@@ -191,11 +191,13 @@ Status APIs:
 http://127.0.0.1:8000/status/today
 http://127.0.0.1:8000/status/history?days=7
 http://127.0.0.1:8000/status/latest-webhook
+http://127.0.0.1:8000/status/strategy
 ```
 
 The dashboard shows trade count, loss streak, open-position state, realized
 paper P/L, recent journal entries, top `NO_TRADE` reasons, and the latest
-received webhook context. It has no order buttons and no broker controls.
+received webhook context. It also surfaces enabled strategy concepts and
+journal-derived strategy counts. It has no order buttons and no broker controls.
 
 ---
 

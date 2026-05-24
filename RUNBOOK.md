@@ -65,6 +65,7 @@ Read status JSON:
 curl http://127.0.0.1:8000/status/today
 curl 'http://127.0.0.1:8000/status/history?days=7'
 curl http://127.0.0.1:8000/status/latest-webhook
+curl http://127.0.0.1:8000/status/strategy
 ```
 
 TradingView cannot call `localhost`; expose port `8000` with a public HTTPS

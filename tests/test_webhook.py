@@ -370,6 +370,24 @@ def test_fastapi_status_history_endpoint():
     assert {"date", "trade_count", "no_trades"}.issubset(data["days"][0])
 
 
+def test_fastapi_strategy_status_endpoint():
+    try:
+        from fastapi.testclient import TestClient
+        from webhook.app import app
+    except ImportError:
+        pytest.skip("fastapi[testclient] not installed")
+
+    client = TestClient(app)
+    resp = client.get("/status/strategy")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "orb_reclaim" in data["enabled_concepts"]
+    assert data["strat_confirmation_only"] is True
+    assert "decision_counts" in data
+    assert "approved_strategy_counts" in data
+
+
 def test_fastapi_latest_webhook_endpoint_after_alert(monkeypatch):
     try:
         from fastapi.testclient import TestClient

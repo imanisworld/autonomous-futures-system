@@ -124,6 +124,12 @@ async def latest_webhook() -> dict:
     return _latest_webhook_payload()
 
 
+@app.get("/status/strategy")
+async def strategy_status() -> dict:
+    """Return enabled strategy concepts and journal-derived strategy counts."""
+    return _strategy_payload(date.today())
+
+
 # ─── Error handlers ───────────────────────────────────────────────────────────
 
 @app.exception_handler(Exception)
@@ -184,6 +190,7 @@ def _dashboard_payload(for_date: date) -> dict:
             for reason, count in no_trade_reasons.most_common(5)
         ],
         "latest_webhook": _latest_webhook_payload(),
+        "strategy_status": _strategy_payload(for_date),
     }
 
 
@@ -204,6 +211,60 @@ def _public_entry(entry: dict) -> dict:
     }
 
 
+def _strategy_payload(for_date: date) -> dict:
+    journal = JournalLogger(log_dir=_config.log_dir)
+    path = journal._journal_path(for_date)
+    entries = journal._read_entries(path) if path.exists() else []
+
+    decision_counts = Counter(
+        entry.get("decision") or entry.get("type") or "UNKNOWN"
+        for entry in entries
+    )
+    market_condition_counts = Counter(
+        entry.get("market_condition") or "UNKNOWN"
+        for entry in entries
+        if entry.get("decision")
+    )
+    approved_strategy_counts = Counter(
+        (entry.get("setup") or {}).get("strategy") or "UNKNOWN"
+        for entry in entries
+        if entry.get("decision") == "TRADE"
+        and (entry.get("risk_check") or {}).get("result") == "APPROVED"
+    )
+    rejected_strategy_counts = Counter(
+        (entry.get("setup") or {}).get("strategy") or "UNKNOWN"
+        for entry in entries
+        if entry.get("decision") == "TRADE"
+        and (entry.get("risk_check") or {}).get("result") == "REJECTED"
+    )
+    no_trade_reasons = Counter(
+        entry.get("reason", "Unknown")
+        for entry in entries
+        if entry.get("decision") == "NO_TRADE"
+    )
+
+    return {
+        "date": for_date.isoformat(),
+        "enabled_concepts": list(_config.enabled_concepts),
+        "strat_confirmation_only": True,
+        "decision_counts": _counter_items(decision_counts, "decision"),
+        "market_condition_counts": _counter_items(market_condition_counts, "market_condition"),
+        "approved_strategy_counts": _counter_items(approved_strategy_counts, "strategy"),
+        "rejected_strategy_counts": _counter_items(rejected_strategy_counts, "strategy"),
+        "top_no_trade_reasons": [
+            {"reason": reason, "count": count}
+            for reason, count in no_trade_reasons.most_common(5)
+        ],
+    }
+
+
+def _counter_items(counter: Counter, key_name: str) -> list[dict]:
+    return [
+        {key_name: name, "count": count}
+        for name, count in counter.most_common()
+    ]
+
+
 def _render_dashboard(status: dict) -> str:
     latest_rows = "\n".join(_render_entry_row(entry) for entry in status["latest_entries"])
     reason_rows = "\n".join(
@@ -221,6 +282,15 @@ def _render_dashboard(status: dict) -> str:
     latest_webhook = status.get("latest_webhook") or {}
     webhook_context = latest_webhook.get("context") or {}
     webhook_result = latest_webhook.get("result") or {}
+    strategy_status = status.get("strategy_status") or {}
+    strategy_rows = "\n".join(
+        f"<li><span>{_escape(item['strategy'])}</span><strong>{item['count']}</strong></li>"
+        for item in strategy_status.get("approved_strategy_counts", [])
+    ) or "<li><span>No approved strategy yet</span><strong>0</strong></li>"
+    decision_rows = "\n".join(
+        f"<li><span>{_escape(item['decision'])}</span><strong>{item['count']}</strong></li>"
+        for item in strategy_status.get("decision_counts", [])
+    ) or "<li><span>No decisions yet</span><strong>0</strong></li>"
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -414,6 +484,22 @@ def _render_dashboard(status: dict) -> str:
       <div class="panel">
         <h2>Top NO_TRADE Reasons</h2>
         <ul>{reason_rows}</ul>
+      </div>
+    </section>
+
+    <section class="wide">
+      <div class="panel">
+        <h2>Enabled Strategy Concepts</h2>
+        <ul>
+          <li><span>Total enabled</span><strong>{len(strategy_status.get('enabled_concepts', []))}</strong></li>
+          <li><span>First enabled</span><strong>{_escape((strategy_status.get('enabled_concepts') or ['None'])[0])}</strong></li>
+          <li><span>Strat mode</span><strong>{'confirmation' if strategy_status.get('strat_confirmation_only') else 'active'}</strong></li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h2>Strategy Pulse</h2>
+        <ul>{strategy_rows}</ul>
+        <ul>{decision_rows}</ul>
       </div>
     </section>
 
