@@ -15,6 +15,7 @@ Types: `Added`, `Changed`, `Fixed`, `Removed`, `Security`, `Rulebook`
 - TradingView payload builder that normalizes futures symbols, detects sessions, and maps alerts into market state.
 - Webhook shared-secret support through the `secret` query string and `WEBHOOK_SECRET`.
 - Optional, disabled-by-default Discord notifications for paper webhook decisions.
+- Local Discord notification smoke-test CLI via `python -m notifications --dry-run`.
 - Read-only RiskSentinel dashboard at `/` with trade count, loss streak, open-position state, realized paper P/L, recent journal entries, and top `NO_TRADE` reasons.
 - `/status/today` and `/status/history` now expose dashboard-ready read-only state.
 - `/status/latest-webhook` exposes the latest raw TradingView payload, derived market context, and paper-engine result.

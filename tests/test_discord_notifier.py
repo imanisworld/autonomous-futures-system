@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 
-from notifications.discord_notifier import notify_discord
+from notifications.discord_notifier import main, notify_discord, smoke_test_payload
 from webhook.payload import AlertPayload
 
 
@@ -112,3 +112,20 @@ def test_discord_notification_sends_paper_decision(config):
     assert sent["headers"]["Content-Type"] == "application/json"
     assert "RiskSentinel paper decision: TRADE" in sent["body"]["content"]
     assert "MNQ | new_york" in sent["body"]["content"]
+
+
+def test_smoke_test_payload_is_synthetic_paper_decision():
+    payload, result = smoke_test_payload()
+
+    assert payload.ticker == "MNQ1!"
+    assert result["decision"] == "TRADE"
+    assert result["context"]["instrument"] == "MNQ"
+
+
+def test_discord_cli_dry_run_prints_message(capsys):
+    exit_code = main(["--dry-run"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "RiskSentinel paper decision: TRADE" in captured.out
+    assert "MNQ | new_york" in captured.out

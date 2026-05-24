@@ -220,6 +220,12 @@ DISCORD_NOTIFY_DECISIONS=TRADE,RISK_REJECTED,BLOCKED_MAX_TRADES,BLOCKED_LOSS_LOC
 
 Keep real Discord webhook URLs in local `.env` only.
 
+Preview the exact message without sending anything:
+
+```bash
+python -m notifications --dry-run
+```
+
 ---
 
 ## Architecture Principles

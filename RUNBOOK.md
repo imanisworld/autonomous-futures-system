@@ -81,6 +81,19 @@ DISCORD_NOTIFY_DECISIONS=TRADE,RISK_REJECTED,BLOCKED_MAX_TRADES,BLOCKED_LOSS_LOC
 Do not commit the real Discord webhook URL. Notification failures are logged but
 do not block TradingView ingestion or paper-risk checks.
 
+Preview the message without sending:
+
+```bash
+python -m notifications --dry-run
+```
+
+Send a smoke-test message only after `.env` has a local Discord webhook URL and
+notifications are enabled:
+
+```bash
+python -m notifications
+```
+
 TradingView cannot call `localhost`; expose port `8000` with a public HTTPS
 tunnel and paste this shape into the TradingView webhook URL field:
 

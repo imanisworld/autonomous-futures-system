@@ -7,13 +7,15 @@ This module is read-only: it never changes trading state and never places orders
 
 from __future__ import annotations
 
+import argparse
 import json
 import logging
+import sys
 from dataclasses import dataclass
 from typing import Callable, Optional
 from urllib import request
 
-from config.settings import SystemConfig
+from config.settings import SystemConfig, load_config
 from webhook.payload import AlertPayload
 
 
@@ -98,3 +100,64 @@ def _post_json(url: str, body: bytes, headers: dict[str, str]) -> None:
     req = request.Request(url, data=body, headers=headers, method="POST")
     with request.urlopen(req, timeout=5):
         return
+
+
+def smoke_test_payload(decision: str = "TRADE") -> tuple[AlertPayload, dict]:
+    """Build a safe synthetic paper decision for notification smoke tests."""
+    payload = AlertPayload(
+        ticker="MNQ1!",
+        timestamp="2026-05-23T14:30:00+00:00",
+        open=19480.0,
+        high=19510.0,
+        low=19475.0,
+        close=19505.25,
+    )
+    result = {
+        "decision": decision,
+        "resolution": None,
+        "risk": {"result": "APPROVED", "failed_rule": None, "reason": None},
+        "fill": {
+            "direction": "LONG",
+            "entry": 19505.25,
+            "stop": 19495.25,
+            "target": 19525.25,
+            "contracts": 1,
+        },
+        "context": {
+            "instrument": "MNQ",
+            "session": "new_york",
+            "close": 19505.25,
+        },
+    }
+    return payload, result
+
+
+def main(argv: Optional[list[str]] = None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Send or preview a read-only Discord paper-decision smoke test."
+    )
+    parser.add_argument(
+        "--decision",
+        default="TRADE",
+        help="Synthetic paper decision to format (default: TRADE).",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print the Discord message without sending it.",
+    )
+    args = parser.parse_args(argv)
+
+    payload, result = smoke_test_payload(args.decision)
+    if args.dry_run:
+        print(_format_message(payload, result))
+        return 0
+
+    config = load_config()
+    send_result = notify_discord(payload=payload, result=result, config=config)
+    print(json.dumps(send_result.__dict__, sort_keys=True))
+    return 0 if send_result.sent else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))
