@@ -183,6 +183,7 @@ class DecisionEngine:
                 market_condition=condition,
                 reason="No qualifying setup found in current market structure.",
             )
+        setup = self._apply_strat_confirmation(setup, state)
 
         # ── R:R validation ────────────────────────────────────────────────────
         if setup.rr_ratio < self.config.min_rr_ratio:
@@ -212,6 +213,31 @@ class DecisionEngine:
                 f"R:R={setup.rr_ratio:.2f}"
             ),
             setup=setup,
+        )
+
+    def _apply_strat_confirmation(self, setup: SetupDetail, state: MarketState) -> SetupDetail:
+        """Append Strat context as confirmation only; never upgrades to TRADE by itself."""
+        strat = state.strat
+        if not strat or not strat.current_bar_type:
+            return setup
+
+        parts = [f"Strat current={strat.current_bar_type}"]
+        if strat.strat_sequence:
+            parts.append(f"sequence={strat.strat_sequence}")
+        if strat.strat_direction:
+            alignment = "aligned" if strat.strat_direction == setup.direction else "not_aligned"
+            parts.append(f"direction={strat.strat_direction} ({alignment})")
+
+        notes = setup.notes or ""
+        suffix = "; ".join(parts)
+        return SetupDetail(
+            direction=setup.direction,
+            entry=setup.entry,
+            stop=setup.stop,
+            target=setup.target,
+            rr_ratio=setup.rr_ratio,
+            strategy=setup.strategy,
+            notes=f"{notes} | {suffix}" if notes else suffix,
         )
 
     # ── Market Condition Scoring ───────────────────────────────────────────────

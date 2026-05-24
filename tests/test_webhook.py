@@ -49,6 +49,9 @@ def _base_payload(**overrides) -> AlertPayload:
         "previous_day_high": 19520.0,
         "previous_day_low": 19440.0,
         "previous_day_close": 19475.0,
+        "current_bar_type": "two_up",
+        "previous_bar_type": "inside_bar",
+        "two_bars_back_type": "two_up",
     }
     data.update(overrides)
     return AlertPayload(**data)
@@ -124,6 +127,9 @@ def test_build_market_state_full_payload():
     assert state.orb.status == "reclaimed_high"
     assert state.market_condition == "TRENDING"
     assert state.trend.direction == "UP"
+    assert state.strat.current_bar_type == "two_up"
+    assert state.strat.strat_sequence == "strat_212"
+    assert state.strat.strat_direction == "LONG"
 
 
 def test_build_market_state_minimal_payload():
@@ -393,6 +399,9 @@ def test_fastapi_latest_webhook_endpoint_after_alert(monkeypatch):
         "previous_day_high": 19520.0,
         "previous_day_low": 19440.0,
         "previous_day_close": 19475.0,
+        "current_bar_type": "two_up",
+        "previous_bar_type": "inside_bar",
+        "two_bars_back_type": "two_up",
     }
 
     alert_resp = client.post("/webhook/alert", json=body)
@@ -407,6 +416,8 @@ def test_fastapi_latest_webhook_endpoint_after_alert(monkeypatch):
     assert data["context"]["orb"]["status"] == "reclaimed_high"
     assert data["context"]["trend"]["direction"] == "UP"
     assert data["context"]["previous_day"]["high"] == 19520.0
+    assert data["context"]["strat"]["strat_sequence"] == "strat_212"
+    assert data["context"]["strat"]["strat_direction"] == "LONG"
     assert data["result"]["decision"] == "NO_TRADE"
 
 

@@ -121,12 +121,19 @@ TradingView full-context alert message:
   "previous_day_low": 0,
   "previous_day_close": 0,
   "price_vs_pdh": "below",
-  "price_vs_pdl": "above"
+  "price_vs_pdl": "above",
+  "current_bar_type": "two_up",
+  "previous_bar_type": "inside_bar",
+  "two_bars_back_type": "two_up",
+  "strat_sequence": "strat_212",
+  "strat_trigger": "continuation",
+  "strat_direction": "LONG"
 }
 ```
 
 Replace the placeholder `0` and classification values with real values from a
-Pine indicator. Omit unknown context fields until they are computed.
+Pine indicator. Omit unknown context fields until they are computed. Strat
+fields are used as confirmation context only and cannot trigger execution alone.
 
 ---
 

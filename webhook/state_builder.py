@@ -28,6 +28,7 @@ from context.market_context import (
     VWAPData,
     VolumeData,
 )
+from strategy.strat_classifier import StratContext, classify_from_ohlc, classify_sequence
 from webhook.payload import AlertPayload
 
 # ─── Constants ────────────────────────────────────────────────────────────────
@@ -133,6 +134,7 @@ def build_market_state(payload: AlertPayload) -> MarketState:
 
     orb_h = payload.orb_high if payload.orb_high is not None else payload.high
     orb_l = payload.orb_low  if payload.orb_low  is not None else payload.low
+    strat = build_strat_context(payload)
 
     return MarketState(
         timestamp=ts,
@@ -176,5 +178,43 @@ def build_market_state(payload: AlertPayload) -> MarketState:
             direction=payload.trend_direction,
             strength=payload.trend_strength,
         ),
+        strat=strat,
         raw=None,
+    )
+
+
+def build_strat_context(payload: AlertPayload) -> StratContext:
+    """Use explicit Strat fields first, otherwise classify from optional OHLC history."""
+    if any(
+        value is not None
+        for value in (
+            payload.current_bar_type,
+            payload.previous_bar_type,
+            payload.two_bars_back_type,
+            payload.strat_sequence,
+            payload.strat_trigger,
+            payload.strat_direction,
+        )
+    ):
+        classified = classify_sequence(
+            payload.two_bars_back_type,
+            payload.previous_bar_type,
+            payload.current_bar_type,
+        )
+        return StratContext(
+            current_bar_type=payload.current_bar_type or classified.current_bar_type,
+            previous_bar_type=payload.previous_bar_type or classified.previous_bar_type,
+            two_bars_back_type=payload.two_bars_back_type or classified.two_bars_back_type,
+            strat_sequence=payload.strat_sequence or classified.strat_sequence,
+            strat_trigger=payload.strat_trigger or classified.strat_trigger,
+            strat_direction=payload.strat_direction or classified.strat_direction,
+        )
+
+    return classify_from_ohlc(
+        current_high=payload.high,
+        current_low=payload.low,
+        previous_high=payload.previous_bar_high,
+        previous_low=payload.previous_bar_low,
+        two_bars_back_high=payload.two_bars_back_high,
+        two_bars_back_low=payload.two_bars_back_low,
     )

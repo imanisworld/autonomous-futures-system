@@ -17,6 +17,7 @@ Types: `Added`, `Changed`, `Fixed`, `Removed`, `Security`, `Rulebook`
 - Read-only RiskSentinel dashboard at `/` with trade count, loss streak, open-position state, realized paper P/L, recent journal entries, and top `NO_TRADE` reasons.
 - `/status/today` and `/status/history` now expose dashboard-ready read-only state.
 - `/status/latest-webhook` exposes the latest raw TradingView payload, derived market context, and paper-engine result.
+- The Strat classifier now supports candle typing and simple `strat_212`, `strat_122`, inside-break, and outside-bar follow-through context as confirmation-only signal metadata.
 - Tests covering payload parsing, session detection, paper decisions, open-position resolution, webhook health, and webhook auth.
 
 ### Security

@@ -182,6 +182,37 @@
         }
       }
     },
+    "strat": {
+      "type": ["object", "null"],
+      "description": "Optional The Strat candle and sequence context.",
+      "additionalProperties": false,
+      "properties": {
+        "current_bar_type": {
+          "type": ["string", "null"],
+          "enum": ["inside_bar", "two_up", "two_down", "outside_bar", null]
+        },
+        "previous_bar_type": {
+          "type": ["string", "null"],
+          "enum": ["inside_bar", "two_up", "two_down", "outside_bar", null]
+        },
+        "two_bars_back_type": {
+          "type": ["string", "null"],
+          "enum": ["inside_bar", "two_up", "two_down", "outside_bar", null]
+        },
+        "strat_sequence": {
+          "type": ["string", "null"],
+          "enum": ["strat_212", "strat_122", "strat_inside_break", "strat_outside_continuation", null]
+        },
+        "strat_trigger": {
+          "type": ["string", "null"],
+          "enum": ["continuation", "reversal", "breakout", "outside_bar_followthrough", null]
+        },
+        "strat_direction": {
+          "type": ["string", "null"],
+          "enum": ["LONG", "SHORT", null]
+        }
+      }
+    },
     "notes": {
       "type": ["string", "null"],
       "description": "Optional free-text notes about current market conditions."

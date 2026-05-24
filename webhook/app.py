@@ -431,6 +431,7 @@ def _render_dashboard(status: dict) -> str:
         <div class="context-item"><label>Market</label><strong>{_escape(webhook_context.get('market_condition') or 'None')}</strong></div>
         <div class="context-item"><label>PDH/PDL</label><strong>{_escape(_format_previous_day(webhook_context.get('previous_day')))}</strong></div>
         <div class="context-item"><label>Volume</label><strong>{_escape(_format_volume(webhook_context.get('volume')))}</strong></div>
+        <div class="context-item"><label>Strat</label><strong>{_escape(_format_strat(webhook_context.get('strat')))}</strong></div>
         <div class="context-item"><label>Risk</label><strong>{_escape(webhook_result.get('risk') or 'None')}</strong></div>
       </div>
     </section>
@@ -514,6 +515,15 @@ def _format_volume(value: dict | None) -> str:
     return f"{value.get('current_bar')} / avg {value.get('avg_bar')} · {relative_text}"
 
 
+def _format_strat(value: dict | None) -> str:
+    if not value:
+        return "None"
+    current = value.get("current_bar_type") or "None"
+    sequence = value.get("strat_sequence") or "no_sequence"
+    direction = value.get("strat_direction") or "None"
+    return f"{current} · {sequence} · {direction}"
+
+
 def _record_latest_webhook(payload: AlertPayload, result: dict) -> None:
     path = _latest_webhook_path()
     state = build_market_state(payload)
@@ -553,6 +563,14 @@ def _record_latest_webhook(payload: AlertPayload, result: dict) -> None:
                 "current_bar": state.volume.current_bar,
                 "avg_bar": state.volume.avg_bar,
                 "relative": state.volume.relative,
+            },
+            "strat": {
+                "current_bar_type": state.strat.current_bar_type if state.strat else None,
+                "previous_bar_type": state.strat.previous_bar_type if state.strat else None,
+                "two_bars_back_type": state.strat.two_bars_back_type if state.strat else None,
+                "strat_sequence": state.strat.strat_sequence if state.strat else None,
+                "strat_trigger": state.strat.strat_trigger if state.strat else None,
+                "strat_direction": state.strat.strat_direction if state.strat else None,
             },
         },
         "result": {

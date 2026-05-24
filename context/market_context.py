@@ -16,6 +16,7 @@ from typing import Optional
 import jsonschema
 
 from config.settings import SystemConfig, load_config
+from strategy.strat_classifier import StratContext
 
 
 # ─── Exceptions ──────────────────────────────────────────────────────────────
@@ -103,6 +104,7 @@ class MarketState:
     volume: VolumeData
     market_condition: Optional[str] = None
     trend: Optional[TrendData] = None
+    strat: Optional[StratContext] = None
     notes: Optional[str] = None
     raw: dict = None  # Original dict for reference
 
@@ -272,6 +274,7 @@ class MarketStateLoader:
             volume=volume,
             market_condition=raw.get("market_condition"),
             trend=trend,
+            strat=StratContext(**raw["strat"]) if raw.get("strat") else None,
             notes=raw.get("notes"),
             raw=raw,
         )

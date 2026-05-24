@@ -48,3 +48,15 @@ class AlertPayload(BaseModel):
     previous_day_close: Optional[float] = None
     price_vs_pdh: Optional[str] = None
     price_vs_pdl: Optional[str] = None
+
+    # ── Optional Strat context ───────────────────────────────────────────────
+    current_bar_type: Optional[str] = None
+    previous_bar_type: Optional[str] = None
+    two_bars_back_type: Optional[str] = None
+    strat_sequence: Optional[str] = None
+    strat_trigger: Optional[str] = None
+    strat_direction: Optional[str] = None
+    previous_bar_high: Optional[float] = None
+    previous_bar_low: Optional[float] = None
+    two_bars_back_high: Optional[float] = None
+    two_bars_back_low: Optional[float] = None
