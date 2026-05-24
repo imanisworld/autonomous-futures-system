@@ -206,6 +206,20 @@ paper P/L, recent journal entries, top `NO_TRADE` reasons, and the latest
 received webhook context. It also surfaces enabled strategy concepts and
 journal-derived strategy counts. It has no order buttons and no broker controls.
 
+## Discord Notifications
+
+Discord output is optional and disabled by default. When enabled, it only posts
+paper-engine decisions after the webhook has processed the alert; it does not
+change decisions, place orders, or touch broker code.
+
+```env
+DISCORD_NOTIFICATIONS_ENABLED=false
+DISCORD_WEBHOOK_URL=
+DISCORD_NOTIFY_DECISIONS=TRADE,RISK_REJECTED,BLOCKED_MAX_TRADES,BLOCKED_LOSS_LOCKOUT
+```
+
+Keep real Discord webhook URLs in local `.env` only.
+
 ---
 
 ## Architecture Principles

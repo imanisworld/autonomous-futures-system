@@ -33,6 +33,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 
 from config.settings import load_config
 from journal.journal_logger import JournalLogger
+from notifications.discord_notifier import notify_discord
 from webhook.payload import AlertPayload
 from webhook.runner import process_alert
 
@@ -64,6 +65,7 @@ async def receive_alert(
     try:
         result = process_alert(payload, config=_config, log_dir=_config.log_dir)
         _record_latest_webhook(payload, result)
+        notify_discord(payload=payload, result=result, config=_config)
         return JSONResponse(content={"ok": True, **result})
     except Exception as exc:
         logger.exception("Error processing alert: %s", exc)
@@ -85,6 +87,7 @@ async def health() -> dict:
         "live_trading_enabled": _config.live_trading_enabled,
         "paper_mode": _config.paper_mode,
         "webhook_secret_required": bool(_configured_webhook_secret()),
+        "discord_notifications_enabled": _config.discord_notifications_enabled,
     }
 
 

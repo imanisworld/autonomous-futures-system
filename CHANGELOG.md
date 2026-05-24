@@ -14,6 +14,7 @@ Types: `Added`, `Changed`, `Fixed`, `Removed`, `Security`, `Rulebook`
 - TradingView webhook receiver for live-data ingestion into the paper-only engine.
 - TradingView payload builder that normalizes futures symbols, detects sessions, and maps alerts into market state.
 - Webhook shared-secret support through the `secret` query string and `WEBHOOK_SECRET`.
+- Optional, disabled-by-default Discord notifications for paper webhook decisions.
 - Read-only RiskSentinel dashboard at `/` with trade count, loss streak, open-position state, realized paper P/L, recent journal entries, and top `NO_TRADE` reasons.
 - `/status/today` and `/status/history` now expose dashboard-ready read-only state.
 - `/status/latest-webhook` exposes the latest raw TradingView payload, derived market context, and paper-engine result.
@@ -25,6 +26,7 @@ Types: `Added`, `Changed`, `Fixed`, `Removed`, `Security`, `Rulebook`
 ### Security
 - Webhook live-data ingestion remains paper-only and does not add broker APIs, broker SDKs, credentials, or live order execution.
 - Webhook errors return generic internal-error responses instead of exposing exception details.
+- Discord notifications are read-only and cannot alter decisions, risk checks, broker behavior, or paper fills.
 
 ### Fixed
 - Replay runs now clear prior generated replay artifacts for each replay date before running, so repeated manifest runs do not double-count trades or P/L.

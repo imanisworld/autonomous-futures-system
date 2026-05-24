@@ -68,6 +68,19 @@ curl http://127.0.0.1:8000/status/latest-webhook
 curl http://127.0.0.1:8000/status/strategy
 ```
 
+### Optional Discord Output
+
+Discord notifications are read-only and disabled by default. To test them
+locally, add a Discord webhook URL to `.env` and set:
+
+```env
+DISCORD_NOTIFICATIONS_ENABLED=true
+DISCORD_NOTIFY_DECISIONS=TRADE,RISK_REJECTED,BLOCKED_MAX_TRADES,BLOCKED_LOSS_LOCKOUT
+```
+
+Do not commit the real Discord webhook URL. Notification failures are logged but
+do not block TradingView ingestion or paper-risk checks.
+
 TradingView cannot call `localhost`; expose port `8000` with a public HTTPS
 tunnel and paste this shape into the TradingView webhook URL field:
 

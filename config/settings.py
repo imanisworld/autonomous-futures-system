@@ -91,6 +91,11 @@ class SystemConfig:
     log_level: str = "INFO"
     risk_rules_path: str = "risk_rules.yaml"
 
+    # Read-only notifications
+    discord_notifications_enabled: bool = False
+    discord_webhook_url: str = ""
+    discord_notify_decisions: List[str] = field(default_factory=lambda: ["TRADE", "RISK_REJECTED", "BLOCKED_MAX_TRADES", "BLOCKED_LOSS_LOCKOUT"])
+
 
 # ─── Loader ──────────────────────────────────────────────────────────────────
 
@@ -183,6 +188,13 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         log_dir=os.getenv("LOG_DIR", "logs"),
         log_level=os.getenv("LOG_LEVEL", "INFO"),
         risk_rules_path=risk_rules_path,
+
+        discord_notifications_enabled=_env_bool("DISCORD_NOTIFICATIONS_ENABLED", False),
+        discord_webhook_url=os.getenv("DISCORD_WEBHOOK_URL", "").strip(),
+        discord_notify_decisions=_env_csv(
+            "DISCORD_NOTIFY_DECISIONS",
+            ["TRADE", "RISK_REJECTED", "BLOCKED_MAX_TRADES", "BLOCKED_LOSS_LOCKOUT"],
+        ),
     )
 
     _validate_config(config)
@@ -214,3 +226,17 @@ def _validate_config(config: SystemConfig) -> None:
     if config.live_trading_enabled:
         # This should never be reached, but belt-and-suspenders
         raise LiveTradingBlockedError(source="post-parse validation")
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in ("true", "1", "yes")
+
+
+def _env_csv(name: str, default: List[str]) -> List[str]:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return list(default)
+    return [item.strip() for item in raw.split(",") if item.strip()]

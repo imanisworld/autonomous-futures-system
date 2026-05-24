@@ -62,6 +62,11 @@ def config() -> SystemConfig:
         log_dir="logs_test",
         log_level="WARNING",
         risk_rules_path="risk_rules.yaml",
+        discord_notifications_enabled=False,
+        discord_webhook_url="",
+        discord_notify_decisions=[
+            "TRADE", "RISK_REJECTED", "BLOCKED_MAX_TRADES", "BLOCKED_LOSS_LOCKOUT"
+        ],
     )
 
 
