@@ -115,6 +115,7 @@ def test_open_trade_without_outcome_is_flagged(config):
     review = RiskReviewer(config).review_entries([approved_trade()], "2026-05-23")
     assert "open_trade_without_outcome" in review.warnings
     assert review.open_trades == 1
+    assert review.recommended_state == "NO_TRADE"
 
 
 def test_daily_summary_writes_eod_artifacts(config, tmp_path):

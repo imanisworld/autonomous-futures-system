@@ -1,5 +1,4 @@
 {
-  "_comment": "Sample market state — choppy MES during NY session. Should produce NO_TRADE.",
   "timestamp": "2026-05-23T10:20:00+00:00",
   "instrument": "MES",
   "session": "new_york",

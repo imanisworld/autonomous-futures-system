@@ -1,5 +1,4 @@
 {
-  "_comment": "Sample market state — MNQ ORB reclaim setup during NY session. Update 'timestamp' to within 5 minutes of current time when testing.",
   "timestamp": "2026-05-23T10:15:00+00:00",
   "instrument": "MNQ",
   "session": "new_york",

@@ -58,7 +58,11 @@ class RiskReviewer:
         self._audit_approved_trades(approved_trades, violations, warnings)
         self._audit_position_stacking(entries_list, violations)
 
-        recommended_state = "NO_TRADE" if violations or "loss_lockout_active" in warnings else "OK_TO_PAPER_TRADE"
+        recommended_state = (
+            "NO_TRADE"
+            if violations or "loss_lockout_active" in warnings or open_trades > 0
+            else "OK_TO_PAPER_TRADE"
+        )
 
         return RiskReview(
             date=review_date,
