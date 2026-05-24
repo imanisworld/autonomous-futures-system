@@ -22,6 +22,13 @@ class ReplayReport:
     losses: int
     open_trades: int
     realized_pnl_dollars: float
+    expectancy: float
+    win_rate: float
+    average_win: float
+    average_loss: float
+    profit_factor: float | None
+    max_drawdown: float
+    trades_per_day: float
     stopped_reason: str | None
     journal_path: str
     review_path: str | None
@@ -43,6 +50,13 @@ class ReplayReport:
             f"- Losses: {self.losses}",
             f"- Open trades: {self.open_trades}",
             f"- Realized P/L: ${self.realized_pnl_dollars:.2f}",
+            f"- Expectancy: ${self.expectancy:.2f}",
+            f"- Win rate: {self.win_rate:.2%}",
+            f"- Average win: ${self.average_win:.2f}",
+            f"- Average loss: ${self.average_loss:.2f}",
+            f"- Profit factor: {self.profit_factor if self.profit_factor is not None else 'n/a'}",
+            f"- Max drawdown: ${self.max_drawdown:.2f}",
+            f"- Trades/day: {self.trades_per_day:.2f}",
             f"- Stopped reason: {self.stopped_reason or 'none'}",
             f"- Journal: `{self.journal_path}`",
             f"- Review: `{self.review_path or 'none'}`",
@@ -63,6 +77,13 @@ class MultiDayReplayReport:
     losses: int
     open_trades: int
     realized_pnl_dollars: float
+    expectancy: float
+    win_rate: float
+    average_win: float
+    average_loss: float
+    profit_factor: float | None
+    max_drawdown: float
+    trades_per_day: float
     stopped_days: int
     survival_passed: bool
     failure_reasons: list[str]
@@ -83,6 +104,13 @@ class MultiDayReplayReport:
             f"- Losses: {self.losses}",
             f"- Open trades: {self.open_trades}",
             f"- Realized P/L: ${self.realized_pnl_dollars:.2f}",
+            f"- Expectancy: ${self.expectancy:.2f}",
+            f"- Win rate: {self.win_rate:.2%}",
+            f"- Average win: ${self.average_win:.2f}",
+            f"- Average loss: ${self.average_loss:.2f}",
+            f"- Profit factor: {self.profit_factor if self.profit_factor is not None else 'n/a'}",
+            f"- Max drawdown: ${self.max_drawdown:.2f}",
+            f"- Trades/day: {self.trades_per_day:.2f}",
             f"- Stopped days: {self.stopped_days}",
             f"- Survival passed: {self.survival_passed}",
             f"- Failure reasons: {', '.join(self.failure_reasons) if self.failure_reasons else 'none'}",

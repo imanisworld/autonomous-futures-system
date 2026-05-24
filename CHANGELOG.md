@@ -8,6 +8,18 @@ Types: `Added`, `Changed`, `Fixed`, `Removed`, `Security`, `Rulebook`
 
 ---
 
+## [1.3.0] 2026-05-24
+
+### Added
+- Replay manifest support for curated multi-day replay suites.
+- Replay hardening checks for duplicate timestamps, unsorted candles, malformed OHLC, malformed ORB levels, invalid volume, and mixed instruments.
+- Replay report metrics: expectancy, win rate, average win/loss, profit factor, max drawdown, and trades per day.
+- CLI support for manifest-driven replay runs.
+
+### Changed
+- Multi-day replay reports now aggregate performance metrics across the full replay suite.
+- Replay CLI now rejects ambiguous input when both `--manifest` and `--candles` are provided.
+
 ## [1.0.0] 2026-05-23
 
 ### Added

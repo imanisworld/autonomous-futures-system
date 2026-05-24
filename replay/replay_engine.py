@@ -27,6 +27,7 @@ from execution.broker_interface import BracketOrder
 from execution.paper_broker import NextBarOHLC, PaperBroker
 from journal.journal_logger import JournalLogger
 from replay.candle_loader import ReplayCandle, ReplayCandleLoader
+from replay.manifest import ReplayManifest
 from replay.replay_report import MultiDayReplayReport, ReplayReport
 from risk.risk_engine import DailyState, RiskEngine, TradeSetup
 from strategy.signal_engine import DecisionEngine
@@ -44,8 +45,17 @@ class ReplayEngine:
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
 
-    def run(self, candle_path: str | Path, review_date: Optional[str] = None) -> ReplayReport:
-        candles = ReplayCandleLoader().load_jsonl(candle_path)
+    def run(
+        self,
+        candle_path: str | Path,
+        review_date: Optional[str] = None,
+        *,
+        allow_mixed_instruments: bool = False,
+    ) -> ReplayReport:
+        candles = ReplayCandleLoader().load_jsonl(
+            candle_path,
+            allow_mixed_instruments=allow_mixed_instruments,
+        )
         if not candles:
             return self._empty_report(candle_path, review_date)
 
@@ -150,6 +160,7 @@ class ReplayEngine:
             losses=summary.get("losses", 0),
             open_trades=review_payload["risk_review"]["open_trades"],
             realized_pnl_dollars=self._realized_pnl(journal, run_date),
+            **self._metrics(journal, run_date, days=1),
             stopped_reason=stopped_reason,
             journal_path=summary.get("journal_path", ""),
             review_path=str(self.log_dir / f"daily_review_{run_date}.md"),
@@ -161,7 +172,25 @@ class ReplayEngine:
         reports: list[ReplayReport] = []
         for path in candle_paths:
             reports.append(self.run(path))
+        return self._aggregate_reports(reports, candle_paths)
 
+    def run_manifest(self, manifest_path: str | Path) -> MultiDayReplayReport:
+        manifest = ReplayManifest.load(manifest_path)
+        reports: list[ReplayReport] = []
+        for entry in manifest.entries:
+            reports.append(
+                self.run(
+                    entry.path,
+                    allow_mixed_instruments=entry.allow_mixed_instruments,
+                )
+            )
+        return self._aggregate_reports(reports, manifest.paths)
+
+    def _aggregate_reports(
+        self,
+        reports: list[ReplayReport],
+        candle_paths: list[str | Path],
+    ) -> MultiDayReplayReport:
         failure_reasons: list[str] = []
         open_trades = sum(report.open_trades for report in reports)
         if open_trades:
@@ -186,6 +215,16 @@ class ReplayEngine:
             losses=sum(report.losses for report in reports),
             open_trades=open_trades,
             realized_pnl_dollars=round(sum(report.realized_pnl_dollars for report in reports), 2),
+            expectancy=self._aggregate_expectancy(reports),
+            win_rate=self._aggregate_win_rate(reports),
+            average_win=self._aggregate_average_win(reports),
+            average_loss=self._aggregate_average_loss(reports),
+            profit_factor=self._aggregate_profit_factor(reports),
+            max_drawdown=self._aggregate_max_drawdown(reports),
+            trades_per_day=(
+                sum(report.approved_trades for report in reports) / len(reports)
+                if reports else 0.0
+            ),
             stopped_days=sum(1 for report in reports if report.stopped_reason is not None),
             survival_passed=not failure_reasons,
             failure_reasons=sorted(set(failure_reasons)),
@@ -251,6 +290,13 @@ class ReplayEngine:
             losses=0,
             open_trades=0,
             realized_pnl_dollars=0.0,
+            expectancy=0.0,
+            win_rate=0.0,
+            average_win=0.0,
+            average_loss=0.0,
+            profit_factor=None,
+            max_drawdown=0.0,
+            trades_per_day=0.0,
             stopped_reason="no_candles",
             journal_path=str(self.log_dir / f"journal_{run_date}.jsonl"),
             review_path=None,
@@ -265,6 +311,84 @@ class ReplayEngine:
             if isinstance(outcome.get("pnl_dollars"), (int, float)):
                 total += float(outcome["pnl_dollars"])
         return round(total, 2)
+
+    @staticmethod
+    def _metrics(journal: JournalLogger, run_date: str, days: int) -> dict:
+        path = journal._journal_path(_date_to_date(run_date))
+        pnl_values: list[float] = []
+        for entry in journal._read_entries(path):
+            outcome = entry.get("outcome") or {}
+            if isinstance(outcome.get("pnl_dollars"), (int, float)):
+                pnl_values.append(float(outcome["pnl_dollars"]))
+
+        wins = [value for value in pnl_values if value > 0]
+        losses = [value for value in pnl_values if value < 0]
+        gross_win = sum(wins)
+        gross_loss = abs(sum(losses))
+        return {
+            "expectancy": round(sum(pnl_values) / len(pnl_values), 2) if pnl_values else 0.0,
+            "win_rate": round(len(wins) / len(pnl_values), 4) if pnl_values else 0.0,
+            "average_win": round(gross_win / len(wins), 2) if wins else 0.0,
+            "average_loss": round(gross_loss / len(losses), 2) if losses else 0.0,
+            "profit_factor": round(gross_win / gross_loss, 4) if gross_loss else None,
+            "max_drawdown": ReplayEngine._max_drawdown(pnl_values),
+            "trades_per_day": round(len(pnl_values) / days, 4) if days else 0.0,
+        }
+
+    @staticmethod
+    def _max_drawdown(pnl_values: list[float]) -> float:
+        equity = 0.0
+        peak = 0.0
+        max_drawdown = 0.0
+        for value in pnl_values:
+            equity += value
+            peak = max(peak, equity)
+            max_drawdown = max(max_drawdown, peak - equity)
+        return round(max_drawdown, 2)
+
+    @staticmethod
+    def _aggregate_expectancy(reports: list[ReplayReport]) -> float:
+        trades = sum(report.approved_trades for report in reports)
+        pnl = sum(report.realized_pnl_dollars for report in reports)
+        return round(pnl / trades, 2) if trades else 0.0
+
+    @staticmethod
+    def _aggregate_win_rate(reports: list[ReplayReport]) -> float:
+        trades = sum(report.approved_trades for report in reports)
+        wins = sum(report.wins for report in reports)
+        return round(wins / trades, 4) if trades else 0.0
+
+    @staticmethod
+    def _aggregate_average_win(reports: list[ReplayReport]) -> float:
+        # Weighted by win count so a day with 3 wins doesn't count the same as 1.
+        total_pnl = sum(report.average_win * report.wins for report in reports)
+        total_wins = sum(report.wins for report in reports)
+        return round(total_pnl / total_wins, 2) if total_wins else 0.0
+
+    @staticmethod
+    def _aggregate_average_loss(reports: list[ReplayReport]) -> float:
+        # Weighted by loss count.
+        total_pnl = sum(report.average_loss * report.losses for report in reports)
+        total_losses = sum(report.losses for report in reports)
+        return round(total_pnl / total_losses, 2) if total_losses else 0.0
+
+    @staticmethod
+    def _aggregate_profit_factor(reports: list[ReplayReport]) -> float | None:
+        gross_win = sum(report.average_win * report.wins for report in reports)
+        gross_loss = sum(report.average_loss * report.losses for report in reports)
+        return round(gross_win / gross_loss, 4) if gross_loss else None
+
+    @staticmethod
+    def _aggregate_max_drawdown(reports: list[ReplayReport]) -> float:
+        """Drawdown on the cumulative day-level equity curve across all days."""
+        equity = 0.0
+        peak = 0.0
+        max_dd = 0.0
+        for report in reports:
+            equity += report.realized_pnl_dollars
+            peak = max(peak, equity)
+            max_dd = max(max_dd, peak - equity)
+        return round(max_dd, 2)
 
 
 def _parse_timestamp(value: str):

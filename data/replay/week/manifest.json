@@ -1,0 +1,39 @@
+{
+  "days": [
+    {
+      "path": "day_1_win.jsonl",
+      "instrument": "MNQ",
+      "session": "new_york",
+      "expected_behavior": "win",
+      "notes": "Trending day, ORB reclaim long, resolves WIN"
+    },
+    {
+      "path": "day_2_choppy.jsonl",
+      "instrument": "MES",
+      "session": "new_york",
+      "expected_behavior": "no_trade",
+      "notes": "Choppy market condition, no setup triggers"
+    },
+    {
+      "path": "day_3_loss.jsonl",
+      "instrument": "MNQ",
+      "session": "new_york",
+      "expected_behavior": "loss",
+      "notes": "Trending setup, resolves LOSS on second bar"
+    },
+    {
+      "path": "day_4_asian_disabled.jsonl",
+      "instrument": "MNQ",
+      "session": "asian",
+      "expected_behavior": "no_trade",
+      "notes": "Asian session is disabled; RiskEngine blocks all entries"
+    },
+    {
+      "path": "day_5_win.jsonl",
+      "instrument": "MES",
+      "session": "new_york",
+      "expected_behavior": "win",
+      "notes": "Trending MES day, ORB reclaim long, resolves WIN"
+    }
+  ]
+}

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -66,7 +67,12 @@ class ReplayCandleLoader:
         "previous_day_close",
     }
 
-    def load_jsonl(self, path: str | Path) -> list[ReplayCandle]:
+    def load_jsonl(
+        self,
+        path: str | Path,
+        *,
+        allow_mixed_instruments: bool = False,
+    ) -> list[ReplayCandle]:
         replay_path = Path(path)
         candles: list[ReplayCandle] = []
         with replay_path.open(encoding="utf-8") as handle:
@@ -79,7 +85,48 @@ class ReplayCandleLoader:
                 if missing:
                     raise ValueError(f"{replay_path}:{line_no} missing fields: {sorted(missing)}")
                 candles.append(self._parse(raw))
+        self._validate_candles(
+            candles,
+            replay_path,
+            allow_mixed_instruments=allow_mixed_instruments,
+        )
         return candles
+
+    def _validate_candles(
+        self,
+        candles: list[ReplayCandle],
+        replay_path: Path,
+        *,
+        allow_mixed_instruments: bool,
+    ) -> None:
+        timestamps: list[datetime] = []
+        seen_raw_timestamps: set[str] = set()
+        instruments: set[str] = set()
+
+        for idx, candle in enumerate(candles, start=1):
+            if candle.timestamp in seen_raw_timestamps:
+                raise ValueError(f"{replay_path}:{idx} duplicate timestamp: {candle.timestamp}")
+            seen_raw_timestamps.add(candle.timestamp)
+            timestamps.append(_parse_timestamp(candle.timestamp))
+            instruments.add(candle.instrument)
+
+            if candle.high < candle.low:
+                raise ValueError(f"{replay_path}:{idx} malformed candle: high < low")
+            if not (candle.low <= candle.open <= candle.high):
+                raise ValueError(f"{replay_path}:{idx} malformed candle: open outside high/low")
+            if not (candle.low <= candle.close <= candle.high):
+                raise ValueError(f"{replay_path}:{idx} malformed candle: close outside high/low")
+            if candle.orb_high < candle.orb_low:
+                raise ValueError(f"{replay_path}:{idx} malformed ORB: orb_high < orb_low")
+            if candle.volume < 0:
+                raise ValueError(f"{replay_path}:{idx} malformed candle: volume < 0")
+            if candle.avg_volume < 1:
+                raise ValueError(f"{replay_path}:{idx} malformed candle: avg_volume < 1")
+
+        if timestamps != sorted(timestamps):
+            raise ValueError(f"{replay_path} candles are not sorted by timestamp")
+        if not allow_mixed_instruments and len(instruments) > 1:
+            raise ValueError(f"{replay_path} contains mixed instruments: {sorted(instruments)}")
 
     @staticmethod
     def _parse(raw: dict) -> ReplayCandle:
@@ -107,3 +154,7 @@ class ReplayCandleLoader:
             timeframe=raw.get("timeframe", "5m"),
             avg_volume=int(raw.get("avg_volume", 1)),
         )
+
+
+def _parse_timestamp(value: str) -> datetime:
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
