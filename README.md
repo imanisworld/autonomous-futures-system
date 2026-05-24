@@ -207,8 +207,9 @@ paper P/L, recent journal entries, top `NO_TRADE` reasons, and the latest
 received webhook context. It also surfaces enabled strategy concepts and
 journal-derived strategy counts. It has no order buttons and no broker controls.
 
-The review endpoint returns the same read-only morning or end-of-day trade
-grading reports produced by `python -m agent.daily_summary`.
+The review endpoint previews the same read-only morning or end-of-day trade
+grading reports produced by `python -m agent.daily_summary`, without writing
+review artifacts.
 
 ## Discord Notifications
 

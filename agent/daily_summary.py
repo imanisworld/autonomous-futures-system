@@ -58,9 +58,16 @@ class DailySummaryAgent:
         self.trade_grader = TradeGrader(self.config)
 
     def morning(self, review_date: str) -> dict:
+        report = self.preview_morning(review_date)
+        self._write_json(review_date, report)
+        self._write_markdown(review_date, report, [])
+        return report
+
+    def preview_morning(self, review_date: str) -> dict:
+        """Build a morning report without writing review artifacts."""
         entries = read_journal(self.log_dir, review_date)
         review = self.risk_reviewer.review_entries(entries, review_date)
-        report = {
+        return {
             "mode": "morning",
             "date": review_date,
             "recommended_state": review.recommended_state,
@@ -74,11 +81,21 @@ class DailySummaryAgent:
             "risk_review": review.to_dict(),
             "message": self._morning_message(review),
         }
-        self._write_json(review_date, report)
-        self._write_markdown(review_date, report, [])
-        return report
 
     def eod(self, review_date: str) -> dict:
+        report, grades = self.preview_eod_with_grades(review_date)
+        self._write_json(review_date, report)
+        self._write_trade_grades_csv(review_date, grades)
+        self._write_markdown(review_date, report, grades)
+        return report
+
+    def preview_eod(self, review_date: str) -> dict:
+        """Build an end-of-day report without writing review artifacts."""
+        report, _ = self.preview_eod_with_grades(review_date)
+        return report
+
+    def preview_eod_with_grades(self, review_date: str) -> tuple[dict, list[TradeGrade]]:
+        """Build an EOD report and return internal grade objects for writers."""
         entries = read_journal(self.log_dir, review_date)
         review = self.risk_reviewer.review_entries(entries, review_date)
         grades = self.trade_grader.grade_entries(entries)
@@ -90,10 +107,7 @@ class DailySummaryAgent:
             "trade_grades": [grade.to_dict() for grade in grades],
             "message": self._eod_message(review, grades),
         }
-        self._write_json(review_date, report)
-        self._write_trade_grades_csv(review_date, grades)
-        self._write_markdown(review_date, report, grades)
-        return report
+        return report, grades
 
     def _write_json(self, review_date: str, report: dict) -> Path:
         path = self.log_dir / f"review_{review_date}.json"

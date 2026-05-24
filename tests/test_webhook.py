@@ -448,7 +448,8 @@ def test_fastapi_review_endpoint_returns_empty_eod_report(monkeypatch, tmp_path)
     assert data["date"] == "2026-05-23"
     assert data["recommended_state"] == "OK_TO_PAPER_TRADE"
     assert data["trade_grades"] == []
-    assert (tmp_path / "logs" / "review_2026-05-23.json").exists()
+    assert not (tmp_path / "logs" / "review_2026-05-23.json").exists()
+    assert not (tmp_path / "logs" / "daily_review_2026-05-23.md").exists()
 
 
 def test_fastapi_review_endpoint_returns_morning_preflight(monkeypatch, tmp_path):

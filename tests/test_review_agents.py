@@ -130,6 +130,30 @@ def test_daily_summary_writes_eod_artifacts(config, tmp_path):
     assert (tmp_path / "daily_review_2026-05-23.md").exists()
 
 
+def test_daily_summary_preview_eod_does_not_write_artifacts(config, tmp_path):
+    config.log_dir = str(tmp_path)
+    write_journal(tmp_path, "2026-05-23", [approved_trade(), outcome("WIN")])
+
+    report = DailySummaryAgent(config).preview_eod("2026-05-23")
+
+    assert report["mode"] == "eod"
+    assert report["trade_grades"][0]["grade"] in ("A", "B")
+    assert not (tmp_path / "review_2026-05-23.json").exists()
+    assert not (tmp_path / "trade_grades_2026-05-23.csv").exists()
+    assert not (tmp_path / "daily_review_2026-05-23.md").exists()
+
+
+def test_daily_summary_preview_morning_does_not_write_artifacts(config, tmp_path):
+    config.log_dir = str(tmp_path)
+
+    report = DailySummaryAgent(config).preview_morning("2026-05-23")
+
+    assert report["mode"] == "morning"
+    assert report["preflight"]["paper_only"] is True
+    assert not (tmp_path / "review_2026-05-23.json").exists()
+    assert not (tmp_path / "daily_review_2026-05-23.md").exists()
+
+
 def test_review_agents_do_not_import_broker_execution():
     import agent.daily_summary as daily_summary
     import agent.risk_reviewer as risk_reviewer

@@ -69,8 +69,8 @@ curl http://127.0.0.1:8000/status/strategy
 curl 'http://127.0.0.1:8000/status/review?date=2026-05-23&mode=eod'
 ```
 
-The review endpoint supports `mode=morning` or `mode=eod` and writes the same
-review artifacts as the daily summary CLI.
+The review endpoint supports `mode=morning` or `mode=eod` and does not write
+review artifacts. Use the daily summary CLI when you want files written.
 
 ### Optional Discord Output
 

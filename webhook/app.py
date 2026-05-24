@@ -139,13 +139,13 @@ async def status_review(
     review_date: str | None = Query(default=None, alias="date"),
     mode: str = Query(default="eod", pattern="^(morning|eod)$"),
 ) -> dict:
-    """Generate and return a read-only morning or end-of-day review report."""
+    """Return a read-only morning or end-of-day review report."""
     target_date = review_date or date.today().isoformat()
     agent = DailySummaryAgent(_config)
     agent.log_dir = Path(_config.log_dir)
     agent.risk_reviewer.config.log_dir = _config.log_dir
     agent.trade_grader.config.log_dir = _config.log_dir
-    return agent.morning(target_date) if mode == "morning" else agent.eod(target_date)
+    return agent.preview_morning(target_date) if mode == "morning" else agent.preview_eod(target_date)
 
 
 # ─── Error handlers ───────────────────────────────────────────────────────────
