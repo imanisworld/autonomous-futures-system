@@ -88,13 +88,16 @@ def detect_session(ts: datetime) -> str:
     """
     Map a UTC datetime to a session name using ET market hours.
 
-    London:   03:00–08:29 ET
-    New York: 09:30–12:00 ET
+    London:      03:00–08:29 ET
+    Session gap: 08:30–09:29 ET
+    New York:    09:30–12:00 ET
     Anything outside → "off_hours" (RiskEngine will block it)
     """
     et_time = ts.astimezone(_ET).time()
     if time(3, 0) <= et_time < time(8, 30):
         return "london"
+    if time(8, 30) <= et_time < time(9, 30):
+        return "session_gap"
     if time(9, 30) <= et_time <= time(12, 0):
         return "new_york"
     return "off_hours"

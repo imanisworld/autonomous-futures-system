@@ -57,6 +57,13 @@ def _base_payload(**overrides) -> AlertPayload:
     return AlertPayload(**data)
 
 
+def _isolate_app_logs(monkeypatch, tmp_path) -> None:
+    """Keep FastAPI endpoint tests from touching production logs/."""
+    import webhook.app as app_module
+
+    monkeypatch.setattr(app_module._config, "log_dir", str(tmp_path / "logs"))
+
+
 # ─── state_builder: parse_timestamp ───────────────────────────────────────────
 
 def test_parse_timestamp_iso():
@@ -106,7 +113,8 @@ def test_normalize_instrument(ticker, expected):
     ("2026-05-23T08:00:00+00:00", "london"),    # 04:00 ET
     ("2026-05-23T14:30:00+00:00", "new_york"),  # 10:30 ET
     ("2026-05-23T01:00:00+00:00", "off_hours"), # 21:00 ET prev day
-    ("2026-05-23T13:00:00+00:00", "off_hours"), # 09:00 ET — before NY open
+    ("2026-05-23T12:30:00+00:00", "session_gap"), # 08:30 ET — gap before NY open
+    ("2026-05-23T13:00:00+00:00", "session_gap"), # 09:00 ET — gap before NY open
     ("2026-05-23T17:30:00+00:00", "off_hours"), # 13:30 ET — after NY close
 ])
 def test_detect_session(iso, expected_session):
@@ -170,6 +178,13 @@ def test_build_market_state_asian_session_detected():
     assert state.session == "off_hours"
 
 
+def test_build_market_state_session_gap_forces_non_allowed_session():
+    # 13:00 UTC = 09:00 ET, explicitly inside the 08:30-09:30 gap.
+    payload = _base_payload(timestamp="2026-05-23T13:00:00+00:00")
+    state = build_market_state(payload)
+    assert state.session == "session_gap"
+
+
 # ─── runner: NO_TRADE path ────────────────────────────────────────────────────
 
 def test_runner_choppy_produces_no_trade(config, tmp_path):
@@ -227,6 +242,33 @@ def test_runner_resolves_open_position_on_next_bar(config, tmp_path):
     r2 = process_alert(p2, config=config, log_dir=log_dir, for_date=today)
 
     assert r2["resolution"] == "WIN"
+
+
+def test_runner_blocks_when_open_position_does_not_resolve(config, tmp_path):
+    """
+    Bar 1 opens a trade. Bar 2 hits neither stop nor target, so the engine
+    must block new entries until the existing position resolves.
+    """
+    from webhook.runner import process_alert
+
+    log_dir = str(tmp_path / "logs")
+    today = date(2026, 5, 23)
+
+    r1 = process_alert(_base_payload(), config=config, log_dir=log_dir, for_date=today)
+    if r1["decision"] != "TRADE" or r1["fill"] is None:
+        pytest.skip("Signal engine produced NO_TRADE on bar 1 — skip open-position test")
+
+    fill = r1["fill"]
+    p2 = _base_payload(
+        timestamp="2026-05-23T14:35:00+00:00",
+        high=float(fill["target"]) - 0.25,
+        low=float(fill["stop"]) + 0.25,
+        close=float(fill["entry"]),
+    )
+    r2 = process_alert(p2, config=config, log_dir=log_dir, for_date=today)
+
+    assert r2["resolution"] is None
+    assert r2["decision"] == "BLOCKED_OPEN_POSITION"
 
 
 # ─── runner: daily limit blocks ──────────────────────────────────────────────
@@ -388,7 +430,7 @@ def test_fastapi_strategy_status_endpoint():
     assert "approved_strategy_counts" in data
 
 
-def test_fastapi_latest_webhook_endpoint_after_alert(monkeypatch):
+def test_fastapi_latest_webhook_endpoint_after_alert(monkeypatch, tmp_path):
     try:
         from fastapi.testclient import TestClient
         from webhook.app import app
@@ -396,6 +438,7 @@ def test_fastapi_latest_webhook_endpoint_after_alert(monkeypatch):
         pytest.skip("fastapi[testclient] not installed")
 
     monkeypatch.delenv("WEBHOOK_SECRET", raising=False)
+    _isolate_app_logs(monkeypatch, tmp_path)
     client = TestClient(app)
     body = {
         "ticker": "MNQ1!",
@@ -439,7 +482,7 @@ def test_fastapi_latest_webhook_endpoint_after_alert(monkeypatch):
     assert data["result"]["decision"] == "NO_TRADE"
 
 
-def test_fastapi_alert_endpoint_valid_payload(monkeypatch):
+def test_fastapi_alert_endpoint_valid_payload(monkeypatch, tmp_path):
     """POST /webhook/alert with a valid payload returns 200."""
     try:
         from fastapi.testclient import TestClient
@@ -448,6 +491,7 @@ def test_fastapi_alert_endpoint_valid_payload(monkeypatch):
         pytest.skip("fastapi[testclient] not installed")
 
     monkeypatch.delenv("WEBHOOK_SECRET", raising=False)
+    _isolate_app_logs(monkeypatch, tmp_path)
     client = TestClient(app)
     body = {
         "ticker": "MNQ1!",
@@ -501,7 +545,7 @@ def test_fastapi_alert_endpoint_rejects_bad_secret(monkeypatch):
     assert resp.status_code == 401
 
 
-def test_fastapi_alert_endpoint_accepts_good_secret_via_query(monkeypatch):
+def test_fastapi_alert_endpoint_rejects_missing_secret(monkeypatch):
     try:
         from fastapi.testclient import TestClient
         from webhook.app import app
@@ -509,6 +553,29 @@ def test_fastapi_alert_endpoint_accepts_good_secret_via_query(monkeypatch):
         pytest.skip("fastapi[testclient] not installed")
 
     monkeypatch.setenv("WEBHOOK_SECRET", "local-test-secret")
+    client = TestClient(app)
+    body = {
+        "ticker": "MNQ1!",
+        "timestamp": "2026-05-23T14:30:00+00:00",
+        "open": 19480.0,
+        "high": 19510.0,
+        "low": 19475.0,
+        "close": 19505.25,
+    }
+
+    resp = client.post("/webhook/alert", json=body)
+    assert resp.status_code == 401
+
+
+def test_fastapi_alert_endpoint_accepts_good_secret_via_query(monkeypatch, tmp_path):
+    try:
+        from fastapi.testclient import TestClient
+        from webhook.app import app
+    except ImportError:
+        pytest.skip("fastapi[testclient] not installed")
+
+    monkeypatch.setenv("WEBHOOK_SECRET", "local-test-secret")
+    _isolate_app_logs(monkeypatch, tmp_path)
     client = TestClient(app)
     body = {
         "ticker": "MNQ1!",
@@ -525,7 +592,7 @@ def test_fastapi_alert_endpoint_accepts_good_secret_via_query(monkeypatch):
     assert resp.json()["ok"] is True
 
 
-def test_fastapi_alert_endpoint_accepts_good_secret_via_header(monkeypatch):
+def test_fastapi_alert_endpoint_accepts_good_secret_via_header(monkeypatch, tmp_path):
     try:
         from fastapi.testclient import TestClient
         from webhook.app import app
@@ -533,6 +600,7 @@ def test_fastapi_alert_endpoint_accepts_good_secret_via_header(monkeypatch):
         pytest.skip("fastapi[testclient] not installed")
 
     monkeypatch.setenv("WEBHOOK_SECRET", "local-test-secret")
+    _isolate_app_logs(monkeypatch, tmp_path)
     client = TestClient(app)
     body = {
         "ticker": "MNQ1!",

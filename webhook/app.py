@@ -63,7 +63,7 @@ async def receive_alert(
     """
     _verify_webhook_secret(x_webhook_secret or secret)
     try:
-        result = process_alert(payload, config=_config)
+        result = process_alert(payload, config=_config, log_dir=_config.log_dir)
         _record_latest_webhook(payload, result)
         return JSONResponse(content={"ok": True, **result})
     except Exception as exc:
@@ -218,22 +218,22 @@ def _strategy_payload(for_date: date) -> dict:
     entries = journal._read_entries(path) if path.exists() else []
 
     decision_counts = Counter(
-        entry.get("decision") or entry.get("type") or "UNKNOWN"
+        entry.get("decision") or entry.get("type")
         for entry in entries
     )
     market_condition_counts = Counter(
-        entry.get("market_condition") or "UNKNOWN"
+        entry.get("market_condition")
         for entry in entries
         if entry.get("decision")
     )
     approved_strategy_counts = Counter(
-        (entry.get("setup") or {}).get("strategy") or "UNKNOWN"
+        (entry.get("setup") or {}).get("strategy")
         for entry in entries
         if entry.get("decision") == "TRADE"
         and (entry.get("risk_check") or {}).get("result") == "APPROVED"
     )
     rejected_strategy_counts = Counter(
-        (entry.get("setup") or {}).get("strategy") or "UNKNOWN"
+        (entry.get("setup") or {}).get("strategy")
         for entry in entries
         if entry.get("decision") == "TRADE"
         and (entry.get("risk_check") or {}).get("result") == "REJECTED"

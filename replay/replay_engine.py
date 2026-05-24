@@ -130,6 +130,7 @@ class ReplayEngine:
                             exit_reason=fill.exit_reason,
                             pnl_ticks=fill.pnl_ticks,
                             pnl_dollars=fill.pnl_dollars,
+                            contracts=fill.contracts,
                             for_date=journal_date,
                         )
                         daily_state.trade_count += 1

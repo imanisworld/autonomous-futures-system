@@ -11,6 +11,7 @@ from strategy.strat_classifier import (
     TWO_UP,
     StratBar,
     classify_bar,
+    classify_from_ohlc,
     classify_sequence,
 )
 
@@ -65,3 +66,39 @@ def test_classify_122_bearish_reversal():
     assert result.strat_sequence == "strat_122"
     assert result.strat_trigger == "reversal"
     assert result.strat_direction == "SHORT"
+
+
+def test_classify_from_ohlc_without_history_returns_empty_context():
+    result = classify_from_ohlc(current_high=101.0, current_low=99.0)
+
+    assert result.current_bar_type is None
+    assert result.strat_sequence is None
+
+
+def test_classify_from_ohlc_derives_current_bar_type():
+    result = classify_from_ohlc(
+        current_high=101.0,
+        current_low=90.0,
+        previous_high=100.0,
+        previous_low=90.0,
+    )
+
+    assert result.current_bar_type == TWO_UP
+    assert result.strat_sequence is None
+
+
+def test_classify_from_ohlc_derives_sequence_from_history():
+    result = classify_from_ohlc(
+        current_high=103.0,
+        current_low=100.0,
+        previous_high=101.0,
+        previous_low=100.0,
+        two_bars_back_high=102.0,
+        two_bars_back_low=99.0,
+        two_bars_back_type=TWO_UP,
+    )
+
+    assert result.current_bar_type == TWO_UP
+    assert result.previous_bar_type == INSIDE_BAR
+    assert result.strat_sequence == "strat_212"
+    assert result.strat_direction == "LONG"

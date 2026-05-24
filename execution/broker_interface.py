@@ -27,6 +27,7 @@ class BracketOrder:
     target: float
     rr_ratio: float
     strategy: str
+    contracts: int = 1
     notes: Optional[str] = None
 
 
@@ -47,6 +48,7 @@ class Fill:
     """Result of an executed order."""
     instrument: str
     direction: str
+    contracts: int
     entry_price: float
     exit_price: Optional[float]
     exit_reason: Optional[str]   # TARGET_HIT | STOP_HIT | MANUAL_CANCEL | None

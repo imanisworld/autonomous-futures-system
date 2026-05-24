@@ -81,6 +81,7 @@ def process_alert(
                 entry=float(open_pos["entry"]),
                 stop=float(open_pos["stop"]),
                 target=float(open_pos["target"]),
+                contracts=int(open_pos.get("contracts", 1)),
             )
             fill = broker.resolve_position(
                 NextBarOHLC(high=payload.high, low=payload.low)
@@ -95,6 +96,7 @@ def process_alert(
                     exit_reason=fill.exit_reason,
                     pnl_ticks=fill.pnl_ticks,
                     pnl_dollars=fill.pnl_dollars,
+                    contracts=fill.contracts,
                     for_date=today,
                 )
                 result["resolution"] = fill.result
@@ -173,6 +175,7 @@ def process_alert(
         "target": decision.setup.target,
         "rr_ratio": decision.setup.rr_ratio,
         "strategy": decision.setup.strategy,
+        "contracts": order.contracts,
     }
     return result
 

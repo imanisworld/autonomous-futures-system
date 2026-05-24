@@ -124,6 +124,53 @@ class TestLongResolution:
         fill = broker.resolve_position(next_bar)
         # target - entry = 19540 - 19500 = 40 points = 160 ticks for MNQ (0.25 tick size)
         assert fill.pnl_ticks == pytest.approx(160.0, rel=1e-2)
+        assert fill.pnl_dollars == pytest.approx(80.0, rel=1e-2)
+
+    def test_contract_count_scales_pnl(self, broker):
+        order = BracketOrder(
+            instrument="MNQ",
+            direction="LONG",
+            entry=19500.0,
+            stop=19480.0,
+            target=19540.0,
+            rr_ratio=2.0,
+            strategy="orb_reclaim",
+            contracts=2,
+        )
+        broker.execute_bracket(order)
+        fill = broker.resolve_position(NextBarOHLC(high=19545.0, low=19490.0))
+        assert fill.contracts == 2
+        assert fill.pnl_ticks == pytest.approx(160.0, rel=1e-2)
+        assert fill.pnl_dollars == pytest.approx(160.0, rel=1e-2)
+
+    @pytest.mark.parametrize(
+        "instrument,tick_value",
+        [
+            ("MNQ", 0.50),
+            ("MES", 1.25),
+            ("MGC", 10.00),
+            ("MCL", 10.00),
+        ],
+    )
+    def test_tick_value_per_instrument(self, broker, instrument, tick_value):
+        tick_sizes = {"MNQ": 0.25, "MES": 0.25, "MGC": 0.10, "MCL": 0.01}
+        tick_size = tick_sizes[instrument]
+        entry = 100.0
+        order = BracketOrder(
+            instrument=instrument,
+            direction="LONG",
+            entry=entry,
+            stop=entry - tick_size,
+            target=entry + tick_size,
+            rr_ratio=1.0,
+            strategy="tick_value_test",
+        )
+        broker.execute_bracket(order)
+        fill = broker.resolve_position(
+            NextBarOHLC(high=entry + tick_size, low=entry)
+        )
+        assert fill.pnl_ticks == pytest.approx(1.0, rel=1e-2)
+        assert fill.pnl_dollars == pytest.approx(tick_value, rel=1e-2)
 
 
 class TestShortResolution:

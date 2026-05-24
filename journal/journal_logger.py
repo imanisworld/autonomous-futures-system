@@ -15,9 +15,15 @@ from __future__ import annotations
 import json
 import logging
 import os
+from contextlib import contextmanager
 from datetime import datetime, timezone, date
 from pathlib import Path
-from typing import Optional, List
+from typing import Iterator, Optional, List
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - Windows fallback
+    fcntl = None
 
 from risk.risk_engine import DailyState
 
@@ -75,6 +81,7 @@ class JournalLogger:
         exit_reason: Optional[str],
         pnl_ticks: Optional[float],
         pnl_dollars: Optional[float],
+        contracts: int = 1,
         for_date: Optional[date] = None,
     ) -> None:
         """
@@ -93,6 +100,7 @@ class JournalLogger:
                 "exit_reason": exit_reason,
                 "pnl_ticks": pnl_ticks,
                 "pnl_dollars": pnl_dollars,
+                "contracts": contracts,
             },
         }
         self._append(entry, for_date)
@@ -103,16 +111,18 @@ class JournalLogger:
         line = f"[{ts}] ERROR: {message}"
         if exc:
             line += f" | {type(exc).__name__}: {exc}"
-        with open(self._error_log, "a") as f:
-            f.write(line + "\n")
+        with self._locked():
+            with open(self._error_log, "a") as f:
+                f.write(line + "\n")
         logger.error(line)
 
     def _append(self, entry: dict, for_date: Optional[date] = None) -> None:
         """Append a single JSON entry to today's journal file."""
         path = self._journal_path(for_date)
         try:
-            with open(path, "a") as f:
-                f.write(json.dumps(entry) + "\n")
+            with self._locked():
+                with open(path, "a") as f:
+                    f.write(json.dumps(entry) + "\n")
         except Exception as e:
             self.log_error(f"Failed to write journal entry: {entry}", exc=e)
 
@@ -141,15 +151,16 @@ class JournalLogger:
 
     def _read_entries(self, path: Path) -> List[dict]:
         entries = []
-        with open(path) as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    entries.append(json.loads(line))
-                except json.JSONDecodeError:
-                    continue
+        with self._locked():
+            with open(path) as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        entries.append(json.loads(line))
+                    except json.JSONDecodeError:
+                        continue
         return entries
 
     def _compute_daily_state(
@@ -234,6 +245,7 @@ class JournalLogger:
                         "entry": setup.get("entry"),
                         "stop": setup.get("stop"),
                         "target": setup.get("target"),
+                        "contracts": setup.get("contracts", 1),
                     }
                 else:
                     last_open = None
@@ -270,3 +282,16 @@ class JournalLogger:
             "losses": losses,
             "journal_path": str(path),
         }
+
+    @contextmanager
+    def _locked(self) -> Iterator[None]:
+        """Serialize journal file access across concurrent webhook requests."""
+        lock_path = self.log_dir / ".journal.lock"
+        with open(lock_path, "a") as lock_file:
+            if fcntl is not None:
+                fcntl.flock(lock_file, fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                if fcntl is not None:
+                    fcntl.flock(lock_file, fcntl.LOCK_UN)

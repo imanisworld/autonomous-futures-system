@@ -40,8 +40,8 @@ TICK_SIZE = {
 TICK_VALUE = {
     "MNQ": 0.50,   # $0.50/tick
     "MES": 1.25,   # $1.25/tick
-    "MGC": 1.00,   # $1.00/tick
-    "MCL": 1.00,   # $1.00/tick (per 0.01 = $1)
+    "MGC": 10.00,  # $10.00/tick
+    "MCL": 10.00,  # $10.00/tick
 }
 
 
@@ -97,13 +97,14 @@ class PaperBroker(BrokerInterface):
                 "Call resolve_position() first."
             )
 
+        contracts = max(1, int(order.contracts or 1))
         self._position = Position(
             instrument=order.instrument,
             direction=order.direction,
             entry_price=order.entry,
             stop=order.stop,
             target=order.target,
-            quantity=1,
+            quantity=contracts,
             open=True,
         )
 
@@ -111,6 +112,7 @@ class PaperBroker(BrokerInterface):
         return Fill(
             instrument=order.instrument,
             direction=order.direction,
+            contracts=contracts,
             entry_price=order.entry,
             exit_price=None,
             exit_reason=None,
@@ -167,13 +169,14 @@ class PaperBroker(BrokerInterface):
         else:
             pnl_ticks = (pos.entry_price - exit_price) / tick
 
-        pnl_dollars = pnl_ticks * tick_val
+        pnl_dollars = pnl_ticks * tick_val * pos.quantity
 
         self._position = None  # Flat
 
         return Fill(
             instrument=instrument,
             direction=pos.direction,
+            contracts=pos.quantity,
             entry_price=pos.entry_price,
             exit_price=round(exit_price, 4),
             exit_reason=exit_reason,
@@ -189,6 +192,7 @@ class PaperBroker(BrokerInterface):
         entry: float,
         stop: float,
         target: float,
+        contracts: int = 1,
     ) -> None:
         """
         Rebuild internal position state from a persisted journal entry.
@@ -206,7 +210,7 @@ class PaperBroker(BrokerInterface):
             entry_price=entry,
             stop=stop,
             target=target,
-            quantity=1,
+            quantity=max(1, int(contracts or 1)),
             open=True,
         )
 
@@ -237,12 +241,13 @@ class PaperBroker(BrokerInterface):
         else:
             pnl_ticks = (pos.entry_price - exit_price) / tick
 
-        pnl_dollars = pnl_ticks * tick_val
+        pnl_dollars = pnl_ticks * tick_val * pos.quantity
         self._position = None
 
         return Fill(
             instrument=instrument,
             direction=pos.direction,
+            contracts=pos.quantity,
             entry_price=pos.entry_price,
             exit_price=round(exit_price, 4),
             exit_reason="MANUAL_CANCEL",

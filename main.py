@@ -124,8 +124,8 @@ def main() -> int:
         log.warning(f"Stale data — NO_TRADE: {e}")
         journal.log_decision({
             "ts": datetime.now(timezone.utc).isoformat(),
-            "instrument": "UNKNOWN",
-            "session": "UNKNOWN",
+            "instrument": None,
+            "session": None,
             "decision": "NO_TRADE",
             "reason": f"Stale data: {e}",
             "market_condition": None,
@@ -137,8 +137,8 @@ def main() -> int:
         log.warning(f"Data quality error — NO_TRADE: {e}")
         journal.log_decision({
             "ts": datetime.now(timezone.utc).isoformat(),
-            "instrument": "UNKNOWN",
-            "session": "UNKNOWN",
+            "instrument": None,
+            "session": None,
             "decision": "NO_TRADE",
             "reason": f"Data quality error: {e}",
             "market_condition": None,
@@ -231,6 +231,7 @@ def main() -> int:
                         exit_reason=outcome.exit_reason,
                         pnl_ticks=outcome.pnl_ticks,
                         pnl_dollars=outcome.pnl_dollars,
+                        contracts=outcome.contracts,
                     )
                     log.info(
                         f"Paper position resolved: {outcome.result} "
