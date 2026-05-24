@@ -199,12 +199,16 @@ http://127.0.0.1:8000/status/today
 http://127.0.0.1:8000/status/history?days=7
 http://127.0.0.1:8000/status/latest-webhook
 http://127.0.0.1:8000/status/strategy
+http://127.0.0.1:8000/status/review?date=2026-05-23&mode=eod
 ```
 
 The dashboard shows trade count, loss streak, open-position state, realized
 paper P/L, recent journal entries, top `NO_TRADE` reasons, and the latest
 received webhook context. It also surfaces enabled strategy concepts and
 journal-derived strategy counts. It has no order buttons and no broker controls.
+
+The review endpoint returns the same read-only morning or end-of-day trade
+grading reports produced by `python -m agent.daily_summary`.
 
 ## Discord Notifications
 

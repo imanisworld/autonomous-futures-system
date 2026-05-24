@@ -430,6 +430,61 @@ def test_fastapi_strategy_status_endpoint():
     assert "approved_strategy_counts" in data
 
 
+def test_fastapi_review_endpoint_returns_empty_eod_report(monkeypatch, tmp_path):
+    try:
+        from fastapi.testclient import TestClient
+        from webhook.app import app
+    except ImportError:
+        pytest.skip("fastapi[testclient] not installed")
+
+    _isolate_app_logs(monkeypatch, tmp_path)
+    client = TestClient(app)
+
+    resp = client.get("/status/review?date=2026-05-23&mode=eod")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["mode"] == "eod"
+    assert data["date"] == "2026-05-23"
+    assert data["recommended_state"] == "OK_TO_PAPER_TRADE"
+    assert data["trade_grades"] == []
+    assert (tmp_path / "logs" / "review_2026-05-23.json").exists()
+
+
+def test_fastapi_review_endpoint_returns_morning_preflight(monkeypatch, tmp_path):
+    try:
+        from fastapi.testclient import TestClient
+        from webhook.app import app
+    except ImportError:
+        pytest.skip("fastapi[testclient] not installed")
+
+    _isolate_app_logs(monkeypatch, tmp_path)
+    client = TestClient(app)
+
+    resp = client.get("/status/review?date=2026-05-23&mode=morning")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["mode"] == "morning"
+    assert data["preflight"]["paper_only"] is True
+    assert data["preflight"]["max_trades_per_day"] == 3
+
+
+def test_fastapi_review_endpoint_rejects_invalid_mode(monkeypatch, tmp_path):
+    try:
+        from fastapi.testclient import TestClient
+        from webhook.app import app
+    except ImportError:
+        pytest.skip("fastapi[testclient] not installed")
+
+    _isolate_app_logs(monkeypatch, tmp_path)
+    client = TestClient(app)
+
+    resp = client.get("/status/review?date=2026-05-23&mode=midday")
+
+    assert resp.status_code == 422
+
+
 def test_fastapi_latest_webhook_endpoint_after_alert(monkeypatch, tmp_path):
     try:
         from fastapi.testclient import TestClient

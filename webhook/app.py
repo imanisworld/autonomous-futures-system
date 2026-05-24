@@ -31,6 +31,7 @@ from pathlib import Path
 from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
+from agent.daily_summary import DailySummaryAgent
 from config.settings import load_config
 from journal.journal_logger import JournalLogger
 from notifications.discord_notifier import notify_discord
@@ -131,6 +132,20 @@ async def latest_webhook() -> dict:
 async def strategy_status() -> dict:
     """Return enabled strategy concepts and journal-derived strategy counts."""
     return _strategy_payload(date.today())
+
+
+@app.get("/status/review")
+async def status_review(
+    review_date: str | None = Query(default=None, alias="date"),
+    mode: str = Query(default="eod", pattern="^(morning|eod)$"),
+) -> dict:
+    """Generate and return a read-only morning or end-of-day review report."""
+    target_date = review_date or date.today().isoformat()
+    agent = DailySummaryAgent(_config)
+    agent.log_dir = Path(_config.log_dir)
+    agent.risk_reviewer.config.log_dir = _config.log_dir
+    agent.trade_grader.config.log_dir = _config.log_dir
+    return agent.morning(target_date) if mode == "morning" else agent.eod(target_date)
 
 
 # ─── Error handlers ───────────────────────────────────────────────────────────

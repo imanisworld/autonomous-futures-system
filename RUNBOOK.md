@@ -66,7 +66,11 @@ curl http://127.0.0.1:8000/status/today
 curl 'http://127.0.0.1:8000/status/history?days=7'
 curl http://127.0.0.1:8000/status/latest-webhook
 curl http://127.0.0.1:8000/status/strategy
+curl 'http://127.0.0.1:8000/status/review?date=2026-05-23&mode=eod'
 ```
+
+The review endpoint supports `mode=morning` or `mode=eod` and writes the same
+review artifacts as the daily summary CLI.
 
 ### Optional Discord Output
 
