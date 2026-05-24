@@ -1,0 +1,244 @@
+// This Pine Script indicator auto-populates every field in
+// full_context_alert_message.json.tpl and fires the alert on each confirmed
+// bar close.  Add it to your MNQ/MES/MGC/MCL chart, then create one alert:
+//   Condition → RiskSentinel — Full Context → "Any alert() function call"
+//   Message   → (leave blank — the script builds the JSON body itself)
+//   Expiry    → Open-ended
+//
+// The webhook receives a complete JSON payload; no fields need to be
+// filled in manually.  The smoke-test template is only needed for
+// one-off curl tests.
+
+//@version=5
+indicator("RiskSentinel — Full Context", overlay=true,
+     max_lines_count=3, max_labels_count=5)
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// INPUTS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+i_orb_min    = input.int(15, "ORB Window (min)", minval=5, maxval=60, step=5,
+                 tooltip="Opening-range window in minutes from session open.",
+                 group="Opening Range")
+i_ny_session = input.session("0930-1200", "NY Session (ET)",
+                 group="Opening Range")
+
+i_ema_fast   = input.int(9,  "Fast EMA",  minval=2,  maxval=50,  group="Trend")
+i_ema_slow   = input.int(21, "Slow EMA",  minval=5,  maxval=200, group="Trend")
+i_vol_len    = input.int(20, "Volume MA", minval=5,               group="Volume")
+
+i_alert_on   = input.bool(true, "Fire alert on every confirmed bar close",
+                 group="Alert")
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Nullable float → JSON token ("null" or numeric string)
+f2j(v, fmt) => na(v) ? "null" : str.tostring(v, fmt)
+
+// Classify one bar relative to the previous
+classify_bar(h, l, ph, pl) =>
+    if na(ph) or na(pl)
+        "unknown"
+    else
+        bh = h > ph
+        bl = l < pl
+        bh and bl ? "outside_bar" : not bh and not bl ? "inside_bar" :
+         bh ? "two_up" : "two_down"
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CORE CALCULATIONS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+ema_fast  = ta.ema(close, i_ema_fast)
+ema_slow  = ta.ema(close, i_ema_slow)
+vwap_val  = ta.vwap(hlc3)
+avg_vol   = ta.sma(volume, i_vol_len)
+rel_vol   = avg_vol > 0 ? volume / avg_vol : 1.0
+
+
+// ── Previous Day H / L / C ────────────────────────────────────────────────────
+[pd_high, pd_low, pd_close] = request.security(
+     syminfo.tickerid, "D",
+     [high[1], low[1], close[1]],
+     lookahead=barmerge.lookahead_on)
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// OPENING RANGE (NY session)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+bars_needed  = math.max(1, math.round(i_orb_min * 60 / timeframe.in_seconds()))
+in_ny        = not na(time(timeframe.period, i_ny_session, "America/New_York"))
+ny_start     = in_ny and not in_ny[1]
+
+var float orb_h    = na
+var float orb_l    = na
+var int   orb_cnt  = 0
+var bool  orb_done = false
+
+if ny_start
+    orb_h    := high
+    orb_l    := low
+    orb_cnt  := 1
+    orb_done := false
+else if in_ny and not orb_done
+    if orb_cnt < bars_needed
+        orb_h   := math.max(orb_h, high)
+        orb_l   := math.min(orb_l, low)
+        orb_cnt += 1
+    else
+        orb_done := true
+
+// Bar-by-bar ORB status
+orb_status =
+     na(orb_h) or na(orb_l)                   ? "undefined"      :
+     close > orb_h and close[1] <= orb_h      ? "reclaimed_high" :
+     close < orb_l and close[1] >= orb_l      ? "reclaimed_low"  :
+     close[1] > orb_h and close  <= orb_h     ? "rejected_high"  :
+     close[1] < orb_l and close  >= orb_l     ? "rejected_low"   :
+     close > orb_h                            ? "above"          :
+     close < orb_l                            ? "below"          :
+                                                "inside"
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TREND
+// ═══════════════════════════════════════════════════════════════════════════════
+
+diff_pct     = math.abs(ema_fast - ema_slow) / ema_slow * 100
+
+trend_dir    =
+     ema_fast > ema_slow and diff_pct > 0.15  ? "UP"      :
+     ema_fast < ema_slow and diff_pct > 0.15  ? "DOWN"    :
+                                                "SIDEWAYS"
+
+trend_str    =
+     diff_pct > 0.40  ? "STRONG"   :
+     diff_pct > 0.15  ? "MODERATE" :
+                        "WEAK"
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MARKET CONDITION
+// ═══════════════════════════════════════════════════════════════════════════════
+
+atr14        = ta.atr(14)
+range_ratio  = atr14 > 0 ? (high - low) / atr14 : 1.0
+
+market_cond  =
+     rel_vol < 0.40                                  ? "DEAD"        :
+     range_ratio < 0.40 or rel_vol < 0.60            ? "CHOPPY"      :
+     trend_dir != "SIDEWAYS" and rel_vol >= 0.80      ? "TRENDING"    :
+                                                        "RANGE_BOUND"
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// STRAT BAR TYPES & SEQUENCE
+// ═══════════════════════════════════════════════════════════════════════════════
+
+cur_type  = classify_bar(high,    low,    high[1], low[1])
+prev_type = classify_bar(high[1], low[1], high[2], low[2])
+t2b_type  = classify_bar(high[2], low[2], high[3], low[3])
+
+strat_seq =
+     cur_type == "two_up"   and prev_type == "inside_bar"  and t2b_type == "two_up"    ? "strat_212"                  :
+     cur_type == "two_down" and prev_type == "inside_bar"  and t2b_type == "two_down"  ? "strat_212"                  :
+     cur_type == "two_up"   and prev_type == "two_down"    and t2b_type == "inside_bar"? "strat_122"                  :
+     cur_type == "two_down" and prev_type == "two_up"      and t2b_type == "inside_bar"? "strat_122"                  :
+     (cur_type == "two_up"   or cur_type == "two_down") and prev_type == "inside_bar"  ? "strat_inside_break"         :
+     (cur_type == "two_up"   or cur_type == "two_down") and prev_type == "outside_bar" ? "strat_outside_continuation" :
+     "no_sequence"
+
+strat_dir =
+     strat_seq != "no_sequence" and cur_type == "two_up"   ? "LONG"  :
+     strat_seq != "no_sequence" and cur_type == "two_down" ? "SHORT" :
+     na(string)  // no direction when no qualifying sequence
+
+strat_trigger =
+     strat_seq == "strat_212"                  ? "continuation"             :
+     strat_seq == "strat_122"                  ? "reversal"                 :
+     strat_seq == "strat_inside_break"         ? "breakout"                 :
+     strat_seq == "strat_outside_continuation" ? "outside_bar_followthrough":
+     na(string)
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PRICE VS KEY LEVELS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+price_vs_pdh =
+     na(pd_high) ? "unknown" :
+     close > pd_high ? "above" : close < pd_high ? "below" : "at"
+
+price_vs_pdl =
+     na(pd_low)  ? "unknown" :
+     close > pd_low  ? "above" : close < pd_low  ? "below" : "at"
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// BUILD ALERT JSON
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Nullable string → JSON token (null or quoted string)
+s2j(v) => na(v) ? "null" : '"' + v + '"'
+
+msg = "{"
+ + '"ticker":'              + '"' + syminfo.ticker              + '",'
+ + '"timestamp":'           + str.tostring(time)                + ','
+ + '"open":'                + str.tostring(open,   "#.####")    + ','
+ + '"high":'                + str.tostring(high,   "#.####")    + ','
+ + '"low":'                 + str.tostring(low,    "#.####")    + ','
+ + '"close":'               + str.tostring(close,  "#.####")    + ','
+ + '"volume":'              + str.tostring(volume)              + ','
+ + '"timeframe":'           + '"' + timeframe.period            + '",'
+ + '"avg_volume":'          + str.tostring(math.round(avg_vol)) + ','
+ + '"vwap":'                + f2j(vwap_val,  "#.####")          + ','
+ + '"orb_high":'            + f2j(orb_h,     "#.##")            + ','
+ + '"orb_low":'             + f2j(orb_l,     "#.##")            + ','
+ + '"orb_status":'          + '"' + orb_status                  + '",'
+ + '"market_condition":'    + '"' + market_cond                 + '",'
+ + '"trend_direction":'     + '"' + trend_dir                   + '",'
+ + '"trend_strength":'      + '"' + trend_str                   + '",'
+ + '"previous_day_high":'   + f2j(pd_high,   "#.##")            + ','
+ + '"previous_day_low":'    + f2j(pd_low,    "#.##")            + ','
+ + '"previous_day_close":'  + f2j(pd_close,  "#.##")            + ','
+ + '"price_vs_pdh":'        + '"' + price_vs_pdh                + '",'
+ + '"price_vs_pdl":'        + '"' + price_vs_pdl                + '",'
+ + '"previous_bar_high":'   + f2j(high[1],   "#.####")          + ','
+ + '"previous_bar_low":'    + f2j(low[1],    "#.####")          + ','
+ + '"two_bars_back_high":'  + f2j(high[2],   "#.####")          + ','
+ + '"two_bars_back_low":'   + f2j(low[2],    "#.####")          + ','
+ + '"current_bar_type":'    + '"' + cur_type                    + '",'
+ + '"previous_bar_type":'   + '"' + prev_type                   + '",'
+ + '"two_bars_back_type":'  + '"' + t2b_type                    + '",'
+ + '"strat_sequence":'      + s2j(strat_seq == "no_sequence" ? na(string) : strat_seq) + ','
+ + '"strat_trigger":'       + s2j(strat_trigger)                + ','
+ + '"strat_direction":'     + s2j(strat_dir)
+ + "}"
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FIRE
+// ═══════════════════════════════════════════════════════════════════════════════
+
+if i_alert_on and barstate.isconfirmed
+    alert(msg, alert.freq_once_per_bar_close)
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CHART OVERLAYS  (visual reference — not required for the webhook)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+plot(ema_fast, "EMA Fast", color=color.new(color.aqua,   30), linewidth=1)
+plot(ema_slow, "EMA Slow", color=color.new(color.orange, 30), linewidth=1)
+plot(vwap_val, "VWAP",     color=color.new(color.yellow, 20), linewidth=2)
+
+orb_h_plot = in_ny or in_ny[1] ? orb_h : na
+orb_l_plot = in_ny or in_ny[1] ? orb_l : na
+plot(orb_h_plot, "ORB High", color=color.new(color.lime,  40), linewidth=1, style=plot.style_stepline)
+plot(orb_l_plot, "ORB Low",  color=color.new(color.red,   40), linewidth=1, style=plot.style_stepline)
