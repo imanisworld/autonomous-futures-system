@@ -129,7 +129,8 @@ def build_market_state(payload: AlertPayload) -> MarketState:
         "below" if payload.close < pdh  else "at"
     )
     price_vs_pdl = payload.price_vs_pdl or (
-        "above" if payload.close >= pdl else "below"
+        "above" if payload.close > pdl else
+        "below" if payload.close < pdl else "at"
     )
 
     orb_h = payload.orb_high if payload.orb_high is not None else payload.high

@@ -133,8 +133,9 @@ TradingView full-context alert message:
 ```
 
 Replace the placeholder `0` and classification values with real values from a
-Pine indicator. Omit unknown context fields until they are computed. Strat
-fields are used as confirmation context only and cannot trigger execution alone.
+Pine indicator. Omit unknown context fields until they are computed. Classified
+`strat_212` and `strat_122` context may create paper setups only when enabled
+and still must pass bracket and risk checks.
 
 ---
 

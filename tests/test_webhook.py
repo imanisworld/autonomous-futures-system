@@ -191,12 +191,12 @@ def test_runner_trending_orb_reclaim_produces_trade(config, tmp_path):
     payload = _base_payload()
     result = process_alert(payload, config=config, log_dir=str(tmp_path / "logs"))
 
-    assert result["decision"] in ("TRADE", "NO_TRADE")
-    if result["decision"] == "TRADE":
-        assert result["fill"] is not None
-        assert result["fill"]["status"] == "OPEN"
-        assert result["fill"]["instrument"] == "MNQ"
-        assert result["risk"]["result"] == "APPROVED"
+    if result["decision"] == "NO_TRADE":
+        pytest.skip("Signal engine produced NO_TRADE — conditions not met")
+    assert result["fill"] is not None
+    assert result["fill"]["status"] == "OPEN"
+    assert result["fill"]["instrument"] == "MNQ"
+    assert result["risk"]["result"] == "APPROVED"
 
 
 # ─── runner: open-position resolution ────────────────────────────────────────
@@ -501,7 +501,7 @@ def test_fastapi_alert_endpoint_rejects_bad_secret(monkeypatch):
     assert resp.status_code == 401
 
 
-def test_fastapi_alert_endpoint_accepts_good_secret(monkeypatch):
+def test_fastapi_alert_endpoint_accepts_good_secret_via_query(monkeypatch):
     try:
         from fastapi.testclient import TestClient
         from webhook.app import app
@@ -521,5 +521,33 @@ def test_fastapi_alert_endpoint_accepts_good_secret(monkeypatch):
     }
 
     resp = client.post("/webhook/alert?secret=local-test-secret", json=body)
+    assert resp.status_code == 200
+    assert resp.json()["ok"] is True
+
+
+def test_fastapi_alert_endpoint_accepts_good_secret_via_header(monkeypatch):
+    try:
+        from fastapi.testclient import TestClient
+        from webhook.app import app
+    except ImportError:
+        pytest.skip("fastapi[testclient] not installed")
+
+    monkeypatch.setenv("WEBHOOK_SECRET", "local-test-secret")
+    client = TestClient(app)
+    body = {
+        "ticker": "MNQ1!",
+        "timestamp": "2026-05-23T14:30:00+00:00",
+        "open": 19480.0,
+        "high": 19510.0,
+        "low": 19475.0,
+        "close": 19505.25,
+        "market_condition": "CHOPPY",
+    }
+
+    resp = client.post(
+        "/webhook/alert",
+        json=body,
+        headers={"X-Webhook-Secret": "local-test-secret"},
+    )
     assert resp.status_code == 200
     assert resp.json()["ok"] is True

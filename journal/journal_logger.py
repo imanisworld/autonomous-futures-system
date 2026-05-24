@@ -205,8 +205,7 @@ class JournalLogger:
         no following OUTCOME entry (i.e., the position is still open).
 
         Returns None if no open position exists for the day.
-        The returned dict has keys: direction, entry, stop, target, rr_ratio,
-        strategy, instrument (instrument comes from the decision entry itself).
+        The returned dict has keys: instrument, direction, entry, stop, target.
         """
         path = self._journal_path(for_date)
         if not path.exists():

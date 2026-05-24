@@ -28,7 +28,7 @@ from collections import Counter
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from config.settings import load_config
@@ -54,20 +54,21 @@ _config = load_config()
 @app.post("/webhook/alert")
 async def receive_alert(
     payload: AlertPayload,
+    x_webhook_secret: str | None = Header(default=None),
     secret: str | None = Query(default=None),
 ) -> JSONResponse:
     """
     Accept a bar-close alert from TradingView, run it through the
     paper-trading pipeline, and return a structured decision result.
     """
-    _verify_webhook_secret(secret)
+    _verify_webhook_secret(x_webhook_secret or secret)
     try:
         result = process_alert(payload, config=_config)
         _record_latest_webhook(payload, result)
         return JSONResponse(content={"ok": True, **result})
     except Exception as exc:
         logger.exception("Error processing alert: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -137,7 +138,7 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
     logger.exception("Unhandled exception on %s: %s", request.url.path, exc)
     return JSONResponse(
         status_code=500,
-        content={"ok": False, "error": str(exc)},
+        content={"ok": False, "error": "Internal server error"},
     )
 
 

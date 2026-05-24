@@ -174,8 +174,8 @@ Full-context alert JSON:
 
 Replace the `0` and classification values with real values from a Pine
 indicator. If a context value is not available yet, omit that field instead of
-sending fake numbers. Strat fields are confirmation context only; they do not
-create trades by themselves.
+sending fake numbers. Classified `strat_212` and `strat_122` context may create
+paper setups only when enabled and still must pass bracket and risk checks.
 
 ## Local Dashboard
 

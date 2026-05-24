@@ -18,11 +18,12 @@ Types: `Added`, `Changed`, `Fixed`, `Removed`, `Security`, `Rulebook`
 - `/status/today` and `/status/history` now expose dashboard-ready read-only state.
 - `/status/latest-webhook` exposes the latest raw TradingView payload, derived market context, and paper-engine result.
 - `/status/strategy` exposes enabled concepts, decision counts, market-condition counts, and strategy counts without mutating journals.
-- The Strat classifier now supports candle typing and simple `strat_212`, `strat_122`, inside-break, and outside-bar follow-through context as confirmation-only signal metadata.
+- The Strat classifier now supports candle typing and simple `strat_212`, `strat_122`, inside-break, and outside-bar follow-through context; classified `strat_212`/`strat_122` setups can generate paper setups when enabled and can veto opposing structural setups.
 - Tests covering payload parsing, session detection, paper decisions, open-position resolution, webhook health, and webhook auth.
 
 ### Security
 - Webhook live-data ingestion remains paper-only and does not add broker APIs, broker SDKs, credentials, or live order execution.
+- Webhook errors return generic internal-error responses instead of exposing exception details.
 
 ### Fixed
 - Replay runs now clear prior generated replay artifacts for each replay date before running, so repeated manifest runs do not double-count trades or P/L.

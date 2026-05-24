@@ -74,10 +74,10 @@ def classify_sequence(
             sequence = "strat_inside_break"
             trigger = "breakout"
             direction = "LONG" if current_bar_type == TWO_UP else "SHORT"
-    elif previous_bar_type == OUTSIDE_BAR and current_bar_type in (TWO_UP, TWO_DOWN):
-        sequence = "strat_outside_continuation"
-        trigger = "outside_bar_followthrough"
-        direction = "LONG" if current_bar_type == TWO_UP else "SHORT"
+        elif previous_bar_type == OUTSIDE_BAR:
+            sequence = "strat_outside_continuation"
+            trigger = "outside_bar_followthrough"
+            direction = "LONG" if current_bar_type == TWO_UP else "SHORT"
 
     return StratContext(
         current_bar_type=current_bar_type,

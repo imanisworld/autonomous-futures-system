@@ -196,7 +196,7 @@ class PaperBroker(BrokerInterface):
         restarts — the broker is stateless between HTTP requests, so the
         journal is the source of truth.
         """
-        if self._position is not None:
+        if self._position is not None and self._position.open:
             raise RuntimeError(
                 "PaperBroker.restore_position: a position is already loaded."
             )

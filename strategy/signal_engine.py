@@ -184,6 +184,15 @@ class DecisionEngine:
                 reason="No qualifying setup found in current market structure.",
             )
         setup = self._apply_strat_confirmation(setup, state)
+        if setup is None:
+            return DecisionOutput(
+                timestamp=now,
+                instrument=state.instrument,
+                session=state.session,
+                decision="NO_TRADE",
+                market_condition=condition,
+                reason="Strat bar sequence contradicts setup direction.",
+            )
 
         # ── R:R validation ────────────────────────────────────────────────────
         if setup.rr_ratio < self.config.min_rr_ratio:
@@ -215,18 +224,27 @@ class DecisionEngine:
             setup=setup,
         )
 
-    def _apply_strat_confirmation(self, setup: SetupDetail, state: MarketState) -> SetupDetail:
-        """Append Strat context as confirmation only; never upgrades to TRADE by itself."""
+    def _apply_strat_confirmation(
+        self, setup: SetupDetail, state: MarketState
+    ) -> Optional[SetupDetail]:
+        """
+        Annotate setup with Strat bar context. Vetoes the trade (returns None)
+        when a classified sequence explicitly points in the opposing direction.
+        Strat never upgrades a NO_TRADE to a TRADE — it only confirms or blocks.
+        """
         strat = state.strat
         if not strat or not strat.current_bar_type:
             return setup
+
+        # Veto: a confirmed sequence in the opposite direction contradicts the setup
+        if strat.strat_sequence and strat.strat_direction and strat.strat_direction != setup.direction:
+            return None
 
         parts = [f"Strat current={strat.current_bar_type}"]
         if strat.strat_sequence:
             parts.append(f"sequence={strat.strat_sequence}")
         if strat.strat_direction:
-            alignment = "aligned" if strat.strat_direction == setup.direction else "not_aligned"
-            parts.append(f"direction={strat.strat_direction} ({alignment})")
+            parts.append(f"direction={strat.strat_direction} (aligned)")
 
         notes = setup.notes or ""
         suffix = "; ".join(parts)
@@ -498,33 +516,54 @@ class DecisionEngine:
 
     def _try_strat_212(self, state: MarketState) -> Optional[SetupDetail]:
         """
-        The Strat: 2-1-2 Continuation (Phase 1 approximation).
+        The Strat: 2-1-2 Continuation.
 
         Full pattern: 2UP → 1 (inside bar) → 2UP  (bullish continuation)
                       2DOWN → 1 → 2DOWN             (bearish continuation)
 
-        Phase 1 proxy: detect via trend direction + ORB inside status + VWAP hold.
-        The inside bar compression stage is approximated by ORB status=inside
-        with price above/below VWAP in a trending market.
-
-        Phase 2 note: replace with actual multi-bar candle classification.
-        See sources/strat_definitions.md for full pattern definition.
+        Uses classified bar sequence from state.strat when available.
+        Falls back to Phase 1 proxy (ORB inside + trend + VWAP) when absent.
         """
+        tick = self.TICK_SIZE.get(state.instrument, 0.25)
+
+        # Use actual classified strat sequence when present
+        strat = state.strat
+        if strat and strat.strat_sequence == "strat_212" and strat.strat_direction:
+            direction = strat.strat_direction
+            if direction == "LONG":
+                entry = state.ohlc.high + tick
+                stop = state.ohlc.low - (tick * 4)
+                risk = entry - stop
+            else:
+                entry = state.ohlc.low - tick
+                stop = state.ohlc.high + (tick * 4)
+                risk = stop - entry
+            if risk <= 0:
+                return None
+            target = entry + (risk * 2.2) if direction == "LONG" else entry - (risk * 2.2)
+            rr = RiskEngine.calculate_rr(direction, entry, stop, target)
+            return SetupDetail(
+                direction=direction,
+                entry=round(entry, 4),
+                stop=round(stop, 4),
+                target=round(target, 4),
+                rr_ratio=rr,
+                strategy="strat_212",
+                notes=f"2-1-2 continuation ({direction}): classified from bar sequence",
+            )
+
+        # Phase 1 fallback proxy: ORB inside + trend + VWAP
         if not (state.trend and state.trend.direction in ("UP", "DOWN")):
             return None
         if state.trend.strength not in ("STRONG", "MODERATE"):
             return None
-        # Phase 1 proxy: ORB inside = inside bar compression in progress
         if state.orb.status != "inside":
             return None
-
-        tick = self.TICK_SIZE.get(state.instrument, 0.25)
 
         if state.trend.direction == "UP":
             if state.vwap.price_vs_vwap != "above":
                 return None
-            # Entry above current bar high (break of compression)
-            entry = state.ohlc.high + (tick * 1)
+            entry = state.ohlc.high + tick
             stop = state.ohlc.low - (tick * 4)
             risk = entry - stop
             if risk <= 0:
@@ -534,7 +573,7 @@ class DecisionEngine:
         else:
             if state.vwap.price_vs_vwap != "below":
                 return None
-            entry = state.ohlc.low - (tick * 1)
+            entry = state.ohlc.low - tick
             stop = state.ohlc.high + (tick * 4)
             risk = stop - entry
             if risk <= 0:
@@ -552,33 +591,55 @@ class DecisionEngine:
             strategy="strat_212",
             notes=(
                 f"2-1-2 continuation proxy ({state.trend.direction}): "
-                f"inside-bar compression in trending market above/below VWAP. "
-                f"Phase 1 approximation — full Strat classification in Phase 2."
+                f"inside-bar compression in trending market above/below VWAP"
             ),
         )
 
     def _try_strat_122(self, state: MarketState) -> Optional[SetupDetail]:
         """
-        The Strat: 1-2-2 Reversal (Phase 1 approximation).
+        The Strat: 1-2-2 Reversal.
 
         Full pattern: 1 (inside) → 2DOWN → 2UP  (bullish reversal)
                       1 → 2UP → 2DOWN             (bearish reversal)
 
-        Phase 1 proxy: detect an ORB rejection (failed breakout) when the
-        broader trend is in the opposite direction — the classic bull/bear trap.
-        ORB rejection_high + downtrend = bearish trap resolved → bullish 1-2-2.
-        ORB rejection_low + uptrend = bullish trap resolved → bearish 1-2-2.
-
-        See sources/strat_definitions.md for full pattern definition.
+        Uses classified bar sequence from state.strat when available.
+        Falls back to Phase 1 proxy (ORB rejection + opposing trend) when absent.
         """
         tick = self.TICK_SIZE.get(state.instrument, 0.25)
 
-        # Bullish 1-2-2: ORB high rejected, but underlying trend is UP → reversal long
+        # Use actual classified strat sequence when present
+        strat = state.strat
+        if strat and strat.strat_sequence == "strat_122" and strat.strat_direction:
+            direction = strat.strat_direction
+            if direction == "LONG":
+                entry = state.ohlc.high + tick
+                stop = state.ohlc.low - (tick * 4)
+                risk = entry - stop
+            else:
+                entry = state.ohlc.low - tick
+                stop = state.ohlc.high + (tick * 4)
+                risk = stop - entry
+            if risk <= 0:
+                return None
+            target = entry + (risk * 2.0) if direction == "LONG" else entry - (risk * 2.0)
+            rr = RiskEngine.calculate_rr(direction, entry, stop, target)
+            return SetupDetail(
+                direction=direction,
+                entry=round(entry, 4),
+                stop=round(stop, 4),
+                target=round(target, 4),
+                rr_ratio=rr,
+                strategy="strat_122",
+                notes=f"1-2-2 reversal ({direction}): classified from bar sequence",
+            )
+
+        # Phase 1 fallback proxy: ORB rejection + opposing trend
+        # Bullish 1-2-2: ORB high rejected but underlying trend is UP
         if (state.orb.status == "rejected_high"
                 and state.trend
                 and state.trend.direction == "UP"
                 and state.vwap.price_vs_vwap == "above"):
-            entry = state.orb.high + (tick * 2)  # Re-entry above ORB high
+            entry = state.orb.high + (tick * 2)
             stop = state.orb.low - (tick * 4)
             risk = entry - stop
             if risk <= 0:
@@ -592,18 +653,15 @@ class DecisionEngine:
                 target=round(target, 4),
                 rr_ratio=rr,
                 strategy="strat_122",
-                notes=(
-                    "1-2-2 bullish reversal proxy: ORB high rejected then reclaimed "
-                    "with uptrend context. Phase 1 approximation."
-                ),
+                notes="1-2-2 bullish reversal proxy: ORB high rejected with uptrend context",
             )
 
-        # Bearish 1-2-2: ORB low rejected, but underlying trend is DOWN → reversal short
+        # Bearish 1-2-2: ORB low rejected but underlying trend is DOWN
         if (state.orb.status == "rejected_low"
                 and state.trend
                 and state.trend.direction == "DOWN"
                 and state.vwap.price_vs_vwap == "below"):
-            entry = state.orb.low - (tick * 2)  # Re-entry below ORB low
+            entry = state.orb.low - (tick * 2)
             stop = state.orb.high + (tick * 4)
             risk = stop - entry
             if risk <= 0:
@@ -617,10 +675,7 @@ class DecisionEngine:
                 target=round(target, 4),
                 rr_ratio=rr,
                 strategy="strat_122",
-                notes=(
-                    "1-2-2 bearish reversal proxy: ORB low rejected then reclaimed "
-                    "with downtrend context. Phase 1 approximation."
-                ),
+                notes="1-2-2 bearish reversal proxy: ORB low rejected with downtrend context",
             )
 
         return None
