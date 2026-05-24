@@ -209,7 +209,7 @@ journal-derived strategy counts. It has no order buttons and no broker controls.
 
 The review endpoint previews the same read-only morning or end-of-day trade
 grading reports produced by `python -m agent.daily_summary`, without writing
-review artifacts.
+review artifacts. Review dates must use exact `YYYY-MM-DD` format.
 
 ## Discord Notifications
 

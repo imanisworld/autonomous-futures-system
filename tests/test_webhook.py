@@ -486,6 +486,22 @@ def test_fastapi_review_endpoint_rejects_invalid_mode(monkeypatch, tmp_path):
     assert resp.status_code == 422
 
 
+def test_fastapi_review_endpoint_rejects_invalid_date(monkeypatch, tmp_path):
+    try:
+        from fastapi.testclient import TestClient
+        from webhook.app import app
+    except ImportError:
+        pytest.skip("fastapi[testclient] not installed")
+
+    _isolate_app_logs(monkeypatch, tmp_path)
+    client = TestClient(app)
+
+    resp = client.get("/status/review?date=../2026-05-23&mode=eod")
+
+    assert resp.status_code == 422
+    assert "YYYY-MM-DD" in resp.json()["detail"]
+
+
 def test_fastapi_latest_webhook_endpoint_after_alert(monkeypatch, tmp_path):
     try:
         from fastapi.testclient import TestClient

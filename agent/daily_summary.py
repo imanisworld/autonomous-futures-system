@@ -24,6 +24,7 @@ from .trade_grader import TradeGrade, TradeGrader
 
 
 def read_journal(log_dir: str | Path, review_date: str) -> list[dict]:
+    review_date = validate_review_date(review_date)
     path = Path(log_dir) / f"journal_{review_date}.jsonl"
     if not path.exists():
         return []
@@ -47,6 +48,17 @@ def read_journal(log_dir: str | Path, review_date: str) -> list[dict]:
     return entries
 
 
+def validate_review_date(review_date: str) -> str:
+    """Require exact YYYY-MM-DD review dates before building file paths."""
+    try:
+        parsed = date.fromisoformat(review_date)
+    except ValueError as exc:
+        raise ValueError("review_date must be YYYY-MM-DD") from exc
+    if parsed.isoformat() != review_date:
+        raise ValueError("review_date must be YYYY-MM-DD")
+    return review_date
+
+
 class DailySummaryAgent:
     """Creates preflight and end-of-day reports from the journal."""
 
@@ -58,6 +70,7 @@ class DailySummaryAgent:
         self.trade_grader = TradeGrader(self.config)
 
     def morning(self, review_date: str) -> dict:
+        review_date = validate_review_date(review_date)
         report = self.preview_morning(review_date)
         self._write_json(review_date, report)
         self._write_markdown(review_date, report, [])
@@ -65,6 +78,7 @@ class DailySummaryAgent:
 
     def preview_morning(self, review_date: str) -> dict:
         """Build a morning report without writing review artifacts."""
+        review_date = validate_review_date(review_date)
         entries = read_journal(self.log_dir, review_date)
         review = self.risk_reviewer.review_entries(entries, review_date)
         return {
@@ -83,6 +97,7 @@ class DailySummaryAgent:
         }
 
     def eod(self, review_date: str) -> dict:
+        review_date = validate_review_date(review_date)
         report, grades = self.preview_eod_with_grades(review_date)
         self._write_json(review_date, report)
         self._write_trade_grades_csv(review_date, grades)
@@ -91,11 +106,13 @@ class DailySummaryAgent:
 
     def preview_eod(self, review_date: str) -> dict:
         """Build an end-of-day report without writing review artifacts."""
+        review_date = validate_review_date(review_date)
         report, _ = self.preview_eod_with_grades(review_date)
         return report
 
     def preview_eod_with_grades(self, review_date: str) -> tuple[dict, list[TradeGrade]]:
         """Build an EOD report and return internal grade objects for writers."""
+        review_date = validate_review_date(review_date)
         entries = read_journal(self.log_dir, review_date)
         review = self.risk_reviewer.review_entries(entries, review_date)
         grades = self.trade_grader.grade_entries(entries)
@@ -110,11 +127,13 @@ class DailySummaryAgent:
         return report, grades
 
     def _write_json(self, review_date: str, report: dict) -> Path:
+        review_date = validate_review_date(review_date)
         path = self.log_dir / f"review_{review_date}.json"
         path.write_text(json.dumps(report, indent=2, sort_keys=True), encoding="utf-8")
         return path
 
     def _write_trade_grades_csv(self, review_date: str, grades: Iterable[TradeGrade]) -> Path:
+        review_date = validate_review_date(review_date)
         path = self.log_dir / f"trade_grades_{review_date}.csv"
         fieldnames = [
             "index",
@@ -140,6 +159,7 @@ class DailySummaryAgent:
         return path
 
     def _write_markdown(self, review_date: str, report: dict, grades: list[TradeGrade]) -> Path:
+        review_date = validate_review_date(review_date)
         path = self.log_dir / f"daily_review_{review_date}.md"
         review = report["risk_review"]
         lines = [

@@ -9,7 +9,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from agent.daily_summary import DailySummaryAgent
+import pytest
+
+from agent.daily_summary import DailySummaryAgent, validate_review_date
 from agent.risk_reviewer import RiskReviewer
 from agent.trade_grader import TradeGrader
 
@@ -152,6 +154,28 @@ def test_daily_summary_preview_morning_does_not_write_artifacts(config, tmp_path
     assert report["preflight"]["paper_only"] is True
     assert not (tmp_path / "review_2026-05-23.json").exists()
     assert not (tmp_path / "daily_review_2026-05-23.md").exists()
+
+
+def test_validate_review_date_accepts_iso_date():
+    assert validate_review_date("2026-05-23") == "2026-05-23"
+
+
+@pytest.mark.parametrize("bad_date", [
+    "2026-5-23",
+    "2026-02-30",
+    "../2026-05-23",
+    "2026-05-23/extra",
+])
+def test_validate_review_date_rejects_unsafe_or_invalid_dates(bad_date):
+    with pytest.raises(ValueError):
+        validate_review_date(bad_date)
+
+
+def test_daily_summary_rejects_invalid_review_date(config, tmp_path):
+    config.log_dir = str(tmp_path)
+
+    with pytest.raises(ValueError):
+        DailySummaryAgent(config).preview_eod("../2026-05-23")
 
 
 def test_review_agents_do_not_import_broker_execution():

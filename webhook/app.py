@@ -31,7 +31,7 @@ from pathlib import Path
 from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
-from agent.daily_summary import DailySummaryAgent
+from agent.daily_summary import DailySummaryAgent, validate_review_date
 from config.settings import load_config
 from journal.journal_logger import JournalLogger
 from notifications.discord_notifier import notify_discord
@@ -140,7 +140,10 @@ async def status_review(
     mode: str = Query(default="eod", pattern="^(morning|eod)$"),
 ) -> dict:
     """Return a read-only morning or end-of-day review report."""
-    target_date = review_date or date.today().isoformat()
+    try:
+        target_date = validate_review_date(review_date or date.today().isoformat())
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     agent = DailySummaryAgent(_config)
     agent.log_dir = Path(_config.log_dir)
     agent.risk_reviewer.config.log_dir = _config.log_dir
