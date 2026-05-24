@@ -314,6 +314,56 @@ def test_fastapi_health_endpoint():
     assert "webhook_secret_required" in data
 
 
+def test_fastapi_dashboard_endpoint():
+    try:
+        from fastapi.testclient import TestClient
+        from webhook.app import app
+    except ImportError:
+        pytest.skip("fastapi[testclient] not installed")
+
+    client = TestClient(app)
+    resp = client.get("/")
+
+    assert resp.status_code == 200
+    assert "text/html" in resp.headers["content-type"]
+    assert "RiskSentinel" in resp.text
+    assert "LIVE TRADING OFF" in resp.text
+
+
+def test_fastapi_status_today_endpoint():
+    try:
+        from fastapi.testclient import TestClient
+        from webhook.app import app
+    except ImportError:
+        pytest.skip("fastapi[testclient] not installed")
+
+    client = TestClient(app)
+    resp = client.get("/status/today")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["live_trading_enabled"] is False
+    assert data["max_trades_per_day"] == 3
+    assert "latest_entries" in data
+    assert "top_no_trade_reasons" in data
+
+
+def test_fastapi_status_history_endpoint():
+    try:
+        from fastapi.testclient import TestClient
+        from webhook.app import app
+    except ImportError:
+        pytest.skip("fastapi[testclient] not installed")
+
+    client = TestClient(app)
+    resp = client.get("/status/history?days=3")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data["days"]) == 3
+    assert {"date", "trade_count", "no_trades"}.issubset(data["days"][0])
+
+
 def test_fastapi_alert_endpoint_valid_payload(monkeypatch):
     """POST /webhook/alert with a valid payload returns 200."""
     try:

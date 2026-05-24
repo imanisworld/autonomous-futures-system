@@ -138,6 +138,25 @@ Required alert JSON:
 }
 ```
 
+## Local Dashboard
+
+When the webhook server is running, open the read-only dashboard:
+
+```text
+http://127.0.0.1:8000/
+```
+
+Status APIs:
+
+```text
+http://127.0.0.1:8000/status/today
+http://127.0.0.1:8000/status/history?days=7
+```
+
+The dashboard shows trade count, loss streak, open-position state, realized
+paper P/L, recent journal entries, and top `NO_TRADE` reasons. It has no order
+buttons and no broker controls.
+
 ---
 
 ## Architecture Principles

@@ -53,6 +53,19 @@ Check local health:
 curl http://127.0.0.1:8000/health
 ```
 
+Open the read-only dashboard:
+
+```text
+http://127.0.0.1:8000/
+```
+
+Read status JSON:
+
+```bash
+curl http://127.0.0.1:8000/status/today
+curl 'http://127.0.0.1:8000/status/history?days=7'
+```
+
 TradingView cannot call `localhost`; expose port `8000` with a public HTTPS
 tunnel and paste this shape into the TradingView webhook URL field:
 
