@@ -236,6 +236,19 @@ def test_manifest_runs_week(config, tmp_path):
     assert (tmp_path / "logs" / "multi_day_replay_report.md").exists()
 
 
+def test_manifest_replay_is_idempotent(config, tmp_path):
+    engine = ReplayEngine(config=config, log_dir=str(tmp_path / "logs"))
+
+    first = engine.run_manifest("data/replay/week/manifest.json")
+    second = engine.run_manifest("data/replay/week/manifest.json")
+
+    assert second.approved_trades == first.approved_trades == 3
+    assert second.no_trades == first.no_trades == 6
+    assert second.wins == first.wins == 2
+    assert second.losses == first.losses == 1
+    assert second.realized_pnl_dollars == first.realized_pnl_dollars == 293.75
+
+
 def test_manifest_rejects_empty_days(tmp_path):
     manifest = tmp_path / "empty_manifest.json"
     manifest.write_text(json.dumps({"days": []}))

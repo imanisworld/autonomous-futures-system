@@ -314,7 +314,7 @@ def test_fastapi_health_endpoint():
     assert "webhook_secret_required" in data
 
 
-def test_fastapi_alert_endpoint_valid_payload():
+def test_fastapi_alert_endpoint_valid_payload(monkeypatch):
     """POST /webhook/alert with a valid payload returns 200."""
     try:
         from fastapi.testclient import TestClient
@@ -322,6 +322,7 @@ def test_fastapi_alert_endpoint_valid_payload():
     except ImportError:
         pytest.skip("fastapi[testclient] not installed")
 
+    monkeypatch.delenv("WEBHOOK_SECRET", raising=False)
     client = TestClient(app)
     body = {
         "ticker": "MNQ1!",

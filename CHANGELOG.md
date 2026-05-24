@@ -19,6 +19,9 @@ Types: `Added`, `Changed`, `Fixed`, `Removed`, `Security`, `Rulebook`
 ### Security
 - Webhook live-data ingestion remains paper-only and does not add broker APIs, broker SDKs, credentials, or live order execution.
 
+### Fixed
+- Replay runs now clear prior generated replay artifacts for each replay date before running, so repeated manifest runs do not double-count trades or P/L.
+
 ## [1.3.0] 2026-05-24
 
 ### Added

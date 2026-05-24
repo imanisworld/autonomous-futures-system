@@ -60,6 +60,7 @@ class ReplayEngine:
             return self._empty_report(candle_path, review_date)
 
         run_date = review_date or _date_from_timestamp(candles[0].timestamp)
+        self._reset_run_outputs(run_date)
         journal = JournalLogger(log_dir=str(self.log_dir))
         journal_date = _date_to_date(run_date)
         decision_engine = DecisionEngine(config=self.config)
@@ -127,10 +128,10 @@ class ReplayEngine:
                             entry_price=fill.entry_price,
                             exit_price=fill.exit_price,
                             exit_reason=fill.exit_reason,
-                        pnl_ticks=fill.pnl_ticks,
-                        pnl_dollars=fill.pnl_dollars,
-                        for_date=journal_date,
-                    )
+                            pnl_ticks=fill.pnl_ticks,
+                            pnl_dollars=fill.pnl_dollars,
+                            for_date=journal_date,
+                        )
                         daily_state.trade_count += 1
                         if fill.result == "LOSS":
                             daily_state.consecutive_losses += 1
@@ -167,6 +168,19 @@ class ReplayEngine:
         )
         report.write_markdown(self.log_dir / f"replay_report_{run_date}.md")
         return report
+
+    def _reset_run_outputs(self, run_date: str) -> None:
+        """Remove prior generated replay artifacts for a deterministic run."""
+        for filename in (
+            f"journal_{run_date}.jsonl",
+            f"review_{run_date}.json",
+            f"trade_grades_{run_date}.csv",
+            f"daily_review_{run_date}.md",
+            f"replay_report_{run_date}.md",
+        ):
+            path = self.log_dir / filename
+            if path.exists():
+                path.unlink()
 
     def run_many(self, candle_paths: list[str | Path]) -> MultiDayReplayReport:
         reports: list[ReplayReport] = []
