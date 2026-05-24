@@ -158,30 +158,29 @@ class JournalLogger:
         has_open_position = False
 
         for entry in entries:
+            entry_type = entry.get("type")
+
+            if entry_type == "OUTCOME":
+                outcome_data = entry.get("outcome", {})
+                result = outcome_data.get("result")
+                if result in ("WIN", "LOSS"):
+                    last_outcomes.append(result)
+                    has_open_position = False
+                continue
+
             decision = entry.get("decision")
             risk_check = entry.get("risk_check") or {}
             risk_approved = risk_check.get("result") == "APPROVED"
             outcome = entry.get("outcome") or {}
             outcome_result = outcome.get("result")
-            entry_type = entry.get("type")
 
-            # Count approved trades
             if decision == "TRADE" and risk_approved:
                 trade_count += 1
-
                 if outcome_result in ("WIN", "LOSS"):
                     last_outcomes.append(outcome_result)
                     has_open_position = False
-                elif outcome_result == "OPEN" or outcome_result is None:
+                else:
                     has_open_position = True
-
-            # Outcomes logged separately
-            if entry_type == "OUTCOME":
-                outcome_data = entry.get("outcome", {})
-                r = outcome_data.get("result")
-                if r in ("WIN", "LOSS"):
-                    last_outcomes.append(r)
-                    has_open_position = False
 
         # Count trailing consecutive losses
         consecutive_losses = 0

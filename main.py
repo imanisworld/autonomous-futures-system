@@ -23,6 +23,7 @@ Paper-only. No real orders. No broker connections.
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import sys
 import traceback
@@ -33,7 +34,7 @@ from config.settings import load_config, LiveTradingBlockedError, ConfigError
 from context.market_context import MarketStateLoader, DataQualityError, StaleDataError
 from strategy.signal_engine import DecisionEngine
 from risk.risk_engine import RiskEngine, TradeSetup, DailyState
-from execution.paper_broker import PaperBroker
+from execution.paper_broker import NextBarOHLC, PaperBroker
 from journal.journal_logger import JournalLogger
 
 
@@ -75,6 +76,14 @@ def main() -> int:
         "--risk-rules",
         default="risk_rules.yaml",
         help="Path to risk_rules.yaml (default: risk_rules.yaml)",
+    )
+    parser.add_argument(
+        "--next-bar",
+        help=(
+            "Optional JSON file with next-bar OHLC fields {high, low}. "
+            "When provided, an approved paper trade is immediately resolved "
+            "and the outcome is journaled."
+        ),
     )
     args = parser.parse_args()
 
@@ -158,6 +167,7 @@ def main() -> int:
 
     # ── 5. Risk Check (only if TRADE) ─────────────────────────────────────────
     risk_result_dict = None
+    decision_logged = False
 
     if decision.decision == "TRADE" and decision.setup is not None:
         risk_engine = RiskEngine(config=config)
@@ -189,6 +199,8 @@ def main() -> int:
 
         # ── 6. Execute (if APPROVED) ──────────────────────────────────────────
         if risk_result.approved:
+            journal.log_decision(decision.to_dict(), risk_result_dict)
+            decision_logged = True
             broker = PaperBroker()
             from execution.broker_interface import BracketOrder
             order = BracketOrder(
@@ -206,9 +218,30 @@ def main() -> int:
                 f"Order submitted to PaperBroker: {fill.direction} {fill.instrument} "
                 f"@ {fill.entry_price} | result={fill.result}"
             )
+            if args.next_bar:
+                next_bar = load_next_bar(args.next_bar)
+                outcome = broker.resolve_position(next_bar)
+                if outcome is not None:
+                    journal.log_outcome(
+                        instrument=outcome.instrument,
+                        session=state.session,
+                        result=outcome.result,
+                        entry_price=outcome.entry_price,
+                        exit_price=outcome.exit_price,
+                        exit_reason=outcome.exit_reason,
+                        pnl_ticks=outcome.pnl_ticks,
+                        pnl_dollars=outcome.pnl_dollars,
+                    )
+                    log.info(
+                        f"Paper position resolved: {outcome.result} "
+                        f"exit={outcome.exit_price} pnl=${outcome.pnl_dollars}"
+                    )
+                else:
+                    log.info("Paper position remains OPEN after next-bar resolution.")
 
     # ── 7. Log ────────────────────────────────────────────────────────────────
-    journal.log_decision(decision.to_dict(), risk_result_dict)
+    if not decision_logged:
+        journal.log_decision(decision.to_dict(), risk_result_dict)
 
     # ── 8. Summary ────────────────────────────────────────────────────────────
     _print_result(decision.decision, decision.reason, decision.setup, risk_result_dict)
@@ -221,6 +254,16 @@ def main() -> int:
     print(f"Journal: {summary['journal_path']}\n")
 
     return 0
+
+
+def load_next_bar(path: str) -> NextBarOHLC:
+    """Load minimal next-bar OHLC data for fake paper resolution."""
+    with open(path, encoding="utf-8") as f:
+        raw = json.load(f)
+    try:
+        return NextBarOHLC(high=float(raw["high"]), low=float(raw["low"]))
+    except KeyError as e:
+        raise ValueError(f"Next-bar file missing required field: {e.args[0]}") from e
 
 
 def _print_result(decision: str, reason: str, setup=None, risk=None) -> None:
