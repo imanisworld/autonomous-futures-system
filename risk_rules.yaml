@@ -1,0 +1,27 @@
+max_trades_per_day: 3
+max_consecutive_losses: 2
+daily_max_loss: 150
+
+allowed_sessions:
+  - london
+  - ny_open
+
+allowed_instruments:
+  - MNQ
+  - MES
+  - MGC
+  - MCL
+
+allowed_setups:
+  - ORB reclaim
+  - ORB rejection
+  - VWAP reclaim
+  - PDH/PDL reclaim
+  - continuation pullback
+
+minimum_rr: 2.0
+
+allow_live_trading: false
+allow_broker_credentials: false
+allow_overnight_holds: false
+allow_averaging_down: false

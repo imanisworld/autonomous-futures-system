@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/autonomous-futures-system/market_state.schema.json",
+  "title": "MarketState",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "symbol",
+    "session",
+    "price",
+    "vwap",
+    "orb_high",
+    "orb_low",
+    "trend",
+    "news_event",
+    "volatility_score",
+    "market_regime"
+  ],
+  "properties": {
+    "symbol": {
+      "type": "string",
+      "enum": ["MNQ", "MES", "MGC", "MCL"]
+    },
+    "session": {
+      "type": "string",
+      "enum": ["london", "ny_open", "asian", "closed"]
+    },
+    "price": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "vwap": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "orb_high": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "orb_low": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "trend": {
+      "type": "string",
+      "enum": ["up", "down", "range", "unknown"]
+    },
+    "news_event": {
+      "type": "boolean"
+    },
+    "volatility_score": {
+      "type": "number",
+      "minimum": 0
+    },
+    "market_regime": {
+      "type": "string",
+      "enum": ["trend", "range", "volatile", "quiet", "unknown"]
+    }
+  }
+}

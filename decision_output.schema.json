@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/autonomous-futures-system/decision_output.schema.json",
+  "title": "DecisionOutput",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["decision", "reason"],
+      "properties": {
+        "decision": { "const": "NO_TRADE" },
+        "reason": { "type": "string", "minLength": 1 },
+        "rule_failures": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": []
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "decision",
+        "symbol",
+        "session",
+        "setup",
+        "direction",
+        "entry",
+        "stop",
+        "target",
+        "rr",
+        "order_type",
+        "reason"
+      ],
+      "properties": {
+        "decision": { "const": "TRADE" },
+        "symbol": { "type": "string", "enum": ["MNQ", "MES", "MGC", "MCL"] },
+        "session": { "type": "string", "enum": ["london", "ny_open"] },
+        "setup": {
+          "type": "string",
+          "enum": [
+            "ORB reclaim",
+            "ORB rejection",
+            "VWAP reclaim",
+            "PDH/PDL reclaim",
+            "continuation pullback"
+          ]
+        },
+        "direction": { "type": "string", "enum": ["long", "short"] },
+        "entry": { "type": "number", "exclusiveMinimum": 0 },
+        "stop": { "type": "number", "exclusiveMinimum": 0 },
+        "target": { "type": "number", "exclusiveMinimum": 0 },
+        "rr": { "type": "number", "minimum": 2.0 },
+        "order_type": { "const": "bracket" },
+        "reason": { "type": "string", "minLength": 1 }
+      }
+    }
+  ]
+}
