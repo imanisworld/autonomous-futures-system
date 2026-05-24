@@ -50,6 +50,7 @@ class JournalLogger:
         self,
         decision_dict: dict,
         risk_result: Optional[dict] = None,
+        for_date: Optional[date] = None,
     ) -> None:
         """
         Append a decision entry to today's journal.
@@ -62,7 +63,7 @@ class JournalLogger:
         if risk_result:
             entry["risk_check"] = risk_result
         entry.setdefault("outcome", None)
-        self._append(entry)
+        self._append(entry, for_date)
 
     def log_outcome(
         self,
@@ -74,6 +75,7 @@ class JournalLogger:
         exit_reason: Optional[str],
         pnl_ticks: Optional[float],
         pnl_dollars: Optional[float],
+        for_date: Optional[date] = None,
     ) -> None:
         """
         Append a trade outcome entry to today's journal.
@@ -93,7 +95,7 @@ class JournalLogger:
                 "pnl_dollars": pnl_dollars,
             },
         }
-        self._append(entry)
+        self._append(entry, for_date)
 
     def log_error(self, message: str, exc: Optional[Exception] = None) -> None:
         """Append to the error log."""
@@ -105,9 +107,9 @@ class JournalLogger:
             f.write(line + "\n")
         logger.error(line)
 
-    def _append(self, entry: dict) -> None:
+    def _append(self, entry: dict, for_date: Optional[date] = None) -> None:
         """Append a single JSON entry to today's journal file."""
-        path = self._journal_path()
+        path = self._journal_path(for_date)
         try:
             with open(path, "a") as f:
                 f.write(json.dumps(entry) + "\n")

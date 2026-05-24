@@ -27,7 +27,7 @@ from execution.broker_interface import BracketOrder
 from execution.paper_broker import NextBarOHLC, PaperBroker
 from journal.journal_logger import JournalLogger
 from replay.candle_loader import ReplayCandle, ReplayCandleLoader
-from replay.replay_report import ReplayReport
+from replay.replay_report import MultiDayReplayReport, ReplayReport
 from risk.risk_engine import DailyState, RiskEngine, TradeSetup
 from strategy.signal_engine import DecisionEngine
 
@@ -51,6 +51,7 @@ class ReplayEngine:
 
         run_date = review_date or _date_from_timestamp(candles[0].timestamp)
         journal = JournalLogger(log_dir=str(self.log_dir))
+        journal_date = _date_to_date(run_date)
         decision_engine = DecisionEngine(config=self.config)
         risk_engine = RiskEngine(config=self.config)
         broker = PaperBroker()
@@ -92,7 +93,7 @@ class ReplayEngine:
                     "reason": risk_result.reason,
                 }
 
-                journal.log_decision(decision.to_dict(), risk_result_dict)
+                journal.log_decision(decision.to_dict(), risk_result_dict, for_date=journal_date)
 
                 if risk_result.approved:
                     order = BracketOrder(
@@ -116,9 +117,10 @@ class ReplayEngine:
                             entry_price=fill.entry_price,
                             exit_price=fill.exit_price,
                             exit_reason=fill.exit_reason,
-                            pnl_ticks=fill.pnl_ticks,
-                            pnl_dollars=fill.pnl_dollars,
-                        )
+                        pnl_ticks=fill.pnl_ticks,
+                        pnl_dollars=fill.pnl_dollars,
+                        for_date=journal_date,
+                    )
                         daily_state.trade_count += 1
                         if fill.result == "LOSS":
                             daily_state.consecutive_losses += 1
@@ -130,7 +132,7 @@ class ReplayEngine:
                         daily_state.has_open_position = True
                 continue
 
-            journal.log_decision(decision.to_dict(), risk_result_dict)
+            journal.log_decision(decision.to_dict(), risk_result_dict, for_date=journal_date)
 
         summary = journal.get_summary(_date_to_date(run_date))
         review = DailySummaryAgent(self.config)
@@ -154,6 +156,42 @@ class ReplayEngine:
         )
         report.write_markdown(self.log_dir / f"replay_report_{run_date}.md")
         return report
+
+    def run_many(self, candle_paths: list[str | Path]) -> MultiDayReplayReport:
+        reports: list[ReplayReport] = []
+        for path in candle_paths:
+            reports.append(self.run(path))
+
+        failure_reasons: list[str] = []
+        open_trades = sum(report.open_trades for report in reports)
+        if open_trades:
+            failure_reasons.append("open_trades_after_replay")
+
+        for report in reports:
+            if report.approved_trades > self.config.max_trades_per_day:
+                failure_reasons.append("daily_trade_limit_violation")
+            if report.losses >= self.config.max_consecutive_losses and report.stopped_reason not in (
+                "max_consecutive_losses",
+                None,
+            ):
+                failure_reasons.append("loss_lockout_violation")
+
+        aggregate = MultiDayReplayReport(
+            source_paths=[str(path) for path in candle_paths],
+            days=len(reports),
+            candles_processed=sum(report.candles_processed for report in reports),
+            approved_trades=sum(report.approved_trades for report in reports),
+            no_trades=sum(report.no_trades for report in reports),
+            wins=sum(report.wins for report in reports),
+            losses=sum(report.losses for report in reports),
+            open_trades=open_trades,
+            realized_pnl_dollars=round(sum(report.realized_pnl_dollars for report in reports), 2),
+            stopped_days=sum(1 for report in reports if report.stopped_reason is not None),
+            survival_passed=not failure_reasons,
+            failure_reasons=sorted(set(failure_reasons)),
+        )
+        aggregate.write_markdown(self.log_dir / "multi_day_replay_report.md")
+        return aggregate
 
     def _market_state_from_candle(self, candle: ReplayCandle) -> MarketState:
         return MarketState(

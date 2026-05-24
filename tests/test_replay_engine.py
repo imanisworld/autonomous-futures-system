@@ -68,3 +68,16 @@ def test_replay_generates_no_trade_for_choppy_day(config, tmp_path):
     assert report.approved_trades == 0
     assert report.no_trades == 1
     assert report.wins == 0
+
+
+def test_one_week_replay_survival_harness(config, tmp_path):
+    paths = sorted(Path("data/replay/week").glob("*.jsonl"))
+
+    report = ReplayEngine(config=config, log_dir=str(tmp_path / "logs")).run_many(paths)
+
+    assert report.days == 5
+    assert report.survival_passed is True
+    assert report.open_trades == 0
+    assert report.approved_trades <= 15
+    assert report.candles_processed > 0
+    assert (tmp_path / "logs" / "multi_day_replay_report.md").exists()

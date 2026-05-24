@@ -50,3 +50,46 @@ class ReplayReport:
         report_path.parent.mkdir(parents=True, exist_ok=True)
         report_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
         return report_path
+
+
+@dataclass
+class MultiDayReplayReport:
+    source_paths: list[str]
+    days: int
+    candles_processed: int
+    approved_trades: int
+    no_trades: int
+    wins: int
+    losses: int
+    open_trades: int
+    realized_pnl_dollars: float
+    stopped_days: int
+    survival_passed: bool
+    failure_reasons: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    def write_markdown(self, path: str | Path) -> Path:
+        report_path = Path(path)
+        lines = [
+            "# Multi-Day Replay Report",
+            "",
+            f"- Days: {self.days}",
+            f"- Candles processed: {self.candles_processed}",
+            f"- Approved trades: {self.approved_trades}",
+            f"- NO_TRADE decisions: {self.no_trades}",
+            f"- Wins: {self.wins}",
+            f"- Losses: {self.losses}",
+            f"- Open trades: {self.open_trades}",
+            f"- Realized P/L: ${self.realized_pnl_dollars:.2f}",
+            f"- Stopped days: {self.stopped_days}",
+            f"- Survival passed: {self.survival_passed}",
+            f"- Failure reasons: {', '.join(self.failure_reasons) if self.failure_reasons else 'none'}",
+            "",
+            "## Sources",
+        ]
+        lines.extend(f"- `{source}`" for source in self.source_paths)
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        report_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return report_path
