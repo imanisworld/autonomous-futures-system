@@ -38,6 +38,51 @@ python main.py --market-state /path/to/your_market_state.json
 python main.py --market-state data/sample_market_state.json --dry-run
 ```
 
+### Start TradingView Webhook Receiver
+
+This receives live TradingView alerts and still runs paper-only. It does not
+place broker orders.
+
+```bash
+python -m webhook
+```
+
+Check local health:
+
+```bash
+curl http://127.0.0.1:8000/health
+```
+
+TradingView cannot call `localhost`; expose port `8000` with a public HTTPS
+tunnel and paste this shape into the TradingView webhook URL field:
+
+```text
+https://YOUR-PUBLIC-TUNNEL/webhook/alert?secret=YOUR_LOCAL_SECRET
+```
+
+Set `WEBHOOK_SECRET` in `.env` to require the secret query string. Leave it
+blank only for local testing.
+
+TradingView alert message:
+
+```json
+{
+  "ticker": "{{ticker}}",
+  "timestamp": "{{time}}",
+  "open": {{open}},
+  "high": {{high}},
+  "low": {{low}},
+  "close": {{close}},
+  "volume": {{volume}},
+  "timeframe": "{{interval}}",
+  "market_condition": "CHOPPY"
+}
+```
+
+Start with `market_condition: "CHOPPY"` for the first live-data smoke test so
+the expected output is `NO_TRADE`. After the webhook path is verified, replace
+that with real indicator context.
+
 ---
 
 ## 2. Running Tests
@@ -177,6 +222,7 @@ python -c "from execution.paper_broker import PaperBroker; b = PaperBroker(); pr
 | Daily review | `logs/daily_review_YYYY-MM-DD.md` | Markdown |
 | Trade grades | `logs/trade_grades_YYYY-MM-DD.csv` | CSV |
 | Review payload | `logs/review_YYYY-MM-DD.json` | JSON |
+| Webhook server | stdout plus `logs/system.log` when engine path runs | Text |
 
 ---
 

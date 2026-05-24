@@ -182,6 +182,34 @@ class PaperBroker(BrokerInterface):
             pnl_dollars=round(pnl_dollars, 2),
         )
 
+    def restore_position(
+        self,
+        instrument: str,
+        direction: str,
+        entry: float,
+        stop: float,
+        target: float,
+    ) -> None:
+        """
+        Rebuild internal position state from a persisted journal entry.
+        Used by the webhook runner to carry open positions across process
+        restarts — the broker is stateless between HTTP requests, so the
+        journal is the source of truth.
+        """
+        if self._position is not None:
+            raise RuntimeError(
+                "PaperBroker.restore_position: a position is already loaded."
+            )
+        self._position = Position(
+            instrument=instrument,
+            direction=direction,
+            entry_price=entry,
+            stop=stop,
+            target=target,
+            quantity=1,
+            open=True,
+        )
+
     def get_position(self) -> Optional[Position]:
         return self._position if (self._position and self._position.open) else None
 

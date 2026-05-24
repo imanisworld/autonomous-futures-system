@@ -199,6 +199,48 @@ class JournalLogger:
             date=(for_date or date.today()).isoformat(),
         )
 
+    def get_open_position(self, for_date: Optional[date] = None) -> Optional[dict]:
+        """
+        Return the setup dict of the last TRADE/APPROVED journal entry that has
+        no following OUTCOME entry (i.e., the position is still open).
+
+        Returns None if no open position exists for the day.
+        The returned dict has keys: direction, entry, stop, target, rr_ratio,
+        strategy, instrument (instrument comes from the decision entry itself).
+        """
+        path = self._journal_path(for_date)
+        if not path.exists():
+            return None
+
+        entries = self._read_entries(path)
+        last_open: Optional[dict] = None
+
+        for entry in entries:
+            entry_type = entry.get("type")
+            if entry_type == "OUTCOME":
+                # A standalone OUTCOME entry closes the position.
+                last_open = None
+                continue
+
+            decision = entry.get("decision")
+            risk_check = entry.get("risk_check") or {}
+            if decision == "TRADE" and risk_check.get("result") == "APPROVED":
+                outcome = entry.get("outcome") or {}
+                if outcome.get("result") not in ("WIN", "LOSS"):
+                    # Approved trade with no resolved outcome — position is open.
+                    setup = entry.get("setup") or {}
+                    last_open = {
+                        "instrument": entry.get("instrument"),
+                        "direction": setup.get("direction"),
+                        "entry": setup.get("entry"),
+                        "stop": setup.get("stop"),
+                        "target": setup.get("target"),
+                    }
+                else:
+                    last_open = None
+
+        return last_open
+
     def get_summary(self, for_date: Optional[date] = None) -> dict:
         """Return a human-readable summary of today's trading activity."""
         path = self._journal_path(for_date)

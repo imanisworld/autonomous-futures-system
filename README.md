@@ -70,6 +70,7 @@ A local, paper-only autonomous trading system for a limited futures universe. De
 ├── sources/
 ├── strategy/
 ├── tests/
+├── webhook/
 └── logs/
 ```
 
@@ -99,6 +100,42 @@ end-of-day reports without placing trades or touching broker code.
 ```bash
 python -m agent.daily_summary --date 2026-05-23 --mode morning
 python -m agent.daily_summary --date 2026-05-23 --mode eod
+```
+
+## TradingView Webhook
+
+The webhook layer accepts TradingView bar-close alerts and routes them through
+the same paper-only engine. It does not connect to a broker or place live
+orders.
+
+```bash
+python -m webhook
+```
+
+TradingView needs a public HTTPS URL, so expose local port `8000` with a tunnel
+and paste the resulting URL plus `/webhook/alert` into TradingView's webhook
+field.
+
+Example URL:
+
+```text
+https://your-public-tunnel.example/webhook/alert?secret=your-local-secret
+```
+
+Required alert JSON:
+
+```json
+{
+  "ticker": "{{ticker}}",
+  "timestamp": "{{time}}",
+  "open": {{open}},
+  "high": {{high}},
+  "low": {{low}},
+  "close": {{close}},
+  "volume": {{volume}},
+  "timeframe": "{{interval}}",
+  "market_condition": "CHOPPY"
+}
 ```
 
 ---

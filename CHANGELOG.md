@@ -8,6 +8,17 @@ Types: `Added`, `Changed`, `Fixed`, `Removed`, `Security`, `Rulebook`
 
 ---
 
+## [1.4.0] 2026-05-24
+
+### Added
+- TradingView webhook receiver for live-data ingestion into the paper-only engine.
+- TradingView payload builder that normalizes futures symbols, detects sessions, and maps alerts into market state.
+- Webhook shared-secret support through the `secret` query string and `WEBHOOK_SECRET`.
+- Tests covering payload parsing, session detection, paper decisions, open-position resolution, webhook health, and webhook auth.
+
+### Security
+- Webhook live-data ingestion remains paper-only and does not add broker APIs, broker SDKs, credentials, or live order execution.
+
 ## [1.3.0] 2026-05-24
 
 ### Added
