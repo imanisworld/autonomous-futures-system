@@ -14,6 +14,7 @@ import argparse
 import csv
 import json
 import os
+import uuid
 from dataclasses import asdict
 from datetime import date
 from io import StringIO
@@ -64,9 +65,13 @@ def validate_review_date(review_date: str) -> str:
 def atomic_write_text(path: Path, content: str) -> Path:
     """Write text via same-directory temp file, then atomically replace target."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path = path.with_name(f".{path.name}.tmp")
-    tmp_path.write_text(content, encoding="utf-8")
-    os.replace(tmp_path, path)
+    tmp_path = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    try:
+        tmp_path.write_text(content, encoding="utf-8")
+        os.replace(tmp_path, path)
+    finally:
+        if tmp_path.exists():
+            tmp_path.unlink()
     return path
 
 

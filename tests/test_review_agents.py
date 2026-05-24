@@ -130,6 +130,7 @@ def test_daily_summary_writes_eod_artifacts(config, tmp_path):
     assert (tmp_path / "review_2026-05-23.json").exists()
     assert (tmp_path / "trade_grades_2026-05-23.csv").exists()
     assert (tmp_path / "daily_review_2026-05-23.md").exists()
+    assert not list(tmp_path.glob("*.tmp"))
     assert not list(tmp_path.glob(".*.tmp"))
 
 
@@ -186,7 +187,22 @@ def test_atomic_write_text_replaces_target_without_temp_file(tmp_path):
     atomic_write_text(path, "second")
 
     assert path.read_text(encoding="utf-8") == "second"
-    assert not (tmp_path / ".review_2026-05-23.json.tmp").exists()
+    assert not list(tmp_path.glob(".review_2026-05-23.json.*.tmp"))
+
+
+def test_atomic_write_text_cleans_temp_file_on_replace_failure(monkeypatch, tmp_path):
+    path = tmp_path / "review_2026-05-23.json"
+
+    def fail_replace(source, target):
+        raise OSError("replace failed")
+
+    monkeypatch.setattr("agent.daily_summary.os.replace", fail_replace)
+
+    with pytest.raises(OSError):
+        atomic_write_text(path, "content")
+
+    assert not path.exists()
+    assert not list(tmp_path.glob(".review_2026-05-23.json.*.tmp"))
 
 
 def test_review_agents_do_not_import_broker_execution():
