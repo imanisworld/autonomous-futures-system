@@ -22,7 +22,7 @@ class TradeGrade:
     instrument: Optional[str]
     session: Optional[str]
     strategy: Optional[str]
-    decision: str
+    decision: Optional[str]
     risk_result: Optional[str]
     outcome: Optional[str]
     score: int
@@ -129,7 +129,7 @@ class TradeGrader:
             instrument=instrument,
             session=session,
             strategy=strategy,
-            decision=entry.get("decision", "UNKNOWN"),
+            decision=entry.get("decision"),
             risk_result=risk_result,
             outcome=self._outcome_result(outcome_entry),
             score=score,

@@ -35,7 +35,6 @@ from config.settings import load_config
 from journal.journal_logger import JournalLogger
 from webhook.payload import AlertPayload
 from webhook.runner import process_alert
-from webhook.state_builder import build_market_state
 
 logger = logging.getLogger(__name__)
 
@@ -613,53 +612,10 @@ def _format_strat(value: dict | None) -> str:
 
 def _record_latest_webhook(payload: AlertPayload, result: dict) -> None:
     path = _latest_webhook_path()
-    state = build_market_state(payload)
     data = {
         "received_at": datetime.now(timezone.utc).isoformat(),
         "payload": _payload_to_dict(payload),
-        "context": {
-            "instrument": state.instrument,
-            "session": state.session,
-            "timestamp": state.timestamp.isoformat(),
-            "close": state.ohlc.close,
-            "timeframe": state.ohlc.timeframe,
-            "vwap": {
-                "value": state.vwap.value,
-                "price_vs_vwap": state.vwap.price_vs_vwap,
-                "reclaimed": state.vwap.reclaimed,
-                "holding": state.vwap.holding,
-            },
-            "orb": {
-                "high": state.orb.high,
-                "low": state.orb.low,
-                "status": state.orb.status,
-            },
-            "trend": {
-                "direction": state.trend.direction if state.trend else None,
-                "strength": state.trend.strength if state.trend else None,
-            },
-            "market_condition": state.market_condition,
-            "previous_day": {
-                "high": state.previous_day.high,
-                "low": state.previous_day.low,
-                "close": state.previous_day.close,
-                "price_vs_pdh": state.previous_day.price_vs_pdh,
-                "price_vs_pdl": state.previous_day.price_vs_pdl,
-            },
-            "volume": {
-                "current_bar": state.volume.current_bar,
-                "avg_bar": state.volume.avg_bar,
-                "relative": state.volume.relative,
-            },
-            "strat": {
-                "current_bar_type": state.strat.current_bar_type if state.strat else None,
-                "previous_bar_type": state.strat.previous_bar_type if state.strat else None,
-                "two_bars_back_type": state.strat.two_bars_back_type if state.strat else None,
-                "strat_sequence": state.strat.strat_sequence if state.strat else None,
-                "strat_trigger": state.strat.strat_trigger if state.strat else None,
-                "strat_direction": state.strat.strat_direction if state.strat else None,
-            },
-        },
+        "context": result.get("context"),
         "result": {
             "decision": result.get("decision"),
             "resolution": result.get("resolution"),

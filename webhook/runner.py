@@ -68,6 +68,7 @@ def process_alert(
         "decision": None,
         "risk": None,
         "fill": None,
+        "context": _market_state_context(state),
     }
 
     # ── Step 1: Resolve any open position with this bar's OHLC ───────────────
@@ -185,3 +186,50 @@ def process_alert(
 def _position_is_complete(pos: dict) -> bool:
     """All required keys present and non-None."""
     return all(pos.get(k) is not None for k in ("direction", "entry", "stop", "target"))
+
+
+def _market_state_context(state) -> dict:
+    """Public, JSON-safe snapshot of the market state derived from the alert."""
+    return {
+        "instrument": state.instrument,
+        "session": state.session,
+        "timestamp": state.timestamp.isoformat(),
+        "close": state.ohlc.close,
+        "timeframe": state.ohlc.timeframe,
+        "vwap": {
+            "value": state.vwap.value,
+            "price_vs_vwap": state.vwap.price_vs_vwap,
+            "reclaimed": state.vwap.reclaimed,
+            "holding": state.vwap.holding,
+        },
+        "orb": {
+            "high": state.orb.high,
+            "low": state.orb.low,
+            "status": state.orb.status,
+        },
+        "trend": {
+            "direction": state.trend.direction if state.trend else None,
+            "strength": state.trend.strength if state.trend else None,
+        },
+        "market_condition": state.market_condition,
+        "previous_day": {
+            "high": state.previous_day.high,
+            "low": state.previous_day.low,
+            "close": state.previous_day.close,
+            "price_vs_pdh": state.previous_day.price_vs_pdh,
+            "price_vs_pdl": state.previous_day.price_vs_pdl,
+        },
+        "volume": {
+            "current_bar": state.volume.current_bar,
+            "avg_bar": state.volume.avg_bar,
+            "relative": state.volume.relative,
+        },
+        "strat": {
+            "current_bar_type": state.strat.current_bar_type if state.strat else None,
+            "previous_bar_type": state.strat.previous_bar_type if state.strat else None,
+            "two_bars_back_type": state.strat.two_bars_back_type if state.strat else None,
+            "strat_sequence": state.strat.strat_sequence if state.strat else None,
+            "strat_trigger": state.strat.strat_trigger if state.strat else None,
+            "strat_direction": state.strat.strat_direction if state.strat else None,
+        },
+    }
