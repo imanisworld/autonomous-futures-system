@@ -364,6 +364,52 @@ def test_fastapi_status_history_endpoint():
     assert {"date", "trade_count", "no_trades"}.issubset(data["days"][0])
 
 
+def test_fastapi_latest_webhook_endpoint_after_alert(monkeypatch):
+    try:
+        from fastapi.testclient import TestClient
+        from webhook.app import app
+    except ImportError:
+        pytest.skip("fastapi[testclient] not installed")
+
+    monkeypatch.delenv("WEBHOOK_SECRET", raising=False)
+    client = TestClient(app)
+    body = {
+        "ticker": "MNQ1!",
+        "timestamp": "2026-05-23T14:30:00+00:00",
+        "open": 19480.0,
+        "high": 19510.0,
+        "low": 19475.0,
+        "close": 19505.25,
+        "volume": 4200,
+        "avg_volume": 3800,
+        "timeframe": "3",
+        "vwap": 19495.0,
+        "orb_high": 19498.0,
+        "orb_low": 19462.0,
+        "orb_status": "reclaimed_high",
+        "market_condition": "CHOPPY",
+        "trend_direction": "UP",
+        "trend_strength": "MODERATE",
+        "previous_day_high": 19520.0,
+        "previous_day_low": 19440.0,
+        "previous_day_close": 19475.0,
+    }
+
+    alert_resp = client.post("/webhook/alert", json=body)
+    assert alert_resp.status_code == 200
+
+    latest_resp = client.get("/status/latest-webhook")
+    assert latest_resp.status_code == 200
+    data = latest_resp.json()
+    assert data["payload"]["ticker"] == "MNQ1!"
+    assert data["context"]["instrument"] == "MNQ"
+    assert data["context"]["vwap"]["value"] == 19495.0
+    assert data["context"]["orb"]["status"] == "reclaimed_high"
+    assert data["context"]["trend"]["direction"] == "UP"
+    assert data["context"]["previous_day"]["high"] == 19520.0
+    assert data["result"]["decision"] == "NO_TRADE"
+
+
 def test_fastapi_alert_endpoint_valid_payload(monkeypatch):
     """POST /webhook/alert with a valid payload returns 200."""
     try:

@@ -64,6 +64,7 @@ Read status JSON:
 ```bash
 curl http://127.0.0.1:8000/status/today
 curl 'http://127.0.0.1:8000/status/history?days=7'
+curl http://127.0.0.1:8000/status/latest-webhook
 ```
 
 TradingView cannot call `localhost`; expose port `8000` with a public HTTPS
@@ -76,7 +77,7 @@ https://YOUR-PUBLIC-TUNNEL/webhook/alert?secret=YOUR_LOCAL_SECRET
 Set `WEBHOOK_SECRET` in `.env` to require the secret query string. Leave it
 blank only for local testing.
 
-TradingView alert message:
+TradingView smoke-test alert message:
 
 ```json
 {
@@ -95,6 +96,37 @@ TradingView alert message:
 Start with `market_condition: "CHOPPY"` for the first live-data smoke test so
 the expected output is `NO_TRADE`. After the webhook path is verified, replace
 that with real indicator context.
+
+TradingView full-context alert message:
+
+```json
+{
+  "ticker": "{{ticker}}",
+  "timestamp": "{{time}}",
+  "open": {{open}},
+  "high": {{high}},
+  "low": {{low}},
+  "close": {{close}},
+  "volume": {{volume}},
+  "timeframe": "{{interval}}",
+  "avg_volume": 1,
+  "vwap": 0,
+  "orb_high": 0,
+  "orb_low": 0,
+  "orb_status": "inside",
+  "market_condition": "CHOPPY",
+  "trend_direction": "SIDEWAYS",
+  "trend_strength": "WEAK",
+  "previous_day_high": 0,
+  "previous_day_low": 0,
+  "previous_day_close": 0,
+  "price_vs_pdh": "below",
+  "price_vs_pdl": "above"
+}
+```
+
+Replace the placeholder `0` and classification values with real values from a
+Pine indicator. Omit unknown context fields until they are computed.
 
 ---
 

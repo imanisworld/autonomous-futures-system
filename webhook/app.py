@@ -21,10 +21,12 @@ Expose to TradingView via ngrok:
 from __future__ import annotations
 
 import hmac
+import json
 import logging
 import os
 from collections import Counter
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -33,6 +35,7 @@ from config.settings import load_config
 from journal.journal_logger import JournalLogger
 from webhook.payload import AlertPayload
 from webhook.runner import process_alert
+from webhook.state_builder import build_market_state
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +63,7 @@ async def receive_alert(
     _verify_webhook_secret(secret)
     try:
         result = process_alert(payload, config=_config)
+        _record_latest_webhook(payload, result)
         return JSONResponse(content={"ok": True, **result})
     except Exception as exc:
         logger.exception("Error processing alert: %s", exc)
@@ -112,6 +116,12 @@ async def status_history(days: int = Query(default=7, ge=1, le=30)) -> dict:
             }
         )
     return {"days": history}
+
+
+@app.get("/status/latest-webhook")
+async def latest_webhook() -> dict:
+    """Return the last TradingView payload and derived market context."""
+    return _latest_webhook_payload()
 
 
 # ─── Error handlers ───────────────────────────────────────────────────────────
@@ -173,6 +183,7 @@ def _dashboard_payload(for_date: date) -> dict:
             {"reason": reason, "count": count}
             for reason, count in no_trade_reasons.most_common(5)
         ],
+        "latest_webhook": _latest_webhook_payload(),
     }
 
 
@@ -207,6 +218,9 @@ def _render_dashboard(status: dict) -> str:
         f"@ {open_position.get('entry')}"
         if open_position else "None"
     )
+    latest_webhook = status.get("latest_webhook") or {}
+    webhook_context = latest_webhook.get("context") or {}
+    webhook_result = latest_webhook.get("result") or {}
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -323,11 +337,36 @@ def _render_dashboard(status: dict) -> str:
     }}
     .rule span {{ color: var(--green); margin-right: 8px; }}
     .rule.danger span {{ color: var(--red); }}
+    .context-grid {{
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }}
+    .context-item {{
+      border-top: 1px solid var(--line);
+      padding-top: 10px;
+    }}
+    .context-item label {{
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      margin-bottom: 5px;
+    }}
+    .context-item strong {{
+      display: block;
+      color: var(--text);
+      font-size: 14px;
+      min-height: 20px;
+      overflow-wrap: anywhere;
+    }}
     @media (max-width: 760px) {{
       header, .wide {{ grid-template-columns: 1fr; display: grid; }}
       .grid {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
       table {{ font-size: 12px; }}
       .rules {{ grid-template-columns: 1fr; }}
+      .context-grid {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
     }}
   </style>
 </head>
@@ -378,6 +417,24 @@ def _render_dashboard(status: dict) -> str:
       </div>
     </section>
 
+    <section class="panel" style="margin-bottom: 14px;">
+      <h2>Latest Webhook Context</h2>
+      <div class="context-grid">
+        <div class="context-item"><label>Received</label><strong>{_escape(latest_webhook.get('received_at') or 'None')}</strong></div>
+        <div class="context-item"><label>Decision</label><strong>{_escape(webhook_result.get('decision') or 'None')}</strong></div>
+        <div class="context-item"><label>Symbol</label><strong>{_escape(webhook_context.get('instrument') or 'None')}</strong></div>
+        <div class="context-item"><label>Session</label><strong>{_escape(webhook_context.get('session') or 'None')}</strong></div>
+        <div class="context-item"><label>Close</label><strong>{_escape(webhook_context.get('close') or 'None')}</strong></div>
+        <div class="context-item"><label>VWAP</label><strong>{_escape(_format_vwap(webhook_context.get('vwap')))}</strong></div>
+        <div class="context-item"><label>ORB</label><strong>{_escape(_format_orb(webhook_context.get('orb')))}</strong></div>
+        <div class="context-item"><label>Trend</label><strong>{_escape(_format_trend(webhook_context.get('trend')))}</strong></div>
+        <div class="context-item"><label>Market</label><strong>{_escape(webhook_context.get('market_condition') or 'None')}</strong></div>
+        <div class="context-item"><label>PDH/PDL</label><strong>{_escape(_format_previous_day(webhook_context.get('previous_day')))}</strong></div>
+        <div class="context-item"><label>Volume</label><strong>{_escape(_format_volume(webhook_context.get('volume')))}</strong></div>
+        <div class="context-item"><label>Risk</label><strong>{_escape(webhook_result.get('risk') or 'None')}</strong></div>
+      </div>
+    </section>
+
     <section class="panel">
       <h2>Latest Journal Entries</h2>
       <table>
@@ -420,6 +477,114 @@ def _short_time(value: str | None) -> str:
     if not value:
         return ""
     return value.replace("T", " ").split(".")[0].replace("+00:00", "Z")
+
+
+def _format_vwap(value: dict | None) -> str:
+    if not value:
+        return "None"
+    return f"{value.get('value')} · {value.get('price_vs_vwap')}"
+
+
+def _format_orb(value: dict | None) -> str:
+    if not value:
+        return "None"
+    return f"H {value.get('high')} / L {value.get('low')} · {value.get('status')}"
+
+
+def _format_trend(value: dict | None) -> str:
+    if not value:
+        return "None"
+    return f"{value.get('direction') or 'None'} · {value.get('strength') or 'None'}"
+
+
+def _format_previous_day(value: dict | None) -> str:
+    if not value:
+        return "None"
+    return (
+        f"H {value.get('high')} / L {value.get('low')} · "
+        f"PDH {value.get('price_vs_pdh')} / PDL {value.get('price_vs_pdl')}"
+    )
+
+
+def _format_volume(value: dict | None) -> str:
+    if not value:
+        return "None"
+    relative = value.get("relative")
+    relative_text = f"{float(relative):.2f}x" if isinstance(relative, (int, float)) else "None"
+    return f"{value.get('current_bar')} / avg {value.get('avg_bar')} · {relative_text}"
+
+
+def _record_latest_webhook(payload: AlertPayload, result: dict) -> None:
+    path = _latest_webhook_path()
+    state = build_market_state(payload)
+    data = {
+        "received_at": datetime.now(timezone.utc).isoformat(),
+        "payload": _payload_to_dict(payload),
+        "context": {
+            "instrument": state.instrument,
+            "session": state.session,
+            "timestamp": state.timestamp.isoformat(),
+            "close": state.ohlc.close,
+            "timeframe": state.ohlc.timeframe,
+            "vwap": {
+                "value": state.vwap.value,
+                "price_vs_vwap": state.vwap.price_vs_vwap,
+                "reclaimed": state.vwap.reclaimed,
+                "holding": state.vwap.holding,
+            },
+            "orb": {
+                "high": state.orb.high,
+                "low": state.orb.low,
+                "status": state.orb.status,
+            },
+            "trend": {
+                "direction": state.trend.direction if state.trend else None,
+                "strength": state.trend.strength if state.trend else None,
+            },
+            "market_condition": state.market_condition,
+            "previous_day": {
+                "high": state.previous_day.high,
+                "low": state.previous_day.low,
+                "close": state.previous_day.close,
+                "price_vs_pdh": state.previous_day.price_vs_pdh,
+                "price_vs_pdl": state.previous_day.price_vs_pdl,
+            },
+            "volume": {
+                "current_bar": state.volume.current_bar,
+                "avg_bar": state.volume.avg_bar,
+                "relative": state.volume.relative,
+            },
+        },
+        "result": {
+            "decision": result.get("decision"),
+            "resolution": result.get("resolution"),
+            "risk": result.get("risk"),
+            "fill": result.get("fill"),
+        },
+    }
+    path.write_text(json.dumps(data, indent=2, sort_keys=True), encoding="utf-8")
+
+
+def _latest_webhook_payload() -> dict:
+    path = _latest_webhook_path()
+    if not path.exists():
+        return {"received_at": None, "payload": None, "context": None, "result": None}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {"received_at": None, "payload": None, "context": None, "result": None}
+
+
+def _latest_webhook_path() -> Path:
+    path = Path(_config.log_dir)
+    path.mkdir(parents=True, exist_ok=True)
+    return path / "latest_webhook.json"
+
+
+def _payload_to_dict(payload: AlertPayload) -> dict:
+    if hasattr(payload, "model_dump"):
+        return payload.model_dump()
+    return payload.dict()
 
 
 def _escape(value: object) -> str:

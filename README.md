@@ -122,7 +122,7 @@ Example URL:
 https://your-public-tunnel.example/webhook/alert?secret=your-local-secret
 ```
 
-Required alert JSON:
+Smoke-test alert JSON:
 
 ```json
 {
@@ -138,6 +138,38 @@ Required alert JSON:
 }
 ```
 
+Full-context alert JSON:
+
+```json
+{
+  "ticker": "{{ticker}}",
+  "timestamp": "{{time}}",
+  "open": {{open}},
+  "high": {{high}},
+  "low": {{low}},
+  "close": {{close}},
+  "volume": {{volume}},
+  "timeframe": "{{interval}}",
+  "avg_volume": 1,
+  "vwap": 0,
+  "orb_high": 0,
+  "orb_low": 0,
+  "orb_status": "inside",
+  "market_condition": "CHOPPY",
+  "trend_direction": "SIDEWAYS",
+  "trend_strength": "WEAK",
+  "previous_day_high": 0,
+  "previous_day_low": 0,
+  "previous_day_close": 0,
+  "price_vs_pdh": "below",
+  "price_vs_pdl": "above"
+}
+```
+
+Replace the `0` and classification values with real values from a Pine
+indicator. If a context value is not available yet, omit that field instead of
+sending fake numbers.
+
 ## Local Dashboard
 
 When the webhook server is running, open the read-only dashboard:
@@ -151,11 +183,12 @@ Status APIs:
 ```text
 http://127.0.0.1:8000/status/today
 http://127.0.0.1:8000/status/history?days=7
+http://127.0.0.1:8000/status/latest-webhook
 ```
 
 The dashboard shows trade count, loss streak, open-position state, realized
-paper P/L, recent journal entries, and top `NO_TRADE` reasons. It has no order
-buttons and no broker controls.
+paper P/L, recent journal entries, top `NO_TRADE` reasons, and the latest
+received webhook context. It has no order buttons and no broker controls.
 
 ---
 

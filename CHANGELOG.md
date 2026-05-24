@@ -16,6 +16,7 @@ Types: `Added`, `Changed`, `Fixed`, `Removed`, `Security`, `Rulebook`
 - Webhook shared-secret support through the `secret` query string and `WEBHOOK_SECRET`.
 - Read-only RiskSentinel dashboard at `/` with trade count, loss streak, open-position state, realized paper P/L, recent journal entries, and top `NO_TRADE` reasons.
 - `/status/today` and `/status/history` now expose dashboard-ready read-only state.
+- `/status/latest-webhook` exposes the latest raw TradingView payload, derived market context, and paper-engine result.
 - Tests covering payload parsing, session detection, paper decisions, open-position resolution, webhook health, and webhook auth.
 
 ### Security
