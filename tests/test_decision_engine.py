@@ -193,6 +193,78 @@ class TestDecisionEngineNoTradeIsValid:
         assert decision.setup is None
 
 
+class TestPDHPDLReclaim:
+    """PDH/PDL reclaim strategies fire on above/below + trend + VWAP."""
+
+    @pytest.fixture
+    def pdh_config(self, config):
+        from dataclasses import replace
+        return replace(config, enabled_concepts=["pdh_reclaim"])
+
+    @pytest.fixture
+    def pdl_config(self, config):
+        from dataclasses import replace
+        return replace(config, enabled_concepts=["pdl_reclaim"])
+
+    def _pdh_state(self, fresh_market_state):
+        state = deepcopy(fresh_market_state)
+        state.previous_day.high = 19490.0       # close 19505.25 is above
+        state.previous_day.price_vs_pdh = "above"
+        state.trend = TrendData(direction="UP", strength="MODERATE")
+        state.vwap.price_vs_vwap = "above"
+        state.orb.status = "inside"             # neutralise other setups
+        return state
+
+    def _pdl_state(self, fresh_market_state):
+        state = deepcopy(fresh_market_state)
+        state.ohlc = deepcopy(state.ohlc)
+        state.ohlc.close = 19430.0              # below PDL 19440
+        state.price.last = 19430.0
+        state.previous_day.low = 19440.0
+        state.previous_day.price_vs_pdl = "below"
+        state.trend = TrendData(direction="DOWN", strength="MODERATE")
+        state.vwap.price_vs_vwap = "below"
+        state.orb.status = "inside"
+        return state
+
+    def test_pdh_reclaim_generates_long(self, fresh_market_state, pdh_config):
+        engine = DecisionEngine(config=pdh_config)
+        state = self._pdh_state(fresh_market_state)
+        decision = engine.evaluate(state, DailyState())
+        assert decision.decision == "TRADE"
+        assert decision.setup.strategy == "pdh_reclaim"
+        assert decision.setup.direction == "LONG"
+
+    def test_pdh_reclaim_blocked_without_trend(self, fresh_market_state, pdh_config):
+        engine = DecisionEngine(config=pdh_config)
+        state = self._pdh_state(fresh_market_state)
+        state.trend = TrendData(direction="SIDEWAYS", strength="WEAK")
+        decision = engine.evaluate(state, DailyState())
+        assert decision.decision == "NO_TRADE"
+
+    def test_pdh_reclaim_blocked_without_vwap(self, fresh_market_state, pdh_config):
+        engine = DecisionEngine(config=pdh_config)
+        state = self._pdh_state(fresh_market_state)
+        state.vwap.price_vs_vwap = "below"
+        decision = engine.evaluate(state, DailyState())
+        assert decision.decision == "NO_TRADE"
+
+    def test_pdl_reclaim_generates_short(self, fresh_market_state, pdl_config):
+        engine = DecisionEngine(config=pdl_config)
+        state = self._pdl_state(fresh_market_state)
+        decision = engine.evaluate(state, DailyState())
+        assert decision.decision == "TRADE"
+        assert decision.setup.strategy == "pdl_reclaim"
+        assert decision.setup.direction == "SHORT"
+
+    def test_pdl_reclaim_blocked_without_downtrend(self, fresh_market_state, pdl_config):
+        engine = DecisionEngine(config=pdl_config)
+        state = self._pdl_state(fresh_market_state)
+        state.trend = TrendData(direction="UP", strength="MODERATE")
+        decision = engine.evaluate(state, DailyState())
+        assert decision.decision == "NO_TRADE"
+
+
 class TestStratWiring:
     """Strat classifier integration with the decision engine."""
 

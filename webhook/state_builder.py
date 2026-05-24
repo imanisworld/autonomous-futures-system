@@ -125,8 +125,8 @@ def build_market_state(payload: AlertPayload) -> MarketState:
     pdc = payload.previous_day_close if payload.previous_day_close is not None else payload.close
 
     price_vs_pdh = payload.price_vs_pdh or (
-        "above" if payload.close >= pdh else
-        "below" if payload.close < pdh  else "at"
+        "above" if payload.close > pdh else
+        "below" if payload.close < pdh else "at"
     )
     price_vs_pdl = payload.price_vs_pdl or (
         "above" if payload.close > pdl else

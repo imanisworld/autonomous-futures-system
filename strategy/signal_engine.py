@@ -465,8 +465,19 @@ class DecisionEngine:
         )
 
     def _try_pdh_reclaim(self, state: MarketState) -> Optional[SetupDetail]:
-        """PDH Reclaim: Price back above previous day high."""
-        if state.previous_day.price_vs_pdh != "reclaimed":
+        """
+        PDH Reclaim: Close is above previous day high with trend and VWAP confirmation.
+
+        The Pine alert emits "above"/"below"/"at" — not "reclaimed" (which would
+        require tracking a bar-by-bar level crossing).  We treat "above" + uptrend
+        + VWAP above as the functional equivalent: price has cleared PDH and is
+        holding with momentum support.
+        """
+        if state.previous_day.price_vs_pdh != "above":
+            return None
+        if not (state.trend and state.trend.direction == "UP"):
+            return None
+        if state.vwap.price_vs_vwap != "above":
             return None
 
         tick = self.TICK_SIZE.get(state.instrument, 0.25)
@@ -485,12 +496,20 @@ class DecisionEngine:
             target=round(target, 4),
             rr_ratio=rr,
             strategy="pdh_reclaim",
-            notes="Previous day high reclaimed",
+            notes="Price above PDH with uptrend and VWAP support",
         )
 
     def _try_pdl_reclaim(self, state: MarketState) -> Optional[SetupDetail]:
-        """PDL Reclaim: Price back below previous day low (short)."""
-        if state.previous_day.price_vs_pdl != "reclaimed":
+        """
+        PDL Reclaim: Close is below previous day low with trend and VWAP confirmation.
+
+        Same reasoning as pdh_reclaim — Pine sends "below" not "reclaimed".
+        """
+        if state.previous_day.price_vs_pdl != "below":
+            return None
+        if not (state.trend and state.trend.direction == "DOWN"):
+            return None
+        if state.vwap.price_vs_vwap != "below":
             return None
 
         tick = self.TICK_SIZE.get(state.instrument, 0.25)
@@ -509,7 +528,7 @@ class DecisionEngine:
             target=round(target, 4),
             rr_ratio=rr,
             strategy="pdl_reclaim",
-            notes="Previous day low reclaimed (breakdown continuation)",
+            notes="Price below PDL with downtrend and VWAP below",
         )
 
     # ── The Strat Patterns ────────────────────────────────────────────────────
