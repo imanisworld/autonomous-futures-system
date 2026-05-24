@@ -184,6 +184,12 @@ class TestRiskEngineBlocksLiveTrading:
             tradable_states=["TRENDING", "RANGE_BOUND"],
             non_tradable_states=["CHOPPY", "DEAD"],
             enabled_concepts=[],
+            broker_priority=["paper", "tradovate_sim", "ibkr_paper"],
+            starting_capital_default=1000.0,
+            minimum_starting_capital=500.0,
+            max_account_risk_per_trade_percent=1.0,
+            max_daily_loss_percent=3.0,
+            require_margin_check=True,
             log_dir="logs_test",
             log_level="WARNING",
             risk_rules_path="risk_rules.yaml",
@@ -240,4 +246,12 @@ strategy:
   enabled_concepts: [orb_reclaim]
   frequency: low
   no_trade_is_valid: true
+broker_roadmap:
+  broker_priority: [paper, tradovate_sim, ibkr_paper]
+capital_guardrails:
+  starting_capital_default: 1000
+  minimum_starting_capital: 500
+  max_account_risk_per_trade_percent: 1.0
+  max_daily_loss_percent: 3.0
+  require_margin_check: true
 """

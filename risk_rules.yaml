@@ -110,3 +110,23 @@ strat:
     strat_4hr_retrigger:
       description: "4AM 2DOWN, 8AM 2UP, NY open dip below 8AM high then reclaim"
   # Reference: sources/strat_definitions.md
+
+# ─── Future Broker Roadmap (Inactive Planning Metadata) ─────
+broker_roadmap:
+  first_realistic_sim_path: tradovate_sim
+  future_multi_asset_path: ibkr_paper
+  broker_priority:
+    - paper
+    - tradovate_sim
+    - ibkr_paper
+  notes:
+    - "Tradovate simulation comes first because small futures account practicality matters."
+    - "IBKR compatibility stays in mind for future options/stocks/futures expansion."
+    - "No broker SDK, credentials, or live execution are enabled by this metadata."
+
+capital_guardrails:
+  starting_capital_default: 1000
+  minimum_starting_capital: 500
+  max_account_risk_per_trade_percent: 1.0
+  max_daily_loss_percent: 3.0
+  require_margin_check: true

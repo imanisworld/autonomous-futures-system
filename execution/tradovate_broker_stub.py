@@ -25,7 +25,13 @@ from __future__ import annotations
 import os
 from typing import Optional
 
-from execution.broker_interface import BrokerInterface, BracketOrder, Position, Fill
+from execution.broker_interface import (
+    BrokerCapabilities,
+    BrokerInterface,
+    BracketOrder,
+    Fill,
+    Position,
+)
 
 
 class TradovateBrokerStub(BrokerInterface):
@@ -57,6 +63,19 @@ class TradovateBrokerStub(BrokerInterface):
 
     def get_broker_name(self) -> str:
         return f"TradovateStub({self._environment})"
+
+    def get_capabilities(self) -> BrokerCapabilities:
+        return BrokerCapabilities(
+            broker_name=self.get_broker_name(),
+            asset_class="futures",
+            account_mode="sim",
+            starting_capital=None,
+            available_cash=None,
+            estimated_margin_required=None,
+            max_dollars_risk_per_trade=None,
+            supports_brackets=True,
+            supports_options=False,
+        )
 
     def execute_bracket(self, order: BracketOrder) -> Fill:
         """

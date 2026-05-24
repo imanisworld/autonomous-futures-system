@@ -53,6 +53,12 @@ def config() -> SystemConfig:
             "orb_reclaim", "orb_rejection", "vwap_reclaim",
             "vwap_hold", "pdh_reclaim", "pdl_reclaim", "continuation_pullback"
         ],
+        broker_priority=["paper", "tradovate_sim", "ibkr_paper"],
+        starting_capital_default=1000.0,
+        minimum_starting_capital=500.0,
+        max_account_risk_per_trade_percent=1.0,
+        max_daily_loss_percent=3.0,
+        require_margin_check=True,
         log_dir="logs_test",
         log_level="WARNING",
         risk_rules_path="risk_rules.yaml",

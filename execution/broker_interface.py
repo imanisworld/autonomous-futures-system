@@ -55,6 +55,20 @@ class Fill:
     pnl_dollars: Optional[float]
 
 
+@dataclass(frozen=True)
+class BrokerCapabilities:
+    """Static broker metadata used for future routing and safety checks."""
+    broker_name: str
+    asset_class: str
+    account_mode: str       # paper | sim | live
+    starting_capital: Optional[float]
+    available_cash: Optional[float]
+    estimated_margin_required: Optional[float]
+    max_dollars_risk_per_trade: Optional[float]
+    supports_brackets: bool
+    supports_options: bool
+
+
 # ─── Abstract Interface ───────────────────────────────────────────────────────
 
 class BrokerInterface(ABC):
@@ -102,4 +116,9 @@ class BrokerInterface(ABC):
     @abstractmethod
     def get_broker_name(self) -> str:
         """Return a human-readable broker name for logging."""
+        ...
+
+    @abstractmethod
+    def get_capabilities(self) -> BrokerCapabilities:
+        """Return static capability metadata for planning and safety checks."""
         ...

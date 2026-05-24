@@ -19,7 +19,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
-from execution.broker_interface import BrokerInterface, BracketOrder, Position, Fill
+from execution.broker_interface import (
+    BrokerCapabilities,
+    BrokerInterface,
+    BracketOrder,
+    Fill,
+    Position,
+)
 
 
 # ─── Tick Values (approximate, Phase 1 simplified) ────────────────────────────
@@ -63,6 +69,19 @@ class PaperBroker(BrokerInterface):
 
     def get_broker_name(self) -> str:
         return "PaperBroker"
+
+    def get_capabilities(self) -> BrokerCapabilities:
+        return BrokerCapabilities(
+            broker_name=self.get_broker_name(),
+            asset_class="futures",
+            account_mode="paper",
+            starting_capital=1000.0,
+            available_cash=1000.0,
+            estimated_margin_required=0.0,
+            max_dollars_risk_per_trade=10.0,
+            supports_brackets=True,
+            supports_options=False,
+        )
 
     def execute_bracket(self, order: BracketOrder) -> Fill:
         """

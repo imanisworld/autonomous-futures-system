@@ -78,6 +78,14 @@ class SystemConfig:
     # Strategy
     enabled_concepts: List[str]
 
+    # Future broker/capital planning (inactive while live trading is blocked)
+    broker_priority: List[str] = field(default_factory=lambda: ["paper", "tradovate_sim", "ibkr_paper"])
+    starting_capital_default: float = 1000.0
+    minimum_starting_capital: float = 500.0
+    max_account_risk_per_trade_percent: float = 1.0
+    max_daily_loss_percent: float = 3.0
+    require_margin_check: bool = True
+
     # Paths
     log_dir: str = "logs"
     log_level: str = "INFO"
@@ -130,6 +138,8 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
     data = rules.get("data_quality", {})
     condition = rules.get("market_condition", {})
     strategy = rules.get("strategy", {})
+    broker = rules.get("broker_roadmap", {})
+    capital = rules.get("capital_guardrails", {})
 
     config = SystemConfig(
         live_trading_enabled=False,  # Always false — enforced above
@@ -161,6 +171,15 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
 
         enabled_concepts=strategy.get("enabled_concepts", []),
 
+        broker_priority=broker.get("broker_priority", ["paper", "tradovate_sim", "ibkr_paper"]),
+        starting_capital_default=float(capital.get("starting_capital_default", 1000)),
+        minimum_starting_capital=float(capital.get("minimum_starting_capital", 500)),
+        max_account_risk_per_trade_percent=float(
+            capital.get("max_account_risk_per_trade_percent", 1.0)
+        ),
+        max_daily_loss_percent=float(capital.get("max_daily_loss_percent", 3.0)),
+        require_margin_check=capital.get("require_margin_check", True),
+
         log_dir=os.getenv("LOG_DIR", "logs"),
         log_level=os.getenv("LOG_LEVEL", "INFO"),
         risk_rules_path=risk_rules_path,
@@ -184,6 +203,14 @@ def _validate_config(config: SystemConfig) -> None:
         raise ConfigError("min_rr_ratio must be >= 1.0.")
     if config.max_staleness_seconds < 1:
         raise ConfigError("max_staleness_seconds must be >= 1.")
+    if config.minimum_starting_capital < 0:
+        raise ConfigError("minimum_starting_capital must be >= 0.")
+    if config.starting_capital_default < config.minimum_starting_capital:
+        raise ConfigError("starting_capital_default must be >= minimum_starting_capital.")
+    if not (0 < config.max_account_risk_per_trade_percent <= 100):
+        raise ConfigError("max_account_risk_per_trade_percent must be between 0 and 100.")
+    if not (0 < config.max_daily_loss_percent <= 100):
+        raise ConfigError("max_daily_loss_percent must be between 0 and 100.")
     if config.live_trading_enabled:
         # This should never be reached, but belt-and-suspenders
         raise LiveTradingBlockedError(source="post-parse validation")

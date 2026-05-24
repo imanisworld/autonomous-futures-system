@@ -35,6 +35,8 @@ A local, paper-only autonomous trading system for a limited futures universe. De
 
 - Max **3 trades/day**
 - Stop after **2 consecutive losses**
+- Future real-capital planning assumes **$500-$1k** starting capital
+- Future per-trade risk defaults to **1%** of account value
 - **One open position** at a time
 - **Bracket orders only** (entry + stop + target required)
 - Minimum **R:R = 2.0**
@@ -114,7 +116,8 @@ python -m agent.daily_summary --date 2026-05-23 --mode eod
 
 - Phase 2: Replay engine with historical candles
 - Phase 3: Live market data only
-- Phase 4: Tradovate simulation connection only
+- Phase 4: Tradovate simulation connection only, with small-account readiness checks
+- Later: IBKR paper adapter for future options/stocks/futures expansion
 - Later: Performance analytics and strategy backtesting
 
 Live broker execution remains out of scope.
