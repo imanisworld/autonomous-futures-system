@@ -122,6 +122,13 @@ Example URL:
 https://your-public-tunnel.example/webhook/alert?secret=your-local-secret
 ```
 
+Paste-ready alert message templates live in `tradingview/`:
+
+```text
+tradingview/smoke_test_alert_message.json.tpl
+tradingview/full_context_alert_message.json.tpl
+```
+
 Smoke-test alert JSON:
 
 ```json

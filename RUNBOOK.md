@@ -78,6 +78,13 @@ https://YOUR-PUBLIC-TUNNEL/webhook/alert?secret=YOUR_LOCAL_SECRET
 Set `WEBHOOK_SECRET` in `.env` to require the secret query string. Leave it
 blank only for local testing.
 
+Paste-ready alert message templates:
+
+```text
+tradingview/smoke_test_alert_message.json.tpl
+tradingview/full_context_alert_message.json.tpl
+```
+
 TradingView smoke-test alert message:
 
 ```json

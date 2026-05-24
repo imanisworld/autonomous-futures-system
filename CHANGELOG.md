@@ -19,6 +19,7 @@ Types: `Added`, `Changed`, `Fixed`, `Removed`, `Security`, `Rulebook`
 - `/status/latest-webhook` exposes the latest raw TradingView payload, derived market context, and paper-engine result.
 - `/status/strategy` exposes enabled concepts, decision counts, market-condition counts, and strategy counts without mutating journals.
 - The Strat classifier now supports candle typing and simple `strat_212`, `strat_122`, inside-break, and outside-bar follow-through context; classified `strat_212`/`strat_122` setups can generate paper setups when enabled and can veto opposing structural setups.
+- TradingView alert message templates are available under `tradingview/`.
 - Tests covering payload parsing, session detection, paper decisions, open-position resolution, webhook health, and webhook auth.
 
 ### Security
