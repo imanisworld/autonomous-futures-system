@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from agent.daily_summary import DailySummaryAgent, validate_review_date
+from agent.daily_summary import DailySummaryAgent, atomic_write_text, validate_review_date
 from agent.risk_reviewer import RiskReviewer
 from agent.trade_grader import TradeGrader
 
@@ -130,6 +130,7 @@ def test_daily_summary_writes_eod_artifacts(config, tmp_path):
     assert (tmp_path / "review_2026-05-23.json").exists()
     assert (tmp_path / "trade_grades_2026-05-23.csv").exists()
     assert (tmp_path / "daily_review_2026-05-23.md").exists()
+    assert not list(tmp_path.glob(".*.tmp"))
 
 
 def test_daily_summary_preview_eod_does_not_write_artifacts(config, tmp_path):
@@ -176,6 +177,16 @@ def test_daily_summary_rejects_invalid_review_date(config, tmp_path):
 
     with pytest.raises(ValueError):
         DailySummaryAgent(config).preview_eod("../2026-05-23")
+
+
+def test_atomic_write_text_replaces_target_without_temp_file(tmp_path):
+    path = tmp_path / "review_2026-05-23.json"
+
+    atomic_write_text(path, "first")
+    atomic_write_text(path, "second")
+
+    assert path.read_text(encoding="utf-8") == "second"
+    assert not (tmp_path / ".review_2026-05-23.json.tmp").exists()
 
 
 def test_review_agents_do_not_import_broker_execution():

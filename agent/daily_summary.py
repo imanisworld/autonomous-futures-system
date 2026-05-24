@@ -13,8 +13,10 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import os
 from dataclasses import asdict
 from datetime import date
+from io import StringIO
 from pathlib import Path
 from typing import Iterable, Optional
 
@@ -57,6 +59,15 @@ def validate_review_date(review_date: str) -> str:
     if parsed.isoformat() != review_date:
         raise ValueError("review_date must be YYYY-MM-DD")
     return review_date
+
+
+def atomic_write_text(path: Path, content: str) -> Path:
+    """Write text via same-directory temp file, then atomically replace target."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_name(f".{path.name}.tmp")
+    tmp_path.write_text(content, encoding="utf-8")
+    os.replace(tmp_path, path)
+    return path
 
 
 class DailySummaryAgent:
@@ -129,8 +140,7 @@ class DailySummaryAgent:
     def _write_json(self, review_date: str, report: dict) -> Path:
         review_date = validate_review_date(review_date)
         path = self.log_dir / f"review_{review_date}.json"
-        path.write_text(json.dumps(report, indent=2, sort_keys=True), encoding="utf-8")
-        return path
+        return atomic_write_text(path, json.dumps(report, indent=2, sort_keys=True))
 
     def _write_trade_grades_csv(self, review_date: str, grades: Iterable[TradeGrade]) -> Path:
         review_date = validate_review_date(review_date)
@@ -149,14 +159,14 @@ class DailySummaryAgent:
             "rule_compliant",
             "risk_notes",
         ]
-        with path.open("w", newline="", encoding="utf-8") as handle:
-            writer = csv.DictWriter(handle, fieldnames=fieldnames)
-            writer.writeheader()
-            for grade in grades:
-                row = asdict(grade)
-                row["risk_notes"] = ";".join(grade.risk_notes)
-                writer.writerow(row)
-        return path
+        buffer = StringIO()
+        writer = csv.DictWriter(buffer, fieldnames=fieldnames)
+        writer.writeheader()
+        for grade in grades:
+            row = asdict(grade)
+            row["risk_notes"] = ";".join(grade.risk_notes)
+            writer.writerow(row)
+        return atomic_write_text(path, buffer.getvalue())
 
     def _write_markdown(self, review_date: str, report: dict, grades: list[TradeGrade]) -> Path:
         review_date = validate_review_date(review_date)
@@ -187,8 +197,7 @@ class DailySummaryAgent:
                 )
             lines.append("")
         lines.append(f"## Summary\n{report['message']}")
-        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-        return path
+        return atomic_write_text(path, "\n".join(lines) + "\n")
 
     @staticmethod
     def _morning_message(review: RiskReview) -> str:
