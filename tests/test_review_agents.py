@@ -130,6 +130,7 @@ def test_daily_summary_writes_eod_artifacts(config, tmp_path):
     assert (tmp_path / "review_2026-05-23.json").exists()
     assert (tmp_path / "trade_grades_2026-05-23.csv").exists()
     assert (tmp_path / "daily_review_2026-05-23.md").exists()
+    assert (tmp_path / ".daily_review.lock").exists()
     assert not list(tmp_path.glob("*.tmp"))
     assert not list(tmp_path.glob(".*.tmp"))
 
@@ -145,6 +146,7 @@ def test_daily_summary_preview_eod_does_not_write_artifacts(config, tmp_path):
     assert not (tmp_path / "review_2026-05-23.json").exists()
     assert not (tmp_path / "trade_grades_2026-05-23.csv").exists()
     assert not (tmp_path / "daily_review_2026-05-23.md").exists()
+    assert not (tmp_path / ".daily_review.lock").exists()
 
 
 def test_daily_summary_preview_morning_does_not_write_artifacts(config, tmp_path):
@@ -156,6 +158,7 @@ def test_daily_summary_preview_morning_does_not_write_artifacts(config, tmp_path
     assert report["preflight"]["paper_only"] is True
     assert not (tmp_path / "review_2026-05-23.json").exists()
     assert not (tmp_path / "daily_review_2026-05-23.md").exists()
+    assert not (tmp_path / ".daily_review.lock").exists()
 
 
 def test_validate_review_date_accepts_iso_date():

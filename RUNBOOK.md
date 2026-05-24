@@ -72,7 +72,8 @@ curl 'http://127.0.0.1:8000/status/review?date=2026-05-23&mode=eod'
 The review endpoint supports `mode=morning` or `mode=eod` and does not write
 review artifacts. Dates must use exact `YYYY-MM-DD` format. Use the daily
 summary CLI when you want files written. CLI review artifacts are written by
-atomic replacement with unique temp files to reduce partial-file risk.
+atomic replacement with unique temp files under a `.daily_review.lock` to
+reduce partial-file and interleaving risk.
 
 ### Optional Discord Output
 

@@ -24,6 +24,7 @@ Types: `Added`, `Changed`, `Fixed`, `Removed`, `Security`, `Rulebook`
 - Daily review agents now support preview methods that do not write artifacts.
 - Review dates are validated as exact `YYYY-MM-DD` before reading or writing files.
 - Daily review artifacts now use unique same-directory atomic replacement writes.
+- Daily review CLI artifact bundles are serialized with `.daily_review.lock`.
 - The Strat classifier now supports candle typing and simple `strat_212`, `strat_122`, inside-break, and outside-bar follow-through context; classified `strat_212`/`strat_122` setups can generate paper setups when enabled and can veto opposing structural setups.
 - TradingView alert message templates are available under `tradingview/`.
 - Tests covering payload parsing, session detection, paper decisions, open-position resolution, webhook health, and webhook auth.

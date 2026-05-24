@@ -15,11 +15,17 @@ import csv
 import json
 import os
 import uuid
+from contextlib import contextmanager
 from dataclasses import asdict
 from datetime import date
 from io import StringIO
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Iterable, Iterator, Optional
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - Windows fallback
+    fcntl = None
 
 from config.settings import SystemConfig, load_config
 from .risk_reviewer import RiskReview, RiskReviewer
@@ -88,8 +94,9 @@ class DailySummaryAgent:
     def morning(self, review_date: str) -> dict:
         review_date = validate_review_date(review_date)
         report = self.preview_morning(review_date)
-        self._write_json(review_date, report)
-        self._write_markdown(review_date, report, [])
+        with self._artifact_lock():
+            self._write_json(review_date, report)
+            self._write_markdown(review_date, report, [])
         return report
 
     def preview_morning(self, review_date: str) -> dict:
@@ -115,9 +122,10 @@ class DailySummaryAgent:
     def eod(self, review_date: str) -> dict:
         review_date = validate_review_date(review_date)
         report, grades = self.preview_eod_with_grades(review_date)
-        self._write_json(review_date, report)
-        self._write_trade_grades_csv(review_date, grades)
-        self._write_markdown(review_date, report, grades)
+        with self._artifact_lock():
+            self._write_json(review_date, report)
+            self._write_trade_grades_csv(review_date, grades)
+            self._write_markdown(review_date, report, grades)
         return report
 
     def preview_eod(self, review_date: str) -> dict:
@@ -203,6 +211,19 @@ class DailySummaryAgent:
             lines.append("")
         lines.append(f"## Summary\n{report['message']}")
         return atomic_write_text(path, "\n".join(lines) + "\n")
+
+    @contextmanager
+    def _artifact_lock(self) -> Iterator[None]:
+        """Serialize multi-file review artifact writes."""
+        lock_path = self.log_dir / ".daily_review.lock"
+        with open(lock_path, "a") as lock_file:
+            if fcntl is not None:
+                fcntl.flock(lock_file, fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                if fcntl is not None:
+                    fcntl.flock(lock_file, fcntl.LOCK_UN)
 
     @staticmethod
     def _morning_message(review: RiskReview) -> str:
