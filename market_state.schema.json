@@ -1,60 +1,190 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.local/autonomous-futures-system/market_state.schema.json",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "market_state.schema.json",
   "title": "MarketState",
+  "description": "Snapshot of market conditions used by the decision engine. All required fields must be present and non-null. Any missing required field results in NO_TRADE.",
   "type": "object",
-  "additionalProperties": false,
   "required": [
-    "symbol",
+    "timestamp",
+    "instrument",
     "session",
     "price",
+    "ohlc",
     "vwap",
-    "orb_high",
-    "orb_low",
-    "trend",
-    "news_event",
-    "volatility_score",
-    "market_regime"
+    "orb",
+    "previous_day",
+    "volume"
   ],
+  "additionalProperties": false,
   "properties": {
-    "symbol": {
+    "timestamp": {
       "type": "string",
-      "enum": ["MNQ", "MES", "MGC", "MCL"]
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of when this market state was captured. Must be within 5 minutes of current time."
+    },
+    "instrument": {
+      "type": "string",
+      "enum": ["MNQ", "MES", "MGC", "MCL"],
+      "description": "Futures instrument symbol."
     },
     "session": {
       "type": "string",
-      "enum": ["london", "ny_open", "asian", "closed"]
+      "enum": ["london", "new_york", "asian", "pre_market", "after_hours"],
+      "description": "Current trading session."
     },
     "price": {
-      "type": "number",
-      "exclusiveMinimum": 0
+      "type": "object",
+      "required": ["last", "bid", "ask"],
+      "additionalProperties": false,
+      "properties": {
+        "last": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Last traded price."
+        },
+        "bid": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "ask": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      }
+    },
+    "ohlc": {
+      "type": "object",
+      "description": "Current bar OHLC data.",
+      "required": ["open", "high", "low", "close", "timeframe"],
+      "additionalProperties": false,
+      "properties": {
+        "open": { "type": "number", "exclusiveMinimum": 0 },
+        "high": { "type": "number", "exclusiveMinimum": 0 },
+        "low":  { "type": "number", "exclusiveMinimum": 0 },
+        "close": { "type": "number", "exclusiveMinimum": 0 },
+        "timeframe": {
+          "type": "string",
+          "enum": ["1m", "2m", "3m", "5m", "15m", "30m", "1h"],
+          "description": "Bar timeframe."
+        },
+        "bar_start": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of bar open."
+        }
+      }
     },
     "vwap": {
-      "type": "number",
-      "exclusiveMinimum": 0
+      "type": "object",
+      "required": ["value", "price_vs_vwap"],
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Current VWAP value."
+        },
+        "price_vs_vwap": {
+          "type": "string",
+          "enum": ["above", "below", "at"],
+          "description": "Where last price is relative to VWAP."
+        },
+        "reclaimed": {
+          "type": ["boolean", "null"],
+          "description": "True if price reclaimed VWAP in the last bar."
+        },
+        "holding": {
+          "type": ["boolean", "null"],
+          "description": "True if price is holding above/below VWAP."
+        }
+      }
     },
-    "orb_high": {
-      "type": "number",
-      "exclusiveMinimum": 0
+    "orb": {
+      "type": "object",
+      "description": "Opening Range Breakout levels (typically first 5 or 15 minutes of session).",
+      "required": ["high", "low", "timeframe_minutes"],
+      "additionalProperties": false,
+      "properties": {
+        "high": { "type": "number", "exclusiveMinimum": 0 },
+        "low":  { "type": "number", "exclusiveMinimum": 0 },
+        "timeframe_minutes": {
+          "type": "integer",
+          "enum": [5, 15, 30],
+          "description": "How many minutes the opening range covers."
+        },
+        "status": {
+          "type": ["string", "null"],
+          "enum": ["above", "below", "inside", "reclaimed_high", "reclaimed_low", "rejected_high", "rejected_low", null],
+          "description": "Current price position relative to ORB."
+        }
+      }
     },
-    "orb_low": {
-      "type": "number",
-      "exclusiveMinimum": 0
+    "previous_day": {
+      "type": "object",
+      "description": "Previous session reference levels.",
+      "required": ["high", "low", "close"],
+      "additionalProperties": false,
+      "properties": {
+        "high":  { "type": "number", "exclusiveMinimum": 0 },
+        "low":   { "type": "number", "exclusiveMinimum": 0 },
+        "close": { "type": "number", "exclusiveMinimum": 0 },
+        "price_vs_pdh": {
+          "type": ["string", "null"],
+          "enum": ["above", "below", "at", "reclaimed", null]
+        },
+        "price_vs_pdl": {
+          "type": ["string", "null"],
+          "enum": ["above", "below", "at", "reclaimed", null]
+        }
+      }
+    },
+    "volume": {
+      "type": "object",
+      "required": ["current_bar", "avg_bar"],
+      "additionalProperties": false,
+      "properties": {
+        "current_bar": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Volume traded in current bar."
+        },
+        "avg_bar": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Average bar volume (20-bar average)."
+        },
+        "relative": {
+          "type": ["number", "null"],
+          "description": "current_bar / avg_bar. Values < 0.5 suggest dead market."
+        }
+      }
+    },
+    "market_condition": {
+      "type": ["string", "null"],
+      "enum": ["TRENDING", "RANGE_BOUND", "CHOPPY", "DEAD", null],
+      "description": "Pre-scored market condition. If null, engine will score internally."
     },
     "trend": {
-      "type": "string",
-      "enum": ["up", "down", "range", "unknown"]
+      "type": ["object", "null"],
+      "description": "Optional trend context.",
+      "additionalProperties": false,
+      "properties": {
+        "direction": {
+          "type": ["string", "null"],
+          "enum": ["UP", "DOWN", "SIDEWAYS", null]
+        },
+        "strength": {
+          "type": ["string", "null"],
+          "enum": ["STRONG", "MODERATE", "WEAK", null]
+        },
+        "ema_fast_above_slow": {
+          "type": ["boolean", "null"]
+        }
+      }
     },
-    "news_event": {
-      "type": "boolean"
-    },
-    "volatility_score": {
-      "type": "number",
-      "minimum": 0
-    },
-    "market_regime": {
-      "type": "string",
-      "enum": ["trend", "range", "volatile", "quiet", "unknown"]
+    "notes": {
+      "type": ["string", "null"],
+      "description": "Optional free-text notes about current market conditions."
     }
   }
 }

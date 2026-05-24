@@ -1,0 +1,50 @@
+{
+  "_comment": "Sample market state — MNQ ORB reclaim setup during NY session. Update 'timestamp' to within 5 minutes of current time when testing.",
+  "timestamp": "2026-05-23T10:15:00+00:00",
+  "instrument": "MNQ",
+  "session": "new_york",
+  "price": {
+    "last": 19505.25,
+    "bid": 19505.00,
+    "ask": 19505.50
+  },
+  "ohlc": {
+    "open": 19480.00,
+    "high": 19510.00,
+    "low": 19475.00,
+    "close": 19505.25,
+    "timeframe": "5m",
+    "bar_start": "2026-05-23T10:10:00+00:00"
+  },
+  "vwap": {
+    "value": 19495.00,
+    "price_vs_vwap": "above",
+    "reclaimed": true,
+    "holding": true
+  },
+  "orb": {
+    "high": 19498.00,
+    "low": 19462.00,
+    "timeframe_minutes": 15,
+    "status": "reclaimed_high"
+  },
+  "previous_day": {
+    "high": 19520.00,
+    "low": 19440.00,
+    "close": 19475.00,
+    "price_vs_pdh": "below",
+    "price_vs_pdl": "above"
+  },
+  "volume": {
+    "current_bar": 4200,
+    "avg_bar": 3800,
+    "relative": 1.10
+  },
+  "market_condition": "TRENDING",
+  "trend": {
+    "direction": "UP",
+    "strength": "MODERATE",
+    "ema_fast_above_slow": true
+  },
+  "notes": "NY open momentum. ORB formed 9:30-9:45. Price dipped, reclaimed ORB high at 10:10 with volume confirmation. VWAP holding."
+}

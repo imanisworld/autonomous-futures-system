@@ -1,0 +1,50 @@
+{
+  "_comment": "Sample market state — choppy MES during NY session. Should produce NO_TRADE.",
+  "timestamp": "2026-05-23T10:20:00+00:00",
+  "instrument": "MES",
+  "session": "new_york",
+  "price": {
+    "last": 5240.50,
+    "bid": 5240.25,
+    "ask": 5240.75
+  },
+  "ohlc": {
+    "open": 5240.00,
+    "high": 5241.25,
+    "low": 5239.50,
+    "close": 5240.50,
+    "timeframe": "5m",
+    "bar_start": "2026-05-23T10:15:00+00:00"
+  },
+  "vwap": {
+    "value": 5240.25,
+    "price_vs_vwap": "at",
+    "reclaimed": null,
+    "holding": null
+  },
+  "orb": {
+    "high": 5243.00,
+    "low": 5238.00,
+    "timeframe_minutes": 15,
+    "status": "inside"
+  },
+  "previous_day": {
+    "high": 5255.00,
+    "low": 5225.00,
+    "close": 5238.75,
+    "price_vs_pdh": "below",
+    "price_vs_pdl": "above"
+  },
+  "volume": {
+    "current_bar": 1200,
+    "avg_bar": 3500,
+    "relative": 0.34
+  },
+  "market_condition": "CHOPPY",
+  "trend": {
+    "direction": "SIDEWAYS",
+    "strength": "WEAK",
+    "ema_fast_above_slow": null
+  },
+  "notes": "Grinding sideways inside ORB. Low relative volume 0.34. No directional bias."
+}

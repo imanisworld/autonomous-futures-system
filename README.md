@@ -1,45 +1,120 @@
-# Autonomous Futures System
+# Autonomous Futures Paper-Trading System
 
-Phase 0 foundation for an autonomous futures paper-trading system.
+A local, paper-only autonomous trading system for a limited futures universe. Designed for disciplined, low-frequency trading with strict risk enforcement, session filters, and full decision journaling.
 
-The first goal is not profit. The first goal is a system that can survive one
-week without crashing, overtrading, violating rules, duplicating positions,
-revenge trading, or drifting into disabled sessions.
+---
 
-## Status
+## Paper-Only System
 
-Foundation only. No trading engine is included in the initial commit.
+**Live trading is disabled and cannot be activated without explicit future safeguards.**
+`LIVE_TRADING_ENABLED` defaults to `false` in every config file and environment. Any attempt to enable live trading in Phase 1 raises a hard error.
 
-## Core Rules
-
-- Paper trading only
-- Never enable live trading
-- No broker API
-- No credentials
-- No Asian session trading initially
-- No overnight holds
-- No averaging down
-- Bracket orders only
-- `NO_TRADE` is valid
+---
 
 ## Allowed Instruments
 
-- `MNQ`
-- `MES`
-- `MGC`
-- `MCL`
+| Symbol | Name |
+|--------|------|
+| MNQ | Micro E-mini NASDAQ-100 |
+| MES | Micro E-mini S&P 500 |
+| MGC | Micro Gold |
+| MCL | Micro Crude Oil |
 
 ## Allowed Sessions
 
-- `london`
-- `ny_open`
+| Session | Active Hours (ET) |
+|---------|-------------------|
+| London | 03:00 – 08:30 |
+| New York | 09:30 – 12:00 |
 
-## Phase Roadmap
+**Asian session is disabled.** Trading outside allowed sessions = NO_TRADE.
 
-1. Phase 0: foundation
-2. Phase 1: fake paper broker and fake fills
-3. Phase 2: replay engine with historical candles
-4. Phase 3: live market data
-5. Phase 4: Tradovate simulation connection
+---
 
-Live broker execution is not part of this roadmap.
+## Risk Rules Summary
+
+- Max **3 trades/day**
+- Stop after **2 consecutive losses**
+- **One open position** at a time
+- **Bracket orders only** (entry + stop + target required)
+- Minimum **R:R = 2.0**
+- `NO_TRADE` is always a valid outcome
+- Missing, stale, or contradictory data = **NO_TRADE**
+
+---
+
+## Project Layout
+
+```
+.
+├── README.md
+├── AGENT_CONTEXT.md
+├── FUTURES_SYSTEM_RULEBOOK.md
+├── LIMITED_AUTONOMOUS_FUTURES_SPEC.md
+├── RUNBOOK.md
+├── CHANGELOG.md
+├── risk_rules.yaml
+├── market_state.schema.json
+├── decision_output.schema.json
+├── .env.example
+├── main.py
+├── agent/
+├── config/
+├── context/
+├── data/
+├── execution/
+├── journal/
+├── risk/
+├── sources/
+├── strategy/
+├── tests/
+└── logs/
+```
+
+---
+
+## Quickstart
+
+```bash
+# 1. Install dependencies
+pip install -r requirements.txt
+
+# 2. Copy and review environment
+cp .env.example .env
+
+# 3. Run paper engine with a sample market state
+python main.py --market-state data/sample_market_state.json
+
+# 4. Run tests
+pytest tests/ -v
+```
+
+## Daily Reviews
+
+The review layer is read-only. It reads the JSONL journal and writes morning or
+end-of-day reports without placing trades or touching broker code.
+
+```bash
+python -m agent.daily_summary --date 2026-05-23 --mode morning
+python -m agent.daily_summary --date 2026-05-23 --mode eod
+```
+
+---
+
+## Architecture Principles
+
+1. **Config is law.** All risk parameters live in `risk_rules.yaml`. Code never overrides them.
+2. **Logs are truth.** Every decision, trade, and rejection is journaled with timestamp and reason.
+3. **LLM classifies, code validates.** The signal engine may reason about setups; the risk engine enforces rules deterministically before any order is simulated.
+4. **NO_TRADE is the default.** Any ambiguity, missing data, or rule violation resolves to NO_TRADE.
+
+---
+
+## Future Roadmap
+
+- Phase 2: Replay engine with historical candles
+- Phase 3: Live market data only
+- Phase 4: Tradovate simulation connection only
+- Later: Performance analytics and strategy backtesting
+
+Live broker execution remains out of scope.

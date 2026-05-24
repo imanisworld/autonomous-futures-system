@@ -1,60 +1,127 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.local/autonomous-futures-system/decision_output.schema.json",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "decision_output.schema.json",
   "title": "DecisionOutput",
-  "oneOf": [
-    {
-      "type": "object",
+  "description": "Output produced by the DecisionEngine for every evaluation cycle.",
+  "type": "object",
+  "required": ["timestamp", "instrument", "session", "decision", "reason"],
+  "additionalProperties": false,
+  "properties": {
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the decision was made."
+    },
+    "instrument": {
+      "type": "string",
+      "enum": ["MNQ", "MES", "MGC", "MCL"],
+      "description": "Instrument evaluated."
+    },
+    "session": {
+      "type": "string",
+      "enum": ["london", "new_york", "asian", "pre_market", "after_hours"]
+    },
+    "decision": {
+      "type": "string",
+      "enum": ["TRADE", "NO_TRADE", "DONE_FOR_DAY", "WAIT"],
+      "description": "Decision outcome. NO_TRADE and DONE_FOR_DAY are valid, expected outcomes."
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 5,
+      "description": "Human-readable explanation of why this decision was reached."
+    },
+    "market_condition": {
+      "type": ["string", "null"],
+      "enum": ["TRENDING", "RANGE_BOUND", "CHOPPY", "DEAD", null],
+      "description": "Assessed market condition at time of decision."
+    },
+    "setup": {
+      "description": "Trade setup details. Required if decision == TRADE. Must be null otherwise.",
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["direction", "entry", "stop", "target", "rr_ratio", "strategy"],
+          "additionalProperties": false,
+          "properties": {
+            "direction": {
+              "type": "string",
+              "enum": ["LONG", "SHORT"]
+            },
+            "entry": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "stop": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "target": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "rr_ratio": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Calculated risk-to-reward ratio."
+            },
+            "strategy": {
+              "type": "string",
+              "description": "Strategy concept that generated this setup.",
+              "enum": [
+                "orb_reclaim",
+                "orb_rejection",
+                "vwap_reclaim",
+                "vwap_hold",
+                "pdh_reclaim",
+                "pdl_reclaim",
+                "continuation_pullback"
+              ]
+            },
+            "notes": {
+              "type": ["string", "null"]
+            }
+          }
+        },
+        { "type": "null" }
+      ]
+    },
+    "risk_check": {
+      "type": ["object", "null"],
+      "description": "Result of RiskEngine validation. Populated after risk check.",
       "additionalProperties": false,
-      "required": ["decision", "reason"],
       "properties": {
-        "decision": { "const": "NO_TRADE" },
-        "reason": { "type": "string", "minLength": 1 },
-        "rule_failures": {
-          "type": "array",
-          "items": { "type": "string" },
-          "default": []
+        "result": {
+          "type": "string",
+          "enum": ["APPROVED", "REJECTED"]
+        },
+        "failed_rule": {
+          "type": ["string", "null"],
+          "description": "Name of the first rule that failed, if rejected."
+        },
+        "reason": {
+          "type": ["string", "null"]
         }
       }
     },
-    {
-      "type": "object",
+    "outcome": {
+      "type": ["object", "null"],
+      "description": "Filled after paper broker resolves the trade.",
       "additionalProperties": false,
-      "required": [
-        "decision",
-        "symbol",
-        "session",
-        "setup",
-        "direction",
-        "entry",
-        "stop",
-        "target",
-        "rr",
-        "order_type",
-        "reason"
-      ],
       "properties": {
-        "decision": { "const": "TRADE" },
-        "symbol": { "type": "string", "enum": ["MNQ", "MES", "MGC", "MCL"] },
-        "session": { "type": "string", "enum": ["london", "ny_open"] },
-        "setup": {
+        "result": {
           "type": "string",
-          "enum": [
-            "ORB reclaim",
-            "ORB rejection",
-            "VWAP reclaim",
-            "PDH/PDL reclaim",
-            "continuation pullback"
-          ]
+          "enum": ["WIN", "LOSS", "OPEN", "CANCELLED"]
         },
-        "direction": { "type": "string", "enum": ["long", "short"] },
-        "entry": { "type": "number", "exclusiveMinimum": 0 },
-        "stop": { "type": "number", "exclusiveMinimum": 0 },
-        "target": { "type": "number", "exclusiveMinimum": 0 },
-        "rr": { "type": "number", "minimum": 2.0 },
-        "order_type": { "const": "bracket" },
-        "reason": { "type": "string", "minLength": 1 }
+        "entry_price": { "type": ["number", "null"] },
+        "exit_price":  { "type": ["number", "null"] },
+        "exit_reason": {
+          "type": ["string", "null"],
+          "enum": ["TARGET_HIT", "STOP_HIT", "MANUAL_CANCEL", null]
+        },
+        "pnl_ticks": { "type": ["number", "null"] },
+        "pnl_dollars": { "type": ["number", "null"] }
       }
     }
-  ]
+  }
 }

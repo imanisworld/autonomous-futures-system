@@ -1,27 +1,112 @@
-max_trades_per_day: 3
-max_consecutive_losses: 2
-daily_max_loss: 150
+# ============================================================
+# RISK RULES — Autonomous Futures Paper-Trading System
+# Version: 1.0.0
+# ============================================================
+# These values are authoritative. All risk engine checks
+# reference this file at runtime. Do not edit without
+# incrementing the version and updating CHANGELOG.md.
+# ============================================================
 
-allowed_sessions:
-  - london
-  - ny_open
+version: "1.0.0"
 
-allowed_instruments:
-  - MNQ
-  - MES
-  - MGC
-  - MCL
+# ─── Trading Mode ────────────────────────────────────────────
+trading_mode:
+  live_trading_enabled: false       # MUST remain false in Phase 1
+  paper_mode: true
+  sim_fill_at_entry: true           # Paper broker fills at entry price
 
-allowed_setups:
-  - ORB reclaim
-  - ORB rejection
-  - VWAP reclaim
-  - PDH/PDL reclaim
-  - continuation pullback
+# ─── Allowed Universe ────────────────────────────────────────
+instruments:
+  allowed:
+    - MNQ   # Micro E-mini NASDAQ-100
+    - MES   # Micro E-mini S&P 500
+    - MGC   # Micro Gold
+    - MCL   # Micro Crude Oil
 
-minimum_rr: 2.0
+sessions:
+  allowed:
+    - london      # 03:00–08:30 ET
+    - new_york    # 09:30–12:00 ET
+  disabled:
+    - asian       # Permanently disabled
 
-allow_live_trading: false
-allow_broker_credentials: false
-allow_overnight_holds: false
-allow_averaging_down: false
+session_hours_et:
+  london:
+    start: "03:00"
+    end:   "08:30"
+  new_york:
+    start: "09:30"
+    end:   "12:00"
+
+# ─── Daily Limits ────────────────────────────────────────────
+daily_limits:
+  max_trades_per_day: 3             # Hard ceiling, calendar-day reset
+  max_consecutive_losses: 2        # Stop after 2 losses in a row
+
+# ─── Position Rules ──────────────────────────────────────────
+position_rules:
+  max_open_positions: 1            # One position at a time
+  averaging_down: false            # Absolute prohibition
+  discretionary_override: false    # No manual intervention
+
+# ─── Order Rules ─────────────────────────────────────────────
+order_rules:
+  order_type: bracket              # Entry + stop + target required
+  require_entry: true
+  require_stop: true
+  require_target: true
+
+# ─── Risk/Reward ─────────────────────────────────────────────
+risk_reward:
+  min_rr_ratio: 2.0               # Reject any setup below this
+
+# ─── Data Quality ────────────────────────────────────────────
+data_quality:
+  max_staleness_seconds: 300       # 5 minutes
+  reject_null_required_fields: true
+  reject_contradictory_data: true  # e.g. high < low
+
+# ─── Market Condition Filter ──────────────────────────────────
+market_condition:
+  tradable_states:
+    - TRENDING
+    - RANGE_BOUND
+  non_tradable_states:
+    - CHOPPY
+    - DEAD
+
+# ─── Strategy Concepts ───────────────────────────────────────
+strategy:
+  enabled_concepts:
+    # ── Core structural setups ────────────────────────────────
+    - orb_reclaim             # Price reclaims ORB high after pullback
+    - orb_rejection           # Failed ORB breakout, fade back inside
+    - vwap_reclaim            # Price crosses above/below VWAP and holds
+    - vwap_hold               # Price holding below VWAP in downtrend
+    - pdh_reclaim             # Previous day high reclaimed
+    - pdl_reclaim             # Previous day low reclaimed (breakdown)
+    - continuation_pullback   # Trend pullback to VWAP/EMA
+    # ── The Strat patterns ───────────────────────────────────
+    # Phase 1: approximated from single-bar market_state flags
+    # Phase 2: full multi-bar Strat classification available
+    - strat_212               # 2-1-2 continuation (2UP→1→2UP or 2DOWN→1→2DOWN)
+    - strat_122               # 1-2-2 reversal (1→2→reverse 2)
+    - strat_4hr_retrigger     # 4AM 2DOWN → 8AM 2UP → NY open retrigger
+  frequency: low                   # Bias toward selectivity
+  no_trade_is_valid: true          # Explicit acknowledgment
+
+# ─── The Strat Config ────────────────────────────────────────
+strat:
+  # Candle classification flags used in market_state (Phase 1 approximation)
+  # Full multi-bar history required for Phase 2 classification
+  candle_types: [inside_bar, two_up, two_down, outside_bar]
+  combo_patterns:
+    strat_212:
+      sequence: [two_up_or_down, inside_bar, two_up_or_down]
+      description: "2-1-2 continuation — compress then extend"
+    strat_122:
+      sequence: [inside_bar, two_directional, two_reverse]
+      description: "1-2-2 reversal — trap then flip"
+    strat_4hr_retrigger:
+      description: "4AM 2DOWN, 8AM 2UP, NY open dip below 8AM high then reclaim"
+  # Reference: sources/strat_definitions.md

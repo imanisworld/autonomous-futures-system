@@ -1,0 +1,9 @@
+__pycache__/
+.pytest_cache/
+*.pyc
+venv/
+logs/
+logs_test/
+.env
+Trading_Intel_Architecture.docx
+autonomous-futures-system/
