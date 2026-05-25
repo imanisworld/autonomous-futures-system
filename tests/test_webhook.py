@@ -185,6 +185,67 @@ def test_build_market_state_session_gap_forces_non_allowed_session():
     assert state.session == "session_gap"
 
 
+# ─── London ORB routing ───────────────────────────────────────────────────────
+
+def test_london_orb_used_when_session_is_london():
+    """When session=london and london_orb_* are present, ORBData uses London levels."""
+    payload = _base_payload(
+        session="london",
+        london_orb_high=19520.0,
+        london_orb_low=19490.0,
+        london_orb_status="reclaimed_high",
+        # NY ORB absent (not built yet during London)
+        orb_high=None,
+        orb_low=None,
+        orb_status=None,
+    )
+    state = build_market_state(payload)
+    assert state.orb.high == 19520.0
+    assert state.orb.low == 19490.0
+    assert state.orb.status == "reclaimed_high"
+
+
+def test_london_orb_undefined_when_not_yet_established():
+    """During London before ORB window closes, status must be 'undefined'."""
+    payload = _base_payload(
+        session="london",
+        london_orb_high=None,
+        london_orb_low=None,
+        london_orb_status=None,
+    )
+    state = build_market_state(payload)
+    assert state.orb.status == "undefined"
+
+
+def test_ny_orb_used_in_new_york_session():
+    """NY session still uses the standard orb_high/low regardless of london fields."""
+    payload = _base_payload(
+        session="new_york",
+        orb_high=19500.0,
+        orb_low=19460.0,
+        orb_status="above",
+        london_orb_high=19520.0,  # present but should be ignored
+        london_orb_low=19490.0,
+        london_orb_status="inside",
+    )
+    state = build_market_state(payload)
+    assert state.orb.high == 19500.0
+    assert state.orb.low == 19460.0
+    assert state.orb.status == "above"
+
+
+def test_london_orb_status_from_payload_not_recomputed():
+    """london_orb_status from Pine is passed through verbatim."""
+    payload = _base_payload(
+        session="london",
+        london_orb_high=19510.0,
+        london_orb_low=19480.0,
+        london_orb_status="rejected_high",
+    )
+    state = build_market_state(payload)
+    assert state.orb.status == "rejected_high"
+
+
 # ─── runner: NO_TRADE path ────────────────────────────────────────────────────
 
 def test_runner_choppy_produces_no_trade(config, tmp_path):

@@ -40,6 +40,9 @@ class AlertPayload(BaseModel):
     orb_high: Optional[float] = None
     orb_low: Optional[float] = None
     orb_status: Optional[str] = None
+    london_orb_high: Optional[float] = None    # set by Pine during London session
+    london_orb_low: Optional[float] = None
+    london_orb_status: Optional[str] = None
     market_condition: Optional[str] = None
     trend_direction: Optional[str] = None
     trend_strength: Optional[str] = None

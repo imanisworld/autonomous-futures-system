@@ -11,18 +11,20 @@
 
 //@version=5
 indicator("RiskSentinel — Full Context", overlay=true,
-     max_lines_count=3, max_labels_count=5)
+     max_lines_count=5, max_labels_count=5)
 
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // INPUTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-i_orb_min    = input.int(15, "ORB Window (min)", minval=5, maxval=60, step=5,
-                 tooltip="Opening-range window in minutes from session open.",
-                 group="Opening Range")
-i_ny_session = input.session("0930-1200", "NY Session (ET)",
-                 group="Opening Range")
+i_orb_min       = input.int(15, "ORB Window (min)", minval=5, maxval=60, step=5,
+                    tooltip="Opening-range window in minutes from each session open.",
+                    group="Opening Range")
+i_ny_session    = input.session("0930-1200", "NY Session (ET)",
+                    group="Opening Range")
+i_london_session = input.session("0300-0830", "London Session (ET)",
+                    group="Opening Range")
 
 i_ema_fast   = input.int(9,  "Fast EMA",  minval=2,  maxval=50,  group="Trend")
 i_ema_slow   = input.int(21, "Slow EMA",  minval=5,  maxval=200, group="Trend")
@@ -39,6 +41,9 @@ i_alert_on   = input.bool(true, "Fire alert on every confirmed bar close",
 // Nullable float → JSON token ("null" or numeric string)
 f2j(v, fmt) => na(v) ? "null" : str.tostring(v, fmt)
 
+// Nullable string → JSON token (null or quoted string)
+s2j(v) => na(v) ? "null" : '"' + v + '"'
+
 // Classify one bar relative to the previous
 classify_bar(h, l, ph, pl) =>
     if na(ph) or na(pl)
@@ -48,6 +53,17 @@ classify_bar(h, l, ph, pl) =>
         bl = l < pl
         bh and bl ? "outside_bar" : not bh and not bl ? "inside_bar" :
          bh ? "two_up" : "two_down"
+
+// Compute ORB status for any pair of ORB levels
+orb_status_for(orb_high, orb_low) =>
+    na(orb_high) or na(orb_low)             ? "undefined"      :
+    close > orb_high and close[1] <= orb_high ? "reclaimed_high" :
+    close < orb_low  and close[1] >= orb_low  ? "reclaimed_low"  :
+    close[1] > orb_high and close <= orb_high ? "rejected_high"  :
+    close[1] < orb_low  and close >= orb_low  ? "rejected_low"   :
+    close > orb_high                         ? "above"          :
+    close < orb_low                          ? "below"          :
+                                               "inside"
 
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -69,12 +85,13 @@ rel_vol   = avg_vol > 0 ? volume / avg_vol : 1.0
 
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// OPENING RANGE (NY session)
+// OPENING RANGE — NY SESSION
 // ═══════════════════════════════════════════════════════════════════════════════
 
-bars_needed  = math.max(1, math.round(i_orb_min * 60 / timeframe.in_seconds()))
-in_ny        = not na(time(timeframe.period, i_ny_session, "America/New_York"))
-ny_start     = in_ny and not in_ny[1]
+bars_needed = math.max(1, math.round(i_orb_min * 60 / timeframe.in_seconds()))
+
+in_ny    = not na(time(timeframe.period, i_ny_session,     "America/New_York"))
+ny_start = in_ny and not in_ny[1]
 
 var float orb_h    = na
 var float orb_l    = na
@@ -94,16 +111,35 @@ else if in_ny and not orb_done
     else
         orb_done := true
 
-// Bar-by-bar ORB status
-orb_status =
-     na(orb_h) or na(orb_l)                   ? "undefined"      :
-     close > orb_h and close[1] <= orb_h      ? "reclaimed_high" :
-     close < orb_l and close[1] >= orb_l      ? "reclaimed_low"  :
-     close[1] > orb_h and close  <= orb_h     ? "rejected_high"  :
-     close[1] < orb_l and close  >= orb_l     ? "rejected_low"   :
-     close > orb_h                            ? "above"          :
-     close < orb_l                            ? "below"          :
-                                                "inside"
+orb_status = orb_status_for(orb_h, orb_l)
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// OPENING RANGE — LONDON SESSION
+// ═══════════════════════════════════════════════════════════════════════════════
+
+in_london    = not na(time(timeframe.period, i_london_session, "America/New_York"))
+london_start = in_london and not in_london[1]
+
+var float london_orb_h    = na
+var float london_orb_l    = na
+var int   london_orb_cnt  = 0
+var bool  london_orb_done = false
+
+if london_start
+    london_orb_h    := high
+    london_orb_l    := low
+    london_orb_cnt  := 1
+    london_orb_done := false
+else if in_london and not london_orb_done
+    if london_orb_cnt < bars_needed
+        london_orb_h   := math.max(london_orb_h, high)
+        london_orb_l   := math.min(london_orb_l, low)
+        london_orb_cnt += 1
+    else
+        london_orb_done := true
+
+london_orb_status = orb_status_for(london_orb_h, london_orb_l)
 
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -184,9 +220,6 @@ price_vs_pdl =
 // BUILD ALERT JSON
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// Nullable string → JSON token (null or quoted string)
-s2j(v) => na(v) ? "null" : '"' + v + '"'
-
 msg = "{"
  + '"ticker":'              + '"' + syminfo.ticker              + '",'
  + '"timestamp":'           + str.tostring(time)                + ','
@@ -201,6 +234,9 @@ msg = "{"
  + '"orb_high":'            + f2j(orb_h,     "#.##")            + ','
  + '"orb_low":'             + f2j(orb_l,     "#.##")            + ','
  + '"orb_status":'          + '"' + orb_status                  + '",'
+ + '"london_orb_high":'     + f2j(london_orb_h,    "#.##")      + ','
+ + '"london_orb_low":'      + f2j(london_orb_l,    "#.##")      + ','
+ + '"london_orb_status":'   + s2j(na(london_orb_h) ? na(string) : london_orb_status) + ','
  + '"market_condition":'    + '"' + market_cond                 + '",'
  + '"trend_direction":'     + '"' + trend_dir                   + '",'
  + '"trend_strength":'      + '"' + trend_str                   + '",'
@@ -238,7 +274,14 @@ plot(ema_fast, "EMA Fast", color=color.new(color.aqua,   30), linewidth=1)
 plot(ema_slow, "EMA Slow", color=color.new(color.orange, 30), linewidth=1)
 plot(vwap_val, "VWAP",     color=color.new(color.yellow, 20), linewidth=2)
 
+// NY ORB levels — visible during and after NY open
 orb_h_plot = in_ny or in_ny[1] ? orb_h : na
 orb_l_plot = in_ny or in_ny[1] ? orb_l : na
-plot(orb_h_plot, "ORB High", color=color.new(color.lime,  40), linewidth=1, style=plot.style_stepline)
-plot(orb_l_plot, "ORB Low",  color=color.new(color.red,   40), linewidth=1, style=plot.style_stepline)
+plot(orb_h_plot, "NY ORB High",     color=color.new(color.lime,   40), linewidth=1, style=plot.style_stepline)
+plot(orb_l_plot, "NY ORB Low",      color=color.new(color.red,    40), linewidth=1, style=plot.style_stepline)
+
+// London ORB levels — visible during and after London open
+l_orb_h_plot = in_london or in_london[1] ? london_orb_h : na
+l_orb_l_plot = in_london or in_london[1] ? london_orb_l : na
+plot(l_orb_h_plot, "London ORB High", color=color.new(color.teal,   50), linewidth=1, style=plot.style_stepline)
+plot(l_orb_l_plot, "London ORB Low",  color=color.new(color.orange, 50), linewidth=1, style=plot.style_stepline)

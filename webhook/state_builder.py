@@ -136,8 +136,26 @@ def build_market_state(payload: AlertPayload) -> MarketState:
         "below" if payload.close < pdl else "at"
     )
 
-    orb_h = payload.orb_high if payload.orb_high is not None else payload.high
-    orb_l = payload.orb_low  if payload.orb_low  is not None else payload.low
+    # ── ORB levels — route by session ────────────────────────────────────────
+    # London session uses the London ORB (Pine tracks it separately).
+    # NY session uses the standard NY ORB.
+    # When the relevant ORB hasn't been established yet, status stays
+    # "undefined" and strategies that check specific statuses won't fire.
+    if session == "london" and payload.london_orb_high is not None:
+        orb_h = payload.london_orb_high
+        orb_l = payload.london_orb_low
+        orb_status_val = payload.london_orb_status or "undefined"
+    elif session == "london":
+        # London ORB not yet established — use current bar as placeholder so
+        # ORBData stays valid, but status stays undefined so no ORB strategy fires.
+        orb_h = payload.high
+        orb_l = payload.low
+        orb_status_val = "undefined"
+    else:
+        orb_h = payload.orb_high if payload.orb_high is not None else payload.high
+        orb_l = payload.orb_low  if payload.orb_low  is not None else payload.low
+        orb_status_val = payload.orb_status or "undefined"
+
     strat = build_strat_context(payload)
 
     return MarketState(
@@ -163,7 +181,7 @@ def build_market_state(payload: AlertPayload) -> MarketState:
             high=orb_h,
             low=orb_l,
             timeframe_minutes=15,
-            status=payload.orb_status,
+            status=orb_status_val,
         ),
         previous_day=PreviousDayData(
             high=pdh,
