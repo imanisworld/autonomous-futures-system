@@ -346,6 +346,8 @@ class DecisionEngine:
             # See sources/strat_definitions.md for full pattern definitions.
             ("strat_212", self._try_strat_212),
             ("strat_122", self._try_strat_122),
+            ("strat_inside_break", self._try_strat_inside_break),
+            ("strat_outside_continuation", self._try_strat_outside_continuation),
         ]
 
         for name, fn in strategies:
@@ -703,6 +705,130 @@ class DecisionEngine:
             )
 
         return None
+
+    def _try_strat_inside_break(self, state: MarketState) -> Optional[SetupDetail]:
+        """
+        The Strat: Inside Bar Breakout.
+
+        Pattern: any bar → 1 (inside bar) → 2UP or 2DOWN
+        The inside bar compressed range; the breakout bar is the entry signal.
+        Differs from strat_212 in that the two-bars-back bar is not directionally
+        aligned — this is a pure compression-breakout, not a continuation.
+
+        Requires trend and VWAP alignment to filter noise: an inside bar can
+        break either direction, so we only take the side that agrees with
+        the broader market context.
+
+        Phase 2 only — no proxy. Requires classified strat_sequence.
+        """
+        strat = state.strat
+        if not (strat and strat.strat_sequence == "strat_inside_break"
+                and strat.strat_direction):
+            return None
+
+        direction = strat.strat_direction
+
+        # Require trend alignment — inside break can fire either way
+        if not (state.trend and state.trend.direction in ("UP", "DOWN")):
+            return None
+        trend_aligned = (
+            (direction == "LONG"  and state.trend.direction == "UP") or
+            (direction == "SHORT" and state.trend.direction == "DOWN")
+        )
+        if not trend_aligned:
+            return None
+
+        # VWAP must support the direction
+        if direction == "LONG"  and state.vwap.price_vs_vwap not in ("above", "at"):
+            return None
+        if direction == "SHORT" and state.vwap.price_vs_vwap not in ("below", "at"):
+            return None
+
+        tick = self.TICK_SIZE.get(state.instrument, 0.25)
+        if direction == "LONG":
+            entry = state.ohlc.high + tick
+            stop  = state.ohlc.low  - (tick * 4)
+            risk  = entry - stop
+            if risk <= 0:
+                return None
+            target = entry + (risk * 2.2)
+        else:
+            entry = state.ohlc.low  - tick
+            stop  = state.ohlc.high + (tick * 4)
+            risk  = stop - entry
+            if risk <= 0:
+                return None
+            target = entry - (risk * 2.2)
+
+        rr = RiskEngine.calculate_rr(direction, entry, stop, target)
+        return SetupDetail(
+            direction=direction,
+            entry=round(entry, 4),
+            stop=round(stop, 4),
+            target=round(target, 4),
+            rr_ratio=rr,
+            strategy="strat_inside_break",
+            notes=(
+                f"Inside bar breakout ({direction}): compression resolved "
+                f"with trend and VWAP alignment"
+            ),
+        )
+
+    def _try_strat_outside_continuation(self, state: MarketState) -> Optional[SetupDetail]:
+        """
+        The Strat: Outside Bar Continuation.
+
+        Pattern: any bar → outside bar (2UP+2DOWN simultaneously) → 2UP or 2DOWN
+        The outside bar engulfed the prior range; the follow-through bar shows
+        which side won and signals continuation in that direction.
+
+        Uses a wider stop than inside_break because the outside bar had a large
+        range — the natural invalidation point is beyond that full range.
+        Requires volume confirmation (outside bar follow-throughs on low volume
+        are traps).
+
+        Phase 2 only — no proxy. Requires classified strat_sequence.
+        """
+        strat = state.strat
+        if not (strat and strat.strat_sequence == "strat_outside_continuation"
+                and strat.strat_direction):
+            return None
+
+        direction = strat.strat_direction
+
+        # Volume must confirm — outside bar follow-through on low volume = trap
+        if state.volume.relative and state.volume.relative < 0.8:
+            return None
+
+        tick = self.TICK_SIZE.get(state.instrument, 0.25)
+        if direction == "LONG":
+            entry = state.ohlc.high + tick
+            stop  = state.ohlc.low  - (tick * 6)   # wider: outside bar had large range
+            risk  = entry - stop
+            if risk <= 0:
+                return None
+            target = entry + (risk * 2.0)
+        else:
+            entry = state.ohlc.low  - tick
+            stop  = state.ohlc.high + (tick * 6)
+            risk  = stop - entry
+            if risk <= 0:
+                return None
+            target = entry - (risk * 2.0)
+
+        rr = RiskEngine.calculate_rr(direction, entry, stop, target)
+        return SetupDetail(
+            direction=direction,
+            entry=round(entry, 4),
+            stop=round(stop, 4),
+            target=round(target, 4),
+            rr_ratio=rr,
+            strategy="strat_outside_continuation",
+            notes=(
+                f"Outside bar follow-through ({direction}): engulf resolved "
+                f"with volume confirmation"
+            ),
+        )
 
     _ET = ZoneInfo("America/New_York")
     _4HR_WINDOW_START = _time(9, 30)

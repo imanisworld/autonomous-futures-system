@@ -97,6 +97,8 @@ strategy:
     - strat_212               # 2-1-2 continuation (2UP→1→2UP or 2DOWN→1→2DOWN)
     - strat_122               # 1-2-2 reversal (1→2→reverse 2)
     - strat_4hr_retrigger     # 4AM 2DOWN → 8AM 2UP → NY open retrigger
+    - strat_inside_break      # inside bar breakout with trend + VWAP filter
+    - strat_outside_continuation  # outside bar follow-through with volume filter
   frequency: low                   # Bias toward selectivity
   no_trade_is_valid: true          # Explicit acknowledgment
 
@@ -114,6 +116,12 @@ strat:
       description: "1-2-2 reversal — trap then flip"
     strat_4hr_retrigger:
       description: "4AM 2DOWN, 8AM 2UP, NY open dip below 8AM high then reclaim"
+    strat_inside_break:
+      sequence: [any, inside_bar, two_up_or_down]
+      description: "inside bar breakout — compression resolved with trend/VWAP filter"
+    strat_outside_continuation:
+      sequence: [any, outside_bar, two_up_or_down]
+      description: "outside bar follow-through — engulf resolved with volume filter"
   # Reference: sources/strat_definitions.md
 
 # ─── Future Broker Roadmap (Inactive Planning Metadata) ─────

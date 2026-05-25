@@ -460,3 +460,130 @@ class TestStrat4hrRetrigger:
         # Falls back to orb_reclaim (or NO_TRADE if blocked by max_contracts)
         if decision.decision == "TRADE":
             assert decision.setup.strategy == "orb_reclaim"
+
+
+class TestStratInsideBreakAndOutsideContinuation:
+    """strat_inside_break and strat_outside_continuation handlers."""
+
+    @pytest.fixture
+    def ib_config(self, config):
+        from dataclasses import replace
+        return replace(config, enabled_concepts=["strat_inside_break"])
+
+    @pytest.fixture
+    def oc_config(self, config):
+        from dataclasses import replace
+        return replace(config, enabled_concepts=["strat_outside_continuation"])
+
+    def _state_with(self, fresh_market_state, **strat_kwargs):
+        state = deepcopy(fresh_market_state)
+        state.strat = StratContext(**strat_kwargs)
+        state.orb.status = "inside"   # neutralise ORB strategies
+        state.market_condition = "TRENDING"
+        return state
+
+    # ── inside_break ─────────────────────────────────────────────────────────
+
+    def test_inside_break_long_with_trend(self, fresh_market_state, ib_config):
+        engine = DecisionEngine(config=ib_config)
+        state = self._state_with(
+            fresh_market_state,
+            current_bar_type="two_up",
+            previous_bar_type="inside_bar",
+            strat_sequence="strat_inside_break",
+            strat_direction="LONG",
+        )
+        state.trend = TrendData(direction="UP", strength="MODERATE")
+        state.vwap.price_vs_vwap = "above"
+        decision = engine.evaluate(state, DailyState())
+        assert decision.decision == "TRADE"
+        assert decision.setup.strategy == "strat_inside_break"
+        assert decision.setup.direction == "LONG"
+
+    def test_inside_break_short_with_downtrend(self, fresh_market_state, ib_config):
+        engine = DecisionEngine(config=ib_config)
+        state = self._state_with(
+            fresh_market_state,
+            current_bar_type="two_down",
+            previous_bar_type="inside_bar",
+            strat_sequence="strat_inside_break",
+            strat_direction="SHORT",
+        )
+        state.trend = TrendData(direction="DOWN", strength="MODERATE")
+        state.vwap.price_vs_vwap = "below"
+        decision = engine.evaluate(state, DailyState())
+        assert decision.decision == "TRADE"
+        assert decision.setup.strategy == "strat_inside_break"
+        assert decision.setup.direction == "SHORT"
+
+    def test_inside_break_blocked_counter_trend(self, fresh_market_state, ib_config):
+        """Long inside break with downtrend context should not fire."""
+        engine = DecisionEngine(config=ib_config)
+        state = self._state_with(
+            fresh_market_state,
+            current_bar_type="two_up",
+            previous_bar_type="inside_bar",
+            strat_sequence="strat_inside_break",
+            strat_direction="LONG",
+        )
+        state.trend = TrendData(direction="DOWN", strength="MODERATE")
+        decision = engine.evaluate(state, DailyState())
+        assert decision.decision == "NO_TRADE"
+
+    def test_inside_break_requires_strat_sequence(self, fresh_market_state, ib_config):
+        """Without classified strat_sequence the handler must not fire."""
+        engine = DecisionEngine(config=ib_config)
+        state = self._state_with(
+            fresh_market_state,
+            current_bar_type="two_up",
+            previous_bar_type="inside_bar",
+            strat_sequence=None,
+            strat_direction=None,
+        )
+        decision = engine.evaluate(state, DailyState())
+        assert decision.decision == "NO_TRADE"
+
+    # ── outside_continuation ─────────────────────────────────────────────────
+
+    def test_outside_continuation_long_with_volume(self, fresh_market_state, oc_config):
+        engine = DecisionEngine(config=oc_config)
+        state = self._state_with(
+            fresh_market_state,
+            current_bar_type="two_up",
+            previous_bar_type="outside_bar",
+            strat_sequence="strat_outside_continuation",
+            strat_direction="LONG",
+        )
+        state.volume = VolumeData(current_bar=5000, avg_bar=3800, relative=1.32)
+        decision = engine.evaluate(state, DailyState())
+        assert decision.decision == "TRADE"
+        assert decision.setup.strategy == "strat_outside_continuation"
+        assert decision.setup.direction == "LONG"
+
+    def test_outside_continuation_blocked_low_volume(self, fresh_market_state, oc_config):
+        """Low-volume outside bar follow-through is a trap — must be rejected."""
+        engine = DecisionEngine(config=oc_config)
+        state = self._state_with(
+            fresh_market_state,
+            current_bar_type="two_up",
+            previous_bar_type="outside_bar",
+            strat_sequence="strat_outside_continuation",
+            strat_direction="LONG",
+        )
+        state.volume = VolumeData(current_bar=1000, avg_bar=3800, relative=0.26)
+        decision = engine.evaluate(state, DailyState())
+        assert decision.decision == "NO_TRADE"
+
+    def test_outside_continuation_short(self, fresh_market_state, oc_config):
+        engine = DecisionEngine(config=oc_config)
+        state = self._state_with(
+            fresh_market_state,
+            current_bar_type="two_down",
+            previous_bar_type="outside_bar",
+            strat_sequence="strat_outside_continuation",
+            strat_direction="SHORT",
+        )
+        state.volume = VolumeData(current_bar=5000, avg_bar=3800, relative=1.32)
+        decision = engine.evaluate(state, DailyState())
+        assert decision.decision == "TRADE"
+        assert decision.setup.direction == "SHORT"
