@@ -74,7 +74,8 @@ review artifacts. Dates must use exact `YYYY-MM-DD` format. Use the daily
 summary CLI when you want files written. CLI review artifacts are written by
 atomic replacement with unique temp files under a `.daily_review.lock` to
 reduce partial-file and interleaving risk.
-The CLI exits with a usage error instead of a traceback for invalid dates.
+The CLI exits with a usage error instead of a traceback for invalid dates,
+missing risk config, or live-trading block errors.
 
 ### Optional Discord Output
 

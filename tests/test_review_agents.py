@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 from agent.daily_summary import DailySummaryAgent, atomic_write_text, main, validate_review_date
+from config.settings import LiveTradingBlockedError
 from agent.risk_reviewer import RiskReviewer
 from agent.trade_grader import TradeGrader
 
@@ -213,6 +214,48 @@ def test_daily_summary_cli_prints_report_for_valid_date(config, tmp_path, monkey
     assert exit_code == 0
     assert '"mode": "eod"' in captured.out
     assert '"date": "2026-05-23"' in captured.out
+
+
+def test_daily_summary_cli_rejects_missing_risk_rules_without_traceback(monkeypatch, capsys):
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "daily_summary",
+            "--date",
+            "2026-05-23",
+            "--mode",
+            "eod",
+            "--risk-rules",
+            "missing-risk-rules.yaml",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc:
+        main()
+
+    captured = capsys.readouterr()
+    assert exc.value.code == 2
+    assert "risk_rules.yaml not found" in captured.err
+    assert "Traceback" not in captured.err
+
+
+def test_daily_summary_cli_reports_live_trading_block_without_traceback(monkeypatch, capsys):
+    def raise_live_block(risk_rules_path):
+        raise LiveTradingBlockedError(source="test")
+
+    monkeypatch.setattr("agent.daily_summary.load_config", raise_live_block)
+    monkeypatch.setattr(
+        "sys.argv",
+        ["daily_summary", "--date", "2026-05-23", "--mode", "eod"],
+    )
+
+    with pytest.raises(SystemExit) as exc:
+        main()
+
+    captured = capsys.readouterr()
+    assert exc.value.code == 2
+    assert "LIVE TRADING IS BLOCKED" in captured.err
+    assert "Traceback" not in captured.err
 
 
 def test_atomic_write_text_replaces_target_without_temp_file(tmp_path):

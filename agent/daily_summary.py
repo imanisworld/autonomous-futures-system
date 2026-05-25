@@ -27,7 +27,7 @@ try:
 except ImportError:  # pragma: no cover - Windows fallback
     fcntl = None
 
-from config.settings import SystemConfig, load_config
+from config.settings import ConfigError, LiveTradingBlockedError, SystemConfig, load_config
 from .risk_reviewer import RiskReview, RiskReviewer
 from .trade_grader import TradeGrade, TradeGrader
 
@@ -260,7 +260,12 @@ def main() -> int:
     except ValueError as exc:
         parser.error(str(exc))
 
-    agent = DailySummaryAgent(load_config(args.risk_rules))
+    try:
+        config = load_config(args.risk_rules)
+    except (ConfigError, LiveTradingBlockedError) as exc:
+        parser.error(str(exc))
+
+    agent = DailySummaryAgent(config)
     report = agent.morning(review_date) if args.mode == "morning" else agent.eod(review_date)
     print(json.dumps(report, indent=2, sort_keys=True))
     return 0
