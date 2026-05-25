@@ -255,8 +255,13 @@ def main() -> int:
     parser.add_argument("--risk-rules", default="risk_rules.yaml")
     args = parser.parse_args()
 
+    try:
+        review_date = validate_review_date(args.date)
+    except ValueError as exc:
+        parser.error(str(exc))
+
     agent = DailySummaryAgent(load_config(args.risk_rules))
-    report = agent.morning(args.date) if args.mode == "morning" else agent.eod(args.date)
+    report = agent.morning(review_date) if args.mode == "morning" else agent.eod(review_date)
     print(json.dumps(report, indent=2, sort_keys=True))
     return 0
 

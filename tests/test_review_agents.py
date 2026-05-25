@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from agent.daily_summary import DailySummaryAgent, atomic_write_text, validate_review_date
+from agent.daily_summary import DailySummaryAgent, atomic_write_text, main, validate_review_date
 from agent.risk_reviewer import RiskReviewer
 from agent.trade_grader import TradeGrader
 
@@ -181,6 +181,38 @@ def test_daily_summary_rejects_invalid_review_date(config, tmp_path):
 
     with pytest.raises(ValueError):
         DailySummaryAgent(config).preview_eod("../2026-05-23")
+
+
+def test_daily_summary_cli_rejects_invalid_date_without_traceback(monkeypatch, capsys):
+    monkeypatch.setattr(
+        "sys.argv",
+        ["daily_summary", "--date", "../2026-05-23", "--mode", "eod"],
+    )
+
+    with pytest.raises(SystemExit) as exc:
+        main()
+
+    captured = capsys.readouterr()
+    assert exc.value.code == 2
+    assert "review_date must be YYYY-MM-DD" in captured.err
+    assert "Traceback" not in captured.err
+
+
+def test_daily_summary_cli_prints_report_for_valid_date(config, tmp_path, monkeypatch, capsys):
+    config.log_dir = str(tmp_path)
+    write_journal(tmp_path, "2026-05-23", [approved_trade(), outcome("WIN")])
+    monkeypatch.setattr("agent.daily_summary.load_config", lambda risk_rules_path: config)
+    monkeypatch.setattr(
+        "sys.argv",
+        ["daily_summary", "--date", "2026-05-23", "--mode", "eod"],
+    )
+
+    exit_code = main()
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert '"mode": "eod"' in captured.out
+    assert '"date": "2026-05-23"' in captured.out
 
 
 def test_atomic_write_text_replaces_target_without_temp_file(tmp_path):
