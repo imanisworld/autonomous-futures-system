@@ -96,6 +96,10 @@ class SystemConfig:
     discord_webhook_url: str = ""
     discord_notify_decisions: List[str] = field(default_factory=lambda: ["TRADE", "RISK_REJECTED", "BLOCKED_MAX_TRADES", "BLOCKED_LOSS_LOCKOUT"])
 
+    # Future signal/data vendor planning; key value is never stored on config.
+    signa_api_enabled: bool = False
+    signa_api_key_configured: bool = False
+
 
 # ─── Loader ──────────────────────────────────────────────────────────────────
 
@@ -195,6 +199,9 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
             "DISCORD_NOTIFY_DECISIONS",
             ["TRADE", "RISK_REJECTED", "BLOCKED_MAX_TRADES", "BLOCKED_LOSS_LOCKOUT"],
         ),
+
+        signa_api_enabled=_env_bool("SIGNA_API_ENABLED", False),
+        signa_api_key_configured=bool(os.getenv("SIGNA_API_KEY", "").strip()),
     )
 
     _validate_config(config)

@@ -67,6 +67,8 @@ def config() -> SystemConfig:
         discord_notify_decisions=[
             "TRADE", "RISK_REJECTED", "BLOCKED_MAX_TRADES", "BLOCKED_LOSS_LOCKOUT"
         ],
+        signa_api_enabled=False,
+        signa_api_key_configured=False,
     )
 
 

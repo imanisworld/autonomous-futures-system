@@ -89,6 +89,8 @@ async def health() -> dict:
         "paper_mode": _config.paper_mode,
         "webhook_secret_required": bool(_configured_webhook_secret()),
         "discord_notifications_enabled": _config.discord_notifications_enabled,
+        "signa_api_enabled": _config.signa_api_enabled,
+        "signa_api_key_configured": _config.signa_api_key_configured,
     }
 
 

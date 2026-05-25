@@ -360,6 +360,8 @@ def test_fastapi_health_endpoint():
     assert data["ok"] is True
     assert data["live_trading_enabled"] is False
     assert "webhook_secret_required" in data
+    assert isinstance(data["signa_api_enabled"], bool)
+    assert isinstance(data["signa_api_key_configured"], bool)
 
 
 def test_fastapi_dashboard_endpoint():

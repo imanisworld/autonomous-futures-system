@@ -231,6 +231,13 @@ Preview the exact message without sending anything:
 python -m notifications --dry-run
 ```
 
+## Signa API Planning
+
+`SIGNA_API_KEY` may be present in local `.env`, but the current system does not
+call Signa or use it for trading decisions. `/health` only reports whether the
+key is configured. See `sources/signa_api_plan.md` before adding any client
+code.
+
 ---
 
 ## Architecture Principles

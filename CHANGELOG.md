@@ -27,6 +27,8 @@ Types: `Added`, `Changed`, `Fixed`, `Removed`, `Security`, `Rulebook`
 - Daily review CLI artifact bundles are serialized with `.daily_review.lock`.
 - Daily review CLI reports invalid dates as usage errors instead of tracebacks.
 - Daily review CLI reports config and live-trading block errors without tracebacks.
+- Signa API key readiness is detected without storing or exposing the key value.
+- Added a Signa API integration plan for future read-only data-source work.
 - The Strat classifier now supports candle typing and simple `strat_212`, `strat_122`, inside-break, and outside-bar follow-through context; classified `strat_212`/`strat_122` setups can generate paper setups when enabled and can veto opposing structural setups.
 - TradingView alert message templates are available under `tradingview/`.
 - Tests covering payload parsing, session detection, paper decisions, open-position resolution, webhook health, and webhook auth.

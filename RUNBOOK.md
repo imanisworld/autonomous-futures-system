@@ -103,6 +103,13 @@ notifications are enabled:
 python -m notifications
 ```
 
+### Signa API Placeholder
+
+`SIGNA_API_KEY` is reserved for future signal or market-data work. The key must
+remain local, and the current system only exposes boolean readiness in
+`/health`. Do not add network calls until the Signa payload is mapped into the
+market-state schema and tested in shadow mode.
+
 TradingView cannot call `localhost`; expose port `8000` with a public HTTPS
 tunnel and paste this shape into the TradingView webhook URL field:
 
