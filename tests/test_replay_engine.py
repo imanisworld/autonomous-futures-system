@@ -327,6 +327,75 @@ def test_aggregate_max_drawdown_is_cumulative(config, tmp_path):
     assert report.max_drawdown >= 0.0
 
 
+# ---------------------------------------------------------------------------
+# Full-day strat + ORB replay: mnq_full_day_2026_05_22
+# Designed sequence:
+#   Trade 1 — orb_reclaim LONG  → WIN  (bar 4 fires, bar 5 resolves high≥target)
+#   Trade 2 — strat_212  LONG  → LOSS (bar 9 fires classified Phase-2, bar 10 low≤stop)
+#   Trade 3 — vwap_hold  SHORT → LOSS (bar 12 fires, bar 13 high≥stop)
+#   Bar 13 own iteration → stopped_reason=max_trades_per_day
+# ---------------------------------------------------------------------------
+
+FULL_DAY_PATH = Path("data/replay/mnq_full_day_2026_05_22.jsonl")
+
+
+@pytest.mark.skipif(
+    not FULL_DAY_PATH.exists(),
+    reason="full-day candle file not present",
+)
+class TestFullDayReplay2026_05_22:
+    def _run(self, tmp_path):
+        return ReplayEngine(log_dir=str(tmp_path / "logs")).run(FULL_DAY_PATH)
+
+    def test_all_13_candles_processed(self, tmp_path):
+        report = self._run(tmp_path)
+        assert report.candles_processed == 13
+
+    def test_three_approved_trades(self, tmp_path):
+        report = self._run(tmp_path)
+        assert report.approved_trades == 3
+
+    def test_one_win_two_losses(self, tmp_path):
+        report = self._run(tmp_path)
+        assert report.wins == 1
+        assert report.losses == 2
+
+    def test_stopped_reason_max_trades_per_day(self, tmp_path):
+        report = self._run(tmp_path)
+        assert report.stopped_reason == "max_trades_per_day"
+
+    def test_no_open_positions(self, tmp_path):
+        report = self._run(tmp_path)
+        assert report.open_trades == 0
+
+    def test_positive_realized_pnl(self, tmp_path):
+        report = self._run(tmp_path)
+        assert report.realized_pnl_dollars > 0
+
+    def test_strategy_mix_in_journal(self, tmp_path):
+        """Journal must contain exactly one entry for each expected strategy."""
+        report = self._run(tmp_path)
+        journal_path = Path(report.journal_path)
+        strategies_traded = []
+        for line in journal_path.read_text().splitlines():
+            entry = json.loads(line)
+            if entry.get("decision") == "TRADE":
+                strategies_traded.append(entry.get("setup", {}).get("strategy"))
+        assert "orb_reclaim" in strategies_traded
+        assert "strat_212" in strategies_traded
+        assert "vwap_hold" in strategies_traded
+
+    def test_strat_fields_loaded_from_candle(self, tmp_path):
+        """ReplayCandle must carry the Phase-2 strat fields from the JSONL."""
+        from replay import ReplayCandleLoader
+        candles = ReplayCandleLoader().load_jsonl(FULL_DAY_PATH)
+        bar9 = candles[8]  # 0-indexed
+        assert bar9.strat_sequence == "strat_212"
+        assert bar9.strat_direction == "LONG"
+        assert bar9.current_bar_type == "two_up"
+        assert bar9.previous_bar_type == "inside_bar"
+
+
 def test_aggregate_average_win_is_weighted(config, tmp_path):
     """Weighted average win must equal gross_win / total_wins, not avg of avgs."""
     paths = sorted(Path("data/replay/week").glob("*.jsonl"))

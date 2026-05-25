@@ -31,6 +31,7 @@ from replay.manifest import ReplayManifest
 from replay.replay_report import MultiDayReplayReport, ReplayReport
 from risk.risk_engine import DailyState, RiskEngine, TradeSetup
 from strategy.signal_engine import DecisionEngine
+from strategy.strat_classifier import StratContext, classify_from_ohlc
 
 
 class ReplayEngine:
@@ -248,6 +249,7 @@ class ReplayEngine:
         return aggregate
 
     def _market_state_from_candle(self, candle: ReplayCandle) -> MarketState:
+        strat = self._strat_context_from_candle(candle)
         return MarketState(
             timestamp=_parse_timestamp(candle.timestamp),
             instrument=candle.instrument,
@@ -290,8 +292,44 @@ class ReplayEngine:
                 direction=candle.trend_direction,
                 strength=candle.trend_strength,
             ),
+            strat=strat,
             raw=None,
         )
+
+    @staticmethod
+    def _strat_context_from_candle(candle: ReplayCandle) -> Optional[StratContext]:
+        """
+        Build StratContext from a ReplayCandle.
+
+        Priority:
+        1. Explicit Pine-classified fields (current_bar_type, strat_sequence, etc.)
+        2. Auto-classify from bar OHLC history (previous_bar_high/low, two_bars_back_high/low)
+        3. None — no strat context available (Phase 1 proxy strategies still fire)
+        """
+        # If Pine provided explicit classification, use it directly.
+        if candle.current_bar_type is not None:
+            return StratContext(
+                current_bar_type=candle.current_bar_type,
+                previous_bar_type=candle.previous_bar_type,
+                two_bars_back_type=candle.two_bars_back_type,
+                strat_sequence=candle.strat_sequence,
+                strat_trigger=candle.strat_trigger,
+                strat_direction=candle.strat_direction,
+            )
+
+        # Auto-classify from OHLC history when available.
+        if candle.previous_bar_high is not None and candle.previous_bar_low is not None:
+            return classify_from_ohlc(
+                current_high=candle.high,
+                current_low=candle.low,
+                previous_high=candle.previous_bar_high,
+                previous_low=candle.previous_bar_low,
+                two_bars_back_high=candle.two_bars_back_high,
+                two_bars_back_low=candle.two_bars_back_low,
+                two_bars_back_type=candle.two_bars_back_type,
+            )
+
+        return None
 
     def _empty_report(self, candle_path: str | Path, review_date: Optional[str]) -> ReplayReport:
         run_date = review_date or date.today().isoformat()

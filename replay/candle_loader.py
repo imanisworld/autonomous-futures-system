@@ -37,6 +37,22 @@ class ReplayCandle:
     price_vs_pdl: Optional[str] = None
     timeframe: str = "5m"
     avg_volume: int = 1
+    # London ORB (optional — populated when session=london and Pine provides it)
+    london_orb_high: Optional[float] = None
+    london_orb_low: Optional[float] = None
+    london_orb_status: Optional[str] = None
+    # Strat classification (optional — Phase 2; computed from bar history when present)
+    current_bar_type: Optional[str] = None
+    previous_bar_type: Optional[str] = None
+    two_bars_back_type: Optional[str] = None
+    strat_sequence: Optional[str] = None
+    strat_trigger: Optional[str] = None
+    strat_direction: Optional[str] = None
+    # Bar history highs/lows for auto-classification when explicit types not provided
+    previous_bar_high: Optional[float] = None
+    previous_bar_low: Optional[float] = None
+    two_bars_back_high: Optional[float] = None
+    two_bars_back_low: Optional[float] = None
 
     @property
     def price_vs_vwap(self) -> str:
@@ -153,6 +169,19 @@ class ReplayCandleLoader:
             price_vs_pdl=raw.get("price_vs_pdl"),
             timeframe=raw.get("timeframe", "5m"),
             avg_volume=int(raw.get("avg_volume", 1)),
+            london_orb_high=float(raw["london_orb_high"]) if raw.get("london_orb_high") is not None else None,
+            london_orb_low=float(raw["london_orb_low"]) if raw.get("london_orb_low") is not None else None,
+            london_orb_status=raw.get("london_orb_status"),
+            current_bar_type=raw.get("current_bar_type"),
+            previous_bar_type=raw.get("previous_bar_type"),
+            two_bars_back_type=raw.get("two_bars_back_type"),
+            strat_sequence=raw.get("strat_sequence"),
+            strat_trigger=raw.get("strat_trigger"),
+            strat_direction=raw.get("strat_direction"),
+            previous_bar_high=float(raw["previous_bar_high"]) if raw.get("previous_bar_high") is not None else None,
+            previous_bar_low=float(raw["previous_bar_low"]) if raw.get("previous_bar_low") is not None else None,
+            two_bars_back_high=float(raw["two_bars_back_high"]) if raw.get("two_bars_back_high") is not None else None,
+            two_bars_back_low=float(raw["two_bars_back_low"]) if raw.get("two_bars_back_low") is not None else None,
         )
 
 
