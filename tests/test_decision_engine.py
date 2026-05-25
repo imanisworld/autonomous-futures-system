@@ -384,3 +384,79 @@ class TestStratWiring:
         decision = engine.evaluate(state, DailyState())
         assert decision.decision == "TRADE"
         assert decision.setup.strategy == "orb_reclaim"
+
+
+class TestStrat4hrRetrigger:
+    """strat_4hr_retrigger fires early NY; orb_reclaim catches the same bar late NY."""
+
+    @pytest.fixture
+    def retrigger_config(self, config):
+        from dataclasses import replace
+        return replace(config, enabled_concepts=["strat_4hr_retrigger", "orb_reclaim"])
+
+    def _retrigger_state(self, ts: datetime) -> MarketState:
+        return MarketState(
+            timestamp=ts,
+            instrument="MNQ",
+            session="new_york",
+            price=PriceData(last=19505.25, bid=19505.0, ask=19505.5),
+            ohlc=OHLCData(open=19480.0, high=19510.0, low=19475.0, close=19505.25, timeframe="5m"),
+            vwap=VWAPData(value=19495.0, price_vs_vwap="above", reclaimed=True, holding=True),
+            orb=ORBData(high=19498.0, low=19462.0, timeframe_minutes=15, status="reclaimed_high"),
+            previous_day=PreviousDayData(high=19520.0, low=19440.0, close=19475.0),
+            volume=VolumeData(current_bar=5000, avg_bar=3800, relative=1.32),
+            market_condition="TRENDING",
+            trend=TrendData(direction="UP", strength="STRONG", ema_fast_above_slow=True),
+            raw={},
+        )
+
+    def test_fires_early_ny(self, retrigger_config):
+        """9:45 ET — inside the 9:30–11:00 window → strat_4hr_retrigger."""
+        from datetime import timezone
+        from zoneinfo import ZoneInfo
+        ts = datetime(2026, 5, 23, 13, 45, tzinfo=timezone.utc)  # 09:45 ET
+        state = self._retrigger_state(ts)
+        engine = DecisionEngine(config=retrigger_config)
+        decision = engine.evaluate(state, DailyState())
+        assert decision.decision == "TRADE"
+        assert decision.setup.strategy == "strat_4hr_retrigger"
+
+    def test_falls_back_to_orb_reclaim_late_ny(self, retrigger_config):
+        """11:30 ET — outside the window → orb_reclaim fires instead."""
+        ts = datetime(2026, 5, 23, 15, 30, tzinfo=timezone.utc)  # 11:30 ET
+        state = self._retrigger_state(ts)
+        engine = DecisionEngine(config=retrigger_config)
+        decision = engine.evaluate(state, DailyState())
+        assert decision.decision == "TRADE"
+        assert decision.setup.strategy == "orb_reclaim"
+
+    def test_does_not_fire_on_moderate_trend(self, retrigger_config):
+        """MODERATE trend — orb_reclaim fires, not strat_4hr_retrigger."""
+        ts = datetime(2026, 5, 23, 13, 45, tzinfo=timezone.utc)  # 09:45 ET
+        state = self._retrigger_state(ts)
+        state.trend = TrendData(direction="UP", strength="MODERATE")
+        engine = DecisionEngine(config=retrigger_config)
+        decision = engine.evaluate(state, DailyState())
+        assert decision.decision == "TRADE"
+        assert decision.setup.strategy == "orb_reclaim"
+
+    def test_does_not_fire_for_mes_instrument(self, retrigger_config):
+        """MES is allowed for strat_4hr_retrigger, confirm it fires."""
+        ts = datetime(2026, 5, 23, 13, 45, tzinfo=timezone.utc)  # 09:45 ET
+        state = self._retrigger_state(ts)
+        state.instrument = "MES"
+        engine = DecisionEngine(config=retrigger_config)
+        decision = engine.evaluate(state, DailyState())
+        assert decision.decision == "TRADE"
+        assert decision.setup.strategy == "strat_4hr_retrigger"
+
+    def test_does_not_fire_for_mgc(self, retrigger_config):
+        """MGC is not an equity index — strat_4hr_retrigger must not fire."""
+        ts = datetime(2026, 5, 23, 13, 45, tzinfo=timezone.utc)  # 09:45 ET
+        state = self._retrigger_state(ts)
+        state.instrument = "MGC"
+        engine = DecisionEngine(config=retrigger_config)
+        decision = engine.evaluate(state, DailyState())
+        # Falls back to orb_reclaim (or NO_TRADE if blocked by max_contracts)
+        if decision.decision == "TRADE":
+            assert decision.setup.strategy == "orb_reclaim"

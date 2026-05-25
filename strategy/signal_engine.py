@@ -13,8 +13,9 @@ valid setup can be formed. Otherwise decision=NO_TRADE with reason.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, time as _time, timezone
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 from config.settings import SystemConfig, load_config
 from context.market_context import MarketState
@@ -326,6 +327,11 @@ class DecisionEngine:
         enabled = self.config.enabled_concepts
 
         strategies = [
+            # ── The Strat 4HR Re-Trigger must be evaluated BEFORE orb_reclaim.
+            # Both share the reclaimed_high condition; 4hr_retrigger is the more
+            # specific setup (MNQ/MES only, early NY, strong trend, volume).
+            # If it doesn't fire, orb_reclaim gets the same bar as a fallback.
+            ("strat_4hr_retrigger", self._try_strat_4hr_retrigger),
             # ── Core structural setups ─────────────────────────────────────
             ("orb_reclaim", self._try_orb_reclaim),
             ("orb_rejection", self._try_orb_rejection),
@@ -340,7 +346,6 @@ class DecisionEngine:
             # See sources/strat_definitions.md for full pattern definitions.
             ("strat_212", self._try_strat_212),
             ("strat_122", self._try_strat_122),
-            ("strat_4hr_retrigger", self._try_strat_4hr_retrigger),
         ]
 
         for name, fn in strategies:
@@ -699,6 +704,10 @@ class DecisionEngine:
 
         return None
 
+    _ET = ZoneInfo("America/New_York")
+    _4HR_WINDOW_START = _time(9, 30)
+    _4HR_WINDOW_END   = _time(11, 0)
+
     def _try_strat_4hr_retrigger(self, state: MarketState) -> Optional[SetupDetail]:
         """
         The Strat: 4HR Re-Trigger (Phase 1 approximation).
@@ -708,9 +717,14 @@ class DecisionEngine:
         8AM candle: 2UP (reclaim)
         NY open: Price dips below 8AM 2UP candle high, then reclaims it = LONG entry
 
-        Phase 1 proxy: session is new_york, ORB status is reclaimed_high
-        (approximates the 8AM level reclaim at NY open), with broader uptrend context
-        and VWAP support. Price must have dipped first (orb status implies that pattern).
+        Phase 1 proxy: session is new_york, bar is in the first 90 minutes of NY
+        (9:30–11:00 ET — outside that window the pre-market structure is stale),
+        ORB status is reclaimed_high, trend is STRONG UP, VWAP above, volume >= 0.7.
+
+        The time gate and STRONG-trend requirement differentiate this from plain
+        orb_reclaim (which fires any time, any trend strength). Evaluated first
+        in the strategy list so it claims the bar when conditions are met; if it
+        returns None, orb_reclaim acts as the fallback on the same bar.
 
         This is specifically for MNQ and MES.
 
@@ -720,9 +734,15 @@ class DecisionEngine:
             return None
         if state.session != "new_york":
             return None
+        # Time gate: pre-market structure only meaningful in early NY session
+        et_time = state.timestamp.astimezone(self._ET).time()
+        if not (self._4HR_WINDOW_START <= et_time <= self._4HR_WINDOW_END):
+            return None
         if state.orb.status != "reclaimed_high":
             return None
-        if not (state.trend and state.trend.direction == "UP"):
+        # Require STRONG trend — distinguishes from plain orb_reclaim (any strength)
+        if not (state.trend and state.trend.direction == "UP"
+                and state.trend.strength == "STRONG"):
             return None
         if state.vwap.price_vs_vwap != "above":
             return None
