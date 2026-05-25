@@ -1,287 +1,225 @@
-// This Pine Script indicator auto-populates every field in
-// full_context_alert_message.json.tpl and fires the alert on each confirmed
-// bar close.  Add it to your MNQ/MES/MGC/MCL chart, then create one alert:
-//   Condition → RiskSentinel — Full Context → "Any alert() function call"
-//   Message   → (leave blank — the script builds the JSON body itself)
-//   Expiry    → Open-ended
-//
-// The webhook receives a complete JSON payload; no fields need to be
-// filled in manually.  The smoke-test template is only needed for
-// one-off curl tests.
+//@version=6
+indicator("RiskSentinel - Full Context", overlay=true)
 
-//@version=5
-indicator("RiskSentinel — Full Context", overlay=true,
-     max_lines_count=5, max_labels_count=5)
-
-
-// ═══════════════════════════════════════════════════════════════════════════════
 // INPUTS
-// ═══════════════════════════════════════════════════════════════════════════════
+i_orb_min = input.int(15, "ORB Window (min)", minval=5, maxval=60, step=5, group="Opening Range")
+i_ny_session = input.session("0930-1200", "NY Session (ET)", group="Opening Range")
+i_london_session = input.session("0300-0830", "London Session (ET)", group="Opening Range")
+i_ema_fast = input.int(9, "Fast EMA", minval=2, group="Trend")
+i_ema_slow = input.int(21, "Slow EMA", minval=5, group="Trend")
+i_vol_len = input.int(20, "Volume MA", minval=5, group="Volume")
+i_alert_on = input.bool(true, "Fire alert on every confirmed bar close", group="Alert")
 
-i_orb_min       = input.int(15, "ORB Window (min)", minval=5, maxval=60, step=5,
-                    tooltip="Opening-range window in minutes from each session open.",
-                    group="Opening Range")
-i_ny_session    = input.session("0930-1200", "NY Session (ET)",
-                    group="Opening Range")
-i_london_session = input.session("0300-0830", "London Session (ET)",
-                    group="Opening Range")
-
-i_ema_fast   = input.int(9,  "Fast EMA",  minval=2,  maxval=50,  group="Trend")
-i_ema_slow   = input.int(21, "Slow EMA",  minval=5,  maxval=200, group="Trend")
-i_vol_len    = input.int(20, "Volume MA", minval=5,               group="Volume")
-
-i_alert_on   = input.bool(true, "Fire alert on every confirmed bar close",
-                 group="Alert")
-
-
-// ═══════════════════════════════════════════════════════════════════════════════
 // HELPERS
-// ═══════════════════════════════════════════════════════════════════════════════
-
-// Nullable float → JSON token ("null" or numeric string)
 f2j(v, fmt) => na(v) ? "null" : str.tostring(v, fmt)
-
-// Nullable string → JSON token (null or quoted string)
 s2j(v) => na(v) ? "null" : '"' + v + '"'
 
-// Classify one bar relative to the previous
 classify_bar(h, l, ph, pl) =>
     if na(ph) or na(pl)
         "unknown"
     else
         bh = h > ph
         bl = l < pl
-        bh and bl ? "outside_bar" : not bh and not bl ? "inside_bar" :
-         bh ? "two_up" : "two_down"
+        if bh and bl
+            "outside_bar"
+        else if not bh and not bl
+            "inside_bar"
+        else if bh
+            "two_up"
+        else
+            "two_down"
 
-// Compute ORB status for any pair of ORB levels
 orb_status_for(orb_high, orb_low) =>
-    na(orb_high) or na(orb_low)             ? "undefined"      :
-    close > orb_high and close[1] <= orb_high ? "reclaimed_high" :
-    close < orb_low  and close[1] >= orb_low  ? "reclaimed_low"  :
-    close[1] > orb_high and close <= orb_high ? "rejected_high"  :
-    close[1] < orb_low  and close >= orb_low  ? "rejected_low"   :
-    close > orb_high                         ? "above"          :
-    close < orb_low                          ? "below"          :
-                                               "inside"
+    if na(orb_high) or na(orb_low)
+        "undefined"
+    else if close > orb_high and close[1] <= orb_high
+        "reclaimed_high"
+    else if close < orb_low and close[1] >= orb_low
+        "reclaimed_low"
+    else if close[1] > orb_high and close <= orb_high
+        "rejected_high"
+    else if close[1] < orb_low and close >= orb_low
+        "rejected_low"
+    else if close > orb_high
+        "above"
+    else if close < orb_low
+        "below"
+    else
+        "inside"
 
-
-// ═══════════════════════════════════════════════════════════════════════════════
 // CORE CALCULATIONS
-// ═══════════════════════════════════════════════════════════════════════════════
+ema_fast = ta.ema(close, i_ema_fast)
+ema_slow = ta.ema(close, i_ema_slow)
+vwap_val = ta.vwap(hlc3)
+avg_vol = ta.sma(volume, i_vol_len)
+rel_vol = avg_vol > 0 ? volume / avg_vol : 1.0
 
-ema_fast  = ta.ema(close, i_ema_fast)
-ema_slow  = ta.ema(close, i_ema_slow)
-vwap_val  = ta.vwap(hlc3)
-avg_vol   = ta.sma(volume, i_vol_len)
-rel_vol   = avg_vol > 0 ? volume / avg_vol : 1.0
+[pd_high, pd_low, pd_close] = request.security(syminfo.tickerid, "D", [high[1], low[1], close[1]], lookahead=barmerge.lookahead_on)
 
+// TREND (declare variables first)
+var string trend_dir = "SIDEWAYS"
+var string trend_str = "WEAK"
 
-// ── Previous Day H / L / C ────────────────────────────────────────────────────
-[pd_high, pd_low, pd_close] = request.security(
-     syminfo.tickerid, "D",
-     [high[1], low[1], close[1]],
-     lookahead=barmerge.lookahead_on)
+diff_pct = math.abs(ema_fast - ema_slow) / ema_slow * 100
+if ema_fast > ema_slow and diff_pct > 0.15
+    trend_dir := "UP"
+else if ema_fast < ema_slow and diff_pct > 0.15
+    trend_dir := "DOWN"
+else
+    trend_dir := "SIDEWAYS"
 
+if diff_pct > 0.40
+    trend_str := "STRONG"
+else if diff_pct > 0.15
+    trend_str := "MODERATE"
+else
+    trend_str := "WEAK"
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// OPENING RANGE — NY SESSION
-// ═══════════════════════════════════════════════════════════════════════════════
-
+// NY ORB
 bars_needed = math.max(1, math.round(i_orb_min * 60 / timeframe.in_seconds()))
-
-in_ny    = not na(time(timeframe.period, i_ny_session,     "America/New_York"))
+in_ny = not na(time(timeframe.period, i_ny_session, "America/New_York"))
 ny_start = in_ny and not in_ny[1]
 
-var float orb_h    = na
-var float orb_l    = na
-var int   orb_cnt  = 0
-var bool  orb_done = false
+var float orb_h = na
+var float orb_l = na
+var int orb_cnt = 0
+var bool orb_done = false
 
 if ny_start
-    orb_h    := high
-    orb_l    := low
-    orb_cnt  := 1
+    orb_h := high
+    orb_l := low
+    orb_cnt := 1
     orb_done := false
 else if in_ny and not orb_done
     if orb_cnt < bars_needed
-        orb_h   := math.max(orb_h, high)
-        orb_l   := math.min(orb_l, low)
+        orb_h := math.max(orb_h, high)
+        orb_l := math.min(orb_l, low)
         orb_cnt += 1
     else
         orb_done := true
 
 orb_status = orb_status_for(orb_h, orb_l)
 
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// OPENING RANGE — LONDON SESSION
-// ═══════════════════════════════════════════════════════════════════════════════
-
-in_london    = not na(time(timeframe.period, i_london_session, "America/New_York"))
+// LONDON ORB
+in_london = not na(time(timeframe.period, i_london_session, "America/New_York"))
 london_start = in_london and not in_london[1]
 
-var float london_orb_h    = na
-var float london_orb_l    = na
-var int   london_orb_cnt  = 0
-var bool  london_orb_done = false
+var float london_orb_h = na
+var float london_orb_l = na
+var int london_orb_cnt = 0
+var bool london_orb_done = false
 
 if london_start
-    london_orb_h    := high
-    london_orb_l    := low
-    london_orb_cnt  := 1
+    london_orb_h := high
+    london_orb_l := low
+    london_orb_cnt := 1
     london_orb_done := false
 else if in_london and not london_orb_done
     if london_orb_cnt < bars_needed
-        london_orb_h   := math.max(london_orb_h, high)
-        london_orb_l   := math.min(london_orb_l, low)
+        london_orb_h := math.max(london_orb_h, high)
+        london_orb_l := math.min(london_orb_l, low)
         london_orb_cnt += 1
     else
         london_orb_done := true
 
 london_orb_status = orb_status_for(london_orb_h, london_orb_l)
 
+// MARKET CONDITION (declare variable first)
+var string market_cond = "RANGE_BOUND"
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// TREND
-// ═══════════════════════════════════════════════════════════════════════════════
+atr14 = ta.atr(14)
+range_ratio = atr14 > 0 ? (high - low) / atr14 : 1.0
 
-diff_pct     = math.abs(ema_fast - ema_slow) / ema_slow * 100
+if rel_vol < 0.40
+    market_cond := "DEAD"
+else if range_ratio < 0.40 or rel_vol < 0.60
+    market_cond := "CHOPPY"
+else if trend_dir != "SIDEWAYS" and rel_vol >= 0.80
+    market_cond := "TRENDING"
+else
+    market_cond := "RANGE_BOUND"
 
-trend_dir    =
-     ema_fast > ema_slow and diff_pct > 0.15  ? "UP"      :
-     ema_fast < ema_slow and diff_pct > 0.15  ? "DOWN"    :
-                                                "SIDEWAYS"
+// STRAT CLASSIFICATION (declare variables first)
+var string cur_type = "unknown"
+var string prev_type = "unknown"
+var string t2b_type = "unknown"
+var string strat_seq = "no_sequence"
+var string strat_dir_ctx = na
+var string strat_trigger_ctx = na
 
-trend_str    =
-     diff_pct > 0.40  ? "STRONG"   :
-     diff_pct > 0.15  ? "MODERATE" :
-                        "WEAK"
+cur_type := classify_bar(high, low, high[1], low[1])
+prev_type := classify_bar(high[1], low[1], high[2], low[2])
+t2b_type := classify_bar(high[2], low[2], high[3], low[3])
 
+if cur_type == "two_up" and prev_type == "inside_bar" and t2b_type == "two_up"
+    strat_seq := "strat_212"
+    strat_dir_ctx := "LONG"
+    strat_trigger_ctx := "continuation"
+else if cur_type == "two_down" and prev_type == "inside_bar" and t2b_type == "two_down"
+    strat_seq := "strat_212"
+    strat_dir_ctx := "SHORT"
+    strat_trigger_ctx := "continuation"
+else if cur_type == "two_up" and prev_type == "two_down" and t2b_type == "inside_bar"
+    strat_seq := "strat_122"
+    strat_dir_ctx := "LONG"
+    strat_trigger_ctx := "reversal"
+else if cur_type == "two_down" and prev_type == "two_up" and t2b_type == "inside_bar"
+    strat_seq := "strat_122"
+    strat_dir_ctx := "SHORT"
+    strat_trigger_ctx := "reversal"
+else if (cur_type == "two_up" or cur_type == "two_down") and prev_type == "inside_bar"
+    strat_seq := "strat_inside_break"
+    strat_dir_ctx := cur_type == "two_up" ? "LONG" : "SHORT"
+    strat_trigger_ctx := "breakout"
+else if (cur_type == "two_up" or cur_type == "two_down") and prev_type == "outside_bar"
+    strat_seq := "strat_outside_continuation"
+    strat_dir_ctx := cur_type == "two_up" ? "LONG" : "SHORT"
+    strat_trigger_ctx := "outside_bar_followthrough"
+else
+    strat_seq := "no_sequence"
+    strat_dir_ctx := na
+    strat_trigger_ctx := na
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// MARKET CONDITION
-// ═══════════════════════════════════════════════════════════════════════════════
+// PRICE VS LEVELS (declare variables first)
+var string price_vs_pdh = "unknown"
+var string price_vs_pdl = "unknown"
 
-atr14        = ta.atr(14)
-range_ratio  = atr14 > 0 ? (high - low) / atr14 : 1.0
+if na(pd_high)
+    price_vs_pdh := "unknown"
+else if close > pd_high
+    price_vs_pdh := "above"
+else if close < pd_high
+    price_vs_pdh := "below"
+else
+    price_vs_pdh := "at"
 
-market_cond  =
-     rel_vol < 0.40                                  ? "DEAD"        :
-     range_ratio < 0.40 or rel_vol < 0.60            ? "CHOPPY"      :
-     trend_dir != "SIDEWAYS" and rel_vol >= 0.80      ? "TRENDING"    :
-                                                        "RANGE_BOUND"
+if na(pd_low)
+    price_vs_pdl := "unknown"
+else if close > pd_low
+    price_vs_pdl := "above"
+else if close < pd_low
+    price_vs_pdl := "below"
+else
+    price_vs_pdl := "at"
 
+// BUILD JSON
+msg = "{" + '"ticker":"' + syminfo.ticker + '",' + '"timestamp":' + str.tostring(time) + ',' + '"open":' + str.tostring(open, "#.####") + ',' + '"high":' + str.tostring(high, "#.####") + ',' + '"low":' + str.tostring(low, "#.####") + ',' + '"close":' + str.tostring(close, "#.####") + ',' + '"volume":' + str.tostring(volume) + ',' + '"timeframe":"' + timeframe.period + '",' + '"avg_volume":' + str.tostring(math.round(avg_vol)) + ',' + '"vwap":' + f2j(vwap_val, "#.####") + ',' + '"orb_high":' + f2j(orb_h, "#.##") + ',' + '"orb_low":' + f2j(orb_l, "#.##") + ',' + '"orb_status":"' + orb_status + '",' + '"london_orb_high":' + f2j(london_orb_h, "#.##") + ',' + '"london_orb_low":' + f2j(london_orb_l, "#.##") + ',' + '"london_orb_status":' + (na(london_orb_h) ? "null" : '"' + london_orb_status + '"') + ',' + '"market_condition":"' + market_cond + '",' + '"trend_direction":"' + trend_dir + '",' + '"trend_strength":"' + trend_str + '",' + '"previous_day_high":' + f2j(pd_high, "#.##") + ',' + '"previous_day_low":' + f2j(pd_low, "#.##") + ',' + '"previous_day_close":' + f2j(pd_close, "#.##") + ',' + '"price_vs_pdh":"' + price_vs_pdh + '",' + '"price_vs_pdl":"' + price_vs_pdl + '",' + '"previous_bar_high":' + f2j(high[1], "#.####") + ',' + '"previous_bar_low":' + f2j(low[1], "#.####") + ',' + '"two_bars_back_high":' + f2j(high[2], "#.####") + ',' + '"two_bars_back_low":' + f2j(low[2], "#.####") + ',' + '"current_bar_type":"' + cur_type + '",' + '"previous_bar_type":"' + prev_type + '",' + '"two_bars_back_type":"' + t2b_type + '",' + '"strat_sequence":' + s2j(strat_seq == "no_sequence" ? na : strat_seq) + ',' + '"strat_trigger":' + s2j(strat_trigger_ctx) + ',' + '"strat_direction":' + s2j(strat_dir_ctx) + "}"
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// STRAT BAR TYPES & SEQUENCE
-// ═══════════════════════════════════════════════════════════════════════════════
-
-cur_type  = classify_bar(high,    low,    high[1], low[1])
-prev_type = classify_bar(high[1], low[1], high[2], low[2])
-t2b_type  = classify_bar(high[2], low[2], high[3], low[3])
-
-strat_seq =
-     cur_type == "two_up"   and prev_type == "inside_bar"  and t2b_type == "two_up"    ? "strat_212"                  :
-     cur_type == "two_down" and prev_type == "inside_bar"  and t2b_type == "two_down"  ? "strat_212"                  :
-     cur_type == "two_up"   and prev_type == "two_down"    and t2b_type == "inside_bar"? "strat_122"                  :
-     cur_type == "two_down" and prev_type == "two_up"      and t2b_type == "inside_bar"? "strat_122"                  :
-     (cur_type == "two_up"   or cur_type == "two_down") and prev_type == "inside_bar"  ? "strat_inside_break"         :
-     (cur_type == "two_up"   or cur_type == "two_down") and prev_type == "outside_bar" ? "strat_outside_continuation" :
-     "no_sequence"
-
-strat_dir =
-     strat_seq != "no_sequence" and cur_type == "two_up"   ? "LONG"  :
-     strat_seq != "no_sequence" and cur_type == "two_down" ? "SHORT" :
-     na(string)  // no direction when no qualifying sequence
-
-strat_trigger =
-     strat_seq == "strat_212"                  ? "continuation"             :
-     strat_seq == "strat_122"                  ? "reversal"                 :
-     strat_seq == "strat_inside_break"         ? "breakout"                 :
-     strat_seq == "strat_outside_continuation" ? "outside_bar_followthrough":
-     na(string)
-
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// PRICE VS KEY LEVELS
-// ═══════════════════════════════════════════════════════════════════════════════
-
-price_vs_pdh =
-     na(pd_high) ? "unknown" :
-     close > pd_high ? "above" : close < pd_high ? "below" : "at"
-
-price_vs_pdl =
-     na(pd_low)  ? "unknown" :
-     close > pd_low  ? "above" : close < pd_low  ? "below" : "at"
-
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// BUILD ALERT JSON
-// ═══════════════════════════════════════════════════════════════════════════════
-
-msg = "{"
- + '"ticker":'              + '"' + syminfo.ticker              + '",'
- + '"timestamp":'           + str.tostring(time)                + ','
- + '"open":'                + str.tostring(open,   "#.####")    + ','
- + '"high":'                + str.tostring(high,   "#.####")    + ','
- + '"low":'                 + str.tostring(low,    "#.####")    + ','
- + '"close":'               + str.tostring(close,  "#.####")    + ','
- + '"volume":'              + str.tostring(volume)              + ','
- + '"timeframe":'           + '"' + timeframe.period            + '",'
- + '"avg_volume":'          + str.tostring(math.round(avg_vol)) + ','
- + '"vwap":'                + f2j(vwap_val,  "#.####")          + ','
- + '"orb_high":'            + f2j(orb_h,     "#.##")            + ','
- + '"orb_low":'             + f2j(orb_l,     "#.##")            + ','
- + '"orb_status":'          + '"' + orb_status                  + '",'
- + '"london_orb_high":'     + f2j(london_orb_h,    "#.##")      + ','
- + '"london_orb_low":'      + f2j(london_orb_l,    "#.##")      + ','
- + '"london_orb_status":'   + s2j(na(london_orb_h) ? na(string) : london_orb_status) + ','
- + '"market_condition":'    + '"' + market_cond                 + '",'
- + '"trend_direction":'     + '"' + trend_dir                   + '",'
- + '"trend_strength":'      + '"' + trend_str                   + '",'
- + '"previous_day_high":'   + f2j(pd_high,   "#.##")            + ','
- + '"previous_day_low":'    + f2j(pd_low,    "#.##")            + ','
- + '"previous_day_close":'  + f2j(pd_close,  "#.##")            + ','
- + '"price_vs_pdh":'        + '"' + price_vs_pdh                + '",'
- + '"price_vs_pdl":'        + '"' + price_vs_pdl                + '",'
- + '"previous_bar_high":'   + f2j(high[1],   "#.####")          + ','
- + '"previous_bar_low":'    + f2j(low[1],    "#.####")          + ','
- + '"two_bars_back_high":'  + f2j(high[2],   "#.####")          + ','
- + '"two_bars_back_low":'   + f2j(low[2],    "#.####")          + ','
- + '"current_bar_type":'    + '"' + cur_type                    + '",'
- + '"previous_bar_type":'   + '"' + prev_type                   + '",'
- + '"two_bars_back_type":'  + '"' + t2b_type                    + '",'
- + '"strat_sequence":'      + s2j(strat_seq == "no_sequence" ? na(string) : strat_seq) + ','
- + '"strat_trigger":'       + s2j(strat_trigger)                + ','
- + '"strat_direction":'     + s2j(strat_dir)
- + "}"
-
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// FIRE
-// ═══════════════════════════════════════════════════════════════════════════════
-
+// FIRE ALERT
 if i_alert_on and barstate.isconfirmed
     alert(msg, alert.freq_once_per_bar_close)
 
+// CHARTS
+plot(ema_fast, "EMA Fast", color=color.new(color.aqua, 30))
+plot(ema_slow, "EMA Slow", color=color.new(color.orange, 30))
+plot(vwap_val, "VWAP", color=color.new(color.yellow, 20))
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// CHART OVERLAYS  (visual reference — not required for the webhook)
-// ═══════════════════════════════════════════════════════════════════════════════
-
-plot(ema_fast, "EMA Fast", color=color.new(color.aqua,   30), linewidth=1)
-plot(ema_slow, "EMA Slow", color=color.new(color.orange, 30), linewidth=1)
-plot(vwap_val, "VWAP",     color=color.new(color.yellow, 20), linewidth=2)
-
-// NY ORB levels — visible during and after NY open
 orb_h_plot = in_ny or in_ny[1] ? orb_h : na
 orb_l_plot = in_ny or in_ny[1] ? orb_l : na
-plot(orb_h_plot, "NY ORB High",     color=color.new(color.lime,   40), linewidth=1, style=plot.style_stepline)
-plot(orb_l_plot, "NY ORB Low",      color=color.new(color.red,    40), linewidth=1, style=plot.style_stepline)
+plot(orb_h_plot, "NY ORB High", color=color.new(color.lime, 40), style=plot.style_stepline)
+plot(orb_l_plot, "NY ORB Low", color=color.new(color.red, 40), style=plot.style_stepline)
 
-// London ORB levels — visible during and after London open
 l_orb_h_plot = in_london or in_london[1] ? london_orb_h : na
 l_orb_l_plot = in_london or in_london[1] ? london_orb_l : na
-plot(l_orb_h_plot, "London ORB High", color=color.new(color.teal,   50), linewidth=1, style=plot.style_stepline)
-plot(l_orb_l_plot, "London ORB Low",  color=color.new(color.orange, 50), linewidth=1, style=plot.style_stepline)
+plot(l_orb_h_plot, "London ORB High", color=color.new(color.teal, 50), style=plot.style_stepline)
+plot(l_orb_l_plot, "London ORB Low", color=color.new(color.orange, 50), style=plot.style_stepline)

@@ -30,6 +30,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from agent.daily_summary import DailySummaryAgent, validate_review_date
 from config.settings import load_config
@@ -45,6 +46,27 @@ app = FastAPI(
     description="TradingView → paper engine → JSONL journal. No live trading.",
     version="1.0.0",
 )
+
+_static = Path(__file__).parent / "static"
+app.mount("/static", StaticFiles(directory=_static), name="static")
+
+
+@app.get("/manifest.json", include_in_schema=False)
+async def pwa_manifest():
+    return JSONResponse({
+        "name": "RiskSentinel",
+        "short_name": "RiskSentinel",
+        "description": "Paper futures trading dashboard",
+        "start_url": "/",
+        "display": "standalone",
+        "background_color": "#050507",
+        "theme_color": "#00d5ff",
+        "icons": [
+            {"src": "/static/icon-192.png", "sizes": "192x192", "type": "image/png"},
+            {"src": "/static/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"},
+        ],
+    })
+
 
 # Load config once at startup; fail loudly if LIVE_TRADING_ENABLED=true.
 _config = load_config()
@@ -318,8 +340,15 @@ def _render_dashboard(status: dict) -> str:
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta http-equiv="refresh" content="15">
+  <meta name="theme-color" content="#00d5ff">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="RiskSentinel">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/static/icon-192.png">
   <title>RiskSentinel</title>
   <style>
     :root {{
@@ -415,7 +444,8 @@ def _render_dashboard(status: dict) -> str:
       vertical-align: top;
     }}
     th {{ color: var(--muted); font-size: 12px; text-transform: uppercase; }}
-    td.reason {{ color: var(--muted); max-width: 440px; }}
+    td.reason {{ color: var(--muted); max-width: 440px; word-break: break-word; overflow-wrap: anywhere; }}
+    td {{ word-break: break-word; overflow-wrap: anywhere; }}
     .rules {{
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -457,9 +487,12 @@ def _render_dashboard(status: dict) -> str:
     @media (max-width: 760px) {{
       header, .wide {{ grid-template-columns: 1fr; display: grid; }}
       .grid {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
-      table {{ font-size: 12px; }}
+      table {{ font-size: 12px; table-layout: auto; width: max-content; min-width: 100%; }}
+      .table-wrap {{ overflow-x: auto; -webkit-overflow-scrolling: touch; }}
       .rules {{ grid-template-columns: 1fr; }}
       .context-grid {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+      .col-session {{ display: none; }}
+      td, td.reason {{ white-space: nowrap; overflow: visible; text-overflow: clip; word-break: normal; overflow-wrap: normal; max-width: none; }}
     }}
   </style>
 </head>
@@ -547,12 +580,13 @@ def _render_dashboard(status: dict) -> str:
 
     <section class="panel">
       <h2>Latest Journal Entries</h2>
+      <div class="table-wrap">
       <table>
         <thead>
           <tr>
             <th>Time</th>
             <th>Symbol</th>
-            <th>Session</th>
+            <th class="col-session">Session</th>
             <th>Decision</th>
             <th>Reason</th>
             <th>Outcome</th>
@@ -560,6 +594,7 @@ def _render_dashboard(status: dict) -> str:
         </thead>
         <tbody>{latest_rows or '<tr><td colspan="6">No journal entries yet.</td></tr>'}</tbody>
       </table>
+      </div>
     </section>
   </main>
 </body>
@@ -575,7 +610,7 @@ def _render_entry_row(entry: dict) -> str:
         "<tr>"
         f"<td>{_escape(_short_time(entry.get('ts')))}</td>"
         f"<td>{_escape(entry.get('instrument') or '')}</td>"
-        f"<td>{_escape(entry.get('session') or '')}</td>"
+        f"<td class=\"col-session\">{_escape(entry.get('session') or '')}</td>"
         f"<td>{_escape(entry.get('decision') or entry.get('type') or '')}</td>"
         f"<td class=\"reason\">{_escape(entry.get('reason') or '')}</td>"
         f"<td>{_escape(outcome)}</td>"
@@ -586,7 +621,13 @@ def _render_entry_row(entry: dict) -> str:
 def _short_time(value: str | None) -> str:
     if not value:
         return ""
-    return value.replace("T", " ").split(".")[0].replace("+00:00", "Z")
+    try:
+        from zoneinfo import ZoneInfo
+        dt = datetime.fromisoformat(value)
+        dt_et = dt.astimezone(ZoneInfo("America/New_York"))
+        return dt_et.strftime("%-I:%M %p")
+    except Exception:
+        return value.split("T")[-1][:5]
 
 
 def _format_vwap(value: dict | None) -> str:
