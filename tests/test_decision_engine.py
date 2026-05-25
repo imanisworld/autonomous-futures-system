@@ -587,3 +587,60 @@ class TestStratInsideBreakAndOutsideContinuation:
         decision = engine.evaluate(state, DailyState())
         assert decision.decision == "TRADE"
         assert decision.setup.direction == "SHORT"
+
+
+class TestContinuationPullback:
+    """Pullback must be within proximity ticks of VWAP — not just any trending bar."""
+
+    @pytest.fixture
+    def pb_config(self, config):
+        from dataclasses import replace
+        return replace(config, enabled_concepts=["continuation_pullback"])
+
+    def _pb_state(self, fresh_market_state, close, vwap, direction="UP"):
+        state = deepcopy(fresh_market_state)
+        state.orb.status = "inside"
+        state.market_condition = "TRENDING"
+        state.trend = TrendData(direction=direction, strength="MODERATE")
+        state.ohlc.close = close
+        state.vwap = VWAPData(
+            value=vwap,
+            price_vs_vwap="above" if close > vwap else "below" if close < vwap else "at",
+            reclaimed=close > vwap,
+            holding=True,
+        )
+        return state
+
+    def test_fires_when_close_near_vwap_from_above(self, fresh_market_state, pb_config):
+        """3 ticks above VWAP in uptrend — within 6-tick window → TRADE."""
+        engine = DecisionEngine(config=pb_config)
+        # MNQ tick = 0.25; 3 ticks = 0.75
+        state = self._pb_state(fresh_market_state, close=19500.75, vwap=19500.0)
+        decision = engine.evaluate(state, DailyState())
+        assert decision.decision == "TRADE"
+        assert decision.setup.strategy == "continuation_pullback"
+
+    def test_blocked_when_close_far_from_vwap(self, fresh_market_state, pb_config):
+        """20 ticks above VWAP — far from it, not a pullback → NO_TRADE."""
+        engine = DecisionEngine(config=pb_config)
+        # MNQ tick = 0.25; 20 ticks = 5.0
+        state = self._pb_state(fresh_market_state, close=19505.0, vwap=19500.0)
+        decision = engine.evaluate(state, DailyState())
+        assert decision.decision == "NO_TRADE"
+
+    def test_blocked_when_close_below_vwap_in_uptrend(self, fresh_market_state, pb_config):
+        """Close below VWAP in uptrend — breakdown, not pullback → NO_TRADE."""
+        engine = DecisionEngine(config=pb_config)
+        state = self._pb_state(fresh_market_state, close=19499.0, vwap=19500.0)
+        decision = engine.evaluate(state, DailyState())
+        assert decision.decision == "NO_TRADE"
+
+    def test_short_pullback_fires_near_vwap_from_below(self, fresh_market_state, pb_config):
+        """2 ticks below VWAP in downtrend → TRADE SHORT."""
+        engine = DecisionEngine(config=pb_config)
+        state = self._pb_state(
+            fresh_market_state, close=19499.5, vwap=19500.0, direction="DOWN"
+        )
+        decision = engine.evaluate(state, DailyState())
+        assert decision.decision == "TRADE"
+        assert decision.setup.direction == "SHORT"

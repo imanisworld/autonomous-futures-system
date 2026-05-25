@@ -8,6 +8,37 @@ Types: `Added`, `Changed`, `Fixed`, `Removed`, `Security`, `Rulebook`
 
 ---
 
+## [1.5.0] 2026-05-24
+
+### Added
+- London session opening range: Pine indicator tracks a London ORB (03:00–08:30 ET)
+  in parallel with the NY ORB using the same configurable window. `london_orb_high`,
+  `london_orb_low`, `london_orb_status` added to the alert payload and chart overlays.
+- `strat_inside_break` signal handler: inside-bar compression breakout with trend and
+  VWAP alignment filter. Phase 2 classified sequence only — no noisy proxy.
+- `strat_outside_continuation` signal handler: outside-bar follow-through with volume
+  >= 0.8× average required to reject trap moves. Phase 2 only.
+- Both new Strat patterns enabled in `risk_rules.yaml` and documented in `strat_definitions.md`.
+
+### Fixed
+- `strat_4hr_retrigger` was unreachable dead code: `orb_reclaim` fired first on identical
+  conditions. Fixed by moving it before `orb_reclaim` in the evaluation list, adding a
+  9:30–11:00 ET time gate, and requiring STRONG (not just UP) trend. `orb_reclaim` now
+  acts as the natural fallback for the same bar outside the window or on MODERATE trend.
+- `pdh_reclaim` and `pdl_reclaim` were permanently dead: both checked `price_vs_pdh == "reclaimed"`
+  but Pine only emits `"above"/"below"/"at"`. Fixed to use `"above"`/`"below"` with trend
+  and VWAP alignment as functional confirmation.
+- `continuation_pullback` VWAP proximity check was a no-op: the `holding` flag is True
+  whenever price is above or below VWAP (i.e. almost always), making the OR condition
+  always pass. Replaced with a tick-distance gate — fires only when close is within 6
+  ticks of VWAP on the correct side.
+- `state_builder` `price_vs_pdh` used `>=` instead of `>`, mapping `close == PDH` to
+  `"above"` rather than `"at"`. Fixed to strict `>` for symmetry with Pine.
+
+### Changed
+- `full_context_alert_message.json.tpl` updated with realistic MNQ example values and
+  all seven fields that were previously missing (London ORB, bar-history floats).
+
 ## [1.4.0] 2026-05-24
 
 ### Added

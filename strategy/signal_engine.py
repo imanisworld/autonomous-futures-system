@@ -900,9 +900,19 @@ class DecisionEngine:
             ),
         )
 
+    # Continuation pullback: max ticks from VWAP to qualify as "near"
+    _PULLBACK_PROXIMITY_TICKS = 6
+
     def _try_continuation_pullback(self, state: MarketState) -> Optional[SetupDetail]:
         """
-        Continuation Pullback: Trending market pulled back to VWAP or ORB level.
+        Continuation Pullback: price in a trending market has pulled back to
+        within _PULLBACK_PROXIMITY_TICKS of VWAP and is still on the correct
+        side (above VWAP for LONG, below for SHORT).
+
+        Previous implementation used `price_vs_vwap == "at"` OR `holding`, but
+        `holding` is True whenever price is above or below VWAP — i.e. almost
+        always — making the check a no-op.  Replaced with a tick-distance gate
+        so the strategy only fires when price has actually pulled back to VWAP.
         """
         if not (state.trend and state.trend.direction in ("UP", "DOWN")):
             return None
@@ -910,25 +920,30 @@ class DecisionEngine:
             return None
 
         tick = self.TICK_SIZE.get(state.instrument, 0.25)
+        proximity = tick * self._PULLBACK_PROXIMITY_TICKS
+        close = state.ohlc.close
+        vwap = state.vwap.value
 
         if state.trend.direction == "UP":
-            # Pullback to VWAP in uptrend
-            if state.vwap.price_vs_vwap != "at" and not state.vwap.holding:
+            # Price must be above VWAP but within proximity — true pullback
+            if not (state.vwap.price_vs_vwap == "above"
+                    and (close - vwap) <= proximity):
                 return None
-            entry = state.ohlc.close
-            stop = state.vwap.value - (tick * 8)
-            risk = entry - stop
+            entry = close
+            stop  = vwap - (tick * 8)
+            risk  = entry - stop
             if risk <= 0:
                 return None
             target = entry + (risk * 2.0)
             direction = "LONG"
         else:
-            # Pullback to VWAP in downtrend
-            if state.vwap.price_vs_vwap != "at" and not state.vwap.holding:
+            # Price must be below VWAP but within proximity — true pullback
+            if not (state.vwap.price_vs_vwap == "below"
+                    and (vwap - close) <= proximity):
                 return None
-            entry = state.ohlc.close
-            stop = state.vwap.value + (tick * 8)
-            risk = stop - entry
+            entry = close
+            stop  = vwap + (tick * 8)
+            risk  = stop - entry
             if risk <= 0:
                 return None
             target = entry - (risk * 2.0)
@@ -942,5 +957,8 @@ class DecisionEngine:
             target=round(target, 4),
             rr_ratio=rr,
             strategy="continuation_pullback",
-            notes=f"Trend continuation pullback to VWAP ({state.trend.direction})",
+            notes=(
+                f"Trend continuation pullback to VWAP ({state.trend.direction}): "
+                f"close within {self._PULLBACK_PROXIMITY_TICKS} ticks of VWAP"
+            ),
         )
