@@ -48,6 +48,11 @@ position_rules:
   max_open_positions: 1            # One position at a time
   averaging_down: false            # Absolute prohibition
   discretionary_override: false    # No manual intervention
+  max_contracts_per_instrument:
+    MNQ: 2
+    MES: 1
+    MGC: 0
+    MCL: 0
 
 # ─── Order Rules ─────────────────────────────────────────────
 order_rules:

@@ -40,6 +40,7 @@ def config() -> SystemConfig:
         max_consecutive_losses=2,
         max_open_positions=1,
         averaging_down_allowed=False,
+        max_contracts_per_instrument={"MNQ": 2, "MES": 1, "MGC": 0, "MCL": 0},
         require_entry=True,
         require_stop=True,
         require_target=True,

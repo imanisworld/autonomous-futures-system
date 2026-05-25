@@ -38,6 +38,7 @@ class TradeSetup:
     strategy: str
     instrument: str
     session: str
+    contracts: int = 1
     notes: Optional[str] = None
 
 
@@ -80,6 +81,7 @@ class RiskEngine:
         checks = [
             self._check_live_trading_disabled,
             self._check_instrument,
+            self._check_max_contracts,
             self._check_session,
             self._check_daily_trade_limit,
             self._check_consecutive_losses,
@@ -105,6 +107,22 @@ class RiskEngine:
         """Live trading must never be enabled in Phase 1."""
         if self.config.live_trading_enabled:
             raise LiveTradingBlockedError(source="RiskEngine._check_live_trading_disabled")
+        return None
+
+    def _check_max_contracts(
+        self, setup: TradeSetup, daily_state: DailyState
+    ) -> Optional[RiskResult]:
+        """Contract count must not exceed instrument-specific maximum."""
+        max_allowed = self.config.max_contracts_per_instrument.get(setup.instrument, 1)
+        if setup.contracts > max_allowed:
+            return RiskResult(
+                result="REJECTED",
+                failed_rule="max_contracts_exceeded",
+                reason=(
+                    f"Contracts {setup.contracts} exceeds max {max_allowed} "
+                    f"for {setup.instrument}."
+                ),
+            )
         return None
 
     def _check_instrument(

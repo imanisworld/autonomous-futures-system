@@ -85,6 +85,7 @@ class SystemConfig:
     max_account_risk_per_trade_percent: float = 1.0
     max_daily_loss_percent: float = 3.0
     require_margin_check: bool = True
+    max_contracts_per_instrument: dict = field(default_factory=dict)
 
     # Paths
     log_dir: str = "logs"
@@ -164,6 +165,7 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
 
         max_open_positions=position.get("max_open_positions", 1),
         averaging_down_allowed=position.get("averaging_down", False),
+        max_contracts_per_instrument=position.get("max_contracts_per_instrument", {}),
 
         require_entry=orders.get("require_entry", True),
         require_stop=orders.get("require_stop", True),

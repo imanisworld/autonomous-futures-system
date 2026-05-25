@@ -91,6 +91,60 @@ class TestSessionCheck:
         assert result.failed_rule == "session_not_allowed"
 
 
+class TestMaxContractsCheck:
+
+    def test_mgc_one_contract_rejected(self, config, clean_daily_state):
+        engine = RiskEngine(config=config)
+        setup = TradeSetup(
+            direction="LONG", entry=2000.0, stop=1995.0, target=2010.0,
+            rr_ratio=2.0, strategy="orb_reclaim",
+            instrument="MGC", session="new_york", contracts=1,
+        )
+        result = engine.validate(setup, clean_daily_state)
+        assert result.rejected
+        assert result.failed_rule == "max_contracts_exceeded"
+
+    def test_mnq_two_contracts_approved(self, config, clean_daily_state):
+        engine = RiskEngine(config=config)
+        setup = TradeSetup(
+            direction="LONG", entry=19500.0, stop=19480.0, target=19540.0,
+            rr_ratio=2.0, strategy="orb_reclaim",
+            instrument="MNQ", session="new_york", contracts=2,
+        )
+        result = engine.validate(setup, clean_daily_state)
+        assert result.approved
+
+    def test_mnq_three_contracts_rejected(self, config, clean_daily_state):
+        engine = RiskEngine(config=config)
+        setup = TradeSetup(
+            direction="LONG", entry=19500.0, stop=19480.0, target=19540.0,
+            rr_ratio=2.0, strategy="orb_reclaim",
+            instrument="MNQ", session="new_york", contracts=3,
+        )
+        result = engine.validate(setup, clean_daily_state)
+        assert result.rejected
+        assert result.failed_rule == "max_contracts_exceeded"
+
+    def test_instrument_not_in_contract_config_defaults_to_one(self, config, clean_daily_state):
+        config.allowed_instruments.append("M2K")
+        engine = RiskEngine(config=config)
+        one_contract = TradeSetup(
+            direction="LONG", entry=100.0, stop=95.0, target=110.0,
+            rr_ratio=2.0, strategy="orb_reclaim",
+            instrument="M2K", session="new_york", contracts=1,
+        )
+        two_contracts = TradeSetup(
+            direction="LONG", entry=100.0, stop=95.0, target=110.0,
+            rr_ratio=2.0, strategy="orb_reclaim",
+            instrument="M2K", session="new_york", contracts=2,
+        )
+
+        assert engine.validate(one_contract, clean_daily_state).approved
+        rejected = engine.validate(two_contracts, clean_daily_state)
+        assert rejected.rejected
+        assert rejected.failed_rule == "max_contracts_exceeded"
+
+
 class TestDailyTradeLimit:
 
     def test_at_limit_rejected(self, config, valid_trade_setup):
