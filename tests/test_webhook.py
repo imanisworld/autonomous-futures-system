@@ -21,6 +21,7 @@ from webhook.payload import AlertPayload
 from webhook.state_builder import (
     build_market_state,
     detect_session,
+    derive_orb_status,
     normalize_instrument,
     parse_timestamp,
 )
@@ -112,7 +113,7 @@ def test_normalize_instrument(ticker, expected):
 @pytest.mark.parametrize("iso,expected_session", [
     ("2026-05-23T08:00:00+00:00", "london"),    # 04:00 ET
     ("2026-05-23T14:30:00+00:00", "new_york"),  # 10:30 ET
-    ("2026-05-23T01:00:00+00:00", "off_hours"), # 21:00 ET prev day
+    ("2026-05-23T01:00:00+00:00", "asian"),      # 21:00 ET prev day — inside Asian window
     ("2026-05-23T12:30:00+00:00", "session_gap"), # 08:30 ET — gap before NY open
     ("2026-05-23T13:00:00+00:00", "session_gap"), # 09:00 ET — gap before NY open
     ("2026-05-23T17:30:00+00:00", "off_hours"), # 13:30 ET — after NY close
@@ -120,6 +121,20 @@ def test_normalize_instrument(ticker, expected):
 def test_detect_session(iso, expected_session):
     ts = parse_timestamp(iso)
     assert detect_session(ts) == expected_session
+
+
+@pytest.mark.parametrize(
+    "close,orb_high,orb_low,expected",
+    [
+        (101.0, 100.0, 90.0, "above"),
+        (89.0, 100.0, 90.0, "below"),
+        (95.0, 100.0, 90.0, "inside"),
+        (95.0, None, 90.0, "undefined"),
+        (95.0, 100.0, None, "undefined"),
+    ],
+)
+def test_derive_orb_status(close, orb_high, orb_low, expected):
+    assert derive_orb_status(close, orb_high, orb_low) == expected
 
 
 # ─── state_builder: build_market_state ───────────────────────────────────────
@@ -159,6 +174,20 @@ def test_build_market_state_minimal_payload():
     assert state.orb.low == 5239.5
 
 
+def test_build_market_state_auto_session_and_orb_status_when_payload_omits_both():
+    payload = _base_payload(
+        session=None,
+        close=19505.25,
+        orb_high=19498.0,
+        orb_low=19462.0,
+        orb_status=None,
+    )
+    state = build_market_state(payload)
+
+    assert state.session == "new_york"
+    assert state.orb.status == "above"
+
+
 def test_build_market_state_price_vs_vwap_below():
     payload = _base_payload(close=19490.0, vwap=19500.0)
     state = build_market_state(payload)
@@ -172,10 +201,10 @@ def test_build_market_state_session_override():
 
 
 def test_build_market_state_asian_session_detected():
-    # 02:30 UTC = 22:30 ET → off_hours
+    # 02:30 UTC = 22:30 ET → asian (19:00–03:00 ET)
     payload = _base_payload(timestamp="2026-05-21T02:30:00+00:00")
     state = build_market_state(payload)
-    assert state.session == "off_hours"
+    assert state.session == "asian"
 
 
 def test_build_market_state_session_gap_forces_non_allowed_session():
@@ -264,8 +293,9 @@ def test_runner_choppy_produces_no_trade(config, tmp_path):
 def test_runner_trending_orb_reclaim_produces_trade(config, tmp_path):
     from webhook.runner import process_alert
 
+    log_dir = str(tmp_path / "logs")
     payload = _base_payload()
-    result = process_alert(payload, config=config, log_dir=str(tmp_path / "logs"))
+    result = process_alert(payload, config=config, log_dir=log_dir)
 
     if result["decision"] == "NO_TRADE":
         pytest.skip("Signal engine produced NO_TRADE — conditions not met")
@@ -273,6 +303,52 @@ def test_runner_trending_orb_reclaim_produces_trade(config, tmp_path):
     assert result["fill"]["status"] == "OPEN"
     assert result["fill"]["instrument"] == "MNQ"
     assert result["risk"]["result"] == "APPROVED"
+
+    journal_path = next((tmp_path / "logs").glob("journal_*.jsonl"))
+    entry = json.loads(journal_path.read_text().splitlines()[-1])
+    assert entry["context"]["orb"]["status"] == "reclaimed_high"
+    assert entry["context"]["session"] == "new_york"
+    assert entry["confluence"]["score"] >= 0
+    assert entry["confluence"]["grade"]
+
+
+def test_journal_reconstructs_orb_break_flags_from_persisted_context(tmp_path):
+    from journal.journal_logger import JournalLogger
+
+    today = date(2026, 5, 23)
+    journal = JournalLogger(log_dir=str(tmp_path / "logs"))
+    base_entry = {
+        "ts": "2026-05-23T14:30:00+00:00",
+        "instrument": "MNQ",
+        "session": "new_york",
+        "decision": "TRADE",
+        "reason": "test",
+        "market_condition": "TRENDING",
+        "setup": {
+            "direction": "LONG",
+            "entry": 19500.0,
+            "stop": 19460.0,
+            "target": 19580.0,
+            "rr_ratio": 2.0,
+            "strategy": "strat_212",
+            "notes": None,
+        },
+        "context": {"orb": {"status": "above"}},
+        "risk_check": {"result": "APPROVED", "failed_rule": None, "reason": None},
+        "outcome": {"result": "WIN"},
+    }
+    journal._append(base_entry, today)
+    state = journal.get_daily_state(today)
+    assert state.orb_break_long_played is True
+
+    reclaim_entry = {
+        **base_entry,
+        "setup": {**base_entry["setup"], "strategy": "orb_reclaim"},
+        "context": {"orb": {"status": "reclaimed_high"}},
+    }
+    journal._append(reclaim_entry, today)
+    state = journal.get_daily_state(today)
+    assert state.orb_break_long_played is False
 
 
 # ─── runner: open-position resolution ────────────────────────────────────────

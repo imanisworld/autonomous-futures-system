@@ -25,6 +25,7 @@ from execution.broker_interface import BracketOrder
 from execution.paper_broker import NextBarOHLC, PaperBroker
 from journal.journal_logger import JournalLogger
 from risk.risk_engine import DailyState, RiskEngine, TradeSetup
+from strategy.confluence_scorer import score_setup as _score_setup
 from strategy.signal_engine import DecisionEngine
 from webhook.payload import AlertPayload
 from webhook.state_builder import build_market_state
@@ -123,8 +124,22 @@ def process_alert(
     result["decision"] = decision.decision
 
     if decision.decision != "TRADE" or decision.setup is None:
-        journal.log_decision(decision.to_dict(), None, for_date=today)
+        journal_entry = decision.to_dict()
+        journal_entry["context"] = _market_state_context(state)
+        journal.log_decision(journal_entry, None, for_date=today)
         return result
+
+    # ── Step 3b: Score confluence ─────────────────────────────────────────────
+    confluence = _score_setup(state, decision.setup)
+    result["confluence"] = {
+        "score": confluence.score,
+        "grade": confluence.grade,
+        "factors": confluence.factors,
+        "penalties": confluence.penalties,
+    }
+    journal_entry = decision.to_dict()
+    journal_entry["context"] = _market_state_context(state)
+    journal_entry["confluence"] = result["confluence"]
 
     # ── Step 4: Risk validation ───────────────────────────────────────────────
     trade_setup = TradeSetup(
@@ -145,7 +160,7 @@ def process_alert(
         "reason": risk_result.reason,
     }
     result["risk"] = risk_dict
-    journal.log_decision(decision.to_dict(), risk_dict, for_date=today)
+    journal.log_decision(journal_entry, risk_dict, for_date=today)
 
     if not risk_result.approved:
         result["decision"] = "RISK_REJECTED"

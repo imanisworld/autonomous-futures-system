@@ -203,12 +203,37 @@ class JournalLogger:
             else:
                 break
 
-        return DailyState(
+        daily_state = DailyState(
             trade_count=trade_count,
             consecutive_losses=consecutive_losses,
             has_open_position=has_open_position,
             date=(for_date or date.today()).isoformat(),
         )
+        for entry in entries:
+            decision = entry.get("decision")
+            risk_check = entry.get("risk_check") or {}
+            if decision == "TRADE" and risk_check.get("result") == "APPROVED":
+                self._apply_orb_break_state(entry, daily_state=daily_state)
+        return daily_state
+
+    @staticmethod
+    def _apply_orb_break_state(entry: dict, daily_state: Optional[DailyState]) -> None:
+        if daily_state is None:
+            return
+        setup = entry.get("setup") or {}
+        context = entry.get("context") or {}
+        orb = context.get("orb") or {}
+        orb_status = orb.get("status")
+        strategy = setup.get("strategy")
+
+        if orb_status == "above":
+            daily_state.orb_break_long_played = True
+        elif orb_status == "below":
+            daily_state.orb_break_short_played = True
+        elif strategy in ("orb_reclaim", "strat_4hr_retrigger"):
+            daily_state.orb_break_long_played = False
+        elif strategy == "orb_rejection":
+            daily_state.orb_break_short_played = False
 
     def get_open_position(self, for_date: Optional[date] = None) -> Optional[dict]:
         """

@@ -173,7 +173,7 @@ class DecisionEngine:
             )
 
         # ── Strategy evaluation ───────────────────────────────────────────────
-        setup = self._find_setup(state, condition)
+        setup = self._find_setup(state, condition, daily_state)
 
         if setup is None:
             return DecisionOutput(
@@ -209,7 +209,22 @@ class DecisionEngine:
                 ),
             )
 
-        # ── TRADE ─────────────────────────────────────────────────────────────
+        # ── TRADE: mark ORB break as played so continuation strategies are
+        # blocked on subsequent bars above/below the same ORB level.
+        # Pull-back strategies (orb_reclaim, vwap_reclaim, etc.) remain eligible.
+        # When orb_reclaim fires it means price returned to the ORB, which
+        # resets the break — clear the flag so a fresh break can be traded again.
+        if state.orb.status == "above":
+            daily_state.orb_break_long_played = True
+        elif state.orb.status == "below":
+            daily_state.orb_break_short_played = True
+        elif setup.strategy in ("orb_reclaim", "strat_4hr_retrigger"):
+            # Price pulled back to the ORB and is reclaiming — reset so the
+            # next clean break above is eligible again.
+            daily_state.orb_break_long_played = False
+        elif setup.strategy == "orb_rejection":
+            daily_state.orb_break_short_played = False
+
         return DecisionOutput(
             timestamp=now,
             instrument=state.instrument,
@@ -319,12 +334,41 @@ class DecisionEngine:
 
     # ── Setup Generation ──────────────────────────────────────────────────────
 
-    def _find_setup(self, state: MarketState, condition: str) -> Optional[SetupDetail]:
+    # Strategies that require price to return to the ORB level (status != "above"/"below").
+    # These are allowed even after the initial ORB break trade has been taken because
+    # they only fire on the specific reclaim/rejection transition — never persistently.
+    _ORB_PULLBACK_STRATEGIES: frozenset[str] = frozenset({
+        "orb_reclaim",
+        "orb_rejection",
+        "strat_4hr_retrigger",
+    })
+
+    def _find_setup(
+        self,
+        state: MarketState,
+        condition: str,
+        daily_state: Optional[DailyState] = None,
+    ) -> Optional[SetupDetail]:
         """
         Try each enabled strategy concept and return the first qualifying setup.
         Returns None if no valid setup is found.
+
+        When daily_state is provided, continuation strategies are skipped after
+        the first ORB break trade in each direction — only pull-back setups
+        (orb_reclaim, orb_rejection, vwap_reclaim, strat_4hr_retrigger) remain
+        eligible until price returns to the ORB level.
         """
         enabled = self.config.enabled_concepts
+
+        # Gate: if the ORB break has already been played in this direction,
+        # block continuation strategies so we don't re-enter on every bar
+        # that stays above/below the ORB. Pull-back strategies remain eligible.
+        orb_continuation_blocked = False
+        if daily_state is not None:
+            if state.orb.status == "above" and daily_state.orb_break_long_played:
+                orb_continuation_blocked = True
+            elif state.orb.status == "below" and daily_state.orb_break_short_played:
+                orb_continuation_blocked = True
 
         strategies = [
             # ── The Strat 4HR Re-Trigger must be evaluated BEFORE orb_reclaim.
@@ -352,6 +396,8 @@ class DecisionEngine:
 
         for name, fn in strategies:
             if name not in enabled:
+                continue
+            if orb_continuation_blocked and name not in self._ORB_PULLBACK_STRATEGIES:
                 continue
             setup = fn(state)
             if setup is not None:

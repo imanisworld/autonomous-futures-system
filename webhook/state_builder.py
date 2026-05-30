@@ -88,12 +88,15 @@ def detect_session(ts: datetime) -> str:
     """
     Map a UTC datetime to a session name using ET market hours.
 
+    Asian:       19:00–02:59 ET (overnight)
     London:      03:00–08:29 ET
     Session gap: 08:30–09:29 ET
     New York:    09:30–12:00 ET
     Anything outside → "off_hours" (RiskEngine will block it)
     """
     et_time = ts.astimezone(_ET).time()
+    if et_time >= time(19, 0) or et_time < time(3, 0):
+        return "asian"
     if time(3, 0) <= et_time < time(8, 30):
         return "london"
     if time(8, 30) <= et_time < time(9, 30):
@@ -101,6 +104,23 @@ def detect_session(ts: datetime) -> str:
     if time(9, 30) <= et_time <= time(12, 0):
         return "new_york"
     return "off_hours"
+
+
+def derive_orb_status(close: float, orb_high: float | None, orb_low: float | None) -> str:
+    """
+    Derive a conservative ORB status when Pine omits orb_status.
+
+    TradingView does not have to send session; session can be auto-detected.
+    Likewise, if ORB levels are present but status is missing, close vs levels
+    is enough to avoid persisting a permanently undefined ORB context.
+    """
+    if orb_high is None or orb_low is None:
+        return "undefined"
+    if close > orb_high:
+        return "above"
+    if close < orb_low:
+        return "below"
+    return "inside"
 
 
 # ─── Main builder ─────────────────────────────────────────────────────────────
@@ -144,7 +164,9 @@ def build_market_state(payload: AlertPayload) -> MarketState:
     if session == "london" and payload.london_orb_high is not None:
         orb_h = payload.london_orb_high
         orb_l = payload.london_orb_low
-        orb_status_val = payload.london_orb_status or "undefined"
+        orb_status_val = payload.london_orb_status or derive_orb_status(
+            payload.close, orb_h, orb_l
+        )
     elif session == "london":
         # London ORB not yet established — use current bar as placeholder so
         # ORBData stays valid, but status stays undefined so no ORB strategy fires.
@@ -154,7 +176,7 @@ def build_market_state(payload: AlertPayload) -> MarketState:
     else:
         orb_h = payload.orb_high if payload.orb_high is not None else payload.high
         orb_l = payload.orb_low  if payload.orb_low  is not None else payload.low
-        orb_status_val = payload.orb_status or "undefined"
+        orb_status_val = payload.orb_status or derive_orb_status(payload.close, orb_h, orb_l)
 
     strat = build_strat_context(payload)
 

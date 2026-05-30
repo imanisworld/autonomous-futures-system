@@ -25,6 +25,11 @@ class DailyState:
     consecutive_losses: int = 0
     has_open_position: bool = False
     date: Optional[str] = None  # YYYY-MM-DD
+    # ORB break played — prevents re-entry on the same directional ORB break.
+    # Cleared automatically when the ORB reclaim/rejection strategy fires
+    # (price returned to the ORB, resetting the setup).
+    orb_break_long_played: bool = False
+    orb_break_short_played: bool = False
 
 
 @dataclass
