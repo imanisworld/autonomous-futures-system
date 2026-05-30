@@ -5,7 +5,4 @@ pyyaml>=6.0
 python-dotenv>=1.0
 jsonschema>=4.0
 tzdata>=2024.1
-pytest>=7.0
-pytest-cov>=4.0
 apscheduler>=3.10
-supervisor>=4.3
