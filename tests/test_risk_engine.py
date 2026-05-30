@@ -339,6 +339,68 @@ class TestDistinctPrices:
         assert result.failed_rule == "entry_equals_target"
 
 
+class TestPerSessionTradeLimit:
+
+    def _setup(self, session="new_york"):
+        return TradeSetup(
+            direction="LONG", entry=19500.0, stop=19480.0, target=19540.0,
+            rr_ratio=2.0, strategy="orb_reclaim",
+            instrument="MNQ", session=session,
+        )
+
+    def _config_with_limits(self, config, limits):
+        from dataclasses import replace
+        return replace(config, per_session_limits=limits)
+
+    def test_under_limit_approved(self, config, clean_daily_state):
+        cfg = self._config_with_limits(config, {"new_york": 2})
+        engine = RiskEngine(config=cfg)
+        state = DailyState(session_trade_counts={"new_york": 1})
+        result = engine.validate(self._setup("new_york"), state)
+        assert result.approved
+
+    def test_at_limit_rejected(self, config, clean_daily_state):
+        cfg = self._config_with_limits(config, {"new_york": 2})
+        engine = RiskEngine(config=cfg)
+        state = DailyState(session_trade_counts={"new_york": 2})
+        result = engine.validate(self._setup("new_york"), state)
+        assert result.rejected
+        assert result.failed_rule == "session_trade_limit"
+        assert "new_york" in result.reason
+
+    def test_no_limit_configured_passes(self, config, clean_daily_state):
+        cfg = self._config_with_limits(config, {})
+        engine = RiskEngine(config=cfg)
+        state = DailyState(session_trade_counts={"new_york": 99})
+        result = engine.validate(self._setup("new_york"), state)
+        assert result.approved
+
+    def test_asian_limit_of_one(self, config, clean_daily_state):
+        cfg = self._config_with_limits(
+            config,
+            {"asian": 1, "london": 2, "new_york": 2},
+        )
+        cfg = type(cfg)(
+            **{
+                **cfg.__dict__,
+                "allowed_sessions": ["london", "new_york", "asian"],
+                "disabled_sessions": [],
+            }
+        )
+        engine = RiskEngine(config=cfg)
+        state = DailyState(session_trade_counts={"asian": 1})
+        result = engine.validate(self._setup("asian"), state)
+        assert result.rejected
+        assert result.failed_rule == "session_trade_limit"
+
+    def test_other_session_count_does_not_affect_limit(self, config, clean_daily_state):
+        cfg = self._config_with_limits(config, {"new_york": 2})
+        engine = RiskEngine(config=cfg)
+        state = DailyState(session_trade_counts={"london": 5, "new_york": 1})
+        result = engine.validate(self._setup("new_york"), state)
+        assert result.approved
+
+
 class TestRRCalculation:
 
     def test_long_rr_calculation(self):

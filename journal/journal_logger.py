@@ -167,6 +167,7 @@ class JournalLogger:
         self, entries: List[dict], for_date: Optional[date]
     ) -> DailyState:
         trade_count = 0
+        session_trade_counts: dict = {}
         last_outcomes: List[str] = []  # WIN or LOSS in order
         has_open_position = False
 
@@ -189,6 +190,9 @@ class JournalLogger:
 
             if decision == "TRADE" and risk_approved:
                 trade_count += 1
+                session = entry.get("session") or ""
+                if session:
+                    session_trade_counts[session] = session_trade_counts.get(session, 0) + 1
                 if outcome_result in ("WIN", "LOSS"):
                     last_outcomes.append(outcome_result)
                     has_open_position = False
@@ -208,6 +212,7 @@ class JournalLogger:
             consecutive_losses=consecutive_losses,
             has_open_position=has_open_position,
             date=(for_date or date.today()).isoformat(),
+            session_trade_counts=session_trade_counts,
         )
         for entry in entries:
             decision = entry.get("decision")

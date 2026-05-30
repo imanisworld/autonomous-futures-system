@@ -84,6 +84,9 @@ def build_discord_payload(result: ScoreResult) -> dict[str, Any]:
         {"name": "Direction", "value": direction, "inline": True},
         {"name": "Confidence", "value": f"{result.score * 10}/100", "inline": True},
         {"name": "Pattern", "value": result.pattern or "N/A", "inline": True},
+        {"name": "Strat Combo", "value": _strat_combo_text(result), "inline": True},
+        {"name": "Timeframe", "value": _timeframe_text(result), "inline": True},
+        {"name": "FTFC", "value": _ftfc_text(result), "inline": True},
         {"name": "Watch Contract", "value": _contract_text(result, side), "inline": True},
         {"name": "Spot Price", "value": _money_text(raw.get("price")), "inline": True},
         {"name": "Stop Level", "value": _money_text(raw.get("stop") or raw.get("stop_level")), "inline": True},
@@ -106,7 +109,7 @@ def build_discord_payload(result: ScoreResult) -> dict[str, Any]:
                 "fields": [field for field in fields if field["value"] != "N/A"],
                 "footer": {
                     "text": (
-                        "Trading Zone War Room - "
+                        "Signal Engine - "
                         f"{session} - Advisory only, independent research required"
                     )
                 },
@@ -200,6 +203,43 @@ def _risk_text(result: ScoreResult) -> str:
     if _alert_state(result) == "forming":
         return "Setup is developing - NOT confirmed. Wait for the A+ signal before entering."
     return "Size for your account. Exit at stop - no exceptions. Targets 1 and 2 are the plan."
+
+
+def _strat_combo_text(result: ScoreResult) -> str:
+    raw = result.raw
+    combo = raw.get("strat_combo") or raw.get("combo") or raw.get("strat_sequence")
+    if isinstance(combo, (list, tuple)):
+        return "-".join(str(item) for item in combo)
+    if combo and str(combo).upper() != "N/A":
+        return str(combo)
+    return "N/A"
+
+
+def _timeframe_text(result: ScoreResult) -> str:
+    raw = result.raw
+    timeframe = raw.get("timeframe") or raw.get("tf")
+    if timeframe:
+        return str(timeframe)
+    timeframes = raw.get("timeframes") or raw.get("tf_stack")
+    if isinstance(timeframes, (list, tuple)):
+        return " / ".join(str(item) for item in timeframes)
+    if timeframes:
+        return str(timeframes)
+    return "N/A"
+
+
+def _ftfc_text(result: ScoreResult) -> str:
+    raw = result.raw
+    ftfc = raw.get("ftfc")
+    if ftfc is None:
+        ftfc = raw.get("full_timeframe_continuity")
+    if isinstance(ftfc, bool):
+        direction = raw.get("ftfc_direction") or result.direction
+        return f"Yes ({direction})" if ftfc else "No"
+    if ftfc:
+        direction = raw.get("ftfc_direction")
+        return f"{ftfc} ({direction})" if direction else str(ftfc)
+    return "N/A"
 
 
 def _pass_fail(value: Any) -> str:

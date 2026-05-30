@@ -10,8 +10,8 @@ Returns RiskResult(APPROVED) or RiskResult(REJECTED, failed_rule, reason).
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Optional
+from dataclasses import dataclass, field
+from typing import Dict, Optional
 
 from config.settings import SystemConfig, load_config, LiveTradingBlockedError
 
@@ -30,6 +30,8 @@ class DailyState:
     # (price returned to the ORB, resetting the setup).
     orb_break_long_played: bool = False
     orb_break_short_played: bool = False
+    # Per-session trade counts — keyed by session name (asian/london/new_york).
+    session_trade_counts: Dict[str, int] = field(default_factory=dict)
 
 
 @dataclass
@@ -89,6 +91,7 @@ class RiskEngine:
             self._check_max_contracts,
             self._check_session,
             self._check_daily_trade_limit,
+            self._check_per_session_trade_limit,
             self._check_consecutive_losses,
             self._check_no_open_position,
             self._check_bracket_completeness,
@@ -171,6 +174,25 @@ class RiskEngine:
                 reason=(
                     f"Daily trade limit reached: {daily_state.trade_count} trades "
                     f"(max {self.config.max_trades_per_day})"
+                ),
+            )
+        return None
+
+    def _check_per_session_trade_limit(
+        self, setup: TradeSetup, daily_state: DailyState
+    ) -> Optional[RiskResult]:
+        """Per-session trade count must not exceed session-specific limit."""
+        limit = self.config.per_session_limits.get(setup.session)
+        if limit is None:
+            return None
+        count = daily_state.session_trade_counts.get(setup.session, 0)
+        if count >= limit:
+            return RiskResult(
+                result="REJECTED",
+                failed_rule="session_trade_limit",
+                reason=(
+                    f"Session trade limit reached for '{setup.session}': "
+                    f"{count} trades (max {limit})"
                 ),
             )
         return None

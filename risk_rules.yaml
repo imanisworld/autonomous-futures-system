@@ -45,6 +45,10 @@ session_hours_et:
 daily_limits:
   max_trades_per_day: 3             # Hard ceiling, calendar-day reset
   max_consecutive_losses: 2        # Stop after 2 losses in a row
+  per_session_limits:
+    asian: 1                        # Protect NY budget from overnight fills
+    london: 2
+    new_york: 2
 
 # ─── Position Rules ──────────────────────────────────────────
 position_rules:
