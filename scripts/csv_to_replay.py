@@ -29,6 +29,19 @@ def ts_to_dt(unix_sec: int) -> datetime:
     return datetime.fromtimestamp(unix_sec, tz=_UTC)
 
 
+def parse_time(value: str) -> tuple[int, datetime]:
+    """Accept either a Unix timestamp (int) or an ISO 8601 string."""
+    try:
+        unix = int(value)
+        return unix, ts_to_dt(unix)
+    except ValueError:
+        dt = datetime.fromisoformat(value)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=_ET)
+        dt_utc = dt.astimezone(_UTC)
+        return int(dt_utc.timestamp()), dt_utc
+
+
 def detect_session(dt: datetime) -> str:
     et = dt.astimezone(_ET).time()
     from datetime import time
@@ -53,16 +66,21 @@ def bar_type_str(t1: str, t2: str, t3: str) -> str | None:
     return None
 
 
-def derive_orb_status(close: float, orb_high: float, orb_low: float) -> str:
+def derive_orb_status(
+    close: float,
+    orb_high: float,
+    orb_low: float,
+    previous_close: float | None = None,
+) -> str:
     if close > orb_high:
+        if previous_close is not None and previous_close <= orb_high:
+            return "reclaimed_high"
         return "above"
     if close < orb_low:
+        if previous_close is not None and previous_close >= orb_low:
+            return "reclaimed_low"
         return "below"
-    orb_range = orb_high - orb_low
-    mid = orb_low + orb_range / 2
-    if close >= mid:
-        return "reclaimed_high"
-    return "reclaimed_low"
+    return "inside"
 
 
 def derive_trend(closes: list[float]) -> tuple[str, str]:
@@ -107,12 +125,20 @@ def compute_vwap(bars: list[dict]) -> float:
 
 def load_csv(path: Path) -> list[dict]:
     rows = []
-    with path.open(encoding="utf-8") as f:
+    with path.open(encoding="utf-8-sig", newline="") as f:
         reader = csv.DictReader(f)
         for row in reader:
             rows.append(row)
     return rows
 
+
+
+def first_value(row: dict, *names: str, default: str = "") -> str:
+    for name in names:
+        value = row.get(name)
+        if value not in (None, ""):
+            return str(value).strip()
+    return default
 
 def detect_day_boundaries(bars: list[dict]) -> list[int]:
     """Return indices where the CME equity futures session date changes (17:00 ET)."""
@@ -136,19 +162,22 @@ def convert(csv_path: Path, out_dir: Path) -> Path:
     # Parse raw rows
     bars: list[dict] = []
     for row in raw:
-        ts = int(row["time"])
+        ts, _ = parse_time(row["time"])
+        volume_raw = first_value(row, "Volume", "volume", default="1")
         bars.append({
             "ts": ts,
             "open": float(row["open"]),
             "high": float(row["high"]),
             "low": float(row["low"]),
             "close": float(row["close"]),
-            "volume": int(row["Volume"]),
-            "orb_high_raw": row["ORB High"].strip(),
-            "orb_low_raw": row["ORB Low"].strip(),
-            "bt1": row["Bar Type 1 Label"].strip(),
-            "bt2": row["Bar Type 2 Label"].strip(),
-            "bt3": row["Bar Type 3 Label"].strip(),
+            # Some TradingView exports omit volume when only indicator values are exported.
+            # Use 1 so replay stays deterministic but does not fake volume confirmation.
+            "volume": int(float(volume_raw or 1)),
+            "orb_high_raw": first_value(row, "ORB High", "OR High", "Orb High"),
+            "orb_low_raw": first_value(row, "ORB Low", "OR Low", "Orb Low"),
+            "bt1": first_value(row, "Bar Type 1 Label", "BT1", "Type 1"),
+            "bt2": first_value(row, "Bar Type 2 Label", "BT2", "Type 2"),
+            "bt3": first_value(row, "Bar Type 3 Label", "BT3", "Type 3"),
         })
 
     # Detect day boundaries to track prev day high/low/close
@@ -192,7 +221,7 @@ def convert(csv_path: Path, out_dir: Path) -> Path:
         orb_high = float(orb_high_raw)
         orb_low = float(orb_low_raw)
 
-        dt = ts_to_dt(bar["ts"])
+        dt = datetime.fromtimestamp(bar["ts"], tz=_UTC)
         session = detect_session(dt)
 
         # Reset VWAP accumulation at session change
@@ -206,7 +235,14 @@ def convert(csv_path: Path, out_dir: Path) -> Path:
         closes.append(bar["close"])
         trend_dir, trend_str = derive_trend(closes)
         market_cond = derive_market_condition(closes)
-        orb_status = derive_orb_status(bar["close"], orb_high, orb_low)
+        prev_bar = bars[i - 1] if i > 0 else None
+        prev2_bar = bars[i - 2] if i > 1 else None
+        orb_status = derive_orb_status(
+            bar["close"],
+            orb_high,
+            orb_low,
+            previous_close=prev_bar["close"] if prev_bar else None,
+        )
 
         # Rolling avg_volume
         vol_window = [bars[j]["volume"] for j in range(max(0, i - LOOKBACK), i + 1)]
@@ -214,8 +250,6 @@ def convert(csv_path: Path, out_dir: Path) -> Path:
 
         # Bar types from Pine labels
         cur_type = bar_type_str(bar["bt1"], bar["bt2"], bar["bt3"])
-        prev_bar = bars[i - 1] if i > 0 else None
-        prev2_bar = bars[i - 2] if i > 1 else None
         prev_type = bar_type_str(prev_bar["bt1"], prev_bar["bt2"], prev_bar["bt3"]) if prev_bar else None
         prev2_type = bar_type_str(prev2_bar["bt1"], prev2_bar["bt2"], prev2_bar["bt3"]) if prev2_bar else None
 
@@ -322,7 +356,7 @@ def validate_pine(csv_path: Path, jsonl_path: Path) -> None:
     raw = load_csv(csv_path)
     raw_by_ts = {}
     for row in raw:
-        ts = int(row["time"])
+        ts, _ = parse_time(row["time"])
         raw_by_ts[ts] = row
 
     mismatches = []
@@ -339,17 +373,23 @@ def validate_pine(csv_path: Path, jsonl_path: Path) -> None:
             checked += 1
 
             # ORB high/low
-            pine_orb_h = float(row["ORB High"]) if row["ORB High"].strip() else None
-            pine_orb_l = float(row["ORB Low"]) if row["ORB Low"].strip() else None
+            pine_orb_h_raw = first_value(row, "ORB High", "OR High", "Orb High")
+            pine_orb_l_raw = first_value(row, "ORB Low", "OR Low", "Orb Low")
+            pine_orb_h = float(pine_orb_h_raw) if pine_orb_h_raw else None
+            pine_orb_l = float(pine_orb_l_raw) if pine_orb_l_raw else None
             if pine_orb_h and abs(pine_orb_h - c["orb_high"]) > 0.01:
                 mismatches.append(f"ORB HIGH mismatch at {c['timestamp']}: pine={pine_orb_h} derived={c['orb_high']}")
             if pine_orb_l and abs(pine_orb_l - c["orb_low"]) > 0.01:
                 mismatches.append(f"ORB LOW mismatch at {c['timestamp']}: pine={pine_orb_l} derived={c['orb_low']}")
 
-            # Bar type
-            pine_bt = bar_type_str(row["Bar Type 1 Label"].strip(), row["Bar Type 2 Label"].strip(), row["Bar Type 3 Label"].strip())
+            # Bar type, if exported by Pine. Some indicator exports only include ORB levels.
+            pine_bt = bar_type_str(
+                first_value(row, "Bar Type 1 Label", "BT1", "Type 1"),
+                first_value(row, "Bar Type 2 Label", "BT2", "Type 2"),
+                first_value(row, "Bar Type 3 Label", "BT3", "Type 3"),
+            )
             derived_bt = c.get("current_bar_type")
-            if pine_bt != derived_bt:
+            if pine_bt is not None and pine_bt != derived_bt:
                 mismatches.append(f"BAR TYPE mismatch at {c['timestamp']}: pine={pine_bt} derived={derived_bt}")
 
     print(f"Bars checked: {checked}")
