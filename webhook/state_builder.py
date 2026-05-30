@@ -129,6 +129,24 @@ def derive_orb_status(close: float, orb_high: float | None, orb_low: float | Non
 
 # ─── Main builder ─────────────────────────────────────────────────────────────
 
+def _build_sd(payload: AlertPayload) -> "SupplyDemandData | None":
+    """Resolve S&D fields, accepting both naming conventions from TradingView."""
+    s_top    = payload.supply_top    or payload.supply_zone_high
+    s_bottom = payload.supply_bottom or payload.supply_zone_low
+    d_top    = payload.demand_top    or payload.demand_zone_high
+    d_bottom = payload.demand_bottom or payload.demand_zone_low
+    if not any(v is not None for v in (s_top, s_bottom, d_top, d_bottom)):
+        return None
+    return SupplyDemandData(
+        supply_top=s_top,
+        supply_bottom=s_bottom,
+        supply_wavg=payload.supply_wavg,
+        demand_top=d_top,
+        demand_bottom=d_bottom,
+        demand_wavg=payload.demand_wavg,
+    )
+
+
 def build_market_state(payload: AlertPayload) -> MarketState:
     """
     Convert an AlertPayload to a MarketState ready for the decision pipeline.
@@ -261,17 +279,7 @@ def build_market_state(payload: AlertPayload) -> MarketState:
             tp2=payload.icc_tp2,
             htf_phase=payload.icc_htf_phase,
         ),
-        sd=SupplyDemandData(
-            supply_top=payload.supply_top,
-            supply_bottom=payload.supply_bottom,
-            supply_wavg=payload.supply_wavg,
-            demand_top=payload.demand_top,
-            demand_bottom=payload.demand_bottom,
-            demand_wavg=payload.demand_wavg,
-        ) if any(v is not None for v in (
-            payload.supply_top, payload.supply_bottom,
-            payload.demand_top, payload.demand_bottom,
-        )) else None,
+        sd=_build_sd(payload),
         raw=None,
     )
 

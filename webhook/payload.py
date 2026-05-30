@@ -99,9 +99,18 @@ class AlertPayload(BaseModel):
     icc_htf_phase: Optional[str] = None
 
     # ── Supply & Demand zones (from LuxAlgo or equivalent indicator) ─────────
+    # Primary names
     supply_top: Optional[float] = None
     supply_bottom: Optional[float] = None
     supply_wavg: Optional[float] = None
     demand_top: Optional[float] = None
     demand_bottom: Optional[float] = None
     demand_wavg: Optional[float] = None
+    # TradingView-friendly aliases (supply_zone_high etc.)
+    supply_zone_high: Optional[float] = None
+    supply_zone_low: Optional[float] = None
+    demand_zone_high: Optional[float] = None
+    demand_zone_low: Optional[float] = None
+    # Zone metadata
+    zone_type: Optional[str] = None   # "supply" | "demand" | "both"
+    zone_state: Optional[str] = None  # "fresh" | "used" | "stale"
