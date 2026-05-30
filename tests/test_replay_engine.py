@@ -416,3 +416,56 @@ def test_aggregate_average_win_is_weighted(config, tmp_path):
         total_wins = sum(r.wins for r in day_reports)
         expected = round(total_pnl / total_wins, 2) if total_wins else 0.0
         assert report.average_win == expected
+
+
+def test_enriched_replay_fields_can_trigger_gex_gate(config, tmp_path):
+    candle = json.loads(Path("data/replay/sample_day_mnq.jsonl").read_text().splitlines()[0])
+    candle.update({
+        "current_bar_type": "two_up",
+        "icc_indication_type": "demand",
+        "gex_flip": candle["close"] - 1,
+        "call_wall": candle["close"] - 0.25,
+        "put_wall": candle["close"] - 80,
+        "signa_grade": "A",
+        "signa_weekly_direction": "UP",
+        "demand_top": candle["close"] + 2,
+        "demand_bottom": candle["close"] - 5,
+    })
+    replay_path = tmp_path / "enriched_gex_block.jsonl"
+    replay_path.write_text(json.dumps(candle) + "\n")
+
+    report = ReplayEngine(config=config, log_dir=str(tmp_path / "logs")).run(
+        replay_path,
+        review_date="2026-05-23",
+    )
+
+    journal_path = Path(report.journal_path)
+    entry = json.loads(journal_path.read_text().splitlines()[0])
+    assert report.approved_trades == 0
+    assert entry["failed_gates"] == ["GEX_UNDER_CALL_WALL"]
+    assert entry["gex_status"] == "RED_LIGHT"
+
+
+def test_candle_loader_preserves_enriched_fields(tmp_path):
+    candle = json.loads(Path("data/replay/sample_day_mnq.jsonl").read_text().splitlines()[0])
+    candle.update({
+        "gex_flip": 19500,
+        "call_wall": 19550,
+        "signa_grade": "B",
+        "signa_weekly_direction": "UP",
+        "icc_indication_type": "demand",
+        "demand_top": 19510,
+        "demand_bottom": 19490,
+    })
+    replay_path = tmp_path / "enriched.jsonl"
+    replay_path.write_text(json.dumps(candle) + "\n")
+
+    loaded = ReplayCandleLoader().load_jsonl(replay_path)[0]
+
+    assert loaded.gex_flip == 19500
+    assert loaded.call_wall == 19550
+    assert loaded.signa_grade == "B"
+    assert loaded.signa_weekly_direction == "UP"
+    assert loaded.icc_indication_type == "demand"
+    assert loaded.demand_top == 19510
+    assert loaded.demand_bottom == 19490

@@ -10,3 +10,7 @@ logs_test/
 .env
 Trading_Intel_Architecture.docx
 autonomous-futures-system/
+clientportal.gw/
+strategy/*.mov
+strategy/*.zip
+strategy/*.pdf
