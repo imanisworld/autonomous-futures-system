@@ -105,10 +105,25 @@ async def dashboard() -> HTMLResponse:
 @app.get("/health")
 async def health() -> dict:
     """Liveness check. Always returns 200 if the server is running."""
+    import os
+    broker_mode = os.getenv("BROKER", "paper").strip().lower()
+    broker_connected: bool | None = None
+    if broker_mode == "ibkr":
+        try:
+            import socket
+            host = os.getenv("IBKR_HOST", "127.0.0.1")
+            port = int(os.getenv("IBKR_PORT", "4002"))
+            with socket.socket() as s:
+                s.settimeout(0.5)
+                broker_connected = s.connect_ex((host, port)) == 0
+        except Exception:
+            broker_connected = False
     return {
         "ok": True,
         "live_trading_enabled": _config.live_trading_enabled,
         "paper_mode": _config.paper_mode,
+        "broker": broker_mode,
+        "broker_gateway_reachable": broker_connected,
         "webhook_secret_required": bool(_configured_webhook_secret()),
         "discord_notifications_enabled": _config.discord_notifications_enabled,
         "signa_api_enabled": _config.signa_api_enabled,

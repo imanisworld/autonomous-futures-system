@@ -22,6 +22,7 @@ from context.market_context import (
     MarketState,
     GEXContext,
     ICCContext,
+    KeyLevels,
     OHLCData,
     ORBData,
     PreviousDayData,
@@ -128,6 +129,37 @@ def derive_orb_status(close: float, orb_high: float | None, orb_low: float | Non
 
 
 # ─── Main builder ─────────────────────────────────────────────────────────────
+
+def _build_key_levels(payload: AlertPayload) -> "KeyLevels | None":
+    """Build KeyLevels from payload. Returns None if no level data present."""
+    has_data = any(v is not None for v in (
+        payload.hod, payload.lod,
+        payload.prev_week_high, payload.prev_week_low,
+        payload.ema_9, payload.ema_21, payload.ema_55, payload.ema_200,
+        payload.ema_9_above_21,
+    ))
+    if not has_data:
+        return None
+    # Derive flags from values when Pine doesn't send them explicitly
+    ema_9_above_21 = payload.ema_9_above_21
+    if ema_9_above_21 is None and payload.ema_9 is not None and payload.ema_21 is not None:
+        ema_9_above_21 = payload.ema_9 > payload.ema_21
+    price_above_ema_55 = (payload.close > payload.ema_55) if payload.ema_55 is not None else None
+    price_above_ema_200 = (payload.close > payload.ema_200) if payload.ema_200 is not None else None
+    return KeyLevels(
+        hod=payload.hod,
+        lod=payload.lod,
+        prev_week_high=payload.prev_week_high,
+        prev_week_low=payload.prev_week_low,
+        ema_9=payload.ema_9,
+        ema_21=payload.ema_21,
+        ema_55=payload.ema_55,
+        ema_200=payload.ema_200,
+        ema_9_above_21=ema_9_above_21,
+        price_above_ema_55=price_above_ema_55,
+        price_above_ema_200=price_above_ema_200,
+    )
+
 
 def _build_sd(payload: AlertPayload) -> "SupplyDemandData | None":
     """Resolve S&D fields, accepting both naming conventions from TradingView."""
@@ -280,6 +312,7 @@ def build_market_state(payload: AlertPayload) -> MarketState:
             htf_phase=payload.icc_htf_phase,
         ),
         sd=_build_sd(payload),
+        key_levels=_build_key_levels(payload),
         raw=None,
     )
 

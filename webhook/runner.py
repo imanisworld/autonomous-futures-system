@@ -8,20 +8,24 @@ Flow per bar:
      with this bar's OHLC (target/stop check).
   2. Check daily limits (max trades, loss lockout).
   3. Run the DecisionEngine → RiskEngine chain.
-  4. If approved: execute a bracket order via PaperBroker and log it.
+  4. If approved: execute a bracket order via the configured broker and log it.
   5. Return a structured result dict.
 
-This is pure Python — FastAPI calls it; tests call it directly.
-No live trading. No broker credentials. Paper only.
+Broker selection: set BROKER=ibkr in .env to route live bracket orders through
+IB Gateway/TWS paper account. Default is BROKER=paper (fully simulated).
+Position resolution (stop/target simulation) always uses PaperBroker logic
+since IBKR manages its own bracket fills internally.
 """
 
 from __future__ import annotations
 
+import logging
+import os
 from datetime import date
 from typing import Optional
 
 from config.settings import SystemConfig, load_config
-from execution.broker_interface import BracketOrder
+from execution.broker_interface import BracketOrder, BrokerInterface
 from execution.paper_broker import NextBarOHLC, PaperBroker
 from journal.journal_logger import JournalLogger
 from risk.risk_engine import DailyState, RiskEngine, TradeSetup
@@ -29,6 +33,20 @@ from strategy.confluence_scorer import score_setup as _score_setup
 from strategy.signal_engine import DecisionEngine
 from webhook.payload import AlertPayload
 from webhook.state_builder import build_market_state
+
+logger = logging.getLogger(__name__)
+
+
+def _make_broker() -> BrokerInterface:
+    """Return IBKRBroker when BROKER=ibkr, otherwise PaperBroker."""
+    broker_env = os.getenv("BROKER", "paper").strip().lower()
+    if broker_env == "ibkr":
+        try:
+            from execution.ibkr_broker import IBKRBroker
+            return IBKRBroker()
+        except Exception as exc:
+            logger.error("IBKRBroker init failed (%s) — falling back to PaperBroker", exc)
+    return PaperBroker()
 
 
 def process_alert(
@@ -189,8 +207,8 @@ def process_alert(
         strategy=decision.setup.strategy,
         notes=decision.setup.notes,
     )
-    broker = PaperBroker()
-    broker.execute_bracket(order)         # sets internal OPEN state
+    broker = _make_broker()
+    broker.execute_bracket(order)
     daily_state.trade_count += 1
     daily_state.has_open_position = True
 

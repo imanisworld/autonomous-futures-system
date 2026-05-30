@@ -98,6 +98,17 @@ class AlertPayload(BaseModel):
     icc_tp2: Optional[float] = None
     icc_htf_phase: Optional[str] = None
 
+    # ── Key levels: intraday + weekly + EMAs ────────────────────────────────
+    hod: Optional[float] = None              # High of Day (running, resets daily)
+    lod: Optional[float] = None              # Low of Day  (running, resets daily)
+    prev_week_high: Optional[float] = None   # Previous week high — swing target
+    prev_week_low: Optional[float] = None    # Previous week low  — swing target
+    ema_9: Optional[float] = None
+    ema_21: Optional[float] = None
+    ema_55: Optional[float] = None
+    ema_200: Optional[float] = None
+    ema_9_above_21: Optional[bool] = None    # Pine can send true/false directly
+
     # ── Supply & Demand zones (from LuxAlgo or equivalent indicator) ─────────
     # Primary names
     supply_top: Optional[float] = None

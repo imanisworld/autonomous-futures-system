@@ -148,5 +148,64 @@ def score_setup(state: MarketState, setup: SetupDetail) -> ConfluenceScore:
         raw -= 2
         penalties.append(f"Low volume {rel_vol:.1f}x (-2)")
 
+    # ── Key levels scoring ────────────────────────────────────────────────────
+    kl = state.key_levels
+    if kl is not None:
+        close = state.ohlc.close
+
+        # +2 EMA 9/21 crossover aligned with direction (momentum confirmed)
+        if kl.ema_9_above_21 is not None:
+            ema_aligned = (direction == "LONG" and kl.ema_9_above_21) or \
+                          (direction == "SHORT" and not kl.ema_9_above_21)
+            if ema_aligned:
+                raw += 2
+                factors.append("EMA 9/21 crossover aligned (+2)")
+            else:
+                raw -= 1
+                penalties.append("EMA 9/21 crossover against direction (-1)")
+
+        # +1 EMA 55 bias aligned (price on right side of trend filter)
+        if kl.price_above_ema_55 is not None:
+            ema55_aligned = (direction == "LONG" and kl.price_above_ema_55) or \
+                            (direction == "SHORT" and not kl.price_above_ema_55)
+            if ema55_aligned:
+                raw += 1
+                factors.append("EMA 55 bias aligned (+1)")
+
+        # +1 EMA 200 macro bias aligned (strongest trend confirmation)
+        if kl.price_above_ema_200 is not None:
+            ema200_aligned = (direction == "LONG" and kl.price_above_ema_200) or \
+                             (direction == "SHORT" and not kl.price_above_ema_200)
+            if ema200_aligned:
+                raw += 1
+                factors.append("EMA 200 macro bias aligned (+1)")
+
+        # +1 Entry near HOD/LOD — price testing a meaningful intraday level
+        if direction == "LONG" and kl.lod is not None and kl.near_level(close, kl.lod):
+            raw += 1
+            factors.append(f"Near LOD {kl.lod:.2f} — strong entry level (+1)")
+        if direction == "SHORT" and kl.hod is not None and kl.near_level(close, kl.hod):
+            raw += 1
+            factors.append(f"Near HOD {kl.hod:.2f} — strong entry level (+1)")
+
+        # +1 Target aligns with PDH/PDL or PWH/PWL (natural magnet)
+        pdh = state.previous_day.high
+        pdl = state.previous_day.low
+        pwh = kl.prev_week_high
+        pwl = kl.prev_week_low
+        target = setup.target
+        target_magnets = []
+        if direction == "LONG":
+            for level, label in ((pdh, "PDH"), (pwh, "PWH")):
+                if level is not None and kl.near_level(target, level, ticks=20):
+                    target_magnets.append(label)
+        else:
+            for level, label in ((pdl, "PDL"), (pwl, "PWL")):
+                if level is not None and kl.near_level(target, level, ticks=20):
+                    target_magnets.append(label)
+        if target_magnets:
+            raw += 1
+            factors.append(f"Target near {'/'.join(target_magnets)} (+1)")
+
     score = max(0, min(10, raw))
     return ConfluenceScore(score=score, grade=_grade(score), factors=factors, penalties=penalties)

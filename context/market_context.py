@@ -166,6 +166,30 @@ class SupplyDemandData:
 
 
 @dataclass
+class KeyLevels:
+    """Intraday and multi-day price levels used for entries, targets, and bias."""
+    # Intraday (running, resets each session)
+    hod: Optional[float] = None          # High of Day — resistance / short target
+    lod: Optional[float] = None          # Low of Day  — support  / long target
+    # Previous week (static, from Pine weekly security call)
+    prev_week_high: Optional[float] = None
+    prev_week_low: Optional[float] = None
+    # EMAs (values from Pine, calculated on chart timeframe)
+    ema_9: Optional[float] = None
+    ema_21: Optional[float] = None
+    ema_55: Optional[float] = None
+    ema_200: Optional[float] = None
+    # Derived flags (set by state_builder when values present)
+    ema_9_above_21: Optional[bool] = None   # 9/21 crossover — momentum direction
+    price_above_ema_55: Optional[bool] = None  # trend bias
+    price_above_ema_200: Optional[bool] = None  # macro bias
+
+    def near_level(self, price: float, level: float, ticks: int = 8, tick_size: float = 0.25) -> bool:
+        """True if price is within N ticks of a key level."""
+        return abs(price - level) <= ticks * tick_size
+
+
+@dataclass
 class MarketState:
     timestamp: datetime
     instrument: str
@@ -183,6 +207,7 @@ class MarketState:
     signa: Optional[SignaContext] = None
     icc: Optional[ICCContext] = None
     sd: Optional[SupplyDemandData] = None
+    key_levels: Optional[KeyLevels] = None
     notes: Optional[str] = None
     raw: dict = None  # Original dict for reference
 
