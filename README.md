@@ -24,10 +24,14 @@ A local, paper-only autonomous trading system for a limited futures universe. De
 
 | Session | Active Hours (ET) |
 |---------|-------------------|
+| Asian | 19:00 - 03:00 |
 | London | 03:00 – 08:30 |
 | New York | 09:30 – 12:00 |
 
-**Asian session is disabled.** Trading outside allowed sessions = NO_TRADE.
+**Asian session is currently enabled for testing.** Disable it in
+`risk_rules.yaml` before NY-only paper trading if you do not want overnight
+signals using the daily trade budget. Trading outside allowed sessions =
+NO_TRADE.
 
 ---
 
@@ -111,6 +115,22 @@ orders.
 ```bash
 python -m webhook
 ```
+
+For local process supervision:
+
+```bash
+venv/bin/supervisord -c supervisord.conf
+venv/bin/supervisorctl -c supervisord.conf status
+```
+
+For Railway-style deployment, the included `Procfile` starts:
+
+```bash
+HOST=0.0.0.0 python -m webhook
+```
+
+The server respects the platform `PORT` environment variable and defaults to
+`8000` locally.
 
 TradingView needs a public HTTPS URL, so expose local port `8000` with a tunnel
 and paste the resulting URL plus `/webhook/alert` into TradingView's webhook
