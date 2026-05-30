@@ -63,3 +63,37 @@ class AlertPayload(BaseModel):
     previous_bar_low: Optional[float] = None
     two_bars_back_high: Optional[float] = None
     two_bars_back_low: Optional[float] = None
+
+    # ── Optional GEX / gamma context ────────────────────────────────────────
+    gex_flip: Optional[float] = None
+    call_wall: Optional[float] = None
+    put_wall: Optional[float] = None
+    hvl: Optional[float] = None
+    max_pain: Optional[float] = None
+    ghost: Optional[float] = None
+    mid_upper: Optional[float] = None
+    mid_lower: Optional[float] = None
+    vol_trigger_up: Optional[float] = None
+    vol_trigger_down: Optional[float] = None
+    gex_regime: Optional[str] = None
+    delta_bias: Optional[str] = None
+
+    # ── Optional Signa context ──────────────────────────────────────────────
+    signa_grade: Optional[str] = None
+    signa_score: Optional[float] = None
+    signa_daily_direction: Optional[str] = None
+    signa_weekly_direction: Optional[str] = None
+
+    # ── Optional ICC context ────────────────────────────────────────────────
+    icc_phase: Optional[str] = None
+    icc_entry_signal: Optional[str] = None
+    icc_indication_type: Optional[str] = None
+    icc_indication_level: Optional[float] = None
+    icc_last_swing_high: Optional[float] = None
+    icc_last_swing_low: Optional[float] = None
+    icc_correction_high: Optional[float] = None
+    icc_correction_low: Optional[float] = None
+    icc_stop_loss: Optional[float] = None
+    icc_tp1: Optional[float] = None
+    icc_tp2: Optional[float] = None
+    icc_htf_phase: Optional[str] = None

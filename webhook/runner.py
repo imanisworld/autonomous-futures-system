@@ -70,6 +70,11 @@ def process_alert(
         "risk": None,
         "fill": None,
         "context": _market_state_context(state),
+        "regime": None,
+        "gex_status": None,
+        "signa_status": None,
+        "failed_gates": [],
+        "confidence_score": None,
     }
 
     # ── Step 1: Resolve any open position with this bar's OHLC ───────────────
@@ -122,6 +127,11 @@ def process_alert(
     # ── Step 3: Decision engine ───────────────────────────────────────────────
     decision = DecisionEngine(config=cfg).evaluate(state, daily_state)
     result["decision"] = decision.decision
+    result["regime"] = decision.regime
+    result["gex_status"] = decision.gex_status
+    result["signa_status"] = decision.signa_status
+    result["failed_gates"] = decision.failed_gates
+    result["confidence_score"] = decision.confidence_score
 
     if decision.decision != "TRADE" or decision.setup is None:
         journal_entry = decision.to_dict()
@@ -131,6 +141,7 @@ def process_alert(
 
     # ── Step 3b: Score confluence ─────────────────────────────────────────────
     confluence = _score_setup(state, decision.setup)
+    result["confidence_score"] = confluence.score
     result["confluence"] = {
         "score": confluence.score,
         "grade": confluence.grade,
@@ -246,5 +257,39 @@ def _market_state_context(state) -> dict:
             "strat_sequence": state.strat.strat_sequence if state.strat else None,
             "strat_trigger": state.strat.strat_trigger if state.strat else None,
             "strat_direction": state.strat.strat_direction if state.strat else None,
+        },
+        "gex": {
+            "gex_flip": state.gex.gex_flip if state.gex else None,
+            "call_wall": state.gex.call_wall if state.gex else None,
+            "put_wall": state.gex.put_wall if state.gex else None,
+            "hvl": state.gex.hvl if state.gex else None,
+            "max_pain": state.gex.max_pain if state.gex else None,
+            "ghost": state.gex.ghost if state.gex else None,
+            "mid_upper": state.gex.mid_upper if state.gex else None,
+            "mid_lower": state.gex.mid_lower if state.gex else None,
+            "vol_trigger_up": state.gex.vol_trigger_up if state.gex else None,
+            "vol_trigger_down": state.gex.vol_trigger_down if state.gex else None,
+            "gex_regime": state.gex.gex_regime if state.gex else None,
+            "delta_bias": state.gex.delta_bias if state.gex else None,
+        },
+        "signa": {
+            "grade": state.signa.grade if state.signa else None,
+            "score": state.signa.score if state.signa else None,
+            "daily_direction": state.signa.daily_direction if state.signa else None,
+            "weekly_direction": state.signa.weekly_direction if state.signa else None,
+        },
+        "icc": {
+            "phase": state.icc.phase if state.icc else None,
+            "entry_signal": state.icc.entry_signal if state.icc else None,
+            "indication_type": state.icc.indication_type if state.icc else None,
+            "indication_level": state.icc.indication_level if state.icc else None,
+            "last_swing_high": state.icc.last_swing_high if state.icc else None,
+            "last_swing_low": state.icc.last_swing_low if state.icc else None,
+            "correction_high": state.icc.correction_high if state.icc else None,
+            "correction_low": state.icc.correction_low if state.icc else None,
+            "stop_loss": state.icc.stop_loss if state.icc else None,
+            "tp1": state.icc.tp1 if state.icc else None,
+            "tp2": state.icc.tp2 if state.icc else None,
+            "htf_phase": state.icc.htf_phase if state.icc else None,
         },
     }

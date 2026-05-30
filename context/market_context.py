@@ -92,6 +92,46 @@ class TrendData:
 
 
 @dataclass
+class GEXContext:
+    gex_flip: Optional[float] = None
+    call_wall: Optional[float] = None
+    put_wall: Optional[float] = None
+    hvl: Optional[float] = None
+    max_pain: Optional[float] = None
+    ghost: Optional[float] = None
+    mid_upper: Optional[float] = None
+    mid_lower: Optional[float] = None
+    vol_trigger_up: Optional[float] = None
+    vol_trigger_down: Optional[float] = None
+    gex_regime: Optional[str] = None
+    delta_bias: Optional[str] = None
+
+
+@dataclass
+class SignaContext:
+    grade: Optional[str] = None
+    score: Optional[float] = None
+    daily_direction: Optional[str] = None
+    weekly_direction: Optional[str] = None
+
+
+@dataclass
+class ICCContext:
+    phase: Optional[str] = None
+    entry_signal: Optional[str] = None
+    indication_type: Optional[str] = None
+    indication_level: Optional[float] = None
+    last_swing_high: Optional[float] = None
+    last_swing_low: Optional[float] = None
+    correction_high: Optional[float] = None
+    correction_low: Optional[float] = None
+    stop_loss: Optional[float] = None
+    tp1: Optional[float] = None
+    tp2: Optional[float] = None
+    htf_phase: Optional[str] = None
+
+
+@dataclass
 class MarketState:
     timestamp: datetime
     instrument: str
@@ -105,6 +145,9 @@ class MarketState:
     market_condition: Optional[str] = None
     trend: Optional[TrendData] = None
     strat: Optional[StratContext] = None
+    gex: Optional[GEXContext] = None
+    signa: Optional[SignaContext] = None
+    icc: Optional[ICCContext] = None
     notes: Optional[str] = None
     raw: dict = None  # Original dict for reference
 

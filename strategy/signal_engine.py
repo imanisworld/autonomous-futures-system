@@ -20,6 +20,9 @@ from zoneinfo import ZoneInfo
 from config.settings import SystemConfig, load_config
 from context.market_context import MarketState
 from risk.risk_engine import RiskEngine, TradeSetup, DailyState
+from strategy.gex_gate import evaluate_gex
+from strategy.regime_classifier import classify_regime
+from strategy.signa_gate import evaluate_signa
 
 
 # ─── Output Types ─────────────────────────────────────────────────────────────
@@ -44,6 +47,11 @@ class DecisionOutput:
     reason: str
     market_condition: Optional[str] = None
     setup: Optional[SetupDetail] = None
+    regime: Optional[str] = None
+    gex_status: Optional[str] = None
+    signa_status: Optional[str] = None
+    failed_gates: list[str] = field(default_factory=list)
+    confidence_score: Optional[int] = None
 
     def to_dict(self) -> dict:
         d = {
@@ -54,6 +62,11 @@ class DecisionOutput:
             "reason": self.reason,
             "market_condition": self.market_condition,
             "setup": None,
+            "regime": self.regime,
+            "gex_status": self.gex_status,
+            "signa_status": self.signa_status,
+            "failed_gates": self.failed_gates,
+            "confidence_score": self.confidence_score,
         }
         if self.setup:
             d["setup"] = {
@@ -170,6 +183,62 @@ class DecisionEngine:
                 decision="NO_TRADE",
                 market_condition=condition,
                 reason=f"Market condition is {condition}. Avoiding dead/choppy markets.",
+                failed_gates=["MARKET_CONDITION_NOT_TRADABLE"],
+                confidence_score=0,
+            )
+
+        gate_direction = self._infer_gate_direction(state)
+        failed_gates: list[str] = []
+
+        regime = classify_regime(state, daily_state)
+        if regime.regime == "NO_TRADE":
+            failed_gate = regime.failed_gate or "REGIME_NO_TRADE"
+            return DecisionOutput(
+                timestamp=now,
+                instrument=state.instrument,
+                session=state.session,
+                decision="NO_TRADE",
+                market_condition=condition,
+                reason=f"Regime gate rejected: {failed_gate}",
+                regime=regime.regime,
+                failed_gates=[failed_gate],
+                confidence_score=0,
+            )
+        if regime.regime == "RESTRICTED" and regime.failed_gate:
+            failed_gates.append(regime.failed_gate)
+
+        gex_gate = evaluate_gex(state, gate_direction)
+        if gex_gate.status == "RED_LIGHT":
+            failed_gate = gex_gate.failed_gate or "GEX_RED_LIGHT"
+            return DecisionOutput(
+                timestamp=now,
+                instrument=state.instrument,
+                session=state.session,
+                decision="NO_TRADE",
+                market_condition=condition,
+                reason=f"GEX gate rejected: {failed_gate}",
+                regime=regime.regime,
+                gex_status=gex_gate.status,
+                signa_status=None,
+                failed_gates=failed_gates + [failed_gate],
+                confidence_score=0,
+            )
+
+        signa_gate = evaluate_signa(state, gate_direction)
+        if signa_gate.status == "FAIL":
+            failed_gate = signa_gate.failed_gate or "SIGNA_FAIL"
+            return DecisionOutput(
+                timestamp=now,
+                instrument=state.instrument,
+                session=state.session,
+                decision="NO_TRADE",
+                market_condition=condition,
+                reason=f"Signa gate rejected: {failed_gate}",
+                regime=regime.regime,
+                gex_status=gex_gate.status,
+                signa_status=signa_gate.status,
+                failed_gates=failed_gates + [failed_gate],
+                confidence_score=0,
             )
 
         # ── Strategy evaluation ───────────────────────────────────────────────
@@ -183,6 +252,11 @@ class DecisionEngine:
                 decision="NO_TRADE",
                 market_condition=condition,
                 reason="No qualifying setup found in current market structure.",
+                regime=regime.regime,
+                gex_status=gex_gate.status,
+                signa_status=signa_gate.status,
+                failed_gates=failed_gates,
+                confidence_score=0,
             )
         setup = self._apply_strat_confirmation(setup, state)
         if setup is None:
@@ -193,6 +267,11 @@ class DecisionEngine:
                 decision="NO_TRADE",
                 market_condition=condition,
                 reason="Strat bar sequence contradicts setup direction.",
+                regime=regime.regime,
+                gex_status=gex_gate.status,
+                signa_status=signa_gate.status,
+                failed_gates=failed_gates + ["STRAT_DIRECTION_CONFLICT"],
+                confidence_score=0,
             )
 
         # ── R:R validation ────────────────────────────────────────────────────
@@ -207,6 +286,11 @@ class DecisionEngine:
                     f"Setup found ({setup.strategy}) but R:R {setup.rr_ratio:.2f} "
                     f"is below minimum {self.config.min_rr_ratio:.2f}."
                 ),
+                regime=regime.regime,
+                gex_status=gex_gate.status,
+                signa_status=signa_gate.status,
+                failed_gates=failed_gates + ["RR_BELOW_MINIMUM"],
+                confidence_score=0,
             )
 
         # ── TRADE: mark ORB break as played so continuation strategies are
@@ -238,7 +322,25 @@ class DecisionEngine:
                 f"R:R={setup.rr_ratio:.2f}"
             ),
             setup=setup,
+            regime=regime.regime,
+            gex_status=gex_gate.status,
+            signa_status=signa_gate.status,
+            failed_gates=failed_gates,
+            confidence_score=None,
         )
+
+    def _infer_gate_direction(self, state: MarketState) -> Optional[str]:
+        if state.strat and state.strat.strat_direction in ("LONG", "SHORT"):
+            return state.strat.strat_direction
+        if state.trend and state.trend.direction == "UP" and state.vwap.price_vs_vwap == "above":
+            return "LONG"
+        if state.trend and state.trend.direction == "DOWN" and state.vwap.price_vs_vwap == "below":
+            return "SHORT"
+        if state.orb.status in ("above", "reclaimed_high"):
+            return "LONG"
+        if state.orb.status in ("below", "rejected_high", "rejected_low"):
+            return "SHORT"
+        return None
 
     def _apply_strat_confirmation(
         self, setup: SetupDetail, state: MarketState
