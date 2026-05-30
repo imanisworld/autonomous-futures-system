@@ -221,6 +221,10 @@ def test_war_room_discord_payload_uses_rich_confirmed_template():
             why="Demand zone reclaim. Volume expanding. GEX flip at 950 cleared.",
             edge="Multi-timeframe alignment confirmed. All gates passed.",
             risk="Size for your account. Exit at stop - no exceptions.",
+            strat_combo=["2U", "1", "2U"],
+            timeframe="15m",
+            ftfc=True,
+            ftfc_direction="UP",
         )
     )
 
@@ -229,6 +233,9 @@ def test_war_room_discord_payload_uses_rich_confirmed_template():
 
     assert embed["title"] == "▲ NVDA CALL - A+ CONFIRMED ⭐ GOLDEN SETUP"
     assert "bullish structure" in embed["description"]
+    assert field_map["Strat Combo"] == "2U-1-2U"
+    assert field_map["Timeframe"] == "15m"
+    assert field_map["FTFC"] == "Yes (UP)"
     assert field_map["Watch Contract"] == "NVDA $950 Call - Jun 20"
     assert field_map["Stop Level"] == "$940.00"
     assert field_map["Target 1"] == "$965.00"
@@ -261,6 +268,9 @@ def test_webhook_context_passes_rich_alert_fields_to_storage_status(tmp_path):
             target_1=965,
             why="Demand reclaim",
             edge="All gates passed",
+            strat_combo="3-1-2U",
+            tf="30m",
+            ftfc="UP",
         )
         webhook = client.post("/webhook/alert", json=body)
         assert webhook.status_code == 200
@@ -269,3 +279,21 @@ def test_webhook_context_passes_rich_alert_fields_to_storage_status(tmp_path):
     latest = status["latest"][0]
     assert latest["ticker"] == "NVDA"
     assert latest["score"] >= 7
+
+
+def test_strat_context_fields_support_aliases():
+    result = score_setup(
+        setup_payload(
+            combo="1-2-2 REV",
+            tf_stack=["15m", "30m", "1h"],
+            full_timeframe_continuity=True,
+            ftfc_direction="UP",
+        )
+    )
+
+    embed = build_discord_payload(result)["embeds"][0]
+    field_map = {field["name"]: field["value"] for field in embed["fields"]}
+
+    assert field_map["Strat Combo"] == "1-2-2 REV"
+    assert field_map["Timeframe"] == "15m / 30m / 1h"
+    assert field_map["FTFC"] == "Yes (UP)"

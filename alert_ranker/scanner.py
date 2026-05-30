@@ -122,6 +122,16 @@ class OptionsScanner:
             "risk",
             "summary",
             "thesis",
+            "strat_combo",
+            "combo",
+            "strat_sequence",
+            "timeframe",
+            "timeframes",
+            "tf",
+            "tf_stack",
+            "ftfc",
+            "ftfc_direction",
+            "full_timeframe_continuity",
         ):
             if key in context:
                 data[key] = context[key]
