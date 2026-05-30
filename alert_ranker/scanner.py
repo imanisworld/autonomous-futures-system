@@ -102,6 +102,29 @@ class OptionsScanner:
             "tastytrade_error": snapshot.error,
             "tastytrade_raw": snapshot.raw,
         }
+        for key in (
+            "alert_state",
+            "status",
+            "contract",
+            "strike",
+            "expiry",
+            "expiration",
+            "stop",
+            "stop_level",
+            "target",
+            "target_1",
+            "target_2",
+            "why",
+            "why_forming",
+            "edge",
+            "flow_note",
+            "gex_note",
+            "risk",
+            "summary",
+            "thesis",
+        ):
+            if key in context:
+                data[key] = context[key]
         if data["volume_ratio"] is None and data["volume"] and data["average_volume"]:
             try:
                 data["volume_ratio"] = float(data["volume"]) / float(data["average_volume"])

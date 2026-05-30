@@ -77,24 +77,140 @@ def build_discord_payload(result: ScoreResult) -> dict[str, Any]:
     if isinstance(iv_rank, (int, float)):
         iv_label = "cheap" if iv_rank < 30 else "neutral" if iv_rank <= 50 else "expensive"
     direction = "LONG (calls)" if result.direction == "LONG" else "SHORT (puts)"
+    side = "CALL" if result.direction == "LONG" else "PUT"
+    state = _alert_state(result)
+    color = 3066993 if result.direction == "LONG" else 15158332
+    fields = [
+        {"name": "Direction", "value": direction, "inline": True},
+        {"name": "Confidence", "value": f"{result.score * 10}/100", "inline": True},
+        {"name": "Pattern", "value": result.pattern or "N/A", "inline": True},
+        {"name": "Watch Contract", "value": _contract_text(result, side), "inline": True},
+        {"name": "Spot Price", "value": _money_text(raw.get("price")), "inline": True},
+        {"name": "Stop Level", "value": _money_text(raw.get("stop") or raw.get("stop_level")), "inline": True},
+        {"name": "Target 1", "value": _money_text(raw.get("target_1") or raw.get("target")), "inline": True},
+        {"name": "Target 2", "value": _money_text(raw.get("target_2")), "inline": True},
+        {"name": "Volume", "value": _ratio_text(volume_ratio), "inline": True},
+        {"name": "IV Rank", "value": _iv_text(iv_rank, iv_label), "inline": True},
+        {"name": "VWAP", "value": _pass_fail(result.components.get("vwap")), "inline": True},
+        {"name": "Trend", "value": _pass_fail(result.components.get("trend")), "inline": True},
+        {"name": "Why", "value": _why_text(result, session), "inline": False},
+        {"name": "Edge", "value": _edge_text(result), "inline": False},
+        {"name": "Risk", "value": _risk_text(result), "inline": False},
+    ]
     return {
         "embeds": [
             {
-                "title": f"\U0001f7e2 A+ SETUP \u2014 {result.ticker} | Score: {result.score}/10",
-                "color": 3066993,
-                "fields": [
-                    {"name": "Direction", "value": direction, "inline": True},
-                    {"name": "Pattern", "value": result.pattern or "N/A", "inline": True},
-                    {"name": "VWAP", "value": "pass" if result.components.get("vwap") else "fail", "inline": True},
-                    {"name": "Trend", "value": "pass" if result.components.get("trend") else "fail", "inline": True},
-                    {"name": "Volume", "value": _ratio_text(volume_ratio), "inline": True},
-                    {"name": "IV Rank", "value": _iv_text(iv_rank, iv_label), "inline": True},
-                    {"name": "Session", "value": session, "inline": True},
-                ],
-                "footer": {"text": "Advisory only \u2014 not financial advice"},
+                "title": _alert_title(result, side, state),
+                "description": _alert_description(result, side, state),
+                "color": color,
+                "fields": [field for field in fields if field["value"] != "N/A"],
+                "footer": {
+                    "text": (
+                        "Trading Zone War Room - "
+                        f"{session} - Advisory only, independent research required"
+                    )
+                },
             }
         ]
     }
+
+
+def _alert_state(result: ScoreResult) -> str:
+    raw_state = str(result.raw.get("status") or result.raw.get("alert_state") or "").lower()
+    if raw_state in {"forming", "developing", "on_deck"}:
+        return "forming"
+    if result.score >= 9:
+        return "golden"
+    return "confirmed"
+
+
+def _alert_title(result: ScoreResult, side: str, state: str) -> str:
+    prefix = "▲"
+    if state == "forming":
+        return f"{prefix} {result.ticker} {side} - SETUP FORMING ⭐"
+    if state == "golden":
+        return f"{prefix} {result.ticker} {side} - A+ CONFIRMED ⭐ GOLDEN SETUP"
+    return f"{prefix} {result.ticker} {side} - A+ SETUP CONFIRMED"
+
+
+def _alert_description(result: ScoreResult, side: str, state: str) -> str:
+    raw = result.raw
+    thesis = raw.get("thesis") or raw.get("summary")
+    if thesis:
+        return str(thesis)
+    if state == "forming":
+        return (
+            f"**{result.ticker} {side}** structure is building. "
+            "All gates not yet passed. Monitor closely - do not enter early."
+        )
+    return (
+        f"**{result.ticker} is showing "
+        f"{'bullish' if result.direction == 'LONG' else 'bearish'} structure.** "
+        f"All gates passed. System confidence: {result.score * 10}/100."
+    )
+
+
+def _contract_text(result: ScoreResult, side: str) -> str:
+    raw = result.raw
+    contract = raw.get("contract")
+    if contract:
+        return str(contract)
+    strike = raw.get("strike")
+    expiry = raw.get("expiry") or raw.get("expiration")
+    if strike and expiry:
+        return f"{result.ticker} ${strike} {side.title()} - {expiry}"
+    if strike:
+        return f"{result.ticker} ${strike} {side.title()}"
+    return "N/A"
+
+
+def _why_text(result: ScoreResult, session: str) -> str:
+    raw = result.raw
+    why = raw.get("why") or raw.get("why_forming")
+    if why:
+        return str(why)
+    reasons = []
+    if result.pattern and result.pattern.upper() != "N/A":
+        reasons.append(f"{result.pattern} confirmed")
+    if result.components.get("vwap"):
+        reasons.append("VWAP aligned")
+    if result.components.get("trend"):
+        reasons.append("20 EMA trend aligned")
+    if result.components.get("volume"):
+        reasons.append("volume expanding")
+    if result.components.get("session"):
+        reasons.append(f"{session} window")
+    return "; ".join(reasons) if reasons else "Setup passed the scanner gates."
+
+
+def _edge_text(result: ScoreResult) -> str:
+    raw = result.raw
+    edge = raw.get("edge") or raw.get("flow_note") or raw.get("gex_note")
+    if edge:
+        return str(edge)
+    gates = sum(1 for value in result.components.values() if value > 0)
+    return f"Multi-factor alignment confirmed. {gates} positive gates passed."
+
+
+def _risk_text(result: ScoreResult) -> str:
+    raw = result.raw
+    risk = raw.get("risk")
+    if risk:
+        return str(risk)
+    if _alert_state(result) == "forming":
+        return "Setup is developing - NOT confirmed. Wait for the A+ signal before entering."
+    return "Size for your account. Exit at stop - no exceptions. Targets 1 and 2 are the plan."
+
+
+def _pass_fail(value: Any) -> str:
+    return "pass" if value else "fail"
+
+
+def _money_text(value: Any) -> str:
+    try:
+        return f"${float(value):.2f}"
+    except (TypeError, ValueError):
+        return "N/A"
 
 
 def _ratio_text(value: Any) -> str:

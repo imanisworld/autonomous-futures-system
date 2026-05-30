@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 
 from alert_ranker.app import create_app
 from alert_ranker.config import ScannerConfig
-from alert_ranker.discord import DiscordAlerter
+from alert_ranker.discord import DiscordAlerter, build_discord_payload
 from alert_ranker.scanner import OptionsScanner
 from alert_ranker.scorer import score_setup
 from alert_ranker.storage import ScanStorage
@@ -206,3 +206,66 @@ def test_alert_ranker_does_not_import_futures_execution_or_risk_modules():
     source = inspect.getsource(app_module) + inspect.getsource(scanner_module)
     forbidden = ("execution.", "paper_broker", "broker_interface", "risk.", "risk_engine")
     assert not any(name in source for name in forbidden)
+
+
+def test_war_room_discord_payload_uses_rich_confirmed_template():
+    result = score_setup(
+        setup_payload(
+            ticker="NVDA",
+            contract="NVDA $950 Call - Jun 20",
+            price=950.0,
+            strike=950,
+            stop=940,
+            target_1=965,
+            target_2=975,
+            why="Demand zone reclaim. Volume expanding. GEX flip at 950 cleared.",
+            edge="Multi-timeframe alignment confirmed. All gates passed.",
+            risk="Size for your account. Exit at stop - no exceptions.",
+        )
+    )
+
+    embed = build_discord_payload(result)["embeds"][0]
+    field_map = {field["name"]: field["value"] for field in embed["fields"]}
+
+    assert embed["title"] == "▲ NVDA CALL - A+ CONFIRMED ⭐ GOLDEN SETUP"
+    assert "bullish structure" in embed["description"]
+    assert field_map["Watch Contract"] == "NVDA $950 Call - Jun 20"
+    assert field_map["Stop Level"] == "$940.00"
+    assert field_map["Target 1"] == "$965.00"
+    assert field_map["Target 2"] == "$975.00"
+    assert field_map["Why"] == "Demand zone reclaim. Volume expanding. GEX flip at 950 cleared."
+    assert field_map["Edge"] == "Multi-timeframe alignment confirmed. All gates passed."
+    assert field_map["Risk"] == "Size for your account. Exit at stop - no exceptions."
+
+
+def test_war_room_discord_payload_marks_forming_setup():
+    result = score_setup(setup_payload(ticker="QQQ", status="forming", strike=490, expiry="Jun 20"))
+
+    embed = build_discord_payload(result)["embeds"][0]
+    field_map = {field["name"]: field["value"] for field in embed["fields"]}
+
+    assert embed["title"] == "▲ QQQ CALL - SETUP FORMING ⭐"
+    assert "do not enter early" in embed["description"]
+    assert field_map["Risk"] == "Setup is developing - NOT confirmed. Wait for the A+ signal before entering."
+
+
+def test_webhook_context_passes_rich_alert_fields_to_storage_status(tmp_path):
+    cfg = scanner_config(tmp_path)
+    app = create_app(cfg)
+
+    with TestClient(app) as client:
+        body = setup_payload(
+            ticker="NVDA",
+            contract="NVDA $950 Call - Jun 20",
+            stop=940,
+            target_1=965,
+            why="Demand reclaim",
+            edge="All gates passed",
+        )
+        webhook = client.post("/webhook/alert", json=body)
+        assert webhook.status_code == 200
+        status = client.get("/status").json()
+
+    latest = status["latest"][0]
+    assert latest["ticker"] == "NVDA"
+    assert latest["score"] >= 7

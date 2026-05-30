@@ -27,8 +27,8 @@ sessions:
   allowed:
     - london      # 03:00–08:30 ET
     - new_york    # 09:30–12:00 ET
-  disabled:
-    - asian       # Permanently disabled
+    - asian       # 19:00–03:00 ET (overnight/testing — disable when done)
+  disabled: []
 
 session_hours_et:
   london:
@@ -37,6 +37,9 @@ session_hours_et:
   new_york:
     start: "09:30"
     end:   "12:00"
+  asian:
+    start: "19:00"
+    end:   "03:00"
 
 # ─── Daily Limits ────────────────────────────────────────────
 daily_limits:
