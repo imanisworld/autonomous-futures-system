@@ -97,3 +97,11 @@ class AlertPayload(BaseModel):
     icc_tp1: Optional[float] = None
     icc_tp2: Optional[float] = None
     icc_htf_phase: Optional[str] = None
+
+    # ── Supply & Demand zones (from LuxAlgo or equivalent indicator) ─────────
+    supply_top: Optional[float] = None
+    supply_bottom: Optional[float] = None
+    supply_wavg: Optional[float] = None
+    demand_top: Optional[float] = None
+    demand_bottom: Optional[float] = None
+    demand_wavg: Optional[float] = None

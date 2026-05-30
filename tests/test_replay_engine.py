@@ -351,18 +351,20 @@ class TestFullDayReplay2026_05_22:
         report = self._run(tmp_path)
         assert report.candles_processed == 13
 
-    def test_three_approved_trades(self, tmp_path):
+    def test_two_approved_trades(self, tmp_path):
+        # vwap_hold generated a 5-point target, correctly blocked by min_target_points rule
         report = self._run(tmp_path)
-        assert report.approved_trades == 3
+        assert report.approved_trades == 2
 
-    def test_one_win_two_losses(self, tmp_path):
+    def test_one_win_one_loss(self, tmp_path):
         report = self._run(tmp_path)
         assert report.wins == 1
-        assert report.losses == 2
+        assert report.losses == 1
 
-    def test_stopped_reason_max_trades_per_day(self, tmp_path):
+    def test_no_stopped_reason(self, tmp_path):
+        # Daily limit never hit — vwap_hold trades blocked by target_too_close, not daily cap
         report = self._run(tmp_path)
-        assert report.stopped_reason == "max_trades_per_day"
+        assert report.stopped_reason is None
 
     def test_no_open_positions(self, tmp_path):
         report = self._run(tmp_path)
@@ -383,6 +385,7 @@ class TestFullDayReplay2026_05_22:
                 strategies_traded.append(entry.get("setup", {}).get("strategy"))
         assert "orb_reclaim" in strategies_traded
         assert "strat_212" in strategies_traded
+        # vwap_hold appears in journal as TRADE but is RISK_REJECTED (target_too_close)
         assert "vwap_hold" in strategies_traded
 
     def test_strat_fields_loaded_from_candle(self, tmp_path):

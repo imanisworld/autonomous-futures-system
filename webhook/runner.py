@@ -163,6 +163,7 @@ def process_alert(
         instrument=state.instrument,
         session=state.session,
         notes=decision.setup.notes,
+        entry_time=state.timestamp,
     )
     risk_result = RiskEngine(config=cfg).validate(trade_setup, daily_state)
     risk_dict = {

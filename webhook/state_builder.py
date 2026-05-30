@@ -27,6 +27,7 @@ from context.market_context import (
     PreviousDayData,
     PriceData,
     SignaContext,
+    SupplyDemandData,
     TrendData,
     VWAPData,
     VolumeData,
@@ -260,6 +261,17 @@ def build_market_state(payload: AlertPayload) -> MarketState:
             tp2=payload.icc_tp2,
             htf_phase=payload.icc_htf_phase,
         ),
+        sd=SupplyDemandData(
+            supply_top=payload.supply_top,
+            supply_bottom=payload.supply_bottom,
+            supply_wavg=payload.supply_wavg,
+            demand_top=payload.demand_top,
+            demand_bottom=payload.demand_bottom,
+            demand_wavg=payload.demand_wavg,
+        ) if any(v is not None for v in (
+            payload.supply_top, payload.supply_bottom,
+            payload.demand_top, payload.demand_bottom,
+        )) else None,
         raw=None,
     )
 

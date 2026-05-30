@@ -132,6 +132,40 @@ class ICCContext:
 
 
 @dataclass
+class SupplyDemandData:
+    supply_top: Optional[float] = None
+    supply_bottom: Optional[float] = None
+    supply_wavg: Optional[float] = None
+    demand_top: Optional[float] = None
+    demand_bottom: Optional[float] = None
+    demand_wavg: Optional[float] = None
+
+    def price_in_supply(self, price: float) -> bool:
+        if self.supply_bottom is None or self.supply_top is None:
+            return False
+        return self.supply_bottom <= price <= self.supply_top
+
+    def price_in_demand(self, price: float) -> bool:
+        if self.demand_bottom is None or self.demand_top is None:
+            return False
+        return self.demand_bottom <= price <= self.demand_top
+
+    def price_at_demand(self, price: float) -> bool:
+        """True if price is inside or within 2 ticks of the demand zone."""
+        if self.demand_bottom is None or self.demand_top is None:
+            return False
+        margin = (self.demand_top - self.demand_bottom) * 0.2
+        return (self.demand_bottom - margin) <= price <= (self.demand_top + margin)
+
+    def price_at_supply(self, price: float) -> bool:
+        """True if price is inside or within 2 ticks of the supply zone."""
+        if self.supply_bottom is None or self.supply_top is None:
+            return False
+        margin = (self.supply_top - self.supply_bottom) * 0.2
+        return (self.supply_bottom - margin) <= price <= (self.supply_top + margin)
+
+
+@dataclass
 class MarketState:
     timestamp: datetime
     instrument: str
@@ -148,6 +182,7 @@ class MarketState:
     gex: Optional[GEXContext] = None
     signa: Optional[SignaContext] = None
     icc: Optional[ICCContext] = None
+    sd: Optional[SupplyDemandData] = None
     notes: Optional[str] = None
     raw: dict = None  # Original dict for reference
 

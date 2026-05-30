@@ -80,6 +80,10 @@ class SystemConfig:
 
     # Per-session trade limits (optional — no limit applied if session not present)
     per_session_limits: dict = field(default_factory=dict)
+    # Time-of-day cutoffs per session (HH:MM ET strings)
+    session_cutoffs: dict = field(default_factory=dict)
+    # Minimum target distance in instrument points
+    min_target_points: dict = field(default_factory=dict)
 
     # Future broker/capital planning (inactive while live trading is blocked)
     broker_priority: List[str] = field(default_factory=lambda: ["paper", "tradovate_sim", "ibkr_paper"])
@@ -166,6 +170,8 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         max_trades_per_day=daily.get("max_trades_per_day", 3),
         max_consecutive_losses=daily.get("max_consecutive_losses", 2),
         per_session_limits=daily.get("per_session_limits", {}),
+        session_cutoffs=daily.get("session_cutoffs_et", {}),
+        min_target_points=daily.get("min_target_points", {}),
 
         max_open_positions=position.get("max_open_positions", 1),
         averaging_down_allowed=position.get("averaging_down", False),

@@ -11,7 +11,11 @@ Returns RiskResult(APPROVED) or RiskResult(REJECTED, failed_rule, reason).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Dict, Optional
+from zoneinfo import ZoneInfo
+
+_ET = ZoneInfo("America/New_York")
 
 from config.settings import SystemConfig, load_config, LiveTradingBlockedError
 
@@ -47,6 +51,7 @@ class TradeSetup:
     session: str
     contracts: int = 1
     notes: Optional[str] = None
+    entry_time: Optional[datetime] = None  # UTC; used for session cutoff check
 
 
 @dataclass
@@ -92,12 +97,14 @@ class RiskEngine:
             self._check_session,
             self._check_daily_trade_limit,
             self._check_per_session_trade_limit,
+            self._check_session_cutoff,
             self._check_consecutive_losses,
             self._check_no_open_position,
             self._check_bracket_completeness,
             self._check_direction,
             self._check_entry_stop_target_distinct,  # structural check before computed R:R
             self._check_rr_ratio,
+            self._check_min_target_distance,
         ]
 
         for check in checks:
@@ -193,6 +200,52 @@ class RiskEngine:
                 reason=(
                     f"Session trade limit reached for '{setup.session}': "
                     f"{count} trades (max {limit})"
+                ),
+            )
+        return None
+
+    def _check_session_cutoff(
+        self, setup: TradeSetup, daily_state: DailyState
+    ) -> Optional[RiskResult]:
+        """No new entries after the session's time-of-day cutoff (ET)."""
+        cutoffs = self.config.session_cutoffs
+        if not cutoffs or setup.session not in cutoffs:
+            return None
+        if setup.entry_time is None:
+            return None
+        cutoff_str = cutoffs[setup.session]
+        cutoff_h, cutoff_m = map(int, cutoff_str.split(":"))
+        et = setup.entry_time.astimezone(_ET)
+        if et.hour > cutoff_h or (et.hour == cutoff_h and et.minute >= cutoff_m):
+            return RiskResult(
+                result="REJECTED",
+                failed_rule="session_cutoff",
+                reason=(
+                    f"Entry at {et.strftime('%H:%M')} ET is after "
+                    f"{cutoff_str} cutoff for '{setup.session}'"
+                ),
+            )
+        return None
+
+    def _check_min_target_distance(
+        self, setup: TradeSetup, daily_state: DailyState
+    ) -> Optional[RiskResult]:
+        """Target must be at least N points away from entry (T1 room check)."""
+        min_pts = self.config.min_target_points.get(setup.instrument, 0)
+        if min_pts <= 0:
+            return None
+        distance = (
+            setup.target - setup.entry
+            if setup.direction == "LONG"
+            else setup.entry - setup.target
+        )
+        if distance < min_pts:
+            return RiskResult(
+                result="REJECTED",
+                failed_rule="target_too_close",
+                reason=(
+                    f"Target is {distance:.1f} pts from entry — "
+                    f"minimum {min_pts} pts required for {setup.instrument}"
                 ),
             )
         return None
