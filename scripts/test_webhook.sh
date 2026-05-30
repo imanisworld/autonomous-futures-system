@@ -15,7 +15,7 @@ curl -s -X POST "$URL" \
   -H "Content-Type: application/json" \
   -d '{
     "ticker": "MNQ1!",
-    "timestamp": "2026-05-30T10:15:00+00:00",
+    "timestamp": "2026-05-30T14:45:00+00:00",
     "instrument": "MNQ",
     "open": 21180.0,
     "high": 21210.0,
