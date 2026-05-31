@@ -144,22 +144,38 @@ class PaperBroker(BrokerInterface):
         target_hit = False
         stop_hit = False
 
+        breakeven_hit = False
+
         if pos.direction == "LONG":
+            initial_risk = pos.entry_price - pos.stop
+            one_r = pos.entry_price + initial_risk if initial_risk > 0 else None
             target_hit = next_bar.high >= pos.target
-            stop_hit = next_bar.low <= pos.stop
+            breakeven_hit = one_r is not None and next_bar.high >= one_r
+            active_stop = pos.entry_price if breakeven_hit else pos.stop
+            breakeven_stop_active = active_stop == pos.entry_price
+            stop_hit = next_bar.low <= active_stop
         elif pos.direction == "SHORT":
+            initial_risk = pos.stop - pos.entry_price
+            one_r = pos.entry_price - initial_risk if initial_risk > 0 else None
             target_hit = next_bar.low <= pos.target
-            stop_hit = next_bar.high >= pos.stop
+            breakeven_hit = one_r is not None and next_bar.low <= one_r
+            active_stop = pos.entry_price if breakeven_hit else pos.stop
+            breakeven_stop_active = active_stop == pos.entry_price
+            stop_hit = next_bar.high >= active_stop
+        else:
+            return None
 
         if target_hit:
             exit_price = pos.target
             exit_reason = "TARGET_HIT"
             result = "WIN"
         elif stop_hit:
-            exit_price = pos.stop
-            exit_reason = "STOP_HIT"
-            result = "LOSS"
+            exit_price = active_stop
+            exit_reason = "BREAKEVEN_STOP" if breakeven_stop_active else "STOP_HIT"
+            result = "BREAKEVEN" if breakeven_stop_active else "LOSS"
         else:
+            if breakeven_hit:
+                pos.stop = pos.entry_price
             # Position still open — no resolution yet
             return None
 

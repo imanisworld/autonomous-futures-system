@@ -38,5 +38,18 @@
   "two_bars_back_type": "two_up",
   "strat_sequence": "strat_212",
   "strat_trigger": "continuation",
-  "strat_direction": "LONG"
+  "strat_direction": "LONG",
+  "daily_bar_type": "two_up",
+  "daily_direction": "UP",
+  "four_hour_bar_type": "two_up",
+  "four_hour_direction": "UP",
+  "one_hour_bar_type": "inside_bar",
+  "one_hour_direction": "NEUTRAL",
+  "ftfc_direction": "UP",
+  "ftfc_aligned": true,
+
+  "supply_top": null,
+  "supply_bottom": null,
+  "demand_top": null,
+  "demand_bottom": null
 }

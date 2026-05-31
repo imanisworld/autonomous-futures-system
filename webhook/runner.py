@@ -128,7 +128,7 @@ def process_alert(
                 daily_state.has_open_position = False
                 if fill.result == "LOSS":
                     daily_state.consecutive_losses += 1
-                elif fill.result == "WIN":
+                elif fill.result in ("WIN", "BREAKEVEN"):
                     daily_state.consecutive_losses = 0
 
     # ── Step 2: Check daily limits before evaluating a new signal ────────────

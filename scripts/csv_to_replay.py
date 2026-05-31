@@ -12,6 +12,7 @@ Usage:
 
 from __future__ import annotations
 
+import bisect
 import csv
 import json
 import sys
@@ -142,6 +143,86 @@ def load_csv(path: Path) -> list[dict]:
     return rows
 
 
+def load_htf_context(path: Path, label: str) -> list[dict]:
+    """Load daily/4H Strat context indexed by bar start timestamp."""
+    rows = load_csv(path)
+    bars: list[dict] = []
+    previous = None
+    for row in rows:
+        ts, dt = parse_time(row["time"])
+        bar = {
+            "ts": ts,
+            "timestamp": dt.isoformat(),
+            "open": float(row["open"]),
+            "high": float(row["high"]),
+            "low": float(row["low"]),
+            "close": float(row["close"]),
+        }
+        bar_type = classify_htf_bar(bar, previous)
+        bar["bar_type"] = bar_type
+        bar["direction"] = direction_from_bar(bar_type, bar)
+        bar["label"] = label
+        bars.append(bar)
+        previous = bar
+    return bars
+
+
+def classify_htf_bar(bar: dict, previous: dict | None) -> str | None:
+    if previous is None:
+        return None
+    broke_high = bar["high"] > previous["high"]
+    broke_low = bar["low"] < previous["low"]
+    if not broke_high and not broke_low:
+        return "1"
+    if broke_high and broke_low:
+        return "3"
+    return "2U" if broke_high else "2D"
+
+
+def direction_from_bar(bar_type: str | None, bar: dict) -> str | None:
+    if bar_type == "2U":
+        return "UP"
+    if bar_type == "2D":
+        return "DOWN"
+    if bar_type == "3":
+        return "UP" if bar["close"] >= bar["open"] else "DOWN"
+    if bar_type == "1":
+        return "NEUTRAL"
+    return None
+
+
+def htf_at(bars: list[dict], ts: int) -> dict | None:
+    if not bars:
+        return None
+    timestamps = [bar["ts"] for bar in bars]
+    idx = bisect.bisect_right(timestamps, ts) - 1
+    if idx < 0:
+        return None
+    return bars[idx]
+
+
+def build_ftfc_context(
+    daily: dict | None,
+    four_hour: dict | None,
+    one_hour: dict | None = None,
+) -> dict:
+    daily_dir = daily.get("direction") if daily else None
+    four_hour_dir = four_hour.get("direction") if four_hour else None
+    one_hour_dir = one_hour.get("direction") if one_hour else None
+    directional = [d for d in (daily_dir, four_hour_dir, one_hour_dir) if d in {"UP", "DOWN"}]
+    ftfc_aligned = bool(directional) and len(set(directional)) == 1
+    ftfc_direction = directional[0] if ftfc_aligned else ("MIXED" if len(set(directional)) > 1 else None)
+    return {
+        "daily_bar_type": daily.get("bar_type") if daily else None,
+        "daily_direction": daily_dir,
+        "four_hour_bar_type": four_hour.get("bar_type") if four_hour else None,
+        "four_hour_direction": four_hour_dir,
+        "one_hour_bar_type": one_hour.get("bar_type") if one_hour else None,
+        "one_hour_direction": one_hour_dir,
+        "ftfc_direction": ftfc_direction,
+        "ftfc_aligned": ftfc_aligned if directional else None,
+    }
+
 
 def first_value(row: dict, *names: str, default: str = "") -> str:
     for name in names:
@@ -191,12 +272,24 @@ def _infer_timeframe(csv_path: Path) -> str:
     return "5m"
 
 
-def convert(csv_path: Path, out_dir: Path) -> Path:
+def convert(
+    csv_path: Path,
+    out_dir: Path,
+    *,
+    daily_csv: Path | None = None,
+    four_hour_csv: Path | None = None,
+    one_hour_csv: Path | None = None,
+) -> Path:
     raw = load_csv(csv_path)
     stem = csv_path.stem.replace(" ", "_").replace(",", "")
     instrument = _infer_instrument(csv_path)
     timeframe = _infer_timeframe(csv_path)
     print(f"[convert] instrument={instrument} timeframe={timeframe}")
+    daily_bars = load_htf_context(daily_csv, "daily") if daily_csv else []
+    four_hour_bars = load_htf_context(four_hour_csv, "4h") if four_hour_csv else []
+    one_hour_bars = load_htf_context(one_hour_csv, "1h") if one_hour_csv else []
+    if daily_bars or four_hour_bars or one_hour_bars:
+        print(f"[convert] htf daily={len(daily_bars)} 4h={len(four_hour_bars)} 1h={len(one_hour_bars)}")
 
     # Parse raw rows
     bars: list[dict] = []
@@ -296,6 +389,12 @@ def convert(csv_path: Path, out_dir: Path) -> Path:
         price_vs_pdh = "above" if bar["close"] > pdh else ("below" if bar["close"] < pdh else "at")
         price_vs_pdl = "above" if bar["close"] > pdl else ("below" if bar["close"] < pdl else "at")
 
+        htf_context = build_ftfc_context(
+            htf_at(daily_bars, bar["ts"]),
+            htf_at(four_hour_bars, bar["ts"]),
+            htf_at(one_hour_bars, bar["ts"]),
+        )
+
         candle = {
             "timestamp": dt.isoformat(),
             "instrument": instrument,
@@ -326,6 +425,7 @@ def convert(csv_path: Path, out_dir: Path) -> Path:
             "previous_bar_low": prev_bar["low"] if prev_bar else None,
             "two_bars_back_high": prev2_bar["high"] if prev2_bar else None,
             "two_bars_back_low": prev2_bar["low"] if prev2_bar else None,
+            **htf_context,
         }
         candles.append(candle)
 
@@ -486,7 +586,25 @@ if __name__ == "__main__":
     csv_path = Path(sys.argv[1])
     out_dir = csv_path.parent / "replay_out"
 
-    jsonl_path = convert(csv_path, out_dir)
+    daily_csv = None
+    four_hour_csv = None
+    one_hour_csv = None
+    args = sys.argv[2:]
+    for idx, arg in enumerate(args):
+        if arg == "--daily" and idx + 1 < len(args):
+            daily_csv = Path(args[idx + 1])
+        if arg == "--four-hour" and idx + 1 < len(args):
+            four_hour_csv = Path(args[idx + 1])
+        if arg == "--one-hour" and idx + 1 < len(args):
+            one_hour_csv = Path(args[idx + 1])
+
+    jsonl_path = convert(
+        csv_path,
+        out_dir,
+        daily_csv=daily_csv,
+        four_hour_csv=four_hour_csv,
+        one_hour_csv=one_hour_csv,
+    )
     analyze_signals(jsonl_path)
     validate_pine(csv_path, jsonl_path)
     run_replay(jsonl_path)

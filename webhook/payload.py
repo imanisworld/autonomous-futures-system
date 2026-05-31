@@ -98,6 +98,16 @@ class AlertPayload(BaseModel):
     icc_tp2: Optional[float] = None
     icc_htf_phase: Optional[str] = None
 
+    # ── Optional HTF / FTFC context ─────────────────────────────────────────
+    daily_bar_type: Optional[str] = None
+    daily_direction: Optional[str] = None
+    four_hour_bar_type: Optional[str] = None
+    four_hour_direction: Optional[str] = None
+    one_hour_bar_type: Optional[str] = None
+    one_hour_direction: Optional[str] = None
+    ftfc_direction: Optional[str] = None
+    ftfc_aligned: Optional[bool] = None
+
     # ── Key levels: intraday + weekly + EMAs ────────────────────────────────
     hod: Optional[float] = None              # High of Day (running, resets daily)
     lod: Optional[float] = None              # Low of Day  (running, resets daily)

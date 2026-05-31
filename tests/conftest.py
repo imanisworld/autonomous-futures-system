@@ -82,7 +82,7 @@ def clean_daily_state() -> DailyState:
 @pytest.fixture
 def fresh_market_state() -> MarketState:
     """A valid, fresh MNQ ORB reclaim market state."""
-    now = datetime.now(timezone.utc)
+    now = datetime(2026, 5, 23, 14, 30, tzinfo=timezone.utc)  # 10:30 ET opening window
     return MarketState(
         timestamp=now,
         instrument="MNQ",

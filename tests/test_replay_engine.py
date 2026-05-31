@@ -53,7 +53,7 @@ def test_replay_stops_after_max_trades(config, tmp_path):
     candles = []
     for i in range(6):
         c = dict(base)
-        c["timestamp"] = (base_dt + timedelta(minutes=5 * i)).isoformat()
+        c["timestamp"] = (base_dt + timedelta(minutes=i)).isoformat()
         # High well above any target → guarantees WIN on every resolution bar.
         c["high"] = 99999.0
         candles.append(json.dumps(c))

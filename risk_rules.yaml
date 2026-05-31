@@ -64,6 +64,24 @@ daily_limits:
     MGC: 0
     MCL: 0
 
+# ─── Setup Quality Gates ─────────────────────────────────────────────────────
+quality_gates:
+  require_strong_trend:             # Only enter when trend.strength == STRONG
+    MNQ: true
+    MES: false                      # MES allowed on MODERATE — less volatile
+    MGC: false
+    MCL: false
+  min_signal_bar_volume:            # Minimum relative volume on the signal bar
+    MNQ: 0.8                        # Reject dead-tape entries on MNQ
+    MES: 0.5
+    MGC: 0.0
+    MCL: 0.0
+  require_htf_alignment:            # Require daily/4H FTFC alignment when HTF data is present
+    MNQ: false                      # Passive — HTF logged in journal but not blocking
+    MES: false
+    MGC: false
+    MCL: false
+
 # ─── Position Rules ──────────────────────────────────────────
 position_rules:
   max_open_positions: 1            # One position at a time

@@ -52,7 +52,7 @@ class Fill:
     entry_price: float
     exit_price: Optional[float]
     exit_reason: Optional[str]   # TARGET_HIT | STOP_HIT | MANUAL_CANCEL | None
-    result: str                  # WIN | LOSS | OPEN | CANCELLED
+    result: str                  # WIN | LOSS | BREAKEVEN | OPEN | CANCELLED
     pnl_ticks: Optional[float]
     pnl_dollars: Optional[float]
 

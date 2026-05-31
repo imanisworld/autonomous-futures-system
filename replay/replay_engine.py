@@ -16,6 +16,7 @@ from config.settings import SystemConfig, load_config
 from context.market_context import (
     MarketState,
     GEXContext,
+    HTFContext,
     ICCContext,
     OHLCData,
     ORBData,
@@ -30,12 +31,18 @@ from context.market_context import (
 from execution.broker_interface import BracketOrder
 from execution.paper_broker import NextBarOHLC, PaperBroker
 from journal.journal_logger import JournalLogger
+from context.htf_loader import HTFLookup
 from replay.candle_loader import ReplayCandle, ReplayCandleLoader
 from replay.manifest import ReplayManifest
 from replay.replay_report import MultiDayReplayReport, ReplayReport
 from risk.risk_engine import DailyState, RiskEngine, TradeSetup
 from strategy.signal_engine import DecisionEngine
 from strategy.strat_classifier import StratContext, classify_from_ohlc
+
+_DEFAULT_HTF_FILES = {
+    "1D": "data/htf/CME_MINI_MNQ1!_1D.jsonl",
+    "4H": "data/htf/CME_MINI_MNQ1!_240_(1).jsonl",
+}
 
 
 class ReplayEngine:
@@ -45,10 +52,21 @@ class ReplayEngine:
         self,
         config: Optional[SystemConfig] = None,
         log_dir: str = "logs/replay",
+        htf_lookup: Optional[HTFLookup] = None,
     ):
         self.config = config or load_config()
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
+        self.htf = htf_lookup or self._load_default_htf()
+
+    @staticmethod
+    def _load_default_htf() -> HTFLookup:
+        lookup = HTFLookup()
+        for tf, path in _DEFAULT_HTF_FILES.items():
+            p = Path(path)
+            if p.exists():
+                lookup.load(p, timeframe=tf)
+        return lookup
 
     def run(
         self,
@@ -159,7 +177,7 @@ class ReplayEngine:
                         daily_state.trade_count += 1
                         if fill.result == "LOSS":
                             daily_state.consecutive_losses += 1
-                        elif fill.result == "WIN":
+                        elif fill.result in ("WIN", "BREAKEVEN"):
                             daily_state.consecutive_losses = 0
                         daily_state.has_open_position = False
                     else:
@@ -362,6 +380,7 @@ class ReplayEngine:
                 tp2=candle.icc_tp2,
                 htf_phase=candle.icc_htf_phase,
             ),
+            htf=self._htf_context_for(candle),
             sd=SupplyDemandData(
                 supply_top=candle.supply_top,
                 supply_bottom=candle.supply_bottom,
@@ -375,6 +394,35 @@ class ReplayEngine:
             )) else None,
             raw=None,
         )
+
+    def _htf_context_for(self, candle: ReplayCandle) -> Optional[HTFContext]:
+        """
+        Return HTFContext for this candle, preferring the HTFLookup (real data)
+        over candle-embedded fields, falling back to candle fields if lookup
+        has nothing loaded.
+        """
+        # Prefer real HTF data from the lookup
+        if self.htf and self.htf.loaded_timeframes():
+            ts = _parse_timestamp(candle.timestamp)
+            return self.htf.get_context(ts)
+
+        # Fall back to whatever the candle carries (may all be None)
+        if any(v is not None for v in (
+            candle.daily_bar_type, candle.daily_direction,
+            candle.four_hour_bar_type, candle.four_hour_direction,
+            candle.ftfc_direction, candle.ftfc_aligned,
+        )):
+            return HTFContext(
+                daily_bar_type=candle.daily_bar_type,
+                daily_direction=candle.daily_direction,
+                four_hour_bar_type=candle.four_hour_bar_type,
+                four_hour_direction=candle.four_hour_direction,
+                one_hour_bar_type=candle.one_hour_bar_type,
+                one_hour_direction=candle.one_hour_direction,
+                ftfc_direction=candle.ftfc_direction,
+                ftfc_aligned=candle.ftfc_aligned,
+            )
+        return None
 
     @staticmethod
     def _strat_context_from_candle(candle: ReplayCandle) -> Optional[StratContext]:

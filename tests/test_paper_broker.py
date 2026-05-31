@@ -220,3 +220,49 @@ class TestPositionClearing:
         # Should be able to execute again
         fill = broker.execute_bracket(long_order)
         assert fill.result == "OPEN"
+
+
+class TestBreakevenAtOneR:
+
+    def test_long_moves_stop_to_breakeven_after_one_r(self, broker, long_order):
+        broker.execute_bracket(long_order)
+
+        # 1R for long_order is 19520. Bar reaches 1R but not target, and does not
+        # retrace to entry yet, so position stays open with stop moved to entry.
+        fill = broker.resolve_position(NextBarOHLC(high=19525.0, low=19505.0))
+        assert fill is None
+        pos = broker.get_position()
+        assert pos is not None
+        assert pos.stop == long_order.entry
+
+        fill = broker.resolve_position(NextBarOHLC(high=19510.0, low=19495.0))
+        assert fill is not None
+        assert fill.result == "BREAKEVEN"
+        assert fill.exit_reason == "BREAKEVEN_STOP"
+        assert fill.exit_price == long_order.entry
+        assert fill.pnl_dollars == 0.0
+
+    def test_short_moves_stop_to_breakeven_after_one_r(self, broker, short_order):
+        broker.execute_bracket(short_order)
+
+        # 1R for short_order is 19480. Bar reaches 1R but not target, and does not
+        # retrace to entry yet, so position stays open with stop moved to entry.
+        fill = broker.resolve_position(NextBarOHLC(high=19495.0, low=19475.0))
+        assert fill is None
+        pos = broker.get_position()
+        assert pos is not None
+        assert pos.stop == short_order.entry
+
+        fill = broker.resolve_position(NextBarOHLC(high=19505.0, low=19490.0))
+        assert fill is not None
+        assert fill.result == "BREAKEVEN"
+        assert fill.exit_reason == "BREAKEVEN_STOP"
+        assert fill.exit_price == short_order.entry
+        assert fill.pnl_dollars == 0.0
+
+    def test_target_still_has_priority_after_one_r(self, broker, long_order):
+        broker.execute_bracket(long_order)
+        fill = broker.resolve_position(NextBarOHLC(high=19545.0, low=19495.0))
+        assert fill is not None
+        assert fill.result == "WIN"
+        assert fill.exit_reason == "TARGET_HIT"

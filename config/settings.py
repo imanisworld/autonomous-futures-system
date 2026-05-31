@@ -86,6 +86,12 @@ class SystemConfig:
     min_target_points: dict = field(default_factory=dict)
     # Maximum stop distance in ticks per instrument (rejects setups with oversized risk)
     max_stop_ticks: dict = field(default_factory=dict)
+    # Quality gates: require trend.strength == STRONG per instrument
+    require_strong_trend: dict = field(default_factory=dict)
+    # Quality gates: minimum signal-bar relative volume per instrument
+    min_signal_bar_volume: dict = field(default_factory=dict)
+    # Quality gates: require explicit daily/4H FTFC alignment when HTF data is present
+    require_htf_alignment: dict = field(default_factory=dict)
 
     # Future broker/capital planning (inactive while live trading is blocked)
     broker_priority: List[str] = field(default_factory=lambda: ["paper", "tradovate_sim", "ibkr_paper"])
@@ -158,6 +164,7 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
     condition = rules.get("market_condition", {})
     strategy = rules.get("strategy", {})
     broker = rules.get("broker_roadmap", {})
+    quality = rules.get("quality_gates", {})
     capital = rules.get("capital_guardrails", {})
 
     config = SystemConfig(
@@ -175,6 +182,9 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         session_cutoffs=daily.get("session_cutoffs_et", {}),
         min_target_points=daily.get("min_target_points", {}),
         max_stop_ticks=daily.get("max_stop_ticks", {}),
+        require_strong_trend=quality.get("require_strong_trend", {}),
+        min_signal_bar_volume=quality.get("min_signal_bar_volume", {}),
+        require_htf_alignment=quality.get("require_htf_alignment", {}),
 
         max_open_positions=position.get("max_open_positions", 1),
         averaging_down_allowed=position.get("averaging_down", False),

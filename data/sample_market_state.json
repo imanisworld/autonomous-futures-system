@@ -4,45 +4,45 @@
   "session": "new_york",
   "price": {
     "last": 19505.25,
-    "bid": 19505.00,
-    "ask": 19505.50
+    "bid": 19505.0,
+    "ask": 19505.5
   },
   "ohlc": {
-    "open": 19480.00,
-    "high": 19510.00,
-    "low": 19475.00,
+    "open": 19480.0,
+    "high": 19510.0,
+    "low": 19475.0,
     "close": 19505.25,
     "timeframe": "5m",
     "bar_start": "2026-05-23T10:10:00+00:00"
   },
   "vwap": {
-    "value": 19495.00,
+    "value": 19495.0,
     "price_vs_vwap": "above",
     "reclaimed": true,
     "holding": true
   },
   "orb": {
-    "high": 19498.00,
-    "low": 19462.00,
+    "high": 19498.0,
+    "low": 19462.0,
     "timeframe_minutes": 15,
     "status": "reclaimed_high"
   },
   "previous_day": {
-    "high": 19520.00,
-    "low": 19440.00,
-    "close": 19475.00,
+    "high": 19520.0,
+    "low": 19440.0,
+    "close": 19475.0,
     "price_vs_pdh": "below",
     "price_vs_pdl": "above"
   },
   "volume": {
     "current_bar": 4200,
     "avg_bar": 3800,
-    "relative": 1.10
+    "relative": 1.1
   },
   "market_condition": "TRENDING",
   "trend": {
     "direction": "UP",
-    "strength": "MODERATE",
+    "strength": "STRONG",
     "ema_fast_above_slow": true
   },
   "notes": "NY open momentum. ORB formed 9:30-9:45. Price dipped, reclaimed ORB high at 10:10 with volume confirmation. VWAP holding."

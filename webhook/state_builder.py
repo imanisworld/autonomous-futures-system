@@ -21,6 +21,7 @@ from zoneinfo import ZoneInfo
 from context.market_context import (
     MarketState,
     GEXContext,
+    HTFContext,
     ICCContext,
     KeyLevels,
     OHLCData,
@@ -179,6 +180,31 @@ def _build_sd(payload: AlertPayload) -> "SupplyDemandData | None":
     )
 
 
+def _build_htf(payload: AlertPayload) -> "HTFContext | None":
+    """Build optional higher-timeframe Strat/FTFC context."""
+    if not any(v is not None for v in (
+        payload.daily_bar_type,
+        payload.daily_direction,
+        payload.four_hour_bar_type,
+        payload.four_hour_direction,
+        payload.one_hour_bar_type,
+        payload.one_hour_direction,
+        payload.ftfc_direction,
+        payload.ftfc_aligned,
+    )):
+        return None
+    return HTFContext(
+        daily_bar_type=payload.daily_bar_type,
+        daily_direction=payload.daily_direction,
+        four_hour_bar_type=payload.four_hour_bar_type,
+        four_hour_direction=payload.four_hour_direction,
+        one_hour_bar_type=payload.one_hour_bar_type,
+        one_hour_direction=payload.one_hour_direction,
+        ftfc_direction=payload.ftfc_direction,
+        ftfc_aligned=payload.ftfc_aligned,
+    )
+
+
 def build_market_state(payload: AlertPayload) -> MarketState:
     """
     Convert an AlertPayload to a MarketState ready for the decision pipeline.
@@ -311,6 +337,7 @@ def build_market_state(payload: AlertPayload) -> MarketState:
             tp2=payload.icc_tp2,
             htf_phase=payload.icc_htf_phase,
         ),
+        htf=_build_htf(payload),
         sd=_build_sd(payload),
         key_levels=_build_key_levels(payload),
         raw=None,

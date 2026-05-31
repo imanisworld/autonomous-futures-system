@@ -83,7 +83,21 @@ class DecisionOutput:
 
 # ─── Decision Engine ──────────────────────────────────────────────────────────
 
+def _parse_hhmm(value: str) -> _time:
+    hour, minute = value.split(":", 1)
+    return _time(int(hour), int(minute))
+
+
 class DecisionEngine:
+    WINDOWS = {
+        "opening":   {"start": "09:30", "end": "10:45", "allow": "all"},
+        "mid_early": {"start": "10:45", "end": "11:30", "allow": "restricted"},
+        "mid_late":  {"start": "11:30", "end": "13:00", "allow": "none"},
+        "afternoon": {"start": "13:00", "end": "15:00", "allow": "restricted"},
+        "late":      {"start": "15:00", "end": "16:00", "allow": "none"},
+    }
+    _NY_RESTRICTED_STRAT_SEQUENCES = {"strat_212", "strat_122"}
+
     """
     Evaluates market state and produces a trading decision.
 
@@ -182,6 +196,19 @@ class DecisionEngine:
                 reason=f"Instrument '{state.instrument}' is not in allowed universe.",
             )
 
+        # ── New York entry window gate ────────────────────────────────────────
+        window_result = self._check_new_york_entry_window(state)
+        if window_result is not None:
+            return DecisionOutput(
+                timestamp=now,
+                instrument=state.instrument,
+                session=state.session,
+                decision="NO_TRADE",
+                reason=window_result,
+                failed_gates=["NY_SESSION_WINDOW"],
+                confidence_score=0,
+            )
+
         # ── Market condition scoring ──────────────────────────────────────────
         condition = self._score_market_condition(state)
 
@@ -250,6 +277,62 @@ class DecisionEngine:
                 failed_gates=failed_gates + [failed_gate],
                 confidence_score=0,
             )
+
+        # ── Quality gate: trend strength ─────────────────────────────────────
+        if self.config.require_strong_trend.get(state.instrument, False):
+            if not (state.trend and state.trend.strength == "STRONG"):
+                actual = state.trend.strength if state.trend else "none"
+                return DecisionOutput(
+                    timestamp=now,
+                    instrument=state.instrument,
+                    session=state.session,
+                    decision="NO_TRADE",
+                    market_condition=condition,
+                    reason=f"Trend strength '{actual}' below STRONG required for {state.instrument}",
+                    regime=regime.regime,
+                    gex_status=gex_gate.status,
+                    signa_status=signa_gate.status,
+                    failed_gates=failed_gates + ["TREND_STRENGTH_BELOW_REQUIRED"],
+                    confidence_score=0,
+                )
+
+        # ── Quality gate: signal-bar volume ──────────────────────────────────
+        min_vol = self.config.min_signal_bar_volume.get(state.instrument, 0.0)
+        if min_vol > 0.0:
+            rel_vol = state.volume.relative
+            if rel_vol is None or rel_vol < min_vol:
+                actual_vol = f"{rel_vol:.2f}" if rel_vol is not None else "n/a"
+                return DecisionOutput(
+                    timestamp=now,
+                    instrument=state.instrument,
+                    session=state.session,
+                    decision="NO_TRADE",
+                    market_condition=condition,
+                    reason=f"Signal-bar volume too low ({actual_vol} < {min_vol:.2f}) for {state.instrument}",
+                    regime=regime.regime,
+                    gex_status=gex_gate.status,
+                    signa_status=signa_gate.status,
+                    failed_gates=failed_gates + ["SIGNAL_BAR_VOLUME_TOO_LOW"],
+                    confidence_score=0,
+                )
+
+        # ── Quality gate: HTF / FTFC alignment ────────────────────────────────
+        if self.config.require_htf_alignment.get(state.instrument, False):
+            htf_failure = self._check_htf_alignment(state, gate_direction)
+            if htf_failure is not None:
+                return DecisionOutput(
+                    timestamp=now,
+                    instrument=state.instrument,
+                    session=state.session,
+                    decision="NO_TRADE",
+                    market_condition=condition,
+                    reason=htf_failure,
+                    regime=regime.regime,
+                    gex_status=gex_gate.status,
+                    signa_status=signa_gate.status,
+                    failed_gates=failed_gates + ["HTF_ALIGNMENT_FAIL"],
+                    confidence_score=0,
+                )
 
         # ── Strategy evaluation ───────────────────────────────────────────────
         setup = self._find_setup(state, condition, daily_state)
@@ -387,6 +470,79 @@ class DecisionEngine:
         )
 
     # ── Market Condition Scoring ───────────────────────────────────────────────
+
+    def _check_htf_alignment(self, state: MarketState, direction: str | None) -> Optional[str]:
+        """Block only when HTF data is present and explicitly conflicts."""
+        htf = getattr(state, "htf", None)
+        if htf is None or direction not in {"LONG", "SHORT"}:
+            return None
+        if htf.ftfc_aligned is False:
+            return "HTF/FTFC alignment failed"
+
+        expected = "UP" if direction == "LONG" else "DOWN"
+        directions = [
+            str(value).strip().upper()
+            for value in (
+                htf.daily_direction,
+                htf.four_hour_direction,
+                htf.one_hour_direction,
+                htf.ftfc_direction,
+            )
+            if value not in (None, "")
+        ]
+        opposing = "DOWN" if expected == "UP" else "UP"
+        if opposing in directions and expected not in directions:
+            return f"HTF direction opposes {direction}"
+        return None
+
+    def _check_new_york_entry_window(self, state: MarketState) -> Optional[str]:
+        if state.session != "new_york":
+            return None
+
+        result = self._ny_window_for(state.timestamp)
+        if result is None:
+            return None
+
+        name, window = result
+        allow = window["allow"]
+        if allow == "none":
+            return "NY session window blocked"
+        if allow == "all":
+            return None
+
+        # "restricted" — conditions differ by window
+        strong_trend = bool(state.trend and state.trend.strength == "STRONG")
+        vwap_aligned = state.vwap.price_vs_vwap in ("above", "below")
+        orb_active = state.orb.status in (
+            "reclaimed_high", "reclaimed_low", "rejected_high", "rejected_low"
+        )
+        volume_surge = bool(state.volume.relative is not None and state.volume.relative >= 1.2)
+        strat_sequence = state.strat.strat_sequence if state.strat else None
+        confirmed_strat = strat_sequence in self._NY_RESTRICTED_STRAT_SEQUENCES
+
+        if name == "mid_early":
+            # 10:45–11:30: strong trend with VWAP clarity or active ORB is enough
+            if strong_trend and (vwap_aligned or orb_active):
+                return None
+            return "Mid-morning window requires strong trend with VWAP or ORB structure"
+
+        # afternoon (13:00–15:00)
+        # Path 1: classic A+ — strat sequence confirmed, strong trend, volume spike
+        if strong_trend and volume_surge and confirmed_strat:
+            return None
+        # Path 2: structural — ORB or VWAP reclaim in strong trend (no strat seq required)
+        if strong_trend and orb_active and vwap_aligned:
+            return None
+        return "Afternoon window requires A+ conditions"
+
+    def _ny_window_for(self, ts: datetime) -> Optional[tuple[str, dict]]:
+        et_time = ts.astimezone(self._ET).time()
+        for name, window in self.WINDOWS.items():
+            start = _parse_hhmm(window["start"])
+            end = _parse_hhmm(window["end"])
+            if start <= et_time < end:
+                return name, window
+        return None
 
     def _score_market_condition(self, state: MarketState) -> str:
         """

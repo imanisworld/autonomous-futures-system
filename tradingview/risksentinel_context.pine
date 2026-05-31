@@ -56,6 +56,18 @@ classify_bar(h, l, ph, pl) =>
         else
             "two_down"
 
+direction_from_bar(bt, o, c) =>
+    if bt == "two_up"
+        "UP"
+    else if bt == "two_down"
+        "DOWN"
+    else if bt == "outside_bar"
+        c >= o ? "UP" : "DOWN"
+    else if bt == "inside_bar"
+        "NEUTRAL"
+    else
+        "UNKNOWN"
+
 orb_status_for(orb_high, orb_low) =>
     if na(orb_high) or na(orb_low)
         "undefined"
@@ -85,6 +97,29 @@ rel_vol = avg_vol > 0 ? volume / avg_vol : 1.0
 
 [pd_high, pd_low, pd_close] = request.security(syminfo.tickerid, "D", [high[1], low[1], close[1]], lookahead=barmerge.lookahead_on)
 [pw_high, pw_low] = request.security(syminfo.tickerid, "W", [high[1], low[1]], lookahead=barmerge.lookahead_on)
+
+// HTF / FTFC CONTEXT
+[d_o, d_h, d_l, d_c, d_ph, d_pl] = request.security(syminfo.tickerid, "D", [open, high, low, close, high[1], low[1]], lookahead=barmerge.lookahead_on)
+[h4_o, h4_h, h4_l, h4_c, h4_ph, h4_pl] = request.security(syminfo.tickerid, "240", [open, high, low, close, high[1], low[1]], lookahead=barmerge.lookahead_on)
+[h1_o, h1_h, h1_l, h1_c, h1_ph, h1_pl] = request.security(syminfo.tickerid, "60", [open, high, low, close, high[1], low[1]], lookahead=barmerge.lookahead_on)
+
+daily_bar_type = classify_bar(d_h, d_l, d_ph, d_pl)
+daily_direction = direction_from_bar(daily_bar_type, d_o, d_c)
+four_hour_bar_type = classify_bar(h4_h, h4_l, h4_ph, h4_pl)
+four_hour_direction = direction_from_bar(four_hour_bar_type, h4_o, h4_c)
+one_hour_bar_type = classify_bar(h1_h, h1_l, h1_ph, h1_pl)
+one_hour_direction = direction_from_bar(one_hour_bar_type, h1_o, h1_c)
+
+daily_up = daily_direction == "UP" ? 1 : 0
+daily_down = daily_direction == "DOWN" ? 1 : 0
+four_hour_up = four_hour_direction == "UP" ? 1 : 0
+four_hour_down = four_hour_direction == "DOWN" ? 1 : 0
+one_hour_up = one_hour_direction == "UP" ? 1 : 0
+one_hour_down = one_hour_direction == "DOWN" ? 1 : 0
+ftfc_up_count = daily_up + four_hour_up + one_hour_up
+ftfc_down_count = daily_down + four_hour_down + one_hour_down
+ftfc_direction = ftfc_up_count == 3 ? "UP" : ftfc_down_count == 3 ? "DOWN" : (ftfc_up_count > 0 and ftfc_down_count > 0 ? "MIXED" : "NEUTRAL")
+ftfc_aligned = ftfc_direction == "UP" or ftfc_direction == "DOWN"
 
 // HOD / LOD — highest high and lowest low since session open
 in_any_session = not na(time(timeframe.period, i_ny_session, "America/New_York")) or not na(time(timeframe.period, i_london_session, "America/New_York"))
@@ -248,7 +283,7 @@ else
 ema_9_above_21 = ema_fast > ema_slow
 
 // BUILD JSON
-msg = "{" + '"ticker":"' + syminfo.ticker + '",' + '"timestamp":' + str.tostring(time) + ',' + '"open":' + str.tostring(open, "#.####") + ',' + '"high":' + str.tostring(high, "#.####") + ',' + '"low":' + str.tostring(low, "#.####") + ',' + '"close":' + str.tostring(close, "#.####") + ',' + '"volume":' + str.tostring(volume) + ',' + '"timeframe":"' + timeframe.period + '",' + '"avg_volume":' + str.tostring(math.round(avg_vol)) + ',' + '"vwap":' + f2j(vwap_val, "#.####") + ',' + '"orb_high":' + f2j(orb_h, "#.##") + ',' + '"orb_low":' + f2j(orb_l, "#.##") + ',' + '"orb_status":"' + orb_status + '",' + '"london_orb_high":' + f2j(london_orb_h, "#.##") + ',' + '"london_orb_low":' + f2j(london_orb_l, "#.##") + ',' + '"london_orb_status":' + (na(london_orb_h) ? "null" : '"' + london_orb_status + '"') + ',' + '"market_condition":"' + market_cond + '",' + '"trend_direction":"' + trend_dir + '",' + '"trend_strength":"' + trend_str + '",' + '"previous_day_high":' + f2j(pd_high, "#.##") + ',' + '"previous_day_low":' + f2j(pd_low, "#.##") + ',' + '"previous_day_close":' + f2j(pd_close, "#.##") + ',' + '"price_vs_pdh":"' + price_vs_pdh + '",' + '"price_vs_pdl":"' + price_vs_pdl + '",' + '"previous_bar_high":' + f2j(high[1], "#.####") + ',' + '"previous_bar_low":' + f2j(low[1], "#.####") + ',' + '"two_bars_back_high":' + f2j(high[2], "#.####") + ',' + '"two_bars_back_low":' + f2j(low[2], "#.####") + ',' + '"current_bar_type":"' + cur_type + '",' + '"previous_bar_type":"' + prev_type + '",' + '"two_bars_back_type":"' + t2b_type + '",' + '"strat_sequence":' + s2j(strat_seq == "no_sequence" ? na : strat_seq) + ',' + '"strat_trigger":' + s2j(strat_trigger_ctx) + ',' + '"strat_direction":' + s2j(strat_dir_ctx) + ',' + '"gex_flip":' + f2j(i_gex_flip, "#.##") + ',' + '"call_wall":' + f2j(i_call_wall, "#.##") + ',' + '"put_wall":' + f2j(i_put_wall, "#.##") + ',' + '"hvl":' + f2j(i_hvl, "#.##") + ',' + '"max_pain":' + f2j(i_max_pain, "#.##") + ',' + '"mid_upper":' + f2j(i_mid_upper, "#.##") + ',' + '"mid_lower":' + f2j(i_mid_lower, "#.##") + ',' + '"vol_trigger_up":' + f2j(i_vol_trigger_up, "#.##") + ',' + '"vol_trigger_down":' + f2j(i_vol_trigger_down, "#.##") + ',' + '"gex_regime":' + s2j(i_gex_regime) + ',' + '"delta_bias":' + s2j(i_delta_bias) + ',' + '"signa_grade":' + s2j(i_signa_grade) + ',' + '"signa_score":' + f2j(i_signa_score, "#.##") + ',' + '"signa_daily_direction":' + s2j(i_signa_daily_direction) + ',' + '"signa_weekly_direction":' + s2j(i_signa_weekly_direction) + ',' + '"supply_top":' + f2j(i_supply_top, "#.##") + ',' + '"supply_bottom":' + f2j(i_supply_bottom, "#.##") + ',' + '"supply_wavg":' + f2j(i_supply_wavg, "#.##") + ',' + '"demand_top":' + f2j(i_demand_top, "#.##") + ',' + '"demand_bottom":' + f2j(i_demand_bottom, "#.##") + ',' + '"demand_wavg":' + f2j(i_demand_wavg, "#.##") + ',' + '"hod":' + f2j(hod, "#.##") + ',' + '"lod":' + f2j(lod, "#.##") + ',' + '"prev_week_high":' + f2j(pw_high, "#.##") + ',' + '"prev_week_low":' + f2j(pw_low, "#.##") + ',' + '"ema_9":' + f2j(ema_fast, "#.####") + ',' + '"ema_21":' + f2j(ema_slow, "#.####") + ',' + '"ema_55":' + f2j(ema_mid, "#.####") + ',' + '"ema_200":' + f2j(ema_long, "#.####") + ',' + '"ema_9_above_21":' + str.tostring(ema_9_above_21) + "}"
+msg = "{" + '"ticker":"' + syminfo.ticker + '",' + '"timestamp":' + str.tostring(time) + ',' + '"open":' + str.tostring(open, "#.####") + ',' + '"high":' + str.tostring(high, "#.####") + ',' + '"low":' + str.tostring(low, "#.####") + ',' + '"close":' + str.tostring(close, "#.####") + ',' + '"volume":' + str.tostring(volume) + ',' + '"timeframe":"' + timeframe.period + '",' + '"avg_volume":' + str.tostring(math.round(avg_vol)) + ',' + '"vwap":' + f2j(vwap_val, "#.####") + ',' + '"orb_high":' + f2j(orb_h, "#.##") + ',' + '"orb_low":' + f2j(orb_l, "#.##") + ',' + '"orb_status":"' + orb_status + '",' + '"london_orb_high":' + f2j(london_orb_h, "#.##") + ',' + '"london_orb_low":' + f2j(london_orb_l, "#.##") + ',' + '"london_orb_status":' + (na(london_orb_h) ? "null" : '"' + london_orb_status + '"') + ',' + '"market_condition":"' + market_cond + '",' + '"trend_direction":"' + trend_dir + '",' + '"trend_strength":"' + trend_str + '",' + '"previous_day_high":' + f2j(pd_high, "#.##") + ',' + '"previous_day_low":' + f2j(pd_low, "#.##") + ',' + '"previous_day_close":' + f2j(pd_close, "#.##") + ',' + '"price_vs_pdh":"' + price_vs_pdh + '",' + '"price_vs_pdl":"' + price_vs_pdl + '",' + '"previous_bar_high":' + f2j(high[1], "#.####") + ',' + '"previous_bar_low":' + f2j(low[1], "#.####") + ',' + '"two_bars_back_high":' + f2j(high[2], "#.####") + ',' + '"two_bars_back_low":' + f2j(low[2], "#.####") + ',' + '"current_bar_type":"' + cur_type + '",' + '"previous_bar_type":"' + prev_type + '",' + '"two_bars_back_type":"' + t2b_type + '",' + '"strat_sequence":' + s2j(strat_seq == "no_sequence" ? na : strat_seq) + ',' + '"strat_trigger":' + s2j(strat_trigger_ctx) + ',' + '"strat_direction":' + s2j(strat_dir_ctx) + ',' + '"gex_flip":' + f2j(i_gex_flip, "#.##") + ',' + '"call_wall":' + f2j(i_call_wall, "#.##") + ',' + '"put_wall":' + f2j(i_put_wall, "#.##") + ',' + '"hvl":' + f2j(i_hvl, "#.##") + ',' + '"max_pain":' + f2j(i_max_pain, "#.##") + ',' + '"mid_upper":' + f2j(i_mid_upper, "#.##") + ',' + '"mid_lower":' + f2j(i_mid_lower, "#.##") + ',' + '"vol_trigger_up":' + f2j(i_vol_trigger_up, "#.##") + ',' + '"vol_trigger_down":' + f2j(i_vol_trigger_down, "#.##") + ',' + '"gex_regime":' + s2j(i_gex_regime) + ',' + '"delta_bias":' + s2j(i_delta_bias) + ',' + '"signa_grade":' + s2j(i_signa_grade) + ',' + '"signa_score":' + f2j(i_signa_score, "#.##") + ',' + '"signa_daily_direction":' + s2j(i_signa_daily_direction) + ',' + '"signa_weekly_direction":' + s2j(i_signa_weekly_direction) + ',' + '"daily_bar_type":' + s2j(daily_bar_type) + ',' + '"daily_direction":' + s2j(daily_direction) + ',' + '"four_hour_bar_type":' + s2j(four_hour_bar_type) + ',' + '"four_hour_direction":' + s2j(four_hour_direction) + ',' + '"one_hour_bar_type":' + s2j(one_hour_bar_type) + ',' + '"one_hour_direction":' + s2j(one_hour_direction) + ',' + '"ftfc_direction":' + s2j(ftfc_direction) + ',' + '"ftfc_aligned":' + str.tostring(ftfc_aligned) + ',' + '"supply_top":' + f2j(i_supply_top, "#.##") + ',' + '"supply_bottom":' + f2j(i_supply_bottom, "#.##") + ',' + '"supply_wavg":' + f2j(i_supply_wavg, "#.##") + ',' + '"demand_top":' + f2j(i_demand_top, "#.##") + ',' + '"demand_bottom":' + f2j(i_demand_bottom, "#.##") + ',' + '"demand_wavg":' + f2j(i_demand_wavg, "#.##") + ',' + '"hod":' + f2j(hod, "#.##") + ',' + '"lod":' + f2j(lod, "#.##") + ',' + '"prev_week_high":' + f2j(pw_high, "#.##") + ',' + '"prev_week_low":' + f2j(pw_low, "#.##") + ',' + '"ema_9":' + f2j(ema_fast, "#.####") + ',' + '"ema_21":' + f2j(ema_slow, "#.####") + ',' + '"ema_55":' + f2j(ema_mid, "#.####") + ',' + '"ema_200":' + f2j(ema_long, "#.####") + ',' + '"ema_9_above_21":' + str.tostring(ema_9_above_21) + "}"
 
 // FIRE ALERT
 if i_alert_on and barstate.isconfirmed

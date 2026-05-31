@@ -19,7 +19,7 @@ import pytest
 
 from context.market_context import (
     MarketState, PriceData, OHLCData, VWAPData, ORBData,
-    PreviousDayData, VolumeData, TrendData,
+    PreviousDayData, VolumeData, TrendData, HTFContext,
 )
 from risk.risk_engine import DailyState
 from strategy.signal_engine import DecisionEngine
@@ -68,6 +68,238 @@ class TestDecisionEngineSessionFilter:
         decision = engine.evaluate(fresh_market_state, DailyState())
         # Should get through session filter (may still be NO_TRADE for other reasons)
         assert decision.decision != "NO_TRADE" or "not allowed" not in decision.reason
+
+
+
+
+class TestNewYorkEntryWindows:
+    @staticmethod
+    def _at_et(state: MarketState, hour: int, minute: int) -> MarketState:
+        state = deepcopy(state)
+        # May is EDT, so ET + 4 hours = UTC.
+        state.timestamp = datetime(2026, 5, 23, hour + 4, minute, tzinfo=timezone.utc)
+        state.session = "new_york"
+        return state
+
+    def _afternoon_a_plus_state(self, fresh_market_state):
+        state = self._at_et(fresh_market_state, 13, 30)
+        state.orb.status = "inside"
+        state.trend = TrendData(direction="UP", strength="STRONG", ema_fast_above_slow=True)
+        state.volume = VolumeData(current_bar=5200, avg_bar=3800, relative=1.37)
+        state.strat = StratContext(
+            current_bar_type="two_up",
+            previous_bar_type="inside_bar",
+            two_bars_back_type="two_up",
+            strat_sequence="strat_212",
+            strat_trigger="continuation",
+            strat_direction="LONG",
+        )
+        return state
+
+    def test_1030_opening_all_setups_allowed(self, engine, fresh_market_state):
+        state = self._at_et(fresh_market_state, 10, 30)
+        decision = engine.evaluate(state, DailyState())
+        assert decision.decision == "TRADE"
+
+    # ── mid_early (10:45–11:30): restricted ───────────────────────────────────
+
+    def test_1050_mid_early_strong_trend_vwap_allowed(self, engine, fresh_market_state):
+        """10:50 ET with strong trend + VWAP above passes mid_early gate."""
+        state = self._at_et(fresh_market_state, 10, 50)
+        state.trend = TrendData(direction="UP", strength="STRONG", ema_fast_above_slow=True)
+        state.vwap.price_vs_vwap = "above"
+        decision = engine.evaluate(state, DailyState())
+        assert decision.decision != "NO_TRADE" or "mid-morning" not in decision.reason.lower()
+
+    def test_1050_mid_early_moderate_trend_blocked(self, engine, fresh_market_state):
+        """10:50 ET with only moderate trend is rejected by mid_early gate."""
+        state = self._at_et(fresh_market_state, 10, 50)
+        state.trend = TrendData(direction="UP", strength="MODERATE", ema_fast_above_slow=True)
+        state.vwap.price_vs_vwap = "above"
+        state.orb.status = "inside"
+        decision = engine.evaluate(state, DailyState())
+        assert decision.decision == "NO_TRADE"
+        assert "mid-morning" in decision.reason.lower()
+
+    def test_1050_mid_early_strong_trend_orb_active_allowed(self, engine, fresh_market_state):
+        """10:50 ET passes mid_early gate via strong trend + active ORB (no VWAP needed)."""
+        state = self._at_et(fresh_market_state, 10, 50)
+        state.trend = TrendData(direction="UP", strength="STRONG", ema_fast_above_slow=True)
+        state.vwap.price_vs_vwap = "inside"
+        state.orb.status = "reclaimed_high"
+        decision = engine.evaluate(state, DailyState())
+        assert decision.decision != "NO_TRADE" or "mid-morning" not in decision.reason.lower()
+
+    # ── mid_late (11:30–13:00): hard blocked ─────────────────────────────────
+
+    def test_1130_midday_blocks_entries(self, engine, fresh_market_state):
+        state = self._at_et(fresh_market_state, 11, 30)
+        decision = engine.evaluate(state, DailyState())
+        assert decision.decision == "NO_TRADE"
+        assert decision.reason == "NY session window blocked"
+
+    def test_1200_mid_late_blocks_even_strong_trend(self, engine, fresh_market_state):
+        """12:00 ET is in mid_late (hard blocked) regardless of trend quality."""
+        state = self._at_et(fresh_market_state, 12, 0)
+        state.trend = TrendData(direction="UP", strength="STRONG", ema_fast_above_slow=True)
+        state.vwap.price_vs_vwap = "above"
+        state.orb.status = "reclaimed_high"
+        decision = engine.evaluate(state, DailyState())
+        assert decision.decision == "NO_TRADE"
+        assert decision.reason == "NY session window blocked"
+
+    # ── afternoon (13:00–15:00): restricted ──────────────────────────────────
+
+    def test_1330_afternoon_a_plus_strat_212_allowed(self, config, fresh_market_state):
+        from dataclasses import replace
+        engine = DecisionEngine(config=replace(config, enabled_concepts=["strat_212"]))
+        state = self._afternoon_a_plus_state(fresh_market_state)
+        decision = engine.evaluate(state, DailyState())
+        assert decision.decision == "TRADE"
+        assert decision.setup.strategy == "strat_212"
+
+    def test_1330_afternoon_structural_orb_vwap_allowed(self, config, fresh_market_state):
+        """Afternoon: strong trend + active ORB + VWAP aligned passes without strat sequence."""
+        from dataclasses import replace
+        engine = DecisionEngine(config=replace(config, enabled_concepts=["orb_reclaim"]))
+        state = self._at_et(fresh_market_state, 13, 30)
+        state.trend = TrendData(direction="UP", strength="STRONG", ema_fast_above_slow=True)
+        state.vwap.price_vs_vwap = "above"
+        state.orb.status = "reclaimed_high"
+        state.volume = VolumeData(current_bar=3000, avg_bar=3800, relative=0.79)
+        decision = engine.evaluate(state, DailyState())
+        assert decision.decision != "NO_TRADE" or "afternoon" not in decision.reason.lower()
+
+    def test_1330_afternoon_moderate_trend_blocked(self, config, fresh_market_state):
+        from dataclasses import replace
+        engine = DecisionEngine(config=replace(config, enabled_concepts=["strat_212"]))
+        state = self._afternoon_a_plus_state(fresh_market_state)
+        state.trend = TrendData(direction="UP", strength="MODERATE", ema_fast_above_slow=True)
+        decision = engine.evaluate(state, DailyState())
+        assert decision.decision == "NO_TRADE"
+        assert decision.reason == "Afternoon window requires A+ conditions"
+
+    def test_1430_afternoon_still_restricted_and_blocks_non_a_plus(self, engine, fresh_market_state):
+        state = self._at_et(fresh_market_state, 14, 30)
+        decision = engine.evaluate(state, DailyState())
+        assert decision.decision == "NO_TRADE"
+        assert decision.reason == "Afternoon window requires A+ conditions"
+
+    def test_1530_late_blocks_entries(self, engine, fresh_market_state):
+        state = self._at_et(fresh_market_state, 15, 30)
+        decision = engine.evaluate(state, DailyState())
+        assert decision.decision == "NO_TRADE"
+        assert decision.reason == "NY session window blocked"
+
+
+class TestQualityGates:
+    """Tests for trend-strength and signal-bar-volume quality gates."""
+
+    @pytest.fixture
+    def qengine(self, config):
+        from dataclasses import replace
+        qconfig = replace(
+            config,
+            require_strong_trend={"MNQ": True, "MES": False},
+            min_signal_bar_volume={"MNQ": 0.8, "MES": 0.0},
+        )
+        return DecisionEngine(config=qconfig)
+
+    def _strong_state(self, fresh_market_state) -> MarketState:
+        """Base state: STRONG trend + sufficient volume — passes all quality gates."""
+        state = deepcopy(fresh_market_state)
+        state.trend = TrendData(direction="UP", strength="STRONG", ema_fast_above_slow=True)
+        state.volume = VolumeData(current_bar=4000, avg_bar=3800, relative=1.05)
+        return state
+
+    def test_mnq_strong_trend_passes(self, qengine, fresh_market_state):
+        state = self._strong_state(fresh_market_state)
+        decision = qengine.evaluate(state, DailyState())
+        assert "TREND_STRENGTH_BELOW_REQUIRED" not in (decision.failed_gates or [])
+
+    def test_mnq_moderate_trend_blocked(self, qengine, fresh_market_state):
+        state = self._strong_state(fresh_market_state)
+        state.trend = TrendData(direction="UP", strength="MODERATE", ema_fast_above_slow=True)
+        decision = qengine.evaluate(state, DailyState())
+        assert decision.decision == "NO_TRADE"
+        assert "TREND_STRENGTH_BELOW_REQUIRED" in (decision.failed_gates or [])
+        assert "STRONG" in decision.reason
+
+    def test_mnq_no_trend_data_blocked(self, qengine, fresh_market_state):
+        state = self._strong_state(fresh_market_state)
+        state.trend = None
+        decision = qengine.evaluate(state, DailyState())
+        assert decision.decision == "NO_TRADE"
+        assert "TREND_STRENGTH_BELOW_REQUIRED" in (decision.failed_gates or [])
+
+    def test_mnq_sufficient_volume_passes(self, qengine, fresh_market_state):
+        state = self._strong_state(fresh_market_state)
+        state.volume = VolumeData(current_bar=4000, avg_bar=3800, relative=0.80)
+        decision = qengine.evaluate(state, DailyState())
+        assert "SIGNAL_BAR_VOLUME_TOO_LOW" not in (decision.failed_gates or [])
+
+    def test_mnq_low_volume_blocked(self, qengine, fresh_market_state):
+        state = self._strong_state(fresh_market_state)
+        state.volume = VolumeData(current_bar=2000, avg_bar=3800, relative=0.53)
+        decision = qengine.evaluate(state, DailyState())
+        assert decision.decision == "NO_TRADE"
+        assert "SIGNAL_BAR_VOLUME_TOO_LOW" in (decision.failed_gates or [])
+        assert "0.53" in decision.reason
+
+    def test_mnq_null_volume_blocked(self, qengine, fresh_market_state):
+        state = self._strong_state(fresh_market_state)
+        state.volume = VolumeData(current_bar=0, avg_bar=0, relative=None)
+        decision = qengine.evaluate(state, DailyState())
+        assert decision.decision == "NO_TRADE"
+        assert "SIGNAL_BAR_VOLUME_TOO_LOW" in (decision.failed_gates or [])
+
+    def test_trend_gate_fires_before_volume_gate(self, qengine, fresh_market_state):
+        """Trend check precedes volume check — weak trend + low volume shows trend failure."""
+        state = self._strong_state(fresh_market_state)
+        state.trend = TrendData(direction="UP", strength="MODERATE", ema_fast_above_slow=True)
+        state.volume = VolumeData(current_bar=2000, avg_bar=3800, relative=0.53)
+        decision = qengine.evaluate(state, DailyState())
+        assert decision.decision == "NO_TRADE"
+        assert "TREND_STRENGTH_BELOW_REQUIRED" in (decision.failed_gates or [])
+
+    def test_htf_alignment_fail_blocks_when_enabled(self, config, fresh_market_state):
+        from dataclasses import replace
+
+        qconfig = replace(
+            config,
+            require_htf_alignment={"MNQ": True},
+            require_strong_trend={"MNQ": True},
+            min_signal_bar_volume={"MNQ": 0.8},
+        )
+        state = self._strong_state(fresh_market_state)
+        state.htf = HTFContext(
+            daily_direction="UP",
+            four_hour_direction="DOWN",
+            ftfc_direction="MIXED",
+            ftfc_aligned=False,
+        )
+
+        decision = DecisionEngine(config=qconfig).evaluate(state, DailyState())
+
+        assert decision.decision == "NO_TRADE"
+        assert decision.reason == "HTF/FTFC alignment failed"
+        assert "HTF_ALIGNMENT_FAIL" in (decision.failed_gates or [])
+
+    def test_htf_absent_does_not_block_when_enabled(self, config, fresh_market_state):
+        from dataclasses import replace
+
+        qconfig = replace(
+            config,
+            require_htf_alignment={"MNQ": True},
+            require_strong_trend={"MNQ": True},
+            min_signal_bar_volume={"MNQ": 0.8},
+        )
+        state = self._strong_state(fresh_market_state)
+        state.htf = None
+
+        decision = DecisionEngine(config=qconfig).evaluate(state, DailyState())
+
+        assert "HTF_ALIGNMENT_FAIL" not in (decision.failed_gates or [])
 
 
 class TestDecisionEngineInstrumentFilter:
@@ -421,14 +653,14 @@ class TestStrat4hrRetrigger:
         assert decision.decision == "TRADE"
         assert decision.setup.strategy == "strat_4hr_retrigger"
 
-    def test_falls_back_to_orb_reclaim_late_ny(self, retrigger_config):
-        """11:30 ET — outside the window → orb_reclaim fires instead."""
+    def test_midday_blocks_late_ny_fallback(self, retrigger_config):
+        """11:30 ET is now blocked by the NY midday no-entry window."""
         ts = datetime(2026, 5, 23, 15, 30, tzinfo=timezone.utc)  # 11:30 ET
         state = self._retrigger_state(ts)
         engine = DecisionEngine(config=retrigger_config)
         decision = engine.evaluate(state, DailyState())
-        assert decision.decision == "TRADE"
-        assert decision.setup.strategy == "orb_reclaim"
+        assert decision.decision == "NO_TRADE"
+        assert decision.reason == "NY session window blocked"
 
     def test_does_not_fire_on_moderate_trend(self, retrigger_config):
         """MODERATE trend — orb_reclaim fires, not strat_4hr_retrigger."""

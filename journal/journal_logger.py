@@ -168,7 +168,7 @@ class JournalLogger:
     ) -> DailyState:
         trade_count = 0
         session_trade_counts: dict = {}
-        last_outcomes: List[str] = []  # WIN or LOSS in order
+        last_outcomes: List[str] = []  # WIN, LOSS, or BREAKEVEN in order
         has_open_position = False
 
         for entry in entries:
@@ -177,7 +177,7 @@ class JournalLogger:
             if entry_type == "OUTCOME":
                 outcome_data = entry.get("outcome", {})
                 result = outcome_data.get("result")
-                if result in ("WIN", "LOSS"):
+                if result in ("WIN", "LOSS", "BREAKEVEN"):
                     last_outcomes.append(result)
                     has_open_position = False
                 continue
@@ -193,7 +193,7 @@ class JournalLogger:
                 session = entry.get("session") or ""
                 if session:
                     session_trade_counts[session] = session_trade_counts.get(session, 0) + 1
-                if outcome_result in ("WIN", "LOSS"):
+                if outcome_result in ("WIN", "LOSS", "BREAKEVEN"):
                     last_outcomes.append(outcome_result)
                     has_open_position = False
                 else:
@@ -266,7 +266,7 @@ class JournalLogger:
             risk_check = entry.get("risk_check") or {}
             if decision == "TRADE" and risk_check.get("result") == "APPROVED":
                 outcome = entry.get("outcome") or {}
-                if outcome.get("result") not in ("WIN", "LOSS"):
+                if outcome.get("result") not in ("WIN", "LOSS", "BREAKEVEN"):
                     # Approved trade with no resolved outcome — position is open.
                     setup = entry.get("setup") or {}
                     last_open = {

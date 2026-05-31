@@ -396,9 +396,10 @@ def test_runner_blocks_when_open_position_does_not_resolve(config, tmp_path):
         pytest.skip("Signal engine produced NO_TRADE on bar 1 — skip open-position test")
 
     fill = r1["fill"]
+    one_r = float(fill["entry"]) + ((float(fill["entry"]) - float(fill["stop"])) * 0.5)
     p2 = _base_payload(
         timestamp="2026-05-23T14:35:00+00:00",
-        high=float(fill["target"]) - 0.25,
+        high=one_r - 0.25,
         low=float(fill["stop"]) + 0.25,
         close=float(fill["entry"]),
     )

@@ -27,6 +27,8 @@
 | price_vs_pdh/pdl | Derived from close vs PDH/PDL |
 | Strat bar types | Bar-by-bar high/low comparison (two_up / two_down / inside / outside) |
 | Strat sequence | Three-bar classification: strat_212 / strat_122 / strat_inside_break / … |
+| HTF context | Daily, 4H, and 1H bar type + direction via `request.security` |
+| FTFC | `UP`, `DOWN`, `MIXED`, or `NEUTRAL`; passive unless config enables HTF gate |
 
 ## Manual templates
 
@@ -40,3 +42,5 @@ full schema for reference.
 - If the tunnel restarts, update the webhook URL in TradingView.
 - The indicator also plots EMA fast/slow, VWAP, and ORB levels on the chart
   as a visual reference.
+- For MNQ, use the chart symbol you trade in TradingView. The webhook normalizes
+  futures symbols like `MNQ1!` into `MNQ`.

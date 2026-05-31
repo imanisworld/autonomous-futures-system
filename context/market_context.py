@@ -132,6 +132,18 @@ class ICCContext:
 
 
 @dataclass
+class HTFContext:
+    daily_bar_type: Optional[str] = None
+    daily_direction: Optional[str] = None
+    four_hour_bar_type: Optional[str] = None
+    four_hour_direction: Optional[str] = None
+    one_hour_bar_type: Optional[str] = None
+    one_hour_direction: Optional[str] = None
+    ftfc_direction: Optional[str] = None
+    ftfc_aligned: Optional[bool] = None
+
+
+@dataclass
 class SupplyDemandData:
     supply_top: Optional[float] = None
     supply_bottom: Optional[float] = None
@@ -206,6 +218,7 @@ class MarketState:
     gex: Optional[GEXContext] = None
     signa: Optional[SignaContext] = None
     icc: Optional[ICCContext] = None
+    htf: Optional[HTFContext] = None
     sd: Optional[SupplyDemandData] = None
     key_levels: Optional[KeyLevels] = None
     notes: Optional[str] = None
