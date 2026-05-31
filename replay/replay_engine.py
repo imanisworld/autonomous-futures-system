@@ -58,6 +58,7 @@ class ReplayEngine:
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.htf = htf_lookup or self._load_default_htf()
+        self._rolling_balance: float | None = None
 
     @staticmethod
     def _load_default_htf() -> HTFLookup:
@@ -88,8 +89,17 @@ class ReplayEngine:
         journal_date = _date_to_date(run_date)
         decision_engine = DecisionEngine(config=self.config)
         risk_engine = RiskEngine(config=self.config)
-        broker = PaperBroker()
-        daily_state = DailyState(date=run_date)
+        broker = PaperBroker(
+            starting_balance=(
+                self._rolling_balance
+                if self._rolling_balance is not None
+                else self.config.position_sizing.starting_balance
+            )
+        )
+        daily_state = DailyState(
+            date=run_date,
+            account_balance=broker.get_account_balance(),
+        )
 
         stopped_reason: str | None = None
         candles_processed = 0
@@ -102,11 +112,11 @@ class ReplayEngine:
                 prev_candle = candle
                 continue
 
-            if daily_state.trade_count >= self.config.max_trades_per_day:
-                stopped_reason = "max_trades_per_day"
-                break
             if daily_state.consecutive_losses >= self.config.max_consecutive_losses:
                 stopped_reason = "max_consecutive_losses"
+                break
+            if daily_state.trade_count >= self.config.max_trades_per_day:
+                stopped_reason = "max_trades_per_day"
                 break
 
             state = self._market_state_from_candle(candle, prev_candle)
@@ -126,6 +136,11 @@ class ReplayEngine:
                     instrument=state.instrument,
                     session=state.session,
                     notes=decision.setup.notes,
+                    entry_time=_parse_timestamp(candle.timestamp),
+                )
+                daily_state.account_balance = broker.get_account_balance()
+                trade_setup.contracts = risk_engine.recommended_contracts(
+                    state.instrument, daily_state.account_balance
                 )
                 risk_result = risk_engine.validate(trade_setup, daily_state)
                 risk_result_dict = {
@@ -137,9 +152,7 @@ class ReplayEngine:
                 journal.log_decision(decision.to_dict(), risk_result_dict, for_date=journal_date)
 
                 if risk_result.approved:
-                    contracts = self.config.max_contracts_per_instrument.get(
-                        state.instrument, 1
-                    )
+                    contracts = trade_setup.contracts
                     order = BracketOrder(
                         instrument=state.instrument,
                         direction=decision.setup.direction,
@@ -180,6 +193,7 @@ class ReplayEngine:
                         elif fill.result in ("WIN", "BREAKEVEN"):
                             daily_state.consecutive_losses = 0
                         daily_state.has_open_position = False
+                        daily_state.account_balance = broker.get_account_balance()
                     else:
                         daily_state.trade_count += 1
                         daily_state.has_open_position = True
@@ -211,6 +225,7 @@ class ReplayEngine:
             journal_path=summary.get("journal_path", ""),
             review_path=str(self.log_dir / f"daily_review_{run_date}.md"),
         )
+        self._rolling_balance = broker.get_account_balance()
         report.write_markdown(self.log_dir / f"replay_report_{run_date}.md")
         return report
 
@@ -227,22 +242,37 @@ class ReplayEngine:
             if path.exists():
                 path.unlink()
 
-    def run_many(self, candle_paths: list[str | Path]) -> MultiDayReplayReport:
+    def run_many(
+        self,
+        candle_paths: list[str | Path],
+        *,
+        allow_mixed_instruments: bool = False,
+    ) -> MultiDayReplayReport:
         reports: list[ReplayReport] = []
-        for path in candle_paths:
-            reports.append(self.run(path))
+        previous_balance = self._rolling_balance
+        self._rolling_balance = self.config.position_sizing.starting_balance
+        try:
+            for path in candle_paths:
+                reports.append(self.run(path, allow_mixed_instruments=allow_mixed_instruments))
+        finally:
+            self._rolling_balance = previous_balance
         return self._aggregate_reports(reports, candle_paths)
 
     def run_manifest(self, manifest_path: str | Path) -> MultiDayReplayReport:
         manifest = ReplayManifest.load(manifest_path)
         reports: list[ReplayReport] = []
-        for entry in manifest.entries:
-            reports.append(
-                self.run(
-                    entry.path,
-                    allow_mixed_instruments=entry.allow_mixed_instruments,
+        previous_balance = self._rolling_balance
+        self._rolling_balance = self.config.position_sizing.starting_balance
+        try:
+            for entry in manifest.entries:
+                reports.append(
+                    self.run(
+                        entry.path,
+                        allow_mixed_instruments=entry.allow_mixed_instruments,
+                    )
                 )
-            )
+        finally:
+            self._rolling_balance = previous_balance
         return self._aggregate_reports(reports, manifest.paths)
 
     def _aggregate_reports(
@@ -260,6 +290,7 @@ class ReplayEngine:
                 failure_reasons.append("daily_trade_limit_violation")
             if report.losses >= self.config.max_consecutive_losses and report.stopped_reason not in (
                 "max_consecutive_losses",
+                "max_trades_per_day",  # trade cap is a valid stop — not a lockout violation
                 None,
             ):
                 failure_reasons.append("loss_lockout_violation")

@@ -20,13 +20,15 @@ instruments:
   allowed:
     - MNQ   # Micro E-mini NASDAQ-100
     - MES   # Micro E-mini S&P 500
+    - ES    # E-mini S&P 500
+    - NQ    # E-mini NASDAQ-100
     - MGC   # Micro Gold
     - MCL   # Micro Crude Oil
 
 sessions:
   allowed:
     - london      # 03:00–08:30 ET
-    - new_york    # 09:30–12:00 ET
+    - new_york    # 09:30–16:30 ET (entries cut at 14:00 via session_cutoffs_et)
   disabled:
     - asian       # disabled — low liquidity, stop hunts
 
@@ -36,7 +38,7 @@ session_hours_et:
     end:   "08:30"
   new_york:
     start: "09:30"
-    end:   "12:00"
+    end:   "16:30"   # entries stop at session_cutoffs_et.new_york (14:00)
   asian:
     start: "19:00"
     end:   "03:00"
@@ -51,11 +53,11 @@ daily_limits:
     new_york: 2
   session_cutoffs_et:               # No new entries after this time (HH:MM ET)
     london: "08:00"                 # Last call before NY gap
-    new_york: "11:30"               # First 2 hours of NY only
+    new_york: "14:00"               # NY open through early afternoon (extended from 11:30)
     asian: "02:30"                  # Thin tape after 2:30 AM ET
   min_target_points:                # Minimum target distance in instrument points
     MNQ: 15
-    MES: 4
+    MES: 15                         # Aligned with MNQ — same structural requirement
     MGC: 0
     MCL: 0
   max_stop_ticks:                   # Backstop rejection if stop still too wide after signal engine caps
@@ -67,13 +69,13 @@ daily_limits:
 # ─── Setup Quality Gates ─────────────────────────────────────────────────────
 quality_gates:
   require_strong_trend:             # Only enter when trend.strength == STRONG
-    MNQ: true
-    MES: false                      # MES allowed on MODERATE — less volatile
+    MNQ: true                       # STRONG required — locked for live replay alignment
+    MES: true                       # Aligned with MNQ — STRONG required
     MGC: false
     MCL: false
   min_signal_bar_volume:            # Minimum relative volume on the signal bar
-    MNQ: 0.8                        # Reject dead-tape entries on MNQ
-    MES: 0.5
+    MNQ: 0.8                        # Locked to 0.8 — match live webhook behavior
+    MES: 0.8                        # Aligned with MNQ
     MGC: 0.0
     MCL: 0.0
   require_htf_alignment:            # Require daily/4H FTFC alignment when HTF data is present
@@ -89,9 +91,47 @@ position_rules:
   discretionary_override: false    # No manual intervention
   max_contracts_per_instrument:
     MNQ: 2
-    MES: 2
+    MES: 3                          # Dynamic sizing controls actual MES tier
+    ES: 3
+    NQ: 2
     MGC: 0
     MCL: 0
+
+
+# ─── Dynamic Position Sizing / Compounding ───────────────────────────────────
+position_sizing:
+  starting_balance: 5000
+  position_sizing_enabled: true
+  aggressive_rounding: true
+  rounding_threshold_percent: 10
+  sizing_rules:
+    - min_balance: 5000
+      max_balance: 9000
+      instrument: "MES"
+      max_contracts: 1
+    - min_balance: 9000
+      max_balance: 13500
+      instrument: "MES"
+      max_contracts: 2
+    - min_balance: 13500
+      max_balance: 18000
+      instrument: "MES"
+      max_contracts: 3
+    - min_balance: 18000
+      max_balance: 25000
+      instrument: "ES"
+      max_contracts: 1
+    - min_balance: 25000
+      max_balance: 40000
+      instrument: "ES"
+      max_contracts: 2
+    - min_balance: 40000
+      max_balance: 60000
+      instrument: "ES"
+      max_contracts: 3
+    - min_balance: 60000
+      instrument: "NQ"
+      max_contracts: 2
 
 # ─── Order Rules ─────────────────────────────────────────────
 order_rules:
@@ -123,6 +163,7 @@ market_condition:
 strategy:
   enabled_concepts:
     # ── Core structural setups ────────────────────────────────
+    - orb_breakout            # Initial break above ORB high (long) or below ORB low (short)
     - orb_reclaim             # Price reclaims ORB high after pullback
     - orb_rejection           # Failed ORB breakout, fade back inside
     - vwap_reclaim            # Price crosses above/below VWAP and holds
@@ -133,13 +174,18 @@ strategy:
     # ── The Strat patterns ───────────────────────────────────
     # Phase 1: approximated from single-bar market_state flags
     # Phase 2: full multi-bar Strat classification available
-    - strat_212               # 2-1-2 continuation (2UP→1→2UP or 2DOWN→1→2DOWN)
     - strat_122               # 1-2-2 reversal (1→2→reverse 2)
     - strat_4hr_retrigger     # 4AM 2DOWN → 8AM 2UP → NY open retrigger
     - strat_inside_break      # inside bar breakout with trend + VWAP filter
     - strat_outside_continuation  # outside bar follow-through with volume filter
   frequency: low                   # Bias toward selectivity
   no_trade_is_valid: true          # Explicit acknowledgment
+
+  # Strategies disabled per instrument (overrides enabled_concepts for that instrument)
+  disabled_concepts_per_instrument:
+    MES:
+      - orb_reclaim    # 0% WR on MES (5 trades) — ORB structure less reliable at MES scale
+      - vwap_reclaim   # 40% WR on MES vs 100% MNQ — reclaim conditions fire too loosely
 
 # ─── The Strat Config ────────────────────────────────────────
 strat:

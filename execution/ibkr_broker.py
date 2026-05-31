@@ -12,7 +12,7 @@ import os
 import time
 from dataclasses import dataclass
 from types import SimpleNamespace
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from dotenv import load_dotenv
 
@@ -44,6 +44,7 @@ class IBKRConfig:
     base_backoff_seconds: float = 1.0
     account_mode: str = "paper"
     account: str = ""
+    auto_resubscribe_on_reconnect: bool = True
 
     @classmethod
     def from_env(cls) -> "IBKRConfig":
@@ -56,6 +57,9 @@ class IBKRConfig:
             max_reconnect_attempts=int(os.getenv("IBKR_MAX_RECONNECT_ATTEMPTS", "3")),
             base_backoff_seconds=float(os.getenv("IBKR_BASE_BACKOFF_SECONDS", "1")),
             account=os.getenv("IBKR_ACCOUNT", "").strip(),
+            auto_resubscribe_on_reconnect=os.getenv(
+                "IBKR_AUTO_RESUBSCRIBE_ON_RECONNECT", "true"
+            ).strip().lower() not in {"0", "false", "no", "off"},
         )
 
 
@@ -65,6 +69,8 @@ class IBKRBroker(BrokerInterface):
     FUTURE_EXCHANGES = {
         "MNQ": "CME",
         "MES": "CME",
+        "ES": "CME",
+        "NQ": "CME",
         "MGC": "COMEX",
         "MCL": "NYMEX",
     }
@@ -76,11 +82,17 @@ class IBKRBroker(BrokerInterface):
         ib: Any | None = None,
         ib_cls: Any | None = None,
         auto_connect: bool = True,
+        status_callback: Callable[[str], None] | None = None,
     ):
         self.config = config or IBKRConfig.from_env()
         self._ib = ib or self._make_ib(ib_cls)
         self._last_order_ids: list[int] = []
         self._last_position: Position | None = None
+        self._last_error_code: int | None = None
+        self._last_error_message: str | None = None
+        self._resubscribe_count = 0
+        self._status_callback = status_callback
+        self._subscribe_error_events()
         if auto_connect:
             self.connect()
 
@@ -237,6 +249,9 @@ class IBKRBroker(BrokerInterface):
         self._last_position = None
         self._last_order_ids = []
 
+    def get_account_balance(self) -> Optional[float]:
+        return self._available_cash()
+
     def get_broker_name(self) -> str:
         return "IBKRBrokerPaper"
 
@@ -252,6 +267,78 @@ class IBKRBroker(BrokerInterface):
             supports_brackets=True,
             supports_options=False,
         )
+
+    def health_check(self) -> dict[str, Any]:
+        """Return a lightweight local status snapshot for overnight monitoring."""
+        return {
+            "broker": self.get_broker_name(),
+            "connected": self.connected,
+            "account_balance": self.get_account_balance(),
+            "last_error_code": self._last_error_code,
+            "last_error_message": self._last_error_message,
+            "resubscribe_count": self._resubscribe_count,
+        }
+
+    def resubscribe_all(self) -> None:
+        """Refresh IB state after connectivity restores."""
+        if not self.connected:
+            logger.warning("IBKR resubscribe skipped; client is not connected")
+            return
+        try:
+            self._ib.positions()
+            self._ib.accountSummary()
+            if hasattr(self._ib, "openTrades"):
+                self._ib.openTrades()
+            self._resubscribe_count += 1
+            logger.info("IBKR resubscribe complete")
+        except Exception as exc:  # pragma: no cover - exact API errors vary
+            logger.warning("IBKR resubscribe failed: %s", exc)
+
+    def _subscribe_error_events(self) -> None:
+        if self._ib is None:
+            return
+        event = getattr(self._ib, "errorEvent", None)
+        if event is None:
+            return
+        try:
+            event += self._on_ib_error
+        except Exception as exc:  # pragma: no cover - fake/event variants differ
+            logger.debug("Unable to subscribe to IBKR errorEvent: %s", exc)
+
+    def _on_ib_error(
+        self,
+        reqId: int,
+        errorCode: int,
+        errorString: str,
+        contract: Any | None = None,
+    ) -> None:
+        self._last_error_code = int(errorCode)
+        self._last_error_message = str(errorString)
+        if errorCode == 1100:
+            logger.warning("IBKR disconnected: %s", errorString)
+            self._emit_status(f"IBKR disconnected (1100): {errorString}")
+            return
+        if errorCode == 1102:
+            logger.info("IBKR reconnected; resubscribing state: %s", errorString)
+            if self.config.auto_resubscribe_on_reconnect:
+                self.resubscribe_all()
+            self._emit_status(f"IBKR reconnected (1102): {errorString}")
+            return
+        if errorCode == 1101:
+            logger.info("IBKR data connection restored; resubscribing state: %s", errorString)
+            if self.config.auto_resubscribe_on_reconnect:
+                self.resubscribe_all()
+            self._emit_status(f"IBKR data restored (1101): {errorString}")
+            return
+        logger.debug("IBKR API message %s reqId=%s: %s", errorCode, reqId, errorString)
+
+    def _emit_status(self, message: str) -> None:
+        if self._status_callback is None:
+            return
+        try:
+            self._status_callback(message)
+        except Exception as exc:  # pragma: no cover - callbacks should not break trading
+            logger.warning("IBKR status callback failed: %s", exc)
 
     def _contract_for(self, instrument: str) -> Any:
         try:

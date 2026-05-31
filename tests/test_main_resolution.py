@@ -7,8 +7,10 @@ Integration coverage for optional next-bar paper fill resolution.
 from __future__ import annotations
 
 import json
+import re
 from copy import deepcopy
 from datetime import datetime, timezone
+from pathlib import Path
 
 from journal.journal_logger import JournalLogger
 from main import load_next_bar, main
@@ -22,6 +24,19 @@ def fresh_market_state() -> dict:
     state["ohlc"]["bar_start"] = now
     return state
 
+
+
+def risk_rules_without_position_sizing(tmp_path):
+    text = Path("risk_rules.yaml").read_text()
+    text = re.sub(
+        r"position_sizing_enabled: true",
+        "position_sizing_enabled: false",
+        text,
+        count=1,
+    )
+    path = tmp_path / "risk_rules_no_sizing.yaml"
+    path.write_text(text)
+    return path
 
 def test_load_next_bar_reads_high_low(tmp_path):
     path = tmp_path / "next_bar.json"
@@ -40,6 +55,7 @@ def test_main_resolves_target_and_journals_outcome(tmp_path, monkeypatch):
     next_bar_path.write_text(json.dumps({"high": 19600.0, "low": 19490.0}))
 
     monkeypatch.setenv("LOG_DIR", str(tmp_path / "logs"))
+    risk_rules_path = risk_rules_without_position_sizing(tmp_path)
     monkeypatch.setattr(
         "sys.argv",
         [
@@ -48,6 +64,8 @@ def test_main_resolves_target_and_journals_outcome(tmp_path, monkeypatch):
             str(market_state_path),
             "--next-bar",
             str(next_bar_path),
+            "--risk-rules",
+            str(risk_rules_path),
         ],
     )
 
@@ -73,6 +91,7 @@ def test_main_resolves_stop_and_daily_state_tracks_loss(tmp_path, monkeypatch):
     next_bar_path.write_text(json.dumps({"high": 19510.0, "low": 19450.0}))
 
     monkeypatch.setenv("LOG_DIR", str(tmp_path / "logs"))
+    risk_rules_path = risk_rules_without_position_sizing(tmp_path)
     monkeypatch.setattr(
         "sys.argv",
         [
@@ -81,6 +100,8 @@ def test_main_resolves_stop_and_daily_state_tracks_loss(tmp_path, monkeypatch):
             str(market_state_path),
             "--next-bar",
             str(next_bar_path),
+            "--risk-rules",
+            str(risk_rules_path),
         ],
     )
 

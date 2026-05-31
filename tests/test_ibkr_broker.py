@@ -20,6 +20,19 @@ class FakeOrder:
         self.account = ""
 
 
+class FakeEvent:
+    def __init__(self):
+        self.handlers = []
+
+    def __iadd__(self, handler):
+        self.handlers.append(handler)
+        return self
+
+    def emit(self, *args):
+        for handler in list(self.handlers):
+            handler(*args)
+
+
 class FakeIB:
     def __init__(self, connected: bool = True):
         self._connected = connected
@@ -31,6 +44,10 @@ class FakeIB:
         self._open_trades = []
         self._account_summary = []
         self.bracket = [FakeOrder(101), FakeOrder(102), FakeOrder(103)]
+        self.errorEvent = FakeEvent()
+        self.positions_calls = 0
+        self.account_summary_calls = 0
+        self.open_trades_calls = 0
 
     def isConnected(self):
         return self._connected
@@ -51,9 +68,11 @@ class FakeIB:
         return SimpleNamespace(fills=[])
 
     def positions(self):
+        self.positions_calls += 1
         return self._positions
 
     def openTrades(self):
+        self.open_trades_calls += 1
         return self._open_trades
 
     def cancelOrder(self, order):
@@ -63,6 +82,7 @@ class FakeIB:
         self.global_cancel_called = True
 
     def accountSummary(self):
+        self.account_summary_calls += 1
         return self._account_summary
 
 
@@ -195,6 +215,45 @@ def test_cancel_all_calls_global_cancel_and_clears_position(config, long_order):
     assert fake_ib.cancelled_orders == [fake_order]
     assert broker.get_position() is None
 
+
+
+def test_ibkr_error_1100_records_disconnect_and_notifies(config):
+    fake_ib = FakeIB()
+    messages = []
+    broker = IBKRBroker(config=config, ib=fake_ib, auto_connect=False, status_callback=messages.append)
+
+    fake_ib.errorEvent.emit(-1, 1100, "Connectivity between IB and TWS has been lost")
+
+    health = broker.health_check()
+    assert health["last_error_code"] == 1100
+    assert "lost" in health["last_error_message"]
+    assert messages == ["IBKR disconnected (1100): Connectivity between IB and TWS has been lost"]
+    assert fake_ib.positions_calls == 0
+
+
+def test_ibkr_error_1102_resubscribes_and_notifies(config):
+    fake_ib = FakeIB()
+    messages = []
+    broker = IBKRBroker(config=config, ib=fake_ib, auto_connect=False, status_callback=messages.append)
+
+    fake_ib.errorEvent.emit(-1, 1102, "Connectivity restored - data maintained")
+
+    health = broker.health_check()
+    assert health["last_error_code"] == 1102
+    assert health["resubscribe_count"] == 1
+    assert fake_ib.positions_calls == 1
+    assert fake_ib.account_summary_calls >= 1
+    assert fake_ib.open_trades_calls == 1
+    assert messages == ["IBKR reconnected (1102): Connectivity restored - data maintained"]
+
+
+def test_ibkr_error_1101_resubscribes_when_data_lost(config):
+    fake_ib = FakeIB()
+    broker = IBKRBroker(config=config, ib=fake_ib, auto_connect=False)
+
+    fake_ib.errorEvent.emit(-1, 1101, "Connectivity restored - data lost")
+
+    assert broker.health_check()["resubscribe_count"] == 1
 
 def test_connect_to_gateway_and_place_paper_bracket_when_opted_in(long_order):
     if os.getenv("IBKR_RUN_INTEGRATION_TESTS", "false").lower() not in {"1", "true", "yes"}:

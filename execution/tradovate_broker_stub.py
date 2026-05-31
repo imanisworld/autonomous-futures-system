@@ -61,6 +61,9 @@ class TradovateBrokerStub(BrokerInterface):
         """
         return True
 
+    def get_account_balance(self) -> Optional[float]:
+        return None
+
     def get_broker_name(self) -> str:
         return f"TradovateStub({self._environment})"
 

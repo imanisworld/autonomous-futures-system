@@ -92,9 +92,9 @@ class DecisionEngine:
     WINDOWS = {
         "opening":   {"start": "09:30", "end": "10:45", "allow": "all"},
         "mid_early": {"start": "10:45", "end": "11:30", "allow": "restricted"},
-        "mid_late":  {"start": "11:30", "end": "13:00", "allow": "none"},
-        "afternoon": {"start": "13:00", "end": "15:00", "allow": "restricted"},
-        "late":      {"start": "15:00", "end": "16:00", "allow": "none"},
+        "mid_late":  {"start": "11:30", "end": "12:00", "allow": "none"},   # lunch block
+        "afternoon": {"start": "12:00", "end": "14:00", "allow": "all"},    # open afternoon
+        "late":      {"start": "14:00", "end": "16:00", "allow": "none"},
     }
     _NY_RESTRICTED_STRAT_SEQUENCES = {"strat_212", "strat_122"}
 
@@ -521,19 +521,15 @@ class DecisionEngine:
         confirmed_strat = strat_sequence in self._NY_RESTRICTED_STRAT_SEQUENCES
 
         if name == "mid_early":
-            # 10:45–11:30: strong trend with VWAP clarity or active ORB is enough
+            # 10:45–11:30: strong or moderate trend with VWAP clarity or active ORB
+            moderate_trend = bool(state.trend and state.trend.strength in ("STRONG", "MODERATE"))
             if strong_trend and (vwap_aligned or orb_active):
                 return None
-            return "Mid-morning window requires strong trend with VWAP or ORB structure"
+            if moderate_trend and vwap_aligned and orb_active:
+                return None
+            return "Mid-morning window requires trend with VWAP and ORB structure"
 
-        # afternoon (13:00–15:00)
-        # Path 1: classic A+ — strat sequence confirmed, strong trend, volume spike
-        if strong_trend and volume_surge and confirmed_strat:
-            return None
-        # Path 2: structural — ORB or VWAP reclaim in strong trend (no strat seq required)
-        if strong_trend and orb_active and vwap_aligned:
-            return None
-        return "Afternoon window requires A+ conditions"
+        return "NY session window restricted"
 
     def _ny_window_for(self, ts: datetime) -> Optional[tuple[str, dict]]:
         et_time = ts.astimezone(self._ET).time()
@@ -627,6 +623,9 @@ class DecisionEngine:
         eligible until price returns to the ORB level.
         """
         enabled = self.config.enabled_concepts
+        instrument_disabled = set(
+            self.config.disabled_concepts_per_instrument.get(state.instrument, [])
+        )
 
         # Gate: if the ORB break has already been played in this direction,
         # block continuation strategies so we don't re-enter on every bar
@@ -645,6 +644,7 @@ class DecisionEngine:
             # If it doesn't fire, orb_reclaim gets the same bar as a fallback.
             ("strat_4hr_retrigger", self._try_strat_4hr_retrigger),
             # ── Core structural setups ─────────────────────────────────────
+            ("orb_breakout", self._try_orb_breakout),
             ("orb_reclaim", self._try_orb_reclaim),
             ("orb_rejection", self._try_orb_rejection),
             ("vwap_reclaim", self._try_vwap_reclaim),
@@ -665,11 +665,73 @@ class DecisionEngine:
         for name, fn in strategies:
             if name not in enabled:
                 continue
+            if name in instrument_disabled:
+                continue
             if orb_continuation_blocked and name not in self._ORB_PULLBACK_STRATEGIES:
                 continue
             setup = fn(state)
             if setup is not None:
                 return setup
+
+        return None
+
+    def _try_orb_breakout(self, state: MarketState) -> Optional[SetupDetail]:
+        """
+        ORB Breakout: First bar where price breaks above ORB high (long) or
+        below ORB low (short), with trend and VWAP aligned.
+        Entry just beyond ORB boundary, stop just inside, target 2.2R.
+        Only fires once per direction per day (orb_continuation_blocked gates repeats).
+        """
+        tick = self.TICK_SIZE.get(state.instrument, 0.25)
+        max_stop_ticks = self.MAX_ORB_STOP_TICKS.get(state.instrument, 80)
+
+        if state.orb.status == "above":
+            if state.vwap.price_vs_vwap != "above":
+                return None
+            if not (state.trend and state.trend.direction == "UP"):
+                return None
+            entry = state.orb.high + (tick * 2)
+            orb_stop = state.orb.high - (tick * 8)
+            max_stop = entry - (tick * max_stop_ticks)
+            stop = max(orb_stop, max_stop)
+            risk = entry - stop
+            if risk <= 0:
+                return None
+            target = entry + (risk * 2.2)
+            rr = RiskEngine.calculate_rr("LONG", entry, stop, target)
+            return SetupDetail(
+                direction="LONG",
+                entry=round(entry, 4),
+                stop=round(stop, 4),
+                target=round(target, 4),
+                rr_ratio=rr,
+                strategy="orb_breakout",
+                notes="Initial ORB high breakout with trend and VWAP alignment",
+            )
+
+        if state.orb.status == "below":
+            if state.vwap.price_vs_vwap != "below":
+                return None
+            if not (state.trend and state.trend.direction == "DOWN"):
+                return None
+            entry = state.orb.low - (tick * 2)
+            orb_stop = state.orb.low + (tick * 8)
+            max_stop = entry + (tick * max_stop_ticks)
+            stop = min(orb_stop, max_stop)
+            risk = stop - entry
+            if risk <= 0:
+                return None
+            target = entry - (risk * 2.2)
+            rr = RiskEngine.calculate_rr("SHORT", entry, stop, target)
+            return SetupDetail(
+                direction="SHORT",
+                entry=round(entry, 4),
+                stop=round(stop, 4),
+                target=round(target, 4),
+                rr_ratio=rr,
+                strategy="orb_breakout",
+                notes="Initial ORB low breakdown with trend and VWAP alignment",
+            )
 
         return None
 
@@ -736,7 +798,8 @@ class DecisionEngine:
     def _try_vwap_reclaim(self, state: MarketState) -> Optional[SetupDetail]:
         """
         VWAP Reclaim: Price was below VWAP, crossed above and held.
-        Long entry above VWAP, stop below VWAP, target 2x+ risk.
+        Entry just above VWAP; stop 7 pts below VWAP (structural — if price
+        returns 7 pts below VWAP the reclaim has failed). Target 2.2R.
         """
         if not (state.vwap.reclaimed and state.vwap.holding and state.vwap.price_vs_vwap == "above"):
             return None
@@ -744,12 +807,12 @@ class DecisionEngine:
             return None
 
         tick = self.TICK_SIZE.get(state.instrument, 0.25)
-        entry = state.vwap.value + (tick * 3)
-        stop = state.vwap.value - (tick * 6)
+        entry = state.vwap.value + (tick * 2)
+        stop = state.vwap.value - (tick * 28)   # 7 pts below VWAP
         risk = entry - stop
         if risk <= 0:
             return None
-        target = entry + (risk * 2.2)
+        target = entry + (risk * 3.0)
 
         rr = RiskEngine.calculate_rr("LONG", entry, stop, target)
         return SetupDetail(
@@ -765,7 +828,7 @@ class DecisionEngine:
     def _try_vwap_hold(self, state: MarketState) -> Optional[SetupDetail]:
         """
         VWAP Hold: Price is holding below VWAP in downtrend.
-        Short from VWAP resistance, stop above VWAP.
+        Short from VWAP; stop 7 pts above VWAP. Target 2.2R.
         """
         if not (state.vwap.holding and state.vwap.price_vs_vwap == "below"):
             return None
@@ -773,12 +836,12 @@ class DecisionEngine:
             return None
 
         tick = self.TICK_SIZE.get(state.instrument, 0.25)
-        entry = state.vwap.value - (tick * 3)
-        stop = state.vwap.value + (tick * 6)
+        entry = state.vwap.value - (tick * 2)
+        stop = state.vwap.value + (tick * 28)   # 7 pts above VWAP
         risk = stop - entry
         if risk <= 0:
             return None
-        target = entry - (risk * 2.2)
+        target = entry - (risk * 3.0)
 
         rr = RiskEngine.calculate_rr("SHORT", entry, stop, target)
         return SetupDetail(
@@ -809,11 +872,11 @@ class DecisionEngine:
 
         tick = self.TICK_SIZE.get(state.instrument, 0.25)
         entry = state.previous_day.high + (tick * 2)
-        stop = state.previous_day.high - (tick * 8)
+        stop = state.previous_day.high - (tick * 26)  # 6.5 pts below PDH
         risk = entry - stop
         if risk <= 0:
             return None
-        target = entry + (risk * 2.0)
+        target = entry + (risk * 2.2)
 
         rr = RiskEngine.calculate_rr("LONG", entry, stop, target)
         return SetupDetail(
@@ -841,11 +904,11 @@ class DecisionEngine:
 
         tick = self.TICK_SIZE.get(state.instrument, 0.25)
         entry = state.previous_day.low - (tick * 2)
-        stop = state.previous_day.low + (tick * 8)
+        stop = state.previous_day.low + (tick * 26)  # 6.5 pts above PDL
         risk = stop - entry
         if risk <= 0:
             return None
-        target = entry - (risk * 2.0)
+        target = entry - (risk * 2.2)
 
         rr = RiskEngine.calculate_rr("SHORT", entry, stop, target)
         return SetupDetail(
@@ -872,17 +935,21 @@ class DecisionEngine:
         """
         tick = self.TICK_SIZE.get(state.instrument, 0.25)
 
+        max_stop_ticks = self.MAX_ORB_STOP_TICKS.get(state.instrument, 80)
+
         # Use actual classified strat sequence when present
         strat = state.strat
         if strat and strat.strat_sequence == "strat_212" and strat.strat_direction:
             direction = strat.strat_direction
             if direction == "LONG":
                 entry = state.ohlc.high + tick
-                stop = state.ohlc.low - (tick * 4)
+                raw_stop = state.ohlc.low - (tick * 4)
+                stop = max(raw_stop, entry - (tick * max_stop_ticks))
                 risk = entry - stop
             else:
                 entry = state.ohlc.low - tick
-                stop = state.ohlc.high + (tick * 4)
+                raw_stop = state.ohlc.high + (tick * 4)
+                stop = min(raw_stop, entry + (tick * max_stop_ticks))
                 risk = stop - entry
             if risk <= 0:
                 return None
@@ -910,7 +977,8 @@ class DecisionEngine:
             if state.vwap.price_vs_vwap != "above":
                 return None
             entry = state.ohlc.high + tick
-            stop = state.ohlc.low - (tick * 4)
+            raw_stop = state.ohlc.low - (tick * 4)
+            stop = max(raw_stop, entry - (tick * max_stop_ticks))
             risk = entry - stop
             if risk <= 0:
                 return None
@@ -920,7 +988,8 @@ class DecisionEngine:
             if state.vwap.price_vs_vwap != "below":
                 return None
             entry = state.ohlc.low - tick
-            stop = state.ohlc.high + (tick * 4)
+            raw_stop = state.ohlc.high + (tick * 4)
+            stop = min(raw_stop, entry + (tick * max_stop_ticks))
             risk = stop - entry
             if risk <= 0:
                 return None
@@ -1197,9 +1266,11 @@ class DecisionEngine:
             return None
 
         tick = self.TICK_SIZE.get(state.instrument, 0.25)
+        max_stop_ticks = self.MAX_ORB_STOP_TICKS.get(state.instrument, 80)
         # Entry at ORB high (the "trigger" level)
         entry = state.orb.high + (tick * 1)
-        stop = state.orb.low - (tick * 6)  # Wide stop — below full ORB range
+        raw_stop = state.orb.low - (tick * 6)
+        stop = max(raw_stop, entry - (tick * max_stop_ticks))  # cap at 20 pts for MNQ
         risk = entry - stop
         if risk <= 0:
             return None

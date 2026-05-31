@@ -94,6 +94,7 @@ ema_long = ta.ema(close, i_ema_long)
 vwap_val = ta.vwap(hlc3)
 avg_vol = ta.sma(volume, i_vol_len)
 rel_vol = avg_vol > 0 ? volume / avg_vol : 1.0
+vwap_reclaimed = ta.crossover(close, vwap_val)
 
 [pd_high, pd_low, pd_close] = request.security(syminfo.tickerid, "D", [high[1], low[1], close[1]], lookahead=barmerge.lookahead_on)
 [pw_high, pw_low] = request.security(syminfo.tickerid, "W", [high[1], low[1]], lookahead=barmerge.lookahead_on)
@@ -294,6 +295,7 @@ msg := msg + "\"volume\":" + str.tostring(volume) + ","
 msg := msg + "\"timeframe\":" + "\"" + timeframe.period + "\"" + ","
 msg := msg + "\"avg_volume\":" + str.tostring(math.round(avg_vol)) + ","
 msg := msg + "\"vwap\":" + f2j(vwap_val, "#.####") + ","
+msg := msg + "\"vwap_reclaimed\":" + str.tostring(vwap_reclaimed) + ","
 msg := msg + "\"orb_high\":" + f2j(orb_h, "#.##") + ","
 msg := msg + "\"orb_low\":" + f2j(orb_l, "#.##") + ","
 msg := msg + "\"orb_status\":" + "\"" + orb_status + "\"" + ","

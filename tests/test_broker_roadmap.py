@@ -44,7 +44,7 @@ def test_paper_broker_capabilities_are_safe():
     assert caps.account_mode == "paper"
     assert caps.supports_brackets is True
     assert caps.supports_options is False
-    assert caps.starting_capital == 1000.0
+    assert caps.starting_capital == 5000.0
     assert caps.max_dollars_risk_per_trade == 10.0
 
 

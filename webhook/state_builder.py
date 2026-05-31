@@ -107,7 +107,7 @@ def detect_session(ts: datetime) -> str:
         return "london"
     if time(8, 30) <= et_time < time(9, 30):
         return "session_gap"
-    if time(9, 30) <= et_time <= time(12, 0):
+    if time(9, 30) <= et_time < time(16, 30):
         return "new_york"
     return "off_hours"
 
@@ -276,7 +276,7 @@ def build_market_state(payload: AlertPayload) -> MarketState:
         vwap=VWAPData(
             value=vwap_value,
             price_vs_vwap=price_vs_vwap,
-            reclaimed=price_vs_vwap == "above",
+            reclaimed=payload.vwap_reclaimed,
             holding=price_vs_vwap in ("above", "below"),
         ),
         orb=ORBData(

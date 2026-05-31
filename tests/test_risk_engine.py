@@ -401,6 +401,88 @@ class TestPerSessionTradeLimit:
         assert result.approved
 
 
+class TestDynamicPositionSizing:
+
+    def _sizing_config(self, config):
+        from dataclasses import replace
+        from config.settings import PositionSizingConfig, PositionSizingRule
+
+        return replace(
+            config,
+            allowed_instruments=["MNQ", "MES", "ES", "NQ", "MGC", "MCL"],
+            max_contracts_per_instrument={
+                "MNQ": 2, "MES": 3, "ES": 3, "NQ": 2, "MGC": 0, "MCL": 0
+            },
+            position_sizing=PositionSizingConfig(
+                starting_balance=5000,
+                enabled=True,
+                aggressive_rounding=True,
+                rounding_threshold_percent=10,
+                sizing_rules=[
+                    PositionSizingRule(5000, 9000, "MES", 1),
+                    PositionSizingRule(9000, 13500, "MES", 2),
+                    PositionSizingRule(13500, 18000, "MES", 3),
+                    PositionSizingRule(18000, 25000, "ES", 1),
+                    PositionSizingRule(25000, 40000, "ES", 2),
+                    PositionSizingRule(40000, 60000, "ES", 3),
+                    PositionSizingRule(60000, None, "NQ", 2),
+                ],
+            ),
+        )
+
+    def _setup(self, instrument="MES", contracts=1):
+        return TradeSetup(
+            direction="LONG",
+            entry=5000.0,
+            stop=4990.0,
+            target=5020.0,
+            rr_ratio=2.0,
+            strategy="vwap_hold",
+            instrument=instrument,
+            session="new_york",
+            contracts=contracts,
+        )
+
+    def test_8500_rounds_up_and_allows_mes_two_contracts(self, config):
+        engine = RiskEngine(config=self._sizing_config(config))
+        state = DailyState(account_balance=8500)
+        result = engine.validate(self._setup("MES", 2), state)
+        assert result.approved
+
+    def test_9500_allows_mes_two_contracts_within_tier(self, config):
+        engine = RiskEngine(config=self._sizing_config(config))
+        state = DailyState(account_balance=9500)
+        result = engine.validate(self._setup("MES", 2), state)
+        assert result.approved
+
+    def test_17000_rounds_up_and_allows_es_one_contract(self, config):
+        engine = RiskEngine(config=self._sizing_config(config))
+        state = DailyState(account_balance=17000)
+        result = engine.validate(self._setup("ES", 1), state)
+        assert result.approved
+
+    def test_12000_on_way_down_stays_mes_two_contracts(self, config):
+        engine = RiskEngine(config=self._sizing_config(config))
+        state = DailyState(account_balance=12000)
+        assert engine.validate(self._setup("MES", 2), state).approved
+        rejected = engine.validate(self._setup("MES", 3), state)
+        assert rejected.rejected
+        assert rejected.failed_rule == "position_sizing_contracts"
+
+    def test_36000_rounds_to_40000_and_allows_es_three_contracts(self, config):
+        engine = RiskEngine(config=self._sizing_config(config))
+        state = DailyState(account_balance=36000)
+        result = engine.validate(self._setup("ES", 3), state)
+        assert result.approved
+
+    def test_wrong_instrument_for_tier_is_rejected(self, config):
+        engine = RiskEngine(config=self._sizing_config(config))
+        state = DailyState(account_balance=17000)
+        rejected = engine.validate(self._setup("MES", 3), state)
+        assert rejected.rejected
+        assert rejected.failed_rule == "position_sizing_instrument"
+
+
 class TestRRCalculation:
 
     def test_long_rr_calculation(self):

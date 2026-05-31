@@ -116,6 +116,11 @@ class BrokerInterface(ABC):
         ...
 
     @abstractmethod
+    def get_account_balance(self) -> Optional[float]:
+        """Return current account balance/equity when available."""
+        ...
+
+    @abstractmethod
     def get_broker_name(self) -> str:
         """Return a human-readable broker name for logging."""
         ...

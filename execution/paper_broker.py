@@ -33,6 +33,8 @@ from execution.broker_interface import (
 TICK_SIZE = {
     "MNQ": 0.25,
     "MES": 0.25,
+    "ES": 0.25,
+    "NQ": 0.25,
     "MGC": 0.10,
     "MCL": 0.01,
 }
@@ -40,6 +42,8 @@ TICK_SIZE = {
 TICK_VALUE = {
     "MNQ": 0.50,   # $0.50/tick
     "MES": 1.25,   # $1.25/tick
+    "ES": 12.50,   # $12.50/tick
+    "NQ": 5.00,    # $5.00/tick
     "MGC": 10.00,  # $10.00/tick
     "MCL": 10.00,  # $10.00/tick
 }
@@ -60,8 +64,9 @@ class PaperBroker(BrokerInterface):
     Never connects to any external service.
     """
 
-    def __init__(self):
+    def __init__(self, starting_balance: float = 5000.0):
         self._position: Optional[Position] = None
+        self._balance = float(starting_balance)
 
     @property
     def is_live(self) -> bool:
@@ -75,8 +80,8 @@ class PaperBroker(BrokerInterface):
             broker_name=self.get_broker_name(),
             asset_class="futures",
             account_mode="paper",
-            starting_capital=1000.0,
-            available_cash=1000.0,
+            starting_capital=self._balance,
+            available_cash=self._balance,
             estimated_margin_required=0.0,
             max_dollars_risk_per_trade=10.0,
             supports_brackets=True,
@@ -126,12 +131,19 @@ class PaperBroker(BrokerInterface):
         Attempt to resolve an open paper position using next-bar OHLC data.
 
         Returns:
-            Fill with WIN/LOSS result, or None if position not open.
+            Fill with WIN/LOSS/BREAKEVEN result, or None if position not yet resolved.
 
         Logic:
             Long: target hit if next_bar.high >= target, stop hit if next_bar.low <= stop
             Short: target hit if next_bar.low <= target, stop hit if next_bar.high >= stop
             Target takes priority if both levels are hit in the same bar.
+
+        1-contract only — breakeven-at-1R:
+            When 1R is reached without hitting target, the stop is moved to entry.
+            If subsequently stopped at entry, result is BREAKEVEN.
+
+        Multi-contract positions hold the full position until target or stop is hit.
+        No partial exits, no 1R management for 2+ contracts.
         """
         if self._position is None or not self._position.open:
             return None
@@ -143,7 +155,6 @@ class PaperBroker(BrokerInterface):
 
         target_hit = False
         stop_hit = False
-
         breakeven_hit = False
 
         if pos.direction == "LONG":
@@ -151,16 +162,18 @@ class PaperBroker(BrokerInterface):
             one_r = pos.entry_price + initial_risk if initial_risk > 0 else None
             target_hit = next_bar.high >= pos.target
             breakeven_hit = one_r is not None and next_bar.high >= one_r
-            active_stop = pos.entry_price if breakeven_hit else pos.stop
-            breakeven_stop_active = active_stop == pos.entry_price
+            breakeven_active = (breakeven_hit or pos.stop == pos.entry_price) and pos.quantity == 1
+            active_stop = pos.entry_price if breakeven_active else pos.stop
+            breakeven_stop_active = breakeven_active
             stop_hit = next_bar.low <= active_stop
         elif pos.direction == "SHORT":
             initial_risk = pos.stop - pos.entry_price
             one_r = pos.entry_price - initial_risk if initial_risk > 0 else None
             target_hit = next_bar.low <= pos.target
             breakeven_hit = one_r is not None and next_bar.low <= one_r
-            active_stop = pos.entry_price if breakeven_hit else pos.stop
-            breakeven_stop_active = active_stop == pos.entry_price
+            breakeven_active = (breakeven_hit or pos.stop == pos.entry_price) and pos.quantity == 1
+            active_stop = pos.entry_price if breakeven_active else pos.stop
+            breakeven_stop_active = breakeven_active
             stop_hit = next_bar.high >= active_stop
         else:
             return None
@@ -174,7 +187,8 @@ class PaperBroker(BrokerInterface):
             exit_reason = "BREAKEVEN_STOP" if breakeven_stop_active else "STOP_HIT"
             result = "BREAKEVEN" if breakeven_stop_active else "LOSS"
         else:
-            if breakeven_hit:
+            # 1-contract only: move stop to breakeven when 1R is reached
+            if breakeven_hit and pos.quantity == 1:
                 pos.stop = pos.entry_price
             # Position still open — no resolution yet
             return None
@@ -187,6 +201,7 @@ class PaperBroker(BrokerInterface):
 
         pnl_dollars = pnl_ticks * tick_val * pos.quantity
 
+        self._balance += pnl_dollars
         self._position = None  # Flat
 
         return Fill(
@@ -233,6 +248,9 @@ class PaperBroker(BrokerInterface):
     def get_position(self) -> Optional[Position]:
         return self._position if (self._position and self._position.open) else None
 
+    def get_account_balance(self) -> Optional[float]:
+        return round(self._balance, 2)
+
     def cancel_all(self) -> None:
         """Cancel (flatten) any open paper position without P&L."""
         if self._position:
@@ -258,6 +276,7 @@ class PaperBroker(BrokerInterface):
             pnl_ticks = (pos.entry_price - exit_price) / tick
 
         pnl_dollars = pnl_ticks * tick_val * pos.quantity
+        self._balance += pnl_dollars
         self._position = None
 
         return Fill(

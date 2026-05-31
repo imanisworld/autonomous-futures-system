@@ -34,6 +34,10 @@ class AlertPayload(BaseModel):
     # ── Optional session override (auto-detected from timestamp if absent) ───
     session: Optional[str] = None
 
+    # ── VWAP cross signal — must be sent explicitly by Pine (ta.crossover) ───
+    # False by default: vwap_reclaim strategy only fires on the actual cross bar.
+    vwap_reclaimed: bool = False
+
     # ── Optional context from Pine Script indicator ───────────────────────────
     avg_volume: int = 1
     vwap: Optional[float] = None

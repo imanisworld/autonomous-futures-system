@@ -13,7 +13,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 import yaml
 from dotenv import load_dotenv
@@ -37,6 +37,24 @@ class ConfigError(ValueError):
 
 
 # ─── Config Dataclass ────────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class PositionSizingRule:
+    min_balance: float
+    max_balance: Optional[float]
+    instrument: str
+    max_contracts: int
+
+
+@dataclass(frozen=True)
+class PositionSizingConfig:
+    starting_balance: float = 5000.0
+    enabled: bool = False
+    aggressive_rounding: bool = True
+    rounding_threshold_percent: float = 10.0
+    sizing_rules: List[PositionSizingRule] = field(default_factory=list)
+
 
 @dataclass
 class SystemConfig:
@@ -92,6 +110,8 @@ class SystemConfig:
     min_signal_bar_volume: dict = field(default_factory=dict)
     # Quality gates: require explicit daily/4H FTFC alignment when HTF data is present
     require_htf_alignment: dict = field(default_factory=dict)
+    # Per-instrument strategy exclusions — overrides enabled_concepts for that instrument
+    disabled_concepts_per_instrument: dict = field(default_factory=dict)
 
     # Future broker/capital planning (inactive while live trading is blocked)
     broker_priority: List[str] = field(default_factory=lambda: ["paper", "tradovate_sim", "ibkr_paper"])
@@ -101,6 +121,7 @@ class SystemConfig:
     max_daily_loss_percent: float = 3.0
     require_margin_check: bool = True
     max_contracts_per_instrument: dict = field(default_factory=dict)
+    position_sizing: PositionSizingConfig = field(default_factory=PositionSizingConfig)
 
     # Paths
     log_dir: str = "logs"
@@ -166,6 +187,7 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
     broker = rules.get("broker_roadmap", {})
     quality = rules.get("quality_gates", {})
     capital = rules.get("capital_guardrails", {})
+    sizing = rules.get("position_sizing", {})
 
     config = SystemConfig(
         live_trading_enabled=False,  # Always false — enforced above
@@ -189,6 +211,7 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         max_open_positions=position.get("max_open_positions", 1),
         averaging_down_allowed=position.get("averaging_down", False),
         max_contracts_per_instrument=position.get("max_contracts_per_instrument", {}),
+        position_sizing=_parse_position_sizing(sizing),
 
         require_entry=orders.get("require_entry", True),
         require_stop=orders.get("require_stop", True),
@@ -204,6 +227,7 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         non_tradable_states=condition.get("non_tradable_states", ["CHOPPY", "DEAD"]),
 
         enabled_concepts=strategy.get("enabled_concepts", []),
+        disabled_concepts_per_instrument=strategy.get("disabled_concepts_per_instrument", {}),
 
         broker_priority=broker.get("broker_priority", ["paper", "tradovate_sim", "ibkr_paper"]),
         starting_capital_default=float(capital.get("starting_capital_default", 1000)),
@@ -233,6 +257,31 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
     return config
 
 
+def _parse_position_sizing(raw: dict) -> PositionSizingConfig:
+    rules = []
+    for item in raw.get("sizing_rules", []) or []:
+        rules.append(
+            PositionSizingRule(
+                min_balance=float(item.get("min_balance", 0)),
+                max_balance=(
+                    float(item["max_balance"])
+                    if item.get("max_balance") is not None
+                    else None
+                ),
+                instrument=str(item.get("instrument", "")).upper(),
+                max_contracts=int(item.get("max_contracts", 0)),
+            )
+        )
+    rules.sort(key=lambda rule: rule.min_balance)
+    return PositionSizingConfig(
+        starting_balance=float(raw.get("starting_balance", 5000)),
+        enabled=bool(raw.get("position_sizing_enabled", False)),
+        aggressive_rounding=bool(raw.get("aggressive_rounding", True)),
+        rounding_threshold_percent=float(raw.get("rounding_threshold_percent", 10)),
+        sizing_rules=rules,
+    )
+
+
 def _validate_config(config: SystemConfig) -> None:
     """Sanity-check the loaded configuration."""
     if not config.allowed_instruments:
@@ -255,6 +304,19 @@ def _validate_config(config: SystemConfig) -> None:
         raise ConfigError("max_account_risk_per_trade_percent must be between 0 and 100.")
     if not (0 < config.max_daily_loss_percent <= 100):
         raise ConfigError("max_daily_loss_percent must be between 0 and 100.")
+    if config.position_sizing.starting_balance <= 0:
+        raise ConfigError("position_sizing.starting_balance must be > 0.")
+    if not (0 <= config.position_sizing.rounding_threshold_percent <= 100):
+        raise ConfigError("position_sizing.rounding_threshold_percent must be between 0 and 100.")
+    for rule in config.position_sizing.sizing_rules:
+        if rule.min_balance < 0:
+            raise ConfigError("position sizing min_balance must be >= 0.")
+        if rule.max_balance is not None and rule.max_balance <= rule.min_balance:
+            raise ConfigError("position sizing max_balance must be greater than min_balance.")
+        if not rule.instrument:
+            raise ConfigError("position sizing rule instrument is required.")
+        if rule.max_contracts < 1:
+            raise ConfigError("position sizing max_contracts must be >= 1.")
     if config.live_trading_enabled:
         # This should never be reached, but belt-and-suspenders
         raise LiveTradingBlockedError(source="post-parse validation")

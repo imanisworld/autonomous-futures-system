@@ -170,6 +170,7 @@ class JournalLogger:
         session_trade_counts: dict = {}
         last_outcomes: List[str] = []  # WIN, LOSS, or BREAKEVEN in order
         has_open_position = False
+        realized_pnl = 0.0
 
         for entry in entries:
             entry_type = entry.get("type")
@@ -179,6 +180,7 @@ class JournalLogger:
                 result = outcome_data.get("result")
                 if result in ("WIN", "LOSS", "BREAKEVEN"):
                     last_outcomes.append(result)
+                    realized_pnl += float(outcome_data.get("pnl_dollars") or 0.0)
                     has_open_position = False
                 continue
 
@@ -213,6 +215,7 @@ class JournalLogger:
             has_open_position=has_open_position,
             date=(for_date or date.today()).isoformat(),
             session_trade_counts=session_trade_counts,
+            account_balance=None,
         )
         for entry in entries:
             decision = entry.get("decision")
@@ -281,6 +284,26 @@ class JournalLogger:
                     last_open = None
 
         return last_open
+
+    def get_account_balance(
+        self,
+        starting_balance: float,
+        through_date: Optional[date] = None,
+    ) -> float:
+        """Reconstruct account balance by summing all journaled realized P&L."""
+        balance = float(starting_balance)
+        paths = sorted(self.log_dir.glob("journal_*.jsonl"))
+        if through_date is not None:
+            cutoff_name = f"journal_{through_date.isoformat()}.jsonl"
+            paths = [path for path in paths if path.name <= cutoff_name]
+
+        for path in paths:
+            for entry in self._read_entries(path):
+                if entry.get("type") != "OUTCOME":
+                    continue
+                outcome = entry.get("outcome") or {}
+                balance += float(outcome.get("pnl_dollars") or 0.0)
+        return round(balance, 2)
 
     def get_summary(self, for_date: Optional[date] = None) -> dict:
         """Return a human-readable summary of today's trading activity."""

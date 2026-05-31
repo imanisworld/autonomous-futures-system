@@ -37,7 +37,7 @@ from webhook.state_builder import build_market_state
 logger = logging.getLogger(__name__)
 
 
-def _make_broker() -> BrokerInterface:
+def _make_broker(starting_balance: float = 5000.0) -> BrokerInterface:
     """Return IBKRBroker when BROKER=ibkr, otherwise PaperBroker."""
     broker_env = os.getenv("BROKER", "paper").strip().lower()
     if broker_env == "ibkr":
@@ -46,7 +46,7 @@ def _make_broker() -> BrokerInterface:
             return IBKRBroker()
         except Exception as exc:
             logger.error("IBKRBroker init failed (%s) — falling back to PaperBroker", exc)
-    return PaperBroker()
+    return PaperBroker(starting_balance=starting_balance)
 
 
 def process_alert(
@@ -99,7 +99,11 @@ def process_alert(
     if daily_state.has_open_position:
         open_pos = journal.get_open_position(today)
         if open_pos and _position_is_complete(open_pos):
-            broker = PaperBroker()
+            broker = PaperBroker(
+                starting_balance=journal.get_account_balance(
+                    cfg.position_sizing.starting_balance, today
+                )
+            )
             broker.restore_position(
                 instrument=open_pos["instrument"] or state.instrument,
                 direction=open_pos["direction"],
@@ -171,7 +175,16 @@ def process_alert(
     journal_entry["confluence"] = result["confluence"]
 
     # ── Step 4: Risk validation ───────────────────────────────────────────────
-    contracts = cfg.max_contracts_per_instrument.get(state.instrument, 1)
+    journal_balance = journal.get_account_balance(
+        cfg.position_sizing.starting_balance, today
+    )
+    broker = _make_broker(starting_balance=journal_balance)
+    account_balance = broker.get_account_balance()
+    if account_balance is None:
+        account_balance = journal_balance
+    daily_state.account_balance = account_balance
+    risk_engine = RiskEngine(config=cfg)
+    contracts = risk_engine.recommended_contracts(state.instrument, account_balance)
     trade_setup = TradeSetup(
         direction=decision.setup.direction,
         entry=decision.setup.entry,
@@ -185,7 +198,7 @@ def process_alert(
         entry_time=state.timestamp,
         contracts=contracts,
     )
-    risk_result = RiskEngine(config=cfg).validate(trade_setup, daily_state)
+    risk_result = risk_engine.validate(trade_setup, daily_state)
     risk_dict = {
         "result": risk_result.result,
         "failed_rule": risk_result.failed_rule,
@@ -210,7 +223,6 @@ def process_alert(
         notes=decision.setup.notes,
         contracts=contracts,
     )
-    broker = _make_broker()
     broker.execute_bracket(order)
     daily_state.trade_count += 1
     daily_state.has_open_position = True

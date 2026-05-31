@@ -56,6 +56,23 @@ class TestPaperBrokerIdentity:
 
 class TestPaperBrokerExecution:
 
+    def test_initial_account_balance_defaults_to_5000(self):
+        broker = PaperBroker()
+        assert broker.get_account_balance() == 5000.0
+
+    def test_account_balance_updates_after_win(self, long_order):
+        broker = PaperBroker(starting_balance=5000)
+        broker.execute_bracket(long_order)
+        broker.resolve_position(NextBarOHLC(high=19545.0, low=19490.0))
+        assert broker.get_account_balance() == pytest.approx(5080.0, rel=1e-2)
+
+    def test_account_balance_updates_after_loss(self, long_order):
+        broker = PaperBroker(starting_balance=5000)
+        broker.execute_bracket(long_order)
+        broker.resolve_position(NextBarOHLC(high=19495.0, low=19475.0))
+        assert broker.get_account_balance() == pytest.approx(4960.0, rel=1e-2)
+
+
     def test_execute_bracket_returns_open_fill(self, broker, long_order):
         fill = broker.execute_bracket(long_order)
         assert fill.result == "OPEN"
@@ -142,6 +159,28 @@ class TestLongResolution:
         assert fill.contracts == 2
         assert fill.pnl_ticks == pytest.approx(160.0, rel=1e-2)
         assert fill.pnl_dollars == pytest.approx(160.0, rel=1e-2)
+
+    def test_multi_contract_does_not_move_stop_to_breakeven(self, broker):
+        order = BracketOrder(
+            instrument="MNQ",
+            direction="LONG",
+            entry=19500.0,
+            stop=19480.0,
+            target=19540.0,
+            rr_ratio=2.0,
+            strategy="orb_reclaim",
+            contracts=2,
+        )
+        broker.execute_bracket(order)
+
+        # Touches 1R (19520) and entry in the same bar, but multi-contract
+        # trades do not use breakeven management. Position should stay open.
+        fill = broker.resolve_position(NextBarOHLC(high=19525.0, low=19495.0))
+        assert fill is None
+        pos = broker.get_position()
+        assert pos is not None
+        assert pos.stop == order.stop
+
 
     @pytest.mark.parametrize(
         "instrument,tick_value",

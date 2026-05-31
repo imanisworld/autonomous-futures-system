@@ -1,6 +1,6 @@
 {
-  "ticker": "MNQ1!",
-  "timestamp": "1748000000000",
+  "ticker": "{{ticker}}",
+  "timestamp": "{{time}}",
   "open": 19480.0,
   "high": 19510.0,
   "low": 19475.0,
@@ -20,7 +20,8 @@
 
   "market_condition": "TRENDING",
   "trend_direction": "UP",
-  "trend_strength": "MODERATE",
+  "trend_strength": "STRONG",
+  "vwap_reclaimed": false,
 
   "previous_day_high": 19520.0,
   "previous_day_low": 19440.0,

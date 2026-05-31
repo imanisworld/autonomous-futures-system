@@ -159,13 +159,16 @@ class ReplayCandleLoader:
         allow_mixed_instruments: bool,
     ) -> None:
         timestamps: list[datetime] = []
-        seen_raw_timestamps: set[str] = set()
+        # In mixed-instrument files each instrument has its own timestamp stream;
+        # duplicates are only an error when (timestamp, instrument) repeats.
+        seen_per_instrument: dict[str, set[str]] = {}
         instruments: set[str] = set()
 
         for idx, candle in enumerate(candles, start=1):
-            if candle.timestamp in seen_raw_timestamps:
+            seen = seen_per_instrument.setdefault(candle.instrument, set())
+            if candle.timestamp in seen:
                 raise ValueError(f"{replay_path}:{idx} duplicate timestamp: {candle.timestamp}")
-            seen_raw_timestamps.add(candle.timestamp)
+            seen.add(candle.timestamp)
             timestamps.append(_parse_timestamp(candle.timestamp))
             instruments.add(candle.instrument)
 

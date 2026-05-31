@@ -36,6 +36,7 @@ class DailyState:
     orb_break_short_played: bool = False
     # Per-session trade counts — keyed by session name (asian/london/new_york).
     session_trade_counts: Dict[str, int] = field(default_factory=dict)
+    account_balance: Optional[float] = None
 
 
 @dataclass
@@ -93,6 +94,7 @@ class RiskEngine:
         checks = [
             self._check_live_trading_disabled,
             self._check_instrument,
+            self._check_position_sizing,
             self._check_max_contracts,
             self._check_session,
             self._check_daily_trade_limit,
@@ -140,6 +142,81 @@ class RiskEngine:
                 ),
             )
         return None
+
+
+    def _check_position_sizing(
+        self, setup: TradeSetup, daily_state: DailyState
+    ) -> Optional[RiskResult]:
+        """Dynamic account-balance sizing ladder with aggressive upward rounding."""
+        sizing = self.config.position_sizing
+        if not sizing.enabled or not sizing.sizing_rules:
+            return None
+
+        balance = (
+            daily_state.account_balance
+            if daily_state.account_balance is not None
+            else sizing.starting_balance
+        )
+        rule = self._position_sizing_rule_for_balance(balance)
+        if rule is None:
+            return RiskResult(
+                result="REJECTED",
+                failed_rule="position_sizing_no_tier",
+                reason=f"No position sizing tier found for balance ${balance:,.2f}.",
+            )
+
+        if setup.instrument != rule.instrument:
+            return RiskResult(
+                result="REJECTED",
+                failed_rule="position_sizing_instrument",
+                reason=(
+                    f"Balance ${balance:,.2f} allows {rule.instrument} only; "
+                    f"received {setup.instrument}."
+                ),
+            )
+
+        if setup.contracts > rule.max_contracts:
+            return RiskResult(
+                result="REJECTED",
+                failed_rule="position_sizing_contracts",
+                reason=(
+                    f"Balance ${balance:,.2f} allows max {rule.max_contracts} "
+                    f"{rule.instrument} contract(s); received {setup.contracts}."
+                ),
+            )
+        return None
+
+    def _position_sizing_rule_for_balance(self, balance: float):
+        sizing = self.config.position_sizing
+        effective_balance = self._effective_sizing_balance(float(balance))
+        selected = None
+        for rule in sizing.sizing_rules:
+            upper_ok = rule.max_balance is None or effective_balance < rule.max_balance
+            if effective_balance >= rule.min_balance and upper_ok:
+                selected = rule
+        return selected
+
+    def _effective_sizing_balance(self, balance: float) -> float:
+        sizing = self.config.position_sizing
+        if not sizing.aggressive_rounding:
+            return balance
+        pct = sizing.rounding_threshold_percent / 100
+        effective = balance
+        for rule in sizing.sizing_rules:
+            threshold = rule.min_balance
+            if balance < threshold and balance >= threshold * (1 - pct):
+                effective = max(effective, threshold)
+        return effective
+
+    def recommended_contracts(self, instrument: str, balance: Optional[float]) -> int:
+        sizing = self.config.position_sizing
+        if sizing.enabled and sizing.sizing_rules:
+            rule = self._position_sizing_rule_for_balance(
+                sizing.starting_balance if balance is None else balance
+            )
+            if rule is not None and instrument == rule.instrument:
+                return rule.max_contracts
+        return int(self.config.max_contracts_per_instrument.get(instrument, 1))
 
     def _check_instrument(
         self, setup: TradeSetup, daily_state: DailyState
@@ -258,7 +335,7 @@ class RiskEngine:
         max_ticks = self.config.max_stop_ticks.get(setup.instrument, 0)
         if max_ticks <= 0:
             return None
-        tick_size = {"MNQ": 0.25, "MES": 0.25}.get(setup.instrument, 0.25)
+        tick_size = {"MNQ": 0.25, "MES": 0.25, "ES": 0.25, "NQ": 0.25}.get(setup.instrument, 0.25)
         risk_pts = (
             setup.entry - setup.stop
             if setup.direction == "LONG"

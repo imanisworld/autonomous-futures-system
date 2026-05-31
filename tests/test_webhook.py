@@ -116,7 +116,8 @@ def test_normalize_instrument(ticker, expected):
     ("2026-05-23T01:00:00+00:00", "asian"),      # 21:00 ET prev day — inside Asian window
     ("2026-05-23T12:30:00+00:00", "session_gap"), # 08:30 ET — gap before NY open
     ("2026-05-23T13:00:00+00:00", "session_gap"), # 09:00 ET — gap before NY open
-    ("2026-05-23T17:30:00+00:00", "off_hours"), # 13:30 ET — after NY close
+    ("2026-05-23T17:30:00+00:00", "new_york"),  # 13:30 ET — afternoon NY window
+    ("2026-05-23T20:30:00+00:00", "off_hours"), # 16:30 ET — after NY close
 ])
 def test_detect_session(iso, expected_session):
     ts = parse_timestamp(iso)

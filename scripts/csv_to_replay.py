@@ -62,7 +62,7 @@ def detect_session(dt: datetime) -> str:
         return "london"
     if time(8, 30) <= et < time(9, 30):
         return "session_gap"
-    if time(9, 30) <= et <= time(12, 0):
+    if time(9, 30) <= et < time(16, 30):
         return "new_york"
     return "off_hours"
 

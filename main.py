@@ -172,6 +172,9 @@ def main() -> int:
     if decision.decision == "TRADE" and decision.setup is not None:
         risk_engine = RiskEngine(config=config)
         setup = decision.setup
+        account_balance = journal.get_account_balance(config.position_sizing.starting_balance)
+        daily_state.account_balance = account_balance
+        contracts = risk_engine.recommended_contracts(state.instrument, account_balance)
 
         trade_setup = TradeSetup(
             direction=setup.direction,
@@ -183,6 +186,7 @@ def main() -> int:
             instrument=state.instrument,
             session=state.session,
             notes=setup.notes,
+            contracts=contracts,
         )
 
         risk_result = risk_engine.validate(trade_setup, daily_state)
@@ -201,7 +205,7 @@ def main() -> int:
         if risk_result.approved:
             journal.log_decision(decision.to_dict(), risk_result_dict)
             decision_logged = True
-            broker = PaperBroker()
+            broker = PaperBroker(starting_balance=account_balance)
             from execution.broker_interface import BracketOrder
             order = BracketOrder(
                 instrument=state.instrument,
@@ -212,6 +216,7 @@ def main() -> int:
                 rr_ratio=setup.rr_ratio,
                 strategy=setup.strategy,
                 notes=setup.notes,
+                contracts=contracts,
             )
             fill = broker.execute_bracket(order)
             log.info(
