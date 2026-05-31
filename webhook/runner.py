@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Optional
 
 from config.settings import SystemConfig, load_config
@@ -126,8 +126,10 @@ def process_alert(
                         f"{fill.result}: {fill.instrument} {fill.contracts}c P&L ${float(fill.pnl_dollars or 0):.2f}"
                     )
                 daily_state.has_open_position = False
+                daily_state.realized_pnl_dollars += float(fill.pnl_dollars or 0.0)
                 if fill.result == "LOSS":
                     daily_state.consecutive_losses += 1
+                    daily_state.last_loss_at = datetime.now(timezone.utc)
                 elif fill.result in ("WIN", "BREAKEVEN"):
                     daily_state.consecutive_losses = 0
 
