@@ -210,7 +210,7 @@ class ReplayEngine:
                         daily_state.realized_pnl_dollars += float(fill.pnl_dollars or 0.0)
                         if fill.result == "LOSS":
                             daily_state.consecutive_losses += 1
-                            daily_state.last_loss_at = datetime.now(timezone.utc)
+                            daily_state.last_loss_at = _parse_timestamp(fc.timestamp)
                         elif fill.result in ("WIN", "BREAKEVEN"):
                             daily_state.consecutive_losses = 0
                         daily_state.has_open_position = False

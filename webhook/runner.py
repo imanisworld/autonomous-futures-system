@@ -129,7 +129,7 @@ def process_alert(
                 daily_state.realized_pnl_dollars += float(fill.pnl_dollars or 0.0)
                 if fill.result == "LOSS":
                     daily_state.consecutive_losses += 1
-                    daily_state.last_loss_at = datetime.now(timezone.utc)
+                    daily_state.last_loss_at = state.timestamp
                 elif fill.result in ("WIN", "BREAKEVEN"):
                     daily_state.consecutive_losses = 0
 
