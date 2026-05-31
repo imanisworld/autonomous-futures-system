@@ -500,3 +500,60 @@ class TestRRCalculation:
     def test_invalid_direction_returns_zero(self):
         rr = RiskEngine.calculate_rr("BUY", entry=19500, stop=19480, target=19540)
         assert rr == 0.0
+
+class TestRailwaySafetyLayers:
+
+    def test_max_daily_loss_rejects(self, config, valid_trade_setup):
+        config.max_daily_loss = 150
+        engine = RiskEngine(config=config)
+        daily = DailyState(realized_pnl_dollars=-150.0)
+
+        result = engine.validate(valid_trade_setup, daily)
+
+        assert result.rejected
+        assert result.failed_rule == "max_daily_loss"
+
+    def test_max_drawdown_rejects(self, config, valid_trade_setup):
+        config.max_drawdown_percent = 0.20
+        engine = RiskEngine(config=config)
+        daily = DailyState(account_balance=1200.0, account_peak_balance=1500.0)
+
+        result = engine.validate(valid_trade_setup, daily)
+
+        assert result.rejected
+        assert result.failed_rule == "max_drawdown"
+
+    def test_circuit_breaker_pauses_for_configured_minutes(self, config, valid_trade_setup):
+        from datetime import datetime, timedelta, timezone
+
+        config.circuit_breaker_losses = 3
+        config.circuit_breaker_pause_minutes = 30
+        now = datetime(2026, 5, 31, 14, 0, tzinfo=timezone.utc)
+        valid_trade_setup.entry_time = now
+        engine = RiskEngine(config=config)
+        daily = DailyState(
+            consecutive_losses=3,
+            last_loss_at=now - timedelta(minutes=10),
+        )
+
+        result = engine.validate(valid_trade_setup, daily)
+
+        assert result.rejected
+        assert result.failed_rule == "circuit_breaker"
+
+    def test_circuit_breaker_allows_after_pause(self, config, valid_trade_setup):
+        from datetime import datetime, timedelta, timezone
+
+        config.circuit_breaker_losses = 3
+        config.circuit_breaker_pause_minutes = 30
+        now = datetime(2026, 5, 31, 14, 45, tzinfo=timezone.utc)
+        valid_trade_setup.entry_time = now
+        engine = RiskEngine(config=config)
+        daily = DailyState(
+            consecutive_losses=3,
+            last_loss_at=now - timedelta(minutes=45),
+        )
+
+        result = engine.validate(valid_trade_setup, daily)
+
+        assert result.failed_rule != "circuit_breaker"

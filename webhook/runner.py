@@ -11,10 +11,9 @@ Flow per bar:
   4. If approved: execute a bracket order via the configured broker and log it.
   5. Return a structured result dict.
 
-Broker selection: set BROKER=ibkr in .env to route live bracket orders through
-IB Gateway/TWS paper account. Default is BROKER=paper (fully simulated).
-Position resolution (stop/target simulation) always uses PaperBroker logic
-since IBKR manages its own bracket fills internally.
+Broker selection is intentionally paper-only for Railway deployment.
+Position resolution uses PaperBroker simulated fills and never routes orders to
+IBKR or Tradovate.
 """
 
 from __future__ import annotations
@@ -37,15 +36,8 @@ from webhook.state_builder import build_market_state
 logger = logging.getLogger(__name__)
 
 
-def _make_broker(starting_balance: float = 5000.0) -> BrokerInterface:
-    """Return IBKRBroker when BROKER=ibkr, otherwise PaperBroker."""
-    broker_env = os.getenv("BROKER", "paper").strip().lower()
-    if broker_env == "ibkr":
-        try:
-            from execution.ibkr_broker import IBKRBroker
-            return IBKRBroker()
-        except Exception as exc:
-            logger.error("IBKRBroker init failed (%s) — falling back to PaperBroker", exc)
+def _make_broker(starting_balance: float = 1500.0) -> BrokerInterface:
+    """Railway deployment is paper-only: always return PaperBroker."""
     return PaperBroker(starting_balance=starting_balance)
 
 
@@ -129,6 +121,10 @@ def process_alert(
                     for_date=today,
                 )
                 result["resolution"] = fill.result
+                if fill.result in {"WIN", "LOSS"}:
+                    send_telegram_message(
+                        f"{fill.result}: {fill.instrument} {fill.contracts}c P&L ${float(fill.pnl_dollars or 0):.2f}"
+                    )
                 daily_state.has_open_position = False
                 if fill.result == "LOSS":
                     daily_state.consecutive_losses += 1
@@ -139,7 +135,7 @@ def process_alert(
     if daily_state.trade_count >= cfg.max_trades_per_day:
         result["decision"] = "BLOCKED_MAX_TRADES"
         return result
-    if daily_state.consecutive_losses >= cfg.max_consecutive_losses:
+    if daily_state.consecutive_losses >= cfg.max_consecutive_losses and not cfg.circuit_breaker_losses:
         result["decision"] = "BLOCKED_LOSS_LOCKOUT"
         return result
     if daily_state.has_open_position:
@@ -183,6 +179,9 @@ def process_alert(
     if account_balance is None:
         account_balance = journal_balance
     daily_state.account_balance = account_balance
+    daily_state.account_peak_balance = journal.get_account_peak_balance(
+        cfg.position_sizing.starting_balance, today
+    )
     risk_engine = RiskEngine(config=cfg)
     contracts = risk_engine.recommended_contracts(state.instrument, account_balance)
     trade_setup = TradeSetup(
@@ -209,6 +208,8 @@ def process_alert(
 
     if not risk_result.approved:
         result["decision"] = "RISK_REJECTED"
+        if risk_result.failed_rule in {"circuit_breaker", "max_daily_loss", "max_drawdown"}:
+            send_telegram_message(f"CIRCUIT_BREAKER: {risk_result.reason}")
         return result
 
     # ── Step 5: Execute bracket order ────────────────────────────────────────
@@ -224,6 +225,9 @@ def process_alert(
         contracts=contracts,
     )
     broker.execute_bracket(order)
+    send_telegram_message(
+        f"TRADE: {order.instrument} {order.direction} {order.contracts}c @ {order.entry} stop {order.stop} target {order.target}"
+    )
     daily_state.trade_count += 1
     daily_state.has_open_position = True
 
@@ -327,3 +331,23 @@ def _market_state_context(state) -> dict:
             "htf_phase": state.icc.htf_phase if state.icc else None,
         },
     }
+
+
+def send_telegram_message(message: str) -> bool:
+    """Optional Telegram notification. Disabled unless token/chat env vars exist."""
+    token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+    chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
+    if not token or not chat_id:
+        return False
+    try:
+        import httpx
+        response = httpx.post(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            json={"chat_id": chat_id, "text": message},
+            timeout=5,
+        )
+        response.raise_for_status()
+        return True
+    except Exception as exc:  # pragma: no cover - network/env dependent
+        logger.warning("Telegram notification failed: %s", exc)
+        return False

@@ -64,7 +64,7 @@ class PaperBroker(BrokerInterface):
     Never connects to any external service.
     """
 
-    def __init__(self, starting_balance: float = 5000.0):
+    def __init__(self, starting_balance: float = 1500.0):
         self._position: Optional[Position] = None
         self._balance = float(starting_balance)
 

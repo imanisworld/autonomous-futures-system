@@ -46,7 +46,12 @@ session_hours_et:
 # ─── Daily Limits ────────────────────────────────────────────
 daily_limits:
   max_trades_per_day: 3             # Hard ceiling, calendar-day reset
-  max_consecutive_losses: 2        # Stop after 2 losses in a row
+  max_consecutive_losses: 3        # Aligns with circuit breaker loss count
+  max_daily_loss: 150              # 10% of $1,500 starting balance
+  max_drawdown_percent: 0.20       # Stop if account falls 20% from peak
+  circuit_breaker_losses: 3        # Pause after 3 consecutive losses
+  circuit_breaker_pause_minutes: 30
+  conservative_mode: true          # Start Railway paper mode with MES 1c
   per_session_limits:
     asian: 1                        # Protect NY budget from overnight fills
     london: 2
@@ -90,7 +95,7 @@ position_rules:
   averaging_down: false            # Absolute prohibition
   discretionary_override: false    # No manual intervention
   max_contracts_per_instrument:
-    MNQ: 2
+    MNQ: 0                          # Railway paper-only MES ladder for now
     MES: 3                          # Dynamic sizing controls actual MES tier
     ES: 3
     NQ: 2
@@ -100,38 +105,26 @@ position_rules:
 
 # ─── Dynamic Position Sizing / Compounding ───────────────────────────────────
 position_sizing:
-  starting_balance: 5000
+  starting_balance: 1500
   position_sizing_enabled: true
-  aggressive_rounding: true
-  rounding_threshold_percent: 10
+  aggressive_rounding: false         # Conservative Railway paper launch
+  rounding_threshold_percent: 0
   sizing_rules:
-    - min_balance: 5000
-      max_balance: 9000
+    - min_balance: 0
+      max_balance: 2000
       instrument: "MES"
       max_contracts: 1
-    - min_balance: 9000
-      max_balance: 13500
+    - min_balance: 2000
+      max_balance: 4000
       instrument: "MES"
       max_contracts: 2
-    - min_balance: 13500
-      max_balance: 18000
+    - min_balance: 4000
+      max_balance: 6000
       instrument: "MES"
       max_contracts: 3
-    - min_balance: 18000
-      max_balance: 25000
-      instrument: "ES"
-      max_contracts: 1
-    - min_balance: 25000
-      max_balance: 40000
-      instrument: "ES"
-      max_contracts: 2
-    - min_balance: 40000
-      max_balance: 60000
-      instrument: "ES"
+    - min_balance: 6000
+      instrument: "MES"
       max_contracts: 3
-    - min_balance: 60000
-      instrument: "NQ"
-      max_contracts: 2
 
 # ─── Order Rules ─────────────────────────────────────────────
 order_rules:
@@ -223,7 +216,7 @@ broker_roadmap:
     - "No broker SDK, credentials, or live execution are enabled by this metadata."
 
 capital_guardrails:
-  starting_capital_default: 5000
+  starting_capital_default: 1500
   minimum_starting_capital: 500
   max_account_risk_per_trade_percent: 1.0
   max_daily_loss_percent: 3.0

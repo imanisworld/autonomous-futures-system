@@ -56,9 +56,9 @@ class TestPaperBrokerIdentity:
 
 class TestPaperBrokerExecution:
 
-    def test_initial_account_balance_defaults_to_5000(self):
+    def test_initial_account_balance_defaults_to_1500(self):
         broker = PaperBroker()
-        assert broker.get_account_balance() == 5000.0
+        assert broker.get_account_balance() == 1500.0
 
     def test_account_balance_updates_after_win(self, long_order):
         broker = PaperBroker(starting_balance=5000)

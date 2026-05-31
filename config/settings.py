@@ -71,6 +71,11 @@ class SystemConfig:
     # Daily limits
     max_trades_per_day: int
     max_consecutive_losses: int
+    max_daily_loss: float
+    max_drawdown_percent: float
+    circuit_breaker_losses: int
+    circuit_breaker_pause_minutes: int
+    conservative_mode: bool
 
     # Position rules
     max_open_positions: int
@@ -191,7 +196,7 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
 
     config = SystemConfig(
         live_trading_enabled=False,  # Always false — enforced above
-        paper_mode=trading.get("paper_mode", True),
+        paper_mode=_env_bool("PAPER_MODE", trading.get("paper_mode", True)),
 
         allowed_instruments=instruments.get("allowed", []),
         allowed_sessions=sessions.get("allowed", []),
@@ -200,6 +205,11 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
 
         max_trades_per_day=daily.get("max_trades_per_day", 3),
         max_consecutive_losses=daily.get("max_consecutive_losses", 2),
+        max_daily_loss=float(daily.get("max_daily_loss", 0) or 0),
+        max_drawdown_percent=float(daily.get("max_drawdown_percent", 0) or 0),
+        circuit_breaker_losses=int(daily.get("circuit_breaker_losses", 0) or 0),
+        circuit_breaker_pause_minutes=int(daily.get("circuit_breaker_pause_minutes", 30) or 30),
+        conservative_mode=bool(daily.get("conservative_mode", False)),
         per_session_limits=daily.get("per_session_limits", {}),
         session_cutoffs=daily.get("session_cutoffs_et", {}),
         min_target_points=daily.get("min_target_points", {}),
@@ -238,7 +248,7 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         max_daily_loss_percent=float(capital.get("max_daily_loss_percent", 3.0)),
         require_margin_check=capital.get("require_margin_check", True),
 
-        log_dir=os.getenv("LOG_DIR", "logs"),
+        log_dir=os.getenv("LOG_DIR", "/app/logs" if os.getenv("RAILWAY_ENVIRONMENT") else "logs"),
         log_level=os.getenv("LOG_LEVEL", "INFO"),
         risk_rules_path=risk_rules_path,
 
@@ -258,6 +268,9 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
 
 
 def _parse_position_sizing(raw: dict) -> PositionSizingConfig:
+    raw = dict(raw or {})
+    if os.getenv("STARTING_BALANCE"):
+        raw["starting_balance"] = os.getenv("STARTING_BALANCE")
     rules = []
     for item in raw.get("sizing_rules", []) or []:
         rules.append(

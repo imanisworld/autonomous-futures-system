@@ -11,7 +11,7 @@ Returns RiskResult(APPROVED) or RiskResult(REJECTED, failed_rule, reason).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional
 from zoneinfo import ZoneInfo
 
@@ -37,6 +37,9 @@ class DailyState:
     # Per-session trade counts — keyed by session name (asian/london/new_york).
     session_trade_counts: Dict[str, int] = field(default_factory=dict)
     account_balance: Optional[float] = None
+    account_peak_balance: Optional[float] = None
+    realized_pnl_dollars: float = 0.0
+    last_loss_at: Optional[datetime] = None
 
 
 @dataclass
@@ -98,6 +101,9 @@ class RiskEngine:
             self._check_max_contracts,
             self._check_session,
             self._check_daily_trade_limit,
+            self._check_daily_loss_limit,
+            self._check_max_drawdown,
+            self._check_circuit_breaker,
             self._check_per_session_trade_limit,
             self._check_session_cutoff,
             self._check_consecutive_losses,
@@ -263,6 +269,80 @@ class RiskEngine:
             )
         return None
 
+
+    def _check_daily_loss_limit(
+        self, setup: TradeSetup, daily_state: DailyState
+    ) -> Optional[RiskResult]:
+        """Stop entries once realized daily P&L reaches the configured loss cap."""
+        max_loss = float(getattr(self.config, "max_daily_loss", 0) or 0)
+        if max_loss <= 0:
+            return None
+        if daily_state.realized_pnl_dollars <= -abs(max_loss):
+            return RiskResult(
+                result="REJECTED",
+                failed_rule="max_daily_loss",
+                reason=(
+                    f"Daily loss limit reached: ${daily_state.realized_pnl_dollars:.2f} "
+                    f"realized P&L (max loss ${abs(max_loss):.2f})."
+                ),
+            )
+        return None
+
+    def _check_max_drawdown(
+        self, setup: TradeSetup, daily_state: DailyState
+    ) -> Optional[RiskResult]:
+        """Stop entries if account balance is below peak by configured percent."""
+        max_dd = float(getattr(self.config, "max_drawdown_percent", 0) or 0)
+        if max_dd <= 0 or daily_state.account_balance is None:
+            return None
+        peak = daily_state.account_peak_balance or max(
+            daily_state.account_balance,
+            self.config.position_sizing.starting_balance,
+        )
+        if peak <= 0:
+            return None
+        drawdown = (peak - daily_state.account_balance) / peak
+        if drawdown >= max_dd:
+            return RiskResult(
+                result="REJECTED",
+                failed_rule="max_drawdown",
+                reason=(
+                    f"Account drawdown {drawdown:.1%} exceeds max {max_dd:.1%} "
+                    f"from peak ${peak:,.2f}."
+                ),
+            )
+        return None
+
+    def _check_circuit_breaker(
+        self, setup: TradeSetup, daily_state: DailyState
+    ) -> Optional[RiskResult]:
+        """Pause entries after N consecutive losses for configured minutes."""
+        losses = int(getattr(self.config, "circuit_breaker_losses", 0) or 0)
+        if losses <= 0 or daily_state.consecutive_losses < losses:
+            return None
+        pause_minutes = int(getattr(self.config, "circuit_breaker_pause_minutes", 30) or 30)
+        now = setup.entry_time or datetime.now(timezone.utc)
+        last_loss_at = daily_state.last_loss_at
+        if last_loss_at is None:
+            return RiskResult(
+                result="REJECTED",
+                failed_rule="circuit_breaker",
+                reason=f"Circuit breaker active after {daily_state.consecutive_losses} consecutive losses.",
+            )
+        if last_loss_at.tzinfo is None:
+            last_loss_at = last_loss_at.replace(tzinfo=timezone.utc)
+        until = last_loss_at + timedelta(minutes=pause_minutes)
+        if now < until:
+            return RiskResult(
+                result="REJECTED",
+                failed_rule="circuit_breaker",
+                reason=(
+                    f"Circuit breaker active after {daily_state.consecutive_losses} losses; "
+                    f"paused until {until.astimezone(_ET).strftime('%H:%M')} ET."
+                ),
+            )
+        return None
+
     def _check_per_session_trade_limit(
         self, setup: TradeSetup, daily_state: DailyState
     ) -> Optional[RiskResult]:
@@ -357,6 +437,8 @@ class RiskEngine:
         self, setup: TradeSetup, daily_state: DailyState
     ) -> Optional[RiskResult]:
         """Must stop after N consecutive losses."""
+        if getattr(self.config, "circuit_breaker_losses", 0):
+            return None
         if daily_state.consecutive_losses >= self.config.max_consecutive_losses:
             return RiskResult(
                 result="REJECTED",

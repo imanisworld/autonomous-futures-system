@@ -171,6 +171,7 @@ class JournalLogger:
         last_outcomes: List[str] = []  # WIN, LOSS, or BREAKEVEN in order
         has_open_position = False
         realized_pnl = 0.0
+        last_loss_at = None
 
         for entry in entries:
             entry_type = entry.get("type")
@@ -181,6 +182,8 @@ class JournalLogger:
                 if result in ("WIN", "LOSS", "BREAKEVEN"):
                     last_outcomes.append(result)
                     realized_pnl += float(outcome_data.get("pnl_dollars") or 0.0)
+                    if result == "LOSS":
+                        last_loss_at = _parse_ts(entry.get("ts"))
                     has_open_position = False
                 continue
 
@@ -197,6 +200,8 @@ class JournalLogger:
                     session_trade_counts[session] = session_trade_counts.get(session, 0) + 1
                 if outcome_result in ("WIN", "LOSS", "BREAKEVEN"):
                     last_outcomes.append(outcome_result)
+                    if outcome_result == "LOSS":
+                        last_loss_at = _parse_ts(entry.get("ts"))
                     has_open_position = False
                 else:
                     has_open_position = True
@@ -216,6 +221,8 @@ class JournalLogger:
             date=(for_date or date.today()).isoformat(),
             session_trade_counts=session_trade_counts,
             account_balance=None,
+            realized_pnl_dollars=round(realized_pnl, 2),
+            last_loss_at=last_loss_at,
         )
         for entry in entries:
             decision = entry.get("decision")
@@ -305,6 +312,29 @@ class JournalLogger:
                 balance += float(outcome.get("pnl_dollars") or 0.0)
         return round(balance, 2)
 
+
+    def get_account_peak_balance(
+        self,
+        starting_balance: float,
+        through_date: Optional[date] = None,
+    ) -> float:
+        """Reconstruct the highest account balance reached after journaled outcomes."""
+        balance = float(starting_balance)
+        peak = balance
+        paths = sorted(self.log_dir.glob("journal_*.jsonl"))
+        if through_date is not None:
+            cutoff_name = f"journal_{through_date.isoformat()}.jsonl"
+            paths = [path for path in paths if path.name <= cutoff_name]
+
+        for path in paths:
+            for entry in self._read_entries(path):
+                if entry.get("type") != "OUTCOME":
+                    continue
+                outcome = entry.get("outcome") or {}
+                balance += float(outcome.get("pnl_dollars") or 0.0)
+                peak = max(peak, balance)
+        return round(peak, 2)
+
     def get_summary(self, for_date: Optional[date] = None) -> dict:
         """Return a human-readable summary of today's trading activity."""
         path = self._journal_path(for_date)
@@ -348,3 +378,13 @@ class JournalLogger:
             finally:
                 if fcntl is not None:
                     fcntl.flock(lock_file, fcntl.LOCK_UN)
+
+
+def _parse_ts(value: str | None) -> Optional[datetime]:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+    except Exception:
+        return None

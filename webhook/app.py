@@ -122,8 +122,8 @@ async def health() -> dict:
         "ok": True,
         "live_trading_enabled": _config.live_trading_enabled,
         "paper_mode": _config.paper_mode,
-        "broker": broker_mode,
-        "broker_gateway_reachable": broker_connected,
+        "broker": "paper",
+        "broker_gateway_reachable": None,
         "webhook_secret_required": bool(_configured_webhook_secret()),
         "discord_notifications_enabled": _config.discord_notifications_enabled,
         "signa_api_enabled": _config.signa_api_enabled,
@@ -156,6 +156,7 @@ async def status_history(days: int = Query(default=7, ge=1, le=30)) -> dict:
                 "wins": payload["wins"],
                 "losses": payload["losses"],
                 "realized_pnl_dollars": payload["realized_pnl_dollars"],
+                "win_rate": payload["win_rate"],
             }
         )
     return {"days": history}
@@ -229,10 +230,18 @@ def _dashboard_payload(for_date: date) -> dict:
         float((entry.get("outcome") or {}).get("pnl_dollars") or 0.0)
         for entry in entries
     )
+    wins = summary.get("wins", 0)
+    losses = summary.get("losses", 0)
+    resolved = wins + losses
+    win_rate = round((wins / resolved) * 100, 1) if resolved else 0.0
+    account_balance = journal.get_account_balance(_config.position_sizing.starting_balance, for_date)
+    account_peak = journal.get_account_peak_balance(_config.position_sizing.starting_balance, for_date)
     return {
         "date": daily_state.date,
         "live_trading_enabled": _config.live_trading_enabled,
         "paper_mode": _config.paper_mode,
+        "account_balance": account_balance,
+        "account_peak_balance": account_peak,
         "trade_count": daily_state.trade_count,
         "max_trades_per_day": _config.max_trades_per_day,
         "consecutive_losses": daily_state.consecutive_losses,
@@ -240,8 +249,9 @@ def _dashboard_payload(for_date: date) -> dict:
         "has_open_position": daily_state.has_open_position,
         "open_position": journal.get_open_position(for_date),
         "no_trades": summary.get("no_trades", 0),
-        "wins": summary.get("wins", 0),
-        "losses": summary.get("losses", 0),
+        "wins": wins,
+        "losses": losses,
+        "win_rate": win_rate,
         "realized_pnl_dollars": round(realized_pnl, 2),
         "journal_path": summary.get("journal_path", str(path)),
         "latest_entries": [_public_entry(entry) for entry in recent_entries],
@@ -356,7 +366,6 @@ def _render_dashboard(status: dict) -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta http-equiv="refresh" content="15">
   <meta name="theme-color" content="#00d5ff">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -413,7 +422,7 @@ def _render_dashboard(status: dict) -> str:
     }}
     .grid {{
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
       gap: 12px;
       margin-bottom: 14px;
     }}
@@ -477,7 +486,7 @@ def _render_dashboard(status: dict) -> str:
     .rule.danger span {{ color: var(--red); }}
     .context-grid {{
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
       gap: 10px;
       margin-top: 12px;
     }}
@@ -524,19 +533,24 @@ def _render_dashboard(status: dict) -> str:
     <section class="grid">
       <div class="panel">
         <h2>Session P/L</h2>
-        <div class="metric {'green' if status['realized_pnl_dollars'] >= 0 else 'red'}">${status['realized_pnl_dollars']:.2f}</div>
+        <div id="metric-pnl" class="metric {'green' if status['realized_pnl_dollars'] >= 0 else 'red'}">${status['realized_pnl_dollars']:.2f}</div>
       </div>
       <div class="panel">
         <h2>Trades</h2>
-        <div class="metric cyan">{status['trade_count']}<small>/{status['max_trades_per_day']}</small></div>
+        <div id="metric-trades" class="metric cyan">{status['trade_count']}<small>/{status['max_trades_per_day']}</small></div>
       </div>
       <div class="panel">
-        <h2>Loss Streak</h2>
-        <div class="metric {'red' if lockout else 'amber'}">{status['consecutive_losses']}<small>/{status['max_consecutive_losses']}</small></div>
+        <h2>Win Rate</h2>
+        <div id="metric-winrate" class="metric {'green' if status['win_rate'] >= 50 else 'amber'}">{status['win_rate']:.1f}<small>%</small></div>
       </div>
       <div class="panel">
-        <h2>NO_TRADE</h2>
-        <div class="metric">{status['no_trades']}</div>
+        <h2>Open Position</h2>
+        <div id="metric-open" class="metric">{'1' if status['has_open_position'] else '0'}</div>
+      </div>
+      <div class="panel">
+        <h2>Balance</h2>
+        <div id="metric-balance" class="metric cyan">${status['account_balance']:.2f}</div>
+        <p id="metric-peak" class="sub">Peak ${status['account_peak_balance']:.2f}</p>
       </div>
     </section>
 
@@ -607,11 +621,78 @@ def _render_dashboard(status: dict) -> str:
             <th>Outcome</th>
           </tr>
         </thead>
-        <tbody>{latest_rows or '<tr><td colspan="6">No journal entries yet.</td></tr>'}</tbody>
+        <tbody id="journal-tbody">{latest_rows or '<tr><td colspan="6">No journal entries yet.</td></tr>'}</tbody>
       </table>
       </div>
     </section>
   </main>
+  <script>
+    function escapeHtml(value) {{
+      return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#x27;');
+    }}
+
+    function shortTime(value) {{
+      if (!value) return '';
+      try {{
+        const date = new Date(value);
+        return date.toLocaleTimeString([], {{hour: 'numeric', minute: '2-digit'}});
+      }} catch (error) {{
+        return String(value).split('T').at(-1)?.slice(0, 5) || '';
+      }}
+    }}
+
+    function renderEntryRow(entry) {{
+      const outcome = entry.outcome
+        ? `${{entry.outcome}}${{entry.pnl_dollars != null ? ' $' + Number(entry.pnl_dollars).toFixed(2) : ''}}`
+        : '';
+      return `<tr>
+        <td>${{escapeHtml(shortTime(entry.ts))}}</td>
+        <td>${{escapeHtml(entry.instrument || '')}}</td>
+        <td class="col-session">${{escapeHtml(entry.session || '')}}</td>
+        <td>${{escapeHtml(entry.decision || entry.type || '')}}</td>
+        <td class="reason">${{escapeHtml(entry.reason || '')}}</td>
+        <td>${{escapeHtml(outcome)}}</td>
+      </tr>`;
+    }}
+
+    async function refreshDashboard() {{
+      try {{
+        const [today, history] = await Promise.all([
+          fetch('/status/today', {{cache: 'no-store'}}).then(r => r.json()),
+          fetch('/status/history?days=7', {{cache: 'no-store'}}).then(r => r.json())
+        ]);
+        const pnl = document.getElementById('metric-pnl');
+        const trades = document.getElementById('metric-trades');
+        const winrate = document.getElementById('metric-winrate');
+        const open = document.getElementById('metric-open');
+        const bal = document.getElementById('metric-balance');
+        const peak = document.getElementById('metric-peak');
+        const tbody = document.getElementById('journal-tbody');
+        if (pnl) pnl.textContent = `$${{Number(today.realized_pnl_dollars || 0).toFixed(2)}}`;
+        if (trades) trades.innerHTML = `${{today.trade_count || 0}}<small>/${{today.max_trades_per_day || 0}}</small>`;
+        if (winrate) winrate.innerHTML = `${{Number(today.win_rate || 0).toFixed(1)}}<small>%</small>`;
+        if (open) open.textContent = today.has_open_position ? '1' : '0';
+        if (bal) bal.textContent = `$${{Number(today.account_balance || 0).toFixed(2)}}`;
+        if (peak) peak.textContent = `Peak $${{Number(today.account_peak_balance || 0).toFixed(2)}}`;
+        if (tbody && today.latest_entries) {{
+          tbody.innerHTML = today.latest_entries.length
+            ? today.latest_entries.map(renderEntryRow).join('')
+            : '<tr><td colspan="6">No journal entries yet.</td></tr>';
+        }}
+        window.__riskSentinelHistory = history;
+      }} catch (error) {{
+        console.warn('Dashboard refresh failed', error);
+      }}
+    }}
+    refreshDashboard();
+    setInterval(refreshDashboard, 30000);
+  </script>
+
 </body>
 </html>"""
 

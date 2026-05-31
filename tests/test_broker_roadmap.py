@@ -17,7 +17,7 @@ def test_config_loads_small_account_guardrails():
     config = load_config()
 
     assert config.minimum_starting_capital == 500
-    assert config.starting_capital_default == 5000
+    assert config.starting_capital_default == 1500
     assert config.max_account_risk_per_trade_percent == 1.0
     assert config.max_daily_loss_percent == 3.0
     assert config.require_margin_check is True
@@ -32,7 +32,7 @@ def test_risk_rules_contains_inactive_broker_roadmap():
     assert rules["broker_roadmap"]["first_realistic_sim_path"] == "tradovate_sim"
     assert rules["broker_roadmap"]["future_multi_asset_path"] == "ibkr_paper"
     assert rules["capital_guardrails"]["minimum_starting_capital"] == 500
-    assert rules["capital_guardrails"]["starting_capital_default"] == 5000
+    assert rules["capital_guardrails"]["starting_capital_default"] == 1500
     assert rules["trading_mode"]["live_trading_enabled"] is False
 
 
@@ -44,7 +44,7 @@ def test_paper_broker_capabilities_are_safe():
     assert caps.account_mode == "paper"
     assert caps.supports_brackets is True
     assert caps.supports_options is False
-    assert caps.starting_capital == 5000.0
+    assert caps.starting_capital == 1500.0
     assert caps.max_dollars_risk_per_trade == 10.0
 
 
