@@ -129,6 +129,13 @@ def derive_orb_status(close: float, orb_high: float | None, orb_low: float | Non
     return "inside"
 
 
+
+def _payload_to_dict(payload: AlertPayload) -> dict:
+    if hasattr(payload, "model_dump"):
+        return payload.model_dump()
+    return payload.dict()
+
+
 # ─── Main builder ─────────────────────────────────────────────────────────────
 
 def _build_key_levels(payload: AlertPayload) -> "KeyLevels | None":
@@ -340,7 +347,7 @@ def build_market_state(payload: AlertPayload) -> MarketState:
         htf=_build_htf(payload),
         sd=_build_sd(payload),
         key_levels=_build_key_levels(payload),
-        raw=None,
+        raw=_payload_to_dict(payload),
     )
 
 

@@ -367,6 +367,9 @@ class DecisionEngine:
                 confidence_score=0,
             )
 
+        setup = self._apply_advisory_bracket(setup, state)
+        setup = self._enforce_min_target_distance(setup, state.instrument)
+
         # ── R:R validation ────────────────────────────────────────────────────
         if setup.rr_ratio < self.config.min_rr_ratio:
             return DecisionOutput(
@@ -467,6 +470,65 @@ class DecisionEngine:
             rr_ratio=setup.rr_ratio,
             strategy=setup.strategy,
             notes=f"{notes} | {suffix}" if notes else suffix,
+        )
+
+    def _apply_advisory_bracket(self, setup: SetupDetail, state: MarketState) -> SetupDetail:
+        """
+        Use Pine-sent bracket coordinates when they are complete and sane.
+
+        Pine brackets are advisory, not authoritative: the backend only accepts
+        them after it has independently found the same setup direction/strategy,
+        then normal risk checks and minimum target enforcement still run.
+        """
+        raw = state.raw or {}
+        if not isinstance(raw, dict):
+            return setup
+
+        required = ("entry", "stop", "target")
+        if any(raw.get(field) is None for field in required):
+            return setup
+
+        raw_direction = str(raw.get("signal_direction") or "").upper()
+        if raw_direction and raw_direction != setup.direction:
+            return setup
+
+        raw_strategy = raw.get("signal_strategy")
+        if raw_strategy and raw_strategy != setup.strategy:
+            return setup
+
+        try:
+            entry = float(raw["entry"])
+            stop = float(raw["stop"])
+            target = float(raw["target"])
+        except (TypeError, ValueError):
+            return setup
+
+        if entry <= 0 or stop <= 0 or target <= 0:
+            return setup
+
+        if setup.direction == "LONG":
+            if not (stop < entry < target):
+                return setup
+        elif setup.direction == "SHORT":
+            if not (target < entry < stop):
+                return setup
+        else:
+            return setup
+
+        rr = RiskEngine.calculate_rr(setup.direction, entry, stop, target)
+        if rr <= 0:
+            return setup
+
+        note = "Pine bracket override"
+        notes = f"{setup.notes} | {note}" if setup.notes else note
+        return SetupDetail(
+            direction=setup.direction,
+            entry=round(entry, 4),
+            stop=round(stop, 4),
+            target=round(target, 4),
+            rr_ratio=rr,
+            strategy=setup.strategy,
+            notes=notes,
         )
 
     # ── Market Condition Scoring ───────────────────────────────────────────────

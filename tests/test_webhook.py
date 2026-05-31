@@ -67,6 +67,26 @@ def _isolate_app_logs(monkeypatch, tmp_path) -> None:
 
 # ─── state_builder: parse_timestamp ───────────────────────────────────────────
 
+def test_state_builder_preserves_pine_advisory_bracket_fields():
+    payload = _base_payload(
+        signal_strategy="continuation_pullback",
+        signal_direction="LONG",
+        entry=5582.25,
+        stop=5578.0,
+        target=5597.25,
+        rr_ratio=3.53,
+    )
+
+    state = build_market_state(payload)
+
+    assert state.raw["signal_strategy"] == "continuation_pullback"
+    assert state.raw["signal_direction"] == "LONG"
+    assert state.raw["entry"] == 5582.25
+    assert state.raw["stop"] == 5578.0
+    assert state.raw["target"] == 5597.25
+    assert state.raw["rr_ratio"] == 3.53
+
+
 def test_parse_timestamp_iso():
     ts = parse_timestamp("2026-05-23T14:30:00+00:00")
     assert ts.year == 2026

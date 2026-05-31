@@ -40,6 +40,14 @@
   "strat_sequence": "strat_212",
   "strat_trigger": "continuation",
   "strat_direction": "LONG",
+
+  "signal_strategy": "continuation_pullback",
+  "signal_direction": "LONG",
+  "entry": 19505.25,
+  "stop": 19498.0,
+  "target": 19520.25,
+  "rr_ratio": 2.07,
+
   "daily_bar_type": "two_up",
   "daily_direction": "UP",
   "four_hour_bar_type": "two_up",

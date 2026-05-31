@@ -908,3 +908,81 @@ def test_mes_live_pullback_target_expands_to_configured_minimum(config, fresh_ma
     assert decision.setup.strategy == "continuation_pullback"
     assert round(decision.setup.target - decision.setup.entry, 2) == 15.0
     assert "target expanded to 15pt minimum for MES" in decision.setup.notes
+
+
+def test_pine_advisory_bracket_overrides_matching_backend_setup(config, fresh_market_state):
+    """Live Pine brackets are accepted when they match the backend setup."""
+    from dataclasses import replace
+
+    cfg = replace(
+        config,
+        enabled_concepts=["continuation_pullback"],
+        min_target_points={"MES": 15},
+    )
+    state = deepcopy(fresh_market_state)
+    state.instrument = "MES"
+    state.orb.status = "inside"
+    state.market_condition = "TRENDING"
+    state.trend = TrendData(direction="UP", strength="MODERATE")
+    state.ohlc.close = 5582.25
+    state.vwap = VWAPData(
+        value=5582.0,
+        price_vs_vwap="above",
+        reclaimed=True,
+        holding=True,
+    )
+    state.raw = {
+        "signal_strategy": "continuation_pullback",
+        "signal_direction": "LONG",
+        "entry": 5582.25,
+        "stop": 5578.0,
+        "target": 5597.25,
+        "rr_ratio": 3.53,
+    }
+
+    decision = DecisionEngine(config=cfg).evaluate(state, DailyState())
+
+    assert decision.decision == "TRADE"
+    assert decision.setup.strategy == "continuation_pullback"
+    assert decision.setup.entry == 5582.25
+    assert decision.setup.stop == 5578.0
+    assert decision.setup.target == 5597.25
+    assert "Pine bracket override" in decision.setup.notes
+
+
+def test_pine_advisory_bracket_mismatch_is_ignored(config, fresh_market_state):
+    """A stale/mismatched Pine strategy cannot override another setup."""
+    from dataclasses import replace
+
+    cfg = replace(
+        config,
+        enabled_concepts=["continuation_pullback"],
+        min_target_points={"MES": 15},
+    )
+    state = deepcopy(fresh_market_state)
+    state.instrument = "MES"
+    state.orb.status = "inside"
+    state.market_condition = "TRENDING"
+    state.trend = TrendData(direction="UP", strength="MODERATE")
+    state.ohlc.close = 5582.25
+    state.vwap = VWAPData(
+        value=5582.0,
+        price_vs_vwap="above",
+        reclaimed=True,
+        holding=True,
+    )
+    state.raw = {
+        "signal_strategy": "orb_breakout",
+        "signal_direction": "LONG",
+        "entry": 5582.25,
+        "stop": 5578.0,
+        "target": 5597.25,
+    }
+
+    decision = DecisionEngine(config=cfg).evaluate(state, DailyState())
+
+    assert decision.decision == "TRADE"
+    assert decision.setup.strategy == "continuation_pullback"
+    assert decision.setup.stop != 5578.0
+    assert "Pine bracket override" not in decision.setup.notes
+

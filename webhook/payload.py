@@ -68,6 +68,16 @@ class AlertPayload(BaseModel):
     two_bars_back_high: Optional[float] = None
     two_bars_back_low: Optional[float] = None
 
+
+    # ── Optional Pine-generated advisory bracket ────────────────────────────
+    # Backend still validates direction/strategy/structure and risk rules.
+    signal_strategy: Optional[str] = None
+    signal_direction: Optional[str] = None
+    entry: Optional[float] = None
+    stop: Optional[float] = None
+    target: Optional[float] = None
+    rr_ratio: Optional[float] = None
+
     # ── Optional GEX / gamma context ────────────────────────────────────────
     gex_flip: Optional[float] = None
     call_wall: Optional[float] = None

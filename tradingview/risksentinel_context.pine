@@ -283,6 +283,88 @@ else
 // EMA FLAGS
 ema_9_above_21 = ema_fast > ema_slow
 
+// ADVISORY BRACKET
+// Pine sends candidate bracket coordinates; backend still validates the setup,
+// strategy match, R:R, and minimum target distance before any paper fill.
+f_rr(dir, e, s, t) =>
+    risk = dir == "LONG" ? e - s : s - e
+    reward = dir == "LONG" ? t - e : e - t
+    risk > 0 ? reward / risk : na
+
+f_min_target(dir, e, raw_t, min_pts) =>
+    min_pts <= 0 ? raw_t : dir == "LONG" ? math.max(raw_t, e + min_pts) : math.min(raw_t, e - min_pts)
+
+root_ticker = str.upper(syminfo.root)
+min_target_pts = root_ticker == "MES" or str.contains(syminfo.ticker, "MES") ? 15.0 : root_ticker == "MNQ" or str.contains(syminfo.ticker, "MNQ") ? 15.0 : 0.0
+max_stop_ticks = root_ticker == "MES" or str.contains(syminfo.ticker, "MES") ? 40.0 : root_ticker == "MNQ" or str.contains(syminfo.ticker, "MNQ") ? 80.0 : 40.0
+
+string signal_strategy = na
+string signal_direction = na
+float signal_entry = na
+float signal_stop = na
+float signal_target = na
+float signal_rr = na
+float raw_target = na
+
+if not na(orb_h) and not na(orb_l) and orb_status == "reclaimed_high" and trend_dir == "UP" and close > vwap_val and rel_vol >= 0.7
+    signal_strategy := "strat_4hr_retrigger"
+    signal_direction := "LONG"
+    signal_entry := orb_h + syminfo.mintick
+    signal_stop := math.max(orb_h - syminfo.mintick * 8, signal_entry - syminfo.mintick * max_stop_ticks)
+    raw_target := signal_entry + (signal_entry - signal_stop) * 2.0
+else if not na(orb_h) and not na(orb_l) and orb_status == "above" and trend_dir == "UP" and close > vwap_val
+    signal_strategy := "orb_breakout"
+    signal_direction := "LONG"
+    signal_entry := orb_h + syminfo.mintick * 2
+    signal_stop := math.max(orb_h - syminfo.mintick * 8, signal_entry - syminfo.mintick * max_stop_ticks)
+    raw_target := signal_entry + (signal_entry - signal_stop) * 2.2
+else if not na(orb_h) and not na(orb_l) and orb_status == "below" and trend_dir == "DOWN" and close < vwap_val
+    signal_strategy := "orb_breakout"
+    signal_direction := "SHORT"
+    signal_entry := orb_l - syminfo.mintick * 2
+    signal_stop := math.min(orb_l + syminfo.mintick * 8, signal_entry + syminfo.mintick * max_stop_ticks)
+    raw_target := signal_entry - (signal_stop - signal_entry) * 2.2
+else if not na(orb_h) and not na(orb_l) and orb_status == "reclaimed_high" and trend_dir == "UP" and close > vwap_val
+    signal_strategy := "orb_reclaim"
+    signal_direction := "LONG"
+    signal_entry := orb_h + syminfo.mintick * 2
+    signal_stop := math.max(orb_l - syminfo.mintick * 4, signal_entry - syminfo.mintick * max_stop_ticks)
+    raw_target := signal_entry + (signal_entry - signal_stop) * 2.5
+else if not na(orb_h) and not na(orb_l) and orb_status == "rejected_high"
+    signal_strategy := "orb_rejection"
+    signal_direction := "SHORT"
+    signal_entry := orb_h - syminfo.mintick * 2
+    signal_stop := math.min(orb_h + syminfo.mintick * 6, signal_entry + syminfo.mintick * max_stop_ticks)
+    raw_target := signal_entry - (signal_stop - signal_entry) * 2.5
+else if vwap_reclaimed and trend_dir == "UP" and close > vwap_val
+    signal_strategy := "vwap_reclaim"
+    signal_direction := "LONG"
+    signal_entry := vwap_val + syminfo.mintick * 2
+    signal_stop := vwap_val - syminfo.mintick * 28
+    raw_target := signal_entry + (signal_entry - signal_stop) * 3.0
+else if trend_dir == "DOWN" and close < vwap_val
+    signal_strategy := "vwap_hold"
+    signal_direction := "SHORT"
+    signal_entry := vwap_val - syminfo.mintick * 2
+    signal_stop := vwap_val + syminfo.mintick * 28
+    raw_target := signal_entry - (signal_stop - signal_entry) * 3.0
+else if trend_dir == "UP" and close > vwap_val and close - vwap_val <= syminfo.mintick * 6
+    signal_strategy := "continuation_pullback"
+    signal_direction := "LONG"
+    signal_entry := close
+    signal_stop := vwap_val - syminfo.mintick * 8
+    raw_target := signal_entry + (signal_entry - signal_stop) * 2.0
+else if trend_dir == "DOWN" and close < vwap_val and vwap_val - close <= syminfo.mintick * 6
+    signal_strategy := "continuation_pullback"
+    signal_direction := "SHORT"
+    signal_entry := close
+    signal_stop := vwap_val + syminfo.mintick * 8
+    raw_target := signal_entry - (signal_stop - signal_entry) * 2.0
+
+if not na(signal_entry) and not na(signal_stop) and not na(raw_target)
+    signal_target := f_min_target(signal_direction, signal_entry, raw_target, min_target_pts)
+    signal_rr := f_rr(signal_direction, signal_entry, signal_stop, signal_target)
+
 // BUILD JSON
 string msg = "{"
 msg := msg + "\"ticker\":" + "\"" + syminfo.ticker + "\"" + ","
@@ -320,6 +402,12 @@ msg := msg + "\"two_bars_back_type\":" + "\"" + t2b_type + "\"" + ","
 msg := msg + "\"strat_sequence\":" + s2j(strat_seq == "no_sequence" ? na : strat_seq) + ","
 msg := msg + "\"strat_trigger\":" + s2j(strat_trigger_ctx) + ","
 msg := msg + "\"strat_direction\":" + s2j(strat_dir_ctx) + ","
+msg := msg + "\"signal_strategy\":" + s2j(signal_strategy) + ","
+msg := msg + "\"signal_direction\":" + s2j(signal_direction) + ","
+msg := msg + "\"entry\":" + f2j(signal_entry, "#.####") + ","
+msg := msg + "\"stop\":" + f2j(signal_stop, "#.####") + ","
+msg := msg + "\"target\":" + f2j(signal_target, "#.####") + ","
+msg := msg + "\"rr_ratio\":" + f2j(signal_rr, "#.####") + ","
 msg := msg + "\"gex_flip\":" + f2j(i_gex_flip, "#.##") + ","
 msg := msg + "\"call_wall\":" + f2j(i_call_wall, "#.##") + ","
 msg := msg + "\"put_wall\":" + f2j(i_put_wall, "#.##") + ","
