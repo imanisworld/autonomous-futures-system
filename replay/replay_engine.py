@@ -7,7 +7,7 @@ decision, risk, paper broker, journal, and review path.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -179,6 +179,11 @@ class ReplayEngine:
                         contracts=contracts,
                     )
                     broker.execute_bracket(order)
+                    session_key = state.session or ""
+                    if session_key:
+                        daily_state.session_trade_counts[session_key] = (
+                            daily_state.session_trade_counts.get(session_key, 0) + 1
+                        )
                     fill = None
                     for future_idx in range(idx + 1, len(candles)):
                         fc = candles[future_idx]
@@ -202,8 +207,10 @@ class ReplayEngine:
                             for_date=journal_date,
                         )
                         daily_state.trade_count += 1
+                        daily_state.realized_pnl_dollars += float(fill.pnl_dollars or 0.0)
                         if fill.result == "LOSS":
                             daily_state.consecutive_losses += 1
+                            daily_state.last_loss_at = datetime.now(timezone.utc)
                         elif fill.result in ("WIN", "BREAKEVEN"):
                             daily_state.consecutive_losses = 0
                         daily_state.has_open_position = False

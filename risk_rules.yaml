@@ -69,7 +69,7 @@ daily_limits:
   per_session_limits:
     asian: 1                        # Protect NY budget from overnight fills
     london: 2
-    new_york: 2
+    new_york: 5                     # 3 normal + 2 bonus — must match total daily capacity
   session_cutoffs_et:               # No new entries after this time (HH:MM ET)
     london: "08:00"                 # Last call before NY gap
     new_york: "14:00"               # NY open through early afternoon (extended from 11:30)

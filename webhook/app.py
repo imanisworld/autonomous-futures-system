@@ -243,7 +243,7 @@ def _dashboard_payload(for_date: date) -> dict:
         "account_balance": account_balance,
         "account_peak_balance": account_peak,
         "trade_count": daily_state.trade_count,
-        "max_trades_per_day": _config.max_trades_per_day,
+        "max_trades_per_day": _config.max_trades_per_day + int(getattr(_config, "bonus_trades_after_max", 0) or 0),
         "consecutive_losses": daily_state.consecutive_losses,
         "max_consecutive_losses": _config.max_consecutive_losses,
         "has_open_position": daily_state.has_open_position,

@@ -552,7 +552,7 @@ def test_fastapi_status_today_endpoint():
     assert resp.status_code == 200
     data = resp.json()
     assert data["live_trading_enabled"] is False
-    assert data["max_trades_per_day"] == 3
+    assert data["max_trades_per_day"] == 5  # 3 normal + 2 bonus
     assert "latest_entries" in data
     assert "top_no_trade_reasons" in data
 
