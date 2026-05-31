@@ -76,6 +76,7 @@ class AgentReport:
 @dataclass
 class CommitteeReport:
     date: str
+    generated_at: str
     overall_status: str  # OK | WARNING | CRITICAL
     agents: list[AgentReport]
     top_recommendations: list[Recommendation]
@@ -85,6 +86,7 @@ class CommitteeReport:
     def to_dict(self) -> dict:
         return {
             "date": self.date,
+            "generated_at": self.generated_at,
             "overall_status": self.overall_status,
             "agents": [a.to_dict() for a in self.agents],
             "top_recommendations": [r.to_dict() for r in self.top_recommendations],
@@ -117,3 +119,27 @@ class TradeRecord:
     volume: Optional[int]
     pine_bracket_overridden: bool  # True if Pine advisory bracket was accepted
     pine_bracket_ignored: bool     # True if Pine sent bracket but it was rejected
+
+
+@dataclass
+class DecisionRecord:
+    date: str
+    ts: str
+    instrument: str
+    session: str
+    decision: str
+    reason: Optional[str]
+    failed_gates: list[str]
+    risk_failed_rule: Optional[str]
+    strategy: str
+    direction: str
+    entry: Optional[float]
+    stop: Optional[float]
+    target: Optional[float]
+    rr_ratio: Optional[float]
+    trend_strength: Optional[str]
+    vwap_value: Optional[float]
+    volume: Optional[int]
+    market_condition: Optional[str]
+    pine_bracket_overridden: bool
+    pine_bracket_ignored: bool

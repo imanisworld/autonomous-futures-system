@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 import os
 import uuid
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -54,10 +54,11 @@ class AdaptiveCommittee:
     def run(self, days: int = 30) -> CommitteeReport:
         """Run all four agents and return an aggregated CommitteeReport."""
         trades = self.reader.read_trades(days=days)
+        decisions = self.reader.read_decisions(days=days)
         latest_age = self.reader.latest_entry_age_seconds()
 
         reports = [
-            self.payload_auditor.audit(trades),
+            self.payload_auditor.audit(trades, decisions),
             self.risk_steward.audit(trades),
             self.strategy_analyst.audit(trades),
             self.ops_monitor.audit(latest_entry_age=latest_age),
@@ -86,6 +87,7 @@ class AdaptiveCommittee:
 
         return CommitteeReport(
             date=date.today().isoformat(),
+            generated_at=datetime.now(timezone.utc).isoformat(),
             overall_status=overall,
             agents=reports,
             top_recommendations=top_recs,
@@ -115,7 +117,7 @@ class AdaptiveCommittee:
         today = date.today()
         history: list[dict] = []
         for offset in range(days):
-            day = today - __import__("datetime").timedelta(days=offset)
+            day = today - timedelta(days=offset)
             cached = self.load_cached(day)
             if cached:
                 history.append(cached)

@@ -381,12 +381,35 @@ def _load_committee_panel(log_dir: str) -> dict:
         return {}
 
 
+def _format_generated_age(value: str) -> str:
+    if not value:
+        return ""
+    try:
+        generated = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if generated.tzinfo is None:
+            generated = generated.replace(tzinfo=timezone.utc)
+        age_seconds = max(0, int((datetime.now(timezone.utc) - generated).total_seconds()))
+    except (TypeError, ValueError):
+        return "unknown age"
+    if age_seconds < 60:
+        return "just now"
+    minutes = age_seconds // 60
+    if minutes < 60:
+        return f"{minutes}m ago"
+    hours = minutes // 60
+    if hours < 48:
+        return f"{hours}h ago"
+    return f"{hours // 24}d ago"
+
+
 def _render_dashboard(status: dict) -> str:
     committee = _load_committee_panel(_config.log_dir)
     committee_status = committee.get("overall_status", "")
     committee_sample = committee.get("sample_size", 0)
     committee_sufficiency = committee.get("sample_sufficiency", "")
     committee_date = committee.get("date", "")
+    committee_generated = committee.get("generated_at", "")
+    committee_generated_label = _format_generated_age(committee_generated)
     committee_recs = committee.get("top_recommendations") or []
     committee_color = {"OK": "green", "WARNING": "amber", "CRITICAL": "red"}.get(committee_status, "muted")
     committee_rec_rows = "\n".join(
@@ -399,6 +422,8 @@ def _render_dashboard(status: dict) -> str:
         f"{committee_sample} trades ({committee_sufficiency})" if committee_status
         else "Not yet run — call GET /status/adaptive"
     )
+    if committee_generated_label:
+        committee_summary = f"{committee_summary} · generated {committee_generated_label}"
 
     latest_rows = "\n".join(_render_entry_row(entry) for entry in status["latest_entries"])
     reason_rows = "\n".join(

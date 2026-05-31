@@ -46,7 +46,8 @@ class RiskReviewer:
         violations: list[str] = []
         warnings: list[str] = []
 
-        if len(approved_trades) > self.config.max_trades_per_day:
+        total_trade_capacity = self.config.max_trades_per_day + int(getattr(self.config, "bonus_trades_after_max", 0) or 0)
+        if len(approved_trades) > total_trade_capacity:
             violations.append("max_trades_per_day_exceeded")
 
         if self._max_consecutive_losses(outcomes) >= self.config.max_consecutive_losses:

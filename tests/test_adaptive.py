@@ -14,14 +14,16 @@ Covers:
 from __future__ import annotations
 
 import json
-from datetime import date, timedelta
+from dataclasses import replace
+from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import Optional
 
 import pytest
 
 from adaptive.models import (
-    TradeRecord,
+    DecisionRecord, TradeRecord,
     PAYLOAD_FIX_REQUIRED, PAUSE_STRATEGY, WATCH, REDUCE_SIZE,
     sample_sufficiency,
 )
@@ -78,6 +80,44 @@ def _trade(
 
 def _loss(pnl: float = -100.0, **kw) -> TradeRecord:
     return _trade(result="LOSS", pnl=pnl, **kw)
+
+
+def _decision(
+    *,
+    decision: str = "NO_TRADE",
+    reason: str | None = "Trend strength missing",
+    failed_gates: list[str] | None = None,
+    trend_strength: str | None = None,
+    vwap_value: float | None = 5000.0,
+    volume: int | None = 500,
+    market_condition: str | None = "TRENDING",
+    entry: float | None = None,
+    stop: float | None = None,
+    target: float | None = None,
+) -> DecisionRecord:
+    day = date.today().isoformat()
+    return DecisionRecord(
+        date=day,
+        ts=f"{day}T14:30:00+00:00",
+        instrument="MES",
+        session="new_york",
+        decision=decision,
+        reason=reason,
+        failed_gates=failed_gates or [],
+        risk_failed_rule=None,
+        strategy="unknown",
+        direction="",
+        entry=entry,
+        stop=stop,
+        target=target,
+        rr_ratio=None,
+        trend_strength=trend_strength,
+        vwap_value=vwap_value,
+        volume=volume,
+        market_condition=market_condition,
+        pine_bracket_overridden=False,
+        pine_bracket_ignored=False,
+    )
 
 
 # ─── sample_sufficiency ───────────────────────────────────────────────────────
@@ -152,6 +192,38 @@ def test_payload_auditor_ok_when_all_fields_present():
     report = PayloadAuditor().audit(trades)
     assert report.status == "OK"
     assert report.recommendations == []
+
+
+def test_payload_auditor_flags_broken_no_trade_payloads():
+    decisions = [
+        _decision(
+            failed_gates=["TREND_STRENGTH_BELOW_REQUIRED"],
+            trend_strength=None,
+            vwap_value=None,
+            volume=0,
+            market_condition=None,
+        )
+        for _ in range(5)
+    ]
+    report = PayloadAuditor().audit([], decisions)
+    assert report.status == "WARNING"
+    subjects = [r.subject for r in report.recommendations]
+    assert "trend_strength_field" in subjects
+    assert "vwap_field" in subjects
+    assert "market_condition_field" in subjects
+    assert report.findings["decisions_audited"] == 5
+
+
+def test_payload_auditor_trend_message_says_blocks_not_bypasses():
+    decisions = [
+        _decision(failed_gates=["TREND_STRENGTH_BELOW_REQUIRED"], trend_strength=None)
+        for _ in range(5)
+    ]
+    report = PayloadAuditor().audit([], decisions)
+    trend_rec = next(r for r in report.recommendations if r.subject == "trend_strength_field")
+    assert "blocks setups" in trend_rec.reason
+    assert "bypassed" not in trend_rec.reason
+    assert trend_rec.evidence["failed_gates"]["TREND_STRENGTH_BELOW_REQUIRED"] == 5
 
 
 # ─── RiskSteward ─────────────────────────────────────────────────────────────
@@ -289,17 +361,28 @@ def test_ops_monitor_no_journal_files(tmp_path):
     assert "journal_files" in subjects
 
 
-def test_ops_monitor_stale_feed_warning(tmp_path):
-    # 5 hours old → WARNING
-    report = OpsMonitor(tmp_path).audit(latest_entry_age=5 * 3600)
-    statuses = [r.subject for r in report.recommendations]
-    assert "webhook_feed" in statuses
+def test_ops_monitor_weekend_stale_feed_no_warning(tmp_path):
+    et = ZoneInfo("America/New_York")
+    sunday_before_open = datetime(2026, 5, 31, 13, 52, tzinfo=et)
+    report = OpsMonitor(tmp_path).audit(latest_entry_age=25 * 3600, now=sunday_before_open)
+    subjects = [r.subject for r in report.recommendations]
+    assert "webhook_feed" not in subjects
+    assert report.status == "OK"
+
+
+def test_ops_monitor_active_session_stale_feed_warning(tmp_path):
+    et = ZoneInfo("America/New_York")
+    monday_open = datetime(2026, 6, 1, 10, 0, tzinfo=et)
+    report = OpsMonitor(tmp_path).audit(latest_entry_age=20 * 60, now=monday_open)
+    subjects = [r.subject for r in report.recommendations]
+    assert "webhook_feed" in subjects
     assert report.status == "WARNING"
 
 
-def test_ops_monitor_stale_feed_critical(tmp_path):
-    # 25 hours old → CRITICAL
-    report = OpsMonitor(tmp_path).audit(latest_entry_age=25 * 3600)
+def test_ops_monitor_active_session_stale_feed_critical(tmp_path):
+    et = ZoneInfo("America/New_York")
+    monday_open = datetime(2026, 6, 1, 10, 0, tzinfo=et)
+    report = OpsMonitor(tmp_path).audit(latest_entry_age=25 * 3600, now=monday_open)
     assert report.status == "CRITICAL"
 
 
@@ -411,6 +494,30 @@ def test_journal_reader_extracts_payload_fields(tmp_path):
     assert trades[0].trend_strength == "STRONG"
     assert trades[0].vwap_value == 5000.0
     assert trades[0].volume == 500
+
+
+def test_journal_reader_reads_all_decisions(tmp_path):
+    today = date.today()
+    no_trade = {
+        "ts": "2026-05-23T14:30:00+00:00",
+        "instrument": "MES",
+        "session": "new_york",
+        "decision": "NO_TRADE",
+        "reason": "Trend strength missing",
+        "failed_gates": ["TREND_STRENGTH_BELOW_REQUIRED"],
+        "market_condition": None,
+        "context": {
+            "trend": {"direction": "UP", "strength": None},
+            "vwap": {"value": None},
+            "volume": {"current_bar": 0},
+        },
+    }
+    _write_journal(tmp_path, today, [no_trade, _approved_entry(), _outcome_entry()])
+    decisions = JournalReader(tmp_path).read_decisions(days=1)
+    assert len(decisions) == 2
+    assert decisions[0].decision == "NO_TRADE"
+    assert decisions[0].failed_gates == ["TREND_STRENGTH_BELOW_REQUIRED"]
+    assert decisions[0].volume == 0
 
 
 # ─── Committee (orchestration + read-only) ───────────────────────────────────
@@ -527,6 +634,7 @@ def test_adaptive_endpoint_returns_stable_json_no_journal(monkeypatch, tmp_path)
     assert resp.status_code == 200
     data = resp.json()
     assert "overall_status" in data
+    assert "generated_at" in data
     assert "sample_size" in data
     assert "agents" in data
     assert data["sample_sufficiency"] == "insufficient_sample"
@@ -548,3 +656,12 @@ def test_adaptive_history_endpoint_empty(monkeypatch, tmp_path):
     data = resp.json()
     assert "days" in data
     assert isinstance(data["days"], list)
+
+
+def test_risk_reviewer_allows_bonus_trade_capacity(config):
+    from agent.risk_reviewer import RiskReviewer
+
+    cfg = replace(config, bonus_trades_after_max=2)
+    entries = [_approved_entry(strategy="orb_reclaim") for _ in range(5)]
+    review = RiskReviewer(cfg).review_entries(entries, date.today().isoformat())
+    assert "max_trades_per_day_exceeded" not in review.violations

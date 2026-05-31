@@ -16,7 +16,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Optional
 
-from .models import TradeRecord
+from .models import DecisionRecord, TradeRecord
 
 
 class JournalReader:
@@ -35,6 +35,16 @@ class JournalReader:
         for offset in range(days):
             day = today - timedelta(days=offset)
             records.extend(self._trades_for_day(day))
+        return records
+
+
+    def read_decisions(self, days: int = 30) -> list[DecisionRecord]:
+        """Return every journaled decision from the last `days` calendar days."""
+        records: list[DecisionRecord] = []
+        today = date.today()
+        for offset in range(days):
+            day = today - timedelta(days=offset)
+            records.extend(self._decisions_for_day(day))
         return records
 
     def latest_entry_age_seconds(self) -> Optional[float]:
@@ -65,6 +75,54 @@ class JournalReader:
         return sorted(self.log_dir.glob("journal_*.jsonl"))
 
     # ── Internal ───────────────────────────────────────────────────────────────
+
+
+    def _decisions_for_day(self, day: date) -> list[DecisionRecord]:
+        path = self.log_dir / f"journal_{day.isoformat()}.jsonl"
+        if not path.exists():
+            return []
+
+        records: list[DecisionRecord] = []
+        for entry in self._read_raw(path):
+            decision = entry.get("decision")
+            if not decision:
+                continue
+
+            setup = entry.get("setup") or {}
+            context = entry.get("context") or {}
+            trend = context.get("trend") or {}
+            vwap_ctx = context.get("vwap") or {}
+            vol = context.get("volume") or {}
+            risk = entry.get("risk_check") or {}
+            notes = setup.get("notes") or ""
+            failed_gates = entry.get("failed_gates") or []
+            if isinstance(failed_gates, str):
+                failed_gates = [failed_gates]
+
+            records.append(DecisionRecord(
+                date=day.isoformat(),
+                ts=entry.get("ts", ""),
+                instrument=entry.get("instrument", ""),
+                session=entry.get("session", ""),
+                decision=decision,
+                reason=entry.get("reason"),
+                failed_gates=[str(gate) for gate in failed_gates],
+                risk_failed_rule=risk.get("failed_rule"),
+                strategy=setup.get("strategy", "unknown"),
+                direction=setup.get("direction", ""),
+                entry=_opt_float(setup.get("entry")),
+                stop=_opt_float(setup.get("stop")),
+                target=_opt_float(setup.get("target")),
+                rr_ratio=_opt_float(setup.get("rr_ratio")),
+                trend_strength=trend.get("strength"),
+                vwap_value=_opt_float(vwap_ctx.get("value")),
+                volume=_opt_int(vol.get("current_bar")),
+                market_condition=entry.get("market_condition") or context.get("market_condition"),
+                pine_bracket_overridden="Pine bracket override" in notes,
+                pine_bracket_ignored="Pine bracket ignored" in notes,
+            ))
+
+        return records
 
     def _trades_for_day(self, day: date) -> list[TradeRecord]:
         path = self.log_dir / f"journal_{day.isoformat()}.jsonl"

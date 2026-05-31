@@ -1,20 +1,17 @@
 """
 adaptive/ops_monitor.py
 
-Checks local operational health:
-  - Log directory writable
-  - Journal files present
-  - Age of the latest journal entry (stale feed detection)
-  - Adaptive review artifact writability
-
+Checks local operational health, including session-aware stale feed detection.
 Does not make outbound HTTP calls — everything is local filesystem.
 """
 
 from __future__ import annotations
 
 import os
+from datetime import datetime, time, timezone
 from pathlib import Path
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 from .models import (
     AgentReport, Recommendation,
@@ -23,17 +20,24 @@ from .models import (
 )
 
 
-_STALE_WARNING_SECONDS = 14_400   # 4 h  — market may be closed
-_STALE_CRITICAL_SECONDS = 86_400  # 24 h — feed almost certainly broken
+_ET = ZoneInfo("America/New_York")
+_ACTIVE_STALE_SECONDS = 900       # 15m tolerance for 5m bar-close alerts
+_STALE_CRITICAL_SECONDS = 86_400  # 24h while market should be active
 
 
 class OpsMonitor:
     def __init__(self, log_dir: str | Path):
         self.log_dir = Path(log_dir)
 
-    def audit(self, latest_entry_age: Optional[float] = None) -> AgentReport:
+    def audit(
+        self,
+        latest_entry_age: Optional[float] = None,
+        now: Optional[datetime] = None,
+    ) -> AgentReport:
         recs: list[Recommendation] = []
         status = "OK"
+        now = _coerce_now(now)
+        market_active = _futures_alert_window_active(now)
 
         # ── Log dir writable ──────────────────────────────────────────────────
         if not self.log_dir.exists():
@@ -64,28 +68,28 @@ class OpsMonitor:
             ))
 
         # ── Latest entry age ──────────────────────────────────────────────────
-        if latest_entry_age is not None:
+        if latest_entry_age is not None and market_active:
             if latest_entry_age > _STALE_CRITICAL_SECONDS:
                 status = worst_status(status, "CRITICAL")
                 recs.append(Recommendation(
                     code=SYSTEM_FIX_REQUIRED,
                     subject="webhook_feed",
                     reason=(
-                        f"Last journal entry is {latest_entry_age/3600:.1f}h old. "
+                        f"Last journal entry is {latest_entry_age/3600:.1f}h old during an active futures alert window. "
                         "TradingView alerts may have stopped firing or the Railway service may be down."
                     ),
-                    evidence={"age_seconds": int(latest_entry_age)},
+                    evidence={"age_seconds": int(latest_entry_age), "market_active": True},
                 ))
-            elif latest_entry_age > _STALE_WARNING_SECONDS:
+            elif latest_entry_age > _ACTIVE_STALE_SECONDS:
                 status = worst_status(status, "WARNING")
                 recs.append(Recommendation(
                     code=WATCH,
                     subject="webhook_feed",
                     reason=(
-                        f"Last journal entry is {latest_entry_age/3600:.1f}h old. "
-                        "Expected during overnight/weekend sessions — check if market is open."
+                        f"Last journal entry is {latest_entry_age/60:.0f}m old during an active futures alert window. "
+                        "Expected 5m bar-close alerts may be missing."
                     ),
-                    evidence={"age_seconds": int(latest_entry_age)},
+                    evidence={"age_seconds": int(latest_entry_age), "market_active": True},
                 ))
 
         return AgentReport(
@@ -98,5 +102,26 @@ class OpsMonitor:
                 "log_dir_writable": os.access(self.log_dir, os.W_OK) if self.log_dir.exists() else False,
                 "journal_file_count": len(journal_files),
                 "latest_entry_age_seconds": int(latest_entry_age) if latest_entry_age is not None else None,
+                "market_active": market_active,
             },
         )
+
+
+def _coerce_now(now: Optional[datetime]) -> datetime:
+    if now is None:
+        return datetime.now(timezone.utc)
+    return now if now.tzinfo else now.replace(tzinfo=timezone.utc)
+
+
+def _futures_alert_window_active(now: datetime) -> bool:
+    """CME equity futures are broadly closed Friday evening through Sunday 18:00 ET."""
+    et = now.astimezone(_ET)
+    weekday = et.weekday()  # Monday=0, Sunday=6
+    current = et.time()
+    if weekday == 5:  # Saturday
+        return False
+    if weekday == 6 and current < time(18, 0):
+        return False
+    if weekday == 4 and current >= time(17, 0):
+        return False
+    return True
