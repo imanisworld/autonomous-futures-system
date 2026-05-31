@@ -205,6 +205,25 @@ async def status_review(
     return agent.preview_morning(target_date) if mode == "morning" else agent.preview_eod(target_date)
 
 
+# ─── Adaptive committee endpoints ────────────────────────────────────────────
+
+@app.get("/status/adaptive")
+async def status_adaptive() -> dict:
+    """Run the Adaptive Risk Committee and return the latest report."""
+    from adaptive.committee import AdaptiveCommittee
+    committee = AdaptiveCommittee(log_dir=_config.log_dir, config=_config)
+    report = committee.run_and_persist(days=30)
+    return report.to_dict()
+
+
+@app.get("/status/adaptive/history")
+async def status_adaptive_history(days: int = Query(default=7, ge=1, le=30)) -> dict:
+    """Return cached committee reports from the last N days."""
+    from adaptive.committee import AdaptiveCommittee
+    committee = AdaptiveCommittee(log_dir=_config.log_dir, config=_config)
+    return {"days": committee.load_history(days=days)}
+
+
 # ─── Error handlers ───────────────────────────────────────────────────────────
 
 @app.exception_handler(Exception)
@@ -352,7 +371,35 @@ def _counter_items(counter: Counter, key_name: str) -> list[dict]:
     ]
 
 
+def _load_committee_panel(log_dir: str) -> dict:
+    """Read the latest cached adaptive review artifact (never recomputes)."""
+    try:
+        from adaptive.committee import AdaptiveCommittee
+        cached = AdaptiveCommittee(log_dir=log_dir).load_cached()
+        return cached or {}
+    except Exception:
+        return {}
+
+
 def _render_dashboard(status: dict) -> str:
+    committee = _load_committee_panel(_config.log_dir)
+    committee_status = committee.get("overall_status", "")
+    committee_sample = committee.get("sample_size", 0)
+    committee_sufficiency = committee.get("sample_sufficiency", "")
+    committee_date = committee.get("date", "")
+    committee_recs = committee.get("top_recommendations") or []
+    committee_color = {"OK": "green", "WARNING": "amber", "CRITICAL": "red"}.get(committee_status, "muted")
+    committee_rec_rows = "\n".join(
+        f"<li><span class='rec-code'>{_escape(r.get('code',''))}</span>"
+        f"<span class='rec-subject'>{_escape(r.get('subject',''))}</span>"
+        f"<span class='rec-reason'>{_escape((r.get('reason') or '')[:120])}</span></li>"
+        for r in committee_recs[:5]
+    ) or "<li><span>No recommendations — run /status/adaptive to generate</span></li>"
+    committee_summary = (
+        f"{committee_sample} trades ({committee_sufficiency})" if committee_status
+        else "Not yet run — call GET /status/adaptive"
+    )
+
     latest_rows = "\n".join(_render_entry_row(entry) for entry in status["latest_entries"])
     reason_rows = "\n".join(
         f"<li><span>{_escape(item['reason'])}</span><strong>{item['count']}</strong></li>"
@@ -487,6 +534,21 @@ def _render_dashboard(status: dict) -> str:
     th {{ color: var(--muted); font-size: 12px; text-transform: uppercase; }}
     td.reason {{ color: var(--muted); max-width: 440px; word-break: break-word; overflow-wrap: anywhere; }}
     td {{ word-break: break-word; overflow-wrap: anywhere; }}
+    .committee-status {{ font-size: 18px; font-weight: 700; margin-top: 8px; }}
+    .committee-meta {{ font-size: 12px; color: var(--muted); margin-top: 4px; margin-bottom: 10px; }}
+    .committee-recs {{ list-style: none; padding: 0; margin: 0; }}
+    .committee-recs li {{
+      display: grid;
+      grid-template-columns: 120px 120px 1fr;
+      gap: 8px;
+      padding: 8px 0;
+      border-top: 1px solid var(--line);
+      font-size: 12px;
+      align-items: start;
+    }}
+    .rec-code {{ color: var(--amber); font-weight: 600; word-break: break-word; }}
+    .rec-subject {{ color: var(--cyan); word-break: break-word; }}
+    .rec-reason {{ color: var(--muted); word-break: break-word; }}
     .rules {{
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -603,6 +665,15 @@ def _render_dashboard(status: dict) -> str:
         <ul>{strategy_rows}</ul>
         <ul>{decision_rows}</ul>
       </div>
+    </section>
+
+    <section class="panel" style="margin-bottom: 14px;">
+      <h2>Committee Review</h2>
+      <div class="committee-status {committee_color}">{committee_status or '—'}</div>
+      <div class="committee-meta">{_escape(committee_summary)}{' · ' + committee_date if committee_date else ''}</div>
+      <ul class="committee-recs">
+        {committee_rec_rows}
+      </ul>
     </section>
 
     <section class="panel" style="margin-bottom: 14px;">
