@@ -25,6 +25,16 @@ _UTC = timezone.utc
 LOOKBACK = 20  # bars for rolling avg_volume
 
 
+
+def parse_tradingview_time(value: str) -> int:
+    value = str(value).strip()
+    if value.isdigit():
+        return int(value)
+    dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=_UTC)
+    return int(dt.timestamp())
+
 def ts_to_dt(unix_sec: int) -> datetime:
     return datetime.fromtimestamp(unix_sec, tz=_UTC)
 
@@ -155,9 +165,38 @@ def detect_day_boundaries(bars: list[dict]) -> list[int]:
     return boundaries
 
 
+_INSTRUMENT_MAP = {
+    "MNQ": "MNQ",
+    "MES": "MES",
+    "MGC": "MGC",
+    "MCL": "MCL",
+}
+
+
+def _infer_instrument(csv_path: Path) -> str:
+    name = csv_path.stem.upper()
+    for key in _INSTRUMENT_MAP:
+        if key in name:
+            return _INSTRUMENT_MAP[key]
+    return "MNQ"
+
+
+def _infer_timeframe(csv_path: Path) -> str:
+    """Best-effort: look for a number after the last comma or space in the stem."""
+    import re
+    stem = csv_path.stem
+    match = re.search(r"[,\s](\d+)\s*$", stem)
+    if match:
+        return f"{match.group(1)}m"
+    return "5m"
+
+
 def convert(csv_path: Path, out_dir: Path) -> Path:
     raw = load_csv(csv_path)
     stem = csv_path.stem.replace(" ", "_").replace(",", "")
+    instrument = _infer_instrument(csv_path)
+    timeframe = _infer_timeframe(csv_path)
+    print(f"[convert] instrument={instrument} timeframe={timeframe}")
 
     # Parse raw rows
     bars: list[dict] = []
@@ -259,7 +298,7 @@ def convert(csv_path: Path, out_dir: Path) -> Path:
 
         candle = {
             "timestamp": dt.isoformat(),
-            "instrument": "MNQ",
+            "instrument": instrument,
             "session": session,
             "open": bar["open"],
             "high": bar["high"],
@@ -279,7 +318,7 @@ def convert(csv_path: Path, out_dir: Path) -> Path:
             "previous_day_close": pdc,
             "price_vs_pdh": price_vs_pdh,
             "price_vs_pdl": price_vs_pdl,
-            "timeframe": "15m",
+            "timeframe": timeframe,
             "current_bar_type": cur_type,
             "previous_bar_type": prev_type,
             "two_bars_back_type": prev2_type,

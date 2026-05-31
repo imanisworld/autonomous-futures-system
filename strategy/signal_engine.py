@@ -107,6 +107,16 @@ class DecisionEngine:
         "MCL": 4,
     }
 
+    # Max ticks from entry for ORB-anchored stops.
+    # Prevents the full ORB range from becoming the stop on wide-ORB days.
+    # Stop is capped at entry - (MAX_ORB_STOP_TICKS * tick_size).
+    MAX_ORB_STOP_TICKS = {
+        "MNQ": 80,   # 20 points
+        "MES": 40,   # 10 points
+        "MGC": 20,
+        "MCL": 40,
+    }
+
     TICK_SIZE = {
         "MNQ": 0.25,
         "MES": 0.25,
@@ -517,8 +527,11 @@ class DecisionEngine:
         if state.vwap.price_vs_vwap != "above":
             return None
 
-        entry = state.orb.high + (self.TICK_SIZE.get(state.instrument, 0.25) * 2)
-        stop = state.orb.low - (self.TICK_SIZE.get(state.instrument, 0.25) * 4)
+        tick = self.TICK_SIZE.get(state.instrument, 0.25)
+        entry = state.orb.high + (tick * 2)
+        orb_stop = state.orb.low - (tick * 4)
+        max_stop = entry - (tick * self.MAX_ORB_STOP_TICKS.get(state.instrument, 80))
+        stop = max(orb_stop, max_stop)
         risk = entry - stop
         if risk <= 0:
             return None
@@ -543,8 +556,11 @@ class DecisionEngine:
         if state.orb.status != "rejected_high":
             return None
 
-        entry = state.orb.high - (self.TICK_SIZE.get(state.instrument, 0.25) * 2)
-        stop = state.orb.high + (self.TICK_SIZE.get(state.instrument, 0.25) * 6)
+        tick = self.TICK_SIZE.get(state.instrument, 0.25)
+        entry = state.orb.high - (tick * 2)
+        orb_stop = state.orb.high + (tick * 6)
+        max_stop = entry + (tick * self.MAX_ORB_STOP_TICKS.get(state.instrument, 80))
+        stop = min(orb_stop, max_stop)
         risk = stop - entry
         if risk <= 0:
             return None

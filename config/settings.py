@@ -84,6 +84,8 @@ class SystemConfig:
     session_cutoffs: dict = field(default_factory=dict)
     # Minimum target distance in instrument points
     min_target_points: dict = field(default_factory=dict)
+    # Maximum stop distance in ticks per instrument (rejects setups with oversized risk)
+    max_stop_ticks: dict = field(default_factory=dict)
 
     # Future broker/capital planning (inactive while live trading is blocked)
     broker_priority: List[str] = field(default_factory=lambda: ["paper", "tradovate_sim", "ibkr_paper"])
@@ -172,6 +174,7 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         per_session_limits=daily.get("per_session_limits", {}),
         session_cutoffs=daily.get("session_cutoffs_et", {}),
         min_target_points=daily.get("min_target_points", {}),
+        max_stop_ticks=daily.get("max_stop_ticks", {}),
 
         max_open_positions=position.get("max_open_positions", 1),
         averaging_down_allowed=position.get("averaging_down", False),

@@ -75,9 +75,14 @@ class ReplayEngine:
 
         stopped_reason: str | None = None
         candles_processed = 0
+        skip_to = 0  # index of first bar available after an open position resolves
+        prev_candle: Optional[ReplayCandle] = None
 
         for idx, candle in enumerate(candles):
             candles_processed += 1
+            if idx < skip_to:
+                prev_candle = candle
+                continue
 
             if daily_state.trade_count >= self.config.max_trades_per_day:
                 stopped_reason = "max_trades_per_day"
@@ -86,9 +91,11 @@ class ReplayEngine:
                 stopped_reason = "max_consecutive_losses"
                 break
 
-            state = self._market_state_from_candle(candle)
+            state = self._market_state_from_candle(candle, prev_candle)
             decision = decision_engine.evaluate(state, daily_state)
             risk_result_dict = None
+
+            prev_candle = candle
 
             if decision.decision == "TRADE" and decision.setup is not None:
                 trade_setup = TradeSetup(
@@ -112,6 +119,9 @@ class ReplayEngine:
                 journal.log_decision(decision.to_dict(), risk_result_dict, for_date=journal_date)
 
                 if risk_result.approved:
+                    contracts = self.config.max_contracts_per_instrument.get(
+                        state.instrument, 1
+                    )
                     order = BracketOrder(
                         instrument=state.instrument,
                         direction=decision.setup.direction,
@@ -121,10 +131,18 @@ class ReplayEngine:
                         rr_ratio=decision.setup.rr_ratio,
                         strategy=decision.setup.strategy,
                         notes=decision.setup.notes,
+                        contracts=contracts,
                     )
                     broker.execute_bracket(order)
-                    next_candle = candles[idx + 1] if idx + 1 < len(candles) else candle
-                    fill = broker.resolve_position(NextBarOHLC(high=next_candle.high, low=next_candle.low))
+                    fill = None
+                    for future_idx in range(idx + 1, len(candles)):
+                        fc = candles[future_idx]
+                        fill = broker.resolve_position(
+                            NextBarOHLC(high=fc.high, low=fc.low)
+                        )
+                        if fill is not None:
+                            skip_to = future_idx + 1
+                            break
                     if fill is not None:
                         journal.log_outcome(
                             instrument=fill.instrument,
@@ -150,6 +168,9 @@ class ReplayEngine:
                 continue
 
             journal.log_decision(decision.to_dict(), risk_result_dict, for_date=journal_date)
+
+        if stopped_reason is None and daily_state.trade_count >= self.config.max_trades_per_day:
+            stopped_reason = "max_trades_per_day"
 
         summary = journal.get_summary(_date_to_date(run_date))
         review = DailySummaryAgent(self.config)
@@ -252,8 +273,18 @@ class ReplayEngine:
         aggregate.write_markdown(self.log_dir / "multi_day_replay_report.md")
         return aggregate
 
-    def _market_state_from_candle(self, candle: ReplayCandle) -> MarketState:
+    def _market_state_from_candle(
+        self,
+        candle: ReplayCandle,
+        prev_candle: Optional[ReplayCandle] = None,
+    ) -> MarketState:
         strat = self._strat_context_from_candle(candle)
+        # True VWAP cross: previous bar was not above, current bar is above
+        vwap_reclaimed = (
+            prev_candle is not None
+            and prev_candle.price_vs_vwap != "above"
+            and candle.price_vs_vwap == "above"
+        )
         return MarketState(
             timestamp=_parse_timestamp(candle.timestamp),
             instrument=candle.instrument,
@@ -270,7 +301,7 @@ class ReplayEngine:
             vwap=VWAPData(
                 value=candle.vwap,
                 price_vs_vwap=candle.price_vs_vwap,
-                reclaimed=candle.price_vs_vwap == "above",
+                reclaimed=vwap_reclaimed,
                 holding=candle.price_vs_vwap in ("above", "below"),
             ),
             orb=ORBData(

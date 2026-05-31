@@ -105,6 +105,7 @@ class RiskEngine:
             self._check_entry_stop_target_distinct,  # structural check before computed R:R
             self._check_rr_ratio,
             self._check_min_target_distance,
+            self._check_max_stop_distance,
         ]
 
         for check in checks:
@@ -246,6 +247,31 @@ class RiskEngine:
                 reason=(
                     f"Target is {distance:.1f} pts from entry — "
                     f"minimum {min_pts} pts required for {setup.instrument}"
+                ),
+            )
+        return None
+
+    def _check_max_stop_distance(
+        self, setup: TradeSetup, daily_state: DailyState
+    ) -> Optional[RiskResult]:
+        """Stop must not be more than N ticks from entry (rejects wide-ORB setups)."""
+        max_ticks = self.config.max_stop_ticks.get(setup.instrument, 0)
+        if max_ticks <= 0:
+            return None
+        tick_size = {"MNQ": 0.25, "MES": 0.25}.get(setup.instrument, 0.25)
+        risk_pts = (
+            setup.entry - setup.stop
+            if setup.direction == "LONG"
+            else setup.stop - setup.entry
+        )
+        risk_ticks = risk_pts / tick_size
+        if risk_ticks > max_ticks:
+            return RiskResult(
+                result="REJECTED",
+                failed_rule="stop_too_wide",
+                reason=(
+                    f"Stop is {risk_ticks:.0f} ticks from entry — "
+                    f"max {max_ticks} ticks allowed for {setup.instrument}"
                 ),
             )
         return None

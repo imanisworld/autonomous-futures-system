@@ -27,8 +27,8 @@ sessions:
   allowed:
     - london      # 03:00–08:30 ET
     - new_york    # 09:30–12:00 ET
-    - asian       # 19:00–03:00 ET (overnight/testing — disable when done)
-  disabled: []
+  disabled:
+    - asian       # disabled — low liquidity, stop hunts
 
 session_hours_et:
   london:
@@ -58,6 +58,11 @@ daily_limits:
     MES: 4
     MGC: 0
     MCL: 0
+  max_stop_ticks:                   # Backstop rejection if stop still too wide after signal engine caps
+    MNQ: 120                        # 120 ticks = 30 pts — hard reject above this
+    MES: 60                         # 60 ticks = 15 pts
+    MGC: 0
+    MCL: 0
 
 # ─── Position Rules ──────────────────────────────────────────
 position_rules:
@@ -66,7 +71,7 @@ position_rules:
   discretionary_override: false    # No manual intervention
   max_contracts_per_instrument:
     MNQ: 2
-    MES: 1
+    MES: 2
     MGC: 0
     MCL: 0
 
@@ -154,7 +159,7 @@ broker_roadmap:
     - "No broker SDK, credentials, or live execution are enabled by this metadata."
 
 capital_guardrails:
-  starting_capital_default: 1000
+  starting_capital_default: 5000
   minimum_starting_capital: 500
   max_account_risk_per_trade_percent: 1.0
   max_daily_loss_percent: 3.0

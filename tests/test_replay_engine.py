@@ -243,10 +243,10 @@ def test_manifest_replay_is_idempotent(config, tmp_path):
     second = engine.run_manifest("data/replay/week/manifest.json")
 
     assert second.approved_trades == first.approved_trades == 3
-    assert second.no_trades == first.no_trades == 6
+    assert second.no_trades == first.no_trades == 3
     assert second.wins == first.wins == 2
     assert second.losses == first.losses == 1
-    assert second.realized_pnl_dollars == first.realized_pnl_dollars == 293.75
+    assert second.realized_pnl_dollars == first.realized_pnl_dollars == 245.0
 
 
 def test_manifest_rejects_empty_days(tmp_path):

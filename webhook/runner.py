@@ -171,6 +171,7 @@ def process_alert(
     journal_entry["confluence"] = result["confluence"]
 
     # ── Step 4: Risk validation ───────────────────────────────────────────────
+    contracts = cfg.max_contracts_per_instrument.get(state.instrument, 1)
     trade_setup = TradeSetup(
         direction=decision.setup.direction,
         entry=decision.setup.entry,
@@ -182,6 +183,7 @@ def process_alert(
         session=state.session,
         notes=decision.setup.notes,
         entry_time=state.timestamp,
+        contracts=contracts,
     )
     risk_result = RiskEngine(config=cfg).validate(trade_setup, daily_state)
     risk_dict = {
@@ -206,6 +208,7 @@ def process_alert(
         rr_ratio=decision.setup.rr_ratio,
         strategy=decision.setup.strategy,
         notes=decision.setup.notes,
+        contracts=contracts,
     )
     broker = _make_broker()
     broker.execute_bracket(order)
