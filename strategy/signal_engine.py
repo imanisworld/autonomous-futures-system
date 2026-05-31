@@ -148,14 +148,21 @@ class DecisionEngine:
         """
         now = datetime.now(timezone.utc)
 
-        # ── Pre-flight: daily limits ──────────────────────────────────────────
-        if daily_state.trade_count >= self.config.max_trades_per_day:
+        # ── Pre-flight: daily capacity ────────────────────────────────────────
+        total_daily_capacity = (
+            self.config.max_trades_per_day
+            + int(getattr(self.config, "bonus_trades_after_max", 0) or 0)
+        )
+        if daily_state.trade_count >= total_daily_capacity:
             return DecisionOutput(
                 timestamp=now,
                 instrument=state.instrument,
                 session=state.session,
                 decision="DONE_FOR_DAY",
-                reason=f"Daily trade limit reached ({daily_state.trade_count}/{self.config.max_trades_per_day}).",
+                reason=(
+                    f"Daily trade capacity reached "
+                    f"({daily_state.trade_count}/{total_daily_capacity})."
+                ),
             )
 
         if daily_state.consecutive_losses >= self.config.max_consecutive_losses:

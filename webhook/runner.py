@@ -131,8 +131,9 @@ def process_alert(
                 elif fill.result in ("WIN", "BREAKEVEN"):
                     daily_state.consecutive_losses = 0
 
-    # ── Step 2: Check daily limits before evaluating a new signal ────────────
-    if daily_state.trade_count >= cfg.max_trades_per_day:
+    # ── Step 2: Check hard daily capacity before evaluating a new signal ─────
+    total_daily_capacity = cfg.max_trades_per_day + int(getattr(cfg, "bonus_trades_after_max", 0) or 0)
+    if daily_state.trade_count >= total_daily_capacity:
         result["decision"] = "BLOCKED_MAX_TRADES"
         return result
     if daily_state.consecutive_losses >= cfg.max_consecutive_losses and not cfg.circuit_breaker_losses:
@@ -196,6 +197,7 @@ def process_alert(
         notes=decision.setup.notes,
         entry_time=state.timestamp,
         contracts=contracts,
+        confluence_grade=confluence.grade,
     )
     risk_result = risk_engine.validate(trade_setup, daily_state)
     risk_dict = {

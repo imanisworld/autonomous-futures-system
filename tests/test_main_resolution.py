@@ -19,7 +19,9 @@ from main import load_next_bar, main
 def fresh_market_state() -> dict:
     with open("data/sample_market_state.json", encoding="utf-8") as handle:
         state = json.load(handle)
-    now = datetime.now(timezone.utc).isoformat()
+    # Fixed 10:30 ET opening-window timestamp so this test exercises fill
+    # resolution, not the live session-window gate.
+    now = datetime(2026, 5, 29, 14, 30, tzinfo=timezone.utc).isoformat()
     state["timestamp"] = now
     state["ohlc"]["bar_start"] = now
     return state
@@ -31,6 +33,12 @@ def risk_rules_without_position_sizing(tmp_path):
     text = re.sub(
         r"position_sizing_enabled: true",
         "position_sizing_enabled: false",
+        text,
+        count=1,
+    )
+    text = re.sub(
+        r"max_staleness_seconds: 300",
+        "max_staleness_seconds: 999999",
         text,
         count=1,
     )

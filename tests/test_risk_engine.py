@@ -154,6 +154,44 @@ class TestDailyTradeLimit:
         assert result.rejected
         assert result.failed_rule == "daily_trade_limit"
 
+    def test_a_grade_bonus_trade_allowed_after_normal_limit(self, config, valid_trade_setup):
+        from dataclasses import replace
+
+        cfg = replace(config, bonus_trades_after_max=2, bonus_min_confluence_grade="A")
+        engine = RiskEngine(config=cfg)
+        setup = replace(valid_trade_setup, confluence_grade="A")
+        daily = DailyState(trade_count=3)
+
+        result = engine.validate(setup, daily)
+
+        assert result.approved
+
+    def test_b_grade_bonus_trade_rejected_after_normal_limit(self, config, valid_trade_setup):
+        from dataclasses import replace
+
+        cfg = replace(config, bonus_trades_after_max=2, bonus_min_confluence_grade="A")
+        engine = RiskEngine(config=cfg)
+        setup = replace(valid_trade_setup, confluence_grade="B")
+        daily = DailyState(trade_count=3)
+
+        result = engine.validate(setup, daily)
+
+        assert result.rejected
+        assert result.failed_rule == "daily_trade_limit_bonus_grade"
+
+    def test_bonus_capacity_has_hard_ceiling(self, config, valid_trade_setup):
+        from dataclasses import replace
+
+        cfg = replace(config, bonus_trades_after_max=2, bonus_min_confluence_grade="A")
+        engine = RiskEngine(config=cfg)
+        setup = replace(valid_trade_setup, confluence_grade="A+")
+        daily = DailyState(trade_count=5)
+
+        result = engine.validate(setup, daily)
+
+        assert result.rejected
+        assert result.failed_rule == "daily_trade_limit"
+
     def test_over_limit_rejected(self, config, valid_trade_setup):
         engine = RiskEngine(config=config)
         daily = DailyState(trade_count=5)  # Over max
@@ -557,3 +595,76 @@ class TestRailwaySafetyLayers:
         result = engine.validate(valid_trade_setup, daily)
 
         assert result.failed_rule != "circuit_breaker"
+
+class TestNewsBlackout:
+
+    def _news_config(self, config, mode="reduced"):
+        from dataclasses import replace
+
+        return replace(
+            config,
+            news_blackout_dates=["2026-06-17"],
+            news_blackout_mode=mode,
+            news_blackout_max_trades=1,
+            news_blackout_cutoff_et="13:30",
+        )
+
+    def test_news_blackout_block_mode_rejects_all_trades(self, config, valid_trade_setup):
+        from dataclasses import replace
+        from datetime import datetime, timezone
+
+        cfg = self._news_config(config, mode="block")
+        setup = replace(
+            valid_trade_setup,
+            entry_time=datetime(2026, 6, 17, 14, 30, tzinfo=timezone.utc),
+        )
+
+        result = RiskEngine(config=cfg).validate(setup, DailyState())
+
+        assert result.rejected
+        assert result.failed_rule == "news_blackout"
+
+    def test_reduced_news_day_allows_first_trade_before_cutoff(self, config, valid_trade_setup):
+        from dataclasses import replace
+        from datetime import datetime, timezone
+
+        cfg = self._news_config(config)
+        setup = replace(
+            valid_trade_setup,
+            entry_time=datetime(2026, 6, 17, 14, 30, tzinfo=timezone.utc),  # 10:30 ET
+        )
+
+        result = RiskEngine(config=cfg).validate(setup, DailyState(trade_count=0))
+
+        assert result.failed_rule not in {"news_blackout_trade_limit", "news_blackout_cutoff"}
+
+    def test_reduced_news_day_rejects_after_one_trade(self, config, valid_trade_setup):
+        from dataclasses import replace
+        from datetime import datetime, timezone
+
+        cfg = self._news_config(config)
+        setup = replace(
+            valid_trade_setup,
+            entry_time=datetime(2026, 6, 17, 14, 30, tzinfo=timezone.utc),
+        )
+
+        result = RiskEngine(config=cfg).validate(setup, DailyState(trade_count=1))
+
+        assert result.rejected
+        assert result.failed_rule == "news_blackout_trade_limit"
+
+    def test_reduced_news_day_rejects_after_cutoff(self, config, valid_trade_setup):
+        from dataclasses import replace
+        from datetime import datetime, timezone
+
+        cfg = self._news_config(config)
+        setup = replace(
+            valid_trade_setup,
+            entry_time=datetime(2026, 6, 17, 18, 0, tzinfo=timezone.utc),  # 14:00 ET
+        )
+
+        result = RiskEngine(config=cfg).validate(setup, DailyState(trade_count=0))
+
+        assert result.rejected
+        assert result.failed_rule == "news_blackout_cutoff"
+

@@ -52,6 +52,20 @@ daily_limits:
   circuit_breaker_losses: 3        # Pause after 3 consecutive losses
   circuit_breaker_pause_minutes: 30
   conservative_mode: true          # Start Railway paper mode with MES 1c
+  bonus_trades_after_max: 2         # After normal max, only A/A+ confluence can add trades
+  bonus_min_confluence_grade: "A"
+  news_blackout_mode: "reduced"     # off | block | reduced
+  news_blackout_max_trades: 1       # On FOMC/news days, allow only one early trade
+  news_blackout_cutoff_et: "13:30"  # Stop before 14:00 ET FOMC statement volatility
+  news_blackout_dates:              # 2026 FOMC decision days from federalreserve.gov calendar
+    - "2026-01-28"
+    - "2026-03-18"
+    - "2026-04-29"
+    - "2026-06-17"
+    - "2026-07-29"
+    - "2026-09-16"
+    - "2026-10-28"
+    - "2026-12-09"
   per_session_limits:
     asian: 1                        # Protect NY budget from overnight fills
     london: 2

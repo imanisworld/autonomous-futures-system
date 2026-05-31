@@ -54,6 +54,7 @@ class TradeSetup:
     instrument: str
     session: str
     contracts: int = 1
+    confluence_grade: Optional[str] = None
     notes: Optional[str] = None
     entry_time: Optional[datetime] = None  # UTC; used for session cutoff check
 
@@ -100,6 +101,7 @@ class RiskEngine:
             self._check_position_sizing,
             self._check_max_contracts,
             self._check_session,
+            self._check_news_blackout,
             self._check_daily_trade_limit,
             self._check_daily_loss_limit,
             self._check_max_drawdown,
@@ -257,16 +259,87 @@ class RiskEngine:
     def _check_daily_trade_limit(
         self, setup: TradeSetup, daily_state: DailyState
     ) -> Optional[RiskResult]:
-        """Daily trade count must be below maximum."""
-        if daily_state.trade_count >= self.config.max_trades_per_day:
+        """Daily trade count must be below max, except configured A-grade bonus trades."""
+        if daily_state.trade_count < self.config.max_trades_per_day:
+            return None
+
+        bonus_max = int(getattr(self.config, "bonus_trades_after_max", 0) or 0)
+        total_cap = self.config.max_trades_per_day + bonus_max
+        grade = (setup.confluence_grade or "").strip().upper()
+        min_grade = (getattr(self.config, "bonus_min_confluence_grade", "A") or "A").strip().upper()
+
+        if bonus_max > 0 and daily_state.trade_count < total_cap:
+            if self._grade_meets_minimum(grade, min_grade):
+                return None
             return RiskResult(
                 result="REJECTED",
-                failed_rule="daily_trade_limit",
+                failed_rule="daily_trade_limit_bonus_grade",
                 reason=(
-                    f"Daily trade limit reached: {daily_state.trade_count} trades "
-                    f"(max {self.config.max_trades_per_day})"
+                    f"Daily trade limit reached; bonus trade requires confluence "
+                    f"grade {min_grade} or better (received {grade or 'NONE'})."
                 ),
             )
+
+        return RiskResult(
+            result="REJECTED",
+            failed_rule="daily_trade_limit",
+            reason=(
+                f"Daily trade limit reached: {daily_state.trade_count} trades "
+                f"(max {self.config.max_trades_per_day}, bonus {bonus_max})"
+            ),
+        )
+
+    @staticmethod
+    def _grade_meets_minimum(grade: str, minimum: str) -> bool:
+        order = {"A+": 5, "A": 4, "B": 3, "C": 2, "WEAK": 1, "F": 0, "": -1}
+        return order.get(grade.upper(), -1) >= order.get(minimum.upper(), 4)
+
+    def _is_news_blackout_date(self, setup: TradeSetup) -> bool:
+        if not setup.entry_time:
+            return False
+        dates = set(getattr(self.config, "news_blackout_dates", []) or [])
+        if not dates:
+            return False
+        return setup.entry_time.astimezone(_ET).date().isoformat() in dates
+
+    def _check_news_blackout(
+        self, setup: TradeSetup, daily_state: DailyState
+    ) -> Optional[RiskResult]:
+        """Block or restrict entries on configured high-impact news dates."""
+        mode = (getattr(self.config, "news_blackout_mode", "off") or "off").lower()
+        if mode == "off" or not self._is_news_blackout_date(setup):
+            return None
+
+        if mode == "block":
+            return RiskResult(
+                result="REJECTED",
+                failed_rule="news_blackout",
+                reason="High-impact news blackout date: no new entries allowed.",
+            )
+
+        if mode == "reduced":
+            max_trades = int(getattr(self.config, "news_blackout_max_trades", 1) or 1)
+            if daily_state.trade_count >= max_trades:
+                return RiskResult(
+                    result="REJECTED",
+                    failed_rule="news_blackout_trade_limit",
+                    reason=(
+                        f"High-impact news date limit reached: {daily_state.trade_count} "
+                        f"trade(s), max {max_trades}."
+                    ),
+                )
+            cutoff = getattr(self.config, "news_blackout_cutoff_et", "13:30") or "13:30"
+            cutoff_h, cutoff_m = map(int, cutoff.split(":"))
+            et = setup.entry_time.astimezone(_ET)
+            if et.hour > cutoff_h or (et.hour == cutoff_h and et.minute >= cutoff_m):
+                return RiskResult(
+                    result="REJECTED",
+                    failed_rule="news_blackout_cutoff",
+                    reason=(
+                        f"High-impact news date cutoff active: entry at "
+                        f"{et.strftime('%H:%M')} ET is after {cutoff} ET."
+                    ),
+                )
         return None
 
 

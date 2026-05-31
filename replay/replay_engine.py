@@ -36,6 +36,7 @@ from replay.candle_loader import ReplayCandle, ReplayCandleLoader
 from replay.manifest import ReplayManifest
 from replay.replay_report import MultiDayReplayReport, ReplayReport
 from risk.risk_engine import DailyState, RiskEngine, TradeSetup
+from strategy.confluence_scorer import score_setup as _score_setup
 from strategy.signal_engine import DecisionEngine
 from strategy.strat_classifier import StratContext, classify_from_ohlc
 
@@ -115,7 +116,11 @@ class ReplayEngine:
             if daily_state.consecutive_losses >= self.config.max_consecutive_losses:
                 stopped_reason = "max_consecutive_losses"
                 break
-            if daily_state.trade_count >= self.config.max_trades_per_day:
+            total_daily_capacity = (
+                self.config.max_trades_per_day
+                + int(getattr(self.config, "bonus_trades_after_max", 0) or 0)
+            )
+            if daily_state.trade_count >= total_daily_capacity:
                 stopped_reason = "max_trades_per_day"
                 break
 
@@ -126,6 +131,14 @@ class ReplayEngine:
             prev_candle = candle
 
             if decision.decision == "TRADE" and decision.setup is not None:
+                confluence = _score_setup(state, decision.setup)
+                journal_entry = decision.to_dict()
+                journal_entry["confluence"] = {
+                    "score": confluence.score,
+                    "grade": confluence.grade,
+                    "factors": confluence.factors,
+                    "penalties": confluence.penalties,
+                }
                 trade_setup = TradeSetup(
                     direction=decision.setup.direction,
                     entry=decision.setup.entry,
@@ -137,6 +150,7 @@ class ReplayEngine:
                     session=state.session,
                     notes=decision.setup.notes,
                     entry_time=_parse_timestamp(candle.timestamp),
+                    confluence_grade=confluence.grade,
                 )
                 daily_state.account_balance = broker.get_account_balance()
                 trade_setup.contracts = risk_engine.recommended_contracts(
@@ -149,7 +163,7 @@ class ReplayEngine:
                     "reason": risk_result.reason,
                 }
 
-                journal.log_decision(decision.to_dict(), risk_result_dict, for_date=journal_date)
+                journal.log_decision(journal_entry, risk_result_dict, for_date=journal_date)
 
                 if risk_result.approved:
                     contracts = trade_setup.contracts
@@ -201,7 +215,11 @@ class ReplayEngine:
 
             journal.log_decision(decision.to_dict(), risk_result_dict, for_date=journal_date)
 
-        if stopped_reason is None and daily_state.trade_count >= self.config.max_trades_per_day:
+        total_daily_capacity = (
+            self.config.max_trades_per_day
+            + int(getattr(self.config, "bonus_trades_after_max", 0) or 0)
+        )
+        if stopped_reason is None and daily_state.trade_count >= total_daily_capacity:
             stopped_reason = "max_trades_per_day"
 
         summary = journal.get_summary(_date_to_date(run_date))

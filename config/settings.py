@@ -117,6 +117,14 @@ class SystemConfig:
     require_htf_alignment: dict = field(default_factory=dict)
     # Per-instrument strategy exclusions — overrides enabled_concepts for that instrument
     disabled_concepts_per_instrument: dict = field(default_factory=dict)
+    # Bonus trades after normal daily max; RiskEngine requires confluence grade.
+    bonus_trades_after_max: int = 0
+    bonus_min_confluence_grade: str = "A"
+    # High-impact news/FOMC controls. Dates are YYYY-MM-DD decision days.
+    news_blackout_dates: List[str] = field(default_factory=list)
+    news_blackout_mode: str = "off"  # off | block | reduced
+    news_blackout_max_trades: int = 1
+    news_blackout_cutoff_et: str = "13:30"
 
     # Future broker/capital planning (inactive while live trading is blocked)
     broker_priority: List[str] = field(default_factory=lambda: ["paper", "tradovate_sim", "ibkr_paper"])
@@ -210,6 +218,12 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         circuit_breaker_losses=int(daily.get("circuit_breaker_losses", 0) or 0),
         circuit_breaker_pause_minutes=int(daily.get("circuit_breaker_pause_minutes", 30) or 30),
         conservative_mode=bool(daily.get("conservative_mode", False)),
+        bonus_trades_after_max=int(daily.get("bonus_trades_after_max", 0) or 0),
+        bonus_min_confluence_grade=str(daily.get("bonus_min_confluence_grade", "A") or "A"),
+        news_blackout_dates=[str(value) for value in daily.get("news_blackout_dates", []) or []],
+        news_blackout_mode=str(daily.get("news_blackout_mode", "off") or "off").lower(),
+        news_blackout_max_trades=int(daily.get("news_blackout_max_trades", 1) or 1),
+        news_blackout_cutoff_et=str(daily.get("news_blackout_cutoff_et", "13:30") or "13:30"),
         per_session_limits=daily.get("per_session_limits", {}),
         session_cutoffs=daily.get("session_cutoffs_et", {}),
         min_target_points=daily.get("min_target_points", {}),
@@ -305,6 +319,12 @@ def _validate_config(config: SystemConfig) -> None:
         raise ConfigError("max_trades_per_day must be >= 1.")
     if config.max_consecutive_losses < 1:
         raise ConfigError("max_consecutive_losses must be >= 1.")
+    if config.bonus_trades_after_max < 0:
+        raise ConfigError("bonus_trades_after_max must be >= 0.")
+    if config.news_blackout_mode not in {"off", "block", "reduced"}:
+        raise ConfigError("news_blackout_mode must be one of: off, block, reduced.")
+    if config.news_blackout_max_trades < 0:
+        raise ConfigError("news_blackout_max_trades must be >= 0.")
     if config.min_rr_ratio < 1.0:
         raise ConfigError("min_rr_ratio must be >= 1.0.")
     if config.max_staleness_seconds < 1:

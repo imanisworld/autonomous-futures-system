@@ -13,32 +13,33 @@ i_vol_len = input.int(20, "Volume MA", minval=5, group="Volume")
 i_alert_on = input.bool(true, "Fire alert on every confirmed bar close", group="Alert")
 
 // Manual context inputs for gates. Keep blank/na when unavailable; webhook treats missing data as neutral.
-i_gex_flip = input.float(na, "GEX Flip", group="GEX / Gamma")
-i_call_wall = input.float(na, "Call Wall", group="GEX / Gamma")
-i_put_wall = input.float(na, "Put Wall", group="GEX / Gamma")
-i_hvl = input.float(na, "HVL", group="GEX / Gamma")
-i_max_pain = input.float(na, "Max Pain", group="GEX / Gamma")
-i_mid_upper = input.float(na, "Mid Upper", group="GEX / Gamma")
-i_mid_lower = input.float(na, "Mid Lower", group="GEX / Gamma")
-i_vol_trigger_up = input.float(na, "Vol Trigger Up", group="GEX / Gamma")
-i_vol_trigger_down = input.float(na, "Vol Trigger Down", group="GEX / Gamma")
+i_gex_flip = input.float(0.0, "GEX Flip", group="GEX / Gamma")
+i_call_wall = input.float(0.0, "Call Wall", group="GEX / Gamma")
+i_put_wall = input.float(0.0, "Put Wall", group="GEX / Gamma")
+i_hvl = input.float(0.0, "HVL", group="GEX / Gamma")
+i_max_pain = input.float(0.0, "Max Pain", group="GEX / Gamma")
+i_mid_upper = input.float(0.0, "Mid Upper", group="GEX / Gamma")
+i_mid_lower = input.float(0.0, "Mid Lower", group="GEX / Gamma")
+i_vol_trigger_up = input.float(0.0, "Vol Trigger Up", group="GEX / Gamma")
+i_vol_trigger_down = input.float(0.0, "Vol Trigger Down", group="GEX / Gamma")
 i_gex_regime = input.string("", "GEX Regime", group="GEX / Gamma")
 i_delta_bias = input.string("", "Delta Bias", group="GEX / Gamma")
 
 i_signa_grade = input.string("", "Signa Grade", group="Signa")
-i_signa_score = input.float(na, "Signa Score", group="Signa")
+i_signa_score = input.float(0.0, "Signa Score", group="Signa")
 i_signa_daily_direction = input.string("", "Signa Daily Direction", group="Signa")
 i_signa_weekly_direction = input.string("", "Signa Weekly Direction", group="Signa")
 
-i_supply_top = input.float(na, "Supply Zone Top", group="Supply / Demand")
-i_supply_bottom = input.float(na, "Supply Zone Bottom", group="Supply / Demand")
-i_supply_wavg = input.float(na, "Supply Zone WAVG", group="Supply / Demand")
-i_demand_top = input.float(na, "Demand Zone Top", group="Supply / Demand")
-i_demand_bottom = input.float(na, "Demand Zone Bottom", group="Supply / Demand")
-i_demand_wavg = input.float(na, "Demand Zone WAVG", group="Supply / Demand")
+i_supply_top = input.float(0.0, "Supply Zone Top", group="Supply / Demand")
+i_supply_bottom = input.float(0.0, "Supply Zone Bottom", group="Supply / Demand")
+i_supply_wavg = input.float(0.0, "Supply Zone WAVG", group="Supply / Demand")
+i_demand_top = input.float(0.0, "Demand Zone Top", group="Supply / Demand")
+i_demand_bottom = input.float(0.0, "Demand Zone Bottom", group="Supply / Demand")
+i_demand_wavg = input.float(0.0, "Demand Zone WAVG", group="Supply / Demand")
 
 // HELPERS
 f2j(v, fmt) => na(v) ? "null" : str.tostring(v, fmt)
+f_opt2j(v, fmt) => v == 0.0 ? "null" : f2j(v, fmt)
 s2j(v) => na(v) or v == "" ? "null" : "\"" + v + "\""
 
 classify_bar(h, l, ph, pl) =>
@@ -408,19 +409,19 @@ msg := msg + "\"entry\":" + f2j(signal_entry, "#.####") + ","
 msg := msg + "\"stop\":" + f2j(signal_stop, "#.####") + ","
 msg := msg + "\"target\":" + f2j(signal_target, "#.####") + ","
 msg := msg + "\"rr_ratio\":" + f2j(signal_rr, "#.####") + ","
-msg := msg + "\"gex_flip\":" + f2j(i_gex_flip, "#.##") + ","
-msg := msg + "\"call_wall\":" + f2j(i_call_wall, "#.##") + ","
-msg := msg + "\"put_wall\":" + f2j(i_put_wall, "#.##") + ","
-msg := msg + "\"hvl\":" + f2j(i_hvl, "#.##") + ","
-msg := msg + "\"max_pain\":" + f2j(i_max_pain, "#.##") + ","
-msg := msg + "\"mid_upper\":" + f2j(i_mid_upper, "#.##") + ","
-msg := msg + "\"mid_lower\":" + f2j(i_mid_lower, "#.##") + ","
-msg := msg + "\"vol_trigger_up\":" + f2j(i_vol_trigger_up, "#.##") + ","
-msg := msg + "\"vol_trigger_down\":" + f2j(i_vol_trigger_down, "#.##") + ","
+msg := msg + "\"gex_flip\":" + f_opt2j(i_gex_flip, "#.##") + ","
+msg := msg + "\"call_wall\":" + f_opt2j(i_call_wall, "#.##") + ","
+msg := msg + "\"put_wall\":" + f_opt2j(i_put_wall, "#.##") + ","
+msg := msg + "\"hvl\":" + f_opt2j(i_hvl, "#.##") + ","
+msg := msg + "\"max_pain\":" + f_opt2j(i_max_pain, "#.##") + ","
+msg := msg + "\"mid_upper\":" + f_opt2j(i_mid_upper, "#.##") + ","
+msg := msg + "\"mid_lower\":" + f_opt2j(i_mid_lower, "#.##") + ","
+msg := msg + "\"vol_trigger_up\":" + f_opt2j(i_vol_trigger_up, "#.##") + ","
+msg := msg + "\"vol_trigger_down\":" + f_opt2j(i_vol_trigger_down, "#.##") + ","
 msg := msg + "\"gex_regime\":" + s2j(i_gex_regime) + ","
 msg := msg + "\"delta_bias\":" + s2j(i_delta_bias) + ","
 msg := msg + "\"signa_grade\":" + s2j(i_signa_grade) + ","
-msg := msg + "\"signa_score\":" + f2j(i_signa_score, "#.##") + ","
+msg := msg + "\"signa_score\":" + f_opt2j(i_signa_score, "#.##") + ","
 msg := msg + "\"signa_daily_direction\":" + s2j(i_signa_daily_direction) + ","
 msg := msg + "\"signa_weekly_direction\":" + s2j(i_signa_weekly_direction) + ","
 msg := msg + "\"daily_bar_type\":" + s2j(daily_bar_type) + ","
@@ -431,12 +432,12 @@ msg := msg + "\"one_hour_bar_type\":" + s2j(one_hour_bar_type) + ","
 msg := msg + "\"one_hour_direction\":" + s2j(one_hour_direction) + ","
 msg := msg + "\"ftfc_direction\":" + s2j(ftfc_direction) + ","
 msg := msg + "\"ftfc_aligned\":" + str.tostring(ftfc_aligned) + ","
-msg := msg + "\"supply_top\":" + f2j(i_supply_top, "#.##") + ","
-msg := msg + "\"supply_bottom\":" + f2j(i_supply_bottom, "#.##") + ","
-msg := msg + "\"supply_wavg\":" + f2j(i_supply_wavg, "#.##") + ","
-msg := msg + "\"demand_top\":" + f2j(i_demand_top, "#.##") + ","
-msg := msg + "\"demand_bottom\":" + f2j(i_demand_bottom, "#.##") + ","
-msg := msg + "\"demand_wavg\":" + f2j(i_demand_wavg, "#.##") + ","
+msg := msg + "\"supply_top\":" + f_opt2j(i_supply_top, "#.##") + ","
+msg := msg + "\"supply_bottom\":" + f_opt2j(i_supply_bottom, "#.##") + ","
+msg := msg + "\"supply_wavg\":" + f_opt2j(i_supply_wavg, "#.##") + ","
+msg := msg + "\"demand_top\":" + f_opt2j(i_demand_top, "#.##") + ","
+msg := msg + "\"demand_bottom\":" + f_opt2j(i_demand_bottom, "#.##") + ","
+msg := msg + "\"demand_wavg\":" + f_opt2j(i_demand_wavg, "#.##") + ","
 msg := msg + "\"hod\":" + f2j(hod, "#.##") + ","
 msg := msg + "\"lod\":" + f2j(lod, "#.##") + ","
 msg := msg + "\"prev_week_high\":" + f2j(pw_high, "#.##") + ","
