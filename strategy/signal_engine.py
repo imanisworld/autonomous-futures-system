@@ -671,9 +671,46 @@ class DecisionEngine:
                 continue
             setup = fn(state)
             if setup is not None:
-                return setup
+                return self._enforce_min_target_distance(setup, state.instrument)
 
         return None
+
+    def _enforce_min_target_distance(
+        self, setup: SetupDetail, instrument: str
+    ) -> SetupDetail:
+        """Expand tiny live targets to the configured instrument minimum."""
+        min_points = float(self.config.min_target_points.get(instrument, 0) or 0)
+        if min_points <= 0:
+            return setup
+
+        if setup.direction == "LONG":
+            current_distance = setup.target - setup.entry
+            if current_distance >= min_points:
+                return setup
+            target = setup.entry + min_points
+        elif setup.direction == "SHORT":
+            current_distance = setup.entry - setup.target
+            if current_distance >= min_points:
+                return setup
+            target = setup.entry - min_points
+        else:
+            return setup
+
+        rr = RiskEngine.calculate_rr(setup.direction, setup.entry, setup.stop, target)
+        note = (
+            f"target expanded to {min_points:g}pt minimum for {instrument} "
+            f"(was {current_distance:.2f}pt)"
+        )
+        notes = f"{setup.notes} | {note}" if setup.notes else note
+        return SetupDetail(
+            direction=setup.direction,
+            entry=setup.entry,
+            stop=setup.stop,
+            target=round(target, 4),
+            rr_ratio=rr,
+            strategy=setup.strategy,
+            notes=notes,
+        )
 
     def _try_orb_breakout(self, state: MarketState) -> Optional[SetupDetail]:
         """

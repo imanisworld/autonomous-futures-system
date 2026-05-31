@@ -878,3 +878,33 @@ class TestContinuationPullback:
         decision = engine.evaluate(state, DailyState())
         assert decision.decision == "TRADE"
         assert decision.setup.direction == "SHORT"
+
+
+def test_mes_live_pullback_target_expands_to_configured_minimum(config, fresh_market_state):
+    """MES live pullbacks must not produce tiny 4-5 point targets."""
+    from dataclasses import replace
+
+    cfg = replace(
+        config,
+        enabled_concepts=["continuation_pullback"],
+        min_target_points={"MES": 15},
+    )
+    state = deepcopy(fresh_market_state)
+    state.instrument = "MES"
+    state.orb.status = "inside"
+    state.market_condition = "TRENDING"
+    state.trend = TrendData(direction="UP", strength="MODERATE")
+    state.ohlc.close = 5582.25
+    state.vwap = VWAPData(
+        value=5582.0,
+        price_vs_vwap="above",
+        reclaimed=True,
+        holding=True,
+    )
+
+    decision = DecisionEngine(config=cfg).evaluate(state, DailyState())
+
+    assert decision.decision == "TRADE"
+    assert decision.setup.strategy == "continuation_pullback"
+    assert round(decision.setup.target - decision.setup.entry, 2) == 15.0
+    assert "target expanded to 15pt minimum for MES" in decision.setup.notes
