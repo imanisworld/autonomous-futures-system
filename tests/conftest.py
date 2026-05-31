@@ -50,7 +50,7 @@ def config() -> SystemConfig:
         require_stop=True,
         require_target=True,
         min_rr_ratio=2.0,
-        max_staleness_seconds=300,
+        max_staleness_seconds=0,   # disabled in tests (historical timestamps)
         reject_null_required_fields=True,
         reject_contradictory_data=True,
         tradable_states=["TRENDING", "RANGE_BOUND"],

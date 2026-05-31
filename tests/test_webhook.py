@@ -508,6 +508,61 @@ def test_runner_blocks_today_when_previous_day_position_still_open(config, tmp_p
     assert JournalLogger(log_dir=log_dir).get_daily_state(yesterday).has_open_position is True
 
 
+def test_runner_resolves_friday_position_on_monday(config, tmp_path):
+    """Friday open position must carry across Saturday+Sunday and resolve on Monday."""
+    from journal.journal_logger import JournalLogger
+    from webhook.runner import process_alert
+
+    log_dir = str(tmp_path / "logs")
+    friday = date(2026, 5, 22)   # Friday
+    monday = date(2026, 5, 25)   # Monday (3 calendar days later)
+    journal = JournalLogger(log_dir=log_dir)
+    _seed_open_trade(journal, friday)
+
+    result = process_alert(
+        _base_payload(
+            timestamp="2026-05-25T14:30:00+00:00",
+            high=19600.0,
+            low=19490.0,
+            close=19590.0,
+        ),
+        config=config,
+        log_dir=log_dir,
+        for_date=monday,
+    )
+
+    assert result["resolution"] == "WIN"
+    assert JournalLogger(log_dir=log_dir).get_daily_state(friday).has_open_position is False
+
+
+def test_runner_blocks_monday_when_friday_position_unresolved(config, tmp_path):
+    """An unresolved Friday position must block new Monday entries."""
+    from journal.journal_logger import JournalLogger
+    from webhook.runner import process_alert
+
+    log_dir = str(tmp_path / "logs")
+    friday = date(2026, 5, 22)
+    monday = date(2026, 5, 25)
+    journal = JournalLogger(log_dir=log_dir)
+    _seed_open_trade(journal, friday)
+
+    result = process_alert(
+        _base_payload(
+            timestamp="2026-05-25T14:30:00+00:00",
+            high=19520.0,
+            low=19480.0,
+            close=19505.0,
+        ),
+        config=config,
+        log_dir=log_dir,
+        for_date=monday,
+    )
+
+    assert result["resolution"] is None
+    assert result["decision"] == "BLOCKED_OPEN_POSITION"
+    assert JournalLogger(log_dir=log_dir).get_daily_state(friday).has_open_position is True
+
+
 # ─── runner: daily limit blocks ──────────────────────────────────────────────
 
 def test_runner_blocks_when_max_trades_reached(config, tmp_path):
@@ -748,8 +803,10 @@ def test_fastapi_latest_webhook_endpoint_after_alert(monkeypatch, tmp_path):
     except ImportError:
         pytest.skip("fastapi[testclient] not installed")
 
-    monkeypatch.delenv("WEBHOOK_SECRET", raising=False)
+    monkeypatch.setenv("WEBHOOK_SECRET", "test-secret")
     _isolate_app_logs(monkeypatch, tmp_path)
+    import webhook.app as app_module
+    monkeypatch.setattr(app_module._config, "max_staleness_seconds", 0)
     client = TestClient(app)
     body = {
         "ticker": "MNQ1!",
@@ -776,7 +833,7 @@ def test_fastapi_latest_webhook_endpoint_after_alert(monkeypatch, tmp_path):
         "two_bars_back_type": "two_up",
     }
 
-    alert_resp = client.post("/webhook/alert", json=body)
+    alert_resp = client.post("/webhook/alert", json=body, headers={"X-Webhook-Secret": "test-secret"})
     assert alert_resp.status_code == 200
 
     latest_resp = client.get("/status/latest-webhook")
@@ -794,14 +851,14 @@ def test_fastapi_latest_webhook_endpoint_after_alert(monkeypatch, tmp_path):
 
 
 def test_fastapi_alert_endpoint_valid_payload(monkeypatch, tmp_path):
-    """POST /webhook/alert with a valid payload returns 200."""
+    """POST /webhook/alert with a valid payload and correct secret returns 200."""
     try:
         from fastapi.testclient import TestClient
         from webhook.app import app
     except ImportError:
         pytest.skip("fastapi[testclient] not installed")
 
-    monkeypatch.delenv("WEBHOOK_SECRET", raising=False)
+    monkeypatch.setenv("WEBHOOK_SECRET", "test-secret")
     _isolate_app_logs(monkeypatch, tmp_path)
     client = TestClient(app)
     body = {
@@ -814,7 +871,7 @@ def test_fastapi_alert_endpoint_valid_payload(monkeypatch, tmp_path):
         "volume": 4200,
         "market_condition": "CHOPPY",
     }
-    resp = client.post("/webhook/alert", json=body)
+    resp = client.post("/webhook/alert", json=body, headers={"X-Webhook-Secret": "test-secret"})
     assert resp.status_code == 200
     data = resp.json()
     assert data["ok"] is True

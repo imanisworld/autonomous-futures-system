@@ -25,6 +25,7 @@ import json
 import logging
 import os
 from collections import Counter
+from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -41,10 +42,23 @@ from webhook.runner import process_alert
 
 logger = logging.getLogger(__name__)
 
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    """Startup gate: refuse to serve if WEBHOOK_SECRET is blank."""
+    if not _configured_webhook_secret():
+        raise RuntimeError(
+            "WEBHOOK_SECRET env var is required but not set. "
+            "Set it in Railway dashboard before deploying."
+        )
+    yield
+
+
 app = FastAPI(
     title="Paper Trading Webhook",
     description="TradingView → paper engine → JSONL journal. No live trading.",
     version="1.0.0",
+    lifespan=_lifespan,
 )
 
 _static = Path(__file__).parent / "static"
@@ -208,10 +222,13 @@ def _configured_webhook_secret() -> str:
 
 def _verify_webhook_secret(provided: str | None) -> None:
     expected = _configured_webhook_secret()
+    # No secret configured → reject every inbound webhook unconditionally.
+    # A blank secret means the endpoint is public; that is never acceptable.
     if not expected:
-        return
+        raise HTTPException(status_code=401, detail="WEBHOOK_SECRET is not configured.")
     if not provided or not hmac.compare_digest(provided, expected):
         raise HTTPException(status_code=401, detail="Invalid webhook secret")
+
 
 
 def _dashboard_payload(for_date: date) -> dict:

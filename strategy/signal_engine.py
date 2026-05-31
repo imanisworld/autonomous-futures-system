@@ -12,10 +12,13 @@ valid setup can be formed. Otherwise decision=NO_TRADE with reason.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime, time as _time, timezone
 from typing import Optional
 from zoneinfo import ZoneInfo
+
+_log = logging.getLogger(__name__)
 
 from config.settings import SystemConfig, load_config
 from context.market_context import MarketState
@@ -491,16 +494,26 @@ class DecisionEngine:
         if not isinstance(raw, dict):
             return setup
 
+        pine_has_bracket = all(raw.get(f) is not None for f in ("entry", "stop", "target"))
+
         required = ("entry", "stop", "target")
         if any(raw.get(field) is None for field in required):
             return setup
 
         raw_direction = str(raw.get("signal_direction") or "").upper()
         if raw_direction and raw_direction != setup.direction:
+            _log.warning(
+                "Pine bracket ignored: direction mismatch (Pine=%s backend=%s)",
+                raw_direction, setup.direction,
+            )
             return setup
 
         raw_strategy = raw.get("signal_strategy")
         if raw_strategy and raw_strategy != setup.strategy:
+            _log.warning(
+                "Pine bracket ignored: strategy mismatch (Pine=%r backend=%r)",
+                raw_strategy, setup.strategy,
+            )
             return setup
 
         try:
@@ -508,22 +521,32 @@ class DecisionEngine:
             stop = float(raw["stop"])
             target = float(raw["target"])
         except (TypeError, ValueError):
+            if pine_has_bracket:
+                _log.warning("Pine bracket ignored: could not parse entry/stop/target as floats")
             return setup
 
         if entry <= 0 or stop <= 0 or target <= 0:
+            if pine_has_bracket:
+                _log.warning("Pine bracket ignored: non-positive value (entry=%s stop=%s target=%s)", entry, stop, target)
             return setup
 
         if setup.direction == "LONG":
             if not (stop < entry < target):
+                if pine_has_bracket:
+                    _log.warning("Pine bracket ignored: LONG order invalid (stop=%s entry=%s target=%s)", stop, entry, target)
                 return setup
         elif setup.direction == "SHORT":
             if not (target < entry < stop):
+                if pine_has_bracket:
+                    _log.warning("Pine bracket ignored: SHORT order invalid (target=%s entry=%s stop=%s)", target, entry, stop)
                 return setup
         else:
             return setup
 
         rr = RiskEngine.calculate_rr(setup.direction, entry, stop, target)
         if rr <= 0:
+            if pine_has_bracket:
+                _log.warning("Pine bracket ignored: RR <= 0")
             return setup
 
         note = "Pine bracket override"

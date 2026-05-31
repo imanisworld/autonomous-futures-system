@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 from config.settings import SystemConfig, load_config
@@ -66,6 +66,26 @@ def process_alert(
                           strategy} | None),
     """
     cfg = config or load_config()
+
+    # ── Step 0: Data-quality gate ─────────────────────────────────────────────
+    quality_error = _check_payload_quality(payload, cfg)
+    if quality_error:
+        return {
+            "timestamp": payload.timestamp,
+            "instrument": payload.ticker,
+            "session": None,
+            "resolution": None,
+            "decision": "BLOCKED_DATA_QUALITY",
+            "risk": None,
+            "fill": None,
+            "context": None,
+            "regime": None,
+            "gex_status": None,
+            "signa_status": None,
+            "failed_gates": [quality_error],
+            "confidence_score": None,
+        }
+
     state = build_market_state(payload)
     journal = JournalLogger(log_dir=log_dir)
     today = for_date or date.today()
@@ -73,12 +93,15 @@ def process_alert(
     open_position_date = today
     open_pos = journal.get_open_position(today) if daily_state.has_open_position else None
     if open_pos is None:
-        previous_day = today - timedelta(days=1)
-        previous_state = journal.get_daily_state(previous_day)
-        if previous_state.has_open_position:
-            open_pos = journal.get_open_position(previous_day)
-            open_position_date = previous_day
-            daily_state.has_open_position = True
+        # Walk back up to 7 calendar days so Friday→Monday carry works across weekends.
+        for days_back in range(1, 8):
+            candidate = today - timedelta(days=days_back)
+            candidate_state = journal.get_daily_state(candidate)
+            if candidate_state.has_open_position:
+                open_pos = journal.get_open_position(candidate)
+                open_position_date = candidate
+                daily_state.has_open_position = True
+                break
 
     result: dict = {
         "timestamp": payload.timestamp,
@@ -343,6 +366,28 @@ def _market_state_context(state) -> dict:
             "htf_phase": state.icc.htf_phase if state.icc else None,
         },
     }
+
+
+def _check_payload_quality(payload: AlertPayload, cfg: SystemConfig) -> Optional[str]:
+    """
+    Return a rejection reason string if the bar data is clearly bad, else None.
+    Checks: contradictory OHLC (high < low), and stale bar timestamp.
+    """
+    if payload.high < payload.low:
+        return f"Contradictory OHLC: high {payload.high} < low {payload.low}"
+
+    max_staleness = int(getattr(cfg, "max_staleness_seconds", 300) or 0)
+    if max_staleness > 0:
+        try:
+            from webhook.state_builder import parse_timestamp
+            bar_ts = parse_timestamp(payload.timestamp)
+            age_seconds = (datetime.now(timezone.utc) - bar_ts).total_seconds()
+            if age_seconds > max_staleness:
+                return f"Stale bar: {int(age_seconds)}s old (max {max_staleness}s)"
+        except Exception:
+            pass  # unparseable timestamp is caught later by state_builder
+
+    return None
 
 
 def send_telegram_message(message: str) -> bool:
