@@ -430,6 +430,84 @@ def test_runner_blocks_when_open_position_does_not_resolve(config, tmp_path):
     assert r2["decision"] == "BLOCKED_OPEN_POSITION"
 
 
+def _seed_open_trade(journal, for_date):
+    journal._append({
+        "ts": f"{for_date.isoformat()}T17:55:00+00:00",
+        "instrument": "MNQ",
+        "session": "new_york",
+        "decision": "TRADE",
+        "reason": "carry test",
+        "market_condition": "TRENDING",
+        "setup": {
+            "direction": "LONG",
+            "entry": 19500.0,
+            "stop": 19460.0,
+            "target": 19580.0,
+            "rr_ratio": 2.0,
+            "strategy": "orb_reclaim",
+            "notes": None,
+            "contracts": 1,
+        },
+        "risk_check": {"result": "APPROVED", "failed_rule": None, "reason": None},
+        "outcome": None,
+    }, for_date)
+
+
+def test_runner_resolves_previous_day_open_position(config, tmp_path):
+    """A carried open trade must resolve from today's OHLC before new entries."""
+    from journal.journal_logger import JournalLogger
+    from webhook.runner import process_alert
+
+    log_dir = str(tmp_path / "logs")
+    yesterday = date(2026, 5, 22)
+    today = date(2026, 5, 23)
+    journal = JournalLogger(log_dir=log_dir)
+    _seed_open_trade(journal, yesterday)
+
+    result = process_alert(
+        _base_payload(
+            timestamp="2026-05-23T14:30:00+00:00",
+            high=19600.0,
+            low=19490.0,
+            close=19590.0,
+        ),
+        config=config,
+        log_dir=log_dir,
+        for_date=today,
+    )
+
+    assert result["resolution"] == "WIN"
+    assert JournalLogger(log_dir=log_dir).get_daily_state(yesterday).has_open_position is False
+
+
+def test_runner_blocks_today_when_previous_day_position_still_open(config, tmp_path):
+    """A carried trade that hits neither bracket must block same-alert re-entry."""
+    from journal.journal_logger import JournalLogger
+    from webhook.runner import process_alert
+
+    log_dir = str(tmp_path / "logs")
+    yesterday = date(2026, 5, 22)
+    today = date(2026, 5, 23)
+    journal = JournalLogger(log_dir=log_dir)
+    _seed_open_trade(journal, yesterday)
+
+    result = process_alert(
+        _base_payload(
+            timestamp="2026-05-23T14:30:00+00:00",
+            high=19520.0,
+            low=19480.0,
+            close=19505.0,
+        ),
+        config=config,
+        log_dir=log_dir,
+        for_date=today,
+    )
+
+    assert result["resolution"] is None
+    assert result["decision"] == "BLOCKED_OPEN_POSITION"
+    assert JournalLogger(log_dir=log_dir).get_daily_state(yesterday).has_open_position is True
+
+
 # ─── runner: daily limit blocks ──────────────────────────────────────────────
 
 def test_runner_blocks_when_max_trades_reached(config, tmp_path):

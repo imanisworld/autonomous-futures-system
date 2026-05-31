@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import date, datetime, timezone
+from datetime import date, timedelta
 from typing import Optional
 
 from config.settings import SystemConfig, load_config
@@ -70,6 +70,15 @@ def process_alert(
     journal = JournalLogger(log_dir=log_dir)
     today = for_date or date.today()
     daily_state = journal.get_daily_state(today)
+    open_position_date = today
+    open_pos = journal.get_open_position(today) if daily_state.has_open_position else None
+    if open_pos is None:
+        previous_day = today - timedelta(days=1)
+        previous_state = journal.get_daily_state(previous_day)
+        if previous_state.has_open_position:
+            open_pos = journal.get_open_position(previous_day)
+            open_position_date = previous_day
+            daily_state.has_open_position = True
 
     result: dict = {
         "timestamp": payload.timestamp,
@@ -89,7 +98,6 @@ def process_alert(
 
     # ── Step 1: Resolve any open position with this bar's OHLC ───────────────
     if daily_state.has_open_position:
-        open_pos = journal.get_open_position(today)
         if open_pos and _position_is_complete(open_pos):
             broker = PaperBroker(
                 starting_balance=journal.get_account_balance(
@@ -118,7 +126,7 @@ def process_alert(
                     pnl_ticks=fill.pnl_ticks,
                     pnl_dollars=fill.pnl_dollars,
                     contracts=fill.contracts,
-                    for_date=today,
+                    for_date=open_position_date,
                 )
                 result["resolution"] = fill.result
                 if fill.result in {"WIN", "LOSS"}:

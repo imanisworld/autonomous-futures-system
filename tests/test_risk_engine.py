@@ -551,6 +551,18 @@ class TestRailwaySafetyLayers:
         assert result.rejected
         assert result.failed_rule == "max_daily_loss"
 
+    def test_max_daily_loss_scales_with_contract_count(self, config, valid_trade_setup):
+        config.max_daily_loss = 150
+        valid_trade_setup.contracts = 2
+        engine = RiskEngine(config=config)
+
+        first_loss = engine.validate(valid_trade_setup, DailyState(realized_pnl_dollars=-150.0))
+        second_loss = engine.validate(valid_trade_setup, DailyState(realized_pnl_dollars=-300.0))
+
+        assert first_loss.approved
+        assert second_loss.rejected
+        assert second_loss.failed_rule == "max_daily_loss"
+
     def test_max_drawdown_rejects(self, config, valid_trade_setup):
         config.max_drawdown_percent = 0.20
         engine = RiskEngine(config=config)

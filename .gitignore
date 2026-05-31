@@ -15,3 +15,8 @@ strategy/*.mov
 strategy/*.zip
 strategy/*.pdf
 .vscode/
+*.dmg
+data/replay/
+data/htf/
+replay_out/
+ibc/

@@ -558,8 +558,8 @@ def _render_dashboard(status: dict) -> str:
       <div class="panel">
         <h2>Rule State</h2>
         <div class="rules">
-          <div class="rule {'danger' if trade_full else ''}"><span>●</span>Max 3 trades/day</div>
-          <div class="rule {'danger' if lockout else ''}"><span>●</span>2-loss lockout</div>
+          <div class="rule {'danger' if trade_full else ''}"><span>●</span>Max {status['max_trades_per_day']} trades/day</div>
+          <div class="rule {'danger' if lockout else ''}"><span>●</span>{status['max_consecutive_losses']}-loss lockout</div>
           <div class="rule {'danger' if status['has_open_position'] else ''}"><span>●</span>Open position: {_escape(open_position_text)}</div>
           <div class="rule"><span>●</span>Paper mode: {str(status['paper_mode']).lower()}</div>
           <div class="rule"><span>●</span>Live trading: {str(status['live_trading_enabled']).lower()}</div>
