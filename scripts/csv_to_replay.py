@@ -310,6 +310,11 @@ def convert(
             "bt1": first_value(row, "Bar Type 1 Label", "BT1", "Type 1"),
             "bt2": first_value(row, "Bar Type 2 Label", "BT2", "Type 2"),
             "bt3": first_value(row, "Bar Type 3 Label", "BT3", "Type 3"),
+            # Pine-computed VWAP (session-anchored) and EMA values when present
+            "vwap_pine": first_value(row, "VWAP", "Vwap", "vwap"),
+            "ema9": first_value(row, "EMA 9", "EMA9", "ema_9"),
+            "ema21": first_value(row, "EMA 21", "EMA21", "ema_21"),
+            "ema55": first_value(row, "EMA 55", "EMA55", "ema_55"),
         })
 
     # Detect day boundaries to track prev day high/low/close
@@ -362,11 +367,35 @@ def convert(
             prev_session = session
 
         session_bars.append(bar)
-        vwap = compute_vwap(session_bars)
+        # Use Pine session-anchored VWAP when available; fall back to computed
+        if bar.get("vwap_pine"):
+            vwap = float(bar["vwap_pine"])
+        else:
+            vwap = compute_vwap(session_bars)
 
         closes.append(bar["close"])
-        trend_dir, trend_str = derive_trend(closes)
-        market_cond = derive_market_condition(closes)
+        # Use EMA-based trend when available (more accurate than rolling close slope)
+        if bar.get("ema9") and bar.get("ema21") and bar.get("ema55"):
+            close = bar["close"]
+            e9, e21, e55 = float(bar["ema9"]), float(bar["ema21"]), float(bar["ema55"])
+            if close > e9 > e21 > e55:
+                trend_dir, trend_str = "UP", "STRONG"
+            elif close < e9 < e21 < e55:
+                trend_dir, trend_str = "DOWN", "STRONG"
+            elif close > e21 and e9 > e21:
+                trend_dir, trend_str = "UP", "MODERATE"
+            elif close < e21 and e9 < e21:
+                trend_dir, trend_str = "DOWN", "MODERATE"
+            elif close > e21:
+                trend_dir, trend_str = "UP", "WEAK"
+            elif close < e21:
+                trend_dir, trend_str = "DOWN", "WEAK"
+            else:
+                trend_dir, trend_str = "SIDEWAYS", "WEAK"
+            market_cond = "TRENDING" if trend_str in ("STRONG", "MODERATE") else derive_market_condition(closes)
+        else:
+            trend_dir, trend_str = derive_trend(closes)
+            market_cond = derive_market_condition(closes)
         prev_bar = bars[i - 1] if i > 0 else None
         prev2_bar = bars[i - 2] if i > 1 else None
         orb_status = derive_orb_status(
