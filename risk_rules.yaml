@@ -114,7 +114,7 @@ position_rules:
   discretionary_override: false    # No manual intervention
   max_contracts_per_instrument:
     MNQ: 0                          # Railway paper-only MES ladder for now
-    MES: 3                          # Dynamic sizing controls actual MES tier
+    MES: 6                          # Dynamic sizing controls actual MES tier
     ES: 3
     NQ: 2
     MGC: 0
@@ -128,8 +128,9 @@ position_sizing:
   aggressive_rounding: false         # Conservative Railway paper launch
   rounding_threshold_percent: 0
   sizing_rules:
-    # ── MES ladder ($1,500 → $8,000) ─────────────────────────────
-    # Max 3-loss DD at each entry: MES 1c $112 (7.5%), 2c $225 (11%), 3c $337 (8.4%)
+    # ── MES-only ladder for Railway paper validation ─────────────
+    # Keep one instrument while validating Pine payloads, Railway uptime,
+    # journal accuracy, and live paper signal quality.
     - min_balance: 0
       max_balance: 2000
       instrument: "MES"
@@ -142,26 +143,18 @@ position_sizing:
       max_balance: 8000
       instrument: "MES"
       max_contracts: 3
-    # ── NQ bridge ($8,000 → $15,000) ─────────────────────────────
-    # 1c NQ: win $300, loss $150. Max 3-loss DD $450 (5.6% at $8k).
-    # Step up from MES before full ES — lower tick value, same structure.
     - min_balance: 8000
-      max_balance: 15000
-      instrument: "NQ"
-      max_contracts: 1
-    # ── ES full-size ($15,000 → $30,000) ─────────────────────────
-    # 1c ES: win $750, loss $375. Max 3-loss DD $1,125 (7.5% at $15k).
-    # Update max_daily_loss to ~$750 in Railway env when you reach this tier.
-    - min_balance: 15000
-      max_balance: 30000
-      instrument: "ES"
-      max_contracts: 1
-    # ── ES scaled ($30,000+) ──────────────────────────────────────
-    # 2c ES: win $1,500, loss $750. Max 3-loss DD $2,250 (7.5% at $30k).
-    # Update max_daily_loss to ~$2,000 in Railway env when you reach this tier.
-    - min_balance: 30000
-      instrument: "ES"
-      max_contracts: 2
+      max_balance: 12000
+      instrument: "MES"
+      max_contracts: 4
+    - min_balance: 12000
+      max_balance: 18000
+      instrument: "MES"
+      max_contracts: 5
+    - min_balance: 18000
+      max_balance: null
+      instrument: "MES"
+      max_contracts: 6
 
 # ─── Order Rules ─────────────────────────────────────────────
 order_rules:
