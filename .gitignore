@@ -37,5 +37,7 @@ id_ed25519
 *.bak
 risk_rules.yaml.bak
 
-# Temp notes
-"Tomorrow Pre-Flight*"
+# Temp notes and local-only files
+Tomorrow\ Pre-Flight*
+strategy/1.*/
+strategy/2.*/
