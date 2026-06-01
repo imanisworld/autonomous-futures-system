@@ -15,7 +15,19 @@ from __future__ import annotations
 
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
+
+# ── Price sanity ranges per instrument root ───────────────────────────────────
+# Reject payloads where close price is outside the plausible range.
+# Prevents MNQ prices being accepted for MES (or vice versa).
+_PRICE_RANGES: dict[str, tuple[float, float]] = {
+    "MES": (2_000,  12_000),   # S&P 500 micro — never been above ~6k, floor at ~1k
+    "ES":  (2_000,  12_000),   # S&P 500 full
+    "MNQ": (5_000,  30_000),   # Nasdaq micro
+    "NQ":  (5_000,  30_000),   # Nasdaq full
+    "MGC": (1_000,   5_000),   # Micro Gold
+    "MCL": (   10,     500),   # Micro Crude Oil
+}
 
 
 class AlertPayload(BaseModel):
@@ -132,6 +144,27 @@ class AlertPayload(BaseModel):
     ema_55: Optional[float] = None
     ema_200: Optional[float] = None
     ema_9_above_21: Optional[bool] = None    # Pine can send true/false directly
+
+    # ── Price sanity validator ───────────────────────────────────────────────
+    @model_validator(mode="after")
+    def _check_price_range(self) -> "AlertPayload":
+        """
+        Reject payloads where close price is outside the known range for the
+        instrument.  Catches MNQ prices accidentally sent for MES ticker, etc.
+        """
+        root = self.ticker.upper().lstrip("1234567890")  # strip contract suffix
+        # Strip trailing digits + common exchange suffixes (MES1!, MNQU2026…)
+        for suffix in ("!", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0",
+                       "H", "M", "U", "Z"):
+            root = root.rstrip(suffix)
+        lo, hi = _PRICE_RANGES.get(root, (0, float("inf")))
+        if not (lo <= self.close <= hi):
+            raise ValueError(
+                f"Price {self.close} is outside the expected range "
+                f"[{lo}, {hi}] for instrument '{self.ticker}' (root '{root}'). "
+                f"Check that the TradingView alert is on the correct chart."
+            )
+        return self
 
     # ── Supply & Demand zones (from LuxAlgo or equivalent indicator) ─────────
     # Primary names
