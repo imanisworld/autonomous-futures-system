@@ -65,6 +65,12 @@ _static = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=_static), name="static")
 
 
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    from fastapi.responses import FileResponse
+    return FileResponse(str(_static / "icon-192.png"), media_type="image/png")
+
+
 @app.get("/manifest.json", include_in_schema=False)
 async def pwa_manifest():
     return JSONResponse({
@@ -270,15 +276,13 @@ def _dashboard_payload(for_date: date) -> dict:
     summary = journal.get_summary(for_date)
     path = journal._journal_path(for_date)
     entries = journal._read_entries(path) if path.exists() else []
-    recent_entries = entries[-10:]
+    # Only show DECISION entries in the table (OUTCOME entries are ephemeral close records)
+    decision_entries = [e for e in entries if e.get("type") != "OUTCOME"]
+    recent_entries = decision_entries[-10:]
     no_trade_reasons = Counter(
         entry.get("reason", "Unknown")
-        for entry in entries
+        for entry in decision_entries
         if entry.get("decision") == "NO_TRADE"
-    )
-    realized_pnl = sum(
-        float((entry.get("outcome") or {}).get("pnl_dollars") or 0.0)
-        for entry in entries
     )
     wins = summary.get("wins", 0)
     losses = summary.get("losses", 0)
@@ -286,6 +290,7 @@ def _dashboard_payload(for_date: date) -> dict:
     win_rate = round((wins / resolved) * 100, 1) if resolved else 0.0
     account_balance = journal.get_account_balance(_config.position_sizing.starting_balance, for_date)
     account_peak = journal.get_account_peak_balance(_config.position_sizing.starting_balance, for_date)
+    realized_pnl = round(account_balance - _config.position_sizing.starting_balance, 2)
     return {
         "date": daily_state.date,
         "live_trading_enabled": _config.live_trading_enabled,

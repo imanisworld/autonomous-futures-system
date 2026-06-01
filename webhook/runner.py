@@ -338,6 +338,10 @@ def process_alert(
         "reason": risk_result.reason,
     }
     result["risk"] = risk_dict
+    if not risk_result.approved:
+        # Update journal entry decision before writing so the log reflects reality.
+        journal_entry["decision"] = "RISK_REJECTED"
+        journal_entry["reason"] = risk_result.reason or journal_entry.get("reason")
     journal.log_decision(journal_entry, risk_dict, for_date=today)
 
     if not risk_result.approved:
