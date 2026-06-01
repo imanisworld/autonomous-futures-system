@@ -677,6 +677,11 @@ def _render_dashboard(status: dict) -> str:
       </div>
     </section>
 
+    <section class="panel" style="margin-bottom:14px;">
+      <h2>Equity Curve <span id="chart-range" style="font-size:11px;font-weight:400;color:var(--muted);margin-left:8px;"></span></h2>
+      <canvas id="pnl-chart" style="width:100%;height:140px;display:block;margin-top:10px;border-radius:4px;"></canvas>
+    </section>
+
     <section class="wide">
       <div class="panel">
         <h2>Rule State</h2>
@@ -792,6 +797,120 @@ def _render_dashboard(status: dict) -> str:
       </tr>`;
     }}
 
+    function drawPnlChart(history) {{
+      const canvas = document.getElementById('pnl-chart');
+      const rangeLabel = document.getElementById('chart-range');
+      if (!canvas || !history || !history.days || !history.days.length) return;
+
+      // History arrives newest-first — reverse so oldest is left
+      const days = [...history.days].reverse();
+
+      const dpr = window.devicePixelRatio || 1;
+      const W = canvas.offsetWidth;
+      const H = canvas.offsetHeight;
+      if (!W || !H) return;
+      canvas.width = W * dpr;
+      canvas.height = H * dpr;
+      const ctx = canvas.getContext('2d');
+      ctx.scale(dpr, dpr);
+
+      const PAD = {{ top: 16, right: 16, bottom: 26, left: 56 }};
+      const chartW = W - PAD.left - PAD.right;
+      const chartH = H - PAD.top - PAD.bottom;
+
+      const pnlValues = days.map(d => d.realized_pnl_dollars || 0);
+      const maxVal = Math.max(0, ...pnlValues);
+      const minVal = Math.min(0, ...pnlValues);
+      const range = (maxVal - minVal) || 1;
+
+      const toX = i => PAD.left + (i / Math.max(days.length - 1, 1)) * chartW;
+      const toY = v => PAD.top + ((maxVal - v) / range) * chartH;
+      const zeroY = toY(0);
+
+      // Background
+      ctx.fillStyle = '#111216';
+      ctx.fillRect(0, 0, W, H);
+
+      // Subtle grid lines
+      ctx.strokeStyle = '#1e2028';
+      ctx.lineWidth = 1;
+      [0.25, 0.5, 0.75].forEach(frac => {{
+        const y = PAD.top + frac * chartH;
+        ctx.beginPath(); ctx.moveTo(PAD.left, y); ctx.lineTo(W - PAD.right, y); ctx.stroke();
+      }});
+
+      // Zero line
+      ctx.strokeStyle = '#2a2d34';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath(); ctx.moveTo(PAD.left, zeroY); ctx.lineTo(W - PAD.right, zeroY); ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Y-axis labels
+      ctx.fillStyle = '#a1a1aa';
+      ctx.font = `${{Math.max(10, Math.min(12, W / 40))}}px ui-sans-serif,system-ui,sans-serif`;
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      const yTicks = [minVal, 0, maxVal].filter((v, i, a) => a.indexOf(v) === i);
+      yTicks.forEach(v => {{
+        ctx.fillText(`$${{v >= 0 ? '' : '-'}}${{Math.abs(v).toFixed(0)}}`, PAD.left - 6, toY(v));
+      }});
+
+      // X-axis date labels
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      const labelIdxs = days.length <= 3
+        ? days.map((_, i) => i)
+        : [0, Math.floor(days.length / 2), days.length - 1];
+      labelIdxs.forEach(i => {{
+        const label = (days[i].date || '').slice(5); // MM-DD
+        ctx.fillText(label, toX(i), H - 2);
+      }});
+
+      // Gradient fill under the curve
+      const grad = ctx.createLinearGradient(0, PAD.top, 0, PAD.top + chartH);
+      grad.addColorStop(0, 'rgba(0,213,255,0.18)');
+      grad.addColorStop(1, 'rgba(0,213,255,0.01)');
+      ctx.beginPath();
+      days.forEach((d, i) => {{
+        const x = toX(i), y = toY(d.realized_pnl_dollars || 0);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }});
+      ctx.lineTo(toX(days.length - 1), zeroY);
+      ctx.lineTo(toX(0), zeroY);
+      ctx.closePath();
+      ctx.fillStyle = grad;
+      ctx.fill();
+
+      // Main line
+      ctx.beginPath();
+      ctx.strokeStyle = '#00d5ff';
+      ctx.lineWidth = 2;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      days.forEach((d, i) => {{
+        const x = toX(i), y = toY(d.realized_pnl_dollars || 0);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }});
+      ctx.stroke();
+
+      // Dots
+      days.forEach((d, i) => {{
+        const v = d.realized_pnl_dollars || 0;
+        ctx.beginPath();
+        ctx.arc(toX(i), toY(v), 3, 0, Math.PI * 2);
+        ctx.fillStyle = v > 0 ? '#17d97f' : v < 0 ? '#ff3d71' : '#a1a1aa';
+        ctx.fill();
+      }});
+
+      // Range label
+      if (rangeLabel) {{
+        const latest = pnlValues[pnlValues.length - 1] || 0;
+        const sign = latest >= 0 ? '+' : '';
+        rangeLabel.textContent = `${{days.length}}d · ${{sign}}$${{latest.toFixed(2)}} cumulative`;
+      }}
+    }}
+
     async function refreshDashboard() {{
       try {{
         const [today, history] = await Promise.all([
@@ -817,12 +936,17 @@ def _render_dashboard(status: dict) -> str:
             : '<tr><td colspan="6">No journal entries yet.</td></tr>';
         }}
         window.__riskSentinelHistory = history;
+        drawPnlChart(history);
       }} catch (error) {{
         console.warn('Dashboard refresh failed', error);
       }}
     }}
     refreshDashboard();
     setInterval(refreshDashboard, 30000);
+    // Redraw chart on resize (handles rotation on mobile)
+    window.addEventListener('resize', () => {{
+      if (window.__riskSentinelHistory) drawPnlChart(window.__riskSentinelHistory);
+    }});
   </script>
 
 </body>
