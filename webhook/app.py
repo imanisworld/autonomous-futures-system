@@ -99,6 +99,11 @@ async def receive_alert(
     paper-trading pipeline, and return a structured decision result.
     """
     _verify_webhook_secret(x_webhook_secret or secret)
+    # Silently ignore non-futures tickers (e.g. stock alerts sharing the same webhook)
+    _FUTURES_PREFIXES = {"MNQ", "MES", "ES", "NQ", "MGC", "MCL"}
+    ticker_root = payload.ticker.upper().replace("1!", "").replace("!", "").strip()
+    if not any(ticker_root.startswith(p) for p in _FUTURES_PREFIXES):
+        return JSONResponse(content={"ok": True, "decision": "IGNORED", "reason": "non-futures ticker"})
     try:
         result = process_alert(payload, config=_config, log_dir=_config.log_dir)
         _record_latest_webhook(payload, result)
