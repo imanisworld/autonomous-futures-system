@@ -286,6 +286,7 @@ class JournalLogger:
                         "stop": setup.get("stop"),
                         "target": setup.get("target"),
                         "contracts": setup.get("contracts", 1),
+                        "ts": entry.get("ts"),  # opened_at timestamp for stale detection
                     }
                 else:
                     last_open = None

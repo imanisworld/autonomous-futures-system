@@ -480,8 +480,8 @@ def test_runner_resolves_previous_day_open_position(config, tmp_path):
     assert JournalLogger(log_dir=log_dir).get_daily_state(yesterday).has_open_position is False
 
 
-def test_runner_blocks_today_when_previous_day_position_still_open(config, tmp_path):
-    """A carried trade that hits neither bracket must block same-alert re-entry."""
+def test_runner_force_closes_stale_previous_day_position(config, tmp_path):
+    """A carried position older than 8 hours must be force-closed, not block forever."""
     from journal.journal_logger import JournalLogger
     from webhook.runner import process_alert
 
@@ -489,7 +489,7 @@ def test_runner_blocks_today_when_previous_day_position_still_open(config, tmp_p
     yesterday = date(2026, 5, 22)
     today = date(2026, 5, 23)
     journal = JournalLogger(log_dir=log_dir)
-    _seed_open_trade(journal, yesterday)
+    _seed_open_trade(journal, yesterday)  # seeded at 17:55 UTC yesterday → >8h old
 
     result = process_alert(
         _base_payload(
@@ -503,9 +503,10 @@ def test_runner_blocks_today_when_previous_day_position_still_open(config, tmp_p
         for_date=today,
     )
 
-    assert result["resolution"] is None
-    assert result["decision"] == "BLOCKED_OPEN_POSITION"
-    assert JournalLogger(log_dir=log_dir).get_daily_state(yesterday).has_open_position is True
+    # Position must be force-closed, not left blocking indefinitely
+    assert result["resolution"] == "FORCE_CLOSE_SESSION_TIMEOUT"
+    assert result["decision"] != "BLOCKED_OPEN_POSITION"
+    assert JournalLogger(log_dir=log_dir).get_daily_state(yesterday).has_open_position is False
 
 
 def test_runner_resolves_friday_position_on_monday(config, tmp_path):
@@ -535,8 +536,8 @@ def test_runner_resolves_friday_position_on_monday(config, tmp_path):
     assert JournalLogger(log_dir=log_dir).get_daily_state(friday).has_open_position is False
 
 
-def test_runner_blocks_monday_when_friday_position_unresolved(config, tmp_path):
-    """An unresolved Friday position must block new Monday entries."""
+def test_runner_force_closes_friday_position_on_monday(config, tmp_path):
+    """An unresolved Friday position older than 8 hours must be force-closed on Monday."""
     from journal.journal_logger import JournalLogger
     from webhook.runner import process_alert
 
@@ -544,7 +545,7 @@ def test_runner_blocks_monday_when_friday_position_unresolved(config, tmp_path):
     friday = date(2026, 5, 22)
     monday = date(2026, 5, 25)
     journal = JournalLogger(log_dir=log_dir)
-    _seed_open_trade(journal, friday)
+    _seed_open_trade(journal, friday)  # seeded at 17:55 UTC Friday → >8h old by Monday
 
     result = process_alert(
         _base_payload(
@@ -558,9 +559,10 @@ def test_runner_blocks_monday_when_friday_position_unresolved(config, tmp_path):
         for_date=monday,
     )
 
-    assert result["resolution"] is None
-    assert result["decision"] == "BLOCKED_OPEN_POSITION"
-    assert JournalLogger(log_dir=log_dir).get_daily_state(friday).has_open_position is True
+    # Position must be force-closed over the weekend, not left blocking Monday
+    assert result["resolution"] == "FORCE_CLOSE_SESSION_TIMEOUT"
+    assert result["decision"] != "BLOCKED_OPEN_POSITION"
+    assert JournalLogger(log_dir=log_dir).get_daily_state(friday).has_open_position is False
 
 
 # ─── runner: daily limit blocks ──────────────────────────────────────────────

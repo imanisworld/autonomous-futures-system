@@ -35,6 +35,20 @@ from webhook.state_builder import build_market_state
 
 logger = logging.getLogger(__name__)
 
+# ── Tick values ($ per tick, 0.25-point ticks) ────────────────────────────────
+_TICK_VALUES: dict[str, float] = {
+    "MES": 1.25,   # $5/pt × 0.25pt/tick
+    "ES":  12.50,  # $50/pt
+    "MNQ": 0.50,   # $2/pt × 0.25pt/tick
+    "NQ":  5.00,   # $20/pt
+    "MGC": 1.00,   # $10/troy oz × 0.10pt/tick
+    "MCL": 1.00,
+}
+
+def _tick_value_for(instrument: str) -> float:
+    root = (instrument or "").upper().rstrip("!1234567890HMUZ")
+    return _TICK_VALUES.get(root, 1.25)
+
 
 def _make_broker(starting_balance: float = 1500.0) -> BrokerInterface:
     """Return the configured broker.
@@ -154,6 +168,75 @@ def process_alert(
             fill = broker.resolve_position(
                 NextBarOHLC(high=payload.high, low=payload.low)
             )
+
+            # ── Stale-position safety net ─────────────────────────────────────
+            # If resolve_position returned None (stop/target not hit), check
+            # whether the position has gone stale:
+            #   (a) price-scale mismatch: current close differs from stored entry
+            #       by more than 30% — prices are from wrong instrument/chart.
+            #   (b) age timeout: position has been open for more than 8 hours —
+            #       intraday paper positions should not survive a full session.
+            # In either case, force-close at the current bar's close price so
+            # the system never stays blocked by an unresolvable open position.
+            if fill is None:
+                entry_price = float(open_pos["entry"])
+                price_ratio = abs(payload.close - entry_price) / entry_price if entry_price else 1.0
+                position_age_hours: float = 999.0
+                open_pos_ts = open_pos.get("ts") or open_pos.get("opened_at")
+                if open_pos_ts:
+                    try:
+                        opened_at = datetime.fromisoformat(str(open_pos_ts).replace("Z", "+00:00"))
+                        position_age_hours = (datetime.now(timezone.utc) - opened_at).total_seconds() / 3600
+                    except (ValueError, TypeError):
+                        pass
+
+                is_price_mismatch = price_ratio > 0.30
+                is_timed_out = position_age_hours > 8.0
+                is_stale = is_price_mismatch or is_timed_out
+
+                if is_stale:
+                    reason = "PRICE_MISMATCH" if is_price_mismatch else "SESSION_TIMEOUT"
+                    direction = open_pos.get("direction", "LONG")
+                    contracts = int(open_pos.get("contracts", 1))
+                    # Compute realistic P&L at current close vs entry
+                    tick_size = 0.25
+                    tick_value = _tick_value_for(open_pos.get("instrument") or state.instrument)
+                    raw_ticks = (payload.close - entry_price) / tick_size
+                    signed_ticks = raw_ticks if direction == "LONG" else -raw_ticks
+                    pnl_dollars = round(signed_ticks * tick_value * contracts, 2)
+                    exit_result = "WIN" if signed_ticks > 0 else "LOSS" if signed_ticks < 0 else "BREAKEVEN"
+                    logger.warning(
+                        "Force-closing stale paper position: instrument=%s reason=%s "
+                        "entry=%.2f current_close=%.2f age_hours=%.1f pnl=$%.2f",
+                        open_pos.get("instrument"), reason, entry_price,
+                        payload.close, position_age_hours, pnl_dollars,
+                    )
+                    journal.log_outcome(
+                        instrument=open_pos.get("instrument") or state.instrument,
+                        session=state.session,
+                        result=exit_result,
+                        entry_price=entry_price,
+                        exit_price=payload.close,
+                        exit_reason=f"FORCE_CLOSE_{reason}",
+                        pnl_ticks=signed_ticks,
+                        pnl_dollars=pnl_dollars,
+                        contracts=contracts,
+                        for_date=open_position_date,
+                    )
+                    result["resolution"] = f"FORCE_CLOSE_{reason}"
+                    daily_state.has_open_position = False
+                    daily_state.realized_pnl_dollars += pnl_dollars
+                    if exit_result == "LOSS":
+                        daily_state.consecutive_losses += 1
+                        daily_state.last_loss_at = state.timestamp
+                    elif exit_result in ("WIN", "BREAKEVEN"):
+                        daily_state.consecutive_losses = 0
+                    send_telegram_message(
+                        f"⚠️ FORCE_CLOSE ({reason}): "
+                        f"{open_pos.get('instrument')} {contracts}c "
+                        f"P&L ${pnl_dollars:.2f}"
+                    )
+
             if fill is not None:
                 journal.log_outcome(
                     instrument=fill.instrument,
