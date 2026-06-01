@@ -73,14 +73,38 @@ daily_limits:
   news_blackout_max_trades: 1       # On FOMC/news days, allow only one early trade
   news_blackout_cutoff_et: "13:30"  # Stop before 14:00 ET FOMC statement volatility
   news_blackout_dates:              # 2026 FOMC decision days from federalreserve.gov calendar
+    - "2026-01-09"
+    - "2026-01-15"
     - "2026-01-28"
+    - "2026-02-06"
+    - "2026-02-12"
+    - "2026-03-06"
+    - "2026-03-11"
     - "2026-03-18"
+    - "2026-04-03"
+    - "2026-04-10"
     - "2026-04-29"
+    - "2026-05-01"
+    - "2026-05-13"
+    - "2026-06-05"
+    - "2026-06-11"
     - "2026-06-17"
+    - "2026-07-02"
+    - "2026-07-15"
     - "2026-07-29"
+    - "2026-08-07"
+    - "2026-08-12"
+    - "2026-09-04"
+    - "2026-09-10"
     - "2026-09-16"
+    - "2026-10-02"
+    - "2026-10-14"
     - "2026-10-28"
+    - "2026-11-06"
+    - "2026-11-12"
+    - "2026-12-04"
     - "2026-12-09"
+    - "2026-12-10"
   per_session_limits:
     asian: 1                        # Protect NY budget from overnight fills
     london: 2
@@ -247,17 +271,54 @@ strat:
       description: "outside bar follow-through — engulf resolved with volume filter"
   # Reference: sources/strat_definitions.md
 
+
+# ─── Alpaca Options Lane (Isolated / Disabled by Default) ────────────────────
+# Futures webhook execution does not route here. This lane exists so options can
+# use futures-style discipline without interfering with MES/MNQ testing.
+options_trading:
+  enabled: false
+  paper_only: true
+  allowed_underlyings: [SPY, QQQ]
+  allowed_contract_types: [CALL, PUT]
+  allowed_sessions: [new_york]
+  session_windows:
+    new_york:
+      - start: "09:35"
+        end: "11:30"
+        allow: true
+        note: "Opening drive after first 5 minutes"
+      - start: "13:00"
+        end: "15:30"
+        allow: true
+        note: "Afternoon continuation window"
+      - default: false
+  max_contracts: 1
+  max_premium_per_contract: 250
+  max_total_premium: 250
+  max_daily_trades: 3
+  max_daily_loss: 150
+  max_consecutive_losses: 2
+  max_open_positions: 1
+  require_entry: true
+  require_stop: true
+  require_target: true
+  min_rr_ratio: 2.0
+  allow_market_orders: false
+  require_confluence_grade: "B"
+
 # ─── Future Broker Roadmap (Inactive Planning Metadata) ─────
 broker_roadmap:
   first_realistic_sim_path: tradovate_sim
-  future_multi_asset_path: ibkr_paper
+  future_multi_asset_path: alpaca_options
   broker_priority:
     - paper
     - tradovate_sim
+    - alpaca_options
     - ibkr_paper
   notes:
     - "Tradovate simulation comes first because small futures account practicality matters."
-    - "IBKR compatibility stays in mind for future options/stocks/futures expansion."
+    - "Alpaca options stays isolated for future stocks/options expansion."
+    - "IBKR compatibility stays in mind for broader multi-asset expansion."
     - "No broker SDK, credentials, or live execution are enabled by this metadata."
 
 capital_guardrails:
