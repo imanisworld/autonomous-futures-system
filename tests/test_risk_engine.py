@@ -680,3 +680,74 @@ class TestNewsBlackout:
         assert result.rejected
         assert result.failed_rule == "news_blackout_cutoff"
 
+
+
+class TestSessionWindows:
+
+    def _asian_window_config(self, config):
+        from dataclasses import replace
+
+        return replace(
+            config,
+            allowed_sessions=["asian", "london", "new_york"],
+            disabled_sessions=[],
+            session_windows={
+                "asian": [
+                    {"start": "02:00", "end": "04:00", "allow": True, "note": "London pre-open and overlap"},
+                    {"start": "20:00", "end": "21:00", "allow": False, "note": "Tokyo open, often fakeout"},
+                    {"default": False},
+                ]
+            },
+        )
+
+    def _asian_setup_at_utc(self, ts):
+        return TradeSetup(
+            direction="LONG",
+            entry=19500.0,
+            stop=19480.0,
+            target=19540.0,
+            rr_ratio=2.0,
+            strategy="orb_reclaim",
+            instrument="MNQ",
+            session="asian",
+            entry_time=ts,
+        )
+
+    def test_asian_pre_london_window_is_allowed(self, config, clean_daily_state):
+        from datetime import datetime, timezone
+
+        cfg = self._asian_window_config(config)
+        engine = RiskEngine(config=cfg)
+        # 2026-05-31 06:30 UTC = 02:30 ET.
+        result = engine.validate(
+            self._asian_setup_at_utc(datetime(2026, 5, 31, 6, 30, tzinfo=timezone.utc)),
+            clean_daily_state,
+        )
+        assert result.approved
+
+    def test_asian_tokyo_fakeout_window_is_blocked(self, config, clean_daily_state):
+        from datetime import datetime, timezone
+
+        cfg = self._asian_window_config(config)
+        engine = RiskEngine(config=cfg)
+        # 2026-06-01 00:30 UTC = 20:30 ET on 2026-05-31.
+        result = engine.validate(
+            self._asian_setup_at_utc(datetime(2026, 6, 1, 0, 30, tzinfo=timezone.utc)),
+            clean_daily_state,
+        )
+        assert result.rejected
+        assert result.failed_rule == "session_window"
+        assert "Tokyo open" in result.reason
+
+    def test_asian_default_window_is_blocked(self, config, clean_daily_state):
+        from datetime import datetime, timezone
+
+        cfg = self._asian_window_config(config)
+        engine = RiskEngine(config=cfg)
+        # 2026-05-31 23:30 UTC = 19:30 ET, no explicit allow window.
+        result = engine.validate(
+            self._asian_setup_at_utc(datetime(2026, 5, 31, 23, 30, tzinfo=timezone.utc)),
+            clean_daily_state,
+        )
+        assert result.rejected
+        assert result.failed_rule == "session_window"

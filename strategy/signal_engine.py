@@ -91,6 +91,30 @@ def _parse_hhmm(value: str) -> _time:
     return _time(int(hour), int(minute))
 
 
+def _time_in_window(value: _time, start: _time, end: _time) -> bool:
+    if start <= end:
+        return start <= value < end
+    return value >= start or value < end
+
+
+def _session_window_decision(rules: list[dict], timestamp: datetime) -> tuple[bool, str | None]:
+    current = timestamp.astimezone(ZoneInfo("America/New_York")).time().replace(second=0, microsecond=0)
+    default_allow = True
+    default_note = None
+    for rule in rules:
+        if "default" in rule:
+            default_allow = bool(rule.get("default"))
+            default_note = rule.get("note")
+            continue
+        start = rule.get("start")
+        end = rule.get("end")
+        if not start or not end:
+            continue
+        if _time_in_window(current, _parse_hhmm(str(start)), _parse_hhmm(str(end))):
+            return bool(rule.get("allow", False)), rule.get("note")
+    return default_allow, default_note
+
+
 class DecisionEngine:
     WINDOWS = {
         "opening":   {"start": "09:30", "end": "10:45", "allow": "all"},
@@ -204,6 +228,19 @@ class DecisionEngine:
                 session=state.session,
                 decision="NO_TRADE",
                 reason=f"Instrument '{state.instrument}' is not in allowed universe.",
+            )
+
+        # ── Session window gate ───────────────────────────────────────────────
+        session_window_result = self._check_session_window(state)
+        if session_window_result is not None:
+            return DecisionOutput(
+                timestamp=now,
+                instrument=state.instrument,
+                session=state.session,
+                decision="NO_TRADE",
+                reason=session_window_result,
+                failed_gates=["SESSION_WINDOW"],
+                confidence_score=0,
             )
 
         # ── New York entry window gate ────────────────────────────────────────
@@ -586,6 +623,21 @@ class DecisionEngine:
         if opposing in directions and expected not in directions:
             return f"HTF direction opposes {direction}"
         return None
+
+    def _check_session_window(self, state: MarketState) -> Optional[str]:
+        windows = getattr(self.config, "session_windows", {}) or {}
+        rules = windows.get(state.session)
+        if not rules:
+            return None
+        allowed, note = _session_window_decision(rules, state.timestamp)
+        if allowed:
+            return None
+        detail = f" ({note})" if note else ""
+        et = state.timestamp.astimezone(ZoneInfo("America/New_York"))
+        return (
+            f"Entry at {et.strftime('%H:%M')} ET is outside allowed "
+            f"'{state.session}' session windows{detail}."
+        )
 
     def _check_new_york_entry_window(self, state: MarketState) -> Optional[str]:
         if state.session != "new_york":

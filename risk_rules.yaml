@@ -27,10 +27,25 @@ instruments:
 
 sessions:
   allowed:
+    - asian       # Window-gated only — default blocked except session_windows.asian allow periods
     - london      # 03:00–08:30 ET
     - new_york    # 09:30–16:30 ET (entries cut at 14:00 via session_cutoffs_et)
-  disabled:
-    - asian       # disabled — low liquidity, stop hunts
+  disabled: []
+
+
+# Fine-grained session windows. If a session has windows configured,
+# entries are blocked by default unless a matching window has allow: true.
+session_windows:
+  asian:
+    - start: "02:00"
+      end: "04:00"
+      allow: true
+      note: "London pre-open and overlap"
+    - start: "20:00"
+      end: "21:00"
+      allow: false
+      note: "Tokyo open, often fakeout"
+    - default: false
 
 session_hours_et:
   london:

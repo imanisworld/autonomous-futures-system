@@ -11,11 +11,41 @@ Returns RiskResult(APPROVED) or RiskResult(REJECTED, failed_rule, reason).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, time as _time, timedelta, timezone
 from typing import Dict, Optional
 from zoneinfo import ZoneInfo
 
 _ET = ZoneInfo("America/New_York")
+
+
+def _parse_hhmm(value: str) -> _time:
+    hour, minute = value.split(":", 1)
+    return _time(int(hour), int(minute))
+
+
+def _time_in_window(value: _time, start: _time, end: _time) -> bool:
+    if start <= end:
+        return start <= value < end
+    return value >= start or value < end
+
+
+def _session_window_decision(rules: list[dict], timestamp: datetime) -> tuple[bool, str | None]:
+    current = timestamp.astimezone(_ET).time().replace(second=0, microsecond=0)
+    default_allow = True
+    default_note = None
+    for rule in rules:
+        if "default" in rule:
+            default_allow = bool(rule.get("default"))
+            default_note = rule.get("note")
+            continue
+        start = rule.get("start")
+        end = rule.get("end")
+        if not start or not end:
+            continue
+        if _time_in_window(current, _parse_hhmm(str(start)), _parse_hhmm(str(end))):
+            return bool(rule.get("allow", False)), rule.get("note")
+    return default_allow, default_note
+
 
 from config.settings import SystemConfig, load_config, LiveTradingBlockedError
 
@@ -101,6 +131,7 @@ class RiskEngine:
             self._check_position_sizing,
             self._check_max_contracts,
             self._check_session,
+            self._check_session_window,
             self._check_news_blackout,
             self._check_daily_trade_limit,
             self._check_daily_loss_limit,
@@ -255,6 +286,35 @@ class RiskEngine:
                 ),
             )
         return None
+
+    def _check_session_window(
+        self, setup: TradeSetup, daily_state: DailyState
+    ) -> Optional[RiskResult]:
+        """Optional allow/deny windows inside an otherwise allowed session."""
+        windows = getattr(self.config, "session_windows", {}) or {}
+        rules = windows.get(setup.session)
+        if not rules:
+            return None
+        if setup.entry_time is None:
+            return RiskResult(
+                result="REJECTED",
+                failed_rule="session_window",
+                reason=f"Session '{setup.session}' requires an entry_time for window gating.",
+            )
+
+        allowed, note = _session_window_decision(rules, setup.entry_time)
+        if allowed:
+            return None
+        detail = f" ({note})" if note else ""
+        et = setup.entry_time.astimezone(_ET)
+        return RiskResult(
+            result="REJECTED",
+            failed_rule="session_window",
+            reason=(
+                f"Entry at {et.strftime('%H:%M')} ET is outside allowed "
+                f"'{setup.session}' session windows{detail}."
+            ),
+        )
 
     def _check_daily_trade_limit(
         self, setup: TradeSetup, daily_state: DailyState

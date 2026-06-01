@@ -986,3 +986,45 @@ def test_pine_advisory_bracket_mismatch_is_ignored(config, fresh_market_state):
     assert decision.setup.stop != 5578.0
     assert "Pine bracket override" not in decision.setup.notes
 
+
+
+class TestAsianSessionWindows:
+
+    def _engine_with_asian_windows(self, config):
+        from dataclasses import replace
+
+        return DecisionEngine(
+            config=replace(
+                config,
+                allowed_sessions=["asian", "london", "new_york"],
+                disabled_sessions=[],
+                session_windows={
+                    "asian": [
+                        {"start": "02:00", "end": "04:00", "allow": True, "note": "London pre-open and overlap"},
+                        {"start": "20:00", "end": "21:00", "allow": False, "note": "Tokyo open, often fakeout"},
+                        {"default": False},
+                    ]
+                },
+            )
+        )
+
+    def test_asian_pre_london_window_reaches_strategy_logic(self, config, fresh_market_state):
+        engine = self._engine_with_asian_windows(config)
+        state = deepcopy(fresh_market_state)
+        state.session = "asian"
+        # 2026-05-31 06:30 UTC = 02:30 ET.
+        state.timestamp = datetime(2026, 5, 31, 6, 30, tzinfo=timezone.utc)
+        decision = engine.evaluate(state, DailyState())
+        assert "SESSION_WINDOW" not in decision.failed_gates
+        assert "outside allowed" not in decision.reason
+
+    def test_asian_tokyo_fakeout_window_blocks_before_setup(self, config, fresh_market_state):
+        engine = self._engine_with_asian_windows(config)
+        state = deepcopy(fresh_market_state)
+        state.session = "asian"
+        # 2026-06-01 00:30 UTC = 20:30 ET on 2026-05-31.
+        state.timestamp = datetime(2026, 6, 1, 0, 30, tzinfo=timezone.utc)
+        decision = engine.evaluate(state, DailyState())
+        assert decision.decision == "NO_TRADE"
+        assert decision.failed_gates == ["SESSION_WINDOW"]
+        assert "Tokyo open" in decision.reason

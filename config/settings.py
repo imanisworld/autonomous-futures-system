@@ -101,6 +101,8 @@ class SystemConfig:
     # Strategy
     enabled_concepts: List[str]
 
+    # Fine-grained session windows (optional — no window gate if session absent)
+    session_windows: dict = field(default_factory=dict)
     # Per-session trade limits (optional — no limit applied if session not present)
     per_session_limits: dict = field(default_factory=dict)
     # Time-of-day cutoffs per session (HH:MM ET strings)
@@ -210,6 +212,7 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         allowed_sessions=sessions.get("allowed", []),
         disabled_sessions=sessions.get("disabled", []),
         session_hours=session_hours,
+        session_windows=rules.get("session_windows", {}) or {},
 
         max_trades_per_day=daily.get("max_trades_per_day", 3),
         max_consecutive_losses=daily.get("max_consecutive_losses", 2),
