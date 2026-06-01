@@ -37,7 +37,23 @@ logger = logging.getLogger(__name__)
 
 
 def _make_broker(starting_balance: float = 1500.0) -> BrokerInterface:
-    """Railway deployment is paper-only: always return PaperBroker."""
+    """Return the configured broker.
+
+    BROKER env var controls selection:
+      - "ibkr"  → IBKRBroker (paper Gateway on port 4003, is_live=False)
+      - anything else (default) → PaperBroker (local simulation)
+
+    LIVE_TRADING_ENABLED must never be set to true — the LiveTradingBlockedError
+    guard in RiskEngine will raise at startup if it is.
+    """
+    broker_type = os.getenv("BROKER", "paper").strip().lower()
+    if broker_type == "ibkr":
+        from execution.ibkr_broker import IBKRBroker, IBKRConfig
+        config = IBKRConfig.from_env()
+        logger.info(
+            "Using IBKRBroker (paper) → %s:%s", config.host, config.port
+        )
+        return IBKRBroker(config=config)
     return PaperBroker(starting_balance=starting_balance)
 
 
