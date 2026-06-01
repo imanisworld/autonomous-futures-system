@@ -212,6 +212,15 @@ async def status_review(
 
 # ─── Adaptive committee endpoints ────────────────────────────────────────────
 
+
+
+@app.get("/status/brokers")
+async def status_brokers() -> dict:
+    """Read-only broker capability matrix; never creates broker clients."""
+    from execution.broker_registry import broker_matrix
+
+    return broker_matrix()
+
 @app.get("/status/adaptive")
 async def status_adaptive() -> dict:
     """Run the Adaptive Risk Committee and return the latest report."""

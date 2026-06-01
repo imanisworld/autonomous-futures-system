@@ -21,7 +21,7 @@ def test_config_loads_small_account_guardrails():
     assert config.max_account_risk_per_trade_percent == 1.0
     assert config.max_daily_loss_percent == 3.0
     assert config.require_margin_check is True
-    assert config.broker_priority == ["paper", "tradovate_sim", "ibkr_paper"]
+    assert config.broker_priority == ["paper", "tradovate_sim", "alpaca_options", "ibkr_paper"]
     assert config.live_trading_enabled is False
 
 
@@ -30,7 +30,7 @@ def test_risk_rules_contains_inactive_broker_roadmap():
         rules = yaml.safe_load(handle)
 
     assert rules["broker_roadmap"]["first_realistic_sim_path"] == "tradovate_sim"
-    assert rules["broker_roadmap"]["future_multi_asset_path"] == "ibkr_paper"
+    assert rules["broker_roadmap"]["future_multi_asset_path"] == "alpaca_options"
     assert rules["capital_guardrails"]["minimum_starting_capital"] == 500
     assert rules["capital_guardrails"]["starting_capital_default"] == 1500
     assert rules["trading_mode"]["live_trading_enabled"] is False

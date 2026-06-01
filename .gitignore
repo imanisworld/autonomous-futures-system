@@ -21,3 +21,21 @@ data/htf/
 replay_out/
 ibc/
 CME_MINI_*.csv
+
+# SSH keys — never commit
+hetzner-futures
+hetzner-futures.pub
+autonomous-futures-system
+autonomous-futures-system.pub
+/tmp/hetzner_deploy_key
+/tmp/hetzner_deploy_key.pub
+*.pem
+id_rsa
+id_ed25519
+
+# Backup files
+*.bak
+risk_rules.yaml.bak
+
+# Temp notes
+"Tomorrow Pre-Flight*"

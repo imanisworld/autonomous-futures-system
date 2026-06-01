@@ -36,6 +36,7 @@ The service listens on `http://127.0.0.1:8010` by default.
 - `GET /health`
 - `GET /status`
 - `GET /watchlist`
+- `GET /terminal` — compact Bloomberg-style options terminal state
 - `POST /webhook/alert`
 
 `POST /webhook/alert` accepts TradingView-style context. Useful fields include `ticker`, `pattern`, `price`, `vwap`, `ema20`, `volume`, `average_volume`, `volume_ratio`, and `iv_rank`.
@@ -55,3 +56,8 @@ The scanner skips scheduled scans outside regular equity market hours: Monday-Fr
 Discord alerts are sent only when score is `>= 7`. Duplicate alerts for the same ticker, direction, and pattern are suppressed for 30 minutes.
 
 Footer text is always: `Advisory only - not financial advice`.
+
+
+## Terminal State
+
+`GET /terminal` returns one compact read-only object for a dashboard: scanner config, watchlist rows, latest scores, options risk settings, and Alpaca options lane health. It does not create broker clients or submit orders.
