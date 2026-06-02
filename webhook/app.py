@@ -308,6 +308,7 @@ def _dashboard_payload(for_date: date) -> dict:
         "losses": losses,
         "win_rate": win_rate,
         "realized_pnl_dollars": round(realized_pnl, 2),
+        "today_pnl_dollars": round(float(daily_state.realized_pnl_dollars or 0.0), 2),
         "journal_path": summary.get("journal_path", str(path)),
         "latest_entries": [_public_entry(entry) for entry in recent_entries],
         "top_no_trade_reasons": [
@@ -445,6 +446,15 @@ def _render_dashboard(status: dict) -> str:
     if committee_generated_label:
         committee_summary = f"{committee_summary} · generated {committee_generated_label}"
 
+    today_pnl = status.get("today_pnl_dollars", 0.0)
+    today_pnl_class = "green" if today_pnl >= 0 else "red"
+    wr_resolved = status["wins"] + status["losses"]
+    wr_str = "—" if wr_resolved == 0 else f"{status['win_rate']:.1f}"
+    wr_suffix = "" if wr_resolved == 0 else "<small>%</small>"
+    wr_class = "muted" if wr_resolved == 0 else ("green" if status["win_rate"] >= 50 else "amber")
+    open_class = "green" if status["has_open_position"] else "muted"
+    open_str = "1" if status["has_open_position"] else "—"
+
     perf = status.get("performance") or {}
     pf_val = perf.get("profit_factor")
     pf_str = f"{pf_val:.2f}×" if pf_val is not None else "—"
@@ -539,6 +549,8 @@ def _render_dashboard(status: dict) -> str:
       padding: 8px 12px;
       font-size: 13px;
       white-space: nowrap;
+      width: fit-content;
+      align-self: flex-start;
     }}
     .grid {{
       display: grid;
@@ -667,6 +679,7 @@ def _render_dashboard(status: dict) -> str:
     @media (max-width: 760px) {{
       header, .wide {{ grid-template-columns: 1fr; display: grid; }}
       .grid {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+      .grid > :last-child:nth-child(odd) {{ grid-column: span 2; }}
       table {{ font-size: 12px; table-layout: auto; width: max-content; min-width: 100%; }}
       .table-wrap {{ overflow-x: auto; -webkit-overflow-scrolling: touch; }}
       .rules {{ grid-template-columns: 1fr; }}
@@ -688,8 +701,8 @@ def _render_dashboard(status: dict) -> str:
 
     <section class="grid">
       <div class="panel">
-        <h2>Session P/L</h2>
-        <div id="metric-pnl" class="metric {'green' if status['realized_pnl_dollars'] >= 0 else 'red'}">${status['realized_pnl_dollars']:.2f}</div>
+        <h2>Today P/L</h2>
+        <div id="metric-pnl" class="metric {today_pnl_class}">${today_pnl:.2f}</div>
       </div>
       <div class="panel">
         <h2>Trades</h2>
@@ -697,11 +710,11 @@ def _render_dashboard(status: dict) -> str:
       </div>
       <div class="panel">
         <h2>Win Rate</h2>
-        <div id="metric-winrate" class="metric {'green' if status['win_rate'] >= 50 else 'amber'}">{status['win_rate']:.1f}<small>%</small></div>
+        <div id="metric-winrate" class="metric {wr_class}">{wr_str}{wr_suffix}</div>
       </div>
       <div class="panel">
-        <h2>Open Position</h2>
-        <div id="metric-open" class="metric">{'1' if status['has_open_position'] else '0'}</div>
+        <h2>Open</h2>
+        <div id="metric-open" class="metric {open_class}">{open_str}</div>
       </div>
       <div class="panel">
         <h2>Balance</h2>
@@ -736,9 +749,6 @@ def _render_dashboard(status: dict) -> str:
           <div class="rule {'danger' if trade_full else ''}"><span>●</span>Max {status['max_trades_per_day']} trades/day</div>
           <div class="rule {'danger' if lockout else ''}"><span>●</span>{status['max_consecutive_losses']}-loss lockout</div>
           <div class="rule {'danger' if status['has_open_position'] else ''}"><span>●</span>Open position: {_escape(open_position_text)}</div>
-          <div class="rule"><span>●</span>Paper mode: {str(status['paper_mode']).lower()}</div>
-          <div class="rule"><span>●</span>Live trading: {str(status['live_trading_enabled']).lower()}</div>
-          <div class="rule"><span>●</span>Bracket-only engine</div>
         </div>
       </div>
       <div class="panel">
@@ -775,7 +785,7 @@ def _render_dashboard(status: dict) -> str:
     <section class="panel" style="margin-bottom: 14px;">
       <h2>Latest Webhook Context</h2>
       <div class="context-grid">
-        <div class="context-item"><label>Received</label><strong>{_escape(latest_webhook.get('received_at') or 'None')}</strong></div>
+        <div class="context-item"><label>Received</label><strong>{_escape(_format_webhook_received(latest_webhook.get('received_at')))}</strong></div>
         <div class="context-item"><label>Decision</label><strong>{_escape(webhook_result.get('decision') or 'None')}</strong></div>
         <div class="context-item"><label>Symbol</label><strong>{_escape(webhook_context.get('instrument') or 'None')}</strong></div>
         <div class="context-item"><label>Session</label><strong>{_escape(webhook_context.get('session') or 'None')}</strong></div>
@@ -971,10 +981,13 @@ def _render_dashboard(status: dict) -> str:
         const bal = document.getElementById('metric-balance');
         const peak = document.getElementById('metric-peak');
         const tbody = document.getElementById('journal-tbody');
-        if (pnl) pnl.textContent = `$${{Number(today.realized_pnl_dollars || 0).toFixed(2)}}`;
+        if (pnl) pnl.textContent = `$${{Number(today.today_pnl_dollars || 0).toFixed(2)}}`;
         if (trades) trades.innerHTML = `${{today.trade_count || 0}}<small>/${{today.max_trades_per_day || 0}}</small>`;
-        if (winrate) winrate.innerHTML = `${{Number(today.win_rate || 0).toFixed(1)}}<small>%</small>`;
-        if (open) open.textContent = today.has_open_position ? '1' : '0';
+        if (winrate) {{
+          const res = (today.wins || 0) + (today.losses || 0);
+          winrate.innerHTML = res === 0 ? '—' : `${{Number(today.win_rate || 0).toFixed(1)}}<small>%</small>`;
+        }}
+        if (open) open.textContent = today.has_open_position ? '1' : '—';
         if (bal) bal.textContent = `$${{Number(today.account_balance || 0).toFixed(2)}}`;
         if (peak) peak.textContent = `Peak $${{Number(today.account_peak_balance || 0).toFixed(2)}}`;
         if (tbody && today.latest_entries) {{
@@ -1126,6 +1139,21 @@ def _payload_to_dict(payload: AlertPayload) -> dict:
     if hasattr(payload, "model_dump"):
         return payload.model_dump()
     return payload.dict()
+
+
+def _format_webhook_received(value: str | None) -> str:
+    """Format a UTC ISO timestamp to a readable ET string, e.g. 'May 31 · 1:07 AM ET'."""
+    if not value:
+        return "None"
+    try:
+        from zoneinfo import ZoneInfo
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        dt_et = dt.astimezone(ZoneInfo("America/New_York"))
+        return dt_et.strftime("%b %-d · %-I:%M %p ET")
+    except Exception:
+        return value
 
 
 def _fmt_stat(value: object, prefix: str = "$", none_str: str = "—") -> str:
