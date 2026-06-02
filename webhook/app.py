@@ -882,6 +882,13 @@ def _render_dashboard(status: dict) -> str:
       font-size: 18px;
       font-weight: 700;
     }}
+    .chart-canvas {{
+      width: 100%;
+      display: block;
+      margin-top: 10px;
+      border-radius: 4px;
+      background: #111216;
+    }}
     @media (max-width: 760px) {{
       header, .wide {{ grid-template-columns: 1fr; display: grid; }}
       .grid {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
@@ -934,7 +941,7 @@ def _render_dashboard(status: dict) -> str:
 
     <section class="panel" style="margin-bottom:14px;">
       <h2>Equity Curve <span id="chart-range" style="font-size:11px;font-weight:400;color:var(--muted);margin-left:8px;"></span></h2>
-      <canvas id="pnl-chart" style="width:100%;height:140px;display:block;margin-top:10px;border-radius:4px;"></canvas>
+      <canvas id="pnl-chart" class="chart-canvas" style="height:140px;"></canvas>
     </section>
 
     <section class="panel" style="margin-bottom:14px;">
@@ -1008,6 +1015,11 @@ def _render_dashboard(status: dict) -> str:
         <div class="context-item"><label>Strat</label><strong>{_escape(_format_strat(webhook_context.get('strat')))}</strong></div>
         <div class="context-item"><label>Risk</label><strong>{_escape(webhook_result.get('risk') or 'None')}</strong></div>
       </div>
+    </section>
+
+    <section class="panel" style="margin-bottom: 14px;">
+      <h2>Daily Made / Lost <span id="bar-chart-range" style="font-size:11px;font-weight:400;color:var(--muted);margin-left:8px;"></span></h2>
+      <canvas id="pnl-bar-chart" class="chart-canvas" style="height:160px;"></canvas>
     </section>
 
     <section class="panel">
@@ -1177,6 +1189,81 @@ def _render_dashboard(status: dict) -> str:
       }}
     }}
 
+    function drawPnlBarChart(history) {{
+      const canvas = document.getElementById('pnl-bar-chart');
+      const rangeLabel = document.getElementById('bar-chart-range');
+      if (!canvas || !history || !history.days || !history.days.length) return;
+
+      const days = [...history.days].reverse();
+      const dpr = window.devicePixelRatio || 1;
+      const W = canvas.offsetWidth;
+      const H = canvas.offsetHeight;
+      if (!W || !H) return;
+      canvas.width = W * dpr;
+      canvas.height = H * dpr;
+      const ctx = canvas.getContext('2d');
+      ctx.scale(dpr, dpr);
+
+      const PAD = {{ top: 16, right: 16, bottom: 30, left: 56 }};
+      const chartW = W - PAD.left - PAD.right;
+      const chartH = H - PAD.top - PAD.bottom;
+      const values = days.map(d => Number(d.realized_pnl_dollars || 0));
+      const maxAbs = Math.max(1, ...values.map(v => Math.abs(v)));
+      const zeroY = PAD.top + chartH / 2;
+      const barGap = Math.min(10, Math.max(4, chartW / Math.max(days.length, 1) * 0.18));
+      const barW = Math.max(6, (chartW - barGap * Math.max(days.length - 1, 0)) / Math.max(days.length, 1));
+      const toY = v => zeroY - (v / maxAbs) * (chartH / 2);
+
+      ctx.fillStyle = '#111216';
+      ctx.fillRect(0, 0, W, H);
+
+      ctx.strokeStyle = '#1e2028';
+      ctx.lineWidth = 1;
+      [0.25, 0.75].forEach(frac => {{
+        const y = PAD.top + frac * chartH;
+        ctx.beginPath(); ctx.moveTo(PAD.left, y); ctx.lineTo(W - PAD.right, y); ctx.stroke();
+      }});
+
+      ctx.strokeStyle = '#2a2d34';
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath(); ctx.moveTo(PAD.left, zeroY); ctx.lineTo(W - PAD.right, zeroY); ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.fillStyle = '#a1a1aa';
+      ctx.font = `${{Math.max(10, Math.min(12, W / 40))}}px ui-sans-serif,system-ui,sans-serif`;
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`+$${{maxAbs.toFixed(0)}}`, PAD.left - 6, PAD.top);
+      ctx.fillText('$0', PAD.left - 6, zeroY);
+      ctx.fillText(`-$${{maxAbs.toFixed(0)}}`, PAD.left - 6, PAD.top + chartH);
+
+      days.forEach((d, i) => {{
+        const value = Number(d.realized_pnl_dollars || 0);
+        const x = PAD.left + i * (barW + barGap);
+        const y = value >= 0 ? toY(value) : zeroY;
+        const h = Math.max(2, Math.abs(toY(value) - zeroY));
+        ctx.fillStyle = value > 0 ? '#17d97f' : value < 0 ? '#ff3d71' : '#2a2d34';
+        ctx.fillRect(x, y, barW, h);
+      }});
+
+      ctx.fillStyle = '#a1a1aa';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      const labelIdxs = days.length <= 4
+        ? days.map((_, i) => i)
+        : [0, Math.floor(days.length / 2), days.length - 1];
+      labelIdxs.forEach(i => {{
+        const x = PAD.left + i * (barW + barGap) + barW / 2;
+        ctx.fillText((days[i].date || '').slice(5), x, H - 2);
+      }});
+
+      if (rangeLabel) {{
+        const wins = values.filter(v => v > 0).reduce((sum, v) => sum + v, 0);
+        const losses = values.filter(v => v < 0).reduce((sum, v) => sum + v, 0);
+        rangeLabel.textContent = `made $${{wins.toFixed(2)}} · lost $${{Math.abs(losses).toFixed(2)}}`;
+      }}
+    }}
+
     async function refreshDashboard() {{
       try {{
         const [today, history] = await Promise.all([
@@ -1231,6 +1318,7 @@ def _render_dashboard(status: dict) -> str:
 
         window.__riskSentinelHistory = history;
         drawPnlChart(history);
+        drawPnlBarChart(history);
       }} catch (error) {{
         console.warn('Dashboard refresh failed', error);
       }}
@@ -1239,7 +1327,10 @@ def _render_dashboard(status: dict) -> str:
     setInterval(refreshDashboard, 30000);
     // Redraw chart on resize (handles rotation on mobile)
     window.addEventListener('resize', () => {{
-      if (window.__riskSentinelHistory) drawPnlChart(window.__riskSentinelHistory);
+      if (window.__riskSentinelHistory) {{
+        drawPnlChart(window.__riskSentinelHistory);
+        drawPnlBarChart(window.__riskSentinelHistory);
+      }}
     }});
   </script>
 
