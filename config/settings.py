@@ -281,7 +281,7 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         max_daily_loss_percent=float(capital.get("max_daily_loss_percent", 3.0)),
         require_margin_check=capital.get("require_margin_check", True),
 
-        log_dir=os.getenv("LOG_DIR", "/app/logs" if os.getenv("RAILWAY_ENVIRONMENT") else "logs"),
+        log_dir=os.getenv("LOG_DIR", "logs"),
         log_level=os.getenv("LOG_LEVEL", "INFO"),
         risk_rules_path=risk_rules_path,
 

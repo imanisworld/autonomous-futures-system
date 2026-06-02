@@ -1,7 +1,7 @@
 """Tradovate REST API broker adapter.
 
 Connects to Tradovate's cloud API — no local Gateway process required.
-Works from any server (Hetzner, Railway) with outbound HTTPS.
+Works from any server with outbound HTTPS (deployed on Hetzner VPS).
 
 Environments:
     demo → https://demo.tradovateapi.com/v1   (paper sim, free)

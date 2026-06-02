@@ -539,7 +539,7 @@ class TestRRCalculation:
         rr = RiskEngine.calculate_rr("BUY", entry=19500, stop=19480, target=19540)
         assert rr == 0.0
 
-class TestRailwaySafetyLayers:
+class TestHetznerSafetyLayers:
 
     def test_max_daily_loss_rejects(self, config, valid_trade_setup):
         config.max_daily_loss = 150

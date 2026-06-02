@@ -63,7 +63,7 @@ class OpsMonitor:
             recs.append(Recommendation(
                 code=WATCH,
                 subject="journal_files",
-                reason="No journal files found. Either no alerts have been received yet, or the Railway Volume is not mounted.",
+                reason="No journal files found. Either no alerts have been received yet, or the log volume is not mounted.",
                 evidence={"log_dir": str(self.log_dir)},
             ))
 
@@ -76,7 +76,7 @@ class OpsMonitor:
                     subject="webhook_feed",
                     reason=(
                         f"Last journal entry is {latest_entry_age/3600:.1f}h old during an active futures alert window. "
-                        "TradingView alerts may have stopped firing or the Railway service may be down."
+                        "TradingView alerts may have stopped firing or the server may be down."
                     ),
                     evidence={"age_seconds": int(latest_entry_age), "market_active": True},
                 ))

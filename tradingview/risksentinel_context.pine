@@ -1,46 +1,40 @@
 //@version=6
 indicator("RiskSentinel - Full Context", overlay=true)
 
-// INPUTS
-i_orb_min = input.int(15, "ORB Window (min)", minval=5, maxval=60, step=5, group="Opening Range")
-i_ny_session = input.session("0930-1200", "NY Session (ET)", group="Opening Range")
-i_london_session = input.session("0300-0830", "London Session (ET)", group="Opening Range")
-i_ema_fast = input.int(9, "Fast EMA", minval=2, group="Trend")
-i_ema_slow = input.int(21, "Slow EMA", minval=5, group="Trend")
-i_ema_mid = input.int(55, "Mid EMA", minval=20, group="Trend")
-i_ema_long = input.int(200, "Long EMA", minval=50, group="Trend")
-i_vol_len = input.int(20, "Volume MA", minval=5, group="Volume")
-i_alert_on = input.bool(true, "Send heartbeat alerts on session bar close", group="Alert")
+// ─── INPUTS ──────────────────────────────────────────────────────────────────
+i_orb_min       = input.int(15,     "ORB Window (min)",   minval=5, maxval=60, step=5, group="Opening Range")
+i_ny_session    = input.session("0930-1200", "NY Session (ET)",     group="Opening Range")
+i_london_session= input.session("0300-0830", "London Session (ET)", group="Opening Range")
+i_ema_fast      = input.int(9,  "Fast EMA", minval=2,  group="Trend")
+i_ema_slow      = input.int(21, "Slow EMA", minval=5,  group="Trend")
+i_ema_mid       = input.int(55, "Mid EMA",  minval=20, group="Trend")
+i_ema_long      = input.int(200,"Long EMA", minval=50, group="Trend")
+i_vol_len       = input.int(20, "Volume MA",minval=5,  group="Volume")
+i_alert_on      = input.bool(true, "Send heartbeat alerts on session bar close", group="Alert")
+i_bos_swing     = input.int(7, "BOS Swing Length", minval=3, maxval=20, group="BOS / MSS")
 
-// Manual context inputs for gates. Keep blank/na when unavailable; webhook treats missing data as neutral.
-i_gex_flip = input.float(0.0, "GEX Flip", group="GEX / Gamma")
-i_call_wall = input.float(0.0, "Call Wall", group="GEX / Gamma")
-i_put_wall = input.float(0.0, "Put Wall", group="GEX / Gamma")
-i_hvl = input.float(0.0, "HVL", group="GEX / Gamma")
-i_max_pain = input.float(0.0, "Max Pain", group="GEX / Gamma")
-i_mid_upper = input.float(0.0, "Mid Upper", group="GEX / Gamma")
-i_mid_lower = input.float(0.0, "Mid Lower", group="GEX / Gamma")
-i_vol_trigger_up = input.float(0.0, "Vol Trigger Up", group="GEX / Gamma")
-i_vol_trigger_down = input.float(0.0, "Vol Trigger Down", group="GEX / Gamma")
-i_gex_regime = input.string("", "GEX Regime", group="GEX / Gamma")
-i_delta_bias = input.string("", "Delta Bias", group="GEX / Gamma")
+// GEX manual inputs (keep blank / 0 when unavailable)
+i_gex_flip          = input.float(0.0, "GEX Flip",          group="GEX / Gamma")
+i_call_wall         = input.float(0.0, "Call Wall",          group="GEX / Gamma")
+i_put_wall          = input.float(0.0, "Put Wall",           group="GEX / Gamma")
+i_hvl               = input.float(0.0, "HVL",                group="GEX / Gamma")
+i_max_pain          = input.float(0.0, "Max Pain",           group="GEX / Gamma")
+i_mid_upper         = input.float(0.0, "Mid Upper",          group="GEX / Gamma")
+i_mid_lower         = input.float(0.0, "Mid Lower",          group="GEX / Gamma")
+i_vol_trigger_up    = input.float(0.0, "Vol Trigger Up",     group="GEX / Gamma")
+i_vol_trigger_down  = input.float(0.0, "Vol Trigger Down",   group="GEX / Gamma")
+i_gex_regime        = input.string("",  "GEX Regime",        group="GEX / Gamma")
+i_delta_bias        = input.string("",  "Delta Bias",        group="GEX / Gamma")
 
-i_signa_grade = input.string("", "Signa Grade", group="Signa")
-i_signa_score = input.float(0.0, "Signa Score", group="Signa")
+i_signa_grade           = input.string("", "Signa Grade",           group="Signa")
+i_signa_score           = input.float(0.0, "Signa Score",           group="Signa")
 i_signa_daily_direction = input.string("", "Signa Daily Direction", group="Signa")
-i_signa_weekly_direction = input.string("", "Signa Weekly Direction", group="Signa")
+i_signa_weekly_direction= input.string("", "Signa Weekly Direction",group="Signa")
 
-i_supply_top = input.float(0.0, "Supply Zone Top", group="Supply / Demand")
-i_supply_bottom = input.float(0.0, "Supply Zone Bottom", group="Supply / Demand")
-i_supply_wavg = input.float(0.0, "Supply Zone WAVG", group="Supply / Demand")
-i_demand_top = input.float(0.0, "Demand Zone Top", group="Supply / Demand")
-i_demand_bottom = input.float(0.0, "Demand Zone Bottom", group="Supply / Demand")
-i_demand_wavg = input.float(0.0, "Demand Zone WAVG", group="Supply / Demand")
-
-// HELPERS
-f2j(v, fmt) => na(v) ? "null" : str.tostring(v, fmt)
-f_opt2j(v, fmt) => v == 0.0 ? "null" : f2j(v, fmt)
-s2j(v) => na(v) or v == "" ? "null" : "\"" + v + "\""
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
+f2j(v, fmt)       => na(v) ? "null" : str.tostring(v, fmt)
+f_opt2j(v, fmt)   => v == 0.0 ? "null" : f2j(v, fmt)
+s2j(v)            => na(v) or v == "" ? "null" : "\"" + v + "\""
 
 classify_bar(h, l, ph, pl) =>
     if na(ph) or na(pl)
@@ -87,45 +81,117 @@ orb_status_for(orb_high, orb_low) =>
     else
         "inside"
 
-// CORE CALCULATIONS
-ema_fast = ta.ema(close, i_ema_fast)
-ema_slow = ta.ema(close, i_ema_slow)
-ema_mid  = ta.ema(close, i_ema_mid)
-ema_long = ta.ema(close, i_ema_long)
-vwap_val = ta.vwap(hlc3)
-avg_vol = ta.sma(volume, i_vol_len)
-rel_vol = avg_vol > 0 ? volume / avg_vol : 1.0
+// ─── CORE CALCULATIONS ───────────────────────────────────────────────────────
+ema_fast    = ta.ema(close, i_ema_fast)
+ema_slow    = ta.ema(close, i_ema_slow)
+ema_mid     = ta.ema(close, i_ema_mid)
+ema_long    = ta.ema(close, i_ema_long)
+vwap_val    = ta.vwap(hlc3)
+avg_vol     = ta.sma(volume, i_vol_len)
+rel_vol     = avg_vol > 0 ? volume / avg_vol : 1.0
 vwap_reclaimed = ta.crossover(close, vwap_val)
 
 [pd_high, pd_low, pd_close] = request.security(syminfo.tickerid, "D", [high[1], low[1], close[1]], lookahead=barmerge.lookahead_on)
-[pw_high, pw_low] = request.security(syminfo.tickerid, "W", [high[1], low[1]], lookahead=barmerge.lookahead_on)
+[pw_high, pw_low]            = request.security(syminfo.tickerid, "W", [high[1], low[1]],           lookahead=barmerge.lookahead_on)
 
-// HTF / FTFC CONTEXT
-[d_o, d_h, d_l, d_c, d_ph, d_pl] = request.security(syminfo.tickerid, "D", [open, high, low, close, high[1], low[1]], lookahead=barmerge.lookahead_on)
+// ─── HTF / FTFC CONTEXT ──────────────────────────────────────────────────────
+[d_o,  d_h,  d_l,  d_c,  d_ph,  d_pl]  = request.security(syminfo.tickerid, "D",   [open, high, low, close, high[1], low[1]], lookahead=barmerge.lookahead_on)
 [h4_o, h4_h, h4_l, h4_c, h4_ph, h4_pl] = request.security(syminfo.tickerid, "240", [open, high, low, close, high[1], low[1]], lookahead=barmerge.lookahead_on)
-[h1_o, h1_h, h1_l, h1_c, h1_ph, h1_pl] = request.security(syminfo.tickerid, "60", [open, high, low, close, high[1], low[1]], lookahead=barmerge.lookahead_on)
+[h1_o, h1_h, h1_l, h1_c, h1_ph, h1_pl] = request.security(syminfo.tickerid, "60",  [open, high, low, close, high[1], low[1]], lookahead=barmerge.lookahead_on)
 
-daily_bar_type = classify_bar(d_h, d_l, d_ph, d_pl)
-daily_direction = direction_from_bar(daily_bar_type, d_o, d_c)
-four_hour_bar_type = classify_bar(h4_h, h4_l, h4_ph, h4_pl)
-four_hour_direction = direction_from_bar(four_hour_bar_type, h4_o, h4_c)
-one_hour_bar_type = classify_bar(h1_h, h1_l, h1_ph, h1_pl)
-one_hour_direction = direction_from_bar(one_hour_bar_type, h1_o, h1_c)
+daily_bar_type      = classify_bar(d_h,  d_l,  d_ph,  d_pl)
+daily_direction     = direction_from_bar(daily_bar_type,      d_o,  d_c)
+four_hour_bar_type  = classify_bar(h4_h, h4_l, h4_ph, h4_pl)
+four_hour_direction = direction_from_bar(four_hour_bar_type,  h4_o, h4_c)
+one_hour_bar_type   = classify_bar(h1_h, h1_l, h1_ph, h1_pl)
+one_hour_direction  = direction_from_bar(one_hour_bar_type,   h1_o, h1_c)
 
-daily_up = daily_direction == "UP" ? 1 : 0
-daily_down = daily_direction == "DOWN" ? 1 : 0
-four_hour_up = four_hour_direction == "UP" ? 1 : 0
-four_hour_down = four_hour_direction == "DOWN" ? 1 : 0
-one_hour_up = one_hour_direction == "UP" ? 1 : 0
-one_hour_down = one_hour_direction == "DOWN" ? 1 : 0
-ftfc_up_count = daily_up + four_hour_up + one_hour_up
-ftfc_down_count = daily_down + four_hour_down + one_hour_down
-ftfc_direction = ftfc_up_count == 3 ? "UP" : ftfc_down_count == 3 ? "DOWN" : (ftfc_up_count > 0 and ftfc_down_count > 0 ? "MIXED" : "NEUTRAL")
-ftfc_aligned = ftfc_direction == "UP" or ftfc_direction == "DOWN"
+ftfc_up_count   = (daily_direction == "UP" ? 1 : 0) + (four_hour_direction == "UP" ? 1 : 0) + (one_hour_direction == "UP" ? 1 : 0)
+ftfc_down_count = (daily_direction == "DOWN" ? 1 : 0) + (four_hour_direction == "DOWN" ? 1 : 0) + (one_hour_direction == "DOWN" ? 1 : 0)
+ftfc_direction  = ftfc_up_count == 3 ? "UP" : ftfc_down_count == 3 ? "DOWN" : "MIXED"
+ftfc_aligned    = ftfc_direction == "UP" or ftfc_direction == "DOWN"
 
-// HOD / LOD — highest high and lowest low since session open
+// ─── BOS / MSS DETECTION ─────────────────────────────────────────────────────
+// BOS  (Break of Structure)   = price breaks a prior swing in the SAME direction → continuation
+// MSS  (Market Structure Shift) = price breaks a prior swing in the OPPOSITE direction → reversal
+//
+// How this improves WR:
+//   • vwap_hold SHORT becomes far stronger when confirmed by a bearish BOS on the same bar
+//   • mss_direction signals the highest-probability reversals — structure genuinely flipped
+//   • backend gates vwap_hold, orb_breakout on bos/mss alignment
+
+ph_bos = ta.pivothigh(high, i_bos_swing, i_bos_swing)
+pl_bos = ta.pivotlow (low,  i_bos_swing, i_bos_swing)
+
+var float last_swing_high = na
+var float last_swing_low  = na
+var int   last_break_dir  = 0   // 1 = last break was bullish, -1 = bearish, 0 = none
+
+if not na(ph_bos)
+    last_swing_high := ph_bos
+if not na(pl_bos)
+    last_swing_low := pl_bos
+
+// Detect breaks on bar close (not intrabar)
+bull_break = not na(last_swing_high) and close > last_swing_high and close[1] <= last_swing_high
+bear_break = not na(last_swing_low)  and close < last_swing_low  and close[1] >= last_swing_low
+
+var string bos_direction = na
+var string mss_direction = na
+bos_direction := na
+mss_direction := na
+
+if bull_break
+    if last_break_dir == 1       // Same direction as last break → BOS (continuation)
+        bos_direction := "bullish"
+    else if last_break_dir == -1 // Opposite direction → MSS (reversal)
+        mss_direction := "bullish"
+    last_break_dir := 1
+
+if bear_break
+    if last_break_dir == -1      // Same direction → BOS
+        bos_direction := "bearish"
+    else if last_break_dir == 1  // Opposite → MSS
+        mss_direction := "bearish"
+    last_break_dir := -1
+
+// ─── AUTO SUPPLY & DEMAND ZONES ──────────────────────────────────────────────
+// Supply zone = area around the most recent pivot HIGH (where sellers appeared)
+// Demand zone = area around the most recent pivot LOW  (where buyers appeared)
+// Zone body = candle body at the pivot bar; zone extremes = full wick
+// wavg = midpoint of the zone body (the most traded price in that zone)
+//
+// How this improves WR:
+//   • vwap_hold SHORT near a supply zone = sellers have already rejected here before
+//   • pdh_reclaim LONG near a demand zone = buyers have defended this level before
+//   • backend entry_rules.py already uses these zone fields to gate setups
+
+var float supply_top    = na
+var float supply_bottom = na
+var float supply_wavg   = na
+var float demand_top    = na
+var float demand_bottom = na
+var float demand_wavg   = na
+
+if not na(ph_bos)
+    idx             = i_bos_swing          // bars back to the pivot
+    body_top        = math.max(open[idx], close[idx])
+    body_bot        = math.min(open[idx], close[idx])
+    supply_top      := high[idx]           // full wick = zone extreme
+    supply_bottom   := body_bot            // candle body bottom = zone floor
+    supply_wavg     := math.avg(body_top, body_bot)  // volume-weighted midpoint proxy
+
+if not na(pl_bos)
+    idx             = i_bos_swing
+    body_top        = math.max(open[idx], close[idx])
+    body_bot        = math.min(open[idx], close[idx])
+    demand_top      := body_top            // candle body top = zone ceiling
+    demand_bottom   := low[idx]            // full wick = zone extreme
+    demand_wavg     := math.avg(body_top, body_bot)
+
+// ─── HOD / LOD ────────────────────────────────────────────────────────────────
 in_any_session = not na(time(timeframe.period, i_ny_session, "America/New_York")) or not na(time(timeframe.period, i_london_session, "America/New_York"))
-day_change = ta.change(time("D")) > 0
+day_change     = ta.change(time("D")) > 0
 var float hod = na
 var float lod = na
 if day_change
@@ -135,35 +201,22 @@ else
     hod := math.max(nz(hod, high), high)
     lod := math.min(nz(lod, low), low)
 
-// TREND (declare variables first)
+// ─── TREND ────────────────────────────────────────────────────────────────────
 var string trend_dir = "SIDEWAYS"
 var string trend_str = "WEAK"
 
 diff_pct = math.abs(ema_fast - ema_slow) / ema_slow * 100
-if ema_fast > ema_slow and diff_pct > 0.15
-    trend_dir := "UP"
-else if ema_fast < ema_slow and diff_pct > 0.15
-    trend_dir := "DOWN"
-else
-    trend_dir := "SIDEWAYS"
+trend_dir := ema_fast > ema_slow and diff_pct > 0.15 ? "UP" : ema_fast < ema_slow and diff_pct > 0.15 ? "DOWN" : "SIDEWAYS"
+trend_str := diff_pct > 0.40 ? "STRONG" : diff_pct > 0.15 ? "MODERATE" : "WEAK"
 
-if diff_pct > 0.40
-    trend_str := "STRONG"
-else if diff_pct > 0.15
-    trend_str := "MODERATE"
-else
-    trend_str := "WEAK"
-
-// NY ORB
+// ─── NY ORB ───────────────────────────────────────────────────────────────────
 bars_needed = math.max(1, math.round(i_orb_min * 60 / timeframe.in_seconds()))
-in_ny = not na(time(timeframe.period, i_ny_session, "America/New_York"))
+in_ny  = not na(time(timeframe.period, i_ny_session, "America/New_York"))
 ny_start = in_ny and not in_ny[1]
-
 var float orb_h = na
 var float orb_l = na
-var int orb_cnt = 0
-var bool orb_done = false
-
+var int   orb_cnt  = 0
+var bool  orb_done = false
 if ny_start
     orb_h := high
     orb_l := low
@@ -176,18 +229,15 @@ else if in_ny and not orb_done
         orb_cnt += 1
     else
         orb_done := true
-
 orb_status = orb_status_for(orb_h, orb_l)
 
-// LONDON ORB
-in_london = not na(time(timeframe.period, i_london_session, "America/New_York"))
+// ─── LONDON ORB ───────────────────────────────────────────────────────────────
+in_london    = not na(time(timeframe.period, i_london_session, "America/New_York"))
 london_start = in_london and not in_london[1]
-
 var float london_orb_h = na
 var float london_orb_l = na
-var int london_orb_cnt = 0
-var bool london_orb_done = false
-
+var int   london_orb_cnt  = 0
+var bool  london_orb_done = false
 if london_start
     london_orb_h := high
     london_orb_l := low
@@ -200,15 +250,12 @@ else if in_london and not london_orb_done
         london_orb_cnt += 1
     else
         london_orb_done := true
-
 london_orb_status = orb_status_for(london_orb_h, london_orb_l)
 
-// MARKET CONDITION (declare variable first)
+// ─── MARKET CONDITION ─────────────────────────────────────────────────────────
 var string market_cond = "RANGE_BOUND"
-
-atr14 = ta.atr(14)
+atr14       = ta.atr(14)
 range_ratio = atr14 > 0 ? (high - low) / atr14 : 1.0
-
 if rel_vol < 0.40
     market_cond := "DEAD"
 else if range_ratio < 0.40 or rel_vol < 0.60
@@ -218,17 +265,17 @@ else if trend_dir != "SIDEWAYS" and rel_vol >= 0.80
 else
     market_cond := "RANGE_BOUND"
 
-// STRAT CLASSIFICATION (declare variables first)
-var string cur_type = "unknown"
+// ─── STRAT CLASSIFICATION ─────────────────────────────────────────────────────
+var string cur_type  = "unknown"
 var string prev_type = "unknown"
-var string t2b_type = "unknown"
+var string t2b_type  = "unknown"
 var string strat_seq = "no_sequence"
-var string strat_dir_ctx = na
+var string strat_dir_ctx     = na
 var string strat_trigger_ctx = na
 
-cur_type := classify_bar(high, low, high[1], low[1])
+cur_type  := classify_bar(high,    low,    high[1], low[1])
 prev_type := classify_bar(high[1], low[1], high[2], low[2])
-t2b_type := classify_bar(high[2], low[2], high[3], low[3])
+t2b_type  := classify_bar(high[2], low[2], high[3], low[3])
 
 if cur_type == "two_up" and prev_type == "inside_bar" and t2b_type == "two_up"
     strat_seq := "strat_212"
@@ -248,234 +295,294 @@ else if cur_type == "two_down" and prev_type == "two_up" and t2b_type == "inside
     strat_trigger_ctx := "reversal"
 else if (cur_type == "two_up" or cur_type == "two_down") and prev_type == "inside_bar"
     strat_seq := "strat_inside_break"
-    strat_dir_ctx := cur_type == "two_up" ? "LONG" : "SHORT"
+    strat_dir_ctx     := cur_type == "two_up" ? "LONG" : "SHORT"
     strat_trigger_ctx := "breakout"
-else if (cur_type == "two_up" or cur_type == "two_down") and prev_type == "outside_bar"
-    strat_seq := "strat_outside_continuation"
-    strat_dir_ctx := cur_type == "two_up" ? "LONG" : "SHORT"
-    strat_trigger_ctx := "outside_bar_followthrough"
 else
     strat_seq := "no_sequence"
     strat_dir_ctx := na
     strat_trigger_ctx := na
 
-// PRICE VS LEVELS (declare variables first)
+// ─── PRICE VS LEVELS ──────────────────────────────────────────────────────────
 var string price_vs_pdh = "unknown"
 var string price_vs_pdl = "unknown"
+price_vs_pdh := na(pd_high) ? "unknown" : close > pd_high ? "above" : close < pd_high ? "below" : "at"
+price_vs_pdl := na(pd_low)  ? "unknown" : close > pd_low  ? "above" : close < pd_low  ? "below" : "at"
 
-if na(pd_high)
-    price_vs_pdh := "unknown"
-else if close > pd_high
-    price_vs_pdh := "above"
-else if close < pd_high
-    price_vs_pdh := "below"
-else
-    price_vs_pdh := "at"
-
-if na(pd_low)
-    price_vs_pdl := "unknown"
-else if close > pd_low
-    price_vs_pdl := "above"
-else if close < pd_low
-    price_vs_pdl := "below"
-else
-    price_vs_pdl := "at"
-
-// EMA FLAGS
 ema_9_above_21 = ema_fast > ema_slow
 
-// ADVISORY BRACKET
-// Pine sends candidate bracket coordinates; backend still validates the setup,
-// strategy match, R:R, and minimum target distance before any paper fill.
+// ─── ADVISORY BRACKET ────────────────────────────────────────────────────────
+// Pine computes candidate coordinates. Backend re-validates strategy, R:R,
+// and min target distance before any fill.
 f_rr(dir, e, s, t) =>
-    risk = dir == "LONG" ? e - s : s - e
+    risk   = dir == "LONG" ? e - s : s - e
     reward = dir == "LONG" ? t - e : e - t
     risk > 0 ? reward / risk : na
 
 f_min_target(dir, e, raw_t, min_pts) =>
     min_pts <= 0 ? raw_t : dir == "LONG" ? math.max(raw_t, e + min_pts) : math.min(raw_t, e - min_pts)
 
-root_ticker = str.upper(syminfo.root)
-min_target_pts = root_ticker == "MES" or str.contains(syminfo.ticker, "MES") ? 15.0 : root_ticker == "MNQ" or str.contains(syminfo.ticker, "MNQ") ? 15.0 : 0.0
-max_stop_ticks = root_ticker == "MES" or str.contains(syminfo.ticker, "MES") ? 40.0 : root_ticker == "MNQ" or str.contains(syminfo.ticker, "MNQ") ? 80.0 : 40.0
+root_ticker     = str.upper(syminfo.root)
+is_mes          = root_ticker == "MES" or str.contains(syminfo.ticker, "MES")
+is_mnq          = root_ticker == "MNQ" or str.contains(syminfo.ticker, "MNQ")
+min_target_pts  = is_mes or is_mnq ? 15.0 : 0.0
+max_stop_ticks  = is_mes ? 40.0 : is_mnq ? 80.0 : 40.0
+tick            = syminfo.mintick
 
 string signal_strategy = na
 string signal_direction = na
-float signal_entry = na
-float signal_stop = na
-float signal_target = na
-float signal_rr = na
-float raw_target = na
+float  signal_entry    = na
+float  signal_stop     = na
+float  signal_target   = na
+float  signal_rr       = na
+float  raw_target      = na
 
-if not na(orb_h) and not na(orb_l) and orb_status == "reclaimed_high" and trend_dir == "UP" and close > vwap_val and rel_vol >= 0.7
+// ── Signal priority order ────────────────────────────────────────────────────
+// 1. 4HR Re-Trigger (most specific — evaluated first)
+// 2. ORB Breakout   (volume + close confirmation added)
+// 3. ORB Reclaim
+// 4. VWAP Rejection (NEW — failed VWAP reclaim in downtrend)
+// 5. VWAP Reclaim
+// 6. VWAP Hold      (requires two_down bar for SHORT confirmation)
+// 7. PDH / PDL Reclaim
+// 8. Continuation Pullback
+
+// 1. 4HR Re-Trigger LONG
+if not na(orb_h) and not na(orb_l) and orb_status == "reclaimed_high"
+  and trend_dir == "UP" and close > vwap_val and rel_vol >= 0.7
+  and cur_type == "two_up"
     signal_strategy := "strat_4hr_retrigger"
     signal_direction := "LONG"
-    signal_entry := orb_h + syminfo.mintick
-    signal_stop := math.max(orb_h - syminfo.mintick * 8, signal_entry - syminfo.mintick * max_stop_ticks)
-    raw_target := signal_entry + (signal_entry - signal_stop) * 2.0
-else if not na(orb_h) and not na(orb_l) and orb_status == "above" and trend_dir == "UP" and close > vwap_val
+    signal_entry := orb_h + tick
+    signal_stop  := math.max(orb_h - tick * 8, signal_entry - tick * max_stop_ticks)
+    raw_target   := signal_entry + (signal_entry - signal_stop) * 2.0
+
+// 4HR Re-Trigger SHORT
+else if not na(orb_h) and not na(orb_l) and orb_status == "reclaimed_low"
+  and trend_dir == "DOWN" and close < vwap_val and rel_vol >= 0.7
+  and cur_type == "two_down"
+    signal_strategy := "strat_4hr_retrigger"
+    signal_direction := "SHORT"
+    signal_entry := orb_l - tick
+    signal_stop  := math.min(orb_l + tick * 8, signal_entry + tick * max_stop_ticks)
+    raw_target   := signal_entry - (signal_stop - signal_entry) * 2.0
+
+// 2. ORB Breakout LONG
+// Requires: bar closes ABOVE orb_h by ≥ 2 ticks + volume ≥ 1.2x average
+else if not na(orb_h) and not na(orb_l) and orb_status == "above"
+  and trend_dir == "UP" and close > vwap_val
+  and close >= orb_h + tick * 2
+  and rel_vol >= 1.2
     signal_strategy := "orb_breakout"
     signal_direction := "LONG"
-    signal_entry := orb_h + syminfo.mintick * 2
-    signal_stop := math.max(orb_h - syminfo.mintick * 8, signal_entry - syminfo.mintick * max_stop_ticks)
-    raw_target := signal_entry + (signal_entry - signal_stop) * 2.2
-else if not na(orb_h) and not na(orb_l) and orb_status == "below" and trend_dir == "DOWN" and close < vwap_val
+    signal_entry := orb_h + tick * 2
+    signal_stop  := math.max(orb_h - tick * 8, signal_entry - tick * max_stop_ticks)
+    raw_target   := signal_entry + (signal_entry - signal_stop) * 2.2
+
+// ORB Breakout SHORT
+else if not na(orb_h) and not na(orb_l) and orb_status == "below"
+  and trend_dir == "DOWN" and close < vwap_val
+  and close <= orb_l - tick * 2
+  and rel_vol >= 1.2
     signal_strategy := "orb_breakout"
     signal_direction := "SHORT"
-    signal_entry := orb_l - syminfo.mintick * 2
-    signal_stop := math.min(orb_l + syminfo.mintick * 8, signal_entry + syminfo.mintick * max_stop_ticks)
-    raw_target := signal_entry - (signal_stop - signal_entry) * 2.2
-else if not na(orb_h) and not na(orb_l) and orb_status == "reclaimed_high" and trend_dir == "UP" and close > vwap_val
+    signal_entry := orb_l - tick * 2
+    signal_stop  := math.min(orb_l + tick * 8, signal_entry + tick * max_stop_ticks)
+    raw_target   := signal_entry - (signal_stop - signal_entry) * 2.2
+
+// 3. ORB Reclaim
+else if not na(orb_h) and not na(orb_l) and orb_status == "reclaimed_high"
+  and trend_dir == "UP" and close > vwap_val
     signal_strategy := "orb_reclaim"
     signal_direction := "LONG"
-    signal_entry := orb_h + syminfo.mintick * 2
-    signal_stop := math.max(orb_l - syminfo.mintick * 4, signal_entry - syminfo.mintick * max_stop_ticks)
-    raw_target := signal_entry + (signal_entry - signal_stop) * 2.5
-else if not na(orb_h) and not na(orb_l) and orb_status == "rejected_high"
-    signal_strategy := "orb_rejection"
+    signal_entry := orb_h + tick * 2
+    signal_stop  := math.max(orb_l - tick * 4, signal_entry - tick * max_stop_ticks)
+    raw_target   := signal_entry + (signal_entry - signal_stop) * 2.5
+
+// 4. VWAP Rejection SHORT (NEW)
+// Price attempted to reclaim VWAP from below but closed back under it — failed reclaim = bearish
+else if vwap_reclaimed and close < vwap_val and trend_dir == "DOWN"
+    signal_strategy := "vwap_rejection"
     signal_direction := "SHORT"
-    signal_entry := orb_h - syminfo.mintick * 2
-    signal_stop := math.min(orb_h + syminfo.mintick * 6, signal_entry + syminfo.mintick * max_stop_ticks)
-    raw_target := signal_entry - (signal_stop - signal_entry) * 2.5
+    signal_entry := vwap_val - tick * 2
+    signal_stop  := vwap_val + tick * 20
+    raw_target   := signal_entry - (signal_stop - signal_entry) * 3.0
+
+// 5. VWAP Reclaim LONG
 else if vwap_reclaimed and trend_dir == "UP" and close > vwap_val
     signal_strategy := "vwap_reclaim"
     signal_direction := "LONG"
-    signal_entry := vwap_val + syminfo.mintick * 2
-    signal_stop := vwap_val - syminfo.mintick * 28
-    raw_target := signal_entry + (signal_entry - signal_stop) * 3.0
-else if trend_dir == "DOWN" and close < vwap_val
+    signal_entry := vwap_val + tick * 2
+    signal_stop  := vwap_val - tick * 28
+    raw_target   := signal_entry + (signal_entry - signal_stop) * 3.0
+
+// 6. VWAP Hold SHORT
+// REQUIRES cur_type == "two_down" — bar must be actively extending lower, not just sitting below VWAP
+// This cuts low-conviction entries that happen to be below VWAP without Strat momentum
+else if trend_dir == "DOWN" and close < vwap_val and cur_type == "two_down"
     signal_strategy := "vwap_hold"
     signal_direction := "SHORT"
-    signal_entry := vwap_val - syminfo.mintick * 2
-    signal_stop := vwap_val + syminfo.mintick * 28
-    raw_target := signal_entry - (signal_stop - signal_entry) * 3.0
-else if trend_dir == "UP" and close > vwap_val and close - vwap_val <= syminfo.mintick * 6
+    signal_entry := vwap_val - tick * 2
+    signal_stop  := vwap_val + tick * 28
+    raw_target   := signal_entry - (signal_stop - signal_entry) * 3.0
+
+// 7. PDH Reclaim LONG
+else if price_vs_pdh == "above" and trend_dir == "UP" and close > vwap_val
+    signal_strategy := "pdh_reclaim"
+    signal_direction := "LONG"
+    signal_entry := pd_high + tick * 2
+    signal_stop  := math.max(pd_high - tick * 26, signal_entry - tick * max_stop_ticks)
+    raw_target   := signal_entry + (signal_entry - signal_stop) * 2.2
+
+// PDL Reclaim SHORT
+else if price_vs_pdl == "below" and trend_dir == "DOWN" and close < vwap_val
+    signal_strategy := "pdl_reclaim"
+    signal_direction := "SHORT"
+    signal_entry := pd_low - tick * 2
+    signal_stop  := math.min(pd_low + tick * 26, signal_entry + tick * max_stop_ticks)
+    raw_target   := signal_entry - (signal_stop - signal_entry) * 2.2
+
+// 8. Continuation Pullback
+else if trend_dir == "UP" and close > vwap_val and close - vwap_val <= tick * 6
     signal_strategy := "continuation_pullback"
     signal_direction := "LONG"
     signal_entry := close
-    signal_stop := vwap_val - syminfo.mintick * 8
-    raw_target := signal_entry + (signal_entry - signal_stop) * 2.0
-else if trend_dir == "DOWN" and close < vwap_val and vwap_val - close <= syminfo.mintick * 6
+    signal_stop  := not na(orb_l) ? orb_l - tick * 4 : vwap_val - tick * 20
+    raw_target   := signal_entry + (signal_entry - signal_stop) * 2.2
+
+else if trend_dir == "DOWN" and close < vwap_val and vwap_val - close <= tick * 6
     signal_strategy := "continuation_pullback"
     signal_direction := "SHORT"
     signal_entry := close
-    signal_stop := vwap_val + syminfo.mintick * 8
-    raw_target := signal_entry - (signal_stop - signal_entry) * 2.0
+    signal_stop  := not na(orb_h) ? orb_h + tick * 4 : vwap_val + tick * 20
+    raw_target   := signal_entry - (signal_stop - signal_entry) * 2.2
 
 if not na(signal_entry) and not na(signal_stop) and not na(raw_target)
     signal_target := f_min_target(signal_direction, signal_entry, raw_target, min_target_pts)
-    signal_rr := f_rr(signal_direction, signal_entry, signal_stop, signal_target)
+    signal_rr     := f_rr(signal_direction, signal_entry, signal_stop, signal_target)
 
-bool has_signal = not na(signal_strategy)
-string event_type = has_signal ? "signal" : "heartbeat"
+bool   has_signal  = not na(signal_strategy)
+string event_type  = has_signal ? "signal" : "heartbeat"
 
-// BUILD JSON
+// ─── BUILD JSON ───────────────────────────────────────────────────────────────
 string msg = "{"
-msg := msg + "\"ticker\":" + "\"" + syminfo.ticker + "\"" + ","
-msg := msg + "\"timestamp\":" + str.tostring(time) + ","
-msg := msg + "\"open\":" + str.tostring(open, "#.####") + ","
-msg := msg + "\"high\":" + str.tostring(high, "#.####") + ","
-msg := msg + "\"low\":" + str.tostring(low, "#.####") + ","
-msg := msg + "\"close\":" + str.tostring(close, "#.####") + ","
-msg := msg + "\"volume\":" + str.tostring(volume) + ","
-msg := msg + "\"timeframe\":" + "\"" + timeframe.period + "\"" + ","
-msg := msg + "\"avg_volume\":" + str.tostring(math.round(avg_vol)) + ","
-msg := msg + "\"vwap\":" + f2j(vwap_val, "#.####") + ","
-msg := msg + "\"vwap_reclaimed\":" + str.tostring(vwap_reclaimed) + ","
-msg := msg + "\"orb_high\":" + f2j(orb_h, "#.##") + ","
-msg := msg + "\"orb_low\":" + f2j(orb_l, "#.##") + ","
-msg := msg + "\"orb_status\":" + "\"" + orb_status + "\"" + ","
-msg := msg + "\"london_orb_high\":" + f2j(london_orb_h, "#.##") + ","
-msg := msg + "\"london_orb_low\":" + f2j(london_orb_l, "#.##") + ","
-msg := msg + "\"london_orb_status\":" + (na(london_orb_h) ? "null" : "\"" + london_orb_status + "\"") + ","
-msg := msg + "\"market_condition\":" + "\"" + market_cond + "\"" + ","
-msg := msg + "\"trend_direction\":" + "\"" + trend_dir + "\"" + ","
-msg := msg + "\"trend_strength\":" + "\"" + trend_str + "\"" + ","
-msg := msg + "\"previous_day_high\":" + f2j(pd_high, "#.##") + ","
-msg := msg + "\"previous_day_low\":" + f2j(pd_low, "#.##") + ","
+msg := msg + "\"ticker\":"             + "\"" + syminfo.ticker + "\","
+msg := msg + "\"timestamp\":"          + str.tostring(time) + ","
+msg := msg + "\"open\":"               + str.tostring(open,  "#.####") + ","
+msg := msg + "\"high\":"               + str.tostring(high,  "#.####") + ","
+msg := msg + "\"low\":"                + str.tostring(low,   "#.####") + ","
+msg := msg + "\"close\":"              + str.tostring(close, "#.####") + ","
+msg := msg + "\"volume\":"             + str.tostring(volume) + ","
+msg := msg + "\"timeframe\":"          + "\"" + timeframe.period + "\","
+msg := msg + "\"avg_volume\":"         + str.tostring(math.round(avg_vol)) + ","
+msg := msg + "\"vwap\":"               + f2j(vwap_val,  "#.####") + ","
+msg := msg + "\"vwap_reclaimed\":"     + str.tostring(vwap_reclaimed) + ","
+msg := msg + "\"orb_high\":"           + f2j(orb_h,     "#.##") + ","
+msg := msg + "\"orb_low\":"            + f2j(orb_l,     "#.##") + ","
+msg := msg + "\"orb_status\":"         + "\"" + orb_status + "\","
+msg := msg + "\"london_orb_high\":"    + f2j(london_orb_h, "#.##") + ","
+msg := msg + "\"london_orb_low\":"     + f2j(london_orb_l, "#.##") + ","
+msg := msg + "\"london_orb_status\":"  + (na(london_orb_h) ? "null" : "\"" + london_orb_status + "\"") + ","
+msg := msg + "\"market_condition\":"   + "\"" + market_cond + "\","
+msg := msg + "\"trend_direction\":"    + "\"" + trend_dir + "\","
+msg := msg + "\"trend_strength\":"     + "\"" + trend_str + "\","
+msg := msg + "\"previous_day_high\":"  + f2j(pd_high, "#.##") + ","
+msg := msg + "\"previous_day_low\":"   + f2j(pd_low,  "#.##") + ","
 msg := msg + "\"previous_day_close\":" + f2j(pd_close, "#.##") + ","
-msg := msg + "\"price_vs_pdh\":" + "\"" + price_vs_pdh + "\"" + ","
-msg := msg + "\"price_vs_pdl\":" + "\"" + price_vs_pdl + "\"" + ","
-msg := msg + "\"previous_bar_high\":" + f2j(high[1], "#.####") + ","
-msg := msg + "\"previous_bar_low\":" + f2j(low[1], "#.####") + ","
+msg := msg + "\"price_vs_pdh\":"       + "\"" + price_vs_pdh + "\","
+msg := msg + "\"price_vs_pdl\":"       + "\"" + price_vs_pdl + "\","
+msg := msg + "\"previous_bar_high\":"  + f2j(high[1], "#.####") + ","
+msg := msg + "\"previous_bar_low\":"   + f2j(low[1],  "#.####") + ","
 msg := msg + "\"two_bars_back_high\":" + f2j(high[2], "#.####") + ","
-msg := msg + "\"two_bars_back_low\":" + f2j(low[2], "#.####") + ","
-msg := msg + "\"current_bar_type\":" + "\"" + cur_type + "\"" + ","
-msg := msg + "\"previous_bar_type\":" + "\"" + prev_type + "\"" + ","
-msg := msg + "\"two_bars_back_type\":" + "\"" + t2b_type + "\"" + ","
-msg := msg + "\"strat_sequence\":" + s2j(strat_seq == "no_sequence" ? na : strat_seq) + ","
-msg := msg + "\"strat_trigger\":" + s2j(strat_trigger_ctx) + ","
-msg := msg + "\"strat_direction\":" + s2j(strat_dir_ctx) + ","
-msg := msg + "\"signal_strategy\":" + s2j(signal_strategy) + ","
-msg := msg + "\"signal_direction\":" + s2j(signal_direction) + ","
-msg := msg + "\"entry\":" + f2j(signal_entry, "#.####") + ","
-msg := msg + "\"stop\":" + f2j(signal_stop, "#.####") + ","
-msg := msg + "\"target\":" + f2j(signal_target, "#.####") + ","
-msg := msg + "\"rr_ratio\":" + f2j(signal_rr, "#.####") + ","
-msg := msg + "\"gex_flip\":" + f_opt2j(i_gex_flip, "#.##") + ","
-msg := msg + "\"call_wall\":" + f_opt2j(i_call_wall, "#.##") + ","
-msg := msg + "\"put_wall\":" + f_opt2j(i_put_wall, "#.##") + ","
-msg := msg + "\"hvl\":" + f_opt2j(i_hvl, "#.##") + ","
-msg := msg + "\"max_pain\":" + f_opt2j(i_max_pain, "#.##") + ","
-msg := msg + "\"mid_upper\":" + f_opt2j(i_mid_upper, "#.##") + ","
-msg := msg + "\"mid_lower\":" + f_opt2j(i_mid_lower, "#.##") + ","
-msg := msg + "\"vol_trigger_up\":" + f_opt2j(i_vol_trigger_up, "#.##") + ","
-msg := msg + "\"vol_trigger_down\":" + f_opt2j(i_vol_trigger_down, "#.##") + ","
-msg := msg + "\"gex_regime\":" + s2j(i_gex_regime) + ","
-msg := msg + "\"delta_bias\":" + s2j(i_delta_bias) + ","
-msg := msg + "\"signa_grade\":" + s2j(i_signa_grade) + ","
-msg := msg + "\"signa_score\":" + f_opt2j(i_signa_score, "#.##") + ","
-msg := msg + "\"signa_daily_direction\":" + s2j(i_signa_daily_direction) + ","
+msg := msg + "\"two_bars_back_low\":"  + f2j(low[2],  "#.####") + ","
+msg := msg + "\"current_bar_type\":"   + "\"" + cur_type  + "\","
+msg := msg + "\"previous_bar_type\":"  + "\"" + prev_type + "\","
+msg := msg + "\"two_bars_back_type\":" + "\"" + t2b_type  + "\","
+msg := msg + "\"strat_sequence\":"     + s2j(strat_seq == "no_sequence" ? na : strat_seq) + ","
+msg := msg + "\"strat_trigger\":"      + s2j(strat_trigger_ctx) + ","
+msg := msg + "\"strat_direction\":"    + s2j(strat_dir_ctx) + ","
+// BOS / MSS (NEW)
+msg := msg + "\"bos_direction\":"      + s2j(bos_direction) + ","
+msg := msg + "\"mss_direction\":"      + s2j(mss_direction) + ","
+// Advisory bracket
+msg := msg + "\"signal_strategy\":"    + s2j(signal_strategy) + ","
+msg := msg + "\"signal_direction\":"   + s2j(signal_direction) + ","
+msg := msg + "\"entry\":"              + f2j(signal_entry,  "#.####") + ","
+msg := msg + "\"stop\":"               + f2j(signal_stop,   "#.####") + ","
+msg := msg + "\"target\":"             + f2j(signal_target, "#.####") + ","
+msg := msg + "\"rr_ratio\":"           + f2j(signal_rr,     "#.####") + ","
+// GEX
+msg := msg + "\"gex_flip\":"           + f_opt2j(i_gex_flip,         "#.##") + ","
+msg := msg + "\"call_wall\":"          + f_opt2j(i_call_wall,        "#.##") + ","
+msg := msg + "\"put_wall\":"           + f_opt2j(i_put_wall,         "#.##") + ","
+msg := msg + "\"hvl\":"                + f_opt2j(i_hvl,              "#.##") + ","
+msg := msg + "\"max_pain\":"           + f_opt2j(i_max_pain,         "#.##") + ","
+msg := msg + "\"mid_upper\":"          + f_opt2j(i_mid_upper,        "#.##") + ","
+msg := msg + "\"mid_lower\":"          + f_opt2j(i_mid_lower,        "#.##") + ","
+msg := msg + "\"vol_trigger_up\":"     + f_opt2j(i_vol_trigger_up,   "#.##") + ","
+msg := msg + "\"vol_trigger_down\":"   + f_opt2j(i_vol_trigger_down, "#.##") + ","
+msg := msg + "\"gex_regime\":"         + s2j(i_gex_regime) + ","
+msg := msg + "\"delta_bias\":"         + s2j(i_delta_bias) + ","
+// Signa
+msg := msg + "\"signa_grade\":"            + s2j(i_signa_grade) + ","
+msg := msg + "\"signa_score\":"            + f_opt2j(i_signa_score, "#.##") + ","
+msg := msg + "\"signa_daily_direction\":"  + s2j(i_signa_daily_direction) + ","
 msg := msg + "\"signa_weekly_direction\":" + s2j(i_signa_weekly_direction) + ","
-msg := msg + "\"daily_bar_type\":" + s2j(daily_bar_type) + ","
-msg := msg + "\"daily_direction\":" + s2j(daily_direction) + ","
-msg := msg + "\"four_hour_bar_type\":" + s2j(four_hour_bar_type) + ","
+// HTF / FTFC
+msg := msg + "\"daily_bar_type\":"      + s2j(daily_bar_type)      + ","
+msg := msg + "\"daily_direction\":"     + s2j(daily_direction)     + ","
+msg := msg + "\"four_hour_bar_type\":"  + s2j(four_hour_bar_type)  + ","
 msg := msg + "\"four_hour_direction\":" + s2j(four_hour_direction) + ","
-msg := msg + "\"one_hour_bar_type\":" + s2j(one_hour_bar_type) + ","
-msg := msg + "\"one_hour_direction\":" + s2j(one_hour_direction) + ","
-msg := msg + "\"ftfc_direction\":" + s2j(ftfc_direction) + ","
-msg := msg + "\"ftfc_aligned\":" + str.tostring(ftfc_aligned) + ","
-msg := msg + "\"supply_top\":" + f_opt2j(i_supply_top, "#.##") + ","
-msg := msg + "\"supply_bottom\":" + f_opt2j(i_supply_bottom, "#.##") + ","
-msg := msg + "\"supply_wavg\":" + f_opt2j(i_supply_wavg, "#.##") + ","
-msg := msg + "\"demand_top\":" + f_opt2j(i_demand_top, "#.##") + ","
-msg := msg + "\"demand_bottom\":" + f_opt2j(i_demand_bottom, "#.##") + ","
-msg := msg + "\"demand_wavg\":" + f_opt2j(i_demand_wavg, "#.##") + ","
-msg := msg + "\"hod\":" + f2j(hod, "#.##") + ","
-msg := msg + "\"lod\":" + f2j(lod, "#.##") + ","
+msg := msg + "\"one_hour_bar_type\":"   + s2j(one_hour_bar_type)   + ","
+msg := msg + "\"one_hour_direction\":"  + s2j(one_hour_direction)  + ","
+msg := msg + "\"ftfc_direction\":"      + s2j(ftfc_direction) + ","
+msg := msg + "\"ftfc_aligned\":"        + str.tostring(ftfc_aligned) + ","
+// Supply & Demand (auto-computed from pivot structure)
+msg := msg + "\"supply_top\":"          + f2j(supply_top,    "#.##") + ","
+msg := msg + "\"supply_bottom\":"       + f2j(supply_bottom, "#.##") + ","
+msg := msg + "\"supply_wavg\":"         + f2j(supply_wavg,   "#.##") + ","
+msg := msg + "\"demand_top\":"          + f2j(demand_top,    "#.##") + ","
+msg := msg + "\"demand_bottom\":"       + f2j(demand_bottom, "#.##") + ","
+msg := msg + "\"demand_wavg\":"         + f2j(demand_wavg,   "#.##") + ","
+// HOD / LOD / Weekly
+msg := msg + "\"hod\":"            + f2j(hod, "#.##") + ","
+msg := msg + "\"lod\":"            + f2j(lod, "#.##") + ","
 msg := msg + "\"prev_week_high\":" + f2j(pw_high, "#.##") + ","
-msg := msg + "\"prev_week_low\":" + f2j(pw_low, "#.##") + ","
-msg := msg + "\"ema_9\":" + f2j(ema_fast, "#.####") + ","
-msg := msg + "\"ema_21\":" + f2j(ema_slow, "#.####") + ","
-msg := msg + "\"ema_55\":" + f2j(ema_mid, "#.####") + ","
-msg := msg + "\"ema_200\":" + f2j(ema_long, "#.####") + ","
+msg := msg + "\"prev_week_low\":"  + f2j(pw_low,  "#.##") + ","
+// EMAs
+msg := msg + "\"ema_9\":"          + f2j(ema_fast, "#.####") + ","
+msg := msg + "\"ema_21\":"         + f2j(ema_slow, "#.####") + ","
+msg := msg + "\"ema_55\":"         + f2j(ema_mid,  "#.####") + ","
+msg := msg + "\"ema_200\":"        + f2j(ema_long, "#.####") + ","
 msg := msg + "\"ema_9_above_21\":" + str.tostring(ema_9_above_21) + ","
-msg := msg + "\"has_signal\":" + str.tostring(has_signal) + ","
-msg := msg + "\"event_type\":\"" + event_type + "\""
+msg := msg + "\"has_signal\":"     + str.tostring(has_signal) + ","
+msg := msg + "\"event_type\":"     + "\"" + event_type + "\""
 msg := msg + "}"
 
-// FIRE ALERT - sends every confirmed London/NY session bar.
-// Backend decides TRADE vs NO_TRADE. This keeps the dashboard fresh.
+// ─── FIRE ALERT ───────────────────────────────────────────────────────────────
 bool should_send = i_alert_on and barstate.isconfirmed and in_any_session
-
 if should_send
     alert(msg, alert.freq_once_per_bar_close)
 
-// CHARTS
-plot(ema_fast, "EMA 9",   color=color.new(color.aqua, 30))
+// ─── CHARTS ───────────────────────────────────────────────────────────────────
+plot(ema_fast, "EMA 9",   color=color.new(color.aqua,   30))
 plot(ema_slow, "EMA 21",  color=color.new(color.orange, 30))
 plot(ema_mid,  "EMA 55",  color=color.new(color.purple, 40))
-plot(ema_long, "EMA 200", color=color.new(color.gray, 40))
+plot(ema_long, "EMA 200", color=color.new(color.gray,   40))
 plot(vwap_val, "VWAP",    color=color.new(color.yellow, 20))
 plot(hod, "HOD", color=color.new(color.lime, 60), style=plot.style_stepline, linewidth=1)
 plot(lod, "LOD", color=color.new(color.red,  60), style=plot.style_stepline, linewidth=1)
 
-orb_h_plot = in_ny or in_ny[1] ? orb_h : na
-orb_l_plot = in_ny or in_ny[1] ? orb_l : na
-plot(orb_h_plot, "NY ORB High", color=color.new(color.lime, 40), style=plot.style_stepline)
-plot(orb_l_plot, "NY ORB Low", color=color.new(color.red, 40), style=plot.style_stepline)
-
+orb_h_plot = in_ny     or in_ny[1]     ? orb_h : na
+orb_l_plot = in_ny     or in_ny[1]     ? orb_l : na
 l_orb_h_plot = in_london or in_london[1] ? london_orb_h : na
 l_orb_l_plot = in_london or in_london[1] ? london_orb_l : na
-plot(l_orb_h_plot, "London ORB High", color=color.new(color.teal, 50), style=plot.style_stepline)
-plot(l_orb_l_plot, "London ORB Low", color=color.new(color.orange, 50), style=plot.style_stepline)
+plot(orb_h_plot,   "NY ORB High",     color=color.new(color.lime,   40), style=plot.style_stepline)
+plot(orb_l_plot,   "NY ORB Low",      color=color.new(color.red,    40), style=plot.style_stepline)
+plot(l_orb_h_plot, "London ORB High", color=color.new(color.teal,   50), style=plot.style_stepline)
+plot(l_orb_l_plot, "London ORB Low",  color=color.new(color.orange, 50), style=plot.style_stepline)
+
+// Supply & Demand zone visualization
+plot(supply_top,    "Supply Top",    color=color.new(color.red,  60), style=plot.style_stepline, linewidth=1)
+plot(supply_bottom, "Supply Bottom", color=color.new(color.red,  80), style=plot.style_stepline, linewidth=1)
+plot(demand_top,    "Demand Top",    color=color.new(color.blue, 80), style=plot.style_stepline, linewidth=1)
+plot(demand_bottom, "Demand Bottom", color=color.new(color.blue, 60), style=plot.style_stepline, linewidth=1)

@@ -99,7 +99,7 @@ async def _lifespan(app: FastAPI):
     if not _configured_webhook_secret():
         raise RuntimeError(
             "WEBHOOK_SECRET env var is required but not set. "
-            "Set it in Railway dashboard before deploying."
+            "Set WEBHOOK_SECRET in the server .env before deploying."
         )
     yield
 

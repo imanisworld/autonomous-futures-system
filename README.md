@@ -123,7 +123,7 @@ venv/bin/supervisord -c supervisord.conf
 venv/bin/supervisorctl -c supervisord.conf status
 ```
 
-For Railway-style deployment, the included `Procfile` starts:
+For Hetzner-style deployment, the included `Procfile` starts:
 
 ```bash
 HOST=0.0.0.0 python -m webhook

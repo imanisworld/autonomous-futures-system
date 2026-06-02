@@ -11,7 +11,7 @@ Flow per bar:
   4. If approved: execute a bracket order via the configured broker and log it.
   5. Return a structured result dict.
 
-Broker selection is intentionally paper-only for Railway deployment.
+Broker selection is intentionally paper-only for Hetzner deployment.
 Position resolution uses PaperBroker simulated fills and never routes orders to
 IBKR or Tradovate.
 """
