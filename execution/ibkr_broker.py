@@ -11,8 +11,53 @@ import logging
 import os
 import time
 from dataclasses import dataclass
+from datetime import date, timedelta
 from types import SimpleNamespace
 from typing import Any, Callable, Optional
+
+
+# ── Contract auto-roll ────────────────────────────────────────────────────────
+# CME micro futures (MES, MNQ, MGC, MCL) expire on the 3rd Friday of each
+# quarter month (Mar/Jun/Sep/Dec).  We roll ROLL_DAYS_BEFORE expiry so the
+# bot never tries to trade an expired contract.
+_QUARTER_MONTHS = (3, 6, 9, 12)
+_ROLL_DAYS_BEFORE = 5
+
+
+def _third_friday(year: int, month: int) -> date:
+    """Return the 3rd Friday of the given month."""
+    first = date(year, month, 1)
+    days_to_fri = (4 - first.weekday()) % 7   # 4 = Friday
+    return first + timedelta(days=days_to_fri + 14)
+
+
+def front_month_contract(today: date | None = None) -> str:
+    """
+    Return YYYYMM for the active front-month quarterly contract.
+    Rolls _ROLL_DAYS_BEFORE days before the 3rd-Friday expiry.
+    The IBKR_CONTRACT_MONTH env var overrides this when set.
+    """
+    override = os.getenv("IBKR_CONTRACT_MONTH", "").strip()
+    if override:
+        return override
+
+    d = today or date.today()
+    for month in _QUARTER_MONTHS:
+        if d.month <= month:
+            exp = _third_friday(d.year, month)
+            if d < exp - timedelta(days=_ROLL_DAYS_BEFORE):
+                return f"{d.year}{month:02d}"
+            # Within roll window — step to next quarter
+            idx = _QUARTER_MONTHS.index(month)
+            if idx + 1 < len(_QUARTER_MONTHS):
+                nm = _QUARTER_MONTHS[idx + 1]
+                return f"{d.year}{nm:02d}"
+            return f"{d.year + 1}{_QUARTER_MONTHS[0]:02d}"
+    # d.month > 12 is impossible, but handle year-end roll
+    exp = _third_friday(d.year, 12)
+    if d < exp - timedelta(days=_ROLL_DAYS_BEFORE):
+        return f"{d.year}12"
+    return f"{d.year + 1}{_QUARTER_MONTHS[0]:02d}"
 
 from dotenv import load_dotenv
 
@@ -358,10 +403,12 @@ class IBKRBroker(BrokerInterface):
             f"IBKR_{instrument.upper()}_EXCHANGE",
             self.FUTURE_EXCHANGES.get(instrument.upper(), "CME"),
         ).strip()
+        # Per-instrument override → global override → auto-computed front month
         contract_month = (
             os.getenv(f"IBKR_{instrument.upper()}_CONTRACT_MONTH", "").strip()
-            or os.getenv("IBKR_CONTRACT_MONTH", "").strip()
+            or front_month_contract()
         )
+        logger.debug("Contract month for %s: %s", instrument, contract_month)
         if Future is None:
             return SimpleNamespace(
                 symbol=instrument.upper(),
