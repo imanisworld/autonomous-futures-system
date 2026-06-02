@@ -37,14 +37,14 @@ sessions:
 # entries are blocked by default unless a matching window has allow: true.
 session_windows:
   asian:
+    - start: "19:00"
+      end: "22:00"
+      allow: true
+      note: "Evening test window — NY close through 10pm ET"
     - start: "02:00"
       end: "04:00"
       allow: true
       note: "London pre-open and overlap"
-    - start: "20:00"
-      end: "21:00"
-      allow: false
-      note: "Tokyo open, often fakeout"
     - default: false
 
 session_hours_et:

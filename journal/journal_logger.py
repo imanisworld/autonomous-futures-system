@@ -206,13 +206,39 @@ class JournalLogger:
                 else:
                     has_open_position = True
 
-        # Count trailing consecutive losses
+        # Count trailing consecutive losses and wins from outcome history
         consecutive_losses = 0
         for r in reversed(last_outcomes):
             if r == "LOSS":
                 consecutive_losses += 1
             else:
                 break
+
+        consecutive_wins = 0
+        for r in reversed(last_outcomes):
+            if r in ("WIN", "BREAKEVEN"):
+                consecutive_wins += 1
+            else:
+                break
+
+        # Derive session-start P&L and time from the first approved trade per session.
+        # Used by the early-session loss floor check in RiskEngine.
+        session_start_pnl: dict = {}
+        session_start_time: dict = {}
+        running_pnl = 0.0
+        for entry in entries:
+            rc = entry.get("risk_check") or {}
+            if entry.get("decision") == "TRADE" and rc.get("result") == "APPROVED":
+                session = entry.get("session") or ""
+                if session and session not in session_start_pnl:
+                    session_start_pnl[session] = running_pnl
+                    ts = _parse_ts(entry.get("ts"))
+                    if ts:
+                        session_start_time[session] = ts
+            outcome = (entry.get("outcome") or {})
+            pnl = outcome.get("pnl_dollars")
+            if isinstance(pnl, (int, float)):
+                running_pnl += float(pnl)
 
         daily_state = DailyState(
             trade_count=trade_count,
@@ -223,6 +249,9 @@ class JournalLogger:
             account_balance=None,
             realized_pnl_dollars=round(realized_pnl, 2),
             last_loss_at=last_loss_at,
+            consecutive_wins=consecutive_wins,
+            session_start_pnl=session_start_pnl,
+            session_start_time=session_start_time,
         )
         for entry in entries:
             decision = entry.get("decision")

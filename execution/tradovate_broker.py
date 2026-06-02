@@ -337,9 +337,18 @@ class TradovateBroker(BrokerInterface):
                     "direction": pos.direction,
                     "qty": pos.quantity,
                 }
+                # liquidateposition requires integer contractId, not symbol string
+                try:
+                    contract_id = self._find_contract_id(pos.instrument)
+                except Exception as exc:
+                    logger.warning("Could not resolve contract ID for liquidation: %s", exc)
+                    contract_id = None
+                if contract_id is None:
+                    result["error"] = f"Could not resolve contract ID for {pos.instrument} — position not closed"
+                    return result
                 liq = self._post("/order/liquidateposition", {
                     "accountId": self._account_id,
-                    "contractId": pos.instrument,
+                    "contractId": contract_id,
                     "admin": False,
                 })
                 logger.info("Tradovate liquidateposition response: %s", liq)

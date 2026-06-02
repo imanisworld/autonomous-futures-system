@@ -414,7 +414,8 @@ class RiskEngine:
         """Block entries if session P&L fell below the floor in the opening window.
 
         Prevents revenge trading in the first N minutes of a session. The floor
-        is measured from the P&L at session open, not from the daily total.
+        is measured from P&L at session open, derived from session_start_pnl
+        which is populated when daily_state is built from the journal.
         """
         floor = float(getattr(self.config, "early_session_loss_floor", 0) or 0)
         window_minutes = int(getattr(self.config, "early_session_minutes", 30) or 30)
@@ -424,19 +425,19 @@ class RiskEngine:
         session = setup.session
         entry_et = setup.entry_time.astimezone(_ET)
 
-        # Record session start time and P&L on first entry of the session
-        if session not in daily_state.session_start_time:
-            daily_state.session_start_time[session] = setup.entry_time
-            daily_state.session_start_pnl[session] = daily_state.realized_pnl_dollars
+        # session_start_pnl is populated by journal_logger when building DailyState.
+        # If not present for this session, nothing has traded yet — floor not applicable.
+        if session not in daily_state.session_start_pnl:
+            return None
 
-        session_start = daily_state.session_start_time[session]
-        session_start_et = session_start.astimezone(_ET)
-        minutes_elapsed = (entry_et - session_start_et).total_seconds() / 60
+        session_start = daily_state.session_start_time.get(session)
+        if session_start:
+            session_start_et = session_start.astimezone(_ET)
+            minutes_elapsed = (entry_et - session_start_et).total_seconds() / 60
+            if minutes_elapsed > window_minutes:
+                return None  # outside the early window
 
-        if minutes_elapsed > window_minutes:
-            return None  # outside the early window — floor no longer applies
-
-        pnl_at_open = daily_state.session_start_pnl.get(session, daily_state.realized_pnl_dollars)
+        pnl_at_open = daily_state.session_start_pnl[session]
         session_pnl = daily_state.realized_pnl_dollars - pnl_at_open
 
         if session_pnl <= floor:

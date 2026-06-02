@@ -187,8 +187,22 @@ def process_alert(
                         "avgCost": float(open_pos["entry"]),
                     })()
                 )
-                ibkr._last_order_ids = []  # order IDs not persisted — rely on position check
+                ibkr._last_order_ids = []
                 fill = ibkr.resolve_position()
+            elif broker_type == "tradovate":
+                from execution.tradovate_broker import TradovateBroker, TradovateConfig
+                from execution.broker_interface import Position as _Position
+                tv = TradovateBroker(config=TradovateConfig.from_env())
+                tv._last_position = _Position(
+                    instrument=open_pos["instrument"] or state.instrument,
+                    direction=open_pos["direction"],
+                    entry_price=float(open_pos["entry"]),
+                    stop=float(open_pos["stop"]),
+                    target=float(open_pos["target"]),
+                    quantity=int(open_pos.get("contracts", 1)),
+                    open=True,
+                )
+                fill = tv.resolve_position()
             else:
                 broker = PaperBroker(
                     starting_balance=journal.get_account_balance(
@@ -217,7 +231,7 @@ def process_alert(
             # In either case, force-close at the current bar's close price so
             # the system never stays blocked by an unresolvable open position.
             # IBKR mode: skip — IBKR manages the bracket; None just means still open.
-            if fill is None and broker_type != "ibkr":
+            if fill is None and broker_type == "paper":
                 entry_price = float(open_pos["entry"])
                 price_ratio = abs(payload.close - entry_price) / entry_price if entry_price else 1.0
                 position_age_hours: float = 999.0
