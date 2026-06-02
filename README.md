@@ -132,6 +132,9 @@ HOST=0.0.0.0 python -m webhook
 The server respects the platform `PORT` environment variable and defaults to
 `8000` locally.
 
+For Hetner VPS deployment with `systemd` and `nginx`, see
+`deploy/hetner/README.md`.
+
 TradingView needs a public HTTPS URL, so expose local port `8000` with a tunnel
 and paste the resulting URL plus `/webhook/alert` into TradingView's webhook
 field.
