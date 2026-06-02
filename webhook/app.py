@@ -229,7 +229,22 @@ async def manual_action(
     action = str(body.get("action", "")).upper().strip()
 
     if action == "STATUS":
-        return JSONResponse(content=_broker_status())
+        status = _broker_status()
+        connected = status.get("connected", False)
+        broker = status.get("broker", "unknown")
+        balance = status.get("account_balance")
+        pos = status.get("position")
+        note_parts = [f"Broker: {broker}", f"Connected: {connected}"]
+        if balance is not None:
+            note_parts.append(f"Balance: ${balance:,.0f}")
+        if pos:
+            note_parts.append(f"Position: {pos.get('direction')} {pos.get('qty')}x {pos.get('instrument')}")
+        return JSONResponse(content={
+            "ok": connected,
+            "action": "STATUS",
+            "note": " · ".join(note_parts),
+            **status,
+        })
 
     if action == "CLOSE_ALL":
         return JSONResponse(content=_manual_close_all())
