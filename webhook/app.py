@@ -181,9 +181,9 @@ async def receive_alert(
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard() -> HTMLResponse:
-    """Read-only operator dashboard."""
-    status = _dashboard_payload(date.today())
-    return HTMLResponse(_render_dashboard(status))
+    """Mobile operator dashboard (static SPA, polls /status/* endpoints)."""
+    html = (_static / "dashboard.html").read_text(encoding="utf-8")
+    return HTMLResponse(html)
 
 
 @app.get("/health")

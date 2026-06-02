@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#080e08">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="RSNTL">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/static/icon-192.png">
+  <title>RSNTL</title>
+  <style>
+    :root {
+      --bg:     #080c08;
+      --panel:  #0d160d;
+      --line:   #1a301a;
+      --line2:  #263e26;
+      --text:   #c8e8c0;
+      --muted:  #5a7a58;
+      --green:  #1ae86a;
+      --red:    #ee4444;
+      --orange: #e8a030;
+      --amber:  #e8c030;
+      --cyan:   #30d8e0;
+      --white:  #f0f4f0;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    html, body { height: 100%; overflow: hidden; background: var(--bg); }
+    body {
+      color: var(--text);
+      font-family: 'JetBrains Mono', 'Courier New', ui-monospace, monospace;
+      font-size: 13px;
+      display: flex;
+      flex-direction: column;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    /* ── Top mode toggle ───────────────────────────────────── */
+    .top-tabs {
+      display: flex;
+      border-bottom: 1px solid var(--line);
+      flex-shrink: 0;
+      padding-top: env(safe-area-inset-top, 0px);
+      background: var(--panel);
+    }
+    .top-tab {
+      flex: 1;
+      background: none;
+      border: 1px solid transparent;
+      color: var(--muted);
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      padding: 13px 8px;
+      cursor: pointer;
+      text-align: center;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .top-tab.active {
+      color: var(--white);
+      border-color: var(--orange);
+    }
+
+    /* ── App header ────────────────────────────────────────── */
+    .app-header {
+      padding: 10px 16px 6px;
+      flex-shrink: 0;
+    }
+    .header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .header-title {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      color: var(--white);
+    }
+    .header-title .sep { color: var(--muted); }
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .conn-badge {
+      font-family: inherit;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      padding: 4px 10px;
+      border-radius: 4px;
+    }
+    .conn-badge.offline { color: #fff; background: #7a1212; border: 1px solid var(--red); }
+    .conn-badge.online  { color: var(--green); background: #072010; border: 1px solid #1a5028; }
+    .refresh-btn {
+      background: none;
+      border: 1px solid var(--line2);
+      border-radius: 4px;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 15px;
+      width: 28px; height: 28px;
+      display: flex; align-items: center; justify-content: center;
+      transition: color 0.15s;
+    }
+    .refresh-btn:active { color: var(--green); }
+    .meta-row {
+      color: var(--muted);
+      font-size: 10px;
+      letter-spacing: 0.5px;
+      margin-top: 4px;
+    }
+
+    /* ── Info strip ────────────────────────────────────────── */
+    .info-strip {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 10px;
+      padding: 6px 16px 8px;
+      border-bottom: 1px solid var(--line);
+      flex-shrink: 0;
+    }
+    .info-item { font-size: 10px; letter-spacing: 0.3px; color: var(--muted); }
+    .info-item .v { font-weight: 700; }
+    .v.red    { color: var(--red); }
+    .v.green  { color: var(--green); }
+    .v.cyan   { color: var(--cyan); }
+    .v.orange { color: var(--orange); }
+    .v.amber  { color: var(--amber); }
+    .v.muted  { color: var(--muted); }
+
+    /* ── Alert bar ─────────────────────────────────────────── */
+    .alert-bar {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      background: #180908;
+      border-bottom: 1px solid #4a1414;
+      flex-shrink: 0;
+    }
+    .alert-bar.show { display: flex; }
+    .alert-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--red);
+      flex-shrink: 0;
+      animation: blink 1.4s ease infinite;
+    }
+    @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+    .alert-text { color: var(--red); font-size: 12px; font-weight: 600; }
+
+    /* ── Scrollable views ──────────────────────────────────── */
+    .view {
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 12px 12px 8px;
+      display: none;
+    }
+    .view.active { display: block; }
+
+    /* ── Panels ────────────────────────────────────────────── */
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 14px;
+      margin-bottom: 10px;
+    }
+    .ph {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .pt {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      color: var(--muted);
+    }
+    .pb {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+    .pb.green  { color: var(--green); }
+    .pb.amber  { color: var(--amber); }
+    .pb.orange { color: var(--orange); }
+    .pb.red    { color: var(--red); }
+    .pb.muted  { color: var(--muted); }
+
+    /* ── Risk ladder ───────────────────────────────────────── */
+    .risk-btns {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .rb {
+      background: #0a100a;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      color: var(--muted);
+      font-family: inherit;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      padding: 10px 2px;
+      text-align: center;
+      cursor: default;
+      transition: all 0.2s;
+    }
+    .rb.st-clear  { background: #0a2010; border-color: #1a5a28; border-bottom: 2px solid var(--green); color: var(--green); }
+    .rb.st-watch  { background: #1a1600; border-color: #4a3a00; border-bottom: 2px solid var(--amber); color: var(--amber); }
+    .rb.st-defend { background: #1a1000; border-color: #5a3200; border-bottom: 2px solid var(--orange); color: var(--orange); }
+    .rb.st-locked { background: #1a0808; border-color: #5a1414; border-bottom: 2px solid var(--red); color: var(--red); }
+    .rl-msg { font-size: 12px; color: var(--green); }
+    .rl-msg.amber  { color: var(--amber); }
+    .rl-msg.orange { color: var(--orange); }
+    .rl-msg.red    { color: var(--red); }
+
+    /* ── Stats grid ────────────────────────────────────────── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .stat-card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 14px;
+    }
+    .sl {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .sv {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--green);
+      line-height: 1.1;
+    }
+    .sv.red   { color: var(--red); }
+    .sv.amber { color: var(--amber); }
+    .ss { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+    /* ── Data rows (futures / risk tabs) ───────────────────── */
+    .drow {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding: 10px 0;
+      border-top: 1px solid var(--line);
+      gap: 12px;
+    }
+    .drow:first-child { border-top: none; }
+    .drow .dl { font-size: 10px; color: var(--muted); letter-spacing: 0.5px; padding-top: 2px; }
+    .drow .dv { font-size: 13px; font-weight: 700; text-align: right; word-break: break-word; }
+    .dv.green  { color: var(--green); }
+    .dv.red    { color: var(--red); }
+    .dv.amber  { color: var(--amber); }
+    .dv.orange { color: var(--orange); }
+    .dv.muted  { color: var(--muted); }
+
+    /* ── Log entries ───────────────────────────────────────── */
+    .log-entry {
+      padding: 10px 0;
+      border-top: 1px solid var(--line);
+    }
+    .log-entry:first-child { border-top: none; }
+    .log-time { font-size: 10px; color: var(--muted); margin-bottom: 4px; }
+    .log-dec  { font-size: 13px; font-weight: 700; }
+    .log-reason { font-size: 11px; color: var(--muted); margin-top: 2px; word-break: break-word; }
+    .log-outcome { font-size: 11px; margin-top: 3px; }
+
+    /* ── Position pill ─────────────────────────────────────── */
+    .pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1px;
+    }
+    .pill-long  { background: #0a2010; color: var(--green); border: 1px solid #1a5028; }
+    .pill-short { background: #1a0808; color: var(--red);   border: 1px solid #5a1414; }
+    .pill-flat  { background: #111;    color: var(--muted); border: 1px solid var(--line); }
+
+    /* ── Bottom nav ────────────────────────────────────────── */
+    .bottom-nav {
+      display: flex;
+      border-top: 1px solid var(--line);
+      background: var(--panel);
+      flex-shrink: 0;
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    .nb {
+      flex: 1;
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      padding: 10px 2px 8px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      transition: color 0.15s;
+    }
+    .nb.active { color: var(--orange); }
+    .nb svg { display: block; }
+
+    .scroll-pad { height: 4px; }
+  </style>
+</head>
+<body>
+
+  <!-- Top FUTURES / OPTIONS toggle -->
+  <div class="top-tabs">
+    <button class="top-tab active" data-mode="futures" onclick="setMode('futures')">FUTURES</button>
+    <button class="top-tab"        data-mode="options" onclick="setMode('options')">OPTIONS</button>
+  </div>
+
+  <!-- Header -->
+  <div class="app-header">
+    <div class="header-row">
+      <div class="header-title">RSNTL <span class="sep">/</span> <span id="view-title">HOME·FUT</span></div>
+      <div class="header-right">
+        <span id="conn-badge" class="conn-badge offline">OFFLINE</span>
+        <button class="refresh-btn" onclick="poll()" title="Refresh">⟳</button>
+      </div>
+    </div>
+    <div class="meta-row" id="meta-row">--:-- ET · POLL:30S · OFFLINE</div>
+  </div>
+
+  <!-- Info strip -->
+  <div class="info-strip">
+    <div class="info-item">API:<span id="i-api"     class="v red">OFFLINE</span></div>
+    <div class="info-item">MODE:<span id="i-mode"   class="v cyan">PAPER</span></div>
+    <div class="info-item">BROKER:<span id="i-broker" class="v muted">SIM</span></div>
+    <div class="info-item">RISK:<span id="i-risk"   class="v green">CLEAR</span></div>
+    <div class="info-item">LOCKOUT:<span id="i-lockout" class="v muted">NONE</span></div>
+    <div class="info-item">POLL:<span class="v muted">30S</span></div>
+  </div>
+
+  <!-- Alert bar -->
+  <div id="alert-bar" class="alert-bar show">
+    <div class="alert-dot"></div>
+    <span id="alert-msg" class="alert-text">Backend unavailable</span>
+  </div>
+
+  <!-- ── HOME view ─────────────────────────────────────────── -->
+  <div class="view active" id="view-home">
+    <!-- Risk ladder -->
+    <div class="panel">
+      <div class="ph">
+        <span class="pt">RISK LADDER</span>
+        <span id="rl-badge" class="pb green">● CLEAR</span>
+      </div>
+      <div class="risk-btns">
+        <div class="rb" id="rb-clear">CLEAR</div>
+        <div class="rb" id="rb-watch">WATCH</div>
+        <div class="rb" id="rb-defend">DEFEND</div>
+        <div class="rb" id="rb-locked">LOCKED</div>
+      </div>
+      <p id="rl-msg" class="rl-msg">All systems nominal — normal sizing permitted</p>
+    </div>
+
+    <!-- Stats 2×2 -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="sl">TODAY P&amp;L</div>
+        <div id="s-pnl" class="sv">$0.00</div>
+      </div>
+      <div class="stat-card">
+        <div class="sl">WIN RATE</div>
+        <div id="s-wr" class="sv">0.0%</div>
+        <div id="s-trades" class="ss">0/0 trades</div>
+      </div>
+      <div class="stat-card">
+        <div class="sl">BALANCE</div>
+        <div id="s-bal" class="sv">$0.00</div>
+      </div>
+      <div class="stat-card">
+        <div class="sl">PEAK</div>
+        <div id="s-peak" class="sv">$0.00</div>
+      </div>
+    </div>
+
+    <!-- System -->
+    <div class="panel">
+      <div class="ph">
+        <span class="pt">SYSTEM</span>
+        <span id="sys-badge" class="pb red">● OFFLINE</span>
+      </div>
+      <div id="sys-info" class="muted" style="font-size:11px;line-height:1.6;"></div>
+    </div>
+    <div class="scroll-pad"></div>
+  </div>
+
+  <!-- ── FUTURES view ───────────────────────────────────────── -->
+  <div class="view" id="view-futures">
+    <div class="panel">
+      <div class="ph">
+        <span class="pt">LATEST SIGNAL</span>
+        <span id="fu-age" class="pb muted">—</span>
+      </div>
+      <div id="fu-signal"></div>
+    </div>
+    <div class="panel">
+      <div class="ph">
+        <span class="pt">OPEN POSITION</span>
+      </div>
+      <div id="fu-pos"></div>
+    </div>
+    <div class="scroll-pad"></div>
+  </div>
+
+  <!-- ── OPTIONS view ──────────────────────────────────────── -->
+  <div class="view" id="view-options">
+    <div class="panel">
+      <div class="ph"><span class="pt">OPTIONS SCANNER</span></div>
+      <div style="font-size:12px;color:var(--muted);padding:4px 0;">
+        Use the <span style="color:var(--cyan)">/alert_ranker</span> service for live options data.<br>
+        No options positions active in paper mode.
+      </div>
+    </div>
+    <div class="scroll-pad"></div>
+  </div>
+
+  <!-- ── RISK view ─────────────────────────────────────────── -->
+  <div class="view" id="view-risk">
+    <div class="panel">
+      <div class="ph">
+        <span class="pt">RISK STATE</span>
+        <span id="rv-state" class="pb green">NORMAL</span>
+      </div>
+      <div id="rv-rows"></div>
+    </div>
+    <div class="scroll-pad"></div>
+  </div>
+
+  <!-- ── LOG view ──────────────────────────────────────────── -->
+  <div class="view" id="view-log">
+    <div class="panel">
+      <div class="ph">
+        <span class="pt">JOURNAL LOG</span>
+        <span id="log-date" class="pb muted"></span>
+      </div>
+      <div id="log-entries"></div>
+    </div>
+    <div class="scroll-pad"></div>
+  </div>
+
+  <!-- Bottom nav -->
+  <nav class="bottom-nav">
+    <button class="nb active" data-view="home" onclick="setView('home')">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+      </svg>
+      HOME
+    </button>
+    <button class="nb" data-view="futures" onclick="setView('futures')">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+      </svg>
+      FUTURES
+    </button>
+    <button class="nb" data-view="options" onclick="setView('options')">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"/>
+        <circle cx="12" cy="12" r="4"/>
+      </svg>
+      OPTIONS
+    </button>
+    <button class="nb" data-view="risk" onclick="setView('risk')">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/>
+      </svg>
+      RISK
+    </button>
+    <button class="nb" data-view="log" onclick="setView('log')">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <line x1="16" y1="13" x2="8" y2="13"/>
+        <line x1="16" y1="17" x2="8" y2="17"/>
+      </svg>
+      LOG
+    </button>
+  </nav>
+
+<script>
+  /* ── App state ───────────────────────────────────────────── */
+  let S = { connected: false, mode: 'futures', view: 'home',
+            today: null, risk: null, health: null, webhook: null };
+  let etStr = '--:-- ET';
+
+  /* ── Helpers ─────────────────────────────────────────────── */
+  function esc(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+  function fmtDollar(v, showSign) {
+    if (v == null) return '—';
+    const n = Number(v);
+    return (showSign ? (n >= 0 ? '+$' : '-$') : '$') + Math.abs(n).toFixed(2);
+  }
+  function fmtAge(ts) {
+    if (!ts) return '—';
+    try {
+      const s = Math.max(0, Math.round((Date.now() - new Date(ts).getTime()) / 1000));
+      if (s < 60)    return 'just now';
+      if (s < 3600)  return Math.floor(s / 60) + 'm ago';
+      if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+      return Math.floor(s / 86400) + 'd ago';
+    } catch(e) { return '—'; }
+  }
+  function fmtTime(ts) {
+    if (!ts) return '—';
+    try {
+      return new Date(ts).toLocaleTimeString('en-US', {
+        hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York'
+      });
+    } catch(e) { return (ts + '').slice(11, 16) || '—'; }
+  }
+  function updateClock() {
+    try {
+      etStr = new Intl.DateTimeFormat('en-US', {
+        hour: '2-digit', minute: '2-digit', hour12: false,
+        timeZone: 'America/New_York'
+      }).format(new Date()) + ' ET';
+    } catch(e) { etStr = '--:-- ET'; }
+  }
+  function drow(label, value, cls) {
+    return `<div class="drow"><span class="dl">${esc(label)}</span><span class="dv ${cls||''}">${esc(String(value))}</span></div>`;
+  }
+
+  /* ── Routing ─────────────────────────────────────────────── */
+  function setMode(m) {
+    S.mode = m;
+    document.querySelectorAll('.top-tab').forEach(t => t.classList.toggle('active', t.dataset.mode === m));
+    updateTitle();
+  }
+  function setView(v) {
+    S.view = v;
+    document.querySelectorAll('.nb').forEach(b => b.classList.toggle('active', b.dataset.view === v));
+    document.querySelectorAll('.view').forEach(c => c.classList.remove('active'));
+    document.getElementById('view-' + v).classList.add('active');
+    updateTitle();
+  }
+  function updateTitle() {
+    const names = { home:'HOME', futures:'FUTURES', options:'OPTIONS', risk:'RISK', log:'LOG' };
+    document.getElementById('view-title').textContent = names[S.view] + '·' + (S.mode === 'futures' ? 'FUT' : 'OPT');
+  }
+
+  /* ── Risk state derivation ───────────────────────────────── */
+  function getRiskState(risk, today) {
+    if (!risk) return 'CLEAR';
+    const conLoss = risk.consecutive_losses || 0;
+    const maxLoss = risk.max_consecutive_losses || 3;
+    if (conLoss >= maxLoss)              return 'LOCKED';
+    if (risk.drawdown_state === 'CRITICAL') return 'LOCKED';
+    if (risk.drawdown_state === 'ELEVATED') return 'WATCH';
+    if (conLoss >= Math.ceil(maxLoss * 0.6)) return 'DEFEND';
+    return 'CLEAR';
+  }
+
+  /* ── Renderers ───────────────────────────────────────────── */
+  function renderRiskLadder(state) {
+    const MAP = {
+      CLEAR:  { btnCls: 'st-clear',  badgeCls: 'green',  msgCls: '',      msg: 'All systems nominal — normal sizing permitted' },
+      WATCH:  { btnCls: 'st-watch',  badgeCls: 'amber',  msgCls: 'amber', msg: 'Elevated drawdown — reduce position size' },
+      DEFEND: { btnCls: 'st-defend', badgeCls: 'orange', msgCls: 'orange',msg: 'Approaching limits — minimize new exposure' },
+      LOCKED: { btnCls: 'st-locked', badgeCls: 'red',    msgCls: 'red',   msg: 'Position lockout — no new trades permitted' },
+    };
+    const m = MAP[state] || MAP.CLEAR;
+    ['clear','watch','defend','locked'].forEach(s => {
+      const el = document.getElementById('rb-' + s);
+      el.className = 'rb' + (s === state.toLowerCase() ? ' ' + m.btnCls : '');
+    });
+    const badge = document.getElementById('rl-badge');
+    badge.textContent = '● ' + state;
+    badge.className = 'pb ' + m.badgeCls;
+    const msgEl = document.getElementById('rl-msg');
+    msgEl.textContent = m.msg;
+    msgEl.className = 'rl-msg ' + m.msgCls;
+  }
+
+  function renderInfoStrip(riskState) {
+    const { connected, health, risk, today } = S;
+    const apiEl = document.getElementById('i-api');
+    apiEl.textContent = connected ? 'ONLINE' : 'OFFLINE';
+    apiEl.className = 'v ' + (connected ? 'green' : 'red');
+
+    if (health) {
+      const modeEl = document.getElementById('i-mode');
+      modeEl.textContent = health.paper_mode ? 'PAPER' : 'LIVE';
+      modeEl.className = 'v ' + (health.paper_mode ? 'cyan' : 'red');
+      const bmap = { paper:'SIM', ibkr:'IBKR', alpaca:'ALPACA' };
+      const bEl = document.getElementById('i-broker');
+      bEl.textContent = (bmap[health.broker] || (health.broker || 'SIM').toUpperCase());
+    }
+
+    const rc = { CLEAR:'green', WATCH:'amber', DEFEND:'orange', LOCKED:'red' };
+    const rEl = document.getElementById('i-risk');
+    rEl.textContent = riskState;
+    rEl.className = 'v ' + (rc[riskState] || 'muted');
+
+    const locked = today && risk &&
+      (risk.consecutive_losses || 0) >= (risk.max_consecutive_losses || 3);
+    const lEl = document.getElementById('i-lockout');
+    lEl.textContent = locked ? 'ACTIVE' : 'NONE';
+    lEl.className = 'v ' + (locked ? 'red' : 'muted');
+  }
+
+  function renderHome(riskState) {
+    const { connected, today, health } = S;
+
+    // alert bar
+    const ab = document.getElementById('alert-bar');
+    document.getElementById('alert-msg').textContent = 'Backend unavailable';
+    connected ? ab.classList.remove('show') : ab.classList.add('show');
+
+    // badge + meta
+    const cb = document.getElementById('conn-badge');
+    cb.textContent = connected ? 'ONLINE' : 'OFFLINE';
+    cb.className = 'conn-badge ' + (connected ? 'online' : 'offline');
+    document.getElementById('meta-row').textContent =
+      etStr + ' · POLL:30S · ' + (connected ? 'LIVE' : 'OFFLINE');
+
+    // stats
+    if (today) {
+      const pnl = Number(today.today_pnl_dollars || 0);
+      const pnlEl = document.getElementById('s-pnl');
+      pnlEl.textContent = (pnl >= 0 ? '+$' : '-$') + Math.abs(pnl).toFixed(2);
+      pnlEl.className = 'sv ' + (pnl < 0 ? 'red' : '');
+
+      const wr = today.win_rate || 0;
+      const wrEl = document.getElementById('s-wr');
+      wrEl.textContent = wr.toFixed(1) + '%';
+      wrEl.className = 'sv ' + (wr < 40 && (today.wins + today.losses) > 0 ? 'amber' : '');
+      document.getElementById('s-trades').textContent =
+        `${today.wins || 0}W / ${today.losses || 0}L · ${today.trade_count || 0}/${today.max_trades_per_day || 0}`;
+
+      document.getElementById('s-bal').textContent  = '$' + Number(today.account_balance || 0).toFixed(2);
+      document.getElementById('s-peak').textContent = '$' + Number(today.account_peak_balance || 0).toFixed(2);
+    }
+
+    // system
+    const sb = document.getElementById('sys-badge');
+    sb.textContent = connected ? '● ONLINE' : '● OFFLINE';
+    sb.className = 'pb ' + (connected ? 'green' : 'red');
+    if (health) {
+      const bmap = { paper:'SIM', ibkr:'IBKR', alpaca:'ALPACA' };
+      const broker = bmap[health.broker] || (health.broker || 'SIM').toUpperCase();
+      const mode   = health.paper_mode ? 'PAPER' : 'LIVE';
+      document.getElementById('sys-info').textContent = mode + ' · ' + broker + ' · WEBHOOK v1.0';
+    }
+  }
+
+  function renderFutures() {
+    const wh = S.webhook || {};
+    const ctx = wh.context || {};
+    const res = wh.result  || {};
+    document.getElementById('fu-age').textContent = fmtAge(wh.received_at);
+
+    const decColor = res.decision === 'TRADE' ? 'green' : res.decision === 'NO_TRADE' ? 'muted' : '';
+    const rows = [
+      ['INSTRUMENT', ctx.instrument || '—', ''],
+      ['SESSION',    ctx.session    || '—', ''],
+      ['CLOSE',      ctx.close      || '—', ''],
+      ['MARKET',     ctx.market_condition || '—', ''],
+      ['DECISION',   res.decision   || '—', decColor],
+      ['RISK',       res.risk       || '—', ''],
+    ];
+    document.getElementById('fu-signal').innerHTML = rows.map(([l,v,c]) => drow(l,v,c)).join('');
+
+    const pos = S.today && S.today.open_position;
+    if (pos && pos.direction) {
+      const dir = pos.direction.toUpperCase();
+      const pc  = dir === 'LONG' ? 'pill-long' : dir === 'SHORT' ? 'pill-short' : 'pill-flat';
+      document.getElementById('fu-pos').innerHTML = [
+        `<div class="drow"><span class="dl">DIRECTION</span><span class="dv"><span class="pill ${pc}">${esc(dir)}</span></span></div>`,
+        drow('INSTRUMENT', pos.instrument || '—', ''),
+        drow('ENTRY',      pos.entry      || '—', ''),
+      ].join('');
+    } else {
+      document.getElementById('fu-pos').innerHTML =
+        '<div class="drow"><span class="dl">POSITION</span><span class="dv muted">FLAT</span></div>';
+    }
+  }
+
+  function renderRisk() {
+    const risk = S.risk;
+    if (!risk) { document.getElementById('rv-rows').innerHTML = drow('STATUS','No data','muted'); return; }
+    const stateMap = { NORMAL:'green', ELEVATED:'amber', CRITICAL:'red' };
+    const el = document.getElementById('rv-state');
+    el.textContent = risk.drawdown_state || '—';
+    el.className   = 'pb ' + (stateMap[risk.drawdown_state] || 'muted');
+
+    const conL = risk.consecutive_losses || 0;
+    const maxL = risk.max_consecutive_losses || 3;
+    const dd   = Number(risk.drawdown_pct || 0);
+    document.getElementById('rv-rows').innerHTML = [
+      drow('DRAWDOWN',       dd.toFixed(2) + '%', dd > 5 ? 'red' : dd > 2 ? 'amber' : 'green'),
+      drow('DAILY LOSS',     '$'+(risk.daily_loss_used||0).toFixed(2)+' / $'+(risk.max_daily_loss||0).toFixed(2), ''),
+      drow('CONS. LOSSES',   conL+' / '+maxL, conL >= maxL ? 'red' : conL > 0 ? 'amber' : 'green'),
+      drow('MAX TRADES',     risk.max_trades || '—', ''),
+      drow('NEWS BLACKOUT',  risk.news_blackout ? 'ACTIVE' : 'NONE', risk.news_blackout ? 'amber' : 'muted'),
+    ].join('');
+  }
+
+  function renderLog() {
+    const today = S.today;
+    document.getElementById('log-date').textContent = today && today.date ? today.date.slice(5) : '';
+    const entries = (today && today.latest_entries) || [];
+    if (!entries.length) {
+      document.getElementById('log-entries').innerHTML =
+        '<div class="log-entry"><div class="muted" style="font-size:12px;">No entries today</div></div>';
+      return;
+    }
+    document.getElementById('log-entries').innerHTML = [...entries].reverse().map(e => {
+      const dec = e.decision || e.type || '—';
+      const dc  = dec === 'TRADE' ? 'green' : dec === 'NO_TRADE' ? 'muted' : '';
+      const out = e.outcome ? `${e.outcome}${e.pnl_dollars != null ? ' $'+Number(e.pnl_dollars).toFixed(2) : ''}` : '';
+      const oc  = out.includes('WIN') ? 'green' : out.includes('LOSS') ? 'red' : 'muted';
+      return `<div class="log-entry">
+        <div class="log-time">${esc(fmtTime(e.ts))} · ${esc(e.instrument||'')} · ${esc(e.session||'')}</div>
+        <div class="log-dec ${dc}">${esc(dec)}</div>
+        <div class="log-reason">${esc(e.reason||'')}</div>
+        ${out ? `<div class="log-outcome ${oc}">${esc(out)}</div>` : ''}
+      </div>`;
+    }).join('');
+  }
+
+  /* ── Full render pass ────────────────────────────────────── */
+  function render() {
+    const riskState = getRiskState(S.risk, S.today);
+    renderRiskLadder(riskState);
+    renderInfoStrip(riskState);
+    renderHome(riskState);
+    renderFutures();
+    renderRisk();
+    renderLog();
+  }
+
+  /* ── Data fetch ──────────────────────────────────────────── */
+  async function poll() {
+    try {
+      const [today, risk, health, webhook] = await Promise.all([
+        fetch('/status/today',          { cache:'no-store' }).then(r => r.json()),
+        fetch('/status/risk',           { cache:'no-store' }).then(r => r.json()),
+        fetch('/health',                { cache:'no-store' }).then(r => r.json()),
+        fetch('/status/latest-webhook', { cache:'no-store' }).then(r => r.json()),
+      ]);
+      S = { ...S, connected: true, today, risk, health, webhook };
+    } catch(e) {
+      S = { ...S, connected: false };
+    }
+    render();
+  }
+
+  /* ── Boot ────────────────────────────────────────────────── */
+  updateClock();
+  setInterval(updateClock, 15000);
+  poll();
+  setInterval(poll, 30000);
+</script>
+</body>
+</html>
