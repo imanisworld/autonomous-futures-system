@@ -365,6 +365,21 @@ async def status_history(days: int = Query(default=7, ge=1, le=30)) -> dict:
     return {"days": history}
 
 
+@app.get("/status/quote")
+async def status_quote(instrument: str = Query(default="MES")) -> dict:
+    """Return live price quote from Tradovate. Only works when BROKER=tradovate."""
+    broker_mode = os.getenv("BROKER", "paper").strip().lower()
+    if broker_mode != "tradovate":
+        return {"ok": False, "error": f"BROKER={broker_mode}, not tradovate"}
+    try:
+        from execution.tradovate_broker import TradovateBroker
+        broker = TradovateBroker()
+        return broker.get_quote(instrument)
+    except Exception as exc:
+        logger.exception("status_quote failed: %s", exc)
+        return {"ok": False, "error": str(exc)}
+
+
 @app.get("/status/latest-webhook")
 async def latest_webhook() -> dict:
     """Return the last TradingView payload and derived market context."""

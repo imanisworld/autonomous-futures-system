@@ -35,9 +35,13 @@ from execution.broker_interface import (
 
 logger = logging.getLogger(__name__)
 
-# MES contract spec
-_MES_TICK  = 0.25   # minimum price increment
-_MES_DOLLAR_PER_TICK = 1.25  # $1.25 per tick per contract
+# Per-instrument tick specs
+_TICK_SIZE: dict[str, float] = {
+    "MES": 0.25, "ES": 0.25, "MNQ": 0.25, "NQ": 0.25, "MGC": 0.10, "MCL": 0.01,
+}
+_TICK_VALUE: dict[str, float] = {
+    "MES": 1.25, "ES": 12.50, "MNQ": 0.50, "NQ": 5.00, "MGC": 1.00, "MCL": 1.00,
+}
 
 
 # ─── Config ───────────────────────────────────────────────────────────────────
@@ -187,6 +191,7 @@ class TradovateBroker(BrokerInterface):
 
     # ── BrokerInterface implementation ────────────────────────────────────────
 
+    @property
     def is_live(self) -> bool:
         return self.config.env == "live"
 
@@ -263,8 +268,13 @@ class TradovateBroker(BrokerInterface):
                     continue
                 direction = "LONG" if net > 0 else "SHORT"
                 entry = pos.get("netPrice") or pos.get("avgPrice") or 0.0
+                # contractId is an integer — look up the name from the contract cache
+                contract_id = pos.get("contractId")
+                instrument = self._contract_id_to_name(contract_id) or (
+                    self._last_position.instrument if self._last_position else "MES"
+                )
                 p = Position(
-                    instrument=pos.get("contractId", "MES"),
+                    instrument=instrument,
                     direction=direction,
                     entry_price=float(entry),
                     stop=self._last_position.stop if self._last_position else 0.0,
@@ -277,6 +287,21 @@ class TradovateBroker(BrokerInterface):
         except Exception as exc:
             logger.warning("Tradovate get_position failed: %s", exc)
         return self._last_position if (self._last_position and self._last_position.open) else None
+
+    def _contract_id_to_name(self, contract_id: int | None) -> str | None:
+        """Reverse-lookup contract name from ID. Falls back to None."""
+        if contract_id is None:
+            return None
+        try:
+            data = self._get(f"/contract/item?id={contract_id}")
+            name = data.get("name", "") or data.get("root", "")
+            # Strip expiry suffix — e.g. "MESM26" → "MES"
+            for root in ("MES", "ES", "MNQ", "NQ", "MGC", "MCL"):
+                if str(name).upper().startswith(root):
+                    return root
+        except Exception:
+            pass
+        return None
 
     def cancel_all(self) -> None:
         """Cancel all open orders."""
@@ -333,31 +358,32 @@ class TradovateBroker(BrokerInterface):
             pos = self.get_position()
             if pos and pos.open:
                 return None  # still open
-            # Position is gone — look at fill history to determine outcome
+            # Position is gone — capture before clearing, then look at fill history
+            last = self._last_position
             fills = self._get(f"/fill/list?accountId={self._account_id}")
             if isinstance(fills, list) and fills:
                 last_fill = fills[-1]
-                fill_price = float(last_fill.get("price", self._last_position.stop))
+                fill_price = float(last_fill.get("price", last.stop))
             else:
-                fill_price = self._last_position.stop
+                fill_price = last.stop
 
-            entry = self._last_position.entry_price
-            direction = self._last_position.direction
-            qty = self._last_position.quantity
-            ticks = (fill_price - entry) / _MES_TICK if direction == "LONG" else (entry - fill_price) / _MES_TICK
-            pnl_dollars = ticks * _MES_DOLLAR_PER_TICK * qty
-            result = "WIN" if pnl_dollars > 0 else "LOSS"
+            instrument = last.instrument
+            tick_size = _TICK_SIZE.get(instrument, 0.25)
+            tick_value = _TICK_VALUE.get(instrument, 1.25)
+            ticks = (fill_price - last.entry_price) / tick_size if last.direction == "LONG" else (last.entry_price - fill_price) / tick_size
+            pnl_dollars = round(ticks * tick_value * last.quantity, 2)
+            result = "WIN" if pnl_dollars > 0 else "LOSS" if pnl_dollars < 0 else "BREAKEVEN"
             exit_reason = "TARGET_HIT" if pnl_dollars > 0 else "STOP_HIT"
             self._last_position = None
             return Fill(
-                instrument=self._last_position.instrument if self._last_position else "MES",
-                direction=direction,
-                contracts=qty,
-                entry_price=entry,
+                instrument=instrument,
+                direction=last.direction,
+                contracts=last.quantity,
+                entry_price=last.entry_price,
                 exit_price=fill_price,
                 exit_reason=exit_reason,
                 result=result,
-                pnl_ticks=ticks,
+                pnl_ticks=round(ticks, 2),
                 pnl_dollars=pnl_dollars,
             )
         except Exception as exc:
@@ -373,6 +399,54 @@ class TradovateBroker(BrokerInterface):
         except Exception as exc:
             logger.warning("Tradovate get_account_balance failed: %s", exc)
             return None
+
+    def get_quote(self, instrument: str = "MES") -> dict:
+        """Get live price snapshot from Tradovate REST API."""
+        try:
+            if not self._authenticate():
+                return {"ok": False, "error": "not_authenticated"}
+            root = instrument.replace("1!", "").upper()
+            # Find front month contract
+            contract_id = None
+            symbol = root
+            try:
+                contract = self._get(f"/contract/find?name={root}")
+                symbol = contract.get("name", root)
+                contract_id = contract.get("id")
+            except Exception as ce:
+                logger.warning("Tradovate contract/find failed for %s: %s", root, ce)
+
+            # Get quote via contract ID or name
+            quote: dict = {}
+            try:
+                if contract_id:
+                    quote = self._get(f"/quote/item?id={contract_id}")
+                else:
+                    quote = self._get(f"/quote/find?name={symbol}")
+            except Exception as qe:
+                return {"ok": False, "error": f"quote_fetch_failed: {qe}", "symbol": symbol}
+
+            bid = quote.get("bid")
+            ask = quote.get("ofr") or quote.get("ask")
+            last = quote.get("last")
+            prev_close = quote.get("prevClose")
+            price = last if last is not None else prev_close
+
+            return {
+                "ok": True,
+                "instrument": instrument,
+                "symbol": symbol,
+                "price": price,
+                "bid": bid,
+                "ask": ask,
+                "spread": round(float(ask) - float(bid), 2) if ask and bid else None,
+                "last": last,
+                "prev_close": prev_close,
+                "ts": quote.get("timestamp"),
+            }
+        except Exception as exc:
+            logger.warning("Tradovate get_quote failed: %s", exc)
+            return {"ok": False, "error": str(exc)}
 
     def get_broker_name(self) -> str:
         return f"TradovateBroker({'live' if self.is_live() else 'demo'})"
