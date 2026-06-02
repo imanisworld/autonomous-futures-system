@@ -100,6 +100,7 @@ def _watchlist_row(ticker: str, row: Any | None, now: datetime) -> dict[str, Any
             "alert_suppression_reason": "no_scan_yet",
             "last_scan_at": None,
             "age_minutes": None,
+            "option_value": None,
         }
 
     age_minutes = _age_minutes(row.timestamp, now)
@@ -118,6 +119,7 @@ def _watchlist_row(ticker: str, row: Any | None, now: datetime) -> dict[str, Any
         "alert_suppression_reason": row.alert_suppression_reason,
         "last_scan_at": row.timestamp,
         "age_minutes": age_minutes,
+        "option_value": _option_value_summary(row),
     }
 
 
@@ -129,3 +131,18 @@ def _age_minutes(timestamp: str, now: datetime) -> int | None:
     except (TypeError, ValueError):
         return None
     return max(0, int((now.astimezone(timezone.utc) - parsed.astimezone(timezone.utc)).total_seconds() // 60))
+
+
+def _option_value_summary(row: Any) -> dict[str, Any] | None:
+    raw = getattr(row, "raw", {}) or {}
+    components = getattr(row, "components", {}) or {}
+    verdict = raw.get("option_value_verdict")
+    if not verdict:
+        return None
+    return {
+        "verdict": verdict,
+        "theoretical_value": raw.get("option_theoretical_value"),
+        "edge_percent": raw.get("option_edge_percent"),
+        "reason": raw.get("option_value_reason"),
+        "score_component": components.get("premium_value"),
+    }

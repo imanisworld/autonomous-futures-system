@@ -225,6 +225,11 @@ def test_war_room_discord_payload_uses_rich_confirmed_template():
             timeframe="15m",
             ftfc=True,
             ftfc_direction="UP",
+            option_type="call",
+            underlying_price=950,
+            dte=19,
+            implied_volatility=25,
+            option_mark=8.0,
         )
     )
 
@@ -242,6 +247,8 @@ def test_war_room_discord_payload_uses_rich_confirmed_template():
     assert field_map["Target 2"] == "$975.00"
     assert field_map["Why"] == "Demand zone reclaim. Volume expanding. GEX flip at 950 cleared."
     assert field_map["Edge"] == "Multi-timeframe alignment confirmed. All gates passed."
+    assert "Premium Value" in field_map
+    assert "fair" in field_map["Premium Value"].lower() or "discount" in field_map["Premium Value"].lower() or "overpriced" in field_map["Premium Value"].lower()
     assert field_map["Risk"] == "Size for your account. Exit at stop - no exceptions."
 
 
@@ -313,7 +320,11 @@ def test_terminal_state_summarizes_options_watchlist(tmp_path):
         sqlite_path=tmp_path / "options_scanner.sqlite",
     )
     storage = ScanStorage(cfg.sqlite_path)
-    result = score_setup(setup_payload(ticker="SPY", pattern="2-1-2", price=101, vwap=100, ema20=99))
+    result = score_setup(setup_payload(
+        ticker="SPY", pattern="2-1-2", price=101, vwap=100, ema20=99,
+        option_type="call", underlying_price=101, strike=100, dte=30,
+        implied_volatility=20, option_mark=2.0,
+    ))
     now = datetime(2026, 5, 29, 10, 0, tzinfo=ZoneInfo("America/New_York"))
     storage.record_scan(result, source="test", alert_sent=True, alert_suppression_reason="", timestamp=now)
     tasty = TastytradeClient(cfg, client=httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(500))))
@@ -330,6 +341,8 @@ def test_terminal_state_summarizes_options_watchlist(tmp_path):
     qqq = next(row for row in state["watchlist"] if row["ticker"] == "QQQ")
     assert spy["status"] == "actionable"
     assert spy["age_minutes"] == 5
+    assert spy["option_value"] is not None
+    assert spy["option_value"]["verdict"] in {"discount", "fair", "overpriced"}
     assert qqq["status"] == "never_seen"
     assert state["options_risk"]["paper_only"] is True
     assert state["broker"]["broker"] in {"AlpacaOptionsPaper", "AlpacaOptionsLive"}
@@ -418,7 +431,8 @@ def test_options_webhook_persists_valuation_context(tmp_path):
 
     latest = status["latest"][0]
     assert latest["ticker"] == "SPY"
-    # Raw valuation fields are stored in SQLite; the status row remains compact.
+    assert latest["components"]["premium_value"] == 2
+    assert latest["raw"]["option_value_verdict"] == "discount"
     import sqlite3, json
 
     with sqlite3.connect(cfg.sqlite_path) as conn:

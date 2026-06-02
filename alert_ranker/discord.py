@@ -94,6 +94,7 @@ def build_discord_payload(result: ScoreResult) -> dict[str, Any]:
         {"name": "Target 2", "value": _money_text(raw.get("target_2")), "inline": True},
         {"name": "Volume", "value": _ratio_text(volume_ratio), "inline": True},
         {"name": "IV Rank", "value": _iv_text(iv_rank, iv_label), "inline": True},
+        {"name": "Premium Value", "value": _premium_value_text(result), "inline": True},
         {"name": "VWAP", "value": _pass_fail(result.components.get("vwap")), "inline": True},
         {"name": "Trend", "value": _pass_fail(result.components.get("trend")), "inline": True},
         {"name": "Why", "value": _why_text(result, session), "inline": False},
@@ -265,3 +266,23 @@ def _iv_text(value: Any, label: str) -> str:
         return f"{float(value):.1f}% ({label})"
     except (TypeError, ValueError):
         return "N/A (unknown)"
+
+
+def _premium_value_text(result: ScoreResult) -> str:
+    raw = result.raw
+    verdict = raw.get("option_value_verdict")
+    if not verdict:
+        return "N/A"
+    edge = raw.get("option_edge_percent")
+    fair = raw.get("option_theoretical_value")
+    score = result.components.get("premium_value", 0)
+    try:
+        edge_text = f"{float(edge):+.1f}%"
+    except (TypeError, ValueError):
+        edge_text = "n/a"
+    try:
+        fair_text = f"${float(fair):.2f}"
+    except (TypeError, ValueError):
+        fair_text = "n/a"
+    label = str(verdict).replace("_", " ").title()
+    return f"{label} ({edge_text}, fair {fair_text}, score {score:+})"

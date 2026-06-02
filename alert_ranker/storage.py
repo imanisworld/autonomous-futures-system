@@ -22,6 +22,8 @@ class StoredScan:
     pattern: str
     alert_sent: bool
     alert_suppression_reason: str
+    components: dict[str, Any]
+    raw: dict[str, Any]
 
 
 class ScanStorage:
@@ -117,7 +119,7 @@ class ScanStorage:
             rows = conn.execute(
                 """
                 SELECT id, timestamp, ticker, direction, score, pattern,
-                       alert_sent, alert_suppression_reason
+                       alert_sent, alert_suppression_reason, components_json, raw_json
                 FROM scans ORDER BY id DESC LIMIT ?
                 """,
                 (limit,),
@@ -132,6 +134,8 @@ class ScanStorage:
                 pattern=row["pattern"],
                 alert_sent=bool(row["alert_sent"]),
                 alert_suppression_reason=row["alert_suppression_reason"],
+                components=json.loads(row["components_json"] or "{}"),
+                raw=json.loads(row["raw_json"] or "{}"),
             )
             for row in rows
         ]
