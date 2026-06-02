@@ -89,6 +89,8 @@ class AlertPayload(BaseModel):
     stop: Optional[float] = None
     target: Optional[float] = None
     rr_ratio: Optional[float] = None
+    has_signal: Optional[bool] = None
+    event_type: Optional[str] = None
 
     # ── Optional GEX / gamma context ────────────────────────────────────────
     gex_flip: Optional[float] = None

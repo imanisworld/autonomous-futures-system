@@ -10,7 +10,7 @@ i_ema_slow = input.int(21, "Slow EMA", minval=5, group="Trend")
 i_ema_mid = input.int(55, "Mid EMA", minval=20, group="Trend")
 i_ema_long = input.int(200, "Long EMA", minval=50, group="Trend")
 i_vol_len = input.int(20, "Volume MA", minval=5, group="Volume")
-i_alert_on = input.bool(true, "Fire alert on every confirmed bar close", group="Alert")
+i_alert_on = input.bool(true, "Send heartbeat alerts on session bar close", group="Alert")
 
 // Manual context inputs for gates. Keep blank/na when unavailable; webhook treats missing data as neutral.
 i_gex_flip = input.float(0.0, "GEX Flip", group="GEX / Gamma")
@@ -366,6 +366,9 @@ if not na(signal_entry) and not na(signal_stop) and not na(raw_target)
     signal_target := f_min_target(signal_direction, signal_entry, raw_target, min_target_pts)
     signal_rr := f_rr(signal_direction, signal_entry, signal_stop, signal_target)
 
+has_signal = not na(signal_strategy)
+event_type = has_signal ? "signal" : "heartbeat"
+
 // BUILD JSON
 string msg = "{"
 msg := msg + "\"ticker\":" + "\"" + syminfo.ticker + "\"" + ","
@@ -446,11 +449,16 @@ msg := msg + "\"ema_9\":" + f2j(ema_fast, "#.####") + ","
 msg := msg + "\"ema_21\":" + f2j(ema_slow, "#.####") + ","
 msg := msg + "\"ema_55\":" + f2j(ema_mid, "#.####") + ","
 msg := msg + "\"ema_200\":" + f2j(ema_long, "#.####") + ","
-msg := msg + "\"ema_9_above_21\":" + str.tostring(ema_9_above_21)
+msg := msg + "\"ema_9_above_21\":" + str.tostring(ema_9_above_21) + ","
+msg := msg + "\"has_signal\":" + str.tostring(has_signal) + ","
+msg := msg + "\"event_type\":\"" + event_type + "\""
 msg := msg + "}"
 
-// FIRE ALERT
-if i_alert_on and barstate.isconfirmed
+// FIRE ALERT — sends every confirmed London/NY session bar.
+// Backend decides TRADE vs NO_TRADE. This keeps the dashboard fresh.
+should_send = i_alert_on and barstate.isconfirmed and in_any_session
+
+if should_send
     alert(msg, alert.freq_once_per_bar_close)
 
 // CHARTS
