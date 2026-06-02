@@ -116,6 +116,7 @@ def process_alert(
             "confidence_score": None,
         }
 
+    _maybe_enrich_payload_with_signa(payload, cfg)
     state = build_market_state(payload)
     journal = JournalLogger(log_dir=log_dir)
     today = for_date or date.today()
@@ -362,7 +363,27 @@ def process_alert(
         notes=decision.setup.notes,
         contracts=contracts,
     )
-    broker.execute_bracket(order)
+    fill = broker.execute_bracket(order)
+    if fill.result != "OPEN":
+        # Broker rejected or failed to place the order — do NOT mark position open.
+        logger.error(
+            "Bracket order failed for %s %s: fill_result=%s",
+            order.instrument, order.direction, fill.result,
+        )
+        send_telegram_message(
+            f"ORDER FAILED: {order.instrument} {order.direction} — {fill.result}"
+        )
+        result["decision"] = "BLOCKED_EXECUTION_FAILED"
+        result["fill"] = {
+            "status": fill.result,
+            "instrument": state.instrument,
+            "direction": decision.setup.direction,
+            "entry": decision.setup.entry,
+            "stop": decision.setup.stop,
+            "target": decision.setup.target,
+        }
+        return result
+
     send_telegram_message(
         f"TRADE: {order.instrument} {order.direction} {order.contracts}c @ {order.entry} stop {order.stop} target {order.target}"
     )
@@ -384,6 +405,19 @@ def process_alert(
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
+
+def _maybe_enrich_payload_with_signa(payload: AlertPayload, cfg: SystemConfig) -> None:
+    """Best-effort Signa shadow enrichment. Never raises, never blocks."""
+    if not getattr(cfg, "signa_api_enabled", False):
+        return
+    try:
+        from sources.signa_client import enrich_payload_with_signa
+        signal = enrich_payload_with_signa(payload, cfg)
+        if signal and not signal.ok:
+            logger.info("Signa enrichment skipped: %s", signal.error)
+    except Exception as exc:  # pragma: no cover - defensive guard
+        logger.warning("Signa enrichment failed: %s", exc)
+
 
 def _position_is_complete(pos: dict) -> bool:
     """All required keys present and non-None."""

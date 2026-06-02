@@ -220,6 +220,31 @@ async def status_review(
 
 
 
+@app.get("/status/signa")
+async def status_signa(symbol: str = Query(default="AAPL")) -> dict:
+    """Read-only Signa connectivity and parsing check."""
+    from sources.signa_client import SignaClient
+
+    client = SignaClient(
+        base_url=_config.signa_base_url,
+        timeout=_config.signa_timeout_seconds,
+    )
+    if not _config.signa_api_enabled:
+        return {
+            "enabled": False,
+            "configured": _config.signa_api_key_configured,
+            "symbol": symbol.upper(),
+            "ok": False,
+            "error": "signa_api_disabled",
+        }
+    signal = client.fetch_signal(symbol.upper())
+    return {
+        "enabled": True,
+        "configured": client.configured,
+        **signal.to_dict(),
+    }
+
+
 @app.get("/status/brokers")
 async def status_brokers() -> dict:
     """Read-only broker capability matrix; never creates broker clients."""
@@ -270,6 +295,21 @@ def _verify_webhook_secret(provided: str | None) -> None:
 
 
 
+def _ibkr_gateway_reachable() -> bool | None:
+    """Return True/False if BROKER=ibkr; None if not using IBKR."""
+    if os.getenv("BROKER", "paper").strip().lower() != "ibkr":
+        return None
+    try:
+        import socket
+        host = os.getenv("IBKR_HOST", "127.0.0.1")
+        port = int(os.getenv("IBKR_PORT", "4002"))
+        with socket.socket() as s:
+            s.settimeout(0.5)
+            return s.connect_ex((host, port)) == 0
+    except Exception:
+        return False
+
+
 def _dashboard_payload(for_date: date) -> dict:
     journal = JournalLogger(log_dir=_config.log_dir)
     daily_state = journal.get_daily_state(for_date)
@@ -318,6 +358,7 @@ def _dashboard_payload(for_date: date) -> dict:
         "latest_webhook": _latest_webhook_payload(),
         "strategy_status": _strategy_payload(for_date),
         "performance": journal.get_performance_stats(_config.position_sizing.starting_balance),
+        "broker_gateway_reachable": _ibkr_gateway_reachable(),
     }
 
 
@@ -491,6 +532,13 @@ def _render_dashboard(status: dict) -> str:
         f"<li><span>{_escape(item['decision'])}</span><strong>{item['count']}</strong></li>"
         for item in strategy_status.get("decision_counts", [])
     ) or "<li><span>No decisions yet</span><strong>0</strong></li>"
+    gw = status.get("broker_gateway_reachable")
+    if gw is True:
+        gateway_badge = '<div id="badge-gateway" class="badge" style="color:var(--green)">IBKR ● CONNECTED</div>'
+    elif gw is False:
+        gateway_badge = '<div id="badge-gateway" class="badge" style="color:var(--red)">IBKR ✕ OFFLINE</div>'
+    else:
+        gateway_badge = '<div id="badge-gateway" style="display:none"></div>'
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -696,7 +744,10 @@ def _render_dashboard(status: dict) -> str:
         <h1>RiskSentinel</h1>
         <p class="sub">{_escape(status['date'])} · Paper-only futures monitor</p>
       </div>
-      <div class="badge">LIVE TRADING OFF</div>
+      <div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap;">
+        <div class="badge">LIVE TRADING OFF</div>
+        {gateway_badge}
+      </div>
     </header>
 
     <section class="grid">
@@ -1011,6 +1062,14 @@ def _render_dashboard(status: dict) -> str:
         updStat('stat-worst-day', perf.worst_day);
         updStat('stat-lg-win',    perf.largest_win);
         updStat('stat-lg-loss',   perf.largest_loss);
+
+        // IBKR gateway badge
+        const gwBadge = document.getElementById('badge-gateway');
+        if (gwBadge && today.broker_gateway_reachable !== null && today.broker_gateway_reachable !== undefined) {{
+          gwBadge.textContent = today.broker_gateway_reachable ? 'IBKR ● CONNECTED' : 'IBKR ✕ OFFLINE';
+          gwBadge.style.color = today.broker_gateway_reachable ? 'var(--green)' : 'var(--red)';
+          gwBadge.style.display = '';
+        }}
 
         window.__riskSentinelHistory = history;
         drawPnlChart(history);
