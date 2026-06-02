@@ -151,6 +151,9 @@ class SystemConfig:
     # Future signal/data vendor planning; key value is never stored on config.
     signa_api_enabled: bool = False
     signa_api_key_configured: bool = False
+    signa_base_url: str = "https://app.getsigna.ai"
+    signa_timeout_seconds: float = 3.0
+    signa_symbol_map: dict = field(default_factory=dict)
 
 
 # ─── Loader ──────────────────────────────────────────────────────────────────
@@ -278,6 +281,12 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
 
         signa_api_enabled=_env_bool("SIGNA_API_ENABLED", False),
         signa_api_key_configured=bool(os.getenv("SIGNA_API_KEY", "").strip()),
+        signa_base_url=os.getenv("SIGNA_BASE_URL", "https://app.getsigna.ai").strip().rstrip("/"),
+        signa_timeout_seconds=float(os.getenv("SIGNA_TIMEOUT_SECONDS", "3") or 3),
+        signa_symbol_map=_env_symbol_map(
+            "SIGNA_SYMBOL_MAP",
+            {"MES": "SPY", "ES": "SPY", "MNQ": "QQQ", "NQ": "QQQ"},
+        ),
     )
 
     _validate_config(config)
@@ -353,6 +362,8 @@ def _validate_config(config: SystemConfig) -> None:
             raise ConfigError("position sizing rule instrument is required.")
         if rule.max_contracts < 1:
             raise ConfigError("position sizing max_contracts must be >= 1.")
+    if config.signa_timeout_seconds <= 0:
+        raise ConfigError("signa_timeout_seconds must be > 0.")
     if config.live_trading_enabled:
         # This should never be reached, but belt-and-suspenders
         raise LiveTradingBlockedError(source="post-parse validation")
@@ -363,6 +374,24 @@ def _env_bool(name: str, default: bool) -> bool:
     if raw is None:
         return default
     return raw.strip().lower() in ("true", "1", "yes")
+
+
+def _env_symbol_map(name: str, default: dict) -> dict:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return dict(default)
+    mapping = dict(default)
+    for item in raw.split(","):
+        if not item.strip():
+            continue
+        if ":" not in item:
+            raise ConfigError(f"{name} entries must look like MES:SPY")
+        key, value = item.split(":", 1)
+        key = key.strip().upper()
+        value = value.strip().upper()
+        if key and value:
+            mapping[key] = value
+    return mapping
 
 
 def _env_csv(name: str, default: List[str]) -> List[str]:

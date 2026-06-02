@@ -658,6 +658,28 @@ def test_fastapi_health_endpoint():
     assert isinstance(data["signa_api_key_configured"], bool)
 
 
+def test_fastapi_status_signa_disabled_endpoint(monkeypatch):
+    try:
+        from fastapi.testclient import TestClient
+        import webhook.app as app_module
+        from webhook.app import app
+    except ImportError:
+        pytest.skip("fastapi[testclient] not installed")
+
+    monkeypatch.setattr(app_module._config, "signa_api_enabled", False)
+    monkeypatch.setattr(app_module._config, "signa_api_key_configured", True)
+
+    client = TestClient(app)
+    resp = client.get("/status/signa?symbol=AAPL")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["enabled"] is False
+    assert data["configured"] is True
+    assert data["symbol"] == "AAPL"
+    assert data["error"] == "signa_api_disabled"
+
+
 def test_fastapi_dashboard_endpoint():
     try:
         from fastapi.testclient import TestClient
