@@ -28,10 +28,19 @@ logger = logging.getLogger(__name__)
 
 
 def _ensure_event_loop() -> None:
+    """Ensure a usable event loop exists; never replaces one that ib_insync is already using."""
     try:
         asyncio.get_running_loop()
+        return  # loop is active — leave it alone
     except RuntimeError:
-        asyncio.set_event_loop(asyncio.new_event_loop())
+        pass
+    try:
+        loop = asyncio.get_event_loop()
+        if not loop.is_closed():
+            return  # a loop is already set and open — reuse it
+    except RuntimeError:
+        pass
+    asyncio.set_event_loop(asyncio.new_event_loop())
 
 
 @dataclass(frozen=True)
@@ -342,7 +351,6 @@ class IBKRBroker(BrokerInterface):
 
     def _contract_for(self, instrument: str) -> Any:
         try:
-            _ensure_event_loop()
             from ib_insync import Future
         except Exception:  # pragma: no cover - mocked/unit-test path
             Future = None
