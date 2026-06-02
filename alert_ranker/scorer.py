@@ -7,6 +7,8 @@ from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from .options_valuation import evaluate_option_value
+
 
 @dataclass(frozen=True)
 class ScoreResult:
@@ -61,6 +63,7 @@ def score_setup(data: dict[str, Any], now: datetime | None = None) -> ScoreResul
     ema20 = _num(data.get("ema20"))
     volume_ratio = _num(data.get("volume_ratio"))
     iv_rank = _num(data.get("iv_rank"))
+    valuation = evaluate_option_value(data)
 
     vwap_pass = bool(
         (direction == "LONG" and price is not None and vwap is not None and price > vwap)
@@ -84,6 +87,7 @@ def score_setup(data: dict[str, Any], now: datetime | None = None) -> ScoreResul
         "trend": 2,
         "volume": 2 if volume_ratio is not None and volume_ratio > 1.2 else 0,
         "iv_rank": 0,
+        "premium_value": 0,
         "session": 1 if is_ny_open(now) else 0,
     }
     if iv_rank is not None:
@@ -92,5 +96,13 @@ def score_setup(data: dict[str, Any], now: datetime | None = None) -> ScoreResul
         elif iv_rank > 50:
             components["iv_rank"] = -3
 
+    enriched = dict(data)
+    if valuation is not None:
+        components["premium_value"] = valuation.component_score
+        enriched["option_theoretical_value"] = valuation.theoretical_value
+        enriched["option_edge_percent"] = valuation.edge_percent
+        enriched["option_value_verdict"] = valuation.verdict
+        enriched["option_value_reason"] = valuation.reason
+
     score = max(0, min(10, sum(components.values())))
-    return ScoreResult(ticker, direction, score, pattern, components, dict(data), "")
+    return ScoreResult(ticker, direction, score, pattern, components, enriched, "")

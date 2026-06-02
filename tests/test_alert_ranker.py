@@ -347,3 +347,84 @@ def test_options_scanner_terminal_endpoint(tmp_path):
     assert body["service"] == "options-terminal"
     assert body["scanner"]["watchlist"] == ["AAPL"]
     assert body["watchlist"][0]["status"] == "never_seen"
+
+
+def test_black_scholes_option_value_sanity():
+    from alert_ranker.options_valuation import black_scholes_price, evaluate_option_value
+
+    call_value = black_scholes_price(
+        option_type="call",
+        underlying_price=100,
+        strike=100,
+        dte=30,
+        implied_volatility=0.20,
+        risk_free_rate=0.04,
+    )
+    assert 2.0 < call_value < 3.5
+
+    valuation = evaluate_option_value({
+        "option_type": "call",
+        "underlying_price": 100,
+        "strike": 100,
+        "dte": 30,
+        "implied_volatility": 20,
+        "option_mark": 2.0,
+        "risk_free_rate": 0.04,
+    })
+    assert valuation is not None
+    assert valuation.verdict in {"discount", "fair"}
+    assert valuation.theoretical_value == call_value
+
+
+def test_option_premium_value_adjusts_advisory_score():
+    morning = datetime(2026, 5, 26, 10, 0, tzinfo=ZoneInfo("America/New_York"))
+    base = setup_payload(
+        option_type="call",
+        underlying_price=100,
+        strike=100,
+        dte=30,
+        implied_volatility=20,
+        risk_free_rate=0.04,
+    )
+
+    discounted = score_setup({**base, "option_mark": 2.0}, now=morning)
+    overpriced = score_setup({**base, "option_mark": 4.0}, now=morning)
+
+    assert discounted.components["premium_value"] == 2
+    assert discounted.raw["option_value_verdict"] == "discount"
+    assert overpriced.components["premium_value"] == -3
+    assert overpriced.raw["option_value_verdict"] == "overpriced"
+    assert discounted.score > overpriced.score
+
+
+def test_options_webhook_persists_valuation_context(tmp_path):
+    cfg = scanner_config(tmp_path)
+    app = create_app(cfg)
+
+    with TestClient(app) as client:
+        body = setup_payload(
+            ticker="SPY",
+            option_type="call",
+            underlying_price=100,
+            strike=100,
+            dte=30,
+            implied_volatility=20,
+            option_mark=2.0,
+            risk_free_rate=0.04,
+        )
+        webhook = client.post("/webhook/alert", json=body)
+        assert webhook.status_code == 200
+        status = client.get("/status").json()
+
+    latest = status["latest"][0]
+    assert latest["ticker"] == "SPY"
+    # Raw valuation fields are stored in SQLite; the status row remains compact.
+    import sqlite3, json
+
+    with sqlite3.connect(cfg.sqlite_path) as conn:
+        row = conn.execute("SELECT components_json, raw_json FROM scans ORDER BY id DESC LIMIT 1").fetchone()
+    components = json.loads(row[0])
+    raw = json.loads(row[1])
+    assert components["premium_value"] == 2
+    assert raw["option_value_verdict"] == "discount"
+    assert raw["option_theoretical_value"] > 0
