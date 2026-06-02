@@ -629,9 +629,8 @@ def _dashboard_payload(for_date: date) -> dict:
     summary = journal.get_summary(for_date)
     path = journal._journal_path(for_date)
     entries = journal._read_entries(path) if path.exists() else []
-    # Only show DECISION entries in the table (OUTCOME entries are ephemeral close records)
     decision_entries = [e for e in entries if e.get("type") != "OUTCOME"]
-    recent_entries = decision_entries[-10:]
+    recent_entries = entries[-10:]
     no_trade_reasons = Counter(
         entry.get("reason", "Unknown")
         for entry in decision_entries
@@ -680,6 +679,9 @@ def _dashboard_payload(for_date: date) -> dict:
 def _public_entry(entry: dict) -> dict:
     outcome = entry.get("outcome") or {}
     setup = entry.get("setup") or {}
+    pnl_dollars = outcome.get("pnl_dollars")
+    exit_reason = outcome.get("exit_reason")
+    outcome_explanation = _explain_outcome(outcome)
     return {
         "ts": entry.get("ts"),
         "type": entry.get("type", "DECISION"),
@@ -690,8 +692,46 @@ def _public_entry(entry: dict) -> dict:
         "market_condition": entry.get("market_condition"),
         "strategy": setup.get("strategy"),
         "outcome": outcome.get("result"),
-        "pnl_dollars": outcome.get("pnl_dollars"),
+        "exit_reason": exit_reason,
+        "pnl_dollars": pnl_dollars,
+        "outcome_explanation": outcome_explanation["message"],
+        "outcome_warning": outcome_explanation["warning"],
     }
+
+
+def _explain_outcome(outcome: dict) -> dict:
+    result = outcome.get("result")
+    exit_reason = outcome.get("exit_reason")
+    pnl = outcome.get("pnl_dollars")
+    try:
+        pnl_value = float(pnl) if pnl is not None else None
+    except (TypeError, ValueError):
+        pnl_value = None
+
+    if not result and not exit_reason:
+        return {"message": None, "warning": False}
+
+    if exit_reason == "TARGET_HIT" and pnl_value is not None and pnl_value < 0:
+        return {
+            "message": "Target was marked hit, but P&L is negative. Check trade direction, tick value, or fill price.",
+            "warning": True,
+        }
+    if exit_reason == "STOP_HIT" and pnl_value is not None and pnl_value > 0:
+        return {
+            "message": "Stop was marked hit, but P&L is positive. Check trade direction, tick value, or fill price.",
+            "warning": True,
+        }
+    if exit_reason == "TARGET_HIT":
+        return {"message": "Closed because target was hit.", "warning": False}
+    if exit_reason == "STOP_HIT":
+        return {"message": "Closed because stop was hit.", "warning": False}
+    if exit_reason == "BREAKEVEN_STOP":
+        return {"message": "Closed at breakeven stop.", "warning": False}
+    if exit_reason and str(exit_reason).startswith("FORCE_CLOSE_"):
+        return {"message": f"Force closed: {str(exit_reason).replace('FORCE_CLOSE_', '').replace('_', ' ').lower()}.", "warning": False}
+    if exit_reason:
+        return {"message": f"Closed by {exit_reason}.", "warning": False}
+    return {"message": f"Outcome recorded as {result}.", "warning": False}
 
 
 def _strategy_payload(for_date: date) -> dict:

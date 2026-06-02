@@ -812,6 +812,26 @@ def test_fastapi_status_diagnostics_endpoint(monkeypatch, tmp_path):
     assert {"Backend API", "Trading mode", "Webhook secret", "Discord alerts"}.issubset(components)
 
 
+def test_public_entry_flags_target_hit_negative_pnl():
+    from webhook.app import _public_entry
+
+    entry = {
+        "type": "OUTCOME",
+        "instrument": "MES",
+        "outcome": {
+            "result": "LOSS",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": -12.50,
+        },
+    }
+
+    public = _public_entry(entry)
+
+    assert public["exit_reason"] == "TARGET_HIT"
+    assert public["outcome_warning"] is True
+    assert "Target was marked hit" in public["outcome_explanation"]
+
+
 def test_fastapi_status_history_endpoint():
     try:
         from fastapi.testclient import TestClient
