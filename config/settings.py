@@ -122,6 +122,14 @@ class SystemConfig:
     # Bonus trades after normal daily max; RiskEngine requires confluence grade.
     bonus_trades_after_max: int = 0
     bonus_min_confluence_grade: str = "A"
+    # Early-session loss floor — blocks entries if down more than N dollars
+    # within the first `early_session_minutes` of a session.
+    early_session_loss_floor: float = 0.0   # 0 = disabled
+    early_session_minutes: int = 30
+    # Win-streak bonus contracts — after N consecutive wins allow +1c on A/A+ setups.
+    win_streak_bonus_after: int = 0          # 0 = disabled
+    win_streak_bonus_contracts: int = 1
+    win_streak_bonus_min_grade: str = "A"
     # High-impact news/FOMC controls. Dates are YYYY-MM-DD decision days.
     news_blackout_dates: List[str] = field(default_factory=list)
     news_blackout_mode: str = "off"  # off | block | reduced
@@ -226,6 +234,11 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         conservative_mode=bool(daily.get("conservative_mode", False)),
         bonus_trades_after_max=int(daily.get("bonus_trades_after_max", 0) or 0),
         bonus_min_confluence_grade=str(daily.get("bonus_min_confluence_grade", "A") or "A"),
+        early_session_loss_floor=float(daily.get("early_session_loss_floor", 0) or 0),
+        early_session_minutes=int(daily.get("early_session_minutes", 30) or 30),
+        win_streak_bonus_after=int(daily.get("win_streak_bonus_after", 0) or 0),
+        win_streak_bonus_contracts=int(daily.get("win_streak_bonus_contracts", 1) or 1),
+        win_streak_bonus_min_grade=str(daily.get("win_streak_bonus_min_grade", "A") or "A"),
         news_blackout_dates=[str(value) for value in daily.get("news_blackout_dates", []) or []],
         news_blackout_mode=str(daily.get("news_blackout_mode", "off") or "off").lower(),
         news_blackout_max_trades=int(daily.get("news_blackout_max_trades", 1) or 1),

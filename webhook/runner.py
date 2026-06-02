@@ -267,6 +267,15 @@ def process_alert(
                         daily_state.last_loss_at = state.timestamp
                     elif exit_result in ("WIN", "BREAKEVEN"):
                         daily_state.consecutive_losses = 0
+                    # Discord alert — force-close means something went wrong with
+                    # the candle feed or position tracking; needs operator attention.
+                    _notify_force_close(
+                        instrument=open_pos.get("instrument") or state.instrument,
+                        reason=reason,
+                        contracts=contracts,
+                        pnl_dollars=pnl_dollars,
+                        config=cfg,
+                    )
 
             if fill is not None:
                 journal.log_outcome(
@@ -477,6 +486,47 @@ def _maybe_enrich_payload_with_signa(payload: AlertPayload, cfg: SystemConfig) -
             logger.info("Signa enrichment skipped: %s", signal.error)
     except Exception as exc:  # pragma: no cover - defensive guard
         logger.warning("Signa enrichment failed: %s", exc)
+
+
+def _notify_force_close(
+    *,
+    instrument: str,
+    reason: str,
+    contracts: int,
+    pnl_dollars: float,
+    config,
+) -> None:
+    """Fire a Discord notification when a position is force-closed.
+
+    Force-close means the candle feed or position tracking has drifted —
+    the operator should investigate. Runs in a background thread so it
+    never blocks the webhook response.
+    """
+    import threading
+    from notifications.discord_notifier import _post_json
+    import json as _json
+
+    if not getattr(config, "discord_notifications_enabled", False):
+        return
+    url = getattr(config, "discord_webhook_url", "")
+    if not url:
+        return
+
+    sign = "+" if pnl_dollars >= 0 else ""
+    message = (
+        f"⚠️ FORCE_CLOSE ({reason})\n"
+        f"{instrument} {contracts}c  P&L {sign}${pnl_dollars:.2f}\n"
+        f"Position closed by safety net — check candle feed / position tracking."
+    )
+
+    def _send():
+        try:
+            body = _json.dumps({"content": message}).encode("utf-8")
+            _post_json(url, body, {"Content-Type": "application/json"})
+        except Exception as exc:
+            logger.warning("Force-close Discord notification failed: %s", exc)
+
+    threading.Thread(target=_send, daemon=True).start()
 
 
 def _position_is_complete(pos: dict) -> bool:

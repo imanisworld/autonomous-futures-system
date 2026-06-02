@@ -856,13 +856,35 @@ class DecisionEngine:
             notes=notes,
         )
 
+    @staticmethod
+    def _gex_allows_orb(state: MarketState) -> bool:
+        """Return False when GEX regime is positive gamma — ORB breaks are unreliable.
+
+        In positive gamma (dealers are long gamma), market makers hedge against
+        moves by selling rallies and buying dips, compressing range and causing
+        ORB breakouts to fade. Negative or neutral gamma means MMs are short gamma
+        and must chase moves — ORB breaks are more likely to follow through.
+        """
+        gex = state.gex
+        if gex is None or not gex.gex_regime:
+            return True  # no GEX data — don't block
+        regime = str(gex.gex_regime).lower()
+        # Block in known positive gamma regimes
+        if any(k in regime for k in ("positive", "pos_gamma", "long_gamma", "compressed")):
+            return False
+        return True
+
     def _try_orb_breakout(self, state: MarketState) -> Optional[SetupDetail]:
         """
         ORB Breakout: First bar where price breaks above ORB high (long) or
         below ORB low (short), with trend and VWAP aligned.
         Entry just beyond ORB boundary, stop just inside, target 2.2R.
         Only fires once per direction per day (orb_continuation_blocked gates repeats).
+        GEX gate: skipped in positive gamma regime (MMs compress ORB breaks).
         """
+        if not self._gex_allows_orb(state):
+            return None
+
         tick = self.TICK_SIZE.get(state.instrument, 0.25)
         max_stop_ticks = self.MAX_ORB_STOP_TICKS.get(state.instrument, 80)
 
@@ -920,7 +942,10 @@ class DecisionEngine:
         """
         ORB Reclaim: Price rejected above ORB high, pulled back, now reclaiming.
         Entry above ORB high, stop below ORB high, target = entry + 2x risk.
+        GEX gate: skipped in positive gamma regime.
         """
+        if not self._gex_allows_orb(state):
+            return None
         if state.orb.status != "reclaimed_high":
             return None
         if state.vwap.price_vs_vwap != "above":

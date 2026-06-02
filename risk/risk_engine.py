@@ -70,6 +70,9 @@ class DailyState:
     account_peak_balance: Optional[float] = None
     realized_pnl_dollars: float = 0.0
     last_loss_at: Optional[datetime] = None
+    consecutive_wins: int = 0
+    session_start_pnl: Dict[str, float] = field(default_factory=dict)
+    session_start_time: Dict[str, datetime] = field(default_factory=dict)
 
 
 @dataclass
@@ -130,11 +133,13 @@ class RiskEngine:
             self._check_instrument,
             self._check_position_sizing,
             self._check_max_contracts,
+            self._check_win_streak_contracts,
             self._check_session,
             self._check_session_window,
             self._check_news_blackout,
             self._check_daily_trade_limit,
             self._check_daily_loss_limit,
+            self._check_early_session_loss_floor,
             self._check_max_drawdown,
             self._check_circuit_breaker,
             self._check_per_session_trade_limit,
@@ -402,6 +407,89 @@ class RiskEngine:
                 )
         return None
 
+
+    def _check_early_session_loss_floor(
+        self, setup: TradeSetup, daily_state: DailyState
+    ) -> Optional[RiskResult]:
+        """Block entries if session P&L fell below the floor in the opening window.
+
+        Prevents revenge trading in the first N minutes of a session. The floor
+        is measured from the P&L at session open, not from the daily total.
+        """
+        floor = float(getattr(self.config, "early_session_loss_floor", 0) or 0)
+        window_minutes = int(getattr(self.config, "early_session_minutes", 30) or 30)
+        if floor >= 0 or not setup.entry_time or not setup.session:
+            return None  # disabled or misconfigured
+
+        session = setup.session
+        entry_et = setup.entry_time.astimezone(_ET)
+
+        # Record session start time and P&L on first entry of the session
+        if session not in daily_state.session_start_time:
+            daily_state.session_start_time[session] = setup.entry_time
+            daily_state.session_start_pnl[session] = daily_state.realized_pnl_dollars
+
+        session_start = daily_state.session_start_time[session]
+        session_start_et = session_start.astimezone(_ET)
+        minutes_elapsed = (entry_et - session_start_et).total_seconds() / 60
+
+        if minutes_elapsed > window_minutes:
+            return None  # outside the early window — floor no longer applies
+
+        pnl_at_open = daily_state.session_start_pnl.get(session, daily_state.realized_pnl_dollars)
+        session_pnl = daily_state.realized_pnl_dollars - pnl_at_open
+
+        if session_pnl <= floor:
+            return RiskResult(
+                result="REJECTED",
+                failed_rule="early_session_loss_floor",
+                reason=(
+                    f"Early-session loss floor hit in '{session}': "
+                    f"${session_pnl:.2f} within first {window_minutes}m "
+                    f"(floor ${floor:.2f}). No new entries until next session."
+                ),
+            )
+        return None
+
+    def _check_win_streak_contracts(
+        self, setup: TradeSetup, daily_state: DailyState
+    ) -> Optional[RiskResult]:
+        """Allow +1 bonus contract after N consecutive wins on A/A+ setups.
+
+        This check is a modifier, not a blocker — it only rejects if the setup
+        is requesting MORE contracts than either the sizing ladder OR the win-streak
+        bonus allows. If no streak is active, normal sizing limits apply.
+        """
+        bonus_after = int(getattr(self.config, "win_streak_bonus_after", 0) or 0)
+        if bonus_after <= 0:
+            return None  # disabled
+
+        bonus_contracts = int(getattr(self.config, "win_streak_bonus_contracts", 1) or 1)
+        min_grade = str(getattr(self.config, "win_streak_bonus_min_grade", "A") or "A").upper()
+        grade = (setup.confluence_grade or "").strip().upper()
+
+        streak = getattr(daily_state, "consecutive_wins", 0)
+        if streak < bonus_after:
+            return None  # streak not yet reached — normal sizing handles this
+
+        # Streak is active — allow up to base_max + bonus on qualifying setups
+        base_max = self.config.max_contracts_per_instrument.get(setup.instrument, 1)
+        if self._grade_meets_minimum(grade, min_grade):
+            allowed = base_max + bonus_contracts
+        else:
+            allowed = base_max  # streak active but grade too low — revert to base
+
+        if setup.contracts > allowed:
+            return RiskResult(
+                result="REJECTED",
+                failed_rule="win_streak_contracts_exceeded",
+                reason=(
+                    f"Win streak ({streak}w) allows max {allowed}c for {setup.instrument} "
+                    f"(grade {grade or 'NONE'} vs required {min_grade}); "
+                    f"requested {setup.contracts}c."
+                ),
+            )
+        return None
 
     def _check_daily_loss_limit(
         self, setup: TradeSetup, daily_state: DailyState
