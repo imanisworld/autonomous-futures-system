@@ -307,60 +307,6 @@ def test_strat_context_fields_support_aliases():
     assert field_map["FTFC"] == "Yes (UP)"
 
 
-def test_terminal_state_summarizes_options_watchlist(tmp_path):
-    from alert_ranker.terminal import build_terminal_state
-
-    cfg = ScannerConfig(
-        tastytrade_username="",
-        tastytrade_password="",
-        tastytrade_base_url="https://api.tastyworks.com",
-        port=8010,
-        discord_webhook_url="",
-        watchlist=["SPY", "QQQ"],
-        interval_minutes=5,
-        sqlite_path=tmp_path / "options_scanner.sqlite",
-    )
-    storage = ScanStorage(cfg.sqlite_path)
-    result = score_setup(setup_payload(
-        ticker="SPY", pattern="2-1-2", price=101, vwap=100, ema20=99,
-        option_type="call", underlying_price=101, strike=100, dte=30,
-        implied_volatility=20, option_mark=2.0,
-    ))
-    now = datetime(2026, 5, 29, 10, 0, tzinfo=ZoneInfo("America/New_York"))
-    storage.record_scan(result, source="test", alert_sent=True, alert_suppression_reason="", timestamp=now)
-    tasty = TastytradeClient(cfg, client=httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(500))))
-    discord = DiscordAlerter(cfg, storage, client=httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(204))))
-    scanner = OptionsScanner(cfg, tasty, storage, discord)
-
-    state = build_terminal_state(scanner, now=now + timedelta(minutes=5))
-
-    assert state["service"] == "options-terminal"
-    assert state["advisory_only"] is True
-    assert state["summary"]["symbols"] == 2
-    assert state["summary"]["actionable_count"] == 1
-    spy = next(row for row in state["watchlist"] if row["ticker"] == "SPY")
-    qqq = next(row for row in state["watchlist"] if row["ticker"] == "QQQ")
-    assert spy["status"] == "actionable"
-    assert spy["age_minutes"] == 5
-    assert spy["option_value"] is not None
-    assert spy["option_value"]["verdict"] in {"discount", "fair", "overpriced"}
-    assert qqq["status"] == "never_seen"
-    assert state["options_risk"]["paper_only"] is True
-    assert state["broker"]["broker"] in {"AlpacaOptionsPaper", "AlpacaOptionsLive"}
-
-
-def test_options_scanner_terminal_endpoint(tmp_path):
-    cfg = scanner_config(tmp_path)
-    app = create_app(cfg)
-
-    with TestClient(app) as client:
-        resp = client.get("/terminal")
-
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["service"] == "options-terminal"
-    assert body["scanner"]["watchlist"] == ["AAPL"]
-    assert body["watchlist"][0]["status"] == "never_seen"
 
 
 def test_black_scholes_option_value_sanity():

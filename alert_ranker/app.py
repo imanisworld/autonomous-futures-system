@@ -14,8 +14,6 @@ from .discord import DiscordAlerter
 from .scanner import OptionsScanner
 from .storage import ScanStorage
 from .tastytrade_client import TastytradeClient
-from .terminal import build_terminal_state
-
 
 def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | None = None) -> FastAPI:
     cfg = config or load_config()
@@ -68,10 +66,6 @@ def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | No
     @app.get("/status")
     async def status() -> dict[str, Any]:
         return get_scanner().status()
-
-    @app.get("/terminal")
-    async def terminal() -> dict[str, Any]:
-        return build_terminal_state(get_scanner())
 
     @app.get("/watchlist")
     async def watchlist() -> dict[str, Any]:

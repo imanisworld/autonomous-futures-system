@@ -60,7 +60,7 @@ def test_main_resolves_target_and_journals_outcome(tmp_path, monkeypatch):
     market_state_path = tmp_path / "market_state.json"
     market_state_path.write_text(json.dumps(fresh_market_state()))
     next_bar_path = tmp_path / "next_bar.json"
-    next_bar_path.write_text(json.dumps({"high": 19600.0, "low": 19490.0}))
+    next_bar_path.write_text(json.dumps({"high": 5920.0, "low": 5898.0}))  # MES scale — hits target
 
     monkeypatch.setenv("LOG_DIR", str(tmp_path / "logs"))
     risk_rules_path = risk_rules_without_position_sizing(tmp_path)
@@ -96,7 +96,7 @@ def test_main_resolves_stop_and_daily_state_tracks_loss(tmp_path, monkeypatch):
     market_state_path = tmp_path / "market_state.json"
     market_state_path.write_text(json.dumps(state))
     next_bar_path = tmp_path / "next_bar.json"
-    next_bar_path.write_text(json.dumps({"high": 19510.0, "low": 19450.0}))
+    next_bar_path.write_text(json.dumps({"high": 5905.0, "low": 5890.0}))  # MES scale — hits stop
 
     monkeypatch.setenv("LOG_DIR", str(tmp_path / "logs"))
     risk_rules_path = risk_rules_without_position_sizing(tmp_path)

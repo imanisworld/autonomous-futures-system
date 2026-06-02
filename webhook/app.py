@@ -245,13 +245,6 @@ async def status_signa(symbol: str = Query(default="AAPL")) -> dict:
     }
 
 
-@app.get("/status/brokers")
-async def status_brokers() -> dict:
-    """Read-only broker capability matrix; never creates broker clients."""
-    from execution.broker_registry import broker_matrix
-
-    return broker_matrix()
-
 @app.get("/status/adaptive")
 async def status_adaptive() -> dict:
     """Run the Adaptive Risk Committee and return the latest report."""

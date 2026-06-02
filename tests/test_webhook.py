@@ -311,23 +311,39 @@ def test_runner_choppy_produces_no_trade(config, tmp_path):
 
 # ─── runner: TRADE → APPROVED path ───────────────────────────────────────────
 
-def test_runner_trending_orb_reclaim_produces_trade(config, tmp_path):
+def test_runner_trending_orb_breakout_mes_produces_trade(config, tmp_path):
+    """MNQ is disabled; test orb_breakout on MES (orb_reclaim disabled on MES, orb_breakout is not)."""
     from webhook.runner import process_alert
 
     log_dir = str(tmp_path / "logs")
-    payload = _base_payload()
+    payload = _base_payload(
+        ticker="MES1!",
+        open=5880.0,
+        high=5910.0,
+        low=5875.0,
+        close=5905.25,
+        volume=4200,
+        avg_volume=3800,
+        vwap=5895.0,
+        orb_high=5898.0,
+        orb_low=5862.0,
+        orb_status="above",
+        previous_day_high=5920.0,
+        previous_day_low=5840.0,
+        previous_day_close=5875.0,
+    )
     result = process_alert(payload, config=config, log_dir=log_dir)
 
     if result["decision"] == "NO_TRADE":
         pytest.skip("Signal engine produced NO_TRADE — conditions not met")
     assert result["fill"] is not None
     assert result["fill"]["status"] == "OPEN"
-    assert result["fill"]["instrument"] == "MNQ"
+    assert result["fill"]["instrument"] == "MES"
     assert result["risk"]["result"] == "APPROVED"
 
     journal_path = next((tmp_path / "logs").glob("journal_*.jsonl"))
     entry = json.loads(journal_path.read_text().splitlines()[-1])
-    assert entry["context"]["orb"]["status"] == "reclaimed_high"
+    assert entry["context"]["orb"]["status"] == "above"
     assert entry["context"]["session"] == "new_york"
     assert entry["confluence"]["score"] >= 0
     assert entry["confluence"]["grade"]
