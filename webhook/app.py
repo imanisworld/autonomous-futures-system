@@ -24,12 +24,13 @@ import hmac
 import json
 import logging
 import os
+import time
 from collections import Counter
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
-from fastapi import FastAPI, Header, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -41,6 +42,74 @@ from webhook.payload import AlertPayload
 from webhook.runner import process_alert
 
 logger = logging.getLogger(__name__)
+_RATE_BUCKETS: dict[tuple[str, str], list[float]] = {}
+_PUBLIC_RATE_LIMIT = int(os.getenv("PUBLIC_RATE_LIMIT_PER_MINUTE", "120") or 120)
+_WEBHOOK_RATE_LIMIT = int(os.getenv("WEBHOOK_RATE_LIMIT_PER_MINUTE", "60") or 60)
+_PRIVATE_RATE_LIMIT = int(os.getenv("PRIVATE_RATE_LIMIT_PER_MINUTE", "240") or 240)
+
+
+def _configured_webhook_secret() -> str:
+    return os.getenv("WEBHOOK_SECRET", "").strip()
+
+
+def _verify_webhook_secret(provided: str | None) -> None:
+    expected = _configured_webhook_secret()
+    # No secret configured → reject every inbound webhook unconditionally.
+    # A blank secret means the endpoint is public; that is never acceptable.
+    if not expected:
+        raise HTTPException(status_code=401, detail="WEBHOOK_SECRET is not configured.")
+    if not provided or not hmac.compare_digest(provided, expected):
+        raise HTTPException(status_code=401, detail="Invalid webhook secret")
+
+
+def _configured_dashboard_token() -> str:
+    return os.getenv("DASHBOARD_TOKEN", "").strip()
+
+
+def _dashboard_token_valid(provided: str | None) -> bool:
+    expected = _configured_dashboard_token()
+    return bool(expected and provided and hmac.compare_digest(provided, expected))
+
+
+async def _require_dashboard_token(
+    x_dashboard_token: str | None = Header(default=None),
+    token: str | None = Query(default=None),
+) -> None:
+    """FastAPI dependency — protects private dashboard/status endpoints."""
+    if not _configured_dashboard_token():
+        raise HTTPException(status_code=503, detail="DASHBOARD_TOKEN is not configured")
+    if not _dashboard_token_valid(x_dashboard_token or token):
+        raise HTTPException(status_code=401, detail="Dashboard token required")
+
+
+def _client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for", "").split(",", 1)[0].strip()
+    if forwarded:
+        return forwarded
+    return request.client.host if request.client else "unknown"
+
+
+def _rate_bucket_for_path(path: str) -> tuple[str, int]:
+    if path == "/webhook/alert":
+        return "webhook", _WEBHOOK_RATE_LIMIT
+    if path in {"/health", "/status/public", "/share", "/favicon.ico", "/manifest.json"} or path.startswith("/static/"):
+        return "public", _PUBLIC_RATE_LIMIT
+    return "private", _PRIVATE_RATE_LIMIT
+
+
+def _enforce_rate_limit(request: Request) -> None:
+    bucket, limit = _rate_bucket_for_path(request.url.path)
+    if limit <= 0:
+        return
+    now = time.monotonic()
+    cutoff = now - 60.0
+    key = (_client_ip(request), bucket)
+    hits = [stamp for stamp in _RATE_BUCKETS.get(key, []) if stamp >= cutoff]
+    if len(hits) >= limit:
+        raise HTTPException(status_code=429, detail="Rate limit exceeded")
+    hits.append(now)
+    _RATE_BUCKETS[key] = hits
+
 
 
 @asynccontextmanager
@@ -51,6 +120,11 @@ async def _lifespan(app: FastAPI):
             "WEBHOOK_SECRET env var is required but not set. "
             "Set it in Railway dashboard before deploying."
         )
+    if not _configured_dashboard_token():
+        raise RuntimeError(
+            "DASHBOARD_TOKEN env var is required but not set. "
+            "Set it on the server and in the app as EXPO_PUBLIC_DASHBOARD_TOKEN."
+        )
     yield
 
 
@@ -60,6 +134,16 @@ app = FastAPI(
     version="1.0.0",
     lifespan=_lifespan,
 )
+
+
+@app.middleware("http")
+async def _rate_limit_middleware(request: Request, call_next):
+    try:
+        _enforce_rate_limit(request)
+    except HTTPException as exc:
+        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+    return await call_next(request)
+
 
 _static = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=_static), name="static")
@@ -120,49 +204,48 @@ async def receive_alert(
         raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
-@app.get("/", response_class=HTMLResponse)
+@app.get("/", response_class=HTMLResponse, dependencies=[Depends(_require_dashboard_token)])
 async def dashboard() -> HTMLResponse:
-    """Read-only local dashboard for today's paper-trading state."""
+    """Read-only operator dashboard — requires DASHBOARD_TOKEN if configured."""
     status = _dashboard_payload(date.today())
     return HTMLResponse(_render_dashboard(status))
 
 
 @app.get("/health")
-async def health() -> dict:
-    """Liveness check. Always returns 200 if the server is running."""
+async def health(
+    x_dashboard_token: str | None = Header(default=None),
+    token: str | None = Query(default=None),
+) -> dict:
+    """Public liveness check. Authenticated callers get operator details."""
+    response = {
+        "ok": True,
+        "paper_mode": _config.paper_mode,
+        "live_trading_enabled": _config.live_trading_enabled,
+        "webhook_secret_required": bool(_configured_webhook_secret()),
+        "dashboard_token_required": bool(_configured_dashboard_token()),
+    }
+    if not _dashboard_token_valid(x_dashboard_token or token):
+        return response
+
     import os
     broker_mode = os.getenv("BROKER", "paper").strip().lower()
-    broker_connected: bool | None = None
-    if broker_mode == "ibkr":
-        try:
-            import socket
-            host = os.getenv("IBKR_HOST", "127.0.0.1")
-            port = int(os.getenv("IBKR_PORT", "4002"))
-            with socket.socket() as s:
-                s.settimeout(0.5)
-                broker_connected = s.connect_ex((host, port)) == 0
-        except Exception:
-            broker_connected = False
-    return {
-        "ok": True,
-        "live_trading_enabled": _config.live_trading_enabled,
-        "paper_mode": _config.paper_mode,
+    response.update({
         "broker": broker_mode,
-        "broker_gateway_reachable": broker_connected,
-        "webhook_secret_required": bool(_configured_webhook_secret()),
+        "broker_gateway_reachable": _ibkr_gateway_reachable(),
         "discord_notifications_enabled": _config.discord_notifications_enabled,
         "signa_api_enabled": _config.signa_api_enabled,
         "signa_api_key_configured": _config.signa_api_key_configured,
-    }
+    })
+    return response
 
 
-@app.get("/status/today")
+@app.get("/status/today", dependencies=[Depends(_require_dashboard_token)])
 async def status_today() -> dict:
     """Return today's reconstructed daily state from the journal."""
     return _dashboard_payload(date.today())
 
 
-@app.get("/status/history")
+@app.get("/status/history", dependencies=[Depends(_require_dashboard_token)])
 async def status_history(days: int = Query(default=7, ge=1, le=30)) -> dict:
     """Return recent read-only daily summaries from the journal."""
     today = date.today()
@@ -187,19 +270,19 @@ async def status_history(days: int = Query(default=7, ge=1, le=30)) -> dict:
     return {"days": history}
 
 
-@app.get("/status/latest-webhook")
+@app.get("/status/latest-webhook", dependencies=[Depends(_require_dashboard_token)])
 async def latest_webhook() -> dict:
     """Return the last TradingView payload and derived market context."""
     return _latest_webhook_payload()
 
 
-@app.get("/status/strategy")
+@app.get("/status/strategy", dependencies=[Depends(_require_dashboard_token)])
 async def strategy_status() -> dict:
     """Return enabled strategy concepts and journal-derived strategy counts."""
     return _strategy_payload(date.today())
 
 
-@app.get("/status/review")
+@app.get("/status/review", dependencies=[Depends(_require_dashboard_token)])
 async def status_review(
     review_date: str | None = Query(default=None, alias="date"),
     mode: str = Query(default="eod", pattern="^(morning|eod)$"),
@@ -220,7 +303,7 @@ async def status_review(
 
 
 
-@app.get("/status/signa")
+@app.get("/status/signa", dependencies=[Depends(_require_dashboard_token)])
 async def status_signa(symbol: str = Query(default="AAPL")) -> dict:
     """Read-only Signa connectivity and parsing check."""
     from sources.signa_client import SignaClient
@@ -245,7 +328,7 @@ async def status_signa(symbol: str = Query(default="AAPL")) -> dict:
     }
 
 
-@app.get("/status/risk")
+@app.get("/status/risk", dependencies=[Depends(_require_dashboard_token)])
 async def status_risk() -> dict:
     """Return risk limits (config) and today's journal-derived risk state."""
     journal = JournalLogger(log_dir=_config.log_dir)
@@ -287,7 +370,7 @@ async def status_risk() -> dict:
     }
 
 
-@app.get("/status/adaptive")
+@app.get("/status/adaptive", dependencies=[Depends(_require_dashboard_token)])
 async def status_adaptive() -> dict:
     """Run the Adaptive Risk Committee and return the latest report."""
     from adaptive.committee import AdaptiveCommittee
@@ -296,12 +379,105 @@ async def status_adaptive() -> dict:
     return report.to_dict()
 
 
-@app.get("/status/adaptive/history")
+@app.get("/status/adaptive/history", dependencies=[Depends(_require_dashboard_token)])
 async def status_adaptive_history(days: int = Query(default=7, ge=1, le=30)) -> dict:
     """Return cached committee reports from the last N days."""
     from adaptive.committee import AdaptiveCommittee
     committee = AdaptiveCommittee(log_dir=_config.log_dir, config=_config)
     return {"days": committee.load_history(days=days)}
+
+
+# ─── Public / shareable endpoints ────────────────────────────────────────────
+
+
+@app.get("/status/public")
+async def status_public() -> dict:
+    """Sanitized read-only status — no auth required, safe to share."""
+    status = _dashboard_payload(date.today())
+    webhook = status.get("latest_webhook") or {}
+    received_at = (webhook.get("received_at") or "") if isinstance(webhook, dict) else ""
+    return {
+        "ok": True,
+        "online": True,
+        "mode": "paper" if status.get("paper_mode") else "live",
+        "today_pnl": round(float(status.get("today_pnl_dollars") or 0), 2),
+        "trades": status.get("trade_count", 0),
+        "max_trades": status.get("max_trades_per_day", 0),
+        "win_rate": status.get("win_rate", 0),
+        "wins": status.get("wins", 0),
+        "losses": status.get("losses", 0),
+        "last_signal": _format_generated_age(received_at) if received_at else None,
+    }
+
+
+@app.get("/share", response_class=HTMLResponse)
+async def share_dashboard() -> HTMLResponse:
+    """Public shareable view — shows safe summary, no private data."""
+    status = _dashboard_payload(date.today())
+    webhook = status.get("latest_webhook") or {}
+    received_at = (webhook.get("received_at") or "") if isinstance(webhook, dict) else ""
+    mode = "Paper" if status.get("paper_mode") else "Live"
+    pnl = round(float(status.get("today_pnl_dollars") or 0), 2)
+    pnl_sign = "+" if pnl >= 0 else ""
+    trades = status.get("trade_count", 0)
+    max_trades = status.get("max_trades_per_day", 0)
+    win_rate = status.get("win_rate", 0)
+    last_signal = _format_generated_age(received_at) if received_at else "No recent signal"
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RiskSentinel</title>
+  <style>
+    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    body {{ background: #1A2C1E; color: #EEF2E8; font-family: 'IBM Plex Mono', 'Courier New', monospace; display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 24px; }}
+    .card {{ background: #2C4430; border: 1px solid #3A5C3E; border-radius: 12px; padding: 28px 24px; max-width: 360px; width: 100%; box-shadow: 0 6px 24px rgba(0,0,0,0.5); }}
+    .header {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }}
+    .title {{ font-size: 13px; letter-spacing: 2px; color: #A8B8A0; font-weight: 600; }}
+    .dot {{ width: 8px; height: 8px; border-radius: 50%; background: #2AE87C; box-shadow: 0 0 6px #2AE87C; }}
+    .badge {{ font-size: 10px; background: #344C3C; border: 1px solid #3A5C3E; padding: 3px 8px; border-radius: 4px; color: #A8B8A0; letter-spacing: 1px; }}
+    .row {{ display: flex; justify-content: space-between; align-items: baseline; padding: 10px 0; border-bottom: 1px solid #3A5C3E40; }}
+    .row:last-child {{ border-bottom: none; }}
+    .label {{ font-size: 10px; color: #607864; letter-spacing: 1px; }}
+    .value {{ font-size: 14px; font-weight: 700; }}
+    .good {{ color: #2AE87C; }}
+    .bad {{ color: #FF4444; }}
+    .muted {{ color: #A8B8A0; }}
+    .footer {{ margin-top: 18px; font-size: 9px; color: #607864; letter-spacing: 1px; text-align: center; }}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header">
+      <span class="title">RISKSENTINEL</span>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span class="badge">{_escape(mode.upper())}</span>
+        <span class="dot"></span>
+      </div>
+    </div>
+    <div class="row">
+      <span class="label">TODAY P&amp;L</span>
+      <span class="value {'good' if pnl >= 0 else 'bad'}">{pnl_sign}${abs(pnl):,.2f}</span>
+    </div>
+    <div class="row">
+      <span class="label">TRADES</span>
+      <span class="value muted">{trades} / {max_trades}</span>
+    </div>
+    <div class="row">
+      <span class="label">WIN RATE</span>
+      <span class="value muted">{win_rate:.1f}%</span>
+    </div>
+    <div class="row">
+      <span class="label">LAST SIGNAL</span>
+      <span class="value muted">{_escape(last_signal)}</span>
+    </div>
+    <div class="footer">READ-ONLY · PAPER SYSTEM · AUTOMATED FUTURES TRADING</div>
+  </div>
+</body>
+</html>"""
+    return HTMLResponse(html)
 
 
 # ─── Error handlers ───────────────────────────────────────────────────────────
@@ -313,21 +489,6 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
         status_code=500,
         content={"ok": False, "error": "Internal server error"},
     )
-
-
-def _configured_webhook_secret() -> str:
-    return os.getenv("WEBHOOK_SECRET", "").strip()
-
-
-def _verify_webhook_secret(provided: str | None) -> None:
-    expected = _configured_webhook_secret()
-    # No secret configured → reject every inbound webhook unconditionally.
-    # A blank secret means the endpoint is public; that is never acceptable.
-    if not expected:
-        raise HTTPException(status_code=401, detail="WEBHOOK_SECRET is not configured.")
-    if not provided or not hmac.compare_digest(provided, expected):
-        raise HTTPException(status_code=401, detail="Invalid webhook secret")
-
 
 
 def _ibkr_gateway_reachable() -> bool | None:
