@@ -245,6 +245,48 @@ async def status_signa(symbol: str = Query(default="AAPL")) -> dict:
     }
 
 
+@app.get("/status/risk")
+async def status_risk() -> dict:
+    """Return risk limits (config) and today's journal-derived risk state."""
+    journal = JournalLogger(log_dir=_config.log_dir)
+    today = date.today()
+    daily_state = journal.get_daily_state(today)
+    account_balance = journal.get_account_balance(_config.position_sizing.starting_balance, today)
+    account_peak = journal.get_account_peak_balance(_config.position_sizing.starting_balance, today)
+
+    daily_loss_used = max(0.0, account_peak - account_balance)
+    drawdown_pct = round(((account_peak - account_balance) / account_peak * 100), 2) if account_peak else 0.0
+    max_dd_pct = _config.max_drawdown_percent * 100
+    drawdown_state = (
+        "CRITICAL" if drawdown_pct >= max_dd_pct
+        else "ELEVATED" if drawdown_pct >= (max_dd_pct * 0.5)
+        else "NORMAL"
+    )
+
+    today_str = today.isoformat()
+    news_blackout = (
+        _config.news_blackout_mode != "off"
+        and today_str in (_config.news_blackout_dates or [])
+    )
+
+    return {
+        "max_daily_loss": _config.max_daily_loss,
+        "daily_loss_used": round(daily_loss_used, 2),
+        "drawdown_state": drawdown_state,
+        "drawdown_pct": drawdown_pct,
+        "max_trades": _config.max_trades_per_day + int(getattr(_config, "bonus_trades_after_max", 0) or 0),
+        "bonus_trades": getattr(_config, "bonus_trades_after_max", 0),
+        "consecutive_losses": daily_state.consecutive_losses,
+        "max_consecutive_losses": _config.max_consecutive_losses,
+        "session_restrictions": [],
+        "news_blackout": news_blackout,
+        "news_blackout_reason": (
+            f"{_config.news_blackout_mode.upper()} — cutoff {_config.news_blackout_cutoff_et} ET"
+            if news_blackout else None
+        ),
+    }
+
+
 @app.get("/status/adaptive")
 async def status_adaptive() -> dict:
     """Run the Adaptive Risk Committee and return the latest report."""
@@ -1166,6 +1208,7 @@ def _record_latest_webhook(payload: AlertPayload, result: dict) -> None:
             "resolution": result.get("resolution"),
             "risk": result.get("risk"),
             "fill": result.get("fill"),
+            "failed_gates": result.get("failed_gates") or [],
         },
     }
     path.write_text(json.dumps(data, indent=2, sort_keys=True), encoding="utf-8")
