@@ -216,7 +216,7 @@ class JournalLogger:
 
         consecutive_wins = 0
         for r in reversed(last_outcomes):
-            if r in ("WIN", "BREAKEVEN"):
+            if r == "WIN":  # BREAKEVEN resets a loss streak but does not count toward win streak
                 consecutive_wins += 1
             else:
                 break

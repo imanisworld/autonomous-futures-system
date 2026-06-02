@@ -849,6 +849,13 @@ def _dashboard_payload(for_date: date) -> dict:
         "max_consecutive_losses": _config.max_consecutive_losses,
         "has_open_position": daily_state.has_open_position,
         "open_position": journal.get_open_position(for_date),
+        # When BROKER=tradovate and a position is open outside session hours, the
+        # bracket orders on Tradovate's side will close it. No action required from
+        # this system — just flag it so the dashboard makes the state obvious.
+        "position_bracket_managed": (
+            daily_state.has_open_position
+            and os.getenv("BROKER", "paper").strip().lower() == "tradovate"
+        ),
         "no_trades": summary.get("no_trades", 0),
         "wins": wins,
         "losses": losses,

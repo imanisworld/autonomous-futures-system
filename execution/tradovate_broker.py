@@ -98,6 +98,8 @@ class TradovateBroker(BrokerInterface):
         self._last_position: Optional[Position] = None
         self._account_id: Optional[int] = None
         self._contract_cache: dict[str, int] = {}  # root symbol → contract ID
+        self._resolve_fail_count: int = 0          # consecutive resolve_position failures
+        self._position_opened_at: Optional[float] = None  # time.time() when bracket placed
 
     # ── Auth ──────────────────────────────────────────────────────────────────
 
@@ -256,6 +258,8 @@ class TradovateBroker(BrokerInterface):
                 quantity=qty,
                 open=True,
             )
+            self._position_opened_at = time.time()
+            self._resolve_fail_count = 0
 
             return Fill(
                 instrument=order.instrument,
@@ -390,6 +394,7 @@ class TradovateBroker(BrokerInterface):
         try:
             pos = self.get_position()
             if pos and pos.open:
+                self._resolve_fail_count = 0  # successful check — reset counter
                 return None  # still open
             # Position is gone — capture before clearing, then look at fill history
             last = self._last_position
@@ -408,6 +413,8 @@ class TradovateBroker(BrokerInterface):
             result = "WIN" if pnl_dollars > 0 else "LOSS" if pnl_dollars < 0 else "BREAKEVEN"
             exit_reason = "TARGET_HIT" if pnl_dollars > 0 else "STOP_HIT"
             self._last_position = None
+            self._resolve_fail_count = 0
+            self._position_opened_at = None
             return Fill(
                 instrument=instrument,
                 direction=last.direction,
@@ -420,7 +427,27 @@ class TradovateBroker(BrokerInterface):
                 pnl_dollars=pnl_dollars,
             )
         except Exception as exc:
-            logger.warning("Tradovate resolve_position failed: %s", exc)
+            self._resolve_fail_count += 1
+            hours_open = (
+                (time.time() - self._position_opened_at) / 3600
+                if self._position_opened_at else 0
+            )
+            # Escalate: warn every failure, error after 5 consecutive failures
+            if self._resolve_fail_count >= 5:
+                logger.error(
+                    "ORPHANED POSITION: resolve_position has failed %d consecutive times "
+                    "(%.1fh since entry, instrument=%s). Token may be expired and "
+                    "not refreshing. Manual check required. Error: %s",
+                    self._resolve_fail_count,
+                    hours_open,
+                    self._last_position.instrument if self._last_position else "unknown",
+                    exc,
+                )
+            else:
+                logger.warning(
+                    "Tradovate resolve_position failed (attempt %d, %.1fh open): %s",
+                    self._resolve_fail_count, hours_open, exc,
+                )
             return None
 
     def get_account_balance(self) -> Optional[float]:
