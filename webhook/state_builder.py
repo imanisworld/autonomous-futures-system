@@ -254,9 +254,14 @@ def build_market_state(payload: AlertPayload) -> MarketState:
         orb_status_val = payload.london_orb_status or derive_orb_status(
             payload.close, orb_h, orb_l
         )
+    elif session == "london" and payload.orb_high is not None:
+        # London ORB fields absent — fall back to standard ORB from Pine.
+        # Pine sends orb_status directly; trust it over deriving from levels.
+        orb_h = payload.orb_high
+        orb_l = payload.orb_low if payload.orb_low is not None else payload.low
+        orb_status_val = payload.orb_status or derive_orb_status(payload.close, orb_h, orb_l)
     elif session == "london":
-        # London ORB not yet established — use current bar as placeholder so
-        # ORBData stays valid, but status stays undefined so no ORB strategy fires.
+        # No ORB data at all — placeholder so ORBData stays valid.
         orb_h = payload.high
         orb_l = payload.low
         orb_status_val = "undefined"
