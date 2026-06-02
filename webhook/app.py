@@ -258,6 +258,12 @@ async def strategy_status() -> dict:
     return _strategy_payload(date.today())
 
 
+@app.get("/status/diagnostics")
+async def status_diagnostics() -> dict:
+    """Return plain-English component health and likely break reasons."""
+    return _diagnostics_payload(date.today())
+
+
 @app.get("/status/review")
 async def status_review(
     review_date: str | None = Query(default=None, alias="date"),
@@ -482,6 +488,141 @@ def _ibkr_gateway_reachable() -> bool | None:
         return False
 
 
+def _diagnostic(status: str, component: str, message: str, next_step: str | None = None) -> dict:
+    item = {
+        "status": status,
+        "component": component,
+        "message": message,
+    }
+    if next_step:
+        item["next_step"] = next_step
+    return item
+
+
+def _latest_webhook_age_seconds() -> int | None:
+    latest = _latest_webhook_payload()
+    received_at = latest.get("received_at")
+    if not received_at:
+        return None
+    try:
+        received = datetime.fromisoformat(str(received_at).replace("Z", "+00:00"))
+        if received.tzinfo is None:
+            received = received.replace(tzinfo=timezone.utc)
+        return max(0, int((datetime.now(timezone.utc) - received).total_seconds()))
+    except (TypeError, ValueError):
+        return None
+
+
+def _diagnostics_payload(for_date: date) -> dict:
+    broker = os.getenv("BROKER", "paper").strip().lower()
+    gateway = _ibkr_gateway_reachable()
+    latest_age = _latest_webhook_age_seconds()
+    journal = JournalLogger(log_dir=_config.log_dir)
+    journal_path = journal._journal_path(for_date)
+    items = [
+        _diagnostic("ok", "Backend API", "FastAPI is responding on the public API routes."),
+    ]
+
+    if _config.live_trading_enabled:
+        items.append(_diagnostic(
+            "error",
+            "Trading mode",
+            "Live trading is enabled. This system should be paper-only right now.",
+            "Set LIVE_TRADING_ENABLED=false and PAPER_MODE=true, then restart the service.",
+        ))
+    elif _config.paper_mode:
+        items.append(_diagnostic("ok", "Trading mode", "Paper mode is active; live trading is off."))
+    else:
+        items.append(_diagnostic(
+            "warn",
+            "Trading mode",
+            "Live trading is off, but PAPER_MODE is not true.",
+            "Set PAPER_MODE=true so the dashboard state is unambiguous.",
+        ))
+
+    if _configured_webhook_secret():
+        items.append(_diagnostic("ok", "Webhook secret", "TradingView webhook protection is configured."))
+    else:
+        items.append(_diagnostic(
+            "error",
+            "Webhook secret",
+            "WEBHOOK_SECRET is missing, so inbound alerts will be rejected.",
+            "Set WEBHOOK_SECRET on the server and include it in the TradingView webhook URL.",
+        ))
+
+    if broker == "ibkr":
+        if gateway is True:
+            items.append(_diagnostic("ok", "IBKR gateway", "IBKR Gateway is reachable from the backend."))
+        elif gateway is False:
+            items.append(_diagnostic(
+                "error",
+                "IBKR gateway",
+                "BROKER=ibkr, but the backend cannot reach IBKR Gateway.",
+                "Check IBKR Gateway/TWS is running and IBKR_HOST/IBKR_PORT match the server.",
+            ))
+        else:
+            items.append(_diagnostic("warn", "IBKR gateway", "IBKR gateway status is unknown."))
+    else:
+        items.append(_diagnostic("ok", "Broker", f"Broker is set to {broker}; IBKR gateway is not required."))
+
+    if _config.discord_notifications_enabled and not _config.discord_webhook_url:
+        items.append(_diagnostic(
+            "warn",
+            "Discord alerts",
+            "Discord alerts are enabled, but no Discord webhook URL is configured.",
+            "Set DISCORD_WEBHOOK_URL or turn DISCORD_NOTIFICATIONS_ENABLED=false.",
+        ))
+    elif _config.discord_notifications_enabled:
+        items.append(_diagnostic("ok", "Discord alerts", "Discord alerts are enabled and have a webhook URL."))
+    else:
+        items.append(_diagnostic("info", "Discord alerts", "Discord alerts are off."))
+
+    if _config.signa_api_enabled and not _config.signa_api_key_configured:
+        items.append(_diagnostic(
+            "warn",
+            "Signa",
+            "Signa is enabled, but the API key is not configured.",
+            "Set SIGNA_API_KEY or turn SIGNA_API_ENABLED=false.",
+        ))
+    elif _config.signa_api_enabled:
+        items.append(_diagnostic("ok", "Signa", "Signa is enabled and configured."))
+    else:
+        items.append(_diagnostic("info", "Signa", "Signa is off."))
+
+    if latest_age is None:
+        items.append(_diagnostic(
+            "warn",
+            "TradingView alerts",
+            "No TradingView webhook has been received yet.",
+            "Check the TradingView alert URL and webhook secret.",
+        ))
+    elif latest_age > 15 * 60:
+        items.append(_diagnostic(
+            "warn",
+            "TradingView alerts",
+            f"Last TradingView webhook was {_format_generated_age(_latest_webhook_payload().get('received_at'))}.",
+            "If the market is open, check whether the TradingView alert is still running.",
+        ))
+    else:
+        items.append(_diagnostic("ok", "TradingView alerts", "A TradingView webhook was received recently."))
+
+    if journal_path.exists():
+        items.append(_diagnostic("ok", "Journal", f"Today journal exists at {journal_path}."))
+    else:
+        items.append(_diagnostic("info", "Journal", "No journal file exists yet today; no decisions have been recorded."))
+
+    rank = {"error": 3, "warn": 2, "info": 1, "ok": 0}
+    worst = max(items, key=lambda item: rank.get(item["status"], 0))
+    overall = "error" if worst["status"] == "error" else "warn" if worst["status"] == "warn" else "ok"
+    return {
+        "ok": overall == "ok",
+        "overall_status": overall,
+        "checked_at": datetime.now(timezone.utc).isoformat(),
+        "top_issue": None if overall == "ok" else worst,
+        "items": items,
+    }
+
+
 def _dashboard_payload(for_date: date) -> dict:
     journal = JournalLogger(log_dir=_config.log_dir)
     daily_state = journal.get_daily_state(for_date)
@@ -503,6 +644,7 @@ def _dashboard_payload(for_date: date) -> dict:
     account_balance = journal.get_account_balance(_config.position_sizing.starting_balance, for_date)
     account_peak = journal.get_account_peak_balance(_config.position_sizing.starting_balance, for_date)
     realized_pnl = round(account_balance - _config.position_sizing.starting_balance, 2)
+    diagnostics = _diagnostics_payload(for_date)
     return {
         "date": daily_state.date,
         "live_trading_enabled": _config.live_trading_enabled,
@@ -531,6 +673,7 @@ def _dashboard_payload(for_date: date) -> dict:
         "strategy_status": _strategy_payload(for_date),
         "performance": journal.get_performance_stats(_config.position_sizing.starting_balance),
         "broker_gateway_reachable": _ibkr_gateway_reachable(),
+        "diagnostics": diagnostics,
     }
 
 

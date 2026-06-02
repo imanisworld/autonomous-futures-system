@@ -783,6 +783,33 @@ def test_fastapi_status_today_endpoint():
     assert data["max_trades_per_day"] == 5  # 3 normal + 2 bonus
     assert "latest_entries" in data
     assert "top_no_trade_reasons" in data
+    assert "diagnostics" in data
+    assert "items" in data["diagnostics"]
+
+
+def test_fastapi_status_diagnostics_endpoint(monkeypatch, tmp_path):
+    try:
+        from fastapi.testclient import TestClient
+        import webhook.app as app_module
+        from webhook.app import app
+    except ImportError:
+        pytest.skip("fastapi[testclient] not installed")
+
+    _isolate_app_logs(monkeypatch, tmp_path)
+    monkeypatch.setenv("BROKER", "paper")
+    monkeypatch.setenv("WEBHOOK_SECRET", "test-secret")
+    monkeypatch.setattr(app_module._config, "discord_notifications_enabled", True)
+    monkeypatch.setattr(app_module._config, "discord_webhook_url", "")
+
+    client = TestClient(app)
+    resp = client.get("/status/diagnostics")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["overall_status"] == "warn"
+    assert data["top_issue"]["component"] in {"Discord alerts", "TradingView alerts"}
+    components = {item["component"] for item in data["items"]}
+    assert {"Backend API", "Trading mode", "Webhook secret", "Discord alerts"}.issubset(components)
 
 
 def test_fastapi_status_history_endpoint():
