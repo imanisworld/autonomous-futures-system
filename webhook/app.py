@@ -316,6 +316,7 @@ def _dashboard_payload(for_date: date) -> dict:
         ],
         "latest_webhook": _latest_webhook_payload(),
         "strategy_status": _strategy_payload(for_date),
+        "performance": journal.get_performance_stats(_config.position_sizing.starting_balance),
     }
 
 
@@ -443,6 +444,17 @@ def _render_dashboard(status: dict) -> str:
     )
     if committee_generated_label:
         committee_summary = f"{committee_summary} · generated {committee_generated_label}"
+
+    perf = status.get("performance") or {}
+    pf_val = perf.get("profit_factor")
+    pf_str = f"{pf_val:.2f}×" if pf_val is not None else "—"
+    avg_win_str   = _fmt_stat(perf.get("avg_win"))
+    avg_loss_str  = _fmt_stat(perf.get("avg_loss"))
+    maxdd_str     = _fmt_stat(perf.get("max_drawdown"))
+    best_day_str  = _fmt_stat(perf.get("best_day"))
+    worst_day_str = _fmt_stat(perf.get("worst_day"))
+    lg_win_str    = _fmt_stat(perf.get("largest_win"))
+    lg_loss_str   = _fmt_stat(perf.get("largest_loss"))
 
     latest_rows = "\n".join(_render_entry_row(entry) for entry in status["latest_entries"])
     reason_rows = "\n".join(
@@ -631,6 +643,27 @@ def _render_dashboard(status: dict) -> str:
       min-height: 20px;
       overflow-wrap: anywhere;
     }}
+    .stats-grid {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      margin-top: 10px;
+    }}
+    .stat-item {{
+      border-top: 1px solid var(--line);
+      padding: 10px 6px;
+    }}
+    .stat-item label {{
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      margin-bottom: 4px;
+    }}
+    .stat-item strong {{
+      font-size: 18px;
+      font-weight: 700;
+    }}
     @media (max-width: 760px) {{
       header, .wide {{ grid-template-columns: 1fr; display: grid; }}
       .grid {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
@@ -680,6 +713,20 @@ def _render_dashboard(status: dict) -> str:
     <section class="panel" style="margin-bottom:14px;">
       <h2>Equity Curve <span id="chart-range" style="font-size:11px;font-weight:400;color:var(--muted);margin-left:8px;"></span></h2>
       <canvas id="pnl-chart" style="width:100%;height:140px;display:block;margin-top:10px;border-radius:4px;"></canvas>
+    </section>
+
+    <section class="panel" style="margin-bottom:14px;">
+      <h2>Performance Stats <span style="font-size:11px;font-weight:400;color:var(--muted);margin-left:8px;">all-time</span></h2>
+      <div class="stats-grid">
+        <div class="stat-item"><label>Profit Factor</label><strong id="stat-pf">{pf_str}</strong></div>
+        <div class="stat-item"><label>Avg Win</label><strong id="stat-avg-win" class="green">{avg_win_str}</strong></div>
+        <div class="stat-item"><label>Avg Loss</label><strong id="stat-avg-loss" class="red">{avg_loss_str}</strong></div>
+        <div class="stat-item"><label>Max Drawdown</label><strong id="stat-maxdd" class="amber">{maxdd_str}</strong></div>
+        <div class="stat-item"><label>Best Day</label><strong id="stat-best-day" class="green">{best_day_str}</strong></div>
+        <div class="stat-item"><label>Worst Day</label><strong id="stat-worst-day" class="red">{worst_day_str}</strong></div>
+        <div class="stat-item"><label>Largest Win</label><strong id="stat-lg-win" class="green">{lg_win_str}</strong></div>
+        <div class="stat-item"><label>Largest Loss</label><strong id="stat-lg-loss" class="red">{lg_loss_str}</strong></div>
+      </div>
     </section>
 
     <section class="wide">
@@ -935,6 +982,23 @@ def _render_dashboard(status: dict) -> str:
             ? today.latest_entries.map(renderEntryRow).join('')
             : '<tr><td colspan="6">No journal entries yet.</td></tr>';
         }}
+        // Performance stats
+        const perf = today.performance || {{}};
+        function updStat(id, val, prefix) {{
+          const el = document.getElementById(id);
+          if (!el) return;
+          el.textContent = val != null ? ((prefix || '$') + Number(val).toFixed(2)) : '—';
+        }}
+        const pfEl = document.getElementById('stat-pf');
+        if (pfEl) pfEl.textContent = perf.profit_factor != null ? Number(perf.profit_factor).toFixed(2) + '×' : '—';
+        updStat('stat-avg-win',   perf.avg_win);
+        updStat('stat-avg-loss',  perf.avg_loss);
+        updStat('stat-maxdd',     perf.max_drawdown);
+        updStat('stat-best-day',  perf.best_day);
+        updStat('stat-worst-day', perf.worst_day);
+        updStat('stat-lg-win',    perf.largest_win);
+        updStat('stat-lg-loss',   perf.largest_loss);
+
         window.__riskSentinelHistory = history;
         drawPnlChart(history);
       }} catch (error) {{
@@ -1062,6 +1126,13 @@ def _payload_to_dict(payload: AlertPayload) -> dict:
     if hasattr(payload, "model_dump"):
         return payload.model_dump()
     return payload.dict()
+
+
+def _fmt_stat(value: object, prefix: str = "$", none_str: str = "—") -> str:
+    """Format a numeric stat for display, returning none_str when value is None."""
+    if value is None:
+        return none_str
+    return f"{prefix}{float(value):.2f}"
 
 
 def _escape(value: object) -> str:

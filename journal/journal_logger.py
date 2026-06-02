@@ -336,6 +336,74 @@ class JournalLogger:
                 peak = max(peak, balance)
         return round(peak, 2)
 
+    def get_performance_stats(self, starting_balance: float) -> dict:
+        """
+        All-time performance statistics derived from resolved OUTCOME entries
+        across every journal file.  Handles both the standalone OUTCOME entry
+        format (current) and the older inline outcome-on-TRADE format.
+        """
+        paths = sorted(self.log_dir.glob("journal_*.jsonl"))
+
+        wins: list[float] = []      # pnl_dollars for each WIN
+        losses: list[float] = []    # abs(pnl_dollars) for each LOSS
+        daily_pnl: dict[str, float] = {}
+
+        balance = float(starting_balance)
+        peak = balance
+        max_drawdown = 0.0
+
+        for path in paths:
+            day_str = path.stem[len("journal_"):]
+            day_pnl = 0.0
+
+            for entry in self._read_entries(path):
+                pnl: Optional[float] = None
+                result: Optional[str] = None
+
+                if entry.get("type") == "OUTCOME":
+                    out = entry.get("outcome") or {}
+                    result = out.get("result")
+                    pnl = float(out.get("pnl_dollars") or 0.0)
+                elif entry.get("decision") == "TRADE":
+                    risk = entry.get("risk_check") or {}
+                    if risk.get("result") == "APPROVED":
+                        out = entry.get("outcome") or {}
+                        result = out.get("result")
+                        if result in ("WIN", "LOSS", "BREAKEVEN"):
+                            pnl = float(out.get("pnl_dollars") or 0.0)
+
+                if pnl is not None and result in ("WIN", "LOSS", "BREAKEVEN"):
+                    day_pnl += pnl
+                    balance += pnl
+                    if balance > peak:
+                        peak = balance
+                    dd = peak - balance
+                    if dd > max_drawdown:
+                        max_drawdown = dd
+                    if result == "WIN" and pnl > 0:
+                        wins.append(pnl)
+                    elif result == "LOSS":
+                        losses.append(abs(pnl))
+
+            if day_pnl:
+                daily_pnl[day_str] = round(day_pnl, 2)
+
+        gross_win = sum(wins)
+        gross_loss = sum(losses)
+        return {
+            "total_trades": len(wins) + len(losses),
+            "wins": len(wins),
+            "losses": len(losses),
+            "profit_factor": round(gross_win / gross_loss, 2) if gross_loss else None,
+            "avg_win": round(gross_win / len(wins), 2) if wins else None,
+            "avg_loss": round(gross_loss / len(losses), 2) if losses else None,
+            "largest_win": round(max(wins), 2) if wins else None,
+            "largest_loss": round(max(losses), 2) if losses else None,
+            "best_day": round(max(daily_pnl.values()), 2) if daily_pnl else None,
+            "worst_day": round(min(daily_pnl.values()), 2) if daily_pnl else None,
+            "max_drawdown": round(max_drawdown, 2),
+        }
+
     def get_summary(self, for_date: Optional[date] = None) -> dict:
         """Return a human-readable summary of today's trading activity."""
         path = self._journal_path(for_date)
