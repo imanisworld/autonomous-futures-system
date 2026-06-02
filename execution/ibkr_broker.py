@@ -322,6 +322,172 @@ class IBKRBroker(BrokerInterface):
             supports_options=False,
         )
 
+    def resolve_position(self) -> Fill | None:
+        """Query IBKR for fills on the child stop/target orders of the open bracket.
+
+        Returns a Fill if the position was closed (stop or target hit), or None
+        if the position is still open. This is the IBKR equivalent of PaperBroker's
+        NextBarOHLC simulation — instead of simulating, we ask IBKR what happened.
+
+        Called once per incoming webhook bar when BROKER=ibkr and a position is open.
+        """
+        if not self._last_position or not self._last_position.open:
+            return None
+
+        try:
+            if not self.connected and not self.connect():
+                logger.warning("IBKR resolve_position: not connected, cannot check fills")
+                return None
+
+            # Check whether any of our tracked child orders have been filled
+            closed_trade = self._find_closed_child_trade()
+            if closed_trade is None:
+                # Also check live positions — if flat, the order closed outside our tracking
+                if not self._ibkr_has_open_position():
+                    return self._synthesize_fill_from_account()
+                return None
+
+            return closed_trade
+
+        except Exception as exc:  # pragma: no cover - API errors vary
+            logger.warning("IBKR resolve_position failed: %s", exc)
+            return None
+
+    def _find_closed_child_trade(self) -> Fill | None:
+        """Scan recent fills for a filled child order (stop or target) from our bracket."""
+        if not self._last_order_ids:
+            return None
+        try:
+            trades = self._ib.trades() if hasattr(self._ib, "trades") else []
+            for trade in trades:
+                order = getattr(trade, "order", None)
+                order_id = getattr(order, "orderId", None)
+                if order_id not in self._last_order_ids:
+                    continue
+                order_type = getattr(order, "orderType", "").upper()
+                status = getattr(getattr(trade, "orderStatus", None), "status", "")
+                if status != "Filled":
+                    continue
+                fills = getattr(trade, "fills", []) or []
+                if not fills:
+                    continue
+                avg_price = self._avg_fill_price([trade]) or (
+                    self._last_position.entry_price if self._last_position else 0.0
+                )
+                is_stop = order_type in ("STP", "STOP", "TRAIL", "TRAILLMT")
+                is_target = order_type in ("LMT", "LIMIT")
+                if not is_stop and not is_target:
+                    continue
+                return self._build_fill_from_close(avg_price, is_stop=is_stop)
+        except Exception as exc:  # pragma: no cover
+            logger.debug("IBKR _find_closed_child_trade error: %s", exc)
+        return None
+
+    def _ibkr_has_open_position(self) -> bool:
+        """Return True if IBKR reports a non-zero position for our instrument."""
+        if self._last_position is None:
+            return False
+        try:
+            for pos in self._ib.positions():
+                contract = getattr(pos, "contract", None)
+                symbol = getattr(contract, "symbol", "")
+                qty = float(getattr(pos, "position", 0) or 0)
+                if symbol.upper() == self._last_position.instrument.upper() and qty != 0:
+                    return True
+        except Exception as exc:  # pragma: no cover
+            logger.debug("IBKR position check error: %s", exc)
+        return False
+
+    def _synthesize_fill_from_account(self) -> Fill | None:
+        """
+        Position closed externally (manual close, margin call, etc.).
+        Best-effort fallback when no order fill record is available.
+        Conservatively marks as LOSS since we can't determine the outcome.
+        """
+        if self._last_position is None:
+            return None
+        pos = self._last_position  # capture before clearing
+        logger.warning(
+            "IBKR position closed outside bracket tracking for %s — synthesising fill",
+            pos.instrument,
+        )
+        self._last_position = None
+        self._last_order_ids = []
+        return Fill(
+            instrument=pos.instrument,
+            direction=pos.direction,
+            contracts=pos.quantity,
+            entry_price=pos.entry_price,
+            exit_price=None,
+            exit_reason="EXTERNAL_CLOSE",
+            result="LOSS",
+            pnl_ticks=None,
+            pnl_dollars=None,
+        )
+
+    def _build_fill_from_close(self, exit_price: float, *, is_stop: bool) -> Fill | None:
+        """Build a Fill from a known exit price and order type."""
+        if self._last_position is None:
+            return None
+        pos = self._last_position
+        tick_size = 0.25
+        tick_values = {"MES": 1.25, "ES": 12.50, "MNQ": 0.50, "NQ": 5.00, "MGC": 1.00, "MCL": 1.00}
+        tick_value = tick_values.get(pos.instrument.upper().rstrip("!1234567890HMUZ"), 1.25)
+
+        raw_ticks = (exit_price - pos.entry_price) / tick_size
+        signed_ticks = raw_ticks if pos.direction == "LONG" else -raw_ticks
+        pnl_dollars = round(signed_ticks * tick_value * pos.quantity, 2)
+
+        if signed_ticks > 0:
+            result = "WIN"
+        elif signed_ticks < 0:
+            result = "LOSS"
+        else:
+            result = "BREAKEVEN"
+
+        exit_reason = "STOP_HIT" if is_stop else "TARGET_HIT"
+
+        # Clear tracking state
+        self._last_position = None
+        self._last_order_ids = []
+
+        return Fill(
+            instrument=pos.instrument,
+            direction=pos.direction,
+            contracts=pos.quantity,
+            entry_price=pos.entry_price,
+            exit_price=exit_price,
+            exit_reason=exit_reason,
+            result=result,
+            pnl_ticks=round(signed_ticks, 2),
+            pnl_dollars=pnl_dollars,
+        )
+
+    def sync_open_position(self) -> Position | None:
+        """Query IBKR for any open position and update internal state.
+
+        Called at startup to reconcile journal state with what IBKR actually holds.
+        Returns the Position if one exists, None if flat.
+        """
+        try:
+            if not self.connected and not self.connect():
+                return None
+            for ib_pos in self._ib.positions():
+                pos = self._position_from_ib(ib_pos)
+                if pos is not None:
+                    self._last_position = pos
+                    logger.info(
+                        "IBKR sync: found open position %s %s qty=%s avg=%.2f",
+                        pos.direction, pos.instrument, pos.quantity, pos.entry_price,
+                    )
+                    return pos
+            # Flat on IBKR side
+            self._last_position = None
+            logger.info("IBKR sync: no open positions")
+        except Exception as exc:  # pragma: no cover
+            logger.warning("IBKR sync_open_position failed: %s", exc)
+        return None
+
     def health_check(self) -> dict[str, Any]:
         """Return a lightweight local status snapshot for overnight monitoring."""
         return {
@@ -456,12 +622,27 @@ class IBKRBroker(BrokerInterface):
         )
 
     def _available_cash(self) -> float | None:
+        """Return account equity suitable for position sizing.
+
+        Priority: NetLiquidation → TotalCashValue → AvailableFunds.
+        NetLiquidation is the correct balance basis for paper Gateway because
+        AvailableFunds excludes margin already in use and understates the
+        account value when a position is open.
+        """
         try:
             if not self.connected:
                 return None
-            for item in self._ib.accountSummary():
-                if getattr(item, "tag", "") in {"AvailableFunds", "TotalCashValue"}:
-                    return float(item.value)
+            summary = {
+                getattr(item, "tag", ""): item
+                for item in self._ib.accountSummary()
+            }
+            for tag in ("NetLiquidation", "TotalCashValue", "AvailableFunds"):
+                item = summary.get(tag)
+                if item is not None:
+                    try:
+                        return float(item.value)
+                    except (TypeError, ValueError):
+                        continue
         except Exception as exc:  # pragma: no cover - exact API errors vary
             logger.debug("IBKR account summary unavailable: %s", exc)
         return None

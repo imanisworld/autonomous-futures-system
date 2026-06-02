@@ -130,6 +130,7 @@ def process_alert(
         }
 
     _maybe_enrich_payload_with_signa(payload, cfg)
+    _maybe_sync_ibkr_position_on_startup(cfg)
     state = build_market_state(payload)
     journal = JournalLogger(log_dir=log_dir)
     today = for_date or date.today()
@@ -163,36 +164,55 @@ def process_alert(
         "confidence_score": None,
     }
 
-    # ── Step 1: Resolve any open position with this bar's OHLC ───────────────
+    # ── Step 1: Resolve any open position ────────────────────────────────────
+    # Paper mode: simulate using next-bar OHLC.
+    # IBKR mode: query actual fills from the Gateway — the bracket child orders
+    # (stop and target) are already live on IBKR's side.
     if daily_state.has_open_position:
         if open_pos and _position_is_complete(open_pos):
-            broker = PaperBroker(
-                starting_balance=journal.get_account_balance(
-                    cfg.position_sizing.starting_balance, today
+            broker_type = os.getenv("BROKER", "paper").strip().lower()
+            if broker_type == "ibkr":
+                from execution.ibkr_broker import IBKRBroker, IBKRConfig
+                ibkr = IBKRBroker(config=IBKRConfig.from_env(), auto_connect=True)
+                # Restore internal position state so resolve_position knows what to look for
+                ibkr._last_position = ibkr._position_from_ib(
+                    type("_P", (), {
+                        "contract": type("_C", (), {"symbol": open_pos["instrument"] or state.instrument})(),
+                        "position": (1 if open_pos["direction"] == "LONG" else -1) * int(open_pos.get("contracts", 1)),
+                        "avgCost": float(open_pos["entry"]),
+                    })()
                 )
-            )
-            broker.restore_position(
-                instrument=open_pos["instrument"] or state.instrument,
-                direction=open_pos["direction"],
-                entry=float(open_pos["entry"]),
-                stop=float(open_pos["stop"]),
-                target=float(open_pos["target"]),
-                contracts=int(open_pos.get("contracts", 1)),
-            )
-            fill = broker.resolve_position(
-                NextBarOHLC(high=payload.high, low=payload.low)
-            )
+                ibkr._last_order_ids = []  # order IDs not persisted — rely on position check
+                fill = ibkr.resolve_position()
+            else:
+                broker = PaperBroker(
+                    starting_balance=journal.get_account_balance(
+                        cfg.position_sizing.starting_balance, today
+                    )
+                )
+                broker.restore_position(
+                    instrument=open_pos["instrument"] or state.instrument,
+                    direction=open_pos["direction"],
+                    entry=float(open_pos["entry"]),
+                    stop=float(open_pos["stop"]),
+                    target=float(open_pos["target"]),
+                    contracts=int(open_pos.get("contracts", 1)),
+                )
+                fill = broker.resolve_position(
+                    NextBarOHLC(high=payload.high, low=payload.low)
+                )
 
-            # ── Stale-position safety net ─────────────────────────────────────
+            # ── Stale-position safety net (paper mode only) ───────────────────
             # If resolve_position returned None (stop/target not hit), check
             # whether the position has gone stale:
             #   (a) price-scale mismatch: current close differs from stored entry
-            #       by more than 30% — prices are from wrong instrument/chart.
+            #       by more than 5% — prices are from wrong instrument/chart.
             #   (b) age timeout: position has been open for more than 8 hours —
             #       intraday paper positions should not survive a full session.
             # In either case, force-close at the current bar's close price so
             # the system never stays blocked by an unresolvable open position.
-            if fill is None:
+            # IBKR mode: skip — IBKR manages the bracket; None just means still open.
+            if fill is None and broker_type != "ibkr":
                 entry_price = float(open_pos["entry"])
                 price_ratio = abs(payload.close - entry_price) / entry_price if entry_price else 1.0
                 position_age_hours: float = 999.0
@@ -247,11 +267,6 @@ def process_alert(
                         daily_state.last_loss_at = state.timestamp
                     elif exit_result in ("WIN", "BREAKEVEN"):
                         daily_state.consecutive_losses = 0
-                    send_telegram_message(
-                        f"⚠️ FORCE_CLOSE ({reason}): "
-                        f"{open_pos.get('instrument')} {contracts}c "
-                        f"P&L ${pnl_dollars:.2f}"
-                    )
 
             if fill is not None:
                 journal.log_outcome(
@@ -268,8 +283,9 @@ def process_alert(
                 )
                 result["resolution"] = fill.result
                 if fill.result in {"WIN", "LOSS"}:
-                    send_telegram_message(
-                        f"{fill.result}: {fill.instrument} {fill.contracts}c P&L ${float(fill.pnl_dollars or 0):.2f}"
+                    logger.info(
+                        "%s: %s %sc P&L $%.2f",
+                        fill.result, fill.instrument, fill.contracts, float(fill.pnl_dollars or 0),
                     )
                 daily_state.has_open_position = False
                 daily_state.realized_pnl_dollars += float(fill.pnl_dollars or 0.0)
@@ -363,7 +379,7 @@ def process_alert(
     if not risk_result.approved:
         result["decision"] = "RISK_REJECTED"
         if risk_result.failed_rule in {"circuit_breaker", "max_daily_loss", "max_drawdown"}:
-            send_telegram_message(f"CIRCUIT_BREAKER: {risk_result.reason}")
+            logger.warning("CIRCUIT_BREAKER: %s", risk_result.reason)
         return result
 
     # ── Step 5: Execute bracket order ────────────────────────────────────────
@@ -385,9 +401,7 @@ def process_alert(
             "Bracket order failed for %s %s: fill_result=%s",
             order.instrument, order.direction, fill.result,
         )
-        send_telegram_message(
-            f"ORDER FAILED: {order.instrument} {order.direction} — {fill.result}"
-        )
+        logger.error("ORDER FAILED: %s %s — %s", order.instrument, order.direction, fill.result)
         result["decision"] = "BLOCKED_EXECUTION_FAILED"
         result["fill"] = {
             "status": fill.result,
@@ -399,8 +413,9 @@ def process_alert(
         }
         return result
 
-    send_telegram_message(
-        f"TRADE: {order.instrument} {order.direction} {order.contracts}c @ {order.entry} stop {order.stop} target {order.target}"
+    logger.info(
+        "TRADE: %s %s %sc @ %s stop %s target %s",
+        order.instrument, order.direction, order.contracts, order.entry, order.stop, order.target,
     )
     daily_state.trade_count += 1
     daily_state.has_open_position = True
@@ -420,6 +435,36 @@ def process_alert(
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
+
+_ibkr_synced_today: set[str] = set()  # dates already synced — one sync per calendar day
+
+
+def _maybe_sync_ibkr_position_on_startup(cfg: SystemConfig) -> None:
+    """Sync open position state from IBKR Gateway once per calendar day.
+
+    Only runs when BROKER=ibkr. Logs a warning if IBKR reports a position
+    that the journal doesn't know about (manual trade, overnight carry, etc.).
+    This is informational only — it does not write to the journal.
+    """
+    if os.getenv("BROKER", "paper").strip().lower() != "ibkr":
+        return
+    today_str = date.today().isoformat()
+    if today_str in _ibkr_synced_today:
+        return
+    _ibkr_synced_today.add(today_str)
+    try:
+        from execution.ibkr_broker import IBKRBroker, IBKRConfig
+        ibkr = IBKRBroker(config=IBKRConfig.from_env(), auto_connect=True)
+        pos = ibkr.sync_open_position()
+        if pos:
+            logger.info(
+                "IBKR startup sync: open position found — %s %s qty=%s avg=%.2f. "
+                "Verify this matches the journal open position.",
+                pos.direction, pos.instrument, pos.quantity, pos.entry_price,
+            )
+    except Exception as exc:  # pragma: no cover - Gateway may not be reachable
+        logger.warning("IBKR startup sync failed (Gateway not reachable?): %s", exc)
+
 
 def _maybe_enrich_payload_with_signa(payload: AlertPayload, cfg: SystemConfig) -> None:
     """Best-effort Signa shadow enrichment. Never raises, never blocks."""
@@ -542,30 +587,3 @@ def _check_payload_quality(payload: AlertPayload, cfg: SystemConfig) -> Optional
     return None
 
 
-def send_telegram_message(message: str) -> bool:
-    """Optional Telegram notification. Disabled unless token/chat env vars exist.
-
-    Fires in a daemon thread so a slow or unreachable Telegram API never
-    blocks the webhook response path.
-    """
-    token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
-    chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
-    if not token or not chat_id:
-        return False
-
-    import threading
-
-    def _send() -> None:
-        try:
-            import httpx
-            response = httpx.post(
-                f"https://api.telegram.org/bot{token}/sendMessage",
-                json={"chat_id": chat_id, "text": message},
-                timeout=5,
-            )
-            response.raise_for_status()
-        except Exception as exc:  # pragma: no cover - network/env dependent
-            logger.warning("Telegram notification failed: %s", exc)
-
-    threading.Thread(target=_send, daemon=True).start()
-    return True
