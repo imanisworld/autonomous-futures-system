@@ -403,8 +403,31 @@ class TradovateBroker(BrokerInterface):
         try:
             if not self._authenticate():
                 return None
-            data = self._get(f"/cashBalance/getCashBalanceSnapshot?accountId={self._account_id}")
-            return float(data.get("totalCashValue", data.get("cashBalance", 0)))
+            # Resolve account ID if not yet known
+            if self._account_id is None:
+                self._resolve_account_id()
+            if self._account_id is None:
+                logger.warning("Tradovate get_account_balance: account ID unknown")
+                return None
+            # Try cash-balance snapshot first; field names vary by API version
+            try:
+                data = self._get(f"/cashBalance/getCashBalanceSnapshot?accountId={self._account_id}")
+                for key in ("totalCashValue", "cashBalance", "netLiq", "balance"):
+                    val = data.get(key)
+                    if val is not None:
+                        return float(val)
+            except Exception:
+                pass
+            # Fallback: account list carries netLiq directly
+            accounts = self._get("/account/list")
+            if isinstance(accounts, list):
+                for acct in accounts:
+                    if acct.get("id") == self._account_id:
+                        for key in ("netLiq", "balance", "cashBalance"):
+                            val = acct.get(key)
+                            if val is not None:
+                                return float(val)
+            return None
         except Exception as exc:
             logger.warning("Tradovate get_account_balance failed: %s", exc)
             return None
