@@ -303,6 +303,75 @@ class IBKRBroker(BrokerInterface):
         self._last_position = None
         self._last_order_ids = []
 
+    def flatten_position(self) -> dict:
+        """Cancel all open orders then send a market order to close any open position.
+
+        This is the safe emergency-exit path. cancel_all() alone only kills the
+        bracket child orders (stop + target), leaving the position naked. This
+        method cancels first, then immediately sends a closing MKT order so you
+        are never left in a trade with no protection.
+
+        Returns a dict describing what was done.
+        """
+        result: dict = {"cancelled_orders": False, "close_sent": False, "position_was": None}
+
+        if not self.connected and not self.connect():
+            result["error"] = "IBKR Gateway not reachable"
+            return result
+
+        # Step 1 — cancel all pending orders (bracket children)
+        try:
+            if hasattr(self._ib, "reqGlobalCancel"):
+                self._ib.reqGlobalCancel()
+            for trade in list(self._ib.openTrades()):
+                self._ib.cancelOrder(trade.order)
+            result["cancelled_orders"] = True
+        except Exception as exc:  # pragma: no cover
+            logger.warning("flatten_position cancel step failed: %s", exc)
+
+        # Step 2 — if there is an open position, send a closing MKT order
+        pos = self.get_position()
+        if pos and pos.open:
+            result["position_was"] = {
+                "instrument": pos.instrument,
+                "direction": pos.direction,
+                "qty": pos.quantity,
+            }
+            try:
+                contract = self._contract_for(pos.instrument)
+                qualified = self._ib.qualifyContracts(contract)
+                if qualified:
+                    contract = qualified[0]
+
+                # Closing action is opposite of the open direction
+                close_action = "SELL" if pos.direction == "LONG" else "BUY"
+
+                try:
+                    from ib_insync import Order as _IBOrder
+                    mkt = _IBOrder()
+                except Exception:
+                    mkt = SimpleNamespace()
+
+                mkt.action = close_action
+                mkt.totalQuantity = pos.quantity
+                mkt.orderType = "MKT"
+                mkt.transmit = True
+
+                trade = self._ib.placeOrder(contract, mkt)
+                self._ib.sleep(1)  # give Gateway a moment to acknowledge
+                result["close_sent"] = True
+                logger.info(
+                    "flatten_position: sent MKT %s x%s to close %s position",
+                    close_action, pos.quantity, pos.instrument,
+                )
+            except Exception as exc:  # pragma: no cover
+                logger.exception("flatten_position close order failed: %s", exc)
+                result["close_error"] = str(exc)
+
+        self._last_position = None
+        self._last_order_ids = []
+        return result
+
     def get_account_balance(self) -> Optional[float]:
         return self._available_cash()
 

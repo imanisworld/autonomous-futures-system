@@ -193,6 +193,110 @@ async def futures_redirect():
     return RedirectResponse(url="/", status_code=301)
 
 
+@app.post("/webhook/manual")
+async def manual_action(
+    request: Request,
+    x_webhook_secret: str | None = Header(default=None),
+    secret: str | None = Query(default=None),
+) -> JSONResponse:
+    """
+    Emergency manual control endpoint. Requires webhook secret.
+
+    Actions:
+        CLOSE_ALL   — cancel all open orders then send a closing MKT order to
+                      flatten any open position. Safe even mid-trade — cancels
+                      the bracket children first, then exits the position.
+        OPEN        — force-open a bracket position bypassing all risk gates.
+                      Body: {direction, entry, stop, target, contracts?, instrument?}
+                      Only works when BROKER=ibkr.
+        STATUS      — return current broker connection status and open position.
+
+    Examples:
+        # Emergency exit
+        curl -X POST https://yourserver/webhook/manual \\
+             -H "X-Webhook-Secret: your-secret" \\
+             -H "Content-Type: application/json" \\
+             -d '{"action": "CLOSE_ALL"}'
+
+        # Manual entry
+        curl -X POST https://yourserver/webhook/manual \\
+             -H "X-Webhook-Secret: your-secret" \\
+             -H "Content-Type: application/json" \\
+             -d '{"action":"OPEN","direction":"LONG","entry":7625.0,"stop":7615.0,"target":7647.0}'
+    """
+    _verify_webhook_secret(x_webhook_secret or secret)
+    body = await request.json()
+    action = str(body.get("action", "")).upper().strip()
+
+    if action == "STATUS":
+        return JSONResponse(content=_broker_status())
+
+    if action == "CLOSE_ALL":
+        return JSONResponse(content=_manual_close_all())
+
+    if action == "OPEN":
+        return JSONResponse(content=_manual_open(body))
+
+    raise HTTPException(status_code=400, detail=f"Unknown action '{action}'. Use CLOSE_ALL, OPEN, or STATUS.")
+
+
+@app.post("/webhook/ibkr-test")
+async def ibkr_test(
+    request: Request,
+    x_webhook_secret: str | None = Header(default=None),
+    secret: str | None = Query(default=None),
+) -> JSONResponse:
+    """
+    Fire a 1-contract MES paper bracket order to IBKR then immediately cancel it.
+    Confirms the full execution path works: connect → qualify → place → cancel.
+    Only works when BROKER=ibkr. Safe to run any time — cancels before fill.
+
+    Example:
+        curl -X POST https://yourserver/webhook/ibkr-test \\
+             -H "X-Webhook-Secret: your-secret" \\
+             -d '{}'
+    """
+    _verify_webhook_secret(x_webhook_secret or secret)
+    import os as _os
+    if _os.getenv("BROKER", "paper").strip().lower() != "ibkr":
+        return JSONResponse(content={"ok": False, "error": "BROKER is not ibkr — nothing sent"})
+
+    try:
+        from execution.ibkr_broker import IBKRBroker, IBKRConfig
+        from execution.broker_interface import BracketOrder
+        ibkr = IBKRBroker(config=IBKRConfig.from_env(), auto_connect=True)
+        if not ibkr.connected:
+            return JSONResponse(content={"ok": False, "error": "IBKR Gateway not reachable"})
+
+        # Place a bracket well away from market so it won't fill before we cancel
+        price = _config.position_sizing.starting_balance  # not a real price, just placeholder
+        # Use a safe far-from-market price: current MES is ~5000s, use a dummy limit
+        test_order = BracketOrder(
+            instrument="MES",
+            direction="LONG",
+            entry=1000.0,   # far below market — won't fill
+            stop=990.0,
+            target=1020.0,
+            rr_ratio=2.0,
+            strategy="ibkr_connectivity_test",
+            contracts=1,
+            notes="ibkr-test endpoint — cancel immediately",
+        )
+        fill = ibkr.execute_bracket(test_order)
+        # Cancel immediately regardless of result
+        ibkr.cancel_all()
+        return JSONResponse(content={
+            "ok": True,
+            "connected": ibkr.connected,
+            "fill_result": fill.result,
+            "account_balance": ibkr.get_account_balance(),
+            "note": "Orders cancelled. If fill_result=OPEN the bracket was placed and cancelled successfully.",
+        })
+    except Exception as exc:
+        logger.exception("IBKR test failed: %s", exc)
+        return JSONResponse(content={"ok": False, "error": str(exc)})
+
+
 @app.get("/", response_class=HTMLResponse)
 async def dashboard() -> HTMLResponse:
     """Read-only operator dashboard."""
@@ -1674,6 +1778,154 @@ def _fmt_stat(value: object, prefix: str = "$", none_str: str = "—") -> str:
     if value is None:
         return none_str
     return f"{prefix}{float(value):.2f}"
+
+
+def _broker_status() -> dict:
+    """Return broker connection and open position status."""
+    import os as _os
+    broker_type = _os.getenv("BROKER", "paper").strip().lower()
+    if broker_type != "ibkr":
+        return {"broker": "paper", "connected": True, "position": None}
+    try:
+        from execution.ibkr_broker import IBKRBroker, IBKRConfig
+        ibkr = IBKRBroker(config=IBKRConfig.from_env(), auto_connect=False)
+        pos = ibkr.get_position() if ibkr.connected else None
+        return {
+            "broker": "ibkr",
+            "connected": ibkr.connected,
+            "account_balance": ibkr.get_account_balance() if ibkr.connected else None,
+            "position": {
+                "instrument": pos.instrument,
+                "direction": pos.direction,
+                "qty": pos.quantity,
+                "entry": pos.entry_price,
+            } if pos else None,
+            **ibkr.health_check(),
+        }
+    except Exception as exc:
+        return {"broker": "ibkr", "connected": False, "error": str(exc)}
+
+
+def _manual_open(body: dict) -> dict:
+    """Force open a bracket position manually, bypassing all risk gates.
+
+    Required body fields:
+        direction   — "LONG" or "SHORT"
+        entry       — entry price (float)
+        stop        — stop price (float)
+        target      — target price (float)
+        contracts   — number of contracts (int, default 1)
+        instrument  — ticker (default "MES")
+
+    Example:
+        curl -X POST http://server/webhook/manual \\
+             -H "X-Webhook-Secret: your-secret" \\
+             -H "Content-Type: application/json" \\
+             -d '{"action":"OPEN","direction":"LONG","entry":7625.0,"stop":7615.0,"target":7647.0}'
+    """
+    import os as _os
+    broker_type = _os.getenv("BROKER", "paper").strip().lower()
+    result: dict = {"action": "OPEN", "broker": broker_type}
+
+    direction = str(body.get("direction", "")).upper().strip()
+    if direction not in ("LONG", "SHORT"):
+        return {**result, "ok": False, "error": "direction must be LONG or SHORT"}
+
+    try:
+        entry = float(body["entry"])
+        stop = float(body["stop"])
+        target = float(body["target"])
+    except (KeyError, TypeError, ValueError) as exc:
+        return {**result, "ok": False, "error": f"entry/stop/target required as numbers: {exc}"}
+
+    contracts = int(body.get("contracts", 1))
+    instrument = str(body.get("instrument", "MES")).upper()
+
+    from execution.broker_interface import BracketOrder
+    order = BracketOrder(
+        instrument=instrument,
+        direction=direction,
+        entry=entry,
+        stop=stop,
+        target=target,
+        contracts=contracts,
+    )
+
+    if broker_type == "ibkr":
+        try:
+            from execution.ibkr_broker import IBKRBroker, IBKRConfig
+            ibkr = IBKRBroker(config=IBKRConfig.from_env(), auto_connect=True)
+            if not ibkr.connected:
+                return {**result, "ok": False, "error": "IBKR Gateway not reachable"}
+            fill = ibkr.execute_bracket(order)
+            result["ok"] = True
+            result["fill"] = {
+                "instrument": fill.instrument,
+                "direction": fill.direction,
+                "contracts": fill.contracts,
+                "entry_price": fill.entry_price,
+                "result": fill.result,
+            }
+            result["note"] = f"Manual {direction} bracket placed on {instrument}."
+        except Exception as exc:
+            return {**result, "ok": False, "error": str(exc)}
+    else:
+        result["ok"] = False
+        result["error"] = "BROKER is not ibkr — manual OPEN only works with live/paper Gateway."
+
+    return result
+
+
+def _manual_close_all() -> dict:
+    """Cancel all orders and flatten position. Logs forced close to journal."""
+    import os as _os
+    from datetime import date as _date
+    broker_type = _os.getenv("BROKER", "paper").strip().lower()
+    result = {"action": "CLOSE_ALL", "broker": broker_type}
+
+    if broker_type == "ibkr":
+        try:
+            from execution.ibkr_broker import IBKRBroker, IBKRConfig
+            ibkr = IBKRBroker(config=IBKRConfig.from_env(), auto_connect=True)
+            if not ibkr.connected:
+                return {**result, "ok": False, "error": "IBKR Gateway not reachable"}
+            flatten = ibkr.flatten_position()
+            result["ok"] = True
+            result["position_was"] = flatten.get("position_was")
+            result["cancelled_orders"] = flatten.get("cancelled_orders", False)
+            result["close_sent"] = flatten.get("close_sent", False)
+            result["note"] = (
+                "Position closed via MKT order + bracket cancelled."
+                if flatten.get("close_sent")
+                else "No open position — bracket orders cancelled only."
+            )
+            if "close_error" in flatten:
+                result["close_error"] = flatten["close_error"]
+        except Exception as exc:
+            return {**result, "ok": False, "error": str(exc)}
+    else:
+        result["ok"] = True
+        result["note"] = "Paper mode — no live orders to cancel."
+
+    # Log the manual close to journal so daily state stays consistent
+    try:
+        journal = JournalLogger(log_dir=_config.log_dir)
+        journal.log_outcome(
+            instrument="MANUAL",
+            session="manual",
+            result="LOSS",
+            entry_price=0.0,
+            exit_price=0.0,
+            exit_reason="MANUAL_CLOSE_ALL",
+            pnl_ticks=0.0,
+            pnl_dollars=0.0,
+            contracts=1,
+            for_date=_date.today(),
+        )
+    except Exception as exc:
+        logger.warning("Manual close journal log failed: %s", exc)
+
+    return result
 
 
 def _escape(value: object) -> str:
