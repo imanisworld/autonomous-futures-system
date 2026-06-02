@@ -2057,21 +2057,25 @@ def _manual_close_all() -> dict:
         result["ok"] = True
         result["note"] = "Paper mode — no live orders to cancel."
 
-    # Log the manual close to journal so daily state stays consistent
+    # Clear open-position flag in journal without polluting P&L / streak stats.
+    # Use result="CANCELLED" so _compute_daily_state clears has_open_position
+    # without adding to consecutive_losses or win_rate denominator.
     try:
         journal = JournalLogger(log_dir=_config.log_dir)
-        journal.log_outcome(
-            instrument="MANUAL",
-            session="manual",
-            result="LOSS",
-            entry_price=0.0,
-            exit_price=0.0,
-            exit_reason="MANUAL_CLOSE_ALL",
-            pnl_ticks=0.0,
-            pnl_dollars=0.0,
-            contracts=1,
-            for_date=_date.today(),
-        )
+        open_pos = journal.get_open_position(_date.today())
+        if open_pos:
+            journal.log_outcome(
+                instrument=open_pos.get("instrument") or "UNKNOWN",
+                session=open_pos.get("session") or "manual",
+                result="CANCELLED",
+                entry_price=float(open_pos.get("entry") or 0.0),
+                exit_price=0.0,
+                exit_reason="MANUAL_CLOSE_ALL",
+                pnl_ticks=0.0,
+                pnl_dollars=0.0,
+                contracts=int(open_pos.get("contracts") or 1),
+                for_date=_date.today(),
+            )
     except Exception as exc:
         logger.warning("Manual close journal log failed: %s", exc)
 

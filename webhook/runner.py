@@ -328,7 +328,9 @@ def process_alert(
     if daily_state.trade_count >= total_daily_capacity:
         result["decision"] = "BLOCKED_MAX_TRADES"
         return result
-    if daily_state.consecutive_losses >= cfg.max_consecutive_losses and not cfg.circuit_breaker_losses:
+    # max_consecutive_losses is the hard stop regardless of circuit breaker setting.
+    # circuit_breaker_losses (lower threshold) triggers a temporary pause via adaptive layer.
+    if daily_state.consecutive_losses >= cfg.max_consecutive_losses:
         result["decision"] = "BLOCKED_LOSS_LOCKOUT"
         return result
     if daily_state.has_open_position:
@@ -411,6 +413,16 @@ def process_alert(
         return result
 
     # ── Step 5: Execute bracket order ────────────────────────────────────────
+    # Safety: if the broker itself reports live env, block unless the config
+    # flag agrees. This catches TRADOVATE_ENV=live overriding LIVE_TRADING_ENABLED.
+    if getattr(broker, "is_live", False) and not getattr(cfg, "live_trading_enabled", False):
+        logger.error(
+            "BLOCKED: broker.is_live=True but live_trading_enabled=False — "
+            "set LIVE_TRADING_ENABLED=true in config to allow real orders"
+        )
+        result["decision"] = "LIVE_TRADING_BLOCKED"
+        return result
+
     order = BracketOrder(
         instrument=state.instrument,
         direction=decision.setup.direction,

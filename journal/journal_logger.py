@@ -185,6 +185,10 @@ class JournalLogger:
                     if result == "LOSS":
                         last_loss_at = _parse_ts(entry.get("ts"))
                     has_open_position = False
+                elif result == "CANCELLED":
+                    # Manual close / cancelled — clear open-position flag without
+                    # affecting P&L, win/loss streak, or win rate.
+                    has_open_position = False
                 continue
 
             decision = entry.get("decision")
@@ -227,7 +231,9 @@ class JournalLogger:
         session_start_time: dict = {}
         running_pnl = 0.0
         for entry in entries:
+            entry_type = entry.get("type")
             rc = entry.get("risk_check") or {}
+            # Record session-start P&L snapshot on first approved TRADE of that session
             if entry.get("decision") == "TRADE" and rc.get("result") == "APPROVED":
                 session = entry.get("session") or ""
                 if session and session not in session_start_pnl:
@@ -235,10 +241,17 @@ class JournalLogger:
                     ts = _parse_ts(entry.get("ts"))
                     if ts:
                         session_start_time[session] = ts
-            outcome = (entry.get("outcome") or {})
-            pnl = outcome.get("pnl_dollars")
-            if isinstance(pnl, (int, float)):
-                running_pnl += float(pnl)
+            # Accumulate P&L — OUTCOME entries are standalone records (type="OUTCOME");
+            # old-format TRADE entries may embed outcome inline (legacy).
+            if entry_type == "OUTCOME":
+                pnl = (entry.get("outcome") or {}).get("pnl_dollars")
+                if isinstance(pnl, (int, float)):
+                    running_pnl += float(pnl)
+            elif entry_type != "OUTCOME":
+                # Legacy embedded outcome in TRADE entry (old journal format)
+                pnl = (entry.get("outcome") or {}).get("pnl_dollars")
+                if isinstance(pnl, (int, float)):
+                    running_pnl += float(pnl)
 
         daily_state = DailyState(
             trade_count=trade_count,
@@ -297,7 +310,7 @@ class JournalLogger:
         for entry in entries:
             entry_type = entry.get("type")
             if entry_type == "OUTCOME":
-                # A standalone OUTCOME entry closes the position.
+                # Any OUTCOME (WIN/LOSS/BREAKEVEN/CANCELLED) closes the tracked position.
                 last_open = None
                 continue
 

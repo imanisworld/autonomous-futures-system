@@ -61,10 +61,10 @@ session_hours_et:
 # ─── Daily Limits ────────────────────────────────────────────
 daily_limits:
   max_trades_per_day: 3             # Hard ceiling, calendar-day reset
-  max_consecutive_losses: 3        # Aligns with circuit breaker loss count
+  max_consecutive_losses: 4        # Hard stop — no more trades today after 4 consecutive losses
   max_daily_loss: 150              # 10% of $1,500 starting balance
   max_drawdown_percent: 0.20       # Stop if account falls 20% from peak
-  circuit_breaker_losses: 3        # Pause after 3 consecutive losses
+  circuit_breaker_losses: 2        # Temporary pause after 2 consecutive losses (30-min cooldown)
   circuit_breaker_pause_minutes: 30
   conservative_mode: true          # Start Railway paper mode with MES 1c
   bonus_trades_after_max: 2         # After normal max, only A/A+ confluence can add trades

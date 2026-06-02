@@ -185,16 +185,25 @@ class TradovateBroker(BrokerInterface):
         root = instrument.replace("1!", "").upper()
         if root in self._contract_cache:
             return self._contract_cache[root]
-        data = self._get(f"/contract/find?name={root}")
-        if isinstance(data, dict) and "id" in data:
-            self._contract_cache[root] = int(data["id"])
-            return self._contract_cache[root]
-        # Try searching
-        results = self._get(f"/contractLibrary/search?text={root}&live=false")
-        if isinstance(results, list) and results:
-            self._contract_cache[root] = int(results[0]["id"])
-            return self._contract_cache[root]
-        raise ValueError(f"Contract not found for {instrument}")
+        # Cache miss — hit the API with simple retry/backoff to survive burst alerts
+        last_exc: Exception = RuntimeError("no attempts made")
+        for attempt in range(3):
+            try:
+                data = self._get(f"/contract/find?name={root}")
+                if isinstance(data, dict) and "id" in data:
+                    self._contract_cache[root] = int(data["id"])
+                    return self._contract_cache[root]
+                # Fallback: library search
+                results = self._get(f"/contractLibrary/search?text={root}&live=false")
+                if isinstance(results, list) and results:
+                    self._contract_cache[root] = int(results[0]["id"])
+                    return self._contract_cache[root]
+                raise ValueError(f"Contract not found for {instrument}")
+            except Exception as exc:
+                last_exc = exc
+                if attempt < 2:
+                    time.sleep(1.5 * (attempt + 1))  # 1.5s, 3.0s
+        raise last_exc
 
     # ── BrokerInterface implementation ────────────────────────────────────────
 
@@ -246,7 +255,21 @@ class TradovateBroker(BrokerInterface):
             }
 
             result = self._post("/order/placeOSO", body)
+            # Detect API-level rejection — Tradovate returns errorText/failureReason on bad payloads
+            error_text = result.get("errorText") or result.get("failureReason") or result.get("errorCode")
+            if error_text:
+                logger.error(
+                    "Tradovate placeOSO REJECTED: %s | instrument=%s dir=%s body=%s",
+                    error_text, order.instrument, order.direction, body,
+                )
+                return self._cancelled_fill(order, f"TRADOVATE_REJECTED")
             order_id = result.get("orderId") or (result.get("orderStatus", {}) or {}).get("orderId")
+            if not order_id:
+                logger.error(
+                    "Tradovate placeOSO returned no orderId — possible silent rejection: %s",
+                    result,
+                )
+                return self._cancelled_fill(order, "TRADOVATE_NO_ORDER_ID")
             logger.info("Tradovate bracket placed: orderId=%s instrument=%s dir=%s", order_id, order.instrument, order.direction)
 
             self._last_position = Position(
