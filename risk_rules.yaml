@@ -37,10 +37,6 @@ sessions:
 # entries are blocked by default unless a matching window has allow: true.
 session_windows:
   asian:
-    - start: "20:00"
-      end: "22:00"
-      allow: true
-      note: "Evening test window — 8pm to 10pm ET"
     - start: "02:00"
       end: "04:00"
       allow: true
