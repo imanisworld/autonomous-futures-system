@@ -517,25 +517,27 @@ class TradovateBroker(BrokerInterface):
             if not self._authenticate():
                 return {"ok": False, "error": "not_authenticated"}
             root = instrument.replace("1!", "").upper()
-            # Find front month contract
-            contract_id = None
+
+            # Use _find_contract_id (cached) — avoids the contract/find list-vs-dict
+            # ambiguity and the quote/find?name=ROOT 404 on plain root symbols.
+            try:
+                contract_id = self._find_contract_id(root)
+            except Exception as ce:
+                return {"ok": False, "error": f"contract_lookup_failed: {ce}", "instrument": instrument}
+
+            # Fetch quote by integer ID — always valid once we have the ID
+            try:
+                quote = self._get(f"/quote/item?id={contract_id}")
+            except Exception as qe:
+                return {"ok": False, "error": f"quote_fetch_failed: {qe}", "instrument": instrument}
+
+            # Resolve full symbol name for display (already cached from _find_contract_id)
             symbol = root
             try:
-                contract = self._get(f"/contract/find?name={root}")
+                contract = self._get(f"/contract/item?id={contract_id}")
                 symbol = contract.get("name", root)
-                contract_id = contract.get("id")
-            except Exception as ce:
-                logger.warning("Tradovate contract/find failed for %s: %s", root, ce)
-
-            # Get quote via contract ID or name
-            quote: dict = {}
-            try:
-                if contract_id:
-                    quote = self._get(f"/quote/item?id={contract_id}")
-                else:
-                    quote = self._get(f"/quote/find?name={symbol}")
-            except Exception as qe:
-                return {"ok": False, "error": f"quote_fetch_failed: {qe}", "symbol": symbol}
+            except Exception:
+                pass
 
             bid = quote.get("bid")
             ask = quote.get("ofr") or quote.get("ask")

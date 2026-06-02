@@ -381,6 +381,56 @@ class DecisionEngine:
                     confidence_score=0,
                 )
 
+        # ── Quality gate: bar close location ─────────────────────────────────
+        # Require the signal bar to close with conviction in the trade direction.
+        # A bar closing mid-range (doji, wick) on a key level is a weak entry.
+        # Gate direction is derived from regime/trend — if unknown, skip.
+        bar_range = state.ohlc.high - state.ohlc.low
+        if bar_range > 0 and gate_direction in ("LONG", "SHORT"):
+            close_pct = (state.ohlc.close - state.ohlc.low) / bar_range
+            # LONG: bar must close in top 40% of range (close_pct >= 0.60)
+            # SHORT: bar must close in bottom 40% (close_pct <= 0.40)
+            weak_close = (
+                (gate_direction == "LONG" and close_pct < 0.40) or
+                (gate_direction == "SHORT" and close_pct > 0.60)
+            )
+            if weak_close:
+                failed_gates.append("WEAK_BAR_CLOSE")
+                # Soft gate — log it but don't hard-block. Strategies can still
+                # fire; the failed gate will appear in the journal for analysis.
+
+        # ── Quality gate: EMA stack alignment ────────────────────────────────
+        # When Pine sends EMA values, require price to be on the correct side
+        # of the EMA stack (above ema_9 > ema_21 > ema_55 for LONG, reverse for SHORT).
+        # If EMAs are absent (null), this gate is skipped — activates automatically
+        # once Pine populates the fields.
+        if state.key_levels and gate_direction in ("LONG", "SHORT"):
+            kl = state.key_levels
+            ema9  = kl.ema_9
+            ema21 = kl.ema_21
+            ema55 = kl.ema_55
+            close = state.ohlc.close
+            if None not in (ema9, ema21, ema55):
+                if gate_direction == "LONG":
+                    ema_aligned = close > ema9 > ema21 > ema55
+                else:
+                    ema_aligned = close < ema9 < ema21 < ema55
+                if not ema_aligned:
+                    return DecisionOutput(
+                        timestamp=now,
+                        instrument=state.instrument,
+                        session=state.session,
+                        decision="NO_TRADE",
+                        market_condition=condition,
+                        reason=f"EMA stack not aligned for {gate_direction}: "
+                               f"close={close} ema9={ema9} ema21={ema21} ema55={ema55}",
+                        regime=regime.regime,
+                        gex_status=gex_gate.status,
+                        signa_status=signa_gate.status,
+                        failed_gates=failed_gates + ["EMA_STACK_NOT_ALIGNED"],
+                        confidence_score=0,
+                    )
+
         # ── Strategy evaluation ───────────────────────────────────────────────
         setup = self._find_setup(state, condition, daily_state)
 
@@ -793,6 +843,7 @@ class DecisionEngine:
             ("orb_reclaim", self._try_orb_reclaim),
             ("orb_rejection", self._try_orb_rejection),
             ("vwap_reclaim", self._try_vwap_reclaim),
+            ("vwap_rejection", self._try_vwap_rejection),
             ("vwap_hold", self._try_vwap_hold),
             ("pdh_reclaim", self._try_pdh_reclaim),
             ("pdl_reclaim", self._try_pdl_reclaim),
@@ -894,6 +945,12 @@ class DecisionEngine:
                 return None
             if not (state.trend and state.trend.direction == "UP"):
                 return None
+            # Bar must close meaningfully above ORB high — not just a wick tap
+            if state.ohlc.close < state.orb.high + (tick * 2):
+                return None
+            # Volume must confirm the breakout
+            if state.volume.relative is not None and state.volume.relative < 1.2:
+                return None
             entry = state.orb.high + (tick * 2)
             orb_stop = state.orb.high - (tick * 8)
             max_stop = entry - (tick * max_stop_ticks)
@@ -910,13 +967,19 @@ class DecisionEngine:
                 target=round(target, 4),
                 rr_ratio=rr,
                 strategy="orb_breakout",
-                notes="Initial ORB high breakout with trend and VWAP alignment",
+                notes="ORB high breakout — bar closes above ORB + volume confirmed",
             )
 
         if state.orb.status == "below":
             if state.vwap.price_vs_vwap != "below":
                 return None
             if not (state.trend and state.trend.direction == "DOWN"):
+                return None
+            # Bar must close meaningfully below ORB low
+            if state.ohlc.close > state.orb.low - (tick * 2):
+                return None
+            # Volume must confirm
+            if state.volume.relative is not None and state.volume.relative < 1.2:
                 return None
             entry = state.orb.low - (tick * 2)
             orb_stop = state.orb.low + (tick * 8)
@@ -1034,13 +1097,36 @@ class DecisionEngine:
 
     def _try_vwap_hold(self, state: MarketState) -> Optional[SetupDetail]:
         """
-        VWAP Hold: Price is holding below VWAP in downtrend.
-        Short from VWAP; stop 7 pts above VWAP. Target 2.2R.
+        VWAP Hold: Price is holding below VWAP in downtrend with Strat confirmation.
+        Short from VWAP; stop 7 pts above VWAP. Target 3.0R.
+
+        Requires current bar type = two_down — this confirms the bar is actively
+        extending lower, not just sitting below VWAP. Cuts low-conviction entries
+        that happen to be below VWAP without directional momentum.
         """
         if not (state.vwap.holding and state.vwap.price_vs_vwap == "below"):
             return None
         if not (state.trend and state.trend.direction == "DOWN"):
             return None
+        # Strat confirmation: bar must be a two_down (lower high AND lower low)
+        if state.strat and state.strat.current_bar_type not in ("two_down", "2d", "2"):
+            return None
+
+        # BOS/MSS boost: if raw data is present, require bearish structure break.
+        # This filters vwap_hold entries that happen on consolidation bars with no
+        # actual structure break — the highest WR entries have a BOS/MSS confirming.
+        raw = state.raw or {}
+        bos = str(raw.get("bos_direction") or "").lower()
+        mss = str(raw.get("mss_direction") or "").lower()
+        ms  = str(raw.get("market_structure") or "").lower()
+        if bos or mss or ms:
+            # Data present — require bearish structure confirmation
+            has_bearish_structure = (
+                bos == "bearish" or mss == "bearish"
+                or ms in ("bearish_bos", "bearish_mss")
+            )
+            if not has_bearish_structure:
+                return None
 
         tick = self.TICK_SIZE.get(state.instrument, 0.25)
         entry = state.vwap.value - (tick * 2)
@@ -1059,6 +1145,62 @@ class DecisionEngine:
             rr_ratio=rr,
             strategy="vwap_hold",
             notes="Price holding below VWAP in downtrend",
+        )
+
+    def _try_vwap_rejection(self, state: MarketState) -> Optional[SetupDetail]:
+        """
+        VWAP Rejection: Price attempted to reclaim VWAP from below, failed,
+        and closed back below it. Mirror image of vwap_reclaim.
+
+        Conditions:
+        - vwap.reclaimed was True (price crossed above VWAP this bar)
+          BUT close is below VWAP (failed to hold) — the reclaim was rejected
+        - Downtrend confirms direction
+        - Strat bar type = two_down preferred (bar extended lower after rejection)
+
+        This is a high-conviction SHORT: the reclaim attempt is the stop-run,
+        and the close back below VWAP is the failed reclaim confirmation.
+        """
+        # Price crossed above VWAP this bar (attempted reclaim) but closed below it
+        if not state.vwap.reclaimed:
+            return None
+        if state.vwap.price_vs_vwap != "below":
+            return None
+        if not (state.trend and state.trend.direction == "DOWN"):
+            return None
+
+        # If BOS/MSS data is present, prefer MSS bearish (highest conviction)
+        # A bearish MSS means the prior bullish structure just failed — the
+        # vwap_rejection is the entry bar for that structural shift.
+        raw = state.raw or {}
+        bos = str(raw.get("bos_direction") or "").lower()
+        mss = str(raw.get("mss_direction") or "").lower()
+        ms  = str(raw.get("market_structure") or "").lower()
+        if bos or mss or ms:
+            has_bearish_structure = (
+                bos == "bearish" or mss == "bearish"
+                or ms in ("bearish_bos", "bearish_mss")
+            )
+            if not has_bearish_structure:
+                return None
+
+        tick = self.TICK_SIZE.get(state.instrument, 0.25)
+        entry = state.vwap.value - (tick * 2)       # just below VWAP
+        stop = state.vwap.value + (tick * 20)        # above the failed reclaim high
+        risk = stop - entry
+        if risk <= 0:
+            return None
+        target = entry - (risk * 3.0)               # 3R — rejection moves fast
+
+        rr = RiskEngine.calculate_rr("SHORT", entry, stop, target)
+        return SetupDetail(
+            direction="SHORT",
+            entry=round(entry, 4),
+            stop=round(stop, 4),
+            target=round(target, 4),
+            rr_ratio=rr,
+            strategy="vwap_rejection",
+            notes="VWAP reclaim attempt failed — closed back below VWAP in downtrend",
         )
 
     def _try_pdh_reclaim(self, state: MarketState) -> Optional[SetupDetail]:

@@ -239,7 +239,8 @@ strategy:
     - orb_reclaim             # Price reclaims ORB high after pullback
     - orb_rejection           # Failed ORB breakout, fade back inside
     - vwap_reclaim            # Price crosses above/below VWAP and holds
-    - vwap_hold               # Price holding below VWAP in downtrend
+    - vwap_rejection          # Failed VWAP reclaim attempt — closes back below in downtrend
+    - vwap_hold               # Price holding below VWAP in downtrend (two_down bar required)
     - pdh_reclaim             # Previous day high reclaimed
     - pdl_reclaim             # Previous day low reclaimed (breakdown)
     - continuation_pullback   # Trend pullback to VWAP/EMA
