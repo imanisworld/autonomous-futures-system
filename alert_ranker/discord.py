@@ -95,6 +95,7 @@ def build_discord_payload(result: ScoreResult) -> dict[str, Any]:
         {"name": "Volume", "value": _ratio_text(volume_ratio), "inline": True},
         {"name": "IV Rank", "value": _iv_text(iv_rank, iv_label), "inline": True},
         {"name": "Premium Value", "value": _premium_value_text(result), "inline": True},
+        {"name": "Signa Flow", "value": _signa_text(result), "inline": True},
         {"name": "VWAP", "value": _pass_fail(result.components.get("vwap")), "inline": True},
         {"name": "Trend", "value": _pass_fail(result.components.get("trend")), "inline": True},
         {"name": "Why", "value": _why_text(result, session), "inline": False},
@@ -286,3 +287,35 @@ def _premium_value_text(result: ScoreResult) -> str:
         fair_text = "n/a"
     label = str(verdict).replace("_", " ").title()
     return f"{label} ({edge_text}, fair {fair_text}, score {score:+})"
+
+
+def _signa_text(result: ScoreResult) -> str:
+    raw = result.raw
+    grade = raw.get("signa_grade")
+    score = raw.get("signa_score")
+    direction = raw.get("signa_daily_direction") or raw.get("signa_direction")
+    symbol = raw.get("signa_symbol")
+    action = raw.get("signa_action")
+    error = raw.get("signa_error")
+    if error:
+        return f"Unavailable ({error})"
+    if not any((grade, score, direction, action)):
+        return "N/A"
+    parts = []
+    if symbol:
+        parts.append(str(symbol))
+    if grade:
+        parts.append(f"grade {grade}")
+    if score is not None:
+        try:
+            parts.append(f"score {float(score):.0f}")
+        except (TypeError, ValueError):
+            parts.append(f"score {score}")
+    if direction:
+        parts.append(str(direction))
+    if action and action != direction:
+        parts.append(str(action))
+    component = result.components.get("signa", 0)
+    if component:
+        parts.append(f"score {component:+}")
+    return " · ".join(parts) if parts else "N/A"

@@ -16,6 +16,7 @@ from alert_ranker.scanner import OptionsScanner
 from alert_ranker.scorer import score_setup
 from alert_ranker.storage import ScanStorage
 from alert_ranker.tastytrade_client import TastytradeClient, parse_iv_rank
+from sources.signa_client import SignaSignal
 
 
 def scanner_config(tmp_path: Path, webhook_url: str = "") -> ScannerConfig:
@@ -442,3 +443,81 @@ def test_options_webhook_persists_valuation_context(tmp_path):
     assert components["premium_value"] == 2
     assert raw["option_value_verdict"] == "discount"
     assert raw["option_theoretical_value"] > 0
+
+
+class FakeSignaClient:
+    def __init__(self):
+        self.symbols = []
+
+    def fetch_signal(self, symbol: str):
+        self.symbols.append(symbol)
+        return SignaSignal(
+            symbol=symbol,
+            ok=True,
+            grade="A",
+            score=88,
+            daily_direction="UP",
+            action="BUY",
+            risk_rating="MODERATE",
+        )
+
+
+def test_options_scanner_enriches_with_signa_context(tmp_path):
+    cfg = scanner_config(tmp_path)
+    object.__setattr__(cfg, "signa_api_enabled", True)
+    object.__setattr__(cfg, "signa_api_key_configured", True)
+    object.__setattr__(cfg, "signa_symbol_map", {"SPXW": "SPY", "AAPL": "AAPL"})
+    storage = ScanStorage(cfg.sqlite_path)
+    tasty = TastytradeClient(cfg, client=httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(500))))
+    discord = DiscordAlerter(cfg, storage, client=httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(204))))
+    signa = FakeSignaClient()
+    scanner = OptionsScanner(cfg, tasty, storage, discord, signa_client=signa)
+
+    now = datetime(2026, 5, 29, 10, 0, tzinfo=ZoneInfo("America/New_York"))
+    outcome = asyncio.run(scanner.scan_ticker("SPXW", source="test", context=setup_payload(ticker="SPXW"), now=now))
+
+    assert signa.symbols == ["SPY"]
+    assert outcome.result.raw["signa_symbol"] == "SPY"
+    assert outcome.result.raw["signa_grade"] == "A"
+    assert outcome.result.raw["signa_daily_direction"] == "UP"
+    assert outcome.result.components["signa"] == 2
+
+
+def test_discord_payload_shows_signa_flow_field():
+    result = score_setup(setup_payload(
+        ticker="QQQ",
+        signa_symbol="QQQ",
+        signa_grade="B",
+        signa_score=74,
+        signa_daily_direction="UP",
+        signa_action="BUY",
+    ))
+
+    embed = build_discord_payload(result)["embeds"][0]
+    field_map = {field["name"]: field["value"] for field in embed["fields"]}
+
+    assert "Signa Flow" in field_map
+    assert "QQQ" in field_map["Signa Flow"]
+    assert "grade B" in field_map["Signa Flow"]
+    assert "score 74" in field_map["Signa Flow"]
+    assert "UP" in field_map["Signa Flow"]
+    assert result.components["signa"] == 2
+
+
+def test_options_config_loads_signa_settings(tmp_path):
+    cfg = ScannerConfig(
+        tastytrade_username="",
+        tastytrade_password="",
+        tastytrade_base_url="https://api.tastyworks.com",
+        port=8010,
+        discord_webhook_url="",
+        watchlist=["SPY"],
+        interval_minutes=5,
+        sqlite_path=tmp_path / "scanner.sqlite",
+        signa_api_enabled=True,
+        signa_api_key_configured=True,
+        signa_symbol_map={"SPXW": "SPY"},
+    )
+
+    assert cfg.signa_api_enabled is True
+    assert cfg.signa_symbol_map["SPXW"] == "SPY"

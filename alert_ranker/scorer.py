@@ -52,6 +52,24 @@ def is_ny_open(now: datetime, tz_name: str = "America/New_York") -> bool:
     )
 
 
+def _signa_component(data: dict[str, Any], direction: str) -> int:
+    grade = str(data.get("signa_grade") or "").strip().upper()
+    signa_direction = str(data.get("signa_daily_direction") or data.get("signa_direction") or "").strip().upper()
+    if not grade and not signa_direction:
+        return 0
+    if grade[:1] in {"C", "D", "F"}:
+        return -3
+    opposes = (direction == "LONG" and signa_direction == "DOWN") or (direction == "SHORT" and signa_direction == "UP")
+    if opposes:
+        return -3
+    aligns = (direction == "LONG" and signa_direction == "UP") or (direction == "SHORT" and signa_direction == "DOWN")
+    if grade[:1] in {"A", "B"} and aligns:
+        return 2
+    if grade[:1] in {"A", "B"}:
+        return 1
+    return 0
+
+
 def score_setup(data: dict[str, Any], now: datetime | None = None) -> ScoreResult:
     now = now or datetime.now(ZoneInfo("America/New_York"))
     ticker = str(data.get("ticker") or "").upper()
@@ -88,6 +106,7 @@ def score_setup(data: dict[str, Any], now: datetime | None = None) -> ScoreResul
         "volume": 2 if volume_ratio is not None and volume_ratio > 1.2 else 0,
         "iv_rank": 0,
         "premium_value": 0,
+        "signa": _signa_component(data, direction),
         "session": 1 if is_ny_open(now) else 0,
     }
     if iv_rank is not None:

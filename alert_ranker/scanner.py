@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Any
@@ -12,6 +13,7 @@ from .discord import DiscordAlerter
 from .scorer import ScoreResult, is_ny_open, score_setup
 from .storage import ScanStorage
 from .tastytrade_client import TastytradeClient
+from sources.signa_client import SignaClient
 
 
 @dataclass(frozen=True)
@@ -29,11 +31,13 @@ class OptionsScanner:
         tastytrade: TastytradeClient,
         storage: ScanStorage,
         discord: DiscordAlerter,
+        signa_client: SignaClient | None = None,
     ):
         self.config = config
         self.tastytrade = tastytrade
         self.storage = storage
         self.discord = discord
+        self.signa_client = signa_client
         self.last_run_at: str | None = None
         self.last_skip_reason: str | None = None
 
@@ -88,6 +92,7 @@ class OptionsScanner:
         self, ticker: str, context: dict[str, Any], now: datetime
     ) -> dict[str, Any]:
         snapshot = await self.tastytrade.fetch_market_snapshot(ticker)
+        signa_context = await self._fetch_signa_context(ticker, context)
         data = {
             "ticker": ticker.upper(),
             "pattern": context.get("pattern") or context.get("strat_pattern") or "N/A",
@@ -108,6 +113,7 @@ class OptionsScanner:
             "ny_open": is_ny_open(now, self.config.timezone),
             "tastytrade_error": snapshot.error,
             "tastytrade_raw": snapshot.raw,
+            **signa_context,
         }
         for key in (
             "alert_state",
@@ -149,6 +155,42 @@ class OptionsScanner:
                 data["volume_ratio"] = None
         return data
 
+    async def _fetch_signa_context(self, ticker: str, context: dict[str, Any]) -> dict[str, Any]:
+        if not self.config.signa_api_enabled:
+            return {}
+        if context.get("signa_grade") or context.get("signa_score") or context.get("signa_daily_direction"):
+            return {
+                "signa_symbol": context.get("signa_symbol") or ticker.upper(),
+                "signa_grade": context.get("signa_grade"),
+                "signa_score": context.get("signa_score"),
+                "signa_daily_direction": context.get("signa_daily_direction") or context.get("signa_direction"),
+                "signa_weekly_direction": context.get("signa_weekly_direction"),
+                "signa_action": context.get("signa_action"),
+                "signa_risk_rating": context.get("signa_risk_rating"),
+            }
+        symbol = self._signa_symbol_for(ticker)
+        client = self.signa_client or SignaClient(
+            base_url=self.config.signa_base_url,
+            timeout=self.config.signa_timeout_seconds,
+        )
+        signal = await asyncio.to_thread(client.fetch_signal, symbol)
+        if not signal.ok:
+            return {"signa_symbol": symbol, "signa_error": signal.error}
+        return {
+            "signa_symbol": symbol,
+            "signa_grade": signal.grade,
+            "signa_score": signal.score,
+            "signa_daily_direction": signal.daily_direction,
+            "signa_weekly_direction": signal.weekly_direction,
+            "signa_action": signal.action,
+            "signa_risk_rating": signal.risk_rating,
+        }
+
+    def _signa_symbol_for(self, ticker: str) -> str:
+        root = (ticker or "").split(":")[-1].upper().strip()
+        root = root.replace("1!", "").rstrip("!1234567890HMUZ")
+        return self.config.signa_symbol_map.get(root, root)
+
     def status(self) -> dict[str, Any]:
         latest = [asdict(item) for item in self.storage.latest(limit=10)]
         return {
@@ -158,5 +200,7 @@ class OptionsScanner:
             "last_run_at": self.last_run_at,
             "last_skip_reason": self.last_skip_reason,
             "tastytrade_configured": self.config.tastytrade_configured,
+            "signa_api_enabled": self.config.signa_api_enabled,
+            "signa_api_key_configured": self.config.signa_api_key_configured,
             "latest": latest,
         }
