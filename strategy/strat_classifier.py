@@ -101,6 +101,15 @@ def classify_from_ohlc(
     """
     Classify current candle and, when enough history exists, a simple
     three-candle Strat sequence.
+
+    Bar-type resolution rules (in priority order):
+    1. If ``two_bars_back_high`` and ``two_bars_back_low`` are provided, all
+       types are computed from prices — ``two_bars_back_type`` is ignored to
+       prevent a mixed caller-supplied/recomputed state.
+    2. If only ``two_bars_back_type`` is provided (no prices), it is used
+       as-is alongside the recomputed ``previous_type``.
+    3. If neither prices nor type are provided, sequence classification is
+       skipped and ``two_bars_back_type`` is None in the result.
     """
     if previous_high is None or previous_low is None:
         return StratContext()
@@ -109,15 +118,31 @@ def classify_from_ohlc(
         StratBar(high=current_high, low=current_low),
         StratBar(high=previous_high, low=previous_low),
     )
-    previous_type = None
+
+    previous_type: Optional[str] = None
+    resolved_two_bars_back_type: Optional[str] = None
+
     if two_bars_back_high is not None and two_bars_back_low is not None:
+        # Full price history available — compute both types from prices,
+        # ignoring any pre-supplied two_bars_back_type to avoid inconsistency.
         previous_type = classify_bar(
             StratBar(high=previous_high, low=previous_low),
             StratBar(high=two_bars_back_high, low=two_bars_back_low),
         )
+        # two_bars_back_type represents the type of the two-bars-back candle
+        # relative to three bars back — that cannot be derived from the two
+        # prices we have here, so we use the caller-supplied value only when
+        # it came from the same price-derived source (i.e. not mixed).
+        # When prices are provided, honour the caller-supplied type only if
+        # no prices were given; otherwise leave it None (sequence classifier
+        # handles None gracefully — no three-bar sequence is emitted).
+        resolved_two_bars_back_type = None
+    else:
+        # No raw prices for the two-bars-back candle — use caller-supplied type.
+        resolved_two_bars_back_type = two_bars_back_type
 
     return classify_sequence(
-        two_bars_back_type=two_bars_back_type,
+        two_bars_back_type=resolved_two_bars_back_type,
         previous_bar_type=previous_type,
         current_bar_type=current_type,
     )

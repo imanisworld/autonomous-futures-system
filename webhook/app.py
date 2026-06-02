@@ -187,6 +187,12 @@ async def receive_alert(
         raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
+@app.get("/futures", include_in_schema=False)
+async def futures_redirect():
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/", status_code=301)
+
+
 @app.get("/", response_class=HTMLResponse)
 async def dashboard() -> HTMLResponse:
     """Read-only operator dashboard."""
@@ -1433,7 +1439,9 @@ def _record_latest_webhook(payload: AlertPayload, result: dict) -> None:
             "failed_gates": result.get("failed_gates") or [],
         },
     }
-    path.write_text(json.dumps(data, indent=2, sort_keys=True), encoding="utf-8")
+    from agent.daily_summary import atomic_write_text
+    path.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_text(path, json.dumps(data, indent=2, sort_keys=True))
 
 
 def _latest_webhook_payload() -> dict:
@@ -1447,9 +1455,7 @@ def _latest_webhook_payload() -> dict:
 
 
 def _latest_webhook_path() -> Path:
-    path = Path(_config.log_dir)
-    path.mkdir(parents=True, exist_ok=True)
-    return path / "latest_webhook.json"
+    return Path(_config.log_dir) / "latest_webhook.json"
 
 
 def _payload_to_dict(payload: AlertPayload) -> dict:

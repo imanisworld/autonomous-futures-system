@@ -45,6 +45,19 @@ _TICK_VALUES: dict[str, float] = {
     "MCL": 1.00,
 }
 
+# Maximum price deviation from entry before a position is considered stale
+# (as a fraction of entry price). Equity index futures trade in a narrow
+# daily range — a 5% move vs entry means the wrong chart/instrument is feeding
+# the webhook. Commodity futures get a slightly wider 10% threshold.
+_STALE_PRICE_MISMATCH_THRESHOLD: dict[str, float] = {
+    "MES": 0.05,
+    "ES":  0.05,
+    "MNQ": 0.05,
+    "NQ":  0.05,
+    "MGC": 0.10,
+    "MCL": 0.10,
+}
+
 def _tick_value_for(instrument: str) -> float:
     root = (instrument or "").upper().rstrip("!1234567890HMUZ")
     return _TICK_VALUES.get(root, 1.25)
@@ -191,7 +204,9 @@ def process_alert(
                     except (ValueError, TypeError):
                         pass
 
-                is_price_mismatch = price_ratio > 0.30
+                instrument_root = (open_pos.get("instrument") or state.instrument or "").upper().rstrip("!1234567890HMUZ")
+                mismatch_threshold = _STALE_PRICE_MISMATCH_THRESHOLD.get(instrument_root, 0.05)
+                is_price_mismatch = price_ratio > mismatch_threshold
                 is_timed_out = position_age_hours > 8.0
                 is_stale = is_price_mismatch or is_timed_out
 
@@ -528,20 +543,29 @@ def _check_payload_quality(payload: AlertPayload, cfg: SystemConfig) -> Optional
 
 
 def send_telegram_message(message: str) -> bool:
-    """Optional Telegram notification. Disabled unless token/chat env vars exist."""
+    """Optional Telegram notification. Disabled unless token/chat env vars exist.
+
+    Fires in a daemon thread so a slow or unreachable Telegram API never
+    blocks the webhook response path.
+    """
     token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
     chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
     if not token or not chat_id:
         return False
-    try:
-        import httpx
-        response = httpx.post(
-            f"https://api.telegram.org/bot{token}/sendMessage",
-            json={"chat_id": chat_id, "text": message},
-            timeout=5,
-        )
-        response.raise_for_status()
-        return True
-    except Exception as exc:  # pragma: no cover - network/env dependent
-        logger.warning("Telegram notification failed: %s", exc)
-        return False
+
+    import threading
+
+    def _send() -> None:
+        try:
+            import httpx
+            response = httpx.post(
+                f"https://api.telegram.org/bot{token}/sendMessage",
+                json={"chat_id": chat_id, "text": message},
+                timeout=5,
+            )
+            response.raise_for_status()
+        except Exception as exc:  # pragma: no cover - network/env dependent
+            logger.warning("Telegram notification failed: %s", exc)
+
+    threading.Thread(target=_send, daemon=True).start()
+    return True

@@ -115,11 +115,7 @@ class RiskReviewer:
             if RiskReviewer._is_approved_trade(entry):
                 if open_positions > 0:
                     violations.append("duplicate_position_risk")
-                outcome = entry.get("outcome") or {}
-                if outcome.get("result") in ("WIN", "LOSS"):
-                    open_positions = 0
-                else:
-                    open_positions += 1
+                open_positions += 1
             elif entry.get("type") == "OUTCOME":
                 open_positions = max(0, open_positions - 1)
 

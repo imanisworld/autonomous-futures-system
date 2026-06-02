@@ -94,15 +94,13 @@ def score_setup(data: dict[str, Any], now: datetime | None = None) -> ScoreResul
 
     if direction not in {"LONG", "SHORT"}:
         return ScoreResult(ticker, "UNKNOWN", 0, pattern, {}, dict(data), "direction_unknown")
-    if not vwap_pass:
-        return ScoreResult(ticker, direction, 0, pattern, {"vwap": 0}, dict(data), "against_vwap")
-    if not trend_pass:
-        return ScoreResult(ticker, direction, 0, pattern, {"trend": 0}, dict(data), "against_trend")
 
+    # Build full component breakdown before applying hard gates so callers
+    # can always see what would have scored (useful for debugging and logging).
     components = {
         "strat_pattern": 3 if pattern and pattern.upper() != "N/A" else 0,
-        "vwap": 2,
-        "trend": 2,
+        "vwap": 2 if vwap_pass else 0,
+        "trend": 2 if trend_pass else 0,
         "volume": 2 if volume_ratio is not None and volume_ratio > 1.2 else 0,
         "iv_rank": 0,
         "premium_value": 0,
@@ -122,6 +120,14 @@ def score_setup(data: dict[str, Any], now: datetime | None = None) -> ScoreResul
         enriched["option_edge_percent"] = valuation.edge_percent
         enriched["option_value_verdict"] = valuation.verdict
         enriched["option_value_reason"] = valuation.reason
+
+    # VWAP and trend are hard structural gates — a setup trading against either
+    # is not actionable regardless of other factors. Score is forced to 0 but
+    # the full component dict is preserved so callers can see what failed and why.
+    if not vwap_pass:
+        return ScoreResult(ticker, direction, 0, pattern, components, enriched, "against_vwap")
+    if not trend_pass:
+        return ScoreResult(ticker, direction, 0, pattern, components, enriched, "against_trend")
 
     score = max(0, min(10, sum(components.values())))
     return ScoreResult(ticker, direction, score, pattern, components, enriched, "")
