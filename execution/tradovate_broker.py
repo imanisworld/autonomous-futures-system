@@ -100,6 +100,7 @@ class TradovateBroker(BrokerInterface):
         self._contract_cache: dict[str, int] = {}  # root symbol → contract ID
         self._resolve_fail_count: int = 0          # consecutive resolve_position failures
         self._position_opened_at: Optional[float] = None  # time.time() when bracket placed
+        self._last_price: dict[str, float] = {}   # root symbol → last bar close from TV webhook
 
     # ── Auth ──────────────────────────────────────────────────────────────────
 
@@ -185,16 +186,11 @@ class TradovateBroker(BrokerInterface):
         root = instrument.replace("1!", "").upper()
         if root in self._contract_cache:
             return self._contract_cache[root]
-        # Cache miss — hit the API with simple retry/backoff to survive burst alerts
+        # Cache miss — use /contract/suggest (find/search endpoints 404 on Tradovate REST)
         last_exc: Exception = RuntimeError("no attempts made")
         for attempt in range(3):
             try:
-                data = self._get(f"/contract/find?name={root}")
-                if isinstance(data, dict) and "id" in data:
-                    self._contract_cache[root] = int(data["id"])
-                    return self._contract_cache[root]
-                # Fallback: library search
-                results = self._get(f"/contractLibrary/search?text={root}&live=false")
+                results = self._get(f"/contract/suggest?t={root}&l=1")
                 if isinstance(results, list) and results:
                     self._contract_cache[root] = int(results[0]["id"])
                     return self._contract_cache[root]
@@ -512,50 +508,36 @@ class TradovateBroker(BrokerInterface):
             return None
 
     def get_quote(self, instrument: str = "MES") -> dict:
-        """Get live price snapshot from Tradovate REST API."""
+        """Return last known price for the instrument.
+
+        Tradovate's REST API has no live quote endpoints — market data is
+        WebSocket-only. This method authenticates to confirm connectivity and
+        returns the contract name, but price comes from the latest webhook
+        payload (set via set_last_price) rather than a direct API call.
+        """
         try:
             if not self._authenticate():
                 return {"ok": False, "error": "not_authenticated"}
             root = instrument.replace("1!", "").upper()
 
-            # Use _find_contract_id (cached) — avoids the contract/find list-vs-dict
-            # ambiguity and the quote/find?name=ROOT 404 on plain root symbols.
-            try:
-                contract_id = self._find_contract_id(root)
-            except Exception as ce:
-                return {"ok": False, "error": f"contract_lookup_failed: {ce}", "instrument": instrument}
-
-            # Fetch quote by integer ID — always valid once we have the ID
-            try:
-                quote = self._get(f"/quote/item?id={contract_id}")
-            except Exception as qe:
-                return {"ok": False, "error": f"quote_fetch_failed: {qe}", "instrument": instrument}
-
-            # Resolve full symbol name for display (already cached from _find_contract_id)
+            # Resolve contract name for display
             symbol = root
             try:
+                contract_id = self._find_contract_id(root)
                 contract = self._get(f"/contract/item?id={contract_id}")
                 symbol = contract.get("name", root)
             except Exception:
                 pass
 
-            bid = quote.get("bid")
-            ask = quote.get("ofr") or quote.get("ask")
-            last = quote.get("last")
-            prev_close = quote.get("prevClose")
-            price = last if last is not None else prev_close
-
+            # Price comes from latest TradingView webhook bar close
+            price = self._last_price.get(root)
             return {
-                "ok": True,
+                "ok": price is not None,
                 "instrument": instrument,
                 "symbol": symbol,
                 "price": price,
-                "bid": bid,
-                "ask": ask,
-                "spread": round(float(ask) - float(bid), 2) if ask and bid else None,
-                "last": last,
-                "prev_close": prev_close,
-                "ts": quote.get("timestamp"),
+                "source": "tradingview_bar_close",
+                "error": None if price is not None else "no_bar_received_yet",
             }
         except Exception as exc:
             logger.warning("Tradovate get_quote failed: %s", exc)

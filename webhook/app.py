@@ -311,13 +311,25 @@ async def status_history(days: int = Query(default=7, ge=1, le=30)) -> dict:
 
 @app.get("/status/quote")
 async def status_quote(instrument: str = Query(default="MES")) -> dict:
-    """Return live price quote from Tradovate. Only works when BROKER=tradovate."""
+    """Return last known price for the instrument.
+
+    Price comes from the close of the last TradingView webhook bar — Tradovate's
+    REST API has no live quote endpoints (WebSocket-only). If no webhook has been
+    received yet, returns ok=false with error=no_bar_received_yet.
+    """
     broker_mode = os.getenv("BROKER", "paper").strip().lower()
     if broker_mode != "tradovate":
         return {"ok": False, "error": f"BROKER={broker_mode}, not tradovate"}
     try:
         from execution.tradovate_broker import TradovateBroker
         broker = TradovateBroker()
+        # Seed the last price from the latest webhook payload if available
+        latest = _latest_webhook_payload()
+        close = latest.get("close") or latest.get("payload", {}).get("close")
+        ticker = (latest.get("ticker") or "").replace("1!", "").upper()
+        root = instrument.replace("1!", "").upper()
+        if close and ticker == root:
+            broker._last_price[root] = float(close)
         return broker.get_quote(instrument)
     except Exception as exc:
         logger.exception("status_quote failed: %s", exc)
