@@ -255,62 +255,6 @@ async def manual_action(
     raise HTTPException(status_code=400, detail=f"Unknown action '{action}'. Use CLOSE_ALL, OPEN, or STATUS.")
 
 
-@app.post("/webhook/ibkr-test")
-async def ibkr_test(
-    request: Request,
-    x_webhook_secret: str | None = Header(default=None),
-    secret: str | None = Query(default=None),
-) -> JSONResponse:
-    """
-    Fire a 1-contract MES paper bracket order to IBKR then immediately cancel it.
-    Confirms the full execution path works: connect → qualify → place → cancel.
-    Only works when BROKER=ibkr. Safe to run any time — cancels before fill.
-
-    Example:
-        curl -X POST https://yourserver/webhook/ibkr-test \\
-             -H "X-Webhook-Secret: your-secret" \\
-             -d '{}'
-    """
-    _verify_webhook_secret(x_webhook_secret or secret)
-    import os as _os
-    if _os.getenv("BROKER", "paper").strip().lower() != "ibkr":
-        return JSONResponse(content={"ok": False, "error": "BROKER is not ibkr — nothing sent"})
-
-    try:
-        from execution.ibkr_broker import IBKRBroker, IBKRConfig
-        from execution.broker_interface import BracketOrder
-        ibkr = IBKRBroker(config=IBKRConfig.from_env(), auto_connect=True)
-        if not ibkr.connected:
-            return JSONResponse(content={"ok": False, "error": "IBKR Gateway not reachable"})
-
-        # Place a bracket well away from market so it won't fill before we cancel
-        price = _config.position_sizing.starting_balance  # not a real price, just placeholder
-        # Use a safe far-from-market price: current MES is ~5000s, use a dummy limit
-        test_order = BracketOrder(
-            instrument="MES",
-            direction="LONG",
-            entry=1000.0,   # far below market — won't fill
-            stop=990.0,
-            target=1020.0,
-            rr_ratio=2.0,
-            strategy="ibkr_connectivity_test",
-            contracts=1,
-            notes="ibkr-test endpoint — cancel immediately",
-        )
-        fill = ibkr.execute_bracket(test_order)
-        # Cancel immediately regardless of result
-        ibkr.cancel_all()
-        return JSONResponse(content={
-            "ok": True,
-            "connected": ibkr.connected,
-            "fill_result": fill.result,
-            "account_balance": ibkr.get_account_balance(),
-            "note": "Orders cancelled. If fill_result=OPEN the bracket was placed and cancelled successfully.",
-        })
-    except Exception as exc:
-        logger.exception("IBKR test failed: %s", exc)
-        return JSONResponse(content={"ok": False, "error": str(exc)})
-
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard() -> HTMLResponse:

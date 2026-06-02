@@ -318,7 +318,7 @@ options_trading:
   require_confluence_grade: "B"
 
 # ─── Broker ──────────────────────────────────────────────────
-# Active: IBKR paper account (DUH623766) via IB Gateway on port 4004.
+# Broker: Tradovate demo (env=demo). Set BROKER=tradovate in .env.
 # LIVE_TRADING_ENABLED is permanently false.
 
 capital_guardrails:

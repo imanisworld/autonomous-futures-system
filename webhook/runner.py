@@ -13,7 +13,7 @@ Flow per bar:
 
 Broker selection is intentionally paper-only for Hetzner deployment.
 Position resolution uses PaperBroker simulated fills and never routes orders to
-IBKR or Tradovate.
+Tradovate (or paper simulation).
 """
 
 from __future__ import annotations

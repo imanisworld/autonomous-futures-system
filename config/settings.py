@@ -137,7 +137,7 @@ class SystemConfig:
     news_blackout_cutoff_et: str = "13:30"
 
     # Future broker/capital planning (inactive while live trading is blocked)
-    broker_priority: List[str] = field(default_factory=lambda: ["paper", "tradovate_sim", "alpaca_options", "ibkr_paper"])
+    broker_priority: List[str] = field(default_factory=lambda: ["paper", "tradovate"])
     starting_capital_default: float = 1000.0
     minimum_starting_capital: float = 500.0
     max_account_risk_per_trade_percent: float = 1.0
@@ -272,7 +272,7 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         enabled_concepts=strategy.get("enabled_concepts", []),
         disabled_concepts_per_instrument=strategy.get("disabled_concepts_per_instrument", {}),
 
-        broker_priority=broker.get("broker_priority", ["paper", "tradovate_sim", "alpaca_options", "ibkr_paper"]),
+        broker_priority=broker.get("broker_priority", ["paper", "tradovate"]),
         starting_capital_default=float(capital.get("starting_capital_default", 1000)),
         minimum_starting_capital=float(capital.get("minimum_starting_capital", 500)),
         max_account_risk_per_trade_percent=float(

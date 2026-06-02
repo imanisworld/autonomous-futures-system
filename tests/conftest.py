@@ -59,7 +59,7 @@ def config() -> SystemConfig:
             "orb_reclaim", "orb_rejection", "vwap_reclaim",
             "vwap_hold", "pdh_reclaim", "pdl_reclaim", "continuation_pullback"
         ],
-        broker_priority=["paper", "tradovate_sim", "alpaca_options", "ibkr_paper"],
+        broker_priority=["paper", "tradovate"],
         starting_capital_default=1000.0,
         minimum_starting_capital=500.0,
         max_account_risk_per_trade_percent=1.0,
