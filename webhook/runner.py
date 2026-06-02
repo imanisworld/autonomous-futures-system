@@ -81,6 +81,11 @@ def _make_broker(starting_balance: float = 1500.0) -> BrokerInterface:
             "Using IBKRBroker (paper) → %s:%s", config.host, config.port
         )
         return IBKRBroker(config=config)
+    if broker_type == "tradovate":
+        from execution.tradovate_broker import TradovateBroker, TradovateConfig
+        config = TradovateConfig.from_env()
+        logger.info("Using TradovateBroker (env=%s)", config.env)
+        return TradovateBroker(config=config)
     return PaperBroker(starting_balance=starting_balance)
 
 

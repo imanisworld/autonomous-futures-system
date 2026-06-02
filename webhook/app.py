@@ -1869,9 +1869,25 @@ def _manual_open(body: dict) -> dict:
             result["note"] = f"Manual {direction} bracket placed on {instrument}."
         except Exception as exc:
             return {**result, "ok": False, "error": str(exc)}
+    elif broker_type == "tradovate":
+        try:
+            from execution.tradovate_broker import TradovateBroker, TradovateConfig
+            broker = TradovateBroker(config=TradovateConfig.from_env())
+            fill = broker.execute_bracket(order)
+            result["ok"] = fill.result != "CANCELLED"
+            result["fill"] = {
+                "instrument": fill.instrument,
+                "direction": fill.direction,
+                "contracts": fill.contracts,
+                "entry_price": fill.entry_price,
+                "result": fill.result,
+            }
+            result["note"] = f"Manual {direction} bracket placed on {instrument} via Tradovate."
+        except Exception as exc:
+            return {**result, "ok": False, "error": str(exc)}
     else:
         result["ok"] = False
-        result["error"] = "BROKER is not ibkr — manual OPEN only works with live/paper Gateway."
+        result["error"] = "BROKER is not ibkr or tradovate — manual OPEN requires a live broker."
 
     return result
 
@@ -1901,6 +1917,24 @@ def _manual_close_all() -> dict:
             )
             if "close_error" in flatten:
                 result["close_error"] = flatten["close_error"]
+        except Exception as exc:
+            return {**result, "ok": False, "error": str(exc)}
+    elif broker_type == "tradovate":
+        try:
+            from execution.tradovate_broker import TradovateBroker, TradovateConfig
+            broker = TradovateBroker(config=TradovateConfig.from_env())
+            flatten = broker.flatten_position()
+            result["ok"] = True
+            result["position_was"] = flatten.get("position_was")
+            result["cancelled_orders"] = flatten.get("cancelled_orders", False)
+            result["close_sent"] = flatten.get("close_sent", False)
+            result["note"] = (
+                "Tradovate position liquidated + orders cancelled."
+                if flatten.get("close_sent")
+                else "No open position — orders cancelled only."
+            )
+            if "error" in flatten:
+                result["close_error"] = flatten["error"]
         except Exception as exc:
             return {**result, "ok": False, "error": str(exc)}
     else:
