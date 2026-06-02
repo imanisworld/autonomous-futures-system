@@ -380,6 +380,65 @@ async def status_quote(instrument: str = Query(default="MES")) -> dict:
         return {"ok": False, "error": str(exc)}
 
 
+@app.get("/status/test-bracket")
+async def status_test_bracket(
+    instrument: str = Query(default="MES"),
+    direction: str = Query(default="LONG"),
+) -> dict:
+    """
+    Dry-run bracket check. Resolves contract ID, fetches live quote, and computes
+    what a bracket order WOULD look like. No order is placed.
+    Only works when BROKER=tradovate.
+    """
+    broker_mode = os.getenv("BROKER", "paper").strip().lower()
+    if broker_mode != "tradovate":
+        return {"ok": False, "error": f"BROKER={broker_mode}, not tradovate"}
+    direction = direction.upper()
+    if direction not in ("LONG", "SHORT"):
+        return {"ok": False, "error": "direction must be LONG or SHORT"}
+    try:
+        from execution.tradovate_broker import TradovateBroker
+        broker = TradovateBroker()
+        # Step 1 — get live quote
+        q = broker.get_quote(instrument)
+        if not q.get("ok"):
+            return {"ok": False, "stage": "quote", "error": q.get("error")}
+        price = q.get("price") or q.get("last")
+        if price is None:
+            return {"ok": False, "stage": "quote", "error": "no price in quote response"}
+        # Step 2 — resolve contract ID (exercises the cache)
+        try:
+            contract_id = broker._find_contract_id(instrument)
+        except Exception as exc:
+            return {"ok": False, "stage": "contract_lookup", "error": str(exc)}
+        # Step 3 — compute illustrative bracket (7-pt stop, 14-pt target — standard MES)
+        tick = 0.25
+        stop_pts = 7.0
+        target_pts = 14.0
+        if direction == "LONG":
+            stop  = round(price - stop_pts, 2)
+            target = round(price + target_pts, 2)
+        else:
+            stop  = round(price + stop_pts, 2)
+            target = round(price - target_pts, 2)
+        return {
+            "ok": True,
+            "dry_run": True,
+            "instrument": instrument,
+            "contract_id": contract_id,
+            "symbol": q.get("symbol"),
+            "direction": direction,
+            "price": price,
+            "bid": q.get("bid"),
+            "ask": q.get("ask"),
+            "bracket": {"entry": price, "stop": stop, "target": target},
+            "note": "No order placed. Confirms quote + contract resolution works end-to-end.",
+        }
+    except Exception as exc:
+        logger.exception("status_test_bracket failed: %s", exc)
+        return {"ok": False, "error": str(exc)}
+
+
 @app.get("/status/latest-webhook")
 async def latest_webhook() -> dict:
     """Return the last TradingView payload and derived market context."""

@@ -97,6 +97,7 @@ class TradovateBroker(BrokerInterface):
         self._session.headers.update({"Content-Type": "application/json"})
         self._last_position: Optional[Position] = None
         self._account_id: Optional[int] = None
+        self._contract_cache: dict[str, int] = {}  # root symbol → contract ID
 
     # ── Auth ──────────────────────────────────────────────────────────────────
 
@@ -178,15 +179,19 @@ class TradovateBroker(BrokerInterface):
     # ── Contract resolution ───────────────────────────────────────────────────
 
     def _find_contract_id(self, instrument: str) -> int:
-        """Find the front-month contract ID for MES (or other CME micro)."""
+        """Find the front-month contract ID for MES (or other CME micro). Cached."""
         root = instrument.replace("1!", "").upper()
+        if root in self._contract_cache:
+            return self._contract_cache[root]
         data = self._get(f"/contract/find?name={root}")
         if isinstance(data, dict) and "id" in data:
-            return int(data["id"])
+            self._contract_cache[root] = int(data["id"])
+            return self._contract_cache[root]
         # Try searching
         results = self._get(f"/contractLibrary/search?text={root}&live=false")
         if isinstance(results, list) and results:
-            return int(results[0]["id"])
+            self._contract_cache[root] = int(results[0]["id"])
+            return self._contract_cache[root]
         raise ValueError(f"Contract not found for {instrument}")
 
     # ── BrokerInterface implementation ────────────────────────────────────────
@@ -198,6 +203,17 @@ class TradovateBroker(BrokerInterface):
     def execute_bracket(self, order: BracketOrder) -> Fill:
         """Place entry market order with attached stop and target (OSO bracket)."""
         try:
+            # ── Safety: TRADOVATE_ENV=live requires explicit LIVE_TRADING_ENABLED=true ──
+            if self.config.env == "live":
+                live_enabled = os.getenv("LIVE_TRADING_ENABLED", "false").strip().lower()
+                if live_enabled != "true":
+                    logger.error(
+                        "BLOCKED real-money order: TRADOVATE_ENV=live but "
+                        "LIVE_TRADING_ENABLED=%s — set LIVE_TRADING_ENABLED=true to allow",
+                        live_enabled,
+                    )
+                    return self._cancelled_fill(order, "LIVE_TRADING_NOT_ENABLED")
+
             if not self._authenticate():
                 return self._cancelled_fill(order, "TRADOVATE_AUTH_FAILED")
 
@@ -318,6 +334,14 @@ class TradovateBroker(BrokerInterface):
         """Cancel all orders then liquidate any open position at market."""
         result: dict = {"cancelled_orders": False, "close_sent": False, "position_was": None}
         try:
+            # ── Safety: same live-env guard as execute_bracket ──
+            if self.config.env == "live":
+                live_enabled = os.getenv("LIVE_TRADING_ENABLED", "false").strip().lower()
+                if live_enabled != "true":
+                    logger.error("BLOCKED flatten: TRADOVATE_ENV=live but LIVE_TRADING_ENABLED=%s", live_enabled)
+                    result["error"] = "LIVE_TRADING_NOT_ENABLED"
+                    return result
+
             if not self._authenticate():
                 result["error"] = "Tradovate not authenticated"
                 return result
@@ -409,13 +433,18 @@ class TradovateBroker(BrokerInterface):
             if self._account_id is None:
                 logger.warning("Tradovate get_account_balance: account ID unknown")
                 return None
-            # Try cash-balance snapshot first; field names vary by API version
+            # Try cash-balance snapshot first; field names and shape vary by API version
             try:
                 data = self._get(f"/cashBalance/getCashBalanceSnapshot?accountId={self._account_id}")
-                for key in ("totalCashValue", "cashBalance", "netLiq", "balance"):
-                    val = data.get(key)
-                    if val is not None:
-                        return float(val)
+                # Response may be a list of snapshots or a single dict
+                rows = data if isinstance(data, list) else [data]
+                for row in rows:
+                    if not isinstance(row, dict):
+                        continue
+                    for key in ("totalCashValue", "cashBalance", "netLiq", "balance", "amount"):
+                        val = row.get(key)
+                        if val is not None:
+                            return float(val)
             except Exception:
                 pass
             # Fallback: account list carries netLiq directly
