@@ -787,6 +787,7 @@ class DecisionEngine:
             # specific setup (MNQ/MES only, early NY, strong trend, volume).
             # If it doesn't fire, orb_reclaim gets the same bar as a fallback.
             ("strat_4hr_retrigger", self._try_strat_4hr_retrigger),
+            ("strat_4hr_retrigger", self._try_strat_4hr_retrigger_short),
             # ── Core structural setups ─────────────────────────────────────
             ("orb_breakout", self._try_orb_breakout),
             ("orb_reclaim", self._try_orb_reclaim),
@@ -1497,6 +1498,57 @@ class DecisionEngine:
             ),
         )
 
+    def _try_strat_4hr_retrigger_short(self, state: MarketState) -> Optional[SetupDetail]:
+        """
+        SHORT mirror of the 4HR Re-Trigger.
+
+        Pattern: pre-market established a rejection high, NY open bounces up
+        to reclaim the ORB low level briefly then fails back below it.
+        ORB status = reclaimed_low, trend STRONG DOWN, price below VWAP.
+
+        Same time gate (9:30–11:00 ET), same instrument restriction (MNQ/MES).
+        """
+        if state.instrument not in ("MNQ", "MES"):
+            return None
+        if state.session != "new_york":
+            return None
+        et_time = state.timestamp.astimezone(self._ET).time()
+        if not (self._4HR_WINDOW_START <= et_time <= self._4HR_WINDOW_END):
+            return None
+        if state.orb.status != "reclaimed_low":
+            return None
+        if not (state.trend and state.trend.direction == "DOWN"
+                and state.trend.strength == "STRONG"):
+            return None
+        if state.vwap.price_vs_vwap != "below":
+            return None
+        if state.volume.relative and state.volume.relative < 0.7:
+            return None
+
+        tick = self.TICK_SIZE.get(state.instrument, 0.25)
+        max_stop_ticks = self.MAX_ORB_STOP_TICKS.get(state.instrument, 80)
+        entry = state.orb.low - (tick * 1)
+        raw_stop = state.orb.high + (tick * 6)
+        stop = min(raw_stop, entry + (tick * max_stop_ticks))
+        risk = stop - entry
+        if risk <= 0:
+            return None
+        target = entry - (risk * 2.0)
+
+        rr = RiskEngine.calculate_rr("SHORT", entry, stop, target)
+        return SetupDetail(
+            direction="SHORT",
+            entry=round(entry, 4),
+            stop=round(stop, 4),
+            target=round(target, 4),
+            rr_ratio=rr,
+            strategy="strat_4hr_retrigger",
+            notes=(
+                "4HR Re-Trigger SHORT proxy: NY open rejects pre-market low level "
+                "(ORB low) with downtrend and VWAP confirmation."
+            ),
+        )
+
     # Continuation pullback: max ticks from VWAP to qualify as "near"
     _PULLBACK_PROXIMITY_TICKS = 6
 
@@ -1506,10 +1558,10 @@ class DecisionEngine:
         within _PULLBACK_PROXIMITY_TICKS of VWAP and is still on the correct
         side (above VWAP for LONG, below for SHORT).
 
-        Previous implementation used `price_vs_vwap == "at"` OR `holding`, but
-        `holding` is True whenever price is above or below VWAP — i.e. almost
-        always — making the check a no-op.  Replaced with a tick-distance gate
-        so the strategy only fires when price has actually pulled back to VWAP.
+        Stop uses ORB structure (ORB low for LONG, ORB high for SHORT) rather
+        than a fixed VWAP offset — ORB levels are the natural invalidation
+        point for intraday continuation setups. Falls back to VWAP ± 20 ticks
+        when ORB isn't established yet.
         """
         if not (state.trend and state.trend.direction in ("UP", "DOWN")):
             return None
@@ -1522,28 +1574,34 @@ class DecisionEngine:
         vwap = state.vwap.value
 
         if state.trend.direction == "UP":
-            # Price must be above VWAP but within proximity — true pullback
             if not (state.vwap.price_vs_vwap == "above"
                     and (close - vwap) <= proximity):
                 return None
             entry = close
-            stop  = vwap - (tick * 8)
-            risk  = entry - stop
+            # Use ORB low as stop if ORB is established, otherwise wide VWAP stop
+            if state.orb.low and state.orb.low > 0 and state.orb.status not in ("undefined", None):
+                stop = state.orb.low - (tick * 4)
+            else:
+                stop = vwap - (tick * 20)
+            risk = entry - stop
             if risk <= 0:
                 return None
-            target = entry + (risk * 2.0)
+            target = entry + (risk * 2.2)
             direction = "LONG"
         else:
-            # Price must be below VWAP but within proximity — true pullback
             if not (state.vwap.price_vs_vwap == "below"
                     and (vwap - close) <= proximity):
                 return None
             entry = close
-            stop  = vwap + (tick * 8)
-            risk  = stop - entry
+            # Use ORB high as stop if ORB is established
+            if state.orb.high and state.orb.high > 0 and state.orb.status not in ("undefined", None):
+                stop = state.orb.high + (tick * 4)
+            else:
+                stop = vwap + (tick * 20)
+            risk = stop - entry
             if risk <= 0:
                 return None
-            target = entry - (risk * 2.0)
+            target = entry - (risk * 2.2)
             direction = "SHORT"
 
         rr = RiskEngine.calculate_rr(direction, entry, stop, target)
@@ -1556,6 +1614,7 @@ class DecisionEngine:
             strategy="continuation_pullback",
             notes=(
                 f"Trend continuation pullback to VWAP ({state.trend.direction}): "
-                f"close within {self._PULLBACK_PROXIMITY_TICKS} ticks of VWAP"
+                f"close within {self._PULLBACK_PROXIMITY_TICKS} ticks, "
+                f"stop at ORB structure"
             ),
         )
