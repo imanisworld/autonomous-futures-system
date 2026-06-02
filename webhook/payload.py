@@ -184,12 +184,3 @@ class AlertPayload(BaseModel):
     # Zone metadata
     zone_type: Optional[str] = None   # "supply" | "demand" | "both"
     zone_state: Optional[str] = None  # "fresh" | "used" | "stale"
-
-    # ── BOS / MSS (Break of Structure / Market Structure Shift) ──────────────
-    # Sent by Pine on the bar where structure breaks.
-    # bos_direction: "bullish" (broke above swing high) | "bearish" (broke below swing low) | null
-    # mss_direction: "bullish" (bearish-to-bullish shift) | "bearish" (bullish-to-bearish) | null
-    # market_structure: combined label — "bullish_bos" | "bearish_bos" | "bullish_mss" | "bearish_mss" | "none"
-    bos_direction: Optional[str] = None
-    mss_direction: Optional[str] = None
-    market_structure: Optional[str] = None
