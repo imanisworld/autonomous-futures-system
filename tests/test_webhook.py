@@ -65,11 +65,6 @@ def _isolate_app_logs(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(app_module._config, "log_dir", str(tmp_path / "logs"))
 
 
-def _dashboard_headers(monkeypatch) -> dict[str, str]:
-    monkeypatch.setenv("DASHBOARD_TOKEN", "dashboard-test-token")
-    return {"X-Dashboard-Token": "dashboard-test-token"}
-
-
 # ─── state_builder: parse_timestamp ───────────────────────────────────────────
 
 def test_state_builder_preserves_pine_advisory_bracket_fields():
@@ -675,43 +670,33 @@ def test_fastapi_health_endpoint(monkeypatch):
     assert data["ok"] is True
     assert data["live_trading_enabled"] is False
     assert "webhook_secret_required" in data
-    assert "dashboard_token_required" in data
-    assert "broker" not in data
-    assert "broker_gateway_reachable" not in data
+    assert "broker" in data
+    assert "broker_gateway_reachable" in data
     assert "discord_notifications_enabled" not in data
     assert "signa_api_key_configured" not in data
 
-    auth_resp = client.get("/health", headers=_dashboard_headers(monkeypatch))
-    auth_data = auth_resp.json()
-    assert auth_resp.status_code == 200
-    assert "broker" in auth_data
-    assert "broker_gateway_reachable" in auth_data
-    assert isinstance(auth_data["signa_api_enabled"], bool)
 
-
-def test_private_status_requires_dashboard_token(monkeypatch):
+def test_status_routes_do_not_require_dashboard_token():
     try:
         from fastapi.testclient import TestClient
         from webhook.app import app
     except ImportError:
         pytest.skip("fastapi[testclient] not installed")
 
-    monkeypatch.setenv("DASHBOARD_TOKEN", "dashboard-test-token")
     client = TestClient(app)
 
-    assert client.get("/status/today").status_code == 401
-    assert client.get("/status/today", headers={"X-Dashboard-Token": "wrong"}).status_code == 401
-    assert client.get("/status/today", headers={"X-Dashboard-Token": "dashboard-test-token"}).status_code == 200
+    assert client.get("/").status_code == 200
+    assert client.get("/status/today").status_code == 200
+    assert client.get("/status/history?days=7").status_code == 200
 
 
-def test_public_share_and_public_status_do_not_require_dashboard_token(monkeypatch):
+def test_public_share_and_public_status_do_not_require_dashboard_token():
     try:
         from fastapi.testclient import TestClient
         from webhook.app import app
     except ImportError:
         pytest.skip("fastapi[testclient] not installed")
 
-    monkeypatch.setenv("DASHBOARD_TOKEN", "dashboard-test-token")
     client = TestClient(app)
 
     public_resp = client.get("/status/public")
@@ -754,7 +739,7 @@ def test_fastapi_status_signa_disabled_endpoint(monkeypatch):
     monkeypatch.setattr(app_module._config, "signa_api_key_configured", True)
 
     client = TestClient(app)
-    resp = client.get("/status/signa?symbol=AAPL", headers=_dashboard_headers(monkeypatch))
+    resp = client.get("/status/signa?symbol=AAPL")
 
     assert resp.status_code == 200
     data = resp.json()
@@ -764,7 +749,7 @@ def test_fastapi_status_signa_disabled_endpoint(monkeypatch):
     assert data["error"] == "signa_api_disabled"
 
 
-def test_fastapi_dashboard_endpoint(monkeypatch):
+def test_fastapi_dashboard_endpoint():
     try:
         from fastapi.testclient import TestClient
         from webhook.app import app
@@ -772,17 +757,15 @@ def test_fastapi_dashboard_endpoint(monkeypatch):
         pytest.skip("fastapi[testclient] not installed")
 
     client = TestClient(app)
-    resp = client.get("/", headers=_dashboard_headers(monkeypatch))
+    resp = client.get("/")
 
     assert resp.status_code == 200
     assert "text/html" in resp.headers["content-type"]
     assert "RiskSentinel" in resp.text
     assert "LIVE TRADING OFF" in resp.text
-    assert "dashboardFetch('/status/today')" in resp.text
-    assert "X-Dashboard-Token" in resp.text
 
 
-def test_fastapi_status_today_endpoint(monkeypatch):
+def test_fastapi_status_today_endpoint():
     try:
         from fastapi.testclient import TestClient
         from webhook.app import app
@@ -790,7 +773,7 @@ def test_fastapi_status_today_endpoint(monkeypatch):
         pytest.skip("fastapi[testclient] not installed")
 
     client = TestClient(app)
-    resp = client.get("/status/today", headers=_dashboard_headers(monkeypatch))
+    resp = client.get("/status/today")
 
     assert resp.status_code == 200
     data = resp.json()
@@ -800,7 +783,7 @@ def test_fastapi_status_today_endpoint(monkeypatch):
     assert "top_no_trade_reasons" in data
 
 
-def test_fastapi_status_history_endpoint(monkeypatch):
+def test_fastapi_status_history_endpoint():
     try:
         from fastapi.testclient import TestClient
         from webhook.app import app
@@ -808,7 +791,7 @@ def test_fastapi_status_history_endpoint(monkeypatch):
         pytest.skip("fastapi[testclient] not installed")
 
     client = TestClient(app)
-    resp = client.get("/status/history?days=3", headers=_dashboard_headers(monkeypatch))
+    resp = client.get("/status/history?days=3")
 
     assert resp.status_code == 200
     data = resp.json()
@@ -816,7 +799,7 @@ def test_fastapi_status_history_endpoint(monkeypatch):
     assert {"date", "trade_count", "no_trades"}.issubset(data["days"][0])
 
 
-def test_fastapi_strategy_status_endpoint(monkeypatch):
+def test_fastapi_strategy_status_endpoint():
     try:
         from fastapi.testclient import TestClient
         from webhook.app import app
@@ -824,7 +807,7 @@ def test_fastapi_strategy_status_endpoint(monkeypatch):
         pytest.skip("fastapi[testclient] not installed")
 
     client = TestClient(app)
-    resp = client.get("/status/strategy", headers=_dashboard_headers(monkeypatch))
+    resp = client.get("/status/strategy")
 
     assert resp.status_code == 200
     data = resp.json()
@@ -844,7 +827,7 @@ def test_fastapi_review_endpoint_returns_empty_eod_report(monkeypatch, tmp_path)
     _isolate_app_logs(monkeypatch, tmp_path)
     client = TestClient(app)
 
-    resp = client.get("/status/review?date=2026-05-23&mode=eod", headers=_dashboard_headers(monkeypatch))
+    resp = client.get("/status/review?date=2026-05-23&mode=eod")
 
     assert resp.status_code == 200
     data = resp.json()
@@ -866,7 +849,7 @@ def test_fastapi_review_endpoint_returns_morning_preflight(monkeypatch, tmp_path
     _isolate_app_logs(monkeypatch, tmp_path)
     client = TestClient(app)
 
-    resp = client.get("/status/review?date=2026-05-23&mode=morning", headers=_dashboard_headers(monkeypatch))
+    resp = client.get("/status/review?date=2026-05-23&mode=morning")
 
     assert resp.status_code == 200
     data = resp.json()
@@ -885,7 +868,7 @@ def test_fastapi_review_endpoint_rejects_invalid_mode(monkeypatch, tmp_path):
     _isolate_app_logs(monkeypatch, tmp_path)
     client = TestClient(app)
 
-    resp = client.get("/status/review?date=2026-05-23&mode=midday", headers=_dashboard_headers(monkeypatch))
+    resp = client.get("/status/review?date=2026-05-23&mode=midday")
 
     assert resp.status_code == 422
 
@@ -900,7 +883,7 @@ def test_fastapi_review_endpoint_rejects_invalid_date(monkeypatch, tmp_path):
     _isolate_app_logs(monkeypatch, tmp_path)
     client = TestClient(app)
 
-    resp = client.get("/status/review?date=../2026-05-23&mode=eod", headers=_dashboard_headers(monkeypatch))
+    resp = client.get("/status/review?date=../2026-05-23&mode=eod")
 
     assert resp.status_code == 422
     assert "YYYY-MM-DD" in resp.json()["detail"]
@@ -946,7 +929,7 @@ def test_fastapi_latest_webhook_endpoint_after_alert(monkeypatch, tmp_path):
     alert_resp = client.post("/webhook/alert", json=body, headers={"X-Webhook-Secret": "test-secret"})
     assert alert_resp.status_code == 200
 
-    latest_resp = client.get("/status/latest-webhook", headers=_dashboard_headers(monkeypatch))
+    latest_resp = client.get("/status/latest-webhook")
     assert latest_resp.status_code == 200
     data = latest_resp.json()
     assert data["payload"]["ticker"] == "MNQ1!"

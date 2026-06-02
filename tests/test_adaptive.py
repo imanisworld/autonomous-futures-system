@@ -627,11 +627,10 @@ def test_adaptive_endpoint_returns_stable_json_no_journal(monkeypatch, tmp_path)
         pytest.skip("fastapi[testclient] not installed")
 
     monkeypatch.setenv("WEBHOOK_SECRET", "test-secret")
-    monkeypatch.setenv("DASHBOARD_TOKEN", "dashboard-test-token")
     import webhook.app as app_module
     monkeypatch.setattr(app_module._config, "log_dir", str(tmp_path))
     client = TestClient(app)
-    resp = client.get("/status/adaptive", headers={"X-Dashboard-Token": "dashboard-test-token"})
+    resp = client.get("/status/adaptive")
     assert resp.status_code == 200
     data = resp.json()
     assert "overall_status" in data
@@ -649,11 +648,10 @@ def test_adaptive_history_endpoint_empty(monkeypatch, tmp_path):
         pytest.skip("fastapi[testclient] not installed")
 
     monkeypatch.setenv("WEBHOOK_SECRET", "test-secret")
-    monkeypatch.setenv("DASHBOARD_TOKEN", "dashboard-test-token")
     import webhook.app as app_module
     monkeypatch.setattr(app_module._config, "log_dir", str(tmp_path))
     client = TestClient(app)
-    resp = client.get("/status/adaptive/history?days=7", headers={"X-Dashboard-Token": "dashboard-test-token"})
+    resp = client.get("/status/adaptive/history?days=7")
     assert resp.status_code == 200
     data = resp.json()
     assert "days" in data

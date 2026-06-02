@@ -30,7 +30,7 @@ from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
+from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -60,26 +60,6 @@ def _verify_webhook_secret(provided: str | None) -> None:
         raise HTTPException(status_code=401, detail="WEBHOOK_SECRET is not configured.")
     if not provided or not hmac.compare_digest(provided, expected):
         raise HTTPException(status_code=401, detail="Invalid webhook secret")
-
-
-def _configured_dashboard_token() -> str:
-    return os.getenv("DASHBOARD_TOKEN", "").strip()
-
-
-def _dashboard_token_valid(provided: str | None) -> bool:
-    expected = _configured_dashboard_token()
-    return bool(expected and provided and hmac.compare_digest(provided, expected))
-
-
-async def _require_dashboard_token(
-    x_dashboard_token: str | None = Header(default=None),
-    token: str | None = Query(default=None),
-) -> None:
-    """FastAPI dependency — protects private dashboard/status endpoints."""
-    if not _configured_dashboard_token():
-        raise HTTPException(status_code=503, detail="DASHBOARD_TOKEN is not configured")
-    if not _dashboard_token_valid(x_dashboard_token or token):
-        raise HTTPException(status_code=401, detail="Dashboard token required")
 
 
 def _client_ip(request: Request) -> str:
@@ -119,11 +99,6 @@ async def _lifespan(app: FastAPI):
         raise RuntimeError(
             "WEBHOOK_SECRET env var is required but not set. "
             "Set it in Railway dashboard before deploying."
-        )
-    if not _configured_dashboard_token():
-        raise RuntimeError(
-            "DASHBOARD_TOKEN env var is required but not set. "
-            "Set it on the server and in the app as EXPO_PUBLIC_DASHBOARD_TOKEN."
         )
     yield
 
@@ -204,48 +179,35 @@ async def receive_alert(
         raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
-@app.get("/", response_class=HTMLResponse, dependencies=[Depends(_require_dashboard_token)])
+@app.get("/", response_class=HTMLResponse)
 async def dashboard() -> HTMLResponse:
-    """Read-only operator dashboard — requires DASHBOARD_TOKEN if configured."""
+    """Read-only operator dashboard."""
     status = _dashboard_payload(date.today())
     return HTMLResponse(_render_dashboard(status))
 
 
 @app.get("/health")
-async def health(
-    x_dashboard_token: str | None = Header(default=None),
-    token: str | None = Query(default=None),
-) -> dict:
-    """Public liveness check. Authenticated callers get operator details."""
-    response = {
+async def health() -> dict:
+    """Liveness check. Returns safe status only."""
+    import os
+    broker_mode = os.getenv("BROKER", "paper").strip().lower()
+    return {
         "ok": True,
         "paper_mode": _config.paper_mode,
         "live_trading_enabled": _config.live_trading_enabled,
-        "webhook_secret_required": bool(_configured_webhook_secret()),
-        "dashboard_token_required": bool(_configured_dashboard_token()),
-    }
-    if not _dashboard_token_valid(x_dashboard_token or token):
-        return response
-
-    import os
-    broker_mode = os.getenv("BROKER", "paper").strip().lower()
-    response.update({
         "broker": broker_mode,
         "broker_gateway_reachable": _ibkr_gateway_reachable(),
-        "discord_notifications_enabled": _config.discord_notifications_enabled,
-        "signa_api_enabled": _config.signa_api_enabled,
-        "signa_api_key_configured": _config.signa_api_key_configured,
-    })
-    return response
+        "webhook_secret_required": bool(_configured_webhook_secret()),
+    }
 
 
-@app.get("/status/today", dependencies=[Depends(_require_dashboard_token)])
+@app.get("/status/today")
 async def status_today() -> dict:
     """Return today's reconstructed daily state from the journal."""
     return _dashboard_payload(date.today())
 
 
-@app.get("/status/history", dependencies=[Depends(_require_dashboard_token)])
+@app.get("/status/history")
 async def status_history(days: int = Query(default=7, ge=1, le=30)) -> dict:
     """Return recent read-only daily summaries from the journal."""
     today = date.today()
@@ -270,19 +232,19 @@ async def status_history(days: int = Query(default=7, ge=1, le=30)) -> dict:
     return {"days": history}
 
 
-@app.get("/status/latest-webhook", dependencies=[Depends(_require_dashboard_token)])
+@app.get("/status/latest-webhook")
 async def latest_webhook() -> dict:
     """Return the last TradingView payload and derived market context."""
     return _latest_webhook_payload()
 
 
-@app.get("/status/strategy", dependencies=[Depends(_require_dashboard_token)])
+@app.get("/status/strategy")
 async def strategy_status() -> dict:
     """Return enabled strategy concepts and journal-derived strategy counts."""
     return _strategy_payload(date.today())
 
 
-@app.get("/status/review", dependencies=[Depends(_require_dashboard_token)])
+@app.get("/status/review")
 async def status_review(
     review_date: str | None = Query(default=None, alias="date"),
     mode: str = Query(default="eod", pattern="^(morning|eod)$"),
@@ -303,7 +265,7 @@ async def status_review(
 
 
 
-@app.get("/status/signa", dependencies=[Depends(_require_dashboard_token)])
+@app.get("/status/signa")
 async def status_signa(symbol: str = Query(default="AAPL")) -> dict:
     """Read-only Signa connectivity and parsing check."""
     from sources.signa_client import SignaClient
@@ -328,7 +290,7 @@ async def status_signa(symbol: str = Query(default="AAPL")) -> dict:
     }
 
 
-@app.get("/status/risk", dependencies=[Depends(_require_dashboard_token)])
+@app.get("/status/risk")
 async def status_risk() -> dict:
     """Return risk limits (config) and today's journal-derived risk state."""
     journal = JournalLogger(log_dir=_config.log_dir)
@@ -370,7 +332,7 @@ async def status_risk() -> dict:
     }
 
 
-@app.get("/status/adaptive", dependencies=[Depends(_require_dashboard_token)])
+@app.get("/status/adaptive")
 async def status_adaptive() -> dict:
     """Run the Adaptive Risk Committee and return the latest report."""
     from adaptive.committee import AdaptiveCommittee
@@ -379,7 +341,7 @@ async def status_adaptive() -> dict:
     return report.to_dict()
 
 
-@app.get("/status/adaptive/history", dependencies=[Depends(_require_dashboard_token)])
+@app.get("/status/adaptive/history")
 async def status_adaptive_history(days: int = Query(default=7, ge=1, le=30)) -> dict:
     """Return cached committee reports from the last N days."""
     from adaptive.committee import AdaptiveCommittee
@@ -1068,15 +1030,6 @@ def _render_dashboard(status: dict) -> str:
     </section>
   </main>
   <script>
-    const dashboardToken = new URLSearchParams(window.location.search).get('token') || '';
-    function dashboardFetch(path) {{
-      const options = {{cache: 'no-store'}};
-      if (dashboardToken) {{
-        options.headers = {{'X-Dashboard-Token': dashboardToken}};
-      }}
-      return fetch(path, options);
-    }}
-
     function escapeHtml(value) {{
       return String(value ?? '')
         .replaceAll('&', '&amp;')
@@ -1227,8 +1180,8 @@ def _render_dashboard(status: dict) -> str:
     async function refreshDashboard() {{
       try {{
         const [today, history] = await Promise.all([
-          dashboardFetch('/status/today').then(r => r.json()),
-          dashboardFetch('/status/history?days=7').then(r => r.json())
+          fetch('/status/today', {{cache: 'no-store'}}).then(r => r.json()),
+          fetch('/status/history?days=7', {{cache: 'no-store'}}).then(r => r.json())
         ]);
         const pnl = document.getElementById('metric-pnl');
         const trades = document.getElementById('metric-trades');
