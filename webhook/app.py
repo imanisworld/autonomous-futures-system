@@ -1784,26 +1784,46 @@ def _broker_status() -> dict:
     """Return broker connection and open position status."""
     import os as _os
     broker_type = _os.getenv("BROKER", "paper").strip().lower()
-    if broker_type != "ibkr":
-        return {"broker": "paper", "connected": True, "position": None}
-    try:
-        from execution.ibkr_broker import IBKRBroker, IBKRConfig
-        ibkr = IBKRBroker(config=IBKRConfig.from_env(), auto_connect=False)
-        pos = ibkr.get_position() if ibkr.connected else None
-        return {
-            "broker": "ibkr",
-            "connected": ibkr.connected,
-            "account_balance": ibkr.get_account_balance() if ibkr.connected else None,
-            "position": {
-                "instrument": pos.instrument,
-                "direction": pos.direction,
-                "qty": pos.quantity,
-                "entry": pos.entry_price,
-            } if pos else None,
-            **ibkr.health_check(),
-        }
-    except Exception as exc:
-        return {"broker": "ibkr", "connected": False, "error": str(exc)}
+    if broker_type == "ibkr":
+        try:
+            from execution.ibkr_broker import IBKRBroker, IBKRConfig
+            ibkr = IBKRBroker(config=IBKRConfig.from_env(), auto_connect=False)
+            pos = ibkr.get_position() if ibkr.connected else None
+            return {
+                "broker": "ibkr",
+                "connected": ibkr.connected,
+                "account_balance": ibkr.get_account_balance() if ibkr.connected else None,
+                "position": {
+                    "instrument": pos.instrument,
+                    "direction": pos.direction,
+                    "qty": pos.quantity,
+                    "entry": pos.entry_price,
+                } if pos else None,
+                **ibkr.health_check(),
+            }
+        except Exception as exc:
+            return {"broker": "ibkr", "connected": False, "error": str(exc)}
+    if broker_type == "tradovate":
+        try:
+            from execution.tradovate_broker import TradovateBroker, TradovateConfig
+            broker = TradovateBroker(config=TradovateConfig.from_env())
+            authenticated = broker._authenticate()
+            pos = broker.get_position() if authenticated else None
+            balance = broker.get_account_balance() if authenticated else None
+            return {
+                "broker": f"tradovate-{broker.config.env}",
+                "connected": authenticated,
+                "account_balance": balance,
+                "position": {
+                    "instrument": pos.instrument,
+                    "direction": pos.direction,
+                    "qty": pos.quantity,
+                    "entry": pos.entry_price,
+                } if pos else None,
+            }
+        except Exception as exc:
+            return {"broker": "tradovate", "connected": False, "error": str(exc)}
+    return {"broker": "paper", "connected": True, "position": None}
 
 
 def _manual_open(body: dict) -> dict:
