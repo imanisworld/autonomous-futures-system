@@ -120,10 +120,20 @@ class TradovateBroker(BrokerInterface):
                 err = data.get("errorText", "no accessToken in response")
                 logger.error("Tradovate auth failed: %s", err)
                 return False
-            # Tradovate tokens expire in ~60 minutes; use expiration hint if present
-            expiry_ms = data.get("expirationTime")
-            if expiry_ms:
-                expires_at = expiry_ms / 1000.0
+            # Tradovate returns expirationTime as ISO string e.g. "2026-06-02T18:31:28+00:00"
+            expiry_raw = data.get("expirationTime")
+            if expiry_raw:
+                try:
+                    from datetime import datetime, timezone
+                    if isinstance(expiry_raw, str):
+                        # Parse ISO 8601 — handle both +00:00 and Z suffixes
+                        expiry_str = expiry_raw.replace("Z", "+00:00")
+                        expires_at = datetime.fromisoformat(expiry_str).timestamp()
+                    else:
+                        # Fallback: treat as milliseconds if it's a number
+                        expires_at = float(expiry_raw) / 1000.0
+                except Exception:
+                    expires_at = time.time() + 3600
             else:
                 expires_at = time.time() + 3600
             self._token = _Token(access_token=token, expires_at=expires_at)
