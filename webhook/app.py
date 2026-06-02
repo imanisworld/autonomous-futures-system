@@ -680,7 +680,7 @@ def _public_entry(entry: dict) -> dict:
     outcome = entry.get("outcome") or {}
     setup = entry.get("setup") or {}
     pnl_dollars = outcome.get("pnl_dollars")
-    exit_reason = outcome.get("exit_reason")
+    raw_exit_reason = outcome.get("exit_reason")
     outcome_explanation = _explain_outcome(outcome)
     return {
         "ts": entry.get("ts"),
@@ -692,7 +692,8 @@ def _public_entry(entry: dict) -> dict:
         "market_condition": entry.get("market_condition"),
         "strategy": setup.get("strategy"),
         "outcome": outcome.get("result"),
-        "exit_reason": exit_reason,
+        "exit_reason": outcome_explanation["display_exit_reason"],
+        "raw_exit_reason": raw_exit_reason,
         "pnl_dollars": pnl_dollars,
         "outcome_explanation": outcome_explanation["message"],
         "outcome_warning": outcome_explanation["warning"],
@@ -709,29 +710,35 @@ def _explain_outcome(outcome: dict) -> dict:
         pnl_value = None
 
     if not result and not exit_reason:
-        return {"message": None, "warning": False}
+        return {"message": None, "warning": False, "display_exit_reason": None}
 
     if exit_reason == "TARGET_HIT" and pnl_value is not None and pnl_value < 0:
         return {
-            "message": "Target was marked hit, but P&L is negative. Check trade direction, tick value, or fill price.",
+            "message": "Loss recorded. Raw exit label said TARGET_HIT, but negative P&L means this was not a profit target.",
             "warning": True,
+            "display_exit_reason": "LOSS_RECORDED",
         }
     if exit_reason == "STOP_HIT" and pnl_value is not None and pnl_value > 0:
         return {
-            "message": "Stop was marked hit, but P&L is positive. Check trade direction, tick value, or fill price.",
+            "message": "Profit recorded. Raw exit label said STOP_HIT, but positive P&L means this was not a losing stop.",
             "warning": True,
+            "display_exit_reason": "PROFIT_RECORDED",
         }
     if exit_reason == "TARGET_HIT":
-        return {"message": "Closed because target was hit.", "warning": False}
+        return {"message": "Closed because target was hit.", "warning": False, "display_exit_reason": "TARGET_HIT"}
     if exit_reason == "STOP_HIT":
-        return {"message": "Closed because stop was hit.", "warning": False}
+        return {"message": "Closed because stop was hit.", "warning": False, "display_exit_reason": "STOP_HIT"}
     if exit_reason == "BREAKEVEN_STOP":
-        return {"message": "Closed at breakeven stop.", "warning": False}
+        return {"message": "Closed at breakeven stop.", "warning": False, "display_exit_reason": "BREAKEVEN_STOP"}
     if exit_reason and str(exit_reason).startswith("FORCE_CLOSE_"):
-        return {"message": f"Force closed: {str(exit_reason).replace('FORCE_CLOSE_', '').replace('_', ' ').lower()}.", "warning": False}
+        return {
+            "message": f"Force closed: {str(exit_reason).replace('FORCE_CLOSE_', '').replace('_', ' ').lower()}.",
+            "warning": False,
+            "display_exit_reason": exit_reason,
+        }
     if exit_reason:
-        return {"message": f"Closed by {exit_reason}.", "warning": False}
-    return {"message": f"Outcome recorded as {result}.", "warning": False}
+        return {"message": f"Closed by {exit_reason}.", "warning": False, "display_exit_reason": exit_reason}
+    return {"message": f"Outcome recorded as {result}.", "warning": False, "display_exit_reason": result}
 
 
 def _strategy_payload(for_date: date) -> dict:

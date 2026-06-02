@@ -827,9 +827,10 @@ def test_public_entry_flags_target_hit_negative_pnl():
 
     public = _public_entry(entry)
 
-    assert public["exit_reason"] == "TARGET_HIT"
+    assert public["exit_reason"] == "LOSS_RECORDED"
+    assert public["raw_exit_reason"] == "TARGET_HIT"
     assert public["outcome_warning"] is True
-    assert "Target was marked hit" in public["outcome_explanation"]
+    assert "negative P&L means this was not a profit target" in public["outcome_explanation"]
 
 
 def test_fastapi_status_history_endpoint():
