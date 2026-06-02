@@ -248,8 +248,8 @@ strategy:
     # Phase 2: full multi-bar Strat classification available
     - strat_122               # 1-2-2 reversal (1→2→reverse 2)
     - strat_inside_break      # inside bar breakout with trend + VWAP filter
-    # SUSPENDED — strat_4hr_retrigger: 4 trades, 25% WR, -$80. Reinstated when 20+ trades.
-    # REMOVED   — strat_outside_continuation: 0 trades in 237 replay days. Never fired.
+    - strat_4hr_retrigger     # 4HR re-trigger — 6 trades 83.3% WR (clean data). Re-enabled.
+    # REMOVED — strat_outside_continuation: 0 trades in 237 replay days. Never fired.
   frequency: low                   # Bias toward selectivity
   no_trade_is_valid: true          # Explicit acknowledgment
 
