@@ -1068,6 +1068,15 @@ def _render_dashboard(status: dict) -> str:
     </section>
   </main>
   <script>
+    const dashboardToken = new URLSearchParams(window.location.search).get('token') || '';
+    function dashboardFetch(path) {{
+      const options = {{cache: 'no-store'}};
+      if (dashboardToken) {{
+        options.headers = {{'X-Dashboard-Token': dashboardToken}};
+      }}
+      return fetch(path, options);
+    }}
+
     function escapeHtml(value) {{
       return String(value ?? '')
         .replaceAll('&', '&amp;')
@@ -1218,8 +1227,8 @@ def _render_dashboard(status: dict) -> str:
     async function refreshDashboard() {{
       try {{
         const [today, history] = await Promise.all([
-          fetch('/status/today', {{cache: 'no-store'}}).then(r => r.json()),
-          fetch('/status/history?days=7', {{cache: 'no-store'}}).then(r => r.json())
+          dashboardFetch('/status/today').then(r => r.json()),
+          dashboardFetch('/status/history?days=7').then(r => r.json())
         ]);
         const pnl = document.getElementById('metric-pnl');
         const trades = document.getElementById('metric-trades');

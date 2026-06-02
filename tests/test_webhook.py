@@ -778,6 +778,8 @@ def test_fastapi_dashboard_endpoint(monkeypatch):
     assert "text/html" in resp.headers["content-type"]
     assert "RiskSentinel" in resp.text
     assert "LIVE TRADING OFF" in resp.text
+    assert "dashboardFetch('/status/today')" in resp.text
+    assert "X-Dashboard-Token" in resp.text
 
 
 def test_fastapi_status_today_endpoint(monkeypatch):
