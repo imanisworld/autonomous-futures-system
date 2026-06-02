@@ -18,12 +18,12 @@ trading_mode:
 # ─── Allowed Universe ────────────────────────────────────────
 instruments:
   allowed:
-    - MNQ   # Micro E-mini NASDAQ-100
-    - MES   # Micro E-mini S&P 500
-    - ES    # E-mini S&P 500
-    - NQ    # E-mini NASDAQ-100
-    - MGC   # Micro Gold
-    - MCL   # Micro Crude Oil
+    - MES   # Micro E-mini S&P 500 (active — MES-only ladder while validating live signals)
+    # - MNQ   # Micro E-mini NASDAQ-100 — disabled until MNQ sizing rules are added
+    # - ES    # E-mini S&P 500 — disabled (full-size, not paper-appropriate yet)
+    # - NQ    # E-mini NASDAQ-100 — disabled (full-size)
+    # - MGC   # Micro Gold — disabled
+    # - MCL   # Micro Crude Oil — disabled
 
 sessions:
   allowed:
@@ -306,20 +306,9 @@ options_trading:
   allow_market_orders: false
   require_confluence_grade: "B"
 
-# ─── Future Broker Roadmap (Inactive Planning Metadata) ─────
-broker_roadmap:
-  first_realistic_sim_path: tradovate_sim
-  future_multi_asset_path: alpaca_options
-  broker_priority:
-    - paper
-    - tradovate_sim
-    - alpaca_options
-    - ibkr_paper
-  notes:
-    - "Tradovate simulation comes first because small futures account practicality matters."
-    - "Alpaca options stays isolated for future stocks/options expansion."
-    - "IBKR compatibility stays in mind for broader multi-asset expansion."
-    - "No broker SDK, credentials, or live execution are enabled by this metadata."
+# ─── Broker ──────────────────────────────────────────────────
+# Active: IBKR paper account (DUH623766) via IB Gateway on port 4004.
+# LIVE_TRADING_ENABLED is permanently false.
 
 capital_guardrails:
   starting_capital_default: 1500
