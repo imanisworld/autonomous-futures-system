@@ -366,8 +366,8 @@ if not na(signal_entry) and not na(signal_stop) and not na(raw_target)
     signal_target := f_min_target(signal_direction, signal_entry, raw_target, min_target_pts)
     signal_rr := f_rr(signal_direction, signal_entry, signal_stop, signal_target)
 
-has_signal = not na(signal_strategy)
-event_type = has_signal ? "signal" : "heartbeat"
+bool has_signal = not na(signal_strategy)
+string event_type = has_signal ? "signal" : "heartbeat"
 
 // BUILD JSON
 string msg = "{"
@@ -454,9 +454,9 @@ msg := msg + "\"has_signal\":" + str.tostring(has_signal) + ","
 msg := msg + "\"event_type\":\"" + event_type + "\""
 msg := msg + "}"
 
-// FIRE ALERT — sends every confirmed London/NY session bar.
+// FIRE ALERT - sends every confirmed London/NY session bar.
 // Backend decides TRADE vs NO_TRADE. This keeps the dashboard fresh.
-should_send = i_alert_on and barstate.isconfirmed and in_any_session
+bool should_send = i_alert_on and barstate.isconfirmed and in_any_session
 
 if should_send
     alert(msg, alert.freq_once_per_bar_close)
