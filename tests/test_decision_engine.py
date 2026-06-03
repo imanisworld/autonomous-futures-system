@@ -834,6 +834,12 @@ class TestContinuationPullback:
     def _pb_state(self, fresh_market_state, close, vwap, direction="UP"):
         state = deepcopy(fresh_market_state)
         state.orb.status = "inside"
+        if direction == "UP":
+            state.orb.low = close - 8.0
+            state.orb.high = close + 12.0
+        else:
+            state.orb.high = close + 8.0
+            state.orb.low = close - 12.0
         state.market_condition = "TRENDING"
         state.trend = TrendData(direction=direction, strength="MODERATE")
         state.ohlc.close = close
@@ -892,6 +898,8 @@ def test_mes_live_pullback_target_expands_to_configured_minimum(config, fresh_ma
     state = deepcopy(fresh_market_state)
     state.instrument = "MES"
     state.orb.status = "inside"
+    state.orb.high = 5590.0
+    state.orb.low = 5579.0
     state.market_condition = "TRENDING"
     state.trend = TrendData(direction="UP", strength="MODERATE")
     state.ohlc.close = 5582.25
@@ -922,6 +930,8 @@ def test_pine_advisory_bracket_overrides_matching_backend_setup(config, fresh_ma
     state = deepcopy(fresh_market_state)
     state.instrument = "MES"
     state.orb.status = "inside"
+    state.orb.high = 5590.0
+    state.orb.low = 5579.0
     state.market_condition = "TRENDING"
     state.trend = TrendData(direction="UP", strength="MODERATE")
     state.ohlc.close = 5582.25
@@ -962,6 +972,8 @@ def test_pine_advisory_bracket_mismatch_is_ignored(config, fresh_market_state):
     state = deepcopy(fresh_market_state)
     state.instrument = "MES"
     state.orb.status = "inside"
+    state.orb.high = 5590.0
+    state.orb.low = 5579.0
     state.market_condition = "TRENDING"
     state.trend = TrendData(direction="UP", strength="MODERATE")
     state.ohlc.close = 5582.25
@@ -975,7 +987,7 @@ def test_pine_advisory_bracket_mismatch_is_ignored(config, fresh_market_state):
         "signal_strategy": "orb_breakout",
         "signal_direction": "LONG",
         "entry": 5582.25,
-        "stop": 5578.0,
+        "stop": 5577.0,
         "target": 5597.25,
     }
 
@@ -983,7 +995,7 @@ def test_pine_advisory_bracket_mismatch_is_ignored(config, fresh_market_state):
 
     assert decision.decision == "TRADE"
     assert decision.setup.strategy == "continuation_pullback"
-    assert decision.setup.stop != 5578.0
+    assert decision.setup.stop != 5577.0
     assert "Pine bracket override" not in decision.setup.notes
 
 

@@ -24,6 +24,8 @@ def fresh_market_state() -> dict:
     now = datetime(2026, 5, 29, 14, 30, tzinfo=timezone.utc).isoformat()
     state["timestamp"] = now
     state["ohlc"]["bar_start"] = now
+    state["volume"]["current_bar"] = 5000
+    state["volume"]["relative"] = 1.3
     return state
 
 
@@ -37,7 +39,7 @@ def risk_rules_without_position_sizing(tmp_path):
         count=1,
     )
     text = re.sub(
-        r"max_staleness_seconds: 300",
+        r"max_staleness_seconds: \d+",
         "max_staleness_seconds: 999999",
         text,
         count=1,
@@ -96,7 +98,7 @@ def test_main_resolves_stop_and_daily_state_tracks_loss(tmp_path, monkeypatch):
     market_state_path = tmp_path / "market_state.json"
     market_state_path.write_text(json.dumps(state))
     next_bar_path = tmp_path / "next_bar.json"
-    next_bar_path.write_text(json.dumps({"high": 5905.0, "low": 5890.0}))  # MES scale — hits stop
+    next_bar_path.write_text(json.dumps({"high": 5900.0, "low": 5890.0}))  # MES scale — hits stop
 
     monkeypatch.setenv("LOG_DIR", str(tmp_path / "logs"))
     risk_rules_path = risk_rules_without_position_sizing(tmp_path)
