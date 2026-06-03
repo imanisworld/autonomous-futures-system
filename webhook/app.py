@@ -648,8 +648,8 @@ def _diagnostic(status: str, component: str, message: str, next_step: str | None
     return item
 
 
-def _latest_webhook_age_seconds() -> int | None:
-    latest = _latest_webhook_payload()
+def _latest_webhook_age_seconds(latest: dict | None = None) -> int | None:
+    latest = latest or _latest_webhook_payload()
     received_at = latest.get("received_at")
     if not received_at:
         return None
@@ -662,10 +662,97 @@ def _latest_webhook_age_seconds() -> int | None:
         return None
 
 
+def _latest_webhook_summary(latest: dict) -> str | None:
+    payload = latest.get("payload") or {}
+    context = latest.get("context") or {}
+    ticker = payload.get("ticker") or context.get("instrument")
+    close = payload.get("close") or context.get("close")
+    timestamp = payload.get("timestamp") or context.get("timestamp")
+    if not any((ticker, close, timestamp)):
+        return None
+    parts = []
+    if ticker:
+        parts.append(str(ticker))
+    if close is not None:
+        parts.append(f"close={close}")
+    if timestamp:
+        parts.append(f"bar_ts={timestamp}")
+    return " | ".join(parts)
+
+
+def _tradovate_env_diagnostic() -> dict:
+    try:
+        from execution.tradovate_broker import TradovateConfig
+        config = TradovateConfig.from_env()
+    except Exception as exc:
+        return _diagnostic(
+            "error",
+            "Tradovate config",
+            f"Tradovate environment is invalid: {exc}",
+            "Set TRADOVATE_API_KEY_ID to the numeric CID only and put the UUID in TRADOVATE_API_KEY_SECRET.",
+        )
+
+    missing = []
+    if not config.username:
+        missing.append("TRADOVATE_USERNAME")
+    if not config.password:
+        missing.append("TRADOVATE_PASSWORD")
+    if not config.cid:
+        missing.append("TRADOVATE_API_KEY_ID")
+    if not config.secret:
+        missing.append("TRADOVATE_API_KEY_SECRET")
+    if missing:
+        return _diagnostic(
+            "warn",
+            "Tradovate config",
+            f"Tradovate broker is selected, but missing: {', '.join(missing)}.",
+            "Fill the missing demo credentials before attempting a manual OPEN.",
+        )
+    return _diagnostic(
+        "ok",
+        "Tradovate config",
+        f"Tradovate env parses cleanly for {config.env}; ACL still must be enabled in Tradovate.",
+    )
+
+
+def _active_configured_windows(now: datetime | None = None) -> list[str]:
+    try:
+        from zoneinfo import ZoneInfo
+        current = (now or datetime.now(timezone.utc)).astimezone(ZoneInfo("America/New_York"))
+    except Exception:
+        current = now or datetime.now(timezone.utc)
+    current_minutes = current.hour * 60 + current.minute
+    active = []
+    for session, windows in (_config.session_windows or {}).items():
+        for window in windows or []:
+            if not isinstance(window, dict) or not window.get("allow"):
+                continue
+            start = _hhmm_to_minutes(window.get("start"))
+            end = _hhmm_to_minutes(window.get("end"))
+            if start is None or end is None:
+                continue
+            if start <= end:
+                in_window = start <= current_minutes < end
+            else:
+                in_window = current_minutes >= start or current_minutes < end
+            if in_window:
+                active.append(f"{session} {window.get('start')}-{window.get('end')}")
+    return active
+
+
+def _hhmm_to_minutes(value: object) -> int | None:
+    try:
+        hour, minute = str(value).split(":", 1)
+        return int(hour) * 60 + int(minute)
+    except (TypeError, ValueError):
+        return None
+
+
 def _diagnostics_payload(for_date: date) -> dict:
     broker = os.getenv("BROKER", "paper").strip().lower()
     gateway = _ibkr_gateway_reachable()
-    latest_age = _latest_webhook_age_seconds()
+    latest = _latest_webhook_payload()
+    latest_age = _latest_webhook_age_seconds(latest)
     journal = JournalLogger(log_dir=_config.log_dir)
     journal_path = journal._journal_path(for_date)
     items = [
@@ -711,6 +798,8 @@ def _diagnostics_payload(for_date: date) -> dict:
             ))
         else:
             items.append(_diagnostic("warn", "IBKR gateway", "IBKR gateway status is unknown."))
+    elif broker == "tradovate":
+        items.append(_tradovate_env_diagnostic())
     else:
         items.append(_diagnostic("ok", "Broker", f"Broker is set to {broker}; IBKR gateway is not required."))
 
@@ -754,6 +843,24 @@ def _diagnostics_payload(for_date: date) -> dict:
         ))
     else:
         items.append(_diagnostic("ok", "TradingView alerts", "A TradingView webhook was received recently."))
+
+    latest_summary = _latest_webhook_summary(latest)
+    if latest_summary:
+        items.append(_diagnostic("info", "Latest webhook", latest_summary))
+
+    active_windows = _active_configured_windows()
+    if active_windows:
+        items.append(_diagnostic(
+            "ok",
+            "Configured windows",
+            f"Active allow window(s): {', '.join(active_windows)}.",
+        ))
+    else:
+        items.append(_diagnostic(
+            "info",
+            "Configured windows",
+            "No configured allow-only test/session window is active right now.",
+        ))
 
     if journal_path.exists():
         items.append(_diagnostic("ok", "Journal", f"Today journal exists at {journal_path}."))

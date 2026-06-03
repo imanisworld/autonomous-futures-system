@@ -10,6 +10,30 @@ from execution.broker_interface import BracketOrder
 from execution.tradovate_broker import TradovateBroker, TradovateConfig
 
 
+def test_config_from_env_accepts_numeric_api_key_id(monkeypatch):
+    monkeypatch.setenv("TRADOVATE_API_KEY_ID", "13833")
+    monkeypatch.setenv("TRADOVATE_API_KEY_SECRET", "secret")
+
+    config = TradovateConfig.from_env()
+
+    assert config.cid == 13833
+    assert config.secret == "secret"
+
+
+def test_config_from_env_rejects_pasted_cid_secret_combo(monkeypatch):
+    monkeypatch.setenv(
+        "TRADOVATE_API_KEY_ID",
+        "cid: 13833, secret: 24b71877-b166-4f98-9fe0-7cb3266e6ee1",
+    )
+
+    try:
+        TradovateConfig.from_env()
+    except ValueError as exc:
+        assert "numeric CID only" in str(exc)
+    else:
+        raise AssertionError("malformed TRADOVATE_API_KEY_ID should fail clearly")
+
+
 def _broker(monkeypatch, orders):
     """A broker whose _get('/order/list') returns `orders`, with no real sleeps."""
     broker = TradovateBroker(config=TradovateConfig())

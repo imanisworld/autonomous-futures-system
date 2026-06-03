@@ -659,6 +659,7 @@ def test_fastapi_health_endpoint(monkeypatch):
     """Health check must return 200 with live_trading_enabled=False."""
     try:
         from fastapi.testclient import TestClient
+        import webhook.app as app_module
         from webhook.app import app
     except ImportError:
         pytest.skip("fastapi[testclient] not installed")
@@ -809,7 +810,36 @@ def test_fastapi_status_diagnostics_endpoint(monkeypatch, tmp_path):
     assert data["overall_status"] == "warn"
     assert data["top_issue"]["component"] in {"Discord alerts", "TradingView alerts"}
     components = {item["component"] for item in data["items"]}
-    assert {"Backend API", "Trading mode", "Webhook secret", "Discord alerts"}.issubset(components)
+    assert {
+        "Backend API",
+        "Trading mode",
+        "Webhook secret",
+        "Discord alerts",
+        "Configured windows",
+    }.issubset(components)
+
+
+def test_status_diagnostics_reports_bad_tradovate_env(monkeypatch, tmp_path):
+    try:
+        from fastapi.testclient import TestClient
+        import webhook.app as app_module
+        from webhook.app import app
+    except ImportError:
+        pytest.skip("fastapi[testclient] not installed")
+
+    _isolate_app_logs(monkeypatch, tmp_path)
+    monkeypatch.setenv("BROKER", "tradovate")
+    monkeypatch.setenv("WEBHOOK_SECRET", "test-secret")
+    monkeypatch.setenv("TRADOVATE_API_KEY_ID", "cid: 13833, secret: pasted")
+
+    client = TestClient(app)
+    resp = client.get("/status/diagnostics")
+
+    assert resp.status_code == 200
+    items = resp.json()["items"]
+    tradovate = next(item for item in items if item["component"] == "Tradovate config")
+    assert tradovate["status"] == "error"
+    assert "numeric CID only" in tradovate["message"]
 
 
 def test_doctor_command_prints_diagnostics(monkeypatch, tmp_path, capsys):

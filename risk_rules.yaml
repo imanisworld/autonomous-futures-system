@@ -40,7 +40,7 @@ session_windows:
     - start: "17:00"
       end: "22:00"
       allow: true
-      note: "Evening test window — 5pm to 10pm ET (temporary live test window)"
+      note: "Evening test window — 5pm to 10pm ET (temporary; remove after testing)"
     - start: "02:00"
       end: "04:00"
       allow: true

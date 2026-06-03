@@ -44,6 +44,18 @@ _TICK_VALUE: dict[str, float] = {
 }
 
 
+def _parse_api_key_id(value: str | None) -> int:
+    raw = (value or "0").strip().strip("\"'")
+    if not raw:
+        return 0
+    if raw.isdigit():
+        return int(raw)
+    raise ValueError(
+        "TRADOVATE_API_KEY_ID must be the numeric CID only "
+        f"(example: 13833), got {raw!r}"
+    )
+
+
 # ─── Config ───────────────────────────────────────────────────────────────────
 
 @dataclass
@@ -63,7 +75,7 @@ class TradovateConfig:
             env=os.getenv("TRADOVATE_ENV", "demo").strip().lower(),
             username=os.getenv("TRADOVATE_USERNAME", "").strip(),
             password=os.getenv("TRADOVATE_PASSWORD", "").strip(),
-            cid=int(os.getenv("TRADOVATE_API_KEY_ID", "0")),
+            cid=_parse_api_key_id(os.getenv("TRADOVATE_API_KEY_ID", "0")),
             secret=os.getenv("TRADOVATE_API_KEY_SECRET", "").strip(),
         )
 
