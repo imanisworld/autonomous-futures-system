@@ -34,18 +34,27 @@ def test_config_from_env_rejects_pasted_cid_secret_combo(monkeypatch):
         raise AssertionError("malformed TRADOVATE_API_KEY_ID should fail clearly")
 
 
-def _broker(monkeypatch, orders):
-    """A broker whose _get('/order/list') returns `orders`, with no real sleeps."""
+def _broker(monkeypatch, items_by_id):
+    """A broker whose _get('/order/item?id=N') returns items_by_id[N].
+
+    Models Tradovate's /order/item — the OSO child orders are looked up by the
+    oso1Id/oso2Id that placeOSO returns (NOT scanned from /order/list, which
+    omits orderType).
+    """
     broker = TradovateBroker(config=TradovateConfig())
     broker._account_id = 555
-    monkeypatch.setattr(broker, "_get", lambda path, **kw: orders)
+
+    def _get(path, **kw):
+        if "id=" in path:
+            oid = int(path.split("id=")[1])
+            if oid in items_by_id:
+                return items_by_id[oid]
+            raise RuntimeError("order not found")
+        return []
+
+    monkeypatch.setattr(broker, "_get", _get)
     monkeypatch.setattr("execution.tradovate_broker.time.sleep", lambda *_a, **_k: None)
     return broker
-
-
-def _order(contract_id=10, action="Sell", otype="Stop", status="Working", account=555):
-    return {"contractId": contract_id, "action": action, "orderType": otype,
-            "ordStatus": status, "accountId": account}
 
 
 _BRACKET = BracketOrder(instrument="MES", direction="LONG", entry=5900.0,
@@ -53,35 +62,32 @@ _BRACKET = BracketOrder(instrument="MES", direction="LONG", entry=5900.0,
                         strategy="manual_force_open", contracts=1)
 
 
-# ── detection (pure) ──────────────────────────────────────────────────────────
+# ── detection (via OSO child ids + /order/item status) ────────────────────────
 
-def test_both_children_live_returns_true_true(monkeypatch):
-    broker = _broker(monkeypatch, [_order(otype="Stop"), _order(otype="Limit")])
-    assert broker._verify_bracket_children(10, "Sell", _BRACKET) == (True, True)
-
-
-def test_missing_stop_returns_false_true(monkeypatch):
-    broker = _broker(monkeypatch, [_order(otype="Limit")])  # target only
-    assert broker._verify_bracket_children(10, "Sell", _BRACKET, retries=1) == (False, True)
+def test_both_children_working_returns_true_true(monkeypatch):
+    broker = _broker(monkeypatch, {101: {"ordStatus": "Working"}, 102: {"ordStatus": "Working"}})
+    assert broker._verify_bracket_children(stop_id=101, target_id=102, order=_BRACKET) == (True, True)
 
 
-def test_no_children_returns_false_false(monkeypatch):
-    broker = _broker(monkeypatch, [])
-    assert broker._verify_bracket_children(10, "Sell", _BRACKET, retries=1) == (False, False)
+def test_missing_stop_id_returns_false_true(monkeypatch):
+    broker = _broker(monkeypatch, {102: {"ordStatus": "Working"}})
+    assert broker._verify_bracket_children(stop_id=None, target_id=102, order=_BRACKET, retries=1) == (False, True)
 
 
-def test_ignores_wrong_contract_action_and_filled_status(monkeypatch):
-    orders = [
-        _order(contract_id=99, otype="Stop"),      # wrong contract
-        _order(action="Buy", otype="Limit"),       # entry side, not close side
-        _order(otype="Stop", status="Filled"),     # already filled — not protecting
-        _order(otype="Limit", status="Canceled"),  # canceled
-    ]
-    broker = _broker(monkeypatch, orders)
-    assert broker._verify_bracket_children(10, "Sell", _BRACKET, retries=1) == (False, False)
+def test_no_child_ids_returns_false_false(monkeypatch):
+    broker = _broker(monkeypatch, {})
+    assert broker._verify_bracket_children(stop_id=None, target_id=None, order=_BRACKET, retries=1) == (False, False)
 
 
-def test_get_failure_is_defensive_treats_as_unprotected(monkeypatch):
+def test_rejected_child_is_not_live(monkeypatch):
+    broker = _broker(monkeypatch, {101: {"ordStatus": "Rejected"}, 102: {"ordStatus": "Working"}})
+    assert broker._verify_bracket_children(stop_id=101, target_id=102, order=_BRACKET, retries=1) == (False, True)
+
+
+def test_item_read_failure_trusts_oso_id(monkeypatch):
+    """If the OSO returned the child id but /order/item is unreadable, trust the
+    OSO — its id IS the broker's confirmation. (Prevents the false-positive
+    flatten that scanning /order/list by orderType caused.)"""
     broker = TradovateBroker(config=TradovateConfig())
     broker._account_id = 555
 
@@ -90,8 +96,7 @@ def test_get_failure_is_defensive_treats_as_unprotected(monkeypatch):
 
     monkeypatch.setattr(broker, "_get", _boom)
     monkeypatch.setattr("execution.tradovate_broker.time.sleep", lambda *_a, **_k: None)
-    # Must not raise; unverifiable → unprotected.
-    assert broker._verify_bracket_children(10, "Sell", _BRACKET, retries=2) == (False, False)
+    assert broker._verify_bracket_children(stop_id=101, target_id=102, order=_BRACKET, retries=2) == (True, True)
 
 
 # ── escalation: alert + auto-flatten ──────────────────────────────────────────

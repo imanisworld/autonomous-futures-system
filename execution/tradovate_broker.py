@@ -287,7 +287,14 @@ class TradovateBroker(BrokerInterface):
                     result,
                 )
                 return self._cancelled_fill(order, "TRADOVATE_NO_ORDER_ID")
-            logger.info("Tradovate bracket placed: orderId=%s instrument=%s dir=%s", order_id, order.instrument, order.direction)
+            # OSO confirms the bracket children with their own order IDs:
+            # oso1 = bracket1 (Limit/target), oso2 = bracket2 (Stop).
+            target_id = result.get("oso1Id")
+            stop_id = result.get("oso2Id")
+            logger.info(
+                "Tradovate bracket placed: entry=%s target=%s stop=%s instrument=%s dir=%s",
+                order_id, target_id, stop_id, order.instrument, order.direction,
+            )
 
             self._last_position = Position(
                 instrument=order.instrument,
@@ -307,7 +314,7 @@ class TradovateBroker(BrokerInterface):
             # the entry exposed: alert loudly AND auto-flatten immediately —
             # a few ticks of slippage beats unbounded unprotected risk.
             stop_ok, target_ok = self._verify_bracket_children(
-                contract_id=contract_id, close_action=close_action, order=order,
+                stop_id=stop_id, target_id=target_id, order=order,
             )
             self._last_bracket_confirmed = stop_ok and target_ok
             if not self._last_bracket_confirmed:
@@ -329,50 +336,42 @@ class TradovateBroker(BrokerInterface):
             logger.exception("Tradovate execute_bracket failed: %s", exc)
             return self._cancelled_fill(order, "TRADOVATE_ORDER_ERROR")
 
-    # Order statuses that mean a protective child is live and guarding the position.
-    _LIVE_ORDER_STATUSES = {"working", "pending", "accepted", "suspended"}
+    # ordStatus values that mean a child order is dead (NOT protecting the position).
+    _DEAD_ORDER_STATUSES = {"rejected", "canceled", "cancelled", "expired"}
 
     def _verify_bracket_children(
-        self, contract_id, close_action: str, order: BracketOrder,
-        retries: int = 4, delay: float = 0.5,
+        self, stop_id, target_id, order: BracketOrder,
+        retries: int = 3, delay: float = 0.5,
     ) -> tuple[bool, bool]:
-        """Detect whether a working Stop AND Limit exist on the close side.
+        """Confirm the OSO's stop + target child orders are live.
 
-        Pure detection — no side effects. Polls the account's orders (children
-        can register a beat after the market entry fills) and returns
-        (stop_ok, target_ok). On uncertainty (e.g. /order/list keeps failing) it
-        returns False for the unseen side so the caller flattens — when in doubt,
-        do not leave a position unprotected. Best-effort: query errors never raise.
+        Tradovate's placeOSO returns oso1Id (target/Limit) and oso2Id (stop/Stop)
+        — their presence is the broker's own confirmation the children exist
+        (NOTE: /order/list omits orderType, so we must NOT scan it by type). A
+        child id is treated as live unless /order/item explicitly reports it
+        Rejected/Canceled/Expired. A missing id means that side never placed.
+        Returns (stop_ok, target_ok). Best-effort: read errors never raise.
         """
-        want_action = str(close_action).capitalize()
-        stop_ok = target_ok = False
+        return self._child_live(stop_id, retries, delay), self._child_live(target_id, retries, delay)
+
+    def _child_live(self, order_id, retries: int, delay: float) -> bool:
+        """True if a bracket child order exists and is not explicitly dead."""
+        if not order_id:
+            return False  # OSO did not return this child → it never placed
         for attempt in range(max(1, retries)):
             try:
-                orders = self._get("/order/list")
+                o = self._get(f"/order/item?id={order_id}")
+                status = str(o.get("ordStatus", "")).lower()
+                if status in self._DEAD_ORDER_STATUSES:
+                    return False
+                if status:  # any other known status (Working/Pending/Filled/...) = live
+                    return True
             except Exception as exc:
-                logger.warning("bracket verify: /order/list failed (attempt %d): %s", attempt + 1, exc)
-                orders = []
-            stop_ok = target_ok = False
-            for o in (orders if isinstance(orders, list) else []):
-                if o.get("contractId") != contract_id:
-                    continue
-                if self._account_id is not None and o.get("accountId") not in (None, self._account_id):
-                    continue
-                if str(o.get("action", "")).capitalize() != want_action:
-                    continue
-                if str(o.get("ordStatus", "")).lower() not in self._LIVE_ORDER_STATUSES:
-                    continue
-                otype = str(o.get("orderType", "")).lower()
-                if otype == "stop":
-                    stop_ok = True
-                elif otype == "limit":
-                    target_ok = True
-            if stop_ok and target_ok:
-                logger.info("bracket verify: stop+target confirmed live for %s", order.instrument)
-                return True, True
+                logger.warning("bracket verify: /order/item id=%s failed: %s", order_id, exc)
             if attempt + 1 < retries:
                 time.sleep(delay)
-        return stop_ok, target_ok
+        # OSO returned the id but we couldn't read its status — trust the OSO.
+        return True
 
     def _handle_naked_position(
         self, order: BracketOrder, qty: int, *, stop_ok: bool, target_ok: bool,
@@ -469,13 +468,41 @@ class TradovateBroker(BrokerInterface):
             pass
         return None
 
+    def _cancel_working_orders(self) -> int:
+        """Cancel every Working/Pending order on the account, one by one.
+
+        Tradovate has NO /order/cancelallorders endpoint (404) — you must list
+        orders and cancel each via /order/cancelorder. Returns count cancelled.
+        """
+        cancelled = 0
+        try:
+            orders = self._get("/order/list")
+        except Exception as exc:
+            logger.warning("cancel: /order/list failed: %s", exc)
+            return 0
+        live = {"working", "pending", "accepted", "suspended"}
+        for o in (orders if isinstance(orders, list) else []):
+            if self._account_id is not None and o.get("accountId") not in (None, self._account_id):
+                continue
+            if str(o.get("ordStatus", "")).lower() not in live:
+                continue
+            oid = o.get("id")
+            if not oid:
+                continue
+            try:
+                self._post("/order/cancelorder", {"orderId": oid})
+                cancelled += 1
+            except Exception as exc:
+                logger.warning("cancel: /order/cancelorder id=%s failed: %s", oid, exc)
+        return cancelled
+
     def cancel_all(self) -> None:
         """Cancel all open orders."""
         try:
             if not self._authenticate():
                 return
-            self._post("/order/cancelallorders", {"accountId": self._account_id})
-            logger.info("Tradovate: all orders cancelled")
+            n = self._cancel_working_orders()
+            logger.info("Tradovate: cancelled %d working order(s)", n)
         except Exception as exc:
             logger.warning("Tradovate cancel_all failed: %s", exc)
         self._last_position = None
@@ -496,10 +523,11 @@ class TradovateBroker(BrokerInterface):
                 result["error"] = "Tradovate not authenticated"
                 return result
 
-            # Step 1 — cancel all pending orders
+            # Step 1 — cancel all working orders (incl. any live bracket children)
             try:
-                self._post("/order/cancelallorders", {"accountId": self._account_id})
-                result["cancelled_orders"] = True
+                n = self._cancel_working_orders()
+                result["cancelled_orders"] = n > 0
+                result["cancelled_count"] = n
             except Exception as exc:
                 logger.warning("Tradovate flatten cancel step failed: %s", exc)
 
