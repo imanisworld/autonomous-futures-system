@@ -2052,12 +2052,14 @@ def _manual_open(body: dict) -> dict:
                 "result": fill.result,
             }
             result["note"] = f"Manual {direction} bracket placed on {instrument} via Tradovate."
-            # Surface a naked-position warning if the protective children didn't confirm.
+            # Naked-bracket safety: if children didn't confirm, the broker has
+            # already auto-flattened the entry — surface that loudly.
             if getattr(broker, "_last_bracket_confirmed", None) is False:
                 result["bracket_unconfirmed"] = True
+                result["auto_flattened"] = True
                 result["warning"] = (
-                    "Entry filled but stop/target NOT confirmed live — position may be "
-                    "unprotected. Check Tradovate and use CLOSE ALL if needed."
+                    "Entry filled but stop/target NOT confirmed — position was AUTO-CLOSED "
+                    "for safety (no naked risk). Verify flat in Tradovate before retrying."
                 )
         except Exception as exc:
             return {**result, "ok": False, "error": str(exc)}

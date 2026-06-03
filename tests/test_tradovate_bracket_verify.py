@@ -1,9 +1,9 @@
-"""Tests for Tradovate bracket-child verification (naked-position detection).
+"""Tests for Tradovate bracket-child verification + naked-position auto-flatten.
 
 A market entry can fill while its protective stop/target children are rejected,
-leaving a naked position. `_verify_bracket_children` polls the account orders and
-returns True only when BOTH protective orders are confirmed live; otherwise it
-fires a naked-position alert.
+leaving a naked position. `_verify_bracket_children` detects which children are
+live (pure, no side effects); `_handle_naked_position` escalates: loud alert +
+immediate flatten, returning a CANCELLED fill so no naked position is held.
 """
 
 from execution.broker_interface import BracketOrder
@@ -16,10 +16,7 @@ def _broker(monkeypatch, orders):
     broker._account_id = 555
     monkeypatch.setattr(broker, "_get", lambda path, **kw: orders)
     monkeypatch.setattr("execution.tradovate_broker.time.sleep", lambda *_a, **_k: None)
-    alerts = []
-    monkeypatch.setattr(broker, "_alert_naked_position",
-                        lambda order, *, stop_ok, target_ok: alerts.append((stop_ok, target_ok)))
-    return broker, alerts
+    return broker
 
 
 def _order(contract_id=10, action="Sell", otype="Stop", status="Working", account=555):
@@ -32,24 +29,21 @@ _BRACKET = BracketOrder(instrument="MES", direction="LONG", entry=5900.0,
                         strategy="manual_force_open", contracts=1)
 
 
-def test_both_children_live_confirms_no_alert(monkeypatch):
-    orders = [_order(otype="Stop"), _order(otype="Limit")]
-    broker, alerts = _broker(monkeypatch, orders)
-    assert broker._verify_bracket_children(10, "Sell", _BRACKET) is True
-    assert alerts == []
+# ── detection (pure) ──────────────────────────────────────────────────────────
+
+def test_both_children_live_returns_true_true(monkeypatch):
+    broker = _broker(monkeypatch, [_order(otype="Stop"), _order(otype="Limit")])
+    assert broker._verify_bracket_children(10, "Sell", _BRACKET) == (True, True)
 
 
-def test_missing_stop_triggers_alert(monkeypatch):
-    orders = [_order(otype="Limit")]  # target only, no stop
-    broker, alerts = _broker(monkeypatch, orders)
-    assert broker._verify_bracket_children(10, "Sell", _BRACKET, retries=1) is False
-    assert alerts == [(False, True)]  # stop missing, target present
+def test_missing_stop_returns_false_true(monkeypatch):
+    broker = _broker(monkeypatch, [_order(otype="Limit")])  # target only
+    assert broker._verify_bracket_children(10, "Sell", _BRACKET, retries=1) == (False, True)
 
 
-def test_no_children_triggers_alert(monkeypatch):
-    broker, alerts = _broker(monkeypatch, [])
-    assert broker._verify_bracket_children(10, "Sell", _BRACKET, retries=1) is False
-    assert alerts == [(False, False)]
+def test_no_children_returns_false_false(monkeypatch):
+    broker = _broker(monkeypatch, [])
+    assert broker._verify_bracket_children(10, "Sell", _BRACKET, retries=1) == (False, False)
 
 
 def test_ignores_wrong_contract_action_and_filled_status(monkeypatch):
@@ -59,12 +53,11 @@ def test_ignores_wrong_contract_action_and_filled_status(monkeypatch):
         _order(otype="Stop", status="Filled"),     # already filled — not protecting
         _order(otype="Limit", status="Canceled"),  # canceled
     ]
-    broker, alerts = _broker(monkeypatch, orders)
-    assert broker._verify_bracket_children(10, "Sell", _BRACKET, retries=1) is False
-    assert alerts == [(False, False)]
+    broker = _broker(monkeypatch, orders)
+    assert broker._verify_bracket_children(10, "Sell", _BRACKET, retries=1) == (False, False)
 
 
-def test_get_failure_is_defensive_and_alerts(monkeypatch):
+def test_get_failure_is_defensive_treats_as_unprotected(monkeypatch):
     broker = TradovateBroker(config=TradovateConfig())
     broker._account_id = 555
 
@@ -73,9 +66,37 @@ def test_get_failure_is_defensive_and_alerts(monkeypatch):
 
     monkeypatch.setattr(broker, "_get", _boom)
     monkeypatch.setattr("execution.tradovate_broker.time.sleep", lambda *_a, **_k: None)
-    alerts = []
+    # Must not raise; unverifiable → unprotected.
+    assert broker._verify_bracket_children(10, "Sell", _BRACKET, retries=2) == (False, False)
+
+
+# ── escalation: alert + auto-flatten ──────────────────────────────────────────
+
+def test_handle_naked_position_alerts_flattens_and_returns_cancelled(monkeypatch):
+    broker = TradovateBroker(config=TradovateConfig())
+    alerts, flattens = [], []
     monkeypatch.setattr(broker, "_alert_naked_position",
                         lambda order, *, stop_ok, target_ok: alerts.append((stop_ok, target_ok)))
-    # Must not raise; treats unverifiable as naked.
-    assert broker._verify_bracket_children(10, "Sell", _BRACKET, retries=2) is False
-    assert alerts == [(False, False)]
+    monkeypatch.setattr(broker, "flatten_position",
+                        lambda: flattens.append(True) or {"close_sent": True, "cancelled_orders": True})
+
+    fill = broker._handle_naked_position(_BRACKET, qty=1, stop_ok=False, target_ok=True)
+
+    assert alerts == [(False, True)]          # alerted with the missing side
+    assert flattens == [True]                 # flatten actually invoked
+    assert fill.result == "CANCELLED"
+    assert fill.exit_reason == "NAKED_BRACKET_AUTO_FLATTENED"
+
+
+def test_handle_naked_position_survives_flatten_failure(monkeypatch):
+    broker = TradovateBroker(config=TradovateConfig())
+    monkeypatch.setattr(broker, "_alert_naked_position", lambda *a, **k: None)
+
+    def _boom():
+        raise RuntimeError("liquidate failed")
+
+    monkeypatch.setattr(broker, "flatten_position", _boom)
+    # Even if the flatten itself errors, we must not raise — return CANCELLED.
+    fill = broker._handle_naked_position(_BRACKET, qty=1, stop_ok=False, target_ok=False)
+    assert fill.result == "CANCELLED"
+    assert fill.exit_reason == "NAKED_BRACKET_AUTO_FLATTENED"

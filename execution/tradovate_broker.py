@@ -283,13 +283,19 @@ class TradovateBroker(BrokerInterface):
             self._position_opened_at = time.time()
             self._resolve_fail_count = 0
 
-            # Verify the protective stop + target children actually went live.
+            # Verify BOTH protective children (stop + target) actually went live.
             # A market entry can fill while its bracket children are rejected,
-            # leaving a naked position — detect and alert (never raise).
-            self._last_bracket_confirmed = self._verify_bracket_children(
+            # leaving a naked position. If either is unconfirmed we do NOT leave
+            # the entry exposed: alert loudly AND auto-flatten immediately —
+            # a few ticks of slippage beats unbounded unprotected risk.
+            stop_ok, target_ok = self._verify_bracket_children(
                 contract_id=contract_id, close_action=close_action, order=order,
             )
+            self._last_bracket_confirmed = stop_ok and target_ok
+            if not self._last_bracket_confirmed:
+                return self._handle_naked_position(order, qty, stop_ok=stop_ok, target_ok=target_ok)
 
+            logger.info("Tradovate bracket fully confirmed (entry+stop+target): %s", order.instrument)
             return Fill(
                 instrument=order.instrument,
                 direction=order.direction,
@@ -310,15 +316,15 @@ class TradovateBroker(BrokerInterface):
 
     def _verify_bracket_children(
         self, contract_id, close_action: str, order: BracketOrder,
-        retries: int = 3, delay: float = 0.5,
-    ) -> bool:
-        """Confirm a working Stop AND Limit exist on the close side after an OSO.
+        retries: int = 4, delay: float = 0.5,
+    ) -> tuple[bool, bool]:
+        """Detect whether a working Stop AND Limit exist on the close side.
 
-        A market entry can fill while its bracket children are rejected, leaving
-        a naked position. This polls the account's orders and returns True only
-        when BOTH protective orders are confirmed live; otherwise it fires a
-        naked-position alert and returns False. Best-effort: query failures are
-        logged, never raised.
+        Pure detection — no side effects. Polls the account's orders (children
+        can register a beat after the market entry fills) and returns
+        (stop_ok, target_ok). On uncertainty (e.g. /order/list keeps failing) it
+        returns False for the unseen side so the caller flattens — when in doubt,
+        do not leave a position unprotected. Best-effort: query errors never raise.
         """
         want_action = str(close_action).capitalize()
         stop_ok = target_ok = False
@@ -345,19 +351,50 @@ class TradovateBroker(BrokerInterface):
                     target_ok = True
             if stop_ok and target_ok:
                 logger.info("bracket verify: stop+target confirmed live for %s", order.instrument)
-                return True
+                return True, True
             if attempt + 1 < retries:
                 time.sleep(delay)
+        return stop_ok, target_ok
+
+    def _handle_naked_position(
+        self, order: BracketOrder, qty: int, *, stop_ok: bool, target_ok: bool,
+    ) -> Fill:
+        """Entry filled without a confirmed bracket: alert, then flatten NOW.
+
+        Returns a CANCELLED Fill — no protected position remains. The realized
+        slippage of the safety-flatten is the price of never holding naked risk.
+        """
         self._alert_naked_position(order, stop_ok=stop_ok, target_ok=target_ok)
-        return False
+        try:
+            flat = self.flatten_position()  # cancel-all + market liquidate
+            if flat.get("close_sent") or flat.get("cancelled_orders"):
+                logger.error("NAKED POSITION auto-flattened for %s: %s", order.instrument, flat)
+            else:
+                logger.critical(
+                    "NAKED POSITION flatten produced no close for %s — MANUAL INTERVENTION NEEDED: %s",
+                    order.instrument, flat,
+                )
+        except Exception as exc:
+            logger.critical("CRITICAL: naked-position flatten FAILED for %s: %s", order.instrument, exc)
+        return Fill(
+            instrument=order.instrument,
+            direction=order.direction,
+            contracts=qty,
+            entry_price=order.entry,
+            exit_price=None,
+            exit_reason="NAKED_BRACKET_AUTO_FLATTENED",
+            result="CANCELLED",
+            pnl_ticks=None,
+            pnl_dollars=None,
+        )
 
     def _alert_naked_position(self, order: BracketOrder, *, stop_ok: bool, target_ok: bool) -> None:
         """Log + Discord-alert that an entry filled without a confirmed bracket."""
         missing = [name for name, ok in (("STOP", stop_ok), ("TARGET", target_ok)) if not ok]
         msg = (
-            f"⚠️ NAKED POSITION RISK: {order.direction} {order.contracts}x {order.instrument} "
+            f"🚨 NAKED POSITION: {order.direction} {order.contracts}x {order.instrument} "
             f"entry filled but bracket child(ren) NOT confirmed live: {', '.join(missing)}. "
-            f"Position may be UNPROTECTED — check Tradovate and use CLOSE ALL if needed."
+            f"Auto-flattening NOW (cancel-all + market close). Verify flat in Tradovate."
         )
         logger.error(msg)
         try:
