@@ -110,6 +110,7 @@ class TradovateBroker(BrokerInterface):
         self._last_position: Optional[Position] = None
         self._account_id: Optional[int] = None
         self._contract_cache: dict[str, int] = {}  # root symbol → contract ID
+        self._contract_symbol_cache: dict[str, str] = {}  # root → front-month symbol (e.g. MESM6)
         self._resolve_fail_count: int = 0          # consecutive resolve_position failures
         self._position_opened_at: Optional[float] = None  # time.time() when bracket placed
         self._last_price: dict[str, float] = {}   # root symbol → last bar close from TV webhook
@@ -208,6 +209,7 @@ class TradovateBroker(BrokerInterface):
                 results = self._get(f"/contract/suggest?t={root}&l=1")
                 if isinstance(results, list) and results:
                     self._contract_cache[root] = int(results[0]["id"])
+                    self._contract_symbol_cache[root] = str(results[0].get("name") or root)
                     return self._contract_cache[root]
                 raise ValueError(f"Contract not found for {instrument}")
             except Exception as exc:
@@ -240,6 +242,10 @@ class TradovateBroker(BrokerInterface):
                 return self._cancelled_fill(order, "TRADOVATE_AUTH_FAILED")
 
             contract_id = self._find_contract_id(order.instrument)
+            root = order.instrument.replace("1!", "").upper()
+            # Tradovate placeOSO needs the specific contract symbol (e.g. MESM6),
+            # NOT the root (MES) — the root is rejected with UnknownReason.
+            contract_symbol = self._contract_symbol_cache.get(root, root)
             action = "Buy" if order.direction == "LONG" else "Sell"
             close_action = "Sell" if order.direction == "LONG" else "Buy"
             qty = max(1, int(order.contracts or 1))
@@ -249,7 +255,7 @@ class TradovateBroker(BrokerInterface):
                 "accountSpec": self.config.username,
                 "accountId": self._account_id,
                 "action": action,
-                "symbol": order.instrument.replace("1!", ""),
+                "symbol": contract_symbol,
                 "orderQty": qty,
                 "orderType": "Market",
                 "isAutomated": True,
