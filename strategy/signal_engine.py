@@ -118,7 +118,7 @@ def _session_window_decision(rules: list[dict], timestamp: datetime) -> tuple[bo
 class DecisionEngine:
     WINDOWS = {
         "opening":   {"start": "09:30", "end": "10:45", "allow": "all"},
-        "mid_early": {"start": "10:45", "end": "11:30", "allow": "restricted"},
+        "mid_early": {"start": "10:45", "end": "11:30", "allow": "all"},   # opened — STRONG-trend quality gate still applies downstream
         "mid_late":  {"start": "11:30", "end": "12:00", "allow": "none"},   # lunch block
         "afternoon": {"start": "12:00", "end": "14:00", "allow": "all"},    # open afternoon
         "late":      {"start": "14:00", "end": "16:00", "allow": "none"},
