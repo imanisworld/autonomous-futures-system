@@ -101,6 +101,9 @@ class TradovateBroker(BrokerInterface):
         self._resolve_fail_count: int = 0          # consecutive resolve_position failures
         self._position_opened_at: Optional[float] = None  # time.time() when bracket placed
         self._last_price: dict[str, float] = {}   # root symbol → last bar close from TV webhook
+        # Set after execute_bracket: did the protective stop+target children verify live?
+        # None = not checked, True = both confirmed working, False = one/both missing (naked risk).
+        self._last_bracket_confirmed: Optional[bool] = None
 
     # ── Auth ──────────────────────────────────────────────────────────────────
 
@@ -280,6 +283,13 @@ class TradovateBroker(BrokerInterface):
             self._position_opened_at = time.time()
             self._resolve_fail_count = 0
 
+            # Verify the protective stop + target children actually went live.
+            # A market entry can fill while its bracket children are rejected,
+            # leaving a naked position — detect and alert (never raise).
+            self._last_bracket_confirmed = self._verify_bracket_children(
+                contract_id=contract_id, close_action=close_action, order=order,
+            )
+
             return Fill(
                 instrument=order.instrument,
                 direction=order.direction,
@@ -294,6 +304,68 @@ class TradovateBroker(BrokerInterface):
         except Exception as exc:
             logger.exception("Tradovate execute_bracket failed: %s", exc)
             return self._cancelled_fill(order, "TRADOVATE_ORDER_ERROR")
+
+    # Order statuses that mean a protective child is live and guarding the position.
+    _LIVE_ORDER_STATUSES = {"working", "pending", "accepted", "suspended"}
+
+    def _verify_bracket_children(
+        self, contract_id, close_action: str, order: BracketOrder,
+        retries: int = 3, delay: float = 0.5,
+    ) -> bool:
+        """Confirm a working Stop AND Limit exist on the close side after an OSO.
+
+        A market entry can fill while its bracket children are rejected, leaving
+        a naked position. This polls the account's orders and returns True only
+        when BOTH protective orders are confirmed live; otherwise it fires a
+        naked-position alert and returns False. Best-effort: query failures are
+        logged, never raised.
+        """
+        want_action = str(close_action).capitalize()
+        stop_ok = target_ok = False
+        for attempt in range(max(1, retries)):
+            try:
+                orders = self._get("/order/list")
+            except Exception as exc:
+                logger.warning("bracket verify: /order/list failed (attempt %d): %s", attempt + 1, exc)
+                orders = []
+            stop_ok = target_ok = False
+            for o in (orders if isinstance(orders, list) else []):
+                if o.get("contractId") != contract_id:
+                    continue
+                if self._account_id is not None and o.get("accountId") not in (None, self._account_id):
+                    continue
+                if str(o.get("action", "")).capitalize() != want_action:
+                    continue
+                if str(o.get("ordStatus", "")).lower() not in self._LIVE_ORDER_STATUSES:
+                    continue
+                otype = str(o.get("orderType", "")).lower()
+                if otype == "stop":
+                    stop_ok = True
+                elif otype == "limit":
+                    target_ok = True
+            if stop_ok and target_ok:
+                logger.info("bracket verify: stop+target confirmed live for %s", order.instrument)
+                return True
+            if attempt + 1 < retries:
+                time.sleep(delay)
+        self._alert_naked_position(order, stop_ok=stop_ok, target_ok=target_ok)
+        return False
+
+    def _alert_naked_position(self, order: BracketOrder, *, stop_ok: bool, target_ok: bool) -> None:
+        """Log + Discord-alert that an entry filled without a confirmed bracket."""
+        missing = [name for name, ok in (("STOP", stop_ok), ("TARGET", target_ok)) if not ok]
+        msg = (
+            f"⚠️ NAKED POSITION RISK: {order.direction} {order.contracts}x {order.instrument} "
+            f"entry filled but bracket child(ren) NOT confirmed live: {', '.join(missing)}. "
+            f"Position may be UNPROTECTED — check Tradovate and use CLOSE ALL if needed."
+        )
+        logger.error(msg)
+        try:
+            from config.settings import load_config
+            from notifications.system_notifier import notify_system
+            notify_system(msg, config=load_config())
+        except Exception as exc:
+            logger.warning("naked-position Discord alert failed: %s", exc)
 
     def get_position(self) -> Optional[Position]:
         """Query Tradovate for open positions."""
