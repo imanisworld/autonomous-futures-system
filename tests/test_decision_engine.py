@@ -101,7 +101,7 @@ class TestNewYorkEntryWindows:
         decision = engine.evaluate(state, DailyState())
         assert decision.decision == "TRADE"
 
-    # ── mid_early (10:45–11:30): restricted ───────────────────────────────────
+    # ── mid_early (10:45–11:30): now open (allow="all") ────────────────────────
 
     def test_1050_mid_early_strong_trend_vwap_allowed(self, engine, fresh_market_state):
         """10:50 ET with strong trend + VWAP above passes mid_early gate."""
@@ -111,15 +111,19 @@ class TestNewYorkEntryWindows:
         decision = engine.evaluate(state, DailyState())
         assert decision.decision != "NO_TRADE" or "mid-morning" not in decision.reason.lower()
 
-    def test_1050_mid_early_moderate_trend_blocked(self, engine, fresh_market_state):
-        """10:50 ET with only moderate trend is rejected by mid_early gate."""
+    def test_1050_mid_early_moderate_trend_not_window_blocked(self, engine, fresh_market_state):
+        """mid_early is now 'all' — the same moderate-trend setup the old 'restricted'
+        window rejected at 10:50 ET now clears the window gate. In the base test config
+        (no STRONG-trend requirement) it proceeds to TRADE. NOTE: the live config sets
+        require_strong_trend for MES/MNQ, which still gates moderate trend downstream —
+        see TestQualityGates.test_mnq_moderate_trend_blocked."""
         state = self._at_et(fresh_market_state, 10, 50)
         state.trend = TrendData(direction="UP", strength="MODERATE", ema_fast_above_slow=True)
         state.vwap.price_vs_vwap = "above"
         state.orb.status = "inside"
         decision = engine.evaluate(state, DailyState())
-        assert decision.decision == "NO_TRADE"
-        assert "mid-morning" in decision.reason.lower()
+        assert "mid-morning" not in (decision.reason or "").lower()
+        assert decision.decision == "TRADE"
 
     def test_1050_mid_early_strong_trend_orb_active_allowed(self, engine, fresh_market_state):
         """10:50 ET passes mid_early gate via strong trend + active ORB (no VWAP needed)."""
