@@ -11,15 +11,12 @@ _Last updated: 2026-06-03_
 
 ## 🔴 Known issues / immediate
 
-- [ ] **MES alerts never reach the backend.** Dashboard shows `LIVE PRICE • MES —
-  Waiting for first TradingView bar…` while only `MNQ1!` webhooks arrive. This is a
-  **TradingView alert-config problem on the MES chart**, not backend tuning — MES is
-  not being rejected, it's never sent.
-  - Confirm an alert actually exists on the MES chart.
-  - Condition: `RiskSentinel — Full Context` → `Any alert() function call`.
-  - Same webhook URL + secret as the MNQ alert.
-  - Check it isn't expired / paused; expiry should be open-ended.
-  - Confirm the chart symbol is MES (webhook normalizes `MES1!` → `MES`).
+- [~] **"MES isn't triggering" — RESOLVED as not-a-bug.** The LOG tab shows MES *is*
+  arriving and being evaluated (e.g. 11:10/11:15/11:20 MES entries). MNQ is rejected at
+  the instrument gate (`not in allowed universe`, by design); MES returns NO_TRADE for
+  legit reasons (range-bound tape, time-window gates). The `LIVE PRICE • MES — Waiting
+  for first TradingView bar…` panel is just a separate dashboard quirk, not proof MES is
+  missing. Watch item: confirm the dashboard LIVE PRICE panel binds to the right ticker.
 
 ---
 
@@ -38,6 +35,28 @@ _Last updated: 2026-06-03_
 - [ ] Test thoroughly on this branch before deploying — touches core config + runner.
 - Notes: defer until current MES validation is sorted. Won't break the current setup
   if done deliberately.
+
+### Pre-market H/L level + late-window soft-open  ← TEST LATER TODAY
+- [ ] **Add a true pre-market high/low level.** The system has no overnight-range
+  reference today — only ORB (NY first 15m) and PDH/PDL. The one "pre-market" mention
+  (`strat_4hr_retrigger`, `signal_engine.py:1637`) just *proxies* it with the ORB high.
+  Pre-market H/L captures overnight positioning (Europe/Asia + data) and its extremes
+  are real liquidity levels.
+- [ ] **Use it to soft-open the late window (14:00–16:00 ET).** Today `late` is
+  `allow: "none"` (closed) — avoids post-lunch chop AND end-of-day/MOC tail risk. Don't
+  blanket-open it; instead make it `restricted` and only admit a **pre-market level
+  break + retest that holds** (level flips role) with trend/VWAP confirm. The *retest*
+  requirement is what filters late-day fakeouts. (Narrower alt: open 15:00–15:45 only,
+  skip the 15:45–16:00 MOC zone.)
+- [ ] **Build order:** (1) Pine computes premarket H/L (e.g. 04:00–09:30 ET) → add
+  `premarket_high`/`premarket_low` to alert JSON; (2) add fields to
+  `market_state.schema.json` + `context/market_context.py` + `webhook/state_builder.py`;
+  (3) new `premarket_break_retest` strategy (usable as the late-window unlock *and* a
+  general setup); (4) **backtest on replay data carrying PMH/PML, measure WR/PF, then
+  decide live.**
+- **⚠️ Backtest sequencing:** can't backtest yet — PMH/PML aren't in the current
+  historical payloads. Feature must be built first, then validated on replay. No WR
+  claim until that runs. Replay engine lives in `replay/` + `scripts/run_replay_batch.py`.
 
 ---
 
@@ -66,8 +85,18 @@ _Last updated: 2026-06-03_
 
 ## ✅ Done
 
-- [x] Diagnosed "MES isn't triggering, MNQ is" → MES alerts never reach the backend;
-  MNQ heartbeats arrive and correctly return NO_TRADE (no active setup). (2026-06-03)
+- [x] **Opened NY `mid_early` window (10:45–11:30 ET) from `restricted` → `all`.**
+  Setups in that window now run the standard pipeline; downstream `require_strong_trend`
+  (MES/MNQ true), market-condition, volume, R:R, and daily-limit gates still apply, so
+  core safety is unchanged. Updated `test_1050_mid_early` test; full suite green
+  (488 passed). (2026-06-03)
+- [x] Confirmed **shorts are fully wired** (vwap_rejection, vwap_hold, orb_rejection,
+  orb_breakout short, continuation/Strat). The noon MES drop wasn't a missed short — the
+  morning was range-bound (no DOWN trend) and the break printed in the 11:30–12:00 lunch
+  block (`mid_late: none`, hard-closed). Note: `pdl_reclaim` (a breakdown short) is
+  disabled for MES. (2026-06-03)
+- [x] Diagnosed "MES isn't triggering, MNQ is" → MES *is* evaluated; MNQ rejected at the
+  instrument gate by design. (2026-06-03)
 
 ---
 
