@@ -257,8 +257,12 @@ strategy:
   # Strategies disabled per instrument (overrides enabled_concepts for that instrument)
   disabled_concepts_per_instrument:
     MES:
-      # orb_reclaim re-enabled: 0% WR was on 5 trades (too small). Requires min B confluence.
+      # Tuned for highest WR on the 74-day MES 5m backtest (Feb–May 2026):
+      #   keep pdh_reclaim + vwap_hold (WR carriers) + strat_4hr_retrigger.
+      #   Disabling these three lifts WR 73.0%→73.7%, P&L $40,988→$41,708, PF 7.8→8.0.
       - vwap_reclaim   # 40% WR on MES vs 100% MNQ — reclaim conditions fire too loosely
+      - orb_reclaim    # mild WR drag: removing it +0.6% WR (leave-one-out)
+      - pdl_reclaim    # WR-neutral but P&L-negative: removing it +$2.2k, same WR
 
 # ─── The Strat Config ────────────────────────────────────────
 strat:
