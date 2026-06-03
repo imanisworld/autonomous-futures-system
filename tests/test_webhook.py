@@ -176,6 +176,36 @@ def test_build_market_state_full_payload():
     assert state.strat.strat_direction == "LONG"
 
 
+def test_payload_accepts_bare_int_timestamp_from_pine():
+    """Pine's str.tostring(time) sends Unix ms as a bare JSON number — the model
+    must coerce it to a string (regression for the 422 'Input should be a valid
+    string' that blocked every live alert)."""
+    payload = AlertPayload(
+        ticker="MES1!",
+        timestamp=1780447500000,   # bare int, not a string
+        open=5950.0, high=5955.0, low=5948.0, close=5952.0,
+    )
+    assert payload.timestamp == "1780447500000"
+    assert parse_timestamp(payload.timestamp).year == 2026
+
+
+def test_payload_accepts_mnq_above_30k():
+    """MNQ now trades above the old 30k cap — must not reject a valid bar."""
+    payload = AlertPayload(
+        ticker="MNQ1!",
+        timestamp="1780447500000",
+        open=30713.5, high=30720.0, low=30709.0, close=30712.5,
+    )
+    assert payload.close == 30712.5
+
+
+def test_payload_still_rejects_cross_instrument_price():
+    """The sanity guard must still catch an MNQ-scale price on an MES chart."""
+    with pytest.raises(Exception):
+        AlertPayload(ticker="MES1!", timestamp="1780447500000",
+                     open=30000.0, high=30001.0, low=29999.0, close=30712.5)
+
+
 def test_build_market_state_minimal_payload():
     """Minimal payload (no context fields) must not raise."""
     payload = AlertPayload(

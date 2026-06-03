@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, field_validator, model_validator
 
 # ── Price sanity ranges per instrument root ───────────────────────────────────
 # Reject payloads where close price is outside the plausible range.
@@ -23,8 +23,8 @@ from pydantic import BaseModel, model_validator
 _PRICE_RANGES: dict[str, tuple[float, float]] = {
     "MES": (2_000,  12_000),   # S&P 500 micro — never been above ~6k, floor at ~1k
     "ES":  (2_000,  12_000),   # S&P 500 full
-    "MNQ": (5_000,  30_000),   # Nasdaq micro
-    "NQ":  (5_000,  30_000),   # Nasdaq full
+    "MNQ": (5_000,  40_000),   # Nasdaq micro — headroom above current ~30k
+    "NQ":  (5_000,  40_000),   # Nasdaq full
     "MGC": (1_000,   5_000),   # Micro Gold
     "MCL": (   10,     500),   # Micro Crude Oil
 }
@@ -38,6 +38,18 @@ class AlertPayload(BaseModel):
     high: float
     low: float
     close: float
+
+    @field_validator("timestamp", mode="before")
+    @classmethod
+    def _coerce_numeric_timestamp(cls, v: object) -> object:
+        """Pine's `str.tostring(time)` emits a BARE Unix-ms number (no quotes),
+        so the JSON arrives as an int. Stringify it — parse_timestamp already
+        understands a Unix-ms string. Keeps ISO strings untouched."""
+        if isinstance(v, bool):
+            return v  # let the str validator reject it
+        if isinstance(v, (int, float)):
+            return str(int(v))
+        return v
 
     # ── Semi-required — usually present ──────────────────────────────────────
     volume: int = 0
