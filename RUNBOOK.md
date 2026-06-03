@@ -53,6 +53,13 @@ Check local health:
 curl http://127.0.0.1:8000/health
 ```
 
+Run the terminal doctor when something feels stuck:
+
+```bash
+python3 scripts/doctor.py
+python3 scripts/doctor.py --json
+```
+
 Open the read-only dashboard:
 
 ```text

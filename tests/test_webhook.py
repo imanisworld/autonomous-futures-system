@@ -812,6 +812,68 @@ def test_fastapi_status_diagnostics_endpoint(monkeypatch, tmp_path):
     assert {"Backend API", "Trading mode", "Webhook secret", "Discord alerts"}.issubset(components)
 
 
+def test_doctor_command_prints_diagnostics(monkeypatch, tmp_path, capsys):
+    import scripts.doctor as doctor
+    import webhook.app as app_module
+
+    _isolate_app_logs(monkeypatch, tmp_path)
+    monkeypatch.setenv("BROKER", "paper")
+    monkeypatch.setenv("WEBHOOK_SECRET", "test-secret")
+    monkeypatch.setattr(app_module._config, "discord_notifications_enabled", False)
+    monkeypatch.setattr(app_module._config, "signa_api_enabled", False)
+
+    exit_code = doctor.main([])
+
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "RiskSentinel doctor:" in out
+    assert "Backend API" in out
+    assert "Webhook secret" in out
+
+
+def test_manual_open_explicit_prices_do_not_require_latest_webhook(monkeypatch):
+    import webhook.app as app_module
+
+    monkeypatch.setenv("BROKER", "paper")
+    monkeypatch.setattr(
+        app_module,
+        "_current_market_price",
+        lambda instrument: pytest.fail("_current_market_price should not be called"),
+    )
+
+    result = app_module._manual_open({
+        "direction": "LONG",
+        "instrument": "MES",
+        "entry": 5900.0,
+        "stop": 5893.0,
+        "target": 5915.0,
+    })
+
+    assert result["ok"] is False
+    assert "mode" not in result
+    assert "requires a live broker" in result["error"]
+
+
+def test_manual_open_market_mode_anchors_to_latest_matching_webhook(monkeypatch):
+    import webhook.app as app_module
+
+    monkeypatch.setenv("BROKER", "paper")
+    monkeypatch.setattr(app_module, "_latest_webhook_payload", lambda: {
+        "received_at": "2026-05-23T14:30:00+00:00",
+        "payload": {"ticker": "MES1!", "close": 5905.12},
+    })
+
+    result = app_module._manual_open({
+        "direction": "SHORT",
+        "instrument": "MES",
+    })
+
+    assert result["ok"] is False
+    assert result["mode"] == "market"
+    assert result["anchor_price"] == 5905.0
+    assert "requires a live broker" in result["error"]
+
+
 def test_public_entry_flags_target_hit_negative_pnl():
     from webhook.app import _public_entry
 

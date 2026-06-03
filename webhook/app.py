@@ -1878,22 +1878,64 @@ def _broker_status() -> dict:
     return {"broker": "paper", "connected": True, "position": None}
 
 
-def _manual_open(body: dict) -> dict:
-    """Force open a bracket position manually, bypassing all risk gates.
+# ── Manual market-order defaults (one-tap FORCE OPEN) ────────────────────────
+# Applied when a manual OPEN omits explicit prices: the entry is a market order
+# anchored to the last bar close, and the bracket is derived from these point
+# offsets. 7pt MES stop matches the system's sacred stop; 15pt target matches
+# risk_rules min_target_points[MES].
+_MANUAL_STOP_POINTS: dict[str, float] = {"MES": 7.0, "ES": 7.0, "MNQ": 7.0, "NQ": 7.0, "MGC": 5.0, "MCL": 0.30}
+_MANUAL_TARGET_POINTS: dict[str, float] = {"MES": 15.0, "ES": 15.0, "MNQ": 15.0, "NQ": 15.0, "MGC": 10.0, "MCL": 0.60}
+_MANUAL_TICK: dict[str, float] = {"MES": 0.25, "ES": 0.25, "MNQ": 0.25, "NQ": 0.25, "MGC": 0.10, "MCL": 0.01}
 
-    Required body fields:
-        direction   — "LONG" or "SHORT"
-        entry       — entry price (float)
-        stop        — stop price (float)
-        target      — target price (float)
+
+def _round_to_tick(price: float, tick: float) -> float:
+    return round(round(price / tick) * tick, 4)
+
+
+def _current_market_price(instrument: str) -> float | None:
+    """Last bar close for `instrument` from the most recent matching webhook."""
+    latest = _latest_webhook_payload()
+    payload = latest.get("payload") or {}
+    close = latest.get("close") or payload.get("close")
+    ticker = (latest.get("ticker") or payload.get("ticker") or "").replace("1!", "").upper()
+    root = instrument.replace("1!", "").upper()
+    if close and ticker == root:
+        try:
+            return float(close)
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+def _manual_rr_ratio(direction: str, entry: float, stop: float, target: float) -> float | None:
+    if direction == "LONG":
+        risk = entry - stop
+        reward = target - entry
+    else:
+        risk = stop - entry
+        reward = entry - target
+    if risk <= 0 or reward <= 0:
+        return None
+    return round(reward / risk, 4)
+
+
+def _manual_open(body: dict) -> dict:
+    """Force open a position manually, bypassing all risk gates.
+
+    Body fields:
+        direction   — "LONG" or "SHORT"  (required)
         contracts   — number of contracts (int, default 1)
         instrument  — ticker (default "MES")
+        entry/stop/target — optional explicit bracket prices (floats). When any
+            is omitted, MARKET MODE engages: a market entry is anchored to the
+            last bar close and a default bracket is derived from
+            _MANUAL_STOP_POINTS / _MANUAL_TARGET_POINTS.
 
-    Example:
-        curl -X POST http://server/webhook/manual \\
-             -H "X-Webhook-Secret: your-secret" \\
-             -H "Content-Type: application/json" \\
-             -d '{"action":"OPEN","direction":"LONG","entry":7625.0,"stop":7615.0,"target":7647.0}'
+    Examples:
+        # One-tap market order (auto 7pt stop / 15pt target on MES)
+        curl ... -d '{"action":"OPEN","direction":"LONG"}'
+        # Explicit bracket
+        curl ... -d '{"action":"OPEN","direction":"LONG","entry":7625.0,"stop":7615.0,"target":7647.0}'
     """
     import os as _os
     broker_type = _os.getenv("BROKER", "paper").strip().lower()
@@ -1903,15 +1945,51 @@ def _manual_open(body: dict) -> dict:
     if direction not in ("LONG", "SHORT"):
         return {**result, "ok": False, "error": "direction must be LONG or SHORT"}
 
-    try:
-        entry = float(body["entry"])
-        stop = float(body["stop"])
-        target = float(body["target"])
-    except (KeyError, TypeError, ValueError) as exc:
-        return {**result, "ok": False, "error": f"entry/stop/target required as numbers: {exc}"}
-
-    contracts = int(body.get("contracts", 1))
+    contracts = int(body.get("contracts", 1) or 1)
     instrument = str(body.get("instrument", "MES")).upper()
+    root = instrument.replace("1!", "").upper()
+
+    # Market mode: derive a market entry + default bracket when prices omitted.
+    raw_entry, raw_stop, raw_target = body.get("entry"), body.get("stop"), body.get("target")
+    if not all(value is not None for value in (raw_entry, raw_stop, raw_target)):
+        price = _current_market_price(instrument)
+        if price is None:
+            return {**result, "ok": False,
+                    "error": f"no_market_price_yet — no recent {root} bar to anchor a market order; wait for a webhook bar"}
+        tick = _MANUAL_TICK.get(root, 0.25)
+        stop_pts = _MANUAL_STOP_POINTS.get(root, 7.0)
+        target_pts = _MANUAL_TARGET_POINTS.get(root, 15.0)
+        entry = _round_to_tick(price, tick)
+        if direction == "LONG":
+            stop = _round_to_tick(price - stop_pts, tick)
+            target = _round_to_tick(price + target_pts, tick)
+        else:
+            stop = _round_to_tick(price + stop_pts, tick)
+            target = _round_to_tick(price - target_pts, tick)
+        result["mode"] = "market"
+        result["anchor_price"] = entry
+    else:
+        try:
+            entry = float(raw_entry)
+            stop = float(raw_stop)
+            target = float(raw_target)
+        except (TypeError, ValueError) as exc:
+            return {**result, "ok": False, "error": f"entry/stop/target must be numbers: {exc}"}
+
+    rr_ratio = _manual_rr_ratio(direction, entry, stop, target)
+    if rr_ratio is None:
+        return {**result, "ok": False, "error": "invalid bracket geometry for direction"}
+
+    result["order"] = {
+        "instrument": instrument,
+        "direction": direction,
+        "entry": entry,
+        "stop": stop,
+        "target": target,
+        "contracts": contracts,
+        "rr_ratio": rr_ratio,
+        "strategy": "manual_force_open",
+    }
 
     from execution.broker_interface import BracketOrder
     order = BracketOrder(
@@ -1920,6 +1998,8 @@ def _manual_open(body: dict) -> dict:
         entry=entry,
         stop=stop,
         target=target,
+        rr_ratio=rr_ratio,
+        strategy="manual_force_open",
         contracts=contracts,
     )
 
