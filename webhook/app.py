@@ -323,10 +323,14 @@ async def status_quote(instrument: str = Query(default="MES")) -> dict:
     try:
         from execution.tradovate_broker import TradovateBroker
         broker = TradovateBroker()
-        # Seed the last price from the latest webhook payload if available
+        # Seed the last price from the latest webhook payload if available.
+        # ticker/close live in the nested `payload` — top-level lacks them, so
+        # without the payload fallback ticker was "" and seeding never happened
+        # (panel stuck on "no_bar_received_yet" despite bars arriving).
         latest = _latest_webhook_payload()
-        close = latest.get("close") or latest.get("payload", {}).get("close")
-        ticker = (latest.get("ticker") or "").replace("1!", "").upper()
+        payload = latest.get("payload") or {}
+        close = latest.get("close") or payload.get("close")
+        ticker = (latest.get("ticker") or payload.get("ticker") or "").replace("1!", "").upper()
         root = instrument.replace("1!", "").upper()
         if close and ticker == root:
             broker._last_price[root] = float(close)
