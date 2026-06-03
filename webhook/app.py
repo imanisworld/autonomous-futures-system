@@ -1892,19 +1892,36 @@ def _round_to_tick(price: float, tick: float) -> float:
     return round(round(price / tick) * tick, 4)
 
 
-def _current_market_price(instrument: str) -> float | None:
-    """Last bar close for `instrument` from the most recent matching webhook."""
+def _current_market_price(instrument: str, max_age_s: float = 600.0) -> float | None:
+    """Last bar close for `instrument` from the most recent matching webhook.
+
+    Returns None when the matching bar is older than `max_age_s` — a manual
+    market order must not anchor its stop/target to a stale price (the entry
+    fills at live market, so a stale anchor would skew the bracket). 600s
+    matches the system's stale-bar gate.
+    """
     latest = _latest_webhook_payload()
     payload = latest.get("payload") or {}
     close = latest.get("close") or payload.get("close")
     ticker = (latest.get("ticker") or payload.get("ticker") or "").replace("1!", "").upper()
     root = instrument.replace("1!", "").upper()
-    if close and ticker == root:
+    if not (close and ticker == root):
+        return None
+
+    received = latest.get("received_at")
+    if received:
         try:
-            return float(close)
-        except (TypeError, ValueError):
-            return None
-    return None
+            ts = datetime.fromisoformat(str(received).replace("Z", "+00:00"))
+            now = datetime.now(ts.tzinfo) if ts.tzinfo else datetime.utcnow()
+            if (now - ts).total_seconds() > max_age_s:
+                return None
+        except (ValueError, TypeError):
+            pass  # unparseable timestamp — fall through and trust the close
+
+    try:
+        return float(close)
+    except (TypeError, ValueError):
+        return None
 
 
 def _manual_rr_ratio(direction: str, entry: float, stop: float, target: float) -> float | None:

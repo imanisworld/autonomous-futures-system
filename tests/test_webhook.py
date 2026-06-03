@@ -856,10 +856,12 @@ def test_manual_open_explicit_prices_do_not_require_latest_webhook(monkeypatch):
 
 def test_manual_open_market_mode_anchors_to_latest_matching_webhook(monkeypatch):
     import webhook.app as app_module
+    from datetime import datetime, timezone
 
     monkeypatch.setenv("BROKER", "paper")
+    fresh = datetime.now(timezone.utc).isoformat()
     monkeypatch.setattr(app_module, "_latest_webhook_payload", lambda: {
-        "received_at": "2026-05-23T14:30:00+00:00",
+        "received_at": fresh,
         "payload": {"ticker": "MES1!", "close": 5905.12},
     })
 
@@ -872,6 +874,26 @@ def test_manual_open_market_mode_anchors_to_latest_matching_webhook(monkeypatch)
     assert result["mode"] == "market"
     assert result["anchor_price"] == 5905.0
     assert "requires a live broker" in result["error"]
+
+
+def test_manual_open_market_mode_rejects_stale_bar(monkeypatch):
+    """A market order must not anchor its bracket to a stale bar close."""
+    import webhook.app as app_module
+
+    monkeypatch.setenv("BROKER", "paper")
+    monkeypatch.setattr(app_module, "_latest_webhook_payload", lambda: {
+        "received_at": "2026-05-23T14:30:00+00:00",  # days old → stale
+        "payload": {"ticker": "MES1!", "close": 5905.12},
+    })
+
+    result = app_module._manual_open({
+        "direction": "SHORT",
+        "instrument": "MES",
+    })
+
+    assert result["ok"] is False
+    assert "mode" not in result
+    assert "no recent" in result["error"]
 
 
 def test_public_entry_flags_target_hit_negative_pnl():
