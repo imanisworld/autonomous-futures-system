@@ -54,9 +54,18 @@ _Last updated: 2026-06-03_
   (3) new `premarket_break_retest` strategy (usable as the late-window unlock *and* a
   general setup); (4) **backtest on replay data carrying PMH/PML, measure WR/PF, then
   decide live.**
-- **⚠️ Backtest sequencing:** can't backtest yet — PMH/PML aren't in the current
-  historical payloads. Feature must be built first, then validated on replay. No WR
-  claim until that runs. Replay engine lives in `replay/` + `scripts/run_replay_batch.py`.
+- [ ] **⚠️ Two-layer 14:00 cutoff — relax BOTH or it won't work.** The cutoff is enforced
+  twice: signal engine `late: none` (`signal_engine.py` WINDOWS) **and** the risk engine
+  `_check_session_cutoff` (`risk_engine.py:146`, reading `session_cutoffs_et.new_york:
+  14:00`). Soft-opening the signal-engine window alone → the decision engine approves and
+  the risk engine then rejects (dead-end). Must relax both in sync.
+- **⚠️ Backtest sequencing + data:** can't backtest yet — PMH/PML aren't in the current
+  historical payloads, and the sample replay data is **RTH-only (starts 09:30, no
+  pre-market bars)**. To get usable data, export the TradingView CSV with **Extended
+  Trading Hours (ETH) ON** before running `scripts/csv_to_replay.py` — RTH export has no
+  04:00–09:30 bars to compute the level from. Build feature first, then validate on
+  replay. No WR claim until that runs. (Replay engine: `replay/` +
+  `scripts/run_replay_batch.py`.)
 
 ---
 
@@ -72,6 +81,34 @@ _Last updated: 2026-06-03_
   which instruments are actually sending data (would have caught the MES gap instantly).
 - [?] **Alert health / heartbeat monitor** — warn if no bar received from an expected
   instrument within N minutes during an active session.
+
+---
+
+## 🔬 Validation & observability
+
+- [ ] **"Why NO_TRADE" daily tally (highest leverage, low effort).** Today's whole pain
+  was *"why didn't it trade?"* — answered by squinting at screenshots. The reason is
+  already recorded per bar (`failed_gates` + `reason` in the journal). Build a daily
+  rollup — e.g. "62% window-blocked, 20% trend-strength, 12% chop, 6% volume" — so it's
+  instantly clear which gate is starving trades and whether tuning does what we think.
+  Makes every future tuning call (incl. pre-market) evidence-based. Do this FIRST.
+- [ ] **In-market shadow / dry-run test lane (doesn't interrupt the live code).** A way
+  to evaluate a candidate config or strategy against the *same live incoming alerts* in
+  parallel, without touching the production journal or placing orders. Feasible because
+  `process_alert(payload, config=..., log_dir=...)` is already parameterized: tee each
+  webhook to a second evaluation with the candidate config + a separate `log_dir`
+  (e.g. `logs_shadow/`) and execution disabled. Lets us A/B changes (mid_early open vs
+  restricted, pre-market on/off) on live bars safely before promoting them.
+- [ ] **Backtest the `mid_early` open we already shipped.** It was changed on reasoning,
+  not data. Once replay data covers 10:45–11:30, run `restricted` vs `all` and confirm
+  it helps (or at least doesn't hurt) WR/PF. Low risk (paper, downstream gates intact)
+  but shouldn't stay unvalidated.
+- [ ] **Validation throughput.** The live paper lane is very selective (3/day cap,
+  STRONG-trend, disabled concepts, time windows) → potentially few fills, slow to
+  validate execution/journal/broker plumbing. Lean on replay (and the shadow lane above)
+  to exercise the pipeline rather than waiting on rare live fills.
+- [ ] **Fix dashboard LIVE PRICE binding.** Panel showed "MES" while ticker was `MNQ1!` —
+  actively misled diagnosis today. Bind it to the actual incoming ticker.
 
 ---
 
