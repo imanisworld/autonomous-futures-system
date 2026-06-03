@@ -348,9 +348,7 @@ float  raw_target      = na
 // 8. Continuation Pullback
 
 // 1. 4HR Re-Trigger LONG
-if not na(orb_h) and not na(orb_l) and orb_status == "reclaimed_high"
-  and trend_dir == "UP" and close > vwap_val and rel_vol >= 0.7
-  and cur_type == "two_up"
+if not na(orb_h) and not na(orb_l) and orb_status == "reclaimed_high" and trend_dir == "UP" and close > vwap_val and rel_vol >= 0.7 and cur_type == "two_up"
     signal_strategy := "strat_4hr_retrigger"
     signal_direction := "LONG"
     signal_entry := orb_h + tick
@@ -358,9 +356,7 @@ if not na(orb_h) and not na(orb_l) and orb_status == "reclaimed_high"
     raw_target   := signal_entry + (signal_entry - signal_stop) * 2.0
 
 // 4HR Re-Trigger SHORT
-else if not na(orb_h) and not na(orb_l) and orb_status == "reclaimed_low"
-  and trend_dir == "DOWN" and close < vwap_val and rel_vol >= 0.7
-  and cur_type == "two_down"
+else if not na(orb_h) and not na(orb_l) and orb_status == "reclaimed_low" and trend_dir == "DOWN" and close < vwap_val and rel_vol >= 0.7 and cur_type == "two_down"
     signal_strategy := "strat_4hr_retrigger"
     signal_direction := "SHORT"
     signal_entry := orb_l - tick
@@ -369,10 +365,7 @@ else if not na(orb_h) and not na(orb_l) and orb_status == "reclaimed_low"
 
 // 2. ORB Breakout LONG
 // Requires: bar closes ABOVE orb_h by ≥ 2 ticks + volume ≥ 1.2x average
-else if not na(orb_h) and not na(orb_l) and orb_status == "above"
-  and trend_dir == "UP" and close > vwap_val
-  and close >= orb_h + tick * 2
-  and rel_vol >= 1.2
+else if not na(orb_h) and not na(orb_l) and orb_status == "above" and trend_dir == "UP" and close > vwap_val and close >= orb_h + tick * 2 and rel_vol >= 1.2
     signal_strategy := "orb_breakout"
     signal_direction := "LONG"
     signal_entry := orb_h + tick * 2
@@ -380,10 +373,7 @@ else if not na(orb_h) and not na(orb_l) and orb_status == "above"
     raw_target   := signal_entry + (signal_entry - signal_stop) * 2.2
 
 // ORB Breakout SHORT
-else if not na(orb_h) and not na(orb_l) and orb_status == "below"
-  and trend_dir == "DOWN" and close < vwap_val
-  and close <= orb_l - tick * 2
-  and rel_vol >= 1.2
+else if not na(orb_h) and not na(orb_l) and orb_status == "below" and trend_dir == "DOWN" and close < vwap_val and close <= orb_l - tick * 2 and rel_vol >= 1.2
     signal_strategy := "orb_breakout"
     signal_direction := "SHORT"
     signal_entry := orb_l - tick * 2
@@ -391,8 +381,7 @@ else if not na(orb_h) and not na(orb_l) and orb_status == "below"
     raw_target   := signal_entry - (signal_stop - signal_entry) * 2.2
 
 // 3. ORB Reclaim
-else if not na(orb_h) and not na(orb_l) and orb_status == "reclaimed_high"
-  and trend_dir == "UP" and close > vwap_val
+else if not na(orb_h) and not na(orb_l) and orb_status == "reclaimed_high" and trend_dir == "UP" and close > vwap_val
     signal_strategy := "orb_reclaim"
     signal_direction := "LONG"
     signal_entry := orb_h + tick * 2
