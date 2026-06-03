@@ -10,8 +10,9 @@
      (add `?secret=YOUR_SECRET` or set header `X-Webhook-Secret`)
    - **Message** → leave blank — the script builds the full JSON body
    - **Expiry** → open-ended
-3. The indicator fires once per confirmed bar close.  No fields need to be
-   filled in manually.
+3. The indicator fires once per confirmed bar close during the configured NY,
+   London, or Evening Test alert sessions. No fields need to be filled in
+   manually.
 
 ## What the indicator computes
 
@@ -29,6 +30,12 @@
 | Strat sequence | Three-bar classification: strat_212 / strat_122 / strat_inside_break / … |
 | HTF context | Daily, 4H, and 1H bar type + direction via `request.security` |
 | FTFC | `UP`, `DOWN`, `MIXED`, or `NEUTRAL`; passive unless config enables HTF gate |
+
+## Evening Test Alerts
+
+The Pine input `Evening Test Session (ET)` defaults to `1700-2200` so bar-close
+heartbeats can reach the backend while the temporary backend Asian-session test
+window is enabled. Remove or disable both windows after testing.
 
 ## Manual templates
 

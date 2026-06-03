@@ -5,6 +5,7 @@ indicator("RiskSentinel - Full Context", overlay=true)
 i_orb_min       = input.int(15,     "ORB Window (min)",   minval=5, maxval=60, step=5, group="Opening Range")
 i_ny_session    = input.session("0930-1200", "NY Session (ET)",     group="Opening Range")
 i_london_session= input.session("0300-0830", "London Session (ET)", group="Opening Range")
+i_test_session  = input.session("1700-2200", "Evening Test Session (ET)", group="Alert")
 i_ema_fast      = input.int(9,  "Fast EMA", minval=2,  group="Trend")
 i_ema_slow      = input.int(21, "Slow EMA", minval=5,  group="Trend")
 i_ema_mid       = input.int(55, "Mid EMA",  minval=20, group="Trend")
@@ -190,7 +191,7 @@ if not na(pl_bos)
     demand_wavg     := math.avg(body_top, body_bot)
 
 // ─── HOD / LOD ────────────────────────────────────────────────────────────────
-in_any_session = not na(time(timeframe.period, i_ny_session, "America/New_York")) or not na(time(timeframe.period, i_london_session, "America/New_York"))
+in_any_session = not na(time(timeframe.period, i_ny_session, "America/New_York")) or not na(time(timeframe.period, i_london_session, "America/New_York")) or not na(time(timeframe.period, i_test_session, "America/New_York"))
 day_change     = ta.change(time("D")) > 0
 var float hod = na
 var float lod = na
