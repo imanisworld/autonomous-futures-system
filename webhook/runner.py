@@ -803,10 +803,18 @@ def _check_payload_quality(payload: AlertPayload, cfg: SystemConfig) -> Optional
     if max_staleness > 0:
         try:
             from webhook.state_builder import parse_timestamp
-            bar_ts = parse_timestamp(payload.timestamp)
-            age_seconds = (datetime.now(timezone.utc) - bar_ts).total_seconds()
+            bar_open_ts = parse_timestamp(payload.timestamp)
+            # TradingView stamps a bar with its OPEN time, so a freshly-closed
+            # bar is already (timeframe) seconds old. Measure staleness from the
+            # bar CLOSE instead — that keeps max_staleness a pure delivery-lag
+            # budget, independent of the decision timeframe (5m vs 15m). Without
+            # this, every 15m bar reads as ~900s old and trips the 600s cap.
+            tf_digits = "".join(c for c in str(payload.timeframe) if c.isdigit())
+            tf_minutes = int(tf_digits) if tf_digits else 0
+            bar_close_ts = bar_open_ts + timedelta(seconds=tf_minutes * 60)
+            age_seconds = (datetime.now(timezone.utc) - bar_close_ts).total_seconds()
             if age_seconds > max_staleness:
-                return f"Stale bar: {int(age_seconds)}s old (max {max_staleness}s)"
+                return f"Stale bar: {int(age_seconds)}s past close (max {max_staleness}s)"
         except Exception as exc:
             return f"Invalid bar timestamp: {payload.timestamp!r} ({exc})"
 
