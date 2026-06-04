@@ -1020,17 +1020,43 @@ def _dashboard_payload(for_date: date) -> dict:
         if entry.get("decision") == "CONFIG_BLOCKED"
         and entry.get("config_block") == "TIMEFRAME_MISMATCH"
     ]
+    def _entry_ts(entry):
+        ts = entry.get("ts")
+        try:
+            return datetime.fromisoformat(ts) if ts else None
+        except (ValueError, TypeError):
+            return None
+
     alert_validation = None
     if tf_blocks:
         latest_block = tf_blocks[-1]
-        alert_validation = {
-            "ok": False,
-            "issue": "TIMEFRAME_MISMATCH",
-            "expected": latest_block.get("expected_timeframe"),
-            "received": latest_block.get("received_timeframe"),
-            "count": len(tf_blocks),
-            "last_ts": latest_block.get("ts"),
-        }
+        # The banner must reflect the *current* alert config, not the whole day.
+        # Any decision that isn't a timeframe-mismatch block came from a bar that
+        # passed the Step-0b timeframe guard — i.e. proof of an on-TF alert. If
+        # one arrived after the last mismatch, the misconfiguration is resolved;
+        # otherwise 47 overnight 5m alerts keep the banner red all day even after
+        # the user has already recreated the alert on the correct timeframe.
+        block_ts = _entry_ts(latest_block)
+        good_ts = [
+            _entry_ts(e) for e in decision_entries
+            if not (e.get("decision") == "CONFIG_BLOCKED"
+                    and e.get("config_block") == "TIMEFRAME_MISMATCH")
+        ]
+        last_good = max((t for t in good_ts if t is not None), default=None)
+        still_misconfigured = (
+            block_ts is None            # unparseable — fail loud
+            or last_good is None        # no on-TF bar ever seen today
+            or block_ts > last_good     # last mismatch is newer than last good bar
+        )
+        if still_misconfigured:
+            alert_validation = {
+                "ok": False,
+                "issue": "TIMEFRAME_MISMATCH",
+                "expected": latest_block.get("expected_timeframe"),
+                "received": latest_block.get("received_timeframe"),
+                "count": len(tf_blocks),
+                "last_ts": latest_block.get("ts"),
+            }
     wins = summary.get("wins", 0)
     losses = summary.get("losses", 0)
     resolved = wins + losses
