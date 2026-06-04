@@ -349,23 +349,50 @@ async def status_history(days: int = Query(default=7, ge=1, le=30)) -> dict:
 # 15s) share one upstream broker/Yahoo call instead of each hitting it — faster
 # and keeps Tradovate well under its 5-req/hr auth limit. instrument → (ts, quote).
 _QUOTE_CACHE: dict[str, tuple[float, dict]] = {}
-_QUOTE_TTL_SECONDS = 60.0  # > the 15s client poll so most polls hit; price is display-only and bars are 15m apart
+_QUOTE_TTL_SECONDS = 10.0
 
-# Reuse ONE TradovateBroker for quotes. A fresh broker has no token, so building
-# one per request re-authenticates every cache-miss (slow — cold calls hit ~15s —
-# and burns Tradovate's 5-req/hr auth limit) and re-runs contract lookups. The
-# singleton keeps its valid token, contract cache and connection pool. get_quote
-# is read-only (no position-state mutation), so sharing it is safe. Lazy init;
-# the worst case on a concurrent first call is a discarded duplicate — harmless.
-_quote_broker = None
+# Module-level Tradovate broker singleton — reused across requests so the auth
+# token persists (the token is instance-level; a fresh broker per request would
+# re-auth and blow the ~5-req/hr auth cap). Lazily created.
+_TV_BROKER = None
 
 
-def _get_quote_broker():
-    global _quote_broker
-    if _quote_broker is None:
+def _tv_broker():
+    global _TV_BROKER
+    if _TV_BROKER is None:
         from execution.tradovate_broker import TradovateBroker
-        _quote_broker = TradovateBroker()
-    return _quote_broker
+        _TV_BROKER = TradovateBroker()
+    return _TV_BROKER
+
+
+# Live Tradovate account snapshot, cached so the dashboard mirror (polled ~30s)
+# shares one upstream call and stays under the auth/data limits.
+_ACCOUNT_CACHE: dict = {"ts": 0.0, "data": None}
+_ACCOUNT_TTL_SECONDS = 30.0
+
+
+@app.get("/status/broker-account")
+async def status_broker_account() -> dict:
+    """Live Tradovate demo/live account truth (equity / open P&L / realized P&L /
+    open position) for the dashboard mirror — read straight from the broker so the
+    UI never diverges from Tradovate. Cached ~30s; only meaningful when
+    BROKER=tradovate."""
+    broker_mode = os.getenv("BROKER", "paper").strip().lower()
+    if broker_mode != "tradovate":
+        return {"ok": False, "error": f"BROKER={broker_mode}, not tradovate"}
+    now = time.time()
+    cached = _ACCOUNT_CACHE.get("data")
+    if cached is not None and (now - _ACCOUNT_CACHE["ts"]) < _ACCOUNT_TTL_SECONDS:
+        return cached
+    try:
+        summary = _tv_broker().get_account_summary()
+    except Exception as exc:
+        logger.exception("status_broker_account failed: %s", exc)
+        summary = {"ok": False, "error": str(exc)}
+    summary["cached_at"] = now
+    _ACCOUNT_CACHE["ts"] = now
+    _ACCOUNT_CACHE["data"] = summary
+    return summary
 
 
 @app.get("/status/quote")
@@ -384,7 +411,7 @@ async def status_quote(instrument: str = Query(default="MES")) -> dict:
     if cached is not None and (time.time() - cached[0]) < _QUOTE_TTL_SECONDS:
         return cached[1]
     try:
-        broker = _get_quote_broker()
+        broker = _tv_broker()  # shared singleton — one auth token across endpoints
         # Seed the last price from the latest webhook payload if available.
         # ticker/close live in the nested `payload` — top-level lacks them, so
         # without the payload fallback ticker was "" and seeding never happened
@@ -1412,22 +1439,30 @@ _DASHBOARD_HTML = r"""<!doctype html>
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="RiskSentinel">
+  <meta name="apple-mobile-web-app-title" content="Backend Console">
   <link rel="manifest" href="/manifest.json">
   <link rel="apple-touch-icon" href="/static/icon-192.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;650;750;850&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
-  <title>RiskSentinel</title>
+  <title>RiskSentinel Backend Console</title>
   <style>
     :root {
       color-scheme: dark;
-      --bg: #050507;
-      --panel: #1a1a2e;
-      --panel2: #15172a;
-      --line: #2a2a3e;
-      --text: #f4f4f5;
-      --muted: #a1a1aa;
+      --font-ui: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --font-console: "JetBrains Mono", "SFMono-Regular", Menlo, Monaco, Consolas, monospace;
+      --bg: #05060d;
+      --shell: #080a14;
+      --shell2: #101427;
+      --panel: #171a2d;
+      --panel2: #111527;
+      --panel3: #0d1020;
+      --line: #2b3458;
+      --line-soft: rgba(126, 138, 185, 0.18);
+      --text: #f3f5ff;
+      --muted: #8d94b3;
+      --muted2: #626b8f;
+      --purple: #9a68ff;
       /* severity system */
       --green: #00FF88;   /* pass / live / clear / fresh / profit */
       --yellow: #FFB800;  /* warning / stale / watch / defend */
@@ -1442,8 +1477,9 @@ _DASHBOARD_HTML = r"""<!doctype html>
       min-height: 100vh;
       background: var(--bg);
       color: var(--text);
-      font-family: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: var(--font-ui);
       -webkit-text-size-adjust: 100%;
+      font-weight: 650;
     }
     h1, h2, h3, p { margin: 0; }
     a { color: inherit; }
@@ -1453,21 +1489,118 @@ _DASHBOARD_HTML = r"""<!doctype html>
     .blue { color: var(--blue); }
     .gray, .muted { color: var(--muted); }
 
+    .live-frame {
+      width: min(1156px, calc(100% - 24px));
+      margin: 10px auto 0;
+      border: 1px solid var(--line-soft);
+      border-radius: 18px;
+      overflow: hidden;
+      background: var(--shell);
+      box-shadow: 0 18px 40px rgba(0,0,0,0.32);
+    }
+    .mode-tabs {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      padding: 22px 28px 16px;
+      background: var(--shell);
+    }
+    .mode-tabs button {
+      position: relative;
+      height: 68px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel2);
+      color: var(--muted2);
+      font: inherit;
+      font-family: var(--font-console);
+      font-size: 21px;
+      font-weight: 800;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+    .mode-tabs button.on {
+      color: var(--purple);
+      background: var(--panel3);
+      border-color: rgba(154,104,255,0.62);
+    }
+    .mode-tabs button.on::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 40px;
+      height: 4px;
+      border-radius: 0 0 4px 4px;
+      background: var(--purple);
+      box-shadow: 0 0 14px rgba(154,104,255,0.85);
+    }
+    .appbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 6px 24px 20px;
+      background: var(--shell);
+      border-bottom: 1px solid var(--line-soft);
+    }
+    .brand-title {
+      font-family: var(--font-console);
+      font-size: 29px;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .brand-title .afs { color: var(--purple); }
+    .brand-title .slash { color: var(--muted2); margin: 0 8px; }
+    .brand-sub {
+      margin-top: 8px;
+      color: var(--muted);
+      font-family: var(--font-console);
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+    }
+    .app-actions { display: flex; align-items: center; gap: 18px; }
+    .live-chip {
+      border: 1px solid rgba(0, 255, 136, 0.50);
+      border-radius: 10px;
+      padding: 8px 15px;
+      color: var(--green);
+      background: rgba(0, 255, 136, 0.08);
+      font-family: var(--font-console);
+      font-size: 20px;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+    }
+    .refresh-tile {
+      width: 76px;
+      height: 76px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: #171c35;
+      color: #aab4d4;
+      font-size: 33px;
+      cursor: pointer;
+      transition: transform 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+    }
+    .refresh-tile:hover { transform: translateY(-2px); border-color: rgba(154,104,255,0.62); color: var(--text); }
+
     /* ── Global status bar ─────────────────────────────────────────────── */
     .statusbar {
-      position: sticky;
-      top: 0;
       z-index: 30;
       display: flex;
       gap: 0;
       align-items: stretch;
-      background: rgba(8,9,12,0.96);
+      background: var(--shell2);
       backdrop-filter: blur(8px);
       border-bottom: 1px solid var(--line);
       overflow-x: auto;
       -webkit-overflow-scrolling: touch;
       scrollbar-width: none;
-      padding: 0 4px;
+      padding: 0 14px;
     }
     .statusbar::-webkit-scrollbar { display: none; }
     .statusbar .seg {
@@ -1476,19 +1609,27 @@ _DASHBOARD_HTML = r"""<!doctype html>
       justify-content: center;
       align-items: center;
       gap: 6px;
-      padding: 7px 11px;
+      padding: 14px 14px;
       white-space: nowrap;
-      border-right: 1px solid #1c1e24;
+      border-right: 0;
+      color: var(--muted);
     }
     .statusbar .seg:last-child { border-right: 0; }
-    .statusbar .seg b { display: none; }
-    .statusbar .seg span { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; font-weight: 800; letter-spacing: 0.01em; }
+    .statusbar .seg b {
+      display: inline;
+      color: var(--muted);
+      font-family: var(--font-console);
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+    }
+    .statusbar .seg span { font-family: var(--font-console); font-size: 17px; font-weight: 900; letter-spacing: 0.02em; }
 
     /* ── Layout ────────────────────────────────────────────────────────── */
     main {
       width: min(1120px, calc(100% - 24px));
       margin: 0 auto;
-      padding: 16px 0 calc(var(--nav-h) + 28px);
+      padding: 22px 0 calc(var(--nav-h) + 28px);
     }
     .tab { display: none; }
     .tab.active { display: block; }
@@ -1502,7 +1643,7 @@ _DASHBOARD_HTML = r"""<!doctype html>
     .hero {
       border: 1px solid var(--line);
       border-radius: 12px;
-      background: linear-gradient(135deg, rgba(26,26,46,0.98), rgba(17,18,31,0.98));
+      background: linear-gradient(180deg, rgba(23,26,45,0.98), rgba(18,21,39,0.98));
       padding: 16px;
       margin-bottom: 12px;
     }
@@ -1512,31 +1653,49 @@ _DASHBOARD_HTML = r"""<!doctype html>
     .badge {
       display: inline-flex; align-items: center; gap: 6px;
       border: 1px solid var(--line); border-radius: 999px;
-      background: rgba(255,255,255,0.025);
+      background: rgba(255,255,255,0.018);
       padding: 5px 10px;
-      font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-family: var(--font-console);
       font-size: 12px; font-weight: 800;
     }
     .mood { margin-top: 10px; color: var(--muted); font-size: 14px; line-height: 1.45; }
 
     .monitorbar {
       margin: 8px 12px 0; padding: 9px 12px; border-radius: 10px;
-      background: rgba(90,168,255,0.10); border: 1px solid rgba(90,168,255,0.35);
+      background: rgba(0,213,255,0.08); border: 1px solid rgba(0,213,255,0.30);
       color: #cfe2ff; font-size: 12px; line-height: 1.5; text-align: center;
     }
     .monitorbar b { color: #eaf2ff; letter-spacing: 0.04em; }
 
+    .sandbox-banner {
+      z-index: 29;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 8px 12px;
+      background: rgba(255, 184, 0, 0.12);
+      border-bottom: 1px solid rgba(255, 184, 0, 0.45);
+      color: #ffe3a3;
+      font-family: var(--font-console);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-align: center;
+    }
+    .sandbox-banner .soft { color: var(--muted); font-weight: 700; letter-spacing: 0; }
+
     .alertbar {
       margin: 8px 12px 0; padding: 11px 14px; border-radius: 10px;
-      background: rgba(255,61,113,0.12); border: 1px solid rgba(255,61,113,0.55);
+      background: rgba(255,68,68,0.12); border: 1px solid rgba(255,68,68,0.55);
       color: #ffd9e2; font-size: 13px; line-height: 1.55; text-align: center;
       font-weight: 600;
     }
     .alertbar b { color: #fff; letter-spacing: 0.05em; display: block; font-size: 14px; margin-bottom: 2px; }
-    .alertbar .sub { font-weight: 400; color: #ffb3c4; font-size: 12px; }
+    .alertbar .sub { font-weight: 500; color: #ffb3c4; font-size: 12px; }
 
     .panel {
-      background: var(--panel);
+      background: linear-gradient(180deg, rgba(23,26,45,0.98), rgba(18,21,39,0.98));
       border: 1px solid var(--line);
       border-radius: 12px;
       padding: 15px;
@@ -1552,9 +1711,61 @@ _DASHBOARD_HTML = r"""<!doctype html>
       text-transform: uppercase;
       margin-bottom: 4px;
     }
-    .panel.accent-yellow { border-color: rgba(255,176,32,0.45); }
-    .panel.accent-red { border-color: rgba(255,61,113,0.40); }
-    .panel.accent-green { border-color: rgba(23,217,127,0.40); }
+    .panel.accent-yellow { border-color: rgba(255,184,0,0.45); }
+    .panel.accent-red { border-color: rgba(255,68,68,0.40); }
+    .panel.accent-green { border-color: rgba(0,255,136,0.40); }
+
+    .source-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .source-item {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: rgba(255,255,255,0.022);
+      padding: 9px 10px;
+      min-height: 62px;
+    }
+    .source-item b {
+      display: block;
+      color: var(--text);
+      font-family: var(--font-console);
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .source-item span { display: block; margin-top: 5px; color: var(--muted); font-size: 12px; line-height: 1.35; }
+    .source-note {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+      color: var(--muted);
+      font-family: var(--font-console);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+    }
+    .source-pill {
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 3px 8px;
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .source-pill.pulled { color: var(--green); border-color: rgba(0,255,136,0.34); background: rgba(0,255,136,0.06); }
+    .source-pill.derived { color: var(--blue); border-color: rgba(0,213,255,0.34); background: rgba(0,213,255,0.06); }
+    .source-pill.waiting { color: var(--yellow); border-color: rgba(255,184,0,0.34); background: rgba(255,184,0,0.08); }
+    .source-pill.not-pulled { color: var(--gray); border-color: rgba(139,144,166,0.28); background: rgba(139,144,166,0.06); }
+    @media (max-width: 720px) { .source-grid { grid-template-columns: 1fr; } }
 
     .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     @media (max-width: 560px) { .grid2 { grid-template-columns: 1fr; } }
@@ -1573,7 +1784,7 @@ _DASHBOARD_HTML = r"""<!doctype html>
     /* key/value rows */
     .kv { display: grid; grid-template-columns: auto 1fr; gap: 7px 14px; margin-top: 10px; font-size: 14px; }
     .kv dt { color: var(--muted); }
-    .kv dd { margin: 0; text-align: right; font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 800; }
+    .kv dd { margin: 0; text-align: right; font-family: var(--font-console); font-weight: 800; }
 
     .metric-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; margin-top: 12px; }
     .metric {
@@ -1581,11 +1792,11 @@ _DASHBOARD_HTML = r"""<!doctype html>
       padding: 10px 12px;
     }
     .metric label { display: block; color: var(--muted); font-size: 10px; font-weight: 750; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 5px; }
-    .metric strong { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 18px; font-weight: 800; }
-    .sparkline { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--blue); font-size: 12px; letter-spacing: 0.05em; margin-left: 8px; white-space: nowrap; }
+    .metric strong { font-family: var(--font-console); font-size: 18px; font-weight: 800; }
+    .sparkline { font-family: var(--font-console); color: var(--blue); font-size: 12px; letter-spacing: 0.05em; margin-left: 8px; white-space: nowrap; }
     .empty-val { color: var(--gray); opacity: 0.65; cursor: help; }
     .placeholder { color: var(--gray); opacity: 0.7; font-style: italic; }
-    .update-line { margin-top: 8px; color: var(--gray); font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+    .update-line { margin-top: 8px; color: var(--gray); font-family: var(--font-console); font-size: 11px; }
     .skeleton {
       position: relative; overflow: hidden; border-radius: 8px; background: rgba(255,255,255,0.055);
       min-height: 14px;
@@ -1603,7 +1814,7 @@ _DASHBOARD_HTML = r"""<!doctype html>
     ul.reasons { list-style: none; padding: 0; margin: 8px 0 0; }
     ul.reasons li {
       display: flex; gap: 9px; align-items: flex-start;
-      padding: 8px 12px; border-top: 0; border-left: 3px solid #ffb800;
+      padding: 8px 12px; border-top: 0; border-left: 3px solid var(--yellow);
       border-radius: 6px; background: rgba(255, 184, 0, 0.10);
       font-size: 13px; color: #ffe3a3; margin-top: 7px;
     }
@@ -1614,9 +1825,9 @@ _DASHBOARD_HTML = r"""<!doctype html>
       display: inline-block; border: 1px solid var(--line); border-radius: 999px;
       padding: 3px 9px; font-size: 11px; font-weight: 800; letter-spacing: 0.03em;
     }
-    .pill.green { color: var(--green); border-color: rgba(23,217,127,0.4); }
-    .pill.yellow { color: var(--yellow); border-color: rgba(255,176,32,0.4); }
-    .pill.red { color: var(--red); border-color: rgba(255,61,113,0.4); }
+    .pill.green { color: var(--green); border-color: rgba(0,255,136,0.4); }
+    .pill.yellow { color: var(--yellow); border-color: rgba(255,184,0,0.4); }
+    .pill.red { color: var(--red); border-color: rgba(255,68,68,0.4); }
     .pill.gray { color: var(--gray); }
     .pill.blue { color: var(--blue); border-color: rgba(0,213,255,0.4); }
 
@@ -1641,18 +1852,84 @@ _DASHBOARD_HTML = r"""<!doctype html>
     .uni .u { display: flex; align-items: center; gap: 7px; border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; font-size: 13px; }
     .uni .u b { font-weight: 800; }
 
+    .futures-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 304px;
+      gap: 12px;
+      align-items: start;
+    }
+    .futures-main, .futures-rail {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      min-width: 0;
+    }
+    .futures-main .panel, .futures-rail .panel { margin-bottom: 0; }
+    .futures-overview {
+      display: grid;
+      grid-template-columns: minmax(190px, 0.85fr) minmax(0, 1.15fr);
+      gap: 12px;
+      align-items: stretch;
+    }
+    .futures-overview .overview-cell {
+      border: 1px solid var(--line-soft);
+      border-radius: 10px;
+      background: rgba(255,255,255,0.018);
+      padding: 10px 12px;
+      min-width: 0;
+    }
+    .overview-label {
+      color: var(--muted);
+      font-family: var(--font-console);
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .overview-value {
+      margin-top: 6px;
+      color: var(--text);
+      font-family: var(--font-console);
+      font-size: 15px;
+      font-weight: 900;
+      line-height: 1.35;
+    }
+    .overview-sub { margin-top: 4px; color: var(--muted); font-size: 12px; line-height: 1.4; }
+    .instrument-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
+    .instrument-card { min-height: 100%; }
+    .instrument-head {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      border-bottom: 1px solid var(--line); padding-bottom: 10px; margin-bottom: 10px;
+    }
+    .instrument-head h2 {
+      margin: 0; color: var(--text); font-family: var(--font-console);
+      font-size: 20px; font-weight: 800; letter-spacing: 0.08em;
+    }
+    .instrument-meta { color: var(--muted); font-size: 11px; font-family: var(--font-console); }
+    .instrument-decision { margin-top: 6px; font-size: 20px; }
+    .mini-context { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    @media (max-width: 1040px) {
+      .futures-layout { grid-template-columns: 1fr; }
+      .futures-rail { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 780px) {
+      .instrument-grid { grid-template-columns: 1fr; }
+      .futures-overview { grid-template-columns: 1fr; }
+      .futures-rail { display: flex; }
+    }
+
     .risk-ladder { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
     .risk-step {
       display: flex; align-items: center; justify-content: center; gap: 7px;
       min-height: 44px; border: 1px solid var(--line); border-radius: 10px;
       background: rgba(255,255,255,0.025);
-      color: var(--muted); font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      color: var(--muted); font-family: var(--font-console);
       font-size: 12px; font-weight: 800; letter-spacing: 0.03em;
       transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
     }
-    .risk-step.active { background: rgba(23,217,127,0.06); }
-    .risk-step.active.yellow { background: rgba(255,176,32,0.08); }
-    .risk-step.active.red { background: rgba(255,61,113,0.08); }
+    .risk-step.active { background: rgba(0,255,136,0.06); }
+    .risk-step.active.yellow { background: rgba(255,184,0,0.08); }
+    .risk-step.active.red { background: rgba(255,68,68,0.08); }
     .risk-step.dim { opacity: 0.48; }
     @media (max-width: 560px) { .risk-ladder { grid-template-columns: 1fr 1fr; } }
 
@@ -1681,7 +1958,7 @@ _DASHBOARD_HTML = r"""<!doctype html>
     /* options lab */
     .demo-banner {
       display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-      background: rgba(255,176,32,0.10); border: 1px dashed rgba(255,176,32,0.55);
+      background: rgba(255,184,0,0.10); border: 1px dashed rgba(255,184,0,0.55);
       color: var(--yellow); border-radius: 10px; padding: 11px 13px; margin-bottom: 12px;
       font-size: 13px; font-weight: 700;
     }
@@ -1696,9 +1973,9 @@ _DASHBOARD_HTML = r"""<!doctype html>
       letter-spacing: 0.02em; cursor: pointer; border: 1px solid var(--line);
       background: var(--panel2); color: var(--text); text-align: center; width: 100%;
     }
-    .btn.long { border-color: rgba(23,217,127,0.6); color: var(--green); background: rgba(23,217,127,0.07); }
-    .btn.short { border-color: rgba(255,61,113,0.55); color: var(--red); background: rgba(255,61,113,0.06); }
-    .btn.danger { border-color: rgba(255,61,113,0.7); color: var(--red); background: rgba(255,61,113,0.10); }
+    .btn.long { border-color: rgba(0,255,136,0.6); color: var(--green); background: rgba(0,255,136,0.07); }
+    .btn.short { border-color: rgba(255,68,68,0.55); color: var(--red); background: rgba(255,68,68,0.06); }
+    .btn.danger { border-color: rgba(255,68,68,0.7); color: var(--red); background: rgba(255,68,68,0.10); }
     .btn:disabled { opacity: 0.4; cursor: not-allowed; }
     .force-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 6px; }
     .force-meta { color: var(--muted); font-size: 12px; margin-top: 10px; line-height: 1.5; }
@@ -1710,21 +1987,21 @@ _DASHBOARD_HTML = r"""<!doctype html>
     .modal h3 { font-size: 17px; margin-bottom: 6px; }
     .modal .mode-tag { font-size: 12px; font-weight: 900; letter-spacing: 0.05em; }
     .modal .kv { margin-top: 12px; }
-    .modal input[type=password] { width: 100%; margin-top: 12px; border: 1px solid var(--line); background: #090a0d; color: var(--text); border-radius: 8px; padding: 11px 12px; font: inherit; }
+    .modal input[type=password] { width: 100%; margin-top: 12px; border: 1px solid var(--line); background: var(--panel3); color: var(--text); border-radius: 8px; padding: 11px 12px; font: inherit; }
     .modal .warn { margin-top: 12px; font-size: 12px; color: var(--yellow); line-height: 1.5; }
     .modal .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 14px; }
     .modal .actions .btn { padding: 11px; }
     .modal .ghost { background: transparent; color: var(--muted); }
     .modal .result { margin-top: 10px; font-size: 12px; color: var(--muted); min-height: 16px; overflow-wrap: anywhere; }
 
-    canvas.chart { width: 100%; display: block; margin-top: 8px; border-radius: 6px; background: #0d0e12; }
+    canvas.chart { width: 100%; display: block; margin-top: 8px; border-radius: 6px; background: var(--panel3); }
 
     /* ── Bottom nav ────────────────────────────────────────────────────── */
     nav.bottom {
       position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
       height: calc(var(--nav-h) + env(safe-area-inset-bottom));
       padding-bottom: env(safe-area-inset-bottom);
-      display: flex; background: rgba(8,9,12,0.98);
+      display: flex; background: rgba(8,10,20,0.98);
       border-top: 1px solid var(--line); backdrop-filter: blur(8px);
     }
     nav.bottom button {
@@ -1739,19 +2016,51 @@ _DASHBOARD_HTML = r"""<!doctype html>
       content: ""; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
       width: 26px; height: 3px; border-radius: 0 0 3px 3px; background: var(--yellow);
     }
+    @media (max-width: 720px) {
+      .live-frame { width: 100%; margin-top: 0; border-left: 0; border-right: 0; border-radius: 0; }
+      .mode-tabs { gap: 8px; padding: 14px 12px 10px; }
+      .mode-tabs button { height: 48px; border-radius: 12px; font-size: 13px; }
+      .appbar { padding: 10px 12px 14px; align-items: flex-start; }
+      .brand-title { font-size: 22px; }
+      .brand-sub { font-size: 12px; line-height: 1.45; }
+      .app-actions { gap: 8px; }
+      .live-chip { font-size: 14px; padding: 6px 10px; }
+      .refresh-tile { width: 52px; height: 52px; border-radius: 14px; font-size: 24px; }
+      .statusbar { padding: 0 8px; }
+      .statusbar .seg { padding: 10px 8px; }
+      .statusbar .seg b { font-size: 13px; }
+      .statusbar .seg span { font-size: 14px; }
+    }
   </style>
 </head>
 <body>
-  <div class="statusbar" id="statusbar"></div>
-  <div class="alertbar" id="alertbar" hidden></div>
-  <div class="monitorbar" id="monitorbar" hidden></div>
-  <main>
-    <section class="tab active" id="tab-home"></section>
-    <section class="tab" id="tab-futures"></section>
-    <section class="tab" id="tab-options"></section>
-    <section class="tab" id="tab-risk"></section>
-    <section class="tab" id="tab-log"></section>
-  </main>
+  <div class="live-frame">
+    <div class="mode-tabs">
+      <button class="top-tab" data-tab="futures">Futures</button>
+      <button class="top-tab" data-tab="options">Options</button>
+    </div>
+    <header class="appbar">
+      <div>
+        <div class="brand-title"><span class="afs">AFS</span><span class="slash">/</span>Backend Console</div>
+        <div class="brand-sub">Autonomous Futures System · Backend SAT · Paper Mode</div>
+      </div>
+      <div class="app-actions">
+        <span class="live-chip">LIVE</span>
+        <button class="refresh-tile" id="refresh-now" type="button" aria-label="Refresh">↻</button>
+      </div>
+    </header>
+    <div class="statusbar" id="statusbar"></div>
+    <div class="alertbar" id="alertbar" hidden></div>
+    <div class="monitorbar" id="monitorbar" hidden></div>
+    <div class="sandbox-banner">SAT / BACKEND CONSOLE <span class="soft">read-only regression surface · not the operator app</span></div>
+    <main>
+      <section class="tab active" id="tab-home"></section>
+      <section class="tab" id="tab-futures"></section>
+      <section class="tab" id="tab-options"></section>
+      <section class="tab" id="tab-risk"></section>
+      <section class="tab" id="tab-log"></section>
+    </main>
+  </div>
 
   <nav class="bottom" id="nav">
     <button data-tab="home" class="on"><span class="ic">▣</span>Home</button>
@@ -1881,6 +2190,22 @@ _DASHBOARD_HTML = r"""<!doctype html>
     function moodLine(risk) { return RISK_MOOD[risk] || RISK_MOOD.CLEAR; }
     function modeLabel() { return INIT.paper_mode ? '📄 PAPER MODE' : '⚡ LIVE MODE'; }
     function lockLabel(lock) { return lock ? '🔒 ACTIVE' : '🔓 NONE'; }
+    function sourcePill(kind, label) {
+      return '<span class="source-pill ' + esc(kind) + '">' + esc(label) + '</span>';
+    }
+    function sourceNote(kind, label, detail) {
+      return '<div class="source-note">' + sourcePill(kind, label) + '<span>' + esc(detail) + '</span></div>';
+    }
+    // SAT data contract: keep this list explicit so the preview never implies
+    // live-operator parity for data that is not actually pulled into this page.
+    function sourceBoundaryPanel() {
+      return '<div class="panel accent-yellow"><h2>SAT Data Boundary</h2>' +
+        '<div class="source-grid">' +
+        '<div class="source-item"><b>Pulled Now</b><span>/status/today, /status/history, /status/risk, per-instrument latest webhook snapshots.</span></div>' +
+        '<div class="source-item"><b>Derived Here</b><span>Risk mood, freshness age, empty states, UI grouping, and placeholder sparkline.</span></div>' +
+        '<div class="source-item"><b>Not Pulled Yet</b><span>Live operator quote panel, live options chain, and order-entry/bracket controls.</span></div>' +
+        '</div></div>';
+    }
 
     function latestHeadline(today) {
       var entries = today.latest_entries || [];
@@ -1941,16 +2266,16 @@ _DASHBOARD_HTML = r"""<!doctype html>
       var modeC = INIT.paper_mode ? 'blue' : 'red';
       var whTag = fr.state === 'NONE' ? 'gray' : (fr.state === 'FRESH' ? 'green' : (fr.state === 'IDLE' ? 'gray' : 'yellow'));
       var segs = [
-        ['', '🟢 LIVE', 'green'],
-        ['', modeLabel(), modeC],
-        ['', '🏦 ' + (INIT.broker || 'PAPER'), 'blue'],
-        ['', (risk === 'CLEAR' ? '✅' : (RISK_ICON[risk] || '•')) + ' ' + risk, RISK_COLOR[risk] || 'gray'],
-        ['', lockLabel(lock), lock ? 'red' : 'green'],
-        ['', '🕒 ' + fr.label, whTag],
-        ['', '🔄 ' + (POLL / 1000) + 's', 'gray']
+        ['API:', 'LIVE', 'green'],
+        ['MODE:', mode, modeC],
+        ['BROKER:', (INIT.broker || 'PAPER'), 'blue'],
+        ['RISK:', risk, RISK_COLOR[risk] || 'gray'],
+        ['LOCKOUT:', lock ? 'ACTIVE' : 'NONE', lock ? 'red' : 'green'],
+        ['DATA:', fr.state === 'NONE' ? 'NONE' : fr.state, whTag],
+        ['POLL:', (POLL / 1000) + 's', 'gray']
       ];
       el('statusbar').innerHTML = segs.map(function (s) {
-        return '<div class="seg"><b>' + s[0] + '</b><span class="' + s[2] + '">' + esc(s[1]) + '</span></div>';
+        return '<div class="seg"><b>' + esc(s[0]) + '</b><span class="' + s[2] + '">' + esc(s[1]) + '</span></div>';
       }).join('');
     }
 
@@ -1994,6 +2319,7 @@ _DASHBOARD_HTML = r"""<!doctype html>
         '<p class="mood">' + esc(moodLine(risk)) + '</p>' +
         '<div class="update-line" id="last-update"></div>' +
         '</div>';
+      html += sourceBoundaryPanel();
 
       html += '<div class="tabhead"><h1>Today</h1><span class="when">' + esc(today.date || '') + '</span></div>';
 
@@ -2049,47 +2375,109 @@ _DASHBOARD_HTML = r"""<!doctype html>
     }
 
     // ── FUTURES ────────────────────────────────────────────────────────
-    function renderFutures() {
-      var today = state.today;
-      var fr = freshness(today);
-      var dv = decisionView(today, fr);
-      var wh = today.latest_webhook || {};
+    function freshnessForWebhook(wh) {
+      var iso = wh && wh.received_at ? wh.received_at : null;
+      var a = ageMs(iso);
+      var mins = a / 60000;
+      var active = inActiveWindow();
+      var stateName;
+      if (!iso) stateName = 'NONE';
+      else if (mins <= 6) stateName = 'FRESH';
+      else if (active) stateName = 'STALE';
+      else stateName = 'IDLE';
+      return { state: stateName, label: humanAge(a), mins: mins, active: active, iso: iso };
+    }
+    function instrumentAccent(decision, fr) {
+      if (fr.state === 'STALE') return 'yellow';
+      if (decision === 'TRADE') return 'green';
+      if (decision === 'WAITING' || decision === 'NO_TRADE') return 'yellow';
+      return 'red';
+    }
+    function instrumentStatus(fr) {
+      if (fr.state === 'FRESH') return '<span class="pill green">🟢 FRESH</span>';
+      if (fr.state === 'STALE') return '<span class="pill yellow">🟡 STALE</span>';
+      if (fr.state === 'IDLE') return '<span class="pill gray">⚪ IDLE</span>';
+      return '<span class="pill gray">⚪ WAITING</span>';
+    }
+    function instrumentCard(inst, today) {
+      var webhooks = today.latest_webhooks || {};
+      var wh = webhooks[inst] || {};
       var ctx = wh.context || {};
-      var symbol = (ctx.instrument || 'MES') + (String(ctx.instrument || '').indexOf('1!') === -1 ? '1!' : '');
+      var result = wh.result || {};
+      var hasPayload = !!(wh.payload || wh.context || wh.result);
+      var fr = freshnessForWebhook(wh);
+      var decision = hasPayload ? (result.decision || 'WAITING') : 'WAITING';
+      var failed = (result.failed_gates || []).map(prettyGate);
+      if (!failed.length && !hasPayload) failed = ['No ' + inst + ' alert received yet today'];
+      if (fr.state === 'STALE') failed = failed.concat(['Last ' + TF_LABEL + ' webhook stale (' + fr.label + ' old)']);
       var price = ctx.close != null ? ctx.close : '—';
       var session = ctx.session || '—';
       var vwap = ctx.vwap || {};
       var orb = ctx.orb || {};
       var vol = ctx.volume || {};
-      var html = '';
-      html += '<div class="tabhead"><h1>Futures</h1><span class="when">' + esc(fr.label) + ' since last bar</span></div>';
-
-      html += '<div class="panel accent-' + (dv.decision === 'TRADE' ? 'green' : (dv.decision === 'NO_TRADE' || dv.decision === 'WAITING' ? 'yellow' : 'red')) + '">' +
-        '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;">' +
-        '<div class="decision d-' + esc(dv.decision) + '"><span class="dot"></span>' + esc(symbol) + ' — ' + esc(dv.decision) + '</div>' +
-        '</div>' +
+      var condition = ctx.market_condition || '—';
+      var meta = fr.state === 'NONE' ? 'waiting for alert' : (fr.label + ' since last bar');
+      var html = '<div class="panel instrument-card accent-' + instrumentAccent(decision, fr) + '">' +
+        '<div class="instrument-head"><div><h2>' + esc(inst) + '</h2><div class="instrument-meta">' + esc(meta) + '</div></div>' +
+        instrumentStatus(fr) + '</div>' +
+        '<div class="decision instrument-decision d-' + esc(decision) + '"><span class="dot"></span>' + esc(decision) + '</div>' +
         '<dl class="kv">' +
-        kv('Price', esc(price)) +
+        kv('Last close', esc(price)) +
         kv('Session', esc(session)) +
-        kv('Timeframe', '5m') +
-        kv('Last webhook', esc(fr.label) + ' ago') +
-        '</dl></div>';
-
-      html += freshWidget(fr);
-
-      html += card('Blocked By', listReasons(dv.blocked, '✕', 'red'), dv.blocked.length ? 'accent-yellow' : '');
-      html += card('Next Validation', listReasons(dv.nextValidation, '→', 'blue'), '');
-
-      html += '<div class="panel"><h2>Market Context</h2><div class="ctx">' +
+        kv('Timeframe', TF_LABEL) +
+        kv('Last webhook', esc(fr.label) + (fr.state === 'NONE' ? '' : ' ago')) +
+        '</dl>' +
+        '<div class="ctx mini-context">' +
         ctxItem('VWAP', vwap.value != null ? vwap.value : '—') +
         ctxItem('ORB High', orb.high != null ? orb.high : '—') +
         ctxItem('ORB Low', orb.low != null ? orb.low : '—') +
-        ctxItem('Condition', ctx.market_condition || '—') +
+        ctxItem('Condition', condition) +
         ctxItem('Volume', vol.current_bar != null ? vol.current_bar : '—') +
+        '</div>';
+      if (failed.length) {
+        html += '<div class="instrument-reasons">' + listReasons(failed, '!', 'yellow') + '</div>';
+      }
+      html += hasPayload ?
+        sourceNote('pulled', 'Pulled', '/status/today latest_webhooks.' + inst + ' · result + context snapshot') :
+        sourceNote('waiting', 'Waiting', 'No ' + inst + ' webhook snapshot has been recorded for this SAT session');
+      return html + '</div>';
+    }
+    function futuresOverview(fr) {
+      var map = { FRESH: ['green', 'FRESH'], STALE: ['yellow', 'STALE'], IDLE: ['gray', 'IDLE'], NONE: ['gray', 'NO DATA'] };
+      var m = map[fr.state] || map.NONE;
+      var sub = fr.state === 'NONE' ? 'Waiting for first webhook snapshot.' :
+        ('Last ' + TF_LABEL + ' webhook: ' + fr.label + ' ago · Expected every ' + TF_LABEL);
+      return '<div class="panel">' +
+        '<h2>Futures Intake</h2>' +
+        '<div class="futures-overview">' +
+        '<div class="overview-cell">' +
+        '<div class="overview-label">Data Freshness</div>' +
+        '<div class="overview-value ' + m[0] + '">' + esc(m[1]) + '</div>' +
+        '<div class="overview-sub">' + esc(sub) + '</div>' +
+        '</div>' +
+        '<div class="overview-cell">' +
+        '<div class="overview-label">SAT Boundary</div>' +
+        '<div class="overview-value">' + sourcePill('derived', 'Webhook Snapshots') + '</div>' +
+        '<div class="overview-sub">MES/MNQ cards show pulled per-instrument webhook result + context when present. Blanks are not live quote-panel data.</div>' +
+        '</div>' +
         '</div></div>';
+    }
+    function renderFutures() {
+      var today = state.today;
+      var fr = freshness(today);
+      var html = '';
+      html += '<div class="tabhead"><h1>Futures</h1><span class="when">' + esc(agePhrase(fr)) + '</span></div>';
 
+      html += '<div class="futures-layout"><div class="futures-main">';
+      html += futuresOverview(fr);
+      html += '<div class="instrument-grid">' +
+        instrumentCard('MES', today) +
+        instrumentCard('MNQ', today) +
+        '</div>';
+      html += '</div><aside class="futures-rail">';
       html += renderUniverse();
       html += renderForce();
+      html += '</aside></div>';
       el('tab-futures').innerHTML = html;
       wireForce();
     }
@@ -2391,6 +2779,12 @@ _DASHBOARD_HTML = r"""<!doctype html>
       if (!W || !H) return;
       canvas.width = W * dpr; canvas.height = H * dpr;
       var ctx = canvas.getContext('2d'); ctx.scale(dpr, dpr);
+      var css = getComputedStyle(document.documentElement);
+      var chartBg = css.getPropertyValue('--panel3').trim() || '#0d1020';
+      var chartLine = css.getPropertyValue('--blue').trim() || '#00d5ff';
+      var chartGreen = css.getPropertyValue('--green').trim() || '#00FF88';
+      var chartRed = css.getPropertyValue('--red').trim() || '#FF4444';
+      var chartGray = css.getPropertyValue('--gray').trim() || '#8b90a6';
       var PAD = { t: 14, r: 14, b: 22, l: 48 };
       var cw = W - PAD.l - PAD.r, ch = H - PAD.t - PAD.b;
       var vals = days.map(function (d) { return num(d.realized_pnl_dollars); });
@@ -2398,13 +2792,13 @@ _DASHBOARD_HTML = r"""<!doctype html>
       var range = (mx - mn) || 1;
       var toX = function (i) { return PAD.l + (i / Math.max(days.length - 1, 1)) * cw; };
       var toY = function (v) { return PAD.t + ((mx - v) / range) * ch; };
-      ctx.fillStyle = '#0d0e12'; ctx.fillRect(0, 0, W, H);
-      ctx.strokeStyle = '#2a2d34'; ctx.setLineDash([4, 4]);
+      ctx.fillStyle = chartBg; ctx.fillRect(0, 0, W, H);
+      ctx.strokeStyle = 'rgba(141,148,179,0.30)'; ctx.setLineDash([4, 4]);
       ctx.beginPath(); ctx.moveTo(PAD.l, toY(0)); ctx.lineTo(W - PAD.r, toY(0)); ctx.stroke(); ctx.setLineDash([]);
-      ctx.beginPath(); ctx.strokeStyle = '#00d5ff'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.strokeStyle = chartLine; ctx.lineWidth = 2;
       days.forEach(function (d, i) { var x = toX(i), y = toY(num(d.realized_pnl_dollars)); i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
       ctx.stroke();
-      days.forEach(function (d, i) { var v = num(d.realized_pnl_dollars); ctx.beginPath(); ctx.arc(toX(i), toY(v), 3, 0, 7); ctx.fillStyle = v > 0 ? '#17d97f' : v < 0 ? '#ff3d71' : '#a1a1aa'; ctx.fill(); });
+      days.forEach(function (d, i) { var v = num(d.realized_pnl_dollars); ctx.beginPath(); ctx.arc(toX(i), toY(v), 3, 0, 7); ctx.fillStyle = v > 0 ? chartGreen : v < 0 ? chartRed : chartGray; ctx.fill(); });
       var rl = el('chart-range');
       if (rl) { var last = vals[vals.length - 1] || 0; rl.textContent = days.length + 'd · ' + (last >= 0 ? '+' : '') + money(last).replace('$', '$'); }
     }
@@ -2421,7 +2815,7 @@ _DASHBOARD_HTML = r"""<!doctype html>
     function setTab(name) {
       state.tab = name;
       Array.prototype.forEach.call(document.querySelectorAll('.tab'), function (s) { s.classList.toggle('active', s.id === 'tab-' + name); });
-      Array.prototype.forEach.call(document.querySelectorAll('#nav button'), function (b) { b.classList.toggle('on', b.getAttribute('data-tab') === name); });
+      Array.prototype.forEach.call(document.querySelectorAll('[data-tab]'), function (b) { b.classList.toggle('on', b.getAttribute('data-tab') === name); });
       if (name === 'risk' && !state.risk) loadRisk();
       renderActive();
       window.scrollTo(0, 0);
@@ -2447,9 +2841,10 @@ _DASHBOARD_HTML = r"""<!doctype html>
     }
 
     // ── wire ───────────────────────────────────────────────────────────
-    Array.prototype.forEach.call(document.querySelectorAll('#nav button'), function (b) {
+    Array.prototype.forEach.call(document.querySelectorAll('[data-tab]'), function (b) {
       b.addEventListener('click', function () { setTab(b.getAttribute('data-tab')); });
     });
+    el('refresh-now').addEventListener('click', refresh);
     el('fm-cancel').addEventListener('click', closeForceModal);
     el('fm-confirm').addEventListener('click', submitForce);
     el('force-modal').addEventListener('click', function (e) { if (e.target === el('force-modal')) closeForceModal(); });

@@ -730,6 +730,59 @@ class TradovateBroker(BrokerInterface):
             logger.warning("Tradovate get_account_balance failed: %s", exc)
             return None
 
+    def get_account_summary(self) -> dict:
+        """Live account truth for the dashboard mirror: equity, open/realized P&L,
+        and the current open position — read straight from Tradovate (the source
+        of truth), so the UI never diverges from the broker. Fail-soft."""
+        out: dict = {
+            "ok": False, "env": self.config.env, "account_id": None,
+            "equity": None, "open_pnl": None, "realized_pnl": None, "position": None,
+        }
+        try:
+            if not self._authenticate():
+                out["error"] = "not_authenticated"
+                return out
+            if self._account_id is None:
+                self._resolve_account_id()
+            out["account_id"] = self._account_id
+            d: dict = {}
+            try:
+                snap = self._get(f"/cashBalance/getCashBalanceSnapshot?accountId={self._account_id}")
+                rows = snap if isinstance(snap, list) else [snap]
+                d = next((r for r in rows if isinstance(r, dict)), {})
+            except Exception:
+                d = {}
+
+            def _pick(*keys):
+                for k in keys:
+                    v = d.get(k)
+                    if v is not None:
+                        try:
+                            return float(v)
+                        except (TypeError, ValueError):
+                            pass
+                return None
+
+            out["equity"] = _pick("totalCashValue", "netLiq", "cashBalance", "balance", "amount")
+            out["open_pnl"] = _pick("openPnL", "openPnl", "unrealizedPnL", "unrealizedPnl")
+            out["realized_pnl"] = _pick("realizedPnL", "realizedPnl", "totalPnL", "totalPnl")
+            if out["equity"] is None:
+                out["equity"] = self.get_account_balance()
+            try:
+                pos = self.get_position()
+                if pos and pos.open:
+                    out["position"] = {
+                        "instrument": pos.instrument, "direction": pos.direction,
+                        "qty": pos.quantity, "entry": pos.entry_price,
+                    }
+            except Exception:
+                pass
+            out["ok"] = out["equity"] is not None
+        except Exception as exc:
+            logger.warning("Tradovate get_account_summary failed: %s", exc)
+            out["error"] = str(exc)
+        return out
+
     def get_quote(self, instrument: str = "MES") -> dict:
         """Return last known price for the instrument.
 
