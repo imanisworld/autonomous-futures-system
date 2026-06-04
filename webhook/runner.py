@@ -145,6 +145,50 @@ def process_alert(
             "confidence_score": None,
         }
 
+    # ── Step 0b: Timeframe guard (CONFIG_BLOCKED / TIMEFRAME_MISMATCH) ─────────
+    # The strategy is tuned and replay-validated on 15m. A webhook arriving on
+    # any other timeframe (e.g. 5m) is a MISCONFIGURED ALERT, not a tradeable
+    # bar — its trend reads SIDEWAYS/WEAK and every setup gets silently filtered.
+    # Reject it as a config error and journal it under a distinct category so it
+    # is NEVER counted or evaluated as a normal NO_TRADE. The dashboard reads
+    # these entries to raise the "LIVE ALERT MISCONFIGURED" banner.
+    tf_mismatch = _check_timeframe(payload, cfg)
+    if tf_mismatch:
+        today = for_date or date.today()
+        journal = JournalLogger(log_dir=log_dir)
+        journal.log_decision(
+            {
+                "ts": _safe_bar_ts(payload),
+                "instrument": payload.ticker,
+                "session": payload.session,
+                "decision": "CONFIG_BLOCKED",
+                "config_block": "TIMEFRAME_MISMATCH",
+                "reason": tf_mismatch["reason"],
+                "expected_timeframe": tf_mismatch["expected"],
+                "received_timeframe": tf_mismatch["received"],
+            },
+            None,
+            for_date=today,
+        )
+        return {
+            "timestamp": payload.timestamp,
+            "instrument": payload.ticker,
+            "session": payload.session,
+            "resolution": None,
+            "decision": "CONFIG_BLOCKED",
+            "config_block": "TIMEFRAME_MISMATCH",
+            "expected_timeframe": tf_mismatch["expected"],
+            "received_timeframe": tf_mismatch["received"],
+            "risk": None,
+            "fill": None,
+            "context": None,
+            "regime": None,
+            "gex_status": None,
+            "signa_status": None,
+            "failed_gates": [tf_mismatch["reason"]],
+            "confidence_score": None,
+        }
+
     _maybe_enrich_payload_with_signa(payload, cfg)
     _maybe_sync_ibkr_position_on_startup(cfg)
     state = build_market_state(payload)
@@ -661,6 +705,89 @@ def _market_state_context(state) -> dict:
             "tp2": state.icc.tp2 if state.icc else None,
             "htf_phase": state.icc.htf_phase if state.icc else None,
         },
+    }
+
+
+def _safe_bar_ts(payload: AlertPayload) -> str:
+    """Best-effort ISO bar timestamp for journaling a pre-state-build rejection."""
+    try:
+        from webhook.state_builder import parse_timestamp
+        return parse_timestamp(payload.timestamp).isoformat()
+    except Exception:
+        return str(payload.timestamp)
+
+
+def normalize_timeframe_minutes(timeframe: object) -> Optional[int]:
+    """Normalize a TradingView timeframe token to whole minutes.
+
+    Accepts the forms TradingView's `{{interval}}` / `timeframe.period` emit:
+        "15", "5", "1"        → minutes as-is
+        "15m", "5min"         → minutes (strip suffix)
+        "1h", "60"            → 60
+        "1D"/"D", "1W"/"W"    → 1440 / 10080
+    Returns None if the token cannot be parsed (treated as a mismatch).
+    """
+    if timeframe is None:
+        return None
+    s = str(timeframe).strip().lower()
+    if not s:
+        return None
+    # Pure number → minutes (TradingView intraday intervals are minute counts).
+    if s.isdigit():
+        return int(s)
+    # Day / week / month tokens.
+    if s in ("d", "1d", "day", "1day"):
+        return 1440
+    if s in ("w", "1w", "week", "1week"):
+        return 10080
+    if s in ("m_month", "mo", "1mo", "month"):
+        return 43200
+    # Suffixed forms: 15m, 5min, 1h, 2h, 4h.
+    import re
+    match = re.fullmatch(r"(\d+)\s*(m|min|mins|minute|minutes|h|hr|hrs|hour|hours)", s)
+    if match:
+        value = int(match.group(1))
+        unit = match.group(2)
+        if unit.startswith("h"):
+            return value * 60
+        return value
+    return None
+
+
+def _check_timeframe(payload: AlertPayload, cfg: SystemConfig) -> Optional[dict]:
+    """Return mismatch info if the alert's timeframe != the expected one, else None.
+
+    Disabled (returns None) when expected_timeframe_minutes <= 0.
+    """
+    expected = int(getattr(cfg, "expected_timeframe_minutes", 15) or 0)
+    if expected <= 0:
+        return None
+    received_raw = payload.timeframe
+    received = normalize_timeframe_minutes(received_raw)
+    if received == expected:
+        return None
+
+    def _label(minutes: Optional[int], raw: object) -> str:
+        if minutes is None:
+            return f"{raw!r}"
+        if minutes % 1440 == 0:
+            return f"{minutes // 1440}D"
+        if minutes % 60 == 0:
+            return f"{minutes // 60}h"
+        return f"{minutes}m"
+
+    exp_label = _label(expected, expected)
+    recv_label = _label(received, received_raw)
+    return {
+        "expected": exp_label,
+        "received": recv_label,
+        "expected_minutes": expected,
+        "received_minutes": received,
+        "reason": (
+            f"Live alert misconfigured: expected {exp_label} chart, "
+            f"received {recv_label}. Recreate the TradingView alert on the "
+            f"{exp_label} chart."
+        ),
     }
 
 

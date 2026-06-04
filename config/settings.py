@@ -119,6 +119,15 @@ class SystemConfig:
     require_htf_alignment: dict = field(default_factory=dict)
     # Minimum confluence grade required for ordinary futures entries; blank disables.
     min_confluence_grade: str = ""
+    # Required chart timeframe (minutes). Live TradingView alerts MUST be created
+    # on this timeframe — the system is tuned/validated on 15m. A webhook arriving
+    # on any other timeframe is a misconfigured alert, not a tradeable bar, and is
+    # rejected as CONFIG_BLOCKED / TIMEFRAME_MISMATCH (never evaluated as NO_TRADE).
+    expected_timeframe_minutes: int = 15
+    # Required instruments that MUST be present in allowed_instruments. If any are
+    # missing the dashboard surfaces a CONFIG ERROR — guards against a stale
+    # in-memory universe silently dropping an instrument (e.g. MNQ).
+    required_instruments: List[str] = field(default_factory=lambda: ["MES", "MNQ"])
     # Paper fill realism — applied by PaperBroker in live paper mode AND replay so
     # the simulated WR reflects reality instead of optimistic next-bar fills.
     #   fill_slippage_ticks: adverse slippage on market fills (entry + stop exit).
@@ -293,6 +302,16 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         max_staleness_seconds=data.get("max_staleness_seconds", 300),
         reject_null_required_fields=data.get("reject_null_required_fields", True),
         reject_contradictory_data=data.get("reject_contradictory_data", True),
+        expected_timeframe_minutes=int(
+            os.getenv("PRIMARY_DECISION_TF")
+            or os.getenv("EXPECTED_TIMEFRAME_MINUTES")
+            or data.get("expected_timeframe_minutes", 15)
+            or 15
+        ),
+        required_instruments=[
+            str(s).upper()
+            for s in (instruments.get("required", ["MES", "MNQ"]) or ["MES", "MNQ"])
+        ],
 
         tradable_states=condition.get("tradable_states", ["TRENDING", "RANGE_BOUND"]),
         non_tradable_states=condition.get("non_tradable_states", ["CHOPPY", "DEAD"]),

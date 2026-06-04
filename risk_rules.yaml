@@ -24,6 +24,11 @@ instruments:
     # - NQ    # E-mini NASDAQ-100 — disabled (full-size)
     # - MGC   # Micro Gold — disabled
     # - MCL   # Micro Crude Oil — disabled
+  # Instruments that MUST stay in `allowed`. If one goes missing (e.g. a stale
+  # in-memory config drops MNQ) the dashboard shows a loud CONFIG ERROR.
+  required:
+    - MES
+    - MNQ
 
 sessions:
   allowed:
@@ -241,9 +246,14 @@ risk_reward:
 
 # ─── Data Quality ────────────────────────────────────────────
 data_quality:
-  max_staleness_seconds: 600       # 10 minutes — TV alert delivery can lag on 5m charts
+  max_staleness_seconds: 600       # 10 minutes — TV alert delivery can lag
   reject_null_required_fields: true
   reject_contradictory_data: true  # e.g. high < low
+  # Live alerts MUST be created on the 15-minute chart. The whole strategy is
+  # tuned and replay-validated on 15m; a 5m (or any other) feed reads trend as
+  # WEAK/SIDEWAYS and silently filters every setup. Off-timeframe webhooks are
+  # rejected as CONFIG_BLOCKED / TIMEFRAME_MISMATCH, not evaluated as NO_TRADE.
+  expected_timeframe_minutes: 15
 
 # ─── Paper Fill Realism ──────────────────────────────────────
 # Applied by PaperBroker in live paper mode AND in replay, so the simulated

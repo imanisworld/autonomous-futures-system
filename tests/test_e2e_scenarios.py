@@ -35,6 +35,7 @@ def _base_payload(**overrides) -> AlertPayload:
     data = {
         "ticker": "MNQ1!",
         "timestamp": "2026-05-23T14:30:00+00:00",
+        "timeframe": "15",   # live alerts run on the validated 15m chart
         "open": 19480.0,
         "high": 19510.0,
         "low": 19475.0,

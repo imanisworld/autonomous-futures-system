@@ -10,6 +10,8 @@ Locks in the two fixes for the "live fires zero trades" root cause:
 
 from __future__ import annotations
 
+from datetime import date
+
 from context.trend import classify_trend, has_ema_inputs
 from execution.broker_interface import BracketOrder
 from execution.paper_broker import NextBarOHLC, PaperBroker
@@ -110,3 +112,63 @@ def test_defaults_preserve_legacy_optimistic_behavior():
     assert fill_open.entry_price == 100.0
     fill = broker.resolve_position(NextBarOHLC(high=103.5, low=98.5))
     assert fill.result == "WIN"
+
+
+# ─── Timeframe guard ──────────────────────────────────────────────────────────
+
+from config.settings import load_config
+from webhook.payload import AlertPayload
+from webhook.runner import (
+    _check_timeframe,
+    normalize_timeframe_minutes,
+    process_alert,
+)
+
+
+def test_normalize_timeframe_minutes_forms():
+    assert normalize_timeframe_minutes("5") == 5
+    assert normalize_timeframe_minutes("15") == 15
+    assert normalize_timeframe_minutes("15m") == 15
+    assert normalize_timeframe_minutes("1h") == 60
+    assert normalize_timeframe_minutes("D") == 1440
+    assert normalize_timeframe_minutes("garbage") is None
+
+
+def _tf_payload(tf: str) -> AlertPayload:
+    return AlertPayload(
+        ticker="MES1!",
+        timestamp="2026-06-04T14:30:00+00:00",
+        open=6000.0, high=6001.0, low=5999.0, close=6000.0,
+        timeframe=tf,
+    )
+
+
+def test_check_timeframe_flags_5m_and_passes_15m():
+    cfg = load_config()
+    assert cfg.expected_timeframe_minutes == 15
+    mismatch = _check_timeframe(_tf_payload("5"), cfg)
+    assert mismatch is not None
+    assert mismatch["expected"] == "15m" and mismatch["received"] == "5m"
+    assert _check_timeframe(_tf_payload("15"), cfg) is None
+
+
+def test_process_alert_blocks_off_timeframe_as_config_blocked(tmp_path):
+    cfg = load_config()
+    result = process_alert(_tf_payload("5"), config=cfg, log_dir=str(tmp_path))
+    # Must NOT be evaluated as a normal NO_TRADE.
+    assert result["decision"] == "CONFIG_BLOCKED"
+    assert result["config_block"] == "TIMEFRAME_MISMATCH"
+    assert result["received_timeframe"] == "5m"
+    # Journaled under the distinct category, not NO_TRADE.
+    import json
+    lines = [json.loads(l) for l in (tmp_path / f"journal_{date.today().isoformat()}.jsonl").read_text().splitlines() if l.strip()]
+    blocks = [e for e in lines if e.get("decision") == "CONFIG_BLOCKED"]
+    assert blocks and blocks[-1]["config_block"] == "TIMEFRAME_MISMATCH"
+    assert not [e for e in lines if e.get("decision") == "NO_TRADE"]
+
+
+def test_required_instruments_present_in_config():
+    cfg = load_config()
+    assert set(["MES", "MNQ"]).issubset(set(cfg.required_instruments))
+    missing = [s for s in cfg.required_instruments if s not in cfg.allowed_instruments]
+    assert missing == []

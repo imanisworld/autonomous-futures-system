@@ -101,6 +101,22 @@ async def _lifespan(app: FastAPI):
             "WEBHOOK_SECRET env var is required but not set. "
             "Set WEBHOOK_SECRET in the server .env before deploying."
         )
+    # Loud startup visibility for the loaded universe + decision timeframe. This
+    # makes a stale in-memory config (e.g. MNQ silently dropped) obvious in the
+    # service logs instead of only surfacing as per-bar NO_TRADE rejections.
+    allowed = list(_config.allowed_instruments or [])
+    required = list(getattr(_config, "required_instruments", []) or [])
+    missing = [s for s in required if s not in allowed]
+    logger.info(
+        "STARTUP universe: allowed=%s required=%s decision_tf=%sm",
+        allowed, required, getattr(_config, "expected_timeframe_minutes", 15),
+    )
+    if missing:
+        logger.error(
+            "CONFIG ERROR: required instrument(s) missing from allowed universe: %s "
+            "(allowed=%s). Live alerts for these will be rejected as 'not in allowed universe'.",
+            missing, allowed,
+        )
     yield
 
 
@@ -889,6 +905,48 @@ def _diagnostics_payload(for_date: date) -> dict:
 
     items.append(_diagnostic("info", "Quality gates", _quality_gate_summary()))
 
+    # Allowed-universe integrity: required instruments must be present.
+    allowed_syms = [s.upper() for s in (_config.allowed_instruments or [])]
+    required_syms = [s.upper() for s in (getattr(_config, "required_instruments", []) or [])]
+    missing_syms = [s for s in required_syms if s not in allowed_syms]
+    if missing_syms:
+        items.append(_diagnostic(
+            "error",
+            "Allowed universe",
+            f"CONFIG ERROR: required instrument(s) missing from the allowed universe: "
+            f"{', '.join(missing_syms)} (allowed: {', '.join(allowed_syms) or 'none'}).",
+            "Add them under instruments.allowed in risk_rules.yaml and restart the service.",
+        ))
+    else:
+        items.append(_diagnostic(
+            "ok",
+            "Allowed universe",
+            f"Allowed: {', '.join(allowed_syms)} · required present ({', '.join(required_syms)}).",
+        ))
+
+    # Decision timeframe: surface any misconfigured-alert (wrong timeframe) bars today.
+    expected_tf = int(getattr(_config, "expected_timeframe_minutes", 15))
+    diag_entries = journal._read_entries(journal_path) if journal_path.exists() else []
+    tf_blocks = [
+        e for e in diag_entries
+        if e.get("decision") == "CONFIG_BLOCKED" and e.get("config_block") == "TIMEFRAME_MISMATCH"
+    ]
+    if tf_blocks:
+        last = tf_blocks[-1]
+        items.append(_diagnostic(
+            "error",
+            "Alert timeframe",
+            f"LIVE ALERT MISCONFIGURED: expected {expected_tf}m, received "
+            f"{last.get('received_timeframe')} ({len(tf_blocks)} bar(s) today).",
+            f"Recreate the TradingView alert on the {expected_tf}m chart.",
+        ))
+    else:
+        items.append(_diagnostic(
+            "ok",
+            "Alert timeframe",
+            f"Decision timeframe is {expected_tf}m; no off-timeframe alerts received today.",
+        ))
+
     if latest_age is None:
         items.append(_diagnostic(
             "warn",
@@ -954,6 +1012,25 @@ def _dashboard_payload(for_date: date) -> dict:
         for entry in decision_entries
         if entry.get("decision") == "NO_TRADE"
     )
+    # Latest timeframe-mismatch (misconfigured alert) seen today, if any. These
+    # are journaled as CONFIG_BLOCKED / TIMEFRAME_MISMATCH — a distinct category,
+    # never counted as NO_TRADE — and drive the loud dashboard banner.
+    tf_blocks = [
+        entry for entry in decision_entries
+        if entry.get("decision") == "CONFIG_BLOCKED"
+        and entry.get("config_block") == "TIMEFRAME_MISMATCH"
+    ]
+    alert_validation = None
+    if tf_blocks:
+        latest_block = tf_blocks[-1]
+        alert_validation = {
+            "ok": False,
+            "issue": "TIMEFRAME_MISMATCH",
+            "expected": latest_block.get("expected_timeframe"),
+            "received": latest_block.get("received_timeframe"),
+            "count": len(tf_blocks),
+            "last_ts": latest_block.get("ts"),
+        }
     wins = summary.get("wins", 0)
     losses = summary.get("losses", 0)
     resolved = wins + losses
@@ -999,6 +1076,7 @@ def _dashboard_payload(for_date: date) -> dict:
         "performance": journal.get_performance_stats(_config.position_sizing.starting_balance),
         "broker_gateway_reachable": _ibkr_gateway_reachable(),
         "diagnostics": diagnostics,
+        "alert_validation": alert_validation,
     }
 
 
@@ -1220,11 +1298,21 @@ def _dashboard_init(status: dict) -> dict:
     committee = _load_committee_panel(_config.log_dir)
     broker = (os.getenv("BROKER", "paper") or "paper").strip().upper()
     allowed = {s.upper() for s in (_config.allowed_instruments or [])}
-    universe = [{"sym": s, "enabled": s in allowed} for s in _FUTURES_UNIVERSE]
+    required = [s.upper() for s in (getattr(_config, "required_instruments", []) or [])]
+    universe = [
+        {"sym": s, "enabled": s in allowed, "required": s in required}
+        for s in _FUTURES_UNIVERSE
+    ]
+    universe_missing = [s for s in required if s not in allowed]
     return {
         "today": status,
         "committee": committee,
         "universe": universe,
+        # Required instruments missing from the allowed universe → CONFIG ERROR.
+        "universe_missing": universe_missing,
+        # Loud "LIVE ALERT MISCONFIGURED" banner data (timeframe mismatch today).
+        "alert_validation": status.get("alert_validation"),
+        "expected_timeframe_minutes": int(getattr(_config, "expected_timeframe_minutes", 15)),
         "broker": broker,
         "paper_mode": bool(status.get("paper_mode", True)),
         "live_trading_enabled": bool(status.get("live_trading_enabled")),
@@ -1335,6 +1423,15 @@ _DASHBOARD_HTML = r"""<!doctype html>
       color: #cfe2ff; font-size: 12px; line-height: 1.5; text-align: center;
     }
     .monitorbar b { color: #eaf2ff; letter-spacing: 0.04em; }
+
+    .alertbar {
+      margin: 8px 12px 0; padding: 11px 14px; border-radius: 10px;
+      background: rgba(255,61,113,0.12); border: 1px solid rgba(255,61,113,0.55);
+      color: #ffd9e2; font-size: 13px; line-height: 1.55; text-align: center;
+      font-weight: 600;
+    }
+    .alertbar b { color: #fff; letter-spacing: 0.05em; display: block; font-size: 14px; margin-bottom: 2px; }
+    .alertbar .sub { font-weight: 400; color: #ffb3c4; font-size: 12px; }
 
     .panel {
       background: var(--panel);
@@ -1501,6 +1598,7 @@ _DASHBOARD_HTML = r"""<!doctype html>
 </head>
 <body>
   <div class="statusbar" id="statusbar"></div>
+  <div class="alertbar" id="alertbar" hidden></div>
   <div class="monitorbar" id="monitorbar" hidden></div>
   <main>
     <section class="tab active" id="tab-home"></section>
@@ -1539,6 +1637,7 @@ _DASHBOARD_HTML = r"""<!doctype html>
     "use strict";
     var INIT = JSON.parse(document.getElementById('init-data').textContent);
     var POLL = (INIT.poll_seconds || 30) * 1000;
+    var TF_LABEL = (INIT.expected_timeframe_minutes || 15) + 'm';
     var state = { tab: 'home', today: INIT.today || {}, risk: null, filter: 'ALL', history: null };
 
     // ── helpers ────────────────────────────────────────────────────────
@@ -1643,7 +1742,7 @@ _DASHBOARD_HTML = r"""<!doctype html>
       var gates = (wh.result && wh.result.failed_gates) || [];
       var blocked = gates.length ? gates.map(prettyGate) : [];
       if (!blocked.length && (decision === 'NO_TRADE' || decision === 'WAITING') && reason) blocked = [reason];
-      if (fr.state === 'STALE') blocked = blocked.concat(['Last 5m webhook stale (' + fr.label + ' old)']);
+      if (fr.state === 'STALE') blocked = blocked.concat(['Last ' + TF_LABEL + ' webhook stale (' + fr.label + ' old)']);
 
       var text = (blocked.join(' ') + ' ' + reason).toLowerCase();
       var nv = [];
@@ -1690,7 +1789,7 @@ _DASHBOARD_HTML = r"""<!doctype html>
       var map = { FRESH: ['green', 'FRESH'], STALE: ['yellow', 'STALE'], IDLE: ['gray', 'IDLE'], NONE: ['gray', 'NO DATA'] };
       var m = map[fr.state] || map.NONE;
       var sub = fr.state === 'NONE' ? 'No webhook received yet' :
-        ('Last 5m webhook: ' + fr.label + ' ago · Expected: every 5m');
+        ('Last ' + TF_LABEL + ' webhook: ' + fr.label + ' ago · Expected: every ' + TF_LABEL);
       return '<div class="panel ' + (fr.state === 'STALE' ? 'accent-yellow' : '') + '">' +
         '<h2>Data Freshness</h2>' +
         '<div class="freshbar"><span class="tag ' + m[0] + '">' + m[1] + '</span>' +
@@ -1807,7 +1906,12 @@ _DASHBOARD_HTML = r"""<!doctype html>
       var u = INIT.universe || [];
       var body = '<div class="uni">' + u.map(function (i) {
         var on = i.enabled;
-        return '<div class="u"><b>' + esc(i.sym) + '</b><span class="pill ' + (on ? 'green' : 'gray') + '">' + (on ? 'ENABLED' : 'DISABLED') + '</span></div>';
+        // A required instrument that is NOT enabled is a CONFIG ERROR (red),
+        // not a benign DISABLED (gray).
+        var configErr = i.required && !on;
+        var cls = on ? 'green' : (configErr ? 'red' : 'gray');
+        var label = on ? 'ENABLED' : (configErr ? 'CONFIG ERROR' : 'DISABLED');
+        return '<div class="u"><b>' + esc(i.sym) + '</b><span class="pill ' + cls + '">' + label + '</span></div>';
       }).join('') + '</div>';
       return card('Allowed Futures', body, '');
     }
@@ -2139,6 +2243,7 @@ _DASHBOARD_HTML = r"""<!doctype html>
         state.today = res[0] || state.today;
         state.history = res[1] || state.history;
         renderStatusBar();
+        renderAlertBar();
         renderActive();
       }).catch(function (e) { /* keep last good state */ });
     }
@@ -2160,7 +2265,35 @@ _DASHBOARD_HTML = r"""<!doctype html>
         'Broker actions hidden until the alert pipeline is validated';
     }
 
+    // Loud red banner for a misconfigured live alert: a required instrument
+    // missing from the universe (CONFIG ERROR), or a wrong-timeframe webhook
+    // (LIVE ALERT MISCONFIGURED). Reads polled state so it clears on its own
+    // once the next correct webhook arrives.
+    function renderAlertBar() {
+      var bar = el('alertbar');
+      if (!bar) return;
+      var msgs = [];
+      var missing = INIT.universe_missing || [];
+      if (missing.length) {
+        msgs.push('<b>CONFIG ERROR</b>' +
+          '<span class="sub">Required instrument(s) not in allowed universe: ' +
+          esc(missing.join(', ')) + ' · fix risk_rules.yaml + restart</span>');
+      }
+      var av = (state.today && state.today.alert_validation) || INIT.alert_validation;
+      if (av && av.ok === false && av.issue === 'TIMEFRAME_MISMATCH') {
+        msgs.push('<b>LIVE ALERT MISCONFIGURED</b>' +
+          '<span class="sub">Expected: ' + esc(av.expected || (INIT.expected_timeframe_minutes + 'm')) +
+          ' · Received: ' + esc(av.received || '?') +
+          ' · Recreate TradingView alert on ' + esc(av.expected || (INIT.expected_timeframe_minutes + 'm')) +
+          ' chart' + (av.count ? ' (' + av.count + ' today)' : '') + '</span>');
+      }
+      if (!msgs.length) { bar.hidden = true; bar.innerHTML = ''; return; }
+      bar.hidden = false;
+      bar.innerHTML = msgs.join('<hr style="border:none;border-top:1px solid rgba(255,61,113,0.3);margin:8px 0;">');
+    }
+
     renderMonitorBar();
+    renderAlertBar();
     renderStatusBar();
     renderActive();
     // initial history fetch for compact-pnl / chart decisions
