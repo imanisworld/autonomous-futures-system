@@ -41,6 +41,13 @@ class JournalLogger:
     - Reconstruct daily state (trade count, loss streak) from today's journal
     """
 
+    # Process-wide parsed-journal cache, keyed by path → ((mtime_ns, size), entries).
+    # Parsing the day's JSONL was the dominant /status cost (~8 reads per request,
+    # every 30s per open tab). A webhook append changes mtime/size and invalidates
+    # the entry automatically; stat() is ~microseconds vs a full re-parse. Shared
+    # across instances because each request builds a fresh JournalLogger.
+    _entries_cache: dict = {}
+
     def __init__(self, log_dir: str = "logs"):
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
@@ -192,7 +199,19 @@ class JournalLogger:
         return self._compute_daily_state(entries, for_date)
 
     def _read_entries(self, path: Path) -> List[dict]:
-        entries = []
+        key = str(path)
+        try:
+            st = path.stat()
+        except FileNotFoundError:
+            JournalLogger._entries_cache.pop(key, None)
+            return []
+        sig = (st.st_mtime_ns, st.st_size)
+        cached = JournalLogger._entries_cache.get(key)
+        if cached is not None and cached[0] == sig:
+            # Unchanged since last parse — reuse. Callers treat entries as
+            # read-only (they filter/iterate, never mutate in place).
+            return cached[1]
+        entries: List[dict] = []
         with self._locked():
             with open(path) as f:
                 for line in f:
@@ -203,6 +222,7 @@ class JournalLogger:
                         entries.append(json.loads(line))
                     except json.JSONDecodeError:
                         continue
+        JournalLogger._entries_cache[key] = (sig, entries)
         return entries
 
     def _compute_daily_state(
