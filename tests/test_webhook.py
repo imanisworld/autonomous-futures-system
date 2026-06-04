@@ -806,6 +806,117 @@ def test_fastapi_status_signa_disabled_endpoint(monkeypatch):
     assert data["configured"] is True
     assert data["symbol"] == "AAPL"
     assert data["error"] == "signa_api_disabled"
+    assert data["status_label"] == "DISABLED"
+    assert "no Signa API calls" in data["display"]
+
+
+def test_fastapi_status_signa_formats_connected_signal(monkeypatch):
+    try:
+        from fastapi.testclient import TestClient
+        import sources.signa_client as signa_module
+        import webhook.app as app_module
+        from webhook.app import app
+    except ImportError:
+        pytest.skip("fastapi[testclient] not installed")
+
+    class FakeSignal:
+        ok = True
+        grade = "A"
+        score = 98.0
+        action = "BUY"
+        risk_rating = "MODERATE"
+        error = None
+
+        def to_dict(self):
+            return {
+                "symbol": "AAPL",
+                "ok": True,
+                "grade": self.grade,
+                "score": self.score,
+                "daily_direction": "WAIT",
+                "weekly_direction": None,
+                "action": self.action,
+                "confidence": 92.0,
+                "risk_rating": self.risk_rating,
+                "error": self.error,
+            }
+
+    class FakeClient:
+        configured = True
+
+        def __init__(self, **kwargs):
+            pass
+
+        def fetch_signal(self, symbol):
+            return FakeSignal()
+
+    monkeypatch.setattr(app_module._config, "signa_api_enabled", True)
+    monkeypatch.setattr(app_module._config, "signa_api_key_configured", True)
+    monkeypatch.setattr(signa_module, "SignaClient", FakeClient)
+
+    resp = TestClient(app).get("/status/signa?symbol=AAPL")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["enabled"] is True
+    assert data["configured"] is True
+    assert data["status_label"] == "CONNECTED"
+    assert data["message"] == "Signa read-only signal check is connected."
+    assert data["display"] == "CONNECTED · grade A · score 98 · BUY · MODERATE"
+
+
+def test_fastapi_status_signa_formats_failed_signal(monkeypatch):
+    try:
+        from fastapi.testclient import TestClient
+        import sources.signa_client as signa_module
+        import webhook.app as app_module
+        from webhook.app import app
+    except ImportError:
+        pytest.skip("fastapi[testclient] not installed")
+
+    class FakeSignal:
+        ok = False
+        grade = None
+        score = None
+        action = None
+        risk_rating = None
+        error = "http_401"
+
+        def to_dict(self):
+            return {
+                "symbol": "AAPL",
+                "ok": False,
+                "grade": None,
+                "score": None,
+                "daily_direction": None,
+                "weekly_direction": None,
+                "action": None,
+                "confidence": None,
+                "risk_rating": None,
+                "error": self.error,
+            }
+
+    class FakeClient:
+        configured = True
+
+        def __init__(self, **kwargs):
+            pass
+
+        def fetch_signal(self, symbol):
+            return FakeSignal()
+
+    monkeypatch.setattr(app_module._config, "signa_api_enabled", True)
+    monkeypatch.setattr(app_module._config, "signa_api_key_configured", True)
+    monkeypatch.setattr(signa_module, "SignaClient", FakeClient)
+
+    resp = TestClient(app).get("/status/signa?symbol=AAPL")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status_label"] == "UNAVAILABLE"
+    assert data["message"] == "Signa read-only signal check failed: http_401."
+    assert data["next_step"]
+    assert data["display"] == "UNAVAILABLE · http_401"
 
 
 def test_fastapi_dashboard_endpoint():
@@ -1090,6 +1201,28 @@ def test_backend_console_uses_tf_freshness_and_non_live_labels(monkeypatch):
     assert "['BACKEND:', 'ONLINE'" in body         # was ['API:', 'LIVE', ...]
     assert "['API:', 'LIVE'" not in body
     assert "🟢 CONSOLE ONLINE" in body
+    # The last ambiguous standalone LIVE chip is gone (header now CONSOLE ONLINE).
+    assert '<span class="live-chip">CONSOLE ONLINE</span>' in body
+    assert '<span class="live-chip">LIVE</span>' not in body
+    # Console freshness now reads the server-provided feed window/threshold.
+    assert "feed_window_active" in body
+    assert "feed_stale_after_minutes" in body
+
+
+def test_status_today_exposes_feed_window_fields(monkeypatch, tmp_path):
+    """/status/today carries the one shared feed window + stale threshold so the
+    dashboards stop deciding feed health with their own clocks."""
+    try:
+        from fastapi.testclient import TestClient
+        from webhook.app import app
+    except ImportError:
+        pytest.skip("fastapi[testclient] not installed")
+
+    _isolate_app_logs(monkeypatch, tmp_path)
+    data = TestClient(app).get("/status/today").json()
+    assert isinstance(data["feed_window_active"], bool)
+    expected_tf = data["expected_timeframe_minutes"]
+    assert data["feed_stale_after_minutes"] == expected_tf * 2 + 1
 
 
 def test_broker_account_not_authenticated_gets_ui_safe_message():

@@ -38,6 +38,7 @@ from fastapi.staticfiles import StaticFiles
 
 from agent.daily_summary import DailySummaryAgent, validate_review_date
 from config.settings import load_config
+from context.futures_session import futures_session_active, feed_stale_after_minutes
 from journal.journal_logger import JournalLogger
 from notifications.discord_notifier import notify_discord
 from webhook.payload import AlertPayload
@@ -632,6 +633,7 @@ async def status_signa(symbol: str = Query(default="AAPL")) -> dict:
     """Read-only Signa connectivity and parsing check."""
     from sources.signa_client import SignaClient
 
+    requested_symbol = symbol.upper()
     client = SignaClient(
         base_url=_config.signa_base_url,
         timeout=_config.signa_timeout_seconds,
@@ -640,14 +642,54 @@ async def status_signa(symbol: str = Query(default="AAPL")) -> dict:
         return {
             "enabled": False,
             "configured": _config.signa_api_key_configured,
-            "symbol": symbol.upper(),
+            "symbol": requested_symbol,
             "ok": False,
             "error": "signa_api_disabled",
+            "status_label": "DISABLED",
+            "message": "Signa is configured but disabled; no Signa API calls are made.",
+            "next_step": "Set SIGNA_API_ENABLED=true and restart the backend to enable read-only Signa checks.",
+            "display": "DISABLED · no Signa API calls",
         }
-    signal = client.fetch_signal(symbol.upper())
+    if not client.configured:
+        return {
+            "enabled": True,
+            "configured": False,
+            "symbol": requested_symbol,
+            "ok": False,
+            "error": "missing_api_key",
+            "status_label": "MISSING KEY",
+            "message": "Signa is enabled, but SIGNA_API_KEY is not configured.",
+            "next_step": "Set SIGNA_API_KEY or turn SIGNA_API_ENABLED=false.",
+            "display": "MISSING KEY",
+        }
+    signal = client.fetch_signal(requested_symbol)
+    status_label = "CONNECTED" if signal.ok else "UNAVAILABLE"
+    display_parts = [status_label]
+    if signal.grade:
+        display_parts.append(f"grade {signal.grade}")
+    if signal.score is not None:
+        display_parts.append(f"score {signal.score:g}")
+    if signal.action:
+        display_parts.append(str(signal.action).upper())
+    if signal.risk_rating:
+        display_parts.append(str(signal.risk_rating).upper())
+    if signal.error:
+        display_parts.append(signal.error)
     return {
         "enabled": True,
         "configured": client.configured,
+        "status_label": status_label,
+        "message": (
+            "Signa read-only signal check is connected."
+            if signal.ok
+            else f"Signa read-only signal check failed: {signal.error or 'unknown_error'}."
+        ),
+        "next_step": (
+            None
+            if signal.ok
+            else "Check Signa network reachability, API key validity, and the configured SIGNA_BASE_URL."
+        ),
+        "display": " · ".join(display_parts),
         **signal.to_dict(),
     }
 
@@ -1034,31 +1076,9 @@ def _timeframe_mismatch_state(entries: list[dict]) -> dict | None:
 
 
 def _feed_window_active(now: datetime | None = None) -> bool:
-    """True when CME equity-index futures are trading and TradingView bars should
-    be arriving — so a stale feed is a real fault rather than expected idle.
-
-    Mirrors scripts/feed_watchdog._futures_session_active: excludes the weekend
-    close (Fri 17:00 ET → Sun 18:00 ET) and the daily maintenance halt
-    (17:00–18:00 ET). Fails OPEN (returns True) if the timezone can't be resolved,
-    so we warn rather than silently hide a real outage.
-    """
-    try:
-        from zoneinfo import ZoneInfo
-        from datetime import time as _dtime
-        et = (now or datetime.now(timezone.utc)).astimezone(ZoneInfo("America/New_York"))
-    except Exception:
-        return True
-    wd = et.weekday()  # Mon=0 .. Sun=6
-    t = et.time()
-    if wd == 5:  # Saturday
-        return False
-    if wd == 6 and t < _dtime(18, 0):  # Sunday before reopen
-        return False
-    if wd == 4 and t >= _dtime(17, 0):  # Friday after close
-        return False
-    if _dtime(17, 0) <= t < _dtime(18, 0):  # daily maintenance break
-        return False
-    return True
+    """Thin wrapper over the shared futures_session_active() helper, kept as a
+    module-level name so diagnostics and tests can reference/monkeypatch it."""
+    return futures_session_active(now)
 
 
 def _diagnostics_payload(for_date: date) -> dict:
@@ -1152,9 +1172,13 @@ def _diagnostics_payload(for_date: date) -> dict:
             "Set SIGNA_API_KEY or turn SIGNA_API_ENABLED=false.",
         ))
     elif _config.signa_api_enabled:
-        items.append(_diagnostic("ok", "Signa", "Signa is enabled and configured."))
+        items.append(_diagnostic(
+            "ok",
+            "Signa",
+            "Signa is enabled and configured; /status/signa performs the live read-only connectivity check.",
+        ))
     else:
-        items.append(_diagnostic("info", "Signa", "Signa is off."))
+        items.append(_diagnostic("info", "Signa", "Signa is disabled; no Signa API calls are made."))
 
     items.append(_diagnostic("info", "Quality gates", _quality_gate_summary()))
 
@@ -1210,7 +1234,7 @@ def _diagnostics_payload(for_date: date) -> dict:
     # active and bars are actually expected — otherwise it's normal overnight/
     # weekend idle (matches the frontend IDLE state and the feed watchdog).
     feed_active = _feed_window_active()
-    feed_stale_seconds = (expected_tf * 2 + 1) * 60  # ~2 missed bars + grace
+    feed_stale_seconds = feed_stale_after_minutes(expected_tf) * 60  # shared ~2 bars + grace
     if latest_age is None:
         if feed_active:
             items.append(_diagnostic(
@@ -1354,6 +1378,12 @@ def _dashboard_payload(for_date: date) -> dict:
         "diagnostics": diagnostics,
         "alert_validation": alert_validation,
         "expected_timeframe_minutes": int(getattr(_config, "expected_timeframe_minutes", 15)),
+        # Feed-health window + stale threshold from the one shared definition, so the
+        # dashboards stop deciding "is a webhook expected now?" with their own clocks.
+        "feed_window_active": futures_session_active(),
+        "feed_stale_after_minutes": feed_stale_after_minutes(
+            int(getattr(_config, "expected_timeframe_minutes", 15))
+        ),
         "instrument_universe": list(_config.allowed_instruments),
     }
 
@@ -2218,7 +2248,7 @@ _DASHBOARD_HTML = r"""<!doctype html>
         <div class="brand-sub">Autonomous Futures System · Backend SAT · Paper Mode</div>
       </div>
       <div class="app-actions">
-        <span class="live-chip">LIVE</span>
+        <span class="live-chip">CONSOLE ONLINE</span>
         <button class="refresh-tile" id="refresh-now" type="button" aria-label="Refresh">↻</button>
       </div>
     </header>
@@ -2333,10 +2363,13 @@ _DASHBOARD_HTML = r"""<!doctype html>
       var iso = wh.received_at || null;
       var a = ageMs(iso);
       var mins = a / 60000;
-      var active = inActiveWindow();
+      // Prefer the server's one-definition feed window + stale threshold; fall
+      // back to the local clock only if the fields are absent.
+      var active = (typeof today.feed_window_active === 'boolean') ? today.feed_window_active : inActiveWindow();
+      var staleMax = today.feed_stale_after_minutes || FRESH_MAX_MIN;
       var stateName;
       if (!iso) stateName = 'NONE';
-      else if (mins <= FRESH_MAX_MIN) stateName = 'FRESH';
+      else if (mins <= staleMax) stateName = 'FRESH';
       else if (active) stateName = 'STALE';
       else stateName = 'IDLE';
       return { state: stateName, label: humanAge(a), mins: mins, active: active, iso: iso };
@@ -2553,13 +2586,16 @@ _DASHBOARD_HTML = r"""<!doctype html>
 
     // ── FUTURES ────────────────────────────────────────────────────────
     function freshnessForWebhook(wh) {
+      var st = state.today || {};
       var iso = wh && wh.received_at ? wh.received_at : null;
       var a = ageMs(iso);
       var mins = a / 60000;
-      var active = inActiveWindow();
+      // Same server-driven window/threshold as freshness(today), via state.today.
+      var active = (typeof st.feed_window_active === 'boolean') ? st.feed_window_active : inActiveWindow();
+      var staleMax = st.feed_stale_after_minutes || FRESH_MAX_MIN;
       var stateName;
       if (!iso) stateName = 'NONE';
-      else if (mins <= FRESH_MAX_MIN) stateName = 'FRESH';
+      else if (mins <= staleMax) stateName = 'FRESH';
       else if (active) stateName = 'STALE';
       else stateName = 'IDLE';
       return { state: stateName, label: humanAge(a), mins: mins, active: active, iso: iso };

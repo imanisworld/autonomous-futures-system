@@ -19,7 +19,7 @@ import argparse
 import json
 import logging
 import sys
-from datetime import datetime, time, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -27,32 +27,11 @@ from zoneinfo import ZoneInfo
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from config.settings import load_config  # noqa: E402
+from context.futures_session import futures_session_active, feed_stale_after_minutes  # noqa: E402
 from notifications.discord_notifier import NotificationResult, send_discord_alert  # noqa: E402
 
 logger = logging.getLogger("feed_watchdog")
-_ET = ZoneInfo("America/New_York")
 _REMINDER_SECONDS = 2 * 3600  # while still down, re-alert at most every 2h
-
-
-def _futures_session_active(now: datetime) -> bool:
-    """True when CME equity-index futures are trading and bars should arrive.
-
-    Excludes the weekend close (Fri 17:00 ET → Sun 18:00 ET) and the daily
-    maintenance halt (17:00–18:00 ET on trading days), when no new bars print and
-    a stale feed is expected rather than a fault.
-    """
-    et = now.astimezone(_ET)
-    wd = et.weekday()  # Mon=0 .. Sun=6
-    t = et.time()
-    if wd == 5:  # Saturday
-        return False
-    if wd == 6 and t < time(18, 0):  # Sunday before the 18:00 reopen
-        return False
-    if wd == 4 and t >= time(17, 0):  # Friday after the 17:00 close
-        return False
-    if time(17, 0) <= t < time(18, 0):  # daily maintenance break
-        return False
-    return True
 
 
 def _load_received_at(log_dir: Path) -> datetime | None:
@@ -91,13 +70,13 @@ def run(now: datetime | None = None, send=send_discord_alert, config=None) -> di
     now = now or datetime.now(timezone.utc)
     log_dir = Path(cfg.log_dir)
     tf = int(getattr(cfg, "expected_timeframe_minutes", 15) or 15)
-    tolerance = (tf * 2 + 1) * 60  # ~2 missed bars + 1m grace; matches UI/ops
+    tolerance = feed_stale_after_minutes(tf) * 60  # shared ~2 bars + grace
 
     state_path = log_dir / "feed_watchdog_state.json"
     state = _read_state(state_path)
 
     # Outside an active session, no bars are expected — clear any prior alert.
-    if not _futures_session_active(now):
+    if not futures_session_active(now):
         if state.get("status") == "down":
             _write_state(state_path, {"status": "ok"})
         return {"action": "idle_session", "active": False}

@@ -8,19 +8,17 @@ Does not make outbound HTTP calls — everything is local filesystem.
 from __future__ import annotations
 
 import os
-from datetime import datetime, time, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
-from zoneinfo import ZoneInfo
+
+from context.futures_session import futures_session_active
 
 from .models import (
     AgentReport, Recommendation,
     SYSTEM_FIX_REQUIRED, WATCH,
     worst_status,
 )
-
-
-_ET = ZoneInfo("America/New_York")
 _STALE_CRITICAL_SECONDS = 86_400  # 24h while market should be active
 
 
@@ -41,7 +39,7 @@ class OpsMonitor:
         recs: list[Recommendation] = []
         status = "OK"
         now = _coerce_now(now)
-        market_active = _futures_alert_window_active(now)
+        market_active = futures_session_active(now)
 
         # ── Log dir writable ──────────────────────────────────────────────────
         if not self.log_dir.exists():
@@ -118,17 +116,3 @@ def _coerce_now(now: Optional[datetime]) -> datetime:
     if now is None:
         return datetime.now(timezone.utc)
     return now if now.tzinfo else now.replace(tzinfo=timezone.utc)
-
-
-def _futures_alert_window_active(now: datetime) -> bool:
-    """CME equity futures are broadly closed Friday evening through Sunday 18:00 ET."""
-    et = now.astimezone(_ET)
-    weekday = et.weekday()  # Monday=0, Sunday=6
-    current = et.time()
-    if weekday == 5:  # Saturday
-        return False
-    if weekday == 6 and current < time(18, 0):
-        return False
-    if weekday == 4 and current >= time(17, 0):
-        return False
-    return True
