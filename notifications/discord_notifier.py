@@ -119,9 +119,14 @@ def _format_bar_time(timestamp) -> str:
         return raw
 
 
-def _close_label(payload: AlertPayload, context: dict) -> str:
+def _close_label(payload: AlertPayload, context: dict, live_quote: Optional[dict] = None) -> str:
     context_close = context.get("close")
     close = context_close if context_close is not None else payload.close
+    # Prefer an independent live index quote when available; show the bar close
+    # alongside so the source is unambiguous (the bar close can be stale/replayed).
+    if live_quote and live_quote.get("price") is not None:
+        sym = live_quote.get("symbol", "live")
+        return f"{_format_price(live_quote['price'])} (live {sym}) · bar {_format_price(close)}"
     source = "TV payload" if context_close == payload.close else "decision context"
     return f"{_format_price(close)} ({source})"
 
@@ -139,7 +144,7 @@ def _format_message(payload: AlertPayload, result: dict) -> str:
 
         lines = [
             f"RiskSentinel paper decision: {decision}",
-            f"{symbol} | {session} | close={_close_label(payload, context)}",
+            f"{symbol} | {session} | close={_close_label(payload, context, result.get('live_quote'))}",
             f"bar={_format_bar_time(payload.timestamp)}",
         ]
         if resolution:
@@ -211,7 +216,7 @@ def _format_message(payload: AlertPayload, result: dict) -> str:
 
     lines.append(_DIVIDER)
     lines.append(
-        f"Market: {market_condition} | Close: {_close_label(payload, context)} | "
+        f"Market: {market_condition} | Close: {_close_label(payload, context, result.get('live_quote'))} | "
         f"Bar: {_format_bar_time(payload.timestamp)}"
     )
 

@@ -157,6 +157,8 @@ class SystemConfig:
     discord_notifications_enabled: bool = False
     discord_webhook_url: str = ""
     discord_notify_decisions: List[str] = field(default_factory=lambda: ["TRADE", "RISK_REJECTED", "BLOCKED_MAX_TRADES", "BLOCKED_LOSS_LOCKOUT"])
+    # Independent live index quote (ES=F/NQ=F via Yahoo) for the Discord display price.
+    live_quote_enabled: bool = True
 
     # Future signal/data vendor planning; key value is never stored on config.
     signa_api_enabled: bool = False
@@ -294,6 +296,7 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
             "DISCORD_NOTIFY_DECISIONS",
             ["TRADE", "RISK_REJECTED", "BLOCKED_MAX_TRADES", "BLOCKED_LOSS_LOCKOUT"],
         ),
+        live_quote_enabled=_env_bool("LIVE_QUOTE_ENABLED", True),
 
         signa_api_enabled=_env_bool("SIGNA_API_ENABLED", False),
         signa_api_key_configured=bool(os.getenv("SIGNA_API_KEY", "").strip()),

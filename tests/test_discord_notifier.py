@@ -187,3 +187,18 @@ def test_no_trade_alert_prefers_enriched_context_close():
 
     assert "close=30712.50 (decision context)" in msg
     assert "19505.25" not in msg
+
+
+def test_no_trade_alert_shows_live_quote_over_bar_close():
+    """When a live index quote is attached, show it as the price and label the
+    (possibly stale) bar close separately."""
+    from notifications.discord_notifier import _format_message
+
+    result = _result("NO_TRADE")
+    result["live_quote"] = {"price": 25180.75, "symbol": "NQ=F", "source": "yahoo:NQ=F"}
+    msg = _format_message(_payload(), result)
+
+    assert "25180.75 (live NQ=F)" in msg
+    assert "bar 19505.25" in msg
+    # Must not relabel the stale bar value as the authoritative price.
+    assert "19505.25 (TV payload)" not in msg

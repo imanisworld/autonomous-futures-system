@@ -180,6 +180,17 @@ async def receive_alert(
     try:
         result = process_alert(payload, config=_config, log_dir=_config.log_dir)
         _record_latest_webhook(payload, result)
+        # Attach an independent live index quote for the Discord display price.
+        # Fail-soft: a quote-source hiccup must never affect ingestion or risk.
+        if _config.live_quote_enabled:
+            try:
+                from quotes.live_index import get_live_quote
+                instrument = (result.get("context") or {}).get("instrument") or payload.ticker
+                live_quote = get_live_quote(instrument)
+                if live_quote:
+                    result["live_quote"] = live_quote
+            except Exception as exc:
+                logger.warning("live_quote attach failed: %s", exc)
         notify_discord(payload=payload, result=result, config=_config)
         return JSONResponse(content={"ok": True, **result})
     except Exception as exc:
