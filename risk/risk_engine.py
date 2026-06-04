@@ -267,8 +267,16 @@ class RiskEngine:
                 instrument,
             )
             if rule is not None and instrument == rule.instrument:
-                return rule.max_contracts
-        return int(self.config.max_contracts_per_instrument.get(instrument, 1))
+                return self._cap_contracts(rule.max_contracts)
+        return self._cap_contracts(int(self.config.max_contracts_per_instrument.get(instrument, 1)))
+
+    def _cap_contracts(self, n: int) -> int:
+        """Apply the hard contract ceiling (e.g. 1 for demo/live) on top of
+        balance-tiered sizing. None = no cap."""
+        cap = getattr(self.config, "max_contracts_hard_cap", None)
+        if cap is not None and cap > 0:
+            return max(1, min(int(n), int(cap)))
+        return int(n)
 
     def _check_instrument(
         self, setup: TradeSetup, daily_state: DailyState

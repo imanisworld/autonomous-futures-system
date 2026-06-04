@@ -1,19 +1,20 @@
 """
 tests/test_tradovate_resolve.py
 
-Locks in the stateless-safe, instrument-aware resolve_position() fix.
+Locks in the stateless-safe, instrument-aware resolve_position() that prices the
+exit by matching our journaled target/stop against the FILLED bracket child
+order — NOT "the last account fill", which with overlapping 6-contract orders
+grabbed an unrelated fill (30208.75) and fabricated +$537/+$266 wins while the
+real demo account was −$66.96.
 
-Before the fix, get_position() fell back to the stale cached _last_position
-(open=True) whenever Tradovate reported flat, so a position closed server-side
-by its OSO bracket never resolved in the journal — it stuck open and the
-one-position rule blocked all further trades. resolve_position now judges
-closure on OUR contract via /position/list and only books an outcome when a
-real fill for that contract is visible.
+resolve now:
+  • judges closure on /position/list for OUR contract only,
+  • finds the filled Limit(target)/Stop(stop) child for OUR contract,
+  • books WIN@target / LOSS@stop from that, retrying (not guessing) if no child
+    matches yet, and never fabricating from an unrelated fill.
 """
 
 from __future__ import annotations
-
-import pytest
 
 from execution.broker_interface import Position
 from execution.tradovate_broker import TradovateBroker, TradovateConfig
@@ -34,6 +35,7 @@ def _broker(monkeypatch):
     b._resolve_fail_count = 0
     monkeypatch.setattr(b, "_authenticate", lambda: True)
     monkeypatch.setattr(b, "_find_contract_id", lambda inst: OUR_CID)
+    # LONG MNQ: target 30015 (above entry → WIN), stop 29994 (below → LOSS).
     b._last_position = Position(
         instrument="MNQ", direction="LONG", entry_price=30000.0,
         stop=29994.0, target=30015.0, quantity=1, open=True,
@@ -41,60 +43,76 @@ def _broker(monkeypatch):
     return b
 
 
-def _wire_get(monkeypatch, broker, positions, fills):
+def _wire(monkeypatch, broker, positions, orders):
     def fake_get(path):
         if path.startswith("/position/list"):
             return positions
-        if path.startswith("/fill/list"):
-            return fills
+        if path.startswith("/order/list"):
+            return orders
         return []
     monkeypatch.setattr(broker, "_get", fake_get)
 
 
 def test_still_open_when_our_contract_has_net_position(monkeypatch):
     b = _broker(monkeypatch)
-    _wire_get(monkeypatch, b, [{"contractId": OUR_CID, "netPos": 1}], [])
+    _wire(monkeypatch, b, [{"contractId": OUR_CID, "netPos": 1}], [])
     assert b.resolve_position() is None
-    assert b._last_position is not None and b._last_position.open  # untouched
+    assert b._last_position is not None and b._last_position.open
 
 
-def test_resolves_win_when_flat_and_target_fill_present(monkeypatch):
+def test_win_when_target_limit_child_filled(monkeypatch):
     b = _broker(monkeypatch)
-    _wire_get(monkeypatch, b, [], [{"contractId": OUR_CID, "price": 30015.0}])
+    _wire(monkeypatch, b, [], [{"contractId": OUR_CID, "ordStatus": "Filled", "orderType": "Limit", "price": 30015.0}])
     fill = b.resolve_position()
     assert fill is not None
     assert fill.result == "WIN" and fill.exit_reason == "TARGET_HIT"
-    assert fill.exit_price == 30015.0
-    assert b._last_position is None  # cleared so journal can mark it closed
+    assert fill.exit_price == 30015.0 and (fill.pnl_dollars or 0) > 0
+    assert b._last_position is None
 
 
-def test_resolves_loss_when_flat_line_item_and_stop_fill(monkeypatch):
+def test_loss_when_stop_child_filled(monkeypatch):
     b = _broker(monkeypatch)
-    # netPos==0 line item (flat but present) must count as closed, not open.
-    _wire_get(monkeypatch, b, [{"contractId": OUR_CID, "netPos": 0}], [{"contractId": OUR_CID, "price": 29994.0}])
+    _wire(monkeypatch, b, [{"contractId": OUR_CID, "netPos": 0}],
+          [{"contractId": OUR_CID, "ordStatus": "Filled", "orderType": "Stop", "stopPrice": 29994.0}])
     fill = b.resolve_position()
-    assert fill is not None and fill.result == "LOSS" and fill.exit_reason == "STOP_HIT"
+    assert fill is not None
+    assert fill.result == "LOSS" and fill.exit_reason == "STOP_HIT"
+    assert fill.exit_price == 29994.0 and (fill.pnl_dollars or 0) < 0
 
 
-def test_other_instrument_open_does_not_block_our_resolution(monkeypatch):
+def test_other_instrument_open_does_not_block_resolution(monkeypatch):
     b = _broker(monkeypatch)
-    # A different contract is open; OURS is flat → we must still resolve.
-    _wire_get(monkeypatch, b, [{"contractId": OTHER_CID, "netPos": 1}], [{"contractId": OUR_CID, "price": 30015.0}])
+    _wire(monkeypatch, b, [{"contractId": OTHER_CID, "netPos": 1}],
+          [{"contractId": OUR_CID, "ordStatus": "Filled", "orderType": "Limit", "price": 30015.0}])
     fill = b.resolve_position()
     assert fill is not None and fill.result == "WIN"
 
 
-def test_flat_but_no_fill_yet_retries_instead_of_guessing(monkeypatch):
+def test_unrelated_fill_does_NOT_fabricate_a_win(monkeypatch):
+    # THE REGRESSION: flat, but the only filled order is an unrelated entry-side
+    # Market fill far from target/stop (the 30208.75 bug). Must NOT book a win —
+    # no bracket child matched → retry, position left open.
     b = _broker(monkeypatch)
-    _wire_get(monkeypatch, b, [], [])  # flat, but fills not visible yet
+    _wire(monkeypatch, b, [],
+          [{"contractId": OUR_CID, "ordStatus": "Filled", "orderType": "Market", "price": 30208.75}])
     assert b.resolve_position() is None
-    assert b._last_position is not None  # NOT cleared — retry next bar
+    assert b._last_position is not None  # not cleared, not booked
     assert b._resolve_fail_count == 1
+
+
+def test_flat_no_match_books_breakeven_after_retries(monkeypatch):
+    b = _broker(monkeypatch)
+    _wire(monkeypatch, b, [], [])  # flat, nothing matches
+    assert b.resolve_position() is None  # attempt 1
+    assert b.resolve_position() is None  # attempt 2
+    fill = b.resolve_position()          # attempt 3 → conservative breakeven at entry
+    assert fill is not None and fill.exit_reason == "FORCE_CLOSE_UNMATCHED"
+    assert fill.exit_price == 30000.0
 
 
 def test_auth_failure_leaves_position_open(monkeypatch):
     b = _broker(monkeypatch)
     monkeypatch.setattr(b, "_authenticate", lambda: False)
-    _wire_get(monkeypatch, b, [], [])
+    _wire(monkeypatch, b, [], [])
     assert b.resolve_position() is None
-    assert b._last_position is not None  # can't tell → never book a guess
+    assert b._last_position is not None

@@ -100,6 +100,20 @@ def _make_broker(
     return _paper_broker(starting_balance, cfg)
 
 
+# Tick size per instrument root — used to align entry/stop/target to valid broker
+# prices. A non-tick price (e.g. 30342.1613) is rejected or silently re-rounded by
+# Tradovate, which also breaks exit reconciliation against the bracket prices.
+_TICK_SIZE_BY_ROOT = {"MES": 0.25, "ES": 0.25, "MNQ": 0.25, "NQ": 0.25, "MGC": 0.1, "MCL": 0.01}
+
+
+def _round_to_tick(price: Optional[float], instrument: str) -> Optional[float]:
+    if price is None:
+        return None
+    root = (instrument or "").upper().rstrip("!1234567890HMUZ")
+    tick = _TICK_SIZE_BY_ROOT.get(root, 0.25)
+    return round(round(float(price) / tick) * tick, 4)
+
+
 def process_alert(
     payload: AlertPayload,
     config: Optional[SystemConfig] = None,
@@ -468,11 +482,21 @@ def process_alert(
     )
     risk_engine = RiskEngine(config=cfg)
     contracts = risk_engine.recommended_contracts(state.instrument, account_balance)
+    # Tick-align entry/stop/target to valid broker prices.
+    entry_px = _round_to_tick(decision.setup.entry, state.instrument)
+    stop_px = _round_to_tick(decision.setup.stop, state.instrument)
+    target_px = _round_to_tick(decision.setup.target, state.instrument)
+    # Persist the real contract count + rounded prices into the journaled setup so
+    # stateless resolution uses the correct quantity (was None → defaulted to 1).
+    if isinstance(journal_entry.get("setup"), dict):
+        journal_entry["setup"].update(
+            {"contracts": contracts, "entry": entry_px, "stop": stop_px, "target": target_px}
+        )
     trade_setup = TradeSetup(
         direction=decision.setup.direction,
-        entry=decision.setup.entry,
-        stop=decision.setup.stop,
-        target=decision.setup.target,
+        entry=entry_px,
+        stop=stop_px,
+        target=target_px,
         rr_ratio=decision.setup.rr_ratio,
         strategy=decision.setup.strategy,
         instrument=state.instrument,
@@ -515,9 +539,9 @@ def process_alert(
     order = BracketOrder(
         instrument=state.instrument,
         direction=decision.setup.direction,
-        entry=decision.setup.entry,
-        stop=decision.setup.stop,
-        target=decision.setup.target,
+        entry=entry_px,
+        stop=stop_px,
+        target=target_px,
         rr_ratio=decision.setup.rr_ratio,
         strategy=decision.setup.strategy,
         notes=decision.setup.notes,

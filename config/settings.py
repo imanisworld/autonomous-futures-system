@@ -163,6 +163,10 @@ class SystemConfig:
     require_margin_check: bool = True
     max_contracts_per_instrument: dict = field(default_factory=dict)
     position_sizing: PositionSizingConfig = field(default_factory=PositionSizingConfig)
+    # Hard ceiling applied AFTER dynamic sizing — caps contracts regardless of
+    # account balance. None = no cap. Used to keep demo/live execution at 1
+    # contract while the balance-tiered rules still scale paper sizing.
+    max_contracts_hard_cap: Optional[int] = None
 
     # Paths
     log_dir: str = "logs"
@@ -292,6 +296,11 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         averaging_down_allowed=position.get("averaging_down", False),
         max_contracts_per_instrument=position.get("max_contracts_per_instrument", {}),
         position_sizing=_parse_position_sizing(sizing),
+        max_contracts_hard_cap=(
+            int(os.getenv("MAX_CONTRACTS_HARD_CAP"))
+            if (os.getenv("MAX_CONTRACTS_HARD_CAP") or "").strip().isdigit()
+            else position.get("max_contracts_hard_cap")
+        ),
 
         require_entry=orders.get("require_entry", True),
         require_stop=orders.get("require_stop", True),

@@ -597,31 +597,63 @@ class TradovateBroker(BrokerInterface):
                 self._resolve_fail_count = 0  # successful check — genuinely open
                 return None
             # ── Our contract is FLAT on Tradovate → the OSO bracket closed it. ──
-            # Price the exit from the most recent fill for OUR contract. If no
-            # fill is visible yet, retry next bar rather than book a wrong price
-            # (avoids mislabelling a target as a stop during the settle window).
-            fills = self._get(f"/fill/list?accountId={self._account_id}")
-            ours = [
-                f for f in (fills if isinstance(fills, list) else [])
-                if our_cid is None or f.get("contractId") == our_cid
-            ]
-            if not ours:
-                self._resolve_fail_count += 1
-                logger.warning(
-                    "resolve_position: %s flat on Tradovate but no fill visible yet "
-                    "(attempt %d) — retrying next bar",
-                    last.instrument, self._resolve_fail_count,
-                )
-                return None
-            fill_price = float(ours[-1].get("price", last.stop))
-
+            # ── Determine WHICH bracket child closed the position, by matching our
+            # journaled target/stop prices against the FILLED Limit/Stop orders for
+            # THIS contract. Never price the exit from "last account fill" — with
+            # overlapping orders that grabs an unrelated entry and fabricates wins
+            # (the 30208.75-on-two-trades bug).
             instrument = last.instrument
             tick_size = _TICK_SIZE.get(instrument, 0.25)
             tick_value = _TICK_VALUE.get(instrument, 1.25)
-            ticks = (fill_price - last.entry_price) / tick_size if last.direction == "LONG" else (last.entry_price - fill_price) / tick_size
-            pnl_dollars = round(ticks * tick_value * last.quantity, 2)
+            tol = tick_size * 2
+            orders = self._get("/order/list")
+            orders = orders if isinstance(orders, list) else []
+            target_hit = stop_hit = False
+            for o in orders:
+                if our_cid is not None and o.get("contractId") not in (None, our_cid):
+                    continue
+                if str(o.get("ordStatus", "")).lower() != "filled":
+                    continue
+                otype = str(o.get("orderType") or o.get("ordType") or "").lower()
+                raw_px = o.get("price") or o.get("stopPrice") or o.get("avgPrice")
+                if raw_px is None:
+                    continue
+                px = float(raw_px)
+                near_target = last.target is not None and abs(px - last.target) <= tol
+                near_stop = last.stop is not None and abs(px - last.stop) <= tol
+                if near_target and "stop" not in otype:
+                    target_hit = True
+                elif near_stop and "stop" in otype:
+                    stop_hit = True
+                elif near_target:
+                    target_hit = True
+                elif near_stop:
+                    stop_hit = True
+            if not (target_hit or stop_hit):
+                # Flat but no bracket child matches yet (settle window) or it was
+                # closed manually/liquidated. Retry a few bars; then book BREAKEVEN
+                # at entry rather than fabricate a win from an unrelated fill.
+                self._resolve_fail_count += 1
+                if self._resolve_fail_count < 3:
+                    logger.warning(
+                        "resolve_position: %s flat but no matching bracket fill yet "
+                        "(attempt %d) — retrying", instrument, self._resolve_fail_count,
+                    )
+                    return None
+                exit_price = last.entry_price
+                exit_reason = "FORCE_CLOSE_UNMATCHED"
+            else:
+                if target_hit and stop_hit:
+                    target_hit, stop_hit = False, True  # ambiguous → pessimistic (stop)
+                exit_price = last.target if target_hit else last.stop
+                exit_reason = "TARGET_HIT" if target_hit else "STOP_HIT"
+
+            signed_ticks = (
+                (exit_price - last.entry_price) if last.direction == "LONG"
+                else (last.entry_price - exit_price)
+            ) / tick_size
+            pnl_dollars = round(signed_ticks * tick_value * last.quantity, 2)
             result = "WIN" if pnl_dollars > 0 else "LOSS" if pnl_dollars < 0 else "BREAKEVEN"
-            exit_reason = "TARGET_HIT" if pnl_dollars > 0 else "STOP_HIT"
             self._last_position = None
             self._resolve_fail_count = 0
             self._position_opened_at = None
@@ -630,10 +662,10 @@ class TradovateBroker(BrokerInterface):
                 direction=last.direction,
                 contracts=last.quantity,
                 entry_price=last.entry_price,
-                exit_price=fill_price,
+                exit_price=exit_price,
                 exit_reason=exit_reason,
                 result=result,
-                pnl_ticks=round(ticks, 2),
+                pnl_ticks=round(signed_ticks, 2),
                 pnl_dollars=pnl_dollars,
             )
         except Exception as exc:
