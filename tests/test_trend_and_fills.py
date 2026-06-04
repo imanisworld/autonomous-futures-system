@@ -10,6 +10,7 @@ Locks in the two fixes for the "live fires zero trades" root cause:
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date
 
 from context.trend import classify_trend, has_ema_inputs
@@ -153,7 +154,7 @@ def test_check_timeframe_flags_5m_and_passes_15m():
 
 
 def test_process_alert_blocks_off_timeframe_as_config_blocked(tmp_path):
-    cfg = load_config()
+    cfg = replace(load_config(), max_staleness_seconds=0)
     result = process_alert(_tf_payload("5"), config=cfg, log_dir=str(tmp_path))
     # Must NOT be evaluated as a normal NO_TRADE.
     assert result["decision"] == "CONFIG_BLOCKED"
