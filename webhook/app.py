@@ -422,16 +422,25 @@ async def status_broker_account() -> dict:
     cached = _ACCOUNT_CACHE.get("data")
     if cached is not None and (now - _ACCOUNT_CACHE["ts"]) < _ACCOUNT_TTL_SECONDS:
         return cached
-    try:
-        summary = _tv_broker().get_account_summary()
-    except Exception as exc:
-        logger.exception("status_broker_account failed: %s", exc)
-        summary = {"ok": False, "error": str(exc)}
+    # Broker auth/network I/O is synchronous and can hang on timeouts; run it off
+    # the event loop so a slow/unauthenticated Tradovate session can't stall other
+    # routes (health/today/quote) and make the dashboard look like an API flap.
+    summary = await asyncio.to_thread(_account_summary_blocking)
     _decorate_broker_account_status(summary)
     summary["cached_at"] = now
     _ACCOUNT_CACHE["ts"] = now
     _ACCOUNT_CACHE["data"] = summary
     return summary
+
+
+def _account_summary_blocking() -> dict:
+    """Blocking Tradovate account fetch (auth + network). Runs in a worker thread
+    via status_broker_account so it never blocks the async event loop."""
+    try:
+        return _tv_broker().get_account_summary()
+    except Exception as exc:
+        logger.exception("status_broker_account failed: %s", exc)
+        return {"ok": False, "error": str(exc)}
 
 
 def _decorate_broker_account_status(summary: dict) -> None:
@@ -1001,6 +1010,34 @@ def _timeframe_mismatch_state(entries: list[dict]) -> dict | None:
     return {"blocks": tf_blocks, "last": last, "current": current}
 
 
+def _feed_window_active(now: datetime | None = None) -> bool:
+    """True when CME equity-index futures are trading and TradingView bars should
+    be arriving — so a stale feed is a real fault rather than expected idle.
+
+    Mirrors scripts/feed_watchdog._futures_session_active: excludes the weekend
+    close (Fri 17:00 ET → Sun 18:00 ET) and the daily maintenance halt
+    (17:00–18:00 ET). Fails OPEN (returns True) if the timezone can't be resolved,
+    so we warn rather than silently hide a real outage.
+    """
+    try:
+        from zoneinfo import ZoneInfo
+        from datetime import time as _dtime
+        et = (now or datetime.now(timezone.utc)).astimezone(ZoneInfo("America/New_York"))
+    except Exception:
+        return True
+    wd = et.weekday()  # Mon=0 .. Sun=6
+    t = et.time()
+    if wd == 5:  # Saturday
+        return False
+    if wd == 6 and t < _dtime(18, 0):  # Sunday before reopen
+        return False
+    if wd == 4 and t >= _dtime(17, 0):  # Friday after close
+        return False
+    if _dtime(17, 0) <= t < _dtime(18, 0):  # daily maintenance break
+        return False
+    return True
+
+
 def _diagnostics_payload(for_date: date) -> dict:
     broker = os.getenv("BROKER", "paper").strip().lower()
     gateway = _ibkr_gateway_reachable()
@@ -1146,20 +1183,40 @@ def _diagnostics_payload(for_date: date) -> dict:
             f"Decision timeframe is {expected_tf}m; no off-timeframe alerts received today.",
         ))
 
+    # Only treat an absent/stale feed as a problem when the futures session is
+    # active and bars are actually expected — otherwise it's normal overnight/
+    # weekend idle (matches the frontend IDLE state and the feed watchdog).
+    feed_active = _feed_window_active()
+    feed_stale_seconds = (expected_tf * 2 + 1) * 60  # ~2 missed bars + grace
     if latest_age is None:
-        items.append(_diagnostic(
-            "warn",
-            "TradingView feed",
-            "No TradingView webhook has been received yet; backend API is still online.",
-            "Check the TradingView alert URL, webhook secret, and whether the alert is enabled.",
-        ))
-    elif latest_age > 15 * 60:
-        items.append(_diagnostic(
-            "warn",
-            "TradingView feed",
-            f"TradingView feed is stale; last webhook was {_format_generated_age(_latest_webhook_payload().get('received_at'))}.",
-            "If the market/session window is active, check whether the TradingView alert is still running.",
-        ))
+        if feed_active:
+            items.append(_diagnostic(
+                "warn",
+                "TradingView feed",
+                "No TradingView webhook has been received yet; backend API is still online.",
+                "Check the TradingView alert URL, webhook secret, and whether the alert is enabled.",
+            ))
+        else:
+            items.append(_diagnostic(
+                "info",
+                "TradingView feed",
+                "No TradingView webhook yet; outside the active futures session, so none is expected right now.",
+            ))
+    elif latest_age > feed_stale_seconds:
+        age_txt = _format_generated_age(_latest_webhook_payload().get("received_at"))
+        if feed_active:
+            items.append(_diagnostic(
+                "warn",
+                "TradingView feed",
+                f"TradingView feed is stale; last webhook was {age_txt} (expected a {expected_tf}m bar every {expected_tf}m).",
+                "The futures session is active — check whether the TradingView alert is still running.",
+            ))
+        else:
+            items.append(_diagnostic(
+                "info",
+                "TradingView feed",
+                f"TradingView feed idle; last webhook was {age_txt}. Outside the active futures session, so no webhooks are expected.",
+            ))
     else:
         items.append(_diagnostic("ok", "TradingView feed", "TradingView webhooks are arriving recently."))
 
@@ -2185,6 +2242,10 @@ _DASHBOARD_HTML = r"""<!doctype html>
     var INIT = JSON.parse(document.getElementById('init-data').textContent);
     var POLL = (INIT.poll_seconds || 30) * 1000;
     var TF_LABEL = (INIT.expected_timeframe_minutes || 15) + 'm';
+    // Freshness tolerance keyed off the real decision timeframe: ~2 missed bars
+    // + 1m delivery grace (matches the ops monitor, the feed watchdog, and the
+    // mobile UI). A hardcoded 6m flagged STALE during normal 15m bar spacing.
+    var FRESH_MAX_MIN = (INIT.expected_timeframe_minutes || 15) * 2 + 1;
     var state = { tab: 'home', today: INIT.today || {}, risk: null, filter: 'ALL', history: null, lastUpdate: Date.now(), firstLoad: !(INIT.today && INIT.today.date) };
 
     // ── helpers ────────────────────────────────────────────────────────
@@ -2252,7 +2313,7 @@ _DASHBOARD_HTML = r"""<!doctype html>
       var active = inActiveWindow();
       var stateName;
       if (!iso) stateName = 'NONE';
-      else if (mins <= 6) stateName = 'FRESH';
+      else if (mins <= FRESH_MAX_MIN) stateName = 'FRESH';
       else if (active) stateName = 'STALE';
       else stateName = 'IDLE';
       return { state: stateName, label: humanAge(a), mins: mins, active: active, iso: iso };
@@ -2359,7 +2420,7 @@ _DASHBOARD_HTML = r"""<!doctype html>
       var modeC = INIT.paper_mode ? 'blue' : 'red';
       var whTag = fr.state === 'NONE' ? 'gray' : (fr.state === 'FRESH' ? 'green' : (fr.state === 'IDLE' ? 'gray' : 'yellow'));
       var segs = [
-        ['API:', 'LIVE', 'green'],
+        ['BACKEND:', 'ONLINE', 'green'],
         ['MODE:', mode, modeC],
         ['BROKER:', (INIT.broker || 'PAPER'), 'blue'],
         ['RISK:', risk, RISK_COLOR[risk] || 'gray'],
@@ -2405,7 +2466,7 @@ _DASHBOARD_HTML = r"""<!doctype html>
       }
       html += '<div class="hero">' +
         '<div class="hero-top"><h1>Backend Console</h1><div class="badges">' +
-        '<span class="badge green">🟢 LIVE</span>' +
+        '<span class="badge green">🟢 CONSOLE ONLINE</span>' +
         '<span class="badge ' + (RISK_COLOR[risk] || 'gray') + '">' + esc(clearLabel) + '</span>' +
         '<span class="badge blue">' + modeLabel() + '</span>' +
         '</div></div>' +
@@ -2475,7 +2536,7 @@ _DASHBOARD_HTML = r"""<!doctype html>
       var active = inActiveWindow();
       var stateName;
       if (!iso) stateName = 'NONE';
-      else if (mins <= 6) stateName = 'FRESH';
+      else if (mins <= FRESH_MAX_MIN) stateName = 'FRESH';
       else if (active) stateName = 'STALE';
       else stateName = 'IDLE';
       return { state: stateName, label: humanAge(a), mins: mins, active: active, iso: iso };

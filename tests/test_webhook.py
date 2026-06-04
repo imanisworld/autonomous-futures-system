@@ -982,6 +982,9 @@ def test_status_diagnostics_labels_tradingview_stale_as_feed_not_api(monkeypatch
     monkeypatch.setenv("BROKER", "paper")
     monkeypatch.setenv("WEBHOOK_SECRET", "test-secret")
     monkeypatch.setattr(app_module._config, "discord_notifications_enabled", False)
+    # Force an active futures session so the absent feed deterministically warns
+    # (a stale feed is only a fault when bars are expected).
+    monkeypatch.setattr(app_module, "_feed_window_active", lambda *a, **k: True)
 
     client = TestClient(app)
     resp = client.get("/status/diagnostics")
@@ -990,9 +993,79 @@ def test_status_diagnostics_labels_tradingview_stale_as_feed_not_api(monkeypatch
     items = resp.json()["items"]
     backend = next(item for item in items if item["component"] == "Backend API")
     feed = next(item for item in items if item["component"] == "TradingView feed")
-    assert backend["status"] == "ok"
+    assert backend["status"] == "ok"  # API ok WHILE feed is degraded
     assert feed["status"] == "warn"
     assert "backend API is still online" in feed["message"]
+
+
+def test_status_diagnostics_feed_idle_outside_session_is_info_not_warn(monkeypatch, tmp_path):
+    """Outside the active futures session, an absent/stale feed is expected idle,
+    not a fault — it must render info, never warn (no crying stale overnight/weekends)."""
+    try:
+        from fastapi.testclient import TestClient
+        import webhook.app as app_module
+        from webhook.app import app
+    except ImportError:
+        pytest.skip("fastapi[testclient] not installed")
+
+    _isolate_app_logs(monkeypatch, tmp_path)
+    monkeypatch.setenv("BROKER", "paper")
+    monkeypatch.setenv("WEBHOOK_SECRET", "test-secret")
+    monkeypatch.setattr(app_module._config, "discord_notifications_enabled", False)
+    # Outside the session window — no bars expected.
+    monkeypatch.setattr(app_module, "_feed_window_active", lambda *a, **k: False)
+
+    client = TestClient(app)
+    resp = client.get("/status/diagnostics")
+
+    assert resp.status_code == 200
+    feed = next(i for i in resp.json()["items"] if i["component"] == "TradingView feed")
+    assert feed["status"] == "info"
+    assert "no" in feed["message"].lower()  # "...none is expected right now."
+
+
+def test_broker_account_endpoint_offloads_and_decorates(monkeypatch, tmp_path):
+    """The broker-account route runs its blocking broker fetch off the event loop
+    (asyncio.to_thread) and returns the UI-safe decorated summary."""
+    try:
+        from fastapi.testclient import TestClient
+        import webhook.app as app_module
+        from webhook.app import app
+    except ImportError:
+        pytest.skip("fastapi[testclient] not installed")
+
+    _isolate_app_logs(monkeypatch, tmp_path)
+    monkeypatch.setenv("BROKER", "tradovate")
+    app_module._ACCOUNT_CACHE.clear()  # ignore any cached summary from other tests
+    monkeypatch.setattr(app_module, "_account_summary_blocking",
+                        lambda: {"ok": True, "equity": 50000.0})
+
+    client = TestClient(app)
+    resp = client.get("/status/broker-account")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["ok"] is True
+    assert "active" in (data.get("message") or "").lower()  # decorated, UI-safe
+    app_module._ACCOUNT_CACHE.clear()
+
+
+def test_backend_console_uses_tf_freshness_and_non_live_labels(monkeypatch):
+    """Regression for the embedded console: freshness keyed off the timeframe (no
+    hardcoded 6m), and 'API: LIVE'/'LIVE' badge reworded so they can't read as
+    live-trading state."""
+    try:
+        from fastapi.testclient import TestClient
+        from webhook.app import app
+    except ImportError:
+        pytest.skip("fastapi[testclient] not installed")
+
+    body = TestClient(app).get("/").text
+    assert "FRESH_MAX_MIN" in body
+    assert "mins <= 6" not in body                 # hardcoded 6m removed
+    assert "['BACKEND:', 'ONLINE'" in body         # was ['API:', 'LIVE', ...]
+    assert "['API:', 'LIVE'" not in body
+    assert "🟢 CONSOLE ONLINE" in body
 
 
 def test_broker_account_not_authenticated_gets_ui_safe_message():
