@@ -63,7 +63,18 @@ def _tick_value_for(instrument: str) -> float:
     return _TICK_VALUES.get(root, 1.25)
 
 
-def _make_broker(starting_balance: float = 1500.0) -> BrokerInterface:
+def _paper_broker(starting_balance: float, cfg: Optional[SystemConfig]) -> PaperBroker:
+    """PaperBroker wired with the configured fill-realism settings."""
+    return PaperBroker(
+        starting_balance=starting_balance,
+        slippage_ticks=float(getattr(cfg, "fill_slippage_ticks", 0.0) or 0.0),
+        pessimistic_both_hit=bool(getattr(cfg, "fill_pessimistic_both_hit", False)),
+    )
+
+
+def _make_broker(
+    starting_balance: float = 1500.0, cfg: Optional[SystemConfig] = None
+) -> BrokerInterface:
     """Return the configured broker.
 
     BROKER env var controls selection:
@@ -86,7 +97,7 @@ def _make_broker(starting_balance: float = 1500.0) -> BrokerInterface:
         config = TradovateConfig.from_env()
         logger.info("Using TradovateBroker (env=%s)", config.env)
         return TradovateBroker(config=config)
-    return PaperBroker(starting_balance=starting_balance)
+    return _paper_broker(starting_balance, cfg)
 
 
 def process_alert(
@@ -210,10 +221,11 @@ def process_alert(
                 )
                 fill = tv.resolve_position()
             else:
-                broker = PaperBroker(
-                    starting_balance=journal.get_account_balance(
+                broker = _paper_broker(
+                    journal.get_account_balance(
                         cfg.position_sizing.starting_balance, today
-                    )
+                    ),
+                    cfg,
                 )
                 broker.restore_position(
                     instrument=open_pos["instrument"] or state.instrument,
@@ -375,7 +387,7 @@ def process_alert(
     journal_balance = journal.get_account_balance(
         cfg.position_sizing.starting_balance, today
     )
-    broker = _make_broker(starting_balance=journal_balance)
+    broker = _make_broker(starting_balance=journal_balance, cfg=cfg)
     account_balance = broker.get_account_balance()
     if account_balance is None:
         account_balance = journal_balance

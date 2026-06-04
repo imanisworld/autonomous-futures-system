@@ -5,10 +5,12 @@ Paper trading simulator. Implements BrokerInterface.
 No real orders. No broker connections. No credentials required.
 
 Simulation logic:
-- Entry fill: assumed at entry price (market order sim)
+- Entry fill: market order at entry price ± slippage_ticks (adverse).
 - Resolution: compares next-bar OHLC to stop and target
-  - If high (long) or inverted-low (short) hits target → WIN
-  - If low (long) or inverted-high (short) hits stop → LOSS
+  - If high (long) or inverted-low (short) hits target → WIN (clean limit fill)
+  - If low (long) or inverted-high (short) hits stop → LOSS (market fill, slipped)
+  - If a bar hits BOTH: pessimistic_both_hit=True → STOP (worst case),
+    False → legacy target-priority (optimistic)
   - If neither: OPEN (position remains pending resolution)
 
 is_live always returns False.
@@ -64,9 +66,27 @@ class PaperBroker(BrokerInterface):
     Never connects to any external service.
     """
 
-    def __init__(self, starting_balance: float = 1500.0):
+    def __init__(
+        self,
+        starting_balance: float = 1500.0,
+        slippage_ticks: float = 0.0,
+        pessimistic_both_hit: bool = False,
+    ):
+        """
+        Args:
+            starting_balance: paper account balance.
+            slippage_ticks: adverse slippage (in ticks) applied to MARKET fills —
+                the entry and any stop exit. Limit exits (target) fill clean.
+                0.0 reproduces the original optimistic behavior.
+            pessimistic_both_hit: when a single bar's range contains BOTH the stop
+                and the target, you cannot know intrabar order — True resolves it
+                as the STOP (worst case), False keeps the legacy target-priority
+                (optimistic) behavior.
+        """
         self._position: Optional[Position] = None
         self._balance = float(starting_balance)
+        self._slippage_ticks = max(0.0, float(slippage_ticks or 0.0))
+        self._pessimistic_both_hit = bool(pessimistic_both_hit)
 
     @property
     def is_live(self) -> bool:
@@ -103,10 +123,22 @@ class PaperBroker(BrokerInterface):
             )
 
         contracts = max(1, int(order.contracts or 1))
+
+        # Entry is a MARKET order — apply adverse slippage. LONG fills higher,
+        # SHORT fills lower. Stop/target stay at their ordered (resting) prices.
+        tick = TICK_SIZE.get(order.instrument, 0.25)
+        slip = self._slippage_ticks * tick
+        if order.direction == "LONG":
+            fill_entry = order.entry + slip
+        elif order.direction == "SHORT":
+            fill_entry = order.entry - slip
+        else:
+            fill_entry = order.entry
+
         self._position = Position(
             instrument=order.instrument,
             direction=order.direction,
-            entry_price=order.entry,
+            entry_price=fill_entry,
             stop=order.stop,
             target=order.target,
             quantity=contracts,
@@ -118,7 +150,7 @@ class PaperBroker(BrokerInterface):
             instrument=order.instrument,
             direction=order.direction,
             contracts=contracts,
-            entry_price=order.entry,
+            entry_price=fill_entry,
             exit_price=None,
             exit_reason=None,
             result="OPEN",
@@ -136,7 +168,8 @@ class PaperBroker(BrokerInterface):
         Logic:
             Long: target hit if next_bar.high >= target, stop hit if next_bar.low <= stop
             Short: target hit if next_bar.low <= target, stop hit if next_bar.high >= stop
-            Target takes priority if both levels are hit in the same bar.
+            Both hit in one bar: resolved as STOP when pessimistic_both_hit=True,
+            else target-priority (legacy optimistic).
 
         1-contract only — breakeven-at-1R:
             When 1R is reached without hitting target, the stop is moved to entry.
@@ -178,12 +211,36 @@ class PaperBroker(BrokerInterface):
         else:
             return None
 
-        if target_hit:
+        # Did the bar trade through the ORIGINAL (ordered) stop — not the
+        # breakeven-trailed stop? A straddle-bar worst case must use this, since
+        # we cannot assume price reached 1R (and trailed the stop to entry)
+        # before it reached the stop.
+        if pos.direction == "LONG":
+            original_stop_hit = next_bar.low <= pos.stop
+        else:
+            original_stop_hit = next_bar.high >= pos.stop
+
+        slip = self._slippage_ticks * tick
+
+        # When a single bar straddles BOTH the original stop and the target,
+        # intrabar order is unknowable. pessimistic_both_hit=True resolves it as
+        # a full stop loss (worst case), bypassing the breakeven trail; False
+        # keeps the legacy optimistic target-priority.
+        if target_hit and original_stop_hit and self._pessimistic_both_hit:
+            exit_price = (pos.stop - slip) if pos.direction == "LONG" else (pos.stop + slip)
+            exit_reason = "STOP_HIT"
+            result = "LOSS"
+        elif target_hit:
+            # Target is a resting LIMIT order — fills clean at the target price.
             exit_price = pos.target
             exit_reason = "TARGET_HIT"
             result = "WIN"
         elif stop_hit:
-            exit_price = active_stop
+            # Stop is a MARKET order — apply adverse slippage past the stop level.
+            if pos.direction == "LONG":
+                exit_price = active_stop - slip
+            else:
+                exit_price = active_stop + slip
             exit_reason = "BREAKEVEN_STOP" if breakeven_stop_active else "STOP_HIT"
             result = "BREAKEVEN" if breakeven_stop_active else "LOSS"
         else:

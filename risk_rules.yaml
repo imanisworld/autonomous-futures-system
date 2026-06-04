@@ -245,6 +245,14 @@ data_quality:
   reject_null_required_fields: true
   reject_contradictory_data: true  # e.g. high < low
 
+# ─── Paper Fill Realism ──────────────────────────────────────
+# Applied by PaperBroker in live paper mode AND in replay, so the simulated
+# win rate reflects reality instead of optimistic next-bar fills. The legacy
+# behavior (0 slippage, target-priority on straddle bars) inflated WR.
+fill_model:
+  slippage_ticks: 1            # adverse slippage on MARKET fills (entry + stop). Target = clean limit fill.
+  pessimistic_both_hit: true   # a bar that hits BOTH stop and target resolves as the STOP (worst case)
+
 # ─── Market Condition Filter ──────────────────────────────────
 market_condition:
   tradable_states:

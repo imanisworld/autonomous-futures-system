@@ -119,6 +119,13 @@ class SystemConfig:
     require_htf_alignment: dict = field(default_factory=dict)
     # Minimum confluence grade required for ordinary futures entries; blank disables.
     min_confluence_grade: str = ""
+    # Paper fill realism — applied by PaperBroker in live paper mode AND replay so
+    # the simulated WR reflects reality instead of optimistic next-bar fills.
+    #   fill_slippage_ticks: adverse slippage on market fills (entry + stop exit).
+    #   fill_pessimistic_both_hit: a bar that straddles stop AND target resolves
+    #       as the STOP (worst case) rather than the target.
+    fill_slippage_ticks: float = 0.0
+    fill_pessimistic_both_hit: bool = False
     # Per-instrument strategy exclusions — overrides enabled_concepts for that instrument
     disabled_concepts_per_instrument: dict = field(default_factory=dict)
     # Bonus trades after normal daily max; RiskEngine requires confluence grade.
@@ -224,6 +231,7 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
     quality = rules.get("quality_gates", {})
     capital = rules.get("capital_guardrails", {})
     sizing = rules.get("position_sizing", {})
+    fill_model = rules.get("fill_model", {}) or {}
 
     config = SystemConfig(
         live_trading_enabled=False,  # Always false — enforced above
@@ -261,6 +269,15 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         min_signal_bar_volume=quality.get("min_signal_bar_volume", {}),
         require_htf_alignment=quality.get("require_htf_alignment", {}),
         min_confluence_grade=str(quality.get("min_confluence_grade", "") or "").upper(),
+        fill_slippage_ticks=float(
+            os.getenv("FILL_SLIPPAGE_TICKS")
+            or fill_model.get("slippage_ticks", 0.0)
+            or 0.0
+        ),
+        fill_pessimistic_both_hit=_env_bool(
+            "FILL_PESSIMISTIC_BOTH_HIT",
+            bool(fill_model.get("pessimistic_both_hit", False)),
+        ),
 
         max_open_positions=position.get("max_open_positions", 1),
         averaging_down_allowed=position.get("averaging_down", False),

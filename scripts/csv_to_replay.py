@@ -20,6 +20,11 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+# Ensure repo root is importable when run as a script (python3 scripts/csv_to_replay.py).
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from context.trend import classify_trend  # noqa: E402  (after path insert)
+
 _ET = ZoneInfo("America/New_York")
 _UTC = timezone.utc
 
@@ -374,24 +379,14 @@ def convert(
             vwap = compute_vwap(session_bars)
 
         closes.append(bar["close"])
-        # Use EMA-based trend when available (more accurate than rolling close slope)
+        # Trend: single source of truth — the SAME scale-free EMA-stack classifier
+        # the live path uses (context.trend.classify_trend). When EMA columns are
+        # present this guarantees replay == live; otherwise fall back to the
+        # rolling-close-slope heuristic.
         if bar.get("ema9") and bar.get("ema21") and bar.get("ema55"):
-            close = bar["close"]
-            e9, e21, e55 = float(bar["ema9"]), float(bar["ema21"]), float(bar["ema55"])
-            if close > e9 > e21 > e55:
-                trend_dir, trend_str = "UP", "STRONG"
-            elif close < e9 < e21 < e55:
-                trend_dir, trend_str = "DOWN", "STRONG"
-            elif close > e21 and e9 > e21:
-                trend_dir, trend_str = "UP", "MODERATE"
-            elif close < e21 and e9 < e21:
-                trend_dir, trend_str = "DOWN", "MODERATE"
-            elif close > e21:
-                trend_dir, trend_str = "UP", "WEAK"
-            elif close < e21:
-                trend_dir, trend_str = "DOWN", "WEAK"
-            else:
-                trend_dir, trend_str = "SIDEWAYS", "WEAK"
+            trend_dir, trend_str = classify_trend(
+                bar["close"], bar["ema9"], bar["ema21"], bar["ema55"]
+            )
             market_cond = "TRENDING" if trend_str in ("STRONG", "MODERATE") else derive_market_condition(closes)
         else:
             trend_dir, trend_str = derive_trend(closes)

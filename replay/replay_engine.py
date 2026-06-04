@@ -95,7 +95,9 @@ class ReplayEngine:
                 self._rolling_balance
                 if self._rolling_balance is not None
                 else self.config.position_sizing.starting_balance
-            )
+            ),
+            slippage_ticks=float(getattr(self.config, "fill_slippage_ticks", 0.0) or 0.0),
+            pessimistic_both_hit=bool(getattr(self.config, "fill_pessimistic_both_hit", False)),
         )
         daily_state = DailyState(
             date=run_date,

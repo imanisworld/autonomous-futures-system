@@ -34,6 +34,7 @@ from context.market_context import (
     VWAPData,
     VolumeData,
 )
+from context.trend import classify_trend, has_ema_inputs
 from strategy.strat_classifier import StratContext, classify_from_ohlc, classify_sequence
 from webhook.payload import AlertPayload
 
@@ -268,6 +269,21 @@ def build_market_state(payload: AlertPayload) -> MarketState:
 
     strat = build_strat_context(payload)
 
+    # ── Trend: single source of truth ────────────────────────────────────────
+    # Compute trend from the EMAs Pine already sends, using the SAME scale-free
+    # EMA-stack definition the replay validates on (context.trend.classify_trend).
+    # This deliberately overrides Pine's `trend_strength` (an EMA %-separation
+    # metric whose STRONG threshold is unreachable on 15m micros, which silently
+    # blocked every live entry). Fall back to the payload-provided trend only
+    # when the EMA inputs are absent.
+    if has_ema_inputs(payload.ema_9, payload.ema_21, payload.ema_55):
+        trend_direction, trend_strength = classify_trend(
+            payload.close, payload.ema_9, payload.ema_21, payload.ema_55
+        )
+    else:
+        trend_direction = payload.trend_direction
+        trend_strength = payload.trend_strength
+
     return MarketState(
         timestamp=ts,
         instrument=instrument,
@@ -307,8 +323,8 @@ def build_market_state(payload: AlertPayload) -> MarketState:
         ),
         market_condition=payload.market_condition,
         trend=TrendData(
-            direction=payload.trend_direction,
-            strength=payload.trend_strength,
+            direction=trend_direction,
+            strength=trend_strength,
         ),
         strat=strat,
         gex=GEXContext(
