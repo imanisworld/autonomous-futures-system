@@ -8,6 +8,68 @@ Types: `Added`, `Changed`, `Fixed`, `Removed`, `Security`, `Rulebook`
 
 ---
 
+## [1.6.0] 2026-06-04
+
+Live paper pipeline closed end-to-end for the first time: a TradingView 15m
+alert produced an entry that **resolved to a booked WIN (MNQ SHORT, +$30.00)**.
+Several gating/resolution bugs surfaced and were fixed, plus a `/status` perf pass.
+
+### Added
+- Per-instrument latest webhook: `/status/today` returns `latest_webhooks`
+  `{MES, MNQ}`, persisted as `latest_webhook_<INST>.json`. Powers a dashboard
+  that shows a dedicated MES side and MNQ side instead of one slot that flipped
+  every bar. (`10ab8fa`)
+- `/status/today` exposes `expected_timeframe_minutes` and `instrument_universe`. (`ce3e9b7`)
+- 15m timeframe guard: off-timeframe alerts are journaled as
+  `CONFIG_BLOCKED / TIMEFRAME_MISMATCH` (distinct from `NO_TRADE`) and surfaced
+  via `alert_validation` + an operator banner. (`658f5aa`)
+
+### Fixed
+- **Paper positions never resolved.** Entry and resolution selected the broker
+  from the `BROKER` env var, ignoring paper mode; with `BROKER=tradovate` +
+  `PAPER_MODE=true`, resolution called `TradovateBroker.resolve_position()`,
+  which has no surviving order IDs across webhook calls → returned `None` every
+  bar → the position stayed open forever, and the paper next-bar safety net was
+  gated `broker_type == "paper"` so it never ran. Paper mode now simulates both
+  entry and resolution via `PaperBroker` (next-bar OHLC) regardless of `BROKER`.
+  Added an instrument guard: a position is only resolved against bars of its OWN
+  instrument (a MES bar must not resolve/force-close an MNQ position at MES-scale
+  prices). (`80dd1c5`)
+- **Every 15m bar false-blocked as stale.** Bar age was measured from the bar's
+  open timestamp (TradingView stamps bars at open), so a freshly-closed 15m bar
+  read ~900s old and tripped the 600s `max_staleness_seconds` cap
+  (`BLOCKED_DATA_QUALITY`). Now measured from bar close, making the cap a clean,
+  timeframe-agnostic delivery-lag budget. (`1faca03`)
+- **"LIVE ALERT MISCONFIGURED" banner and OPS:FAIL stuck all day.** Both lit if
+  *any* timeframe mismatch occurred that day, so a night of off-timeframe (5m)
+  alerts kept them red even after the alert was recreated on 15m. Both now report
+  misconfigured only when a mismatch is newer than the last on-timeframe bar,
+  via a shared `_timeframe_mismatch_state()` helper (single source of truth so
+  the banner and OPS diagnostic can't drift). (`5e78e34`, `6ef4f45`)
+
+### Changed
+- **Performance — `/status` endpoints.** `_read_entries` re-locked and re-parsed
+  the day's JSONL ~8× per `/status/today` request (every 30s per open tab);
+  under a growing journal it crawled to 15–30s and flapped the dashboard to
+  "offline". Parsed entries are now cached per file `(mtime_ns, size)` — a
+  webhook append invalidates automatically — bringing `/status/today` to ~0.3s. (`808c731`)
+- **Performance — `/status/quote`.** Added a 60s TTL cache (longer than the 15s
+  client poll, so most polls hit instantly instead of paying the ~8.5s upstream
+  fetch) and reused a single `TradovateBroker` instance so quotes no longer
+  re-authenticate per call (also protects Tradovate's 5-req/hr auth limit).
+  (`b650046`, `df2462c`, `100d146`)
+- **Trend definition unified** on the scale-free EMA stack across live and replay
+  (`context/trend.py`); Pine emits raw EMAs and the backend classifies. Realistic
+  paper fills (1-tick slippage, pessimistic both-hit). `PRIMARY_DECISION_TF=15`.
+  (`0a19385`, `dc3610e`)
+
+### Dashboard (companion repo `vibecode-mobile` → `/var/www/rsntl`)
+- Futures tab split into independent MES and MNQ blocks (decision, freshness,
+  reference price, latest-webhook detail, journal) driven by `latest_webhooks`.
+- `useMonitor` requires 2 consecutive failed polls before showing "Backend
+  offline", so a ~15s deploy restart no longer flips the dashboard.
+- Journal summary label `"N dec"` → `"N decisions"` (read as a December date).
+
 ## [1.5.0] 2026-05-24
 
 ### Added
