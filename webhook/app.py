@@ -2337,7 +2337,7 @@ _DASHBOARD_HTML = r"""<!doctype html>
       if (/trend|strength|weak/.test(text)) nv.push('Trend strength must move WEAK → STRONG');
       if (/regime|restrict|condition|range/.test(text)) nv.push('Regime / market-condition restriction must clear');
       if (/session|window/.test(text)) nv.push('Wait for an allowed session window');
-      if (fr.state === 'STALE') nv.unshift('Fresh 5m bar-close webhook required');
+      if (fr.state === 'STALE') nv.unshift('Fresh ' + TF_LABEL + ' bar-close webhook required');
       if (!nv.length && (decision === 'NO_TRADE' || decision === 'WAITING')) nv.push('Conditions for a valid setup must be met');
       return { decision: decision, reason: reason, blocked: blocked, nextValidation: nv };
     }
@@ -2759,7 +2759,7 @@ _DASHBOARD_HTML = r"""<!doctype html>
         var st = a ? a.status : null;
         var note = '';
         // Ops freshness override
-        if (m[0] === 'ops_monitor' && fr.state === 'STALE') { st = 'WARNING'; note = 'last webhook stale (' + fr.label + ' old)'; }
+        if (m[0] === 'ops_monitor' && fr.state === 'STALE') { st = 'WARNING'; note = 'TradingView feed stale (' + fr.label + ' old) — data freshness, not an ops-agent failure'; }
         if (!st) { st = 'NONE'; }
         var sw = STATUS_WORD[st] || ['—', 'gray'];
         if (st === 'WARNING') anyWarn = true;
@@ -2773,7 +2773,7 @@ _DASHBOARD_HTML = r"""<!doctype html>
       var consensus, cc, blocker = '';
       var suff = c.sample_sufficiency || '';
       if (!c.overall_status) { consensus = 'NOT RUN'; cc = 'gray'; blocker = 'Committee has not run yet — call /status/adaptive.'; }
-      else if (fr.state === 'STALE') { consensus = 'WITHHELD'; cc = 'yellow'; blocker = 'Ops stale → consensus withheld (data freshness during active window).'; }
+      else if (fr.state === 'STALE') { consensus = 'WITHHELD'; cc = 'yellow'; blocker = 'TradingView feed stale → consensus withheld (data freshness during active window).'; }
       else if (suff === 'insufficient_sample') { consensus = 'INSUFFICIENT'; cc = 'yellow'; blocker = 'Insufficient resolved-trade sample (' + num(c.sample_size) + ' trades) to form consensus.'; }
       else if (anyCrit) { consensus = 'BLOCKED'; cc = 'red'; blocker = 'A committee agent reported CRITICAL.'; }
       else if (anyWarn) { consensus = 'PARTIAL'; cc = 'yellow'; blocker = 'At least one agent reported WARNING.'; }
