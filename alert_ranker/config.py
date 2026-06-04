@@ -63,9 +63,16 @@ def _as_int(value: str | None, default: int) -> int:
 
 @dataclass(frozen=True)
 class ScannerConfig:
+    market_data_provider: str
     tastytrade_username: str
     tastytrade_password: str
     tastytrade_base_url: str
+    public_api_key_configured: bool
+    public_base_url: str
+    alpaca_api_key_configured: bool
+    alpaca_secret_key_configured: bool
+    alpaca_paper: bool
+    alpaca_data_base_url: str
     port: int
     discord_webhook_url: str
     watchlist: list[str]
@@ -84,14 +91,32 @@ class ScannerConfig:
     def tastytrade_configured(self) -> bool:
         return bool(self.tastytrade_username and self.tastytrade_password)
 
+    @property
+    def market_data_configured(self) -> bool:
+        provider = self.market_data_provider.lower()
+        if provider == "tastytrade":
+            return self.tastytrade_configured
+        if provider == "public":
+            return self.public_api_key_configured
+        if provider == "alpaca":
+            return self.alpaca_api_key_configured and self.alpaca_secret_key_configured
+        return False
+
 
 def load_config(environ: Iterable[tuple[str, str]] | None = None) -> ScannerConfig:
     load_dotenv()
     env = dict(environ) if environ is not None else os.environ
     return ScannerConfig(
+        market_data_provider=env.get("OPTIONS_MARKET_DATA_PROVIDER", "public").strip().lower(),
         tastytrade_username=env.get("TASTYTRADE_USERNAME", ""),
         tastytrade_password=env.get("TASTYTRADE_PASSWORD", ""),
         tastytrade_base_url=env.get("TASTYTRADE_BASE_URL", "https://api.tastyworks.com"),
+        public_api_key_configured=bool(env.get("PUBLIC_API_KEY", "").strip()),
+        public_base_url=env.get("PUBLIC_BASE_URL", "https://api.public.com").strip().rstrip("/"),
+        alpaca_api_key_configured=bool(env.get("ALPACA_API_KEY", "").strip()),
+        alpaca_secret_key_configured=bool(env.get("ALPACA_SECRET_KEY", "").strip()),
+        alpaca_paper=_as_bool(env.get("ALPACA_PAPER"), True),
+        alpaca_data_base_url=env.get("ALPACA_DATA_BASE_URL", "https://data.alpaca.markets").strip().rstrip("/"),
         port=_as_int(env.get("OPTIONS_SCANNER_PORT"), 8010),
         discord_webhook_url=env.get("OPTIONS_SCANNER_DISCORD_WEBHOOK_URL", ""),
         watchlist=_split_watchlist(

@@ -7,13 +7,16 @@ from typing import Any
 
 import uvicorn
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 
 from .config import ScannerConfig, load_config
 from .discord import DiscordAlerter
+from .market_data import build_provider_capabilities, create_market_data_client
 from .scanner import OptionsScanner
 from .storage import ScanStorage
-from .tastytrade_client import TastytradeClient
+
+
+SHADOW_OUTCOME_STATUSES = {"OPEN", "WIN", "LOSS", "BREAKEVEN", "CANCELLED", "EXPIRED"}
 
 def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | None = None) -> FastAPI:
     cfg = config or load_config()
@@ -23,8 +26,8 @@ def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | No
     async def lifespan(app: FastAPI):
         nonlocal scanner
         storage = ScanStorage(cfg.sqlite_path)
-        async with TastytradeClient(cfg) as tastytrade, DiscordAlerter(cfg, storage) as discord:
-            scanner = scanner or OptionsScanner(cfg, tastytrade, storage, discord)
+        async with create_market_data_client(cfg) as market_data, DiscordAlerter(cfg, storage) as discord:
+            scanner = scanner or OptionsScanner(cfg, market_data, storage, discord)
             app.state.scanner = scanner
             scheduler = AsyncIOScheduler(timezone=cfg.timezone)
             scheduler.add_job(
@@ -53,6 +56,12 @@ def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | No
 
     @app.get("/health")
     async def health() -> dict[str, Any]:
+        provider_profile = build_provider_capabilities(
+            cfg,
+            last_error=getattr(getattr(app.state, "scanner", None), "market_data", None).last_error
+            if getattr(app.state, "scanner", None) is not None
+            else None,
+        ).to_dict()
         return {
             "status": "healthy",
             "service": "options-scanner",
@@ -60,6 +69,9 @@ def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | No
             "port": cfg.port,
             "database": str(cfg.sqlite_path),
             "scheduler_running": bool(app_state["scheduler"] and app_state["scheduler"].running),
+            "market_data_provider": cfg.market_data_provider,
+            "market_data_configured": cfg.market_data_configured,
+            "provider_profile": provider_profile,
             "tastytrade_configured": cfg.tastytrade_configured,
         }
 
@@ -70,6 +82,64 @@ def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | No
     @app.get("/watchlist")
     async def watchlist() -> dict[str, Any]:
         return {"watchlist": cfg.watchlist}
+
+    @app.get("/terminal")
+    async def terminal() -> dict[str, Any]:
+        return get_scanner().terminal_state()
+
+    @app.get("/shadow-journal")
+    async def shadow_journal(
+        limit: int = 25,
+        ticker: str | None = None,
+        status: str | None = None,
+    ) -> dict[str, Any]:
+        bounded_limit = max(1, min(limit, 100))
+        normalized_status = status.upper() if status else None
+        if normalized_status and normalized_status not in SHADOW_OUTCOME_STATUSES:
+            raise HTTPException(status_code=400, detail="unsupported_shadow_status")
+        return {
+            "advisory_only": True,
+            "items": [
+                item.__dict__
+                for item in get_scanner().storage.latest_shadow_setups(
+                    limit=bounded_limit,
+                    ticker=ticker,
+                    status=normalized_status,
+                )
+            ],
+        }
+
+    @app.get("/shadow-journal/summary")
+    async def shadow_journal_summary(ticker: str | None = None) -> dict[str, Any]:
+        return {
+            "advisory_only": True,
+            "ticker": ticker.upper() if ticker else None,
+            "summary": get_scanner().storage.shadow_summary(ticker=ticker).__dict__,
+        }
+
+    @app.patch("/shadow-journal/{shadow_id}/outcome")
+    async def update_shadow_outcome(shadow_id: int, request: Request) -> dict[str, Any]:
+        payload = await request.json()
+        status = str(payload.get("status") or "OPEN").upper()
+        if status not in SHADOW_OUTCOME_STATUSES:
+            raise HTTPException(status_code=400, detail="unsupported_shadow_status")
+        outcome = payload.get("outcome")
+        if outcome is None:
+            outcome = {key: value for key, value in payload.items() if key != "status"}
+        if not isinstance(outcome, dict):
+            raise HTTPException(status_code=400, detail="shadow_outcome_must_be_object")
+        updated = get_scanner().storage.update_shadow_outcome(
+            shadow_id,
+            status=status,
+            outcome=outcome,
+        )
+        if updated is None:
+            raise HTTPException(status_code=404, detail="shadow_setup_not_found")
+        return {
+            "updated": True,
+            "advisory_only": True,
+            "item": updated.__dict__,
+        }
 
     @app.post("/webhook/alert")
     async def webhook_alert(request: Request) -> dict[str, Any]:
@@ -94,6 +164,7 @@ def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | No
                     "alert_sent": outcome.alert_sent,
                     "alert_suppression_reason": outcome.alert_suppression_reason,
                     "storage_id": outcome.storage_id,
+                    "shadow_id": outcome.shadow_id,
                 }
                 for outcome in outcomes
             ],

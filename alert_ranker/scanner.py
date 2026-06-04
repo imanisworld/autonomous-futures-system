@@ -10,9 +10,9 @@ from zoneinfo import ZoneInfo
 
 from .config import ScannerConfig
 from .discord import DiscordAlerter
+from .market_data import MarketDataClient, build_provider_capabilities
 from .scorer import ScoreResult, is_ny_open, score_setup
 from .storage import ScanStorage
-from .tastytrade_client import TastytradeClient
 from sources.signa_client import SignaClient
 
 
@@ -22,19 +22,20 @@ class ScanOutcome:
     alert_sent: bool
     alert_suppression_reason: str
     storage_id: int
+    shadow_id: int
 
 
 class OptionsScanner:
     def __init__(
         self,
         config: ScannerConfig,
-        tastytrade: TastytradeClient,
+        market_data: MarketDataClient,
         storage: ScanStorage,
         discord: DiscordAlerter,
         signa_client: SignaClient | None = None,
     ):
         self.config = config
-        self.tastytrade = tastytrade
+        self.market_data = market_data
         self.storage = storage
         self.discord = discord
         self.signa_client = signa_client
@@ -86,12 +87,20 @@ class OptionsScanner:
             alert_suppression_reason=decision.reason,
             timestamp=now,
         )
-        return ScanOutcome(result, decision.sent, decision.reason, storage_id)
+        shadow_id = self.storage.record_shadow_setup(
+            result,
+            scan_id=storage_id,
+            setup_inputs=_shadow_setup_inputs(result.raw),
+            provider_snapshot=_provider_snapshot(result.raw),
+            selected_contract=_selected_contract(result.raw),
+            timestamp=now,
+        )
+        return ScanOutcome(result, decision.sent, decision.reason, storage_id, shadow_id)
 
     async def _build_normalized_data(
         self, ticker: str, context: dict[str, Any], now: datetime
     ) -> dict[str, Any]:
-        snapshot = await self.tastytrade.fetch_market_snapshot(ticker)
+        snapshot = await self.market_data.fetch_market_snapshot(ticker)
         signa_context = await self._fetch_signa_context(ticker, context)
         data = {
             "ticker": ticker.upper(),
@@ -111,8 +120,12 @@ class OptionsScanner:
             "implied_volatility": context.get("implied_volatility") or context.get("iv"),
             "risk_free_rate": context.get("risk_free_rate"),
             "ny_open": is_ny_open(now, self.config.timezone),
-            "tastytrade_error": snapshot.error,
-            "tastytrade_raw": snapshot.raw,
+            "market_data_provider": self.config.market_data_provider,
+            "market_data_error": snapshot.error,
+            "market_data_raw": snapshot.raw,
+            # Backward-compatible aliases for existing status/tests.
+            "tastytrade_error": snapshot.error if self.config.market_data_provider == "tastytrade" else None,
+            "tastytrade_raw": snapshot.raw if self.config.market_data_provider == "tastytrade" else {},
             **signa_context,
         }
         for key in (
@@ -193,10 +206,17 @@ class OptionsScanner:
 
     def status(self) -> dict[str, Any]:
         latest = [asdict(item) for item in self.storage.latest(limit=10)]
+        provider_profile = build_provider_capabilities(
+            self.config,
+            last_error=getattr(self.market_data, "last_error", None),
+        ).to_dict()
         return {
             "service": "options-scanner",
             "advisory_only": True,
             "watchlist": self.config.watchlist,
+            "market_data_provider": self.config.market_data_provider,
+            "market_data_configured": self.config.market_data_configured,
+            "provider_profile": provider_profile,
             "last_run_at": self.last_run_at,
             "last_skip_reason": self.last_skip_reason,
             "tastytrade_configured": self.config.tastytrade_configured,
@@ -204,3 +224,33 @@ class OptionsScanner:
             "signa_api_key_configured": self.config.signa_api_key_configured,
             "latest": latest,
         }
+
+    def terminal_state(self) -> dict[str, Any]:
+        status = self.status()
+        status["shadow_journal"] = [asdict(item) for item in self.storage.latest_shadow_setups(limit=10)]
+        status["shadow_summary"] = asdict(self.storage.shadow_summary())
+        status["scanner_config"] = {
+            "port": self.config.port,
+            "interval_minutes": self.config.interval_minutes,
+            "alert_threshold": self.config.alert_threshold,
+            "duplicate_window_minutes": self.config.duplicate_window_minutes,
+        }
+        return status
+
+
+def _provider_snapshot(raw: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "provider": raw.get("market_data_provider"),
+        "error": raw.get("market_data_error"),
+        "raw": raw.get("market_data_raw") or {},
+    }
+
+
+def _selected_contract(raw: dict[str, Any]) -> dict[str, Any]:
+    keys = ("contract", "strike", "expiry", "expiration", "option_type", "option_mark", "dte")
+    return {key: raw[key] for key in keys if raw.get(key) not in (None, "")}
+
+
+def _shadow_setup_inputs(raw: dict[str, Any]) -> dict[str, Any]:
+    omitted = {"market_data_raw", "tastytrade_raw"}
+    return {key: value for key, value in raw.items() if key not in omitted}

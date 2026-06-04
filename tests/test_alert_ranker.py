@@ -10,8 +10,14 @@ import httpx
 from fastapi.testclient import TestClient
 
 from alert_ranker.app import create_app
-from alert_ranker.config import ScannerConfig
+from alert_ranker.config import ScannerConfig, load_config
 from alert_ranker.discord import DiscordAlerter, build_discord_payload
+from alert_ranker.market_data import (
+    AlpacaMarketDataClient,
+    PublicMarketDataClient,
+    build_provider_capabilities,
+    create_market_data_client,
+)
 from alert_ranker.scanner import OptionsScanner
 from alert_ranker.scorer import score_setup
 from alert_ranker.storage import ScanStorage
@@ -21,9 +27,16 @@ from sources.signa_client import SignaSignal
 
 def scanner_config(tmp_path: Path, webhook_url: str = "") -> ScannerConfig:
     return ScannerConfig(
+        market_data_provider="tastytrade",
         tastytrade_username="user",
         tastytrade_password="pass",
         tastytrade_base_url="https://api.tastyworks.com",
+        public_api_key_configured=False,
+        public_base_url="https://api.public.com",
+        alpaca_api_key_configured=False,
+        alpaca_secret_key_configured=False,
+        alpaca_paper=True,
+        alpaca_data_base_url="https://data.alpaca.markets",
         port=8010,
         discord_webhook_url=webhook_url,
         watchlist=["AAPL"],
@@ -195,9 +208,112 @@ def test_health_status_watchlist_and_webhook_endpoints_work(tmp_path):
         body = webhook.json()
         assert body["accepted"] is True
         assert body["results"][0]["ticker"] == "AAPL"
+        assert body["results"][0]["shadow_id"]
         status = client.get("/status").json()
         assert status["advisory_only"] is True
+        assert status["provider_profile"]["read_only"] is True
+        assert status["provider_profile"]["order_supported"] is False
         assert status["latest"][0]["ticker"] == "AAPL"
+        terminal = client.get("/terminal").json()
+        assert terminal["shadow_journal"][0]["ticker"] == "AAPL"
+        assert terminal["shadow_journal"][0]["scan_id"] == body["results"][0]["storage_id"]
+
+
+def test_shadow_journal_endpoint_lists_and_updates_outcomes(tmp_path):
+    cfg = scanner_config(tmp_path)
+    app = create_app(cfg)
+
+    with TestClient(app) as client:
+        webhook = client.post("/webhook/alert", json=setup_payload(ticker="SPY", option_mark=2.1))
+        shadow_id = webhook.json()["results"][0]["shadow_id"]
+        listed = client.get("/shadow-journal").json()
+        assert listed["advisory_only"] is True
+        assert listed["items"][0]["id"] == shadow_id
+        assert listed["items"][0]["status"] == "OPEN"
+        assert client.get("/shadow-journal?ticker=QQQ").json()["items"] == []
+        assert client.get("/shadow-journal?ticker=SPY&status=OPEN").json()["items"][0]["id"] == shadow_id
+
+        updated = client.patch(
+            f"/shadow-journal/{shadow_id}/outcome",
+            json={
+                "status": "WIN",
+                "outcome": {
+                    "exit_mark": 3.2,
+                    "closed_reason": "target_hit",
+                },
+            },
+        )
+        assert updated.status_code == 200
+        body = updated.json()
+        assert body["advisory_only"] is True
+        assert body["item"]["status"] == "WIN"
+        assert body["item"]["outcome"]["closed_reason"] == "target_hit"
+        assert body["item"]["outcome"]["entry_mark"] == 2.1
+        assert body["item"]["outcome"]["exit_mark"] == 3.2
+        assert body["item"]["outcome"]["pnl_percent"] == 52.38
+        assert body["item"]["outcome"]["pnl_dollars"] == 110.0
+        assert client.get("/shadow-journal?status=WIN").json()["items"][0]["id"] == shadow_id
+
+
+def test_shadow_journal_summary_reports_paper_stats(tmp_path):
+    cfg = scanner_config(tmp_path)
+    app = create_app(cfg)
+
+    with TestClient(app) as client:
+        spy = client.post("/webhook/alert", json=setup_payload(ticker="SPY", option_mark=2.0))
+        qqq = client.post("/webhook/alert", json=setup_payload(ticker="QQQ", option_mark=4.0))
+        spy_shadow = spy.json()["results"][0]["shadow_id"]
+        qqq_shadow = qqq.json()["results"][0]["shadow_id"]
+        client.patch(
+            f"/shadow-journal/{spy_shadow}/outcome",
+            json={"status": "WIN", "outcome": {"exit_mark": 3.0}},
+        )
+        client.patch(
+            f"/shadow-journal/{qqq_shadow}/outcome",
+            json={"status": "LOSS", "outcome": {"exit_mark": 2.0}},
+        )
+
+        summary = client.get("/shadow-journal/summary").json()["summary"]
+        assert summary["total"] == 2
+        assert summary["closed"] == 2
+        assert summary["wins"] == 1
+        assert summary["losses"] == 1
+        assert summary["win_rate_percent"] == 50.0
+        assert summary["total_pnl_dollars"] == -100.0
+        assert summary["average_pnl_percent"] == 0.0
+
+        spy_summary = client.get("/shadow-journal/summary?ticker=SPY").json()
+        assert spy_summary["ticker"] == "SPY"
+        assert spy_summary["summary"]["total"] == 1
+        assert spy_summary["summary"]["wins"] == 1
+        assert spy_summary["summary"]["total_pnl_dollars"] == 100.0
+
+        terminal = client.get("/terminal").json()
+        assert terminal["shadow_summary"]["total"] == 2
+
+
+def test_shadow_outcome_update_rejects_invalid_status_and_missing_id(tmp_path):
+    cfg = scanner_config(tmp_path)
+    app = create_app(cfg)
+
+    with TestClient(app) as client:
+        bad_status = client.patch(
+            "/shadow-journal/1/outcome",
+            json={"status": "FILLED", "outcome": {}},
+        )
+        assert bad_status.status_code == 400
+        assert bad_status.json()["detail"] == "unsupported_shadow_status"
+
+        missing = client.patch(
+            "/shadow-journal/999/outcome",
+            json={"status": "LOSS", "outcome": {"closed_reason": "stop_hit"}},
+        )
+        assert missing.status_code == 404
+        assert missing.json()["detail"] == "shadow_setup_not_found"
+
+        bad_filter = client.get("/shadow-journal?status=FILLED")
+        assert bad_filter.status_code == 400
+        assert bad_filter.json()["detail"] == "unsupported_shadow_status"
 
 
 def test_alert_ranker_does_not_import_futures_execution_or_risk_modules():
@@ -452,9 +568,16 @@ def test_discord_payload_shows_signa_flow_field():
 
 def test_options_config_loads_signa_settings(tmp_path):
     cfg = ScannerConfig(
+        market_data_provider="tastytrade",
         tastytrade_username="",
         tastytrade_password="",
         tastytrade_base_url="https://api.tastyworks.com",
+        public_api_key_configured=False,
+        public_base_url="https://api.public.com",
+        alpaca_api_key_configured=False,
+        alpaca_secret_key_configured=False,
+        alpaca_paper=True,
+        alpaca_data_base_url="https://data.alpaca.markets",
         port=8010,
         discord_webhook_url="",
         watchlist=["SPY"],
@@ -467,3 +590,192 @@ def test_options_config_loads_signa_settings(tmp_path):
 
     assert cfg.signa_api_enabled is True
     assert cfg.signa_symbol_map["SPXW"] == "SPY"
+
+
+def test_market_data_provider_factory_selects_public_and_alpaca(tmp_path):
+    cfg = scanner_config(tmp_path)
+    object.__setattr__(cfg, "market_data_provider", "public")
+    assert isinstance(create_market_data_client(cfg), PublicMarketDataClient)
+
+    object.__setattr__(cfg, "market_data_provider", "alpaca")
+    assert isinstance(create_market_data_client(cfg), AlpacaMarketDataClient)
+
+
+def test_options_market_data_defaults_to_public():
+    cfg = load_config(environ=[])
+
+    assert cfg.market_data_provider == "public"
+
+
+def test_provider_capabilities_are_read_only_and_account_forbidden(tmp_path):
+    cfg = scanner_config(tmp_path)
+    object.__setattr__(cfg, "market_data_provider", "public")
+    object.__setattr__(cfg, "public_api_key_configured", True)
+
+    profile = build_provider_capabilities(cfg).to_dict()
+
+    assert profile["name"] == "public"
+    assert profile["configured"] is True
+    assert profile["read_only"] is True
+    assert profile["options_supported"] is True
+    assert profile["order_supported"] is False
+    assert profile["account_endpoints_forbidden"] is True
+    assert "/orders" in profile["forbidden_path_parts"]
+
+
+def test_unsupported_market_data_provider_rejected(tmp_path):
+    cfg = scanner_config(tmp_path)
+    object.__setattr__(cfg, "market_data_provider", "unknown-provider")
+
+    try:
+        create_market_data_client(cfg)
+    except ValueError as exc:
+        assert "Unsupported OPTIONS_MARKET_DATA_PROVIDER" in str(exc)
+    else:
+        raise AssertionError("unsupported provider should raise")
+
+
+def test_public_provider_is_read_only_and_parses_snapshot(tmp_path, monkeypatch):
+    monkeypatch.setenv("PUBLIC_API_KEY", "public-key")
+    seen = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen["path"] = request.url.path
+        seen["auth"] = request.headers.get("authorization")
+        return httpx.Response(200, json={
+            "data": {
+                "iv_rank": 22,
+                "underlying_price": 501.25,
+                "volume": 12345,
+            }
+        })
+
+    cfg = scanner_config(tmp_path)
+    object.__setattr__(cfg, "market_data_provider", "public")
+    object.__setattr__(cfg, "public_api_key_configured", True)
+    client = httpx.AsyncClient(
+        transport=httpx.MockTransport(handler),
+        base_url="https://api.public.com",
+    )
+
+    async def run():
+        public = PublicMarketDataClient(cfg, client=client)
+        snapshot = await public.fetch_market_snapshot("SPY")
+        assert snapshot.error is None
+        assert snapshot.iv_rank == 22
+        assert snapshot.price == 501.25
+        assert snapshot.volume == 12345
+
+    asyncio.run(run())
+    assert seen == {
+        "path": "/market-data/options/SPY",
+        "auth": "Bearer public-key",
+    }
+
+
+def test_public_provider_missing_credentials_fails_soft(tmp_path):
+    cfg = scanner_config(tmp_path)
+    object.__setattr__(cfg, "market_data_provider", "public")
+    object.__setattr__(cfg, "public_api_key_configured", False)
+
+    async def run():
+        public = PublicMarketDataClient(cfg)
+        snapshot = await public.fetch_market_snapshot("SPY")
+        assert snapshot.ticker == "SPY"
+        assert snapshot.error == "credentials_missing"
+
+    asyncio.run(run())
+
+
+def test_public_provider_blocks_forbidden_account_paths(tmp_path):
+    cfg = scanner_config(tmp_path)
+    object.__setattr__(cfg, "market_data_provider", "public")
+    object.__setattr__(cfg, "public_api_key_configured", True)
+
+    async def run():
+        public = PublicMarketDataClient(cfg)
+        try:
+            await public._get("/accounts/me")
+        except ValueError as exc:
+            assert "forbidden market-data path" in str(exc)
+        else:
+            raise AssertionError("account path should be blocked")
+
+    asyncio.run(run())
+
+
+def test_public_provider_marks_unsupported_response_shape(tmp_path, monkeypatch):
+    monkeypatch.setenv("PUBLIC_API_KEY", "public-key")
+
+    client = httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda request: httpx.Response(200, json={})),
+        base_url="https://api.public.com",
+    )
+    cfg = scanner_config(tmp_path)
+    object.__setattr__(cfg, "market_data_provider", "public")
+    object.__setattr__(cfg, "public_api_key_configured", True)
+
+    async def run():
+        public = PublicMarketDataClient(cfg, client=client)
+        snapshot = await public.fetch_market_snapshot("SPY")
+        assert snapshot.error == "unsupported_response_shape"
+
+    asyncio.run(run())
+
+
+def test_alpaca_provider_uses_market_data_only_and_midpoint(tmp_path, monkeypatch):
+    monkeypatch.setenv("ALPACA_API_KEY", "alpaca-key")
+    monkeypatch.setenv("ALPACA_SECRET_KEY", "alpaca-secret")
+    seen = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen["path"] = request.url.path
+        seen["key"] = request.headers.get("apca-api-key-id")
+        seen["secret"] = request.headers.get("apca-api-secret-key")
+        return httpx.Response(200, json={
+            "snapshot": {
+                "latestQuote": {"bp": 2.1, "ap": 2.3},
+                "volume": 250,
+                "ivRank": 28,
+            }
+        })
+
+    cfg = scanner_config(tmp_path)
+    object.__setattr__(cfg, "market_data_provider", "alpaca")
+    object.__setattr__(cfg, "alpaca_api_key_configured", True)
+    object.__setattr__(cfg, "alpaca_secret_key_configured", True)
+    client = httpx.AsyncClient(
+        transport=httpx.MockTransport(handler),
+        base_url="https://data.alpaca.markets",
+    )
+
+    async def run():
+        alpaca = AlpacaMarketDataClient(cfg, client=client)
+        snapshot = await alpaca.fetch_market_snapshot("SPY")
+        assert snapshot.error is None
+        assert snapshot.iv_rank == 28
+        assert snapshot.price == 2.2
+        assert snapshot.volume == 250
+
+    asyncio.run(run())
+    assert seen == {
+        "path": "/v1beta1/options/snapshots/SPY",
+        "key": "alpaca-key",
+        "secret": "alpaca-secret",
+    }
+
+
+def test_alpaca_provider_blocks_order_paths(tmp_path):
+    cfg = scanner_config(tmp_path)
+    object.__setattr__(cfg, "market_data_provider", "alpaca")
+
+    async def run():
+        alpaca = AlpacaMarketDataClient(cfg)
+        try:
+            await alpaca._get("/v1beta1/options/orders")
+        except ValueError as exc:
+            assert "forbidden market-data path" in str(exc)
+        else:
+            raise AssertionError("order path should be blocked")
+
+    asyncio.run(run())

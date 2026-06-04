@@ -25,6 +25,8 @@ class MarketSnapshot:
 
 
 class TastytradeClient:
+    provider_name = "tastytrade"
+
     def __init__(self, config: ScannerConfig, client: httpx.AsyncClient | None = None):
         self.config = config
         self._client = client
@@ -71,6 +73,8 @@ class TastytradeClient:
 
         metrics = await self.fetch_market_metrics(symbol)
         price_data = await self.fetch_current_market_data(symbol)
+        if not metrics and not price_data and self.last_error is None:
+            self.last_error = "unsupported_response_shape"
         raw = {"market_metrics": metrics, "market_data": price_data}
         return MarketSnapshot(
             ticker=symbol,
