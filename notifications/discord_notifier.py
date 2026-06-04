@@ -64,6 +64,31 @@ def notify_discord(
     return NotificationResult(sent=True, reason="sent")
 
 
+def send_discord_alert(
+    config: SystemConfig,
+    content: str,
+    transport: Optional[Transport] = None,
+) -> NotificationResult:
+    """Send a plain operational alert to Discord (e.g. the feed-down watchdog).
+
+    Separate from notify_discord, which is for trade *decisions* and is filtered
+    by decision type. Operational alerts are infrastructure-critical, so they
+    send whenever a webhook URL is configured (not gated on the decision toggle).
+    Fail-soft: never raises.
+    """
+    if not config.discord_webhook_url:
+        return NotificationResult(sent=False, reason="missing_webhook_url")
+    body = json.dumps({"content": content}).encode("utf-8")
+    headers = {"Content-Type": "application/json"}
+    sender = transport or _post_json
+    try:
+        sender(config.discord_webhook_url, body, headers)
+    except Exception as exc:  # pragma: no cover - exact urllib errors vary
+        logger.warning("Discord alert failed: %s", exc)
+        return NotificationResult(sent=False, reason="send_failed")
+    return NotificationResult(sent=True, reason="sent")
+
+
 def _should_notify(result: dict, allowed_decisions: list[str]) -> bool:
     decision = result.get("decision")
     return decision in allowed_decisions

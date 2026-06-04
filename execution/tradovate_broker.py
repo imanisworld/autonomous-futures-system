@@ -117,13 +117,40 @@ class TradovateBroker(BrokerInterface):
         # Set after execute_bracket: did the protective stop+target children verify live?
         # None = not checked, True = both confirmed working, False = one/both missing (naked risk).
         self._last_bracket_confirmed: Optional[bool] = None
+        # Auth circuit breaker — after repeated failures, stop hammering
+        # /auth/accesstokenrequest so a rejected credential can't get the account
+        # locked by Tradovate. Reset on the first success.
+        self._auth_fail_count: int = 0
+        self._auth_cooldown_until: float = 0.0
+        self._last_auth_error: Optional[str] = None
 
     # ── Auth ──────────────────────────────────────────────────────────────────
+
+    # Auth circuit-breaker tuning.
+    _AUTH_MAX_FAILURES = 3        # consecutive failures before backing off
+    _AUTH_COOLDOWN_SECONDS = 900  # 15m quiet period (Tradovate locks on repeated fails)
+
+    def _note_auth_failure(self, reason: str) -> None:
+        self._auth_fail_count += 1
+        self._last_auth_error = reason
+        if self._auth_fail_count >= self._AUTH_MAX_FAILURES:
+            self._auth_cooldown_until = time.time() + self._AUTH_COOLDOWN_SECONDS
+            logger.error(
+                "Tradovate auth failed %d× (%s) — backing off %ds to avoid a lockout. "
+                "Verify TRADOVATE_USERNAME / PASSWORD / API_KEY_ID / API_KEY_SECRET "
+                "(API keys expire).",
+                self._auth_fail_count, reason, self._AUTH_COOLDOWN_SECONDS,
+            )
 
     def _authenticate(self) -> bool:
         """Obtain or refresh access token. Returns True on success."""
         if self._token and self._token.is_valid(self.config.token_refresh_buffer):
             return True
+
+        # Circuit breaker: after repeated failures, refuse to hit the auth API
+        # until the cooldown elapses so we don't get the account locked.
+        if time.time() < self._auth_cooldown_until:
+            return False
 
         url = f"{self.config.base_url}/auth/accesstokenrequest"
         body = {
@@ -143,6 +170,7 @@ class TradovateBroker(BrokerInterface):
             if not token:
                 err = data.get("errorText", "no accessToken in response")
                 logger.error("Tradovate auth failed: %s", err)
+                self._note_auth_failure(f"rejected: {err}")
                 return False
             # Tradovate returns expirationTime as ISO string e.g. "2026-06-02T18:31:28+00:00"
             expiry_raw = data.get("expirationTime")
@@ -162,12 +190,19 @@ class TradovateBroker(BrokerInterface):
                 expires_at = time.time() + 3600
             self._token = _Token(access_token=token, expires_at=expires_at)
             self._session.headers["Authorization"] = f"Bearer {token}"
+            # Success — clear the circuit breaker.
+            self._auth_fail_count = 0
+            self._auth_cooldown_until = 0.0
+            self._last_auth_error = None
             logger.info("Tradovate authenticated (env=%s)", self.config.env)
             # Cache account ID
             self._resolve_account_id()
             return True
         except Exception as exc:
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            reason = "credentials_rejected (401)" if status == 401 else f"error: {exc}"
             logger.exception("Tradovate authentication error: %s", exc)
+            self._note_auth_failure(reason)
             return False
 
     def _resolve_account_id(self) -> None:

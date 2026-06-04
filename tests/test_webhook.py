@@ -877,7 +877,7 @@ def test_fastapi_status_diagnostics_endpoint(monkeypatch, tmp_path):
     assert resp.status_code == 200
     data = resp.json()
     assert data["overall_status"] == "warn"
-    assert data["top_issue"]["component"] in {"Discord alerts", "TradingView alerts"}
+    assert data["top_issue"]["component"] in {"Discord alerts", "TradingView feed"}
     components = {item["component"] for item in data["items"]}
     assert {
         "Backend API",
@@ -938,6 +938,110 @@ def test_status_diagnostics_reports_bad_tradovate_env(monkeypatch, tmp_path):
     tradovate = next(item for item in items if item["component"] == "Tradovate config")
     assert tradovate["status"] == "error"
     assert "numeric CID only" in tradovate["message"]
+
+
+def test_status_diagnostics_labels_tradingview_stale_as_feed_not_api(monkeypatch, tmp_path):
+    try:
+        from fastapi.testclient import TestClient
+        import webhook.app as app_module
+        from webhook.app import app
+    except ImportError:
+        pytest.skip("fastapi[testclient] not installed")
+
+    _isolate_app_logs(monkeypatch, tmp_path)
+    monkeypatch.setenv("BROKER", "paper")
+    monkeypatch.setenv("WEBHOOK_SECRET", "test-secret")
+    monkeypatch.setattr(app_module._config, "discord_notifications_enabled", False)
+
+    client = TestClient(app)
+    resp = client.get("/status/diagnostics")
+
+    assert resp.status_code == 200
+    items = resp.json()["items"]
+    backend = next(item for item in items if item["component"] == "Backend API")
+    feed = next(item for item in items if item["component"] == "TradingView feed")
+    assert backend["status"] == "ok"
+    assert feed["status"] == "warn"
+    assert "backend API is still online" in feed["message"]
+
+
+def test_broker_account_not_authenticated_gets_ui_safe_message():
+    import webhook.app as app_module
+
+    summary = {"ok": False, "error": "not_authenticated"}
+    app_module._decorate_broker_account_status(summary)
+
+    assert summary["error"] == "not_authenticated"
+    assert summary["status_label"] == "SESSION NOT ACTIVE"
+    assert "not authenticated" in summary["message"]
+    assert "separate from TradingView alert freshness" in summary["next_step"]
+
+
+def test_webhook_alert_fast_acks_and_processes_in_background(monkeypatch, tmp_path):
+    """The /webhook/alert handler MUST return immediately and run the slow
+    pipeline in the background. If it ever blocks on process_alert again,
+    TradingView's webhook client times out (nginx 499) and bars are dropped —
+    the all-day outage of 2026-06-04. Regression lock for commit 3fc7b55.
+    """
+    try:
+        from fastapi.testclient import TestClient
+        import webhook.app as app_module
+        from webhook.app import app
+    except ImportError:
+        pytest.skip("fastapi[testclient] not installed")
+
+    _isolate_app_logs(monkeypatch, tmp_path)
+    monkeypatch.setenv("WEBHOOK_SECRET", "test-secret")
+
+    def _process_alert(payload, config=None, log_dir=None, **kw):
+        return {"ok": True, "decision": "NO_TRADE", "context": {"instrument": "MNQ"}}
+
+    monkeypatch.setattr(app_module, "process_alert", _process_alert)
+
+    client = TestClient(app)
+    body = {
+        "ticker": "MNQ1!",
+        "timestamp": "2026-05-23T14:30:00+00:00",
+        "timeframe": "15",
+        "open": 19480.0, "high": 19510.0, "low": 19475.0, "close": 19505.25,
+    }
+    resp = client.post("/webhook/alert?secret=test-secret", json=body)
+
+    assert resp.status_code == 200
+    data = resp.json()
+    # Fast-ACK contract: it ACKNOWLEDGES (queued) instead of returning the
+    # pipeline result inline. The old blocking handler returned {"ok",**result}
+    # which included "decision"/"resolution"; if that regresses, this fails.
+    assert data.get("queued") is True
+    assert data.get("ticker") == "MNQ1!"
+    assert "decision" not in data
+    assert "resolution" not in data
+
+
+def test_webhook_alert_rejects_bad_secret_before_queueing(monkeypatch, tmp_path):
+    """Auth still happens synchronously, before anything is queued."""
+    try:
+        from fastapi.testclient import TestClient
+        import webhook.app as app_module
+        from webhook.app import app
+    except ImportError:
+        pytest.skip("fastapi[testclient] not installed")
+
+    _isolate_app_logs(monkeypatch, tmp_path)
+    monkeypatch.setenv("WEBHOOK_SECRET", "test-secret")
+
+    called = {"n": 0}
+    monkeypatch.setattr(app_module, "process_alert",
+                        lambda *a, **k: called.__setitem__("n", called["n"] + 1))
+
+    client = TestClient(app)
+    # Valid payload (passes body validation) but wrong secret → 401 in-handler,
+    # before anything is handed off for processing.
+    body = {"ticker": "MNQ1!", "timestamp": "2026-05-23T14:30:00+00:00",
+            "timeframe": "15", "open": 19480.0, "high": 19510.0, "low": 19475.0, "close": 19505.25}
+    resp = client.post("/webhook/alert?secret=wrong", json=body)
+    assert resp.status_code == 401
+    assert called["n"] == 0
 
 
 def test_doctor_command_prints_diagnostics(monkeypatch, tmp_path, capsys):
@@ -1281,7 +1385,8 @@ def test_fastapi_alert_endpoint_valid_payload(monkeypatch, tmp_path):
     assert resp.status_code == 200
     data = resp.json()
     assert data["ok"] is True
-    assert "decision" in data
+    assert data["queued"] is True
+    assert data["ticker"] == "MNQ1!"
 
 
 def test_fastapi_alert_endpoint_missing_required_fields():
