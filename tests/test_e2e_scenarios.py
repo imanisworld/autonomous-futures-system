@@ -249,11 +249,18 @@ def test_scenario_a_max_daily_loss_not_triggered_by_small_loss(tmp_path):
 
 def test_scenario_b_stale_bar_blocked(tmp_path):
     """
-    Story: A bar-close alert arrives with a timestamp 5 minutes old against
-    a max_staleness_seconds=60 limit. It should be blocked as BLOCKED_DATA_QUALITY.
+    Story: A bar-close alert arrives whose bar CLOSED well past the
+    max_staleness_seconds=60 limit. It should be blocked as BLOCKED_DATA_QUALITY.
+
+    Staleness is measured from bar CLOSE (open + timeframe), not bar OPEN
+    (see runner._check_payload_quality / commit 1faca03). The 15m base payload
+    means the bar only closes 15m after its timestamp, so the timestamp must be
+    (timeframe + breach) old for the close to be stale: here 15m + 120s.
     """
     today = date.today()
-    stale_ts = (datetime.now(timezone.utc) - timedelta(seconds=120)).isoformat()
+    stale_ts = (
+        datetime.now(timezone.utc) - timedelta(seconds=15 * 60 + 120)
+    ).isoformat()
     cfg = replace(_base_config(tmp_path), max_staleness_seconds=60)
 
     result = process_alert(
