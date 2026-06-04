@@ -568,19 +568,52 @@ class TradovateBroker(BrokerInterface):
         """Check if a bracket child order (stop or target) has filled."""
         if not self._last_position or not self._last_position.open:
             return None
+        last = self._last_position
         try:
-            pos = self.get_position()
-            if pos and pos.open:
-                self._resolve_fail_count = 0  # successful check — reset counter
-                return None  # still open
-            # Position is gone — capture before clearing, then look at fill history
-            last = self._last_position
+            if not self._authenticate():
+                # Can't reach Tradovate — leave the position open and let the
+                # escalation counter flag a true orphan. Never book a guess.
+                self._resolve_fail_count += 1
+                return None
+            # Resolve OUR contract id so closure is judged on THIS instrument only.
+            # A live position on a different contract (e.g. MNQ open while we
+            # resolve MES) must not read as "still open" for this one.
+            try:
+                our_cid = self._find_contract_id(last.instrument)
+            except Exception:
+                our_cid = None
+            positions = self._get("/position/list")
+            positions = positions if isinstance(positions, list) else []
+            our_open = False
+            for p in positions:
+                if (p.get("netPos", 0) or 0) == 0:
+                    continue  # flat line item
+                cid = p.get("contractId")
+                if our_cid is not None and cid is not None and cid != our_cid:
+                    continue  # a different instrument's position — ignore
+                our_open = True
+                break
+            if our_open:
+                self._resolve_fail_count = 0  # successful check — genuinely open
+                return None
+            # ── Our contract is FLAT on Tradovate → the OSO bracket closed it. ──
+            # Price the exit from the most recent fill for OUR contract. If no
+            # fill is visible yet, retry next bar rather than book a wrong price
+            # (avoids mislabelling a target as a stop during the settle window).
             fills = self._get(f"/fill/list?accountId={self._account_id}")
-            if isinstance(fills, list) and fills:
-                last_fill = fills[-1]
-                fill_price = float(last_fill.get("price", last.stop))
-            else:
-                fill_price = last.stop
+            ours = [
+                f for f in (fills if isinstance(fills, list) else [])
+                if our_cid is None or f.get("contractId") == our_cid
+            ]
+            if not ours:
+                self._resolve_fail_count += 1
+                logger.warning(
+                    "resolve_position: %s flat on Tradovate but no fill visible yet "
+                    "(attempt %d) — retrying next bar",
+                    last.instrument, self._resolve_fail_count,
+                )
+                return None
+            fill_price = float(ours[-1].get("price", last.stop))
 
             instrument = last.instrument
             tick_size = _TICK_SIZE.get(instrument, 0.25)
