@@ -851,7 +851,7 @@ class DecisionEngine:
             # ── The Strat patterns ─────────────────────────────────────────
             # Phase 1: approximated from market_state flags.
             # Full multi-bar classification in Phase 2.
-            # See sources/strat_definitions.md for full pattern definitions.
+            # Full proprietary pattern doctrine lives outside the public repo.
             ("strat_212", self._try_strat_212),
             ("strat_122", self._try_strat_122),
             ("strat_inside_break", self._try_strat_inside_break),
@@ -1592,7 +1592,7 @@ class DecisionEngine:
 
         This is specifically for MNQ and MES.
 
-        See sources/strat_definitions.md for full pattern definition.
+        Full proprietary pattern doctrine lives outside the public repo.
         """
         if state.instrument not in ("MNQ", "MES"):
             return None

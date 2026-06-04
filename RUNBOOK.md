@@ -351,7 +351,7 @@ python -c "from execution.paper_broker import PaperBroker; b = PaperBroker(); pr
 If the system is generating trades that seem wrong:
 
 1. **Do not manually edit the journal.** It is append-only by design.
-2. Check `risk_rules.yaml` — confirm values match `FUTURES_SYSTEM_RULEBOOK.md`
+2. Check `risk_rules.yaml` — confirm values match your reviewed local policy
 3. Run `pytest tests/test_risk_engine.py -v` — all rules must pass
 4. Review the market state file used — confirm it accurately represents conditions
 5. Add a test case that covers the unexpected scenario before changing any logic

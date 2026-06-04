@@ -325,7 +325,7 @@ strat:
     strat_outside_continuation:
       sequence: [any, outside_bar, two_up_or_down]
       description: "outside bar follow-through — engulf resolved with volume filter"
-  # Reference: sources/strat_definitions.md
+  # Detailed proprietary pattern doctrine is intentionally not published here.
 
 
 # ─── Alpaca Options Lane (Isolated / Disabled by Default) ────────────────────

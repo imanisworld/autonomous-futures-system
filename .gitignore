@@ -8,6 +8,8 @@ venv/
 logs/
 logs_test/
 .env
+.env.*
+!.env.example
 Trading_Intel_Architecture.docx
 autonomous-futures-system/
 clientportal.gw/
@@ -41,3 +43,13 @@ risk_rules.yaml.bak
 Tomorrow\ Pre-Flight*
 strategy/1.*/
 strategy/2.*/
+
+# Private companion material. Keep proprietary strategy, operations, and
+# personal research outside the public repository.
+.private-companion/
+private/
+PRIVATE_NOTES.md
+reports/
+journal/*.jsonl
+*.sqlite
+*.sqlite3

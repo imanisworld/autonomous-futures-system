@@ -4,6 +4,16 @@ A local, paper-only autonomous trading system for a limited futures universe. De
 
 ---
 
+## Learning Package
+
+Shareable course and learning documents live in
+[`share/learning/`](share/learning/COURSE_README.md).
+
+Private strategy doctrine, production configuration, operational notes, and
+credentials are intentionally not part of this public repository.
+
+---
+
 ## Paper-Only System
 
 **Live trading is disabled and cannot be activated without explicit future safeguards.**
@@ -54,9 +64,7 @@ NO_TRADE.
 ```
 .
 ├── README.md
-├── AGENT_CONTEXT.md
-├── FUTURES_SYSTEM_RULEBOOK.md
-├── LIMITED_AUTONOMOUS_FUTURES_SPEC.md
+├── SECURITY.md
 ├── RUNBOOK.md
 ├── CHANGELOG.md
 ├── risk_rules.yaml
@@ -73,6 +81,7 @@ NO_TRADE.
 ├── risk/
 ├── sources/
 ├── strategy/
+├── share/learning/
 ├── tests/
 ├── webhook/
 └── logs/
@@ -131,9 +140,6 @@ HOST=0.0.0.0 python -m webhook
 
 The server respects the platform `PORT` environment variable and defaults to
 `8000` locally.
-
-For Hetner VPS deployment with `systemd` and `nginx`, see
-`deploy/hetner/README.md`.
 
 TradingView needs a public HTTPS URL, so expose local port `8000` with a tunnel
 and paste the resulting URL plus `/webhook/alert` into TradingView's webhook
@@ -258,10 +264,9 @@ python -m notifications --dry-run
 
 ## Signa API Planning
 
-`SIGNA_API_KEY` may be present in local `.env`, but the current system does not
-call Signa or use it for trading decisions. `/health` only reports whether the
-key is configured. See `sources/signa_api_plan.md` before adding any client
-code.
+Keep `SIGNA_API_KEY` and all other provider credentials in local `.env` only.
+Provider integrations must remain read-only unless a separately reviewed
+paper-execution phase explicitly requires otherwise.
 
 ---
 
