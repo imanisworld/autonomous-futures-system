@@ -830,10 +830,33 @@ def _ibkr_gateway_reachable() -> bool | None:
         return False
 
 
-def _diagnostic(status: str, component: str, message: str, next_step: str | None = None) -> dict:
+def _diag_slug(component: str) -> str:
+    """Machine-readable code derived from a display label (fallback)."""
+    import re
+    return re.sub(r"[^a-z0-9]+", "_", component.strip().lower()).strip("_")
+
+
+# Codes pinned to stay stable even if the display `component` label changes, so
+# external consumers (UI, scripts, prompts) can key off `code` not `component`.
+# Add the old label here on any rename to keep the code constant.
+_DIAG_CODE_OVERRIDES = {
+    "TradingView feed": "tradingview_feed",
+    "TradingView alerts": "tradingview_feed",  # legacy label → same stable code
+    "Tradovate config": "tradovate_config",
+    "Trading mode": "trading_mode",
+    "Backend API": "backend_api",
+    "Broker": "broker",
+    "Webhook secret": "webhook_secret",
+}
+
+
+def _diagnostic(status: str, component: str, message: str, next_step: str | None = None,
+                code: str | None = None) -> dict:
     item = {
         "status": status,
         "component": component,
+        # Stable machine-readable identifier; display `component` may change freely.
+        "code": code or _DIAG_CODE_OVERRIDES.get(component) or _diag_slug(component),
         "message": message,
     }
     if next_step:

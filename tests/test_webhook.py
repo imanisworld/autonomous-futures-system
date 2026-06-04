@@ -1050,6 +1050,30 @@ def test_broker_account_endpoint_offloads_and_decorates(monkeypatch, tmp_path):
     app_module._ACCOUNT_CACHE.clear()
 
 
+def test_diagnostics_items_carry_stable_codes(monkeypatch, tmp_path):
+    """Every diagnostic item exposes a machine-readable `code`, and rename-sensitive
+    components are pinned so consumers can key off code, not the display label."""
+    try:
+        from fastapi.testclient import TestClient
+        import webhook.app as app_module
+        from webhook.app import app
+    except ImportError:
+        pytest.skip("fastapi[testclient] not installed")
+
+    _isolate_app_logs(monkeypatch, tmp_path)
+    monkeypatch.setenv("BROKER", "tradovate")
+    monkeypatch.setenv("WEBHOOK_SECRET", "test-secret")
+    monkeypatch.setattr(app_module, "_feed_window_active", lambda *a, **k: True)
+
+    items = TestClient(app).get("/status/diagnostics").json()["items"]
+    assert all(i.get("code") for i in items)  # no item missing a code
+    by_label = {i["component"]: i["code"] for i in items}
+    assert by_label.get("TradingView feed") == "tradingview_feed"
+    assert by_label.get("Tradovate config") == "tradovate_config"
+    # The pinned code is independent of the (renameable) display label.
+    assert app_module._diagnostic("ok", "TradingView alerts", "x")["code"] == "tradingview_feed"
+
+
 def test_backend_console_uses_tf_freshness_and_non_live_labels(monkeypatch):
     """Regression for the embedded console: freshness keyed off the timeframe (no
     hardcoded 6m), and 'API: LIVE'/'LIVE' badge reworded so they can't read as
