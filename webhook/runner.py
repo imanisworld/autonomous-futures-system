@@ -126,6 +126,16 @@ def process_alert(
     """
     cfg = config or load_config()
 
+    # In paper mode we SIMULATE entry + resolution locally via PaperBroker
+    # (next-bar OHLC), regardless of the BROKER env var. BROKER=tradovate is kept
+    # for live price quotes and eventual live trading, but routing automated paper
+    # fills through the Tradovate demo broker means resolve_position() has no
+    # surviving order IDs across webhook calls and never closes the position —
+    # the trade stays open forever. paper_mode → simulate is the correct,
+    # self-contained behavior (and what the $1,500 paper balance + fill model
+    # were built for). Default True so a missing flag fails safe (never live).
+    simulate = bool(getattr(cfg, "paper_mode", True))
+
     # ── Step 0: Data-quality gate ─────────────────────────────────────────────
     quality_error = _check_payload_quality(payload, cfg)
     if quality_error:
@@ -237,7 +247,15 @@ def process_alert(
     if daily_state.has_open_position:
         if open_pos and _position_is_complete(open_pos):
             broker_type = os.getenv("BROKER", "paper").strip().lower()
-            if broker_type == "ibkr":
+            # Only resolve a position against bars of its OWN instrument. An MNQ
+            # position must never be resolved against a MES bar's OHLC (different
+            # price scale → false no-hit, and the price-mismatch safety net would
+            # then force-close at the wrong instrument's price). Each instrument's
+            # own next bar resolves its own position.
+            _open_root = (open_pos.get("instrument") or "").upper().rstrip("!1234567890HMUZ")
+            _bar_root = (state.instrument or "").upper().rstrip("!1234567890HMUZ")
+            same_instrument = bool(_open_root) and _open_root == _bar_root
+            if not simulate and broker_type == "ibkr":
                 from execution.ibkr_broker import IBKRBroker, IBKRConfig
                 ibkr = IBKRBroker(config=IBKRConfig.from_env(), auto_connect=True)
                 # Restore internal position state so resolve_position knows what to look for
@@ -250,7 +268,7 @@ def process_alert(
                 )
                 ibkr._last_order_ids = []
                 fill = ibkr.resolve_position()
-            elif broker_type == "tradovate":
+            elif not simulate and broker_type == "tradovate":
                 from execution.tradovate_broker import TradovateBroker, TradovateConfig
                 from execution.broker_interface import Position as _Position
                 tv = TradovateBroker(config=TradovateConfig.from_env())
@@ -264,7 +282,8 @@ def process_alert(
                     open=True,
                 )
                 fill = tv.resolve_position()
-            else:
+            elif same_instrument:
+                # Paper simulation: resolve against THIS bar's OHLC.
                 broker = _paper_broker(
                     journal.get_account_balance(
                         cfg.position_sizing.starting_balance, today
@@ -282,6 +301,10 @@ def process_alert(
                 fill = broker.resolve_position(
                     NextBarOHLC(high=payload.high, low=payload.low)
                 )
+            else:
+                # Different-instrument bar (e.g. MES bar while an MNQ position is
+                # open) — leave the position untouched for its own next bar.
+                fill = None
 
             # ── Stale-position safety net (paper mode only) ───────────────────
             # If resolve_position returned None (stop/target not hit), check
@@ -293,7 +316,7 @@ def process_alert(
             # In either case, force-close at the current bar's close price so
             # the system never stays blocked by an unresolvable open position.
             # IBKR mode: skip — IBKR manages the bracket; None just means still open.
-            if fill is None and broker_type == "paper":
+            if fill is None and simulate and same_instrument:
                 entry_price = float(open_pos["entry"])
                 price_ratio = abs(payload.close - entry_price) / entry_price if entry_price else 1.0
                 position_age_hours: float = 999.0
@@ -431,7 +454,11 @@ def process_alert(
     journal_balance = journal.get_account_balance(
         cfg.position_sizing.starting_balance, today
     )
-    broker = _make_broker(starting_balance=journal_balance, cfg=cfg)
+    broker = (
+        _paper_broker(journal_balance, cfg)
+        if simulate
+        else _make_broker(starting_balance=journal_balance, cfg=cfg)
+    )
     account_balance = broker.get_account_balance()
     if account_balance is None:
         account_balance = journal_balance
