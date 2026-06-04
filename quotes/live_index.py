@@ -1,17 +1,18 @@
 """
 quotes/live_index.py
 
-Lightweight live-price source for the Discord alert display line.
+DISPLAY-ONLY reference price for the dashboard and Discord alerts.
 
 MES/MNQ track their parent CME index future 1:1, so we read the front-month
-future quote (ES=F / NQ=F) from Yahoo Finance's public chart endpoint. This is
-a DISPLAY price only — execution still anchors to the bar close / broker fill.
-It is intentionally decoupled from the broker: Tradovate's REST API has no quote
-endpoint (market data is WebSocket-only), so this gives an independent, correct
-sanity price without the TradingView bar-close echo.
+future quote (ES=F / NQ=F) from a public HTTP endpoint (Yahoo Finance chart).
 
-Read-only and fail-soft: every error returns None so notification/ingestion can
-never break. Results are cached briefly to avoid hammering the upstream.
+⚠️ This is a REFERENCE / DISPLAY price ONLY. It is NOT the broker execution
+price and MUST NEVER be used for execution, signal validation, stop/target
+calculation, risk checks, or trade decisions. Trading logic does not read it.
+A Tradovate WebSocket feed (broker-exact) may be added later behind a flag.
+
+Read-only and fail-soft: every error returns a status, never raises, so the
+trading pipeline is unaffected when the upstream is unavailable.
 """
 
 from __future__ import annotations
@@ -32,7 +33,13 @@ _INDEX_SYMBOL: dict[str, str] = {
     "MCL": "CL=F",
 }
 
-_CACHE_TTL_SECONDS = 15.0
+# Human-facing source label (per product spec).
+SOURCE_LABEL = "ES=F/NQ=F HTTP proxy"
+KIND = "reference"
+
+_CACHE_TTL_SECONDS = 15.0      # within this age → FRESH (no refetch)
+_STALE_MAX_SECONDS = 600.0     # beyond this, a cached value is too old → UNAVAILABLE
+
 # symbol → (fetched_at_monotonic, price)
 _cache: dict[str, tuple[float, float]] = {}
 
@@ -77,11 +84,23 @@ def _fetch_price(symbol: str) -> Optional[float]:
         return None
 
 
-def get_live_quote(instrument: str) -> Optional[dict]:
-    """Return a fresh-ish live quote for the instrument's parent index future.
+def _quote(symbol: str, price: Optional[float], age_seconds: Optional[float], status: str) -> dict:
+    return {
+        "price": round(price, 2) if price is not None else None,
+        "symbol": symbol,
+        "source": SOURCE_LABEL,
+        "age_seconds": int(age_seconds) if age_seconds is not None else None,
+        "status": status,            # FRESH | STALE | UNAVAILABLE
+        "kind": KIND,                # display-only reference, never execution
+    }
 
-    Returns {"price": float, "symbol": str, "source": str} or None when the
-    instrument is unmapped or the upstream is unavailable. Never raises.
+
+def get_live_quote(instrument: str) -> Optional[dict]:
+    """Return a display-only reference quote for the instrument's index future.
+
+    Returns a dict with price/symbol/source/age_seconds/status, or None when the
+    instrument has no index proxy. Status is one of FRESH / STALE / UNAVAILABLE.
+    Never raises; trading logic must not depend on this value.
     """
     symbol = index_symbol_for(instrument)
     if symbol is None:
@@ -89,17 +108,22 @@ def get_live_quote(instrument: str) -> Optional[dict]:
 
     now = time.monotonic()
     cached = _cache.get(symbol)
-    if cached is not None and (now - cached[0]) < _CACHE_TTL_SECONDS:
-        price = cached[1]
-    else:
-        price = _fetch_price(symbol)
-        if price is None:
-            # Serve a slightly-stale cached value rather than nothing.
-            if cached is not None:
-                price = cached[1]
-            else:
-                return None
-        else:
-            _cache[symbol] = (now, price)
 
-    return {"price": price, "symbol": symbol, "source": f"yahoo:{symbol}"}
+    # Fresh cache hit — serve without refetching.
+    if cached is not None and (now - cached[0]) < _CACHE_TTL_SECONDS:
+        return _quote(symbol, cached[1], now - cached[0], "FRESH")
+
+    # Try a live fetch.
+    price = _fetch_price(symbol)
+    if price is not None:
+        _cache[symbol] = (now, price)
+        return _quote(symbol, price, 0.0, "FRESH")
+
+    # Upstream failed — serve cached value as STALE until it ages out entirely.
+    if cached is not None:
+        age = now - cached[0]
+        if age <= _STALE_MAX_SECONDS:
+            return _quote(symbol, cached[1], age, "STALE")
+
+    # No usable value.
+    return _quote(symbol, None, None, "UNAVAILABLE")

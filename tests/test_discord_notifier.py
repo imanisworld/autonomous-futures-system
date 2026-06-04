@@ -166,15 +166,17 @@ def test_no_trade_alert_stays_minimal():
     assert "Score:" not in msg
 
 
-def test_no_trade_alert_labels_price_source_and_bar_time():
-    """Discord should make clear the visible close came from TradingView."""
+def test_no_trade_alert_labels_bar_close_and_12h_time():
+    """Bar close is labelled as such; bar time is 12-hour with AM/PM."""
     from notifications.discord_notifier import _format_message
 
     result = _result("NO_TRADE")
     msg = _format_message(_payload(), result)
 
-    assert "close=19505.25 (TV payload)" in msg
-    assert "bar=2026-05-23 10:30 ET" in msg
+    assert "Bar close: 19505.25 (TV payload)" in msg
+    # 14:30 UTC → 10:30 AM ET, 12-hour clock with meridiem.
+    assert "Bar time: 2026-05-23 10:30 AM ET" in msg
+    assert "10:30 ET" not in msg  # no 24-hour remnants
 
 
 def test_no_trade_alert_prefers_enriched_context_close():
@@ -185,20 +187,35 @@ def test_no_trade_alert_prefers_enriched_context_close():
     result["context"]["close"] = 30712.5
     msg = _format_message(_payload(), result)
 
-    assert "close=30712.50 (decision context)" in msg
-    assert "19505.25" not in msg
+    assert "Bar close: 30712.50 (decision context)" in msg
 
 
-def test_no_trade_alert_shows_live_quote_over_bar_close():
-    """When a live index quote is attached, show it as the price and label the
-    (possibly stale) bar close separately."""
+def test_no_trade_alert_shows_reference_price_clearly_labelled():
+    """A live index quote shows as a clearly-labelled, display-only reference
+    price with source + status — separate from the bar close."""
     from notifications.discord_notifier import _format_message
 
     result = _result("NO_TRADE")
-    result["live_quote"] = {"price": 25180.75, "symbol": "NQ=F", "source": "yahoo:NQ=F"}
+    result["live_quote"] = {
+        "price": 25180.75, "symbol": "NQ=F", "source": "ES=F/NQ=F HTTP proxy",
+        "age_seconds": 3, "status": "FRESH", "kind": "reference",
+    }
     msg = _format_message(_payload(), result)
 
-    assert "25180.75 (live NQ=F)" in msg
-    assert "bar 19505.25" in msg
-    # Must not relabel the stale bar value as the authoritative price.
-    assert "19505.25 (TV payload)" not in msg
+    assert "Reference price: 25180.75 (ES=F/NQ=F HTTP proxy · FRESH · 3s ago)" in msg
+    assert "Bar close: 19505.25 (TV payload)" in msg  # bar close kept, distinct
+
+
+def test_no_trade_alert_reference_price_unavailable():
+    """When the proxy is unavailable, say so explicitly — never blank/misleading."""
+    from notifications.discord_notifier import _format_message
+
+    result = _result("NO_TRADE")
+    result["live_quote"] = {
+        "price": None, "symbol": "NQ=F", "source": "ES=F/NQ=F HTTP proxy",
+        "age_seconds": None, "status": "UNAVAILABLE", "kind": "reference",
+    }
+    msg = _format_message(_payload(), result)
+
+    assert "Reference price: unavailable (ES=F/NQ=F HTTP proxy · UNAVAILABLE)" in msg
+    assert "Bar close: 19505.25" in msg

@@ -114,21 +114,37 @@ def _format_bar_time(timestamp) -> str:
             dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
             if dt.tzinfo is None:
                 dt = dt.replace(tzinfo=timezone.utc)
-        return dt.astimezone(ZoneInfo("America/New_York")).strftime("%Y-%m-%d %H:%M ET")
+        # 12-hour clock with AM/PM, e.g. "2026-06-03 11:14 PM ET".
+        return dt.astimezone(ZoneInfo("America/New_York")).strftime("%Y-%m-%d %I:%M %p ET")
     except (OSError, ValueError):
         return raw
 
 
-def _close_label(payload: AlertPayload, context: dict, live_quote: Optional[dict] = None) -> str:
+def _bar_close_label(payload: AlertPayload, context: dict) -> str:
+    """The TradingView bar close (the value the decision was made on)."""
     context_close = context.get("close")
     close = context_close if context_close is not None else payload.close
-    # Prefer an independent live index quote when available; show the bar close
-    # alongside so the source is unambiguous (the bar close can be stale/replayed).
-    if live_quote and live_quote.get("price") is not None:
-        sym = live_quote.get("symbol", "live")
-        return f"{_format_price(live_quote['price'])} (live {sym}) · bar {_format_price(close)}"
     source = "TV payload" if context_close == payload.close else "decision context"
     return f"{_format_price(close)} ({source})"
+
+
+def _reference_price_line(live_quote: Optional[dict]) -> Optional[str]:
+    """A clearly-labelled, display-only reference price line.
+
+    Reference price is an independent index proxy (ES=F/NQ=F over HTTP) — NOT the
+    broker execution price. Returns None for instruments with no proxy so the
+    caller can omit the line entirely.
+    """
+    if not live_quote:
+        return None
+    source = live_quote.get("source", "HTTP proxy")
+    status = live_quote.get("status", "UNAVAILABLE")
+    price = live_quote.get("price")
+    age = live_quote.get("age_seconds")
+    if price is None or status == "UNAVAILABLE":
+        return f"Reference price: unavailable ({source} · UNAVAILABLE)"
+    age_str = f" · {age}s ago" if isinstance(age, int) else ""
+    return f"Reference price: {_format_price(price)} ({source} · {status}{age_str})"
 
 
 def _format_message(payload: AlertPayload, result: dict) -> str:
@@ -144,9 +160,13 @@ def _format_message(payload: AlertPayload, result: dict) -> str:
 
         lines = [
             f"RiskSentinel paper decision: {decision}",
-            f"{symbol} | {session} | close={_close_label(payload, context, result.get('live_quote'))}",
-            f"bar={_format_bar_time(payload.timestamp)}",
+            f"{symbol} | {session}",
         ]
+        ref_line = _reference_price_line(result.get("live_quote"))
+        if ref_line:
+            lines.append(ref_line)
+        lines.append(f"Bar close: {_bar_close_label(payload, context)}")
+        lines.append(f"Bar time: {_format_bar_time(payload.timestamp)}")
         if resolution:
             lines.append(f"Resolution: {resolution}")
         if risk:
@@ -215,9 +235,12 @@ def _format_message(payload: AlertPayload, result: dict) -> str:
         lines.append(f"Risk: {risk.get('result')}")
 
     lines.append(_DIVIDER)
+    ref_line = _reference_price_line(result.get("live_quote"))
+    if ref_line:
+        lines.append(ref_line)
     lines.append(
-        f"Market: {market_condition} | Close: {_close_label(payload, context, result.get('live_quote'))} | "
-        f"Bar: {_format_bar_time(payload.timestamp)}"
+        f"Market: {market_condition} | Bar close: {_bar_close_label(payload, context)} | "
+        f"Bar time: {_format_bar_time(payload.timestamp)}"
     )
 
     return "\n".join(lines)
