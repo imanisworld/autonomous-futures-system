@@ -349,7 +349,7 @@ async def status_history(days: int = Query(default=7, ge=1, le=30)) -> dict:
 # 15s) share one upstream broker/Yahoo call instead of each hitting it — faster
 # and keeps Tradovate well under its 5-req/hr auth limit. instrument → (ts, quote).
 _QUOTE_CACHE: dict[str, tuple[float, dict]] = {}
-_QUOTE_TTL_SECONDS = 10.0
+_QUOTE_TTL_SECONDS = 60.0  # > the 15s client poll so most polls hit; price is display-only and bars are 15m apart
 
 # Reuse ONE TradovateBroker for quotes. A fresh broker has no token, so building
 # one per request re-authenticates every cache-miss (slow — cold calls hit ~15s —
