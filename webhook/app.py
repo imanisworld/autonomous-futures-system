@@ -1098,6 +1098,7 @@ def _dashboard_payload(for_date: date) -> dict:
             for reason, count in no_trade_reasons.most_common(5)
         ],
         "latest_webhook": _latest_webhook_payload(),
+        "latest_webhooks": _latest_webhooks_by_instrument(),
         "strategy_status": _strategy_payload(for_date),
         "performance": journal.get_performance_stats(_config.position_sizing.starting_balance),
         "broker_gateway_reachable": _ibkr_gateway_reachable(),
@@ -2347,6 +2348,24 @@ def _render_dashboard(status: dict) -> str:
     return _DASHBOARD_HTML.replace("__INIT_JSON__", init_json)
 
 
+def _instrument_root_of(ticker: str | None) -> str | None:
+    """Map a TradingView ticker (MES1!, CME_MINI_MNQ1!, …) to MES/MNQ, else None.
+
+    Check MNQ/NQ before MES/ES because "MNQ1!" contains "NQ" and must not fall
+    through to the ES branch.
+    """
+    up = (ticker or "").upper()
+    if "MNQ" in up or "NQ" in up:
+        return "MNQ"
+    if "MES" in up or "ES" in up:
+        return "MES"
+    return None
+
+
+def _latest_webhook_inst_path(inst: str) -> Path:
+    return Path(_config.log_dir) / f"latest_webhook_{inst}.json"
+
+
 def _record_latest_webhook(payload: AlertPayload, result: dict) -> None:
     path = _latest_webhook_path()
     data = {
@@ -2364,6 +2383,30 @@ def _record_latest_webhook(payload: AlertPayload, result: dict) -> None:
     from agent.daily_summary import atomic_write_text
     path.parent.mkdir(parents=True, exist_ok=True)
     atomic_write_text(path, json.dumps(data, indent=2, sort_keys=True))
+    # Also keep the latest webhook per instrument so the dashboard can show a
+    # dedicated MES side and MNQ side instead of one global slot that flips
+    # MES↔MNQ on every bar.
+    root = _instrument_root_of(getattr(payload, "ticker", None))
+    if root:
+        atomic_write_text(
+            _latest_webhook_inst_path(root),
+            json.dumps(data, indent=2, sort_keys=True),
+        )
+
+
+def _latest_webhooks_by_instrument() -> dict:
+    empty = {"received_at": None, "payload": None, "context": None, "result": None}
+    out: dict = {}
+    for inst in ("MES", "MNQ"):
+        path = _latest_webhook_inst_path(inst)
+        if not path.exists():
+            out[inst] = dict(empty)
+            continue
+        try:
+            out[inst] = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            out[inst] = dict(empty)
+    return out
 
 
 def _latest_webhook_payload() -> dict:
