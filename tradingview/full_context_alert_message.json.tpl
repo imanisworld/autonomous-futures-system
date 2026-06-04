@@ -1,12 +1,12 @@
 {
   "ticker": "{{ticker}}",
   "timestamp": "{{time}}",
-  "open": 19480.0,
-  "high": 19510.0,
-  "low": 19475.0,
-  "close": 19505.25,
-  "volume": 4200,
-  "timeframe": "5",
+  "open": {{open}},
+  "high": {{high}},
+  "low": {{low}},
+  "close": {{close}},
+  "volume": {{volume}},
+  "timeframe": "{{interval}}",
   "avg_volume": 3800,
   "vwap": 19495.0,
 

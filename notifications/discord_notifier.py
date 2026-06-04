@@ -12,7 +12,9 @@ import json
 import logging
 import sys
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Callable, Optional
+from zoneinfo import ZoneInfo
 
 from config.settings import SystemConfig, load_config
 from webhook.payload import AlertPayload
@@ -91,6 +93,39 @@ def _strategy_label(strategy: str) -> str:
     return _STRATEGY_LABELS.get(strategy, strategy)
 
 
+def _format_price(value) -> str:
+    if value is None:
+        return "?"
+    try:
+        return f"{float(value):.2f}"
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def _format_bar_time(timestamp) -> str:
+    if timestamp is None:
+        return "unknown"
+    raw = str(timestamp)
+    try:
+        if raw.isdigit():
+            seconds = int(raw) / 1000 if len(raw) >= 13 else int(raw)
+            dt = datetime.fromtimestamp(seconds, tz=timezone.utc)
+        else:
+            dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(ZoneInfo("America/New_York")).strftime("%Y-%m-%d %H:%M ET")
+    except (OSError, ValueError):
+        return raw
+
+
+def _close_label(payload: AlertPayload, context: dict) -> str:
+    context_close = context.get("close")
+    close = context_close if context_close is not None else payload.close
+    source = "TV payload" if context_close == payload.close else "decision context"
+    return f"{_format_price(close)} ({source})"
+
+
 def _format_message(payload: AlertPayload, result: dict) -> str:
     decision = result.get("decision") or "UNKNOWN"
 
@@ -101,11 +136,11 @@ def _format_message(payload: AlertPayload, result: dict) -> str:
         resolution = result.get("resolution")
         symbol = context.get("instrument") or payload.ticker
         session = context.get("session") or "unknown_session"
-        close = context.get("close") or payload.close
 
         lines = [
             f"RiskSentinel paper decision: {decision}",
-            f"{symbol} | {session} | close={close}",
+            f"{symbol} | {session} | close={_close_label(payload, context)}",
+            f"bar={_format_bar_time(payload.timestamp)}",
         ]
         if resolution:
             lines.append(f"Resolution: {resolution}")
@@ -138,7 +173,6 @@ def _format_message(payload: AlertPayload, result: dict) -> str:
     stop = fill.get("stop")
     target = fill.get("target")
     rr = fill.get("rr_ratio")
-    close = context.get("close") or payload.close
     market_condition = context.get("market_condition") or "?"
 
     dir_icon = "🟢" if direction == "LONG" else "🔴"
@@ -176,7 +210,10 @@ def _format_message(payload: AlertPayload, result: dict) -> str:
         lines.append(f"Risk: {risk.get('result')}")
 
     lines.append(_DIVIDER)
-    lines.append(f"Market: {market_condition} | Close: {close}")
+    lines.append(
+        f"Market: {market_condition} | Close: {_close_label(payload, context)} | "
+        f"Bar: {_format_bar_time(payload.timestamp)}"
+    )
 
     return "\n".join(lines)
 

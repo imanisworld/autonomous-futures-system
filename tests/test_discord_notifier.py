@@ -164,3 +164,26 @@ def test_no_trade_alert_stays_minimal():
     assert "RiskSentinel paper decision: NO_TRADE" in msg
     assert "SETUP" not in msg
     assert "Score:" not in msg
+
+
+def test_no_trade_alert_labels_price_source_and_bar_time():
+    """Discord should make clear the visible close came from TradingView."""
+    from notifications.discord_notifier import _format_message
+
+    result = _result("NO_TRADE")
+    msg = _format_message(_payload(), result)
+
+    assert "close=19505.25 (TV payload)" in msg
+    assert "bar=2026-05-23 10:30 ET" in msg
+
+
+def test_no_trade_alert_prefers_enriched_context_close():
+    """If a future enrichment supplies a better close, Discord should show it."""
+    from notifications.discord_notifier import _format_message
+
+    result = _result("NO_TRADE")
+    result["context"]["close"] = 30712.5
+    msg = _format_message(_payload(), result)
+
+    assert "close=30712.50 (decision context)" in msg
+    assert "19505.25" not in msg
