@@ -178,22 +178,21 @@ _config = load_config()
 
 # ─── Routes ───────────────────────────────────────────────────────────────────
 
-@app.post("/webhook/alert")
-async def receive_alert(
-    payload: AlertPayload,
-    x_webhook_secret: str | None = Header(default=None),
-    secret: str | None = Query(default=None),
-) -> JSONResponse:
+# Serializes alert processing so two bars can't race on position state, while
+# keeping the work OFF the event loop (see _process_alert_async). Held across an
+# asyncio.to_thread call, so it's an asyncio.Lock, not a thread lock.
+_alert_lock = asyncio.Lock()
+# Strong refs to in-flight background tasks so the loop doesn't GC them mid-run.
+_alert_tasks: set[asyncio.Task] = set()
+
+
+def _handle_alert_blocking(payload: AlertPayload) -> None:
+    """Full alert pipeline — decision engine, broker, reference quote, Discord.
+
+    Runs in a worker thread (via _process_alert_async) so its seconds of
+    synchronous I/O never block the event loop. Blocking here is exactly what
+    made TradingView's webhook POST time out (nginx 499) and drop the bar.
     """
-    Accept a bar-close alert from TradingView, run it through the
-    paper-trading pipeline, and return a structured decision result.
-    """
-    _verify_webhook_secret(x_webhook_secret or secret)
-    # Silently ignore non-futures tickers (e.g. stock alerts sharing the same webhook)
-    _FUTURES_PREFIXES = {"MNQ", "MES", "ES", "NQ", "MGC", "MCL"}
-    ticker_root = payload.ticker.upper().replace("1!", "").replace("!", "").strip()
-    if not any(ticker_root.startswith(p) for p in _FUTURES_PREFIXES):
-        return JSONResponse(content={"ok": True, "decision": "IGNORED", "reason": "non-futures ticker"})
     try:
         result = process_alert(payload, config=_config, log_dir=_config.log_dir)
         _record_latest_webhook(payload, result)
@@ -209,10 +208,43 @@ async def receive_alert(
             except Exception as exc:
                 logger.warning("live_quote attach failed: %s", exc)
         notify_discord(payload=payload, result=result, config=_config)
-        return JSONResponse(content={"ok": True, **result})
+        logger.info("Alert processed: %s -> %s", payload.ticker, result.get("decision"))
     except Exception as exc:
-        logger.exception("Error processing alert: %s", exc)
-        raise HTTPException(status_code=500, detail="Internal server error") from exc
+        logger.exception("Error processing alert for %s: %s", payload.ticker, exc)
+
+
+async def _process_alert_async(payload: AlertPayload) -> None:
+    # One bar at a time (lock), each on a worker thread (to_thread) so the event
+    # loop stays free to accept the next webhook immediately.
+    async with _alert_lock:
+        await asyncio.to_thread(_handle_alert_blocking, payload)
+
+
+@app.post("/webhook/alert")
+async def receive_alert(
+    payload: AlertPayload,
+    x_webhook_secret: str | None = Header(default=None),
+    secret: str | None = Query(default=None),
+) -> JSONResponse:
+    """
+    Accept a bar-close alert from TradingView and acknowledge it immediately.
+
+    The decision pipeline (which can take many seconds: broker calls, a Yahoo
+    reference-price fetch, Discord) runs in the background — TradingView's webhook
+    client times out after a few seconds, so doing that work before responding
+    made every delivery fail (nginx 499) and silently dropped the bar. We
+    validate + authenticate synchronously, then hand off and return 200 fast.
+    """
+    _verify_webhook_secret(x_webhook_secret or secret)
+    # Silently ignore non-futures tickers (e.g. stock alerts sharing the same webhook)
+    _FUTURES_PREFIXES = {"MNQ", "MES", "ES", "NQ", "MGC", "MCL"}
+    ticker_root = payload.ticker.upper().replace("1!", "").replace("!", "").strip()
+    if not any(ticker_root.startswith(p) for p in _FUTURES_PREFIXES):
+        return JSONResponse(content={"ok": True, "decision": "IGNORED", "reason": "non-futures ticker"})
+    task = asyncio.create_task(_process_alert_async(payload))
+    _alert_tasks.add(task)
+    task.add_done_callback(_alert_tasks.discard)
+    return JSONResponse(content={"ok": True, "queued": True, "ticker": payload.ticker})
 
 
 @app.get("/futures", include_in_schema=False)
