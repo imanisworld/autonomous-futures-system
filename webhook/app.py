@@ -351,6 +351,22 @@ async def status_history(days: int = Query(default=7, ge=1, le=30)) -> dict:
 _QUOTE_CACHE: dict[str, tuple[float, dict]] = {}
 _QUOTE_TTL_SECONDS = 10.0
 
+# Reuse ONE TradovateBroker for quotes. A fresh broker has no token, so building
+# one per request re-authenticates every cache-miss (slow — cold calls hit ~15s —
+# and burns Tradovate's 5-req/hr auth limit) and re-runs contract lookups. The
+# singleton keeps its valid token, contract cache and connection pool. get_quote
+# is read-only (no position-state mutation), so sharing it is safe. Lazy init;
+# the worst case on a concurrent first call is a discarded duplicate — harmless.
+_quote_broker = None
+
+
+def _get_quote_broker():
+    global _quote_broker
+    if _quote_broker is None:
+        from execution.tradovate_broker import TradovateBroker
+        _quote_broker = TradovateBroker()
+    return _quote_broker
+
 
 @app.get("/status/quote")
 async def status_quote(instrument: str = Query(default="MES")) -> dict:
@@ -368,8 +384,7 @@ async def status_quote(instrument: str = Query(default="MES")) -> dict:
     if cached is not None and (time.time() - cached[0]) < _QUOTE_TTL_SECONDS:
         return cached[1]
     try:
-        from execution.tradovate_broker import TradovateBroker
-        broker = TradovateBroker()
+        broker = _get_quote_broker()
         # Seed the last price from the latest webhook payload if available.
         # ticker/close live in the nested `payload` — top-level lacks them, so
         # without the payload fallback ticker was "" and seeding never happened
