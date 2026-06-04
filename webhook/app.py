@@ -824,6 +824,49 @@ def _quality_gate_summary() -> str:
     return "; ".join(parts) + "."
 
 
+def _timeframe_mismatch_state(entries: list[dict]) -> dict | None:
+    """Shared off-timeframe-alert detector for the banner AND the OPS diagnostic.
+
+    Returns None if no TIMEFRAME_MISMATCH bars exist today. Otherwise returns
+    {"blocks": [...], "last": <block>, "current": bool}. `current` is True only
+    when the latest mismatch is newer than the last on-timeframe decision — i.e.
+    the alert is STILL misconfigured right now, not already fixed earlier today.
+    Single source of truth so the banner and OPS can't drift (they did once:
+    47 overnight 5m alerts kept OPS red all day after the alert was fixed).
+    """
+    tf_blocks = [
+        e for e in entries
+        if e.get("decision") == "CONFIG_BLOCKED"
+        and e.get("config_block") == "TIMEFRAME_MISMATCH"
+    ]
+    if not tf_blocks:
+        return None
+
+    def _ts(entry):
+        t = entry.get("ts")
+        try:
+            return datetime.fromisoformat(t) if t else None
+        except (ValueError, TypeError):
+            return None
+
+    last = tf_blocks[-1]
+    block_ts = _ts(last)
+    # Any non-mismatch decision proves an on-timeframe alert passed the guard.
+    good_ts = [
+        _ts(e) for e in entries
+        if e.get("type") != "OUTCOME"
+        and not (e.get("decision") == "CONFIG_BLOCKED"
+                 and e.get("config_block") == "TIMEFRAME_MISMATCH")
+    ]
+    last_good = max((t for t in good_ts if t is not None), default=None)
+    current = (
+        block_ts is None       # unparseable — fail loud
+        or last_good is None   # no on-TF bar ever seen today
+        or block_ts > last_good
+    )
+    return {"blocks": tf_blocks, "last": last, "current": current}
+
+
 def _diagnostics_payload(for_date: date) -> dict:
     broker = os.getenv("BROKER", "paper").strip().lower()
     gateway = _ibkr_gateway_reachable()
@@ -927,18 +970,24 @@ def _diagnostics_payload(for_date: date) -> dict:
     # Decision timeframe: surface any misconfigured-alert (wrong timeframe) bars today.
     expected_tf = int(getattr(_config, "expected_timeframe_minutes", 15))
     diag_entries = journal._read_entries(journal_path) if journal_path.exists() else []
-    tf_blocks = [
-        e for e in diag_entries
-        if e.get("decision") == "CONFIG_BLOCKED" and e.get("config_block") == "TIMEFRAME_MISMATCH"
-    ]
-    if tf_blocks:
-        last = tf_blocks[-1]
+    tf_state = _timeframe_mismatch_state(diag_entries)
+    if tf_state and tf_state["current"]:
+        last = tf_state["last"]
         items.append(_diagnostic(
             "error",
             "Alert timeframe",
             f"LIVE ALERT MISCONFIGURED: expected {expected_tf}m, received "
-            f"{last.get('received_timeframe')} ({len(tf_blocks)} bar(s) today).",
+            f"{last.get('received_timeframe')} ({len(tf_state['blocks'])} bar(s) today).",
             f"Recreate the TradingView alert on the {expected_tf}m chart.",
+        ))
+    elif tf_state:
+        # Mismatches earlier today, but an on-timeframe bar has since been
+        # evaluated — resolved, so this must NOT keep OPS red.
+        items.append(_diagnostic(
+            "ok",
+            "Alert timeframe",
+            f"Decision timeframe is {expected_tf}m; {len(tf_state['blocks'])} "
+            f"off-timeframe alert(s) earlier today, now resolved.",
         ))
     else:
         items.append(_diagnostic(
@@ -1015,48 +1064,18 @@ def _dashboard_payload(for_date: date) -> dict:
     # Latest timeframe-mismatch (misconfigured alert) seen today, if any. These
     # are journaled as CONFIG_BLOCKED / TIMEFRAME_MISMATCH — a distinct category,
     # never counted as NO_TRADE — and drive the loud dashboard banner.
-    tf_blocks = [
-        entry for entry in decision_entries
-        if entry.get("decision") == "CONFIG_BLOCKED"
-        and entry.get("config_block") == "TIMEFRAME_MISMATCH"
-    ]
-    def _entry_ts(entry):
-        ts = entry.get("ts")
-        try:
-            return datetime.fromisoformat(ts) if ts else None
-        except (ValueError, TypeError):
-            return None
-
+    tf_state = _timeframe_mismatch_state(decision_entries)
     alert_validation = None
-    if tf_blocks:
-        latest_block = tf_blocks[-1]
-        # The banner must reflect the *current* alert config, not the whole day.
-        # Any decision that isn't a timeframe-mismatch block came from a bar that
-        # passed the Step-0b timeframe guard — i.e. proof of an on-TF alert. If
-        # one arrived after the last mismatch, the misconfiguration is resolved;
-        # otherwise 47 overnight 5m alerts keep the banner red all day even after
-        # the user has already recreated the alert on the correct timeframe.
-        block_ts = _entry_ts(latest_block)
-        good_ts = [
-            _entry_ts(e) for e in decision_entries
-            if not (e.get("decision") == "CONFIG_BLOCKED"
-                    and e.get("config_block") == "TIMEFRAME_MISMATCH")
-        ]
-        last_good = max((t for t in good_ts if t is not None), default=None)
-        still_misconfigured = (
-            block_ts is None            # unparseable — fail loud
-            or last_good is None        # no on-TF bar ever seen today
-            or block_ts > last_good     # last mismatch is newer than last good bar
-        )
-        if still_misconfigured:
-            alert_validation = {
-                "ok": False,
-                "issue": "TIMEFRAME_MISMATCH",
-                "expected": latest_block.get("expected_timeframe"),
-                "received": latest_block.get("received_timeframe"),
-                "count": len(tf_blocks),
-                "last_ts": latest_block.get("ts"),
-            }
+    if tf_state and tf_state["current"]:
+        latest_block = tf_state["last"]
+        alert_validation = {
+            "ok": False,
+            "issue": "TIMEFRAME_MISMATCH",
+            "expected": latest_block.get("expected_timeframe"),
+            "received": latest_block.get("received_timeframe"),
+            "count": len(tf_state["blocks"]),
+            "last_ts": latest_block.get("ts"),
+        }
     wins = summary.get("wins", 0)
     losses = summary.get("losses", 0)
     resolved = wins + losses
@@ -1366,22 +1385,25 @@ _DASHBOARD_HTML = r"""<!doctype html>
   <meta name="apple-mobile-web-app-title" content="RiskSentinel">
   <link rel="manifest" href="/manifest.json">
   <link rel="apple-touch-icon" href="/static/icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;650;750;850&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
   <title>RiskSentinel</title>
   <style>
     :root {
       color-scheme: dark;
       --bg: #050507;
-      --panel: #111216;
-      --panel2: #15171c;
-      --line: #2a2d34;
+      --panel: #1a1a2e;
+      --panel2: #15172a;
+      --line: #2a2a3e;
       --text: #f4f4f5;
       --muted: #a1a1aa;
       /* severity system */
-      --green: #17d97f;   /* pass / live / clear / fresh */
-      --yellow: #ffb020;  /* warning / stale / watch */
-      --red: #ff3d71;     /* blocked / locked / loss / error */
+      --green: #00FF88;   /* pass / live / clear / fresh / profit */
+      --yellow: #FFB800;  /* warning / stale / watch / defend */
+      --red: #FF4444;     /* blocked / locked / loss / error */
       --blue: #00d5ff;    /* info / paper / broker */
-      --gray: #6b7280;    /* inactive / disabled */
+      --gray: #8b90a6;    /* inactive / disabled / neutral */
       --nav-h: 54px;
     }
     * { box-sizing: border-box; }
@@ -1390,7 +1412,7 @@ _DASHBOARD_HTML = r"""<!doctype html>
       min-height: 100vh;
       background: var(--bg);
       color: var(--text);
-      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       -webkit-text-size-adjust: 100%;
     }
     h1, h2, h3, p { margin: 0; }
@@ -1420,16 +1442,17 @@ _DASHBOARD_HTML = r"""<!doctype html>
     .statusbar::-webkit-scrollbar { display: none; }
     .statusbar .seg {
       display: flex;
-      flex-direction: column;
+      flex-direction: row;
       justify-content: center;
-      gap: 1px;
+      align-items: center;
+      gap: 6px;
       padding: 7px 11px;
       white-space: nowrap;
       border-right: 1px solid #1c1e24;
     }
     .statusbar .seg:last-child { border-right: 0; }
-    .statusbar .seg b { font-size: 9px; letter-spacing: 0.06em; color: var(--muted); text-transform: uppercase; font-weight: 700; }
-    .statusbar .seg span { font-size: 13px; font-weight: 800; letter-spacing: 0.01em; }
+    .statusbar .seg b { display: none; }
+    .statusbar .seg span { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; font-weight: 800; letter-spacing: 0.01em; }
 
     /* ── Layout ────────────────────────────────────────────────────────── */
     main {
@@ -1445,6 +1468,26 @@ _DASHBOARD_HTML = r"""<!doctype html>
     }
     .tabhead h1 { font-size: 21px; }
     .tabhead .when { color: var(--muted); font-size: 12px; }
+
+    .hero {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: linear-gradient(135deg, rgba(26,26,46,0.98), rgba(17,18,31,0.98));
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+    .hero-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .hero h1 { font-size: 23px; font-weight: 850; letter-spacing: 0.01em; }
+    .badges { display: flex; gap: 8px; flex-wrap: wrap; }
+    .badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      border: 1px solid var(--line); border-radius: 999px;
+      background: rgba(255,255,255,0.025);
+      padding: 5px 10px;
+      font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px; font-weight: 800;
+    }
+    .mood { margin-top: 10px; color: var(--muted); font-size: 14px; line-height: 1.45; }
 
     .monitorbar {
       margin: 8px 12px 0; padding: 9px 12px; border-radius: 10px;
@@ -1465,10 +1508,12 @@ _DASHBOARD_HTML = r"""<!doctype html>
     .panel {
       background: var(--panel);
       border: 1px solid var(--line);
-      border-radius: 10px;
+      border-radius: 12px;
       padding: 15px;
       margin-bottom: 12px;
+      transition: transform 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
     }
+    .panel:hover { transform: translateY(-2px); border-color: rgba(255,255,255,0.18); }
     .panel > h2 {
       color: var(--muted);
       font-size: 11px;
@@ -1498,13 +1543,39 @@ _DASHBOARD_HTML = r"""<!doctype html>
     /* key/value rows */
     .kv { display: grid; grid-template-columns: auto 1fr; gap: 7px 14px; margin-top: 10px; font-size: 14px; }
     .kv dt { color: var(--muted); }
-    .kv dd { margin: 0; text-align: right; font-weight: 700; }
+    .kv dd { margin: 0; text-align: right; font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 800; }
+
+    .metric-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; margin-top: 12px; }
+    .metric {
+      border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,0.025);
+      padding: 10px 12px;
+    }
+    .metric label { display: block; color: var(--muted); font-size: 10px; font-weight: 750; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 5px; }
+    .metric strong { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 18px; font-weight: 800; }
+    .sparkline { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--blue); font-size: 12px; letter-spacing: 0.05em; margin-left: 8px; white-space: nowrap; }
+    .empty-val { color: var(--gray); opacity: 0.65; cursor: help; }
+    .placeholder { color: var(--gray); opacity: 0.7; font-style: italic; }
+    .update-line { margin-top: 8px; color: var(--gray); font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+    .skeleton {
+      position: relative; overflow: hidden; border-radius: 8px; background: rgba(255,255,255,0.055);
+      min-height: 14px;
+    }
+    .skeleton::after {
+      content: ""; position: absolute; inset: 0; transform: translateX(-100%);
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.09), transparent);
+      animation: shimmer 1.25s infinite;
+    }
+    .skeleton.line { width: 72%; }
+    .skeleton.short { width: 44%; }
+    @keyframes shimmer { 100% { transform: translateX(100%); } }
+    @media (max-width: 560px) { .metric-grid { grid-template-columns: 1fr; } }
 
     ul.reasons { list-style: none; padding: 0; margin: 8px 0 0; }
     ul.reasons li {
       display: flex; gap: 9px; align-items: flex-start;
-      padding: 7px 0; border-top: 1px solid var(--line);
-      font-size: 13px; color: var(--text);
+      padding: 8px 12px; border-top: 0; border-left: 3px solid #ffb800;
+      border-radius: 6px; background: rgba(255, 184, 0, 0.10);
+      font-size: 13px; color: #ffe3a3; margin-top: 7px;
     }
     ul.reasons li .mk { font-weight: 900; flex: none; }
     ul.reasons li:first-child { border-top: 0; }
@@ -1539,6 +1610,21 @@ _DASHBOARD_HTML = r"""<!doctype html>
     .uni { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
     .uni .u { display: flex; align-items: center; gap: 7px; border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; font-size: 13px; }
     .uni .u b { font-weight: 800; }
+
+    .risk-ladder { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+    .risk-step {
+      display: flex; align-items: center; justify-content: center; gap: 7px;
+      min-height: 44px; border: 1px solid var(--line); border-radius: 10px;
+      background: rgba(255,255,255,0.025);
+      color: var(--muted); font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px; font-weight: 800; letter-spacing: 0.03em;
+      transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+    }
+    .risk-step.active { background: rgba(23,217,127,0.06); }
+    .risk-step.active.yellow { background: rgba(255,176,32,0.08); }
+    .risk-step.active.red { background: rgba(255,61,113,0.08); }
+    .risk-step.dim { opacity: 0.48; }
+    @media (max-width: 560px) { .risk-ladder { grid-template-columns: 1fr 1fr; } }
 
     /* committee */
     .cmt { display: grid; grid-template-columns: auto 1fr auto; gap: 6px 12px; margin-top: 8px; font-size: 14px; align-items: center; }
@@ -1667,7 +1753,7 @@ _DASHBOARD_HTML = r"""<!doctype html>
     var INIT = JSON.parse(document.getElementById('init-data').textContent);
     var POLL = (INIT.poll_seconds || 30) * 1000;
     var TF_LABEL = (INIT.expected_timeframe_minutes || 15) + 'm';
-    var state = { tab: 'home', today: INIT.today || {}, risk: null, filter: 'ALL', history: null };
+    var state = { tab: 'home', today: INIT.today || {}, risk: null, filter: 'ALL', history: null, lastUpdate: Date.now(), firstLoad: !(INIT.today && INIT.today.date) };
 
     // ── helpers ────────────────────────────────────────────────────────
     function esc(v) {
@@ -1678,6 +1764,21 @@ _DASHBOARD_HTML = r"""<!doctype html>
     function el(id) { return document.getElementById(id); }
     function num(v) { var n = Number(v); return isFinite(n) ? n : 0; }
     function money(v) { var n = num(v); return (n < 0 ? '-$' : '$') + Math.abs(n).toFixed(2); }
+    function hasTradeData(today) { return num(today.trade_count) > 0 || num(today.wins) > 0 || num(today.losses) > 0; }
+    function emptyValue(label) { return '<span class="empty-val" title="' + esc(label || 'No data yet') + '">—</span>'; }
+    function metricValue(value, emptyLabel) { return value == null ? emptyValue(emptyLabel) : value; }
+    function agePhrase(fr) { return fr.state === 'NONE' ? 'never' : (fr.label + ' ago'); }
+    function clock(ts) {
+      try { return new Date(ts).toLocaleTimeString('en-US', { hour12: false }); }
+      catch (e) { return '--:--:--'; }
+    }
+    function updateAgeText() {
+      var node = el('last-update');
+      if (!node) return;
+      var elapsed = Math.max(0, Math.floor((Date.now() - state.lastUpdate) / 1000));
+      var next = Math.max(0, Math.ceil((POLL - (Date.now() - state.lastUpdate)) / 1000));
+      node.textContent = 'Last update: ' + clock(state.lastUpdate) + ' · ' + elapsed + 's ago · Next in ' + next + 's';
+    }
 
     function ageMs(iso) {
       if (!iso) return Infinity;
@@ -1740,6 +1841,16 @@ _DASHBOARD_HTML = r"""<!doctype html>
       return 'CLEAR';
     }
     var RISK_COLOR = { CLEAR: 'green', WATCH: 'yellow', DEFEND: 'yellow', LOCKED: 'red' };
+    var RISK_ICON = { CLEAR: '🟢', WATCH: '🟡', DEFEND: '🟠', LOCKED: '🔴' };
+    var RISK_MOOD = {
+      CLEAR: 'All systems nominal — normal sizing permitted',
+      WATCH: 'Caution — reduce size',
+      DEFEND: 'Defensive only — protect capital',
+      LOCKED: 'No trades — wait for conditions to improve'
+    };
+    function moodLine(risk) { return RISK_MOOD[risk] || RISK_MOOD.CLEAR; }
+    function modeLabel() { return INIT.paper_mode ? '📄 PAPER MODE' : '⚡ LIVE MODE'; }
+    function lockLabel(lock) { return lock ? '🔒 ACTIVE' : '🔓 NONE'; }
 
     function latestHeadline(today) {
       var entries = today.latest_entries || [];
@@ -1800,13 +1911,13 @@ _DASHBOARD_HTML = r"""<!doctype html>
       var modeC = INIT.paper_mode ? 'blue' : 'red';
       var whTag = fr.state === 'NONE' ? 'gray' : (fr.state === 'FRESH' ? 'green' : (fr.state === 'IDLE' ? 'gray' : 'yellow'));
       var segs = [
-        ['API', 'LIVE', 'green'],
-        ['MODE', mode, modeC],
-        ['BROKER', INIT.broker || 'PAPER', 'blue'],
-        ['RISK', risk, RISK_COLOR[risk] || 'gray'],
-        ['LOCKOUT', lock ? 'ACTIVE' : 'NONE', lock ? 'red' : 'green'],
-        ['LAST WEBHOOK', fr.label, whTag],
-        ['POLL', (POLL / 1000) + 's', 'gray']
+        ['', '🟢 LIVE', 'green'],
+        ['', modeLabel(), modeC],
+        ['', '🏦 ' + (INIT.broker || 'PAPER'), 'blue'],
+        ['', (risk === 'CLEAR' ? '✅' : (RISK_ICON[risk] || '•')) + ' ' + risk, RISK_COLOR[risk] || 'gray'],
+        ['', lockLabel(lock), lock ? 'red' : 'green'],
+        ['', '🕒 ' + fr.label, whTag],
+        ['', '🔄 ' + (POLL / 1000) + 's', 'gray']
       ];
       el('statusbar').innerHTML = segs.map(function (s) {
         return '<div class="seg"><b>' + s[0] + '</b><span class="' + s[2] + '">' + esc(s[1]) + '</span></div>';
@@ -1817,7 +1928,7 @@ _DASHBOARD_HTML = r"""<!doctype html>
     function freshWidget(fr) {
       var map = { FRESH: ['green', 'FRESH'], STALE: ['yellow', 'STALE'], IDLE: ['gray', 'IDLE'], NONE: ['gray', 'NO DATA'] };
       var m = map[fr.state] || map.NONE;
-      var sub = fr.state === 'NONE' ? 'No webhook received yet' :
+      var sub = fr.state === 'NONE' ? '⏳ Waiting for first webhook...' :
         ('Last ' + TF_LABEL + ' webhook: ' + fr.label + ' ago · Expected: every ' + TF_LABEL);
       return '<div class="panel ' + (fr.state === 'STALE' ? 'accent-yellow' : '') + '">' +
         '<h2>Data Freshness</h2>' +
@@ -1833,18 +1944,41 @@ _DASHBOARD_HTML = r"""<!doctype html>
       if (risk === 'CLEAR' && fr.state === 'STALE') risk = 'WATCH';
       var dv = decisionView(today, fr);
       var pnl = num(today.today_pnl_dollars);
+      var lock = num(today.consecutive_losses) >= num(today.max_consecutive_losses) && num(today.max_consecutive_losses) > 0;
+      var clearLabel = risk === 'CLEAR' && !lock ? '✅ CLEAR TO TRADE' : ((RISK_ICON[risk] || '•') + ' ' + risk);
+      var traded = hasTradeData(today);
+      var pnlDisplay = traded ? money(pnl) : emptyValue('No trades yet');
+      var winRateDisplay = traded ? (num(today.win_rate).toFixed(1) + '%') : emptyValue('Win rate appears after at least 1 trade');
+      var tradesDisplay = num(today.trade_count) + ' / ' + num(today.max_trades_per_day);
       var html = '';
+      if (state.firstLoad) {
+        html += '<div class="hero"><div class="hero-top"><h1>Backend Console</h1><div class="badges"><span class="badge gray">Loading</span></div></div>' +
+          '<div class="metric-grid"><div class="metric"><div class="skeleton line"></div></div><div class="metric"><div class="skeleton short"></div></div></div></div>';
+      }
+      html += '<div class="hero">' +
+        '<div class="hero-top"><h1>Backend Console</h1><div class="badges">' +
+        '<span class="badge green">🟢 LIVE</span>' +
+        '<span class="badge ' + (RISK_COLOR[risk] || 'gray') + '">' + esc(clearLabel) + '</span>' +
+        '<span class="badge blue">' + modeLabel() + '</span>' +
+        '</div></div>' +
+        '<p class="mood">' + esc(moodLine(risk)) + '</p>' +
+        '<div class="update-line" id="last-update"></div>' +
+        '</div>';
+
       html += '<div class="tabhead"><h1>Today</h1><span class="when">' + esc(today.date || '') + '</span></div>';
 
       html += '<div class="panel">' +
         '<h2>Decision</h2>' +
         '<div class="decision d-' + esc(dv.decision) + '"><span class="dot"></span>' + esc(dv.decision) + '</div>' +
+        '<div class="metric-grid">' +
+        '<div class="metric"><label>💰 Today P&amp;L</label><strong class="' + (!traded ? 'gray' : (pnl < 0 ? 'red' : 'green')) + '">' + pnlDisplay + '</strong><span class="sparkline">▁▂▃▅▇█▇▅▃▂▁</span></div>' +
+        '<div class="metric"><label>📊 Trades Used</label><strong>' + tradesDisplay + '</strong></div>' +
+        '<div class="metric"><label>🏁 Win Rate</label><strong>' + winRateDisplay + '</strong></div>' +
+        '</div>' +
         '<dl class="kv">' +
         kv('Risk state', '<span class="' + (RISK_COLOR[risk] || 'gray') + '">' + risk + '</span>') +
         kv('Open position', esc(openPositionText(today))) +
-        kv('Last webhook', esc(fr.label) + ' ago') +
-        kv('P&L today', '<span class="' + (pnl < 0 ? 'red' : 'green') + '">' + money(pnl) + '</span>') +
-        kv('Trades used', num(today.trade_count) + ' / ' + num(today.max_trades_per_day)) +
+        kv('Last webhook', esc(agePhrase(fr))) +
         '</dl>' +
         '<p class="muted" style="margin-top:10px;font-size:13px;">Reason: ' + esc(dv.reason || '—') + '</p>' +
         '</div>';
@@ -1852,12 +1986,13 @@ _DASHBOARD_HTML = r"""<!doctype html>
       html += freshWidget(fr);
 
       if (dv.decision === 'NO_TRADE' || dv.decision === 'WAITING') {
-        html += card('Why No Trade?', listReasons(dv.blocked, '✕', 'red'), dv.blocked.length ? 'accent-yellow' : '');
+        html += card('Why No Trade?', listReasons(dv.blocked, '!', 'yellow'), dv.blocked.length ? 'accent-yellow' : '');
         html += card('Next Required Validation', listReasons(dv.nextValidation, '→', 'blue'), '');
       }
 
       html += compactPnl(today);
       el('tab-home').innerHTML = html;
+      updateAgeText();
     }
     function kv(k, v) { return '<dt>' + esc(k) + '</dt><dd>' + v + '</dd>'; }
     function card(title, body, cls) {
@@ -1875,9 +2010,9 @@ _DASHBOARD_HTML = r"""<!doctype html>
       var pnl7 = hist.reduce(function (a, d) { return a + num(d.realized_pnl_dollars); }, 0);
       if (!anyData) {
         return '<div class="panel"><h2>P&L</h2><dl class="kv">' +
-          kv('P&L today', money(today.today_pnl_dollars)) +
-          kv('7D P&L', money(pnl7)) +
-          '</dl><p class="muted" style="margin-top:8px;font-size:12px;">No realized P&L yet — chart hidden until there is history.</p></div>';
+          kv('P&L today', hasTradeData(today) ? money(today.today_pnl_dollars) : emptyValue('No trades yet')) +
+          kv('7D P&L', pnl7 ? money(pnl7) : emptyValue('No realized P&L yet')) +
+          '</dl><p class="placeholder" style="margin-top:8px;font-size:12px;">No realized P&L yet — chart hidden until there is history.</p></div>';
       }
       return '<div class="panel"><h2>Equity Curve <span class="muted" id="chart-range" style="font-size:11px;font-weight:400;"></span></h2>' +
         '<canvas id="pnl-chart" class="chart" style="height:140px;"></canvas></div>';
@@ -2061,7 +2196,8 @@ _DASHBOARD_HTML = r"""<!doctype html>
       if (base === 'CLEAR' && fr.state === 'STALE') shown = 'WATCH';
       html += '<div class="panel accent-' + (RISK_COLOR[shown] === 'red' ? 'red' : (RISK_COLOR[shown] === 'yellow' ? 'yellow' : 'green')) + '">' +
         '<h2>Risk Ladder</h2>' +
-        '<div class="decision ' + RISK_COLOR[shown] + '" style="font-size:24px;"><span class="dot"></span>' + shown + '</div>';
+        '<div class="decision ' + RISK_COLOR[shown] + '" style="font-size:24px;">' + (RISK_ICON[shown] || '•') + ' ' + shown + '</div>' +
+        '<p class="mood">' + esc(moodLine(shown)) + '</p>';
       if (shown !== base) html += '<p class="muted" style="margin-top:8px;font-size:12px;">OPS: WATCH — base state ' + base + ', raised to WATCH because DATA FRESHNESS: STALE.</p>';
       html += ladder(shown) + '</div>';
 
@@ -2087,10 +2223,11 @@ _DASHBOARD_HTML = r"""<!doctype html>
     }
     function ladder(shown) {
       var steps = ['CLEAR', 'WATCH', 'DEFEND', 'LOCKED'];
-      return '<div class="uni" style="margin-top:12px;">' + steps.map(function (s) {
+      return '<div class="risk-ladder">' + steps.map(function (s) {
         var active = s === shown;
         var c = RISK_COLOR[s];
-        return '<div class="u"><span class="pill ' + (active ? c : 'gray') + '">' + s + (active ? ' ●' : '') + '</span></div>';
+        var icon = active ? (RISK_ICON[s] || '●') : '○';
+        return '<div class="risk-step ' + (active ? ('active ' + c) : 'dim') + ' ' + (active ? c : 'gray') + '">' + icon + ' ' + s + '</div>';
       }).join('') + '</div>';
     }
     var AGENT_MAP = [
@@ -2271,6 +2408,8 @@ _DASHBOARD_HTML = r"""<!doctype html>
       ]).then(function (res) {
         state.today = res[0] || state.today;
         state.history = res[1] || state.history;
+        state.lastUpdate = Date.now();
+        state.firstLoad = false;
         renderStatusBar();
         renderAlertBar();
         renderActive();
@@ -2325,9 +2464,11 @@ _DASHBOARD_HTML = r"""<!doctype html>
     renderAlertBar();
     renderStatusBar();
     renderActive();
+    updateAgeText();
     // initial history fetch for compact-pnl / chart decisions
-    fetch('/status/history?days=7', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (d) { state.history = d; renderActive(); }).catch(function () {});
+    fetch('/status/history?days=7', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (d) { state.history = d; state.firstLoad = false; renderActive(); }).catch(function () {});
     setInterval(function () { renderStatusBar(); }, 1000 * 20);
+    setInterval(updateAgeText, 1000);
     setInterval(refresh, POLL);
     window.addEventListener('resize', function () { if (state.tab === 'home') drawPnlChart(); });
   })();
