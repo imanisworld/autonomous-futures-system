@@ -20,6 +20,7 @@ Expose to TradingView via ngrok:
 
 from __future__ import annotations
 
+import asyncio
 import hmac
 import json
 import logging
@@ -349,7 +350,7 @@ async def status_history(days: int = Query(default=7, ge=1, le=30)) -> dict:
 # 15s) share one upstream broker/Yahoo call instead of each hitting it — faster
 # and keeps Tradovate well under its 5-req/hr auth limit. instrument → (ts, quote).
 _QUOTE_CACHE: dict[str, tuple[float, dict]] = {}
-_QUOTE_TTL_SECONDS = 10.0
+_QUOTE_TTL_SECONDS = 30.0  # price is a bar-close + Yahoo proxy; >poll interval so most polls hit cache
 
 # Module-level Tradovate broker singleton — reused across requests so the auth
 # token persists (the token is instance-level; a fresh broker per request would
@@ -395,21 +396,14 @@ async def status_broker_account() -> dict:
     return summary
 
 
-@app.get("/status/quote")
-async def status_quote(instrument: str = Query(default="MES")) -> dict:
-    """Return last known price for the instrument.
+def _compute_quote(instrument: str) -> dict:
+    """Blocking quote fetch — broker auth + get_quote + Yahoo reference price.
 
-    Price comes from the close of the last TradingView webhook bar — Tradovate's
-    REST API has no live quote endpoints (WebSocket-only). If no webhook has been
-    received yet, returns ok=false with error=no_bar_received_yet.
+    Runs in a worker thread (see status_quote) so its ~10s of synchronous network
+    I/O never freezes the async event loop and stall the health/today polls the
+    dashboard uses to decide it is "live". Writes the result into _QUOTE_CACHE.
     """
-    broker_mode = os.getenv("BROKER", "paper").strip().lower()
-    if broker_mode != "tradovate":
-        return {"ok": False, "error": f"BROKER={broker_mode}, not tradovate"}
     cache_key = instrument.upper()
-    cached = _QUOTE_CACHE.get(cache_key)
-    if cached is not None and (time.time() - cached[0]) < _QUOTE_TTL_SECONDS:
-        return cached[1]
     try:
         broker = _tv_broker()  # shared singleton — one auth token across endpoints
         # Seed the last price from the latest webhook payload if available.
@@ -442,6 +436,27 @@ async def status_quote(instrument: str = Query(default="MES")) -> dict:
         err = {"ok": False, "error": str(exc)}
         _QUOTE_CACHE[cache_key] = (time.time(), err)
         return err
+
+
+@app.get("/status/quote")
+async def status_quote(instrument: str = Query(default="MES")) -> dict:
+    """Return last known price for the instrument.
+
+    Price comes from the close of the last TradingView webhook bar — Tradovate's
+    REST API has no live quote endpoints (WebSocket-only). If no webhook has been
+    received yet, returns ok=false with error=no_bar_received_yet.
+
+    The actual fetch is offloaded to a thread (asyncio.to_thread) so a slow upstream
+    can never block the event loop and flap the dashboard offline.
+    """
+    broker_mode = os.getenv("BROKER", "paper").strip().lower()
+    if broker_mode != "tradovate":
+        return {"ok": False, "error": f"BROKER={broker_mode}, not tradovate"}
+    cache_key = instrument.upper()
+    cached = _QUOTE_CACHE.get(cache_key)
+    if cached is not None and (time.time() - cached[0]) < _QUOTE_TTL_SECONDS:
+        return cached[1]
+    return await asyncio.to_thread(_compute_quote, instrument)
 
 
 @app.get("/status/test-bracket")
