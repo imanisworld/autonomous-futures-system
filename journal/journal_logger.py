@@ -116,6 +116,48 @@ class JournalLogger:
                 f.write(line + "\n")
         logger.error(line)
 
+    def claim_bar(
+        self,
+        *,
+        instrument: str,
+        bar_ts: str,
+        for_date: Optional[date] = None,
+    ) -> bool:
+        """Atomically claim one instrument/bar timestamp before gate evaluation.
+
+        Returns False if this journal already has a claim or decision for the
+        same instrument + bar timestamp. This prevents duplicate webhook workers
+        from both passing daily/open-position gates for the same TradingView bar.
+        """
+        path = self._journal_path(for_date)
+        with self._locked():
+            if path.exists():
+                with open(path) as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            entry = json.loads(line)
+                        except json.JSONDecodeError:
+                            continue
+                        if entry.get("instrument") != instrument:
+                            continue
+                        if entry.get("ts") != bar_ts:
+                            continue
+                        if entry.get("type") == "OUTCOME":
+                            continue
+                        return False
+            entry = {
+                "ts": bar_ts,
+                "type": "BAR_CLAIM",
+                "instrument": instrument,
+                "claimed_at": datetime.now(timezone.utc).isoformat(),
+            }
+            with open(path, "a") as f:
+                f.write(json.dumps(entry) + "\n")
+            return True
+
     def _append(self, entry: dict, for_date: Optional[date] = None) -> None:
         """Append a single JSON entry to today's journal file."""
         path = self._journal_path(for_date)

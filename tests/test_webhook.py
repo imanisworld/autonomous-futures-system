@@ -12,6 +12,7 @@ Webhook layer coverage:
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from datetime import date, datetime, timezone
 from pathlib import Path
 
@@ -337,6 +338,32 @@ def test_runner_choppy_produces_no_trade(config, tmp_path):
     assert result["decision"] == "NO_TRADE"
     assert result["fill"] is None
     assert result["resolution"] is None
+
+
+def test_runner_blocks_duplicate_bar_timestamp(config, tmp_path):
+    from webhook.runner import process_alert
+
+    log_dir = str(tmp_path / "logs")
+    payload = _base_payload(market_condition="CHOPPY", orb_status=None)
+
+    first = process_alert(payload, config=config, log_dir=log_dir)
+    second = process_alert(payload, config=config, log_dir=log_dir)
+
+    assert first["decision"] != "BLOCKED_DUPLICATE_BAR"
+    assert second["decision"] == "BLOCKED_DUPLICATE_BAR"
+    assert "Duplicate bar" in second["failed_gates"][0]
+
+
+def test_runner_invalid_timestamp_fails_closed(config, tmp_path):
+    from webhook.runner import process_alert
+
+    cfg = replace(config, max_staleness_seconds=60)
+    payload = _base_payload(timestamp="not-a-timestamp")
+
+    result = process_alert(payload, config=cfg, log_dir=str(tmp_path / "logs"))
+
+    assert result["decision"] == "BLOCKED_DATA_QUALITY"
+    assert "Invalid bar timestamp" in result["failed_gates"][0]
 
 
 # ─── runner: TRADE → APPROVED path ───────────────────────────────────────────
@@ -980,6 +1007,36 @@ def test_manual_open_disabled_by_default(monkeypatch):
 
     assert result["ok"] is False
     assert "disabled" in result["error"]
+
+
+def test_manual_open_blocks_live_broker_when_live_trading_disabled(monkeypatch):
+    import webhook.app as app_module
+    import execution.tradovate_broker as tradovate_module
+
+    class FakeTradovateBroker:
+        is_live = True
+
+        def __init__(self, config):
+            self.config = config
+
+        def execute_bracket(self, order):
+            pytest.fail("manual open must not execute when live trading is disabled")
+
+    monkeypatch.setenv("BROKER", "tradovate")
+    monkeypatch.setenv("MANUAL_OPEN_ENABLED", "true")
+    monkeypatch.setattr(app_module._config, "live_trading_enabled", False)
+    monkeypatch.setattr(tradovate_module, "TradovateBroker", FakeTradovateBroker)
+
+    result = app_module._manual_open({
+        "direction": "LONG",
+        "instrument": "MES",
+        "entry": 5900.0,
+        "stop": 5893.0,
+        "target": 5915.0,
+    })
+
+    assert result["ok"] is False
+    assert result["error"].startswith("LIVE_TRADING_BLOCKED")
 
 
 def test_public_entry_flags_target_hit_negative_pnl():

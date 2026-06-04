@@ -7,6 +7,7 @@ immediate flatten, returning a CANCELLED fill so no naked position is held.
 """
 
 from execution.broker_interface import BracketOrder
+from execution.broker_interface import Position
 from execution.tradovate_broker import TradovateBroker, TradovateConfig
 
 
@@ -84,10 +85,8 @@ def test_rejected_child_is_not_live(monkeypatch):
     assert broker._verify_bracket_children(stop_id=101, target_id=102, order=_BRACKET, retries=1) == (False, True)
 
 
-def test_item_read_failure_trusts_oso_id(monkeypatch):
-    """If the OSO returned the child id but /order/item is unreadable, trust the
-    OSO — its id IS the broker's confirmation. (Prevents the false-positive
-    flatten that scanning /order/list by orderType caused.)"""
+def test_item_read_failure_fails_closed(monkeypatch):
+    """If /order/item is unreadable, treat the child as unconfirmed."""
     broker = TradovateBroker(config=TradovateConfig())
     broker._account_id = 555
 
@@ -96,7 +95,48 @@ def test_item_read_failure_trusts_oso_id(monkeypatch):
 
     monkeypatch.setattr(broker, "_get", _boom)
     monkeypatch.setattr("execution.tradovate_broker.time.sleep", lambda *_a, **_k: None)
-    assert broker._verify_bracket_children(stop_id=101, target_id=102, order=_BRACKET, retries=2) == (True, True)
+    assert broker._verify_bracket_children(stop_id=101, target_id=102, order=_BRACKET, retries=2) == (False, False)
+
+
+def test_flatten_liquidates_before_cancel(monkeypatch):
+    broker = TradovateBroker(config=TradovateConfig())
+    broker._account_id = 555
+    calls = []
+    pos = Position(
+        instrument="MES",
+        direction="LONG",
+        entry_price=5900.0,
+        stop=5893.0,
+        target=5915.0,
+        quantity=1,
+        open=True,
+    )
+
+    monkeypatch.setattr(broker, "_authenticate", lambda: True)
+    monkeypatch.setattr(broker, "get_position", lambda: calls.append("get_position") or pos)
+    monkeypatch.setattr(broker, "_find_contract_id", lambda instrument: 123)
+    monkeypatch.setattr(broker, "_post", lambda path, body: calls.append(path) or {"ok": True})
+    monkeypatch.setattr(broker, "_cancel_working_orders", lambda: calls.append("cancel_orders") or 2)
+
+    result = broker.flatten_position()
+
+    assert result["close_sent"] is True
+    assert result["cancelled_orders"] is True
+    assert calls == ["get_position", "/order/liquidateposition", "cancel_orders"]
+
+
+def test_flatten_repolls_position_before_deciding_no_liquidation(monkeypatch):
+    broker = TradovateBroker(config=TradovateConfig())
+    calls = []
+
+    monkeypatch.setattr(broker, "_authenticate", lambda: True)
+    monkeypatch.setattr(broker, "get_position", lambda: calls.append("get_position") or None)
+    monkeypatch.setattr(broker, "_cancel_working_orders", lambda: calls.append("cancel_orders") or 0)
+
+    result = broker.flatten_position()
+
+    assert result["close_sent"] is False
+    assert calls == ["get_position", "cancel_orders"]
 
 
 # ── escalation: alert + auto-flatten ──────────────────────────────────────────

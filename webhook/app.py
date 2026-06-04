@@ -2455,6 +2455,11 @@ def _manual_open(body: dict) -> dict:
             "error": "Manual OPEN is disabled. Set MANUAL_OPEN_ENABLED=true to re-enable it.",
         }
 
+    def _broker_live_blocked(broker) -> bool:
+        return bool(getattr(broker, "is_live", False)) and not bool(
+            getattr(_config, "live_trading_enabled", False)
+        )
+
     direction = str(body.get("direction", "")).upper().strip()
     if direction not in ("LONG", "SHORT"):
         return {**result, "ok": False, "error": "direction must be LONG or SHORT"}
@@ -2523,6 +2528,12 @@ def _manual_open(body: dict) -> dict:
             ibkr = IBKRBroker(config=IBKRConfig.from_env(), auto_connect=True)
             if not ibkr.connected:
                 return {**result, "ok": False, "error": "IBKR Gateway not reachable"}
+            if _broker_live_blocked(ibkr):
+                return {
+                    **result,
+                    "ok": False,
+                    "error": "LIVE_TRADING_BLOCKED — broker.is_live=True but live_trading_enabled=False",
+                }
             fill = ibkr.execute_bracket(order)
             result["ok"] = True
             result["fill"] = {
@@ -2539,6 +2550,12 @@ def _manual_open(body: dict) -> dict:
         try:
             from execution.tradovate_broker import TradovateBroker, TradovateConfig
             broker = TradovateBroker(config=TradovateConfig.from_env())
+            if _broker_live_blocked(broker):
+                return {
+                    **result,
+                    "ok": False,
+                    "error": "LIVE_TRADING_BLOCKED — broker.is_live=True but live_trading_enabled=False",
+                }
             fill = broker.execute_bracket(order)
             result["ok"] = fill.result != "CANCELLED"
             result["fill"] = {

@@ -169,6 +169,12 @@ def process_alert(
         "confidence_score": None,
     }
 
+    bar_ts = state.timestamp.isoformat()
+    if not journal.claim_bar(instrument=state.instrument, bar_ts=bar_ts, for_date=today):
+        result["decision"] = "BLOCKED_DUPLICATE_BAR"
+        result["failed_gates"] = [f"Duplicate bar already processed: {state.instrument} {bar_ts}"]
+        return result
+
     # ── Step 1: Resolve any open position ────────────────────────────────────
     # Paper mode: simulate using next-bar OHLC.
     # IBKR mode: query actual fills from the Gateway — the bracket child orders
@@ -662,9 +668,7 @@ def _check_payload_quality(payload: AlertPayload, cfg: SystemConfig) -> Optional
             age_seconds = (datetime.now(timezone.utc) - bar_ts).total_seconds()
             if age_seconds > max_staleness:
                 return f"Stale bar: {int(age_seconds)}s old (max {max_staleness}s)"
-        except Exception:
-            pass  # unparseable timestamp is caught later by state_builder
+        except Exception as exc:
+            return f"Invalid bar timestamp: {payload.timestamp!r} ({exc})"
 
     return None
-
-

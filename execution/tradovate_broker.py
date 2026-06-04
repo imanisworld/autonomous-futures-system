@@ -346,11 +346,11 @@ class TradovateBroker(BrokerInterface):
         """Confirm the OSO's stop + target child orders are live.
 
         Tradovate's placeOSO returns oso1Id (target/Limit) and oso2Id (stop/Stop)
-        — their presence is the broker's own confirmation the children exist
-        (NOTE: /order/list omits orderType, so we must NOT scan it by type). A
-        child id is treated as live unless /order/item explicitly reports it
-        Rejected/Canceled/Expired. A missing id means that side never placed.
-        Returns (stop_ok, target_ok). Best-effort: read errors never raise.
+        — their presence is the broker's first acknowledgement the children
+        exist, but we still require /order/item confirmation. A child id is
+        live only when /order/item returns a non-dead status. A missing id or
+        unreadable child status fails closed so the naked-position handler
+        auto-flattens instead of trusting an unverified bracket.
         """
         return self._child_live(stop_id, retries, delay), self._child_live(target_id, retries, delay)
 
@@ -370,8 +370,9 @@ class TradovateBroker(BrokerInterface):
                 logger.warning("bracket verify: /order/item id=%s failed: %s", order_id, exc)
             if attempt + 1 < retries:
                 time.sleep(delay)
-        # OSO returned the id but we couldn't read its status — trust the OSO.
-        return True
+        # OSO returned the id but we couldn't read its status. Fail closed:
+        # unverified protection is treated as missing protection.
+        return False
 
     def _handle_naked_position(
         self, order: BracketOrder, qty: int, *, stop_ok: bool, target_ok: bool,
@@ -508,7 +509,7 @@ class TradovateBroker(BrokerInterface):
         self._last_position = None
 
     def flatten_position(self) -> dict:
-        """Cancel all orders then liquidate any open position at market."""
+        """Liquidate any open position at market, then cancel working orders."""
         result: dict = {"cancelled_orders": False, "close_sent": False, "position_was": None}
         try:
             # ── Safety: same live-env guard as execute_bracket ──
@@ -523,15 +524,8 @@ class TradovateBroker(BrokerInterface):
                 result["error"] = "Tradovate not authenticated"
                 return result
 
-            # Step 1 — cancel all working orders (incl. any live bracket children)
-            try:
-                n = self._cancel_working_orders()
-                result["cancelled_orders"] = n > 0
-                result["cancelled_count"] = n
-            except Exception as exc:
-                logger.warning("Tradovate flatten cancel step failed: %s", exc)
-
-            # Step 2 — liquidate via Tradovate's liquidateposition endpoint
+            # Step 1 — re-poll position and liquidate first. Canceling bracket
+            # children before the close can briefly make a real position naked.
             pos = self.get_position()
             if pos and pos.open:
                 result["position_was"] = {
@@ -555,6 +549,15 @@ class TradovateBroker(BrokerInterface):
                 })
                 logger.info("Tradovate liquidateposition response: %s", liq)
                 result["close_sent"] = True
+
+            # Step 2 — after liquidation request, cancel any remaining working
+            # orders (including bracket children that may still be live).
+            try:
+                n = self._cancel_working_orders()
+                result["cancelled_orders"] = n > 0
+                result["cancelled_count"] = n
+            except Exception as exc:
+                logger.warning("Tradovate flatten cancel step failed: %s", exc)
         except Exception as exc:
             logger.exception("Tradovate flatten_position failed: %s", exc)
             result["error"] = str(exc)
@@ -699,14 +702,14 @@ class TradovateBroker(BrokerInterface):
             return {"ok": False, "error": str(exc)}
 
     def get_broker_name(self) -> str:
-        return f"TradovateBroker({'live' if self.is_live() else 'demo'})"
+        return f"TradovateBroker({'live' if self.is_live else 'demo'})"
 
     def get_capabilities(self) -> BrokerCapabilities:
         balance = self.get_account_balance()
         return BrokerCapabilities(
             broker_name=self.get_broker_name(),
             asset_class="futures",
-            account_mode="live" if self.is_live() else "demo",
+            account_mode="live" if self.is_live else "demo",
             starting_capital=balance,
             available_cash=balance,
             estimated_margin_required=None,
