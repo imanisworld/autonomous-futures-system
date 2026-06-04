@@ -117,6 +117,8 @@ class SystemConfig:
     min_signal_bar_volume: dict = field(default_factory=dict)
     # Quality gates: require explicit daily/4H FTFC alignment when HTF data is present
     require_htf_alignment: dict = field(default_factory=dict)
+    # Minimum confluence grade required for ordinary futures entries; blank disables.
+    min_confluence_grade: str = ""
     # Per-instrument strategy exclusions — overrides enabled_concepts for that instrument
     disabled_concepts_per_instrument: dict = field(default_factory=dict)
     # Bonus trades after normal daily max; RiskEngine requires confluence grade.
@@ -250,6 +252,7 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         require_strong_trend=quality.get("require_strong_trend", {}),
         min_signal_bar_volume=quality.get("min_signal_bar_volume", {}),
         require_htf_alignment=quality.get("require_htf_alignment", {}),
+        min_confluence_grade=str(quality.get("min_confluence_grade", "") or "").upper(),
 
         max_open_positions=position.get("max_open_positions", 1),
         averaging_down_allowed=position.get("averaging_down", False),
@@ -350,6 +353,8 @@ def _validate_config(config: SystemConfig) -> None:
         raise ConfigError("news_blackout_mode must be one of: off, block, reduced.")
     if config.news_blackout_max_trades < 0:
         raise ConfigError("news_blackout_max_trades must be >= 0.")
+    if config.min_confluence_grade and config.min_confluence_grade not in {"A+", "A", "B", "C", "WEAK", "F"}:
+        raise ConfigError("min_confluence_grade must be one of: A+, A, B, C, WEAK, F.")
     if config.min_rr_ratio < 1.0:
         raise ConfigError("min_rr_ratio must be >= 1.0.")
     if config.max_staleness_seconds < 1:

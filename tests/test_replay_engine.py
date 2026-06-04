@@ -380,27 +380,22 @@ class TestFullDayReplay2026_05_22:
         report = self._run(tmp_path)
         assert report.candles_processed == 13
 
-    def test_zero_approved_trades(self, tmp_path):
-        # MNQ removed from instruments.allowed — all signals blocked at instrument gate
+    def test_mnq_approves_two_trades(self, tmp_path):
         report = self._run(tmp_path)
-        assert report.approved_trades == 0
+        assert report.approved_trades == 2
 
     def test_not_stopped_at_daily_limit(self, tmp_path):
-        # No trades approved so daily cap is never reached
         report = self._run(tmp_path)
         assert report.stopped_reason is None
 
-    @pytest.mark.skip(reason="MNQ disabled in instruments.allowed — no wins possible until re-enabled with sizing rules")
     def test_at_least_one_win(self, tmp_path):
         report = self._run(tmp_path)
         assert report.wins >= 1
 
-    @pytest.mark.skip(reason="MNQ disabled — no P&L until re-enabled")
     def test_positive_realized_pnl(self, tmp_path):
         report = self._run(tmp_path)
         assert report.realized_pnl_dollars > 0
 
-    @pytest.mark.skip(reason="MNQ disabled — strategy mix test requires active MNQ replay")
     def test_strategy_mix_in_journal(self, tmp_path):
         """Journal must contain exactly one entry for each expected strategy."""
         report = self._run(tmp_path)

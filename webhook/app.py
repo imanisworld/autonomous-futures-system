@@ -206,9 +206,8 @@ async def manual_action(
         CLOSE_ALL   — cancel all open orders then send a closing MKT order to
                       flatten any open position. Safe even mid-trade — cancels
                       the bracket children first, then exits the position.
-        OPEN        — force-open a bracket position bypassing all risk gates.
-                      Body: {direction, entry, stop, target, contracts?, instrument?}
-                      Only works when BROKER=ibkr.
+        OPEN        — disabled by default. Set MANUAL_OPEN_ENABLED=true to
+                      force-open a bracket position bypassing all risk gates.
         STATUS      — return current broker connection status and open position.
 
     Examples:
@@ -250,9 +249,19 @@ async def manual_action(
         return JSONResponse(content=_manual_close_all())
 
     if action == "OPEN":
+        if not _manual_open_enabled():
+            return JSONResponse(content={
+                "ok": False,
+                "action": "OPEN",
+                "error": "Manual OPEN is disabled. Set MANUAL_OPEN_ENABLED=true to re-enable it.",
+            })
         return JSONResponse(content=_manual_open(body))
 
     raise HTTPException(status_code=400, detail=f"Unknown action '{action}'. Use CLOSE_ALL, OPEN, or STATUS.")
+
+
+def _manual_open_enabled() -> bool:
+    return os.getenv("MANUAL_OPEN_ENABLED", "false").strip().lower() in {"true", "1", "yes"}
 
 
 
@@ -752,6 +761,31 @@ def _hhmm_to_minutes(value: object) -> int | None:
         return None
 
 
+def _quality_gate_summary() -> str:
+    strong = [
+        instrument
+        for instrument, enabled in (_config.require_strong_trend or {}).items()
+        if enabled
+    ]
+    volume = [
+        f"{instrument}>={threshold:g}"
+        for instrument, threshold in (_config.min_signal_bar_volume or {}).items()
+        if float(threshold or 0) > 0
+    ]
+    htf = [
+        instrument
+        for instrument, enabled in (_config.require_htf_alignment or {}).items()
+        if enabled
+    ]
+    parts = [
+        f"strong trend: {', '.join(strong) if strong else 'off'}",
+        f"volume: {', '.join(volume) if volume else 'off'}",
+        f"confluence: {(_config.min_confluence_grade or 'off')}",
+        f"HTF: {', '.join(htf) if htf else 'passive'}",
+    ]
+    return "; ".join(parts) + "."
+
+
 def _diagnostics_payload(for_date: date) -> dict:
     broker = os.getenv("BROKER", "paper").strip().lower()
     gateway = _ibkr_gateway_reachable()
@@ -830,6 +864,8 @@ def _diagnostics_payload(for_date: date) -> dict:
         items.append(_diagnostic("ok", "Signa", "Signa is enabled and configured."))
     else:
         items.append(_diagnostic("info", "Signa", "Signa is off."))
+
+    items.append(_diagnostic("info", "Quality gates", _quality_gate_summary()))
 
     if latest_age is None:
         items.append(_diagnostic(
@@ -931,6 +967,7 @@ def _dashboard_payload(for_date: date) -> dict:
         "today_pnl_dollars": round(float(daily_state.realized_pnl_dollars or 0.0), 2),
         "journal_path": summary.get("journal_path", str(path)),
         "latest_entries": [_public_entry(entry) for entry in recent_entries],
+        "instrument_breakdown": _instrument_breakdown(entries),
         "top_no_trade_reasons": [
             {"reason": reason, "count": count}
             for reason, count in no_trade_reasons.most_common(5)
@@ -941,6 +978,56 @@ def _dashboard_payload(for_date: date) -> dict:
         "broker_gateway_reachable": _ibkr_gateway_reachable(),
         "diagnostics": diagnostics,
     }
+
+
+def _instrument_breakdown(entries: list[dict]) -> list[dict]:
+    instruments = [
+        instrument
+        for instrument in _config.allowed_instruments
+        if instrument in {"MES", "MNQ"}
+    ]
+    if not instruments:
+        instruments = ["MES", "MNQ"]
+
+    breakdown = []
+    for instrument in instruments:
+        inst_entries = [
+            entry for entry in entries
+            if (entry.get("instrument") or "").upper() == instrument
+        ]
+        decision_entries = [entry for entry in inst_entries if entry.get("type") != "OUTCOME"]
+        outcome_entries = [entry for entry in inst_entries if entry.get("type") == "OUTCOME"]
+        trades = [
+            entry for entry in decision_entries
+            if entry.get("decision") == "TRADE"
+            and (entry.get("risk_check") or {}).get("result") == "APPROVED"
+        ]
+        no_trades = [entry for entry in decision_entries if entry.get("decision") == "NO_TRADE"]
+        pnl = 0.0
+        wins = 0
+        losses = 0
+        for entry in outcome_entries:
+            outcome = entry.get("outcome") or {}
+            result = outcome.get("result")
+            if result == "WIN":
+                wins += 1
+            elif result == "LOSS":
+                losses += 1
+            pnl += float(outcome.get("pnl_dollars") or 0.0)
+
+        latest = _public_entry(inst_entries[-1]) if inst_entries else None
+        breakdown.append({
+            "instrument": instrument,
+            "decisions": len(decision_entries),
+            "trades": len(trades),
+            "no_trades": len(no_trades),
+            "wins": wins,
+            "losses": losses,
+            "pnl_dollars": round(pnl, 2),
+            "latest": latest,
+            "latest_entries": [_public_entry(entry) for entry in inst_entries[-5:]],
+        })
+    return breakdown
 
 
 def _public_entry(entry: dict) -> dict:
@@ -1137,6 +1224,9 @@ def _render_dashboard(status: dict) -> str:
     lg_loss_str   = _fmt_stat(perf.get("largest_loss"))
 
     latest_rows = "\n".join(_render_entry_row(entry) for entry in status["latest_entries"])
+    instrument_cards = "\n".join(
+        _render_instrument_card(item) for item in status.get("instrument_breakdown", [])
+    )
     reason_rows = "\n".join(
         f"<li><span>{_escape(item['reason'])}</span><strong>{item['count']}</strong></li>"
         for item in status["top_no_trade_reasons"]
@@ -1332,6 +1422,66 @@ def _render_dashboard(status: dict) -> str:
       min-height: 20px;
       overflow-wrap: anywhere;
     }}
+    .instrument-grid {{
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 14px;
+    }}
+    .instrument-head {{
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }}
+    .instrument-symbol {{
+      font-size: 24px;
+      font-weight: 800;
+    }}
+    .instrument-latest {{
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.4;
+      margin-top: 4px;
+    }}
+    .instrument-stats {{
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 10px;
+    }}
+    .instrument-stat {{
+      border-top: 1px solid var(--line);
+      padding-top: 8px;
+    }}
+    .instrument-stat label {{
+      display: block;
+      color: var(--muted);
+      font-size: 10px;
+      text-transform: uppercase;
+      margin-bottom: 3px;
+    }}
+    .instrument-stat strong {{
+      font-size: 16px;
+    }}
+    .mini-entry {{
+      display: grid;
+      grid-template-columns: 58px 88px 1fr;
+      gap: 8px;
+      border-top: 1px solid var(--line);
+      padding: 8px 0;
+      color: var(--muted);
+      font-size: 12px;
+      align-items: start;
+    }}
+    .mini-entry strong {{
+      color: var(--text);
+      font-size: 12px;
+    }}
+    .mini-entry span:last-child {{
+      overflow-wrap: anywhere;
+    }}
     .stats-grid {{
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
@@ -1367,6 +1517,9 @@ def _render_dashboard(status: dict) -> str:
       table {{ font-size: 12px; table-layout: auto; width: max-content; min-width: 100%; }}
       .table-wrap {{ overflow-x: auto; -webkit-overflow-scrolling: touch; }}
       .rules {{ grid-template-columns: 1fr; }}
+      .instrument-grid {{ grid-template-columns: 1fr; }}
+      .instrument-stats {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+      .mini-entry {{ grid-template-columns: 54px 82px 1fr; }}
       .context-grid {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
       .col-session {{ display: none; }}
       td, td.reason {{ white-space: nowrap; overflow: visible; text-overflow: clip; word-break: normal; overflow-wrap: normal; max-width: none; }}
@@ -1413,6 +1566,10 @@ def _render_dashboard(status: dict) -> str:
     <section class="panel" style="margin-bottom:14px;">
       <h2>Equity Curve <span id="chart-range" style="font-size:11px;font-weight:400;color:var(--muted);margin-left:8px;"></span></h2>
       <canvas id="pnl-chart" class="chart-canvas" style="height:140px;"></canvas>
+    </section>
+
+    <section id="instrument-grid" class="instrument-grid">
+      {instrument_cards}
     </section>
 
     <section class="panel" style="margin-bottom:14px;">
@@ -1544,6 +1701,39 @@ def _render_dashboard(status: dict) -> str:
         <td class="reason">${{escapeHtml(entry.reason || '')}}</td>
         <td>${{escapeHtml(outcome)}}</td>
       </tr>`;
+    }}
+
+    function renderMiniEntry(entry) {{
+      return `<div class="mini-entry">
+        <span>${{escapeHtml(shortTime(entry.ts))}}</span>
+        <strong>${{escapeHtml(entry.decision || entry.type || '')}}</strong>
+        <span>${{escapeHtml(entry.reason || entry.exit_reason || '')}}</span>
+      </div>`;
+    }}
+
+    function renderInstrumentCard(item) {{
+      const latest = item.latest || {{}};
+      const pnl = Number(item.pnl_dollars || 0);
+      const pnlClass = pnl >= 0 ? 'green' : 'red';
+      const miniRows = item.latest_entries && item.latest_entries.length
+        ? item.latest_entries.map(renderMiniEntry).join('')
+        : '<div class="mini-entry"><span>—</span><strong>NONE</strong><span>No entries yet.</span></div>';
+      return `<div class="panel instrument-card">
+        <div class="instrument-head">
+          <div>
+            <div class="instrument-symbol">${{escapeHtml(item.instrument || '')}}</div>
+            <div class="instrument-latest">${{escapeHtml(latest.decision || latest.type || '—')}} · ${{escapeHtml(latest.reason || 'No entries yet.')}}</div>
+          </div>
+          <div class="badge ${{pnlClass}}">$${{pnl.toFixed(2)}}</div>
+        </div>
+        <div class="instrument-stats">
+          <div class="instrument-stat"><label>Decisions</label><strong>${{Number(item.decisions || 0)}}</strong></div>
+          <div class="instrument-stat"><label>Trades</label><strong>${{Number(item.trades || 0)}}</strong></div>
+          <div class="instrument-stat"><label>W/L</label><strong>${{Number(item.wins || 0)}}/${{Number(item.losses || 0)}}</strong></div>
+          <div class="instrument-stat"><label>No Trade</label><strong>${{Number(item.no_trades || 0)}}</strong></div>
+        </div>
+        <div class="instrument-mini-list">${{miniRows}}</div>
+      </div>`;
     }}
 
     function drawPnlChart(history) {{
@@ -1748,6 +1938,7 @@ def _render_dashboard(status: dict) -> str:
         const bal = document.getElementById('metric-balance');
         const peak = document.getElementById('metric-peak');
         const tbody = document.getElementById('journal-tbody');
+        const instrumentGrid = document.getElementById('instrument-grid');
         if (pnl) pnl.textContent = `$${{Number(today.today_pnl_dollars || 0).toFixed(2)}}`;
         if (trades) trades.innerHTML = `${{today.trade_count || 0}}<small>/${{today.max_trades_per_day || 0}}</small>`;
         if (winrate) {{
@@ -1761,6 +1952,9 @@ def _render_dashboard(status: dict) -> str:
           tbody.innerHTML = today.latest_entries.length
             ? today.latest_entries.map(renderEntryRow).join('')
             : '<tr><td colspan="6">No journal entries yet.</td></tr>';
+        }}
+        if (instrumentGrid && today.instrument_breakdown) {{
+          instrumentGrid.innerHTML = today.instrument_breakdown.map(renderInstrumentCard).join('');
         }}
         // Performance stats
         const perf = today.performance || {{}};
@@ -1823,6 +2017,46 @@ def _render_entry_row(entry: dict) -> str:
         f"<td class=\"reason\">{_escape(entry.get('reason') or '')}</td>"
         f"<td>{_escape(outcome)}</td>"
         "</tr>"
+    )
+
+
+def _render_instrument_card(item: dict) -> str:
+    instrument = item.get("instrument") or ""
+    latest = item.get("latest") or {}
+    latest_decision = latest.get("decision") or latest.get("type") or "—"
+    latest_reason = latest.get("reason") or "No entries yet."
+    pnl = float(item.get("pnl_dollars") or 0.0)
+    pnl_class = "green" if pnl >= 0 else "red"
+    mini_rows = "".join(
+        _render_mini_entry(entry) for entry in item.get("latest_entries", [])
+    ) or "<div class='mini-entry'><span>—</span><strong>NONE</strong><span>No entries yet.</span></div>"
+    return (
+        "<div class=\"panel instrument-card\">"
+        "<div class=\"instrument-head\">"
+        "<div>"
+        f"<div class=\"instrument-symbol\">{_escape(instrument)}</div>"
+        f"<div class=\"instrument-latest\">{_escape(latest_decision)} · {_escape(latest_reason)}</div>"
+        "</div>"
+        f"<div class=\"badge {pnl_class}\">${pnl:.2f}</div>"
+        "</div>"
+        "<div class=\"instrument-stats\">"
+        f"<div class=\"instrument-stat\"><label>Decisions</label><strong>{int(item.get('decisions') or 0)}</strong></div>"
+        f"<div class=\"instrument-stat\"><label>Trades</label><strong>{int(item.get('trades') or 0)}</strong></div>"
+        f"<div class=\"instrument-stat\"><label>W/L</label><strong>{int(item.get('wins') or 0)}/{int(item.get('losses') or 0)}</strong></div>"
+        f"<div class=\"instrument-stat\"><label>No Trade</label><strong>{int(item.get('no_trades') or 0)}</strong></div>"
+        "</div>"
+        f"<div class=\"instrument-mini-list\">{mini_rows}</div>"
+        "</div>"
+    )
+
+
+def _render_mini_entry(entry: dict) -> str:
+    return (
+        "<div class=\"mini-entry\">"
+        f"<span>{_escape(_short_time(entry.get('ts')))}</span>"
+        f"<strong>{_escape(entry.get('decision') or entry.get('type') or '')}</strong>"
+        f"<span>{_escape(entry.get('reason') or entry.get('exit_reason') or '')}</span>"
+        "</div>"
     )
 
 
@@ -2068,6 +2302,12 @@ def _manual_open(body: dict) -> dict:
     import os as _os
     broker_type = _os.getenv("BROKER", "paper").strip().lower()
     result: dict = {"action": "OPEN", "broker": broker_type}
+    if not _manual_open_enabled():
+        return {
+            **result,
+            "ok": False,
+            "error": "Manual OPEN is disabled. Set MANUAL_OPEN_ENABLED=true to re-enable it.",
+        }
 
     direction = str(body.get("direction", "")).upper().strip()
     if direction not in ("LONG", "SHORT"):

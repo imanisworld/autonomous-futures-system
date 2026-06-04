@@ -150,6 +150,7 @@ class RiskEngine:
             self._check_direction,
             self._check_entry_stop_target_distinct,  # structural check before computed R:R
             self._check_rr_ratio,
+            self._check_min_confluence_grade,
             self._check_min_target_distance,
             self._check_max_stop_distance,
         ]
@@ -201,7 +202,7 @@ class RiskEngine:
             if daily_state.account_balance is not None
             else sizing.starting_balance
         )
-        rule = self._position_sizing_rule_for_balance(balance)
+        rule = self._position_sizing_rule_for_balance(balance, setup.instrument)
         if rule is None:
             return RiskResult(
                 result="REJECTED",
@@ -230,14 +231,20 @@ class RiskEngine:
             )
         return None
 
-    def _position_sizing_rule_for_balance(self, balance: float):
+    def _position_sizing_rule_for_balance(self, balance: float, instrument: str | None = None):
         sizing = self.config.position_sizing
         effective_balance = self._effective_sizing_balance(float(balance))
-        selected = None
+        matching = []
         for rule in sizing.sizing_rules:
             upper_ok = rule.max_balance is None or effective_balance < rule.max_balance
             if effective_balance >= rule.min_balance and upper_ok:
-                selected = rule
+                matching.append(rule)
+        if instrument:
+            instrument = instrument.upper()
+            for rule in reversed(matching):
+                if rule.instrument == instrument:
+                    return rule
+        selected = matching[-1] if matching else None
         return selected
 
     def _effective_sizing_balance(self, balance: float) -> float:
@@ -256,7 +263,8 @@ class RiskEngine:
         sizing = self.config.position_sizing
         if sizing.enabled and sizing.sizing_rules:
             rule = self._position_sizing_rule_for_balance(
-                sizing.starting_balance if balance is None else balance
+                sizing.starting_balance if balance is None else balance,
+                instrument,
             )
             if rule is not None and instrument == rule.instrument:
                 return rule.max_contracts
@@ -358,6 +366,27 @@ class RiskEngine:
     def _grade_meets_minimum(grade: str, minimum: str) -> bool:
         order = {"A+": 5, "A": 4, "B": 3, "C": 2, "WEAK": 1, "F": 0, "": -1}
         return order.get(grade.upper(), -1) >= order.get(minimum.upper(), 4)
+
+    def _check_min_confluence_grade(
+        self, setup: TradeSetup, daily_state: DailyState
+    ) -> Optional[RiskResult]:
+        """Optional baseline confluence grade gate for ordinary entries."""
+        minimum = (getattr(self.config, "min_confluence_grade", "") or "").strip().upper()
+        if not minimum:
+            return None
+
+        grade = (setup.confluence_grade or "").strip().upper()
+        if self._grade_meets_minimum(grade, minimum):
+            return None
+
+        return RiskResult(
+            result="REJECTED",
+            failed_rule="min_confluence_grade",
+            reason=(
+                f"Confluence grade {grade or 'NONE'} is below required "
+                f"minimum {minimum}."
+            ),
+        )
 
     def _is_news_blackout_date(self, setup: TradeSetup) -> bool:
         if not setup.entry_time:

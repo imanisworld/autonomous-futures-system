@@ -18,8 +18,8 @@ trading_mode:
 # ─── Allowed Universe ────────────────────────────────────────
 instruments:
   allowed:
-    - MES   # Micro E-mini S&P 500 (active — MES-only ladder while validating live signals)
-    # - MNQ   # Micro E-mini NASDAQ-100 — disabled until MNQ sizing rules are added
+    - MES   # Micro E-mini S&P 500
+    - MNQ   # Micro E-mini NASDAQ-100 — same quality gates, separate conservative sizing
     # - ES    # E-mini S&P 500 — disabled (full-size, not paper-appropriate yet)
     # - NQ    # E-mini NASDAQ-100 — disabled (full-size)
     # - MGC   # Micro Gold — disabled
@@ -151,10 +151,11 @@ quality_gates:
     MGC: 0.0
     MCL: 0.0
   require_htf_alignment:            # Require daily/4H FTFC alignment when HTF data is present
-    MNQ: false                      # Passive — HTF logged in journal but not blocking
-    MES: false
+    MNQ: false                      # Passive — replay over-filtered when active without WR improvement
+    MES: false                      # Passive — replay over-filtered when active without WR improvement
     MGC: false
     MCL: false
+  min_confluence_grade: "B"         # Reject weak/C setups; require at least 2-of-3 style confirmation
 
 # ─── Position Rules ──────────────────────────────────────────
 position_rules:
@@ -162,7 +163,7 @@ position_rules:
   averaging_down: false            # Absolute prohibition
   discretionary_override: false    # No manual intervention
   max_contracts_per_instrument:
-    MNQ: 0                          # MES-only ladder for now
+    MNQ: 6                          # Dynamic sizing controls actual MNQ tier
     MES: 6                          # Dynamic sizing controls actual MES tier
     ES: 3
     NQ: 2
@@ -177,32 +178,54 @@ position_sizing:
   aggressive_rounding: false         # Conservative launch
   rounding_threshold_percent: 0
   sizing_rules:
-    # ── MES-only ladder — validating live signals on Hetzner ──────
-    # Keep one instrument while validating Pine payloads, Hetzner uptime,
-    # journal accuracy, and live paper signal quality.
+    # ── Conservative micro ladders — MES and MNQ share gates, size separately.
     - min_balance: 0
       max_balance: 2000
       instrument: "MES"
+      max_contracts: 1
+    - min_balance: 0
+      max_balance: 2000
+      instrument: "MNQ"
       max_contracts: 1
     - min_balance: 2000
       max_balance: 4000
       instrument: "MES"
       max_contracts: 2
+    - min_balance: 2000
+      max_balance: 4000
+      instrument: "MNQ"
+      max_contracts: 2
     - min_balance: 4000
       max_balance: 8000
       instrument: "MES"
+      max_contracts: 3
+    - min_balance: 4000
+      max_balance: 8000
+      instrument: "MNQ"
       max_contracts: 3
     - min_balance: 8000
       max_balance: 12000
       instrument: "MES"
       max_contracts: 4
+    - min_balance: 8000
+      max_balance: 12000
+      instrument: "MNQ"
+      max_contracts: 4
     - min_balance: 12000
       max_balance: 18000
       instrument: "MES"
       max_contracts: 5
+    - min_balance: 12000
+      max_balance: 18000
+      instrument: "MNQ"
+      max_contracts: 5
     - min_balance: 18000
       max_balance: null
       instrument: "MES"
+      max_contracts: 6
+    - min_balance: 18000
+      max_balance: null
+      instrument: "MNQ"
       max_contracts: 6
 
 # ─── Order Rules ─────────────────────────────────────────────

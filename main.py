@@ -33,6 +33,7 @@ from pathlib import Path
 from config.settings import load_config, LiveTradingBlockedError, ConfigError
 from context.market_context import MarketStateLoader, DataQualityError, StaleDataError
 from strategy.signal_engine import DecisionEngine
+from strategy.confluence_scorer import score_setup as _score_setup
 from risk.risk_engine import RiskEngine, TradeSetup, DailyState
 from execution.paper_broker import NextBarOHLC, PaperBroker
 from journal.journal_logger import JournalLogger
@@ -168,10 +169,18 @@ def main() -> int:
     # ── 5. Risk Check (only if TRADE) ─────────────────────────────────────────
     risk_result_dict = None
     decision_logged = False
+    decision_log_entry = decision.to_dict()
 
     if decision.decision == "TRADE" and decision.setup is not None:
         risk_engine = RiskEngine(config=config)
         setup = decision.setup
+        confluence = _score_setup(state, setup)
+        decision_log_entry["confluence"] = {
+            "score": confluence.score,
+            "grade": confluence.grade,
+            "factors": confluence.factors,
+            "penalties": confluence.penalties,
+        }
         account_balance = journal.get_account_balance(config.position_sizing.starting_balance)
         daily_state.account_balance = account_balance
         contracts = risk_engine.recommended_contracts(state.instrument, account_balance)
@@ -187,6 +196,7 @@ def main() -> int:
             session=state.session,
             notes=setup.notes,
             contracts=contracts,
+            confluence_grade=confluence.grade,
         )
 
         risk_result = risk_engine.validate(trade_setup, daily_state)
@@ -203,7 +213,7 @@ def main() -> int:
 
         # ── 6. Execute (if APPROVED) ──────────────────────────────────────────
         if risk_result.approved:
-            journal.log_decision(decision.to_dict(), risk_result_dict)
+            journal.log_decision(decision_log_entry, risk_result_dict)
             decision_logged = True
             broker = PaperBroker(starting_balance=account_balance)
             from execution.broker_interface import BracketOrder
@@ -247,7 +257,7 @@ def main() -> int:
 
     # ── 7. Log ────────────────────────────────────────────────────────────────
     if not decision_logged:
-        journal.log_decision(decision.to_dict(), risk_result_dict)
+        journal.log_decision(decision_log_entry, risk_result_dict)
 
     # ── 8. Summary ────────────────────────────────────────────────────────────
     _print_result(decision.decision, decision.reason, decision.setup, risk_result_dict)

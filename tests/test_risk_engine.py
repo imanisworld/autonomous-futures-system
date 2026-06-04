@@ -208,6 +208,45 @@ class TestDailyTradeLimit:
                 f"trade_count={count} should be under limit"
 
 
+class TestConfluenceGradeGate:
+
+    def test_min_confluence_grade_disabled_by_default(self, config, valid_trade_setup, clean_daily_state):
+        engine = RiskEngine(config=config)
+
+        result = engine.validate(valid_trade_setup, clean_daily_state)
+
+        assert result.approved
+
+    @pytest.mark.parametrize("grade", ["B", "A", "A+"])
+    def test_min_confluence_grade_accepts_grade_at_or_above_minimum(
+        self, config, valid_trade_setup, clean_daily_state, grade
+    ):
+        from dataclasses import replace
+
+        cfg = replace(config, min_confluence_grade="B")
+        setup = replace(valid_trade_setup, confluence_grade=grade)
+        engine = RiskEngine(config=cfg)
+
+        result = engine.validate(setup, clean_daily_state)
+
+        assert result.approved
+
+    @pytest.mark.parametrize("grade", [None, "", "WEAK", "C", "F"])
+    def test_min_confluence_grade_rejects_grade_below_minimum(
+        self, config, valid_trade_setup, clean_daily_state, grade
+    ):
+        from dataclasses import replace
+
+        cfg = replace(config, min_confluence_grade="B")
+        setup = replace(valid_trade_setup, confluence_grade=grade)
+        engine = RiskEngine(config=cfg)
+
+        result = engine.validate(setup, clean_daily_state)
+
+        assert result.rejected
+        assert result.failed_rule == "min_confluence_grade"
+
+
 class TestConsecutiveLossLimit:
 
     def test_at_loss_limit_rejected(self, config, valid_trade_setup):
@@ -519,6 +558,34 @@ class TestDynamicPositionSizing:
         rejected = engine.validate(self._setup("MES", 3), state)
         assert rejected.rejected
         assert rejected.failed_rule == "position_sizing_instrument"
+
+    def test_overlapping_mes_mnq_tiers_size_each_instrument_independently(self, config):
+        from dataclasses import replace
+        from config.settings import PositionSizingConfig, PositionSizingRule
+
+        cfg = replace(
+            config,
+            allowed_instruments=["MES", "MNQ"],
+            max_contracts_per_instrument={"MES": 6, "MNQ": 6},
+            position_sizing=PositionSizingConfig(
+                starting_balance=1500,
+                enabled=True,
+                aggressive_rounding=False,
+                rounding_threshold_percent=0,
+                sizing_rules=[
+                    PositionSizingRule(0, 2000, "MES", 1),
+                    PositionSizingRule(0, 2000, "MNQ", 1),
+                    PositionSizingRule(2000, 4000, "MES", 2),
+                    PositionSizingRule(2000, 4000, "MNQ", 2),
+                ],
+            ),
+        )
+        engine = RiskEngine(config=cfg)
+
+        assert engine.validate(self._setup("MES", 1), DailyState(account_balance=1500)).approved
+        assert engine.validate(self._setup("MNQ", 1), DailyState(account_balance=1500)).approved
+        assert engine.recommended_contracts("MES", 2500) == 2
+        assert engine.recommended_contracts("MNQ", 2500) == 2
 
 
 class TestRRCalculation:
