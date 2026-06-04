@@ -43,12 +43,12 @@ def _broker(monkeypatch):
     return b
 
 
-def _wire(monkeypatch, broker, positions, orders):
+def _wire(monkeypatch, broker, positions, fills):
     def fake_get(path):
         if path.startswith("/position/list"):
             return positions
-        if path.startswith("/order/list"):
-            return orders
+        if path.startswith("/fill/list"):
+            return fills
         return []
     monkeypatch.setattr(broker, "_get", fake_get)
 
@@ -60,20 +60,23 @@ def test_still_open_when_our_contract_has_net_position(monkeypatch):
     assert b._last_position is not None and b._last_position.open
 
 
-def test_win_when_target_limit_child_filled(monkeypatch):
+def test_win_when_target_fill_matches(monkeypatch):
     b = _broker(monkeypatch)
-    _wire(monkeypatch, b, [], [{"contractId": OUR_CID, "ordStatus": "Filled", "orderType": "Limit", "price": 30015.0}])
+    # entry fill 30002 (≠ intended 30000), exit fill at target 30015.
+    _wire(monkeypatch, b, [],
+          [{"contractId": OUR_CID, "price": 30002.0}, {"contractId": OUR_CID, "price": 30015.0}])
     fill = b.resolve_position()
     assert fill is not None
     assert fill.result == "WIN" and fill.exit_reason == "TARGET_HIT"
-    assert fill.exit_price == 30015.0 and (fill.pnl_dollars or 0) > 0
+    assert fill.exit_price == 30015.0
+    assert fill.entry_price == 30002.0  # real entry fill used, not the planned 30000
     assert b._last_position is None
 
 
-def test_loss_when_stop_child_filled(monkeypatch):
+def test_loss_when_stop_fill_matches(monkeypatch):
     b = _broker(monkeypatch)
     _wire(monkeypatch, b, [{"contractId": OUR_CID, "netPos": 0}],
-          [{"contractId": OUR_CID, "ordStatus": "Filled", "orderType": "Stop", "stopPrice": 29994.0}])
+          [{"contractId": OUR_CID, "price": 30001.0}, {"contractId": OUR_CID, "price": 29994.0}])
     fill = b.resolve_position()
     assert fill is not None
     assert fill.result == "LOSS" and fill.exit_reason == "STOP_HIT"
@@ -83,18 +86,16 @@ def test_loss_when_stop_child_filled(monkeypatch):
 def test_other_instrument_open_does_not_block_resolution(monkeypatch):
     b = _broker(monkeypatch)
     _wire(monkeypatch, b, [{"contractId": OTHER_CID, "netPos": 1}],
-          [{"contractId": OUR_CID, "ordStatus": "Filled", "orderType": "Limit", "price": 30015.0}])
+          [{"contractId": OUR_CID, "price": 30000.0}, {"contractId": OUR_CID, "price": 30015.0}])
     fill = b.resolve_position()
     assert fill is not None and fill.result == "WIN"
 
 
 def test_unrelated_fill_does_NOT_fabricate_a_win(monkeypatch):
-    # THE REGRESSION: flat, but the only filled order is an unrelated entry-side
-    # Market fill far from target/stop (the 30208.75 bug). Must NOT book a win —
-    # no bracket child matched → retry, position left open.
+    # THE REGRESSION: flat, but the only fill is far from target/stop (the 30208.75
+    # bug). Must NOT book a win — no bracket price matched → retry, position kept.
     b = _broker(monkeypatch)
-    _wire(monkeypatch, b, [],
-          [{"contractId": OUR_CID, "ordStatus": "Filled", "orderType": "Market", "price": 30208.75}])
+    _wire(monkeypatch, b, [], [{"contractId": OUR_CID, "price": 30208.75}])
     assert b.resolve_position() is None
     assert b._last_position is not None  # not cleared, not booked
     assert b._resolve_fail_count == 1

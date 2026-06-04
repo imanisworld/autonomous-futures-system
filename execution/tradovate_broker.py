@@ -606,31 +606,27 @@ class TradovateBroker(BrokerInterface):
             tick_size = _TICK_SIZE.get(instrument, 0.25)
             tick_value = _TICK_VALUE.get(instrument, 1.25)
             tol = tick_size * 2
-            orders = self._get("/order/list")
-            orders = orders if isinstance(orders, list) else []
+            # Use /fill/list (reliably carries `price`; /order/list often omits the
+            # limit price). Match the EXIT fill to our journaled target/stop — never
+            # "the last fill", which grabs an unrelated entry and fabricates wins
+            # (the 30208.75-on-two-trades bug).
+            fills = self._get(f"/fill/list?accountId={self._account_id}")
+            ours = [
+                f for f in (fills if isinstance(fills, list) else [])
+                if (our_cid is None or f.get("contractId") == our_cid) and f.get("price") is not None
+            ]
+            exit_fill = None
             target_hit = stop_hit = False
-            for o in orders:
-                if our_cid is not None and o.get("contractId") not in (None, our_cid):
-                    continue
-                if str(o.get("ordStatus", "")).lower() != "filled":
-                    continue
-                otype = str(o.get("orderType") or o.get("ordType") or "").lower()
-                raw_px = o.get("price") or o.get("stopPrice") or o.get("avgPrice")
-                if raw_px is None:
-                    continue
-                px = float(raw_px)
-                near_target = last.target is not None and abs(px - last.target) <= tol
-                near_stop = last.stop is not None and abs(px - last.stop) <= tol
-                if near_target and "stop" not in otype:
-                    target_hit = True
-                elif near_stop and "stop" in otype:
-                    stop_hit = True
-                elif near_target:
-                    target_hit = True
-                elif near_stop:
-                    stop_hit = True
-            if not (target_hit or stop_hit):
-                # Flat but no bracket child matches yet (settle window) or it was
+            for f in ours:
+                px = float(f["price"])
+                if last.target is not None and abs(px - last.target) <= tol:
+                    exit_fill, target_hit = f, True
+                    break
+                if last.stop is not None and abs(px - last.stop) <= tol:
+                    exit_fill, stop_hit = f, True
+                    break
+            if exit_fill is None:
+                # Flat but no fill matches our bracket prices yet (settle window) or
                 # closed manually/liquidated. Retry a few bars; then book BREAKEVEN
                 # at entry rather than fabricate a win from an unrelated fill.
                 self._resolve_fail_count += 1
@@ -640,17 +636,22 @@ class TradovateBroker(BrokerInterface):
                         "(attempt %d) — retrying", instrument, self._resolve_fail_count,
                     )
                     return None
+                entry_fill_px = last.entry_price
                 exit_price = last.entry_price
                 exit_reason = "FORCE_CLOSE_UNMATCHED"
             else:
-                if target_hit and stop_hit:
-                    target_hit, stop_hit = False, True  # ambiguous → pessimistic (stop)
-                exit_price = last.target if target_hit else last.stop
+                exit_price = float(exit_fill["price"])
                 exit_reason = "TARGET_HIT" if target_hit else "STOP_HIT"
+                # Actual entry fill = the fill closest to our intended entry among the
+                # rest (so P&L matches Tradovate to the dollar, not the planned entry).
+                others = [float(f["price"]) for f in ours if f is not exit_fill]
+                entry_fill_px = (
+                    min(others, key=lambda p: abs(p - last.entry_price)) if others else last.entry_price
+                )
 
             signed_ticks = (
-                (exit_price - last.entry_price) if last.direction == "LONG"
-                else (last.entry_price - exit_price)
+                (exit_price - entry_fill_px) if last.direction == "LONG"
+                else (entry_fill_px - exit_price)
             ) / tick_size
             pnl_dollars = round(signed_ticks * tick_value * last.quantity, 2)
             result = "WIN" if pnl_dollars > 0 else "LOSS" if pnl_dollars < 0 else "BREAKEVEN"
@@ -661,7 +662,7 @@ class TradovateBroker(BrokerInterface):
                 instrument=instrument,
                 direction=last.direction,
                 contracts=last.quantity,
-                entry_price=last.entry_price,
+                entry_price=entry_fill_px,
                 exit_price=exit_price,
                 exit_reason=exit_reason,
                 result=result,
