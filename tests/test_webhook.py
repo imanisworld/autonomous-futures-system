@@ -940,6 +940,36 @@ def test_status_diagnostics_reports_bad_tradovate_env(monkeypatch, tmp_path):
     assert "numeric CID only" in tradovate["message"]
 
 
+def test_status_diagnostics_tradovate_config_ok_is_not_session_auth(monkeypatch, tmp_path):
+    """A parsing Tradovate config must read 'ok' AND explicitly disclaim that it
+    proves an authenticated broker session. Config-valid != session-active: the
+    'Tradovate config' check only proves env vars parse, never that the live
+    Tradovate session is authenticated (that's /status/broker-account)."""
+    try:
+        from fastapi.testclient import TestClient
+        from webhook.app import app
+    except ImportError:
+        pytest.skip("fastapi[testclient] not installed")
+
+    _isolate_app_logs(monkeypatch, tmp_path)
+    monkeypatch.setenv("BROKER", "tradovate")
+    monkeypatch.setenv("TRADOVATE_ENV", "demo")
+    monkeypatch.setenv("WEBHOOK_SECRET", "test-secret")
+    monkeypatch.setenv("TRADOVATE_USERNAME", "demo-user")
+    monkeypatch.setenv("TRADOVATE_PASSWORD", "demo-pass")
+    monkeypatch.setenv("TRADOVATE_API_KEY_ID", "13833")
+    monkeypatch.setenv("TRADOVATE_API_KEY_SECRET", "11111111-2222-3333-4444-555555555555")
+
+    client = TestClient(app)
+    resp = client.get("/status/diagnostics")
+
+    assert resp.status_code == 200
+    cfg = next(i for i in resp.json()["items"] if i["component"] == "Tradovate config")
+    assert cfg["status"] == "ok"
+    # The OK message must NOT imply the broker session is authenticated.
+    assert "not the active broker session" in cfg["message"]
+
+
 def test_status_diagnostics_labels_tradingview_stale_as_feed_not_api(monkeypatch, tmp_path):
     try:
         from fastapi.testclient import TestClient

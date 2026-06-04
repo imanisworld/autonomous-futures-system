@@ -412,7 +412,12 @@ async def status_broker_account() -> dict:
     BROKER=tradovate."""
     broker_mode = os.getenv("BROKER", "paper").strip().lower()
     if broker_mode != "tradovate":
-        return {"ok": False, "error": f"BROKER={broker_mode}, not tradovate"}
+        return {
+            "ok": False,
+            "error": "broker_not_tradovate",
+            "message": f"Broker account panel is unavailable because BROKER={broker_mode}.",
+            "next_step": "Set BROKER=tradovate only when you want the dashboard to read a Tradovate account.",
+        }
     now = time.time()
     cached = _ACCOUNT_CACHE.get("data")
     if cached is not None and (now - _ACCOUNT_CACHE["ts"]) < _ACCOUNT_TTL_SECONDS:
@@ -422,10 +427,34 @@ async def status_broker_account() -> dict:
     except Exception as exc:
         logger.exception("status_broker_account failed: %s", exc)
         summary = {"ok": False, "error": str(exc)}
+    _decorate_broker_account_status(summary)
     summary["cached_at"] = now
     _ACCOUNT_CACHE["ts"] = now
     _ACCOUNT_CACHE["data"] = summary
     return summary
+
+
+def _decorate_broker_account_status(summary: dict) -> None:
+    """Attach UI-safe account status text while preserving raw error codes."""
+    if summary.get("ok"):
+        summary.setdefault("message", "Broker account session is active.")
+        return
+    raw_error = str(summary.get("error") or "").strip()
+    if raw_error == "not_authenticated":
+        summary.setdefault("status_label", "SESSION NOT ACTIVE")
+        summary.setdefault("message", "Tradovate account is unavailable because the demo broker session is not authenticated.")
+        summary.setdefault(
+            "next_step",
+            "Refresh Tradovate auth and confirm the API ACL is enabled; this is separate from TradingView alert freshness.",
+        )
+    elif raw_error:
+        summary.setdefault("status_label", "BROKER ACCOUNT UNAVAILABLE")
+        summary.setdefault("message", f"Tradovate account status check failed: {raw_error}")
+        summary.setdefault("next_step", "Check broker credentials, network reachability, and the service logs.")
+    else:
+        summary.setdefault("status_label", "BROKER ACCOUNT UNKNOWN")
+        summary.setdefault("message", "Tradovate account status is unavailable.")
+        summary.setdefault("next_step", "Retry after the backend has refreshed its broker session.")
 
 
 def _compute_quote(instrument: str) -> dict:
@@ -866,7 +895,8 @@ def _tradovate_env_diagnostic() -> dict:
     return _diagnostic(
         "ok",
         "Tradovate config",
-        f"Tradovate env parses cleanly for {config.env}; ACL still must be enabled in Tradovate.",
+        f"Tradovate credentials parse cleanly for {config.env}; this checks configuration, not the active broker session.",
+        "If the account panel says session not active, refresh Tradovate auth and confirm the API ACL is enabled.",
     )
 
 
@@ -1119,19 +1149,19 @@ def _diagnostics_payload(for_date: date) -> dict:
     if latest_age is None:
         items.append(_diagnostic(
             "warn",
-            "TradingView alerts",
-            "No TradingView webhook has been received yet.",
-            "Check the TradingView alert URL and webhook secret.",
+            "TradingView feed",
+            "No TradingView webhook has been received yet; backend API is still online.",
+            "Check the TradingView alert URL, webhook secret, and whether the alert is enabled.",
         ))
     elif latest_age > 15 * 60:
         items.append(_diagnostic(
             "warn",
-            "TradingView alerts",
-            f"Last TradingView webhook was {_format_generated_age(_latest_webhook_payload().get('received_at'))}.",
-            "If the market is open, check whether the TradingView alert is still running.",
+            "TradingView feed",
+            f"TradingView feed is stale; last webhook was {_format_generated_age(_latest_webhook_payload().get('received_at'))}.",
+            "If the market/session window is active, check whether the TradingView alert is still running.",
         ))
     else:
-        items.append(_diagnostic("ok", "TradingView alerts", "A TradingView webhook was received recently."))
+        items.append(_diagnostic("ok", "TradingView feed", "TradingView webhooks are arriving recently."))
 
     latest_summary = _latest_webhook_summary(latest)
     if latest_summary:
