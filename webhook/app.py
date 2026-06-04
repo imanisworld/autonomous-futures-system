@@ -945,12 +945,28 @@ def _diagnostics_payload(for_date: date) -> dict:
     elif _config.paper_mode:
         items.append(_diagnostic("ok", "Trading mode", "Paper mode is active; live trading is off."))
     else:
-        items.append(_diagnostic(
-            "warn",
-            "Trading mode",
-            "Live trading is off, but PAPER_MODE is not true.",
-            "Set PAPER_MODE=true so the dashboard state is unambiguous.",
-        ))
+        # PAPER_MODE=false with live (real-money) trading off means orders route to
+        # the broker's DEMO/sim account — intended "demo execution" mode, a VALID
+        # configured state. Do NOT advise setting PAPER_MODE=true here: that disables
+        # demo execution (back to internal sim). Only the genuinely ambiguous combos
+        # (broker=paper, or a LIVE broker env gated off so nothing actually routes)
+        # warrant the warn.
+        tv_env = os.getenv("TRADOVATE_ENV", "").strip().lower()
+        if broker != "paper" and tv_env and tv_env != "live":
+            items.append(_diagnostic(
+                "ok",
+                "Trading mode",
+                f"Demo execution active: orders route to the {broker} {tv_env} account; "
+                "live (real-money) trading is off.",
+            ))
+        else:
+            items.append(_diagnostic(
+                "warn",
+                "Trading mode",
+                "Live trading is off, but PAPER_MODE is not true.",
+                "Set PAPER_MODE=true for internal sim, or set a demo broker "
+                "(e.g. BROKER=tradovate, TRADOVATE_ENV=demo) for demo execution.",
+            ))
 
     if _configured_webhook_secret():
         items.append(_diagnostic("ok", "Webhook secret", "TradingView webhook protection is configured."))

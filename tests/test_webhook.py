@@ -889,6 +889,34 @@ def test_fastapi_status_diagnostics_endpoint(monkeypatch, tmp_path):
     }.issubset(components)
 
 
+def test_demo_execution_mode_is_ok_not_warn(monkeypatch, tmp_path):
+    """PAPER_MODE=false + live off + a demo broker = intended demo execution.
+    The Trading mode diagnostic must read 'ok' and must NOT advise setting
+    PAPER_MODE=true (that would disable demo execution)."""
+    try:
+        from fastapi.testclient import TestClient
+        import webhook.app as app_module
+        from webhook.app import app
+    except ImportError:
+        pytest.skip("fastapi[testclient] not installed")
+
+    _isolate_app_logs(monkeypatch, tmp_path)
+    monkeypatch.setenv("BROKER", "tradovate")
+    monkeypatch.setenv("TRADOVATE_ENV", "demo")
+    monkeypatch.setenv("WEBHOOK_SECRET", "test-secret")
+    monkeypatch.setattr(app_module._config, "paper_mode", False)
+    monkeypatch.setattr(app_module._config, "live_trading_enabled", False)
+
+    client = TestClient(app)
+    resp = client.get("/status/diagnostics")
+
+    assert resp.status_code == 200
+    mode = next(i for i in resp.json()["items"] if i["component"] == "Trading mode")
+    assert mode["status"] == "ok"
+    assert "Demo execution active" in mode["message"]
+    assert "PAPER_MODE=true" not in (mode.get("next_step") or "")
+
+
 def test_status_diagnostics_reports_bad_tradovate_env(monkeypatch, tmp_path):
     try:
         from fastapi.testclient import TestClient
