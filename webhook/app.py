@@ -354,7 +354,18 @@ async def status_quote(instrument: str = Query(default="MES")) -> dict:
         root = instrument.replace("1!", "").upper()
         if close and ticker == root:
             broker._last_price[root] = float(close)
-        return broker.get_quote(instrument)
+        quote = broker.get_quote(instrument)
+        # Display-only reference price (ES=F/NQ=F HTTP proxy) with freshness, kept
+        # clearly separate from the broker price. NOT an execution feed — trading
+        # logic never reads it. Fail-soft so a proxy hiccup can't break the panel.
+        try:
+            from quotes.live_index import get_live_quote
+            ref = get_live_quote(instrument)
+            if ref is not None:
+                quote["reference_price"] = ref
+        except Exception as exc:
+            logger.warning("reference_price attach failed: %s", exc)
+        return quote
     except Exception as exc:
         logger.exception("status_quote failed: %s", exc)
         return {"ok": False, "error": str(exc)}
@@ -1191,90 +1202,47 @@ def _format_generated_age(value: str) -> str:
     return f"{hours // 24}d ago"
 
 
-def _render_dashboard(status: dict) -> str:
+# ─────────────────────────────────────────────────────────────────────────────
+# Operator dashboard — tabbed single page.
+#
+# The server ships a JSON view-model embedded in the page; every tab is rendered
+# client-side from that view-model so the 30s refresh reuses one render path and
+# the server never duplicates presentation logic. UI only — no trading state is
+# mutated here; force-open / close still go through the guarded /webhook/manual
+# endpoint (which keeps OPEN disabled unless MANUAL_OPEN_ENABLED=true).
+# ─────────────────────────────────────────────────────────────────────────────
+
+_FUTURES_UNIVERSE = ["MES", "MNQ", "MGC", "MCL"]
+
+
+def _dashboard_init(status: dict) -> dict:
+    """Assemble the JSON view-model the client renders every tab from."""
     committee = _load_committee_panel(_config.log_dir)
-    committee_status = committee.get("overall_status", "")
-    committee_sample = committee.get("sample_size", 0)
-    committee_sufficiency = committee.get("sample_sufficiency", "")
-    committee_date = committee.get("date", "")
-    committee_generated = committee.get("generated_at", "")
-    committee_generated_label = _format_generated_age(committee_generated)
-    committee_recs = committee.get("top_recommendations") or []
-    committee_color = {"OK": "green", "WARNING": "amber", "CRITICAL": "red"}.get(committee_status, "muted")
-    committee_rec_rows = "\n".join(
-        f"<li><span class='rec-code'>{_escape(r.get('code',''))}</span>"
-        f"<span class='rec-subject'>{_escape(r.get('subject',''))}</span>"
-        f"<span class='rec-reason'>{_escape((r.get('reason') or '')[:120])}</span></li>"
-        for r in committee_recs[:5]
-    ) or "<li><span>No recommendations — run /status/adaptive to generate</span></li>"
-    committee_summary = (
-        f"{committee_sample} trades ({committee_sufficiency})" if committee_status
-        else "Not yet run — call GET /status/adaptive"
-    )
-    if committee_generated_label:
-        committee_summary = f"{committee_summary} · generated {committee_generated_label}"
+    broker = (os.getenv("BROKER", "paper") or "paper").strip().upper()
+    allowed = {s.upper() for s in (_config.allowed_instruments or [])}
+    universe = [{"sym": s, "enabled": s in allowed} for s in _FUTURES_UNIVERSE]
+    return {
+        "today": status,
+        "committee": committee,
+        "universe": universe,
+        "broker": broker,
+        "paper_mode": bool(status.get("paper_mode", True)),
+        "live_trading_enabled": bool(status.get("live_trading_enabled")),
+        "max_drawdown_pct": round(float(getattr(_config, "max_drawdown_percent", 0.10)) * 100, 2),
+        "poll_seconds": 30,
+        # Monitor-only mode: when False the UI renders NO manual execution controls.
+        "manual_controls_enabled": bool(
+            getattr(_config, "enable_manual_execution_controls", False)
+        ),
+    }
 
-    today_pnl = status.get("today_pnl_dollars", 0.0)
-    today_pnl_class = "green" if today_pnl >= 0 else "red"
-    wr_resolved = status["wins"] + status["losses"]
-    wr_str = "—" if wr_resolved == 0 else f"{status['win_rate']:.1f}"
-    wr_suffix = "" if wr_resolved == 0 else "<small>%</small>"
-    wr_class = "muted" if wr_resolved == 0 else ("green" if status["win_rate"] >= 50 else "amber")
-    open_class = "green" if status["has_open_position"] else "muted"
-    open_str = "1" if status["has_open_position"] else "—"
 
-    perf = status.get("performance") or {}
-    pf_val = perf.get("profit_factor")
-    pf_str = f"{pf_val:.2f}×" if pf_val is not None else "—"
-    avg_win_str   = _fmt_stat(perf.get("avg_win"))
-    avg_loss_str  = _fmt_stat(perf.get("avg_loss"))
-    maxdd_str     = _fmt_stat(perf.get("max_drawdown"))
-    best_day_str  = _fmt_stat(perf.get("best_day"))
-    worst_day_str = _fmt_stat(perf.get("worst_day"))
-    lg_win_str    = _fmt_stat(perf.get("largest_win"))
-    lg_loss_str   = _fmt_stat(perf.get("largest_loss"))
-
-    latest_rows = "\n".join(_render_entry_row(entry) for entry in status["latest_entries"])
-    instrument_cards = "\n".join(
-        _render_instrument_card(item) for item in status.get("instrument_breakdown", [])
-    )
-    reason_rows = "\n".join(
-        f"<li><span>{_escape(item['reason'])}</span><strong>{item['count']}</strong></li>"
-        for item in status["top_no_trade_reasons"]
-    ) or "<li><span>No NO_TRADE reasons yet</span><strong>0</strong></li>"
-    lockout = status["consecutive_losses"] >= status["max_consecutive_losses"]
-    trade_full = status["trade_count"] >= status["max_trades_per_day"]
-    open_position = status["open_position"] or {}
-    open_position_text = (
-        f"{open_position.get('direction')} {open_position.get('instrument')} "
-        f"@ {open_position.get('entry')}"
-        if open_position else "None"
-    )
-    latest_webhook = status.get("latest_webhook") or {}
-    webhook_context = latest_webhook.get("context") or {}
-    webhook_result = latest_webhook.get("result") or {}
-    strategy_status = status.get("strategy_status") or {}
-    strategy_rows = "\n".join(
-        f"<li><span>{_escape(item['strategy'])}</span><strong>{item['count']}</strong></li>"
-        for item in strategy_status.get("approved_strategy_counts", [])
-    ) or "<li><span>No approved strategy yet</span><strong>0</strong></li>"
-    decision_rows = "\n".join(
-        f"<li><span>{_escape(item['decision'])}</span><strong>{item['count']}</strong></li>"
-        for item in strategy_status.get("decision_counts", [])
-    ) or "<li><span>No decisions yet</span><strong>0</strong></li>"
-    gw = status.get("broker_gateway_reachable")
-    if gw is True:
-        gateway_badge = '<div id="badge-gateway" class="badge" style="color:var(--green)">IBKR ● CONNECTED</div>'
-    elif gw is False:
-        gateway_badge = '<div id="badge-gateway" class="badge" style="color:var(--red)">IBKR ✕ OFFLINE</div>'
-    else:
-        gateway_badge = '<div id="badge-gateway" style="display:none"></div>'
-    return f"""<!doctype html>
+_DASHBOARD_HTML = r"""<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#00d5ff">
+  <meta name="theme-color" content="#050507">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -1283,994 +1251,939 @@ def _render_dashboard(status: dict) -> str:
   <link rel="apple-touch-icon" href="/static/icon-192.png">
   <title>RiskSentinel</title>
   <style>
-    :root {{
+    :root {
       color-scheme: dark;
       --bg: #050507;
       --panel: #111216;
+      --panel2: #15171c;
       --line: #2a2d34;
       --text: #f4f4f5;
       --muted: #a1a1aa;
-      --cyan: #00d5ff;
-      --green: #17d97f;
-      --amber: #ffb020;
-      --red: #ff3d71;
-    }}
-    * {{ box-sizing: border-box; }}
-    body {{
-      margin: 0;
+      /* severity system */
+      --green: #17d97f;   /* pass / live / clear / fresh */
+      --yellow: #ffb020;  /* warning / stale / watch */
+      --red: #ff3d71;     /* blocked / locked / loss / error */
+      --blue: #00d5ff;    /* info / paper / broker */
+      --gray: #6b7280;    /* inactive / disabled */
+      --nav-h: 54px;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+    body {
       min-height: 100vh;
       background: var(--bg);
       color: var(--text);
       font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      letter-spacing: 0;
-    }}
-    main {{
-      width: min(1120px, calc(100% - 32px));
-      margin: 0 auto;
-      padding: 28px 0 40px;
-    }}
-    header {{
+      -webkit-text-size-adjust: 100%;
+    }
+    h1, h2, h3, p { margin: 0; }
+    a { color: inherit; }
+    .green { color: var(--green); }
+    .yellow { color: var(--yellow); }
+    .red { color: var(--red); }
+    .blue { color: var(--blue); }
+    .gray, .muted { color: var(--muted); }
+
+    /* ── Global status bar ─────────────────────────────────────────────── */
+    .statusbar {
+      position: sticky;
+      top: 0;
+      z-index: 30;
       display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      margin-bottom: 22px;
-    }}
-    h1, h2, p {{ margin: 0; }}
-    h1 {{ font-size: 24px; line-height: 1.1; }}
-    h2 {{ color: var(--muted); font-size: 13px; font-weight: 700; text-transform: uppercase; }}
-    .sub {{ color: var(--muted); margin-top: 5px; font-size: 13px; }}
-    .badge {{
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      color: var(--green);
-      padding: 8px 12px;
-      font-size: 13px;
+      gap: 0;
+      align-items: stretch;
+      background: rgba(8,9,12,0.96);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--line);
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      padding: 0 4px;
+    }
+    .statusbar::-webkit-scrollbar { display: none; }
+    .statusbar .seg {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 1px;
+      padding: 7px 11px;
       white-space: nowrap;
-      width: fit-content;
-      align-self: flex-start;
-    }}
-    .grid {{
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-      gap: 12px;
-      margin-bottom: 14px;
-    }}
-    .panel {{
+      border-right: 1px solid #1c1e24;
+    }
+    .statusbar .seg:last-child { border-right: 0; }
+    .statusbar .seg b { font-size: 9px; letter-spacing: 0.06em; color: var(--muted); text-transform: uppercase; font-weight: 700; }
+    .statusbar .seg span { font-size: 13px; font-weight: 800; letter-spacing: 0.01em; }
+
+    /* ── Layout ────────────────────────────────────────────────────────── */
+    main {
+      width: min(1120px, calc(100% - 24px));
+      margin: 0 auto;
+      padding: 16px 0 calc(var(--nav-h) + 28px);
+    }
+    .tab { display: none; }
+    .tab.active { display: block; }
+    .tabhead {
+      display: flex; align-items: baseline; justify-content: space-between;
+      gap: 12px; margin: 4px 0 14px;
+    }
+    .tabhead h1 { font-size: 21px; }
+    .tabhead .when { color: var(--muted); font-size: 12px; }
+
+    .monitorbar {
+      margin: 8px 12px 0; padding: 9px 12px; border-radius: 10px;
+      background: rgba(90,168,255,0.10); border: 1px solid rgba(90,168,255,0.35);
+      color: #cfe2ff; font-size: 12px; line-height: 1.5; text-align: center;
+    }
+    .monitorbar b { color: #eaf2ff; letter-spacing: 0.04em; }
+
+    .panel {
       background: var(--panel);
       border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 16px;
-    }}
-    .metric {{ font-size: 32px; font-weight: 800; margin-top: 10px; }}
-    .metric small {{ color: var(--muted); font-size: 18px; }}
-    .cyan {{ color: var(--cyan); }}
-    .green {{ color: var(--green); }}
-    .amber {{ color: var(--amber); }}
-    .red {{ color: var(--red); }}
-    .wide {{
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-      margin-bottom: 14px;
-    }}
-    ul {{ list-style: none; padding: 0; margin: 12px 0 0; }}
-    li {{
-      display: flex;
-      justify-content: space-between;
-      gap: 12px;
-      padding: 10px 0;
-      border-top: 1px solid var(--line);
-      color: var(--muted);
-      font-size: 14px;
-    }}
-    li strong {{ color: var(--text); }}
-    table {{
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 12px;
-      font-size: 13px;
-    }}
-    th, td {{
-      text-align: left;
-      border-top: 1px solid var(--line);
-      padding: 10px 8px;
-      vertical-align: top;
-    }}
-    th {{ color: var(--muted); font-size: 12px; text-transform: uppercase; }}
-    td.reason {{ color: var(--muted); max-width: 440px; word-break: break-word; overflow-wrap: anywhere; }}
-    td {{ word-break: break-word; overflow-wrap: anywhere; }}
-    .committee-status {{ font-size: 18px; font-weight: 700; margin-top: 8px; }}
-    .committee-meta {{ font-size: 12px; color: var(--muted); margin-top: 4px; margin-bottom: 10px; }}
-    .committee-recs {{ list-style: none; padding: 0; margin: 0; }}
-    .committee-recs li {{
-      display: grid;
-      grid-template-columns: 120px 120px 1fr;
-      gap: 8px;
-      padding: 8px 0;
-      border-top: 1px solid var(--line);
-      font-size: 12px;
-      align-items: start;
-    }}
-    .rec-code {{ color: var(--amber); font-weight: 600; word-break: break-word; }}
-    .rec-subject {{ color: var(--cyan); word-break: break-word; }}
-    .rec-reason {{ color: var(--muted); word-break: break-word; }}
-    .rules {{
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px;
-      margin-top: 12px;
-    }}
-    .rule {{
-      border-top: 1px solid var(--line);
-      padding-top: 10px;
-      color: var(--muted);
-      font-size: 14px;
-    }}
-    .rule span {{ color: var(--green); margin-right: 8px; }}
-    .rule.danger span {{ color: var(--red); }}
-    .context-grid {{
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-      gap: 10px;
-      margin-top: 12px;
-    }}
-    .context-item {{
-      border-top: 1px solid var(--line);
-      padding-top: 10px;
-    }}
-    .context-item label {{
-      display: block;
-      color: var(--muted);
-      font-size: 12px;
-      text-transform: uppercase;
-      margin-bottom: 5px;
-    }}
-    .context-item strong {{
-      display: block;
-      color: var(--text);
-      font-size: 14px;
-      min-height: 20px;
-      overflow-wrap: anywhere;
-    }}
-    .instrument-grid {{
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 12px;
-      margin-bottom: 14px;
-    }}
-    .instrument-head {{
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 12px;
+      border-radius: 10px;
+      padding: 15px;
       margin-bottom: 12px;
-    }}
-    .instrument-symbol {{
-      font-size: 24px;
-      font-weight: 800;
-    }}
-    .instrument-latest {{
-      color: var(--muted);
-      font-size: 13px;
-      line-height: 1.4;
-      margin-top: 4px;
-    }}
-    .instrument-stats {{
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 8px;
-      margin-bottom: 10px;
-    }}
-    .instrument-stat {{
-      border-top: 1px solid var(--line);
-      padding-top: 8px;
-    }}
-    .instrument-stat label {{
-      display: block;
-      color: var(--muted);
-      font-size: 10px;
-      text-transform: uppercase;
-      margin-bottom: 3px;
-    }}
-    .instrument-stat strong {{
-      font-size: 16px;
-    }}
-    .mini-entry {{
-      display: grid;
-      grid-template-columns: 58px 88px 1fr;
-      gap: 8px;
-      border-top: 1px solid var(--line);
-      padding: 8px 0;
-      color: var(--muted);
-      font-size: 12px;
-      align-items: start;
-    }}
-    .mini-entry strong {{
-      color: var(--text);
-      font-size: 12px;
-    }}
-    .mini-entry span:last-child {{
-      overflow-wrap: anywhere;
-    }}
-    .stats-grid {{
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-      margin-top: 10px;
-    }}
-    .stat-item {{
-      border-top: 1px solid var(--line);
-      padding: 10px 6px;
-    }}
-    .stat-item label {{
-      display: block;
+    }
+    .panel > h2 {
       color: var(--muted);
       font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.05em;
       text-transform: uppercase;
-      letter-spacing: 0.03em;
       margin-bottom: 4px;
-    }}
-    .stat-item strong {{
-      font-size: 18px;
-      font-weight: 700;
-    }}
-    .chart-canvas {{
-      width: 100%;
-      display: block;
-      margin-top: 10px;
-      border-radius: 4px;
-      background: #111216;
-    }}
-    .emergency-panel {{
-      border-color: rgba(255, 61, 113, 0.32);
-      margin-bottom: 14px;
-    }}
-    .emergency-panel summary {{
+    }
+    .panel.accent-yellow { border-color: rgba(255,176,32,0.45); }
+    .panel.accent-red { border-color: rgba(255,61,113,0.40); }
+    .panel.accent-green { border-color: rgba(23,217,127,0.40); }
+
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 560px) { .grid2 { grid-template-columns: 1fr; } }
+
+    /* decision chip */
+    .decision {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 22px; font-weight: 900; letter-spacing: 0.02em;
+    }
+    .decision .dot { width: 11px; height: 11px; border-radius: 50%; background: currentColor; }
+    .d-NO_TRADE, .d-WAITING { color: var(--yellow); }
+    .d-TRADE, .d-TRADE_READY { color: var(--green); }
+    .d-RISK_REJECTED { color: var(--red); }
+    .d-CONFIG_BLOCKED { color: var(--gray); }
+
+    /* key/value rows */
+    .kv { display: grid; grid-template-columns: auto 1fr; gap: 7px 14px; margin-top: 10px; font-size: 14px; }
+    .kv dt { color: var(--muted); }
+    .kv dd { margin: 0; text-align: right; font-weight: 700; }
+
+    ul.reasons { list-style: none; padding: 0; margin: 8px 0 0; }
+    ul.reasons li {
+      display: flex; gap: 9px; align-items: flex-start;
+      padding: 7px 0; border-top: 1px solid var(--line);
+      font-size: 13px; color: var(--text);
+    }
+    ul.reasons li .mk { font-weight: 900; flex: none; }
+    ul.reasons li:first-child { border-top: 0; }
+
+    .pill {
+      display: inline-block; border: 1px solid var(--line); border-radius: 999px;
+      padding: 3px 9px; font-size: 11px; font-weight: 800; letter-spacing: 0.03em;
+    }
+    .pill.green { color: var(--green); border-color: rgba(23,217,127,0.4); }
+    .pill.yellow { color: var(--yellow); border-color: rgba(255,176,32,0.4); }
+    .pill.red { color: var(--red); border-color: rgba(255,61,113,0.4); }
+    .pill.gray { color: var(--gray); }
+    .pill.blue { color: var(--blue); border-color: rgba(0,213,255,0.4); }
+
+    .freshbar {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      font-size: 13px;
+    }
+    .freshbar .tag { font-weight: 900; letter-spacing: 0.04em; }
+
+    .ctx { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 9px; margin-top: 8px; }
+    .ctx .c { border-top: 1px solid var(--line); padding-top: 8px; }
+    .ctx .c label { display: block; color: var(--muted); font-size: 10px; text-transform: uppercase; margin-bottom: 3px; }
+    .ctx .c strong { font-size: 15px; }
+
+    .stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px,1fr)); gap: 4px; margin-top: 6px; }
+    .stat-row .s { border-top: 1px solid var(--line); padding: 9px 4px; }
+    .stat-row .s label { display: block; color: var(--muted); font-size: 10px; text-transform: uppercase; margin-bottom: 3px; }
+    .stat-row .s strong { font-size: 18px; font-weight: 800; }
+
+    /* universe */
+    .uni { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+    .uni .u { display: flex; align-items: center; gap: 7px; border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; font-size: 13px; }
+    .uni .u b { font-weight: 800; }
+
+    /* committee */
+    .cmt { display: grid; grid-template-columns: auto 1fr auto; gap: 6px 12px; margin-top: 8px; font-size: 14px; align-items: center; }
+    .cmt .nm { color: var(--muted); }
+    .cmt .note { font-size: 12px; color: var(--muted); grid-column: 1 / -1; margin: -2px 0 4px; }
+    .consensus { margin-top: 12px; padding-top: 11px; border-top: 1px solid var(--line); font-size: 15px; font-weight: 800; }
+
+    /* journal */
+    .filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+    .filters button {
+      border: 1px solid var(--line); background: transparent; color: var(--muted);
+      border-radius: 999px; padding: 5px 11px; font: inherit; font-size: 12px; font-weight: 700;
       cursor: pointer;
-      list-style: none;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      color: var(--muted);
-      font-size: 13px;
-      font-weight: 700;
-      text-transform: uppercase;
-    }}
-    .emergency-panel summary::-webkit-details-marker {{ display: none; }}
-    .emergency-panel summary::after {{
-      content: "Closed";
-      color: var(--green);
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      padding: 6px 10px;
-      font-size: 11px;
-    }}
-    .emergency-panel[open] summary::after {{
-      content: "Open";
-      color: var(--amber);
-    }}
-    .emergency-body {{
-      border-top: 1px solid var(--line);
-      margin-top: 12px;
-      padding-top: 12px;
-      display: grid;
-      gap: 10px;
-    }}
-    .emergency-body label {{
-      color: var(--muted);
-      font-size: 12px;
-      text-transform: uppercase;
-      display: grid;
-      gap: 6px;
-    }}
-    .emergency-body input[type="password"] {{
-      width: 100%;
-      border: 1px solid var(--line);
-      background: #090a0d;
-      color: var(--text);
-      border-radius: 6px;
-      padding: 10px 12px;
-      font: inherit;
-    }}
-    .emergency-check {{
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      color: var(--muted);
-      font-size: 13px;
-      text-transform: none;
-    }}
-    .emergency-check span {{ text-transform: none; }}
-    .emergency-check input {{
-      width: 18px;
-      height: 18px;
-      accent-color: var(--red);
-    }}
-    .danger-button {{
-      justify-self: start;
-      border: 1px solid rgba(255, 61, 113, 0.65);
-      background: rgba(255, 61, 113, 0.10);
-      color: var(--red);
-      border-radius: 6px;
-      padding: 10px 14px;
-      font: inherit;
-      font-weight: 800;
-      text-transform: uppercase;
-      cursor: pointer;
-    }}
-    .danger-button:disabled {{
-      opacity: 0.35;
-      cursor: not-allowed;
-    }}
-    .emergency-result {{
-      color: var(--muted);
-      font-size: 13px;
-      min-height: 18px;
-      overflow-wrap: anywhere;
-    }}
-    @media (max-width: 760px) {{
-      header, .wide {{ grid-template-columns: 1fr; display: grid; }}
-      .grid {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
-      .grid > :last-child:nth-child(odd) {{ grid-column: span 2; }}
-      table {{ font-size: 12px; table-layout: auto; width: max-content; min-width: 100%; }}
-      .table-wrap {{ overflow-x: auto; -webkit-overflow-scrolling: touch; }}
-      .rules {{ grid-template-columns: 1fr; }}
-      .instrument-grid {{ grid-template-columns: 1fr; }}
-      .instrument-stats {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
-      .mini-entry {{ grid-template-columns: 54px 82px 1fr; }}
-      .context-grid {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
-      .col-session {{ display: none; }}
-      td, td.reason {{ white-space: nowrap; overflow: visible; text-overflow: clip; word-break: normal; overflow-wrap: normal; max-width: none; }}
-    }}
+    }
+    .filters button.on { color: var(--bg); background: var(--yellow); border-color: var(--yellow); }
+    .jrow { display: grid; grid-template-columns: 96px 54px 1fr auto; gap: 10px; padding: 9px 0; border-top: 1px solid var(--line); font-size: 13px; align-items: start; }
+    .jrow:first-child { border-top: 0; }
+    .jrow .jt { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; }
+    .jrow .jd { font-weight: 800; }
+    .jrow .jr { color: var(--muted); overflow-wrap: anywhere; }
+    .jrow .jx { font-size: 11px; font-weight: 800; }
+    @media (max-width: 560px) { .jrow { grid-template-columns: 78px 46px 1fr; } .jrow .jx { grid-column: 2 / -1; text-align: left; } }
+
+    /* options lab */
+    .demo-banner {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      background: rgba(255,176,32,0.10); border: 1px dashed rgba(255,176,32,0.55);
+      color: var(--yellow); border-radius: 10px; padding: 11px 13px; margin-bottom: 12px;
+      font-size: 13px; font-weight: 700;
+    }
+    .opt-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); align-items: center; }
+    .opt-row:first-child { border-top: 0; }
+    .opt-row .on { font-weight: 800; }
+    .opt-row .om { color: var(--muted); font-size: 12px; }
+
+    /* buttons */
+    .btn {
+      border-radius: 9px; padding: 12px 14px; font: inherit; font-weight: 900;
+      letter-spacing: 0.02em; cursor: pointer; border: 1px solid var(--line);
+      background: var(--panel2); color: var(--text); text-align: center; width: 100%;
+    }
+    .btn.long { border-color: rgba(23,217,127,0.6); color: var(--green); background: rgba(23,217,127,0.07); }
+    .btn.short { border-color: rgba(255,61,113,0.55); color: var(--red); background: rgba(255,61,113,0.06); }
+    .btn.danger { border-color: rgba(255,61,113,0.7); color: var(--red); background: rgba(255,61,113,0.10); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .force-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 6px; }
+    .force-meta { color: var(--muted); font-size: 12px; margin-top: 10px; line-height: 1.5; }
+
+    /* modal */
+    .modal-wrap { position: fixed; inset: 0; z-index: 60; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.66); padding: 18px; }
+    .modal-wrap.open { display: flex; }
+    .modal { width: min(420px, 100%); background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
+    .modal h3 { font-size: 17px; margin-bottom: 6px; }
+    .modal .mode-tag { font-size: 12px; font-weight: 900; letter-spacing: 0.05em; }
+    .modal .kv { margin-top: 12px; }
+    .modal input[type=password] { width: 100%; margin-top: 12px; border: 1px solid var(--line); background: #090a0d; color: var(--text); border-radius: 8px; padding: 11px 12px; font: inherit; }
+    .modal .warn { margin-top: 12px; font-size: 12px; color: var(--yellow); line-height: 1.5; }
+    .modal .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 14px; }
+    .modal .actions .btn { padding: 11px; }
+    .modal .ghost { background: transparent; color: var(--muted); }
+    .modal .result { margin-top: 10px; font-size: 12px; color: var(--muted); min-height: 16px; overflow-wrap: anywhere; }
+
+    canvas.chart { width: 100%; display: block; margin-top: 8px; border-radius: 6px; background: #0d0e12; }
+
+    /* ── Bottom nav ────────────────────────────────────────────────────── */
+    nav.bottom {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+      height: calc(var(--nav-h) + env(safe-area-inset-bottom));
+      padding-bottom: env(safe-area-inset-bottom);
+      display: flex; background: rgba(8,9,12,0.98);
+      border-top: 1px solid var(--line); backdrop-filter: blur(8px);
+    }
+    nav.bottom button {
+      flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 2px; background: transparent; border: 0; color: var(--muted);
+      font: inherit; font-size: 10px; font-weight: 700; cursor: pointer;
+      padding: 6px 2px 7px; position: relative;
+    }
+    nav.bottom button .ic { font-size: 17px; line-height: 1; }
+    nav.bottom button.on { color: var(--text); }
+    nav.bottom button.on::after {
+      content: ""; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+      width: 26px; height: 3px; border-radius: 0 0 3px 3px; background: var(--yellow);
+    }
   </style>
 </head>
 <body>
+  <div class="statusbar" id="statusbar"></div>
+  <div class="monitorbar" id="monitorbar" hidden></div>
   <main>
-    <header>
-      <div>
-        <h1>RiskSentinel</h1>
-        <p class="sub">{_escape(status['date'])} · Paper-only futures monitor</p>
-      </div>
-      <div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap;">
-        <div class="badge">LIVE TRADING OFF</div>
-        {gateway_badge}
-      </div>
-    </header>
-
-    <section class="grid">
-      <div class="panel">
-        <h2>Today P/L</h2>
-        <div id="metric-pnl" class="metric {today_pnl_class}">${today_pnl:.2f}</div>
-      </div>
-      <div class="panel">
-        <h2>Trades</h2>
-        <div id="metric-trades" class="metric cyan">{status['trade_count']}<small>/{status['max_trades_per_day']}</small></div>
-      </div>
-      <div class="panel">
-        <h2>Win Rate</h2>
-        <div id="metric-winrate" class="metric {wr_class}">{wr_str}{wr_suffix}</div>
-      </div>
-      <div class="panel">
-        <h2>Open</h2>
-        <div id="metric-open" class="metric {open_class}">{open_str}</div>
-      </div>
-      <div class="panel">
-        <h2>Balance</h2>
-        <div id="metric-balance" class="metric cyan">${status['account_balance']:.2f}</div>
-        <p id="metric-peak" class="sub">Peak ${status['account_peak_balance']:.2f}</p>
-      </div>
-    </section>
-
-    <section class="panel" style="margin-bottom:14px;">
-      <h2>Equity Curve <span id="chart-range" style="font-size:11px;font-weight:400;color:var(--muted);margin-left:8px;"></span></h2>
-      <canvas id="pnl-chart" class="chart-canvas" style="height:140px;"></canvas>
-    </section>
-
-    <section id="instrument-grid" class="instrument-grid">
-      {instrument_cards}
-    </section>
-
-    <section class="panel" style="margin-bottom:14px;">
-      <h2>Performance Stats <span style="font-size:11px;font-weight:400;color:var(--muted);margin-left:8px;">all-time</span></h2>
-      <div class="stats-grid">
-        <div class="stat-item"><label>Profit Factor</label><strong id="stat-pf">{pf_str}</strong></div>
-        <div class="stat-item"><label>Avg Win</label><strong id="stat-avg-win" class="green">{avg_win_str}</strong></div>
-        <div class="stat-item"><label>Avg Loss</label><strong id="stat-avg-loss" class="red">{avg_loss_str}</strong></div>
-        <div class="stat-item"><label>Max Drawdown</label><strong id="stat-maxdd" class="amber">{maxdd_str}</strong></div>
-        <div class="stat-item"><label>Best Day</label><strong id="stat-best-day" class="green">{best_day_str}</strong></div>
-        <div class="stat-item"><label>Worst Day</label><strong id="stat-worst-day" class="red">{worst_day_str}</strong></div>
-        <div class="stat-item"><label>Largest Win</label><strong id="stat-lg-win" class="green">{lg_win_str}</strong></div>
-        <div class="stat-item"><label>Largest Loss</label><strong id="stat-lg-loss" class="red">{lg_loss_str}</strong></div>
-      </div>
-    </section>
-
-    <section class="wide">
-      <div class="panel">
-        <h2>Rule State</h2>
-        <div class="rules">
-          <div class="rule {'danger' if trade_full else ''}"><span>●</span>Max {status['max_trades_per_day']} trades/day</div>
-          <div class="rule {'danger' if lockout else ''}"><span>●</span>{status['max_consecutive_losses']}-loss lockout</div>
-          <div class="rule {'danger' if status['has_open_position'] else ''}"><span>●</span>Open position: {_escape(open_position_text)}</div>
-        </div>
-      </div>
-      <div class="panel">
-        <h2>Top NO_TRADE Reasons</h2>
-        <ul>{reason_rows}</ul>
-      </div>
-    </section>
-
-    <details class="panel emergency-panel" id="emergency-panel">
-      <summary>Emergency Controls</summary>
-      <div class="emergency-body">
-        <label>Webhook Secret
-          <input id="emergency-secret" type="password" autocomplete="off" placeholder="Required for close all">
-        </label>
-        <label class="emergency-check">
-          <input id="emergency-confirm" type="checkbox">
-          <span>I understand this cancels working orders and attempts to flatten the current broker position.</span>
-        </label>
-        <button id="close-all-button" class="danger-button" type="button" disabled>CLOSE ALL</button>
-        <div id="emergency-result" class="emergency-result">Manual OPEN is disabled. CLOSE ALL is hidden here until you deliberately open this drawer.</div>
-      </div>
-    </details>
-
-    <section class="wide">
-      <div class="panel">
-        <h2>Enabled Strategy Concepts</h2>
-        <ul>
-          <li><span>Total enabled</span><strong>{len(strategy_status.get('enabled_concepts', []))}</strong></li>
-          <li><span>First enabled</span><strong>{_escape((strategy_status.get('enabled_concepts') or ['None'])[0])}</strong></li>
-          <li><span>Strat mode</span><strong>{'confirmation' if strategy_status.get('strat_confirmation_only') else 'active'}</strong></li>
-        </ul>
-      </div>
-      <div class="panel">
-        <h2>Strategy Pulse</h2>
-        <ul>{strategy_rows}</ul>
-        <ul>{decision_rows}</ul>
-      </div>
-    </section>
-
-    <section class="panel" style="margin-bottom: 14px;">
-      <h2>Committee Review</h2>
-      <div class="committee-status {committee_color}">{committee_status or '—'}</div>
-      <div class="committee-meta">{_escape(committee_summary)}{' · ' + committee_date if committee_date else ''}</div>
-      <ul class="committee-recs">
-        {committee_rec_rows}
-      </ul>
-    </section>
-
-    <section class="panel" style="margin-bottom: 14px;">
-      <h2>Latest Webhook Context</h2>
-      <div class="context-grid">
-        <div class="context-item"><label>Received</label><strong>{_escape(_format_webhook_received(latest_webhook.get('received_at')))}</strong></div>
-        <div class="context-item"><label>Decision</label><strong>{_escape(webhook_result.get('decision') or 'None')}</strong></div>
-        <div class="context-item"><label>Symbol</label><strong>{_escape(webhook_context.get('instrument') or 'None')}</strong></div>
-        <div class="context-item"><label>Session</label><strong>{_escape(webhook_context.get('session') or 'None')}</strong></div>
-        <div class="context-item"><label>Close</label><strong>{_escape(webhook_context.get('close') or 'None')}</strong></div>
-        <div class="context-item"><label>VWAP</label><strong>{_escape(_format_vwap(webhook_context.get('vwap')))}</strong></div>
-        <div class="context-item"><label>ORB</label><strong>{_escape(_format_orb(webhook_context.get('orb')))}</strong></div>
-        <div class="context-item"><label>Trend</label><strong>{_escape(_format_trend(webhook_context.get('trend')))}</strong></div>
-        <div class="context-item"><label>Market</label><strong>{_escape(webhook_context.get('market_condition') or 'None')}</strong></div>
-        <div class="context-item"><label>PDH/PDL</label><strong>{_escape(_format_previous_day(webhook_context.get('previous_day')))}</strong></div>
-        <div class="context-item"><label>Volume</label><strong>{_escape(_format_volume(webhook_context.get('volume')))}</strong></div>
-        <div class="context-item"><label>Strat</label><strong>{_escape(_format_strat(webhook_context.get('strat')))}</strong></div>
-        <div class="context-item"><label>Risk</label><strong>{_escape(webhook_result.get('risk') or 'None')}</strong></div>
-      </div>
-    </section>
-
-    <section class="panel" style="margin-bottom: 14px;">
-      <h2>Daily Made / Lost <span id="bar-chart-range" style="font-size:11px;font-weight:400;color:var(--muted);margin-left:8px;"></span></h2>
-      <canvas id="pnl-bar-chart" class="chart-canvas" style="height:160px;"></canvas>
-    </section>
-
-    <section class="panel">
-      <h2>Latest Journal Entries</h2>
-      <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Time</th>
-            <th>Symbol</th>
-            <th class="col-session">Session</th>
-            <th>Decision</th>
-            <th>Reason</th>
-            <th>Outcome</th>
-          </tr>
-        </thead>
-        <tbody id="journal-tbody">{latest_rows or '<tr><td colspan="6">No journal entries yet.</td></tr>'}</tbody>
-      </table>
-      </div>
-    </section>
+    <section class="tab active" id="tab-home"></section>
+    <section class="tab" id="tab-futures"></section>
+    <section class="tab" id="tab-options"></section>
+    <section class="tab" id="tab-risk"></section>
+    <section class="tab" id="tab-log"></section>
   </main>
+
+  <nav class="bottom" id="nav">
+    <button data-tab="home" class="on"><span class="ic">▣</span>Home</button>
+    <button data-tab="futures"><span class="ic">📈</span>Futures</button>
+    <button data-tab="options"><span class="ic">🧪</span>Options Lab</button>
+    <button data-tab="risk"><span class="ic">🛡</span>Risk</button>
+    <button data-tab="log"><span class="ic">≣</span>Log</button>
+  </nav>
+
+  <div class="modal-wrap" id="force-modal">
+    <div class="modal">
+      <h3 id="fm-title">Confirm</h3>
+      <div class="mode-tag" id="fm-mode"></div>
+      <dl class="kv" id="fm-kv"></dl>
+      <div class="warn" id="fm-warn"></div>
+      <input type="password" id="fm-secret" placeholder="Webhook secret (required)" autocomplete="off">
+      <div class="actions">
+        <button class="btn ghost" id="fm-cancel">Cancel</button>
+        <button class="btn" id="fm-confirm">Confirm</button>
+      </div>
+      <div class="result" id="fm-result"></div>
+    </div>
+  </div>
+
+  <script type="application/json" id="init-data">__INIT_JSON__</script>
   <script>
-    function escapeHtml(value) {{
-      return String(value ?? '')
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&#x27;');
-    }}
+  (function () {
+    "use strict";
+    var INIT = JSON.parse(document.getElementById('init-data').textContent);
+    var POLL = (INIT.poll_seconds || 30) * 1000;
+    var state = { tab: 'home', today: INIT.today || {}, risk: null, filter: 'ALL', history: null };
 
-    function shortTime(value) {{
-      if (!value) return '';
-      try {{
-        const date = new Date(value);
-        return date.toLocaleTimeString([], {{hour: 'numeric', minute: '2-digit'}});
-      }} catch (error) {{
-        return String(value).split('T').at(-1)?.slice(0, 5) || '';
-      }}
-    }}
+    // ── helpers ────────────────────────────────────────────────────────
+    function esc(v) {
+      return String(v == null ? '' : v)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#x27;');
+    }
+    function el(id) { return document.getElementById(id); }
+    function num(v) { var n = Number(v); return isFinite(n) ? n : 0; }
+    function money(v) { var n = num(v); return (n < 0 ? '-$' : '$') + Math.abs(n).toFixed(2); }
 
-    function renderEntryRow(entry) {{
-      const outcome = entry.outcome
-        ? `${{entry.outcome}}${{entry.pnl_dollars != null ? ' $' + Number(entry.pnl_dollars).toFixed(2) : ''}}`
-        : '';
-      return `<tr>
-        <td>${{escapeHtml(shortTime(entry.ts))}}</td>
-        <td>${{escapeHtml(entry.instrument || '')}}</td>
-        <td class="col-session">${{escapeHtml(entry.session || '')}}</td>
-        <td>${{escapeHtml(entry.decision || entry.type || '')}}</td>
-        <td class="reason">${{escapeHtml(entry.reason || '')}}</td>
-        <td>${{escapeHtml(outcome)}}</td>
-      </tr>`;
-    }}
+    function ageMs(iso) {
+      if (!iso) return Infinity;
+      var t = new Date(iso).getTime();
+      if (!isFinite(t)) return Infinity;
+      return Date.now() - t;
+    }
+    function humanAge(ms) {
+      if (!isFinite(ms)) return 'never';
+      var m = Math.floor(ms / 60000);
+      if (m < 1) return 'just now';
+      if (m < 60) return m + 'm';
+      var h = Math.floor(m / 60);
+      if (h < 48) return h + 'h';
+      return Math.floor(h / 24) + 'd';
+    }
+    function etHour() {
+      try {
+        var s = new Date().toLocaleString('en-US', { timeZone: 'America/New_York', hour12: false, weekday: 'short', hour: '2-digit', minute: '2-digit' });
+        // s like "Mon, 14:05"
+        var parts = s.replace(',', '').split(' ');
+        var wd = parts[0];
+        var hm = parts[parts.length - 1].split(':');
+        return { wd: wd, h: num(hm[0]), m: num(hm[1]) };
+      } catch (e) { return { wd: 'Mon', h: 12, m: 0 }; }
+    }
+    function inActiveWindow() {
+      var t = etHour();
+      if (t.wd === 'Sat' || t.wd === 'Sun') return false;
+      var mins = t.h * 60 + t.m;
+      // RTH 09:30-16:00 ET, plus evening test window 17:00-22:00 ET
+      return (mins >= 570 && mins <= 960) || (mins >= 1020 && mins <= 1320);
+    }
+    function freshness(today) {
+      var wh = today.latest_webhook || {};
+      var iso = wh.received_at || null;
+      var a = ageMs(iso);
+      var mins = a / 60000;
+      var active = inActiveWindow();
+      var stateName;
+      if (!iso) stateName = 'NONE';
+      else if (mins <= 6) stateName = 'FRESH';
+      else if (active) stateName = 'STALE';
+      else stateName = 'IDLE';
+      return { state: stateName, label: humanAge(a), mins: mins, active: active, iso: iso };
+    }
+    function isConfig(e) {
+      var r = (e.reason || '').toLowerCase();
+      return r.indexOf('not in allowed') !== -1 || r.indexOf('not allowed') !== -1;
+    }
+    function baseRisk(today) {
+      var lock = num(today.consecutive_losses) >= num(today.max_consecutive_losses) && num(today.max_consecutive_losses) > 0;
+      var full = num(today.trade_count) >= num(today.max_trades_per_day) && num(today.max_trades_per_day) > 0;
+      if (lock || full) return 'LOCKED';
+      var peak = num(today.account_peak_balance), bal = num(today.account_balance);
+      var ddpct = peak > 0 ? (peak - bal) / peak * 100 : 0;
+      var maxdd = num(INIT.max_drawdown_pct) || 10;
+      if (ddpct >= maxdd) return 'DEFEND';
+      if (ddpct >= maxdd * 0.5) return 'WATCH';
+      return 'CLEAR';
+    }
+    var RISK_COLOR = { CLEAR: 'green', WATCH: 'yellow', DEFEND: 'yellow', LOCKED: 'red' };
 
-    function renderMiniEntry(entry) {{
-      return `<div class="mini-entry">
-        <span>${{escapeHtml(shortTime(entry.ts))}}</span>
-        <strong>${{escapeHtml(entry.decision || entry.type || '')}}</strong>
-        <span>${{escapeHtml(entry.reason || entry.exit_reason || '')}}</span>
-      </div>`;
-    }}
+    function latestHeadline(today) {
+      var entries = today.latest_entries || [];
+      for (var i = entries.length - 1; i >= 0; i--) {
+        var e = entries[i];
+        if ((e.type || 'DECISION') === 'OUTCOME') continue;
+        if (isConfig(e)) continue;
+        return e;
+      }
+      return null;
+    }
+    var GATE_LABELS = {
+      SESSION_WINDOW: 'Session window restricted',
+      NY_SESSION_WINDOW: 'Outside NY session window',
+      MARKET_CONDITION_NOT_TRADABLE: 'Market condition not tradable',
+      REGIME_RESTRICTED: 'Regime restricted',
+      TREND_STRENGTH: 'Trend strength below required',
+      TREND_WEAK: 'Trend strength weak'
+    };
+    function prettyGate(g) {
+      if (GATE_LABELS[g]) return GATE_LABELS[g];
+      return String(g).replace(/_/g, ' ').toLowerCase().replace(/^./, function (c) { return c.toUpperCase(); });
+    }
+    function decisionView(today, fr) {
+      var head = latestHeadline(today);
+      var decision = head ? (head.decision || 'WAITING') : 'WAITING';
+      var reason = head ? (head.reason || '') : 'Awaiting first signal of the session';
+      var wh = today.latest_webhook || {};
+      var gates = (wh.result && wh.result.failed_gates) || [];
+      var blocked = gates.length ? gates.map(prettyGate) : [];
+      if (!blocked.length && (decision === 'NO_TRADE' || decision === 'WAITING') && reason) blocked = [reason];
+      if (fr.state === 'STALE') blocked = blocked.concat(['Last 5m webhook stale (' + fr.label + ' old)']);
 
-    function renderInstrumentCard(item) {{
-      const latest = item.latest || {{}};
-      const pnl = Number(item.pnl_dollars || 0);
-      const pnlClass = pnl >= 0 ? 'green' : 'red';
-      const miniRows = item.latest_entries && item.latest_entries.length
-        ? item.latest_entries.map(renderMiniEntry).join('')
-        : '<div class="mini-entry"><span>—</span><strong>NONE</strong><span>No entries yet.</span></div>';
-      return `<div class="panel instrument-card">
-        <div class="instrument-head">
-          <div>
-            <div class="instrument-symbol">${{escapeHtml(item.instrument || '')}}</div>
-            <div class="instrument-latest">${{escapeHtml(latest.decision || latest.type || '—')}} · ${{escapeHtml(latest.reason || 'No entries yet.')}}</div>
-          </div>
-          <div class="badge ${{pnlClass}}">$${{pnl.toFixed(2)}}</div>
-        </div>
-        <div class="instrument-stats">
-          <div class="instrument-stat"><label>Decisions</label><strong>${{Number(item.decisions || 0)}}</strong></div>
-          <div class="instrument-stat"><label>Trades</label><strong>${{Number(item.trades || 0)}}</strong></div>
-          <div class="instrument-stat"><label>W/L</label><strong>${{Number(item.wins || 0)}}/${{Number(item.losses || 0)}}</strong></div>
-          <div class="instrument-stat"><label>No Trade</label><strong>${{Number(item.no_trades || 0)}}</strong></div>
-        </div>
-        <div class="instrument-mini-list">${{miniRows}}</div>
-      </div>`;
-    }}
+      var text = (blocked.join(' ') + ' ' + reason).toLowerCase();
+      var nv = [];
+      if (/trend|strength|weak/.test(text)) nv.push('Trend strength must move WEAK → STRONG');
+      if (/regime|restrict|condition|range/.test(text)) nv.push('Regime / market-condition restriction must clear');
+      if (/session|window/.test(text)) nv.push('Wait for an allowed session window');
+      if (fr.state === 'STALE') nv.unshift('Fresh 5m bar-close webhook required');
+      if (!nv.length && (decision === 'NO_TRADE' || decision === 'WAITING')) nv.push('Conditions for a valid setup must be met');
+      return { decision: decision, reason: reason, blocked: blocked, nextValidation: nv };
+    }
 
-    function drawPnlChart(history) {{
-      const canvas = document.getElementById('pnl-chart');
-      const rangeLabel = document.getElementById('chart-range');
-      if (!canvas || !history || !history.days || !history.days.length) return;
+    function openPositionText(today) {
+      var p = today.open_position || null;
+      if (!p) return today.has_open_position ? 'OPEN' : 'FLAT';
+      return (p.direction || '') + ' ' + (p.instrument || '') + ' @ ' + (p.entry != null ? p.entry : '?');
+    }
 
-      // History arrives newest-first — reverse so oldest is left
-      const days = [...history.days].reverse();
+    // ── status bar ─────────────────────────────────────────────────────
+    function renderStatusBar() {
+      var today = state.today;
+      var fr = freshness(today);
+      var risk = baseRisk(today);
+      if (risk === 'CLEAR' && fr.state === 'STALE') risk = 'WATCH';
+      var lock = num(today.consecutive_losses) >= num(today.max_consecutive_losses) && num(today.max_consecutive_losses) > 0;
+      var mode = INIT.paper_mode ? 'PAPER' : 'LIVE';
+      var modeC = INIT.paper_mode ? 'blue' : 'red';
+      var whTag = fr.state === 'NONE' ? 'gray' : (fr.state === 'FRESH' ? 'green' : (fr.state === 'IDLE' ? 'gray' : 'yellow'));
+      var segs = [
+        ['API', 'LIVE', 'green'],
+        ['MODE', mode, modeC],
+        ['BROKER', INIT.broker || 'PAPER', 'blue'],
+        ['RISK', risk, RISK_COLOR[risk] || 'gray'],
+        ['LOCKOUT', lock ? 'ACTIVE' : 'NONE', lock ? 'red' : 'green'],
+        ['LAST WEBHOOK', fr.label, whTag],
+        ['POLL', (POLL / 1000) + 's', 'gray']
+      ];
+      el('statusbar').innerHTML = segs.map(function (s) {
+        return '<div class="seg"><b>' + s[0] + '</b><span class="' + s[2] + '">' + esc(s[1]) + '</span></div>';
+      }).join('');
+    }
 
-      const dpr = window.devicePixelRatio || 1;
-      const W = canvas.offsetWidth;
-      const H = canvas.offsetHeight;
+    // ── freshness widget (shared Home + Futures) ───────────────────────
+    function freshWidget(fr) {
+      var map = { FRESH: ['green', 'FRESH'], STALE: ['yellow', 'STALE'], IDLE: ['gray', 'IDLE'], NONE: ['gray', 'NO DATA'] };
+      var m = map[fr.state] || map.NONE;
+      var sub = fr.state === 'NONE' ? 'No webhook received yet' :
+        ('Last 5m webhook: ' + fr.label + ' ago · Expected: every 5m');
+      return '<div class="panel ' + (fr.state === 'STALE' ? 'accent-yellow' : '') + '">' +
+        '<h2>Data Freshness</h2>' +
+        '<div class="freshbar"><span class="tag ' + m[0] + '">' + m[1] + '</span>' +
+        '<span class="muted">' + esc(sub) + '</span></div></div>';
+    }
+
+    // ── HOME ───────────────────────────────────────────────────────────
+    function renderHome() {
+      var today = state.today;
+      var fr = freshness(today);
+      var risk = baseRisk(today);
+      if (risk === 'CLEAR' && fr.state === 'STALE') risk = 'WATCH';
+      var dv = decisionView(today, fr);
+      var pnl = num(today.today_pnl_dollars);
+      var html = '';
+      html += '<div class="tabhead"><h1>Today</h1><span class="when">' + esc(today.date || '') + '</span></div>';
+
+      html += '<div class="panel">' +
+        '<h2>Decision</h2>' +
+        '<div class="decision d-' + esc(dv.decision) + '"><span class="dot"></span>' + esc(dv.decision) + '</div>' +
+        '<dl class="kv">' +
+        kv('Risk state', '<span class="' + (RISK_COLOR[risk] || 'gray') + '">' + risk + '</span>') +
+        kv('Open position', esc(openPositionText(today))) +
+        kv('Last webhook', esc(fr.label) + ' ago') +
+        kv('P&L today', '<span class="' + (pnl < 0 ? 'red' : 'green') + '">' + money(pnl) + '</span>') +
+        kv('Trades used', num(today.trade_count) + ' / ' + num(today.max_trades_per_day)) +
+        '</dl>' +
+        '<p class="muted" style="margin-top:10px;font-size:13px;">Reason: ' + esc(dv.reason || '—') + '</p>' +
+        '</div>';
+
+      html += freshWidget(fr);
+
+      if (dv.decision === 'NO_TRADE' || dv.decision === 'WAITING') {
+        html += card('Why No Trade?', listReasons(dv.blocked, '✕', 'red'), dv.blocked.length ? 'accent-yellow' : '');
+        html += card('Next Required Validation', listReasons(dv.nextValidation, '→', 'blue'), '');
+      }
+
+      html += compactPnl(today);
+      el('tab-home').innerHTML = html;
+    }
+    function kv(k, v) { return '<dt>' + esc(k) + '</dt><dd>' + v + '</dd>'; }
+    function card(title, body, cls) {
+      return '<div class="panel ' + (cls || '') + '"><h2>' + esc(title) + '</h2>' + body + '</div>';
+    }
+    function listReasons(items, mark, color) {
+      if (!items || !items.length) return '<p class="muted" style="margin-top:8px;font-size:13px;">None.</p>';
+      return '<ul class="reasons">' + items.map(function (r, i) {
+        return '<li><span class="mk ' + color + '">' + mark + '</span><span>' + (i + 1) + '. ' + esc(r) + '</span></li>';
+      }).join('') + '</ul>';
+    }
+    function compactPnl(today) {
+      var hist = state.history && state.history.days ? state.history.days : [];
+      var anyData = hist.some(function (d) { return num(d.realized_pnl_dollars) !== 0; }) || num(today.today_pnl_dollars) !== 0;
+      var pnl7 = hist.reduce(function (a, d) { return a + num(d.realized_pnl_dollars); }, 0);
+      if (!anyData) {
+        return '<div class="panel"><h2>P&L</h2><dl class="kv">' +
+          kv('P&L today', money(today.today_pnl_dollars)) +
+          kv('7D P&L', money(pnl7)) +
+          '</dl><p class="muted" style="margin-top:8px;font-size:12px;">No realized P&L yet — chart hidden until there is history.</p></div>';
+      }
+      return '<div class="panel"><h2>Equity Curve <span class="muted" id="chart-range" style="font-size:11px;font-weight:400;"></span></h2>' +
+        '<canvas id="pnl-chart" class="chart" style="height:140px;"></canvas></div>';
+    }
+
+    // ── FUTURES ────────────────────────────────────────────────────────
+    function renderFutures() {
+      var today = state.today;
+      var fr = freshness(today);
+      var dv = decisionView(today, fr);
+      var wh = today.latest_webhook || {};
+      var ctx = wh.context || {};
+      var symbol = (ctx.instrument || 'MES') + (String(ctx.instrument || '').indexOf('1!') === -1 ? '1!' : '');
+      var price = ctx.close != null ? ctx.close : '—';
+      var session = ctx.session || '—';
+      var vwap = ctx.vwap || {};
+      var orb = ctx.orb || {};
+      var vol = ctx.volume || {};
+      var html = '';
+      html += '<div class="tabhead"><h1>Futures</h1><span class="when">' + esc(fr.label) + ' since last bar</span></div>';
+
+      html += '<div class="panel accent-' + (dv.decision === 'TRADE' ? 'green' : (dv.decision === 'NO_TRADE' || dv.decision === 'WAITING' ? 'yellow' : 'red')) + '">' +
+        '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;">' +
+        '<div class="decision d-' + esc(dv.decision) + '"><span class="dot"></span>' + esc(symbol) + ' — ' + esc(dv.decision) + '</div>' +
+        '</div>' +
+        '<dl class="kv">' +
+        kv('Price', esc(price)) +
+        kv('Session', esc(session)) +
+        kv('Timeframe', '5m') +
+        kv('Last webhook', esc(fr.label) + ' ago') +
+        '</dl></div>';
+
+      html += freshWidget(fr);
+
+      html += card('Blocked By', listReasons(dv.blocked, '✕', 'red'), dv.blocked.length ? 'accent-yellow' : '');
+      html += card('Next Validation', listReasons(dv.nextValidation, '→', 'blue'), '');
+
+      html += '<div class="panel"><h2>Market Context</h2><div class="ctx">' +
+        ctxItem('VWAP', vwap.value != null ? vwap.value : '—') +
+        ctxItem('ORB High', orb.high != null ? orb.high : '—') +
+        ctxItem('ORB Low', orb.low != null ? orb.low : '—') +
+        ctxItem('Condition', ctx.market_condition || '—') +
+        ctxItem('Volume', vol.current_bar != null ? vol.current_bar : '—') +
+        '</div></div>';
+
+      html += renderUniverse();
+      html += renderForce();
+      el('tab-futures').innerHTML = html;
+      wireForce();
+    }
+    function ctxItem(label, val) {
+      return '<div class="c"><label>' + esc(label) + '</label><strong>' + esc(val) + '</strong></div>';
+    }
+    function renderUniverse() {
+      var u = INIT.universe || [];
+      var body = '<div class="uni">' + u.map(function (i) {
+        var on = i.enabled;
+        return '<div class="u"><b>' + esc(i.sym) + '</b><span class="pill ' + (on ? 'green' : 'gray') + '">' + (on ? 'ENABLED' : 'DISABLED') + '</span></div>';
+      }).join('') + '</div>';
+      return card('Allowed Futures', body, '');
+    }
+
+    // ── force-open controls ────────────────────────────────────────────
+    var POINTS = { MES: { stop: 7, target: 15, dollar: 5 }, MNQ: { stop: 7, target: 15, dollar: 2 }, MGC: { stop: 5, target: 10, dollar: 10 }, MCL: { stop: 0.3, target: 0.6, dollar: 100 } };
+    function modeWord() { return INIT.live_trading_enabled && !INIT.paper_mode ? 'LIVE' : 'PAPER'; }
+    function renderForce() {
+      // Monitor-only mode (default): render NO order-sending controls.
+      if (!INIT.manual_controls_enabled) {
+        return '<div class="panel accent-yellow"><h2>Manual Execution — Disabled</h2>' +
+          '<div class="force-meta">MODE: MONITOR ONLY · Broker actions hidden until the alert pipeline is validated. ' +
+          'No force-open, close-all, or flatten controls render in this phase. ' +
+          'Read-only broker status is shown on the Home tab.</div></div>';
+      }
+      var enabled = (INIT.universe || []).filter(function (i) { return i.enabled; });
+      var btns = '';
+      enabled.forEach(function (i) {
+        btns += '<button class="btn long" data-force="' + esc(i.sym) + '|LONG">FORCE ' + modeWord() + ' LONG — ' + esc(i.sym) + ' — 1 CONTRACT</button>';
+        btns += '<button class="btn short" data-force="' + esc(i.sym) + '|SHORT">FORCE ' + modeWord() + ' SHORT — ' + esc(i.sym) + ' — 1 CONTRACT</button>';
+      });
+      var p = POINTS.MES;
+      var meta = '<div class="force-meta">Bracket per contract — Entry: Market · Stop: ' + p.stop + ' pts · Target: ' + p.target + ' pts · Est. risk ~' + money(p.stop * p.dollar) + ' (MES). Every force-open requires confirmation + webhook secret.</div>';
+      var close = '<div style="margin-top:12px;"><button class="btn danger" data-force="*|CLOSE">CLOSE ALL ' + modeWord() + ' POSITIONS</button></div>';
+      return '<div class="panel accent-red"><h2>Manual Force Controls — ' + modeWord() + '</h2>' +
+        '<div class="force-grid">' + btns + '</div>' + meta + close + '</div>';
+    }
+    function wireForce() {
+      var btns = document.querySelectorAll('[data-force]');
+      Array.prototype.forEach.call(btns, function (b) {
+        b.addEventListener('click', function () { openForceModal(b.getAttribute('data-force')); });
+      });
+    }
+    var pendingForce = null;
+    function openForceModal(spec) {
+      var parts = spec.split('|');
+      var sym = parts[0], side = parts[1];
+      var mode = modeWord();
+      var live = mode === 'LIVE';
+      el('fm-mode').innerHTML = '<span class="' + (live ? 'red' : 'blue') + '">MODE: ' + mode + '</span>';
+      if (side === 'CLOSE') {
+        el('fm-title').textContent = 'Close all ' + mode.toLowerCase() + ' positions?';
+        el('fm-kv').innerHTML = kv('Action', 'CLOSE ALL') + kv('Mode', mode) + kv('Scope', 'Cancel working orders + flatten');
+        el('fm-warn').textContent = live
+          ? 'LIVE MODE — this cancels real working orders and flattens a real broker position. This cannot be undone.'
+          : 'Paper mode — cancels working orders and flattens the simulated position.';
+        pendingForce = { action: 'CLOSE_ALL' };
+      } else {
+        var p = POINTS[sym] || POINTS.MES;
+        el('fm-title').textContent = 'Force ' + mode + ' ' + side + ' — ' + sym;
+        el('fm-kv').innerHTML =
+          kv('Mode', mode) + kv('Symbol', sym) + kv('Side', side) + kv('Contracts', '1') +
+          kv('Entry', 'Market') + kv('Stop', p.stop + ' pts') + kv('Target', p.target + ' pts') +
+          kv('Est. risk', '~' + money(p.stop * p.dollar) + ' / contract');
+        el('fm-warn').textContent = live
+          ? 'LIVE MODE — this places a REAL bracket order that bypasses all risk gates. Type confirms a real-money trade.'
+          : 'Paper / force mode — bypasses all risk gates. Server keeps OPEN disabled unless MANUAL_OPEN_ENABLED=true.';
+        pendingForce = { action: 'OPEN', direction: side, instrument: sym, contracts: 1 };
+      }
+      el('fm-confirm').className = 'btn ' + (side === 'CLOSE' ? 'danger' : (side === 'LONG' ? 'long' : 'short'));
+      el('fm-confirm').textContent = side === 'CLOSE' ? 'CONFIRM CLOSE' : ('CONFIRM ' + mode + ' ' + side);
+      el('fm-secret').value = '';
+      el('fm-result').textContent = '';
+      el('force-modal').classList.add('open');
+    }
+    function closeForceModal() { el('force-modal').classList.remove('open'); pendingForce = null; }
+    function submitForce() {
+      if (!pendingForce) return;
+      var secret = el('fm-secret').value.trim();
+      if (!secret) { el('fm-result').textContent = 'Webhook secret is required.'; return; }
+      el('fm-confirm').disabled = true;
+      el('fm-result').textContent = 'Sending…';
+      fetch('/webhook/manual', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Webhook-Secret': secret },
+        body: JSON.stringify(pendingForce)
+      }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+        .then(function (res) {
+          var d = res.d || {};
+          if (!res.ok || d.ok === false) el('fm-result').innerHTML = '<span class="red">' + esc(d.error || d.detail || 'Request rejected.') + '</span>';
+          else { el('fm-result').innerHTML = '<span class="green">' + esc(d.note || 'Request accepted.') + '</span>'; }
+        }).catch(function () { el('fm-result').innerHTML = '<span class="red">Failed before reaching the server.</span>'; })
+        .then(function () { el('fm-confirm').disabled = false; });
+    }
+
+    // ── OPTIONS LAB (demo) ─────────────────────────────────────────────
+    var DEMO_OPTIONS = [
+      { sym: 'NVDA', type: 'CALL', strike: 88, score: 'A' },
+      { sym: 'AAPL', type: 'CALL', strike: 72, score: 'B' },
+      { sym: 'AMD', type: 'PUT', strike: 61, score: 'B' },
+      { sym: 'TSLA', type: 'CALL', strike: 240, score: 'C' }
+    ];
+    function renderOptions() {
+      var html = '<div class="tabhead"><h1>Options Lab</h1><span class="when">demo</span></div>';
+      html += '<div class="demo-banner">🧪 OPTIONS LAB · DEMO DATA · Scanner not live yet</div>';
+      var rows = DEMO_OPTIONS.map(function (o) {
+        return '<div class="opt-row">' +
+          '<div><span class="on">' + esc(o.sym) + ' ' + esc(o.type) + ' ' + esc(o.strike) + '</span>' +
+          '<div class="om">Confluence grade ' + esc(o.score) + ' · simulated ranking</div></div>' +
+          '<span class="pill yellow">SIMULATED</span></div>';
+      }).join('');
+      html += '<div class="panel"><h2>Simulated Alerts</h2>' + rows + '</div>';
+      html += '<div class="panel"><h2>About</h2><p class="muted" style="font-size:13px;line-height:1.6;">' +
+        'These rows are placeholder/demo output. No live options scanner is connected, and nothing here is sent to any broker. ' +
+        'Every row is labelled <b>SIMULATED</b> so it can never be mistaken for a live futures decision.</p></div>';
+      el('tab-options').innerHTML = html;
+    }
+
+    // ── RISK ───────────────────────────────────────────────────────────
+    function renderRisk() {
+      var today = state.today;
+      var fr = freshness(today);
+      var r = state.risk;
+      var html = '<div class="tabhead"><h1>Risk</h1><span class="when">' + esc(today.date || '') + '</span></div>';
+
+      var base = baseRisk(today);
+      var shown = base;
+      if (base === 'CLEAR' && fr.state === 'STALE') shown = 'WATCH';
+      html += '<div class="panel accent-' + (RISK_COLOR[shown] === 'red' ? 'red' : (RISK_COLOR[shown] === 'yellow' ? 'yellow' : 'green')) + '">' +
+        '<h2>Risk Ladder</h2>' +
+        '<div class="decision ' + RISK_COLOR[shown] + '" style="font-size:24px;"><span class="dot"></span>' + shown + '</div>';
+      if (shown !== base) html += '<p class="muted" style="margin-top:8px;font-size:12px;">OPS: WATCH — base state ' + base + ', raised to WATCH because DATA FRESHNESS: STALE.</p>';
+      html += ladder(shown) + '</div>';
+
+      if (r) {
+        html += '<div class="panel"><h2>Limits</h2><dl class="kv">' +
+          kv('Max daily loss', money(r.max_daily_loss)) +
+          kv('Daily loss used', money(r.daily_loss_used)) +
+          kv('Drawdown', num(r.drawdown_pct).toFixed(2) + '% (' + esc(r.drawdown_state) + ')') +
+          kv('Trades', num(today.trade_count) + ' / ' + num(r.max_trades)) +
+          kv('Consecutive losses', num(r.consecutive_losses) + ' / ' + num(r.max_consecutive_losses)) +
+          '</dl></div>';
+        html += '<div class="panel"><h2>Session &amp; News</h2><dl class="kv">' +
+          kv('News blackout', r.news_blackout ? '<span class="red">ACTIVE</span>' : '<span class="green">NONE</span>') +
+          (r.news_blackout_reason ? kv('Reason', esc(r.news_blackout_reason)) : '') +
+          kv('In active window', fr.active ? '<span class="green">YES</span>' : '<span class="gray">NO</span>') +
+          '</dl></div>';
+      } else {
+        html += '<div class="panel"><h2>Limits</h2><p class="muted">Loading…</p></div>';
+      }
+
+      html += renderCommittee(fr);
+      el('tab-risk').innerHTML = html;
+    }
+    function ladder(shown) {
+      var steps = ['CLEAR', 'WATCH', 'DEFEND', 'LOCKED'];
+      return '<div class="uni" style="margin-top:12px;">' + steps.map(function (s) {
+        var active = s === shown;
+        var c = RISK_COLOR[s];
+        return '<div class="u"><span class="pill ' + (active ? c : 'gray') + '">' + s + (active ? ' ●' : '') + '</span></div>';
+      }).join('') + '</div>';
+    }
+    var AGENT_MAP = [
+      ['payload_auditor', 'Payload'],
+      ['risk_steward', 'Risk'],
+      ['strategy_analyst', 'Strategy'],
+      ['ops_monitor', 'Ops']
+    ];
+    var STATUS_WORD = { OK: ['PASS', 'green'], WARNING: ['WARN', 'yellow'], CRITICAL: ['FAIL', 'red'] };
+    function renderCommittee(fr) {
+      var c = INIT.committee || {};
+      var agents = c.agents || [];
+      var byName = {};
+      agents.forEach(function (a) { byName[a.agent] = a; });
+      var anyWarn = false, anyCrit = false;
+      var rows = AGENT_MAP.map(function (m) {
+        var a = byName[m[0]];
+        var st = a ? a.status : null;
+        var note = '';
+        // Ops freshness override
+        if (m[0] === 'ops_monitor' && fr.state === 'STALE') { st = 'WARNING'; note = 'last webhook stale (' + fr.label + ' old)'; }
+        if (!st) { st = 'NONE'; }
+        var sw = STATUS_WORD[st] || ['—', 'gray'];
+        if (st === 'WARNING') anyWarn = true;
+        if (st === 'CRITICAL') anyCrit = true;
+        if (!note && a && a.recommendations && a.recommendations.length) note = (a.recommendations[0].reason || '').slice(0, 90);
+        var line = '<span class="nm">' + esc(m[1]) + '</span><span class="' + sw[1] + '" style="font-weight:800;">' + sw[0] + '</span><span></span>';
+        if (note) line += '<span class="note">' + esc(note) + '</span>';
+        return line;
+      }).join('');
+
+      var consensus, cc, blocker = '';
+      var suff = c.sample_sufficiency || '';
+      if (!c.overall_status) { consensus = 'NOT RUN'; cc = 'gray'; blocker = 'Committee has not run yet — call /status/adaptive.'; }
+      else if (fr.state === 'STALE') { consensus = 'WITHHELD'; cc = 'yellow'; blocker = 'Ops stale → consensus withheld (data freshness during active window).'; }
+      else if (suff === 'insufficient_sample') { consensus = 'INSUFFICIENT'; cc = 'yellow'; blocker = 'Insufficient resolved-trade sample (' + num(c.sample_size) + ' trades) to form consensus.'; }
+      else if (anyCrit) { consensus = 'BLOCKED'; cc = 'red'; blocker = 'A committee agent reported CRITICAL.'; }
+      else if (anyWarn) { consensus = 'PARTIAL'; cc = 'yellow'; blocker = 'At least one agent reported WARNING.'; }
+      else { consensus = 'OK'; cc = 'green'; }
+
+      var body = '<div class="cmt">' + rows + '</div>' +
+        '<div class="consensus">Consensus: <span class="' + cc + '">' + consensus + '</span></div>' +
+        (blocker ? '<p class="muted" style="margin-top:6px;font-size:12px;">' + esc(blocker) + '</p>' : '');
+      return '<div class="panel"><h2>Adaptive Committee</h2>' + body + '</div>';
+    }
+
+    // ── LOG ────────────────────────────────────────────────────────────
+    function categoryOf(e) {
+      if ((e.type || '') === 'OUTCOME' || e.outcome) return e.outcome || 'OUTCOME';
+      if (isConfig(e)) return 'CONFIG_BLOCK';
+      return e.decision || e.type || 'EVENT';
+    }
+    var FILTER_MATCH = {
+      ALL: function () { return true; },
+      TRADE: function (c) { return c === 'TRADE'; },
+      NO_TRADE: function (c) { return c === 'NO_TRADE'; },
+      RISK_REJECTED: function (c) { return c === 'RISK_REJECTED'; },
+      CONFIG: function (c) { return c === 'CONFIG_BLOCK'; },
+      ERROR: function (c) { return c === 'ERROR'; },
+      WIN: function (c) { return c === 'WIN'; },
+      LOSS: function (c) { return c === 'LOSS'; }
+    };
+    function compress(entries) {
+      // collapse consecutive same (instrument, category) runs
+      var groups = [];
+      entries.forEach(function (e) {
+        var cat = categoryOf(e);
+        var inst = (e.instrument || '—').toUpperCase();
+        var last = groups[groups.length - 1];
+        if (last && last.cat === cat && last.inst === inst && (last.reason === (e.reason || ''))) {
+          last.count++; last.lastTs = e.ts; last.items.push(e);
+        } else {
+          groups.push({ cat: cat, inst: inst, reason: e.reason || '', firstTs: e.ts, lastTs: e.ts, count: 1, items: [e], outcome: e });
+        }
+      });
+      return groups;
+    }
+    function shortT(iso) {
+      if (!iso) return '';
+      try {
+        return new Date(iso).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true });
+      } catch (e) { return String(iso).split('T')[1] ? String(iso).split('T')[1].slice(0, 5) : ''; }
+    }
+    var CAT_COLOR = { TRADE: 'green', WIN: 'green', NO_TRADE: 'yellow', WAITING: 'yellow', CONFIG_BLOCK: 'gray', RISK_REJECTED: 'red', LOSS: 'red', ERROR: 'red', BREAKEVEN: 'blue' };
+    function renderLog() {
+      var today = state.today;
+      var entries = (today.latest_entries || []).slice();
+      var filters = ['ALL', 'TRADE', 'NO_TRADE', 'RISK_REJECTED', 'CONFIG', 'ERROR', 'WIN', 'LOSS'];
+      var html = '<div class="tabhead"><h1>Log</h1><span class="when">' + entries.length + ' recent</span></div>';
+      html += '<div class="filters">' + filters.map(function (f) {
+        return '<button data-filter="' + f + '" class="' + (state.filter === f ? 'on' : '') + '">' + f.replace('_', ' ') + '</button>';
+      }).join('') + '</div>';
+
+      var match = FILTER_MATCH[state.filter] || FILTER_MATCH.ALL;
+      var groups = compress(entries).filter(function (g) { return match(g.cat); });
+      var body = '';
+      if (!groups.length) body = '<p class="muted" style="font-size:13px;">No entries for this filter.</p>';
+      else {
+        // newest first
+        groups.reverse().forEach(function (g) {
+          var label = g.cat === 'CONFIG_BLOCK' ? 'CONFIG_BLOCK' : g.cat;
+          var cnt = g.count > 1 ? ' <span class="muted">x' + g.count + '</span>' : '';
+          var trange = g.count > 1 ? (shortT(g.firstTs) + '–' + shortT(g.lastTs)) : shortT(g.firstTs);
+          var color = CAT_COLOR[g.cat] || 'gray';
+          var reason = g.reason;
+          if (g.cat === 'CONFIG_BLOCK') reason = (g.inst + ' not in allowed universe');
+          var px = '';
+          if (g.outcome && g.outcome.pnl_dollars != null) px = '<span class="jx ' + (num(g.outcome.pnl_dollars) < 0 ? 'red' : 'green') + '">' + money(g.outcome.pnl_dollars) + '</span>';
+          body += '<div class="jrow">' +
+            '<span class="jt">' + esc(trange) + '</span>' +
+            '<span class="jd ' + color + '">' + esc(g.inst) + '</span>' +
+            '<span class="jr"><b class="' + color + '">' + esc(label) + cnt + '</b><br>' + esc(reason || '—') + '</span>' +
+            px + '</div>';
+        });
+      }
+      html += '<div class="panel"><h2>Journal (compressed)</h2>' + body + '</div>';
+      el('tab-log').innerHTML = html;
+      Array.prototype.forEach.call(document.querySelectorAll('[data-filter]'), function (b) {
+        b.addEventListener('click', function () { state.filter = b.getAttribute('data-filter'); renderLog(); });
+      });
+    }
+
+    // ── charts (only drawn when present) ───────────────────────────────
+    function drawPnlChart() {
+      var canvas = el('pnl-chart');
+      var hist = state.history;
+      if (!canvas || !hist || !hist.days || !hist.days.length) return;
+      var days = hist.days.slice().reverse();
+      var dpr = window.devicePixelRatio || 1;
+      var W = canvas.offsetWidth, H = canvas.offsetHeight;
       if (!W || !H) return;
-      canvas.width = W * dpr;
-      canvas.height = H * dpr;
-      const ctx = canvas.getContext('2d');
-      ctx.scale(dpr, dpr);
-
-      const PAD = {{ top: 16, right: 16, bottom: 26, left: 56 }};
-      const chartW = W - PAD.left - PAD.right;
-      const chartH = H - PAD.top - PAD.bottom;
-
-      const pnlValues = days.map(d => d.realized_pnl_dollars || 0);
-      const maxVal = Math.max(0, ...pnlValues);
-      const minVal = Math.min(0, ...pnlValues);
-      const range = (maxVal - minVal) || 1;
-
-      const toX = i => PAD.left + (i / Math.max(days.length - 1, 1)) * chartW;
-      const toY = v => PAD.top + ((maxVal - v) / range) * chartH;
-      const zeroY = toY(0);
-
-      // Background
-      ctx.fillStyle = '#111216';
-      ctx.fillRect(0, 0, W, H);
-
-      // Subtle grid lines
-      ctx.strokeStyle = '#1e2028';
-      ctx.lineWidth = 1;
-      [0.25, 0.5, 0.75].forEach(frac => {{
-        const y = PAD.top + frac * chartH;
-        ctx.beginPath(); ctx.moveTo(PAD.left, y); ctx.lineTo(W - PAD.right, y); ctx.stroke();
-      }});
-
-      // Zero line
-      ctx.strokeStyle = '#2a2d34';
-      ctx.lineWidth = 1;
-      ctx.setLineDash([4, 4]);
-      ctx.beginPath(); ctx.moveTo(PAD.left, zeroY); ctx.lineTo(W - PAD.right, zeroY); ctx.stroke();
-      ctx.setLineDash([]);
-
-      // Y-axis labels
-      ctx.fillStyle = '#a1a1aa';
-      ctx.font = `${{Math.max(10, Math.min(12, W / 40))}}px ui-sans-serif,system-ui,sans-serif`;
-      ctx.textAlign = 'right';
-      ctx.textBaseline = 'middle';
-      const yTicks = [minVal, 0, maxVal].filter((v, i, a) => a.indexOf(v) === i);
-      yTicks.forEach(v => {{
-        ctx.fillText(`$${{v >= 0 ? '' : '-'}}${{Math.abs(v).toFixed(0)}}`, PAD.left - 6, toY(v));
-      }});
-
-      // X-axis date labels
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'bottom';
-      const labelIdxs = days.length <= 3
-        ? days.map((_, i) => i)
-        : [0, Math.floor(days.length / 2), days.length - 1];
-      labelIdxs.forEach(i => {{
-        const label = (days[i].date || '').slice(5); // MM-DD
-        ctx.fillText(label, toX(i), H - 2);
-      }});
-
-      // Gradient fill under the curve
-      const grad = ctx.createLinearGradient(0, PAD.top, 0, PAD.top + chartH);
-      grad.addColorStop(0, 'rgba(0,213,255,0.18)');
-      grad.addColorStop(1, 'rgba(0,213,255,0.01)');
-      ctx.beginPath();
-      days.forEach((d, i) => {{
-        const x = toX(i), y = toY(d.realized_pnl_dollars || 0);
-        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-      }});
-      ctx.lineTo(toX(days.length - 1), zeroY);
-      ctx.lineTo(toX(0), zeroY);
-      ctx.closePath();
-      ctx.fillStyle = grad;
-      ctx.fill();
-
-      // Main line
-      ctx.beginPath();
-      ctx.strokeStyle = '#00d5ff';
-      ctx.lineWidth = 2;
-      ctx.lineJoin = 'round';
-      ctx.lineCap = 'round';
-      days.forEach((d, i) => {{
-        const x = toX(i), y = toY(d.realized_pnl_dollars || 0);
-        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-      }});
+      canvas.width = W * dpr; canvas.height = H * dpr;
+      var ctx = canvas.getContext('2d'); ctx.scale(dpr, dpr);
+      var PAD = { t: 14, r: 14, b: 22, l: 48 };
+      var cw = W - PAD.l - PAD.r, ch = H - PAD.t - PAD.b;
+      var vals = days.map(function (d) { return num(d.realized_pnl_dollars); });
+      var mx = Math.max(0, Math.max.apply(null, vals)), mn = Math.min(0, Math.min.apply(null, vals));
+      var range = (mx - mn) || 1;
+      var toX = function (i) { return PAD.l + (i / Math.max(days.length - 1, 1)) * cw; };
+      var toY = function (v) { return PAD.t + ((mx - v) / range) * ch; };
+      ctx.fillStyle = '#0d0e12'; ctx.fillRect(0, 0, W, H);
+      ctx.strokeStyle = '#2a2d34'; ctx.setLineDash([4, 4]);
+      ctx.beginPath(); ctx.moveTo(PAD.l, toY(0)); ctx.lineTo(W - PAD.r, toY(0)); ctx.stroke(); ctx.setLineDash([]);
+      ctx.beginPath(); ctx.strokeStyle = '#00d5ff'; ctx.lineWidth = 2;
+      days.forEach(function (d, i) { var x = toX(i), y = toY(num(d.realized_pnl_dollars)); i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
       ctx.stroke();
+      days.forEach(function (d, i) { var v = num(d.realized_pnl_dollars); ctx.beginPath(); ctx.arc(toX(i), toY(v), 3, 0, 7); ctx.fillStyle = v > 0 ? '#17d97f' : v < 0 ? '#ff3d71' : '#a1a1aa'; ctx.fill(); });
+      var rl = el('chart-range');
+      if (rl) { var last = vals[vals.length - 1] || 0; rl.textContent = days.length + 'd · ' + (last >= 0 ? '+' : '') + money(last).replace('$', '$'); }
+    }
 
-      // Dots
-      days.forEach((d, i) => {{
-        const v = d.realized_pnl_dollars || 0;
-        ctx.beginPath();
-        ctx.arc(toX(i), toY(v), 3, 0, Math.PI * 2);
-        ctx.fillStyle = v > 0 ? '#17d97f' : v < 0 ? '#ff3d71' : '#a1a1aa';
-        ctx.fill();
-      }});
+    // ── tab switching + render dispatch ────────────────────────────────
+    function renderActive() {
+      if (state.tab === 'home') renderHome();
+      else if (state.tab === 'futures') renderFutures();
+      else if (state.tab === 'options') renderOptions();
+      else if (state.tab === 'risk') renderRisk();
+      else if (state.tab === 'log') renderLog();
+      if (state.tab === 'home') drawPnlChart();
+    }
+    function setTab(name) {
+      state.tab = name;
+      Array.prototype.forEach.call(document.querySelectorAll('.tab'), function (s) { s.classList.toggle('active', s.id === 'tab-' + name); });
+      Array.prototype.forEach.call(document.querySelectorAll('#nav button'), function (b) { b.classList.toggle('on', b.getAttribute('data-tab') === name); });
+      if (name === 'risk' && !state.risk) loadRisk();
+      renderActive();
+      window.scrollTo(0, 0);
+    }
 
-      // Range label
-      if (rangeLabel) {{
-        const latest = pnlValues[pnlValues.length - 1] || 0;
-        const sign = latest >= 0 ? '+' : '';
-        rangeLabel.textContent = `${{days.length}}d · ${{sign}}$${{latest.toFixed(2)}} cumulative`;
-      }}
-    }}
+    // ── data ───────────────────────────────────────────────────────────
+    function loadRisk() {
+      return fetch('/status/risk', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (d) { state.risk = d; if (state.tab === 'risk') renderRisk(); }).catch(function () {});
+    }
+    function refresh() {
+      Promise.all([
+        fetch('/status/today', { cache: 'no-store' }).then(function (r) { return r.json(); }),
+        fetch('/status/history?days=7', { cache: 'no-store' }).then(function (r) { return r.json(); })
+      ]).then(function (res) {
+        state.today = res[0] || state.today;
+        state.history = res[1] || state.history;
+        renderStatusBar();
+        renderActive();
+      }).catch(function (e) { /* keep last good state */ });
+    }
 
-    function setupEmergencyControls() {{
-      const secret = document.getElementById('emergency-secret');
-      const confirm = document.getElementById('emergency-confirm');
-      const button = document.getElementById('close-all-button');
-      const result = document.getElementById('emergency-result');
-      if (!secret || !confirm || !button || !result) return;
+    // ── wire ───────────────────────────────────────────────────────────
+    Array.prototype.forEach.call(document.querySelectorAll('#nav button'), function (b) {
+      b.addEventListener('click', function () { setTab(b.getAttribute('data-tab')); });
+    });
+    el('fm-cancel').addEventListener('click', closeForceModal);
+    el('fm-confirm').addEventListener('click', submitForce);
+    el('force-modal').addEventListener('click', function (e) { if (e.target === el('force-modal')) closeForceModal(); });
 
-      function syncState() {{
-        button.disabled = !(secret.value.trim() && confirm.checked);
-      }}
+    function renderMonitorBar() {
+      var bar = el('monitorbar');
+      if (!bar) return;
+      if (INIT.manual_controls_enabled) { bar.hidden = true; return; }
+      bar.hidden = false;
+      bar.innerHTML = '<b>MODE: MONITOR ONLY</b> · Manual execution controls disabled · ' +
+        'Broker actions hidden until the alert pipeline is validated';
+    }
 
-      secret.addEventListener('input', syncState);
-      confirm.addEventListener('change', syncState);
-      button.addEventListener('click', async () => {{
-        if (button.disabled) return;
-        button.disabled = true;
-        result.textContent = 'Sending emergency close...';
-        try {{
-          const response = await fetch('/webhook/manual', {{
-            method: 'POST',
-            headers: {{
-              'Content-Type': 'application/json',
-              'X-Webhook-Secret': secret.value.trim()
-            }},
-            body: JSON.stringify({{ action: 'CLOSE_ALL' }})
-          }});
-          const data = await response.json();
-          if (!response.ok || data.ok === false) {{
-            result.textContent = data.error || data.detail || 'Emergency close failed.';
-          }} else {{
-            result.textContent = data.note || 'Emergency close request sent.';
-            confirm.checked = false;
-          }}
-        }} catch (error) {{
-          result.textContent = 'Emergency close failed before reaching the server.';
-        }} finally {{
-          syncState();
-        }}
-      }});
-      syncState();
-    }}
-
-    function drawPnlBarChart(history) {{
-      const canvas = document.getElementById('pnl-bar-chart');
-      const rangeLabel = document.getElementById('bar-chart-range');
-      if (!canvas || !history || !history.days || !history.days.length) return;
-
-      const days = [...history.days].reverse();
-      const dpr = window.devicePixelRatio || 1;
-      const W = canvas.offsetWidth;
-      const H = canvas.offsetHeight;
-      if (!W || !H) return;
-      canvas.width = W * dpr;
-      canvas.height = H * dpr;
-      const ctx = canvas.getContext('2d');
-      ctx.scale(dpr, dpr);
-
-      const PAD = {{ top: 16, right: 16, bottom: 30, left: 56 }};
-      const chartW = W - PAD.left - PAD.right;
-      const chartH = H - PAD.top - PAD.bottom;
-      const values = days.map(d => Number(d.realized_pnl_dollars || 0));
-      const maxAbs = Math.max(1, ...values.map(v => Math.abs(v)));
-      const zeroY = PAD.top + chartH / 2;
-      const barGap = Math.min(10, Math.max(4, chartW / Math.max(days.length, 1) * 0.18));
-      const barW = Math.max(6, (chartW - barGap * Math.max(days.length - 1, 0)) / Math.max(days.length, 1));
-      const toY = v => zeroY - (v / maxAbs) * (chartH / 2);
-
-      ctx.fillStyle = '#111216';
-      ctx.fillRect(0, 0, W, H);
-
-      ctx.strokeStyle = '#1e2028';
-      ctx.lineWidth = 1;
-      [0.25, 0.75].forEach(frac => {{
-        const y = PAD.top + frac * chartH;
-        ctx.beginPath(); ctx.moveTo(PAD.left, y); ctx.lineTo(W - PAD.right, y); ctx.stroke();
-      }});
-
-      ctx.strokeStyle = '#2a2d34';
-      ctx.setLineDash([4, 4]);
-      ctx.beginPath(); ctx.moveTo(PAD.left, zeroY); ctx.lineTo(W - PAD.right, zeroY); ctx.stroke();
-      ctx.setLineDash([]);
-
-      ctx.fillStyle = '#a1a1aa';
-      ctx.font = `${{Math.max(10, Math.min(12, W / 40))}}px ui-sans-serif,system-ui,sans-serif`;
-      ctx.textAlign = 'right';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(`+$${{maxAbs.toFixed(0)}}`, PAD.left - 6, PAD.top);
-      ctx.fillText('$0', PAD.left - 6, zeroY);
-      ctx.fillText(`-$${{maxAbs.toFixed(0)}}`, PAD.left - 6, PAD.top + chartH);
-
-      days.forEach((d, i) => {{
-        const value = Number(d.realized_pnl_dollars || 0);
-        const x = PAD.left + i * (barW + barGap);
-        const y = value >= 0 ? toY(value) : zeroY;
-        const h = Math.max(2, Math.abs(toY(value) - zeroY));
-        ctx.fillStyle = value > 0 ? '#17d97f' : value < 0 ? '#ff3d71' : '#2a2d34';
-        ctx.fillRect(x, y, barW, h);
-      }});
-
-      ctx.fillStyle = '#a1a1aa';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'bottom';
-      const labelIdxs = days.length <= 4
-        ? days.map((_, i) => i)
-        : [0, Math.floor(days.length / 2), days.length - 1];
-      labelIdxs.forEach(i => {{
-        const x = PAD.left + i * (barW + barGap) + barW / 2;
-        ctx.fillText((days[i].date || '').slice(5), x, H - 2);
-      }});
-
-      if (rangeLabel) {{
-        const wins = values.filter(v => v > 0).reduce((sum, v) => sum + v, 0);
-        const losses = values.filter(v => v < 0).reduce((sum, v) => sum + v, 0);
-        rangeLabel.textContent = `made $${{wins.toFixed(2)}} · lost $${{Math.abs(losses).toFixed(2)}}`;
-      }}
-    }}
-
-    async function refreshDashboard() {{
-      try {{
-        const [today, history] = await Promise.all([
-          fetch('/status/today', {{cache: 'no-store'}}).then(r => r.json()),
-          fetch('/status/history?days=7', {{cache: 'no-store'}}).then(r => r.json())
-        ]);
-        const pnl = document.getElementById('metric-pnl');
-        const trades = document.getElementById('metric-trades');
-        const winrate = document.getElementById('metric-winrate');
-        const open = document.getElementById('metric-open');
-        const bal = document.getElementById('metric-balance');
-        const peak = document.getElementById('metric-peak');
-        const tbody = document.getElementById('journal-tbody');
-        const instrumentGrid = document.getElementById('instrument-grid');
-        if (pnl) pnl.textContent = `$${{Number(today.today_pnl_dollars || 0).toFixed(2)}}`;
-        if (trades) trades.innerHTML = `${{today.trade_count || 0}}<small>/${{today.max_trades_per_day || 0}}</small>`;
-        if (winrate) {{
-          const res = (today.wins || 0) + (today.losses || 0);
-          winrate.innerHTML = res === 0 ? '—' : `${{Number(today.win_rate || 0).toFixed(1)}}<small>%</small>`;
-        }}
-        if (open) open.textContent = today.has_open_position ? '1' : '—';
-        if (bal) bal.textContent = `$${{Number(today.account_balance || 0).toFixed(2)}}`;
-        if (peak) peak.textContent = `Peak $${{Number(today.account_peak_balance || 0).toFixed(2)}}`;
-        if (tbody && today.latest_entries) {{
-          tbody.innerHTML = today.latest_entries.length
-            ? today.latest_entries.map(renderEntryRow).join('')
-            : '<tr><td colspan="6">No journal entries yet.</td></tr>';
-        }}
-        if (instrumentGrid && today.instrument_breakdown) {{
-          instrumentGrid.innerHTML = today.instrument_breakdown.map(renderInstrumentCard).join('');
-        }}
-        // Performance stats
-        const perf = today.performance || {{}};
-        function updStat(id, val, prefix) {{
-          const el = document.getElementById(id);
-          if (!el) return;
-          el.textContent = val != null ? ((prefix || '$') + Number(val).toFixed(2)) : '—';
-        }}
-        const pfEl = document.getElementById('stat-pf');
-        if (pfEl) pfEl.textContent = perf.profit_factor != null ? Number(perf.profit_factor).toFixed(2) + '×' : '—';
-        updStat('stat-avg-win',   perf.avg_win);
-        updStat('stat-avg-loss',  perf.avg_loss);
-        updStat('stat-maxdd',     perf.max_drawdown);
-        updStat('stat-best-day',  perf.best_day);
-        updStat('stat-worst-day', perf.worst_day);
-        updStat('stat-lg-win',    perf.largest_win);
-        updStat('stat-lg-loss',   perf.largest_loss);
-
-        // IBKR gateway badge
-        const gwBadge = document.getElementById('badge-gateway');
-        if (gwBadge && today.broker_gateway_reachable !== null && today.broker_gateway_reachable !== undefined) {{
-          gwBadge.textContent = today.broker_gateway_reachable ? 'IBKR ● CONNECTED' : 'IBKR ✕ OFFLINE';
-          gwBadge.style.color = today.broker_gateway_reachable ? 'var(--green)' : 'var(--red)';
-          gwBadge.style.display = '';
-        }}
-
-        window.__riskSentinelHistory = history;
-        drawPnlChart(history);
-        drawPnlBarChart(history);
-      }} catch (error) {{
-        console.warn('Dashboard refresh failed', error);
-      }}
-    }}
-    refreshDashboard();
-    setupEmergencyControls();
-    setInterval(refreshDashboard, 30000);
-    // Redraw chart on resize (handles rotation on mobile)
-    window.addEventListener('resize', () => {{
-      if (window.__riskSentinelHistory) {{
-        drawPnlChart(window.__riskSentinelHistory);
-        drawPnlBarChart(window.__riskSentinelHistory);
-      }}
-    }});
+    renderMonitorBar();
+    renderStatusBar();
+    renderActive();
+    // initial history fetch for compact-pnl / chart decisions
+    fetch('/status/history?days=7', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (d) { state.history = d; renderActive(); }).catch(function () {});
+    setInterval(function () { renderStatusBar(); }, 1000 * 20);
+    setInterval(refresh, POLL);
+    window.addEventListener('resize', function () { if (state.tab === 'home') drawPnlChart(); });
+  })();
   </script>
-
 </body>
 </html>"""
 
 
-def _render_entry_row(entry: dict) -> str:
-    outcome = entry.get("outcome") or ""
-    pnl = entry.get("pnl_dollars")
-    if pnl is not None:
-        outcome = f"{outcome} ${float(pnl):.2f}"
-    return (
-        "<tr>"
-        f"<td>{_escape(_short_time(entry.get('ts')))}</td>"
-        f"<td>{_escape(entry.get('instrument') or '')}</td>"
-        f"<td class=\"col-session\">{_escape(entry.get('session') or '')}</td>"
-        f"<td>{_escape(entry.get('decision') or entry.get('type') or '')}</td>"
-        f"<td class=\"reason\">{_escape(entry.get('reason') or '')}</td>"
-        f"<td>{_escape(outcome)}</td>"
-        "</tr>"
-    )
+def _render_dashboard(status: dict) -> str:
+    """Render the operator dashboard.
 
-
-def _render_instrument_card(item: dict) -> str:
-    instrument = item.get("instrument") or ""
-    latest = item.get("latest") or {}
-    latest_decision = latest.get("decision") or latest.get("type") or "—"
-    latest_reason = latest.get("reason") or "No entries yet."
-    pnl = float(item.get("pnl_dollars") or 0.0)
-    pnl_class = "green" if pnl >= 0 else "red"
-    mini_rows = "".join(
-        _render_mini_entry(entry) for entry in item.get("latest_entries", [])
-    ) or "<div class='mini-entry'><span>—</span><strong>NONE</strong><span>No entries yet.</span></div>"
-    return (
-        "<div class=\"panel instrument-card\">"
-        "<div class=\"instrument-head\">"
-        "<div>"
-        f"<div class=\"instrument-symbol\">{_escape(instrument)}</div>"
-        f"<div class=\"instrument-latest\">{_escape(latest_decision)} · {_escape(latest_reason)}</div>"
-        "</div>"
-        f"<div class=\"badge {pnl_class}\">${pnl:.2f}</div>"
-        "</div>"
-        "<div class=\"instrument-stats\">"
-        f"<div class=\"instrument-stat\"><label>Decisions</label><strong>{int(item.get('decisions') or 0)}</strong></div>"
-        f"<div class=\"instrument-stat\"><label>Trades</label><strong>{int(item.get('trades') or 0)}</strong></div>"
-        f"<div class=\"instrument-stat\"><label>W/L</label><strong>{int(item.get('wins') or 0)}/{int(item.get('losses') or 0)}</strong></div>"
-        f"<div class=\"instrument-stat\"><label>No Trade</label><strong>{int(item.get('no_trades') or 0)}</strong></div>"
-        "</div>"
-        f"<div class=\"instrument-mini-list\">{mini_rows}</div>"
-        "</div>"
-    )
-
-
-def _render_mini_entry(entry: dict) -> str:
-    return (
-        "<div class=\"mini-entry\">"
-        f"<span>{_escape(_short_time(entry.get('ts')))}</span>"
-        f"<strong>{_escape(entry.get('decision') or entry.get('type') or '')}</strong>"
-        f"<span>{_escape(entry.get('reason') or entry.get('exit_reason') or '')}</span>"
-        "</div>"
-    )
-
-
-def _short_time(value: str | None) -> str:
-    if not value:
-        return ""
-    try:
-        from zoneinfo import ZoneInfo
-        dt = datetime.fromisoformat(value)
-        dt_et = dt.astimezone(ZoneInfo("America/New_York"))
-        return dt_et.strftime("%-I:%M %p")
-    except Exception:
-        return value.split("T")[-1][:5]
-
-
-def _format_vwap(value: dict | None) -> str:
-    if not value:
-        return "None"
-    return f"{value.get('value')} · {value.get('price_vs_vwap')}"
-
-
-def _format_orb(value: dict | None) -> str:
-    if not value:
-        return "None"
-    return f"H {value.get('high')} / L {value.get('low')} · {value.get('status')}"
-
-
-def _format_trend(value: dict | None) -> str:
-    if not value:
-        return "None"
-    return f"{value.get('direction') or 'None'} · {value.get('strength') or 'None'}"
-
-
-def _format_previous_day(value: dict | None) -> str:
-    if not value:
-        return "None"
-    return (
-        f"H {value.get('high')} / L {value.get('low')} · "
-        f"PDH {value.get('price_vs_pdh')} / PDL {value.get('price_vs_pdl')}"
-    )
-
-
-def _format_volume(value: dict | None) -> str:
-    if not value:
-        return "None"
-    relative = value.get("relative")
-    relative_text = f"{float(relative):.2f}x" if isinstance(relative, (int, float)) else "None"
-    return f"{value.get('current_bar')} / avg {value.get('avg_bar')} · {relative_text}"
-
-
-def _format_strat(value: dict | None) -> str:
-    if not value:
-        return "None"
-    current = value.get("current_bar_type") or "None"
-    sequence = value.get("strat_sequence") or "no_sequence"
-    direction = value.get("strat_direction") or "None"
-    return f"{current} · {sequence} · {direction}"
+    All tabs are rendered client-side from the embedded JSON view-model, so the
+    30s refresh reuses one render path and the server holds no presentation
+    logic. `<` is escaped to keep any reason text from breaking out of the
+    JSON <script> island.
+    """
+    init_json = json.dumps(_dashboard_init(status), default=str).replace("<", "\\u003c")
+    return _DASHBOARD_HTML.replace("__INIT_JSON__", init_json)
 
 
 def _record_latest_webhook(payload: AlertPayload, result: dict) -> None:
@@ -2310,28 +2223,6 @@ def _payload_to_dict(payload: AlertPayload) -> dict:
     if hasattr(payload, "model_dump"):
         return payload.model_dump()
     return payload.dict()
-
-
-def _format_webhook_received(value: str | None) -> str:
-    """Format a UTC ISO timestamp to a readable ET string, e.g. 'May 31 · 1:07 AM ET'."""
-    if not value:
-        return "None"
-    try:
-        from zoneinfo import ZoneInfo
-        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        dt_et = dt.astimezone(ZoneInfo("America/New_York"))
-        return dt_et.strftime("%b %-d · %-I:%M %p ET")
-    except Exception:
-        return value
-
-
-def _fmt_stat(value: object, prefix: str = "$", none_str: str = "—") -> str:
-    """Format a numeric stat for display, returning none_str when value is None."""
-    if value is None:
-        return none_str
-    return f"{prefix}{float(value):.2f}"
 
 
 def _broker_status() -> dict:

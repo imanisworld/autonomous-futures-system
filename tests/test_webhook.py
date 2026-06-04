@@ -820,13 +820,20 @@ def test_fastapi_dashboard_endpoint():
     assert resp.status_code == 200
     assert "text/html" in resp.headers["content-type"]
     assert "RiskSentinel" in resp.text
-    assert "LIVE TRADING OFF" in resp.text
-    assert "Daily Made / Lost" in resp.text
-    assert "pnl-bar-chart" in resp.text
-    assert "Emergency Controls" in resp.text
-    assert 'id="close-all-button"' in resp.text
-    assert 'id="emergency-panel"' in resp.text
-    assert "Manual OPEN is disabled" in resp.text
+    # Tabbed single-page shell: global status bar, bottom nav, and the five tabs.
+    assert 'id="statusbar"' in resp.text
+    assert 'class="bottom"' in resp.text
+    assert 'data-tab="futures"' in resp.text
+    assert 'data-tab="options"' in resp.text
+    assert "Options Lab" in resp.text
+    # Embedded JSON view-model the client renders from.
+    assert 'id="init-data"' in resp.text
+    # Force-open confirmation modal + close-all path live in the client script.
+    assert 'id="force-modal"' in resp.text
+    assert "CLOSE ALL " in resp.text
+    # Options Lab demo data must be unmistakably simulated.
+    assert "OPTIONS LAB · DEMO DATA" in resp.text
+    assert "SIMULATED" in resp.text
 
 
 def test_fastapi_status_today_endpoint():

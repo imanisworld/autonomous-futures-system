@@ -160,6 +160,12 @@ class SystemConfig:
     # Independent live index quote (ES=F/NQ=F via Yahoo) for the Discord display price.
     live_quote_enabled: bool = True
 
+    # Visible manual execution controls (force-open / close-all / flatten buttons).
+    # Default OFF: the system is in monitor / alert-validation mode. When False the
+    # dashboard renders NO order-sending buttons — backend /webhook/manual endpoints
+    # are unchanged, just not surfaced in the UI.
+    enable_manual_execution_controls: bool = False
+
     # Future signal/data vendor planning; key value is never stored on config.
     signa_api_enabled: bool = False
     signa_api_key_configured: bool = False
@@ -297,6 +303,7 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
             ["TRADE", "RISK_REJECTED", "BLOCKED_MAX_TRADES", "BLOCKED_LOSS_LOCKOUT"],
         ),
         live_quote_enabled=_env_bool("LIVE_QUOTE_ENABLED", True),
+        enable_manual_execution_controls=_env_bool("ENABLE_MANUAL_EXECUTION_CONTROLS", False),
 
         signa_api_enabled=_env_bool("SIGNA_API_ENABLED", False),
         signa_api_key_configured=bool(os.getenv("SIGNA_API_KEY", "").strip()),
