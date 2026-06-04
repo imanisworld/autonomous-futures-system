@@ -206,9 +206,14 @@ else
 var string trend_dir = "SIDEWAYS"
 var string trend_str = "WEAK"
 
-diff_pct = math.abs(ema_fast - ema_slow) / ema_slow * 100
-trend_dir := ema_fast > ema_slow and diff_pct > 0.15 ? "UP" : ema_fast < ema_slow and diff_pct > 0.15 ? "DOWN" : "SIDEWAYS"
-trend_str := diff_pct > 0.40 ? "STRONG" : diff_pct > 0.15 ? "MODERATE" : "WEAK"
+// Scale-free EMA-stack trend (matches backend context/trend.py source of truth).
+// Replaces the old EMA9/21 %-spread formula whose STRONG gate (>0.40%) was
+// mathematically unreachable on 15m micros and suppressed the payload.
+bull_stack = close > ema_fast and ema_fast > ema_slow and ema_slow > ema_mid
+bear_stack = close < ema_fast and ema_fast < ema_slow and ema_slow < ema_mid
+
+trend_dir := bull_stack ? "UP" : bear_stack ? "DOWN" : "SIDEWAYS"
+trend_str := bull_stack or bear_stack ? "STRONG" : "WEAK"
 
 // ─── NY ORB ───────────────────────────────────────────────────────────────────
 bars_needed = math.max(1, math.round(i_orb_min * 60 / timeframe.in_seconds()))
