@@ -21,13 +21,17 @@ from .models import (
 
 
 _ET = ZoneInfo("America/New_York")
-_ACTIVE_STALE_SECONDS = 900       # 15m tolerance for 5m bar-close alerts
 _STALE_CRITICAL_SECONDS = 86_400  # 24h while market should be active
 
 
 class OpsMonitor:
-    def __init__(self, log_dir: str | Path):
+    def __init__(self, log_dir: str | Path, expected_tf_minutes: int = 15):
         self.log_dir = Path(log_dir)
+        # Drive staleness off the configured bar timeframe instead of a hardcoded
+        # value — the system runs 15m bars now, not 5m. Tolerate ~2 missed bars
+        # plus a 1-minute delivery-lag grace before warning (matches the UI).
+        self.expected_tf_minutes = int(expected_tf_minutes or 15)
+        self.active_stale_seconds = (self.expected_tf_minutes * 2 + 1) * 60
 
     def audit(
         self,
@@ -69,27 +73,30 @@ class OpsMonitor:
 
         # ── Latest entry age ──────────────────────────────────────────────────
         if latest_entry_age is not None and market_active:
+            tf = self.expected_tf_minutes
             if latest_entry_age > _STALE_CRITICAL_SECONDS:
                 status = worst_status(status, "CRITICAL")
                 recs.append(Recommendation(
                     code=SYSTEM_FIX_REQUIRED,
                     subject="webhook_feed",
                     reason=(
-                        f"Last journal entry is {latest_entry_age/3600:.1f}h old during an active futures alert window. "
-                        "TradingView alerts may have stopped firing or the server may be down."
+                        f"Last journal entry is {latest_entry_age/3600:.1f}h old during an active futures alert window "
+                        f"(expected a {tf}m bar every {tf} minutes). Check the TradingView alert log for webhook "
+                        "delivery failures, then confirm the server is up."
                     ),
-                    evidence={"age_seconds": int(latest_entry_age), "market_active": True},
+                    evidence={"age_seconds": int(latest_entry_age), "market_active": True, "expected_tf_minutes": tf},
                 ))
-            elif latest_entry_age > _ACTIVE_STALE_SECONDS:
+            elif latest_entry_age > self.active_stale_seconds:
                 status = worst_status(status, "WARNING")
                 recs.append(Recommendation(
                     code=WATCH,
                     subject="webhook_feed",
                     reason=(
-                        f"Last journal entry is {latest_entry_age/60:.0f}m old during an active futures alert window. "
-                        "Expected 5m bar-close alerts may be missing."
+                        f"Last journal entry is {latest_entry_age/60:.0f}m old during an active futures alert window "
+                        f"(expected a {tf}m bar every {tf} minutes). Check the TradingView alert log for webhook "
+                        "delivery failures."
                     ),
-                    evidence={"age_seconds": int(latest_entry_age), "market_active": True},
+                    evidence={"age_seconds": int(latest_entry_age), "market_active": True, "expected_tf_minutes": tf},
                 ))
 
         return AgentReport(

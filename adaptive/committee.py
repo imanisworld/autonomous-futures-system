@@ -49,7 +49,10 @@ class AdaptiveCommittee:
             max_trades_per_day=int(cfg.max_trades_per_day),
         )
         self.strategy_analyst = StrategyAnalyst()
-        self.ops_monitor = OpsMonitor(self.log_dir)
+        self.ops_monitor = OpsMonitor(
+            self.log_dir,
+            expected_tf_minutes=int(getattr(cfg, "expected_timeframe_minutes", 15) or 15),
+        )
 
     def run(self, days: int = 30) -> CommitteeReport:
         """Run all four agents and return an aggregated CommitteeReport."""

@@ -373,10 +373,34 @@ def test_ops_monitor_weekend_stale_feed_no_warning(tmp_path):
 def test_ops_monitor_active_session_stale_feed_warning(tmp_path):
     et = ZoneInfo("America/New_York")
     monday_open = datetime(2026, 6, 1, 10, 0, tzinfo=et)
-    report = OpsMonitor(tmp_path).audit(latest_entry_age=20 * 60, now=monday_open)
+    # Default 15m TF tolerates ~2 missed bars + grace (31m); 40m is clearly stale.
+    report = OpsMonitor(tmp_path).audit(latest_entry_age=40 * 60, now=monday_open)
     subjects = [r.subject for r in report.recommendations]
     assert "webhook_feed" in subjects
     assert report.status == "WARNING"
+    feed = next(r for r in report.recommendations if r.subject == "webhook_feed")
+    # Message reflects the configured timeframe, not the old hardcoded "5m bar-close".
+    assert "15m" in feed.reason
+    assert "bar-close alerts may be missing" not in feed.reason
+
+
+def test_ops_monitor_one_late_bar_within_tolerance_no_warning(tmp_path):
+    et = ZoneInfo("America/New_York")
+    monday_open = datetime(2026, 6, 1, 10, 0, tzinfo=et)
+    # 20m old at a 15m cadence = one slightly-late bar; should NOT warn.
+    report = OpsMonitor(tmp_path).audit(latest_entry_age=20 * 60, now=monday_open)
+    assert "webhook_feed" not in [r.subject for r in report.recommendations]
+
+
+def test_ops_monitor_staleness_threshold_tracks_timeframe(tmp_path):
+    et = ZoneInfo("America/New_York")
+    monday_open = datetime(2026, 6, 1, 10, 0, tzinfo=et)
+    # Same 20m gap DOES warn when the configured timeframe is 5m.
+    report = OpsMonitor(tmp_path, expected_tf_minutes=5).audit(latest_entry_age=20 * 60, now=monday_open)
+    subjects = [r.subject for r in report.recommendations]
+    assert "webhook_feed" in subjects
+    feed = next(r for r in report.recommendations if r.subject == "webhook_feed")
+    assert "5m" in feed.reason
 
 
 def test_ops_monitor_active_session_stale_feed_critical(tmp_path):
