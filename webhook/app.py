@@ -345,6 +345,13 @@ async def status_history(days: int = Query(default=7, ge=1, le=30)) -> dict:
     return {"days": history}
 
 
+# Short TTL cache so many clients (every Futures tab polls 2 instruments every
+# 15s) share one upstream broker/Yahoo call instead of each hitting it — faster
+# and keeps Tradovate well under its 5-req/hr auth limit. instrument → (ts, quote).
+_QUOTE_CACHE: dict[str, tuple[float, dict]] = {}
+_QUOTE_TTL_SECONDS = 10.0
+
+
 @app.get("/status/quote")
 async def status_quote(instrument: str = Query(default="MES")) -> dict:
     """Return last known price for the instrument.
@@ -356,6 +363,10 @@ async def status_quote(instrument: str = Query(default="MES")) -> dict:
     broker_mode = os.getenv("BROKER", "paper").strip().lower()
     if broker_mode != "tradovate":
         return {"ok": False, "error": f"BROKER={broker_mode}, not tradovate"}
+    cache_key = instrument.upper()
+    cached = _QUOTE_CACHE.get(cache_key)
+    if cached is not None and (time.time() - cached[0]) < _QUOTE_TTL_SECONDS:
+        return cached[1]
     try:
         from execution.tradovate_broker import TradovateBroker
         broker = TradovateBroker()
@@ -381,10 +392,14 @@ async def status_quote(instrument: str = Query(default="MES")) -> dict:
                 quote["reference_price"] = ref
         except Exception as exc:
             logger.warning("reference_price attach failed: %s", exc)
+        _QUOTE_CACHE[cache_key] = (time.time(), quote)
         return quote
     except Exception as exc:
         logger.exception("status_quote failed: %s", exc)
-        return {"ok": False, "error": str(exc)}
+        # Cache the failure briefly too, so a flapping upstream isn't hammered.
+        err = {"ok": False, "error": str(exc)}
+        _QUOTE_CACHE[cache_key] = (time.time(), err)
+        return err
 
 
 @app.get("/status/test-bracket")
