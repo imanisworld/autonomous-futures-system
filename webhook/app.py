@@ -1077,6 +1077,8 @@ def _dashboard_payload(for_date: date) -> dict:
         "broker_gateway_reachable": _ibkr_gateway_reachable(),
         "diagnostics": diagnostics,
         "alert_validation": alert_validation,
+        "expected_timeframe_minutes": int(getattr(_config, "expected_timeframe_minutes", 15)),
+        "instrument_universe": list(_config.allowed_instruments),
     }
 
 
