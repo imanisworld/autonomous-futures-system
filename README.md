@@ -228,7 +228,9 @@ http://127.0.0.1:8000/status/review?date=2026-05-23&mode=eod
 The dashboard shows trade count, loss streak, open-position state, realized
 paper P/L, recent journal entries, top `NO_TRADE` reasons, and the latest
 received webhook context. It also surfaces enabled strategy concepts and
-journal-derived strategy counts. It has no order buttons and no broker controls.
+journal-derived strategy counts. It has no manual entry controls. Emergency
+`CLOSE_ALL` is tucked behind a collapsed safety drawer and requires the webhook
+secret plus an explicit confirmation checkbox.
 
 The review endpoint previews the same read-only morning or end-of-day trade
 grading reports produced by `python -m agent.daily_summary`, without writing

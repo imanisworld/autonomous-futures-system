@@ -1510,6 +1510,94 @@ def _render_dashboard(status: dict) -> str:
       border-radius: 4px;
       background: #111216;
     }}
+    .emergency-panel {{
+      border-color: rgba(255, 61, 113, 0.32);
+      margin-bottom: 14px;
+    }}
+    .emergency-panel summary {{
+      cursor: pointer;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }}
+    .emergency-panel summary::-webkit-details-marker {{ display: none; }}
+    .emergency-panel summary::after {{
+      content: "Closed";
+      color: var(--green);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 11px;
+    }}
+    .emergency-panel[open] summary::after {{
+      content: "Open";
+      color: var(--amber);
+    }}
+    .emergency-body {{
+      border-top: 1px solid var(--line);
+      margin-top: 12px;
+      padding-top: 12px;
+      display: grid;
+      gap: 10px;
+    }}
+    .emergency-body label {{
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      display: grid;
+      gap: 6px;
+    }}
+    .emergency-body input[type="password"] {{
+      width: 100%;
+      border: 1px solid var(--line);
+      background: #090a0d;
+      color: var(--text);
+      border-radius: 6px;
+      padding: 10px 12px;
+      font: inherit;
+    }}
+    .emergency-check {{
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 13px;
+      text-transform: none;
+    }}
+    .emergency-check span {{ text-transform: none; }}
+    .emergency-check input {{
+      width: 18px;
+      height: 18px;
+      accent-color: var(--red);
+    }}
+    .danger-button {{
+      justify-self: start;
+      border: 1px solid rgba(255, 61, 113, 0.65);
+      background: rgba(255, 61, 113, 0.10);
+      color: var(--red);
+      border-radius: 6px;
+      padding: 10px 14px;
+      font: inherit;
+      font-weight: 800;
+      text-transform: uppercase;
+      cursor: pointer;
+    }}
+    .danger-button:disabled {{
+      opacity: 0.35;
+      cursor: not-allowed;
+    }}
+    .emergency-result {{
+      color: var(--muted);
+      font-size: 13px;
+      min-height: 18px;
+      overflow-wrap: anywhere;
+    }}
     @media (max-width: 760px) {{
       header, .wide {{ grid-template-columns: 1fr; display: grid; }}
       .grid {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
@@ -1600,6 +1688,21 @@ def _render_dashboard(status: dict) -> str:
         <ul>{reason_rows}</ul>
       </div>
     </section>
+
+    <details class="panel emergency-panel" id="emergency-panel">
+      <summary>Emergency Controls</summary>
+      <div class="emergency-body">
+        <label>Webhook Secret
+          <input id="emergency-secret" type="password" autocomplete="off" placeholder="Required for close all">
+        </label>
+        <label class="emergency-check">
+          <input id="emergency-confirm" type="checkbox">
+          <span>I understand this cancels working orders and attempts to flatten the current broker position.</span>
+        </label>
+        <button id="close-all-button" class="danger-button" type="button" disabled>CLOSE ALL</button>
+        <div id="emergency-result" class="emergency-result">Manual OPEN is disabled. CLOSE ALL is hidden here until you deliberately open this drawer.</div>
+      </div>
+    </details>
 
     <section class="wide">
       <div class="panel">
@@ -1850,6 +1953,48 @@ def _render_dashboard(status: dict) -> str:
       }}
     }}
 
+    function setupEmergencyControls() {{
+      const secret = document.getElementById('emergency-secret');
+      const confirm = document.getElementById('emergency-confirm');
+      const button = document.getElementById('close-all-button');
+      const result = document.getElementById('emergency-result');
+      if (!secret || !confirm || !button || !result) return;
+
+      function syncState() {{
+        button.disabled = !(secret.value.trim() && confirm.checked);
+      }}
+
+      secret.addEventListener('input', syncState);
+      confirm.addEventListener('change', syncState);
+      button.addEventListener('click', async () => {{
+        if (button.disabled) return;
+        button.disabled = true;
+        result.textContent = 'Sending emergency close...';
+        try {{
+          const response = await fetch('/webhook/manual', {{
+            method: 'POST',
+            headers: {{
+              'Content-Type': 'application/json',
+              'X-Webhook-Secret': secret.value.trim()
+            }},
+            body: JSON.stringify({{ action: 'CLOSE_ALL' }})
+          }});
+          const data = await response.json();
+          if (!response.ok || data.ok === false) {{
+            result.textContent = data.error || data.detail || 'Emergency close failed.';
+          }} else {{
+            result.textContent = data.note || 'Emergency close request sent.';
+            confirm.checked = false;
+          }}
+        }} catch (error) {{
+          result.textContent = 'Emergency close failed before reaching the server.';
+        }} finally {{
+          syncState();
+        }}
+      }});
+      syncState();
+    }}
+
     function drawPnlBarChart(history) {{
       const canvas = document.getElementById('pnl-bar-chart');
       const rangeLabel = document.getElementById('bar-chart-range');
@@ -1989,6 +2134,7 @@ def _render_dashboard(status: dict) -> str:
       }}
     }}
     refreshDashboard();
+    setupEmergencyControls();
     setInterval(refreshDashboard, 30000);
     // Redraw chart on resize (handles rotation on mobile)
     window.addEventListener('resize', () => {{

@@ -796,6 +796,10 @@ def test_fastapi_dashboard_endpoint():
     assert "LIVE TRADING OFF" in resp.text
     assert "Daily Made / Lost" in resp.text
     assert "pnl-bar-chart" in resp.text
+    assert "Emergency Controls" in resp.text
+    assert 'id="close-all-button"' in resp.text
+    assert 'id="emergency-panel"' in resp.text
+    assert "Manual OPEN is disabled" in resp.text
 
 
 def test_fastapi_status_today_endpoint():
