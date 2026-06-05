@@ -253,7 +253,23 @@ async def _lifespan(app: FastAPI):
             "(allowed=%s). Live alerts for these will be rejected as 'not in allowed universe'.",
             missing, allowed,
         )
+    # Background safety tasks (run independent of the bar feed):
+    #   - keepalive: renew the Tradovate token so it never idle-expires.
+    #   - reconciler: clear a phantom (journal-open / broker-flat) the resolver
+    #     can't fix when no bars are arriving.
+    _bg_tasks = []
+    try:
+        import asyncio as _asyncio
+        from execution.tradovate_keepalive import run_tradovate_keepalive
+        from webhook.reconciler import run_reconciler_loop
+        _bg_tasks.append(_asyncio.create_task(run_tradovate_keepalive()))
+        _bg_tasks.append(_asyncio.create_task(run_reconciler_loop(_config, _config.log_dir)))
+        logger.info("Background tasks launched: keepalive + phantom reconciler")
+    except Exception as exc:
+        logger.warning("could not start background tasks: %s", exc)
     yield
+    for _t in _bg_tasks:
+        _t.cancel()
 
 
 app = FastAPI(
