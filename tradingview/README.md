@@ -2,17 +2,21 @@
 
 ## Quick start
 
-1. Open `risksentinel_context.pine` in TradingView's Pine Editor and add it to
-   your chart (MNQ/MES/MGC/MCL, 3m or 5m timeframe).
+1. Open `risksentinel_context.pine`, replace the **entire** contents of your
+   TradingView Pine Editor, save it, and add it to an MNQ or MES **15m** chart.
+   Do not paste only part of the file; every input, including `i_orb_min`, is
+   declared near the top.
 2. Create one alert:
    - **Condition** → `RiskSentinel — Full Context` → `Any alert() function call`
    - **Webhook URL** → `https://YOUR-TUNNEL/webhook/alert`
      (add `?secret=YOUR_SECRET` or set header `X-Webhook-Secret`)
    - **Message** → leave blank — the script builds the full JSON body
    - **Expiry** → open-ended
-3. The indicator fires once per confirmed bar close during the configured NY,
-   London, or Evening Test alert sessions. No fields need to be filled in
-   manually.
+3. The indicator fires once per confirmed 15m bar close. `Send alerts 24 hours`
+   defaults to ON so overnight opportunities reach the backend. Turn it OFF to
+   restrict alerts to the configured NY, London, and additional alert sessions.
+4. After replacing or changing the Pine script, delete and recreate the MNQ and
+   MES TradingView alerts. Existing alerts keep a snapshot of the old script.
 
 ## What the indicator computes
 
@@ -31,11 +35,10 @@
 | HTF context | Daily, 4H, and 1H bar type + direction via `request.security` |
 | FTFC | `UP`, `DOWN`, `MIXED`, or `NEUTRAL`; passive unless config enables HTF gate |
 
-## Evening Test Alerts
+## Alert Sessions
 
-The Pine input `Evening Test Session (ET)` defaults to `1700-2200` so bar-close
-heartbeats can reach the backend while the temporary backend Asian-session test
-window is enabled. Remove or disable both windows after testing.
+`Send alerts 24 hours` is enabled by default. The NY, London, and Additional
+Alert Session inputs remain available for a restricted-session alert mode.
 
 ## Manual templates
 
