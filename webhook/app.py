@@ -372,7 +372,16 @@ async def status_history(days: int = Query(default=7, ge=1, le=30)) -> dict:
                 "no_trades": payload["no_trades"],
                 "wins": payload["wins"],
                 "losses": payload["losses"],
-                "realized_pnl_dollars": payload["realized_pnl_dollars"],
+                # Per-day history must report each day's OWN realized P&L, not the
+                # cumulative account figure. `realized_pnl_dollars` in the single-day
+                # payload is `account_balance - starting_balance` (a running total),
+                # so a win persists in it on every later day. Frontends SUM this
+                # array for the "7D P&L" total and chart it as daily bars — summing a
+                # running total double-counts every prior win (one +$55 win showed as
+                # +$110 across two days). Emit the daily increment (today_pnl_dollars)
+                # here; expose the running total separately for anyone who wants it.
+                "realized_pnl_dollars": payload["today_pnl_dollars"],
+                "cumulative_realized_pnl_dollars": payload["realized_pnl_dollars"],
                 "win_rate": payload["win_rate"],
             }
         )
