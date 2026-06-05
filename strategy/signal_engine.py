@@ -165,8 +165,14 @@ class DecisionEngine:
         "MCL": 0.01,
     }
 
-    def __init__(self, config: Optional[SystemConfig] = None):
+    def __init__(self, config: Optional[SystemConfig] = None,
+                 schedule_mode: Optional[str] = None):
         self.config = config or load_config()
+        # schedule_mode overrides the config's; default falls back to config
+        # ("current"). Only "current" enforces the schedule/session gates — the
+        # always-on modes bypass them (used by the read-only shadow generator).
+        self.schedule_mode = schedule_mode or getattr(self.config, "schedule_mode", "current")
+        self._enforce_schedule = self.schedule_mode == "current"
 
     def evaluate(self, state: MarketState, daily_state: DailyState) -> DecisionOutput:
         """
@@ -211,7 +217,8 @@ class DecisionEngine:
             )
 
         # ── Session check ─────────────────────────────────────────────────────
-        if state.session not in self.config.allowed_sessions:
+        # Skipped in always-on modes (schedule bypassed); enforced in "current".
+        if self._enforce_schedule and state.session not in self.config.allowed_sessions:
             return DecisionOutput(
                 timestamp=now,
                 instrument=state.instrument,
@@ -231,7 +238,9 @@ class DecisionEngine:
             )
 
         # ── Session window gate ───────────────────────────────────────────────
-        session_window_result = self._check_session_window(state)
+        session_window_result = (
+            self._check_session_window(state) if self._enforce_schedule else None
+        )
         if session_window_result is not None:
             return DecisionOutput(
                 timestamp=now,
@@ -244,7 +253,9 @@ class DecisionEngine:
             )
 
         # ── New York entry window gate ────────────────────────────────────────
-        window_result = self._check_new_york_entry_window(state)
+        window_result = (
+            self._check_new_york_entry_window(state) if self._enforce_schedule else None
+        )
         if window_result is not None:
             return DecisionOutput(
                 timestamp=now,

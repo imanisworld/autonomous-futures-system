@@ -118,8 +118,15 @@ class RiskEngine:
     All checks are independent and can be unit-tested in isolation.
     """
 
-    def __init__(self, config: Optional[SystemConfig] = None):
+    def __init__(self, config: Optional[SystemConfig] = None,
+                 schedule_mode: Optional[str] = None):
         self.config = config or load_config()
+        # Only "current" enforces the session-eligibility gates (allowlist,
+        # window, cutoff). Always-on modes bypass them; ALL other risk gates
+        # (daily cap, loss, drawdown, open-position, consecutive-loss, per-session
+        # count) remain shared and enforced in every mode.
+        self.schedule_mode = schedule_mode or getattr(self.config, "schedule_mode", "current")
+        self._enforce_schedule = self.schedule_mode == "current"
 
     def validate(self, setup: TradeSetup, daily_state: DailyState) -> RiskResult:
         """
@@ -296,7 +303,9 @@ class RiskEngine:
     def _check_session(
         self, setup: TradeSetup, daily_state: DailyState
     ) -> Optional[RiskResult]:
-        """Session must be in allowed list."""
+        """Session must be in allowed list (skipped in always-on modes)."""
+        if not self._enforce_schedule:
+            return None
         if setup.session not in self.config.allowed_sessions:
             return RiskResult(
                 result="REJECTED",
@@ -311,7 +320,9 @@ class RiskEngine:
     def _check_session_window(
         self, setup: TradeSetup, daily_state: DailyState
     ) -> Optional[RiskResult]:
-        """Optional allow/deny windows inside an otherwise allowed session."""
+        """Optional allow/deny windows inside a session (skipped in always-on)."""
+        if not self._enforce_schedule:
+            return None
         windows = getattr(self.config, "session_windows", {}) or {}
         rules = windows.get(setup.session)
         if not rules:
@@ -635,7 +646,11 @@ class RiskEngine:
         wrongly flag a 20:45 start-of-session entry as "after 02:30". Measuring
         minutes-since-session-start (mod 24h) for both entry and cutoff fixes it,
         and reduces to the old behavior for non-wrapping sessions.
+
+        Skipped in always-on modes (the cutoff is a schedule gate).
         """
+        if not self._enforce_schedule:
+            return None
         cutoffs = self.config.session_cutoffs
         if not cutoffs or setup.session not in cutoffs:
             return None
