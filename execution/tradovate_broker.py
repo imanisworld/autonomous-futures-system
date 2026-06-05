@@ -579,25 +579,37 @@ class TradovateBroker(BrokerInterface):
         slippage of the safety-flatten is the price of never holding naked risk.
         """
         self._alert_naked_position(order, stop_ok=stop_ok, target_ok=target_ok)
+        close_confirmed = False
         try:
             flat = self.flatten_position()  # cancel-all + market liquidate
-            if flat.get("close_sent") or flat.get("cancelled_orders"):
+            # Only a CONFIRMED close (close_sent, per the failure-checked flatten)
+            # lets us claim flat. cancelled_orders alone is NOT a close.
+            close_confirmed = bool(flat.get("close_sent"))
+            if close_confirmed:
                 logger.error("NAKED POSITION auto-flattened for %s: %s", order.instrument, flat)
             else:
                 logger.critical(
-                    "NAKED POSITION flatten produced no close for %s — MANUAL INTERVENTION NEEDED: %s",
+                    "NAKED POSITION flatten produced no confirmed close for %s — "
+                    "treating as STILL OPEN; MANUAL VERIFICATION NEEDED: %s",
                     order.instrument, flat,
                 )
         except Exception as exc:
             logger.critical("CRITICAL: naked-position flatten FAILED for %s: %s", order.instrument, exc)
+            close_confirmed = False
+        # Fail CLOSED: if we could not confirm the close, assume the position is
+        # LIVE. Returning OPEN makes the runner track it (blocks new trades, keeps
+        # trying to resolve, surfaces it) instead of falsely booking it flat.
         return Fill(
             instrument=order.instrument,
             direction=order.direction,
             contracts=qty,
             entry_price=order.entry,
             exit_price=None,
-            exit_reason="NAKED_BRACKET_AUTO_FLATTENED",
-            result="CANCELLED",
+            exit_reason=(
+                "NAKED_BRACKET_AUTO_FLATTENED" if close_confirmed
+                else "NAKED_FLATTEN_UNCONFIRMED"
+            ),
+            result="CANCELLED" if close_confirmed else "OPEN",
             pnl_ticks=None,
             pnl_dollars=None,
         )
@@ -744,7 +756,21 @@ class TradovateBroker(BrokerInterface):
                     "admin": False,
                 })
                 logger.info("Tradovate liquidateposition response: %s", liq)
-                result["close_sent"] = True
+                # Tradovate can return HTTP 200 with a failure body (no exception),
+                # so a clean POST does NOT mean the position closed. Only report
+                # close_sent on a response with no failure marker — fail closed.
+                fail = None
+                if isinstance(liq, dict):
+                    fail = liq.get("failureReason") or liq.get("failureText") or liq.get("errorText")
+                if fail:
+                    logger.error(
+                        "Tradovate liquidate REJECTED for %s: %s — position NOT closed",
+                        pos.instrument, fail,
+                    )
+                    result["close_sent"] = False
+                    result["error"] = f"liquidate rejected: {fail}"
+                else:
+                    result["close_sent"] = True
 
             # Step 2 — after liquidation request, cancel any remaining working
             # orders (including bracket children that may still be live).
