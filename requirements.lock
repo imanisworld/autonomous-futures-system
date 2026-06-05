@@ -1,0 +1,44 @@
+# requirements.lock — fully pinned, reproducible runtime install.
+#
+# Generated from requirements.txt resolved in a clean Python 3.13 venv.
+# Use this for deployments so installs are deterministic and supply-chain
+# updates are deliberate (Dependabot opens PRs against requirements.txt).
+#
+#   Install:    pip install -r requirements.lock
+#   Regenerate: python -m venv /tmp/lock && /tmp/lock/bin/pip install -r requirements.txt \
+#               && /tmp/lock/bin/pip freeze | grep -viE "^(pip|setuptools|wheel)==" | sort
+#
+APScheduler==3.11.2
+PyYAML==6.0.3
+annotated-doc==0.0.4
+annotated-types==0.7.0
+anyio==4.13.0
+attrs==26.1.0
+certifi==2026.5.20
+click==8.4.1
+eventkit==1.0.3
+fastapi==0.136.3
+h11==0.16.0
+httpcore==1.0.9
+httptools==0.8.0
+httpx==0.28.1
+ib-insync==0.9.86
+idna==3.18
+jsonschema-specifications==2025.9.1
+jsonschema==4.26.0
+nest-asyncio==1.6.0
+numpy==2.4.6
+pydantic==2.13.4
+pydantic_core==2.46.4
+python-dotenv==1.2.2
+referencing==0.37.0
+rpds-py==2026.5.1
+starlette==1.2.1
+typing-inspection==0.4.2
+typing_extensions==4.15.0
+tzdata==2026.2
+tzlocal==5.3.1
+uvicorn==0.49.0
+uvloop==0.22.1
+watchfiles==1.2.0
+websockets==16.0

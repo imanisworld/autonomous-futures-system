@@ -50,9 +50,81 @@ _PUBLIC_RATE_LIMIT = int(os.getenv("PUBLIC_RATE_LIMIT_PER_MINUTE", "120") or 120
 _WEBHOOK_RATE_LIMIT = int(os.getenv("WEBHOOK_RATE_LIMIT_PER_MINUTE", "60") or 60)
 _PRIVATE_RATE_LIMIT = int(os.getenv("PRIVATE_RATE_LIMIT_PER_MINUTE", "240") or 240)
 
+_TRUTHY = {"1", "true", "yes", "on"}
+
+
+def _env_flag(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None or raw.strip() == "":
+        return default
+    return raw.strip().lower() in _TRUTHY
+
+
+def _cors_allow_origins() -> list[str]:
+    """Browser CORS allowlist. Defaults to '*' (unchanged) when ALLOWED_ORIGINS is
+    unset, so existing deployments are not affected. Set ALLOWED_ORIGINS to a
+    comma-separated list to lock the API to known front-ends."""
+    raw = os.getenv("ALLOWED_ORIGINS", "").strip()
+    if not raw:
+        return ["*"]
+    return [o.strip() for o in raw.split(",") if o.strip()]
+
+
+# Public demo deployment: when on, serve ONLY a small sanitized read-only surface
+# and 404 everything else (default-deny). The real/operator box leaves this OFF.
+_DEMO_ALLOWED_PATHS = {"/health", "/status/public", "/share", "/favicon.ico", "/manifest.json"}
+
+
+def _public_demo_mode() -> bool:
+    return _env_flag("PUBLIC_DEMO_MODE", default=False)
+
+
+def _demo_path_allowed(path: str) -> bool:
+    return path in _DEMO_ALLOWED_PATHS or path.startswith("/static/")
+
+
+def _allow_secret_in_query() -> bool:
+    """The webhook secret may still travel as a URL query param (?secret=) while
+    this is on (default). Query params leak into access logs / browser history, so
+    prefer the request body or X-Webhook-Secret header and flip this off once the
+    TradingView alert is updated."""
+    return _env_flag("ALLOW_SECRET_IN_QUERY", default=True)
+
 
 def _configured_webhook_secret() -> str:
     return os.getenv("WEBHOOK_SECRET", "").strip()
+
+
+async def _resolve_inbound_secret(
+    request: Request,
+    header_secret: str | None,
+    query_secret: str | None,
+) -> str | None:
+    """Find the webhook secret from (in order of preference): the X-Webhook-Secret
+    header, the JSON body `secret` field, then the URL query param (deprecated).
+
+    Reading the body is wrapped so a malformed/absent body can never break the
+    critical ingestion path — it simply falls back to header/query, exactly as
+    before. The body secret is a local value only; it is never added to the
+    payload model, so it cannot leak into the journal or market state."""
+    if header_secret:
+        return header_secret
+    try:
+        data = await request.json()
+        if isinstance(data, dict):
+            body_secret = data.get("secret")
+            if isinstance(body_secret, str) and body_secret:
+                return body_secret
+    except Exception:
+        pass
+    if query_secret and _allow_secret_in_query():
+        logger.warning(
+            "Webhook secret received via URL query param (deprecated — prefer the "
+            "request body or X-Webhook-Secret header). path=%s",
+            request.url.path,
+        )
+        return query_secret
+    return None
 
 
 def _verify_webhook_secret(provided: str | None) -> None:
@@ -131,10 +203,32 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_allow_origins(),
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def _security_headers_middleware(request: Request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    # HSTS is inert over plain HTTP and takes effect once the site is on HTTPS.
+    response.headers.setdefault(
+        "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
+    )
+    return response
+
+
+@app.middleware("http")
+async def _public_demo_gate_middleware(request: Request, call_next):
+    # Default-deny: when PUBLIC_DEMO_MODE is on, only the sanitized read-only
+    # surface is reachable; every other path 404s as if it does not exist.
+    if _public_demo_mode() and not _demo_path_allowed(request.url.path):
+        return JSONResponse(status_code=404, content={"detail": "Not Found"})
+    return await call_next(request)
 
 
 @app.middleware("http")
@@ -224,6 +318,7 @@ async def _process_alert_async(payload: AlertPayload) -> None:
 @app.post("/webhook/alert")
 async def receive_alert(
     payload: AlertPayload,
+    request: Request,
     x_webhook_secret: str | None = Header(default=None),
     secret: str | None = Query(default=None),
 ) -> JSONResponse:
@@ -236,7 +331,7 @@ async def receive_alert(
     made every delivery fail (nginx 499) and silently dropped the bar. We
     validate + authenticate synchronously, then hand off and return 200 fast.
     """
-    _verify_webhook_secret(x_webhook_secret or secret)
+    _verify_webhook_secret(await _resolve_inbound_secret(request, x_webhook_secret, secret))
     # Silently ignore non-futures tickers (e.g. stock alerts sharing the same webhook)
     _FUTURES_PREFIXES = {"MNQ", "MES", "ES", "NQ", "MGC", "MCL"}
     ticker_root = payload.ticker.upper().replace("1!", "").replace("!", "").strip()
@@ -284,7 +379,7 @@ async def manual_action(
              -H "Content-Type: application/json" \\
              -d '{"action":"OPEN","direction":"LONG","entry":7625.0,"stop":7615.0,"target":7647.0}'
     """
-    _verify_webhook_secret(x_webhook_secret or secret)
+    _verify_webhook_secret(await _resolve_inbound_secret(request, x_webhook_secret, secret))
     body = await request.json()
     action = str(body.get("action", "")).upper().strip()
 
