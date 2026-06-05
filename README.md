@@ -147,18 +147,8 @@ orders.
 python -m webhook
 ```
 
-For local process supervision:
-
-```bash
-venv/bin/supervisord -c supervisord.conf
-venv/bin/supervisorctl -c supervisord.conf status
-```
-
-For Hetzner-style deployment, the included `Procfile` starts:
-
-```bash
-HOST=0.0.0.0 python -m webhook
-```
+In production this runs on the Hetzner VPS under systemd (service
+`futures-bot`, uvicorn on `:8000`); `systemctl restart futures-bot` to reload.
 
 The server respects the platform `PORT` environment variable and defaults to
 `8000` locally.
