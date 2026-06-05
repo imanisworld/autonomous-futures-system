@@ -193,6 +193,11 @@ class SystemConfig:
     signa_timeout_seconds: float = 3.0
     signa_symbol_map: dict = field(default_factory=dict)
 
+    # Optional Public.com read-only quote provider. Secret value is never stored.
+    public_api_enabled: bool = False
+    public_api_secret_key_configured: bool = False
+    public_default_account_number_configured: bool = False
+
 
 # ─── Loader ──────────────────────────────────────────────────────────────────
 
@@ -357,6 +362,11 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         signa_symbol_map=_env_symbol_map(
             "SIGNA_SYMBOL_MAP",
             {"MES": "SPY", "ES": "SPY", "MNQ": "QQQ", "NQ": "QQQ"},
+        ),
+        public_api_enabled=_env_bool("PUBLIC_API_ENABLED", False),
+        public_api_secret_key_configured=bool(os.getenv("PUBLIC_API_SECRET_KEY", "").strip()),
+        public_default_account_number_configured=bool(
+            os.getenv("PUBLIC_DEFAULT_ACCOUNT_NUMBER", "").strip()
         ),
     )
 

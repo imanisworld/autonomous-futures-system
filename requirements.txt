@@ -7,3 +7,4 @@ jsonschema>=4.0
 tzdata>=2024.1
 apscheduler>=3.10
 ib_insync>=0.9.86
+publicdotcom-py>=0.1.15,<0.2

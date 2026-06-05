@@ -694,6 +694,66 @@ async def status_signa(symbol: str = Query(default="AAPL")) -> dict:
     }
 
 
+@app.get("/status/public-provider")
+async def status_public_provider(symbol: str = Query(default="AAPL")) -> dict:
+    """Read-only Public.com quote connectivity check. No account/order actions."""
+    from sources.public_client import PublicQuoteClient
+
+    requested_symbol = symbol.upper()
+    configured = bool(
+        _config.public_api_secret_key_configured
+        and _config.public_default_account_number_configured
+    )
+    if not _config.public_api_enabled:
+        return {
+            "enabled": False,
+            "configured": configured,
+            "symbol": requested_symbol,
+            "ok": False,
+            "error": "public_api_disabled",
+            "status_label": "DISABLED",
+            "message": "Public.com read-only quotes are disabled; no Public API calls are made.",
+            "next_step": "Set PUBLIC_API_ENABLED=true and restart the backend to enable quote checks.",
+            "display": "DISABLED · no Public API calls",
+        }
+    if not configured:
+        return {
+            "enabled": True,
+            "configured": False,
+            "symbol": requested_symbol,
+            "ok": False,
+            "error": "credentials_missing",
+            "status_label": "MISSING CREDENTIALS",
+            "message": "Public.com quote checks require an API secret key and default account number.",
+            "next_step": "Set PUBLIC_API_SECRET_KEY and PUBLIC_DEFAULT_ACCOUNT_NUMBER.",
+            "display": "MISSING CREDENTIALS",
+        }
+    quote = await asyncio.to_thread(PublicQuoteClient().fetch_equity_quote, requested_symbol)
+    status_label = "CONNECTED" if quote.ok else "UNAVAILABLE"
+    display_parts = [status_label, requested_symbol]
+    if quote.last is not None:
+        display_parts.append(f"last {quote.last:g}")
+    if quote.error:
+        display_parts.append(quote.error)
+    return {
+        "enabled": True,
+        "configured": configured,
+        "status_label": status_label,
+        "message": (
+            "Public.com read-only quote check is connected."
+            if quote.ok
+            else f"Public.com read-only quote check failed: {quote.error or 'unknown_error'}."
+        ),
+        "next_step": (
+            None
+            if quote.ok
+            else "Check the Public API key, default account number, SDK installation, and network reachability."
+        ),
+        "display": " · ".join(display_parts),
+        **quote.to_dict(),
+    }
+
+
 @app.get("/status/risk")
 async def status_risk() -> dict:
     """Return risk limits (config) and today's journal-derived risk state."""
@@ -1179,6 +1239,30 @@ def _diagnostics_payload(for_date: date) -> dict:
         ))
     else:
         items.append(_diagnostic("info", "Signa", "Signa is disabled; no Signa API calls are made."))
+
+    public_configured = bool(
+        _config.public_api_secret_key_configured
+        and _config.public_default_account_number_configured
+    )
+    if _config.public_api_enabled and not public_configured:
+        items.append(_diagnostic(
+            "warn",
+            "Public.com quotes",
+            "Public.com quote checks are enabled, but the API secret key or default account number is missing.",
+            "Set PUBLIC_API_SECRET_KEY and PUBLIC_DEFAULT_ACCOUNT_NUMBER, or turn PUBLIC_API_ENABLED=false.",
+        ))
+    elif _config.public_api_enabled:
+        items.append(_diagnostic(
+            "ok",
+            "Public.com quotes",
+            "Public.com read-only quotes are enabled and configured; /status/public-provider performs the live check.",
+        ))
+    else:
+        items.append(_diagnostic(
+            "info",
+            "Public.com quotes",
+            "Public.com read-only quotes are disabled; no Public API calls are made.",
+        ))
 
     items.append(_diagnostic("info", "Quality gates", _quality_gate_summary()))
 

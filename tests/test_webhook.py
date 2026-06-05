@@ -919,6 +919,50 @@ def test_fastapi_status_signa_formats_failed_signal(monkeypatch):
     assert data["display"] == "UNAVAILABLE · http_401"
 
 
+def test_fastapi_status_public_provider_disabled(monkeypatch):
+    try:
+        from fastapi.testclient import TestClient
+        import webhook.app as app_module
+        from webhook.app import app
+    except ImportError:
+        pytest.skip("fastapi[testclient] not installed")
+
+    monkeypatch.setattr(app_module._config, "public_api_enabled", False)
+    monkeypatch.setattr(app_module._config, "public_api_secret_key_configured", False)
+    monkeypatch.setattr(app_module._config, "public_default_account_number_configured", False)
+
+    data = TestClient(app).get("/status/public-provider?symbol=AAPL").json()
+
+    assert data["status_label"] == "DISABLED"
+    assert data["display"] == "DISABLED · no Public API calls"
+
+
+def test_fastapi_status_public_provider_formats_quote(monkeypatch):
+    try:
+        from fastapi.testclient import TestClient
+        import sources.public_client as public_module
+        import webhook.app as app_module
+        from webhook.app import app
+    except ImportError:
+        pytest.skip("fastapi[testclient] not installed")
+
+    class FakeClient:
+        def fetch_equity_quote(self, symbol):
+            return public_module.PublicQuote(symbol=symbol, ok=True, last=201.5)
+
+    monkeypatch.setattr(app_module._config, "public_api_enabled", True)
+    monkeypatch.setattr(app_module._config, "public_api_secret_key_configured", True)
+    monkeypatch.setattr(app_module._config, "public_default_account_number_configured", True)
+    monkeypatch.setattr(public_module, "PublicQuoteClient", FakeClient)
+
+    data = TestClient(app).get("/status/public-provider?symbol=AAPL").json()
+
+    assert data["status_label"] == "CONNECTED"
+    assert data["message"] == "Public.com read-only quote check is connected."
+    assert data["display"] == "CONNECTED · AAPL · last 201.5"
+    assert data["last"] == 201.5
+
+
 def test_fastapi_dashboard_endpoint():
     try:
         from fastapi.testclient import TestClient
