@@ -133,3 +133,49 @@ def test_secret_in_query_rejected_when_flag_off(monkeypatch):
     )
     assert ok.status_code == 200
     assert ok.json().get("decision") == "IGNORED"
+
+
+# ─── Site access code gate ────────────────────────────────────────────────────
+
+def test_site_gate_off_by_default_opens_everything(monkeypatch):
+    monkeypatch.delenv("SITE_ACCESS_CODE", raising=False)
+    client, _ = _client(monkeypatch)
+    # No code configured → no redirect to /gate.
+    assert client.get("/status/public").status_code == 200
+
+
+def test_site_gate_blocks_without_code(monkeypatch):
+    monkeypatch.setenv("WEBHOOK_SECRET", "s3cret")
+    monkeypatch.setenv("SITE_ACCESS_CODE", "letmein")
+    client, _ = _client(monkeypatch)
+
+    # Browser GET with no cookie → redirected to the /gate code page.
+    r = client.get("/status/public", headers={"accept": "text/html"}, follow_redirects=False)
+    assert r.status_code == 302
+    assert r.headers["location"].startswith("/gate")
+
+    # API-style call with no cookie → 401, not a redirect.
+    assert client.get("/status/public").status_code == 401
+
+    # Ingestion + health stay exempt so TradingView / uptime never get walled off.
+    assert client.get("/health").status_code == 200
+    ok = client.post("/webhook/alert", json=_alert_body(), headers={"X-Webhook-Secret": "s3cret"})
+    assert ok.status_code == 200
+
+
+def test_site_gate_wrong_then_right_code(monkeypatch):
+    monkeypatch.setenv("WEBHOOK_SECRET", "s3cret")
+    monkeypatch.setenv("SITE_ACCESS_CODE", "letmein")
+    client, _ = _client(monkeypatch)
+
+    # Wrong code → 401, no cookie set.
+    bad = client.post("/gate", data={"code": "nope", "next": "/"}, follow_redirects=False)
+    assert bad.status_code == 401
+
+    # Right code → redirect + cookie set; then the gated page opens.
+    good = client.post("/gate", data={"code": "letmein", "next": "/status/public"}, follow_redirects=False)
+    assert good.status_code == 302
+    assert good.headers["location"] == "/status/public"
+    assert client.cookies.get("vp_access")
+    # Cookie now carries through → access granted.
+    assert client.get("/status/public").status_code == 200
