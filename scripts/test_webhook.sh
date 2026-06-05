@@ -1,5 +1,6 @@
 #!/bin/bash
-# Test the Railway webhook with a realistic MNQ orb_reclaim setup.
+# Smoke-test the live webhook with a realistic MNQ orb_reclaim setup.
+# Prod runs on the Hetzner VPS; override the host via WEBHOOK_URL if needed.
 # Usage: WEBHOOK_SECRET=your_secret bash scripts/test_webhook.sh
 
 SECRET="${WEBHOOK_SECRET:-}"
@@ -9,7 +10,7 @@ if [ -z "$SECRET" ]; then
   exit 1
 fi
 
-URL="https://autonomous-futures-system-production.up.railway.app/webhook/alert?secret=${SECRET}"
+URL="${WEBHOOK_URL:-http://5.78.84.223}/webhook/alert?secret=${SECRET}"
 
 curl -s -X POST "$URL" \
   -H "Content-Type: application/json" \
@@ -36,7 +37,7 @@ curl -s -X POST "$URL" \
     "previous_day_close": 21200.0,
     "price_vs_pdh": "below",
     "price_vs_pdl": "above",
-    "timeframe": "5m",
+    "timeframe": "15",
     "current_bar_type": "two_up",
     "previous_bar_type": "inside_bar",
     "two_bars_back_type": "two_up",
