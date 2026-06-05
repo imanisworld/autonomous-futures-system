@@ -1476,6 +1476,60 @@ def test_fastapi_status_history_endpoint():
     assert {"date", "trade_count", "no_trades"}.issubset(data["days"][0])
 
 
+def test_status_history_realized_pnl_is_daily_not_cumulative(monkeypatch):
+    """Regression: a single win must not be double-counted across days.
+
+    `_dashboard_payload.realized_pnl_dollars` is the cumulative account figure
+    (account_balance - starting_balance), so a win persists in it on every later
+    day. Frontends SUM the history array for the "7D P&L" total, so the endpoint
+    must emit each day's OWN P&L (today_pnl_dollars) under realized_pnl_dollars,
+    not the running total. One +$55 win across two days = +$55, not +$110.
+    """
+    from datetime import timedelta
+
+    try:
+        from fastapi.testclient import TestClient
+        import webhook.app as appmod
+    except ImportError:
+        pytest.skip("fastapi[testclient] not installed")
+
+    # Day 1 ago: the +$55 win actually happened. Today: no new trade, but the
+    # cumulative account figure still carries that win. Days >=2: nothing.
+    def fake_payload(for_date):
+        offset = (date.today() - for_date).days
+        daily = 55.0 if offset == 1 else 0.0
+        cumulative = 55.0 if offset <= 1 else 0.0
+        return {
+            "date": for_date.isoformat(),
+            "trade_count": 1 if offset == 1 else 0,
+            "max_trades_per_day": 5,
+            "consecutive_losses": 0,
+            "has_open_position": False,
+            "no_trades": 0,
+            "wins": 1 if offset == 1 else 0,
+            "losses": 0,
+            "realized_pnl_dollars": cumulative,   # running account total
+            "today_pnl_dollars": daily,           # that day's own P&L
+            "win_rate": 100.0 if offset == 1 else 0.0,
+        }
+
+    monkeypatch.setattr(appmod, "_dashboard_payload", fake_payload)
+
+    client = TestClient(appmod.app)
+    days = client.get("/status/history?days=7").json()["days"]
+
+    # Per-day value is the daily increment, and the running total is still exposed.
+    by_date = {d["date"]: d for d in days}
+    win_day = (date.today() - timedelta(days=1)).isoformat()
+    today = date.today().isoformat()
+    assert by_date[win_day]["realized_pnl_dollars"] == 55.0
+    assert by_date[today]["realized_pnl_dollars"] == 0.0            # not the carried 55
+    assert by_date[today]["cumulative_realized_pnl_dollars"] == 55.0
+
+    # The number frontends actually display: sum of daily P&L == one win, not two.
+    assert sum(d["realized_pnl_dollars"] for d in days) == 55.0
+
+
 def test_fastapi_strategy_status_endpoint():
     try:
         from fastapi.testclient import TestClient
