@@ -21,11 +21,13 @@ Expose to TradingView via ngrok:
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import hmac
 import json
 import logging
 import os
 import time
+from urllib.parse import parse_qs
 from collections import Counter
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta, timezone
@@ -81,6 +83,66 @@ def _public_demo_mode() -> bool:
 
 def _demo_path_allowed(path: str) -> bool:
     return path in _DEMO_ALLOWED_PATHS or path.startswith("/static/")
+
+
+# ── Simple site access code ───────────────────────────────────────────────────
+# A single shared passcode that gates the whole site: no valid code → you can't
+# open it. Disabled by default (blank SITE_ACCESS_CODE) so it cannot break an
+# existing deployment until the operator sets a code. This is a "keep randoms
+# out" speed bump; it is only strong once the site is on HTTPS.
+_GATE_COOKIE = "vp_access"
+_GATE_EXEMPT_PATHS = {
+    "/gate", "/health", "/webhook/alert", "/webhook/manual",
+    "/favicon.ico", "/manifest.json",
+}
+
+
+def _site_access_code() -> str:
+    return os.getenv("SITE_ACCESS_CODE", "").strip()
+
+
+def _site_gate_enabled() -> bool:
+    return bool(_site_access_code())
+
+
+def _gate_token() -> str:
+    """Opaque cookie value bound to BOTH the server secret and the current code,
+    so rotating SITE_ACCESS_CODE invalidates every existing session. The raw code
+    is never stored in the cookie."""
+    key = _configured_webhook_secret().encode()
+    msg = ("site-access:" + _site_access_code()).encode()
+    return hmac.new(key, msg, hashlib.sha256).hexdigest()
+
+
+def _gate_path_exempt(path: str) -> bool:
+    return path in _GATE_EXEMPT_PATHS or path.startswith("/static/")
+
+
+def _has_valid_gate_cookie(request: Request) -> bool:
+    token = request.cookies.get(_GATE_COOKIE)
+    return bool(token) and hmac.compare_digest(token, _gate_token())
+
+
+def _gate_html(next_path: str, error: bool) -> str:
+    safe_next = next_path if next_path.startswith("/") else "/"
+    err = (
+        '<p style="color:#FF4D5A;margin:0 0 14px">Wrong code — try again.</p>'
+        if error else ""
+    )
+    return f"""<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Vantage Point · Enter code</title></head>
+<body style="margin:0;background:#070706;color:#F2EEE6;font-family:-apple-system,Segoe UI,Roboto,sans-serif;display:flex;min-height:100vh;align-items:center;justify-content:center">
+<form method="post" action="/gate" style="background:#141312;border:1px solid #35312A;border-radius:10px;padding:28px;width:280px">
+<div style="font-size:15px;color:#F0B85A;font-weight:600;margin-bottom:4px">Vantage Point</div>
+<div style="font-size:12px;color:#AAA294;margin-bottom:18px">Enter access code to continue</div>
+{err}
+<input type="hidden" name="next" value="{safe_next}">
+<input name="code" type="password" autofocus autocomplete="off"
+ style="width:100%;box-sizing:border-box;padding:11px;background:#242018;border:1px solid #35312A;border-radius:7px;color:#F2EEE6;font-size:15px;margin-bottom:14px">
+<button type="submit"
+ style="width:100%;padding:11px;background:#F0B85A;color:#070706;border:0;border-radius:7px;font-size:15px;font-weight:600;cursor:pointer">Enter</button>
+</form></body></html>"""
 
 
 def _allow_secret_in_query() -> bool:
@@ -223,6 +285,24 @@ async def _security_headers_middleware(request: Request, call_next):
 
 
 @app.middleware("http")
+async def _site_access_gate_middleware(request: Request, call_next):
+    # When SITE_ACCESS_CODE is set, every non-exempt path requires a valid gate
+    # cookie. Browsers are redirected to the /gate code page; API/non-HTML callers
+    # get a 401. Disabled (pass-through) when no code is configured.
+    if (
+        _site_gate_enabled()
+        and not _gate_path_exempt(request.url.path)
+        and not _has_valid_gate_cookie(request)
+    ):
+        accepts_html = "text/html" in request.headers.get("accept", "")
+        if accepts_html and request.method == "GET":
+            from fastapi.responses import RedirectResponse
+            return RedirectResponse(url=f"/gate?next={request.url.path}", status_code=302)
+        return JSONResponse(status_code=401, content={"detail": "Access code required"})
+    return await call_next(request)
+
+
+@app.middleware("http")
 async def _public_demo_gate_middleware(request: Request, call_next):
     # Default-deny: when PUBLIC_DEMO_MODE is on, only the sanitized read-only
     # surface is reachable; every other path 404s as if it does not exist.
@@ -242,6 +322,38 @@ async def _rate_limit_middleware(request: Request, call_next):
 
 _static = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=_static), name="static")
+
+
+@app.get("/gate", response_class=HTMLResponse, include_in_schema=False)
+async def gate_form(next: str = "/"):
+    if not _site_gate_enabled():
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url="/", status_code=302)
+    return HTMLResponse(_gate_html(next_path=next, error=False))
+
+
+@app.post("/gate", include_in_schema=False)
+async def gate_submit(request: Request):
+    raw = (await request.body()).decode("utf-8", "ignore")
+    form = parse_qs(raw)
+    code = (form.get("code") or [""])[0]
+    next_path = (form.get("next") or ["/"])[0] or "/"
+    if not next_path.startswith("/"):
+        next_path = "/"
+    from fastapi.responses import RedirectResponse
+    if _site_gate_enabled() and hmac.compare_digest(code, _site_access_code()):
+        resp = RedirectResponse(url=next_path, status_code=302)
+        secure = (
+            request.url.scheme == "https"
+            or request.headers.get("x-forwarded-proto", "") == "https"
+        )
+        resp.set_cookie(
+            _GATE_COOKIE, _gate_token(),
+            httponly=True, samesite="lax", secure=secure,
+            max_age=60 * 60 * 24 * 30,
+        )
+        return resp
+    return HTMLResponse(_gate_html(next_path=next_path, error=True), status_code=401)
 
 
 @app.get("/favicon.ico", include_in_schema=False)
