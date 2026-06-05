@@ -348,6 +348,24 @@ class TradovateBroker(BrokerInterface):
             self._note_auth_failure(reason)
             return False
 
+    def keep_alive(self) -> bool:
+        """Background-timer entry point: keep the shared session token fresh so it
+        never expires from inactivity.
+
+        Renewing (/auth/renewAccessToken) extends the SAME session WITHOUT using
+        the API key, so as long as we renew before the ~90-min token lapses we
+        never re-login — which means the recurring API-key 401 (the key expiring)
+        never bites. Only if there is no token, or renewal genuinely fails
+        (session invalidated server-side), do we fall back to a fresh login
+        (which respects the circuit breaker). Returns True if a live token is held.
+        """
+        with self._auth_state.lock:
+            if self._auth_state.token is not None and self._renew_token():
+                return True
+            if time.time() < self._auth_state.cooldown_until:
+                return False
+            return self._login()
+
     def _resolve_account_id(self) -> None:
         try:
             resp = self._session.get(f"{self.config.base_url}/account/list", timeout=8)
