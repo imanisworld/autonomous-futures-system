@@ -25,6 +25,7 @@ from typing import Optional
 
 from config.settings import SystemConfig, load_config
 from execution.broker_interface import BracketOrder, BrokerInterface
+from context.bar_history import BarHistory
 from execution.paper_broker import NextBarOHLC, PaperBroker
 from journal.journal_logger import JournalLogger
 from risk.risk_engine import DailyState, RiskEngine, TradeSetup
@@ -216,6 +217,33 @@ def process_alert(
     _maybe_enrich_payload_with_signa(payload, cfg)
     _maybe_sync_ibkr_position_on_startup(cfg)
     state = build_market_state(payload)
+
+    # ── Rolling bar history (Phase 3): continuous price record + gap detection ──
+    # Record EVERY ingested bar (traded or not) so regime can be judged over a
+    # window and ingestion gaps are visible. Fail-soft: a history hiccup must
+    # never affect ingestion, the decision, or risk.
+    bar_gap = None
+    try:
+        bar_hist = BarHistory(log_dir=log_dir)
+        tf_min = _bar_timeframe_minutes(payload, cfg)
+        bar_gap = bar_hist.detect_gap(state.instrument, payload.timestamp, tf_min)
+        bar_hist.record(
+            state.instrument,
+            ts=payload.timestamp,
+            open=state.ohlc.open,
+            high=state.ohlc.high,
+            low=state.ohlc.low,
+            close=state.ohlc.close,
+            volume=state.volume.current_bar if state.volume else None,
+            timeframe=state.ohlc.timeframe,
+        )
+        # Window regime: include this just-recorded bar in the lookback.
+        state.window_direction = BarHistory.window_direction(
+            bar_hist.recent(state.instrument, 6)
+        )
+    except Exception:  # noqa: BLE001 — fail-soft, never break ingestion
+        logger.warning("bar history update failed", exc_info=True)
+
     journal = JournalLogger(log_dir=log_dir)
     today = for_date or date.today()
     daily_state = journal.get_daily_state(today)
@@ -246,6 +274,8 @@ def process_alert(
         "signa_status": None,
         "failed_gates": [],
         "confidence_score": None,
+        "bar_gap": bar_gap,
+        "window_direction": state.window_direction,
     }
 
     bar_ts = state.timestamp.isoformat()
@@ -840,6 +870,16 @@ def _check_timeframe(payload: AlertPayload, cfg: SystemConfig) -> Optional[dict]
             f"{exp_label} chart."
         ),
     }
+
+
+def _bar_timeframe_minutes(payload: AlertPayload, cfg: SystemConfig) -> int:
+    """Bar timeframe in minutes for gap detection: the payload's own timeframe,
+    falling back to the configured expected timeframe (default 15)."""
+    received = normalize_timeframe_minutes(payload.timeframe)
+    if received and received > 0:
+        return received
+    expected = int(getattr(cfg, "expected_timeframe_minutes", 15) or 0)
+    return expected if expected > 0 else 15
 
 
 def _check_payload_quality(payload: AlertPayload, cfg: SystemConfig) -> Optional[str]:

@@ -627,7 +627,15 @@ class RiskEngine:
     def _check_session_cutoff(
         self, setup: TradeSetup, daily_state: DailyState
     ) -> Optional[RiskResult]:
-        """No new entries after the session's time-of-day cutoff (ET)."""
+        """No new entries after the session's time-of-day cutoff (ET).
+
+        The comparison is anchored to the session START so sessions that wrap
+        past midnight work correctly. The Asian session runs 19:00 -> 03:00 ET
+        with an 02:30 cutoff; a naive clock compare (et.hour > cutoff_h) would
+        wrongly flag a 20:45 start-of-session entry as "after 02:30". Measuring
+        minutes-since-session-start (mod 24h) for both entry and cutoff fixes it,
+        and reduces to the old behavior for non-wrapping sessions.
+        """
         cutoffs = self.config.session_cutoffs
         if not cutoffs or setup.session not in cutoffs:
             return None
@@ -636,7 +644,31 @@ class RiskEngine:
         cutoff_str = cutoffs[setup.session]
         cutoff_h, cutoff_m = map(int, cutoff_str.split(":"))
         et = setup.entry_time.astimezone(_ET)
-        if et.hour > cutoff_h or (et.hour == cutoff_h and et.minute >= cutoff_m):
+        entry_min = et.hour * 60 + et.minute
+        cutoff_min = cutoff_h * 60 + cutoff_m
+
+        # Only sessions that WRAP past midnight (start-of-day > end-of-day, e.g.
+        # asian 19:00 -> 03:00) need the start-anchored comparison. For ordinary
+        # same-day sessions the simple clock compare is correct AND must be kept —
+        # anchoring there would wrongly reject pre-session entries (e.g. an 08:00
+        # entry measured against a 09:30 start wraps to ~22h "after").
+        hours = (self.config.session_hours or {}).get(setup.session) or {}
+        start_str, end_str = hours.get("start"), hours.get("end")
+        wraps = False
+        start_min = 0
+        if start_str and end_str:
+            start_h, start_m = map(int, start_str.split(":"))
+            end_h, end_m = map(int, end_str.split(":"))
+            start_min = start_h * 60 + start_m
+            wraps = start_min > (end_h * 60 + end_m)
+
+        if wraps:
+            day = 24 * 60
+            after_cutoff = ((entry_min - start_min) % day) >= ((cutoff_min - start_min) % day)
+        else:
+            after_cutoff = entry_min >= cutoff_min
+
+        if after_cutoff:
             return RiskResult(
                 result="REJECTED",
                 failed_rule="session_cutoff",

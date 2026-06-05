@@ -321,18 +321,48 @@ class TestDecisionEngineInstrumentFilter:
 class TestDecisionEngineMarketCondition:
 
     def test_choppy_market_no_trade(self, engine, fresh_market_state):
+        """A GENUINELY choppy bar (no directional structure, tight range) blocks.
+
+        The regime is now derived from the backend's structural read, not Pine's
+        label, so the bar must actually be choppy — sideways trend, inside ORB,
+        at VWAP, tight range.
+        """
         state = deepcopy(fresh_market_state)
         state.market_condition = "CHOPPY"
+        state.trend = TrendData(direction="SIDEWAYS", strength="WEAK", ema_fast_above_slow=None)
+        state.vwap = VWAPData(value=19495.0, price_vs_vwap="at", reclaimed=False, holding=False)
+        state.orb = ORBData(high=19498.0, low=19462.0, timeframe_minutes=15, status="inside")
+        state.ohlc = OHLCData(open=19505.0, high=19506.0, low=19505.0, close=19505.25, timeframe="5m")
         decision = engine.evaluate(state, DailyState())
         assert decision.decision == "NO_TRADE"
         assert "CHOPPY" in decision.reason
 
     def test_dead_market_no_trade(self, engine, fresh_market_state):
+        """A GENUINELY dead bar (relative volume < 0.4) blocks — hard floor."""
         state = deepcopy(fresh_market_state)
         state.market_condition = "DEAD"
+        state.volume = VolumeData(current_bar=380, avg_bar=3800, relative=0.10)
         decision = engine.evaluate(state, DailyState())
         assert decision.decision == "NO_TRADE"
         assert "DEAD" in decision.reason
+
+    def test_directional_move_labeled_chop_is_tradable(self, engine, fresh_market_state):
+        """Regression for the live MES bar: Pine labels a clean directional move
+        CHOPPY, but the backend's structural read (trend DOWN + three two_down
+        bars + price below VWAP) must VETO the chop label so it is NOT blocked.
+        """
+        state = deepcopy(fresh_market_state)
+        state.market_condition = "CHOPPY"  # Pine's (wrong) label
+        state.trend = TrendData(direction="DOWN", strength="MODERATE", ema_fast_above_slow=False)
+        state.vwap = VWAPData(value=19510.0, price_vs_vwap="below", reclaimed=False, holding=True)
+        state.orb = ORBData(high=19498.0, low=19462.0, timeframe_minutes=15, status="inside")
+        state.strat = StratContext(
+            current_bar_type="two_down",
+            previous_bar_type="two_down",
+            two_bars_back_type="two_down",
+        )
+        assert engine._has_directional_structure(state) is True
+        assert engine._score_market_condition(state) not in ("CHOPPY", "DEAD")
 
     def test_trending_market_eligible(self, engine, fresh_market_state):
         """TRENDING market with ORB reclaim should produce TRADE."""

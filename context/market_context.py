@@ -221,6 +221,11 @@ class MarketState:
     htf: Optional[HTFContext] = None
     sd: Optional[SupplyDemandData] = None
     key_levels: Optional[KeyLevels] = None
+    # Direction of recent close-to-close price action over a window of prior bars
+    # (UP/DOWN/None), from context.bar_history. Populated on the LIVE ingest path
+    # only (the replay/test paths leave it None → no behavior change there). Lets
+    # regime see CONTINUOUS price action, not just this one bar's Pine label.
+    window_direction: Optional[str] = None
     notes: Optional[str] = None
     raw: dict = None  # Original dict for reference
 
