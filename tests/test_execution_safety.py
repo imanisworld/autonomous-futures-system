@@ -84,9 +84,12 @@ def test_unknown_mode_is_denied():
 
 # ── Config-level safety (belt-and-suspenders) ────────────────────────────────
 
-def test_config_rejects_always_on_paper_when_live(config):
+@pytest.mark.parametrize("mode", ["always_on_shadow", "always_on_paper"])
+def test_config_rejects_any_always_on_when_live(config, mode):
+    # BOTH always-on modes must be rejected when live trading is enabled.
     bad = dataclasses.replace(
-        config, schedule_mode="always_on_paper", live_trading_enabled=True)
+        config, schedule_mode=mode, live_trading_enabled=True,
+        max_staleness_seconds=300)
     with pytest.raises(ConfigError):
         _validate_config(bad)
 
@@ -113,3 +116,57 @@ def test_shadow_generator_emits_non_executable_candidate(config, fresh_market_st
         schedule_mode="always_on_shadow", session=cand.session,
         live_trading_enabled=False, paper_eligible_sessions=PAPER)
     assert ok is False
+
+
+# ── #1: the gate is actually WIRED into the runner ───────────────────────────
+
+def test_runner_gate_suppresses_orders_in_shadow_mode(tmp_path):
+    """End-to-end: the same tradeable bar places an order in 'current' but is
+    suppressed (no fill) in always_on_shadow — proving the gate is a real
+    chokepoint in process_alert, not just a standalone function."""
+    from datetime import date
+    from config.settings import load_config
+    from webhook.runner import process_alert
+    import sys
+    sys.path.insert(0, "tests")
+    from test_e2e_scenarios import _base_payload
+
+    cfg = dataclasses.replace(load_config(), max_staleness_seconds=10 ** 9)
+    payload = _base_payload(timestamp="2026-05-23T14:30:00+00:00")
+    fd = date(2026, 5, 23)
+
+    base = process_alert(payload, config=cfg, log_dir=str(tmp_path / "cur"), for_date=fd)
+    assert base["decision"] == "TRADE" and base.get("fill"), base  # sanity baseline
+
+    scfg = dataclasses.replace(cfg, schedule_mode="always_on_shadow")
+    shadow = process_alert(payload, config=scfg, log_dir=str(tmp_path / "shad"), for_date=fd)
+    assert shadow["decision"] == "SHADOW_NO_ORDER", shadow
+    assert not shadow.get("fill")
+
+
+# ── #2: a risk-blocked shadow candidate is RISK_REJECTED, not SETUP_BLOCKED ───
+
+def test_risk_blocked_candidate_is_risk_rejected(config, fresh_market_state):
+    from adaptive.shadow_runner import evaluate_with_shadow
+    from adaptive.opportunity_tracker import RISK_REJECTED
+    cfg = dataclasses.replace(config, allowed_sessions=["london"], max_daily_loss=150.0)
+    ds = DailyState(realized_pnl_dollars=-500.0)  # over the daily loss cap
+    cand = evaluate_with_shadow(fresh_market_state, ds, cfg)
+    assert cand is not None
+    assert cand.block_type == RISK_REJECTED       # not a clean schedule miss
+    assert cand.risk_failed_rule == "max_daily_loss"
+
+
+# ── #3: shadow risk validation includes confluence ───────────────────────────
+
+def test_shadow_risk_includes_confluence(config, fresh_market_state):
+    from adaptive.shadow_runner import evaluate_with_shadow
+    from adaptive.opportunity_tracker import SETUP_BLOCKED
+    # Require grade B. If confluence weren't scored into the risk setup, the
+    # RiskEngine would reject on min_confluence_grade → RISK_REJECTED. A clean
+    # SETUP_BLOCKED proves the grade was passed through.
+    cfg = dataclasses.replace(config, allowed_sessions=["london"], min_confluence_grade="B")
+    cand = evaluate_with_shadow(fresh_market_state, DailyState(), cfg)
+    assert cand is not None
+    assert cand.risk_failed_rule != "min_confluence_grade"
+    assert cand.block_type == SETUP_BLOCKED

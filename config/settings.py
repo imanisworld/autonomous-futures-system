@@ -418,11 +418,13 @@ def _validate_config(config: SystemConfig) -> None:
         raise ConfigError(
             "schedule_mode must be one of: current, always_on_shadow, always_on_paper."
         )
-    # Safety invariant: live execution must never run the always-on paper mode.
-    if config.schedule_mode == "always_on_paper" and config.live_trading_enabled:
+    # Safety invariant: live execution may run ONLY the "current" schedule.
+    # BOTH always-on modes are forbidden when live trading is enabled.
+    if config.live_trading_enabled and config.schedule_mode != "current":
         raise ConfigError(
-            "schedule_mode 'always_on_paper' is forbidden when live_trading_enabled "
-            "is true — always-on must never place live orders."
+            f"schedule_mode '{config.schedule_mode}' is forbidden when "
+            "live_trading_enabled is true — live execution must use 'current' "
+            "(always-on must never place live orders)."
         )
     if config.max_trades_per_day < 1:
         raise ConfigError("max_trades_per_day must be >= 1.")

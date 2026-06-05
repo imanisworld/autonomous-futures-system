@@ -17,9 +17,10 @@ from typing import Optional
 from context.market_context import MarketState
 from risk.risk_engine import DailyState, RiskEngine, RiskResult, TradeSetup
 from strategy.signal_engine import DecisionEngine, DecisionOutput
+from strategy.confluence_scorer import score_setup
 from config.settings import SystemConfig
 from adaptive.opportunity_tracker import (
-    OpportunityCandidate, OpportunityStore, SETUP_BLOCKED,
+    OpportunityCandidate, OpportunityStore, SETUP_BLOCKED, RISK_REJECTED,
 )
 
 
@@ -68,6 +69,11 @@ def _candidate_from(
         if (risk_result is not None and risk_result.result != "APPROVED")
         else None
     )
+    # The current-path block was schedule-only by construction (shadow trades,
+    # current doesn't). But if the schedule-BYPASSED RiskEngine would ALSO reject
+    # it, the honest label is RISK_REJECTED (a non-schedule risk failure), not a
+    # clean schedule miss — per the tracker contract.
+    block_type = RISK_REJECTED if risk_failed_rule else SETUP_BLOCKED
     return OpportunityCandidate(
         candidate_id=OpportunityCandidate.make_id(
             state.instrument, source_bar_id, setup.strategy, setup.direction
@@ -86,7 +92,7 @@ def _candidate_from(
         failed_gates=list(current.failed_gates or []),
         risk_failed_rule=risk_failed_rule,
         market_condition=shadow.market_condition,
-        block_type=SETUP_BLOCKED,   # shadow trades, current doesn't → schedule-only by construction
+        block_type=block_type,
         multi_gate=bool(len(current.failed_gates or []) > 1 or risk_failed_rule),
         snapshots=_snapshots(state, shadow),
         status="PENDING",
@@ -102,11 +108,14 @@ def _shadow_risk_result(
     whether it would also clear the shared risk gates in the always-on world.
     Read-only; never executes."""
     s = shadow.setup
+    # Score confluence exactly as the runner does — otherwise the RiskEngine's
+    # min_confluence_grade gate would falsely reject otherwise-valid candidates.
+    confluence = score_setup(state, s)
     trade_setup = TradeSetup(
         direction=s.direction, entry=s.entry, stop=s.stop, target=s.target,
         rr_ratio=s.rr_ratio, strategy=s.strategy, instrument=state.instrument,
         session=state.session, entry_time=state.timestamp, contracts=1,
-        notes=getattr(s, "notes", None),
+        notes=getattr(s, "notes", None), confluence_grade=confluence.grade,
     )
     return RiskEngine(config, schedule_mode="always_on_shadow").validate(
         trade_setup, daily_state

@@ -228,6 +228,18 @@ def main() -> int:
                 notes=setup.notes,
                 contracts=contracts,
             )
+            # Schedule-mode execution gate (Phase 3 safety chokepoint). "current"
+            # always allows; always-on modes suppress per session eligibility.
+            from adaptive.execution_gate import order_placement_allowed
+            _allowed, _gate_reason = order_placement_allowed(
+                schedule_mode=getattr(config, "schedule_mode", "current"),
+                session=state.session,
+                live_trading_enabled=getattr(config, "live_trading_enabled", False),
+                paper_eligible_sessions=getattr(config, "paper_eligible_sessions", []),
+            )
+            if not _allowed:
+                log.info(f"Order suppressed by schedule gate: {_gate_reason}")
+                return 0
             fill = broker.execute_bracket(order)
             log.info(
                 f"Order submitted to PaperBroker: {fill.direction} {fill.instrument} "

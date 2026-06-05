@@ -3623,6 +3623,18 @@ def _manual_open(body: dict) -> dict:
         contracts=contracts,
     )
 
+    # Schedule-mode execution gate: manual orders are a CURRENT-mode operation.
+    # In any always-on mode the system is in research/shadow — refuse manual
+    # execution so a non-current mode can never place an order here either.
+    if getattr(_config, "schedule_mode", "current") != "current":
+        return {
+            **result, "ok": False,
+            "error": (
+                f"manual orders disabled under schedule_mode "
+                f"'{getattr(_config, 'schedule_mode', 'current')}' (current-mode only)"
+            ),
+        }
+
     if broker_type == "ibkr":
         try:
             from execution.ibkr_broker import IBKRBroker, IBKRConfig
