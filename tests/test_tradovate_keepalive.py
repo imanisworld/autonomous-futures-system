@@ -7,6 +7,7 @@ only when renewal genuinely fails, and respects the auth circuit breaker.
 """
 from __future__ import annotations
 
+import asyncio
 import time
 
 import requests
@@ -120,3 +121,28 @@ def test_keepalive_respects_cooldown_when_no_token(monkeypatch):
     monkeypatch.setattr(b._session, "post", post)
     assert b.keep_alive() is False      # no token + cooldown → no API call
     assert calls["n"] == 0
+
+
+def test_fastapi_lifespan_starts_and_stops_keepalive(monkeypatch):
+    import webhook.app as app_module
+
+    started = asyncio.Event()
+    stopped = asyncio.Event()
+
+    async def fake_keepalive():
+        started.set()
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            stopped.set()
+            raise
+
+    monkeypatch.setattr(app_module, "_configured_webhook_secret", lambda: "test-secret")
+    monkeypatch.setattr(app_module, "run_tradovate_keepalive", fake_keepalive)
+
+    async def exercise():
+        async with app_module._lifespan(app_module.app):
+            await asyncio.wait_for(started.wait(), timeout=1)
+        assert stopped.is_set()
+
+    asyncio.run(exercise())
