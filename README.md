@@ -1,7 +1,6 @@
 # Autonomous Futures Paper-Trading System
 
 [![CI](https://github.com/imanisworld/autonomous-futures-system/actions/workflows/ci.yml/badge.svg)](https://github.com/imanisworld/autonomous-futures-system/actions/workflows/ci.yml)
-[![CodeQL](https://github.com/imanisworld/autonomous-futures-system/actions/workflows/codeql.yml/badge.svg)](https://github.com/imanisworld/autonomous-futures-system/actions/workflows/codeql.yml)
 [![Paper Only](https://img.shields.io/badge/execution-paper--only-blue)](#paper-only-system)
 [![License](https://img.shields.io/badge/license-all%20rights%20reserved-lightgrey)](LICENSE)
 
