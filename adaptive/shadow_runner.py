@@ -15,7 +15,7 @@ from __future__ import annotations
 from typing import Optional
 
 from context.market_context import MarketState
-from risk.risk_engine import DailyState
+from risk.risk_engine import DailyState, RiskEngine, RiskResult, TradeSetup
 from strategy.signal_engine import DecisionEngine, DecisionOutput
 from config.settings import SystemConfig
 from adaptive.opportunity_tracker import (
@@ -52,11 +52,22 @@ def _snapshots(state: MarketState, shadow: DecisionOutput) -> dict:
 
 
 def _candidate_from(
-    state: MarketState, shadow: DecisionOutput, current: DecisionOutput
+    state: MarketState,
+    shadow: DecisionOutput,
+    current: DecisionOutput,
+    risk_result: Optional[RiskResult] = None,
 ) -> OpportunityCandidate:
     setup = shadow.setup
     source_bar_id = state.timestamp.isoformat()
     timeframe = getattr(getattr(state, "ohlc", None), "timeframe", None) or "15"
+    # risk_result is the schedule-bypassed RiskEngine verdict: None/APPROVED means
+    # the setup would ALSO clear shared risk in the always-on world; a failed_rule
+    # means it would still be risk-blocked there (recorded, not hidden).
+    risk_failed_rule = (
+        risk_result.failed_rule
+        if (risk_result is not None and risk_result.result != "APPROVED")
+        else None
+    )
     return OpportunityCandidate(
         candidate_id=OpportunityCandidate.make_id(
             state.instrument, source_bar_id, setup.strategy, setup.direction
@@ -73,13 +84,32 @@ def _candidate_from(
         target=setup.target,
         # Context: what the CURRENT (enforced) path said when it blocked this bar.
         failed_gates=list(current.failed_gates or []),
-        risk_failed_rule=None,
+        risk_failed_rule=risk_failed_rule,
         market_condition=shadow.market_condition,
         block_type=SETUP_BLOCKED,   # shadow trades, current doesn't → schedule-only by construction
-        multi_gate=len(current.failed_gates or []) > 1,
+        multi_gate=bool(len(current.failed_gates or []) > 1 or risk_failed_rule),
         snapshots=_snapshots(state, shadow),
         status="PENDING",
         expires_at=None,
+    )
+
+
+def _shadow_risk_result(
+    state: MarketState, shadow: DecisionOutput, config: SystemConfig,
+    daily_state: DailyState,
+) -> Optional[RiskResult]:
+    """Validate the shadow setup through a schedule-BYPASSED RiskEngine so we know
+    whether it would also clear the shared risk gates in the always-on world.
+    Read-only; never executes."""
+    s = shadow.setup
+    trade_setup = TradeSetup(
+        direction=s.direction, entry=s.entry, stop=s.stop, target=s.target,
+        rr_ratio=s.rr_ratio, strategy=s.strategy, instrument=state.instrument,
+        session=state.session, entry_time=state.timestamp, contracts=1,
+        notes=getattr(s, "notes", None),
+    )
+    return RiskEngine(config, schedule_mode="always_on_shadow").validate(
+        trade_setup, daily_state
     )
 
 
@@ -103,7 +133,11 @@ def evaluate_with_shadow(
     if shadow.decision != "TRADE" or shadow.setup is None:
         return None  # shadow also wouldn't trade → the block was NOT schedule-only
 
-    candidate = _candidate_from(state, shadow, current)
+    # Enrich with the schedule-bypassed risk verdict (capacity/account gates stay
+    # shared) — distinguishes a clean miss from one risk would also have stopped.
+    risk_result = _shadow_risk_result(state, shadow, config, daily_state)
+
+    candidate = _candidate_from(state, shadow, current, risk_result)
     if store is not None:
         store.record_candidate(candidate)
     return candidate
