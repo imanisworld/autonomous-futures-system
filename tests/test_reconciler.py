@@ -17,15 +17,16 @@ _NOW = datetime(2026, 6, 5, 16, 0, tzinfo=timezone.utc)
 
 
 class _FakeBroker:
-    def __init__(self, authed=True, position=None):
+    def __init__(self, authed=True, position=None, position_confirmed=True):
         self._authed = authed
         self._position = position
+        self._position_confirmed = position_confirmed
 
     def _authenticate(self):
         return self._authed
 
-    def get_position(self):
-        return self._position
+    def get_position_snapshot(self):
+        return self._position_confirmed, self._position
 
 
 def _seed_open(log_dir, *, age_min=30):
@@ -76,6 +77,19 @@ def test_does_nothing_when_broker_unauthenticated(monkeypatch, tmp_path, config)
                                   broker=_FakeBroker(authed=False))
     assert res["action"] == "broker_unauthenticated"
     assert j.get_open_position(_NOW.date()) is not None      # uncertainty → untouched
+
+
+def test_does_nothing_when_position_read_is_unconfirmed(monkeypatch, tmp_path, config):
+    _tradovate(monkeypatch)
+    j = _seed_open(tmp_path, age_min=30)
+    res = reconcile_open_position(
+        config,
+        str(tmp_path),
+        now=_NOW,
+        broker=_FakeBroker(authed=True, position=None, position_confirmed=False),
+    )
+    assert res["action"] == "broker_position_unconfirmed"
+    assert j.get_open_position(_NOW.date()) is not None
 
 
 def test_does_not_touch_recent_position(monkeypatch, tmp_path, config):

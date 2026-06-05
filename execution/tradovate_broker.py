@@ -630,13 +630,20 @@ class TradovateBroker(BrokerInterface):
         except Exception as exc:
             logger.warning("naked-position Discord alert failed: %s", exc)
 
-    def get_position(self) -> Optional[Position]:
-        """Query Tradovate for open positions."""
+    def get_position_snapshot(self) -> tuple[bool, Optional[Position]]:
+        """Return ``(confirmed, position)`` from a direct Tradovate API read.
+
+        ``confirmed=True, position=None`` is the only definitive-flat result.
+        Authentication failures, API errors, and malformed responses return
+        ``confirmed=False`` so safety callers never mistake uncertainty for flat.
+        """
         try:
             if not self._authenticate():
-                return self._last_position
+                return False, self._last_position
             data = self._get("/position/list")
-            for pos in (data if isinstance(data, list) else []):
+            if not isinstance(data, list):
+                return False, self._last_position
+            for pos in data:
                 net = pos.get("netPos", 0)
                 if net == 0:
                     continue
@@ -657,10 +664,18 @@ class TradovateBroker(BrokerInterface):
                     open=True,
                 )
                 self._last_position = p
-                return p
+                return True, p
+            self._last_position = None
+            return True, None
         except Exception as exc:
             logger.warning("Tradovate get_position failed: %s", exc)
-        return self._last_position if (self._last_position and self._last_position.open) else None
+            cached = self._last_position if (self._last_position and self._last_position.open) else None
+            return False, cached
+
+    def get_position(self) -> Optional[Position]:
+        """Query Tradovate for an open position, retaining the legacy interface."""
+        _, position = self.get_position_snapshot()
+        return position
 
     def _contract_id_to_name(self, contract_id: int | None) -> str | None:
         """Reverse-lookup contract name from ID. Falls back to None."""
