@@ -93,10 +93,10 @@ def _make_broker(
         )
         return IBKRBroker(config=config)
     if broker_type == "tradovate":
-        from execution.tradovate_broker import TradovateBroker, TradovateConfig
-        config = TradovateConfig.from_env()
-        logger.info("Using TradovateBroker (env=%s)", config.env)
-        return TradovateBroker(config=config)
+        from execution.tradovate_session import shared_tradovate_broker
+        broker = shared_tradovate_broker()
+        logger.info("Using shared TradovateBroker (env=%s)", broker.config.env)
+        return broker
     return _paper_broker(starting_balance, cfg)
 
 
@@ -283,9 +283,9 @@ def process_alert(
                 ibkr._last_order_ids = []
                 fill = ibkr.resolve_position()
             elif not simulate and broker_type == "tradovate":
-                from execution.tradovate_broker import TradovateBroker, TradovateConfig
                 from execution.broker_interface import Position as _Position
-                tv = TradovateBroker(config=TradovateConfig.from_env())
+                from execution.tradovate_session import shared_tradovate_broker
+                tv = shared_tradovate_broker()
                 tv._last_position = _Position(
                     instrument=open_pos["instrument"] or state.instrument,
                     direction=open_pos["direction"],

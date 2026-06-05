@@ -394,18 +394,9 @@ async def status_history(days: int = Query(default=7, ge=1, le=30)) -> dict:
 _QUOTE_CACHE: dict[str, tuple[float, dict]] = {}
 _QUOTE_TTL_SECONDS = 30.0  # price is a bar-close + Yahoo proxy; >poll interval so most polls hit cache
 
-# Module-level Tradovate broker singleton — reused across requests so the auth
-# token persists (the token is instance-level; a fresh broker per request would
-# re-auth and blow the ~5-req/hr auth cap). Lazily created.
-_TV_BROKER = None
-
-
 def _tv_broker():
-    global _TV_BROKER
-    if _TV_BROKER is None:
-        from execution.tradovate_broker import TradovateBroker
-        _TV_BROKER = TradovateBroker()
-    return _TV_BROKER
+    from execution.tradovate_session import shared_tradovate_broker
+    return shared_tradovate_broker()
 
 
 # Live Tradovate account snapshot, cached so the dashboard mirror (polled ~30s)
@@ -556,8 +547,7 @@ async def status_test_bracket(
     if direction not in ("LONG", "SHORT"):
         return {"ok": False, "error": "direction must be LONG or SHORT"}
     try:
-        from execution.tradovate_broker import TradovateBroker
-        broker = TradovateBroker()
+        broker = _tv_broker()
         # Step 1 — get live quote
         q = broker.get_quote(instrument)
         if not q.get("ok"):
@@ -3242,8 +3232,7 @@ def _broker_status() -> dict:
             return {"broker": "ibkr", "connected": False, "error": str(exc)}
     if broker_type == "tradovate":
         try:
-            from execution.tradovate_broker import TradovateBroker, TradovateConfig
-            broker = TradovateBroker(config=TradovateConfig.from_env())
+            broker = _tv_broker()
             authenticated = broker._authenticate()
             pos = broker.get_position() if authenticated else None
             balance = broker.get_account_balance() if authenticated else None
@@ -3442,8 +3431,7 @@ def _manual_open(body: dict) -> dict:
             return {**result, "ok": False, "error": str(exc)}
     elif broker_type == "tradovate":
         try:
-            from execution.tradovate_broker import TradovateBroker, TradovateConfig
-            broker = TradovateBroker(config=TradovateConfig.from_env())
+            broker = _tv_broker()
             if _broker_live_blocked(broker):
                 return {
                     **result,
@@ -3507,8 +3495,7 @@ def _manual_close_all() -> dict:
             return {**result, "ok": False, "error": str(exc)}
     elif broker_type == "tradovate":
         try:
-            from execution.tradovate_broker import TradovateBroker, TradovateConfig
-            broker = TradovateBroker(config=TradovateConfig.from_env())
+            broker = _tv_broker()
             flatten = broker.flatten_position()
             result["ok"] = True
             result["position_was"] = flatten.get("position_was")

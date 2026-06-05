@@ -1411,13 +1411,9 @@ def test_manual_open_disabled_by_default(monkeypatch):
 
 def test_manual_open_blocks_live_broker_when_live_trading_disabled(monkeypatch):
     import webhook.app as app_module
-    import execution.tradovate_broker as tradovate_module
 
     class FakeTradovateBroker:
         is_live = True
-
-        def __init__(self, config):
-            self.config = config
 
         def execute_bracket(self, order):
             pytest.fail("manual open must not execute when live trading is disabled")
@@ -1425,7 +1421,7 @@ def test_manual_open_blocks_live_broker_when_live_trading_disabled(monkeypatch):
     monkeypatch.setenv("BROKER", "tradovate")
     monkeypatch.setenv("MANUAL_OPEN_ENABLED", "true")
     monkeypatch.setattr(app_module._config, "live_trading_enabled", False)
-    monkeypatch.setattr(tradovate_module, "TradovateBroker", FakeTradovateBroker)
+    monkeypatch.setattr(app_module, "_tv_broker", lambda: FakeTradovateBroker())
 
     result = app_module._manual_open({
         "direction": "LONG",
