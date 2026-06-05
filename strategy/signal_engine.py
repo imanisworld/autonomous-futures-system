@@ -762,11 +762,21 @@ class DecisionEngine:
         consecutive two_down bars) from consolidation/chop above a breakout (a
         lone up-bar, trend-ish, on the right side of VWAP) that Pine reasonably
         labels CHOPPY. Only the former vetoes a chop label.
+
+        A windowed continuation also qualifies: when a multi-bar window of recent
+        closes (context.bar_history) is decisively directional in the trend's
+        direction, that is continuous-data evidence of a real move — the Phase 3
+        "judge regime over a window, not one snapshot" signal. It is only set on
+        the live ingest path (None elsewhere), so it never alters replay/tests.
         """
         trend = state.trend
         if trend is None or trend.direction not in ("UP", "DOWN"):
             return False
-        return self._strat_run_direction(state.strat) == trend.direction
+        if self._strat_run_direction(state.strat) == trend.direction:
+            return True
+        if state.window_direction is not None and state.window_direction == trend.direction:
+            return True
+        return False
 
     def _score_market_condition(self, state: MarketState) -> str:
         """
