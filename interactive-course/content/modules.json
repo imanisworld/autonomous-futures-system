@@ -1,0 +1,66 @@
+[
+  {
+    "id": "module-00",
+    "title": "Orientation and Safety",
+    "estimated_hours": "1-2",
+    "required": true,
+    "interaction_focus": "worksheet",
+    "completion_gate": "Submit a paper-only system safety policy"
+  },
+  {
+    "id": "module-01",
+    "title": "Python Project Foundations",
+    "estimated_hours": "2-4",
+    "required": true,
+    "interaction_focus": "terminal_check",
+    "completion_gate": "Run the application and test suite without exposing secrets"
+  },
+  {
+    "id": "module-02",
+    "title": "Designing the Market Data Contract",
+    "estimated_hours": "3-5",
+    "required": true,
+    "interaction_focus": "payload_lab",
+    "completion_gate": "Validate good, invalid, stale, and contradictory payloads"
+  },
+  {
+    "id": "module-03",
+    "title": "Receiving TradingView Webhooks",
+    "estimated_hours": "3-5",
+    "required": true,
+    "interaction_focus": "terminal_check",
+    "completion_gate": "Receive an authenticated paper-only test alert"
+  },
+  {
+    "id": "module-04",
+    "title": "Building Canonical Market State",
+    "estimated_hours": "3-5",
+    "required": true,
+    "interaction_focus": "code_task",
+    "completion_gate": "Convert alert variations into consistent market state"
+  },
+  {
+    "id": "module-05",
+    "title": "Strategy Engine",
+    "estimated_hours": "4-7",
+    "required": true,
+    "interaction_focus": "code_task",
+    "completion_gate": "Produce deterministic structured decisions"
+  },
+  {
+    "id": "module-06",
+    "title": "Independent Risk Engine",
+    "estimated_hours": "4-7",
+    "required": true,
+    "interaction_focus": "code_task",
+    "completion_gate": "Prove risk rules reject invalid trades"
+  },
+  {
+    "id": "module-07",
+    "title": "Paper Execution and Position State",
+    "estimated_hours": "3-6",
+    "required": true,
+    "interaction_focus": "replay_lab",
+    "completion_gate": "Resolve simulated win, loss, open, and ambiguous outcomes"
+  }
+]
