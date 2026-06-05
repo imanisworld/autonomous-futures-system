@@ -19,12 +19,42 @@ from __future__ import annotations
 
 import bisect
 import json
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
 from context.market_context import HTFContext
+
+
+def _tf_to_seconds(tf: str) -> int:
+    """Best-effort parse of a timeframe label to seconds (0 if unknown).
+
+    Handles "1D"/"4H"/"1h"/"240"/"60"/"15m" etc. Bare numbers are minutes
+    (TradingView convention: "240" = 240m = 4h).
+    """
+    t = str(tf).strip().lower()
+    explicit = {
+        "1d": 86400, "d": 86400, "day": 86400, "daily": 86400,
+        "4h": 14400, "240": 14400,
+        "1h": 3600, "60": 3600, "h": 3600, "hourly": 3600,
+        "30m": 1800, "30": 1800, "15m": 900, "15": 900,
+        "5m": 300, "5": 300,
+    }
+    if t in explicit:
+        return explicit[t]
+    m = re.fullmatch(r"(\d+)\s*([a-z]*)", t)
+    if m:
+        n = int(m.group(1))
+        unit = m.group(2)
+        if unit in ("d", "day", "days"):
+            return n * 86400
+        if unit in ("h", "hr", "hour", "hours"):
+            return n * 3600
+        if unit in ("m", "min", "minute", "minutes", ""):
+            return n * 60  # bare number = minutes
+    return 0
 
 
 @dataclass
@@ -44,6 +74,15 @@ class HTFLookup:
 
     def __init__(self) -> None:
         self._frames: dict[str, list[_Bar]] = {}
+        # Bar duration (seconds) per timeframe, inferred from data spacing at
+        # load time. Used to expose a bar only AFTER it has closed (no lookahead).
+        self._durations: dict[str, int] = {}
+
+    @staticmethod
+    def _infer_interval(bars: list[_Bar]) -> int:
+        """Smallest positive gap between consecutive bar opens = the bar interval."""
+        gaps = [b2.unix - b1.unix for b1, b2 in zip(bars, bars[1:]) if b2.unix > b1.unix]
+        return min(gaps) if gaps else 0
 
     # ── Data loading ──────────────────────────────────────────────────────────
 
@@ -77,16 +116,27 @@ class HTFLookup:
         for b in merged:
             seen[b.unix] = b
         self._frames[key] = sorted(seen.values(), key=lambda b: b.unix)
+        # Record the bar interval so _at can require a bar to be CLOSED.
+        explicit = _tf_to_seconds(key)
+        self._durations[key] = explicit or self._infer_interval(self._frames[key])
 
     # ── Lookup ────────────────────────────────────────────────────────────────
 
     def _at(self, tf: str, ts_unix: int) -> Optional[_Bar]:
-        """Return the most recent bar for timeframe tf at or before ts_unix."""
+        """Return the most recent CLOSED bar for timeframe tf at/before ts_unix.
+
+        HTF rows are timestamped at bar OPEN. A bar opening at b.unix only closes
+        at b.unix + duration, so exposing it before then would leak future OHLC
+        into a lower-timeframe decision (lookahead). We therefore require
+        b.unix + duration <= ts_unix, i.e. b.unix <= ts_unix - duration.
+        """
         bars = self._frames.get(tf)
         if not bars:
             return None
+        duration = self._durations.get(tf) or _tf_to_seconds(tf)
+        cutoff = ts_unix - duration  # bar must have closed by ts_unix
         keys = [b.unix for b in bars]
-        idx = bisect.bisect_right(keys, ts_unix) - 1
+        idx = bisect.bisect_right(keys, cutoff) - 1
         return bars[idx] if idx >= 0 else None
 
     def get_context(
