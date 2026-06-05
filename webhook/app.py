@@ -29,7 +29,7 @@ import os
 import time
 from urllib.parse import parse_qs
 from collections import Counter
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -41,6 +41,7 @@ from fastapi.staticfiles import StaticFiles
 from agent.daily_summary import DailySummaryAgent, validate_review_date
 from config.settings import load_config
 from context.futures_session import futures_session_active, feed_stale_after_minutes
+from execution.tradovate_keepalive import run_tradovate_keepalive
 from journal.journal_logger import JournalLogger
 from notifications.discord_notifier import notify_discord
 from webhook.payload import AlertPayload
@@ -253,7 +254,13 @@ async def _lifespan(app: FastAPI):
             "(allowed=%s). Live alerts for these will be rejected as 'not in allowed universe'.",
             missing, allowed,
         )
-    yield
+    keepalive_task = asyncio.create_task(run_tradovate_keepalive())
+    try:
+        yield
+    finally:
+        keepalive_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await keepalive_task
 
 
 app = FastAPI(
