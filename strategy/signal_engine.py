@@ -467,6 +467,37 @@ class DecisionEngine:
         setup = self._apply_advisory_bracket(setup, state)
         setup = self._enforce_min_target_distance(setup, state.instrument)
 
+        # ── Entry-sanity guard (stale/detached level) ─────────────────────────
+        # Every setup anchors its entry to a level (VWAP/ORB/PDH...). After a
+        # feed gap that level can be stranded far from the live price, so a
+        # MARKET entry would fill ~120pt from plan and the absolute bracket lands
+        # on the wrong side of the fill (this caused the 2026-06-05 03:15 ET MNQ
+        # scratch: SHORT with target 30178.75 ABOVE the 30080.75 fill). Require
+        # the bracket to still straddle the current price; otherwise the signal
+        # is stale — refuse rather than chase a broken market fill.
+        entry_price = state.ohlc.close if state.ohlc else None
+        if entry_price is not None and not self._entry_bracket_straddles_price(
+            setup.direction, setup.entry, setup.stop, setup.target, entry_price
+        ):
+            return DecisionOutput(
+                timestamp=now,
+                instrument=state.instrument,
+                session=state.session,
+                decision="NO_TRADE",
+                market_condition=condition,
+                reason=(
+                    f"Entry {setup.entry:g} detached from price {entry_price:g} "
+                    f"(stop {setup.stop:g} / target {setup.target:g} no longer "
+                    f"straddle the live price) — stale level after a feed gap; "
+                    f"not chasing a market fill."
+                ),
+                regime=regime.regime,
+                gex_status=gex_gate.status,
+                signa_status=signa_gate.status,
+                failed_gates=failed_gates + ["ENTRY_DETACHED_FROM_PRICE"],
+                confidence_score=0,
+            )
+
         # ── R:R validation ────────────────────────────────────────────────────
         if setup.rr_ratio < self.config.min_rr_ratio:
             return DecisionOutput(
@@ -978,6 +1009,27 @@ class DecisionEngine:
             strategy=setup.strategy,
             notes=notes,
         )
+
+    @staticmethod
+    def _entry_bracket_straddles_price(
+        direction: str, entry: float, stop: float, target: float, price: float
+    ) -> bool:
+        """Is the bracket still valid if we fill at the live `price`?
+
+        Entries are placed as MARKET orders, so the fill happens at the current
+        price — not the planned entry. The protective orders must therefore still
+        sit on the correct sides of that fill: stop on the loss side, target on
+        the profit side. When a level (VWAP/ORB/...) is stale/detached from price
+        (e.g. after a feed gap), they don't, and the trade would fill at/through
+        its own bracket. Returns False in that case so the setup is rejected.
+        """
+        if price is None:
+            return True  # no price to check against — don't block here
+        if direction == "LONG":
+            return stop < price < target
+        if direction == "SHORT":
+            return target < price < stop
+        return True
 
     @staticmethod
     def _gex_allows_orb(state: MarketState) -> bool:
