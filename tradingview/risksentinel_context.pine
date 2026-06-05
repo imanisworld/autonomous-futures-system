@@ -2,35 +2,44 @@
 indicator("RiskSentinel - Full Context", overlay=true)
 
 // ─── INPUTS ──────────────────────────────────────────────────────────────────
-i_orb_min       = input.int(15,     "ORB Window (min)",   minval=5, maxval=60, step=5, group="Opening Range")
-i_ny_session    = input.session("0930-1200", "NY Session (ET)",     group="Opening Range")
-i_london_session= input.session("0300-0830", "London Session (ET)", group="Opening Range")
-i_test_session  = input.session("1700-2200", "Evening Test Session (ET)", group="Alert")
-i_ema_fast      = input.int(9,  "Fast EMA", minval=2,  group="Trend")
-i_ema_slow      = input.int(21, "Slow EMA", minval=5,  group="Trend")
-i_ema_mid       = input.int(55, "Mid EMA",  minval=20, group="Trend")
-i_ema_long      = input.int(200,"Long EMA", minval=50, group="Trend")
-i_vol_len       = input.int(20, "Volume MA",minval=5,  group="Volume")
-i_alert_on      = input.bool(true, "Send heartbeat alerts on session bar close", group="Alert")
-i_bos_swing     = input.int(7, "BOS Swing Length", minval=3, maxval=20, group="BOS / MSS")
+const string GROUP_ORB   = "Opening Range"
+const string GROUP_ALERT = "Alerts"
+const string GROUP_TREND = "Trend"
+const string GROUP_VOL   = "Volume"
+const string GROUP_BOS   = "BOS / MSS"
+const string GROUP_GEX   = "GEX / Gamma"
+const string GROUP_SIGNA = "Signa"
+
+i_orb_min       = input.int(15, "ORB Window (min)", minval=5, maxval=60, step=5, group=GROUP_ORB)
+i_ny_session    = input.session("0930-1200", "NY Session (ET)", group=GROUP_ORB)
+i_london_session= input.session("0300-0830", "London Session (ET)", group=GROUP_ORB)
+i_extra_session = input.session("1700-2200", "Additional Alert Session (ET)", group=GROUP_ALERT)
+i_alert_on      = input.bool(true, "Send confirmed-bar alerts", group=GROUP_ALERT)
+i_alert_all_sessions = input.bool(true, "Send alerts 24 hours", group=GROUP_ALERT)
+i_ema_fast      = input.int(9, "Fast EMA", minval=2, group=GROUP_TREND)
+i_ema_slow      = input.int(21, "Slow EMA", minval=5, group=GROUP_TREND)
+i_ema_mid       = input.int(55, "Mid EMA", minval=20, group=GROUP_TREND)
+i_ema_long      = input.int(200, "Long EMA", minval=50, group=GROUP_TREND)
+i_vol_len       = input.int(20, "Volume MA", minval=5, group=GROUP_VOL)
+i_bos_swing     = input.int(7, "BOS Swing Length", minval=3, maxval=20, group=GROUP_BOS)
 
 // GEX manual inputs (keep blank / 0 when unavailable)
-i_gex_flip          = input.float(0.0, "GEX Flip",          group="GEX / Gamma")
-i_call_wall         = input.float(0.0, "Call Wall",          group="GEX / Gamma")
-i_put_wall          = input.float(0.0, "Put Wall",           group="GEX / Gamma")
-i_hvl               = input.float(0.0, "HVL",                group="GEX / Gamma")
-i_max_pain          = input.float(0.0, "Max Pain",           group="GEX / Gamma")
-i_mid_upper         = input.float(0.0, "Mid Upper",          group="GEX / Gamma")
-i_mid_lower         = input.float(0.0, "Mid Lower",          group="GEX / Gamma")
-i_vol_trigger_up    = input.float(0.0, "Vol Trigger Up",     group="GEX / Gamma")
-i_vol_trigger_down  = input.float(0.0, "Vol Trigger Down",   group="GEX / Gamma")
-i_gex_regime        = input.string("",  "GEX Regime",        group="GEX / Gamma")
-i_delta_bias        = input.string("",  "Delta Bias",        group="GEX / Gamma")
+i_gex_flip          = input.float(0.0, "GEX Flip", group=GROUP_GEX)
+i_call_wall         = input.float(0.0, "Call Wall", group=GROUP_GEX)
+i_put_wall          = input.float(0.0, "Put Wall", group=GROUP_GEX)
+i_hvl               = input.float(0.0, "HVL", group=GROUP_GEX)
+i_max_pain          = input.float(0.0, "Max Pain", group=GROUP_GEX)
+i_mid_upper         = input.float(0.0, "Mid Upper", group=GROUP_GEX)
+i_mid_lower         = input.float(0.0, "Mid Lower", group=GROUP_GEX)
+i_vol_trigger_up    = input.float(0.0, "Vol Trigger Up", group=GROUP_GEX)
+i_vol_trigger_down  = input.float(0.0, "Vol Trigger Down", group=GROUP_GEX)
+i_gex_regime        = input.string("", "GEX Regime", group=GROUP_GEX)
+i_delta_bias        = input.string("", "Delta Bias", group=GROUP_GEX)
 
-i_signa_grade           = input.string("", "Signa Grade",           group="Signa")
-i_signa_score           = input.float(0.0, "Signa Score",           group="Signa")
-i_signa_daily_direction = input.string("", "Signa Daily Direction", group="Signa")
-i_signa_weekly_direction= input.string("", "Signa Weekly Direction",group="Signa")
+i_signa_grade           = input.string("", "Signa Grade", group=GROUP_SIGNA)
+i_signa_score           = input.float(0.0, "Signa Score", group=GROUP_SIGNA)
+i_signa_daily_direction = input.string("", "Signa Daily Direction", group=GROUP_SIGNA)
+i_signa_weekly_direction= input.string("", "Signa Weekly Direction", group=GROUP_SIGNA)
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 f2j(v, fmt)       => na(v) ? "null" : str.tostring(v, fmt)
@@ -96,9 +105,11 @@ vwap_reclaimed = ta.crossover(close, vwap_val)
 [pw_high, pw_low]            = request.security(syminfo.tickerid, "W", [high[1], low[1]],           lookahead=barmerge.lookahead_on)
 
 // ─── HTF / FTFC CONTEXT ──────────────────────────────────────────────────────
-[d_o,  d_h,  d_l,  d_c,  d_ph,  d_pl]  = request.security(syminfo.tickerid, "D",   [open, high, low, close, high[1], low[1]], lookahead=barmerge.lookahead_on)
-[h4_o, h4_h, h4_l, h4_c, h4_ph, h4_pl] = request.security(syminfo.tickerid, "240", [open, high, low, close, high[1], low[1]], lookahead=barmerge.lookahead_on)
-[h1_o, h1_h, h1_l, h1_c, h1_ph, h1_pl] = request.security(syminfo.tickerid, "60",  [open, high, low, close, high[1], low[1]], lookahead=barmerge.lookahead_on)
+// Use only CLOSED HTF bars. Pairing [1]/[2] with lookahead_on returns the most
+// recent confirmed HTF bar without leaking the still-forming bar into history.
+[d_o,  d_h,  d_l,  d_c,  d_ph,  d_pl]  = request.security(syminfo.tickerid, "D",   [open[1], high[1], low[1], close[1], high[2], low[2]], lookahead=barmerge.lookahead_on)
+[h4_o, h4_h, h4_l, h4_c, h4_ph, h4_pl] = request.security(syminfo.tickerid, "240", [open[1], high[1], low[1], close[1], high[2], low[2]], lookahead=barmerge.lookahead_on)
+[h1_o, h1_h, h1_l, h1_c, h1_ph, h1_pl] = request.security(syminfo.tickerid, "60",  [open[1], high[1], low[1], close[1], high[2], low[2]], lookahead=barmerge.lookahead_on)
 
 daily_bar_type      = classify_bar(d_h,  d_l,  d_ph,  d_pl)
 daily_direction     = direction_from_bar(daily_bar_type,      d_o,  d_c)
@@ -191,7 +202,7 @@ if not na(pl_bos)
     demand_wavg     := math.avg(body_top, body_bot)
 
 // ─── HOD / LOD ────────────────────────────────────────────────────────────────
-in_any_session = not na(time(timeframe.period, i_ny_session, "America/New_York")) or not na(time(timeframe.period, i_london_session, "America/New_York")) or not na(time(timeframe.period, i_test_session, "America/New_York"))
+in_any_session = not na(time(timeframe.period, i_ny_session, "America/New_York")) or not na(time(timeframe.period, i_london_session, "America/New_York")) or not na(time(timeframe.period, i_extra_session, "America/New_York"))
 day_change     = ta.change(time("D")) > 0
 var float hod = na
 var float lod = na
@@ -554,7 +565,7 @@ msg := msg + "\"event_type\":"     + "\"" + event_type + "\""
 msg := msg + "}"
 
 // ─── FIRE ALERT ───────────────────────────────────────────────────────────────
-bool should_send = i_alert_on and barstate.isconfirmed and in_any_session
+bool should_send = i_alert_on and barstate.isconfirmed and (i_alert_all_sessions or in_any_session)
 if should_send
     alert(msg, alert.freq_once_per_bar_close)
 
