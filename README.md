@@ -1,6 +1,25 @@
 # Autonomous Futures Paper-Trading System
 
+[![CI](https://github.com/imanisworld/autonomous-futures-system/actions/workflows/ci.yml/badge.svg)](https://github.com/imanisworld/autonomous-futures-system/actions/workflows/ci.yml)
+[![Paper Only](https://img.shields.io/badge/execution-paper--only-blue)](#paper-only-system)
+[![License](https://img.shields.io/badge/license-all%20rights%20reserved-lightgrey)](LICENSE)
+
 A local, paper-only autonomous trading system for a limited futures universe. Designed for disciplined, low-frequency trading with strict risk enforcement, session filters, and full decision journaling.
+
+---
+
+## Public Use Notice
+
+This repository is published for educational review and paper-trading
+demonstration only. It is not financial advice, does not promise profitability,
+and does not provide live-trading support.
+
+All rights are reserved. Viewing and personal evaluation are allowed, but
+reuse, redistribution, commercial use, and publication of derivative works
+require written permission. See [LICENSE](LICENSE).
+
+Bug reports and documentation feedback are welcome. Unsolicited pull requests
+are not currently accepted. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
@@ -65,6 +84,9 @@ NO_TRADE.
 .
 ├── README.md
 ├── SECURITY.md
+├── CONTRIBUTING.md
+├── CODE_OF_CONDUCT.md
+├── LICENSE
 ├── RUNBOOK.md
 ├── CHANGELOG.md
 ├── risk_rules.yaml

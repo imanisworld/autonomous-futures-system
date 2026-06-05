@@ -1,0 +1,34 @@
+name: Bug report
+description: Report a reproducible problem in the public paper-trading engine
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include credentials, account information, private logs, or live-trading details.
+        Report security issues privately through the repository Security page.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+      description: Provide the smallest safe example that reproduces the problem.
+    validations:
+      required: true
+  - type: input
+    id: commit
+    attributes:
+      label: Commit or version
+      description: Commit SHA or branch where the issue occurred.
+  - type: textarea
+    id: sanitized_output
+    attributes:
+      label: Sanitized output
+      description: Include relevant errors after removing all secrets and private data.
