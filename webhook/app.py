@@ -45,6 +45,7 @@ from execution.tradovate_keepalive import run_tradovate_keepalive
 from journal.journal_logger import JournalLogger
 from notifications.discord_notifier import notify_discord
 from webhook.payload import AlertPayload
+from webhook.reconciler import run_reconciler_loop
 from webhook.runner import process_alert
 
 logger = logging.getLogger(__name__)
@@ -254,13 +255,19 @@ async def _lifespan(app: FastAPI):
             "(allowed=%s). Live alerts for these will be rejected as 'not in allowed universe'.",
             missing, allowed,
         )
-    keepalive_task = asyncio.create_task(run_tradovate_keepalive())
+    # Background safety tasks run independently of the TradingView bar feed.
+    background_tasks = [
+        asyncio.create_task(run_tradovate_keepalive()),
+        asyncio.create_task(run_reconciler_loop(_config, _config.log_dir)),
+    ]
     try:
         yield
     finally:
-        keepalive_task.cancel()
-        with suppress(asyncio.CancelledError):
-            await keepalive_task
+        for task in background_tasks:
+            task.cancel()
+        for task in background_tasks:
+            with suppress(asyncio.CancelledError):
+                await task
 
 
 app = FastAPI(
