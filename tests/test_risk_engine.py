@@ -818,3 +818,64 @@ class TestSessionWindows:
         )
         assert result.rejected
         assert result.failed_rule == "session_window"
+
+
+class TestSessionCutoffCrossMidnight:
+    """The Asian session wraps past midnight (19:00 -> 03:00 ET) with an 02:30
+    cutoff. A naive clock compare flagged an early-session 20:45 entry as 'after
+    02:30'. The cutoff must be anchored to the session START.
+    """
+
+    def _engine(self, config):
+        from dataclasses import replace
+
+        cfg = replace(
+            config,
+            session_hours={
+                "asian": {"start": "19:00", "end": "03:00"},
+                "new_york": {"start": "09:30", "end": "16:30"},
+            },
+            session_cutoffs={"asian": "02:30", "new_york": "14:00"},
+        )
+        return RiskEngine(config=cfg)
+
+    def _setup_at_et(self, session, hh, mm):
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+
+        dt = datetime(2026, 6, 17, hh, mm, tzinfo=ZoneInfo("America/New_York"))
+        return TradeSetup(
+            direction="SHORT", entry=19500.0, stop=19520.0, target=19440.0,
+            rr_ratio=2.0, strategy="vwap_hold", instrument="MNQ",
+            session=session, entry_time=dt,
+        )
+
+    # ── Asian (wraps midnight) ────────────────────────────────────────────
+    def test_asian_evening_entry_allowed(self, config):
+        """20:45 ET is the START of the asian session — well before 02:30."""
+        engine = self._engine(config)
+        assert engine._check_session_cutoff(self._setup_at_et("asian", 20, 45), DailyState()) is None
+
+    def test_asian_just_before_cutoff_allowed(self, config):
+        engine = self._engine(config)
+        assert engine._check_session_cutoff(self._setup_at_et("asian", 2, 15), DailyState()) is None
+
+    def test_asian_after_cutoff_rejected(self, config):
+        engine = self._engine(config)
+        result = engine._check_session_cutoff(self._setup_at_et("asian", 2, 45), DailyState())
+        assert result is not None and result.failed_rule == "session_cutoff"
+
+    def test_asian_at_cutoff_rejected(self, config):
+        engine = self._engine(config)
+        result = engine._check_session_cutoff(self._setup_at_et("asian", 2, 30), DailyState())
+        assert result is not None and result.failed_rule == "session_cutoff"
+
+    # ── New York (does NOT wrap) — behavior unchanged ─────────────────────
+    def test_new_york_before_cutoff_allowed(self, config):
+        engine = self._engine(config)
+        assert engine._check_session_cutoff(self._setup_at_et("new_york", 13, 30), DailyState()) is None
+
+    def test_new_york_after_cutoff_rejected(self, config):
+        engine = self._engine(config)
+        result = engine._check_session_cutoff(self._setup_at_et("new_york", 14, 30), DailyState())
+        assert result is not None and result.failed_rule == "session_cutoff"

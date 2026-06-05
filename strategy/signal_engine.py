@@ -734,21 +734,75 @@ class DecisionEngine:
                 return name, window
         return None
 
+    @staticmethod
+    def _strat_run_direction(strat) -> Optional[str]:
+        """Direction of a FULL 3-bar consecutive directional run, else None.
+
+        Returns "UP"/"DOWN" only when all three classified bars (two_bars_back,
+        previous, current) are two_up (or all two_down) — a sustained run that no
+        reasonable definition calls chop (each bar takes out the prior in the same
+        direction). Deliberately strict: a lone or 2-bar directional bar (common
+        inside consolidation above a breakout) does NOT qualify, so it cannot
+        override a chop label.
+        """
+        if strat is None:
+            return None
+        seq = (strat.two_bars_back_type, strat.previous_bar_type, strat.current_bar_type)
+        if all(t == "two_up" for t in seq):
+            return "UP"
+        if all(t == "two_down" for t in seq):
+            return "DOWN"
+        return None
+
+    def _has_directional_structure(self, state: MarketState) -> bool:
+        """True when the bar shows an UNAMBIGUOUS directional impulse: a full
+        3-bar strat run agreeing with the EMA-stack trend direction.
+
+        This is what distinguishes the live MES short (trend DOWN + three
+        consecutive two_down bars) from consolidation/chop above a breakout (a
+        lone up-bar, trend-ish, on the right side of VWAP) that Pine reasonably
+        labels CHOPPY. Only the former vetoes a chop label.
+        """
+        trend = state.trend
+        if trend is None or trend.direction not in ("UP", "DOWN"):
+            return False
+        return self._strat_run_direction(state.strat) == trend.direction
+
     def _score_market_condition(self, state: MarketState) -> str:
         """
-        Score market condition from available indicators.
-        Prefers externally provided condition; falls back to internal scoring.
-        """
-        # Use provided condition if already assessed
-        if state.market_condition and state.market_condition in (
-            "TRENDING", "RANGE_BOUND", "CHOPPY", "DEAD"
-        ):
-            return state.market_condition
+        Decide the market regime, intervening on chop ONLY.
 
-        # Internal scoring from volume and structure
+        The fix is deliberately minimal-surface: Pine's TRADABLE labels
+        (TRENDING / RANGE_BOUND) are trusted verbatim so downstream regime-
+        dependent setup/confluence logic is unchanged. We intervene in exactly
+        one case — a CHOPPY label on a bar with clear directional structure — to
+        VETO the chop call. This is the same lesson already applied to
+        trend_strength (context.trend): never let an external chop label override
+        the structural evidence we already have (e.g. the live MES bar dropping
+        with three consecutive two_down bars + trend DOWN + price below VWAP, which
+        Pine mislabeled CHOPPY → NO_TRADE). DEAD (illiquid / low volume) stays a
+        hard floor and is never vetoed.
+        """
+        pine = state.market_condition if state.market_condition in (
+            "TRENDING", "RANGE_BOUND", "CHOPPY", "DEAD"
+        ) else None
+
+        # Trust Pine's tradable labels as-is (no downstream perturbation).
+        if pine in ("TRENDING", "RANGE_BOUND"):
+            return pine
+
+        # The core fix: a CHOPPY label is vetoed by clear directional structure.
+        if pine == "CHOPPY":
+            return "RANGE_BOUND" if self._has_directional_structure(state) else "CHOPPY"
+
+        # DEAD is a hard floor (illiquid tape) — not overridden.
+        if pine == "DEAD":
+            return "DEAD"
+
+        # ── No Pine label: score from structure (legacy fallback) ───────────
         score = 0
 
-        # Volume check: dead market if relative volume < 0.4
+        # Volume check: dead market if relative volume < 0.4 (hard floor).
         if state.volume.relative is not None:
             if state.volume.relative < 0.4:
                 return "DEAD"
@@ -757,7 +811,7 @@ class DecisionEngine:
             elif state.volume.relative >= 0.5:
                 score += 1
 
-        # Trend check
+        # Trend check (EMA-stack direction/strength from context.trend)
         if state.trend:
             if state.trend.direction in ("UP", "DOWN") and state.trend.strength == "STRONG":
                 score += 3
@@ -765,6 +819,10 @@ class DecisionEngine:
                 score += 1
             elif state.trend.direction == "SIDEWAYS":
                 score -= 1
+
+        # Strat run: consecutive same-direction directional bars = trending
+        if self._strat_run_direction(state.strat) is not None:
+            score += 2
 
         # ORB structure
         if state.orb.status in ("reclaimed_high", "reclaimed_low", "rejected_high", "rejected_low"):
@@ -776,6 +834,10 @@ class DecisionEngine:
         if state.vwap.price_vs_vwap in ("above", "below"):
             score += 1
 
+        # VETO: a clear directional move is never chop. At minimum RANGE_BOUND.
+        if self._has_directional_structure(state):
+            return "TRENDING" if score >= 4 else "RANGE_BOUND"
+
         # Range check (tight range = choppy)
         bar_range = state.ohlc.high - state.ohlc.low
         tick_size = self.TICK_SIZE.get(state.instrument, 0.25)
@@ -785,10 +847,9 @@ class DecisionEngine:
 
         if score >= 4:
             return "TRENDING"
-        elif score >= 1:
+        if score >= 1:
             return "RANGE_BOUND"
-        else:
-            return "CHOPPY"
+        return "CHOPPY"
 
     # ── Setup Generation ──────────────────────────────────────────────────────
 
