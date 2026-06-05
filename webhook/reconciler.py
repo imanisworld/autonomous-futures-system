@@ -79,7 +79,9 @@ def reconcile_open_position(
     # Only act on an AUTHENTICATED + DEFINITIVELY FLAT reading.
     if not broker._authenticate():
         return {"action": "broker_unauthenticated"}
-    pos = broker.get_position()
+    confirmed, pos = broker.get_position_snapshot()
+    if not confirmed:
+        return {"action": "broker_position_unconfirmed"}
     if pos is not None and getattr(pos, "open", False):
         return {"action": "broker_has_position"}
 
