@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 import time
 from dataclasses import dataclass, field
 from typing import Optional
@@ -97,6 +98,44 @@ class _Token:
         return time.time() < (self.expires_at - buffer)
 
 
+# ─── Shared auth session (ONE Tradovate session per process) ────────────────────
+# Tradovate allows only TWO concurrent sessions per account. Every call to
+# /auth/accesstokenrequest opens a NEW session — so if each TradovateBroker
+# instance (webhook runner, dashboard checks, position resolution, manual
+# actions) authenticated independently, they'd evict each other AND the user's
+# browser login, surfacing as `not_authenticated`. We therefore SHARE one token
+# + one circuit breaker across all instances that use the same credentials, and
+# RENEW that token in place (/auth/renewAccessToken) instead of re-requesting a
+# brand-new session. Only a genuine renewal failure falls back to a fresh login.
+
+@dataclass
+class _SharedAuth:
+    token: Optional[_Token] = None
+    fail_count: int = 0
+    cooldown_until: float = 0.0
+    last_error: Optional[str] = None
+    lock: threading.RLock = field(default_factory=threading.RLock)
+
+
+_SHARED_AUTH: dict[tuple, _SharedAuth] = {}
+_SHARED_AUTH_REGISTRY_LOCK = threading.Lock()
+
+
+def _get_shared_auth(key: tuple) -> _SharedAuth:
+    with _SHARED_AUTH_REGISTRY_LOCK:
+        st = _SHARED_AUTH.get(key)
+        if st is None:
+            st = _SharedAuth()
+            _SHARED_AUTH[key] = st
+        return st
+
+
+def _reset_shared_auth() -> None:
+    """Test helper — clear all process-shared Tradovate auth state."""
+    with _SHARED_AUTH_REGISTRY_LOCK:
+        _SHARED_AUTH.clear()
+
+
 # ─── Broker ───────────────────────────────────────────────────────────────────
 
 class TradovateBroker(BrokerInterface):
@@ -104,7 +143,11 @@ class TradovateBroker(BrokerInterface):
 
     def __init__(self, config: Optional[TradovateConfig] = None) -> None:
         self.config = config or TradovateConfig.from_env()
-        self._token: Optional[_Token] = None
+        # ONE shared session/token + circuit breaker per (env, account) so the
+        # whole process holds a SINGLE Tradovate session (see _SharedAuth above).
+        self._auth_state = _get_shared_auth(
+            (self.config.base_url, self.config.username, self.config.cid)
+        )
         self._session = requests.Session()
         self._session.headers.update({"Content-Type": "application/json"})
         self._last_position: Optional[Position] = None
@@ -117,14 +160,45 @@ class TradovateBroker(BrokerInterface):
         # Set after execute_bracket: did the protective stop+target children verify live?
         # None = not checked, True = both confirmed working, False = one/both missing (naked risk).
         self._last_bracket_confirmed: Optional[bool] = None
-        # Auth circuit breaker — after repeated failures, stop hammering
-        # /auth/accesstokenrequest so a rejected credential can't get the account
-        # locked by Tradovate. Reset on the first success.
-        self._auth_fail_count: int = 0
-        self._auth_cooldown_until: float = 0.0
-        self._last_auth_error: Optional[str] = None
+        # Auth circuit-breaker + token state now live in self._auth_state, shared
+        # across all instances with the same creds (see _SharedAuth). They are
+        # exposed via the _token / _auth_fail_count / _auth_cooldown_until /
+        # _last_auth_error properties below so existing callers keep working.
 
     # ── Auth ──────────────────────────────────────────────────────────────────
+
+    # Token + circuit-breaker state are process-shared (proxied to _auth_state).
+    @property
+    def _token(self) -> Optional[_Token]:
+        return self._auth_state.token
+
+    @_token.setter
+    def _token(self, value: Optional[_Token]) -> None:
+        self._auth_state.token = value
+
+    @property
+    def _auth_fail_count(self) -> int:
+        return self._auth_state.fail_count
+
+    @_auth_fail_count.setter
+    def _auth_fail_count(self, value: int) -> None:
+        self._auth_state.fail_count = value
+
+    @property
+    def _auth_cooldown_until(self) -> float:
+        return self._auth_state.cooldown_until
+
+    @_auth_cooldown_until.setter
+    def _auth_cooldown_until(self, value: float) -> None:
+        self._auth_state.cooldown_until = value
+
+    @property
+    def _last_auth_error(self) -> Optional[str]:
+        return self._auth_state.last_error
+
+    @_last_auth_error.setter
+    def _last_auth_error(self, value: Optional[str]) -> None:
+        self._auth_state.last_error = value
 
     # Auth circuit-breaker tuning.
     _AUTH_MAX_FAILURES = 3        # consecutive failures before backing off
@@ -142,16 +216,100 @@ class TradovateBroker(BrokerInterface):
                 self._auth_fail_count, reason, self._AUTH_COOLDOWN_SECONDS,
             )
 
-    def _authenticate(self) -> bool:
-        """Obtain or refresh access token. Returns True on success."""
-        if self._token and self._token.is_valid(self.config.token_refresh_buffer):
-            return True
+    @staticmethod
+    def _parse_expiry(expiry_raw) -> float:
+        """Parse Tradovate's expirationTime (ISO 8601 string, or ms number)."""
+        if not expiry_raw:
+            return time.time() + 3600
+        try:
+            from datetime import datetime
+            if isinstance(expiry_raw, str):
+                # Handle both +00:00 and Z suffixes.
+                return datetime.fromisoformat(expiry_raw.replace("Z", "+00:00")).timestamp()
+            # Fallback: treat as milliseconds if it's a number.
+            return float(expiry_raw) / 1000.0
+        except Exception:
+            return time.time() + 3600
 
-        # Circuit breaker: after repeated failures, refuse to hit the auth API
-        # until the cooldown elapses so we don't get the account locked.
-        if time.time() < self._auth_cooldown_until:
+    def _apply_token(self, tok: _Token) -> None:
+        """Point THIS instance's HTTP session at the shared token, and make sure
+        the account id is resolved (so a brand-new instance reusing the shared
+        session is immediately usable)."""
+        self._session.headers["Authorization"] = f"Bearer {tok.access_token}"
+        if self._account_id is None:
+            self._resolve_account_id()
+
+    def _authenticate(self) -> bool:
+        """Ensure THIS instance has a usable Tradovate session.
+
+        Order of preference (all under a shared lock so only one session is ever
+        opened per process):
+          1. Reuse the shared token if still valid → just bind this session.
+          2. Honor the circuit breaker (don't hammer auth after repeated 401s).
+          3. RENEW the existing token in place (same session) if it's stale.
+          4. Only as a last resort, open a fresh session (accesstokenrequest).
+        """
+        with self._auth_state.lock:
+            tok = self._auth_state.token
+            # 1. Valid shared token → reuse it for this instance.
+            if tok and tok.is_valid(self.config.token_refresh_buffer):
+                self._apply_token(tok)
+                return True
+
+            # 2. Circuit breaker: after repeated failures, refuse to hit the auth
+            # API until the cooldown elapses so we don't get the account locked.
+            if time.time() < self._auth_cooldown_until:
+                return False
+
+            # 3. Token exists but is stale → renew in place (keeps SAME session).
+            if tok is not None and self._renew_token():
+                return True
+
+            # 4. Last resort — open a brand-new session.
+            return self._login()
+
+    def _renew_token(self) -> bool:
+        """Extend the existing 90-minute token via /auth/renewAccessToken — this
+        keeps the SAME Tradovate session (no new session created). Returns False
+        on any failure so the caller falls back to a fresh login."""
+        tok = self._auth_state.token
+        if tok is None:
+            return False
+        url = f"{self.config.base_url}/auth/renewAccessToken"
+        try:
+            resp = self._session.get(
+                url, timeout=10,
+                headers={"Authorization": f"Bearer {tok.access_token}"},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            new_token = data.get("accessToken")
+            if not new_token:
+                logger.warning(
+                    "Tradovate token renewal returned no accessToken; re-logging in."
+                )
+                return False
+            self._auth_state.token = _Token(
+                access_token=new_token,
+                expires_at=self._parse_expiry(data.get("expirationTime")),
+            )
+            self._apply_token(self._auth_state.token)
+            # Healthy renewal clears the breaker.
+            self._auth_fail_count = 0
+            self._auth_cooldown_until = 0.0
+            self._last_auth_error = None
+            logger.info("Tradovate token renewed in place (env=%s)", self.config.env)
+            return True
+        except Exception as exc:
+            logger.warning("Tradovate token renewal failed (%s); re-logging in.", exc)
             return False
 
+    def _login(self) -> bool:
+        """Open a NEW Tradovate session via /auth/accesstokenrequest.
+
+        Each call creates a new session and Tradovate only allows two concurrent
+        — so this is the last resort, used only when there is no token or renewal
+        failed. Returns True on success."""
         url = f"{self.config.base_url}/auth/accesstokenrequest"
         body = {
             "name": self.config.username,
@@ -172,31 +330,16 @@ class TradovateBroker(BrokerInterface):
                 logger.error("Tradovate auth failed: %s", err)
                 self._note_auth_failure(f"rejected: {err}")
                 return False
-            # Tradovate returns expirationTime as ISO string e.g. "2026-06-02T18:31:28+00:00"
-            expiry_raw = data.get("expirationTime")
-            if expiry_raw:
-                try:
-                    from datetime import datetime, timezone
-                    if isinstance(expiry_raw, str):
-                        # Parse ISO 8601 — handle both +00:00 and Z suffixes
-                        expiry_str = expiry_raw.replace("Z", "+00:00")
-                        expires_at = datetime.fromisoformat(expiry_str).timestamp()
-                    else:
-                        # Fallback: treat as milliseconds if it's a number
-                        expires_at = float(expiry_raw) / 1000.0
-                except Exception:
-                    expires_at = time.time() + 3600
-            else:
-                expires_at = time.time() + 3600
-            self._token = _Token(access_token=token, expires_at=expires_at)
-            self._session.headers["Authorization"] = f"Bearer {token}"
+            self._auth_state.token = _Token(
+                access_token=token,
+                expires_at=self._parse_expiry(data.get("expirationTime")),
+            )
+            self._apply_token(self._auth_state.token)
             # Success — clear the circuit breaker.
             self._auth_fail_count = 0
             self._auth_cooldown_until = 0.0
             self._last_auth_error = None
-            logger.info("Tradovate authenticated (env=%s)", self.config.env)
-            # Cache account ID
-            self._resolve_account_id()
+            logger.info("Tradovate authenticated — new session (env=%s)", self.config.env)
             return True
         except Exception as exc:
             status = getattr(getattr(exc, "response", None), "status_code", None)

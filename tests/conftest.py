@@ -34,6 +34,16 @@ def isolate_live_broker_env(monkeypatch):
     monkeypatch.setenv("TRADOVATE_PASSWORD", "")
 
 
+@pytest.fixture(autouse=True)
+def reset_tradovate_shared_auth():
+    """Clear the process-shared Tradovate auth state between tests so token /
+    circuit-breaker state never leaks across broker auth tests."""
+    from execution.tradovate_broker import _reset_shared_auth
+    _reset_shared_auth()
+    yield
+    _reset_shared_auth()
+
+
 # ─── Config Fixture ────────────────────────────────────────────────────────────
 
 @pytest.fixture
