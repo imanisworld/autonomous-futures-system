@@ -41,7 +41,10 @@ from fastapi.staticfiles import StaticFiles
 from agent.daily_summary import DailySummaryAgent, validate_review_date
 from config.settings import load_config
 from context.futures_session import futures_session_active, feed_stale_after_minutes
-from execution.tradovate_keepalive import run_tradovate_keepalive
+from execution.tradovate_supervisor import (
+    reliability_snapshot,
+    run_tradovate_supervisor,
+)
 from journal.journal_logger import JournalLogger
 from notifications.discord_notifier import notify_discord
 from webhook.payload import AlertPayload
@@ -257,7 +260,7 @@ async def _lifespan(app: FastAPI):
         )
     # Background safety tasks run independently of the TradingView bar feed.
     background_tasks = [
-        asyncio.create_task(run_tradovate_keepalive()),
+        asyncio.create_task(run_tradovate_supervisor()),
         asyncio.create_task(run_reconciler_loop(_config, _config.log_dir)),
     ]
     try:
@@ -648,20 +651,28 @@ async def status_broker_account() -> dict:
             "error": "broker_not_tradovate",
             "message": f"Broker account panel is unavailable because BROKER={broker_mode}.",
             "next_step": "Set BROKER=tradovate only when you want the dashboard to read a Tradovate account.",
+            "reliability": reliability_snapshot(),
         }
     now = time.time()
     cached = _ACCOUNT_CACHE.get("data")
     if cached is not None and (now - _ACCOUNT_CACHE["ts"]) < _ACCOUNT_TTL_SECONDS:
-        return cached
+        return {**cached, "reliability": reliability_snapshot()}
     # Broker auth/network I/O is synchronous and can hang on timeouts; run it off
     # the event loop so a slow/unauthenticated Tradovate session can't stall other
     # routes (health/today/quote) and make the dashboard look like an API flap.
     summary = await asyncio.to_thread(_account_summary_blocking)
+    summary["reliability"] = reliability_snapshot()
     _decorate_broker_account_status(summary)
     summary["cached_at"] = now
     _ACCOUNT_CACHE["ts"] = now
     _ACCOUNT_CACHE["data"] = summary
     return summary
+
+
+@app.get("/status/tradovate-reliability")
+async def status_tradovate_reliability() -> dict:
+    """Protected operator view of the process-global broker readiness state."""
+    return reliability_snapshot()
 
 
 def _account_summary_blocking() -> dict:
