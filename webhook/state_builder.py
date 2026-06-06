@@ -15,6 +15,7 @@ Responsibilities:
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, time
 from zoneinfo import ZoneInfo
 
@@ -43,36 +44,61 @@ from webhook.payload import AlertPayload
 _ET = ZoneInfo("America/New_York")
 _UTC = ZoneInfo("UTC")
 
-# Root ticker symbols the system accepts, sorted longest-first for prefix matching.
+# Root ticker symbols the system trades, sorted longest-first.
 _KNOWN_INSTRUMENTS: tuple[str, ...] = tuple(
     sorted(("MNQ", "MES", "MGC", "MCL"), key=len, reverse=True)
 )
 
+# A real futures contract suffix: a CME month code (F G H J K M N Q U V X Z)
+# followed by 1-4 year digits, e.g. "M6" or "U2026". This is how we tell a
+# contract symbol (MESU2026) from a stock that merely shares a leading substring
+# (ESTC, NQXX) — substring matching would route those to futures by mistake.
+_CONTRACT_SUFFIX = re.compile(r"^[FGHJKMNQUVXZ]\d{1,4}$")
+
 
 # ─── Normalisation helpers ─────────────────────────────────────────────────────
 
-def normalize_instrument(ticker: str) -> str:
-    """
-    Convert a TradingView ticker to the canonical 3-letter instrument name.
+def futures_root(
+    ticker: str | None, roots: tuple[str, ...] = _KNOWN_INSTRUMENTS
+) -> str | None:
+    """Canonical futures root for `ticker`, or None if it isn't one of `roots`.
 
-    Uses prefix matching against known instruments so that futures contract
-    suffixes (month codes + year digits + "!") don't corrupt the base symbol.
+    Matches a root EXACTLY after stripping the exchange prefix and either the
+    continuous ('1!'/'!') or a month+year contract suffix. Substring matching is
+    deliberately avoided — a stock like ESTC or NQXX must never route to futures.
 
     Examples:
         "MNQ1!"          → "MNQ"
         "MNQU2026"       → "MNQ"
         "CME_MINI:MNQ1!" → "MNQ"
         "MES"            → "MES"
-        "MGC1!"          → "MGC"
+        "ESTC"           → None   (Elastic stock, not the ES future)
+        "AAPL"           → None
     """
-    if ":" in ticker:
-        ticker = ticker.split(":")[-1]
-    upper = ticker.upper()
-    for root in _KNOWN_INSTRUMENTS:   # longest-first; avoids prefix ambiguity
-        if upper.startswith(root):
+    if not ticker:
+        return None
+    sym = ticker.split(":")[-1].upper().strip()
+    if sym.endswith("1!"):
+        sym = sym[:-2]
+    sym = sym.rstrip("!")
+    for root in sorted(roots, key=len, reverse=True):  # longest-first
+        if sym == root:
             return root
-    # Unknown instrument — return as-is; RiskEngine will reject it.
-    return upper
+        if sym.startswith(root) and _CONTRACT_SUFFIX.match(sym[len(root):]):
+            return root
+    return None
+
+
+def normalize_instrument(ticker: str) -> str:
+    """Convert a TradingView ticker to the canonical instrument root.
+
+    Returns the matched root for a known futures contract; otherwise the
+    exchange-stripped upper symbol as-is, which the RiskEngine then rejects.
+    """
+    root = futures_root(ticker)
+    if root:
+        return root
+    return ticker.split(":")[-1].upper()
 
 
 def parse_timestamp(value: str) -> datetime:

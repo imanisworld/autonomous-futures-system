@@ -45,6 +45,12 @@ from journal.journal_logger import JournalLogger
 from notifications.discord_notifier import notify_discord
 from webhook.payload import AlertPayload
 from webhook.runner import process_alert
+from webhook.state_builder import futures_root
+
+# Roots accepted by the webhook ingest filter — the traded micros plus the ES/NQ
+# e-minis (recognized so they're acknowledged, then RISK_REJECTED downstream as
+# not in the allowed universe). Matching is exact-root + contract-suffix only.
+_INGEST_FUTURES_ROOTS = ("MNQ", "MES", "ES", "NQ", "MGC", "MCL")
 
 logger = logging.getLogger(__name__)
 _RATE_BUCKETS: dict[tuple[str, str], list[float]] = {}
@@ -444,10 +450,10 @@ async def receive_alert(
     validate + authenticate synchronously, then hand off and return 200 fast.
     """
     _verify_webhook_secret(await _resolve_inbound_secret(request, x_webhook_secret, secret))
-    # Silently ignore non-futures tickers (e.g. stock alerts sharing the same webhook)
-    _FUTURES_PREFIXES = {"MNQ", "MES", "ES", "NQ", "MGC", "MCL"}
-    ticker_root = payload.ticker.upper().replace("1!", "").replace("!", "").strip()
-    if not any(ticker_root.startswith(p) for p in _FUTURES_PREFIXES):
+    # Silently ignore non-futures tickers (e.g. stock alerts sharing the same
+    # webhook). Exact root + contract-suffix matching — NOT a startswith prefix
+    # — so a stock like ESTC or NQXX is never mistaken for the ES/NQ future.
+    if futures_root(payload.ticker, _INGEST_FUTURES_ROOTS) is None:
         return JSONResponse(content={"ok": True, "decision": "IGNORED", "reason": "non-futures ticker"})
     task = asyncio.create_task(_process_alert_async(payload))
     _alert_tasks.add(task)
@@ -3291,17 +3297,12 @@ def _render_dashboard(status: dict) -> str:
 
 
 def _instrument_root_of(ticker: str | None) -> str | None:
-    """Map a TradingView ticker (MES1!, CME_MINI_MNQ1!, …) to MES/MNQ, else None.
+    """Map a TradingView ticker (MES1!, CME_MINI:MNQ1!, …) to MES/MNQ, else None.
 
-    Check MNQ/NQ before MES/ES because "MNQ1!" contains "NQ" and must not fall
-    through to the ES branch.
+    Exact root + contract-suffix matching (shared with the ingest filter) so a
+    stock sharing a substring never buckets into a futures side.
     """
-    up = (ticker or "").upper()
-    if "MNQ" in up or "NQ" in up:
-        return "MNQ"
-    if "MES" in up or "ES" in up:
-        return "MES"
-    return None
+    return futures_root(ticker, ("MES", "MNQ"))
 
 
 def _latest_webhook_inst_path(inst: str) -> Path:

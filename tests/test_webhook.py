@@ -130,6 +130,23 @@ def test_normalize_instrument(ticker, expected):
     assert normalize_instrument(ticker) == expected
 
 
+@pytest.mark.parametrize("ticker,expected", [
+    ("MES1!", "MES"),
+    ("MNQ1!", "MNQ"),
+    ("CME_MINI:MNQ1!", "MNQ"),
+    ("MESU2026", "MES"),     # real contract suffix (month code + year)
+    ("MNQ", "MNQ"),
+    ("ESTC", None),          # Elastic stock — NOT the ES future (the prefix bug)
+    ("NQXX", None),
+    ("AAPL", None),
+    ("ES1!", "ES"),          # e-mini recognized (then RISK_REJECTED downstream)
+])
+def test_futures_root_exact_not_prefix(ticker, expected):
+    from webhook.state_builder import futures_root
+    roots = ("MNQ", "MES", "ES", "NQ", "MGC", "MCL")
+    assert futures_root(ticker, roots) == expected
+
+
 # ─── state_builder: detect_session ────────────────────────────────────────────
 
 @pytest.mark.parametrize("iso,expected_session", [
