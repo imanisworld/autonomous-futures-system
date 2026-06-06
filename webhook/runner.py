@@ -79,20 +79,13 @@ def _make_broker(
     """Return the configured broker.
 
     BROKER env var controls selection:
-      - "ibkr"  → IBKRBroker (paper Gateway on port 4003, is_live=False)
+      - "tradovate" → TradovateBroker (demo/live per TRADOVATE_ENV)
       - anything else (default) → PaperBroker (local simulation)
 
     LIVE_TRADING_ENABLED must never be set to true — the LiveTradingBlockedError
     guard in RiskEngine will raise at startup if it is.
     """
     broker_type = os.getenv("BROKER", "paper").strip().lower()
-    if broker_type == "ibkr":
-        from execution.ibkr_broker import IBKRBroker, IBKRConfig
-        config = IBKRConfig.from_env()
-        logger.info(
-            "Using IBKRBroker (paper) → %s:%s", config.host, config.port
-        )
-        return IBKRBroker(config=config)
     if broker_type == "tradovate":
         from execution.tradovate_broker import TradovateBroker, TradovateConfig
         config = TradovateConfig.from_env()
@@ -215,7 +208,6 @@ def process_alert(
         }
 
     _maybe_enrich_payload_with_signa(payload, cfg)
-    _maybe_sync_ibkr_position_on_startup(cfg)
     state = build_market_state(payload)
 
     # ── Rolling bar history (Phase 3): continuous price record + gap detection ──
@@ -286,8 +278,8 @@ def process_alert(
 
     # ── Step 1: Resolve any open position ────────────────────────────────────
     # Paper mode: simulate using next-bar OHLC.
-    # IBKR mode: query actual fills from the Gateway — the bracket child orders
-    # (stop and target) are already live on IBKR's side.
+    # Tradovate mode: query actual fills from the broker — the bracket child
+    # orders (stop and target) are already live on Tradovate's side.
     if daily_state.has_open_position:
         if open_pos and _position_is_complete(open_pos):
             broker_type = os.getenv("BROKER", "paper").strip().lower()
@@ -299,20 +291,7 @@ def process_alert(
             _open_root = (open_pos.get("instrument") or "").upper().rstrip("!1234567890HMUZ")
             _bar_root = (state.instrument or "").upper().rstrip("!1234567890HMUZ")
             same_instrument = bool(_open_root) and _open_root == _bar_root
-            if not simulate and broker_type == "ibkr":
-                from execution.ibkr_broker import IBKRBroker, IBKRConfig
-                ibkr = IBKRBroker(config=IBKRConfig.from_env(), auto_connect=True)
-                # Restore internal position state so resolve_position knows what to look for
-                ibkr._last_position = ibkr._position_from_ib(
-                    type("_P", (), {
-                        "contract": type("_C", (), {"symbol": open_pos["instrument"] or state.instrument})(),
-                        "position": (1 if open_pos["direction"] == "LONG" else -1) * int(open_pos.get("contracts", 1)),
-                        "avgCost": float(open_pos["entry"]),
-                    })()
-                )
-                ibkr._last_order_ids = []
-                fill = ibkr.resolve_position()
-            elif not simulate and broker_type == "tradovate":
+            if not simulate and broker_type == "tradovate":
                 from execution.tradovate_broker import TradovateBroker, TradovateConfig
                 from execution.broker_interface import Position as _Position
                 tv = TradovateBroker(config=TradovateConfig.from_env())
@@ -359,7 +338,8 @@ def process_alert(
             #       intraday paper positions should not survive a full session.
             # In either case, force-close at the current bar's close price so
             # the system never stays blocked by an unresolvable open position.
-            # IBKR mode: skip — IBKR manages the bracket; None just means still open.
+            # Tradovate mode: skip — the broker manages the bracket; None just
+            # means still open.
             if fill is None and simulate and same_instrument:
                 entry_price = float(open_pos["entry"])
                 price_ratio = abs(payload.close - entry_price) / entry_price if entry_price else 1.0
@@ -618,35 +598,6 @@ def process_alert(
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
-
-_ibkr_synced_today: set[str] = set()  # dates already synced — one sync per calendar day
-
-
-def _maybe_sync_ibkr_position_on_startup(cfg: SystemConfig) -> None:
-    """Sync open position state from IBKR Gateway once per calendar day.
-
-    Only runs when BROKER=ibkr. Logs a warning if IBKR reports a position
-    that the journal doesn't know about (manual trade, overnight carry, etc.).
-    This is informational only — it does not write to the journal.
-    """
-    if os.getenv("BROKER", "paper").strip().lower() != "ibkr":
-        return
-    today_str = date.today().isoformat()
-    if today_str in _ibkr_synced_today:
-        return
-    _ibkr_synced_today.add(today_str)
-    try:
-        from execution.ibkr_broker import IBKRBroker, IBKRConfig
-        ibkr = IBKRBroker(config=IBKRConfig.from_env(), auto_connect=True)
-        pos = ibkr.sync_open_position()
-        if pos:
-            logger.info(
-                "IBKR startup sync: open position found — %s %s qty=%s avg=%.2f. "
-                "Verify this matches the journal open position.",
-                pos.direction, pos.instrument, pos.quantity, pos.entry_price,
-            )
-    except Exception as exc:  # pragma: no cover - Gateway may not be reachable
-        logger.warning("IBKR startup sync failed (Gateway not reachable?): %s", exc)
 
 
 def _maybe_enrich_payload_with_signa(payload: AlertPayload, cfg: SystemConfig) -> None:

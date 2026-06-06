@@ -550,7 +550,7 @@ async def health() -> dict:
         "paper_mode": _config.paper_mode,
         "live_trading_enabled": _config.live_trading_enabled,
         "broker": broker_mode,
-        "broker_gateway_reachable": _ibkr_gateway_reachable(),
+        "broker_gateway_reachable": None,  # IBKR-only concept; broker removed
         "webhook_secret_required": bool(_configured_webhook_secret()),
     }
 
@@ -1073,21 +1073,6 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
     )
 
 
-def _ibkr_gateway_reachable() -> bool | None:
-    """Return True/False if BROKER=ibkr; None if not using IBKR."""
-    if os.getenv("BROKER", "paper").strip().lower() != "ibkr":
-        return None
-    try:
-        import socket
-        host = os.getenv("IBKR_HOST", "127.0.0.1")
-        port = int(os.getenv("IBKR_PORT", "4002"))
-        with socket.socket() as s:
-            s.settimeout(0.5)
-            return s.connect_ex((host, port)) == 0
-    except Exception:
-        return False
-
-
 def _diag_slug(component: str) -> str:
     """Machine-readable code derived from a display label (fallback)."""
     import re
@@ -1299,7 +1284,6 @@ def _feed_window_active(now: datetime | None = None) -> bool:
 
 def _diagnostics_payload(for_date: date) -> dict:
     broker = os.getenv("BROKER", "paper").strip().lower()
-    gateway = _ibkr_gateway_reachable()
     latest = _latest_webhook_payload()
     latest_age = _latest_webhook_age_seconds(latest)
     journal = JournalLogger(log_dir=_config.log_dir)
@@ -1351,22 +1335,10 @@ def _diagnostics_payload(for_date: date) -> dict:
             "Set WEBHOOK_SECRET on the server and include it in the TradingView webhook URL.",
         ))
 
-    if broker == "ibkr":
-        if gateway is True:
-            items.append(_diagnostic("ok", "IBKR gateway", "IBKR Gateway is reachable from the backend."))
-        elif gateway is False:
-            items.append(_diagnostic(
-                "error",
-                "IBKR gateway",
-                "BROKER=ibkr, but the backend cannot reach IBKR Gateway.",
-                "Check IBKR Gateway/TWS is running and IBKR_HOST/IBKR_PORT match the server.",
-            ))
-        else:
-            items.append(_diagnostic("warn", "IBKR gateway", "IBKR gateway status is unknown."))
-    elif broker == "tradovate":
+    if broker == "tradovate":
         items.append(_tradovate_env_diagnostic())
     else:
-        items.append(_diagnostic("ok", "Broker", f"Broker is set to {broker}; IBKR gateway is not required."))
+        items.append(_diagnostic("ok", "Broker", f"Broker is set to {broker}; no external gateway required."))
 
     if _config.discord_notifications_enabled and not _config.discord_webhook_url:
         items.append(_diagnostic(
@@ -1590,7 +1562,7 @@ def _dashboard_payload(for_date: date) -> dict:
         "latest_webhooks": _latest_webhooks_by_instrument(),
         "strategy_status": _strategy_payload(for_date),
         "performance": journal.get_performance_stats(_config.position_sizing.starting_balance),
-        "broker_gateway_reachable": _ibkr_gateway_reachable(),
+        "broker_gateway_reachable": None,  # IBKR-only concept; broker removed
         "diagnostics": diagnostics,
         "alert_validation": alert_validation,
         "expected_timeframe_minutes": int(getattr(_config, "expected_timeframe_minutes", 15)),
@@ -3428,25 +3400,6 @@ def _broker_status() -> dict:
     """Return broker connection and open position status."""
     import os as _os
     broker_type = _os.getenv("BROKER", "paper").strip().lower()
-    if broker_type == "ibkr":
-        try:
-            from execution.ibkr_broker import IBKRBroker, IBKRConfig
-            ibkr = IBKRBroker(config=IBKRConfig.from_env(), auto_connect=False)
-            pos = ibkr.get_position() if ibkr.connected else None
-            return {
-                "broker": "ibkr",
-                "connected": ibkr.connected,
-                "account_balance": ibkr.get_account_balance() if ibkr.connected else None,
-                "position": {
-                    "instrument": pos.instrument,
-                    "direction": pos.direction,
-                    "qty": pos.quantity,
-                    "entry": pos.entry_price,
-                } if pos else None,
-                **ibkr.health_check(),
-            }
-        except Exception as exc:
-            return {"broker": "ibkr", "connected": False, "error": str(exc)}
     if broker_type == "tradovate":
         try:
             from execution.tradovate_broker import TradovateBroker, TradovateConfig
@@ -3623,31 +3576,7 @@ def _manual_open(body: dict) -> dict:
         contracts=contracts,
     )
 
-    if broker_type == "ibkr":
-        try:
-            from execution.ibkr_broker import IBKRBroker, IBKRConfig
-            ibkr = IBKRBroker(config=IBKRConfig.from_env(), auto_connect=True)
-            if not ibkr.connected:
-                return {**result, "ok": False, "error": "IBKR Gateway not reachable"}
-            if _broker_live_blocked(ibkr):
-                return {
-                    **result,
-                    "ok": False,
-                    "error": "LIVE_TRADING_BLOCKED — broker.is_live=True but live_trading_enabled=False",
-                }
-            fill = ibkr.execute_bracket(order)
-            result["ok"] = True
-            result["fill"] = {
-                "instrument": fill.instrument,
-                "direction": fill.direction,
-                "contracts": fill.contracts,
-                "entry_price": fill.entry_price,
-                "result": fill.result,
-            }
-            result["note"] = f"Manual {direction} bracket placed on {instrument}."
-        except Exception as exc:
-            return {**result, "ok": False, "error": str(exc)}
-    elif broker_type == "tradovate":
+    if broker_type == "tradovate":
         try:
             from execution.tradovate_broker import TradovateBroker, TradovateConfig
             broker = TradovateBroker(config=TradovateConfig.from_env())
@@ -3680,7 +3609,7 @@ def _manual_open(body: dict) -> dict:
             return {**result, "ok": False, "error": str(exc)}
     else:
         result["ok"] = False
-        result["error"] = "BROKER is not ibkr or tradovate — manual OPEN requires a live broker."
+        result["error"] = "BROKER is not tradovate — manual OPEN requires a live broker."
 
     return result
 
@@ -3692,27 +3621,7 @@ def _manual_close_all() -> dict:
     broker_type = _os.getenv("BROKER", "paper").strip().lower()
     result = {"action": "CLOSE_ALL", "broker": broker_type}
 
-    if broker_type == "ibkr":
-        try:
-            from execution.ibkr_broker import IBKRBroker, IBKRConfig
-            ibkr = IBKRBroker(config=IBKRConfig.from_env(), auto_connect=True)
-            if not ibkr.connected:
-                return {**result, "ok": False, "error": "IBKR Gateway not reachable"}
-            flatten = ibkr.flatten_position()
-            result["ok"] = True
-            result["position_was"] = flatten.get("position_was")
-            result["cancelled_orders"] = flatten.get("cancelled_orders", False)
-            result["close_sent"] = flatten.get("close_sent", False)
-            result["note"] = (
-                "Position closed via MKT order + bracket cancelled."
-                if flatten.get("close_sent")
-                else "No open position — bracket orders cancelled only."
-            )
-            if "close_error" in flatten:
-                result["close_error"] = flatten["close_error"]
-        except Exception as exc:
-            return {**result, "ok": False, "error": str(exc)}
-    elif broker_type == "tradovate":
+    if broker_type == "tradovate":
         try:
             from execution.tradovate_broker import TradovateBroker, TradovateConfig
             broker = TradovateBroker(config=TradovateConfig.from_env())
