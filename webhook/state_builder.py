@@ -224,25 +224,46 @@ def build_market_state(payload: AlertPayload) -> MarketState:
     session = payload.session or detect_session(ts)
 
     # ── Derived string flags ─────────────────────────────────────────────────
-    vwap_value = payload.vwap if payload.vwap is not None else payload.close
-    price_vs_vwap = (
-        "above" if payload.close > vwap_value else
-        "below" if payload.close < vwap_value else
-        "at"
-    )
+    # Missing structural levels must FAIL CLOSED — never silently substitute the
+    # current bar. A substituted level reads downstream as a real one: it can
+    # satisfy a directional gate or become a fabricated structural stop. When a
+    # level is absent we keep a harmless placeholder for the typed-float
+    # dataclass field but set the derived comparison to "undefined" — a neutral
+    # token every strategy gate treats as not-satisfied, so dependent setups
+    # don't fire. The placeholder is unreachable: all level arithmetic sits
+    # behind an "above"/"below" guard that "undefined" fails.
+    if payload.vwap is not None:
+        vwap_value = payload.vwap
+        price_vs_vwap = (
+            "above" if payload.close > vwap_value else
+            "below" if payload.close < vwap_value else
+            "at"
+        )
+    else:
+        vwap_value = payload.close   # placeholder; never used while undefined
+        price_vs_vwap = "undefined"
 
-    pdh = payload.previous_day_high if payload.previous_day_high is not None else payload.high
-    pdl = payload.previous_day_low  if payload.previous_day_low  is not None else payload.low
+    if payload.previous_day_high is not None:
+        pdh = payload.previous_day_high
+        price_vs_pdh = payload.price_vs_pdh or (
+            "above" if payload.close > pdh else
+            "below" if payload.close < pdh else "at"
+        )
+    else:
+        pdh = payload.close          # placeholder; never used while undefined
+        price_vs_pdh = payload.price_vs_pdh or "undefined"
+
+    if payload.previous_day_low is not None:
+        pdl = payload.previous_day_low
+        price_vs_pdl = payload.price_vs_pdl or (
+            "above" if payload.close > pdl else
+            "below" if payload.close < pdl else "at"
+        )
+    else:
+        pdl = payload.close          # placeholder; never used while undefined
+        price_vs_pdl = payload.price_vs_pdl or "undefined"
+
     pdc = payload.previous_day_close if payload.previous_day_close is not None else payload.close
-
-    price_vs_pdh = payload.price_vs_pdh or (
-        "above" if payload.close > pdh else
-        "below" if payload.close < pdh else "at"
-    )
-    price_vs_pdl = payload.price_vs_pdl or (
-        "above" if payload.close > pdl else
-        "below" if payload.close < pdl else "at"
-    )
 
     # ── ORB levels — route by session ────────────────────────────────────────
     # London session uses the London ORB (Pine tracks it separately).
@@ -262,10 +283,16 @@ def build_market_state(payload: AlertPayload) -> MarketState:
         orb_h = payload.high
         orb_l = payload.low
         orb_status_val = "undefined"
-    else:
-        orb_h = payload.orb_high if payload.orb_high is not None else payload.high
-        orb_l = payload.orb_low  if payload.orb_low  is not None else payload.low
+    elif payload.orb_high is not None:
+        orb_h = payload.orb_high
+        orb_l = payload.orb_low if payload.orb_low is not None else payload.low
         orb_status_val = payload.orb_status or derive_orb_status(payload.close, orb_h, orb_l)
+    else:
+        # NY ORB not yet established — fail closed (mirror the London branch).
+        # Placeholder levels are never used while status is "undefined".
+        orb_h = payload.high
+        orb_l = payload.low
+        orb_status_val = payload.orb_status or "undefined"
 
     strat = build_strat_context(payload)
 

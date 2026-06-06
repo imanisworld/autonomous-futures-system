@@ -221,10 +221,14 @@ def test_build_market_state_minimal_payload():
     state = build_market_state(payload)
     assert state.instrument == "MES"
     assert state.session == "new_york"
-    # Defaults: vwap falls back to close, orb falls back to high/low
-    assert state.vwap.value == 5240.5
-    assert state.orb.high == 5241.25
-    assert state.orb.low == 5239.5
+    # Missing structural levels FAIL CLOSED: the level value carries a harmless
+    # placeholder for the typed dataclass, but every derived comparison is
+    # "undefined" so no strategy gate can be satisfied off a fabricated level.
+    assert state.vwap.price_vs_vwap == "undefined"
+    assert state.vwap.holding is False
+    assert state.orb.status == "undefined"
+    assert state.previous_day.price_vs_pdh == "undefined"
+    assert state.previous_day.price_vs_pdl == "undefined"
 
 
 def test_build_market_state_auto_session_and_orb_status_when_payload_omits_both():
