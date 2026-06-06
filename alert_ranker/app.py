@@ -1,7 +1,17 @@
-"""FastAPI app and scheduler lifecycle for the options scanner."""
+"""FastAPI app and scheduler lifecycle for the options scanner.
+
+TEST-ONLY. This advisory options scanner is NOT part of the live futures
+deployment (the production service runs ``uvicorn webhook.app:app`` and never
+imports this module). It is advisory-only — it can place no broker orders — and
+its endpoints are unauthenticated, so it must not be exposed in production. The
+launch path is gated behind ``OPTIONS_SCANNER_ENABLED=true`` (default off): the
+served ``app`` is inert and ``run()`` refuses unless the flag is set in a test
+environment.
+"""
 
 from __future__ import annotations
 
+import os
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -173,9 +183,38 @@ def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | No
     return app
 
 
-app = create_app()
+def options_scanner_enabled() -> bool:
+    """The scanner only runs when explicitly opted in (test environments)."""
+    return os.getenv("OPTIONS_SCANNER_ENABLED", "false").strip().lower() in {"true", "1", "yes"}
+
+
+def _disabled_app() -> FastAPI:
+    """Inert stand-in served when the scanner is not enabled, so that
+    ``uvicorn alert_ranker.app:app`` in production is safe and 403s everything
+    instead of starting the advisory scanner + scheduler."""
+    disabled = FastAPI(title="Advisory Options Scanner (disabled)")
+
+    @disabled.api_route("/{path:path}", methods=["GET", "POST", "PATCH", "PUT", "DELETE"])
+    async def _blocked(path: str) -> Any:
+        raise HTTPException(
+            status_code=403,
+            detail="Options scanner is disabled. It is a test-only advisory module, "
+            "not part of the live deployment. Set OPTIONS_SCANNER_ENABLED=true to run it.",
+        )
+
+    return disabled
+
+
+# Served by ``uvicorn alert_ranker.app:app`` — inert unless explicitly enabled.
+app = create_app() if options_scanner_enabled() else _disabled_app()
 
 
 def run() -> None:
+    if not options_scanner_enabled():
+        raise SystemExit(
+            "Options scanner is disabled. It is a TEST-ONLY advisory module and is not "
+            "part of the live futures deployment. Set OPTIONS_SCANNER_ENABLED=true in a "
+            "test environment to run it."
+        )
     cfg = load_config()
     uvicorn.run("alert_ranker.app:app", host="0.0.0.0", port=cfg.port)

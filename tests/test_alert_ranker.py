@@ -9,6 +9,8 @@ from zoneinfo import ZoneInfo
 import httpx
 from fastapi.testclient import TestClient
 
+import importlib
+
 from alert_ranker.app import create_app
 from alert_ranker.config import ScannerConfig, load_config
 from alert_ranker.discord import DiscordAlerter, build_discord_payload
@@ -194,6 +196,33 @@ def test_sqlite_records_required_scan_fields(tmp_path):
     assert latest.direction == "LONG"
     assert latest.alert_sent is False
     assert latest.alert_suppression_reason == "score_below_threshold"
+
+
+def test_options_scanner_served_app_is_disabled_in_production(monkeypatch):
+    """The module-level app served by `uvicorn alert_ranker.app:app` must be
+    inert unless OPTIONS_SCANNER_ENABLED is set — options is test-only and not
+    part of the live deployment."""
+    import alert_ranker.app as ar_app
+
+    # Default (flag unset / production) → served app 403s everything; run() refuses.
+    monkeypatch.delenv("OPTIONS_SCANNER_ENABLED", raising=False)
+    reloaded = importlib.reload(ar_app)
+    assert reloaded.options_scanner_enabled() is False
+    client = TestClient(reloaded.app)
+    assert client.get("/health").status_code == 403
+    assert client.post("/webhook/alert", json={"ticker": "SPY"}).status_code == 403
+    with __import__("pytest").raises(SystemExit):
+        reloaded.run()
+
+    # Opted in (test env) → served app is the real scanner.
+    monkeypatch.setenv("OPTIONS_SCANNER_ENABLED", "true")
+    enabled = importlib.reload(ar_app)
+    assert enabled.options_scanner_enabled() is True
+    assert enabled.app.title == "Advisory Options Scanner"
+
+    # Restore default so the module-level app stays inert for other tests.
+    monkeypatch.delenv("OPTIONS_SCANNER_ENABLED", raising=False)
+    importlib.reload(ar_app)
 
 
 def test_health_status_watchlist_and_webhook_endpoints_work(tmp_path):
