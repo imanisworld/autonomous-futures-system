@@ -123,13 +123,13 @@ def test_keepalive_respects_cooldown_when_no_token(monkeypatch):
     assert calls["n"] == 0
 
 
-def test_fastapi_lifespan_starts_and_stops_keepalive(monkeypatch):
+def test_fastapi_lifespan_starts_and_stops_supervisor(monkeypatch):
     import webhook.app as app_module
 
     started = asyncio.Event()
     stopped = asyncio.Event()
 
-    async def fake_keepalive():
+    async def fake_supervisor():
         started.set()
         try:
             await asyncio.Event().wait()
@@ -138,7 +138,7 @@ def test_fastapi_lifespan_starts_and_stops_keepalive(monkeypatch):
             raise
 
     monkeypatch.setattr(app_module, "_configured_webhook_secret", lambda: "test-secret")
-    monkeypatch.setattr(app_module, "run_tradovate_keepalive", fake_keepalive)
+    monkeypatch.setattr(app_module, "run_tradovate_supervisor", fake_supervisor)
 
     async def exercise():
         async with app_module._lifespan(app_module.app):

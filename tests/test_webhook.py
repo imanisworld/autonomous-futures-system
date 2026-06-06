@@ -1179,7 +1179,21 @@ def test_broker_account_endpoint_offloads_and_decorates(monkeypatch, tmp_path):
     data = resp.json()
     assert data["ok"] is True
     assert "active" in (data.get("message") or "").lower()  # decorated, UI-safe
+    assert data["reliability"]["state"] == "STARTING"
     app_module._ACCOUNT_CACHE.clear()
+
+
+def test_tradovate_reliability_status_endpoint():
+    try:
+        from fastapi.testclient import TestClient
+        from webhook.app import app
+    except ImportError:
+        pytest.skip("fastapi[testclient] not installed")
+
+    resp = TestClient(app).get("/status/tradovate-reliability")
+
+    assert resp.status_code == 200
+    assert {"state", "ready", "last_successful_heartbeat"} <= set(resp.json())
 
 
 def test_diagnostics_items_carry_stable_codes(monkeypatch, tmp_path):

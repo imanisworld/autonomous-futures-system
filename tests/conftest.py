@@ -39,9 +39,12 @@ def reset_tradovate_shared_auth():
     """Clear the process-shared Tradovate auth state between tests so token /
     circuit-breaker state never leaks across broker auth tests."""
     from execution.tradovate_broker import _reset_shared_auth
+    from execution.tradovate_supervisor import reset_reliability_snapshot
     _reset_shared_auth()
+    reset_reliability_snapshot()
     yield
     _reset_shared_auth()
+    reset_reliability_snapshot()
 
 
 # ─── Config Fixture ────────────────────────────────────────────────────────────

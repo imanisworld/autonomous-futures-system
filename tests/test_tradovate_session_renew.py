@@ -108,8 +108,8 @@ def test_stale_token_renews_in_place(monkeypatch):
     assert b._session.headers["Authorization"] == "Bearer renewed"
 
 
-def test_renew_failure_falls_back_to_login(monkeypatch):
-    """If renewal genuinely fails, open a fresh session as a last resort."""
+def test_temporary_renew_failure_does_not_open_new_session(monkeypatch):
+    """A provider outage must not churn Tradovate sessions."""
     login_calls = {"n": 0}
 
     def fake_post(url, **kw):
@@ -132,6 +132,6 @@ def test_renew_failure_falls_back_to_login(monkeypatch):
     assert login_calls["n"] == 1 and b._token.access_token == "tok1"
 
     b._auth_state.token.expires_at = time.time() + 10  # stale
-    assert b._authenticate() is True
-    assert login_calls["n"] == 2  # renewal failed → opened a fresh session
-    assert b._token.access_token == "tok2"
+    assert b._authenticate() is False
+    assert login_calls["n"] == 1
+    assert b._token.access_token == "tok1"
