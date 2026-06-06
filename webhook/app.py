@@ -474,22 +474,17 @@ async def manual_action(
         CLOSE_ALL   — cancel all open orders then send a closing MKT order to
                       flatten any open position. Safe even mid-trade — cancels
                       the bracket children first, then exits the position.
-        OPEN        — disabled by default. Set MANUAL_OPEN_ENABLED=true to
-                      force-open a bracket position bypassing all risk gates.
         STATUS      — return current broker connection status and open position.
 
-    Examples:
+    Manual OPEN (force-entry) has been removed: it bypassed all risk gates.
+    Entries only happen via the risk-gated alert pipeline.
+
+    Example:
         # Emergency exit
         curl -X POST https://yourserver/webhook/manual \\
              -H "X-Webhook-Secret: your-secret" \\
              -H "Content-Type: application/json" \\
              -d '{"action": "CLOSE_ALL"}'
-
-        # Manual entry
-        curl -X POST https://yourserver/webhook/manual \\
-             -H "X-Webhook-Secret: your-secret" \\
-             -H "Content-Type: application/json" \\
-             -d '{"action":"OPEN","direction":"LONG","entry":7625.0,"stop":7615.0,"target":7647.0}'
     """
     _verify_webhook_secret(await _resolve_inbound_secret(request, x_webhook_secret, secret))
     body = await request.json()
@@ -517,19 +512,15 @@ async def manual_action(
         return JSONResponse(content=_manual_close_all())
 
     if action == "OPEN":
-        if not _manual_open_enabled():
-            return JSONResponse(content={
-                "ok": False,
-                "action": "OPEN",
-                "error": "Manual OPEN is disabled. Set MANUAL_OPEN_ENABLED=true to re-enable it.",
-            })
-        return JSONResponse(content=_manual_open(body))
+        # Manual force-open was REMOVED — it bypassed every risk gate plus the
+        # allowed-instrument and contract-cap checks. The only entry path is the
+        # gated decision pipeline (TradingView alert → risk engine → broker).
+        raise HTTPException(
+            status_code=410,
+            detail="Manual OPEN has been removed. Entries only via the risk-gated alert pipeline.",
+        )
 
-    raise HTTPException(status_code=400, detail=f"Unknown action '{action}'. Use CLOSE_ALL, OPEN, or STATUS.")
-
-
-def _manual_open_enabled() -> bool:
-    return os.getenv("MANUAL_OPEN_ENABLED", "false").strip().lower() in {"true", "1", "yes"}
+    raise HTTPException(status_code=400, detail=f"Unknown action '{action}'. Use CLOSE_ALL or STATUS.")
 
 
 
@@ -1782,8 +1773,8 @@ def _format_generated_age(value: str) -> str:
 # The server ships a JSON view-model embedded in the page; every tab is rendered
 # client-side from that view-model so the 30s refresh reuses one render path and
 # the server never duplicates presentation logic. UI only — no trading state is
-# mutated here; force-open / close still go through the guarded /webhook/manual
-# endpoint (which keeps OPEN disabled unless MANUAL_OPEN_ENABLED=true).
+# mutated here; the only manual action (CLOSE_ALL emergency exit) goes through
+# the guarded /webhook/manual endpoint. Force-OPEN was removed.
 # ─────────────────────────────────────────────────────────────────────────────
 
 _FUTURES_UNIVERSE = ["MES", "MNQ", "MGC", "MCL"]
@@ -2910,17 +2901,12 @@ _DASHBOARD_HTML = r"""<!doctype html>
           'No force-open, close-all, or flatten controls render in this phase. ' +
           'Read-only broker status is shown on the Home tab.</div></div>';
       }
-      var enabled = (INIT.universe || []).filter(function (i) { return i.enabled; });
-      var btns = '';
-      enabled.forEach(function (i) {
-        btns += '<button class="btn long" data-force="' + esc(i.sym) + '|LONG">FORCE ' + modeWord() + ' LONG — ' + esc(i.sym) + ' — 1 CONTRACT</button>';
-        btns += '<button class="btn short" data-force="' + esc(i.sym) + '|SHORT">FORCE ' + modeWord() + ' SHORT — ' + esc(i.sym) + ' — 1 CONTRACT</button>';
-      });
-      var p = POINTS.MES;
-      var meta = '<div class="force-meta">Bracket per contract — Entry: Market · Stop: ' + p.stop + ' pts · Target: ' + p.target + ' pts · Est. risk ~' + money(p.stop * p.dollar) + ' (MES). Every force-open requires confirmation + webhook secret.</div>';
+      // Force-OPEN was removed (it bypassed all risk gates). Only the CLOSE_ALL
+      // kill-switch remains — it can never open risk, only flatten it.
+      var meta = '<div class="force-meta">Force-entry is disabled. Entries only via the risk-gated alert pipeline. This is an emergency exit only.</div>';
       var close = '<div style="margin-top:12px;"><button class="btn danger" data-force="*|CLOSE">CLOSE ALL ' + modeWord() + ' POSITIONS</button></div>';
-      return '<div class="panel accent-red"><h2>Manual Force Controls — ' + modeWord() + '</h2>' +
-        '<div class="force-grid">' + btns + '</div>' + meta + close + '</div>';
+      return '<div class="panel accent-red"><h2>Emergency Exit — ' + modeWord() + '</h2>' +
+        meta + close + '</div>';
     }
     function wireForce() {
       var btns = document.querySelectorAll('[data-force]');
@@ -2935,27 +2921,16 @@ _DASHBOARD_HTML = r"""<!doctype html>
       var mode = modeWord();
       var live = mode === 'LIVE';
       el('fm-mode').innerHTML = '<span class="' + (live ? 'red' : 'blue') + '">MODE: ' + mode + '</span>';
-      if (side === 'CLOSE') {
-        el('fm-title').textContent = 'Close all ' + mode.toLowerCase() + ' positions?';
-        el('fm-kv').innerHTML = kv('Action', 'CLOSE ALL') + kv('Mode', mode) + kv('Scope', 'Cancel working orders + flatten');
-        el('fm-warn').textContent = live
-          ? 'LIVE MODE — this cancels real working orders and flattens a real broker position. This cannot be undone.'
-          : 'Paper mode — cancels working orders and flattens the simulated position.';
-        pendingForce = { action: 'CLOSE_ALL' };
-      } else {
-        var p = POINTS[sym] || POINTS.MES;
-        el('fm-title').textContent = 'Force ' + mode + ' ' + side + ' — ' + sym;
-        el('fm-kv').innerHTML =
-          kv('Mode', mode) + kv('Symbol', sym) + kv('Side', side) + kv('Contracts', '1') +
-          kv('Entry', 'Market') + kv('Stop', p.stop + ' pts') + kv('Target', p.target + ' pts') +
-          kv('Est. risk', '~' + money(p.stop * p.dollar) + ' / contract');
-        el('fm-warn').textContent = live
-          ? 'LIVE MODE — this places a REAL bracket order that bypasses all risk gates. Type confirms a real-money trade.'
-          : 'Paper / force mode — bypasses all risk gates. Server keeps OPEN disabled unless MANUAL_OPEN_ENABLED=true.';
-        pendingForce = { action: 'OPEN', direction: side, instrument: sym, contracts: 1 };
-      }
-      el('fm-confirm').className = 'btn ' + (side === 'CLOSE' ? 'danger' : (side === 'LONG' ? 'long' : 'short'));
-      el('fm-confirm').textContent = side === 'CLOSE' ? 'CONFIRM CLOSE' : ('CONFIRM ' + mode + ' ' + side);
+      // CLOSE_ALL is the only manual action — force-OPEN was removed.
+      if (side !== 'CLOSE') return;
+      el('fm-title').textContent = 'Close all ' + mode.toLowerCase() + ' positions?';
+      el('fm-kv').innerHTML = kv('Action', 'CLOSE ALL') + kv('Mode', mode) + kv('Scope', 'Cancel working orders + flatten');
+      el('fm-warn').textContent = live
+        ? 'LIVE MODE — this cancels real working orders and flattens a real broker position. This cannot be undone.'
+        : 'Paper mode — cancels working orders and flattens the simulated position.';
+      pendingForce = { action: 'CLOSE_ALL' };
+      el('fm-confirm').className = 'btn danger';
+      el('fm-confirm').textContent = 'CONFIRM CLOSE';
       el('fm-secret').value = '';
       el('fm-result').textContent = '';
       el('force-modal').classList.add('open');
@@ -3422,196 +3397,6 @@ def _broker_status() -> dict:
             return {"broker": "tradovate", "connected": False, "error": str(exc)}
     return {"broker": "paper", "connected": True, "position": None}
 
-
-# ── Manual market-order defaults (one-tap FORCE OPEN) ────────────────────────
-# Applied when a manual OPEN omits explicit prices: the entry is a market order
-# anchored to the last bar close, and the bracket is derived from these point
-# offsets. 7pt MES stop matches the system's sacred stop; 15pt target matches
-# risk_rules min_target_points[MES].
-_MANUAL_STOP_POINTS: dict[str, float] = {"MES": 7.0, "ES": 7.0, "MNQ": 7.0, "NQ": 7.0, "MGC": 5.0, "MCL": 0.30}
-_MANUAL_TARGET_POINTS: dict[str, float] = {"MES": 15.0, "ES": 15.0, "MNQ": 15.0, "NQ": 15.0, "MGC": 10.0, "MCL": 0.60}
-_MANUAL_TICK: dict[str, float] = {"MES": 0.25, "ES": 0.25, "MNQ": 0.25, "NQ": 0.25, "MGC": 0.10, "MCL": 0.01}
-
-
-def _round_to_tick(price: float, tick: float) -> float:
-    return round(round(price / tick) * tick, 4)
-
-
-def _current_market_price(instrument: str, max_age_s: float = 600.0) -> float | None:
-    """Last bar close for `instrument` from the most recent matching webhook.
-
-    Returns None when the matching bar is older than `max_age_s` — a manual
-    market order must not anchor its stop/target to a stale price (the entry
-    fills at live market, so a stale anchor would skew the bracket). 600s
-    matches the system's stale-bar gate.
-    """
-    latest = _latest_webhook_payload()
-    payload = latest.get("payload") or {}
-    close = latest.get("close") or payload.get("close")
-    ticker = (latest.get("ticker") or payload.get("ticker") or "").replace("1!", "").upper()
-    root = instrument.replace("1!", "").upper()
-    if not (close and ticker == root):
-        return None
-
-    received = latest.get("received_at")
-    if received:
-        try:
-            ts = datetime.fromisoformat(str(received).replace("Z", "+00:00"))
-            now = datetime.now(ts.tzinfo) if ts.tzinfo else datetime.utcnow()
-            if (now - ts).total_seconds() > max_age_s:
-                return None
-        except (ValueError, TypeError):
-            pass  # unparseable timestamp — fall through and trust the close
-
-    try:
-        return float(close)
-    except (TypeError, ValueError):
-        return None
-
-
-def _manual_rr_ratio(direction: str, entry: float, stop: float, target: float) -> float | None:
-    if direction == "LONG":
-        risk = entry - stop
-        reward = target - entry
-    else:
-        risk = stop - entry
-        reward = entry - target
-    if risk <= 0 or reward <= 0:
-        return None
-    return round(reward / risk, 4)
-
-
-def _manual_open(body: dict) -> dict:
-    """Force open a position manually, bypassing all risk gates.
-
-    Body fields:
-        direction   — "LONG" or "SHORT"  (required)
-        contracts   — number of contracts (int, default 1)
-        instrument  — ticker (default "MES")
-        entry/stop/target — optional explicit bracket prices (floats). When any
-            is omitted, MARKET MODE engages: a market entry is anchored to the
-            last bar close and a default bracket is derived from
-            _MANUAL_STOP_POINTS / _MANUAL_TARGET_POINTS.
-
-    Examples:
-        # One-tap market order (auto 7pt stop / 15pt target on MES)
-        curl ... -d '{"action":"OPEN","direction":"LONG"}'
-        # Explicit bracket
-        curl ... -d '{"action":"OPEN","direction":"LONG","entry":7625.0,"stop":7615.0,"target":7647.0}'
-    """
-    import os as _os
-    broker_type = _os.getenv("BROKER", "paper").strip().lower()
-    result: dict = {"action": "OPEN", "broker": broker_type}
-    if not _manual_open_enabled():
-        return {
-            **result,
-            "ok": False,
-            "error": "Manual OPEN is disabled. Set MANUAL_OPEN_ENABLED=true to re-enable it.",
-        }
-
-    def _broker_live_blocked(broker) -> bool:
-        return bool(getattr(broker, "is_live", False)) and not bool(
-            getattr(_config, "live_trading_enabled", False)
-        )
-
-    direction = str(body.get("direction", "")).upper().strip()
-    if direction not in ("LONG", "SHORT"):
-        return {**result, "ok": False, "error": "direction must be LONG or SHORT"}
-
-    contracts = int(body.get("contracts", 1) or 1)
-    instrument = str(body.get("instrument", "MES")).upper()
-    root = instrument.replace("1!", "").upper()
-
-    # Market mode: derive a market entry + default bracket when prices omitted.
-    raw_entry, raw_stop, raw_target = body.get("entry"), body.get("stop"), body.get("target")
-    if not all(value is not None for value in (raw_entry, raw_stop, raw_target)):
-        price = _current_market_price(instrument)
-        if price is None:
-            return {**result, "ok": False,
-                    "error": f"no_market_price_yet — no recent {root} bar to anchor a market order; wait for a webhook bar"}
-        tick = _MANUAL_TICK.get(root, 0.25)
-        stop_pts = _MANUAL_STOP_POINTS.get(root, 7.0)
-        target_pts = _MANUAL_TARGET_POINTS.get(root, 15.0)
-        entry = _round_to_tick(price, tick)
-        if direction == "LONG":
-            stop = _round_to_tick(price - stop_pts, tick)
-            target = _round_to_tick(price + target_pts, tick)
-        else:
-            stop = _round_to_tick(price + stop_pts, tick)
-            target = _round_to_tick(price - target_pts, tick)
-        result["mode"] = "market"
-        result["anchor_price"] = entry
-    else:
-        try:
-            entry = float(raw_entry)
-            stop = float(raw_stop)
-            target = float(raw_target)
-        except (TypeError, ValueError) as exc:
-            return {**result, "ok": False, "error": f"entry/stop/target must be numbers: {exc}"}
-
-    rr_ratio = _manual_rr_ratio(direction, entry, stop, target)
-    if rr_ratio is None:
-        return {**result, "ok": False, "error": "invalid bracket geometry for direction"}
-
-    result["order"] = {
-        "instrument": instrument,
-        "direction": direction,
-        "entry": entry,
-        "stop": stop,
-        "target": target,
-        "contracts": contracts,
-        "rr_ratio": rr_ratio,
-        "strategy": "manual_force_open",
-    }
-
-    from execution.broker_interface import BracketOrder
-    order = BracketOrder(
-        instrument=instrument,
-        direction=direction,
-        entry=entry,
-        stop=stop,
-        target=target,
-        rr_ratio=rr_ratio,
-        strategy="manual_force_open",
-        contracts=contracts,
-    )
-
-    if broker_type == "tradovate":
-        try:
-            from execution.tradovate_broker import TradovateBroker, TradovateConfig
-            broker = TradovateBroker(config=TradovateConfig.from_env())
-            if _broker_live_blocked(broker):
-                return {
-                    **result,
-                    "ok": False,
-                    "error": "LIVE_TRADING_BLOCKED — broker.is_live=True but live_trading_enabled=False",
-                }
-            fill = broker.execute_bracket(order)
-            result["ok"] = fill.result != "CANCELLED"
-            result["fill"] = {
-                "instrument": fill.instrument,
-                "direction": fill.direction,
-                "contracts": fill.contracts,
-                "entry_price": fill.entry_price,
-                "result": fill.result,
-            }
-            result["note"] = f"Manual {direction} bracket placed on {instrument} via Tradovate."
-            # Naked-bracket safety: if children didn't confirm, the broker has
-            # already auto-flattened the entry — surface that loudly.
-            if getattr(broker, "_last_bracket_confirmed", None) is False:
-                result["bracket_unconfirmed"] = True
-                result["auto_flattened"] = True
-                result["warning"] = (
-                    "Entry filled but stop/target NOT confirmed — position was AUTO-CLOSED "
-                    "for safety (no naked risk). Verify flat in Tradovate before retrying."
-                )
-        except Exception as exc:
-            return {**result, "ok": False, "error": str(exc)}
-    else:
-        result["ok"] = False
-        result["error"] = "BROKER is not tradovate — manual OPEN requires a live broker."
-
-    return result
 
 
 def _manual_close_all() -> dict:
