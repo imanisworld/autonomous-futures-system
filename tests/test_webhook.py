@@ -130,6 +130,23 @@ def test_normalize_instrument(ticker, expected):
     assert normalize_instrument(ticker) == expected
 
 
+@pytest.mark.parametrize("ticker,expected", [
+    ("MES1!", "MES"),
+    ("MNQ1!", "MNQ"),
+    ("CME_MINI:MNQ1!", "MNQ"),
+    ("MESU2026", "MES"),     # real contract suffix (month code + year)
+    ("MNQ", "MNQ"),
+    ("ESTC", None),          # Elastic stock — NOT the ES future (the prefix bug)
+    ("NQXX", None),
+    ("AAPL", None),
+    ("ES1!", "ES"),          # e-mini recognized (then RISK_REJECTED downstream)
+])
+def test_futures_root_exact_not_prefix(ticker, expected):
+    from webhook.state_builder import futures_root
+    roots = ("MNQ", "MES", "ES", "NQ", "MGC", "MCL")
+    assert futures_root(ticker, roots) == expected
+
+
 # ─── state_builder: detect_session ────────────────────────────────────────────
 
 @pytest.mark.parametrize("iso,expected_session", [
@@ -221,10 +238,14 @@ def test_build_market_state_minimal_payload():
     state = build_market_state(payload)
     assert state.instrument == "MES"
     assert state.session == "new_york"
-    # Defaults: vwap falls back to close, orb falls back to high/low
-    assert state.vwap.value == 5240.5
-    assert state.orb.high == 5241.25
-    assert state.orb.low == 5239.5
+    # Missing structural levels FAIL CLOSED: the level value carries a harmless
+    # placeholder for the typed dataclass, but every derived comparison is
+    # "undefined" so no strategy gate can be satisfied off a fabricated level.
+    assert state.vwap.price_vs_vwap == "undefined"
+    assert state.vwap.holding is False
+    assert state.orb.status == "undefined"
+    assert state.previous_day.price_vs_pdh == "undefined"
+    assert state.previous_day.price_vs_pdl == "undefined"
 
 
 def test_build_market_state_auto_session_and_orb_status_when_payload_omits_both():
@@ -1323,120 +1344,30 @@ def test_doctor_command_prints_diagnostics(monkeypatch, tmp_path, capsys):
     assert "Webhook secret" in out
 
 
-def test_manual_open_explicit_prices_do_not_require_latest_webhook(monkeypatch):
+def test_manual_open_action_is_removed(monkeypatch, tmp_path):
+    """Manual force-OPEN was removed entirely — the endpoint must reject it,
+    and the bypass helpers must no longer exist."""
     import webhook.app as app_module
+    from fastapi.testclient import TestClient
 
-    monkeypatch.setenv("BROKER", "paper")
-    monkeypatch.setenv("MANUAL_OPEN_ENABLED", "true")
-    monkeypatch.setattr(
-        app_module,
-        "_current_market_price",
-        lambda instrument: pytest.fail("_current_market_price should not be called"),
+    _isolate_app_logs(monkeypatch, tmp_path)
+    monkeypatch.setenv("WEBHOOK_SECRET", "test-secret")
+    monkeypatch.setattr(app_module, "_configured_webhook_secret", lambda: "test-secret")
+
+    # The force-open code paths and their bypass helpers are gone.
+    assert not hasattr(app_module, "_manual_open")
+    assert not hasattr(app_module, "_manual_open_enabled")
+    assert not hasattr(app_module, "_current_market_price")
+
+    client = TestClient(app_module.app)
+    resp = client.post(
+        "/webhook/manual",
+        json={"action": "OPEN", "direction": "LONG", "instrument": "MES",
+              "entry": 5900.0, "stop": 5893.0, "target": 5915.0},
+        headers={"X-Webhook-Secret": "test-secret"},
     )
-
-    result = app_module._manual_open({
-        "direction": "LONG",
-        "instrument": "MES",
-        "entry": 5900.0,
-        "stop": 5893.0,
-        "target": 5915.0,
-    })
-
-    assert result["ok"] is False
-    assert "mode" not in result
-    assert "requires a live broker" in result["error"]
-
-
-def test_manual_open_market_mode_anchors_to_latest_matching_webhook(monkeypatch):
-    import webhook.app as app_module
-    from datetime import datetime, timezone
-
-    monkeypatch.setenv("BROKER", "paper")
-    monkeypatch.setenv("MANUAL_OPEN_ENABLED", "true")
-    fresh = datetime.now(timezone.utc).isoformat()
-    monkeypatch.setattr(app_module, "_latest_webhook_payload", lambda: {
-        "received_at": fresh,
-        "payload": {"ticker": "MES1!", "close": 5905.12},
-    })
-
-    result = app_module._manual_open({
-        "direction": "SHORT",
-        "instrument": "MES",
-    })
-
-    assert result["ok"] is False
-    assert result["mode"] == "market"
-    assert result["anchor_price"] == 5905.0
-    assert "requires a live broker" in result["error"]
-
-
-def test_manual_open_market_mode_rejects_stale_bar(monkeypatch):
-    """A market order must not anchor its bracket to a stale bar close."""
-    import webhook.app as app_module
-
-    monkeypatch.setenv("BROKER", "paper")
-    monkeypatch.setenv("MANUAL_OPEN_ENABLED", "true")
-    monkeypatch.setattr(app_module, "_latest_webhook_payload", lambda: {
-        "received_at": "2026-05-23T14:30:00+00:00",  # days old → stale
-        "payload": {"ticker": "MES1!", "close": 5905.12},
-    })
-
-    result = app_module._manual_open({
-        "direction": "SHORT",
-        "instrument": "MES",
-    })
-
-    assert result["ok"] is False
-    assert "mode" not in result
-    assert "no recent" in result["error"]
-
-
-def test_manual_open_disabled_by_default(monkeypatch):
-    import webhook.app as app_module
-
-    monkeypatch.setenv("BROKER", "tradovate")
-    monkeypatch.delenv("MANUAL_OPEN_ENABLED", raising=False)
-
-    result = app_module._manual_open({
-        "direction": "LONG",
-        "instrument": "MES",
-        "entry": 5900.0,
-        "stop": 5893.0,
-        "target": 5915.0,
-    })
-
-    assert result["ok"] is False
-    assert "disabled" in result["error"]
-
-
-def test_manual_open_blocks_live_broker_when_live_trading_disabled(monkeypatch):
-    import webhook.app as app_module
-    import execution.tradovate_broker as tradovate_module
-
-    class FakeTradovateBroker:
-        is_live = True
-
-        def __init__(self, config):
-            self.config = config
-
-        def execute_bracket(self, order):
-            pytest.fail("manual open must not execute when live trading is disabled")
-
-    monkeypatch.setenv("BROKER", "tradovate")
-    monkeypatch.setenv("MANUAL_OPEN_ENABLED", "true")
-    monkeypatch.setattr(app_module._config, "live_trading_enabled", False)
-    monkeypatch.setattr(tradovate_module, "TradovateBroker", FakeTradovateBroker)
-
-    result = app_module._manual_open({
-        "direction": "LONG",
-        "instrument": "MES",
-        "entry": 5900.0,
-        "stop": 5893.0,
-        "target": 5915.0,
-    })
-
-    assert result["ok"] is False
-    assert result["error"].startswith("LIVE_TRADING_BLOCKED")
+    assert resp.status_code == 410
+    assert "removed" in resp.json()["detail"].lower()
 
 
 def test_public_entry_flags_target_hit_negative_pnl():

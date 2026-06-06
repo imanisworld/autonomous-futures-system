@@ -9,7 +9,7 @@ def test_system_notifier_disabled_by_default(config):
     config.discord_notifications_enabled = False
     config.discord_webhook_url = "https://discord.test"
 
-    result = notify_system("IBKR heartbeat: connected", config=config)
+    result = notify_system("Broker heartbeat: connected", config=config)
 
     assert result.sent is False
     assert result.reason == "disabled"
@@ -26,9 +26,9 @@ def test_system_notifier_sends_when_configured(config):
     config.discord_notifications_enabled = True
     config.discord_webhook_url = "https://discord.test/webhook"
 
-    result = notify_system("IBKR heartbeat: connected", config=config, transport=transport)
+    result = notify_system("Broker heartbeat: connected", config=config, transport=transport)
 
     assert result.sent is True
     assert sent["url"] == "https://discord.test/webhook"
-    assert sent["body"] == {"content": "IBKR heartbeat: connected"}
+    assert sent["body"] == {"content": "Broker heartbeat: connected"}
     assert sent["headers"] == {"Content-Type": "application/json"}

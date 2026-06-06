@@ -15,6 +15,7 @@ Responsibilities:
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, time
 from zoneinfo import ZoneInfo
 
@@ -43,36 +44,61 @@ from webhook.payload import AlertPayload
 _ET = ZoneInfo("America/New_York")
 _UTC = ZoneInfo("UTC")
 
-# Root ticker symbols the system accepts, sorted longest-first for prefix matching.
+# Root ticker symbols the system trades, sorted longest-first.
 _KNOWN_INSTRUMENTS: tuple[str, ...] = tuple(
     sorted(("MNQ", "MES", "MGC", "MCL"), key=len, reverse=True)
 )
 
+# A real futures contract suffix: a CME month code (F G H J K M N Q U V X Z)
+# followed by 1-4 year digits, e.g. "M6" or "U2026". This is how we tell a
+# contract symbol (MESU2026) from a stock that merely shares a leading substring
+# (ESTC, NQXX) — substring matching would route those to futures by mistake.
+_CONTRACT_SUFFIX = re.compile(r"^[FGHJKMNQUVXZ]\d{1,4}$")
+
 
 # ─── Normalisation helpers ─────────────────────────────────────────────────────
 
-def normalize_instrument(ticker: str) -> str:
-    """
-    Convert a TradingView ticker to the canonical 3-letter instrument name.
+def futures_root(
+    ticker: str | None, roots: tuple[str, ...] = _KNOWN_INSTRUMENTS
+) -> str | None:
+    """Canonical futures root for `ticker`, or None if it isn't one of `roots`.
 
-    Uses prefix matching against known instruments so that futures contract
-    suffixes (month codes + year digits + "!") don't corrupt the base symbol.
+    Matches a root EXACTLY after stripping the exchange prefix and either the
+    continuous ('1!'/'!') or a month+year contract suffix. Substring matching is
+    deliberately avoided — a stock like ESTC or NQXX must never route to futures.
 
     Examples:
         "MNQ1!"          → "MNQ"
         "MNQU2026"       → "MNQ"
         "CME_MINI:MNQ1!" → "MNQ"
         "MES"            → "MES"
-        "MGC1!"          → "MGC"
+        "ESTC"           → None   (Elastic stock, not the ES future)
+        "AAPL"           → None
     """
-    if ":" in ticker:
-        ticker = ticker.split(":")[-1]
-    upper = ticker.upper()
-    for root in _KNOWN_INSTRUMENTS:   # longest-first; avoids prefix ambiguity
-        if upper.startswith(root):
+    if not ticker:
+        return None
+    sym = ticker.split(":")[-1].upper().strip()
+    if sym.endswith("1!"):
+        sym = sym[:-2]
+    sym = sym.rstrip("!")
+    for root in sorted(roots, key=len, reverse=True):  # longest-first
+        if sym == root:
             return root
-    # Unknown instrument — return as-is; RiskEngine will reject it.
-    return upper
+        if sym.startswith(root) and _CONTRACT_SUFFIX.match(sym[len(root):]):
+            return root
+    return None
+
+
+def normalize_instrument(ticker: str) -> str:
+    """Convert a TradingView ticker to the canonical instrument root.
+
+    Returns the matched root for a known futures contract; otherwise the
+    exchange-stripped upper symbol as-is, which the RiskEngine then rejects.
+    """
+    root = futures_root(ticker)
+    if root:
+        return root
+    return ticker.split(":")[-1].upper()
 
 
 def parse_timestamp(value: str) -> datetime:
@@ -224,25 +250,46 @@ def build_market_state(payload: AlertPayload) -> MarketState:
     session = payload.session or detect_session(ts)
 
     # ── Derived string flags ─────────────────────────────────────────────────
-    vwap_value = payload.vwap if payload.vwap is not None else payload.close
-    price_vs_vwap = (
-        "above" if payload.close > vwap_value else
-        "below" if payload.close < vwap_value else
-        "at"
-    )
+    # Missing structural levels must FAIL CLOSED — never silently substitute the
+    # current bar. A substituted level reads downstream as a real one: it can
+    # satisfy a directional gate or become a fabricated structural stop. When a
+    # level is absent we keep a harmless placeholder for the typed-float
+    # dataclass field but set the derived comparison to "undefined" — a neutral
+    # token every strategy gate treats as not-satisfied, so dependent setups
+    # don't fire. The placeholder is unreachable: all level arithmetic sits
+    # behind an "above"/"below" guard that "undefined" fails.
+    if payload.vwap is not None:
+        vwap_value = payload.vwap
+        price_vs_vwap = (
+            "above" if payload.close > vwap_value else
+            "below" if payload.close < vwap_value else
+            "at"
+        )
+    else:
+        vwap_value = payload.close   # placeholder; never used while undefined
+        price_vs_vwap = "undefined"
 
-    pdh = payload.previous_day_high if payload.previous_day_high is not None else payload.high
-    pdl = payload.previous_day_low  if payload.previous_day_low  is not None else payload.low
+    if payload.previous_day_high is not None:
+        pdh = payload.previous_day_high
+        price_vs_pdh = payload.price_vs_pdh or (
+            "above" if payload.close > pdh else
+            "below" if payload.close < pdh else "at"
+        )
+    else:
+        pdh = payload.close          # placeholder; never used while undefined
+        price_vs_pdh = payload.price_vs_pdh or "undefined"
+
+    if payload.previous_day_low is not None:
+        pdl = payload.previous_day_low
+        price_vs_pdl = payload.price_vs_pdl or (
+            "above" if payload.close > pdl else
+            "below" if payload.close < pdl else "at"
+        )
+    else:
+        pdl = payload.close          # placeholder; never used while undefined
+        price_vs_pdl = payload.price_vs_pdl or "undefined"
+
     pdc = payload.previous_day_close if payload.previous_day_close is not None else payload.close
-
-    price_vs_pdh = payload.price_vs_pdh or (
-        "above" if payload.close > pdh else
-        "below" if payload.close < pdh else "at"
-    )
-    price_vs_pdl = payload.price_vs_pdl or (
-        "above" if payload.close > pdl else
-        "below" if payload.close < pdl else "at"
-    )
 
     # ── ORB levels — route by session ────────────────────────────────────────
     # London session uses the London ORB (Pine tracks it separately).
@@ -262,10 +309,16 @@ def build_market_state(payload: AlertPayload) -> MarketState:
         orb_h = payload.high
         orb_l = payload.low
         orb_status_val = "undefined"
-    else:
-        orb_h = payload.orb_high if payload.orb_high is not None else payload.high
-        orb_l = payload.orb_low  if payload.orb_low  is not None else payload.low
+    elif payload.orb_high is not None:
+        orb_h = payload.orb_high
+        orb_l = payload.orb_low if payload.orb_low is not None else payload.low
         orb_status_val = payload.orb_status or derive_orb_status(payload.close, orb_h, orb_l)
+    else:
+        # NY ORB not yet established — fail closed (mirror the London branch).
+        # Placeholder levels are never used while status is "undefined".
+        orb_h = payload.high
+        orb_l = payload.low
+        orb_status_val = payload.orb_status or "undefined"
 
     strat = build_strat_context(payload)
 

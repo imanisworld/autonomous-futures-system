@@ -248,7 +248,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         description="Replay one webhook payload fixture through webhook.app /webhook/alert.",
     )
     parser.add_argument("fixture", type=Path, help="Path to a concrete JSON webhook payload fixture.")
-    parser.add_argument("--broker", choices=["paper", "tradovate", "ibkr"], default=os.getenv("BROKER", "paper").lower())
+    parser.add_argument("--broker", choices=["paper", "tradovate"], default=os.getenv("BROKER", "paper").lower())
     parser.add_argument("--secret", default=None, help="Webhook secret to use; defaults to WEBHOOK_SECRET or a local harness secret.")
     parser.add_argument(
         "--log-dir",
