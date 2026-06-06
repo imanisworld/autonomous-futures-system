@@ -43,6 +43,29 @@ def test_replay_engine_runs_sample_day(config, tmp_path):
     assert (tmp_path / "replay_report_2026-05-23.md").exists()
 
 
+def test_replay_journal_preserves_historical_context_for_adaptive_committee(config, tmp_path):
+    source = Path("data/replay/sample_day_mnq.jsonl")
+    candles = [json.loads(line) for line in source.read_text().splitlines()]
+    report = ReplayEngine(config=config, log_dir=str(tmp_path)).run(
+        source,
+        review_date="2026-05-23",
+    )
+
+    entries = [
+        json.loads(line)
+        for line in Path(report.journal_path).read_text().splitlines()
+        if line.strip()
+    ]
+    decisions = [entry for entry in entries if entry.get("decision")]
+    outcomes = [entry for entry in entries if entry.get("type") == "OUTCOME"]
+
+    assert decisions[0]["ts"] == candles[0]["timestamp"]
+    assert decisions[0]["context"]["trend"]["strength"] == candles[0]["trend_strength"]
+    assert decisions[0]["context"]["vwap"]["value"] == candles[0]["vwap"]
+    assert decisions[0]["context"]["volume"]["current_bar"] == candles[0]["volume"]
+    assert outcomes[0]["ts"] in {candle["timestamp"] for candle in candles}
+
+
 def test_replay_stops_after_max_trades(config, tmp_path):
     from datetime import datetime, timedelta
 

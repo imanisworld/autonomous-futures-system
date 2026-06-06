@@ -16,6 +16,8 @@ from datetime import date
 from context.trend import classify_trend, has_ema_inputs
 from execution.broker_interface import BracketOrder
 from execution.paper_broker import NextBarOHLC, PaperBroker
+from replay.candle_loader import ReplayCandleLoader
+from scripts.csv_to_replay import _infer_timeframe, convert, htf_at
 
 
 # ─── Trend: scale-free EMA stack ──────────────────────────────────────────────
@@ -173,3 +175,31 @@ def test_required_instruments_present_in_config():
     assert set(["MES", "MNQ"]).issubset(set(cfg.required_instruments))
     missing = [s for s in cfg.required_instruments if s not in cfg.allowed_instruments]
     assert missing == []
+
+
+def test_csv_replay_accepts_hyphen_timeframe_and_ny_orb_columns(tmp_path):
+    csv_path = tmp_path / "CME_MINI_MNQ1-15.csv"
+    csv_path.write_text(
+        "time,open,high,low,close,NY ORB High,NY ORB Low,EMA 9,EMA 21,EMA 55,VWAP,Volume\n"
+        "2026-06-05T09:30:00-04:00,100,102,99,101,102,99,100,99,98,100.5,1000\n"
+    )
+
+    assert _infer_timeframe(csv_path) == "15m"
+    output = convert(csv_path, tmp_path / "converted")
+    candle = ReplayCandleLoader().load_jsonl(output)[0]
+
+    assert candle.timeframe == "15m"
+    assert candle.orb_high == 102
+    assert candle.orb_low == 99
+
+
+def test_csv_replay_only_exposes_completed_one_hour_bar():
+    bars = [
+        {"ts": 0, "label": "one_hour", "direction": "UP"},
+        {"ts": 3600, "label": "one_hour", "direction": "DOWN"},
+    ]
+
+    assert htf_at(bars, 3599) is None
+    assert htf_at(bars, 3600)["direction"] == "UP"
+    assert htf_at(bars, 7199)["direction"] == "UP"
+    assert htf_at(bars, 7200)["direction"] == "DOWN"

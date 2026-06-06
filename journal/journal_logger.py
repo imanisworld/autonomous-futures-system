@@ -90,13 +90,14 @@ class JournalLogger:
         pnl_dollars: Optional[float],
         contracts: int = 1,
         for_date: Optional[date] = None,
+        timestamp: Optional[datetime] = None,
     ) -> None:
         """
         Append a trade outcome entry to today's journal.
         Called after paper broker resolves a position.
         """
         entry = {
-            "ts": datetime.now(timezone.utc).isoformat(),
+            "ts": (timestamp or datetime.now(timezone.utc)).isoformat(),
             "type": "OUTCOME",
             "instrument": instrument,
             "session": session,

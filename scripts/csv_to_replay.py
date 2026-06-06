@@ -199,8 +199,15 @@ def direction_from_bar(bar_type: str | None, bar: dict) -> str | None:
 def htf_at(bars: list[dict], ts: int) -> dict | None:
     if not bars:
         return None
+    # load_htf_context labels hourly bars "1h" (not "one_hour") — include both
+    # so the close-delay below is actually applied to hourly HTF rows.
+    durations = {"1h": 3600, "one_hour": 3600, "4h": 4 * 3600,
+                 "daily": 24 * 3600, "1d": 24 * 3600}
+    duration = durations.get(str(bars[0].get("label")), 0)
     timestamps = [bar["ts"] for bar in bars]
-    idx = bisect.bisect_right(timestamps, ts) - 1
+    # TradingView timestamps HTF rows at bar open. Only expose a row after its
+    # bar has closed so lower-timeframe replay cannot see future HTF OHLC.
+    idx = bisect.bisect_right(timestamps, ts - duration) - 1
     if idx < 0:
         return None
     return bars[idx]
@@ -271,7 +278,7 @@ def _infer_timeframe(csv_path: Path) -> str:
     """Best-effort: look for a number after the last comma or space in the stem."""
     import re
     stem = csv_path.stem
-    match = re.search(r"[,\s](\d+)\s*$", stem)
+    match = re.search(r"[,_\s-](\d+)\s*$", stem)
     if match:
         return f"{match.group(1)}m"
     return "5m"
@@ -310,8 +317,8 @@ def convert(
             # Some TradingView exports omit volume when only indicator values are exported.
             # Use 1 so replay stays deterministic but does not fake volume confirmation.
             "volume": int(float(volume_raw or 1)),
-            "orb_high_raw": first_value(row, "ORB High", "OR High", "Orb High"),
-            "orb_low_raw": first_value(row, "ORB Low", "OR Low", "Orb Low"),
+            "orb_high_raw": first_value(row, "ORB High", "OR High", "Orb High", "NY ORB High"),
+            "orb_low_raw": first_value(row, "ORB Low", "OR Low", "Orb Low", "NY ORB Low"),
             "bt1": first_value(row, "Bar Type 1 Label", "BT1", "Type 1"),
             "bt2": first_value(row, "Bar Type 2 Label", "BT2", "Type 2"),
             "bt3": first_value(row, "Bar Type 3 Label", "BT3", "Type 3"),

@@ -129,12 +129,14 @@ class ReplayEngine:
             state = self._market_state_from_candle(candle, prev_candle)
             decision = decision_engine.evaluate(state, daily_state)
             risk_result_dict = None
+            journal_entry = decision.to_dict()
+            journal_entry["ts"] = candle.timestamp
+            journal_entry["context"] = self._adaptive_context(state)
 
             prev_candle = candle
 
             if decision.decision == "TRADE" and decision.setup is not None:
                 confluence = _score_setup(state, decision.setup)
-                journal_entry = decision.to_dict()
                 journal_entry["confluence"] = {
                     "score": confluence.score,
                     "grade": confluence.grade,
@@ -207,6 +209,7 @@ class ReplayEngine:
                             pnl_dollars=fill.pnl_dollars,
                             contracts=fill.contracts,
                             for_date=journal_date,
+                            timestamp=_parse_timestamp(fc.timestamp),
                         )
                         daily_state.trade_count += 1
                         daily_state.realized_pnl_dollars += float(fill.pnl_dollars or 0.0)
@@ -222,7 +225,7 @@ class ReplayEngine:
                         daily_state.has_open_position = True
                 continue
 
-            journal.log_decision(decision.to_dict(), risk_result_dict, for_date=journal_date)
+            journal.log_decision(journal_entry, risk_result_dict, for_date=journal_date)
 
         total_daily_capacity = (
             self.config.max_trades_per_day
@@ -452,6 +455,26 @@ class ReplayEngine:
             )) else None,
             raw=None,
         )
+
+    @staticmethod
+    def _adaptive_context(state: MarketState) -> dict:
+        """Journal the fields consumed by the read-only adaptive committee."""
+        return {
+            "market_condition": state.market_condition,
+            "trend": {
+                "direction": state.trend.direction if state.trend else None,
+                "strength": state.trend.strength if state.trend else None,
+            },
+            "vwap": {
+                "value": state.vwap.value,
+                "price_vs_vwap": state.vwap.price_vs_vwap,
+            },
+            "volume": {
+                "current_bar": state.volume.current_bar,
+                "avg_bar": state.volume.avg_bar,
+                "relative": state.volume.relative,
+            },
+        }
 
     def _htf_context_for(self, candle: ReplayCandle) -> Optional[HTFContext]:
         """
