@@ -120,3 +120,59 @@ def test_signa_enrichment_disabled_is_noop(config):
 
     assert result is None
     assert payload.signa_grade is None
+
+
+# Intended advisory FLOW watchlist — the liquid index/ETF option underlyings
+# (plus VIX) we'd surface in the FLOW tab if/when Signa API access is sorted.
+# Kept as a TEST-ONLY fixture; nothing here is wired into the live path.
+SIGNA_FLOW_WATCHLIST = ("SPY", "QQQ", "SPX", "SPXW", "VIX")
+
+
+def test_signa_flow_watchlist_advisory_fetch():
+    """Each FLOW watchlist symbol fetches + parses a directional signal."""
+    seen_syms = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen_syms.append(dict(request.url.params)["sym"])
+        return httpx.Response(200, json={
+            "ok": True,
+            "engine": {"grade": "B", "score": 70, "direction": "BULLISH"},
+        })
+
+    client = SignaClient(
+        api_key="test-key",
+        client=httpx.Client(
+            base_url="https://app.getsigna.ai",
+            transport=httpx.MockTransport(handler),
+        ),
+    )
+
+    for sym in SIGNA_FLOW_WATCHLIST:
+        signal = client.fetch_signal(sym)
+        assert signal.ok is True
+        assert signal.symbol == sym
+        assert signal.daily_direction == "UP"
+
+    assert seen_syms == list(SIGNA_FLOW_WATCHLIST)
+
+
+def test_signa_flow_watchlist_degrades_safely_on_auth_failure():
+    """A rejected/expired key (live state: HTTP 401) must degrade to a neutral
+    signal for every watchlist symbol — never raise, never block."""
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(401, json={"error": "unauthorized"})
+
+    client = SignaClient(
+        api_key="bad-key",
+        client=httpx.Client(
+            base_url="https://app.getsigna.ai",
+            transport=httpx.MockTransport(handler),
+        ),
+    )
+
+    for sym in SIGNA_FLOW_WATCHLIST:
+        signal = client.fetch_signal(sym)
+        assert signal.ok is False
+        assert signal.error == "http_401"
+        assert signal.grade is None
+        assert signal.to_payload_fields()["signa_grade"] is None
