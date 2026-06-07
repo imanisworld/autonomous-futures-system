@@ -31,10 +31,10 @@ instruments:
     - MNQ
 
 sessions:
-  allowed:
-    - asian       # Window-gated only — default blocked except session_windows.asian allow periods
-    - london      # 03:00–08:30 ET
-    - new_york    # 09:30–16:30 ET (entries cut at 14:00 via session_cutoffs_et)
+  allowed:                 # 24h coverage — every market-open hour is eligible
+    - asian       # 18:00–02:59 ET (overnight, from the daily reopen)
+    - london      # 03:00–09:29 ET (absorbs the old 08:30–09:30 pre-open gap)
+    - new_york    # 09:30–16:59 ET (through to the maintenance halt)
   disabled: []
 
 
@@ -42,25 +42,18 @@ sessions:
 # entries are blocked by default unless a matching window has allow: true.
 session_windows:
   asian:
-    - start: "17:00"
-      end: "22:00"
-      allow: true
-      note: "Evening test window — 5pm to 10pm ET (temporary; remove after testing)"
-    - start: "02:00"
-      end: "04:00"
-      allow: true
-      note: "London pre-open and overlap"
-    - default: false
+    - default: true   # 24h: asian fully open (18:00–03:00 ET). Trade count is
+                      # still capped by per_session_limits.asian + daily_limits.
 
 session_hours_et:
   london:
     start: "03:00"
-    end:   "08:30"
+    end:   "09:30"   # absorbs the old 08:30–09:30 pre-open gap
   new_york:
     start: "09:30"
-    end:   "16:30"   # entries stop at session_cutoffs_et.new_york (14:00)
+    end:   "17:00"   # through to the daily maintenance halt
   asian:
-    start: "19:00"
+    start: "18:00"   # the daily CME reopen
     end:   "03:00"
 
 # ─── Daily Limits ────────────────────────────────────────────
@@ -124,10 +117,13 @@ daily_limits:
     asian: 1                        # Protect NY budget from overnight fills
     london: 2
     new_york: 5                     # 3 normal + 2 bonus — must match total daily capacity
-  session_cutoffs_et:               # No new entries after this time (HH:MM ET)
-    london: "08:00"                 # Last call before NY gap
-    new_york: "14:00"               # NY open through early afternoon (extended from 11:30)
-    asian: "02:30"                  # Thin tape after 2:30 AM ET
+  session_cutoffs_et:               # No new entries after this time (HH:MM ET).
+    # 24h: cutoffs set to each session's END so no hour is cut mid-session.
+    # FOMC volatility is still protected independently by
+    # daily_limits.news_blackout_cutoff_et (13:30) on news_blackout_dates.
+    london: "09:30"                 # = london session end
+    new_york: "17:00"               # = new_york session end (maintenance halt)
+    asian: "03:00"                  # = asian session end
   min_target_points:                # Minimum target distance in instrument points
     MNQ: 15
     MES: 15                         # Aligned with MNQ — same structural requirement

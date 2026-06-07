@@ -121,20 +121,24 @@ def detect_session(ts: datetime) -> str:
     """
     Map a UTC datetime to a session name using ET market hours.
 
-    Asian:       19:00–02:59 ET (overnight)
-    London:      03:00–08:29 ET
-    Session gap: 08:30–09:29 ET
-    New York:    09:30–12:00 ET
-    Anything outside → "off_hours" (RiskEngine will block it)
+    Full coverage of the CME equity-index session (Sun 18:00 → Fri 17:00 ET,
+    with the daily 17:00–18:00 ET maintenance halt). Every hour the market is
+    open maps to a tradeable session; only the maintenance halt is off_hours:
+
+      Asian:    18:00–02:59 ET  (overnight, from the daily reopen)
+      London:   03:00–09:29 ET  (absorbs the old 08:30–09:30 pre-open gap)
+      New York: 09:30–16:59 ET  (through to the maintenance halt)
+      17:00–17:59 ET maintenance halt → "off_hours" (market closed; no bars)
+
+    Opening the *hours* does not open the floodgates — trade COUNT is still
+    bounded by daily_limits (max 3/day) and per_session_limits.
     """
     et_time = ts.astimezone(_ET).time()
-    if et_time >= time(19, 0) or et_time < time(3, 0):
+    if et_time >= time(18, 0) or et_time < time(3, 0):
         return "asian"
-    if time(3, 0) <= et_time < time(8, 30):
+    if time(3, 0) <= et_time < time(9, 30):
         return "london"
-    if time(8, 30) <= et_time < time(9, 30):
-        return "session_gap"
-    if time(9, 30) <= et_time < time(16, 30):
+    if time(9, 30) <= et_time < time(17, 0):
         return "new_york"
     return "off_hours"
 
