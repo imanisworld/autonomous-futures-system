@@ -59,15 +59,15 @@ def parse_time(value: str) -> tuple[int, datetime]:
 
 
 def detect_session(dt: datetime) -> str:
+    # Full-coverage CME session map — keep in sync with
+    # webhook.state_builder.detect_session.
     et = dt.astimezone(_ET).time()
     from datetime import time
-    if et >= time(19, 0) or et < time(3, 0):
+    if et >= time(18, 0) or et < time(3, 0):
         return "asian"
-    if time(3, 0) <= et < time(8, 30):
+    if time(3, 0) <= et < time(9, 30):
         return "london"
-    if time(8, 30) <= et < time(9, 30):
-        return "session_gap"
-    if time(9, 30) <= et < time(16, 30):
+    if time(9, 30) <= et < time(17, 0):
         return "new_york"
     return "off_hours"
 

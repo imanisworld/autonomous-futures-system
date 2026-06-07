@@ -152,11 +152,13 @@ def test_futures_root_exact_not_prefix(ticker, expected):
 @pytest.mark.parametrize("iso,expected_session", [
     ("2026-05-23T08:00:00+00:00", "london"),    # 04:00 ET
     ("2026-05-23T14:30:00+00:00", "new_york"),  # 10:30 ET
-    ("2026-05-23T01:00:00+00:00", "asian"),      # 21:00 ET prev day — inside Asian window
-    ("2026-05-23T12:30:00+00:00", "session_gap"), # 08:30 ET — gap before NY open
-    ("2026-05-23T13:00:00+00:00", "session_gap"), # 09:00 ET — gap before NY open
-    ("2026-05-23T17:30:00+00:00", "new_york"),  # 13:30 ET — afternoon NY window
-    ("2026-05-23T20:30:00+00:00", "off_hours"), # 16:30 ET — after NY close
+    ("2026-05-23T01:00:00+00:00", "asian"),      # 21:00 ET prev day — overnight asian
+    ("2026-05-23T12:30:00+00:00", "london"),    # 08:30 ET — old gap, now folded into london
+    ("2026-05-23T13:00:00+00:00", "london"),    # 09:00 ET — old gap, now london
+    ("2026-05-23T17:30:00+00:00", "new_york"),  # 13:30 ET — afternoon NY
+    ("2026-05-23T20:30:00+00:00", "new_york"),  # 16:30 ET — late NY (extended to 17:00)
+    ("2026-05-23T22:15:00+00:00", "asian"),     # 18:15 ET — the daily reopen (was off_hours)
+    ("2026-05-23T21:30:00+00:00", "off_hours"), # 17:30 ET — maintenance halt (market closed)
 ])
 def test_detect_session(iso, expected_session):
     ts = parse_timestamp(iso)
@@ -281,11 +283,12 @@ def test_build_market_state_asian_session_detected():
     assert state.session == "asian"
 
 
-def test_build_market_state_session_gap_forces_non_allowed_session():
-    # 13:00 UTC = 09:00 ET, explicitly inside the 08:30-09:30 gap.
+def test_build_market_state_pre_open_folds_into_london():
+    # 13:00 UTC = 09:00 ET — the old 08:30-09:30 gap is now folded into london
+    # (a tradeable session) under 24h coverage.
     payload = _base_payload(timestamp="2026-05-23T13:00:00+00:00")
     state = build_market_state(payload)
-    assert state.session == "session_gap"
+    assert state.session == "london"
 
 
 # ─── London ORB routing ───────────────────────────────────────────────────────

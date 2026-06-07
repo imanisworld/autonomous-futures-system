@@ -879,3 +879,37 @@ class TestSessionCutoffCrossMidnight:
         engine = self._engine(config)
         result = engine._check_session_cutoff(self._setup_at_et("new_york", 14, 30), DailyState())
         assert result is not None and result.failed_rule == "session_cutoff"
+
+
+def test_production_config_allows_24h_sessions():
+    """The live risk_rules.yaml must allow every market-open hour through all
+    three session gates: the 18:00 ET daily reopen, the deep overnight (23:00 ET
+    — the old session_windows hole), pre-open (09:00 ET, the old gap), and late
+    NY (16:30 ET). None should be session / window / cutoff rejected."""
+    from datetime import datetime, timezone
+    from config.settings import load_config
+
+    cfg = load_config()
+    engine = RiskEngine(config=cfg)
+
+    def setup_at(session: str, et_hour: int, et_min: int) -> TradeSetup:
+        # June = EDT (UTC-4); build a UTC entry_time for the given ET wall time.
+        utc_h = (et_hour + 4) % 24
+        et_time = datetime(2026, 6, 8, utc_h, et_min, tzinfo=timezone.utc)
+        return TradeSetup(
+            direction="LONG", entry=100.0, stop=99.0, target=103.0,
+            rr_ratio=3.0, strategy="t", instrument="MES",
+            session=session, entry_time=et_time,
+        )
+
+    for session, h, m in [
+        ("asian", 18, 15),    # the daily reopen (was off_hours / blocked)
+        ("asian", 23, 0),     # deep overnight (was the 22:00–02:00 window hole)
+        ("asian", 1, 0),      # pre-london overnight
+        ("london", 9, 0),     # pre-open (old 08:30–09:30 gap, now london)
+        ("new_york", 16, 30), # late NY (extended to 17:00)
+    ]:
+        s = setup_at(session, h, m)
+        assert engine._check_session(s, DailyState()) is None, (session, h, m)
+        assert engine._check_session_window(s, DailyState()) is None, (session, h, m)
+        assert engine._check_session_cutoff(s, DailyState()) is None, (session, h, m)
