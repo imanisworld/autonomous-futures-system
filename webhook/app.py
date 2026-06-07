@@ -49,6 +49,7 @@ from journal.journal_logger import JournalLogger
 from notifications.discord_notifier import notify_discord
 from webhook.payload import AlertPayload
 from webhook.reconciler import run_reconciler_loop
+from notifications.heartbeat import run_heartbeat_loop
 from webhook.runner import process_alert
 from webhook.state_builder import futures_root
 
@@ -268,6 +269,7 @@ async def _lifespan(app: FastAPI):
     background_tasks = [
         asyncio.create_task(run_tradovate_supervisor()),
         asyncio.create_task(run_reconciler_loop(_config, _config.log_dir)),
+        asyncio.create_task(run_heartbeat_loop(_config, _config.log_dir)),
     ]
     try:
         yield

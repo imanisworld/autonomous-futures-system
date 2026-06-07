@@ -177,6 +177,9 @@ class SystemConfig:
     discord_notifications_enabled: bool = False
     discord_webhook_url: str = ""
     discord_notify_decisions: List[str] = field(default_factory=lambda: ["TRADE", "RISK_REJECTED", "BLOCKED_MAX_TRADES", "BLOCKED_LOSS_LOCKOUT"])
+    # Hourly "still alive" heartbeat to Discord (off by default). Only sends while
+    # bars are actively arriving, so it stays quiet on weekends / the halt.
+    discord_heartbeat_enabled: bool = False
     # Independent live index quote (ES=F/NQ=F via Yahoo) for the Discord display price.
     live_quote_enabled: bool = True
 
@@ -342,6 +345,7 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         risk_rules_path=risk_rules_path,
 
         discord_notifications_enabled=_env_bool("DISCORD_NOTIFICATIONS_ENABLED", False),
+        discord_heartbeat_enabled=_env_bool("DISCORD_HEARTBEAT_ENABLED", False),
         discord_webhook_url=os.getenv("DISCORD_WEBHOOK_URL", "").strip(),
         discord_notify_decisions=_env_csv(
             "DISCORD_NOTIFY_DECISIONS",
