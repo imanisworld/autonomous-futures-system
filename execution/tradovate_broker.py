@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 import time
 from dataclasses import dataclass, field
 from typing import Optional
@@ -34,6 +35,24 @@ from execution.broker_interface import (
 )
 
 logger = logging.getLogger(__name__)
+
+AUTH_HEALTHY = "healthy"
+AUTH_TEMPORARY_FAILURE = "temporary_failure"
+AUTH_RATE_LIMITED = "rate_limited"
+AUTH_TOKEN_INVALID = "token_invalid"
+AUTH_CREDENTIALS_REJECTED = "credentials_rejected"
+AUTH_COOLDOWN = "cooldown"
+
+
+@dataclass(frozen=True)
+class AuthResult:
+    status: str
+    detail: Optional[str] = None
+    retry_after_seconds: Optional[int] = None
+
+    @property
+    def ok(self) -> bool:
+        return self.status == AUTH_HEALTHY
 
 # Per-instrument tick specs
 _TICK_SIZE: dict[str, float] = {
@@ -97,6 +116,45 @@ class _Token:
         return time.time() < (self.expires_at - buffer)
 
 
+# ─── Shared auth session (ONE Tradovate session per process) ────────────────────
+# Tradovate allows only TWO concurrent sessions per account. Every call to
+# /auth/accesstokenrequest opens a NEW session — so if each TradovateBroker
+# instance (webhook runner, dashboard checks, position resolution, manual
+# actions) authenticated independently, they'd evict each other AND the user's
+# browser login, surfacing as `not_authenticated`. We therefore SHARE one token
+# + one circuit breaker across all instances that use the same credentials, and
+# RENEW that token in place (/auth/renewAccessToken) instead of re-requesting a
+# brand-new session. Only a genuine renewal failure falls back to a fresh login.
+
+@dataclass
+class _SharedAuth:
+    token: Optional[_Token] = None
+    fail_count: int = 0
+    cooldown_until: float = 0.0
+    last_error: Optional[str] = None
+    last_renewed_at: Optional[float] = None
+    lock: threading.RLock = field(default_factory=threading.RLock)
+
+
+_SHARED_AUTH: dict[tuple, _SharedAuth] = {}
+_SHARED_AUTH_REGISTRY_LOCK = threading.Lock()
+
+
+def _get_shared_auth(key: tuple) -> _SharedAuth:
+    with _SHARED_AUTH_REGISTRY_LOCK:
+        st = _SHARED_AUTH.get(key)
+        if st is None:
+            st = _SharedAuth()
+            _SHARED_AUTH[key] = st
+        return st
+
+
+def _reset_shared_auth() -> None:
+    """Test helper — clear all process-shared Tradovate auth state."""
+    with _SHARED_AUTH_REGISTRY_LOCK:
+        _SHARED_AUTH.clear()
+
+
 # ─── Broker ───────────────────────────────────────────────────────────────────
 
 class TradovateBroker(BrokerInterface):
@@ -104,7 +162,11 @@ class TradovateBroker(BrokerInterface):
 
     def __init__(self, config: Optional[TradovateConfig] = None) -> None:
         self.config = config or TradovateConfig.from_env()
-        self._token: Optional[_Token] = None
+        # ONE shared session/token + circuit breaker per (env, account) so the
+        # whole process holds a SINGLE Tradovate session (see _SharedAuth above).
+        self._auth_state = _get_shared_auth(
+            (self.config.base_url, self.config.username, self.config.cid)
+        )
         self._session = requests.Session()
         self._session.headers.update({"Content-Type": "application/json"})
         self._last_position: Optional[Position] = None
@@ -117,14 +179,45 @@ class TradovateBroker(BrokerInterface):
         # Set after execute_bracket: did the protective stop+target children verify live?
         # None = not checked, True = both confirmed working, False = one/both missing (naked risk).
         self._last_bracket_confirmed: Optional[bool] = None
-        # Auth circuit breaker — after repeated failures, stop hammering
-        # /auth/accesstokenrequest so a rejected credential can't get the account
-        # locked by Tradovate. Reset on the first success.
-        self._auth_fail_count: int = 0
-        self._auth_cooldown_until: float = 0.0
-        self._last_auth_error: Optional[str] = None
+        # Auth circuit-breaker + token state now live in self._auth_state, shared
+        # across all instances with the same creds (see _SharedAuth). They are
+        # exposed via the _token / _auth_fail_count / _auth_cooldown_until /
+        # _last_auth_error properties below so existing callers keep working.
 
     # ── Auth ──────────────────────────────────────────────────────────────────
+
+    # Token + circuit-breaker state are process-shared (proxied to _auth_state).
+    @property
+    def _token(self) -> Optional[_Token]:
+        return self._auth_state.token
+
+    @_token.setter
+    def _token(self, value: Optional[_Token]) -> None:
+        self._auth_state.token = value
+
+    @property
+    def _auth_fail_count(self) -> int:
+        return self._auth_state.fail_count
+
+    @_auth_fail_count.setter
+    def _auth_fail_count(self, value: int) -> None:
+        self._auth_state.fail_count = value
+
+    @property
+    def _auth_cooldown_until(self) -> float:
+        return self._auth_state.cooldown_until
+
+    @_auth_cooldown_until.setter
+    def _auth_cooldown_until(self, value: float) -> None:
+        self._auth_state.cooldown_until = value
+
+    @property
+    def _last_auth_error(self) -> Optional[str]:
+        return self._auth_state.last_error
+
+    @_last_auth_error.setter
+    def _last_auth_error(self, value: Optional[str]) -> None:
+        self._auth_state.last_error = value
 
     # Auth circuit-breaker tuning.
     _AUTH_MAX_FAILURES = 3        # consecutive failures before backing off
@@ -142,16 +235,139 @@ class TradovateBroker(BrokerInterface):
                 self._auth_fail_count, reason, self._AUTH_COOLDOWN_SECONDS,
             )
 
+    @staticmethod
+    def _http_failure_result(exc: Exception, *, login: bool = False) -> AuthResult:
+        response = getattr(exc, "response", None)
+        status = getattr(response, "status_code", None)
+        if status == 429:
+            retry = None
+            try:
+                retry = int(response.headers.get("Retry-After"))
+            except (AttributeError, TypeError, ValueError):
+                pass
+            return AuthResult(AUTH_RATE_LIMITED, "HTTP 429", retry)
+        if status in {401, 403}:
+            kind = AUTH_CREDENTIALS_REJECTED if login else AUTH_TOKEN_INVALID
+            return AuthResult(kind, f"HTTP {status}")
+        if status is None or status >= 500:
+            return AuthResult(AUTH_TEMPORARY_FAILURE, str(exc))
+        return AuthResult(AUTH_TEMPORARY_FAILURE, f"HTTP {status}: {exc}")
+
+    @staticmethod
+    def _parse_expiry(expiry_raw) -> float:
+        """Parse Tradovate's expirationTime (ISO 8601 string, or ms number)."""
+        if not expiry_raw:
+            return time.time() + 3600
+        try:
+            from datetime import datetime
+            if isinstance(expiry_raw, str):
+                # Handle both +00:00 and Z suffixes.
+                return datetime.fromisoformat(expiry_raw.replace("Z", "+00:00")).timestamp()
+            # Fallback: treat as milliseconds if it's a number.
+            return float(expiry_raw) / 1000.0
+        except Exception:
+            return time.time() + 3600
+
+    def _apply_token(self, tok: _Token) -> None:
+        """Point THIS instance's HTTP session at the shared token, and make sure
+        the account id is resolved (so a brand-new instance reusing the shared
+        session is immediately usable)."""
+        self._session.headers["Authorization"] = f"Bearer {tok.access_token}"
+        if self._account_id is None:
+            self._resolve_account_id()
+
     def _authenticate(self) -> bool:
-        """Obtain or refresh access token. Returns True on success."""
-        if self._token and self._token.is_valid(self.config.token_refresh_buffer):
-            return True
+        return self.authenticate_result().ok
 
-        # Circuit breaker: after repeated failures, refuse to hit the auth API
-        # until the cooldown elapses so we don't get the account locked.
-        if time.time() < self._auth_cooldown_until:
-            return False
+    def authenticate_result(self) -> AuthResult:
+        """Ensure THIS instance has a usable Tradovate session.
 
+        Order of preference (all under a shared lock so only one session is ever
+        opened per process):
+          1. Reuse the shared token if still valid → just bind this session.
+          2. Honor the circuit breaker (don't hammer auth after repeated 401s).
+          3. RENEW the existing token in place (same session) if it's stale.
+          4. Only as a last resort, open a fresh session (accesstokenrequest).
+        """
+        with self._auth_state.lock:
+            tok = self._auth_state.token
+            # 1. Valid shared token → reuse it for this instance.
+            if tok and tok.is_valid(self.config.token_refresh_buffer):
+                self._apply_token(tok)
+                return AuthResult(AUTH_HEALTHY)
+
+            # 2. Circuit breaker: after repeated failures, refuse to hit the auth
+            # API until the cooldown elapses so we don't get the account locked.
+            if time.time() < self._auth_cooldown_until:
+                return AuthResult(
+                    AUTH_COOLDOWN,
+                    self._last_auth_error,
+                    max(1, int(self._auth_cooldown_until - time.time())),
+                )
+
+            # 3. Token exists but is stale → renew in place (keeps SAME session).
+            if tok is not None:
+                renewed = self.renew_token_result()
+                if renewed.ok:
+                    return renewed
+                # A timeout, 429, or provider outage must never create another
+                # Tradovate session. Only an explicitly invalid token may.
+                if renewed.status != AUTH_TOKEN_INVALID:
+                    return renewed
+
+            # 4. Last resort — no token, or renewal explicitly proved it invalid.
+            return self.login_result()
+
+    def _renew_token(self) -> bool:
+        return self.renew_token_result().ok
+
+    def renew_token_result(self) -> AuthResult:
+        """Extend the existing 90-minute token via /auth/renewAccessToken — this
+        keeps the SAME Tradovate session (no new session created). The classified
+        result lets callers distinguish an invalid token from a temporary outage."""
+        tok = self._auth_state.token
+        if tok is None:
+            return AuthResult(AUTH_TOKEN_INVALID, "no token")
+        url = f"{self.config.base_url}/auth/renewAccessToken"
+        try:
+            resp = self._session.get(
+                url, timeout=10,
+                headers={"Authorization": f"Bearer {tok.access_token}"},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            new_token = data.get("accessToken")
+            if not new_token:
+                logger.warning(
+                    "Tradovate token renewal returned no accessToken."
+                )
+                return AuthResult(AUTH_TOKEN_INVALID, "renewal returned no accessToken")
+            self._auth_state.token = _Token(
+                access_token=new_token,
+                expires_at=self._parse_expiry(data.get("expirationTime")),
+            )
+            self._apply_token(self._auth_state.token)
+            # Healthy renewal clears the breaker.
+            self._auth_fail_count = 0
+            self._auth_cooldown_until = 0.0
+            self._last_auth_error = None
+            self._auth_state.last_renewed_at = time.time()
+            logger.info("Tradovate token renewed in place (env=%s)", self.config.env)
+            return AuthResult(AUTH_HEALTHY)
+        except Exception as exc:
+            result = self._http_failure_result(exc)
+            logger.warning("Tradovate token renewal failed (%s): %s", result.status, exc)
+            return result
+
+    def _login(self) -> bool:
+        return self.login_result().ok
+
+    def login_result(self) -> AuthResult:
+        """Open a NEW Tradovate session via /auth/accesstokenrequest.
+
+        Each call creates a new session and Tradovate only allows two concurrent
+        — so this is the last resort, used only when there is no token or renewal
+        failed. Returns True on success."""
         url = f"{self.config.base_url}/auth/accesstokenrequest"
         body = {
             "name": self.config.username,
@@ -171,39 +387,85 @@ class TradovateBroker(BrokerInterface):
                 err = data.get("errorText", "no accessToken in response")
                 logger.error("Tradovate auth failed: %s", err)
                 self._note_auth_failure(f"rejected: {err}")
-                return False
-            # Tradovate returns expirationTime as ISO string e.g. "2026-06-02T18:31:28+00:00"
-            expiry_raw = data.get("expirationTime")
-            if expiry_raw:
-                try:
-                    from datetime import datetime, timezone
-                    if isinstance(expiry_raw, str):
-                        # Parse ISO 8601 — handle both +00:00 and Z suffixes
-                        expiry_str = expiry_raw.replace("Z", "+00:00")
-                        expires_at = datetime.fromisoformat(expiry_str).timestamp()
-                    else:
-                        # Fallback: treat as milliseconds if it's a number
-                        expires_at = float(expiry_raw) / 1000.0
-                except Exception:
-                    expires_at = time.time() + 3600
-            else:
-                expires_at = time.time() + 3600
-            self._token = _Token(access_token=token, expires_at=expires_at)
-            self._session.headers["Authorization"] = f"Bearer {token}"
+                return AuthResult(AUTH_CREDENTIALS_REJECTED, str(err))
+            self._auth_state.token = _Token(
+                access_token=token,
+                expires_at=self._parse_expiry(data.get("expirationTime")),
+            )
+            self._apply_token(self._auth_state.token)
             # Success — clear the circuit breaker.
             self._auth_fail_count = 0
             self._auth_cooldown_until = 0.0
             self._last_auth_error = None
-            logger.info("Tradovate authenticated (env=%s)", self.config.env)
-            # Cache account ID
-            self._resolve_account_id()
-            return True
+            logger.info("Tradovate authenticated — new session (env=%s)", self.config.env)
+            return AuthResult(AUTH_HEALTHY)
         except Exception as exc:
-            status = getattr(getattr(exc, "response", None), "status_code", None)
-            reason = "credentials_rejected (401)" if status == 401 else f"error: {exc}"
-            logger.exception("Tradovate authentication error: %s", exc)
-            self._note_auth_failure(reason)
-            return False
+            result = self._http_failure_result(exc, login=True)
+            logger.warning("Tradovate authentication error (%s): %s", result.status, exc)
+            # Only rejected credentials count toward the 15-minute auth breaker.
+            # Provider outages and rate limits keep their own retry behavior.
+            if result.status == AUTH_CREDENTIALS_REJECTED:
+                self._note_auth_failure("credentials_rejected (401)")
+            return result
+
+    def keep_alive(self) -> bool:
+        return self.keep_alive_result().ok
+
+    def keep_alive_result(self) -> AuthResult:
+        """Background-timer entry point: keep the shared session token fresh so it
+        never expires from inactivity.
+
+        Renewing (/auth/renewAccessToken) extends the SAME session WITHOUT using
+        the API key, so as long as we renew before the ~90-min token lapses we
+        never re-login — which means the recurring API-key 401 (the key expiring)
+        never bites. Only if there is no token, or renewal explicitly proves the
+        session invalid, do we fall back to a fresh login. Temporary failures and
+        rate limits retain the existing session and retry later.
+        """
+        with self._auth_state.lock:
+            if self._auth_state.token is not None:
+                result = self.renew_token_result()
+                if result.ok or result.status != AUTH_TOKEN_INVALID:
+                    return result
+            if time.time() < self._auth_state.cooldown_until:
+                return AuthResult(
+                    AUTH_COOLDOWN,
+                    self._last_auth_error,
+                    max(1, int(self._auth_state.cooldown_until - time.time())),
+                )
+            return self.login_result()
+
+    def reliability_heartbeat(self) -> AuthResult:
+        """Confirm auth, account access, and position-state readability.
+
+        This is intentionally a small REST heartbeat. It never creates a fresh
+        session after a temporary provider/network failure.
+        """
+        auth = self.authenticate_result()
+        if not auth.ok:
+            return auth
+        try:
+            account_resp = self._session.get(f"{self.config.base_url}/account/list", timeout=8)
+            account_resp.raise_for_status()
+            accounts = account_resp.json()
+            if not isinstance(accounts, list) or not accounts:
+                return AuthResult(AUTH_TEMPORARY_FAILURE, "account/list returned no accounts")
+            self._account_id = accounts[0].get("id")
+
+            position_resp = self._session.get(f"{self.config.base_url}/position/list", timeout=8)
+            position_resp.raise_for_status()
+            if not isinstance(position_resp.json(), list):
+                return AuthResult(AUTH_TEMPORARY_FAILURE, "position/list returned malformed data")
+            return AuthResult(AUTH_HEALTHY)
+        except Exception as exc:
+            result = self._http_failure_result(exc)
+            if result.status == AUTH_TOKEN_INVALID and self._auth_state.token is not None:
+                # The heartbeat proved this cached bearer token is unusable.
+                # Mark it stale so the next supervised auth cycle renews it,
+                # then opens at most one replacement session if renewal confirms
+                # the invalid-token response.
+                self._auth_state.token.expires_at = 0.0
+            return result
 
     def _resolve_account_id(self) -> None:
         try:
@@ -272,6 +534,11 @@ class TradovateBroker(BrokerInterface):
                         live_enabled,
                     )
                     return self._cancelled_fill(order, "LIVE_TRADING_NOT_ENABLED")
+
+            from execution.tradovate_supervisor import tradovate_order_ready
+            if not tradovate_order_ready():
+                logger.error("BLOCKED Tradovate order: reliability supervisor is not ready")
+                return self._cancelled_fill(order, "BROKER_NOT_READY")
 
             if not self._authenticate():
                 return self._cancelled_fill(order, "TRADOVATE_AUTH_FAILED")
@@ -418,25 +685,37 @@ class TradovateBroker(BrokerInterface):
         slippage of the safety-flatten is the price of never holding naked risk.
         """
         self._alert_naked_position(order, stop_ok=stop_ok, target_ok=target_ok)
+        close_confirmed = False
         try:
             flat = self.flatten_position()  # cancel-all + market liquidate
-            if flat.get("close_sent") or flat.get("cancelled_orders"):
+            # Only a CONFIRMED close (close_sent, per the failure-checked flatten)
+            # lets us claim flat. cancelled_orders alone is NOT a close.
+            close_confirmed = bool(flat.get("close_sent"))
+            if close_confirmed:
                 logger.error("NAKED POSITION auto-flattened for %s: %s", order.instrument, flat)
             else:
                 logger.critical(
-                    "NAKED POSITION flatten produced no close for %s — MANUAL INTERVENTION NEEDED: %s",
+                    "NAKED POSITION flatten produced no confirmed close for %s — "
+                    "treating as STILL OPEN; MANUAL VERIFICATION NEEDED: %s",
                     order.instrument, flat,
                 )
         except Exception as exc:
             logger.critical("CRITICAL: naked-position flatten FAILED for %s: %s", order.instrument, exc)
+            close_confirmed = False
+        # Fail CLOSED: if we could not confirm the close, assume the position is
+        # LIVE. Returning OPEN makes the runner track it (blocks new trades, keeps
+        # trying to resolve, surfaces it) instead of falsely booking it flat.
         return Fill(
             instrument=order.instrument,
             direction=order.direction,
             contracts=qty,
             entry_price=order.entry,
             exit_price=None,
-            exit_reason="NAKED_BRACKET_AUTO_FLATTENED",
-            result="CANCELLED",
+            exit_reason=(
+                "NAKED_BRACKET_AUTO_FLATTENED" if close_confirmed
+                else "NAKED_FLATTEN_UNCONFIRMED"
+            ),
+            result="CANCELLED" if close_confirmed else "OPEN",
             pnl_ticks=None,
             pnl_dollars=None,
         )
@@ -457,13 +736,20 @@ class TradovateBroker(BrokerInterface):
         except Exception as exc:
             logger.warning("naked-position Discord alert failed: %s", exc)
 
-    def get_position(self) -> Optional[Position]:
-        """Query Tradovate for open positions."""
+    def get_position_snapshot(self) -> tuple[bool, Optional[Position]]:
+        """Return ``(confirmed, position)`` from a direct Tradovate API read.
+
+        ``confirmed=True, position=None`` is the only definitive-flat result.
+        Authentication failures, API errors, and malformed responses return
+        ``confirmed=False`` so safety callers never mistake uncertainty for flat.
+        """
         try:
             if not self._authenticate():
-                return self._last_position
+                return False, self._last_position
             data = self._get("/position/list")
-            for pos in (data if isinstance(data, list) else []):
+            if not isinstance(data, list):
+                return False, self._last_position
+            for pos in data:
                 net = pos.get("netPos", 0)
                 if net == 0:
                     continue
@@ -484,10 +770,18 @@ class TradovateBroker(BrokerInterface):
                     open=True,
                 )
                 self._last_position = p
-                return p
+                return True, p
+            self._last_position = None
+            return True, None
         except Exception as exc:
             logger.warning("Tradovate get_position failed: %s", exc)
-        return self._last_position if (self._last_position and self._last_position.open) else None
+            cached = self._last_position if (self._last_position and self._last_position.open) else None
+            return False, cached
+
+    def get_position(self) -> Optional[Position]:
+        """Query Tradovate for an open position, retaining the legacy interface."""
+        _, position = self.get_position_snapshot()
+        return position
 
     def _contract_id_to_name(self, contract_id: int | None) -> str | None:
         """Reverse-lookup contract name from ID. Falls back to None."""
@@ -583,7 +877,21 @@ class TradovateBroker(BrokerInterface):
                     "admin": False,
                 })
                 logger.info("Tradovate liquidateposition response: %s", liq)
-                result["close_sent"] = True
+                # Tradovate can return HTTP 200 with a failure body (no exception),
+                # so a clean POST does NOT mean the position closed. Only report
+                # close_sent on a response with no failure marker — fail closed.
+                fail = None
+                if isinstance(liq, dict):
+                    fail = liq.get("failureReason") or liq.get("failureText") or liq.get("errorText")
+                if fail:
+                    logger.error(
+                        "Tradovate liquidate REJECTED for %s: %s — position NOT closed",
+                        pos.instrument, fail,
+                    )
+                    result["close_sent"] = False
+                    result["error"] = f"liquidate rejected: {fail}"
+                else:
+                    result["close_sent"] = True
 
             # Step 2 — after liquidation request, cancel any remaining working
             # orders (including bracket children that may still be live).

@@ -165,7 +165,9 @@ def test_handle_naked_position_survives_flatten_failure(monkeypatch):
         raise RuntimeError("liquidate failed")
 
     monkeypatch.setattr(broker, "flatten_position", _boom)
-    # Even if the flatten itself errors, we must not raise — return CANCELLED.
+    # Even if the flatten itself errors, we must not raise. And — fail CLOSED —
+    # an unconfirmed close must NOT be booked flat: return OPEN (assume the
+    # position is live) so the runner keeps tracking it for manual reconciliation.
     fill = broker._handle_naked_position(_BRACKET, qty=1, stop_ok=False, target_ok=False)
-    assert fill.result == "CANCELLED"
-    assert fill.exit_reason == "NAKED_BRACKET_AUTO_FLATTENED"
+    assert fill.result == "OPEN"
+    assert fill.exit_reason == "NAKED_FLATTEN_UNCONFIRMED"

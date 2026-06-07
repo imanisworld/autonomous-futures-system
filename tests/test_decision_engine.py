@@ -554,6 +554,14 @@ class TestStratWiring:
         # Clear ORB signals so only strat fires
         state.orb.status = "inside"
         state.market_condition = "TRENDING"
+        # Make the bar consistent with the strat direction. The base fixture is a
+        # bullish bar (close near the high); a SHORT strat anchors its entry to
+        # the bar LOW, so a close near the high is an unrealistic bearish bar and
+        # the entry-sanity guard rightly rejects it. Close near the low for a
+        # SHORT so the bracket straddles the live price as it would in reality.
+        if strat_kwargs.get("strat_direction") == "SHORT":
+            o = state.ohlc
+            o.close = round(o.low + (o.high - o.low) * 0.1, 4)
         return state
 
     def test_strat_212_fires_from_classified_long(self, strat_engine, fresh_market_state):

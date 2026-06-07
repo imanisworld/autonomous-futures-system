@@ -28,10 +28,24 @@ from risk.risk_engine import DailyState, TradeSetup
 def isolate_live_broker_env(monkeypatch):
     """Keep local live/demo broker settings from leaking into unit tests."""
     monkeypatch.setenv("BROKER", "paper")
+    monkeypatch.setenv("SITE_ACCESS_CODE", "")
     monkeypatch.setenv("TRADOVATE_API_KEY_ID", "0")
     monkeypatch.setenv("TRADOVATE_API_KEY_SECRET", "")
     monkeypatch.setenv("TRADOVATE_USERNAME", "")
     monkeypatch.setenv("TRADOVATE_PASSWORD", "")
+
+
+@pytest.fixture(autouse=True)
+def reset_tradovate_shared_auth():
+    """Clear the process-shared Tradovate auth state between tests so token /
+    circuit-breaker state never leaks across broker auth tests."""
+    from execution.tradovate_broker import _reset_shared_auth
+    from execution.tradovate_supervisor import reset_reliability_snapshot
+    _reset_shared_auth()
+    reset_reliability_snapshot()
+    yield
+    _reset_shared_auth()
+    reset_reliability_snapshot()
 
 
 # ─── Config Fixture ────────────────────────────────────────────────────────────
