@@ -199,8 +199,15 @@ def direction_from_bar(bar_type: str | None, bar: dict) -> str | None:
 def htf_at(bars: list[dict], ts: int) -> dict | None:
     if not bars:
         return None
+    # HTF rows are timestamped at bar OPEN. Only expose a row AFTER its bar has
+    # closed, so lower-timeframe replay cannot see future HTF OHLC (lookahead).
+    # Duration comes from the row label — load_htf_context labels hourly bars
+    # "1h" (NOT "one_hour"); include both so the delay is always applied.
+    durations = {"1h": 3600, "one_hour": 3600, "4h": 4 * 3600,
+                 "daily": 24 * 3600, "1d": 24 * 3600}
+    duration = durations.get(str(bars[0].get("label")), 0)
     timestamps = [bar["ts"] for bar in bars]
-    idx = bisect.bisect_right(timestamps, ts) - 1
+    idx = bisect.bisect_right(timestamps, ts - duration) - 1
     if idx < 0:
         return None
     return bars[idx]
