@@ -270,11 +270,6 @@ def test_build_market_state_price_vs_vwap_below():
     assert state.vwap.price_vs_vwap == "below"
 
 
-def test_build_market_state_session_override():
-    payload = _base_payload(session="london")
-    state = build_market_state(payload)
-    assert state.session == "london"
-
 
 def test_build_market_state_asian_session_detected():
     # 02:30 UTC = 22:30 ET → asian (19:00–03:00 ET)
@@ -296,7 +291,7 @@ def test_build_market_state_pre_open_folds_into_london():
 def test_london_orb_used_when_session_is_london():
     """When session=london and london_orb_* are present, ORBData uses London levels."""
     payload = _base_payload(
-        session="london",
+        timestamp="2026-05-23T09:00:00+00:00",  # 05:00 ET → london
         london_orb_high=19520.0,
         london_orb_low=19490.0,
         london_orb_status="reclaimed_high",
@@ -314,7 +309,7 @@ def test_london_orb_used_when_session_is_london():
 def test_london_orb_undefined_when_not_yet_established():
     """During London before ORB window closes, status must be 'undefined'."""
     payload = _base_payload(
-        session="london",
+        timestamp="2026-05-23T09:00:00+00:00",  # 05:00 ET → london
         london_orb_high=None,
         london_orb_low=None,
         london_orb_status=None,
@@ -343,7 +338,7 @@ def test_ny_orb_used_in_new_york_session():
 def test_london_orb_status_from_payload_not_recomputed():
     """london_orb_status from Pine is passed through verbatim."""
     payload = _base_payload(
-        session="london",
+        timestamp="2026-05-23T09:00:00+00:00",  # 05:00 ET → london
         london_orb_high=19510.0,
         london_orb_low=19480.0,
         london_orb_status="rejected_high",
