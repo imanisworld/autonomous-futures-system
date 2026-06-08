@@ -251,7 +251,10 @@ def build_market_state(payload: AlertPayload) -> MarketState:
     """
     ts = parse_timestamp(payload.timestamp)
     instrument = normalize_instrument(payload.ticker)
-    session = payload.session or detect_session(ts)
+    # Always use the server-side clock — Pine mislabels Sunday 18:00 ET reopen
+    # as "off_hours" because its session() function doesn't cover the Sun CME
+    # reopen as Asian. detect_session() is authoritative.
+    session = detect_session(ts)
 
     # ── Derived string flags ─────────────────────────────────────────────────
     # Missing structural levels must FAIL CLOSED — never silently substitute the
