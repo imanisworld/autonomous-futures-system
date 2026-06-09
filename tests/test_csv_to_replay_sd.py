@@ -46,3 +46,21 @@ def test_convert_carries_supply_demand_zones(tmp_path):
     assert first["supply_bottom"] == 19522.0
     assert first["demand_top"] == 19478.0
     assert first["demand_bottom"] == 19470.0
+
+
+from pathlib import Path as _Path
+
+from scripts.csv_to_replay import _infer_timeframe
+
+
+def test_infer_timeframe_handles_redownload_suffix():
+    # The bug: a re-downloaded export "..., 15 (1).csv" was mislabeled 5m,
+    # so every 15m bar got rejected as off-timeframe in replay.
+    assert _infer_timeframe(_Path("CME_MINI_MNQ1!, 15 (1).csv")) == "15m"
+    assert _infer_timeframe(_Path("CME_MINI_MES1!, 15 (2).csv")) == "15m"
+    assert _infer_timeframe(_Path("CME_MINI_MNQ1!, 240 (1).csv")) == "240m"
+    # Plain (no suffix) still works.
+    assert _infer_timeframe(_Path("CME_MINI_MNQ1!, 15.csv")) == "15m"
+    assert _infer_timeframe(_Path("CME_MINI_MES1!, 240.csv")) == "240m"
+    # No parseable number → conservative default unchanged.
+    assert _infer_timeframe(_Path("weird_name.csv")) == "5m"

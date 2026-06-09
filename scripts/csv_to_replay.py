@@ -285,10 +285,20 @@ def _infer_instrument(csv_path: Path) -> str:
 
 
 def _infer_timeframe(csv_path: Path) -> str:
-    """Best-effort: look for a number after the last comma or space in the stem."""
+    """Best-effort timeframe from a TradingView export filename.
+
+    TV exports as "SYMBOL, <timeframe>" (e.g. "CME_MINI_MNQ1!, 15"). A re-download
+    appends a duplicate-copy suffix like " (1)" / " (2)", which previously pushed
+    the digits off the end of the stem so the regex fell through to the "5m"
+    default — silently mislabeling a 15m export as 5m and getting every bar
+    rejected as off-timeframe. Strip that suffix first, then read the number.
+    """
     import re
     stem = csv_path.stem
-    match = re.search(r"[,\s](\d+)\s*$", stem)
+    # Drop a trailing duplicate-download suffix: " (1)", " (2)", ...
+    stem = re.sub(r"\s*\(\d+\)\s*$", "", stem)
+    # Prefer the timeframe number right after the comma; fall back to trailing number.
+    match = re.search(r",\s*(\d+)\s*$", stem) or re.search(r"[,\s](\d+)\s*$", stem)
     if match:
         return f"{match.group(1)}m"
     return "5m"
