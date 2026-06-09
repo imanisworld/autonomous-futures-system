@@ -195,6 +195,10 @@ class SystemConfig:
     signa_base_url: str = "https://app.getsigna.ai"
     signa_timeout_seconds: float = 3.0
     signa_symbol_map: dict = field(default_factory=dict)
+    # Shadow vs enforce: when False (default), Signa is fetched/journaled for
+    # observation but a FAIL never blocks a trade. Flip to True only after the
+    # accumulated shadow data proves Signa-aligned trades actually outperform.
+    signa_gate_enforced: bool = False
 
 
 # ─── Loader ──────────────────────────────────────────────────────────────────
@@ -360,8 +364,11 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         signa_timeout_seconds=float(os.getenv("SIGNA_TIMEOUT_SECONDS", "3") or 3),
         signa_symbol_map=_env_symbol_map(
             "SIGNA_SYMBOL_MAP",
-            {"MES": "SPY", "ES": "SPY", "MNQ": "QQQ", "NQ": "QQQ"},
+            # MES→ES (S&P future is in Signa's universe); MNQ→QQQ (NASDAQ futures
+            # NQ/NDX are NOT covered, QQQ ETF is the only working NASDAQ proxy).
+            {"MES": "ES", "ES": "ES", "MNQ": "QQQ", "NQ": "QQQ"},
         ),
+        signa_gate_enforced=_env_bool("SIGNA_GATE_ENFORCED", False),
     )
 
     _validate_config(config)
