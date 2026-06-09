@@ -45,7 +45,7 @@ def test_window_vetoes_chop_label_on_continuous_downtrend(tmp_path):
         current_bar_type="inside_bar", previous_bar_type="two_down",
         two_bars_back_type="inside_bar",
     )
-    result = process_alert(payload, config=_cfg(), log_dir=log_dir)
+    result = process_alert(payload, config=_cfg(), log_dir=log_dir, for_date=base.date())
 
     # The window read the continuous downtrend...
     assert result["window_direction"] == "DOWN"
@@ -58,11 +58,12 @@ def test_no_prior_history_leaves_window_none(tmp_path):
     """First bar for an instrument has no window — must not crash, window None."""
     log_dir = str(tmp_path / "logs")
     # Default _base_payload is a valid MNQ bar.
+    base = datetime(2026, 6, 5, 1, 0, tzinfo=timezone.utc)
     payload = _base_payload(
-        timestamp="2026-06-05T01:00:00+00:00",
+        timestamp=base.isoformat(),
         market_condition="CHOPPY", trend_direction="DOWN",
     )
-    result = process_alert(payload, config=_cfg(), log_dir=log_dir)
+    result = process_alert(payload, config=_cfg(), log_dir=log_dir, for_date=base.date())
     assert result["window_direction"] is None
 
 
@@ -78,6 +79,6 @@ def test_gap_surfaced_in_result(tmp_path):
         timestamp=(base + timedelta(minutes=60)).isoformat(),
         market_condition="TRENDING", trend_direction="DOWN",
     )
-    result = process_alert(payload, config=_cfg(), log_dir=log_dir)
+    result = process_alert(payload, config=_cfg(), log_dir=log_dir, for_date=base.date())
     assert result["bar_gap"]["gapped"] is True
     assert result["bar_gap"]["missing_bars"] == 3
