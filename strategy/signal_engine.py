@@ -308,8 +308,11 @@ class DecisionEngine:
                 confidence_score=0,
             )
 
+        # Signa is SHADOW by default: the status is still computed and recorded
+        # on every DecisionOutput below (for journaling/measurement), but a FAIL
+        # only blocks the trade when signa_gate_enforced is explicitly on.
         signa_gate = evaluate_signa(state, gate_direction)
-        if signa_gate.status == "FAIL":
+        if signa_gate.status == "FAIL" and getattr(self.config, "signa_gate_enforced", False):
             failed_gate = signa_gate.failed_gate or "SIGNA_FAIL"
             return DecisionOutput(
                 timestamp=now,

@@ -81,6 +81,7 @@ def test_daily_3_no_htf_agreement_is_restricted(fresh_market_state):
 
 
 def test_signa_c_rejected(config, fresh_market_state):
+    config.signa_gate_enforced = True  # this test covers ENFORCED behavior
     state = _base_long_state(fresh_market_state)
     state.signa.grade = "C"
 
@@ -92,6 +93,7 @@ def test_signa_c_rejected(config, fresh_market_state):
 
 
 def test_opposing_weekly_signa_rejected(config, fresh_market_state):
+    config.signa_gate_enforced = True  # this test covers ENFORCED behavior
     state = _base_long_state(fresh_market_state)
     state.signa.grade = "A"
     state.signa.weekly_direction = "DOWN"
@@ -101,6 +103,22 @@ def test_opposing_weekly_signa_rejected(config, fresh_market_state):
     assert decision.decision == "NO_TRADE"
     assert decision.signa_status == "FAIL"
     assert "SIGNA_WEEKLY_OPPOSES" in decision.failed_gates
+
+
+def test_signa_fail_is_shadow_by_default_does_not_block(config, fresh_market_state):
+    """Default (signa_gate_enforced=False): a Signa FAIL is still COMPUTED and
+    recorded for journaling/measurement, but it must NOT block the trade."""
+    assert config.signa_gate_enforced is False  # production default
+    state = _base_long_state(fresh_market_state)
+    state.signa.grade = "C"  # would FAIL the gate
+
+    decision = DecisionEngine(config=config).evaluate(state, DailyState())
+
+    # Trade is NOT blocked by Signa in shadow mode...
+    assert decision.decision == "TRADE"
+    assert "SIGNA_GRADE_FAIL" not in decision.failed_gates
+    # ...but the FAIL status is still surfaced so we can measure it later.
+    assert decision.signa_status == "FAIL"
 
 
 def test_mid_range_gex_rejected_watch_only(config, fresh_market_state):
