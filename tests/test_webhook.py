@@ -980,7 +980,7 @@ def test_fastapi_status_today_endpoint():
     assert resp.status_code == 200
     data = resp.json()
     assert data["live_trading_enabled"] is False
-    assert data["max_trades_per_day"] == 5  # 3 normal + 2 bonus
+    assert data["max_trades_per_day"] == 7  # 5 normal + 2 bonus
     assert "latest_entries" in data
     assert "top_no_trade_reasons" in data
     assert "diagnostics" in data
@@ -1529,7 +1529,7 @@ def test_fastapi_review_endpoint_returns_morning_preflight(monkeypatch, tmp_path
     data = resp.json()
     assert data["mode"] == "morning"
     assert data["preflight"]["paper_only"] is True
-    assert data["preflight"]["max_trades_per_day"] == 3
+    assert data["preflight"]["max_trades_per_day"] == 5
 
 
 def test_fastapi_review_endpoint_rejects_invalid_mode(monkeypatch, tmp_path):

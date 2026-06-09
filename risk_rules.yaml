@@ -58,7 +58,7 @@ session_hours_et:
 
 # ─── Daily Limits ────────────────────────────────────────────
 daily_limits:
-  max_trades_per_day: 3             # Hard ceiling, calendar-day reset
+  max_trades_per_day: 5             # Hard ceiling, calendar-day reset (raised 3->5: overnight/london trades were starving the NY session of budget; see 2026-06-09 backtest)
   max_consecutive_losses: 4        # Hard stop — no more trades today after 4 consecutive losses
   max_daily_loss: 150              # 10% of $1,500 starting balance
   max_drawdown_percent: 0.20       # Stop if account falls 20% from peak
@@ -116,7 +116,7 @@ daily_limits:
   per_session_limits:
     asian: 1                        # Protect NY budget from overnight fills
     london: 2
-    new_york: 5                     # 3 normal + 2 bonus — must match total daily capacity
+    new_york: 5                     # NY per-session cap; daily ceiling (max_trades_per_day=5, +2 bonus) still binds overall
   session_cutoffs_et:               # No new entries after this time (HH:MM ET).
     # 24h: cutoffs set to each session's END so no hour is cut mid-session.
     # FOMC volatility is still protected independently by
