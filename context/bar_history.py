@@ -30,9 +30,28 @@ from typing import List, Optional
 
 
 def _parse_dt(ts: str) -> Optional[datetime]:
-    """Parse an ISO timestamp to an aware UTC datetime; None on failure."""
+    """Parse an ISO or epoch timestamp to an aware UTC datetime; None on failure.
+
+    Epoch strings MUST be handled before fromisoformat: live TradingView
+    payloads carry epoch timestamps, and a 10-digit epoch-seconds value like
+    "1781011800" otherwise parses as basic-ISO "1781-01-18T00", silently
+    fragmenting bar history into one junk year-1781 file per bar — which
+    breaks the window_direction / gap-continuity reads.
+    """
     if not ts:
         return None
+    ts = ts.strip()
+    if ts.replace(".", "", 1).isdigit():
+        try:
+            value = float(ts)
+        except ValueError:
+            return None
+        if value > 1e12:  # epoch milliseconds
+            value /= 1000.0
+        try:
+            return datetime.fromtimestamp(value, tz=timezone.utc)
+        except (ValueError, OSError, OverflowError):
+            return None
     try:
         dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
     except (ValueError, AttributeError):
@@ -43,11 +62,12 @@ def _parse_dt(ts: str) -> Optional[datetime]:
 
 
 def _iso(ts) -> str:
-    """Normalize a timestamp (str or datetime) to an ISO string."""
+    """Normalize a timestamp (str, epoch, or datetime) to an ISO string."""
     if isinstance(ts, datetime):
         dt = ts if ts.tzinfo else ts.replace(tzinfo=timezone.utc)
         return dt.astimezone(timezone.utc).isoformat()
-    return str(ts)
+    parsed = _parse_dt(str(ts))
+    return parsed.isoformat() if parsed else str(ts)
 
 
 def _ts_date(ts) -> date:
