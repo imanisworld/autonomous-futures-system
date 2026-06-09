@@ -9,19 +9,39 @@
   "timeframe": "15",
   "avg_volume": 3800,
   "vwap": 19495.0,
+  "vwap_reclaimed": false,
+
+  "ema_9": 19500.0,
+  "ema_21": 19490.0,
+  "ema_55": 19470.0,
+  "ema_200": 19410.0,
+  "ema_9_above_21": true,
+  "hod": 19510.0,
+  "lod": 19475.0,
+
   "orb_high": 19498.0,
   "orb_low": 19462.0,
   "orb_status": "reclaimed_high",
+
   "market_condition": "TRENDING",
   "trend_direction": "UP",
   "trend_strength": "MODERATE",
+
   "previous_day_high": 19520.0,
   "previous_day_low": 19440.0,
   "previous_day_close": 19475.0,
+  "price_vs_pdh": "below",
+  "price_vs_pdl": "above",
+
   "current_bar_type": "two_up",
   "previous_bar_type": "inside_bar",
   "two_bars_back_type": "two_up",
   "strat_sequence": "strat_212",
   "strat_trigger": "continuation",
-  "strat_direction": "LONG"
+  "strat_direction": "LONG",
+
+  "supply_top": 19530.0,
+  "supply_bottom": 19522.0,
+  "demand_top": 19478.0,
+  "demand_bottom": 19470.0
 }

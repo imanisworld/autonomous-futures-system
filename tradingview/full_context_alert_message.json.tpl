@@ -10,6 +10,14 @@
   "avg_volume": 3800,
   "vwap": 19495.0,
 
+  "ema_9": 19500.0,
+  "ema_21": 19490.0,
+  "ema_55": 19470.0,
+  "ema_200": 19410.0,
+  "ema_9_above_21": true,
+  "hod": 19510.0,
+  "lod": 19470.0,
+
   "orb_high": 19498.0,
   "orb_low": 19462.0,
   "orb_status": "reclaimed_high",
@@ -57,8 +65,20 @@
   "ftfc_direction": "UP",
   "ftfc_aligned": true,
 
-  "supply_top": null,
-  "supply_bottom": null,
-  "demand_top": null,
-  "demand_bottom": null
+  "supply_top": 19530.0,
+  "supply_bottom": 19522.0,
+  "supply_wavg": 19526.0,
+  "demand_top": 19478.0,
+  "demand_bottom": 19470.0,
+  "demand_wavg": 19474.0,
+
+  "signa_grade": "B",
+  "signa_score": 6,
+  "signa_daily_direction": "UP",
+  "signa_weekly_direction": "UP",
+  "gex_regime": "positive",
+  "gex_flip": 19450.0,
+  "call_wall": 19600.0,
+  "put_wall": 19400.0,
+  "max_pain": 19500.0
 }
