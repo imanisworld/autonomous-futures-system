@@ -115,7 +115,7 @@ daily_limits:
   win_streak_bonus_min_grade: "A"      # minimum confluence grade required
   per_session_limits:
     asian: 1                        # Protect NY budget from overnight fills
-    london: 2
+    london: 1                       # was 2 — two london trades drained the daily budget before NY open (2026-06-09); overnight keeps its best shot, NY keeps >=1 normal trade
     new_york: 5                     # 3 normal + 2 bonus — must match total daily capacity
   session_cutoffs_et:               # No new entries after this time (HH:MM ET).
     # 24h: cutoffs set to each session's END so no hour is cut mid-session.
