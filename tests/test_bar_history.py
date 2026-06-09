@@ -101,3 +101,44 @@ class TestWindowDirection:
         # 4 of 5 steps up, net up → UP despite one down step.
         bars = [{"close": c} for c in (7500, 7510, 7520, 7515, 7530, 7545)]
         assert BarHistory.window_direction(bars) == "UP"
+
+
+class TestEpochTimestamps:
+    """Live TradingView payloads carry epoch timestamps. A 10-digit
+    epoch-seconds string like "1781011800" must NOT parse as basic-ISO
+    "1781-01-18" — that fragmented prod history into one junk year-1781
+    file per bar and broke window_direction/gap continuity (seen live
+    2026-06-09: 20 bars_*_1781-*.jsonl files on the box)."""
+
+    def test_epoch_seconds_lands_in_correct_date_file(self, tmp_path):
+        bh = BarHistory(log_dir=str(tmp_path))
+        # 1781044200 = 2026-06-09 22:30:00 UTC
+        bh.record("MES", ts="1781044200", open=7500, high=7501, low=7499,
+                  close=7500, volume=1000, timeframe="15")
+        files = sorted(p.name for p in tmp_path.glob("bars_MES_*.jsonl"))
+        assert files == ["bars_MES_2026-06-09.jsonl"], files
+
+    def test_epoch_millis_lands_in_correct_date_file(self, tmp_path):
+        bh = BarHistory(log_dir=str(tmp_path))
+        bh.record("MNQ", ts="1781044200000", open=29000, high=29001, low=28999,
+                  close=29000, volume=1000, timeframe="15")
+        files = sorted(p.name for p in tmp_path.glob("bars_MNQ_*.jsonl"))
+        assert files == ["bars_MNQ_2026-06-09.jsonl"], files
+
+    def test_epoch_bars_keep_window_continuity(self, tmp_path):
+        """Consecutive epoch-ts bars must land in ONE file so recent()
+        sees the full window (the broken behavior split them 1-per-file)."""
+        bh = BarHistory(log_dir=str(tmp_path))
+        base = 1781044200  # 2026-06-09 22:30:00 UTC
+        for i in range(4):
+            bh.record("MES", ts=str(base + 900 * i), open=7500, high=7501 + i,
+                      low=7499, close=7500 + i, volume=1000, timeframe="15")
+        recent = bh.recent("MES", 4, for_date=date(2026, 6, 9))
+        assert [b["close"] for b in recent] == [7500, 7501, 7502, 7503]
+
+    def test_iso_strings_still_work_unchanged(self, tmp_path):
+        bh = BarHistory(log_dir=str(tmp_path))
+        bh.record("MES", ts="2026-06-09T22:30:00+00:00", open=7500, high=7501,
+                  low=7499, close=7500, volume=1000, timeframe="15")
+        files = sorted(p.name for p in tmp_path.glob("bars_MES_*.jsonl"))
+        assert files == ["bars_MES_2026-06-09.jsonl"], files
