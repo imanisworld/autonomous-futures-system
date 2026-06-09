@@ -218,7 +218,12 @@ def process_alert(
     try:
         bar_hist = BarHistory(log_dir=log_dir)
         tf_min = _bar_timeframe_minutes(payload, cfg)
-        bar_gap = bar_hist.detect_gap(state.instrument, payload.timestamp, tf_min)
+        # Reference date for gap/window reads. Defaults to today (live behavior);
+        # an explicit for_date (replay/tests) anchors reads to the bar's own day so
+        # they don't depend on wall-clock now.
+        bar_gap = bar_hist.detect_gap(
+            state.instrument, payload.timestamp, tf_min, for_date=for_date
+        )
         bar_hist.record(
             state.instrument,
             ts=payload.timestamp,
@@ -231,7 +236,7 @@ def process_alert(
         )
         # Window regime: include this just-recorded bar in the lookback.
         state.window_direction = BarHistory.window_direction(
-            bar_hist.recent(state.instrument, 6)
+            bar_hist.recent(state.instrument, 6, for_date=for_date)
         )
     except Exception:  # noqa: BLE001 — fail-soft, never break ingestion
         logger.warning("bar history update failed", exc_info=True)
