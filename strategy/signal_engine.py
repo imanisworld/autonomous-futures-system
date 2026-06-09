@@ -119,9 +119,9 @@ class DecisionEngine:
     WINDOWS = {
         "opening":   {"start": "09:30", "end": "10:45", "allow": "all"},
         "mid_early": {"start": "10:45", "end": "11:30", "allow": "all"},   # opened — STRONG-trend quality gate still applies downstream
-        "mid_late":  {"start": "11:30", "end": "12:00", "allow": "none"},   # lunch block
+        "mid_late":  {"start": "11:30", "end": "12:00", "allow": "all"},    # opened (was lunch block) — full NY session tradeable
         "afternoon": {"start": "12:00", "end": "14:00", "allow": "all"},    # open afternoon
-        "late":      {"start": "14:00", "end": "16:00", "allow": "none"},
+        "late":      {"start": "14:00", "end": "16:00", "allow": "all"},    # opened (was afternoon block) — full NY session tradeable
     }
     _NY_RESTRICTED_STRAT_SEQUENCES = {"strat_212", "strat_122"}
 

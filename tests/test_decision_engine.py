@@ -136,12 +136,15 @@ class TestNewYorkEntryWindows:
 
     # ── mid_late (11:30–12:00): lunch block — hard blocked ───────────────────
 
-    def test_1130_is_now_mid_late_blocked(self, engine, fresh_market_state):
-        """11:30 ET is in mid_late (hard blocked) — lunch transition window."""
+    def test_1130_mid_late_now_open(self, engine, fresh_market_state):
+        """11:30 ET (former lunch block) is now OPEN — the full NY session is
+        tradeable; the window gate must not block."""
         state = self._at_et(fresh_market_state, 11, 30)
+        state.trend = TrendData(direction="UP", strength="STRONG", ema_fast_above_slow=True)
+        state.vwap.price_vs_vwap = "above"
+        state.orb.status = "reclaimed_high"
         decision = engine.evaluate(state, DailyState())
-        assert decision.decision == "NO_TRADE"
-        assert decision.reason == "NY session window blocked"
+        assert decision.reason != "NY session window blocked"
 
     # ── afternoon (12:00–14:00): open — all setups allowed ───────────────────
 
@@ -184,18 +187,23 @@ class TestNewYorkEntryWindows:
         decision = engine.evaluate(state, DailyState())
         assert decision.reason != "NY session window blocked"
 
-    def test_1400_late_blocks_entries(self, engine, fresh_market_state):
-        """14:00 ET is in the late window — hard blocked."""
+    def test_1400_late_now_open(self, engine, fresh_market_state):
+        """14:00 ET (former late block) is now OPEN — window gate must not block."""
         state = self._at_et(fresh_market_state, 14, 0)
+        state.trend = TrendData(direction="UP", strength="STRONG", ema_fast_above_slow=True)
+        state.vwap.price_vs_vwap = "above"
+        state.orb.status = "reclaimed_high"
         decision = engine.evaluate(state, DailyState())
-        assert decision.decision == "NO_TRADE"
-        assert decision.reason == "NY session window blocked"
+        assert decision.reason != "NY session window blocked"
 
-    def test_1530_late_blocks_entries(self, engine, fresh_market_state):
+    def test_1530_late_now_open(self, engine, fresh_market_state):
+        """15:30 ET (former late block) is now OPEN — window gate must not block."""
         state = self._at_et(fresh_market_state, 15, 30)
+        state.trend = TrendData(direction="UP", strength="STRONG", ema_fast_above_slow=True)
+        state.vwap.price_vs_vwap = "above"
+        state.orb.status = "reclaimed_high"
         decision = engine.evaluate(state, DailyState())
-        assert decision.decision == "NO_TRADE"
-        assert decision.reason == "NY session window blocked"
+        assert decision.reason != "NY session window blocked"
 
 
 class TestQualityGates:
@@ -697,14 +705,17 @@ class TestStrat4hrRetrigger:
         assert decision.decision == "TRADE"
         assert decision.setup.strategy == "strat_4hr_retrigger"
 
-    def test_1400_late_window_blocks_retrigger(self, retrigger_config):
-        """14:05 ET is in the late window (hard blocked) — strat_4hr_retrigger cannot fire."""
+    def test_1405_late_window_now_open(self, retrigger_config):
+        """14:05 ET (former late block) is now OPEN — the window gate no longer
+        blocks, so a setup can fire. (strat_4hr_retrigger has its own 9:30–11:00
+        gate, so at 14:05 orb_reclaim is what takes the trade — the point here is
+        only that the late window stopped blocking.)"""
         ts = datetime(2026, 5, 23, 18, 5, tzinfo=timezone.utc)  # 14:05 ET
         state = self._retrigger_state(ts)
         engine = DecisionEngine(config=retrigger_config)
         decision = engine.evaluate(state, DailyState())
-        assert decision.decision == "NO_TRADE"
-        assert decision.reason == "NY session window blocked"
+        assert decision.decision == "TRADE"
+        assert decision.reason != "NY session window blocked"
 
     def test_does_not_fire_on_moderate_trend(self, retrigger_config):
         """MODERATE trend — orb_reclaim fires, not strat_4hr_retrigger."""
