@@ -32,6 +32,16 @@ LOOKBACK = 20  # bars for rolling avg_volume
 
 
 
+def _opt_float(value: object) -> "float | None":
+    """Coerce a value to float, returning None for empty / unparseable input."""
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def parse_tradingview_time(value: str) -> int:
     value = str(value).strip()
     if value.isdigit():
@@ -317,8 +327,8 @@ def convert(
             # Some TradingView exports omit volume when only indicator values are exported.
             # Use 1 so replay stays deterministic but does not fake volume confirmation.
             "volume": int(float(volume_raw or 1)),
-            "orb_high_raw": first_value(row, "ORB High", "OR High", "Orb High"),
-            "orb_low_raw": first_value(row, "ORB Low", "OR Low", "Orb Low"),
+            "orb_high_raw": first_value(row, "NY ORB High", "London ORB High", "ORB High", "OR High", "Orb High"),
+            "orb_low_raw": first_value(row, "NY ORB Low", "London ORB Low", "ORB Low", "OR Low", "Orb Low"),
             "bt1": first_value(row, "Bar Type 1 Label", "BT1", "Type 1"),
             "bt2": first_value(row, "Bar Type 2 Label", "BT2", "Type 2"),
             "bt3": first_value(row, "Bar Type 3 Label", "BT3", "Type 3"),
@@ -327,6 +337,9 @@ def convert(
             "ema9": first_value(row, "EMA 9", "EMA9", "ema_9"),
             "ema21": first_value(row, "EMA 21", "EMA21", "ema_21"),
             "ema55": first_value(row, "EMA 55", "EMA55", "ema_55"),
+            "ema200": first_value(row, "EMA 200", "EMA200", "ema_200"),
+            "hod": first_value(row, "HOD", "Hod", "hod"),
+            "lod": first_value(row, "LOD", "Lod", "lod"),
         })
 
     # Detect day boundaries to track prev day high/low/close
@@ -437,6 +450,19 @@ def convert(
             "volume": bar["volume"],
             "avg_volume": avg_vol,
             "vwap": vwap,
+            # Derive the comparison the engine actually gates on (was missing →
+            # None → every VWAP/ORB setup silently skipped in replay).
+            "price_vs_vwap": (
+                "above" if bar["close"] > vwap
+                else ("below" if bar["close"] < vwap else "at")
+            ),
+            # Key levels — feed the confluence scorer (were absent → key_levels None)
+            "ema_9": _opt_float(bar.get("ema9")),
+            "ema_21": _opt_float(bar.get("ema21")),
+            "ema_55": _opt_float(bar.get("ema55")),
+            "ema_200": _opt_float(bar.get("ema200")),
+            "hod": _opt_float(bar.get("hod")),
+            "lod": _opt_float(bar.get("lod")),
             "orb_high": orb_high,
             "orb_low": orb_low,
             "orb_status": orb_status,

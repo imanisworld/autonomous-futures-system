@@ -123,6 +123,20 @@ class JournalLogger:
                 f.write(line + "\n")
         logger.error(line)
 
+    def log_scout(self, entry: dict, for_date: Optional[date] = None) -> None:
+        """Append a Scout classification entry (read-only context).
+
+        Tags the entry as an external Scout signal and writes it append-only.
+        This is context/audit output ONLY — it never places or authorizes a
+        trade. Fails closed (errors are swallowed, never raised to the caller).
+        """
+        record = dict(entry)
+        record["type"] = "SCOUT_SIGNAL"
+        record.setdefault("source", "scout")
+        record.setdefault("scout_trade_authorized", False)
+        record.setdefault("ts", datetime.now(timezone.utc).isoformat())
+        self._append(record, for_date)
+
     def claim_bar(
         self,
         *,
