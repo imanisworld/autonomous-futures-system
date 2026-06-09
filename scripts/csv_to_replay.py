@@ -340,6 +340,10 @@ def convert(
             "ema200": first_value(row, "EMA 200", "EMA200", "ema_200"),
             "hod": first_value(row, "HOD", "Hod", "hod"),
             "lod": first_value(row, "LOD", "Lod", "lod"),
+            "supply_top": first_value(row, "Supply Top", "supply_top"),
+            "supply_bottom": first_value(row, "Supply Bottom", "supply_bottom"),
+            "demand_top": first_value(row, "Demand Top", "demand_top"),
+            "demand_bottom": first_value(row, "Demand Bottom", "demand_bottom"),
         })
 
     # Detect day boundaries to track prev day high/low/close
@@ -463,6 +467,12 @@ def convert(
             "ema_200": _opt_float(bar.get("ema200")),
             "hod": _opt_float(bar.get("hod")),
             "lod": _opt_float(bar.get("lod")),
+            # Supply/demand zones — feed state.sd (were absent → sd None in replay,
+            # so the demand/supply context never reached the engine on historical data).
+            "supply_top": _opt_float(bar.get("supply_top")),
+            "supply_bottom": _opt_float(bar.get("supply_bottom")),
+            "demand_top": _opt_float(bar.get("demand_top")),
+            "demand_bottom": _opt_float(bar.get("demand_bottom")),
             "orb_high": orb_high,
             "orb_low": orb_low,
             "orb_status": orb_status,
