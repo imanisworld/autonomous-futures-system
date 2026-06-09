@@ -18,6 +18,7 @@ from context.market_context import (
     GEXContext,
     HTFContext,
     ICCContext,
+    KeyLevels,
     OHLCData,
     ORBData,
     PreviousDayData,
@@ -404,6 +405,7 @@ class ReplayEngine:
                 strength=candle.trend_strength,
             ),
             strat=strat,
+            key_levels=self._key_levels_from_candle(candle),
             gex=GEXContext(
                 gex_flip=candle.gex_flip,
                 call_wall=candle.call_wall,
@@ -483,6 +485,40 @@ class ReplayEngine:
         return None
 
     @staticmethod
+    @staticmethod
+    def _key_levels_from_candle(candle: ReplayCandle) -> Optional[KeyLevels]:
+        """Build KeyLevels from candle EMA/HOD/LOD — mirrors the live
+        webhook/state_builder._build_key_levels so replay scores confluence the
+        same way as production. Returns None when no level data is present."""
+        if not any(v is not None for v in (
+            candle.hod, candle.lod,
+            candle.ema_9, candle.ema_21, candle.ema_55, candle.ema_200,
+        )):
+            return None
+        ema_9_above_21 = (
+            candle.ema_9 > candle.ema_21
+            if candle.ema_9 is not None and candle.ema_21 is not None
+            else None
+        )
+        price_above_ema_55 = (
+            candle.close > candle.ema_55 if candle.ema_55 is not None else None
+        )
+        price_above_ema_200 = (
+            candle.close > candle.ema_200 if candle.ema_200 is not None else None
+        )
+        return KeyLevels(
+            hod=candle.hod,
+            lod=candle.lod,
+            ema_9=candle.ema_9,
+            ema_21=candle.ema_21,
+            ema_55=candle.ema_55,
+            ema_200=candle.ema_200,
+            ema_9_above_21=ema_9_above_21,
+            price_above_ema_55=price_above_ema_55,
+            price_above_ema_200=price_above_ema_200,
+        )
+
+    @staticmethod
     def _strat_context_from_candle(candle: ReplayCandle) -> Optional[StratContext]:
         """
         Build StratContext from a ReplayCandle.
@@ -492,15 +528,29 @@ class ReplayEngine:
         2. Auto-classify from bar OHLC history (previous_bar_high/low, two_bars_back_high/low)
         3. None — no strat context available (Phase 1 proxy strategies still fire)
         """
-        # If Pine provided explicit classification, use it directly.
+        # If Pine provided explicit classification, use it — but when the
+        # SEQUENCE is missing (bar types present, sequence absent — the common
+        # CSV case), classify it from bar history so the +3 strat confluence
+        # bonus and strat_* setups aren't silently disabled (mirrors live).
         if candle.current_bar_type is not None:
+            classified = None
+            if candle.strat_sequence is None and candle.previous_bar_high is not None:
+                classified = classify_from_ohlc(
+                    current_high=candle.high,
+                    current_low=candle.low,
+                    previous_high=candle.previous_bar_high,
+                    previous_low=candle.previous_bar_low,
+                    two_bars_back_high=candle.two_bars_back_high,
+                    two_bars_back_low=candle.two_bars_back_low,
+                    two_bars_back_type=candle.two_bars_back_type,
+                )
             return StratContext(
                 current_bar_type=candle.current_bar_type,
                 previous_bar_type=candle.previous_bar_type,
                 two_bars_back_type=candle.two_bars_back_type,
-                strat_sequence=candle.strat_sequence,
-                strat_trigger=candle.strat_trigger,
-                strat_direction=candle.strat_direction,
+                strat_sequence=candle.strat_sequence or (classified.strat_sequence if classified else None),
+                strat_trigger=candle.strat_trigger or (classified.strat_trigger if classified else None),
+                strat_direction=candle.strat_direction or (classified.strat_direction if classified else None),
             )
 
         # Auto-classify from OHLC history when available.

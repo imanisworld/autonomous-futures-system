@@ -41,6 +41,13 @@ class ReplayCandle:
     london_orb_high: Optional[float] = None
     london_orb_low: Optional[float] = None
     london_orb_status: Optional[str] = None
+    # Key levels (optional — EMAs + HOD/LOD; feed the confluence scorer)
+    ema_9: Optional[float] = None
+    ema_21: Optional[float] = None
+    ema_55: Optional[float] = None
+    ema_200: Optional[float] = None
+    hod: Optional[float] = None
+    lod: Optional[float] = None
     # Strat classification (optional — Phase 2; computed from bar history when present)
     current_bar_type: Optional[str] = None
     previous_bar_type: Optional[str] = None
@@ -218,6 +225,12 @@ class ReplayCandleLoader:
             london_orb_high=float(raw["london_orb_high"]) if raw.get("london_orb_high") is not None else None,
             london_orb_low=float(raw["london_orb_low"]) if raw.get("london_orb_low") is not None else None,
             london_orb_status=raw.get("london_orb_status"),
+            ema_9=_float_or_none(raw.get("ema_9")),
+            ema_21=_float_or_none(raw.get("ema_21")),
+            ema_55=_float_or_none(raw.get("ema_55")),
+            ema_200=_float_or_none(raw.get("ema_200")),
+            hod=_float_or_none(raw.get("hod")),
+            lod=_float_or_none(raw.get("lod")),
             current_bar_type=raw.get("current_bar_type"),
             previous_bar_type=raw.get("previous_bar_type"),
             two_bars_back_type=raw.get("two_bars_back_type"),
