@@ -280,14 +280,18 @@ strategy:
     - vwap_hold               # Price holding below VWAP in downtrend (two_down bar required)
     - pdh_reclaim             # Previous day high reclaimed
     - pdl_reclaim             # Previous day low reclaimed (breakdown)
-    - continuation_pullback   # Trend pullback to VWAP/EMA
     # ── The Strat patterns ───────────────────────────────────
     # Phase 1: approximated from single-bar market_state flags
     # Phase 2: full multi-bar Strat classification available
     - strat_122               # 1-2-2 reversal (1→2→reverse 2)
-    - strat_inside_break      # inside bar breakout with trend + VWAP filter
     - strat_4hr_retrigger     # 4HR re-trigger — 6 trades 83.3% WR (clean data). Re-enabled.
     # REMOVED — strat_outside_continuation: 0 trades in 237 replay days. Never fired.
+    # REMOVED — strat_inside_break: confirmed loser at SUFFICIENT sample on the
+    #   2yr Polygon dataset (553 session-days/instrument): MES 79tr 16.9% WR
+    #   -$4,138; MNQ 50tr 14.0% WR -$5,556. Negative on BOTH instruments.
+    # REMOVED — continuation_pullback: same dataset: MES 54tr 24.0% WR -$2,786;
+    #   MNQ 2tr -$141. (Curated 64-day set had it +$836 on 8 trades — the
+    #   small-sample noise the 2yr data resolves.)
   frequency: low                   # Bias toward selectivity
   no_trade_is_valid: true          # Explicit acknowledgment
 
