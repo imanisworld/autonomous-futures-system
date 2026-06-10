@@ -146,14 +146,21 @@ class PolygonFuturesClient:
         base_url: Optional[str] = None,
         timeout: float = 30.0,
         client: Optional[httpx.Client] = None,
-        max_retries: int = 3,
+        max_retries: int = 5,
         retry_sleep_seconds: float = 15.0,
+        min_request_interval: float = 0.0,
     ) -> None:
         self.api_key = (api_key if api_key is not None else os.getenv("POLYGON_API_KEY", "")).strip()
         self.base_url = (base_url or os.getenv("POLYGON_BASE_URL", "") or DEFAULT_BASE_URL).rstrip("/")
         self.timeout = timeout
         self.max_retries = max_retries
         self.retry_sleep_seconds = retry_sleep_seconds
+        # Proactive pacing for the free tier (~5 req/min): sleep so consecutive
+        # requests are at least this many seconds apart. Reactive 429 retries
+        # alone are not enough — a multi-contract bulk download bursts straight
+        # through the per-minute window. ~13s ≈ safely under 5/min.
+        self.min_request_interval = min_request_interval
+        self._last_request_at = 0.0
         self._client = client
 
     @property
@@ -165,6 +172,11 @@ class PolygonFuturesClient:
         headers = {"Authorization": f"Bearer {self.api_key}"}
         last_err: Optional[Exception] = None
         for attempt in range(self.max_retries + 1):
+            if self.min_request_interval > 0:
+                wait = self.min_request_interval - (_time.monotonic() - self._last_request_at)
+                if wait > 0:
+                    _time.sleep(wait)
+            self._last_request_at = _time.monotonic()
             try:
                 resp = client.get(url, params=params, headers=headers, timeout=self.timeout)
             except httpx.HTTPError as exc:
@@ -173,11 +185,13 @@ class PolygonFuturesClient:
                     _time.sleep(self.retry_sleep_seconds)
                 continue
             if resp.status_code == 429 and attempt < self.max_retries:
-                # Free tier rate limit — honor Retry-After when present.
+                # Free tier rate limit — honor Retry-After when present,
+                # otherwise back off harder each attempt (the per-minute
+                # window needs real time to drain, not a fixed short nap).
                 try:
-                    wait = float(resp.headers.get("Retry-After", self.retry_sleep_seconds))
-                except (TypeError, ValueError):
-                    wait = self.retry_sleep_seconds
+                    wait = float(resp.headers["Retry-After"])
+                except (KeyError, TypeError, ValueError):
+                    wait = self.retry_sleep_seconds * (attempt + 1)
                 _time.sleep(max(1.0, wait))
                 continue
             if resp.status_code != 200:

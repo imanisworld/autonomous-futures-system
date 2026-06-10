@@ -113,6 +113,23 @@ class TestFetchBars:
         bars = client.fetch_bars("MESM6", date(2026, 6, 9), date(2026, 6, 9))
         assert len(bars) == 1
 
+    def test_429_retries_then_succeeds(self):
+        ns = int(datetime(2026, 6, 9, 13, 0, tzinfo=timezone.utc).timestamp() * 1e9)
+        responses = [
+            httpx.Response(429, json={"status": "ERROR", "error": "rate limited"}),
+            httpx.Response(429, json={"status": "ERROR", "error": "rate limited"}),
+            httpx.Response(200, json={"results": [_row(ns)]}),
+        ]
+        def handler(request: httpx.Request) -> httpx.Response:
+            return responses.pop(0)
+        client = PolygonFuturesClient(
+            api_key="test-key",
+            client=httpx.Client(transport=httpx.MockTransport(handler)),
+            retry_sleep_seconds=0.01,
+        )
+        bars = client.fetch_bars("MESM6", date(2026, 6, 9), date(2026, 6, 9))
+        assert len(bars) == 1 and not responses  # consumed all three responses
+
     def test_http_error_raises_polygon_error(self):
         def handler(request: httpx.Request) -> httpx.Response:
             return httpx.Response(403, text="unauthorized")

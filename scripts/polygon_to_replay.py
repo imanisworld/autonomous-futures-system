@@ -313,7 +313,9 @@ def main(argv: list[str] | None = None) -> int:
     symbol = args.symbol.strip().upper()
     start = date.fromisoformat(args.start)
     end = date.fromisoformat(args.end)
-    client = PolygonFuturesClient()
+    # Free tier allows ~5 requests/min — pace a multi-contract bulk download
+    # so it never bursts into 429s (a 2-year pull is ~20 requests ≈ 4-5 min).
+    client = PolygonFuturesClient(min_request_interval=13.0)
     if not client.configured:
         print("[polygon] POLYGON_API_KEY not set", file=sys.stderr)
         return 1
