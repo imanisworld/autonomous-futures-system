@@ -101,10 +101,14 @@ class BarHistory:
         volume: Optional[float] = None,
         timeframe: Optional[str] = None,
         for_date: Optional[date] = None,
+        source: Optional[str] = None,
     ) -> dict:
         """Append one bar-close record. Idempotent on the LAST timestamp: if the
         most recent stored bar for this instrument/day has the same ts (a resend),
         it is NOT appended again. Returns the stored record.
+
+        `source` marks bars that did NOT arrive via live ingestion (e.g.
+        "polygon" backfill); live bars omit it.
         """
         d = for_date or _ts_date(ts)
         self.log_dir.mkdir(parents=True, exist_ok=True)
@@ -118,12 +122,65 @@ class BarHistory:
             "volume": None if volume is None else float(volume),
             "timeframe": timeframe,
         }
+        if source:
+            rec["source"] = source
         existing = self._read_bars(path)
         if existing and existing[-1].get("ts") == rec["ts"]:
             return existing[-1]
         with path.open("a") as f:  # path.open avoids the `open` param shadow
             f.write(json.dumps(rec) + "\n")
         return rec
+
+    def merge_backfill(
+        self,
+        instrument: str,
+        d: date,
+        bars: List[dict],
+        *,
+        source: str = "polygon",
+    ) -> int:
+        """Merge externally-sourced bars into one day file, GAPS ONLY.
+
+        Live ingestion appends in arrival order, so a backfilled bar (older
+        than the file tail) cannot simply be appended — it would corrupt the
+        chronological order recent()/window_direction rely on. This merges new
+        bars with the existing file, keeps EXISTING records on timestamp
+        collision (live data always wins), sorts by ts, and atomically rewrites
+        the file. Returns the number of bars actually added.
+
+        Offline-maintenance path only — not called by the live pipeline.
+        """
+        path = self._path_for(instrument, d)
+        existing = self._read_bars(path)
+        have = {b.get("ts") for b in existing}
+        added = []
+        for b in bars:
+            ts = _iso(b.get("ts"))
+            if ts in have:
+                continue
+            have.add(ts)
+            rec = {
+                "ts": ts,
+                "open": float(b["open"]),
+                "high": float(b["high"]),
+                "low": float(b["low"]),
+                "close": float(b["close"]),
+                "volume": None if b.get("volume") is None else float(b["volume"]),
+                "timeframe": b.get("timeframe"),
+                "source": source,
+            }
+            added.append(rec)
+        if not added:
+            return 0
+        merged = sorted(existing + added, key=lambda r: r.get("ts") or "")
+        self.log_dir.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".jsonl.tmp")
+        with tmp.open("w") as f:
+            for rec in merged:
+                f.write(json.dumps(rec) + "\n")
+        tmp.replace(path)
+        BarHistory._cache.pop(str(path), None)
+        return len(added)
 
     # ── read (cached) ──────────────────────────────────────────────────────────
     def _read_bars(self, path: Path) -> List[dict]:
