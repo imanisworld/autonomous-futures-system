@@ -85,7 +85,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     _load_env()
-    client = PolygonFuturesClient()
+    # Pace under the free tier's ~5 req/min so multi-instrument runs don't 429.
+    client = PolygonFuturesClient(min_request_interval=13.0)
     if not client.configured:
         print("[backfill] POLYGON_API_KEY not set — nothing to do", file=sys.stderr)
         return 1
