@@ -41,6 +41,17 @@ class SetupDetail:
     notes: Optional[str] = None
 
 
+@dataclass(frozen=True)
+class StrategyCandidate:
+    """A setup plus deterministic ranking metadata for opt-in portfolio selection."""
+    setup: SetupDetail
+    confluence_score: int
+    confluence_grade: str
+    rank_score: float
+    rank_reason: str
+    priority_index: int
+
+
 @dataclass
 class DecisionOutput:
     timestamp: datetime
@@ -163,6 +174,13 @@ class DecisionEngine:
         "MES": 0.25,
         "MGC": 0.10,
         "MCL": 0.01,
+    }
+
+    # Ranked-selection research weights. These are deliberately opt-in via
+    # strategy_selection_mode="ranked" and do not affect first-match/live default.
+    _RANK_EXPECTANCY_BONUS = {
+        ("MNQ", "strat_4hr_retrigger"): 80.0,
+        ("MNQ", "orb_reclaim"): 80.0,
     }
 
     def __init__(self, config: Optional[SystemConfig] = None):
@@ -330,7 +348,8 @@ class DecisionEngine:
 
         # ── Quality gate: trend strength ─────────────────────────────────────
         if self.config.require_strong_trend.get(state.instrument, False):
-            if not (state.trend and state.trend.strength == "STRONG"):
+            if not (state.trend and state.trend.strength == "STRONG") \
+                    and not self._admit_moderate(state):
                 actual = state.trend.strength if state.trend else "none"
                 return DecisionOutput(
                     timestamp=now,
@@ -418,7 +437,7 @@ class DecisionEngine:
                     ema_aligned = close > ema9 > ema21 > ema55
                 else:
                     ema_aligned = close < ema9 < ema21 < ema55
-                if not ema_aligned:
+                if not ema_aligned and not self._admit_moderate(state):
                     return DecisionOutput(
                         timestamp=now,
                         instrument=state.instrument,
@@ -433,6 +452,10 @@ class DecisionEngine:
                         failed_gates=failed_gates + ["EMA_STACK_NOT_ALIGNED"],
                         confidence_score=0,
                     )
+                if not ema_aligned:
+                    # Admitted MODERATE bar — record the soft miss for the journal
+                    # but let the setups decide (EXPERIMENT path only).
+                    failed_gates.append("EMA_STACK_NOT_ALIGNED_SOFT")
 
         # ── Strategy evaluation ───────────────────────────────────────────────
         setup = self._find_setup(state, condition, daily_state)
@@ -723,6 +746,41 @@ class DecisionEngine:
             f"'{state.session}' session windows{detail}."
         )
 
+    def _admit_moderate(self, state: MarketState) -> bool:
+        """EXPERIMENT gate: admit a MODERATE-trend bar past the two full-stack walls.
+
+        Two redundant gates normally require a full EMA stack (STRONG): the
+        trend-strength gate and the pre-setup EMA-stack-alignment gate. This
+        helper, per per-instrument flags, lets a MODERATE bar through *both* so
+        the individual setups become the deciders:
+
+          - allow_moderate_pullback → admit PULLBACK bars (stack intact, dip to
+            ema9 inside a confirmed trend).
+          - allow_moderate_early    → admit EARLY bars (trend forming, ema55 not
+            yet flipped).
+
+        With both on, "trade any MODERATE trend, not only STRONG." When
+        `moderate_pullback_require_vwap_align` is set, also require price on the
+        trend side of VWAP. All flags default off → no production behavior change.
+        """
+        trend = state.trend
+        if not trend or trend.strength != "MODERATE":
+            return False
+        if trend.direction not in ("UP", "DOWN"):
+            return False
+        kind = trend.moderate_kind
+        pull_ok = (kind == "PULLBACK"
+                   and self.config.allow_moderate_pullback.get(state.instrument, False))
+        early_ok = (kind == "EARLY"
+                    and self.config.allow_moderate_early.get(state.instrument, False))
+        if not (pull_ok or early_ok):
+            return False
+        if self.config.moderate_pullback_require_vwap_align.get(state.instrument, False):
+            want = "above" if trend.direction == "UP" else "below"
+            if state.vwap.price_vs_vwap != want:
+                return False
+        return True
+
     def _check_new_york_entry_window(self, state: MarketState) -> Optional[str]:
         if state.session != "new_york":
             return None
@@ -926,6 +984,10 @@ class DecisionEngine:
             self.config.disabled_concepts_per_instrument.get(state.instrument, [])
         )
 
+        if getattr(self.config, "strategy_selection_mode", "first_match") == "ranked":
+            candidate = self._find_ranked_setup(state, daily_state)
+            return candidate.setup if candidate is not None else None
+
         # Gate: if the ORB break has already been played in this direction,
         # block continuation strategies so we don't re-enter on every bar
         # that stays above/below the ORB. Pull-back strategies remain eligible.
@@ -975,6 +1037,125 @@ class DecisionEngine:
                 return self._enforce_min_target_distance(setup, state.instrument)
 
         return None
+
+    def collect_strategy_candidates(
+        self,
+        state: MarketState,
+        condition: str,
+        daily_state: Optional[DailyState] = None,
+    ) -> list[StrategyCandidate]:
+        """
+        Return every enabled setup candidate with ranking metadata.
+
+        This is the test/shadow path for moving from "first matching setup wins"
+        toward a measured strategy portfolio. It does not place trades, mutate
+        state, or alter default live behavior.
+        """
+        del condition  # retained for API symmetry with _find_setup
+        candidates: list[StrategyCandidate] = []
+        for priority_index, setup in self._iter_enabled_setups(state, daily_state):
+            candidates.append(self._score_strategy_candidate(state, setup, priority_index))
+        return sorted(
+            candidates,
+            key=lambda c: (c.rank_score, -c.priority_index),
+            reverse=True,
+        )
+
+    def _find_ranked_setup(
+        self,
+        state: MarketState,
+        daily_state: Optional[DailyState] = None,
+    ) -> Optional[StrategyCandidate]:
+        candidates = self.collect_strategy_candidates(state, "", daily_state)
+        return candidates[0] if candidates else None
+
+    def _iter_enabled_setups(
+        self,
+        state: MarketState,
+        daily_state: Optional[DailyState] = None,
+    ):
+        enabled = self.config.enabled_concepts
+        instrument_disabled = set(
+            self.config.disabled_concepts_per_instrument.get(state.instrument, [])
+        )
+
+        orb_continuation_blocked = False
+        if daily_state is not None:
+            if state.orb.status == "above" and daily_state.orb_break_long_played:
+                orb_continuation_blocked = True
+            elif state.orb.status == "below" and daily_state.orb_break_short_played:
+                orb_continuation_blocked = True
+
+        strategies = [
+            ("strat_4hr_retrigger", self._try_strat_4hr_retrigger),
+            ("strat_4hr_retrigger", self._try_strat_4hr_retrigger_short),
+            ("orb_breakout", self._try_orb_breakout),
+            ("orb_reclaim", self._try_orb_reclaim),
+            ("orb_rejection", self._try_orb_rejection),
+            ("vwap_reclaim", self._try_vwap_reclaim),
+            ("vwap_rejection", self._try_vwap_rejection),
+            ("vwap_hold", self._try_vwap_hold),
+            ("pdh_reclaim", self._try_pdh_reclaim),
+            ("pdl_reclaim", self._try_pdl_reclaim),
+            ("continuation_pullback", self._try_continuation_pullback),
+            ("strat_212", self._try_strat_212),
+            ("strat_122", self._try_strat_122),
+            ("strat_inside_break", self._try_strat_inside_break),
+            ("strat_outside_continuation", self._try_strat_outside_continuation),
+        ]
+
+        for priority_index, (name, fn) in enumerate(strategies):
+            if name not in enabled:
+                continue
+            if name in instrument_disabled:
+                continue
+            if orb_continuation_blocked and name not in self._ORB_PULLBACK_STRATEGIES:
+                continue
+            setup = fn(state)
+            if setup is not None:
+                yield priority_index, self._enforce_min_target_distance(setup, state.instrument)
+
+    def _score_strategy_candidate(
+        self,
+        state: MarketState,
+        setup: SetupDetail,
+        priority_index: int,
+    ) -> StrategyCandidate:
+        from strategy.confluence_scorer import score_setup
+
+        confluence = score_setup(state, setup)
+        expectancy_bonus = self._RANK_EXPECTANCY_BONUS.get(
+            (state.instrument, setup.strategy), 0.0
+        )
+        rank_score = (
+            (confluence.score * 100.0)
+            + (setup.rr_ratio * 10.0)
+            + expectancy_bonus
+            - priority_index
+        )
+        reason = (
+            f"ranked candidate: confluence {confluence.score}/10 {confluence.grade}, "
+            f"R:R {setup.rr_ratio:.2f}, expectancy_bonus {expectancy_bonus:.1f}, "
+            f"priority {priority_index}"
+        )
+        notes = f"{setup.notes} | {reason}" if setup.notes else reason
+        ranked_setup = SetupDetail(
+            direction=setup.direction,
+            entry=setup.entry,
+            stop=setup.stop,
+            target=setup.target,
+            rr_ratio=setup.rr_ratio,
+            strategy=setup.strategy,
+            notes=notes,
+        )
+        return StrategyCandidate(
+            setup=ranked_setup,
+            confluence_score=confluence.score,
+            confluence_grade=confluence.grade,
+            rank_score=rank_score,
+            rank_reason=reason,
+            priority_index=priority_index,
+        )
 
     def _enforce_min_target_distance(
         self, setup: SetupDetail, instrument: str

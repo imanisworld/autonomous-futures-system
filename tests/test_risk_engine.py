@@ -7,6 +7,8 @@ Each rule is tested: valid pass, and each failure mode.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 from risk.risk_engine import RiskEngine, DailyState, TradeSetup, RiskResult
 
@@ -629,6 +631,51 @@ class TestHetznerSafetyLayers:
         assert first_loss.approved
         assert second_loss.rejected
         assert second_loss.failed_rule == "max_daily_loss"
+
+    def test_profit_protect_threshold_allows_risk_within_current_profit(self, config, valid_trade_setup):
+        cfg = replace(config, daily_profit_protect_threshold=300)
+        setup = replace(
+            valid_trade_setup,
+            instrument="MNQ",
+            entry=19000.0,
+            stop=18950.0,
+            contracts=1,
+        )
+        engine = RiskEngine(config=cfg)
+
+        result = engine.validate(setup, DailyState(realized_pnl_dollars=300.0))
+
+        assert result.approved
+
+    def test_profit_protect_threshold_rejects_risk_over_current_profit(self, config, valid_trade_setup):
+        cfg = replace(config, daily_profit_protect_threshold=300)
+        setup = replace(
+            valid_trade_setup,
+            instrument="MNQ",
+            entry=19000.0,
+            stop=18800.0,
+            contracts=1,
+        )
+        engine = RiskEngine(config=cfg)
+
+        result = engine.validate(setup, DailyState(realized_pnl_dollars=300.0))
+
+        assert result.rejected
+        assert result.failed_rule == "profit_protect_gate"
+
+    def test_profit_protect_threshold_disabled_by_default(self, config, valid_trade_setup):
+        setup = replace(
+            valid_trade_setup,
+            instrument="MNQ",
+            entry=19000.0,
+            stop=18800.0,
+            contracts=1,
+        )
+        engine = RiskEngine(config=config)
+
+        result = engine.validate(setup, DailyState(realized_pnl_dollars=300.0))
+
+        assert result.approved
 
     def test_max_drawdown_rejects(self, config, valid_trade_setup):
         config.max_drawdown_percent = 0.20

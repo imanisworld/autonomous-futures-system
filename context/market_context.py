@@ -89,6 +89,7 @@ class TrendData:
     direction: Optional[str] = None        # UP | DOWN | SIDEWAYS
     strength: Optional[str] = None         # STRONG | MODERATE | WEAK
     ema_fast_above_slow: Optional[bool] = None
+    moderate_kind: Optional[str] = None    # PULLBACK | EARLY | None (only when MODERATE)
 
 
 @dataclass
@@ -377,6 +378,14 @@ class MarketStateLoader:
         trend = None
         if raw.get("trend"):
             t = raw["trend"]
+            # NOTE: this is the legacy CLI/dev path (main.py --market-state). It
+            # trusts the payload's trend.strength verbatim (predates the EMA-stack
+            # divergence fix that the LIVE path in webhook/state_builder applies),
+            # and does not compute trend.moderate_kind. Consequence: the MODERATE
+            # admission experiment (allow_moderate_pullback/early) is inert here —
+            # this path keeps the conservative STRONG-only behavior. The live
+            # futures-bot service runs through webhook/runner → build_market_state,
+            # which DOES populate moderate_kind, so production is unaffected.
             trend = TrendData(
                 direction=t.get("direction"),
                 strength=t.get("strength"),

@@ -38,7 +38,7 @@ DEFAULT_OUT_DIR = "logs/replay_comparison"
 DEFAULT_THRESHOLD = 300.0
 INSTRUMENTS = ["MES", "MNQ"]
 
-MODES = ["first_match", "ranked", "ranked_protect"]
+MODES = ["first_match", "mod_pullback", "mod_all"]
 
 
 # ─── Stats dataclass ──────────────────────────────────────────────────────────
@@ -56,6 +56,8 @@ class ModeStats:
     gross_losses: float
     days_at_goal: int
     skipped_by_gate: int
+    max_drawdown: float          # deepest peak-to-trough dip of the equity curve ($)
+    max_consec_losses: int       # longest run of consecutive losing trades
     strategy_counts: Dict[str, int]
 
     @property
@@ -114,6 +116,13 @@ def _collect_stats(
     total_pnl = gross_wins = gross_losses = 0.0
     strategy_counts: Dict[str, int] = defaultdict(int)
 
+    # Risk metrics tracked across the chronological (date-sorted) trade sequence.
+    equity = 0.0          # running cumulative P&L
+    equity_peak = 0.0     # highest equity seen so far
+    max_drawdown = 0.0    # deepest peak-to-trough dip ($, reported as a positive number)
+    consec_losses = 0     # current losing streak
+    max_consec_losses = 0
+
     for journal_path in journals:
         lines = [l for l in journal_path.read_text().splitlines() if l.strip()]
         entries = [json.loads(l) for l in lines]
@@ -154,9 +163,18 @@ def _collect_stats(
             if result == "WIN":
                 wins += 1
                 gross_wins += pnl_val
+                consec_losses = 0
             elif result == "LOSS":
                 losses += 1
                 gross_losses += pnl_val
+                consec_losses += 1
+                max_consec_losses = max(max_consec_losses, consec_losses)
+
+            # Update the equity curve per resolved trade (chronological).
+            if result in ("WIN", "LOSS"):
+                equity += pnl_val
+                equity_peak = max(equity_peak, equity)
+                max_drawdown = max(max_drawdown, equity_peak - equity)
 
             day_pnl += pnl_val
 
@@ -176,6 +194,8 @@ def _collect_stats(
         gross_losses=round(gross_losses, 2),
         days_at_goal=days_at_goal,
         skipped_by_gate=skipped_by_gate,
+        max_drawdown=round(max_drawdown, 2),
+        max_consec_losses=max_consec_losses,
         strategy_counts=dict(strategy_counts),
     )
 
@@ -284,6 +304,28 @@ def _print_report(
             goal_vals.append(f"{s.days_at_goal}/{s.days_run}{d}")
         row(f"Days ≥ ${goal_threshold:.0f}", goal_vals)
 
+        # Max drawdown (lower is better — show worsening as the signed delta)
+        dd_vals = []
+        for i, s in enumerate(stats_list):
+            if s is None:
+                dd_vals.append("—")
+                continue
+            base_dd = base.max_drawdown if base else s.max_drawdown
+            d = f" ({s.max_drawdown - base_dd:+,.0f})" if i > 0 and base else ""
+            dd_vals.append(f"${s.max_drawdown:>9,.2f}{d}")
+        row("Max drawdown", dd_vals)
+
+        # Max consecutive losses (lower is better)
+        mcl_vals = []
+        for i, s in enumerate(stats_list):
+            if s is None:
+                mcl_vals.append("—")
+                continue
+            base_mcl = base.max_consec_losses if base else s.max_consec_losses
+            d = f" ({s.max_consec_losses - base_mcl:+d})" if i > 0 and base else ""
+            mcl_vals.append(f"{s.max_consec_losses}{d}")
+        row("Max consec losses", mcl_vals)
+
         # Skipped by gate (only ranked_protect)
         gate_vals = []
         for s in stats_list:
@@ -365,13 +407,21 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"[comparison] Config error: {exc}", file=sys.stderr)
         return 1
 
+    insts = args.instruments
+    all_on = {i: True for i in insts}
     mode_configs = {
+        # Baseline: current production gate (STRONG trend required, both walls).
         "first_match": base_config,
-        "ranked": replace(base_config, strategy_selection_mode="ranked"),
-        "ranked_protect": replace(
+        # Admit MODERATE-PULLBACK only (confirmed-trend dip to ema9) past both walls.
+        "mod_pullback": replace(
             base_config,
-            strategy_selection_mode="ranked",
-            daily_profit_protect_threshold=args.threshold,
+            allow_moderate_pullback=all_on,
+        ),
+        # Admit ALL MODERATE (pullback + early) — "trade any moderate trend".
+        "mod_all": replace(
+            base_config,
+            allow_moderate_pullback=all_on,
+            allow_moderate_early=all_on,
         ),
     }
 
