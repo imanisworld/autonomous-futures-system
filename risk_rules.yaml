@@ -61,6 +61,7 @@ daily_limits:
   max_trades_per_day: 3             # Hard ceiling, calendar-day reset
   max_consecutive_losses: 4        # Hard stop — no more trades today after 4 consecutive losses
   max_daily_loss: 150              # 10% of $1,500 starting balance
+  daily_profit_protect_threshold: 0 # 0 = off. If set, only risk current green-day profit after this P&L.
   max_drawdown_percent: 0.20       # Stop if account falls 20% from peak
   circuit_breaker_losses: 2        # Temporary pause after 2 consecutive losses (30-min cooldown)
   circuit_breaker_pause_minutes: 30
@@ -270,6 +271,7 @@ market_condition:
 
 # ─── Strategy Concepts ───────────────────────────────────────
 strategy:
+  selection_mode: "ranked"         # first_match | ranked. Enabled: 555-day Polygon replay +$9,727 MNQ / +$2,461 MES vs first_match.
   enabled_concepts:
     # ── Core structural setups ────────────────────────────────
     - orb_breakout            # Initial break above ORB high (long) or below ORB low (short)
