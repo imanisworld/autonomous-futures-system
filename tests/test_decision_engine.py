@@ -425,6 +425,22 @@ class TestStrategyCandidateRanking:
         assert decision.setup is not None
         assert decision.setup.strategy == "orb_reclaim"
 
+    def test_ranked_selection_can_choose_better_candidate(self, config, fresh_market_state):
+        config.enabled_concepts = ["orb_reclaim", "vwap_reclaim"]
+        config.strategy_selection_mode = "ranked"
+        engine = DecisionEngine(config=config)
+
+        state = deepcopy(fresh_market_state)
+        state.instrument = "MES"  # no MNQ-specific expectancy bonus in this generic case
+        candidates = engine.collect_strategy_candidates(state, "TRENDING", DailyState())
+        decision = engine.evaluate(state, DailyState())
+
+        assert [c.setup.strategy for c in candidates[:2]] == ["vwap_reclaim", "orb_reclaim"]
+        assert decision.decision == "TRADE"
+        assert decision.setup is not None
+        assert decision.setup.strategy == "vwap_reclaim"
+        assert "ranked candidate" in (decision.setup.notes or "")
+
 
 class TestDecisionEngineRRFilter:
 
@@ -717,6 +733,24 @@ class TestStrat4hrRetrigger:
         decision = engine.evaluate(state, DailyState())
         assert decision.decision == "TRADE"
         assert decision.setup.strategy == "strat_4hr_retrigger"
+
+    def test_ranked_mode_applies_mnq_orb_reclaim_expectancy(self, retrigger_config):
+        """MNQ ranked mode can prefer high-expectancy orb_reclaim on overlap bars."""
+        retrigger_config.strategy_selection_mode = "ranked"
+        ts = datetime(2026, 5, 23, 13, 45, tzinfo=timezone.utc)  # 09:45 ET
+        state = self._retrigger_state(ts)
+        engine = DecisionEngine(config=retrigger_config)
+
+        candidates = engine.collect_strategy_candidates(state, "TRENDING", DailyState())
+        decision = engine.evaluate(state, DailyState())
+
+        assert [c.setup.strategy for c in candidates[:2]] == [
+            "orb_reclaim",
+            "strat_4hr_retrigger",
+        ]
+        assert decision.decision == "TRADE"
+        assert decision.setup.strategy == "orb_reclaim"
+        assert "expectancy_bonus 80.0" in (decision.setup.notes or "")
 
     def test_1405_late_window_now_open(self, retrigger_config):
         """14:05 ET (former late block) is now OPEN — the window gate no longer
