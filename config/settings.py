@@ -167,6 +167,13 @@ class SystemConfig:
     # account balance. None = no cap. Used to keep demo/live execution at 1
     # contract while the balance-tiered rules still scale paper sizing.
     max_contracts_hard_cap: Optional[int] = None
+    # Opt-in ranked strategy selection. "first_match" = default live behavior.
+    # "ranked" = score all candidates and pick the highest-ranked one.
+    strategy_selection_mode: str = "first_match"
+    # After daily P&L reaches this threshold, only allow a new trade if its
+    # planned max loss (stop_distance * point_value * contracts) does not exceed
+    # the current daily profit. 0 = disabled (default).
+    daily_profit_protect_threshold: float = 0.0
 
     # Paths
     log_dir: str = "logs"
@@ -308,6 +315,9 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
             if (os.getenv("MAX_CONTRACTS_HARD_CAP") or "").strip().isdigit()
             else position.get("max_contracts_hard_cap")
         ),
+        daily_profit_protect_threshold=float(
+            daily.get("daily_profit_protect_threshold", 0.0) or 0.0
+        ),
 
         require_entry=orders.get("require_entry", True),
         require_stop=orders.get("require_stop", True),
@@ -333,6 +343,9 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         non_tradable_states=condition.get("non_tradable_states", ["CHOPPY", "DEAD"]),
 
         enabled_concepts=strategy.get("enabled_concepts", []),
+        strategy_selection_mode=str(
+            strategy.get("selection_mode", "first_match") or "first_match"
+        ).lower(),
         disabled_concepts_per_instrument=strategy.get("disabled_concepts_per_instrument", {}),
 
         broker_priority=broker.get("broker_priority", ["paper", "tradovate"]),

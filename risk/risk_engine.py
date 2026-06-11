@@ -139,6 +139,7 @@ class RiskEngine:
             self._check_news_blackout,
             self._check_daily_trade_limit,
             self._check_daily_loss_limit,
+            self._check_profit_protect_gate,
             self._check_early_session_loss_floor,
             self._check_max_drawdown,
             self._check_circuit_breaker,
@@ -444,6 +445,38 @@ class RiskEngine:
                 )
         return None
 
+
+    # Point value per instrument (dollars per 1-point move, 1 contract).
+    _POINT_VALUES: Dict[str, float] = {"MES": 5.0, "MNQ": 2.0, "ES": 50.0, "NQ": 20.0}
+
+    def _check_profit_protect_gate(
+        self, setup: TradeSetup, daily_state: DailyState
+    ) -> Optional[RiskResult]:
+        """After daily P&L >= threshold, only allow trades whose planned risk ≤ daily profit."""
+        threshold = float(getattr(self.config, "daily_profit_protect_threshold", 0) or 0)
+        if threshold <= 0:
+            return None
+        day_pnl = daily_state.realized_pnl_dollars
+        if day_pnl < threshold:
+            return None
+        pv = self._POINT_VALUES.get(setup.instrument, 1.0)
+        contracts = max(1, int(setup.contracts or 1))
+        risk_distance = abs(
+            (setup.entry - setup.stop)
+            if setup.direction == "LONG"
+            else (setup.stop - setup.entry)
+        )
+        planned_risk = risk_distance * pv * contracts
+        if planned_risk > day_pnl:
+            return RiskResult(
+                result="REJECTED",
+                failed_rule="profit_protect_gate",
+                reason=(
+                    f"Profit protection: planned risk ${planned_risk:.2f} > "
+                    f"daily P&L ${day_pnl:.2f} (threshold ${threshold:.0f})"
+                ),
+            )
+        return None
 
     def _check_early_session_loss_floor(
         self, setup: TradeSetup, daily_state: DailyState
