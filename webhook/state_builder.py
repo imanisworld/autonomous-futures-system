@@ -35,7 +35,7 @@ from context.market_context import (
     VWAPData,
     VolumeData,
 )
-from context.trend import classify_trend, has_ema_inputs
+from context.trend import classify_trend, has_ema_inputs, moderate_subtype
 from strategy.strat_classifier import StratContext, classify_from_ohlc, classify_sequence
 from webhook.payload import AlertPayload
 
@@ -336,8 +336,12 @@ def build_market_state(payload: AlertPayload) -> MarketState:
     # metric whose STRONG threshold is unreachable on 15m micros, which silently
     # blocked every live entry). Fall back to the payload-provided trend only
     # when the EMA inputs are absent.
+    trend_moderate_kind = None
     if has_ema_inputs(payload.ema_9, payload.ema_21, payload.ema_55):
         trend_direction, trend_strength = classify_trend(
+            payload.close, payload.ema_9, payload.ema_21, payload.ema_55
+        )
+        trend_moderate_kind = moderate_subtype(
             payload.close, payload.ema_9, payload.ema_21, payload.ema_55
         )
     else:
@@ -385,6 +389,7 @@ def build_market_state(payload: AlertPayload) -> MarketState:
         trend=TrendData(
             direction=trend_direction,
             strength=trend_strength,
+            moderate_kind=trend_moderate_kind,
         ),
         strat=strat,
         gex=GEXContext(

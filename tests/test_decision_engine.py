@@ -413,6 +413,19 @@ class TestDecisionEngineORBSetup:
             assert decision.setup.strategy == "orb_rejection"
 
 
+class TestStrategyCandidateRanking:
+
+    def test_default_selection_keeps_first_matching_setup(self, config, fresh_market_state):
+        config.enabled_concepts = ["orb_reclaim", "vwap_reclaim"]
+        engine = DecisionEngine(config=config)
+
+        decision = engine.evaluate(deepcopy(fresh_market_state), DailyState())
+
+        assert decision.decision == "TRADE"
+        assert decision.setup is not None
+        assert decision.setup.strategy == "orb_reclaim"
+
+
 class TestDecisionEngineRRFilter:
 
     def test_trade_has_rr_above_minimum(self, engine, fresh_market_state):

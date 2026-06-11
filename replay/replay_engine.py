@@ -33,6 +33,7 @@ from execution.broker_interface import BracketOrder
 from execution.paper_broker import NextBarOHLC, PaperBroker
 from journal.journal_logger import JournalLogger
 from context.htf_loader import HTFLookup
+from context.trend import moderate_subtype
 from replay.candle_loader import ReplayCandle, ReplayCandleLoader
 from replay.manifest import ReplayManifest
 from replay.replay_report import MultiDayReplayReport, ReplayReport
@@ -403,6 +404,9 @@ class ReplayEngine:
             trend=TrendData(
                 direction=candle.trend_direction,
                 strength=candle.trend_strength,
+                moderate_kind=moderate_subtype(
+                    candle.close, candle.ema_9, candle.ema_21, candle.ema_55
+                ),
             ),
             strat=strat,
             key_levels=self._key_levels_from_candle(candle),

@@ -68,6 +68,46 @@ def classify_trend(
     return _SIDEWAYS, _WEAK
 
 
+def moderate_subtype(
+    close: float,
+    ema9: Optional[float],
+    ema21: Optional[float],
+    ema55: Optional[float],
+) -> Optional[str]:
+    """Sub-classify a MODERATE trend bar into PULLBACK vs EARLY.
+
+    A bar is MODERATE (not STRONG) for exactly one of two reasons — the full
+    stack ordering is broken in one of two distinct ways:
+
+        PULLBACK — the 9/21/55 stack is still fully ordered (ema9>ema21>ema55 up,
+                   or ema9<ema21<ema55 down) but price pulled back through ema9
+                   (close on the ema21 side of ema9). A dip inside a *confirmed*
+                   trend.
+
+        EARLY    — price and ema9 lead, but the slow ema55 hasn't flipped yet
+                   (ema21 not yet beyond ema55). The trend is *forming*, not
+                   confirmed.
+
+    Returns "PULLBACK", "EARLY", or None (bar is not MODERATE / inputs missing).
+    """
+    if ema9 is None or ema21 is None or ema55 is None:
+        return None
+
+    c, e9, e21, e55 = float(close), float(ema9), float(ema21), float(ema55)
+
+    direction, strength = classify_trend(c, e9, e21, e55)
+    if strength != _MODERATE:
+        return None
+
+    if direction == _UP:
+        stack_intact = e9 > e21 > e55
+        return "PULLBACK" if stack_intact else "EARLY"
+    if direction == _DOWN:
+        stack_intact = e9 < e21 < e55
+        return "PULLBACK" if stack_intact else "EARLY"
+    return None
+
+
 def has_ema_inputs(
     ema9: Optional[float], ema21: Optional[float], ema55: Optional[float]
 ) -> bool:
