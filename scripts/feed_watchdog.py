@@ -34,6 +34,19 @@ logger = logging.getLogger("feed_watchdog")
 _REMINDER_SECONDS = 2 * 3600  # while still down, re-alert at most every 2h
 
 
+def _router_send(cfg, content: str) -> NotificationResult:
+    """Send via the named 'error' Discord route; fall back to legacy URL."""
+    try:
+        from notifications.discord_router import DiscordRouter
+        router = DiscordRouter()
+        if router.is_enabled("error"):
+            ok = router.send("error", content)
+            return NotificationResult(sent=ok, reason="sent" if ok else "send_failed")
+    except Exception as exc:
+        logger.warning("Discord router error route failed: %s", exc)
+    return send_discord_alert(cfg, content)
+
+
 def _load_received_at(log_dir: Path) -> datetime | None:
     path = log_dir / "latest_webhook.json"
     try:
@@ -65,7 +78,7 @@ def _write_state(path: Path, state: dict) -> None:
         logger.warning("could not write watchdog state: %s", exc)
 
 
-def run(now: datetime | None = None, send=send_discord_alert, config=None) -> dict:
+def run(now: datetime | None = None, send=_router_send, config=None) -> dict:
     cfg = config or load_config()
     now = now or datetime.now(timezone.utc)
     log_dir = Path(cfg.log_dir)

@@ -633,14 +633,6 @@ def _notify_force_close(
     never blocks the webhook response.
     """
     import threading
-    from notifications.discord_notifier import _post_json
-    import json as _json
-
-    if not getattr(config, "discord_notifications_enabled", False):
-        return
-    url = getattr(config, "discord_webhook_url", "")
-    if not url:
-        return
 
     sign = "+" if pnl_dollars >= 0 else ""
     message = (
@@ -650,6 +642,22 @@ def _notify_force_close(
     )
 
     def _send():
+        try:
+            from notifications.discord_router import DiscordRouter
+            router = DiscordRouter()
+            if router.is_enabled("error"):
+                router.send("error", message)
+                return
+        except Exception as exc:
+            logger.warning("Discord router error route failed: %s", exc)
+        # Fallback: legacy webhook URL
+        from notifications.discord_notifier import _post_json
+        import json as _json
+        if not getattr(config, "discord_notifications_enabled", False):
+            return
+        url = getattr(config, "discord_webhook_url", "")
+        if not url:
+            return
         try:
             body = _json.dumps({"content": message}).encode("utf-8")
             _post_json(url, body, {"Content-Type": "application/json"})

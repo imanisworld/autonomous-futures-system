@@ -102,6 +102,15 @@ def maybe_send_heartbeat(
             trades_today=int(getattr(state, "trade_count", 0) or 0),
             pnl_today=float(getattr(state, "realized_pnl_dollars", 0.0) or 0.0),
         )
+        if sender is None:
+            try:
+                from notifications.discord_router import DiscordRouter
+                _router = DiscordRouter()
+                if _router.is_enabled("heartbeat"):
+                    _router.send("heartbeat", message)
+                    return message
+            except Exception as _exc:
+                logger.warning("heartbeat router failed: %s", _exc)
         send_discord_alert(config, message, transport=sender)
         return message
     except Exception as exc:  # pragma: no cover - defensive; heartbeat must never raise
