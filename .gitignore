@@ -19,10 +19,12 @@ strategy/*.pdf
 .vscode/
 *.dmg
 data/replay/
+data/replay_polygon/
 data/htf/
 replay_out/
 ibc/
 CME_MINI_*.csv
+scripts/csv/
 
 # SSH keys — never commit
 hetzner-futures
@@ -37,6 +39,7 @@ id_ed25519
 
 # Backup files
 *.bak
+*.bak-*
 risk_rules.yaml.bak
 
 # Temp notes and local-only files
