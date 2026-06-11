@@ -2410,6 +2410,58 @@ _DASHBOARD_HTML = r"""<!doctype html>
     .modal .result { margin-top: 10px; font-size: 12px; color: var(--muted); min-height: 16px; overflow-wrap: anywhere; }
 
     canvas.chart { width: 100%; display: block; margin-top: 8px; border-radius: 6px; background: var(--panel3); }
+    .pnl-calendar-wrap {
+      margin-top: 10px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    .pnl-calendar-wrap::-webkit-scrollbar { display: none; }
+    .pnl-calendar {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(72px, 1fr));
+      gap: 7px;
+      min-width: 560px;
+      align-items: stretch;
+    }
+    .pnl-day {
+      min-height: 76px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255,255,255,0.022);
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      overflow: hidden;
+    }
+    .pnl-day.today { border-color: rgba(0,213,255,0.48); background: rgba(0,213,255,0.06); }
+    .pnl-day .dow {
+      color: var(--muted);
+      font-family: var(--font-console);
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .pnl-day .date {
+      margin-top: 3px;
+      color: var(--text);
+      font-family: var(--font-console);
+      font-size: 13px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+    .pnl-day .pnl {
+      margin-top: 8px;
+      font-family: var(--font-console);
+      font-size: 12px;
+      font-weight: 900;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
 
     /* ── Bottom nav ────────────────────────────────────────────────────── */
     nav.bottom {
@@ -2782,19 +2834,35 @@ _DASHBOARD_HTML = r"""<!doctype html>
         return '<li><span class="mk ' + color + '">' + mark + '</span><span>' + (i + 1) + '. ' + esc(r) + '</span></li>';
       }).join('') + '</ul>';
     }
-    function compactPnl(today) {
-      var hist = state.history && state.history.days ? state.history.days : [];
-      var anyData = hist.some(function (d) { return num(d.realized_pnl_dollars) !== 0; }) || num(today.today_pnl_dollars) !== 0;
-      var pnl7 = hist.reduce(function (a, d) { return a + num(d.realized_pnl_dollars); }, 0);
-      if (!anyData) {
-        return '<div class="panel"><h2>P&L</h2><dl class="kv">' +
-          kv('P&L today', hasTradeData(today) ? money(today.today_pnl_dollars) : emptyValue('No trades yet')) +
-          kv('7D P&L', pnl7 ? money(pnl7) : emptyValue('No realized P&L yet')) +
-          '</dl><p class="placeholder" style="margin-top:8px;font-size:12px;">No realized P&L yet — chart hidden until there is history.</p></div>';
-      }
-      return '<div class="panel"><h2>Equity Curve <span class="muted" id="chart-range" style="font-size:11px;font-weight:400;"></span></h2>' +
-        '<canvas id="pnl-chart" class="chart" style="height:140px;"></canvas></div>';
-    }
+	    function compactPnl(today) {
+	      var hist = state.history && state.history.days ? state.history.days : [];
+	      var anyData = hist.some(function (d) { return num(d.realized_pnl_dollars) !== 0; }) || num(today.today_pnl_dollars) !== 0;
+	      var pnl7 = hist.reduce(function (a, d) { return a + num(d.realized_pnl_dollars); }, 0);
+	      if (!anyData) {
+	        return '<div class="panel"><h2>P&L</h2><dl class="kv">' +
+	          kv('P&L today', hasTradeData(today) ? money(today.today_pnl_dollars) : emptyValue('No trades yet')) +
+	          kv('7D P&L', pnl7 ? money(pnl7) : emptyValue('No realized P&L yet')) +
+	          '</dl><p class="placeholder" style="margin-top:8px;font-size:12px;">No realized P&L yet — chart hidden until there is history.</p></div>';
+	      }
+	      return '<div class="panel"><h2>P&L Calendar <span class="muted" id="chart-range" style="font-size:11px;font-weight:400;"></span></h2>' +
+	        pnlCalendar(hist, today) +
+	        '<canvas id="pnl-chart" class="chart" style="height:116px;"></canvas></div>';
+	    }
+	    function pnlCalendar(hist, today) {
+	      var days = hist.slice().reverse().slice(-7);
+	      var todayDate = today && today.date ? today.date : '';
+	      return '<div class="pnl-calendar-wrap"><div class="pnl-calendar">' + days.map(function (d) {
+	        var v = num(d.realized_pnl_dollars);
+	        var cls = v > 0 ? 'green' : v < 0 ? 'red' : 'gray';
+	        var dt = new Date((d.date || '') + 'T12:00:00');
+	        var dow = isNaN(dt.getTime()) ? '---' : dt.toLocaleDateString('en-US', { weekday: 'short' });
+	        var label = isNaN(dt.getTime()) ? esc(d.date || '') : dt.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
+	        var pnl = v ? money(v) : emptyValue('Flat');
+	        return '<div class="pnl-day ' + (d.date === todayDate ? 'today' : '') + '">' +
+	          '<div><div class="dow">' + esc(dow) + '</div><div class="date">' + esc(label) + '</div></div>' +
+	          '<div class="pnl ' + cls + '">' + pnl + '</div></div>';
+	      }).join('') + '</div></div>';
+	    }
 
     // ── FUTURES ────────────────────────────────────────────────────────
     function freshnessForWebhook(wh) {
