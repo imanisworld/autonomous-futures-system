@@ -578,7 +578,7 @@ async def status_today() -> dict:
 
 
 @app.get("/status/history")
-async def status_history(days: int = Query(default=7, ge=1, le=30)) -> dict:
+async def status_history(days: int = Query(default=7, ge=1, le=90)) -> dict:
     """Return recent read-only daily summaries from the journal."""
     today = date.today()
     history = []
@@ -986,7 +986,7 @@ async def status_adaptive() -> dict:
 
 
 @app.get("/status/adaptive/history")
-async def status_adaptive_history(days: int = Query(default=7, ge=1, le=30)) -> dict:
+async def status_adaptive_history(days: int = Query(default=7, ge=1, le=90)) -> dict:
     """Return cached committee reports from the last N days."""
     from adaptive.committee import AdaptiveCommittee
     committee = AdaptiveCommittee(log_dir=_config.log_dir, config=_config)

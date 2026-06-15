@@ -441,7 +441,6 @@ class TestStrategyCandidateRanking:
         assert decision.setup.strategy == "vwap_reclaim"
         assert "ranked candidate" in (decision.setup.notes or "")
 
-
 class TestDecisionEngineRRFilter:
 
     def test_trade_has_rr_above_minimum(self, engine, fresh_market_state):

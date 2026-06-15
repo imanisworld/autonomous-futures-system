@@ -63,6 +63,25 @@ _TICK_VALUE: dict[str, float] = {
 }
 
 
+def _round_to_tick(price: float, instrument: str) -> float:
+    """Snap a price to the instrument's tick grid (e.g. MNQ 0.25).
+
+    Tradovate rejects Stop/Limit child orders whose price is not an exact
+    multiple of the contract tick. Strategy stops/targets are frequently
+    VWAP-anchored (``vwap.value ± n·tick``) or risk-multiples
+    (``entry + risk·2.2``), which land *between* ticks; the strategy's
+    ``round(x, 4)`` rounds decimals but does NOT snap to the grid. An off-tick
+    protective child is silently rejected, leaving a naked entry that the
+    safety net has to flatten — the repeated "NAKED POSITION … STOP" alerts.
+    Round to the nearest tick so the bracket children are accepted.
+    """
+    root = instrument.replace("1!", "").upper()
+    tick = _TICK_SIZE.get(root, 0.25)
+    if tick <= 0:
+        return float(price)
+    return round(round(float(price) / tick) * tick, 4)
+
+
 def _parse_api_key_id(value: str | None) -> int:
     raw = (value or "0").strip().strip("\"'")
     if not raw:
@@ -170,6 +189,12 @@ class TradovateBroker(BrokerInterface):
         self._session = requests.Session()
         self._session.headers.update({"Content-Type": "application/json"})
         self._last_position: Optional[Position] = None
+        # OSO order ids for the current position, set by execute_bracket:
+        # {"instrument", "entry", "target", "stop"}. Lets resolve_position scope
+        # fills to OUR specific orders (correct partial-fill averaging; can't
+        # grab an overlapping trade's fill). None → resolve falls back to
+        # price-matching. Cleared whenever the position goes flat/resolves.
+        self._last_order_ids: Optional[dict] = None
         self._account_id: Optional[int] = None
         self._contract_cache: dict[str, int] = {}  # root symbol → contract ID
         self._contract_symbol_cache: dict[str, str] = {}  # root → front-month symbol (e.g. MESM6)
@@ -552,6 +577,18 @@ class TradovateBroker(BrokerInterface):
             close_action = "Sell" if order.direction == "LONG" else "Buy"
             qty = max(1, int(order.contracts or 1))
 
+            # Snap protective prices to the contract tick grid. Off-tick Stop/
+            # Limit children are rejected by Tradovate, which would leave the
+            # market entry naked (see _round_to_tick). The entry itself is a
+            # Market order, so it never carries a price to reject.
+            tick_target = _round_to_tick(order.target, root)
+            tick_stop = _round_to_tick(order.stop, root)
+            if tick_target != float(order.target) or tick_stop != float(order.stop):
+                logger.info(
+                    "Tick-rounded bracket for %s: target %s→%s stop %s→%s",
+                    root, order.target, tick_target, order.stop, tick_stop,
+                )
+
             # Place bracket via OSO (On Submit, send bracket child orders)
             body = {
                 "accountSpec": self.config.username,
@@ -564,12 +601,12 @@ class TradovateBroker(BrokerInterface):
                 "bracket1": {
                     "action": close_action,
                     "orderType": "Limit",
-                    "price": float(order.target),
+                    "price": tick_target,
                 },
                 "bracket2": {
                     "action": close_action,
                     "orderType": "Stop",
-                    "stopPrice": float(order.stop),
+                    "stopPrice": tick_stop,
                 },
             }
 
@@ -602,11 +639,20 @@ class TradovateBroker(BrokerInterface):
                 instrument=order.instrument,
                 direction=order.direction,
                 entry_price=order.entry,
-                stop=order.stop,
-                target=order.target,
+                stop=tick_stop,
+                target=tick_target,
                 quantity=qty,
                 open=True,
             )
+            # Remember the OSO order ids so resolve_position can scope fills to
+            # exactly these orders (correct partial-fill averaging; immune to an
+            # overlapping trade's fill at a similar price).
+            self._last_order_ids = {
+                "instrument": order.instrument,
+                "entry": order_id,
+                "target": target_id,
+                "stop": stop_id,
+            }
             self._position_opened_at = time.time()
             self._resolve_fail_count = 0
 
@@ -665,6 +711,12 @@ class TradovateBroker(BrokerInterface):
                 o = self._get(f"/order/item?id={order_id}")
                 status = str(o.get("ordStatus", "")).lower()
                 if status in self._DEAD_ORDER_STATUSES:
+                    logger.error(
+                        "bracket child id=%s DEAD status=%s reason=%s order=%s",
+                        order_id, status,
+                        o.get("rejectReason") or o.get("text") or o.get("cxlRejReason"),
+                        o,
+                    )
                     return False
                 if status:  # any other known status (Working/Pending/Filled/...) = live
                     return True
@@ -772,6 +824,7 @@ class TradovateBroker(BrokerInterface):
                 self._last_position = p
                 return True, p
             self._last_position = None
+            self._last_order_ids = None
             return True, None
         except Exception as exc:
             logger.warning("Tradovate get_position failed: %s", exc)
@@ -836,6 +889,7 @@ class TradovateBroker(BrokerInterface):
         except Exception as exc:
             logger.warning("Tradovate cancel_all failed: %s", exc)
         self._last_position = None
+        self._last_order_ids = None
 
     def flatten_position(self) -> dict:
         """Liquidate any open position at market, then cancel working orders."""
@@ -905,6 +959,7 @@ class TradovateBroker(BrokerInterface):
             logger.exception("Tradovate flatten_position failed: %s", exc)
             result["error"] = str(exc)
         self._last_position = None
+        self._last_order_ids = None
         return result
 
     def resolve_position(self) -> Optional[Fill]:
@@ -958,39 +1013,74 @@ class TradovateBroker(BrokerInterface):
                 f for f in (fills if isinstance(fills, list) else [])
                 if (our_cid is None or f.get("contractId") == our_cid) and f.get("price") is not None
             ]
-            exit_fill = None
+
+            def _wavg(group: list) -> float:
+                """Quantity-weighted average fill price (averages partial fills).
+
+                A 2-lot can fill in two prints at different prices; the dollar-
+                accurate entry/exit is the size-weighted mean, not one leg.
+                Falls back to a simple mean when `qty` is absent.
+                """
+                qtot = sum(abs(float(f.get("qty") or 0)) for f in group)
+                if qtot > 0:
+                    return sum(float(f["price"]) * abs(float(f.get("qty") or 0)) for f in group) / qtot
+                return sum(float(f["price"]) for f in group) / len(group)
+
+            exit_price = entry_fill_px = exit_reason = None
             target_hit = stop_hit = False
-            for f in ours:
-                px = float(f["price"])
-                if last.target is not None and abs(px - last.target) <= tol:
-                    exit_fill, target_hit = f, True
-                    break
-                if last.stop is not None and abs(px - last.stop) <= tol:
-                    exit_fill, stop_hit = f, True
-                    break
-            if exit_fill is None:
-                # Flat but no fill matches our bracket prices yet (settle window) or
-                # closed manually/liquidated. Retry a few bars; then book BREAKEVEN
-                # at entry rather than fabricate a win from an unrelated fill.
-                self._resolve_fail_count += 1
-                if self._resolve_fail_count < 3:
-                    logger.warning(
-                        "resolve_position: %s flat but no matching bracket fill yet "
-                        "(attempt %d) — retrying", instrument, self._resolve_fail_count,
+
+            # ── Preferred: scope fills to OUR exact OSO order ids ──
+            # Ties each fill to the order we placed, so partial fills average
+            # correctly AND an overlapping trade's fill at a similar price can
+            # never be mistaken for ours. Only engages when the live fills carry
+            # orderId and belong to this instrument; otherwise we price-match.
+            ids = self._last_order_ids
+            if (ids and ids.get("instrument") == instrument
+                    and any(f.get("orderId") is not None for f in ours)):
+                by_order = lambda oid: [f for f in ours if oid is not None and f.get("orderId") == oid]
+                target_fills, stop_fills = by_order(ids.get("target")), by_order(ids.get("stop"))
+                if target_fills:
+                    exit_price, target_hit, exit_reason = _wavg(target_fills), True, "TARGET_HIT"
+                elif stop_fills:
+                    exit_price, stop_hit, exit_reason = _wavg(stop_fills), True, "STOP_HIT"
+                if exit_reason is not None:
+                    entry_fills = by_order(ids.get("entry"))
+                    entry_fill_px = _wavg(entry_fills) if entry_fills else last.entry_price
+
+            # ── Fallback: price-match against journaled target/stop ──
+            if exit_reason is None:
+                exit_fill = None
+                for f in ours:
+                    px = float(f["price"])
+                    if last.target is not None and abs(px - last.target) <= tol:
+                        exit_fill, target_hit = f, True
+                        break
+                    if last.stop is not None and abs(px - last.stop) <= tol:
+                        exit_fill, stop_hit = f, True
+                        break
+                if exit_fill is None:
+                    # Flat but no fill matches our bracket prices yet (settle window) or
+                    # closed manually/liquidated. Retry a few bars; then book BREAKEVEN
+                    # at entry rather than fabricate a win from an unrelated fill.
+                    self._resolve_fail_count += 1
+                    if self._resolve_fail_count < 3:
+                        logger.warning(
+                            "resolve_position: %s flat but no matching bracket fill yet "
+                            "(attempt %d) — retrying", instrument, self._resolve_fail_count,
+                        )
+                        return None
+                    entry_fill_px = last.entry_price
+                    exit_price = last.entry_price
+                    exit_reason = "FORCE_CLOSE_UNMATCHED"
+                else:
+                    exit_price = float(exit_fill["price"])
+                    exit_reason = "TARGET_HIT" if target_hit else "STOP_HIT"
+                    # Actual entry fill = the fill closest to our intended entry among the
+                    # rest (so P&L matches Tradovate to the dollar, not the planned entry).
+                    others = [float(f["price"]) for f in ours if f is not exit_fill]
+                    entry_fill_px = (
+                        min(others, key=lambda p: abs(p - last.entry_price)) if others else last.entry_price
                     )
-                    return None
-                entry_fill_px = last.entry_price
-                exit_price = last.entry_price
-                exit_reason = "FORCE_CLOSE_UNMATCHED"
-            else:
-                exit_price = float(exit_fill["price"])
-                exit_reason = "TARGET_HIT" if target_hit else "STOP_HIT"
-                # Actual entry fill = the fill closest to our intended entry among the
-                # rest (so P&L matches Tradovate to the dollar, not the planned entry).
-                others = [float(f["price"]) for f in ours if f is not exit_fill]
-                entry_fill_px = (
-                    min(others, key=lambda p: abs(p - last.entry_price)) if others else last.entry_price
-                )
 
             signed_ticks = (
                 (exit_price - entry_fill_px) if last.direction == "LONG"
@@ -999,6 +1089,7 @@ class TradovateBroker(BrokerInterface):
             pnl_dollars = round(signed_ticks * tick_value * last.quantity, 2)
             result = "WIN" if pnl_dollars > 0 else "LOSS" if pnl_dollars < 0 else "BREAKEVEN"
             self._last_position = None
+            self._last_order_ids = None
             self._resolve_fail_count = 0
             self._position_opened_at = None
             return Fill(

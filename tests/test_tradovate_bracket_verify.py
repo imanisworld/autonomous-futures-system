@@ -8,7 +8,7 @@ immediate flatten, returning a CANCELLED fill so no naked position is held.
 
 from execution.broker_interface import BracketOrder
 from execution.broker_interface import Position
-from execution.tradovate_broker import TradovateBroker, TradovateConfig
+from execution.tradovate_broker import TradovateBroker, TradovateConfig, _round_to_tick
 
 
 def test_config_from_env_accepts_numeric_api_key_id(monkeypatch):
@@ -61,6 +61,56 @@ def _broker(monkeypatch, items_by_id):
 _BRACKET = BracketOrder(instrument="MES", direction="LONG", entry=5900.0,
                         stop=5893.0, target=5915.0, rr_ratio=2.14,
                         strategy="manual_force_open", contracts=1)
+
+
+# ── tick-rounding (off-tick protective children get rejected → naked) ─────────
+
+def test_round_to_tick_snaps_offgrid_prices():
+    # VWAP-anchored stop (vwap.value − 28·tick) and risk-multiple target
+    # (entry + risk·2.2) both land between ticks. round(x, 4) does NOT snap.
+    assert _round_to_tick(30201.2487, "MNQ") == 30201.25
+    assert _round_to_tick(30224.40, "MNQ") == 30224.50
+    assert _round_to_tick(7566.13, "MES") == 7566.25
+    assert _round_to_tick(2345.07, "MGC") == 2345.10
+    assert _round_to_tick(78.123, "MCL") == 78.12
+    # already aligned → unchanged; root suffix (1!) stripped
+    assert _round_to_tick(30201.25, "MNQ") == 30201.25
+    assert _round_to_tick(30201.2487, "MNQ1!") == 30201.25
+
+
+def test_execute_bracket_sends_tick_rounded_children(monkeypatch):
+    """An off-tick (VWAP-anchored) stop must reach placeOSO snapped to the grid.
+
+    Otherwise Tradovate rejects the Stop child and the market entry is left
+    naked — the repeated "NAKED POSITION … STOP" auto-flattens in production.
+    """
+    broker = TradovateBroker(config=TradovateConfig())
+    broker._account_id = 555
+    captured = {}
+
+    monkeypatch.setattr(broker, "_authenticate", lambda: True)
+    monkeypatch.setattr(broker, "_find_contract_id", lambda instrument: 123)
+    monkeypatch.setattr("execution.tradovate_supervisor.tradovate_order_ready", lambda: True)
+    monkeypatch.setattr(broker, "_verify_bracket_children", lambda **kw: (True, True))
+
+    def _post(path, body):
+        captured["path"], captured["body"] = path, body
+        return {"orderId": 900, "oso1Id": 901, "oso2Id": 902}
+
+    monkeypatch.setattr(broker, "_post", _post)
+
+    order = BracketOrder(instrument="MNQ", direction="LONG", entry=30210.0,
+                         stop=30201.2487, target=30224.40, rr_ratio=2.0,
+                         strategy="vwap_hold", contracts=1)
+    fill = broker.execute_bracket(order)
+
+    body = captured["body"]
+    assert body["bracket2"]["stopPrice"] == 30201.25   # off-tick stop snapped
+    assert body["bracket1"]["price"] == 30224.50        # off-tick target snapped
+    assert fill.result == "OPEN"
+    # recorded position carries the snapped prices so later resolution matches broker
+    assert broker._last_position.stop == 30201.25
+    assert broker._last_position.target == 30224.50
 
 
 # ── detection (via OSO child ids + /order/item status) ────────────────────────

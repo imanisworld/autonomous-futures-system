@@ -218,4 +218,38 @@ def test_no_trade_alert_reference_price_unavailable():
     msg = _format_message(_payload(), result)
 
     assert "Reference price: unavailable (ES=F/NQ=F HTTP proxy · UNAVAILABLE)" in msg
+
+
+def test_rejected_alert_states_the_reason():
+    """A rejection must explain WHY — not a bare 'Risk: REJECTED'."""
+    from notifications.discord_notifier import _format_message
+
+    result = _result("RISK_REJECTED")
+    result["risk"] = {
+        "result": "REJECTED", "failed_rule": "session_cutoff",
+        "reason": "Outside session window: london ended 02:30 ET",
+    }
+    msg = _format_message(_payload(), result)
+
+    assert "Risk: REJECTED — Outside session window: london ended 02:30 ET" in msg
+
+
+def test_rejected_alert_falls_back_to_failed_rule_when_no_reason():
+    from notifications.discord_notifier import _format_message
+
+    result = _result("RISK_REJECTED")
+    result["risk"] = {"result": "REJECTED", "failed_rule": "max_daily_loss", "reason": None}
+    msg = _format_message(_payload(), result)
+
+    assert "Risk: REJECTED — max_daily_loss" in msg
+
+
+def test_approved_trade_has_no_reason_suffix():
+    """Approved trades carry no reason — stay a clean 'Risk: APPROVED'."""
+    from notifications.discord_notifier import _format_message
+
+    msg = _format_message(_payload(), _result("TRADE"))
+
+    assert "Risk: APPROVED" in msg
+    assert "Risk: APPROVED —" not in msg
     assert "Bar close: 19505.25" in msg
