@@ -63,6 +63,25 @@ _TICK_VALUE: dict[str, float] = {
 }
 
 
+def _round_to_tick(price: float, instrument: str) -> float:
+    """Snap a price to the instrument's tick grid (e.g. MNQ 0.25).
+
+    Tradovate rejects Stop/Limit child orders whose price is not an exact
+    multiple of the contract tick. Strategy stops/targets are frequently
+    VWAP-anchored (``vwap.value ± n·tick``) or risk-multiples
+    (``entry + risk·2.2``), which land *between* ticks; the strategy's
+    ``round(x, 4)`` rounds decimals but does NOT snap to the grid. An off-tick
+    protective child is silently rejected, leaving a naked entry that the
+    safety net has to flatten — the repeated "NAKED POSITION … STOP" alerts.
+    Round to the nearest tick so the bracket children are accepted.
+    """
+    root = instrument.replace("1!", "").upper()
+    tick = _TICK_SIZE.get(root, 0.25)
+    if tick <= 0:
+        return float(price)
+    return round(round(float(price) / tick) * tick, 4)
+
+
 def _parse_api_key_id(value: str | None) -> int:
     raw = (value or "0").strip().strip("\"'")
     if not raw:
@@ -552,6 +571,18 @@ class TradovateBroker(BrokerInterface):
             close_action = "Sell" if order.direction == "LONG" else "Buy"
             qty = max(1, int(order.contracts or 1))
 
+            # Snap protective prices to the contract tick grid. Off-tick Stop/
+            # Limit children are rejected by Tradovate, which would leave the
+            # market entry naked (see _round_to_tick). The entry itself is a
+            # Market order, so it never carries a price to reject.
+            tick_target = _round_to_tick(order.target, root)
+            tick_stop = _round_to_tick(order.stop, root)
+            if tick_target != float(order.target) or tick_stop != float(order.stop):
+                logger.info(
+                    "Tick-rounded bracket for %s: target %s→%s stop %s→%s",
+                    root, order.target, tick_target, order.stop, tick_stop,
+                )
+
             # Place bracket via OSO (On Submit, send bracket child orders)
             body = {
                 "accountSpec": self.config.username,
@@ -564,12 +595,12 @@ class TradovateBroker(BrokerInterface):
                 "bracket1": {
                     "action": close_action,
                     "orderType": "Limit",
-                    "price": float(order.target),
+                    "price": tick_target,
                 },
                 "bracket2": {
                     "action": close_action,
                     "orderType": "Stop",
-                    "stopPrice": float(order.stop),
+                    "stopPrice": tick_stop,
                 },
             }
 
@@ -602,8 +633,8 @@ class TradovateBroker(BrokerInterface):
                 instrument=order.instrument,
                 direction=order.direction,
                 entry_price=order.entry,
-                stop=order.stop,
-                target=order.target,
+                stop=tick_stop,
+                target=tick_target,
                 quantity=qty,
                 open=True,
             )
@@ -665,6 +696,12 @@ class TradovateBroker(BrokerInterface):
                 o = self._get(f"/order/item?id={order_id}")
                 status = str(o.get("ordStatus", "")).lower()
                 if status in self._DEAD_ORDER_STATUSES:
+                    logger.error(
+                        "bracket child id=%s DEAD status=%s reason=%s order=%s",
+                        order_id, status,
+                        o.get("rejectReason") or o.get("text") or o.get("cxlRejReason"),
+                        o,
+                    )
                     return False
                 if status:  # any other known status (Working/Pending/Filled/...) = live
                     return True
