@@ -570,25 +570,33 @@ if should_send
     alert(msg, alert.freq_once_per_bar_close)
 
 // ─── CHARTS ───────────────────────────────────────────────────────────────────
-plot(ema_fast, "EMA 9",   color=color.new(color.aqua,   30))
-plot(ema_slow, "EMA 21",  color=color.new(color.orange, 30))
-plot(ema_mid,  "EMA 55",  color=color.new(color.purple, 40))
-plot(ema_long, "EMA 200", color=color.new(color.gray,   40))
-plot(vwap_val, "VWAP",    color=color.new(color.yellow, 20))
-plot(hod, "HOD", color=color.new(color.lime, 60), style=plot.style_stepline, linewidth=1)
-plot(lod, "LOD", color=color.new(color.red,  60), style=plot.style_stepline, linewidth=1)
+// White/transparent visuals only. Payload + alerts unaffected.
 
-orb_h_plot = in_ny     or in_ny[1]     ? orb_h : na
-orb_l_plot = in_ny     or in_ny[1]     ? orb_l : na
+VISIBLE_WHITE = color.new(color.white, 0)
+SOFT_WHITE    = color.new(color.white, 70)
+HIDDEN        = color.new(color.white, 100)
+
+// Core lines
+plot(ema_fast, "EMA 9",   color=HIDDEN)
+plot(ema_slow, "EMA 21",  color=HIDDEN)
+plot(ema_mid,  "EMA 55",  color=HIDDEN)
+plot(ema_long, "EMA 200", color=HIDDEN)
+plot(vwap_val, "VWAP",    color=HIDDEN)
+plot(hod, "HOD", color=HIDDEN, style=plot.style_stepline, linewidth=1)
+plot(lod, "LOD", color=HIDDEN, style=plot.style_stepline, linewidth=1)
+
+orb_h_plot   = in_ny or in_ny[1] ? orb_h : na
+orb_l_plot   = in_ny or in_ny[1] ? orb_l : na
 l_orb_h_plot = in_london or in_london[1] ? london_orb_h : na
 l_orb_l_plot = in_london or in_london[1] ? london_orb_l : na
-plot(orb_h_plot,   "NY ORB High",     color=color.new(color.lime,   40), style=plot.style_stepline)
-plot(orb_l_plot,   "NY ORB Low",      color=color.new(color.red,    40), style=plot.style_stepline)
-plot(l_orb_h_plot, "London ORB High", color=color.new(color.teal,   50), style=plot.style_stepline)
-plot(l_orb_l_plot, "London ORB Low",  color=color.new(color.orange, 50), style=plot.style_stepline)
+
+plot(orb_h_plot,   "NY ORB High",     color=HIDDEN, style=plot.style_stepline)
+plot(orb_l_plot,   "NY ORB Low",      color=HIDDEN, style=plot.style_stepline)
+plot(l_orb_h_plot, "London ORB High", color=HIDDEN, style=plot.style_stepline)
+plot(l_orb_l_plot, "London ORB Low",  color=HIDDEN, style=plot.style_stepline)
 
 // Supply & Demand zone visualization
-plot(supply_top,    "Supply Top",    color=color.new(color.red,  60), style=plot.style_stepline, linewidth=1)
-plot(supply_bottom, "Supply Bottom", color=color.new(color.red,  80), style=plot.style_stepline, linewidth=1)
-plot(demand_top,    "Demand Top",    color=color.new(color.blue, 80), style=plot.style_stepline, linewidth=1)
-plot(demand_bottom, "Demand Bottom", color=color.new(color.blue, 60), style=plot.style_stepline, linewidth=1)
+plot(supply_top,    "Supply Top",    color=HIDDEN, style=plot.style_stepline, linewidth=1)
+plot(supply_bottom, "Supply Bottom", color=HIDDEN, style=plot.style_stepline, linewidth=1)
+plot(demand_top,    "Demand Top",    color=HIDDEN, style=plot.style_stepline, linewidth=1)
+plot(demand_bottom, "Demand Bottom", color=HIDDEN, style=plot.style_stepline, linewidth=1)

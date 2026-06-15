@@ -2441,7 +2441,12 @@ _DASHBOARD_HTML = r"""<!doctype html>
       .app-actions { gap: 8px; }
       .live-chip { font-size: 14px; padding: 6px 10px; }
       .refresh-tile { width: 52px; height: 52px; border-radius: 14px; font-size: 24px; }
-      .statusbar { padding: 0 8px; }
+      .statusbar {
+        flex-wrap: wrap;
+        overflow-x: visible;
+        padding: 0 8px;
+      }
+      .statusbar .seg { flex: 1 1 calc(33.333% - 1px); }
       .statusbar .seg { padding: 10px 8px; }
       .statusbar .seg b { font-size: 13px; }
       .statusbar .seg span { font-size: 14px; }

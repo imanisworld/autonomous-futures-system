@@ -195,7 +195,14 @@ def _format_message(payload: AlertPayload, result: dict) -> str:
         if resolution:
             lines.append(f"Resolution: {resolution}")
         if risk:
-            lines.append(f"Risk: {risk.get('result')}")
+            risk_line = f"Risk: {risk.get('result')}"
+            failed_rule = risk.get("failed_rule")
+            reason = risk.get("reason")
+            if failed_rule:
+                risk_line += f" ({failed_rule})"
+            lines.append(risk_line)
+            if reason:
+                lines.append(f"Reason: {reason}")
         return "\n".join(lines)
 
     # ── TRADE: rich format with confluence score ──────────────────────────────

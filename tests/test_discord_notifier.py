@@ -166,6 +166,23 @@ def test_no_trade_alert_stays_minimal():
     assert "Score:" not in msg
 
 
+def test_rejected_alert_shows_failed_risk_rule_and_reason():
+    """RISK_REJECTED Discord alerts should explain the actual gate."""
+    from notifications.discord_notifier import _format_message
+
+    result = _result("RISK_REJECTED")
+    result["risk"] = {
+        "result": "REJECTED",
+        "failed_rule": "session_window",
+        "reason": "Outside allowed session window",
+    }
+
+    msg = _format_message(_payload(), result)
+
+    assert "Risk: REJECTED (session_window)" in msg
+    assert "Reason: Outside allowed session window" in msg
+
+
 def test_no_trade_alert_labels_bar_close_and_12h_time():
     """Bar close is labelled as such; bar time is 12-hour with AM/PM."""
     from notifications.discord_notifier import _format_message
