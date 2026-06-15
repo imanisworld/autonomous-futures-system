@@ -172,6 +172,19 @@ def _reference_price_line(live_quote: Optional[dict]) -> Optional[str]:
     return f"Reference price: {_format_price(price)} ({source} · {status}{age_str})"
 
 
+def _risk_line(risk: dict) -> str:
+    """`Risk: REJECTED — <why>` instead of a bare result.
+
+    The risk dict already carries the human-readable `reason` (and `failed_rule`)
+    from RiskEngine.validate; surface it so a rejection explains itself in
+    Discord instead of just saying REJECTED. Approved trades carry no reason, so
+    they stay `Risk: APPROVED`.
+    """
+    result = risk.get("result")
+    reason = risk.get("reason") or risk.get("failed_rule")
+    return f"Risk: {result} — {reason}" if reason else f"Risk: {result}"
+
+
 def _format_message(payload: AlertPayload, result: dict) -> str:
     decision = result.get("decision") or "UNKNOWN"
 
@@ -195,7 +208,7 @@ def _format_message(payload: AlertPayload, result: dict) -> str:
         if resolution:
             lines.append(f"Resolution: {resolution}")
         if risk:
-            lines.append(f"Risk: {risk.get('result')}")
+            lines.append(_risk_line(risk))
         return "\n".join(lines)
 
     # ── TRADE: rich format with confluence score ──────────────────────────────
@@ -257,7 +270,7 @@ def _format_message(payload: AlertPayload, result: dict) -> str:
     if resolution:
         lines.append(f"Resolution: {resolution}")
     if risk:
-        lines.append(f"Risk: {risk.get('result')}")
+        lines.append(_risk_line(risk))
 
     lines.append(_DIVIDER)
     ref_line = _reference_price_line(result.get("live_quote"))
