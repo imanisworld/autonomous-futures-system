@@ -113,6 +113,18 @@ class SystemConfig:
     max_stop_ticks: dict = field(default_factory=dict)
     # Quality gates: require trend.strength == STRONG per instrument
     require_strong_trend: dict = field(default_factory=dict)
+    # EXPERIMENT (off by default): when require_strong_trend is on, still admit a
+    # MODERATE-PULLBACK bar (full EMA stack intact, price pulled back below ema9 —
+    # a dip inside a confirmed trend, NOT an early/unconfirmed move). Per instrument.
+    # Relaxes BOTH the strength gate AND the pre-setup EMA-stack-alignment gate.
+    allow_moderate_pullback: dict = field(default_factory=dict)
+    # EXPERIMENT (off by default): also admit MODERATE-EARLY bars (trend forming,
+    # ema55 not yet flipped). With allow_moderate_pullback this means "trade any
+    # MODERATE trend, not only STRONG." Per instrument.
+    allow_moderate_early: dict = field(default_factory=dict)
+    # When allow_moderate_pullback is on, optionally require price on the trend side
+    # of VWAP for the admitted pullback (extra confluence). Per instrument bool.
+    moderate_pullback_require_vwap_align: dict = field(default_factory=dict)
     # Quality gates: minimum signal-bar relative volume per instrument
     min_signal_bar_volume: dict = field(default_factory=dict)
     # Quality gates: require explicit daily/4H FTFC alignment when HTF data is present
@@ -286,6 +298,11 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         min_target_points=daily.get("min_target_points", {}),
         max_stop_ticks=daily.get("max_stop_ticks", {}),
         require_strong_trend=quality.get("require_strong_trend", {}),
+        allow_moderate_pullback=quality.get("allow_moderate_pullback", {}),
+        allow_moderate_early=quality.get("allow_moderate_early", {}),
+        moderate_pullback_require_vwap_align=quality.get(
+            "moderate_pullback_require_vwap_align", {}
+        ),
         min_signal_bar_volume=quality.get("min_signal_bar_volume", {}),
         require_htf_alignment=quality.get("require_htf_alignment", {}),
         min_confluence_grade=str(quality.get("min_confluence_grade", "") or "").upper(),

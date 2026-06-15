@@ -330,7 +330,8 @@ class DecisionEngine:
 
         # ── Quality gate: trend strength ─────────────────────────────────────
         if self.config.require_strong_trend.get(state.instrument, False):
-            if not (state.trend and state.trend.strength == "STRONG"):
+            if not (state.trend and state.trend.strength == "STRONG") \
+                    and not self._admit_moderate(state):
                 actual = state.trend.strength if state.trend else "none"
                 return DecisionOutput(
                     timestamp=now,
@@ -418,7 +419,7 @@ class DecisionEngine:
                     ema_aligned = close > ema9 > ema21 > ema55
                 else:
                     ema_aligned = close < ema9 < ema21 < ema55
-                if not ema_aligned:
+                if not ema_aligned and not self._admit_moderate(state):
                     return DecisionOutput(
                         timestamp=now,
                         instrument=state.instrument,
@@ -433,6 +434,10 @@ class DecisionEngine:
                         failed_gates=failed_gates + ["EMA_STACK_NOT_ALIGNED"],
                         confidence_score=0,
                     )
+                if not ema_aligned:
+                    # Admitted MODERATE bar — record the soft miss for the journal
+                    # but let the setups decide (EXPERIMENT path only).
+                    failed_gates.append("EMA_STACK_NOT_ALIGNED_SOFT")
 
         # ── Strategy evaluation ───────────────────────────────────────────────
         setup = self._find_setup(state, condition, daily_state)
@@ -722,6 +727,41 @@ class DecisionEngine:
             f"Entry at {et.strftime('%H:%M')} ET is outside allowed "
             f"'{state.session}' session windows{detail}."
         )
+
+    def _admit_moderate(self, state: MarketState) -> bool:
+        """EXPERIMENT gate: admit a MODERATE-trend bar past the two full-stack walls.
+
+        Two redundant gates normally require a full EMA stack (STRONG): the
+        trend-strength gate and the pre-setup EMA-stack-alignment gate. This
+        helper, per per-instrument flags, lets a MODERATE bar through *both* so
+        the individual setups become the deciders:
+
+          - allow_moderate_pullback → admit PULLBACK bars (stack intact, dip to
+            ema9 inside a confirmed trend).
+          - allow_moderate_early    → admit EARLY bars (trend forming, ema55 not
+            yet flipped).
+
+        With both on, "trade any MODERATE trend, not only STRONG." When
+        `moderate_pullback_require_vwap_align` is set, also require price on the
+        trend side of VWAP. All flags default off → no production behavior change.
+        """
+        trend = state.trend
+        if not trend or trend.strength != "MODERATE":
+            return False
+        if trend.direction not in ("UP", "DOWN"):
+            return False
+        kind = trend.moderate_kind
+        pull_ok = (kind == "PULLBACK"
+                   and self.config.allow_moderate_pullback.get(state.instrument, False))
+        early_ok = (kind == "EARLY"
+                    and self.config.allow_moderate_early.get(state.instrument, False))
+        if not (pull_ok or early_ok):
+            return False
+        if self.config.moderate_pullback_require_vwap_align.get(state.instrument, False):
+            want = "above" if trend.direction == "UP" else "below"
+            if state.vwap.price_vs_vwap != want:
+                return False
+        return True
 
     def _check_new_york_entry_window(self, state: MarketState) -> Optional[str]:
         if state.session != "new_york":

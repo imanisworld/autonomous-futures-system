@@ -146,6 +146,22 @@ quality_gates:
     MES: true                       # Aligned with MNQ — STRONG required
     MGC: false
     MCL: false
+  # Admit MODERATE-trend bars past the STRONG gate (and the pre-setup EMA-stack
+  # gate). Validated on the 555-day Polygon replay + a first-half/second-half
+  # walk-forward: opens up NY (MODERATE<STRONG was the #1 NY blocker), positive
+  # P&L in both halves, and on MES drawdown is shallower AND regime-stable (~$2k
+  # both halves vs baseline $3.9k→$2.0k). MNQ-early decayed in the recent half →
+  # left off. See scripts/replay_comparison.py (modes: mod_pullback, mod_all).
+  allow_moderate_pullback:          # MODERATE w/ full stack intact, price dipped to ema9
+    MNQ: true                       # +$7.7k/2yr, expectancy up, drawdown flat — pure win
+    MES: true                       # part of MES all-MODERATE (see allow_moderate_early)
+    MGC: false
+    MCL: false
+  allow_moderate_early:             # MODERATE w/ ema55 not yet flipped (trend forming)
+    MNQ: false                      # decayed in 2nd half of walk-forward — excluded
+    MES: true                       # MES all-MODERATE: +$33k/2yr, drawdown 46% shallower
+    MGC: false
+    MCL: false
   min_signal_bar_volume:            # Minimum relative volume on the signal bar
     MNQ: 0.8                        # Locked to 0.8 — match live webhook behavior
     MES: 0.8                        # Aligned with MNQ

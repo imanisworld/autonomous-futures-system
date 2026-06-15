@@ -7,6 +7,8 @@ Each rule is tested: valid pass, and each failure mode.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 from risk.risk_engine import RiskEngine, DailyState, TradeSetup, RiskResult
 

@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import re
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from journal.journal_logger import JournalLogger
@@ -19,9 +19,14 @@ from main import load_next_bar, main
 def fresh_market_state() -> dict:
     with open("data/sample_market_state.json", encoding="utf-8") as handle:
         state = json.load(handle)
-    # Fixed 10:30 ET opening-window timestamp so this test exercises fill
-    # resolution, not the live session-window gate.
-    now = datetime(2026, 5, 29, 14, 30, tzinfo=timezone.utc).isoformat()
+    # Recent 10:30 ET opening-window timestamp so this test exercises fill
+    # resolution, not the live session-window or staleness gate.
+    ts = datetime.now(timezone.utc).replace(hour=14, minute=30, second=0, microsecond=0)
+    if ts > datetime.now(timezone.utc):
+        ts -= timedelta(days=1)
+    while ts.weekday() >= 5:
+        ts -= timedelta(days=1)
+    now = ts.isoformat()
     state["timestamp"] = now
     state["ohlc"]["bar_start"] = now
     state["volume"]["current_bar"] = 5000
