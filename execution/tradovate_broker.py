@@ -687,23 +687,43 @@ class TradovateBroker(BrokerInterface):
     # ordStatus values that mean a child order is dead (NOT protecting the position).
     _DEAD_ORDER_STATUSES = {"rejected", "canceled", "cancelled", "expired"}
 
+    # Tradovate has read-after-write lag: /order/item?id=<childId> can 404 for a
+    # few seconds after placeOSO even though the child order exists server-side
+    # (the OSO was accepted and the entry filled, so the brackets ARE placed).
+    # The original 3×0.5s=1.5s window mistook that lag for a missing bracket and
+    # auto-flattened entries to $0. Poll over a wider window and corroborate via
+    # /order/list before failing closed. A genuinely DEAD status still fails
+    # immediately — we never wait on a confirmed rejection.
+    _BRACKET_CONFIRM_RETRIES = 12   # worst case ≈ retries × delay seconds
+    _BRACKET_CONFIRM_DELAY = 0.6
+
     def _verify_bracket_children(
         self, stop_id, target_id, order: BracketOrder,
-        retries: int = 3, delay: float = 0.5,
+        retries: int = None, delay: float = None,
     ) -> tuple[bool, bool]:
         """Confirm the OSO's stop + target child orders are live.
 
         Tradovate's placeOSO returns oso1Id (target/Limit) and oso2Id (stop/Stop)
         — their presence is the broker's first acknowledgement the children
-        exist, but we still require /order/item confirmation. A child id is
-        live only when /order/item returns a non-dead status. A missing id or
-        unreadable child status fails closed so the naked-position handler
-        auto-flattens instead of trusting an unverified bracket.
+        exist, but we still require status confirmation. A child id is live only
+        when /order/item (or /order/list) returns a non-dead status. A missing id
+        or a child still unreadable after the full poll window fails closed so the
+        naked-position handler auto-flattens instead of trusting an unverified
+        bracket.
         """
+        retries = self._BRACKET_CONFIRM_RETRIES if retries is None else retries
+        delay = self._BRACKET_CONFIRM_DELAY if delay is None else delay
         return self._child_live(stop_id, retries, delay), self._child_live(target_id, retries, delay)
 
     def _child_live(self, order_id, retries: int, delay: float) -> bool:
-        """True if a bracket child order exists and is not explicitly dead."""
+        """True if a bracket child order exists and is not explicitly dead.
+
+        Polls /order/item?id= with backoff. A 404 (or any read error) right after
+        placeOSO is treated as read-after-write lag — NOT a missing child — so we
+        corroborate via /order/list and keep polling until the window expires.
+        Only an explicit dead status, or no live confirmation from EITHER read
+        across the whole window, fails closed.
+        """
         if not order_id:
             return False  # OSO did not return this child → it never placed
         for attempt in range(max(1, retries)):
@@ -721,12 +741,48 @@ class TradovateBroker(BrokerInterface):
                 if status:  # any other known status (Working/Pending/Filled/...) = live
                     return True
             except Exception as exc:
-                logger.warning("bracket verify: /order/item id=%s failed: %s", order_id, exc)
+                # 404 = the child isn't readable by id yet (read-after-write lag),
+                # not proof it's missing. Corroborate via the order list, which
+                # often reflects the new order before /order/item?id= does.
+                logger.warning(
+                    "bracket verify: /order/item id=%s not readable yet (attempt %d/%d): %s",
+                    order_id, attempt + 1, retries, exc,
+                )
+                in_list = self._child_status_in_list(order_id)
+                if in_list is True:
+                    return True
+                if in_list is False:
+                    return False  # explicitly dead in the list
             if attempt + 1 < retries:
                 time.sleep(delay)
-        # OSO returned the id but we couldn't read its status. Fail closed:
-        # unverified protection is treated as missing protection.
+        # Polled the whole window and never got a live status from either read.
+        # Fail closed: unverified protection is treated as missing protection.
+        logger.error(
+            "bracket child id=%s NOT confirmed after %d polls (~%.1fs) — failing closed",
+            order_id, retries, retries * delay,
+        )
         return False
+
+    def _child_status_in_list(self, order_id):
+        """Liveness of ``order_id`` from /order/list.
+
+        Returns True (present + not dead), False (present + dead), or None
+        (absent / list unreadable → caller keeps polling). /order/list omits
+        orderType but carries ordStatus, which is all liveness needs.
+        """
+        try:
+            orders = self._get("/order/list")
+        except Exception:
+            return None
+        if not isinstance(orders, list):
+            return None
+        for o in orders:
+            if o.get("id") == order_id:
+                status = str(o.get("ordStatus", "")).lower()
+                if status in self._DEAD_ORDER_STATUSES:
+                    return False
+                return True if status else None
+        return None
 
     def _handle_naked_position(
         self, order: BracketOrder, qty: int, *, stop_ok: bool, target_ok: bool,
