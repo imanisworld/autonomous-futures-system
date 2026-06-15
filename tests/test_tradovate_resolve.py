@@ -117,3 +117,99 @@ def test_auth_failure_leaves_position_open(monkeypatch):
     _wire(monkeypatch, b, [], [])
     assert b.resolve_position() is None
     assert b._last_position is not None
+
+
+# ── order-id-scoped resolution (partial fills + overlap-proof) ────────────────
+#
+# When the live fills carry orderId, resolve scopes them to OUR exact OSO
+# orders: partial entry/exit legs average (quantity-weighted), and a fill from
+# an overlapping trade can never be mistaken for ours. Falls back to the
+# price-matcher when orderId is absent (every test above exercises that path).
+
+ENTRY_OID, TARGET_OID, STOP_OID = 1001, 1002, 1003
+
+
+def _broker_with_oso(monkeypatch, qty=2):
+    b = _broker(monkeypatch)
+    b._last_position.quantity = qty
+    b._last_order_ids = {
+        "instrument": "MNQ", "entry": ENTRY_OID, "target": TARGET_OID, "stop": STOP_OID,
+    }
+    return b
+
+
+def test_partial_entry_fills_are_quantity_weighted(monkeypatch):
+    b = _broker_with_oso(monkeypatch, qty=2)
+    # 2-lot entry filled in two prints (30000, 30002) → avg 30001; target qty2 @30015.
+    _wire(monkeypatch, b, [], [
+        {"contractId": OUR_CID, "orderId": ENTRY_OID,  "qty": 1, "price": 30000.0},
+        {"contractId": OUR_CID, "orderId": ENTRY_OID,  "qty": 1, "price": 30002.0},
+        {"contractId": OUR_CID, "orderId": TARGET_OID, "qty": 2, "price": 30015.0},
+    ])
+    fill = b.resolve_position()
+    assert fill.result == "WIN" and fill.exit_reason == "TARGET_HIT"
+    assert fill.entry_price == 30001.0          # weighted mean of the two entry legs
+    assert fill.exit_price == 30015.0
+    assert fill.contracts == 2
+    # (30015 − 30001)/0.25 = 56 ticks · $0.50 · 2 = $56.00
+    assert fill.pnl_dollars == 56.0
+
+
+def test_split_target_exit_is_quantity_weighted(monkeypatch):
+    b = _broker_with_oso(monkeypatch, qty=2)
+    # exit target fills at two prices (30015, 30017) → weighted 30016; single entry.
+    _wire(monkeypatch, b, [], [
+        {"contractId": OUR_CID, "orderId": ENTRY_OID,  "qty": 2, "price": 30000.0},
+        {"contractId": OUR_CID, "orderId": TARGET_OID, "qty": 1, "price": 30015.0},
+        {"contractId": OUR_CID, "orderId": TARGET_OID, "qty": 1, "price": 30017.0},
+    ])
+    fill = b.resolve_position()
+    assert fill.exit_reason == "TARGET_HIT" and fill.exit_price == 30016.0
+    assert fill.entry_price == 30000.0
+
+
+def test_order_id_scoping_ignores_an_overlapping_trades_fill(monkeypatch):
+    b = _broker_with_oso(monkeypatch, qty=2)
+    # A DIFFERENT order (7777) left a fill at a wild price; it must not pollute
+    # our entry average — even though it shares our contract.
+    _wire(monkeypatch, b, [], [
+        {"contractId": OUR_CID, "orderId": 7777,       "qty": 10, "price": 29000.0},
+        {"contractId": OUR_CID, "orderId": ENTRY_OID,  "qty": 2,  "price": 30000.0},
+        {"contractId": OUR_CID, "orderId": TARGET_OID, "qty": 2,  "price": 30015.0},
+    ])
+    fill = b.resolve_position()
+    assert fill.entry_price == 30000.0 and fill.exit_price == 30015.0
+    assert fill.result == "WIN"
+
+
+def test_falls_back_to_price_match_when_fills_lack_order_id(monkeypatch):
+    # ids are set, but the broker returned fills WITHOUT orderId → price path.
+    b = _broker_with_oso(monkeypatch, qty=1)
+    _wire(monkeypatch, b, [],
+          [{"contractId": OUR_CID, "price": 30002.0}, {"contractId": OUR_CID, "price": 30015.0}])
+    fill = b.resolve_position()
+    assert fill.result == "WIN" and fill.entry_price == 30002.0
+
+
+def test_instrument_mismatch_falls_back_to_price_match(monkeypatch):
+    # order ids belong to a different instrument (stale) → do not scope by id.
+    b = _broker_with_oso(monkeypatch, qty=1)
+    b._last_order_ids["instrument"] = "MES"
+    _wire(monkeypatch, b, [], [
+        {"contractId": OUR_CID, "orderId": ENTRY_OID,  "qty": 1, "price": 30002.0},
+        {"contractId": OUR_CID, "orderId": TARGET_OID, "qty": 1, "price": 30015.0},
+    ])
+    fill = b.resolve_position()
+    # price-matcher still books the win from the target-priced fill
+    assert fill.result == "WIN" and fill.exit_price == 30015.0
+
+
+def test_order_ids_cleared_after_resolution(monkeypatch):
+    b = _broker_with_oso(monkeypatch, qty=2)
+    _wire(monkeypatch, b, [], [
+        {"contractId": OUR_CID, "orderId": ENTRY_OID,  "qty": 2, "price": 30000.0},
+        {"contractId": OUR_CID, "orderId": TARGET_OID, "qty": 2, "price": 30015.0},
+    ])
+    assert b.resolve_position().result == "WIN"
+    assert b._last_position is None
+    assert b._last_order_ids is None
