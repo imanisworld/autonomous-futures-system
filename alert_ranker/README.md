@@ -49,12 +49,57 @@ The service listens on `http://127.0.0.1:8010` by default.
 - `GET /status`
 - `GET /watchlist`
 - `GET /terminal` — compact Bloomberg-style options terminal state
+- `GET /rh-options` — manual RH Options Scout evaluation page
+- `GET /rh-options/sample` — pasteable RH Options Scout sample payload
+- `GET /rh-options/sample-text` — pasteable RH Options Scout notes payload
+- `GET /rh-options/recent` — latest RH Options Scout shadow evaluations
+- `POST /rh-options/evaluate` — evaluate Signa/GEX/options context and return an advisory RH order ticket
+- `POST /rh-options/evaluate-text` — parse loose notes, evaluate the setup, and return the same advisory output
+- `POST /rh-options/manage` — compare current price/premium against a shadow setup's advisory stop, target, and invalidation
 - `GET /shadow-journal` — latest hypothetical setup rows, filterable by `ticker` and `status`
 - `GET /shadow-journal/summary` — compact hypothetical win/loss and P&L summary
 - `PATCH /shadow-journal/{shadow_id}/outcome` — update hypothetical outcome fields
 - `POST /webhook/alert`
 
 `POST /webhook/alert` accepts TradingView-style context. Useful fields include `ticker`, `pattern`, `price`, `vwap`, `ema20`, `volume`, `average_volume`, `volume_ratio`, and `iv_rank`.
+
+## RH Options Scout
+
+Open the manual evaluator at:
+
+```text
+http://127.0.0.1:8010/rh-options
+```
+
+Or fetch the sample payload and post it back:
+
+```bash
+curl -s http://127.0.0.1:8010/rh-options/sample
+curl -s -X POST http://127.0.0.1:8010/rh-options/evaluate \
+  -H 'content-type: application/json' \
+  --data '{"ticker":"SPY","direction":"LONG","contract_type":"CALL","signa_score":82,"signa_grade":"A","signa_daily_direction":"BULLISH","signa_weekly_direction":"BULLISH","gex_regime":"LOW_PINNING","gex_support_wall":495,"gex_resistance_wall":510,"current_price":500,"premium":2.2,"expiry_date":"2026-07-07","dte":18,"strike":505}'
+```
+
+The page also accepts loose notes:
+
+```text
+SPY bullish
+Signa 82 A
+daily bullish weekly bullish
+GEX low pinning
+support 495 resistance 510
+price 500
+505C 7/7
+premium 2.20
+dte 18
+no earnings
+```
+
+The response is advisory-only: `TRADE`, `WATCH`, or `NO_TRADE`, failed gates, warnings, an RH-ready order ticket when actionable, and a broker preview that never submits live orders.
+
+The page also shows recent RH Scout evaluations from the shadow journal so an evaluated idea stays visible after it is logged.
+
+Use **Manage Open Idea** with a shadow id and current price or premium to get an advisory `HOLD`, `TRIM`, `EXIT`, or `INVALIDATED` action. This does not update the journal outcome or submit orders.
 
 ## Persistence
 

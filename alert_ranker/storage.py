@@ -274,6 +274,40 @@ class ScanStorage:
             for row in rows
         ]
 
+    def latest_rh_option_setups(self, limit: int = 10) -> list[StoredShadowSetup]:
+        bounded_limit = max(1, min(limit, 100))
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT j.id, j.timestamp, j.scan_id, j.ticker, j.direction, j.score,
+                       j.pattern, j.status, j.setup_inputs_json, j.provider_snapshot_json,
+                       j.selected_contract_json, j.outcome_json
+                FROM options_shadow_journal j
+                JOIN scans s ON s.id = j.scan_id
+                WHERE s.source = 'rh_options'
+                ORDER BY j.id DESC
+                LIMIT ?
+                """,
+                (bounded_limit,),
+            ).fetchall()
+        return [
+            StoredShadowSetup(
+                id=row["id"],
+                timestamp=row["timestamp"],
+                scan_id=row["scan_id"],
+                ticker=row["ticker"],
+                direction=row["direction"],
+                score=row["score"],
+                pattern=row["pattern"],
+                status=row["status"],
+                setup_inputs=json.loads(row["setup_inputs_json"] or "{}"),
+                provider_snapshot=json.loads(row["provider_snapshot_json"] or "{}"),
+                selected_contract=json.loads(row["selected_contract_json"] or "{}"),
+                outcome=json.loads(row["outcome_json"] or "{}"),
+            )
+            for row in rows
+        ]
+
     def get_shadow_setup(self, shadow_id: int) -> StoredShadowSetup | None:
         with self._connect() as conn:
             row = conn.execute(

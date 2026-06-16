@@ -1011,6 +1011,25 @@ def _missing_rh_fields(body: dict[str, Any]) -> list[str]:
 # ── GEX wall computation from RH option chain ───────────────────────────────
 
 
+def auto_check_positions(storage: ScanStorage, discord_url: str, rh_client: Any) -> dict[str, Any]:
+    """Fetch current marks from Robinhood and run stop/target hit detection.
+
+    rh_client: RHClient instance (or any object with fetch_marks_for_positions).
+    Returns the check_open_positions result enriched with marks_fetched count.
+    """
+    if not rh_client or not getattr(rh_client, "configured", False):
+        return {"error": "rh_not_configured", "open_count": 0, "hits": [], "marks_fetched": 0}
+
+    open_positions = storage.latest_shadow_setups(status="OPEN", limit=100)
+    if not open_positions:
+        return {"open_count": 0, "hits": [], "marks_fetched": 0}
+
+    marks = rh_client.fetch_marks_for_positions(open_positions)
+    result = check_open_positions(storage, discord_url, marks or None)
+    result["marks_fetched"] = len(marks)
+    return result
+
+
 def compute_gex_walls(
     chain: list[dict[str, Any]], current_price: float
 ) -> dict[str, Any]:
