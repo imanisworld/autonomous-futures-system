@@ -255,11 +255,22 @@ def test_risk_steward_flags_daily_loss_breach():
 
 def test_risk_steward_flags_circuit_breaker_streak():
     steward = RiskSteward(circuit_breaker_losses=3)
-    trades = [_loss()] * 3 + [_trade()]
+    trades = [_loss()] * 3
     report = steward.audit(trades)
     subjects = [r.subject for r in report.recommendations]
     assert "consecutive_losses" in subjects
     assert report.findings["max_consecutive_losses"] == 3
+    assert report.findings["current_consecutive_losses"] == 3
+
+
+def test_risk_steward_does_not_warn_on_reset_historical_loss_streak():
+    steward = RiskSteward(circuit_breaker_losses=3)
+    trades = [_loss()] * 3 + [_trade()]
+    report = steward.audit(trades)
+    subjects = [r.subject for r in report.recommendations]
+    assert "consecutive_losses" not in subjects
+    assert report.findings["max_consecutive_losses"] == 3
+    assert report.findings["current_consecutive_losses"] == 0
 
 
 def test_risk_steward_flags_tier_jump():

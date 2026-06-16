@@ -111,17 +111,22 @@ class RiskSteward:
 
         # ── Consecutive-loss streaks ──────────────────────────────────────────
         max_streak = _max_consecutive_losses(resolved)
-        if max_streak >= self.circuit_breaker_losses:
+        current_streak = _current_consecutive_losses(resolved)
+        if current_streak >= self.circuit_breaker_losses:
             status = worst_status(status, "WARNING")
             recs.append(Recommendation(
                 code=WATCH,
                 subject="consecutive_losses",
                 reason=(
-                    f"Max consecutive-loss streak of {max_streak} reached the circuit-breaker "
+                    f"Current consecutive-loss streak of {current_streak} reached the circuit-breaker "
                     f"threshold ({self.circuit_breaker_losses}). "
                     "Review trade quality during those sessions."
                 ),
-                evidence={"max_streak": max_streak, "threshold": self.circuit_breaker_losses},
+                evidence={
+                    "current_streak": current_streak,
+                    "max_streak": max_streak,
+                    "threshold": self.circuit_breaker_losses,
+                },
             ))
 
         # ── Contract tier transition check ────────────────────────────────────
@@ -173,6 +178,7 @@ class RiskSteward:
                 "max_drawdown_seen_pct": round(max_dd_seen * 100, 2),
                 "daily_loss_breaches": len(daily_loss_breaches),
                 "max_consecutive_losses": max_streak,
+                "current_consecutive_losses": current_streak,
             },
         )
 
@@ -186,3 +192,13 @@ def _max_consecutive_losses(trades: list[TradeRecord]) -> int:
         else:
             streak = 0
     return max_streak
+
+
+def _current_consecutive_losses(trades: list[TradeRecord]) -> int:
+    streak = 0
+    for t in reversed(trades):
+        if t.result == "LOSS":
+            streak += 1
+        else:
+            break
+    return streak
