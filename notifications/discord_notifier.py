@@ -149,8 +149,7 @@ def _bar_close_label(payload: AlertPayload, context: dict) -> str:
     """The TradingView bar close (the value the decision was made on)."""
     context_close = context.get("close")
     close = context_close if context_close is not None else payload.close
-    source = "TV payload" if context_close == payload.close else "decision context"
-    return f"{_format_price(close)} ({source})"
+    return _format_price(close)
 
 
 def _reference_price_line(live_quote: Optional[dict]) -> Optional[str]:
