@@ -61,6 +61,32 @@ def setup_payload(**overrides):
     return data
 
 
+def valid_rh_body(**overrides):
+    data = {
+        "ticker": "SPY",
+        "direction": "LONG",
+        "contract_type": "CALL",
+        "signa_score": 82,
+        "signa_grade": "A",
+        "signa_daily_direction": "BULLISH",
+        "signa_weekly_direction": "BULLISH",
+        "gex_regime": "LOW_PINNING",
+        "gex_support_wall": 495.0,
+        "gex_resistance_wall": 510.0,
+        "current_price": 500.0,
+        "premium": 2.20,
+        "expiry_date": "2026-07-07",
+        "dte": 18,
+        "strike": 505.0,
+        "earnings_date": None,
+        "option_volume": 850,
+        "open_interest": 12000,
+        "nine_ma": 498.5,
+    }
+    data.update(overrides)
+    return data
+
+
 def test_tastytrade_auth_mock_returns_session_token(tmp_path):
     async def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.path == "/sessions"
@@ -808,3 +834,227 @@ def test_alpaca_provider_blocks_order_paths(tmp_path):
             raise AssertionError("order path should be blocked")
 
     asyncio.run(run())
+
+
+def test_rh_options_evaluate_endpoint_returns_trade_for_valid_input(tmp_path):
+    cfg = scanner_config(tmp_path)
+    app = create_app(cfg)
+
+    with TestClient(app) as client:
+        response = client.post("/rh-options/evaluate", json=valid_rh_body())
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["advisory_only"] is True
+    assert body["decision"] == "TRADE"
+    assert body["order_ticket"]["ticker"] == "SPY"
+    assert body["broker_preview"]["status"] == "ADVISORY_ONLY"
+    assert isinstance(body["shadow_id"], int)
+
+
+def test_rh_options_evaluate_endpoint_returns_no_trade_for_bad_score(tmp_path):
+    cfg = scanner_config(tmp_path)
+    app = create_app(cfg)
+
+    with TestClient(app) as client:
+        response = client.post("/rh-options/evaluate", json=valid_rh_body(signa_score=50))
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["decision"] == "NO_TRADE"
+    assert "signa_score_too_low" in body["failed_gates"]
+    assert body["order_ticket"] is None
+    assert body["shadow_id"] is None
+
+
+def test_rh_options_sample_endpoint_returns_pasteable_payload(tmp_path):
+    cfg = scanner_config(tmp_path)
+    app = create_app(cfg)
+
+    with TestClient(app) as client:
+        response = client.get("/rh-options/sample")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ticker"] == "SPY"
+    assert body["gex_regime"] == "LOW_PINNING"
+    assert body["signa_score"] >= 70
+
+
+def test_rh_options_sample_text_endpoint_returns_notes_payload(tmp_path):
+    cfg = scanner_config(tmp_path)
+    app = create_app(cfg)
+
+    with TestClient(app) as client:
+        response = client.get("/rh-options/sample-text")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "SPY bullish" in body["text"]
+    assert "Signa 82 A" in body["text"]
+
+
+def test_rh_options_evaluate_text_endpoint_returns_trade(tmp_path):
+    cfg = scanner_config(tmp_path)
+    app = create_app(cfg)
+
+    with TestClient(app) as client:
+        sample = client.get("/rh-options/sample-text").json()["text"]
+        response = client.post("/rh-options/evaluate-text", json={"text": sample})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["decision"] == "TRADE"
+    assert body["order_ticket"]["ticker"] == "SPY"
+    assert body["parsed"]["missing_fields"] == []
+
+
+def test_rh_options_recent_endpoint_lists_rh_shadow_setups(tmp_path):
+    cfg = scanner_config(tmp_path)
+    app = create_app(cfg)
+
+    with TestClient(app) as client:
+        assert client.get("/rh-options/recent").json()["items"] == []
+        sample = client.get("/rh-options/sample-text").json()["text"]
+        evaluated = client.post("/rh-options/evaluate-text", json={"text": sample}).json()
+        recent = client.get("/rh-options/recent").json()
+
+    assert recent["advisory_only"] is True
+    assert recent["items"][0]["id"] == evaluated["shadow_id"]
+    assert recent["items"][0]["ticker"] == "SPY"
+    assert recent["items"][0]["selected_contract"]["action"] == "Buy to open"
+
+
+def test_rh_options_manage_endpoint_returns_management_action(tmp_path):
+    cfg = scanner_config(tmp_path)
+    app = create_app(cfg)
+
+    with TestClient(app) as client:
+        sample = client.get("/rh-options/sample-text").json()["text"]
+        evaluated = client.post("/rh-options/evaluate-text", json={"text": sample}).json()
+        managed = client.post(
+            "/rh-options/manage",
+            json={
+                "shadow_id": evaluated["shadow_id"],
+                "current_price": 500,
+                "current_premium": 4.5,
+            },
+        )
+
+    assert managed.status_code == 200
+    body = managed.json()
+    assert body["advisory_only"] is True
+    assert body["action"] == "TRIM"
+    assert body["shadow_id"] == evaluated["shadow_id"]
+
+
+def test_rh_options_manage_endpoint_rejects_missing_shadow(tmp_path):
+    cfg = scanner_config(tmp_path)
+    app = create_app(cfg)
+
+    with TestClient(app) as client:
+        managed = client.post("/rh-options/manage", json={"shadow_id": 999, "current_premium": 2.0})
+
+    assert managed.status_code == 404
+    assert managed.json()["detail"] == "shadow_setup_not_found"
+
+
+def test_rh_options_terminal_page_renders(tmp_path):
+    cfg = scanner_config(tmp_path)
+    app = create_app(cfg)
+
+    with TestClient(app) as client:
+        response = client.get("/rh-options")
+
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    assert "RH Options Scout" in response.text
+    assert "ADVISORY ONLY" in response.text
+    assert "/rh-options/evaluate" in response.text
+    assert "/rh-options/evaluate-text" in response.text
+    assert "Load Notes" in response.text
+    assert "Recent RH Evaluations" in response.text
+    assert "/rh-options/recent" in response.text
+    assert "Manage Open Idea" in response.text
+    assert "/rh-options/manage" in response.text
+
+
+# ── Earnings guard in candidate alert ────────────────────────────────────────
+
+
+def _make_scanner_with_discord(tmp_path, discord_url="http://fake-discord"):
+    cfg = scanner_config(tmp_path, webhook_url=discord_url)
+    object.__setattr__(cfg, "signa_api_enabled", True)
+    object.__setattr__(cfg, "signa_api_key_configured", True)
+    object.__setattr__(cfg, "signa_symbol_map", {})
+    storage = ScanStorage(cfg.sqlite_path)
+    tasty = TastytradeClient(
+        cfg, client=httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(500)))
+    )
+    discord = DiscordAlerter(
+        cfg, storage, client=httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(204)))
+    )
+    signa = FakeSignaClient()
+    return OptionsScanner(cfg, tasty, storage, discord, signa_client=signa)
+
+
+def test_candidate_alert_suppressed_within_5_days_of_earnings(tmp_path, monkeypatch):
+    scanner = _make_scanner_with_discord(tmp_path)
+    now = datetime(2026, 6, 16, 10, 0, tzinfo=ZoneInfo("America/New_York"))
+    earnings_soon = "2026-06-19"  # 3 days away — inside the 5-day gate
+
+    posted = []
+    monkeypatch.setattr(
+        "alert_ranker.scanner.httpx.post",
+        lambda url, **kw: posted.append(kw) or type("R", (), {"status_code": 204})(),
+    )
+
+    asyncio.run(scanner._maybe_send_candidate_alert(
+        "AAPL",
+        {"price": 200.0, "signa_score": 88, "signa_grade": "A", "signa_daily_direction": "UP", "earnings_date": earnings_soon},
+        now,
+    ))
+
+    assert posted == [], "candidate alert must be suppressed within 5 days of earnings"
+
+
+def test_candidate_alert_fires_with_earnings_note_at_6_to_14_days(tmp_path, monkeypatch):
+    scanner = _make_scanner_with_discord(tmp_path)
+    now = datetime(2026, 6, 16, 10, 0, tzinfo=ZoneInfo("America/New_York"))
+    earnings_7d = "2026-06-23"  # 7 days away — warning range
+
+    posted = []
+    monkeypatch.setattr(
+        "alert_ranker.scanner.httpx.post",
+        lambda url, **kw: posted.append(kw) or type("R", (), {"status_code": 204})(),
+    )
+
+    asyncio.run(scanner._maybe_send_candidate_alert(
+        "AAPL",
+        {"price": 200.0, "signa_score": 88, "signa_grade": "A", "signa_daily_direction": "UP", "earnings_date": earnings_7d},
+        now,
+    ))
+
+    assert len(posted) == 1
+    embed = posted[0]["json"]["embeds"][0]
+    note_fields = [f for f in embed["fields"] if "Earnings" in f.get("name", "") or "earnings" in f.get("value", "").lower()]
+    assert note_fields, "embed should include earnings warning note"
+
+
+def test_candidate_alert_fires_normally_with_no_earnings_date(tmp_path, monkeypatch):
+    scanner = _make_scanner_with_discord(tmp_path)
+    now = datetime(2026, 6, 16, 10, 0, tzinfo=ZoneInfo("America/New_York"))
+
+    posted = []
+    monkeypatch.setattr(
+        "alert_ranker.scanner.httpx.post",
+        lambda url, **kw: posted.append(kw) or type("R", (), {"status_code": 204})(),
+    )
+
+    asyncio.run(scanner._maybe_send_candidate_alert(
+        "AAPL",
+        {"price": 200.0, "signa_score": 88, "signa_grade": "A", "signa_daily_direction": "UP"},
+        now,
+    ))
+
+    assert len(posted) == 1

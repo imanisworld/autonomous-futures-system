@@ -99,11 +99,11 @@ class OptionsScanner:
             timestamp=now,
         )
         # Fire enriched options candidate alert when Signa qualifies
-        await self._maybe_send_candidate_alert(ticker, normalized)
+        await self._maybe_send_candidate_alert(ticker, normalized, now)
         return ScanOutcome(result, decision.sent, decision.reason, storage_id, shadow_id)
 
     async def _maybe_send_candidate_alert(
-        self, ticker: str, normalized: dict[str, Any]
+        self, ticker: str, normalized: dict[str, Any], now: datetime
     ) -> None:
         """Send enriched options Discord when Signa score/grade qualify.
 
@@ -135,6 +135,21 @@ class OptionsScanner:
 
         direction = "LONG" if str(direction_raw).upper() in ("BULLISH", "UP", "LONG") else "SHORT"
 
+        # Earnings guard — suppress alert if earnings within 5 days
+        earnings_note: str | None = None
+        earnings_raw = normalized.get("earnings_date")
+        if earnings_raw:
+            try:
+                from datetime import date
+                earnings_dt = date.fromisoformat(str(earnings_raw))
+                days_to_earnings = (earnings_dt - now.date()).days
+                if 0 <= days_to_earnings <= 5:
+                    return  # too close to earnings — don't ping
+                if days_to_earnings <= 14:
+                    earnings_note = f"Earnings in {days_to_earnings}d ({earnings_raw})"
+            except ValueError:
+                pass
+
         # GEX walls: use Signa pivots as proxy (S1 = put wall, R1 = call wall)
         pivot_s1 = normalized.get("signa_pivot_s1")
         pivot_r1 = normalized.get("signa_pivot_r1")
@@ -163,6 +178,7 @@ class OptionsScanner:
             call_wall=call_wall,
             put_wall=put_wall,
             regime=regime,
+            note=earnings_note,
         )
         payload = {"embeds": [embed]}
         try:
