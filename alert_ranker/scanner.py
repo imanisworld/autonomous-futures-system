@@ -305,6 +305,31 @@ class OptionsScanner:
             self.config,
             last_error=getattr(self.market_data, "last_error", None),
         ).to_dict()
+        scans = [
+            {
+                "symbol": s["ticker"],
+                "time": s["timestamp"],
+                "score": s["score"],
+                "direction": s["direction"],
+                "pattern": s["pattern"],
+                "contract": s["raw"].get("contract") or s["raw"].get("strike"),
+                "premium": s["raw"].get("option_mark"),
+            }
+            for s in latest
+        ]
+        signa = [
+            {
+                "symbol": s["ticker"],
+                "grade": s["raw"].get("signa_grade"),
+                "score": s["raw"].get("signa_score"),
+                "action": s["raw"].get("signa_action"),
+                "direction": s["raw"].get("signa_daily_direction") or s["raw"].get("signa_direction"),
+                "alertSent": s["alert_sent"],
+                "suppressedReason": s["alert_suppression_reason"] or None,
+            }
+            for s in latest
+            if s["raw"].get("signa_grade") or s["raw"].get("signa_score")
+        ]
         return {
             "service": "options-scanner",
             "advisory_only": True,
@@ -318,6 +343,8 @@ class OptionsScanner:
             "signa_api_enabled": self.config.signa_api_enabled,
             "signa_api_key_configured": self.config.signa_api_key_configured,
             "latest": latest,
+            "scans": scans,
+            "signa": signa,
         }
 
     def terminal_state(self) -> dict[str, Any]:
