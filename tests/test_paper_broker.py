@@ -263,6 +263,12 @@ class TestPositionClearing:
 
 class TestBreakevenAtOneR:
 
+    @pytest.fixture
+    def broker(self):
+        # This class exercises the 1R→breakeven trail, which is now opt-in
+        # (default off, to match the live box's static brackets). Request it.
+        return PaperBroker(breakeven_at_1r=True)
+
     def test_long_moves_stop_to_breakeven_after_one_r(self, broker, long_order):
         broker.execute_bracket(long_order)
 

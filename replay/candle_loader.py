@@ -103,6 +103,10 @@ class ReplayCandle:
     demand_top: Optional[float] = None
     demand_bottom: Optional[float] = None
     demand_wavg: Optional[float] = None
+    # Original source dict — passed through to MarketState.raw so detectors that
+    # read raw payload fields (overnight_high/low, rth_open, session_open) work
+    # in replay exactly as they do live.
+    source: Optional[dict] = None
 
     @property
     def price_vs_vwap(self) -> str:
@@ -283,6 +287,7 @@ class ReplayCandleLoader:
             demand_top=_float_or_none(raw.get("demand_top")),
             demand_bottom=_float_or_none(raw.get("demand_bottom")),
             demand_wavg=_float_or_none(raw.get("demand_wavg")),
+            source=raw,
         )
 
 
