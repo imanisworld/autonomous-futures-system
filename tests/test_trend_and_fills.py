@@ -115,6 +115,21 @@ def test_defaults_preserve_legacy_optimistic_behavior():
     assert fill.result == "WIN"
 
 
+def test_production_fill_defaults_are_honest(monkeypatch):
+    """The PaperBroker constructor stays optimistic for back-compat, but the
+    PRODUCTION config default (paper/replay) must be the honest fill model:
+    pessimistic both-hit + >=1 tick slippage. This is the lock that stops a
+    future backtest from silently inflating the win rate."""
+    from config.settings import load_config
+
+    monkeypatch.delenv("FILL_SLIPPAGE_TICKS", raising=False)
+    monkeypatch.delenv("FILL_PESSIMISTIC_BOTH_HIT", raising=False)
+    monkeypatch.setenv("SIGNA_SYMBOL_MAP", "MES:SPY,MNQ:QQQ")
+    cfg = load_config()
+    assert cfg.fill_pessimistic_both_hit is True
+    assert cfg.fill_slippage_ticks >= 1.0
+
+
 # ─── Timeframe guard ──────────────────────────────────────────────────────────
 
 from config.settings import load_config
