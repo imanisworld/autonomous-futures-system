@@ -959,9 +959,12 @@ def test_fastapi_dashboard_endpoint():
     assert "Options Lab" in resp.text
     # Embedded JSON view-model the client renders from.
     assert 'id="init-data"' in resp.text
-    # Force-open confirmation modal + close-all path live in the client script.
+    # Ops modal is present; manual flatten controls are intentionally not shown.
     assert 'id="force-modal"' in resp.text
-    assert "CLOSE ALL " in resp.text
+    assert 'id="ops-modal"' in resp.text
+    assert 'data-ops="preflight"' in resp.text
+    assert 'data-ops="discord"' in resp.text
+    assert "Emergency flattening is handled directly in Tradovate" in resp.text
     # Options Lab demo data must be unmistakably simulated.
     assert "OPTIONS LAB · DEMO DATA" in resp.text
     assert "SIMULATED" in resp.text
@@ -985,6 +988,7 @@ def test_fastapi_status_today_endpoint():
     assert "top_no_trade_reasons" in data
     assert "diagnostics" in data
     assert "items" in data["diagnostics"]
+    assert "live_preflight" in data
 
 
 def test_fastapi_status_diagnostics_endpoint(monkeypatch, tmp_path):
@@ -1192,6 +1196,109 @@ def test_tradovate_reliability_status_endpoint():
 
     assert resp.status_code == 200
     assert {"state", "ready", "last_successful_heartbeat"} <= set(resp.json())
+
+
+def test_live_preflight_status_endpoint(monkeypatch, tmp_path):
+    try:
+        from fastapi.testclient import TestClient
+        from execution import live_preflight
+        from webhook.app import app
+    except ImportError:
+        pytest.skip("fastapi[testclient] not installed")
+
+    monkeypatch.setattr(live_preflight, "DEFAULT_STATE_PATH", tmp_path / "preflight.json")
+
+    resp = TestClient(app).get("/status/live-preflight")
+
+    assert resp.status_code == 200
+    assert resp.json()["ready"] is False
+
+
+def test_live_preflight_arm_requires_prior_pass(monkeypatch, tmp_path):
+    try:
+        from fastapi.testclient import TestClient
+        from execution import live_preflight
+        from webhook.app import app
+    except ImportError:
+        pytest.skip("fastapi[testclient] not installed")
+
+    monkeypatch.setattr(live_preflight, "DEFAULT_STATE_PATH", tmp_path / "preflight.json")
+    monkeypatch.setenv("WEBHOOK_SECRET", "test-secret")
+
+    resp = TestClient(app).post(
+        "/admin/live-preflight/arm",
+        headers={"X-Webhook-Secret": "test-secret"},
+    )
+
+    assert resp.status_code == 409
+    assert resp.json()["detail"]["reason"] == "preflight_required"
+
+
+def test_live_preflight_run_endpoint_passes_clean_broker(monkeypatch, tmp_path):
+    try:
+        from fastapi.testclient import TestClient
+        from execution import live_preflight
+        from execution.tradovate_broker import AUTH_HEALTHY, AuthResult
+        import webhook.app as app_module
+        from webhook.app import app
+    except ImportError:
+        pytest.skip("fastapi[testclient] not installed")
+
+    class FakeBroker:
+        def reliability_heartbeat(self):
+            return AuthResult(AUTH_HEALTHY)
+
+        def _get(self, path):
+            return []
+
+    monkeypatch.setattr(live_preflight, "DEFAULT_STATE_PATH", tmp_path / "preflight.json")
+    monkeypatch.setattr(live_preflight, "reliability_snapshot", lambda: {
+        "state": "HEALTHY",
+        "ready": True,
+        "last_successful_heartbeat": datetime.now(timezone.utc).isoformat(),
+    })
+    monkeypatch.setattr(app_module, "_TV_BROKER", FakeBroker())
+    monkeypatch.setenv("BROKER", "tradovate")
+    monkeypatch.setenv("WEBHOOK_SECRET", "test-secret")
+
+    resp = TestClient(app).post(
+        "/admin/live-preflight/run",
+        headers={"X-Webhook-Secret": "test-secret"},
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["passed"] is True
+
+
+def test_admin_test_discord_endpoint(monkeypatch):
+    try:
+        from fastapi.testclient import TestClient
+        import webhook.app as app_module
+        from webhook.app import app
+    except ImportError:
+        pytest.skip("fastapi[testclient] not installed")
+
+    class Result:
+        sent = True
+        reason = "sent"
+
+    sent = []
+    monkeypatch.setenv("WEBHOOK_SECRET", "test-secret")
+    monkeypatch.setattr(app_module._config, "discord_webhook_url", "https://discord.test/hook")
+    monkeypatch.setattr(
+        app_module,
+        "send_discord_alert",
+        lambda config, content: sent.append(content) or Result(),
+    )
+
+    resp = TestClient(app).post(
+        "/admin/test-discord",
+        headers={"X-Webhook-Secret": "test-secret"},
+    )
+
+    assert resp.status_code == 200
+    assert resp.json() == {"ok": True, "reason": "sent"}
+    assert sent and "DISCORD TEST" in sent[0]
 
 
 def test_diagnostics_items_carry_stable_codes(monkeypatch, tmp_path):

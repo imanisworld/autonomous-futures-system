@@ -559,6 +559,10 @@ class TradovateBroker(BrokerInterface):
                         live_enabled,
                     )
                     return self._cancelled_fill(order, "LIVE_TRADING_NOT_ENABLED")
+                from execution.live_preflight import live_order_ready
+                if not live_order_ready():
+                    logger.error("BLOCKED real-money order: daily live preflight is not armed")
+                    return self._cancelled_fill(order, "LIVE_PREFLIGHT_NOT_ARMED")
 
             from execution.tradovate_supervisor import tradovate_order_ready
             if not tradovate_order_ready():

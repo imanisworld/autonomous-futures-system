@@ -113,6 +113,23 @@ def test_execute_bracket_sends_tick_rounded_children(monkeypatch):
     assert broker._last_position.target == 30224.50
 
 
+def test_live_execute_bracket_requires_daily_preflight_arm(monkeypatch):
+    broker = TradovateBroker(config=TradovateConfig(env="live"))
+    order = BracketOrder(instrument="MNQ", direction="LONG", entry=30210.0,
+                         stop=30200.0, target=30230.0, rr_ratio=2.0,
+                         strategy="vwap_hold", contracts=1)
+
+    monkeypatch.setenv("LIVE_TRADING_ENABLED", "true")
+    monkeypatch.setattr("execution.live_preflight.live_order_ready", lambda: False)
+    monkeypatch.setattr("execution.tradovate_supervisor.tradovate_order_ready", lambda: True)
+    monkeypatch.setattr(broker, "_authenticate", lambda: (_ for _ in ()).throw(AssertionError("auth should not run")))
+
+    fill = broker.execute_bracket(order)
+
+    assert fill.result == "CANCELLED"
+    assert fill.exit_reason == "LIVE_PREFLIGHT_NOT_ARMED"
+
+
 # ── detection (via OSO child ids + /order/item status) ────────────────────────
 
 def test_both_children_working_returns_true_true(monkeypatch):

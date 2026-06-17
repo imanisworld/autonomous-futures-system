@@ -570,6 +570,18 @@ def process_alert(
             order.instrument, order.direction, fill.result,
         )
         logger.error("ORDER FAILED: %s %s — %s", order.instrument, order.direction, fill.result)
+        if os.getenv("BROKER", "paper").strip().lower() == "tradovate":
+            try:
+                from notifications.discord_notifier import send_discord_alert
+                send_discord_alert(
+                    cfg,
+                    "LIVE ORDER BLOCKED: Tradovate did not accept the order. "
+                    f"No order sent/kept open. Reason: {fill.result}. "
+                    f"Setup: {order.direction} {order.instrument} {order.contracts}c "
+                    f"@ {order.entry} stop {order.stop} target {order.target}.",
+                )
+            except Exception as exc:  # pragma: no cover - notification must never affect trading
+                logger.warning("Live-order-blocked Discord alert failed: %s", exc)
         result["decision"] = "BLOCKED_EXECUTION_FAILED"
         result["fill"] = {
             "status": fill.result,

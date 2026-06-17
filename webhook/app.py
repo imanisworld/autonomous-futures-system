@@ -46,7 +46,7 @@ from execution.tradovate_supervisor import (
     run_tradovate_supervisor,
 )
 from journal.journal_logger import JournalLogger
-from notifications.discord_notifier import notify_discord
+from notifications.discord_notifier import notify_discord, send_discord_alert
 from webhook.payload import AlertPayload
 from webhook.reconciler import run_reconciler_loop
 from notifications.heartbeat import run_heartbeat_loop
@@ -672,6 +672,86 @@ async def status_broker_account() -> dict:
 async def status_tradovate_reliability() -> dict:
     """Protected operator view of the process-global broker readiness state."""
     return reliability_snapshot()
+
+
+def _live_preflight_notify(message: str) -> None:
+    send_discord_alert(_config, message)
+
+
+@app.get("/status/live-preflight")
+async def status_live_preflight() -> dict:
+    """Daily live-order preflight/arming state."""
+    from execution.live_preflight import live_order_status
+
+    state = live_order_status()
+    state["reliability"] = reliability_snapshot()
+    return state
+
+
+@app.post("/admin/live-preflight/run")
+async def admin_live_preflight_run(
+    request: Request,
+    x_webhook_secret: str | None = Header(default=None),
+    secret: str | None = Query(default=None),
+) -> JSONResponse:
+    """Run the broker/account/flat/no-working-orders preflight check."""
+    _verify_webhook_secret(await _resolve_inbound_secret(request, x_webhook_secret, secret))
+    if os.getenv("BROKER", "paper").strip().lower() != "tradovate":
+        raise HTTPException(status_code=400, detail="BROKER must be tradovate to run live preflight.")
+    from execution.live_preflight import run_preflight
+
+    result = await asyncio.to_thread(
+        run_preflight,
+        _tv_broker(),
+        notify=_live_preflight_notify,
+    )
+    return JSONResponse(content=result)
+
+
+@app.post("/admin/live-preflight/arm")
+async def admin_live_preflight_arm(
+    request: Request,
+    x_webhook_secret: str | None = Header(default=None),
+    secret: str | None = Query(default=None),
+) -> JSONResponse:
+    """Arm live trading for today after a passing preflight."""
+    _verify_webhook_secret(await _resolve_inbound_secret(request, x_webhook_secret, secret))
+    from execution.live_preflight import arm_today
+
+    result = arm_today(notify=_live_preflight_notify)
+    if not result.get("ready"):
+        raise HTTPException(status_code=409, detail=result)
+    return JSONResponse(content=result)
+
+
+@app.post("/admin/live-preflight/disarm")
+async def admin_live_preflight_disarm(
+    request: Request,
+    x_webhook_secret: str | None = Header(default=None),
+    secret: str | None = Query(default=None),
+) -> JSONResponse:
+    """Manually disarm live trading."""
+    _verify_webhook_secret(await _resolve_inbound_secret(request, x_webhook_secret, secret))
+    body = await request.json()
+    reason = str(body.get("reason") or "manual").strip() or "manual"
+    from execution.live_preflight import disarm
+
+    return JSONResponse(content=disarm(reason=reason, notify=_live_preflight_notify))
+
+
+@app.post("/admin/test-discord")
+async def admin_test_discord(
+    request: Request,
+    x_webhook_secret: str | None = Header(default=None),
+    secret: str | None = Query(default=None),
+) -> JSONResponse:
+    """Send an operator-visible Discord smoke alert."""
+    _verify_webhook_secret(await _resolve_inbound_secret(request, x_webhook_secret, secret))
+    result = send_discord_alert(
+        _config,
+        "DISCORD TEST: RiskSentinel operator alerts are reaching this channel.",
+    )
+    return JSONResponse(content={"ok": result.sent, "reason": result.reason})
 
 
 def _account_summary_blocking() -> dict:
@@ -1361,6 +1441,24 @@ def _diagnostics_payload(for_date: date) -> dict:
 
     if broker == "tradovate":
         items.append(_tradovate_env_diagnostic())
+        try:
+            from execution.live_preflight import live_order_status
+            preflight = live_order_status()
+            if preflight.get("ready"):
+                items.append(_diagnostic("ok", "Live preflight", "Live trading is armed for today."))
+            else:
+                items.append(_diagnostic(
+                    "warn",
+                    "Live preflight",
+                    f"Live orders are blocked: {preflight.get('reason')}.",
+                    "Run /admin/live-preflight/run, resolve any failed checks, then arm today.",
+                ))
+        except Exception as exc:
+            items.append(_diagnostic(
+                "warn",
+                "Live preflight",
+                f"Live preflight state is unavailable: {exc}",
+            ))
     else:
         items.append(_diagnostic("ok", "Broker", f"Broker is set to {broker}; no external gateway required."))
 
@@ -1514,6 +1612,14 @@ def _diagnostics_payload(for_date: date) -> dict:
     }
 
 
+def _safe_live_preflight_status() -> dict:
+    try:
+        from execution.live_preflight import live_order_status
+        return live_order_status()
+    except Exception as exc:
+        return {"ready": False, "reason": f"unavailable:{exc}", "armed": False}
+
+
 def _dashboard_payload(for_date: date) -> dict:
     journal = JournalLogger(log_dir=_config.log_dir)
     daily_state = journal.get_daily_state(for_date)
@@ -1588,6 +1694,7 @@ def _dashboard_payload(for_date: date) -> dict:
         "performance": journal.get_performance_stats(_config.position_sizing.starting_balance),
         "broker_gateway_reachable": None,  # IBKR-only concept; broker removed
         "diagnostics": diagnostics,
+        "live_preflight": _safe_live_preflight_status(),
         "alert_validation": alert_validation,
         "expected_timeframe_minutes": int(getattr(_config, "expected_timeframe_minutes", 15)),
         # Feed-health window + stale threshold from the one shared definition, so the
@@ -2392,6 +2499,26 @@ _DASHBOARD_HTML = r"""<!doctype html>
     .btn.short { border-color: rgba(255,68,68,0.55); color: var(--red); background: rgba(255,68,68,0.06); }
     .btn.danger { border-color: rgba(255,68,68,0.7); color: var(--red); background: rgba(255,68,68,0.10); }
     .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn.slim { padding: 9px 11px; font-size: 12px; }
+    .ops-card {
+      display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px;
+      align-items: center; margin-top: 12px; padding: 12px;
+      border: 1px solid var(--line-soft); border-radius: 10px;
+      background: rgba(255,255,255,0.018);
+    }
+    .ops-card b { font-family: var(--font-console); font-size: 13px; letter-spacing: 0.04em; }
+    .ops-card p { margin-top: 4px; color: var(--muted); font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
+    .ops-card .btn { width: auto; min-width: 128px; }
+    .ops-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; margin-top: 12px; }
+    .ops-grid .btn { min-height: 44px; }
+    .ops-secret { margin-top: 12px; }
+    .ops-output {
+      margin-top: 12px; min-height: 42px; padding: 10px;
+      border: 1px solid var(--line-soft); border-radius: 8px;
+      background: rgba(0,0,0,0.18); color: var(--muted);
+      font-family: var(--font-console); font-size: 11px; line-height: 1.45;
+      white-space: pre-wrap; overflow-wrap: anywhere;
+    }
     .force-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 6px; }
     .force-meta { color: var(--muted); font-size: 12px; margin-top: 10px; line-height: 1.5; }
 
@@ -2399,6 +2526,7 @@ _DASHBOARD_HTML = r"""<!doctype html>
     .modal-wrap { position: fixed; inset: 0; z-index: 60; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.66); padding: 18px; }
     .modal-wrap.open { display: flex; }
     .modal { width: min(420px, 100%); background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
+    .modal.ops { width: min(560px, 100%); }
     .modal h3 { font-size: 17px; margin-bottom: 6px; }
     .modal .mode-tag { font-size: 12px; font-weight: 900; letter-spacing: 0.05em; }
     .modal .kv { margin-top: 12px; }
@@ -2445,6 +2573,11 @@ _DASHBOARD_HTML = r"""<!doctype html>
       .statusbar .seg { padding: 10px 8px; }
       .statusbar .seg b { font-size: 13px; }
       .statusbar .seg span { font-size: 14px; }
+    }
+    @media (max-width: 560px) {
+      .ops-card { grid-template-columns: 1fr; }
+      .ops-card .btn { width: 100%; }
+      .ops-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -2497,6 +2630,27 @@ _DASHBOARD_HTML = r"""<!doctype html>
         <button class="btn" id="fm-confirm">Confirm</button>
       </div>
       <div class="result" id="fm-result"></div>
+    </div>
+  </div>
+
+  <div class="modal-wrap" id="ops-modal">
+    <div class="modal ops">
+      <h3>Ops Controls</h3>
+      <div class="mode-tag" id="ops-mode"></div>
+      <dl class="kv" id="ops-kv"></dl>
+      <input class="ops-secret" type="password" id="ops-secret" placeholder="Webhook secret for protected actions" autocomplete="off">
+      <div class="ops-grid">
+        <button class="btn" data-ops="preflight">Run Preflight</button>
+        <button class="btn long" data-ops="arm">Arm Live Today</button>
+        <button class="btn danger" data-ops="disarm">Disarm Live</button>
+        <button class="btn" data-ops="broker">Broker Status</button>
+        <button class="btn" data-ops="diagnostics">Run Diagnostics</button>
+        <button class="btn" data-ops="discord">Send Test Discord</button>
+      </div>
+      <div class="ops-output" id="ops-output">Choose an action.</div>
+      <div class="actions">
+        <button class="btn ghost" id="ops-close">Close</button>
+      </div>
     </div>
   </div>
 
@@ -2612,6 +2766,14 @@ _DASHBOARD_HTML = r"""<!doctype html>
     function moodLine(risk) { return RISK_MOOD[risk] || RISK_MOOD.CLEAR; }
     function modeLabel() { return INIT.paper_mode ? '📄 PAPER MODE' : '⚡ LIVE MODE'; }
     function lockLabel(lock) { return lock ? '🔒 ACTIVE' : '🔓 NONE'; }
+    function livePreflight() { return (state.today && state.today.live_preflight) || {}; }
+    function preflightStatusLine() {
+      var pf = livePreflight();
+      if (pf.ready) return ['green', 'ARMED', 'Live preflight passed and armed for today.'];
+      if (pf.last_result === true) return ['yellow', 'PASSED · NOT ARMED', 'Preflight passed; live orders remain blocked until armed.'];
+      if (pf.last_result === false) return ['red', 'FAILED', pf.reason || pf.disarmed_reason || 'preflight failed'];
+      return ['gray', 'NOT RUN', pf.reason || 'preflight required'];
+    }
     function sourcePill(kind, label) {
       return '<span class="source-pill ' + esc(kind) + '">' + esc(label) + '</span>';
     }
@@ -2626,6 +2788,15 @@ _DASHBOARD_HTML = r"""<!doctype html>
         '<div class="source-item"><b>Pulled Now</b><span>/status/today, /status/history, /status/risk, per-instrument latest webhook snapshots.</span></div>' +
         '<div class="source-item"><b>Derived Here</b><span>Risk mood, freshness age, empty states, UI grouping, and placeholder sparkline.</span></div>' +
         '<div class="source-item"><b>Not Pulled Yet</b><span>Live operator quote panel, live options chain, and order-entry/bracket controls.</span></div>' +
+        '</div></div>';
+    }
+    function opsCard() {
+      var pf = preflightStatusLine();
+      return '<div class="panel"><h2>Ops</h2>' +
+        '<div class="ops-card">' +
+        '<div><b class="' + pf[0] + '">LIVE PREFLIGHT: ' + esc(pf[1]) + '</b>' +
+        '<p>' + esc(pf[2]) + '</p></div>' +
+        '<button class="btn slim" id="open-ops" type="button">Open Ops</button>' +
         '</div></div>';
     }
 
@@ -2742,6 +2913,7 @@ _DASHBOARD_HTML = r"""<!doctype html>
         '<div class="update-line" id="last-update"></div>' +
         '</div>';
       html += sourceBoundaryPanel();
+      html += opsCard();
 
       html += '<div class="tabhead"><h1>Today</h1><span class="when">' + esc(today.date || '') + '</span></div>';
 
@@ -2770,6 +2942,8 @@ _DASHBOARD_HTML = r"""<!doctype html>
 
       html += compactPnl(today);
       el('tab-home').innerHTML = html;
+      var opsBtn = el('open-ops');
+      if (opsBtn) opsBtn.addEventListener('click', openOpsModal);
       updateAgeText();
     }
     function kv(k, v) { return '<dt>' + esc(k) + '</dt><dd>' + v + '</dd>'; }
@@ -2927,19 +3101,9 @@ _DASHBOARD_HTML = r"""<!doctype html>
     var POINTS = { MES: { stop: 7, target: 15, dollar: 5 }, MNQ: { stop: 7, target: 15, dollar: 2 }, MGC: { stop: 5, target: 10, dollar: 10 }, MCL: { stop: 0.3, target: 0.6, dollar: 100 } };
     function modeWord() { return INIT.live_trading_enabled && !INIT.paper_mode ? 'LIVE' : 'PAPER'; }
     function renderForce() {
-      // Monitor-only mode (default): render NO order-sending controls.
-      if (!INIT.manual_controls_enabled) {
-        return '<div class="panel accent-yellow"><h2>Manual Execution — Disabled</h2>' +
-          '<div class="force-meta">MODE: MONITOR ONLY · Broker actions hidden until the alert pipeline is validated. ' +
-          'No force-open, close-all, or flatten controls render in this phase. ' +
-          'Read-only broker status is shown on the Home tab.</div></div>';
-      }
-      // Force-OPEN was removed (it bypassed all risk gates). Only the CLOSE_ALL
-      // kill-switch remains — it can never open risk, only flatten it.
-      var meta = '<div class="force-meta">Force-entry is disabled. Entries only via the risk-gated alert pipeline. This is an emergency exit only.</div>';
-      var close = '<div style="margin-top:12px;"><button class="btn danger" data-force="*|CLOSE">CLOSE ALL ' + modeWord() + ' POSITIONS</button></div>';
-      return '<div class="panel accent-red"><h2>Emergency Exit — ' + modeWord() + '</h2>' +
-        meta + close + '</div>';
+      return '<div class="panel accent-yellow"><h2>Manual Execution — Disabled</h2>' +
+        '<div class="force-meta">Entries only run through the risk-gated alert pipeline. ' +
+        'Emergency flattening is handled directly in Tradovate, which remains the broker source of truth.</div></div>';
     }
     function wireForce() {
       var btns = document.querySelectorAll('[data-force]');
@@ -2986,6 +3150,62 @@ _DASHBOARD_HTML = r"""<!doctype html>
           else { el('fm-result').innerHTML = '<span class="green">' + esc(d.note || 'Request accepted.') + '</span>'; }
         }).catch(function () { el('fm-result').innerHTML = '<span class="red">Failed before reaching the server.</span>'; })
         .then(function () { el('fm-confirm').disabled = false; });
+    }
+
+    function openOpsModal() {
+      var pf = preflightStatusLine();
+      var raw = livePreflight();
+      el('ops-mode').innerHTML = '<span class="' + pf[0] + '">LIVE PREFLIGHT: ' + esc(pf[1]) + '</span>';
+      el('ops-kv').innerHTML =
+        kv('Broker', esc(INIT.broker || 'PAPER')) +
+        kv('Mode', esc(modeWord())) +
+        kv('Reason', esc(raw.reason || raw.disarmed_reason || '—')) +
+        kv('Last preflight', esc(raw.last_preflight_at || 'never'));
+      el('ops-output').textContent = 'Choose an action.';
+      el('ops-modal').classList.add('open');
+    }
+    function closeOpsModal() { el('ops-modal').classList.remove('open'); }
+    function opsSecretRequired() {
+      var secret = el('ops-secret').value.trim();
+      if (!secret) {
+        el('ops-output').innerHTML = '<span class="yellow">Webhook secret required for this action.</span>';
+        return null;
+      }
+      return secret;
+    }
+    function opsPrint(label, data, ok) {
+      var text = label + '\n' + JSON.stringify(data, null, 2);
+      el('ops-output').innerHTML = '<span class="' + (ok === false ? 'red' : 'green') + '">' + esc(text) + '</span>';
+    }
+    function opsFetch(path, opts, label) {
+      el('ops-output').textContent = 'Working…';
+      return fetch(path, opts || { cache: 'no-store' })
+        .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+        .then(function (res) { opsPrint(label, res.d, res.ok && res.d.ok !== false); return res; })
+        .catch(function (err) { opsPrint(label, { error: String(err) }, false); });
+    }
+    function protectedPost(path, body, label) {
+      var secret = opsSecretRequired();
+      if (!secret) return;
+      return opsFetch(path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Webhook-Secret': secret },
+        body: JSON.stringify(body || {})
+      }, label).then(function () { refresh(); });
+    }
+    function wireOps() {
+      var btns = document.querySelectorAll('[data-ops]');
+      Array.prototype.forEach.call(btns, function (btn) {
+        btn.addEventListener('click', function () {
+          var action = btn.getAttribute('data-ops');
+          if (action === 'preflight') return protectedPost('/admin/live-preflight/run', {}, 'Preflight');
+          if (action === 'arm') return protectedPost('/admin/live-preflight/arm', {}, 'Arm Live Today');
+          if (action === 'disarm') return protectedPost('/admin/live-preflight/disarm', { reason: 'manual_dashboard' }, 'Disarm Live');
+          if (action === 'discord') return protectedPost('/admin/test-discord', {}, 'Discord Test');
+          if (action === 'broker') return opsFetch('/status/broker-account', { cache: 'no-store' }, 'Broker Status');
+          if (action === 'diagnostics') return opsFetch('/status/diagnostics', { cache: 'no-store' }, 'Diagnostics');
+        });
+      });
     }
 
     // ── OPTIONS LAB (demo) ─────────────────────────────────────────────
@@ -3257,6 +3477,9 @@ _DASHBOARD_HTML = r"""<!doctype html>
     el('fm-cancel').addEventListener('click', closeForceModal);
     el('fm-confirm').addEventListener('click', submitForce);
     el('force-modal').addEventListener('click', function (e) { if (e.target === el('force-modal')) closeForceModal(); });
+    el('ops-close').addEventListener('click', closeOpsModal);
+    el('ops-modal').addEventListener('click', function (e) { if (e.target === el('ops-modal')) closeOpsModal(); });
+    wireOps();
 
     function renderMonitorBar() {
       var bar = el('monitorbar');
