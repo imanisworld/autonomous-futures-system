@@ -147,6 +147,13 @@ class SystemConfig:
     #       as the STOP (worst case) rather than the target.
     fill_slippage_ticks: float = 1.0
     fill_pessimistic_both_hit: bool = True
+    # 1R→breakeven stop trail (1-contract paper/replay only). DEFAULT False so
+    # the simulation matches the live box, which executes static Tradovate OSO
+    # brackets with no breakeven trail — trades run to the original stop/target.
+    # (Backtests with the trail ON understated strategies ~11% by scratching
+    # winners the box actually lets run.) Set True to model a future trailing
+    # stop. The live box never uses PaperBroker, so this flag has no live impact.
+    breakeven_at_1r: bool = False
     # Per-instrument strategy exclusions — overrides enabled_concepts for that instrument
     disabled_concepts_per_instrument: dict = field(default_factory=dict)
     # Bonus trades after normal daily max; RiskEngine requires confluence grade.
@@ -320,6 +327,10 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         fill_pessimistic_both_hit=_env_bool(
             "FILL_PESSIMISTIC_BOTH_HIT",
             bool(fill_model.get("pessimistic_both_hit", True)),
+        ),
+        breakeven_at_1r=_env_bool(
+            "BREAKEVEN_AT_1R",
+            bool(fill_model.get("breakeven_at_1r", False)),
         ),
 
         max_open_positions=position.get("max_open_positions", 1),

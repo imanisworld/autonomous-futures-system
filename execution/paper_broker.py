@@ -71,6 +71,7 @@ class PaperBroker(BrokerInterface):
         starting_balance: float = 1500.0,
         slippage_ticks: float = 0.0,
         pessimistic_both_hit: bool = False,
+        breakeven_at_1r: bool = False,
     ):
         """
         Args:
@@ -87,6 +88,9 @@ class PaperBroker(BrokerInterface):
         self._balance = float(starting_balance)
         self._slippage_ticks = max(0.0, float(slippage_ticks or 0.0))
         self._pessimistic_both_hit = bool(pessimistic_both_hit)
+        # When False, the 1R→breakeven stop trail is disabled: trades run to the
+        # original stop (full LOSS) or target (WIN), never scratched at entry.
+        self._breakeven_at_1r = bool(breakeven_at_1r)
 
     @property
     def is_live(self) -> bool:
@@ -195,7 +199,7 @@ class PaperBroker(BrokerInterface):
             one_r = pos.entry_price + initial_risk if initial_risk > 0 else None
             target_hit = next_bar.high >= pos.target
             breakeven_hit = one_r is not None and next_bar.high >= one_r
-            breakeven_active = (breakeven_hit or pos.stop == pos.entry_price) and pos.quantity == 1
+            breakeven_active = (breakeven_hit or pos.stop == pos.entry_price) and pos.quantity == 1 and self._breakeven_at_1r
             active_stop = pos.entry_price if breakeven_active else pos.stop
             breakeven_stop_active = breakeven_active
             stop_hit = next_bar.low <= active_stop
@@ -204,7 +208,7 @@ class PaperBroker(BrokerInterface):
             one_r = pos.entry_price - initial_risk if initial_risk > 0 else None
             target_hit = next_bar.low <= pos.target
             breakeven_hit = one_r is not None and next_bar.low <= one_r
-            breakeven_active = (breakeven_hit or pos.stop == pos.entry_price) and pos.quantity == 1
+            breakeven_active = (breakeven_hit or pos.stop == pos.entry_price) and pos.quantity == 1 and self._breakeven_at_1r
             active_stop = pos.entry_price if breakeven_active else pos.stop
             breakeven_stop_active = breakeven_active
             stop_hit = next_bar.high >= active_stop
@@ -245,7 +249,7 @@ class PaperBroker(BrokerInterface):
             result = "BREAKEVEN" if breakeven_stop_active else "LOSS"
         else:
             # 1-contract only: move stop to breakeven when 1R is reached
-            if breakeven_hit and pos.quantity == 1:
+            if breakeven_hit and pos.quantity == 1 and self._breakeven_at_1r:
                 pos.stop = pos.entry_price
             # Position still open — no resolution yet
             return None

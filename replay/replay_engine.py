@@ -100,6 +100,7 @@ class ReplayEngine:
             ),
             slippage_ticks=float(getattr(self.config, "fill_slippage_ticks", 0.0) or 0.0),
             pessimistic_both_hit=bool(getattr(self.config, "fill_pessimistic_both_hit", False)),
+            breakeven_at_1r=bool(getattr(self.config, "breakeven_at_1r", True)),
         )
         daily_state = DailyState(
             date=run_date,
@@ -456,7 +457,7 @@ class ReplayEngine:
                 candle.supply_top, candle.supply_bottom,
                 candle.demand_top, candle.demand_bottom,
             )) else None,
-            raw=None,
+            raw=candle.source,
         )
 
     def _htf_context_for(self, candle: ReplayCandle) -> Optional[HTFContext]:
