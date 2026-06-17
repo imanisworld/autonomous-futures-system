@@ -145,8 +145,8 @@ class SystemConfig:
     #   fill_slippage_ticks: adverse slippage on market fills (entry + stop exit).
     #   fill_pessimistic_both_hit: a bar that straddles stop AND target resolves
     #       as the STOP (worst case) rather than the target.
-    fill_slippage_ticks: float = 0.0
-    fill_pessimistic_both_hit: bool = False
+    fill_slippage_ticks: float = 1.0
+    fill_pessimistic_both_hit: bool = True
     # Per-instrument strategy exclusions — overrides enabled_concepts for that instrument
     disabled_concepts_per_instrument: dict = field(default_factory=dict)
     # Bonus trades after normal daily max; RiskEngine requires confluence grade.
@@ -314,12 +314,12 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         min_confluence_grade=str(quality.get("min_confluence_grade", "") or "").upper(),
         fill_slippage_ticks=float(
             os.getenv("FILL_SLIPPAGE_TICKS")
-            or fill_model.get("slippage_ticks", 0.0)
-            or 0.0
+            or fill_model.get("slippage_ticks", 1.0)
+            or 1.0
         ),
         fill_pessimistic_both_hit=_env_bool(
             "FILL_PESSIMISTIC_BOTH_HIT",
-            bool(fill_model.get("pessimistic_both_hit", False)),
+            bool(fill_model.get("pessimistic_both_hit", True)),
         ),
 
         max_open_positions=position.get("max_open_positions", 1),

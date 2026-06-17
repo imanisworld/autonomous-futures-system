@@ -99,6 +99,12 @@ def config() -> SystemConfig:
         ],
         signa_api_enabled=False,
         signa_api_key_configured=False,
+        # Mechanics tests use the simple/legacy fill model for deterministic
+        # outcomes (clean target = WIN). Fill-realism (slippage + pessimistic
+        # both-hit) has its own coverage in test_paper_broker.py, and the
+        # production default is locked by test_production_fill_defaults_are_honest.
+        fill_slippage_ticks=0.0,
+        fill_pessimistic_both_hit=False,
     )
 
 
