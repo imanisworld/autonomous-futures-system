@@ -396,13 +396,67 @@ class RiskEngine:
             ),
         )
 
+    def _news_date_map(self) -> Dict[str, Optional[str]]:
+        """Map blackout date -> optional 'HH:MM' ET release time.
+
+        Each news_blackout_dates entry is 'YYYY-MM-DD' (uses the default release
+        time) or 'YYYY-MM-DD HH:MM' (explicit ET release time, e.g. '08:30' for a
+        CPI/NFP print, '14:00' for an FOMC statement).
+        """
+        out: Dict[str, Optional[str]] = {}
+        for raw in (getattr(self.config, "news_blackout_dates", []) or []):
+            text = str(raw).strip()
+            if not text:
+                continue
+            parts = text.split()
+            out[parts[0]] = parts[1] if len(parts) > 1 else None
+        return out
+
     def _is_news_blackout_date(self, setup: TradeSetup) -> bool:
         if not setup.entry_time:
             return False
-        dates = set(getattr(self.config, "news_blackout_dates", []) or [])
-        if not dates:
+        date_map = self._news_date_map()
+        if not date_map:
             return False
-        return setup.entry_time.astimezone(_ET).date().isoformat() in dates
+        return setup.entry_time.astimezone(_ET).date().isoformat() in date_map
+
+    def _check_news_release_window(self, setup: TradeSetup) -> Optional[RiskResult]:
+        """Block entries ONLY within a window centered on the release time.
+
+        Outside the window, normal daily limits apply — there is no special trade
+        cap or all-day cutoff in this mode. Window length is
+        news_blackout_release_window_minutes (total, centered on the release).
+        """
+        if not setup.entry_time:
+            return None
+        et = setup.entry_time.astimezone(_ET)
+        release_str = (
+            self._news_date_map().get(et.date().isoformat())
+            or getattr(self.config, "news_blackout_release_default_et", "14:00")
+            or "14:00"
+        )
+        try:
+            release_h, release_m = map(int, str(release_str).split(":"))
+        except ValueError:
+            return None
+        window = int(getattr(self.config, "news_blackout_release_window_minutes", 30) or 30)
+        if window <= 0:
+            return None
+        release_dt = et.replace(hour=release_h, minute=release_m, second=0, microsecond=0)
+        half = timedelta(minutes=window / 2)
+        start, end = release_dt - half, release_dt + half
+        if start <= et < end:
+            return RiskResult(
+                result="REJECTED",
+                failed_rule="news_release_window",
+                reason=(
+                    f"High-impact release blackout {start.strftime('%H:%M')}-"
+                    f"{end.strftime('%H:%M')} ET (±{window // 2}m around "
+                    f"{release_h:02d}:{release_m:02d} ET release). "
+                    f"No entries inside the window; normal trading otherwise."
+                ),
+            )
+        return None
 
     def _check_news_blackout(
         self, setup: TradeSetup, daily_state: DailyState
@@ -411,6 +465,9 @@ class RiskEngine:
         mode = (getattr(self.config, "news_blackout_mode", "off") or "off").lower()
         if mode == "off" or not self._is_news_blackout_date(setup):
             return None
+
+        if mode == "release_window":
+            return self._check_news_release_window(setup)
 
         if mode == "block":
             return RiskResult(

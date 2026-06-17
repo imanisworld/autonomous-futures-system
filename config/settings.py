@@ -162,9 +162,13 @@ class SystemConfig:
     win_streak_bonus_min_grade: str = "A"
     # High-impact news/FOMC controls. Dates are YYYY-MM-DD decision days.
     news_blackout_dates: List[str] = field(default_factory=list)
-    news_blackout_mode: str = "off"  # off | block | reduced
+    news_blackout_mode: str = "off"  # off | block | reduced | release_window
     news_blackout_max_trades: int = 1
     news_blackout_cutoff_et: str = "13:30"
+    # release_window mode: block only a window (total minutes, centered) around
+    # each date's release time; default release time used for untagged dates.
+    news_blackout_release_window_minutes: int = 30
+    news_blackout_release_default_et: str = "14:00"
 
     # Future broker/capital planning (inactive while live trading is blocked)
     broker_priority: List[str] = field(default_factory=lambda: ["paper", "tradovate"])
@@ -293,6 +297,8 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         news_blackout_mode=str(daily.get("news_blackout_mode", "off") or "off").lower(),
         news_blackout_max_trades=int(daily.get("news_blackout_max_trades", 1) or 1),
         news_blackout_cutoff_et=str(daily.get("news_blackout_cutoff_et", "13:30") or "13:30"),
+        news_blackout_release_window_minutes=int(daily.get("news_blackout_release_window_minutes", 30) or 30),
+        news_blackout_release_default_et=str(daily.get("news_blackout_release_default_et", "14:00") or "14:00"),
         per_session_limits=daily.get("per_session_limits", {}),
         session_cutoffs=daily.get("session_cutoffs_et", {}),
         min_target_points=daily.get("min_target_points", {}),
@@ -432,10 +438,12 @@ def _validate_config(config: SystemConfig) -> None:
         raise ConfigError("max_consecutive_losses must be >= 1.")
     if config.bonus_trades_after_max < 0:
         raise ConfigError("bonus_trades_after_max must be >= 0.")
-    if config.news_blackout_mode not in {"off", "block", "reduced"}:
-        raise ConfigError("news_blackout_mode must be one of: off, block, reduced.")
+    if config.news_blackout_mode not in {"off", "block", "reduced", "release_window"}:
+        raise ConfigError("news_blackout_mode must be one of: off, block, reduced, release_window.")
     if config.news_blackout_max_trades < 0:
         raise ConfigError("news_blackout_max_trades must be >= 0.")
+    if config.news_blackout_release_window_minutes < 0:
+        raise ConfigError("news_blackout_release_window_minutes must be >= 0.")
     if config.min_confluence_grade and config.min_confluence_grade not in {"A+", "A", "B", "C", "WEAK", "F"}:
         raise ConfigError("min_confluence_grade must be one of: A+, A, B, C, WEAK, F.")
     if config.min_rr_ratio < 1.0:

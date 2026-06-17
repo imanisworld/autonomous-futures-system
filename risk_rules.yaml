@@ -67,41 +67,46 @@ daily_limits:
   conservative_mode: true          # Conservative: MES 1c while validating signals
   bonus_trades_after_max: 2         # After normal max, only A/A+ confluence can add trades
   bonus_min_confluence_grade: "A"
-  news_blackout_mode: "reduced"     # off | block | reduced
-  news_blackout_max_trades: 1       # On FOMC/news days, allow only one early trade
-  news_blackout_cutoff_et: "13:30"  # Stop before 14:00 ET FOMC statement volatility
-  news_blackout_dates:              # 2026 FOMC decision days from federalreserve.gov calendar
+  news_blackout_mode: "release_window"  # off | block | reduced | release_window
+  news_blackout_max_trades: 1           # (unused in release_window mode)
+  news_blackout_cutoff_et: "13:30"      # (unused in release_window mode)
+  # release_window: block ONLY a 30-min window centered on each release time.
+  # Normal daily limits (max_trades_per_day) govern the rest of the day — the
+  # downstream quality gates already filter low-quality trades.
+  news_blackout_release_window_minutes: 30
+  news_blackout_release_default_et: "08:30"   # most dates below are 8:30 ET data prints
+  news_blackout_dates:              # 8:30 ET CPI/NFP unless tagged 14:00 (FOMC)
     - "2026-01-09"
     - "2026-01-15"
-    - "2026-01-28"
+    - "2026-01-28 14:00"  # FOMC
     - "2026-02-06"
     - "2026-02-12"
     - "2026-03-06"
     - "2026-03-11"
-    - "2026-03-18"
+    - "2026-03-18 14:00"  # FOMC
     - "2026-04-03"
     - "2026-04-10"
-    - "2026-04-29"
+    - "2026-04-29 14:00"  # FOMC
     - "2026-05-01"
     - "2026-05-13"
     - "2026-06-05"
     - "2026-06-11"
-    - "2026-06-17"
+    - "2026-06-17 14:00"  # FOMC
     - "2026-07-02"
     - "2026-07-15"
-    - "2026-07-29"
+    - "2026-07-29 14:00"  # FOMC
     - "2026-08-07"
     - "2026-08-12"
     - "2026-09-04"
     - "2026-09-10"
-    - "2026-09-16"
+    - "2026-09-16 14:00"  # FOMC
     - "2026-10-02"
     - "2026-10-14"
-    - "2026-10-28"
+    - "2026-10-28 14:00"  # FOMC
     - "2026-11-06"
     - "2026-11-12"
     - "2026-12-04"
-    - "2026-12-09"
+    - "2026-12-09 14:00"  # FOMC
     - "2026-12-10"
   # Early-session loss floor: if realized P&L drops below this within the first
   # N minutes of a session, block new entries for the rest of that session.
@@ -119,8 +124,8 @@ daily_limits:
     new_york: 5                     # 3 normal + 2 bonus — must match total daily capacity
   session_cutoffs_et:               # No new entries after this time (HH:MM ET).
     # 24h: cutoffs set to each session's END so no hour is cut mid-session.
-    # FOMC volatility is still protected independently by
-    # daily_limits.news_blackout_cutoff_et (13:30) on news_blackout_dates.
+    # High-impact volatility is protected independently by the news release
+    # window (news_blackout_mode: release_window) on news_blackout_dates.
     london: "09:30"                 # = london session end
     new_york: "17:00"               # = new_york session end (maintenance halt)
     asian: "03:00"                  # = asian session end
