@@ -173,7 +173,7 @@ def test_no_trade_alert_labels_bar_close_and_12h_time():
     result = _result("NO_TRADE")
     msg = _format_message(_payload(), result)
 
-    assert "Bar close: 19505.25 (TV payload)" in msg
+    assert "Bar close: 19505.25" in msg
     # 14:30 UTC → 10:30 AM ET, 12-hour clock with meridiem.
     assert "Bar time: 2026-05-23 10:30 AM ET" in msg
     assert "10:30 ET" not in msg  # no 24-hour remnants
@@ -187,7 +187,7 @@ def test_no_trade_alert_prefers_enriched_context_close():
     result["context"]["close"] = 30712.5
     msg = _format_message(_payload(), result)
 
-    assert "Bar close: 30712.50 (decision context)" in msg
+    assert "Bar close: 30712.50" in msg  # enriched context_close still preferred, just unlabelled
 
 
 def test_no_trade_alert_shows_reference_price_clearly_labelled():
@@ -203,7 +203,7 @@ def test_no_trade_alert_shows_reference_price_clearly_labelled():
     msg = _format_message(_payload(), result)
 
     assert "Reference price: 25180.75 (ES=F/NQ=F HTTP proxy · FRESH · 3s ago)" in msg
-    assert "Bar close: 19505.25 (TV payload)" in msg  # bar close kept, distinct
+    assert "Bar close: 19505.25" in msg  # bar close kept, distinct
 
 
 def test_no_trade_alert_reference_price_unavailable():
