@@ -205,23 +205,27 @@ def _collect_stats(
 def _print_report(
     results: Dict[str, Dict[str, ModeStats]],
     goal_threshold: float,
+    modes: List[str] = None,
+    base_key: str = "baseline",
+    title: str = "SELECTOR COMPARISON",
 ) -> None:
+    modes = modes or MODES
     sep = "═" * 90
     dash = "─" * 90
     col_w = 22
 
     print(f"\n{sep}")
-    print(f"  SELECTOR COMPARISON  ·  protect threshold ${goal_threshold:.0f}")
+    print(f"  {title}  ·  protect threshold ${goal_threshold:.0f}")
     print(sep)
 
     for instrument in INSTRUMENTS:
         if instrument not in results:
             continue
         modes_data = results[instrument]
-        base = modes_data.get("baseline")
+        base = modes_data.get(base_key)
         print(f"\n  {instrument}")
         print(f"  {'─'*86}")
-        header = f"  {'Metric':<28}" + "".join(f"  {m:<{col_w}}" for m in MODES)
+        header = f"  {'Metric':<28}" + "".join(f"  {m:<{col_w}}" for m in modes)
         print(header)
         print(f"  {'─'*86}")
 
@@ -236,7 +240,7 @@ def _print_report(
             d = cur - base_val
             return f"({d:+.1f}pp)" if d != 0 else ""
 
-        stats_list = [modes_data.get(m) for m in MODES]
+        stats_list = [modes_data.get(m) for m in modes]
 
         # Total P&L
         pnl_vals = []
@@ -346,7 +350,7 @@ def _print_report(
                 all_strats.update(s.strategy_counts.keys())
         if all_strats:
             print(f"\n  Strategy mix:")
-            for strat in sorted(all_strats, key=lambda s: -(modes_data.get("baseline") or
+            for strat in sorted(all_strats, key=lambda s: -(modes_data.get(base_key) or
                     next(iter(modes_data.values()))).strategy_counts.get(s, 0)):
                 counts = []
                 for s in stats_list:
@@ -392,6 +396,12 @@ def main(argv: Optional[List[str]] = None) -> int:
         "--rerun",
         action="store_true",
         help="Re-run all replay days even if cached journals exist",
+    )
+    parser.add_argument(
+        "--gate-rip",
+        action="store_true",
+        help="Compare LIVE risk gates vs psychology-gates-OFF (keeps max_daily_loss "
+             "+ max_drawdown). Holds strategy posture constant (first_match).",
     )
     args = parser.parse_args(argv)
 
@@ -441,6 +451,41 @@ def main(argv: Optional[List[str]] = None) -> int:
         ),
     }
 
+    # ── Gate-rip axis: hold strategy posture constant, vary ONLY the risk gates.
+    # "live" = current risk_rules.yaml gates. "gates_off" = all psychology/throttle
+    # gates disabled, KEEPING max_daily_loss + max_drawdown_percent (survival floor).
+    if args.gate_rip:
+        live_strategy = dict(
+            strategy_selection_mode="first_match",  # matches the deployed box
+            allow_moderate_pullback=on,             # moderate admission is live on box
+            allow_moderate_early=on,
+        )
+        live_cfg = replace(base_config, **live_strategy)
+        gates_off_cfg = replace(
+            base_config,
+            **live_strategy,
+            # ── psychology / throttle / time gates → OFF ──
+            session_windows={},
+            session_cutoffs={},
+            per_session_limits={},
+            max_trades_per_day=10_000,           # >=1 enforced; effectively unlimited
+            bonus_trades_after_max=0,
+            max_consecutive_losses=10_000,       # >=1 enforced; effectively off
+            circuit_breaker_losses=0,            # disables circuit breaker
+            daily_profit_protect_threshold=0.0,  # off
+            early_session_loss_floor=0.0,        # disables revenge-trade floor
+            news_blackout_mode="off",
+            # ── survival floor KEPT: max_daily_loss, max_drawdown_percent untouched ──
+        )
+        mode_configs = {"live": live_cfg, "gates_off": gates_off_cfg}
+        active_modes = ["live", "gates_off"]
+        base_key = "live"
+        report_title = "GATE-RIP COMPARISON (psychology gates off; survival floor kept)"
+    else:
+        active_modes = MODES
+        base_key = "baseline"
+        report_title = "SELECTOR COMPARISON"
+
     candles_root = Path(args.candles)
     out_root = Path(args.out_dir)
     out_root.mkdir(parents=True, exist_ok=True)
@@ -461,7 +506,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"\n[comparison] {instrument} — {len(candle_files)} days")
         results[instrument] = {}
 
-        for mode in MODES:
+        for mode in active_modes:
             log_dir = out_root / instrument / mode
             if args.rerun and log_dir.exists():
                 import shutil
@@ -476,7 +521,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         print("[comparison] No results collected.", file=sys.stderr)
         return 1
 
-    _print_report(results, args.threshold)
+    _print_report(results, args.threshold, modes=active_modes, base_key=base_key, title=report_title)
     return 0
 
 

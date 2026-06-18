@@ -40,10 +40,7 @@ sessions:
 
 # Fine-grained session windows. If a session has windows configured,
 # entries are blocked by default unless a matching window has allow: true.
-session_windows:
-  asian:
-    - default: true   # 24h: asian fully open (18:00–03:00 ET). Trade count is
-                      # still capped by per_session_limits.asian + daily_limits.
+session_windows: {}   # RIPPED 2026-06-17 (was asian:default-allow) — no time-window gating (empty = all sessions fully open)
 
 session_hours_et:
   london:
@@ -58,17 +55,25 @@ session_hours_et:
 
 # ─── Daily Limits ────────────────────────────────────────────
 daily_limits:
-  max_trades_per_day: 3             # Hard ceiling, calendar-day reset
-  max_consecutive_losses: 4        # Hard stop — no more trades today after 4 consecutive losses
-  max_daily_loss: 150              # 10% of $1,500 starting balance
-  daily_profit_protect_threshold: 0 # 0 = off. If set, only risk current green-day profit after this P&L.
-  max_drawdown_percent: 0.20       # Stop if account falls 20% from peak
-  circuit_breaker_losses: 2        # Temporary pause after 2 consecutive losses (30-min cooldown)
+  # ── PSYCHOLOGY/THROTTLE GATES RIPPED 2026-06-17 ──────────────────────────────
+  # This is an ALGORITHM, not a person: human throttles (trade-count caps, tilt /
+  # revenge-trade halts, news-avoidance, profit-protect) were leaving money on the
+  # table. Backtest (556d, honest fills) of gates-off vs gates-on: MES +15.5% P&L /
+  # +0.8pp win / +$8 expectancy; MNQ +37% P&L / +1.2pp win / +$8 expectancy — and
+  # expectancy PER TRADE rose, so the extra trades are GOOD, not junk. Survival floor
+  # (max_daily_loss + max_drawdown_percent) KEPT — those are risk control, not fear.
+  # To restore the human throttles, revert this block (values preserved in git).
+  max_trades_per_day: 9999          # was 3 — unlimited (validator requires >=1)
+  max_consecutive_losses: 9999     # was 4 — tilt halt off (validator requires >=1)
+  max_daily_loss: 150              # KEPT — survival floor (10% of $1,500)
+  daily_profit_protect_threshold: 0 # off (was already 0)
+  max_drawdown_percent: 0.20       # KEPT — survival floor (stop if 20% from peak)
+  circuit_breaker_losses: 0        # was 2 — circuit breaker OFF
   circuit_breaker_pause_minutes: 30
   conservative_mode: true          # Conservative: MES 1c while validating signals
-  bonus_trades_after_max: 2         # After normal max, only A/A+ confluence can add trades
+  bonus_trades_after_max: 0         # was 2 — moot now max is unlimited
   bonus_min_confluence_grade: "A"
-  news_blackout_mode: "release_window"  # off | block | reduced | release_window
+  news_blackout_mode: "off"         # was release_window — news-avoidance OFF (algo, not human)
   news_blackout_max_trades: 1           # (unused in release_window mode)
   news_blackout_cutoff_et: "13:30"      # (unused in release_window mode)
   # release_window: block ONLY a 30-min window centered on each release time.
@@ -112,24 +117,15 @@ daily_limits:
   # Early-session loss floor: if realized P&L drops below this within the first
   # N minutes of a session, block new entries for the rest of that session.
   # Prevents revenge trading in the opening window.
-  early_session_loss_floor: -75        # dollars — stop if down $75 in first 30m of NY
+  early_session_loss_floor: 0          # RIPPED 2026-06-17 (was -75) — revenge-trade floor OFF (algo, not human). 0 = disabled.
   early_session_minutes: 30            # window length in minutes from session open
   # Win-streak bonus contracts: after N consecutive wins, allow +1 contract on
   # the next A/A+ setup only. Resets on any loss.
   win_streak_bonus_after: 3            # consecutive wins required
   win_streak_bonus_contracts: 1        # extra contracts allowed
   win_streak_bonus_min_grade: "A"      # minimum confluence grade required
-  per_session_limits:
-    asian: 1                        # Protect NY budget from overnight fills
-    london: 1                       # was 2 — two london trades drained the daily budget before NY open (2026-06-09); overnight keeps its best shot, NY keeps >=1 normal trade
-    new_york: 5                     # 3 normal + 2 bonus — must match total daily capacity
-  session_cutoffs_et:               # No new entries after this time (HH:MM ET).
-    # 24h: cutoffs set to each session's END so no hour is cut mid-session.
-    # High-impact volatility is protected independently by the news release
-    # window (news_blackout_mode: release_window) on news_blackout_dates.
-    london: "09:30"                 # = london session end
-    new_york: "17:00"               # = new_york session end (maintenance halt)
-    asian: "03:00"                  # = asian session end
+  per_session_limits: {}            # RIPPED 2026-06-17 (was asian:1/london:1/ny:5) — per-session throttle OFF (algo, not human)
+  session_cutoffs_et: {}            # RIPPED 2026-06-17 (was session-end cutoffs) — time-of-day cutoff OFF (24h algo, not human hours)
   min_target_points:                # Minimum target distance in instrument points
     MNQ: 15
     MES: 15                         # Aligned with MNQ — same structural requirement
