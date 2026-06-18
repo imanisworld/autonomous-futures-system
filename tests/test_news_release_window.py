@@ -75,11 +75,15 @@ def test_non_blackout_date_is_unrestricted(config):
     assert res.approved
 
 
-def test_real_risk_rules_load_with_release_window():
-    """The shipped risk_rules.yaml uses release_window — it must load cleanly."""
+def test_real_risk_rules_load_cleanly_with_news_off():
+    """News-avoidance was RIPPED 2026-06-17 (algo, not a person) — the shipped
+    risk_rules.yaml now ships news_blackout_mode: off. The release_window FEATURE
+    still works when explicitly configured (covered by the `config`-fixture tests
+    above); this just pins the shipped default and confirms the yaml loads clean."""
     from config.settings import load_config
     cfg = load_config()
-    assert cfg.news_blackout_mode == "release_window"
+    assert cfg.news_blackout_mode == "off"
+    # The blackout-date list + window minutes remain defined (feature is dormant,
+    # not deleted) so re-enabling is a one-line config flip.
     assert cfg.news_blackout_release_window_minutes == 30
-    # FOMC date carries an explicit 14:00 tag; data dates stay untagged (08:30).
     assert any(d.startswith("2026-06-17") and "14:00" in d for d in cfg.news_blackout_dates)
