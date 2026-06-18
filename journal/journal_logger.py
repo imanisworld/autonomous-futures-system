@@ -248,6 +248,7 @@ class JournalLogger:
         has_open_position = False
         realized_pnl = 0.0
         last_loss_at = None
+        open_trade_session = None  # session of the currently-open trade, for CANCELLED reversal
 
         for entry in entries:
             entry_type = entry.get("type")
@@ -262,9 +263,17 @@ class JournalLogger:
                         last_loss_at = _parse_ts(entry.get("ts"))
                     has_open_position = False
                 elif result == "CANCELLED":
-                    # Manual close / cancelled — clear open-position flag without
-                    # affecting P&L, win/loss streak, or win rate.
+                    # Naked-flatten / phantom-reconcile / manual cancel: the trade
+                    # never held a position, so REVERSE its trade-count increment.
+                    # A failed attempt must NOT consume the daily/per-session trade
+                    # limit (that locks the session into "doing nothing"). P&L,
+                    # win/loss streak, and win rate are untouched.
                     has_open_position = False
+                    if trade_count > 0:
+                        trade_count -= 1
+                    if open_trade_session and session_trade_counts.get(open_trade_session, 0) > 0:
+                        session_trade_counts[open_trade_session] -= 1
+                    open_trade_session = None
                 continue
 
             decision = entry.get("decision")
@@ -274,17 +283,25 @@ class JournalLogger:
             outcome_result = outcome.get("result")
 
             if decision == "TRADE" and risk_approved:
-                trade_count += 1
                 session = entry.get("session") or ""
-                if session:
-                    session_trade_counts[session] = session_trade_counts.get(session, 0) + 1
-                if outcome_result in ("WIN", "LOSS", "BREAKEVEN"):
-                    last_outcomes.append(outcome_result)
-                    if outcome_result == "LOSS":
-                        last_loss_at = _parse_ts(entry.get("ts"))
+                if outcome_result == "CANCELLED":
+                    # Inline-cancelled attempt: never held a position -> do NOT
+                    # count it toward the daily/per-session trade limit.
                     has_open_position = False
+                    open_trade_session = None
                 else:
-                    has_open_position = True
+                    trade_count += 1
+                    if session:
+                        session_trade_counts[session] = session_trade_counts.get(session, 0) + 1
+                    if outcome_result in ("WIN", "LOSS", "BREAKEVEN"):
+                        last_outcomes.append(outcome_result)
+                        if outcome_result == "LOSS":
+                            last_loss_at = _parse_ts(entry.get("ts"))
+                        has_open_position = False
+                        open_trade_session = None
+                    else:
+                        has_open_position = True
+                        open_trade_session = session
 
         # Count trailing consecutive losses and wins from outcome history
         consecutive_losses = 0
