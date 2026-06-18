@@ -38,7 +38,7 @@ DEFAULT_OUT_DIR = "logs/replay_comparison"
 DEFAULT_THRESHOLD = 300.0
 INSTRUMENTS = ["MES", "MNQ"]
 
-MODES = ["first_match", "mod_pullback", "mod_all"]
+MODES = ["baseline", "moderate", "ranked", "both"]
 
 
 # ─── Stats dataclass ──────────────────────────────────────────────────────────
@@ -218,7 +218,7 @@ def _print_report(
         if instrument not in results:
             continue
         modes_data = results[instrument]
-        base = modes_data.get("first_match")
+        base = modes_data.get("baseline")
         print(f"\n  {instrument}")
         print(f"  {'─'*86}")
         header = f"  {'Metric':<28}" + "".join(f"  {m:<{col_w}}" for m in MODES)
@@ -346,7 +346,7 @@ def _print_report(
                 all_strats.update(s.strategy_counts.keys())
         if all_strats:
             print(f"\n  Strategy mix:")
-            for strat in sorted(all_strats, key=lambda s: -(modes_data.get("first_match") or
+            for strat in sorted(all_strats, key=lambda s: -(modes_data.get("baseline") or
                     next(iter(modes_data.values()))).strategy_counts.get(s, 0)):
                 counts = []
                 for s in stats_list:
@@ -408,20 +408,36 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 1
 
     insts = args.instruments
-    all_on = {i: True for i in insts}
+    on = {i: True for i in insts}
+    off = {i: False for i in insts}
     mode_configs = {
-        # Baseline: current production gate (STRONG trend required, both walls).
-        "first_match": base_config,
-        # Admit MODERATE-PULLBACK only (confirmed-trend dip to ema9) past both walls.
-        "mod_pullback": replace(
+        # TRUE production baseline: first-match selection, STRONG-only trend gate.
+        "baseline": replace(
             base_config,
-            allow_moderate_pullback=all_on,
+            strategy_selection_mode="first_match",
+            allow_moderate_pullback=off,
+            allow_moderate_early=off,
         ),
-        # Admit ALL MODERATE (pullback + early) — "trade any moderate trend".
-        "mod_all": replace(
+        # Fear-removal ONLY: first-match + admit MODERATE trend.
+        "moderate": replace(
             base_config,
-            allow_moderate_pullback=all_on,
-            allow_moderate_early=all_on,
+            strategy_selection_mode="first_match",
+            allow_moderate_pullback=on,
+            allow_moderate_early=on,
+        ),
+        # Selector-flip ONLY: ranked selection, STRONG-only gate.
+        "ranked": replace(
+            base_config,
+            strategy_selection_mode="ranked",
+            allow_moderate_pullback=off,
+            allow_moderate_early=off,
+        ),
+        # BOTH (the full configured change): ranked + admit MODERATE.
+        "both": replace(
+            base_config,
+            strategy_selection_mode="ranked",
+            allow_moderate_pullback=on,
+            allow_moderate_early=on,
         ),
     }
 
