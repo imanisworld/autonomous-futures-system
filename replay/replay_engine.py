@@ -39,6 +39,7 @@ from replay.manifest import ReplayManifest
 from replay.replay_report import MultiDayReplayReport, ReplayReport
 from risk.risk_engine import DailyState, RiskEngine, TradeSetup
 from strategy.confluence_scorer import score_setup as _score_setup
+from strategy.shadow_setups import evaluate_shadow_setups
 from strategy.signal_engine import DecisionEngine
 from strategy.strat_classifier import StratContext, classify_from_ohlc
 
@@ -130,6 +131,11 @@ class ReplayEngine:
                 break
 
             state = self._market_state_from_candle(candle, prev_candle)
+            # Shadow setups: audit-only observation (read-only, never trades).
+            try:
+                shadow_candidates = [c.to_dict() for c in evaluate_shadow_setups(state)]
+            except Exception:
+                shadow_candidates = []
             decision = decision_engine.evaluate(state, daily_state)
             risk_result_dict = None
 
@@ -138,6 +144,8 @@ class ReplayEngine:
             if decision.decision == "TRADE" and decision.setup is not None:
                 confluence = _score_setup(state, decision.setup)
                 journal_entry = decision.to_dict()
+                if shadow_candidates:
+                    journal_entry["shadow_candidates"] = shadow_candidates
                 journal_entry["confluence"] = {
                     "score": confluence.score,
                     "grade": confluence.grade,
@@ -225,7 +233,10 @@ class ReplayEngine:
                         daily_state.has_open_position = True
                 continue
 
-            journal.log_decision(decision.to_dict(), risk_result_dict, for_date=journal_date)
+            journal_entry = decision.to_dict()
+            if shadow_candidates:
+                journal_entry["shadow_candidates"] = shadow_candidates
+            journal.log_decision(journal_entry, risk_result_dict, for_date=journal_date)
 
         total_daily_capacity = (
             self.config.max_trades_per_day

@@ -30,6 +30,7 @@ from execution.paper_broker import NextBarOHLC, PaperBroker
 from journal.journal_logger import JournalLogger
 from risk.risk_engine import DailyState, RiskEngine, TradeSetup
 from strategy.confluence_scorer import score_setup as _score_setup
+from strategy.shadow_setups import evaluate_shadow_setups
 from strategy.signal_engine import DecisionEngine
 from webhook.payload import AlertPayload
 from webhook.state_builder import build_market_state
@@ -275,6 +276,16 @@ def process_alert(
         "window_direction": state.window_direction,
     }
 
+    # Shadow setups: audit-only observation of fade/reclaim/range opportunities
+    # the live strategy does NOT trade. Read-only — never places an order; just
+    # surfaced on `result` + journal for offline study. Fail-soft.
+    try:
+        shadow_candidates = [c.to_dict() for c in evaluate_shadow_setups(state)]
+    except Exception:
+        shadow_candidates = []
+    if shadow_candidates:
+        result["shadow_candidates"] = shadow_candidates
+
     bar_ts = state.timestamp.isoformat()
     if not journal.claim_bar(instrument=state.instrument, bar_ts=bar_ts, for_date=today):
         result["decision"] = "BLOCKED_DUPLICATE_BAR"
@@ -463,6 +474,8 @@ def process_alert(
     if decision.decision != "TRADE" or decision.setup is None:
         journal_entry = decision.to_dict()
         journal_entry["context"] = _market_state_context(state)
+        if shadow_candidates:
+            journal_entry["shadow_candidates"] = shadow_candidates
         journal.log_decision(journal_entry, None, for_date=today)
         return result
 
@@ -477,6 +490,8 @@ def process_alert(
     }
     journal_entry = decision.to_dict()
     journal_entry["context"] = _market_state_context(state)
+    if shadow_candidates:
+        journal_entry["shadow_candidates"] = shadow_candidates
     journal_entry["confluence"] = result["confluence"]
 
     # ── Step 4: Risk validation ───────────────────────────────────────────────
@@ -562,6 +577,23 @@ def process_alert(
         notes=decision.setup.notes,
         contracts=contracts,
     )
+
+    # ── Schedule-mode execution gate (Phase 3 safety chokepoint) ──────────────
+    # In "current" this always allows (no behavior change). always_on_shadow
+    # suppresses ALL orders; always_on_paper allows only paper_eligible_sessions.
+    from adaptive.execution_gate import order_placement_allowed
+    _allowed, _gate_reason = order_placement_allowed(
+        schedule_mode=getattr(cfg, "schedule_mode", "current"),
+        session=state.session,
+        live_trading_enabled=getattr(cfg, "live_trading_enabled", False),
+        paper_eligible_sessions=getattr(cfg, "paper_eligible_sessions", []),
+    )
+    if not _allowed:
+        logger.info("Order suppressed by schedule gate: %s", _gate_reason)
+        result["decision"] = "SHADOW_NO_ORDER"
+        result["gate_reason"] = _gate_reason
+        return result
+
     fill = broker.execute_bracket(order)
     if fill.result != "OPEN":
         # Broker rejected or failed to place the order — do NOT mark position open.

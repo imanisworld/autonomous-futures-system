@@ -37,6 +37,17 @@ sessions:
     - new_york    # 09:30–16:59 ET (through to the maintenance halt)
   disabled: []
 
+# Schedule mode (Phase 3). Keep "current" for live — DO NOT change on the VPS.
+# always_on_* are for offline shadow research / paper only; always_on_paper is
+# rejected outright when live_trading_enabled is true.
+schedule:
+  mode: current            # current | always_on_shadow | always_on_paper
+  paper_eligible_sessions: # only these may place PAPER orders under always_on_paper
+    - asian
+    - london
+    - new_york
+  # session_gap and off_hours stay shadow-only until they have sufficient evidence.
+
 
 # Fine-grained session windows. If a session has windows configured,
 # entries are blocked by default unless a matching window has allow: true.

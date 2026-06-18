@@ -101,6 +101,17 @@ class SystemConfig:
     # Strategy
     enabled_concepts: List[str]
 
+    # ── Schedule mode (Phase 3, default preserves current behavior) ──────────
+    # "current"          : existing schedule/session gates enforced (DEFAULT).
+    # "always_on_shadow" : evaluate all sessions, never submit orders (shadow).
+    # "always_on_paper"  : evaluate all sessions, paper orders only (live rejects).
+    schedule_mode: str = "current"
+    # Sessions eligible for paper orders under always_on_paper. session_gap and
+    # off_hours stay shadow-only until they have sufficient evidence.
+    paper_eligible_sessions: List[str] = field(
+        default_factory=lambda: ["asian", "london", "new_york"]
+    )
+
     # Fine-grained session windows (optional — no window gate if session absent)
     session_windows: dict = field(default_factory=dict)
     # Per-session trade limits (optional — no limit applied if session not present)
@@ -282,6 +293,7 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
     capital = rules.get("capital_guardrails", {})
     sizing = rules.get("position_sizing", {})
     fill_model = rules.get("fill_model", {}) or {}
+    schedule = rules.get("schedule", {}) or {}
 
     config = SystemConfig(
         live_trading_enabled=False,  # Always false — enforced above
@@ -291,6 +303,10 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         allowed_sessions=sessions.get("allowed", []),
         disabled_sessions=sessions.get("disabled", []),
         session_hours=session_hours,
+        schedule_mode=str(schedule.get("mode", "current")).strip().lower(),
+        paper_eligible_sessions=schedule.get(
+            "paper_eligible_sessions", ["asian", "london", "new_york"]
+        ),
         session_windows=rules.get("session_windows", {}) or {},
 
         max_trades_per_day=daily.get("max_trades_per_day", 3),
@@ -456,6 +472,18 @@ def _validate_config(config: SystemConfig) -> None:
         raise ConfigError("No allowed instruments configured.")
     if not config.allowed_sessions:
         raise ConfigError("No allowed sessions configured.")
+    if config.schedule_mode not in {"current", "always_on_shadow", "always_on_paper"}:
+        raise ConfigError(
+            "schedule_mode must be one of: current, always_on_shadow, always_on_paper."
+        )
+    # Safety invariant: live execution may run ONLY the "current" schedule.
+    # BOTH always-on modes are forbidden when live trading is enabled.
+    if config.live_trading_enabled and config.schedule_mode != "current":
+        raise ConfigError(
+            f"schedule_mode '{config.schedule_mode}' is forbidden when "
+            "live_trading_enabled is true — live execution must use 'current' "
+            "(always-on must never place live orders)."
+        )
     if config.max_trades_per_day < 1:
         raise ConfigError("max_trades_per_day must be >= 1.")
     if config.max_consecutive_losses < 1:
