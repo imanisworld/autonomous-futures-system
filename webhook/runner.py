@@ -30,6 +30,7 @@ from execution.paper_broker import NextBarOHLC, PaperBroker
 from journal.journal_logger import JournalLogger
 from risk.risk_engine import DailyState, RiskEngine, TradeSetup
 from strategy.confluence_scorer import score_setup as _score_setup
+from strategy.shadow_setups import evaluate_shadow_setups
 from strategy.signal_engine import DecisionEngine
 from webhook.payload import AlertPayload
 from webhook.state_builder import build_market_state
@@ -275,6 +276,16 @@ def process_alert(
         "window_direction": state.window_direction,
     }
 
+    # Shadow setups: audit-only observation of fade/reclaim/range opportunities
+    # the live strategy does NOT trade. Read-only — never places an order; just
+    # surfaced on `result` + journal for offline study. Fail-soft.
+    try:
+        shadow_candidates = [c.to_dict() for c in evaluate_shadow_setups(state)]
+    except Exception:
+        shadow_candidates = []
+    if shadow_candidates:
+        result["shadow_candidates"] = shadow_candidates
+
     bar_ts = state.timestamp.isoformat()
     if not journal.claim_bar(instrument=state.instrument, bar_ts=bar_ts, for_date=today):
         result["decision"] = "BLOCKED_DUPLICATE_BAR"
@@ -463,6 +474,8 @@ def process_alert(
     if decision.decision != "TRADE" or decision.setup is None:
         journal_entry = decision.to_dict()
         journal_entry["context"] = _market_state_context(state)
+        if shadow_candidates:
+            journal_entry["shadow_candidates"] = shadow_candidates
         journal.log_decision(journal_entry, None, for_date=today)
         return result
 
@@ -477,6 +490,8 @@ def process_alert(
     }
     journal_entry = decision.to_dict()
     journal_entry["context"] = _market_state_context(state)
+    if shadow_candidates:
+        journal_entry["shadow_candidates"] = shadow_candidates
     journal_entry["confluence"] = result["confluence"]
 
     # ── Step 4: Risk validation ───────────────────────────────────────────────
