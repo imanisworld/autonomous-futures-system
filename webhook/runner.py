@@ -614,6 +614,25 @@ def process_alert(
                 )
             except Exception as exc:  # pragma: no cover - notification must never affect trading
                 logger.warning("Live-order-blocked Discord alert failed: %s", exc)
+        # The decision was journaled as a TRADE (open) above, but the broker did
+        # NOT establish a position (rejected / no-fill / naked-flattened). Book a
+        # CANCELLED outcome NOW so the journal doesn't carry a phantom-open that
+        # blocks this instrument until the 20-min reconciler sweeps it. Mirrors the
+        # reconciler's own clear, and via CANCELLED-not-counted it also un-counts
+        # the failed attempt from the daily/session trade limits.
+        journal.log_outcome(
+            instrument=order.instrument,
+            session=state.session,
+            result="CANCELLED",
+            entry_price=order.entry,
+            exit_price=None,
+            exit_reason=f"execution_failed:{fill.result}",
+            pnl_ticks=0.0,
+            pnl_dollars=0.0,
+            contracts=order.contracts,
+            for_date=today,
+        )
+        daily_state.has_open_position = False
         result["decision"] = "BLOCKED_EXECUTION_FAILED"
         result["fill"] = {
             "status": fill.result,
