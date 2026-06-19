@@ -691,6 +691,29 @@ class TradovateBroker(BrokerInterface):
     # ordStatus values that mean a child order is dead (NOT protecting the position).
     _DEAD_ORDER_STATUSES = {"rejected", "canceled", "cancelled", "expired"}
 
+    # Fields Tradovate is known to scatter the rejection reason across, depending on
+    # the rejection path. `rejectReason` (enum, e.g. InvalidPrice / MarketClosed) and
+    # the human-readable `text` carry OSO-CHILD rejects (confirmed via the Tradovate
+    # API community: a protective STOP placed too close to the live price at submit
+    # time rejects as InvalidPrice / "current price outside the price limits set").
+    # failureReason/failureText/admReason show up on command/liquidate rejects. The
+    # 2026-06-16 box diagnostic read ONLY the failure* set, so a stop-too-close reject
+    # logged reason=None. Read the UNION so the reason is always captured.
+    _REJECT_REASON_FIELDS = (
+        "rejectReason", "text", "cxlRejReason",
+        "failureReason", "failureText", "admReason", "reason",
+    )
+
+    @classmethod
+    def _extract_reject_reason(cls, o) -> str:
+        """Human-readable rejection reason from a dead order object (union of all
+        known fields). Returns 'unknown' when none are populated — in which case the
+        full order dump alongside this call carries the raw payload for inspection."""
+        if not isinstance(o, dict):
+            return "unknown"
+        parts = [f"{f}={o[f]}" for f in cls._REJECT_REASON_FIELDS if o.get(f)]
+        return "; ".join(parts) if parts else "unknown"
+
     # Tradovate has read-after-write lag: /order/item?id=<childId> can 404 for a
     # few seconds after placeOSO even though the child order exists server-side
     # (the OSO was accepted and the entry filled, so the brackets ARE placed).
@@ -736,10 +759,8 @@ class TradovateBroker(BrokerInterface):
                 status = str(o.get("ordStatus", "")).lower()
                 if status in self._DEAD_ORDER_STATUSES:
                     logger.error(
-                        "bracket child id=%s DEAD status=%s reason=%s order=%s",
-                        order_id, status,
-                        o.get("rejectReason") or o.get("text") or o.get("cxlRejReason"),
-                        o,
+                        "bracket child id=%s DEAD status=%s reason=[%s] order=%s",
+                        order_id, status, self._extract_reject_reason(o), o,
                     )
                     return False
                 if status:  # any other known status (Working/Pending/Filled/...) = live
@@ -784,6 +805,13 @@ class TradovateBroker(BrokerInterface):
             if o.get("id") == order_id:
                 status = str(o.get("ordStatus", "")).lower()
                 if status in self._DEAD_ORDER_STATUSES:
+                    # Capture the reason here too — when /order/item?id= 404s on
+                    # read-lag and we corroborate via the list, this is the ONLY
+                    # place the reject surfaces.
+                    logger.error(
+                        "bracket child id=%s DEAD (via /order/list) status=%s reason=[%s] order=%s",
+                        order_id, status, self._extract_reject_reason(o), o,
+                    )
                     return False
                 return True if status else None
         return None
