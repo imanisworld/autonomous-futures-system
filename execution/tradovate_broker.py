@@ -622,7 +622,14 @@ class TradovateBroker(BrokerInterface):
                 offset = tol_ticks * tick
                 raw_limit = float(order.entry) + (offset if order.direction == "LONG" else -offset)
                 limit_px = _round_to_tick(raw_limit, root)
-                entry_leg = {"orderType": "Limit", "price": limit_px}
+                # timeInForce=IOC: Tradovate self-cancels an unfilled limit entry
+                # immediately, so no resting parent can fill on a LATER bar outside
+                # the signal context. The post-placeOSO poll below classifies the
+                # result and is the fallback if IOC is ignored. (If a future Tradovate
+                # rejects the OSO for carrying IOC, the placeOSO-REJECTED path fails
+                # SAFE — no trade — and dropping this one field leaves poll-and-cancel
+                # still enforcing no-fill safety.)
+                entry_leg = {"orderType": "Limit", "price": limit_px, "timeInForce": "IOC"}
                 logger.info(
                     "Limit entry (#2) %s %s: plan=%s cap=%s (tol=%g ticks)",
                     root, order.direction, order.entry, limit_px, tol_ticks,
@@ -673,6 +680,40 @@ class TradovateBroker(BrokerInterface):
                 "Tradovate bracket placed: entry=%s target=%s stop=%s instrument=%s dir=%s",
                 order_id, target_id, stop_id, order.instrument, order.direction,
             )
+
+            # Limit-entry no-fill guard (#2): a capped Limit entry can rest unfilled
+            # when price has already run past the cap. Before opening a position,
+            # confirm the entry actually filled — otherwise CANCEL the OSO so it can
+            # never fill on a later bar OUTSIDE the original signal context, and
+            # report NO_FILL WITHOUT journaling a position. (Market entries skip this
+            # — they fill immediately by definition.)
+            if entry_leg.get("orderType") == "Limit":
+                status = self._entry_status(order_id)
+                if status == "dead":
+                    # IOC-cancelled / rejected → no fill; bracket children never armed.
+                    logger.warning(
+                        "Limit entry (#2) NOT filled (status=dead) — no position opened. %s %s cap=%s",
+                        root, order.direction, limit_px,
+                    )
+                    self._last_position = None
+                    self._last_order_ids = None
+                    return self._cancelled_fill(order, "ENTRY_NOT_FILLED")
+                if status == "working":
+                    # Resting limit (IOC ignored) → cancel the OSO now so it can't
+                    # fill late. Safe: an unfilled entry means the children are
+                    # inactive, so there is NO naked position to protect.
+                    n = self._cancel_oso(order_id, target_id, stop_id)
+                    logger.warning(
+                        "Limit entry (#2) resting unfilled — OSO cancelled (n=%d), no position. %s %s cap=%s",
+                        n, root, order.direction, limit_px,
+                    )
+                    self._last_position = None
+                    self._last_order_ids = None
+                    return self._cancelled_fill(order, "ENTRY_NOT_FILLED")
+                # status "filled" or "unknown" → fall through to open + bracket verify.
+                # "unknown" (read-lag) NEVER cancels a possibly-filled entry — the
+                # naked-flatten safety net in _verify_bracket_children covers the case
+                # the brackets turn out not to be live.
 
             self._last_position = Position(
                 instrument=order.instrument,
@@ -1001,6 +1042,56 @@ class TradovateBroker(BrokerInterface):
             except Exception as exc:
                 logger.warning("cancel: /order/cancelorder id=%s failed: %s", oid, exc)
         return cancelled
+
+    def _cancel_oso(self, *order_ids) -> int:
+        """Cancel specific OSO order ids (entry + children) by id — used by the
+        limit-entry no-fill guard to tear down a resting unfilled OSO without
+        touching unrelated working orders. Best-effort; ignores per-id errors."""
+        n = 0
+        for oid in order_ids:
+            if not oid:
+                continue
+            try:
+                self._post("/order/cancelorder", {"orderId": oid})
+                n += 1
+            except Exception as exc:
+                logger.warning("limit-entry cancel: cancelorder id=%s failed: %s", oid, exc)
+        return n
+
+    _ENTRY_FILL_RETRIES = 5
+    _ENTRY_FILL_DELAY = 0.4
+
+    def _entry_status(self, order_id, retries: Optional[int] = None,
+                      delay: Optional[float] = None) -> str:
+        """Classify a limit entry order shortly after placeOSO:
+
+            "filled"  — ordStatus Filled → proceed to open the position
+            "dead"    — rejected/canceled/expired (IOC no-fill) → no position
+            "working" — still resting unfilled after the window → cancel it
+            "unknown" — never readable (read-lag) → caller proceeds + bracket-verify
+
+        Polls /order/item?id= with a short backoff. Fail-SAFE: only an explicit
+        Working status triggers a cancel; an unconfirmed read NEVER cancels a
+        possibly-filled entry (which could strand a naked position)."""
+        retries = self._ENTRY_FILL_RETRIES if retries is None else retries
+        delay = self._ENTRY_FILL_DELAY if delay is None else delay
+        working_seen = False
+        live = {"working", "pending", "accepted", "suspended"}
+        for attempt in range(max(1, retries)):
+            try:
+                o = self._get(f"/order/item?id={order_id}")
+                st = str(o.get("ordStatus", "")).lower()
+                if st == "filled":
+                    return "filled"
+                if st in self._DEAD_ORDER_STATUSES:
+                    return "dead"
+                if st in live:
+                    working_seen = True
+            except Exception:
+                pass  # read-after-write lag — keep polling, never assume dead
+            if attempt + 1 < retries:
+                time.sleep(delay)
+        return "working" if working_seen else "unknown"
 
     def cancel_all(self) -> None:
         """Cancel all open orders."""
