@@ -72,3 +72,70 @@ def test_short_entry_cap_is_below_plan(monkeypatch):
     # SHORT cap = entry - 2 ticks = 7550.0 - 0.5 = 7549.5
     assert cap["body"]["orderType"] == "Limit"
     assert cap["body"]["price"] == 7549.5
+
+
+# ── #2 limit-entry no-fill lifecycle (IOC emulation: poll → open-or-cancel) ──
+import execution.tradovate_broker as tb
+
+
+def _mock_oso(monkeypatch, b, entry_status, posts=None):
+    """placeOSO succeeds (ids 111/222/333); /order/item returns entry_status."""
+    posts = posts if posts is not None else []
+    def fake_post(path, body, **k):
+        posts.append((path, body))
+        if path == "/order/placeOSO":
+            return {"orderId": 111, "oso1Id": 222, "oso2Id": 333}
+        return {}
+    def fake_get(path, **k):
+        if "/order/item" in path:
+            return {"ordStatus": entry_status}
+        return []
+    monkeypatch.setattr(b, "_post", fake_post)
+    monkeypatch.setattr(b, "_get", fake_get)
+    monkeypatch.setattr(tb.time, "sleep", lambda *a, **k: None)  # no real backoff in tests
+    return posts
+
+
+def test_limit_entry_fill_opens_position(monkeypatch):
+    monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS", "2")
+    b = _broker(monkeypatch)
+    _mock_oso(monkeypatch, b, entry_status="Filled")
+    monkeypatch.setattr(b, "_verify_bracket_children", lambda **k: (True, True))
+    fill = b.execute_bracket(_long_order())
+    assert fill.result == "OPEN"
+    assert b._last_position is not None and b._last_position.open
+
+
+def test_limit_entry_dead_opens_nothing(monkeypatch):
+    # IOC-cancelled / rejected entry → no fill → CANCELLED, journal NOT marked open.
+    monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS", "2")
+    b = _broker(monkeypatch)
+    _mock_oso(monkeypatch, b, entry_status="Canceled")
+    fill = b.execute_bracket(_long_order())
+    assert fill.result == "CANCELLED"
+    assert fill.exit_reason == "ENTRY_NOT_FILLED"
+    assert b._last_position is None
+
+
+def test_limit_entry_resting_cancels_oso_no_position(monkeypatch):
+    # Resting Working limit (IOC ignored) → cancel entry + both children, no position.
+    monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS", "2")
+    b = _broker(monkeypatch)
+    posts = _mock_oso(monkeypatch, b, entry_status="Working")
+    fill = b.execute_bracket(_long_order())
+    assert fill.result == "CANCELLED"
+    assert fill.exit_reason == "ENTRY_NOT_FILLED"
+    assert b._last_position is None
+    cancels = {body.get("orderId") for path, body in posts if path == "/order/cancelorder"}
+    assert cancels == {111, 222, 333}   # entry + target + stop torn down
+
+
+def test_market_entry_skips_nofill_guard(monkeypatch):
+    # tol=0 → Market entry → no fill poll, no ENTRY_NOT_FILLED path (regression).
+    monkeypatch.delenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS", raising=False)
+    b = _broker(monkeypatch)
+    posts = _mock_oso(monkeypatch, b, entry_status="Working")
+    monkeypatch.setattr(b, "_verify_bracket_children", lambda **k: (True, True))
+    fill = b.execute_bracket(_long_order())
+    assert fill.result == "OPEN"
+    assert not [p for p, _ in posts if p == "/order/cancelorder"]
