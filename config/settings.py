@@ -165,6 +165,24 @@ class SystemConfig:
     # winners the box actually lets run.) Set True to model a future trailing
     # stop. The live box never uses PaperBroker, so this flag has no live impact.
     breakeven_at_1r: bool = False
+    # Quality gate (#1): when True, only a TRENDING market condition may trade —
+    # RANGE_BOUND / CHOPPY / DEAD all reject (MARKET_CONDITION_NOT_TRENDING). The
+    # 555-day replay never took a single trade in a non-TRENDING condition (0/1274),
+    # so this is zero-regression on the validated edge while blocking the live
+    # out-of-distribution false-breakout entries (e.g. RANGE_BOUND orb_breakout).
+    require_trending_condition: bool = True
+    # Quality gate (#3): ORB-anchored stop offset in ticks beyond the ORB boundary.
+    # Per instrument; falls back to the legacy hard-coded 8 ticks when unset. The
+    # legacy 8-ticks-past-ORB stop is only ~10 ticks from entry — noise-width — so a
+    # good fill still gets shaken out on normal post-breakout wiggle. Widen here and
+    # validate on replay before changing live.
+    orb_stop_ticks: dict = field(default_factory=dict)
+    # Execution (#2): cap entry slippage by submitting a Limit entry at
+    # entry ± this many ticks instead of a Market order. 0 = Market (legacy, default,
+    # no live change). >0 fills at the limit price or better and SKIPS the bar if
+    # price has already run past it — a limit entry can miss a fill a market order
+    # would guarantee, which is the intended "don't chase the breakout" behavior.
+    entry_slippage_tolerance_ticks: float = 0.0
     # Per-instrument strategy exclusions — overrides enabled_concepts for that instrument
     disabled_concepts_per_instrument: dict = field(default_factory=dict)
     # Bonus trades after normal daily max; RiskEngine requires confluence grade.
@@ -391,8 +409,20 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
 
         tradable_states=condition.get("tradable_states", ["TRENDING", "RANGE_BOUND"]),
         non_tradable_states=condition.get("non_tradable_states", ["CHOPPY", "DEAD"]),
+        require_trending_condition=_env_bool(
+            "REQUIRE_TRENDING_CONDITION",
+            bool(condition.get("require_trending", True)),
+        ),
 
         enabled_concepts=strategy.get("enabled_concepts", []),
+        orb_stop_ticks=strategy.get("orb_stop_ticks", {}),
+        entry_slippage_tolerance_ticks=float(
+            os.getenv(
+                "ENTRY_SLIPPAGE_TOLERANCE_TICKS",
+                strategy.get("entry_slippage_tolerance_ticks", 0),
+            )
+            or 0
+        ),
         strategy_selection_mode=str(
             strategy.get("selection_mode", "first_match") or "first_match"
         ).lower(),

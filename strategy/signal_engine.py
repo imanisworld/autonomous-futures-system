@@ -300,6 +300,24 @@ class DecisionEngine:
                 confidence_score=0,
             )
 
+        # TRENDING-only gate (#1): the validated edge was earned exclusively in
+        # TRENDING conditions (the 555-day replay took 0/1274 trades in any other
+        # state). RANGE_BOUND passes the non_tradable_states check above but is
+        # out-of-distribution for every setup — block it here so a live Pine
+        # RANGE_BOUND label can't admit a false-breakout the backtest never saw.
+        if self.config.require_trending_condition and condition != "TRENDING":
+            return DecisionOutput(
+                timestamp=now,
+                instrument=state.instrument,
+                session=state.session,
+                decision="NO_TRADE",
+                market_condition=condition,
+                reason=f"Market condition is {condition}, not TRENDING. "
+                       "Only TRENDING conditions are traded.",
+                failed_gates=["MARKET_CONDITION_NOT_TRENDING"],
+                confidence_score=0,
+            )
+
         gate_direction = self._infer_gate_direction(state)
         failed_gates: list[str] = []
 
@@ -1257,6 +1275,10 @@ class DecisionEngine:
 
         tick = self.TICK_SIZE.get(state.instrument, 0.25)
         max_stop_ticks = self.MAX_ORB_STOP_TICKS.get(state.instrument, 80)
+        # Stop offset beyond the ORB boundary (#3). Legacy default = 8 ticks, which
+        # places the stop only ~10 ticks from entry — noise-width. Widen per
+        # instrument via config.orb_stop_ticks (validated on replay).
+        orb_stop_off = tick * float(self.config.orb_stop_ticks.get(state.instrument, 8))
 
         if state.orb.status == "above":
             if state.vwap.price_vs_vwap != "above":
@@ -1270,7 +1292,7 @@ class DecisionEngine:
             if state.volume.relative is not None and state.volume.relative < 1.2:
                 return None
             entry = state.orb.high + (tick * 2)
-            orb_stop = state.orb.high - (tick * 8)
+            orb_stop = state.orb.high - orb_stop_off
             max_stop = entry - (tick * max_stop_ticks)
             stop = max(orb_stop, max_stop)
             risk = entry - stop
@@ -1300,7 +1322,7 @@ class DecisionEngine:
             if state.volume.relative is not None and state.volume.relative < 1.2:
                 return None
             entry = state.orb.low - (tick * 2)
-            orb_stop = state.orb.low + (tick * 8)
+            orb_stop = state.orb.low + orb_stop_off
             max_stop = entry + (tick * max_stop_ticks)
             stop = min(orb_stop, max_stop)
             risk = stop - entry

@@ -378,13 +378,28 @@ class TestDecisionEngineMarketCondition:
         # Sample fixture is TRENDING with orb_reclaim conditions
         assert decision.decision == "TRADE"
 
-    def test_range_bound_eligible(self, engine, fresh_market_state):
-        """RANGE_BOUND market should not be immediately rejected."""
+    def test_range_bound_rejected_under_trending_gate(self, engine, fresh_market_state):
+        """RANGE_BOUND is rejected by the TRENDING-only gate (#1, default on).
+
+        The 555-day replay took 0/1274 trades in any non-TRENDING condition, so the
+        validated edge is TRENDING-only; a live RANGE_BOUND label must not admit a
+        false-breakout the backtest never saw (regression for the 2026-06-18 losses).
+        """
         state = deepcopy(fresh_market_state)
         state.market_condition = "RANGE_BOUND"
         decision = engine.evaluate(state, DailyState())
-        # RANGE_BOUND is tradable — condition should not be rejection reason
-        assert "RANGE_BOUND" not in decision.reason or decision.decision == "TRADE"
+        assert decision.decision == "NO_TRADE"
+        assert "MARKET_CONDITION_NOT_TRENDING" in decision.failed_gates
+
+    def test_range_bound_tradable_when_gate_disabled(self, config, fresh_market_state):
+        """With require_trending_condition off, RANGE_BOUND passes the condition
+        gate (legacy behavior) — not rejected on condition grounds."""
+        import dataclasses
+        engine = DecisionEngine(config=dataclasses.replace(config, require_trending_condition=False))
+        state = deepcopy(fresh_market_state)
+        state.market_condition = "RANGE_BOUND"
+        decision = engine.evaluate(state, DailyState())
+        assert "NOT_TRENDING" not in (decision.reason or "")
 
 
 class TestDecisionEngineORBSetup:
@@ -411,6 +426,36 @@ class TestDecisionEngineORBSetup:
         if decision.decision == "TRADE":
             assert decision.setup.direction == "SHORT"
             assert decision.setup.strategy == "orb_rejection"
+
+
+class TestORBBreakoutStopWidth:
+    """#3: ORB-breakout stop offset is configurable; legacy default = 8 ticks."""
+
+    def _breakout_state(self, fresh_market_state):
+        from context.market_context import OHLCData, VolumeData
+        state = deepcopy(fresh_market_state)
+        state.instrument = "MES"
+        state.orb = ORBData(high=7500.0, low=7490.0, timeframe_minutes=15, status="above")
+        state.trend = TrendData(direction="UP", strength="STRONG", ema_fast_above_slow=True)
+        state.vwap = VWAPData(value=7495.0, price_vs_vwap="above", reclaimed=False, holding=True)
+        # close meaningfully above ORB high (orb.high + 2 ticks = 7500.5)
+        state.ohlc = OHLCData(open=7499.0, high=7503.0, low=7498.5, close=7502.0, timeframe=15)
+        state.volume = VolumeData(current_bar=1500.0, avg_bar=1000.0, relative=1.5)
+        return state
+
+    def test_default_orb_stop_is_legacy_8_ticks(self, engine, fresh_market_state):
+        setup = engine._try_orb_breakout(self._breakout_state(fresh_market_state))
+        assert setup is not None and setup.strategy == "orb_breakout"
+        # entry = 7500 + 2t = 7500.5 ; stop = orb.high - 8t = 7498.0
+        assert setup.stop == pytest.approx(7498.0)
+
+    def test_orb_stop_widens_with_config(self, config, fresh_market_state):
+        import dataclasses
+        engine = DecisionEngine(config=dataclasses.replace(config, orb_stop_ticks={"MES": 20}))
+        setup = engine._try_orb_breakout(self._breakout_state(fresh_market_state))
+        assert setup is not None
+        # stop = orb.high - 20t = 7500 - 5.0 = 7495.0 (wider risk than legacy)
+        assert setup.stop == pytest.approx(7495.0)
 
 
 class TestStrategyCandidateRanking:
