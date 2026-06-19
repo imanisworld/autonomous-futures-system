@@ -82,21 +82,24 @@ def _round_to_tick(price: float, instrument: str) -> float:
     return round(round(float(price) / tick) * tick, 4)
 
 
-def _entry_slippage_tolerance_ticks() -> float:
-    """Limit-entry slippage cap in ticks (#2), read from the env at submit time.
+def _entry_slippage_tolerance_ticks(instrument: str = "") -> float:
+    """PER-INSTRUMENT limit-entry slippage cap in ticks (#2), read from env.
 
-    0 (default) keeps the legacy Market entry — guaranteed fill, no cap on
-    slippage. >0 sends a Limit entry at entry ± tolerance so a fast breakout can
-    no longer fill 26–52 ticks past plan (see the 2026-06-18 loss analysis).
+    Looks up ENTRY_SLIPPAGE_TOLERANCE_TICKS_<ROOT> (e.g. _MES, _MNQ) first, then
+    falls back to the global ENTRY_SLIPPAGE_TOLERANCE_TICKS. Per-instrument is
+    REQUIRED because the right cap differs by contract — e.g. MES 4 ticks (1.0 pt)
+    vs MNQ 16 ticks (4.0 pt); a single global value forces a bad compromise.
 
-    CAVEAT before enabling live: a Limit entry priced through the market fills
-    immediately, but if price has already run past the cap the parent OSO RESTS
-    unfilled — the bracket children never arm and the working order lingers until
-    the next bar re-evaluates. Validate the resting-order lifecycle (cancel-on-
-    next-bar) before flipping this on.
+    0 (default) keeps the legacy Market entry. >0 sends a capped Limit entry so a
+    fast breakout can't fill 26–52 ticks past plan (2026-06-18 loss analysis). The
+    resting-unfilled hazard is handled by the IOC + no-fill guard in execute_bracket.
     """
+    root = (instrument or "").replace("1!", "").upper()
+    raw = os.getenv(f"ENTRY_SLIPPAGE_TOLERANCE_TICKS_{root}") if root else None
+    if raw is None:
+        raw = os.getenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS", "0")
     try:
-        return max(0.0, float(os.getenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS", "0") or 0))
+        return max(0.0, float(raw or 0))
     except ValueError:
         return 0.0
 
@@ -616,7 +619,7 @@ class TradovateBroker(BrokerInterface):
             # ENTRY_SLIPPAGE_TOLERANCE_TICKS > 0, use a Limit entry capped at
             # entry ± tolerance so breakout fills can't chase far past plan.
             entry_leg = {"orderType": "Market"}
-            tol_ticks = _entry_slippage_tolerance_ticks()
+            tol_ticks = _entry_slippage_tolerance_ticks(root)
             if tol_ticks > 0:
                 tick = _TICK_SIZE.get(root, 0.25)
                 offset = tol_ticks * tick
