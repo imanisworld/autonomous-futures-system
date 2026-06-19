@@ -82,6 +82,25 @@ def _round_to_tick(price: float, instrument: str) -> float:
     return round(round(float(price) / tick) * tick, 4)
 
 
+def _entry_slippage_tolerance_ticks() -> float:
+    """Limit-entry slippage cap in ticks (#2), read from the env at submit time.
+
+    0 (default) keeps the legacy Market entry — guaranteed fill, no cap on
+    slippage. >0 sends a Limit entry at entry ± tolerance so a fast breakout can
+    no longer fill 26–52 ticks past plan (see the 2026-06-18 loss analysis).
+
+    CAVEAT before enabling live: a Limit entry priced through the market fills
+    immediately, but if price has already run past the cap the parent OSO RESTS
+    unfilled — the bracket children never arm and the working order lingers until
+    the next bar re-evaluates. Validate the resting-order lifecycle (cancel-on-
+    next-bar) before flipping this on.
+    """
+    try:
+        return max(0.0, float(os.getenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS", "0") or 0))
+    except ValueError:
+        return 0.0
+
+
 def _parse_api_key_id(value: str | None) -> int:
     raw = (value or "0").strip().strip("\"'")
     if not raw:
@@ -593,6 +612,22 @@ class TradovateBroker(BrokerInterface):
                     root, order.target, tick_target, order.stop, tick_stop,
                 )
 
+            # Entry leg (#2): Market by default (legacy, guaranteed fill). When
+            # ENTRY_SLIPPAGE_TOLERANCE_TICKS > 0, use a Limit entry capped at
+            # entry ± tolerance so breakout fills can't chase far past plan.
+            entry_leg = {"orderType": "Market"}
+            tol_ticks = _entry_slippage_tolerance_ticks()
+            if tol_ticks > 0:
+                tick = _TICK_SIZE.get(root, 0.25)
+                offset = tol_ticks * tick
+                raw_limit = float(order.entry) + (offset if order.direction == "LONG" else -offset)
+                limit_px = _round_to_tick(raw_limit, root)
+                entry_leg = {"orderType": "Limit", "price": limit_px}
+                logger.info(
+                    "Limit entry (#2) %s %s: plan=%s cap=%s (tol=%g ticks)",
+                    root, order.direction, order.entry, limit_px, tol_ticks,
+                )
+
             # Place bracket via OSO (On Submit, send bracket child orders)
             body = {
                 "accountSpec": self.config.username,
@@ -600,7 +635,7 @@ class TradovateBroker(BrokerInterface):
                 "action": action,
                 "symbol": contract_symbol,
                 "orderQty": qty,
-                "orderType": "Market",
+                **entry_leg,
                 "isAutomated": True,
                 "bracket1": {
                     "action": close_action,

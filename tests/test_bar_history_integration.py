@@ -47,11 +47,16 @@ def test_window_vetoes_chop_label_on_continuous_downtrend(tmp_path):
     )
     result = process_alert(payload, config=_cfg(), log_dir=log_dir, for_date=base.date())
 
-    # The window read the continuous downtrend...
+    # The window read the continuous downtrend, so the CHOPPY label is vetoed —
+    # the bar is NOT rejected as a hard non-tradable (CHOPPY/DEAD) market.
     assert result["window_direction"] == "DOWN"
-    # ...so CHOPPY is no longer the blocker.
     gates = result.get("failed_gates") or []
-    assert not any("MARKET_CONDITION" in str(g) for g in gates)
+    assert "MARKET_CONDITION_NOT_TRADABLE" not in gates  # chop veto held
+    # But the veto lands the bar in RANGE_BOUND, and the TRENDING-only gate (#1,
+    # default on) blocks every non-TRENDING condition — the validated edge was
+    # earned solely in TRENDING (0/1274 replay trades elsewhere). So a vetoed-chop
+    # bar no longer trades on its own; it needs a genuine TRENDING label.
+    assert "MARKET_CONDITION_NOT_TRENDING" in gates
 
 
 def test_no_prior_history_leaves_window_none(tmp_path):
