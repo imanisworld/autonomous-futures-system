@@ -170,3 +170,42 @@ def test_shadow_risk_includes_confluence(config, fresh_market_state):
     assert cand is not None
     assert cand.risk_failed_rule != "min_confluence_grade"
     assert cand.block_type == SETUP_BLOCKED
+
+
+# ── Phantom-open prevention: execution failure must clear the journal open ────
+
+def test_execution_failure_clears_phantom_open(tmp_path, monkeypatch):
+    """A TRADE decision whose execution returns non-OPEN (reject / no-fill /
+    naked-flatten) must NOT leave a phantom open in the journal. A CANCELLED
+    outcome is booked immediately so the NEXT bar sees the instrument FLAT,
+    instead of blocked for ~20 min until the reconciler sweeps it. Regression for
+    the 2026-06-19 limit-entry no-fill phantom churn."""
+    from datetime import date
+    from config.settings import load_config
+    from webhook.runner import process_alert
+    from journal.journal_logger import JournalLogger
+    from execution.broker_interface import Fill
+    import execution.paper_broker as pb
+    import sys
+    sys.path.insert(0, "tests")
+    from test_e2e_scenarios import _base_payload
+
+    def _cancelled(self, order):
+        return Fill(instrument=order.instrument, direction=order.direction,
+                    contracts=order.contracts, entry_price=order.entry,
+                    exit_price=None, exit_reason="ENTRY_NOT_FILLED",
+                    result="CANCELLED", pnl_ticks=None, pnl_dollars=None)
+    monkeypatch.setattr(pb.PaperBroker, "execute_bracket", _cancelled, raising=False)
+
+    cfg = dataclasses.replace(load_config(), max_staleness_seconds=10 ** 9)
+    payload = _base_payload(timestamp="2026-05-23T14:30:00+00:00")
+    fd = date(2026, 5, 23)
+    log_dir = str(tmp_path / "j")
+
+    res = process_alert(payload, config=cfg, log_dir=log_dir, for_date=fd)
+    assert res["decision"] == "BLOCKED_EXECUTION_FAILED", res
+
+    # No phantom: the journal must read FLAT, and the failed attempt is un-counted.
+    ds = JournalLogger(log_dir=log_dir).get_daily_state(fd)
+    assert ds.has_open_position is False, "phantom open left in journal"
+    assert ds.trade_count == 0, "failed attempt should not consume a trade slot"
