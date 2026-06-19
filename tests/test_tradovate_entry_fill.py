@@ -139,3 +139,33 @@ def test_market_entry_skips_nofill_guard(monkeypatch):
     fill = b.execute_bracket(_long_order())
     assert fill.result == "OPEN"
     assert not [p for p, _ in posts if p == "/order/cancelorder"]
+
+
+# ── #2 per-instrument tolerance (MES 4t / MNQ 16t cannot be one global value) ──
+def test_per_instrument_tolerance_mes_vs_mnq(monkeypatch):
+    monkeypatch.delenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS", raising=False)
+    monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS_MES", "4")
+    monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS_MNQ", "16")
+    # MES LONG entry 7559.5 → +4 ticks = +1.0pt → cap 7560.5
+    b = _broker(monkeypatch)
+    cap = _capture_body(monkeypatch, b)
+    b.execute_bracket(_long_order())
+    assert cap["body"]["orderType"] == "Limit"
+    assert cap["body"]["price"] == 7560.5
+    assert cap["body"]["timeInForce"] == "IOC"
+    # MNQ LONG entry 30438.75 → +16 ticks = +4.0pt → cap 30442.75 (NOT 1.0pt)
+    b2 = _broker(monkeypatch)
+    cap2 = _capture_body(monkeypatch, b2)
+    mnq = BracketOrder(instrument="MNQ", direction="LONG", entry=30438.75,
+                       stop=30418.75, target=30488.75, rr_ratio=2.5, strategy="orb_reclaim")
+    b2.execute_bracket(mnq)
+    assert cap2["body"]["price"] == 30442.75
+
+
+def test_global_fallback_when_no_per_instrument(monkeypatch):
+    monkeypatch.delenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS_MES", raising=False)
+    monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS", "2")  # global only
+    b = _broker(monkeypatch)
+    cap = _capture_body(monkeypatch, b)
+    b.execute_bracket(_long_order())  # MES → no _MES → global 2t → +0.5 → 7560.0
+    assert cap["body"]["price"] == 7560.0

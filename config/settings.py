@@ -177,12 +177,13 @@ class SystemConfig:
     # good fill still gets shaken out on normal post-breakout wiggle. Widen here and
     # validate on replay before changing live.
     orb_stop_ticks: dict = field(default_factory=dict)
-    # Execution (#2): cap entry slippage by submitting a Limit entry at
-    # entry ± this many ticks instead of a Market order. 0 = Market (legacy, default,
-    # no live change). >0 fills at the limit price or better and SKIPS the bar if
-    # price has already run past it — a limit entry can miss a fill a market order
-    # would guarantee, which is the intended "don't chase the breakout" behavior.
-    entry_slippage_tolerance_ticks: float = 0.0
+    # Execution (#2) — entry-slippage cap (Limit-vs-Market entry) is PER-INSTRUMENT
+    # and read by the live Tradovate broker straight from the environment, NOT from
+    # this config (the broker only has TradovateConfig). Set it via env:
+    #   ENTRY_SLIPPAGE_TOLERANCE_TICKS_MES=4   (1.0 pt)
+    #   ENTRY_SLIPPAGE_TOLERANCE_TICKS_MNQ=16  (4.0 pt)
+    #   ENTRY_SLIPPAGE_TOLERANCE_TICKS=<n>     (global fallback; 0 = Market, default)
+    # No SystemConfig field so config can never silently disagree with live behavior.
     # Per-instrument strategy exclusions — overrides enabled_concepts for that instrument
     disabled_concepts_per_instrument: dict = field(default_factory=dict)
     # Bonus trades after normal daily max; RiskEngine requires confluence grade.
@@ -416,13 +417,6 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
 
         enabled_concepts=strategy.get("enabled_concepts", []),
         orb_stop_ticks=strategy.get("orb_stop_ticks", {}),
-        entry_slippage_tolerance_ticks=float(
-            os.getenv(
-                "ENTRY_SLIPPAGE_TOLERANCE_TICKS",
-                strategy.get("entry_slippage_tolerance_ticks", 0),
-            )
-            or 0
-        ),
         strategy_selection_mode=str(
             strategy.get("selection_mode", "first_match") or "first_match"
         ).lower(),
