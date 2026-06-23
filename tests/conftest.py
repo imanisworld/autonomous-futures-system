@@ -29,6 +29,9 @@ def isolate_live_broker_env(monkeypatch):
     """Keep local live/demo broker settings from leaking into unit tests."""
     monkeypatch.setenv("BROKER", "paper")
     monkeypatch.setenv("SITE_ACCESS_CODE", "")
+    monkeypatch.delenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS", raising=False)
+    monkeypatch.delenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS_MES", raising=False)
+    monkeypatch.delenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS_MNQ", raising=False)
     monkeypatch.setenv("TRADOVATE_API_KEY_ID", "0")
     monkeypatch.setenv("TRADOVATE_API_KEY_SECRET", "")
     monkeypatch.setenv("TRADOVATE_USERNAME", "")
