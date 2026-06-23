@@ -52,7 +52,7 @@ class MockChainProvider:
             return self.snapshot
         return ChainSnapshot(underlying, error="no_data")
 
-    async def fetch_quote(self, option_symbol: str) -> OptionQuote:
+    async def fetch_quote(self, option_symbol: str, *, underlying=None, expiry=None) -> OptionQuote:
         return self.quotes.get(option_symbol, OptionQuote(option_symbol, error="no_quote"))
 
 
@@ -513,6 +513,103 @@ class TestResolution:
 
 
 # ─── status summary ──────────────────────────────────────────────────────────
+
+
+class TestPublicChainProvider:
+    """PublicChainProvider against Public's REAL documented HTTP contract (mocked).
+
+    Verifies token mint, account-scoped POST paths, calls[]/puts[]/optionDetails
+    parsing, and that trading paths are structurally blocked by the whitelist.
+    """
+
+    def _transport(self, requests: list):
+        import httpx
+
+        today = date.today()
+        d0, d1, d5 = (
+            today.isoformat(),
+            date.fromordinal(today.toordinal() + 1).isoformat(),
+            date.fromordinal(today.toordinal() + 5).isoformat(),
+        )
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            requests.append(str(request.url.path))
+            path = request.url.path
+            if path.endswith("/personal/access-tokens"):
+                assert b"secret" in request.content
+                return httpx.Response(200, json={"accessToken": "tok-123"})
+            if path.endswith("/option-expirations"):
+                assert request.headers.get("Authorization") == "Bearer tok-123"
+                return httpx.Response(200, json={"baseSymbol": "QQQ", "expirations": [d0, d1, d5]})
+            if path.endswith("/option-chain"):
+                return httpx.Response(200, json={
+                    "calls": [
+                        {"instrument": {"symbol": "QQQ_C_505"}, "bid": "1.00", "ask": "1.10",
+                         "optionDetails": {"strikePrice": "505", "greeks": {"delta": "0.38"}}},
+                    ],
+                    "puts": [
+                        {"instrument": {"symbol": "QQQ_P_495"}, "bid": "0.90", "ask": "1.00",
+                         "optionDetails": {"strikePrice": "495", "greeks": {"delta": "-0.35"}}},
+                    ],
+                })
+            return httpx.Response(404)
+
+        return httpx.MockTransport(handler), (d0, d1, d5)
+
+    def test_fetch_chain_parses_real_shape(self):
+        import httpx
+
+        seen: list = []
+        transport, (d0, d1, d5) = self._transport(seen)
+        client = httpx.AsyncClient(transport=transport, base_url="https://api.public.com")
+        from options_companion.chain_provider import PublicChainProvider
+
+        prov = PublicChainProvider(api_key="sek", account_id="ACC1", client=client)
+        snap = _run(prov.fetch_chain("QQQ", max_dte=2))
+
+        assert snap.error is None
+        # token minted, account-scoped paths hit, DTE>2 expiry (d5) skipped
+        assert "/userapiauthservice/personal/access-tokens" in seen
+        assert "/userapigateway/marketdata/ACC1/option-expirations" in seen
+        assert "/userapigateway/marketdata/ACC1/option-chain" in seen
+        calls = [c for c in snap.contracts if c.contract_type == "CALL"]
+        puts = [c for c in snap.contracts if c.contract_type == "PUT"]
+        assert calls and puts
+        c = calls[0]
+        assert c.symbol == "QQQ_C_505"
+        assert c.strike == 505.0
+        assert c.bid == 1.00 and c.ask == 1.10
+        assert c.delta == pytest.approx(0.38)  # string greeks -> float
+
+    def test_chain_feeds_selection_end_to_end(self):
+        import httpx
+
+        seen: list = []
+        transport, _ = self._transport(seen)
+        client = httpx.AsyncClient(transport=transport, base_url="https://api.public.com")
+        from options_companion.chain_provider import PublicChainProvider
+
+        prov = PublicChainProvider(api_key="sek", account_id="ACC1", client=client)
+        snap = _run(prov.fetch_chain("QQQ", max_dte=2))
+        res = select_contract(snap, "CALL", now=NOW)
+        assert isinstance(res, CompanionSelection)
+        assert res.option_symbol == "QQQ_C_505"
+        assert res.entry_mark == pytest.approx(1.05)
+
+    def test_missing_credentials_soft_fail(self):
+        from options_companion.chain_provider import PublicChainProvider
+
+        snap = _run(PublicChainProvider(api_key="", account_id="ACC1").fetch_chain("QQQ", max_dte=2))
+        assert snap.error == "credentials_missing"
+        snap2 = _run(PublicChainProvider(api_key="sek", account_id="").fetch_chain("QQQ", max_dte=2))
+        assert snap2.error == "account_id_missing"
+
+    def test_trading_path_is_structurally_blocked(self):
+        from options_companion.chain_provider import PublicChainProvider
+
+        prov = PublicChainProvider(api_key="sek", account_id="ACC1")
+        with pytest.raises(ValueError):
+            _run(prov._post("/userapigateway/trading/ACC1/order", {"side": "BUY"}))
 
 
 class TestStatus:

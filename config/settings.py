@@ -269,8 +269,10 @@ class SystemConfig:
     options_companion_mode: str = "paper"
     options_companion_sqlite_path: str = "logs/options_companion.sqlite"
     # Public is the strategic data target (read-only chains/quotes; never orders).
+    # Account id scopes the market-data paths (/userapigateway/marketdata/{accountId}/...).
     public_base_url: str = "https://api.public.com"
     public_api_key_configured: bool = False
+    public_account_id_configured: bool = False
 
 
 # ─── Loader ──────────────────────────────────────────────────────────────────
@@ -476,6 +478,7 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         ).strip(),
         public_base_url=os.getenv("PUBLIC_BASE_URL", "https://api.public.com").strip().rstrip("/"),
         public_api_key_configured=bool(os.getenv("PUBLIC_API_KEY", "").strip()),
+        public_account_id_configured=bool(os.getenv("PUBLIC_ACCOUNT_ID", "").strip()),
     )
 
     _validate_config(config)

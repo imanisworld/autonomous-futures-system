@@ -38,7 +38,9 @@ async def resolve_open_companions(
     for row in store.open_positions():
         if row.entry_mark is None or row.stop_mark is None or row.target_mark is None:
             continue
-        quote = await provider.fetch_quote(row.option_symbol or "")
+        quote = await provider.fetch_quote(
+            row.option_symbol or "", underlying=row.underlying, expiry=row.expiry
+        )
         mid = quote.mid
         if mid is None:
             # No mark this tick. Only force EXPIRED once the contract is past expiry.
