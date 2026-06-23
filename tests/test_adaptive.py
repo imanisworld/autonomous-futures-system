@@ -53,11 +53,12 @@ def _trade(
     pine_bracket_ignored: bool = False,
     pine_bracket_overridden: bool = False,
     day_offset: int = 0,
+    ts: Optional[str] = None,
 ) -> TradeRecord:
     day = (date.today() - timedelta(days=day_offset)).isoformat()
     return TradeRecord(
         date=day,
-        ts=f"{day}T14:30:00+00:00",
+        ts=ts or f"{day}T14:30:00+00:00",
         instrument="MES",
         session=session,
         strategy=strategy,
@@ -244,13 +245,56 @@ def test_risk_steward_flags_drawdown_breach():
     assert REDUCE_SIZE in codes
 
 
-def test_risk_steward_flags_daily_loss_breach():
-    # One day: 3 losses totalling -$200 on 1c = exceeds $150 limit
-    steward = RiskSteward(starting_balance=1500.0, max_daily_loss_per_contract=150.0)
-    losses = [_loss(pnl=-70.0, contracts=1)] * 3  # -$210 on 1 day
+def test_risk_steward_clean_breach_does_not_warn():
+    # One day, 3 sub-limit losses: 0 -> -70 -> -140 -> -210. Each entry happened
+    # while the running loss was still inside the $150 limit, so the breaker had
+    # no basis to fire earlier; the overshoot to -$210 is legitimate, NOT a
+    # breaker failure. It is recorded as a breach but must NOT raise a finding.
+    # circuit_breaker_losses high so the separate consecutive-loss WARN stays out
+    # of the way. This test isolates the daily-loss breaker logic.
+    steward = RiskSteward(
+        starting_balance=1500.0, max_daily_loss_per_contract=150.0, circuit_breaker_losses=10
+    )
+    losses = [
+        _loss(pnl=-70.0, contracts=1, ts="2026-06-18T14:30:00+00:00"),
+        _loss(pnl=-70.0, contracts=1, ts="2026-06-18T15:00:00+00:00"),
+        _loss(pnl=-70.0, contracts=1, ts="2026-06-18T15:30:00+00:00"),
+    ]
     report = steward.audit(losses)
     subjects = [r.subject for r in report.recommendations]
-    assert "daily_loss_limit" in subjects
+    assert "daily_loss_breaker_failed" not in subjects
+    assert report.status == "OK"
+    assert report.findings["daily_loss_breaches"] == 1
+    assert report.findings["daily_loss_breaker_verified_clean"] == 1
+    assert report.findings["daily_loss_breaker_failures"] == 0
+
+
+def test_risk_steward_single_trade_overshoot_is_clean():
+    # The 2026-06-18 live case: one trade overshot the $150 limit to -$170, then
+    # the next entries were REJECTED (no TradeRecord). The breaker can't pre-empt
+    # a single trade, so a lone overshoot with nothing after it is NOT a failure.
+    steward = RiskSteward(starting_balance=1500.0, max_daily_loss_per_contract=150.0)
+    report = steward.audit([_loss(pnl=-170.0, contracts=1)])
+    subjects = [r.subject for r in report.recommendations]
+    assert "daily_loss_breaker_failed" not in subjects
+    assert report.findings["daily_loss_breaches"] == 1
+    assert report.findings["daily_loss_breaker_failures"] == 0
+
+
+def test_risk_steward_flags_breaker_failure_when_trading_continues():
+    # Trade 1 overshoots to -$160 (>= $150 limit); trade 2 is then ENTERED while
+    # already past the limit. That is the breaker failing to block a new entry.
+    steward = RiskSteward(starting_balance=1500.0, max_daily_loss_per_contract=150.0)
+    trades = [
+        _loss(pnl=-160.0, contracts=1, ts="2026-06-18T14:30:00+00:00"),
+        _loss(pnl=-50.0, contracts=1, ts="2026-06-18T15:00:00+00:00"),
+    ]
+    report = steward.audit(trades)
+    failures = [r for r in report.recommendations if r.subject == "daily_loss_breaker_failed"]
+    assert len(failures) == 1
+    assert report.status == "WARNING"
+    assert report.findings["daily_loss_breaker_failures"] == 1
+    assert failures[0].evidence["days"][-1]["entries_after_limit"] == 1
 
 
 def test_risk_steward_flags_circuit_breaker_streak():
