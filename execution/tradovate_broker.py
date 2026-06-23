@@ -174,6 +174,7 @@ class _SharedAuth:
     cooldown_until: float = 0.0
     last_error: Optional[str] = None
     last_renewed_at: Optional[float] = None
+    alerted: bool = False          # True once a session-DOWN Discord alert has fired (reset on recovery)
     lock: threading.RLock = field(default_factory=threading.RLock)
 
 
@@ -281,6 +282,42 @@ class TradovateBroker(BrokerInterface):
                 "(API keys expire).",
                 self._auth_fail_count, reason, self._AUTH_COOLDOWN_SECONDS,
             )
+            # Make the one SILENT failure loud: alert Discord once when the breaker trips.
+            # (When the session is dead, "no trades" looks identical to "no setups".)
+            if not self._auth_state.alerted:
+                self._send_session_alert(
+                    f"\U0001F534 **Tradovate session DOWN** — auth failed "
+                    f"{self._auth_fail_count}× ({reason}). Trading is HALTED "
+                    f"(~{self._AUTH_COOLDOWN_SECONDS // 60}m backoff). Most likely an "
+                    "expired API key — reactivate it in Tradovate, then restart futures-bot. "
+                    "⚠️ While this is down, *no trades* does NOT mean *no setups*."
+                )
+                self._auth_state.alerted = True
+
+    def _clear_auth_breaker(self) -> None:
+        """Reset the auth circuit breaker. If a session-DOWN alert had fired, announce
+        recovery once so the Discord channel shows the session came back."""
+        if self._auth_state.alerted:
+            self._send_session_alert(
+                "\U0001F7E2 **Tradovate session restored** — auth recovered, trading resumed."
+            )
+            self._auth_state.alerted = False
+        self._auth_fail_count = 0
+        self._auth_cooldown_until = 0.0
+        self._last_auth_error = None
+
+    def _send_session_alert(self, content: str) -> None:
+        """Post an operational alert to Discord (session up/down). Fail-soft — never raises.
+
+        Self-contained (reads DISCORD_WEBHOOK_URL directly) because the broker holds only
+        TradovateConfig, not the SystemConfig that carries the webhook URL."""
+        url = os.getenv("DISCORD_WEBHOOK_URL", "").strip()
+        if not url:
+            return
+        try:
+            requests.post(url, json={"content": content}, timeout=5)
+        except Exception as exc:  # noqa: BLE001 - an alert must never break the auth path
+            logger.warning("Tradovate session alert to Discord failed: %s", exc)
 
     @staticmethod
     def _http_failure_result(exc: Exception, *, login: bool = False) -> AuthResult:
@@ -394,10 +431,8 @@ class TradovateBroker(BrokerInterface):
                 expires_at=self._parse_expiry(data.get("expirationTime")),
             )
             self._apply_token(self._auth_state.token)
-            # Healthy renewal clears the breaker.
-            self._auth_fail_count = 0
-            self._auth_cooldown_until = 0.0
-            self._last_auth_error = None
+            # Healthy renewal clears the breaker (and announces recovery if it had tripped).
+            self._clear_auth_breaker()
             self._auth_state.last_renewed_at = time.time()
             logger.info("Tradovate token renewed in place (env=%s)", self.config.env)
             return AuthResult(AUTH_HEALTHY)
@@ -440,10 +475,8 @@ class TradovateBroker(BrokerInterface):
                 expires_at=self._parse_expiry(data.get("expirationTime")),
             )
             self._apply_token(self._auth_state.token)
-            # Success — clear the circuit breaker.
-            self._auth_fail_count = 0
-            self._auth_cooldown_until = 0.0
-            self._last_auth_error = None
+            # Success — clear the circuit breaker (and announce recovery if it had tripped).
+            self._clear_auth_breaker()
             logger.info("Tradovate authenticated — new session (env=%s)", self.config.env)
             return AuthResult(AUTH_HEALTHY)
         except Exception as exc:
