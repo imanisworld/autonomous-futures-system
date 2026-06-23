@@ -31,6 +31,9 @@ _UTC = ZoneInfo("UTC")
 # Last bar older than this ⇒ market closed / feed down ⇒ skip (no ping).
 _MARKET_QUIET_SECONDS = 70 * 60
 _DEFAULT_INTERVAL_SECONDS = 3600  # hourly
+# Grace after (re)start before the first ping. Short enough to promptly confirm a
+# restart, long enough that a crash-looping process dying inside it never pings.
+_STARTUP_DELAY_SECONDS = 60
 
 
 def build_heartbeat_message(
@@ -114,10 +117,20 @@ async def run_heartbeat_loop(
     log_dir: str,
     *,
     interval_seconds: int = _DEFAULT_INTERVAL_SECONDS,
+    startup_delay_seconds: int = _STARTUP_DELAY_SECONDS,
     sleep: Callable = asyncio.sleep,
 ) -> None:
-    """Background loop: emit an hourly heartbeat. Sleeps first so a restart does
-    not immediately ping. Cancellation-safe; exceptions are swallowed per tick."""
+    """Background loop: emit a heartbeat shortly after (re)start, then hourly.
+
+    The startup ping means a restart promptly confirms the service is alive
+    instead of going dark for up to an hour — previously the loop slept a full
+    interval first, so any restart inside that window silently skipped a ping and
+    re-anchored the schedule. The market-aware gate in ``maybe_send_heartbeat``
+    keeps BOTH the startup ping and the hourly pings quiet when the market is
+    closed / the feed is down, so frequent off-hours restarts don't spam.
+    Cancellation-safe; exceptions are swallowed per tick."""
+    await sleep(startup_delay_seconds)
+    maybe_send_heartbeat(config, log_dir)
     while True:
         await sleep(interval_seconds)
         maybe_send_heartbeat(config, log_dir)
