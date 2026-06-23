@@ -350,6 +350,28 @@ def process_alert(
                 # open) — leave the position untouched for its own next bar.
                 fill = None
 
+            # ── Trailing-stop SHADOW (log-only — sends NOTHING) ───────────────
+            # Increment 2 of the live-trailing build: observe where a runner trail
+            # WOULD move the stop this bar, using the SAME math as the sim. Flag-
+            # gated (RUNNER_SHADOW_ENABLED) and fail-soft — inert by default and
+            # never affects resolution, orders, or state.
+            if same_instrument and os.getenv("RUNNER_SHADOW_ENABLED", "").strip().lower() in ("1", "true", "yes"):
+                try:
+                    from execution.trail_shadow import shadow_trail, format_shadow_log
+                    _inst = open_pos.get("instrument") or state.instrument
+                    _bars = BarHistory(log_dir=cfg.log_dir).recent(_inst, 60)
+                    _entry_ts = str(open_pos.get("ts") or "")
+                    _since = [b for b in _bars if str(b.get("ts", "")) >= _entry_ts] if _entry_ts else _bars
+                    _shadow = shadow_trail(
+                        open_pos, _since,
+                        activation_r=float(os.getenv("RUNNER_ACTIVATION_R", "1.0") or 1.0),
+                        trail_r=float(os.getenv("RUNNER_TRAIL_R", "0.5") or 0.5),
+                    )
+                    if _shadow:
+                        logger.info(format_shadow_log(_shadow, _inst))
+                except Exception as _exc:  # shadow must never affect trading
+                    logger.debug("trail-shadow skipped: %s", _exc)
+
             # ── Stale-position safety net (paper mode only) ───────────────────
             # If resolve_position returned None (stop/target not hit), check
             # whether the position has gone stale:
