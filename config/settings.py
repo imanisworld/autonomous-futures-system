@@ -260,6 +260,18 @@ class SystemConfig:
     # accumulated shadow data proves Signa-aligned trades actually outperform.
     signa_gate_enforced: bool = False
 
+    # ── Companion options paper lane (options_companion/) ──────────────────────
+    # When a futures trade is fully approved + opened, derive an INTERNAL paper
+    # options trade (long-premium call/put on the matching ETF) and track it in a
+    # separate SQLite ledger. v1 places NO live or broker-paper options orders.
+    # Default OFF: a disabled lane changes nothing.
+    options_companion_enabled: bool = False
+    options_companion_mode: str = "paper"
+    options_companion_sqlite_path: str = "logs/options_companion.sqlite"
+    # Public is the strategic data target (read-only chains/quotes; never orders).
+    public_base_url: str = "https://api.public.com"
+    public_api_key_configured: bool = False
+
 
 # ─── Loader ──────────────────────────────────────────────────────────────────
 
@@ -456,6 +468,14 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
             {"MES": "ES", "ES": "ES", "MNQ": "QQQ", "NQ": "QQQ"},
         ),
         signa_gate_enforced=_env_bool("SIGNA_GATE_ENFORCED", False),
+
+        options_companion_enabled=_env_bool("OPTIONS_COMPANION_ENABLED", False),
+        options_companion_mode=os.getenv("OPTIONS_COMPANION_MODE", "paper").strip().lower(),
+        options_companion_sqlite_path=os.getenv(
+            "OPTIONS_COMPANION_SQLITE_PATH", "logs/options_companion.sqlite"
+        ).strip(),
+        public_base_url=os.getenv("PUBLIC_BASE_URL", "https://api.public.com").strip().rstrip("/"),
+        public_api_key_configured=bool(os.getenv("PUBLIC_API_KEY", "").strip()),
     )
 
     _validate_config(config)
