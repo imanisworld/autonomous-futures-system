@@ -190,6 +190,11 @@ def main() -> None:
         if t.get("instrument") and t.get("entry_ts") and t.get("entry") is not None:
             by_inst[t["instrument"]].append(t)
 
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+    except ImportError:
+        pass
     client = PolygonFuturesClient()
     if not client.configured:
         raise SystemExit("POLYGON_API_KEY not set — cannot fetch 1-min bars.")
