@@ -662,7 +662,10 @@ class TestDiscordNotify:
         notify_companion_create({"candidates": [
             {"status": "REJECTED", "underlying": "QQQ", "contract_type": "CALL", "rule": "signa_opposes"},
         ]})
-        assert len(posts) == 1 and "signa_opposes" in posts[0][1]
+        # Message carries the plain-English reason, not the raw rule code.
+        assert len(posts) == 1
+        assert "Signa daily trend opposed the trade" in posts[0][1]
+        assert "signa_opposes" not in posts[0][1]
 
     def test_resolution_posts(self, monkeypatch):
         from options_companion.notify import notify_companion_resolved
@@ -761,3 +764,25 @@ class TestStatus:
         assert summary["rejected"] == 1
         assert summary["win_rate_percent"] == 50.0
         assert summary["total_paper_pnl_dollars"] == pytest.approx(50.0)
+
+
+class TestRejectEnglish:
+    def test_known_code_is_plain_english(self):
+        from options_companion.notify import _fmt_reject
+
+        msg = _fmt_reject({"underlying": "QQQ", "contract_type": "CALL", "rule": "signa_grade"})
+        assert "Companion skipped" in msg
+        assert "Signa grade too low (needs A or B)" in msg
+        assert "signa_grade" not in msg  # raw code must not leak through
+
+    def test_unknown_code_is_humanised(self):
+        from options_companion.notify import _english_rule
+
+        # Unmapped code → underscores become spaces (still readable, no crash).
+        assert _english_rule("some_new_rule") == "some new rule"
+
+    def test_missing_rule_has_fallback(self):
+        from options_companion.notify import _english_rule
+
+        assert _english_rule(None) == "no reason given"
+        assert _english_rule("") == "no reason given"
