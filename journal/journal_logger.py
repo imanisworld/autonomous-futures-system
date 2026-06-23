@@ -112,6 +112,29 @@ class JournalLogger:
         }
         self._append(entry, for_date)
 
+    def log_order_ids(
+        self,
+        instrument: str,
+        session: str,
+        order_ids: dict,
+        for_date: Optional[date] = None,
+    ) -> None:
+        """Append the broker's OSO order ids for the currently-open position.
+
+        Lets a fresh broker instance (e.g. after a restart) restore order-id based
+        exit attribution in resolve_position() instead of degrading to price-
+        matching (which can misbook a slipped-stop loss as BREAKEVEN). Additive,
+        append-only record; read only by get_open_position().
+        """
+        record = {
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "type": "ORDER_IDS",
+            "instrument": instrument,
+            "session": session,
+            "order_ids": dict(order_ids or {}),
+        }
+        self._append(record, for_date)
+
     def log_error(self, message: str, exc: Optional[Exception] = None) -> None:
         """Append to the error log."""
         ts = datetime.now(timezone.utc).isoformat()
@@ -405,6 +428,13 @@ class JournalLogger:
             if entry_type == "OUTCOME":
                 # Any OUTCOME (WIN/LOSS/BREAKEVEN/CANCELLED) closes the tracked position.
                 last_open = None
+                continue
+
+            if entry_type == "ORDER_IDS":
+                # Attach the broker OSO order ids to the currently-open position so
+                # a restarted broker can restore order-id exit attribution.
+                if last_open is not None and entry.get("instrument") == last_open.get("instrument"):
+                    last_open["order_ids"] = entry.get("order_ids")
                 continue
 
             decision = entry.get("decision")
