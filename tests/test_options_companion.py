@@ -112,10 +112,61 @@ def _evaluate(state, store, provider, *, instrument, direction, now=NOW, config=
     )
 
 
-# ─── 1. futures non-fills never reach this lane (hook gating is in runner) ───────
-# The companion hook only fires on fill.result == OPEN. evaluate_companion is only
-# ever called for an opened trade; here we assert mapping is the gate that produces
-# no row for an unmapped/instrumentless trade (defense in depth).
+# ─── 1. futures non-fills never reach this lane (runner-level hook gating) ───────
+# The create hook lives ONLY in the OPEN success branch of process_alert, so any
+# non-fill decision (NO_TRADE / RISK_REJECTED / BLOCKED_*) produces NO companion
+# row. These tests drive the REAL runner to prove the wiring, not just the helpers.
+
+
+class TestRunnerHookGating:
+    def _companion_cfg(self, tmp_path, *, enabled: bool):
+        from config.settings import load_config
+
+        return replace(
+            load_config(),
+            max_staleness_seconds=10_000_000,  # fixed-timestamp bars aren't stale
+            options_companion_enabled=enabled,
+            options_companion_sqlite_path=str(tmp_path / "companion.sqlite"),
+        )
+
+    def _no_trade_payload(self):
+        from tests.test_webhook import _base_payload
+
+        # A CHOPPY MNQ bar forms no tradable setup -> NO_TRADE (no fill).
+        return _base_payload(
+            timestamp=datetime(2026, 6, 5, 1, 0, tzinfo=timezone.utc).isoformat(),
+            market_condition="CHOPPY",
+            trend_direction="DOWN",
+        )
+
+    def test_non_fill_creates_no_companion_row_when_enabled(self, tmp_path):
+        from webhook.runner import process_alert
+
+        cfg = self._companion_cfg(tmp_path, enabled=True)
+        result = process_alert(
+            self._no_trade_payload(), config=cfg, log_dir=str(tmp_path / "logs"),
+            for_date=date(2026, 6, 5),
+        )
+        # Sanity: this bar did NOT open a position.
+        assert (result.get("fill") or {}).get("status") != "OPEN"
+        # The create hook never fired -> zero rows. (The per-webhook resolve hook
+        # ran but had no OPEN rows to touch, so it adds nothing either.)
+        store = OptionsCompanionStore(tmp_path / "companion.sqlite")
+        assert store.all_rows() == []
+        assert "companion" not in result  # create hook attaches only on OPEN
+
+    def test_disabled_lane_writes_nothing(self, tmp_path):
+        from webhook.runner import process_alert
+
+        cfg = self._companion_cfg(tmp_path, enabled=False)
+        db = tmp_path / "companion.sqlite"
+        result = process_alert(
+            self._no_trade_payload(), config=cfg, log_dir=str(tmp_path / "logs"),
+            for_date=date(2026, 6, 5),
+        )
+        assert "companion" not in result
+        # Disabled lane never even touches the ledger file.
+        assert not db.exists()
 
 
 class TestMapping:
