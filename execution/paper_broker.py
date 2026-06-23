@@ -72,6 +72,9 @@ class PaperBroker(BrokerInterface):
         slippage_ticks: float = 0.0,
         pessimistic_both_hit: bool = False,
         breakeven_at_1r: bool = False,
+        runner_mode: bool = False,
+        runner_activation_r: float = 1.0,
+        runner_trail_r: float = 0.5,
     ):
         """
         Args:
@@ -91,6 +94,14 @@ class PaperBroker(BrokerInterface):
         # When False, the 1R→breakeven stop trail is disabled: trades run to the
         # original stop (full LOSS) or target (WIN), never scratched at entry.
         self._breakeven_at_1r = bool(breakeven_at_1r)
+        # Runner mode (1-contract): once price reaches runner_activation_r * R in
+        # our favour, DROP the fixed target and trail the stop runner_trail_r * R
+        # behind the running favourable extreme — i.e. let winners run instead of
+        # capping at target. Default off → exit behaviour is unchanged.
+        self._runner_mode = bool(runner_mode)
+        self._runner_activation_r = float(runner_activation_r)
+        self._runner_trail_r = float(runner_trail_r)
+        self._runner_max_fav: Optional[float] = None  # running favourable price extreme
 
     @property
     def is_live(self) -> bool:
@@ -162,6 +173,50 @@ class PaperBroker(BrokerInterface):
             pnl_dollars=None,
         )
 
+    def _resolve_runner(self, next_bar, pos, tick, tick_val) -> Optional[Fill]:
+        """Runner exit: no fixed target; once +activation_R is reached, trail the
+        stop trail_R behind the running favourable extreme. Favourable tracking
+        uses only PRIOR bars (no intra-bar look-ahead); a straddle still exits on
+        the trailed stop (worst case). 1-contract only."""
+        is_long = pos.direction == "LONG"
+        R = abs(pos.entry_price - pos.stop)
+        if self._runner_max_fav is None:
+            self._runner_max_fav = pos.entry_price
+        slip = self._slippage_ticks * tick
+
+        prior_fav = ((self._runner_max_fav - pos.entry_price) if is_long
+                     else (pos.entry_price - self._runner_max_fav))
+        active_stop = pos.stop
+        trailing = R > 0 and prior_fav >= self._runner_activation_r * R
+        if trailing:
+            offset = self._runner_trail_r * R
+            trailed = (self._runner_max_fav - offset) if is_long else (self._runner_max_fav + offset)
+            # never loosen past the original stop
+            active_stop = max(trailed, pos.stop) if is_long else min(trailed, pos.stop)
+
+        stop_hit = (next_bar.low <= active_stop) if is_long else (next_bar.high >= active_stop)
+        if stop_hit:
+            exit_price = (active_stop - slip) if is_long else (active_stop + slip)
+            pnl_ticks = ((exit_price - pos.entry_price) if is_long
+                         else (pos.entry_price - exit_price)) / tick
+            pnl_dollars = pnl_ticks * tick_val * pos.quantity
+            self._balance += pnl_dollars
+            self._position = None
+            self._runner_max_fav = None
+            result = "WIN" if pnl_dollars > 0 else ("BREAKEVEN" if pnl_dollars == 0 else "LOSS")
+            return Fill(
+                instrument=pos.instrument, direction=pos.direction, contracts=pos.quantity,
+                entry_price=pos.entry_price, exit_price=round(exit_price, 4),
+                exit_reason=("RUNNER_TRAIL" if trailing else "STOP_HIT"), result=result,
+                pnl_ticks=round(pnl_ticks, 2), pnl_dollars=round(pnl_dollars, 2),
+            )
+
+        # update favourable extreme AFTER the exit check
+        cur = next_bar.high if is_long else next_bar.low
+        self._runner_max_fav = (max(self._runner_max_fav, cur) if is_long
+                                else min(self._runner_max_fav, cur))
+        return None
+
     def resolve_position(self, next_bar: NextBarOHLC) -> Optional[Fill]:
         """
         Attempt to resolve an open paper position using next-bar OHLC data.
@@ -189,6 +244,9 @@ class PaperBroker(BrokerInterface):
         instrument = pos.instrument
         tick = TICK_SIZE.get(instrument, 0.25)
         tick_val = TICK_VALUE.get(instrument, 1.0)
+
+        if self._runner_mode and pos.quantity == 1:
+            return self._resolve_runner(next_bar, pos, tick, tick_val)
 
         target_hit = False
         stop_hit = False
