@@ -325,6 +325,13 @@ def process_alert(
                     quantity=int(open_pos.get("contracts", 1)),
                     open=True,
                 )
+                # Restore the OSO order ids (if persisted) so exit attribution uses
+                # order-id matching instead of degrading to price-matching after a
+                # restart. Only restore a dict — absent or a corrupt/typed payload
+                # → None → resolve_position falls back to price-matching safely
+                # (never stalls on a non-dict ids.get()).
+                _restored_ids = open_pos.get("order_ids")
+                tv._last_order_ids = _restored_ids if isinstance(_restored_ids, dict) else None
                 fill = tv.resolve_position()
             elif same_instrument:
                 # Paper simulation: resolve against THIS bar's OHLC.
@@ -677,6 +684,22 @@ def process_alert(
     )
     daily_state.trade_count += 1
     daily_state.has_open_position = True
+
+    # Persist the broker's OSO order ids next to the open position so a restart can
+    # restore order-id exit attribution (see resolve_position) rather than degrade
+    # to price-matching. Tradovate only — PaperBroker has none, so this is skipped.
+    # Fail-soft: a persistence hiccup must never affect trading.
+    try:
+        _order_ids = getattr(broker, "_last_order_ids", None)
+        if _order_ids:
+            journal.log_order_ids(
+                instrument=order.instrument,
+                session=state.session,
+                order_ids=_order_ids,
+                for_date=today,
+            )
+    except Exception as _exc:  # pragma: no cover - persistence must never break trading
+        logger.warning("order-id persist skipped: %s", _exc)
 
     result["fill"] = {
         "status": "OPEN",
