@@ -701,6 +701,45 @@ class TestDiscordNotify:
         assert posts == []  # no URL -> silent no-op, no raise
 
 
+class TestDailyReport:
+    def test_build_report_counts_today_and_alltime(self, tmp_path):
+        from options_companion.daily_report import build_report
+        from options_companion.status import companion_summary
+
+        store = OptionsCompanionStore(tmp_path / "c.sqlite")
+        # opened today (counts), a today-resolved WIN, a today REJECTED, and an
+        # older row that must NOT count toward "today".
+        store.record(futures_instrument="MNQ", futures_direction="LONG", underlying="QQQ",
+                     status="OPEN", entry_mark=1.0, created_at=NOW)
+        wid = store.record(futures_instrument="MES", futures_direction="LONG", underlying="SPY",
+                           status="OPEN", entry_mark=1.0, created_at=NOW)
+        store.resolve(wid, status="WIN", paper_pnl_dollars=80.0, paper_pnl_percent=80.0, resolved_at=NOW)
+        store.record(futures_instrument="MNQ", futures_direction="SHORT", underlying="QQQ",
+                     status="REJECTED", risk_failed_rule="signa_opposes", created_at=NOW)
+        old = datetime(2026, 6, 1, 15, 0, tzinfo=timezone.utc)
+        store.record(futures_instrument="MES", futures_direction="LONG", underlying="SPY",
+                     status="OPEN", entry_mark=1.0, created_at=old)
+
+        rows = store.all_rows()
+        report = build_report(rows, companion_summary(store), day_iso=TODAY.isoformat())
+        assert TODAY.isoformat() in report
+        assert "2** opened" in report or "**2**" in report  # 2 opened today (not the old one)
+        assert "1W / 0L / 0exp" in report
+        assert "$80.00" in report
+        assert "1 skipped" in report
+
+    def test_daily_report_posts_to_daily_channel(self, monkeypatch):
+        from options_companion.notify import notify_companion_daily_report
+        import notifications.discord_notifier as dn
+
+        posts = []
+        monkeypatch.setattr(dn, "_post_json", lambda u, b, h: posts.append((u, json.loads(b.decode())["content"])))
+        monkeypatch.setenv("DISCORD_NOTIFICATIONS_ENABLED", "true")
+        monkeypatch.setenv("DISCORD_OPTIONS_DAILY_REPORT", "https://discord/daily")
+        assert notify_companion_daily_report("hi") is True
+        assert posts and posts[0][0] == "https://discord/daily"
+
+
 class TestStatus:
     def test_summary_counts(self, tmp_path):
         store = OptionsCompanionStore(tmp_path / "c.sqlite")
