@@ -34,8 +34,8 @@ class CompanionConfig:
     allowed_underlyings: list[str] = field(default_factory=lambda: ["SPY", "QQQ"])
     max_daily_trades: int = 3
     max_open_positions_per_underlying: int = 1
-    max_premium_per_contract: float = 250.0
-    max_total_premium: float = 250.0
+    max_premium_per_contract: float = 400.0
+    max_total_premium: float = 400.0
     premium_caps_by_underlying: dict[str, float] = field(default_factory=dict)
     min_rr_ratio: float = 2.0
     require_confluence_grade: str = "B"

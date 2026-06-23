@@ -369,10 +369,10 @@ class TestStrike:
 class TestPremiumCaps:
     def test_oversized_premium_rejected(self, fresh_market_state, tmp_path):
         store = OptionsCompanionStore(tmp_path / "c.sqlite")
-        # mid 3.05 -> $305 > $250 flat cap
+        # mid 4.55 -> $455 > $400 flat cap
         snap = ChainSnapshot(
             "QQQ", underlying_price=500.0,
-            contracts=[_contract("big", 0, 505, "CALL", 3.00, 3.10, delta=0.38)],
+            contracts=[_contract("big", 0, 505, "CALL", 4.50, 4.60, delta=0.38)],
         )
         provider = MockChainProvider(snap)
         state = _state(fresh_market_state, instrument="MNQ", grade="A", daily="UP")
