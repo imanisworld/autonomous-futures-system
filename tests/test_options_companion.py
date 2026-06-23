@@ -639,12 +639,15 @@ class TestDiscordNotify:
         posts = self._capture(monkeypatch)
         notify_companion_create({"candidates": [
             {"status": "OPEN", "underlying": "QQQ", "contract_type": "CALL",
-             "option_symbol": "QQQ_C", "entry_mark": 2.1, "stop_mark": 1.05, "target_mark": 4.2,
+             "option_symbol": "QQQ260623C00741000", "strike": 741.0, "expiry": "2026-06-23", "dte": 0,
+             "entry_mark": 2.1, "stop_mark": 1.05, "target_mark": 4.2,
              "futures_instrument": "MNQ", "futures_direction": "LONG"},
         ]})
         assert len(posts) == 1
         url, msg = posts[0]
-        assert url == "https://discord/sig" and "OPEN" in msg and "QQQ" in msg
+        # human-readable contract: "QQQ $741 CALL · exp Jun 23 (0DTE)"
+        assert url == "https://discord/sig" and "OPEN" in msg
+        assert "$741" in msg and "CALL" in msg and "Jun 23" in msg and "0DTE" in msg
 
     def test_reject_posts_only_when_opted_in(self, monkeypatch):
         from options_companion.notify import notify_companion_create
@@ -667,11 +670,14 @@ class TestDiscordNotify:
         self._env(monkeypatch)
         posts = self._capture(monkeypatch)
         notify_companion_resolved({"resolved": [
-            {"status": "WIN", "option_symbol": "QQQ_C", "pnl_dollars": 100.0},
-            {"status": "LOSS", "option_symbol": "SPY_P", "pnl_dollars": -50.0},
+            {"status": "WIN", "underlying": "QQQ", "contract_type": "CALL", "strike": 741.0,
+             "expiry": "2026-06-23", "dte": 0, "option_symbol": "QQQ260623C00741000", "pnl_dollars": 100.0},
+            {"status": "LOSS", "underlying": "SPY", "contract_type": "PUT", "strike": 600.0,
+             "expiry": "2026-06-24", "dte": 1, "option_symbol": "SPY260624P00600000", "pnl_dollars": -50.0},
         ]})
         assert len(posts) == 2
-        assert "WIN" in posts[0][1] and "LOSS" in posts[1][1]
+        assert "WIN" in posts[0][1] and "$741" in posts[0][1] and "Jun 23" in posts[0][1]
+        assert "LOSS" in posts[1][1] and "SPY" in posts[1][1] and "$600" in posts[1][1]
 
     def test_error_posts_to_error_channel(self, monkeypatch):
         from options_companion.notify import notify_companion_error

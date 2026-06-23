@@ -62,31 +62,68 @@ def _money(value: Any) -> str:
         return "$?"
 
 
+def _fmt_expiry(expiry: Any) -> str:
+    if not expiry:
+        return ""
+    try:
+        from datetime import date
+
+        d = date.fromisoformat(str(expiry)[:10])
+        return f"{d.strftime('%b')} {d.day}"  # "Jun 23"
+    except (ValueError, TypeError):
+        return str(expiry)
+
+
+def _fmt_contract(c: dict[str, Any]) -> str:
+    """Human-readable contract, e.g. 'QQQ $741 CALL · exp Jun 23 (0DTE)'."""
+    parts = [str(c.get("underlying") or "?")]
+    strike = c.get("strike")
+    if strike is not None:
+        try:
+            parts.append(f"${float(strike):g}")
+        except (TypeError, ValueError):
+            pass
+    if c.get("contract_type"):
+        parts.append(str(c.get("contract_type")))
+    label = " ".join(parts)
+    exp = _fmt_expiry(c.get("expiry"))
+    if exp:
+        label += f" · exp {exp}"
+    dte = c.get("dte")
+    if dte is not None:
+        try:
+            label += f" ({int(dte)}DTE)"
+        except (TypeError, ValueError):
+            pass
+    return label
+
+
 def _fmt_open(c: dict[str, Any]) -> str:
     fut = c.get("futures_instrument") or "?"
     side = c.get("futures_direction") or "?"
+    sym = c.get("option_symbol")
+    sym_ref = f"  `{sym}`" if sym else ""
     return (
-        f"📄 **Paper option OPEN** — {c.get('underlying')} {c.get('contract_type')} "
-        f"`{c.get('option_symbol')}`\n"
+        f"📄 **Paper option OPEN** — **{_fmt_contract(c)}**{sym_ref}\n"
         f"entry {_money(c.get('entry_mark'))} · stop {_money(c.get('stop_mark'))} · "
         f"target {_money(c.get('target_mark'))}  _(from {side} {fut})_"
     )
 
 
 def _fmt_reject(c: dict[str, Any]) -> str:
-    return (
-        f"🚫 Companion skipped — {c.get('underlying')} {c.get('contract_type') or ''}: "
-        f"`{c.get('rule')}`"
-    )
+    return f"🚫 Companion skipped — {_fmt_contract(c)}: `{c.get('rule')}`"
 
 
 def _fmt_resolved(r: dict[str, Any]) -> str:
     status = r.get("status")
     icon = {"WIN": "✅", "LOSS": "❌", "EXPIRED": "⌛"}.get(status, "•")
-    sym = r.get("option_symbol") or r.get("underlying") or ""
+    # Prefer the human-readable contract; fall back to the OSI symbol.
+    label = _fmt_contract(r) if r.get("underlying") else (r.get("option_symbol") or "")
+    sym = r.get("option_symbol")
+    sym_ref = f"  `{sym}`" if sym and r.get("underlying") else ""
     pnl = r.get("pnl_dollars")
     pnl_str = f"  ({_money(pnl)})" if pnl is not None else ""
-    return f"{icon} **Paper option {status}** — `{sym}`{pnl_str}"
+    return f"{icon} **Paper option {status}** — **{label}**{sym_ref}{pnl_str}"
 
 
 def notify_companion_create(audit: dict[str, Any] | None) -> None:
