@@ -85,28 +85,54 @@ class RiskSteward:
             ))
 
         # ── Per-day loss check ────────────────────────────────────────────────
+        # A day that *reaches* the daily-loss limit is not, by itself, a finding:
+        # a single trade can legitimately overshoot the limit, and the breaker only
+        # exists to block the NEXT entry. So instead of asking a human to "verify the
+        # breaker fired", we self-verify: replay each breach day in entry (ts) order
+        # and flag any trade that was ENTERED while the running realised loss had
+        # already reached the limit. That, and only that, is the breaker failing.
+        #
+        # This relies on the one-position-at-a-time invariant (a new entry is blocked
+        # until the prior position is flat), so accumulating realised P&L in entry
+        # order exactly reconstructs what the live breaker saw at each decision. If
+        # the system ever runs concurrent positions, this would need the decision
+        # journal (entry vs. close times) instead of trade-order accumulation.
         by_day: dict[str, list[TradeRecord]] = defaultdict(list)
         for t in resolved:
             by_day[t.date].append(t)
 
-        daily_loss_breaches: list[str] = []
-        for day, day_trades in by_day.items():
-            day_pnl = sum(float(t.pnl_dollars or 0.0) for t in day_trades)
+        daily_loss_breaches: list[str] = []          # any day the limit was reached
+        breaker_failures: list[dict] = []            # breach days where trading continued past it
+        for day in sorted(by_day):
+            day_trades = by_day[day]
             contracts = max((t.contracts for t in day_trades), default=1)
             limit = self.max_daily_loss_per_contract * contracts
-            if day_pnl <= -limit:
-                daily_loss_breaches.append(day)
+            day_pnl = sum(float(t.pnl_dollars or 0.0) for t in day_trades)
+            if day_pnl > -limit:
+                continue
+            daily_loss_breaches.append(day)
 
-        if daily_loss_breaches:
+            running = 0.0
+            entries_after_limit = 0
+            for t in sorted(day_trades, key=lambda x: x.ts):
+                if running <= -limit:           # limit was already reached BEFORE this entry
+                    entries_after_limit += 1
+                running += float(t.pnl_dollars or 0.0)
+            if entries_after_limit:
+                breaker_failures.append({"date": day, "entries_after_limit": entries_after_limit})
+
+        if breaker_failures:
             status = worst_status(status, "WARNING")
+            overruns = sum(b["entries_after_limit"] for b in breaker_failures)
             recs.append(Recommendation(
-                code=WATCH,
-                subject="daily_loss_limit",
+                code=SYSTEM_FIX_REQUIRED,
+                subject="daily_loss_breaker_failed",
                 reason=(
-                    f"Daily loss limit was reached on {len(daily_loss_breaches)} day(s). "
-                    "Verify circuit-breaker fired correctly each time."
+                    f"Trading continued past the daily loss limit on {len(breaker_failures)} day(s): "
+                    f"{overruns} entr{'y' if overruns == 1 else 'ies'} taken after the limit was already "
+                    "reached. The circuit-breaker did not block new entries; investigate the breaker."
                 ),
-                evidence={"dates": daily_loss_breaches[-5:]},
+                evidence={"days": breaker_failures[-5:]},
             ))
 
         # ── Consecutive-loss streaks ──────────────────────────────────────────
@@ -177,6 +203,8 @@ class RiskSteward:
                 "current_drawdown_pct": round(current_dd * 100, 2),
                 "max_drawdown_seen_pct": round(max_dd_seen * 100, 2),
                 "daily_loss_breaches": len(daily_loss_breaches),
+                "daily_loss_breaker_failures": len(breaker_failures),
+                "daily_loss_breaker_verified_clean": len(daily_loss_breaches) - len(breaker_failures),
                 "max_consecutive_losses": max_streak,
                 "current_consecutive_losses": current_streak,
             },
