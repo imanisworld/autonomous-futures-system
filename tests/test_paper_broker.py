@@ -311,3 +311,54 @@ class TestBreakevenAtOneR:
         assert fill is not None
         assert fill.result == "WIN"
         assert fill.exit_reason == "TARGET_HIT"
+
+
+# ─── Runner mode (drop fixed target, trail the stop) ──────────────────────────
+
+def _runner_broker():
+    # MNQ: tick 0.25, $0.50/tick → $2/pt. entry 100, stop 90 (R=10), target 120.
+    b = PaperBroker(runner_mode=True, runner_activation_r=1.0, runner_trail_r=0.5)
+    b.execute_bracket(BracketOrder(instrument="MNQ", direction="LONG", entry=100.0,
+                                   stop=90.0, target=120.0, rr_ratio=2.0, strategy="x"))
+    return b
+
+
+def test_runner_trails_after_activation_and_exits_above_entry():
+    b = _runner_broker()
+    # bar1 runs to +1.5R (high 115), no exit (trail not yet armed from prior bars)
+    assert b.resolve_position(NextBarOHLC(high=115.0, low=105.0)) is None
+    # bar2: prior favourable 15 ≥ 1R → trail to 115 - 0.5R(5) = 110; low 108 taps it
+    fill = b.resolve_position(NextBarOHLC(high=116.0, low=108.0))
+    assert fill is not None
+    assert fill.exit_reason == "RUNNER_TRAIL"
+    assert fill.exit_price == 110.0
+    assert fill.pnl_dollars == (110 - 100) / 0.25 * 0.50  # +$20
+
+
+def test_runner_ignores_fixed_target():
+    b = _runner_broker()
+    # A bar that blows through the old target 120 must NOT exit at target —
+    # runner has no target; it keeps running on the trail.
+    assert b.resolve_position(NextBarOHLC(high=130.0, low=121.0)) is None
+    # next bar: trail = 130 - 5 = 125; low 124 taps it → exit 125, not 120
+    fill = b.resolve_position(NextBarOHLC(high=131.0, low=124.0))
+    assert fill.exit_price == 125.0
+    assert fill.exit_reason == "RUNNER_TRAIL"
+
+
+def test_runner_pre_activation_loss_uses_original_stop():
+    b = _runner_broker()
+    # Immediate adverse move before +1R is ever reached → original stop 90.
+    fill = b.resolve_position(NextBarOHLC(high=101.0, low=88.0))
+    assert fill is not None
+    assert fill.exit_reason == "STOP_HIT"
+    assert fill.exit_price == 90.0
+    assert fill.result == "LOSS"
+
+
+def test_runner_off_by_default_keeps_target_exit():
+    b = PaperBroker()  # runner_mode default False
+    b.execute_bracket(BracketOrder(instrument="MNQ", direction="LONG", entry=100.0,
+                                   stop=90.0, target=120.0, rr_ratio=2.0, strategy="x"))
+    fill = b.resolve_position(NextBarOHLC(high=121.0, low=105.0))
+    assert fill.exit_reason == "TARGET_HIT" and fill.result == "WIN"
