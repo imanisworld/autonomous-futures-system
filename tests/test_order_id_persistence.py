@@ -52,6 +52,35 @@ def test_open_position_without_order_ids_has_none(tmp_path):
     assert pos.get("order_ids") is None  # absent → safe fallback downstream
 
 
+@pytest.mark.parametrize("bad", ["bad", ["E1", "T1"], 42, None])
+def test_corrupt_typed_order_ids_not_attached(tmp_path, bad):
+    # A malformed (non-dict) order_ids payload — e.g. a hand-edited/corrupt journal
+    # line — must NOT be attached, so the broker never restores a non-dict and
+    # resolve_position degrades to price-matching instead of stalling on .get().
+    j = JournalLogger(log_dir=str(tmp_path))
+    j.log_decision(_trade_record(), {"result": "APPROVED", "failed_rule": None, "reason": None})
+    j._append({"ts": "2026-06-23T15:01:00+00:00", "type": "ORDER_IDS",
+               "instrument": "MNQ", "session": "new_york", "order_ids": bad}, None)
+    pos = j.get_open_position()
+    assert pos is not None
+    assert pos.get("order_ids") is None  # corrupt payload dropped → safe fallback
+
+
+def test_restore_guard_coerces_non_dict_to_none(monkeypatch):
+    # Mirror the runner restore guard: a non-dict open_pos["order_ids"] becomes
+    # None on the broker, so resolve_position price-matches a clean target.
+    b = _broker(monkeypatch)
+    restored = "bad"
+    b._last_order_ids = restored if isinstance(restored, dict) else None
+    assert b._last_order_ids is None
+    _wire(monkeypatch, b, [
+        {"contractId": OUR_CID, "price": 30002.0},
+        {"contractId": OUR_CID, "price": 30015.0},
+    ])
+    fill = b.resolve_position()
+    assert fill is not None and fill.result == "WIN"  # price-match, no stall
+
+
 def test_order_ids_cleared_after_outcome(tmp_path):
     j = JournalLogger(log_dir=str(tmp_path))
     j.log_decision(_trade_record(), {"result": "APPROVED", "failed_rule": None, "reason": None})

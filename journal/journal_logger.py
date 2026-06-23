@@ -432,9 +432,14 @@ class JournalLogger:
 
             if entry_type == "ORDER_IDS":
                 # Attach the broker OSO order ids to the currently-open position so
-                # a restarted broker can restore order-id exit attribution.
-                if last_open is not None and entry.get("instrument") == last_open.get("instrument"):
-                    last_open["order_ids"] = entry.get("order_ids")
+                # a restarted broker can restore order-id exit attribution. Only a
+                # dict is attached — a corrupt/typed payload (e.g. a string) is
+                # dropped so resolve_position degrades to price-matching, never
+                # stalls on a non-dict ids.get().
+                order_ids = entry.get("order_ids")
+                if (last_open is not None and isinstance(order_ids, dict)
+                        and entry.get("instrument") == last_open.get("instrument")):
+                    last_open["order_ids"] = order_ids
                 continue
 
             decision = entry.get("decision")

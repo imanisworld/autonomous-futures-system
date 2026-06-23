@@ -327,8 +327,11 @@ def process_alert(
                 )
                 # Restore the OSO order ids (if persisted) so exit attribution uses
                 # order-id matching instead of degrading to price-matching after a
-                # restart. None when absent → resolve_position falls back safely.
-                tv._last_order_ids = open_pos.get("order_ids")
+                # restart. Only restore a dict — absent or a corrupt/typed payload
+                # → None → resolve_position falls back to price-matching safely
+                # (never stalls on a non-dict ids.get()).
+                _restored_ids = open_pos.get("order_ids")
+                tv._last_order_ids = _restored_ids if isinstance(_restored_ids, dict) else None
                 fill = tv.resolve_position()
             elif same_instrument:
                 # Paper simulation: resolve against THIS bar's OHLC.
