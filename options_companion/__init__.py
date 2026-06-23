@@ -25,8 +25,10 @@ from .chain_provider import (
 )
 from .evaluator import CompanionConfig, evaluate_companion, run_companion_create
 from .mapping import map_companion_candidates
+from .daily_report import build_report as build_daily_report
 from .notify import (
     notify_companion_create,
+    notify_companion_daily_report,
     notify_companion_error,
     notify_companion_resolved,
 )
@@ -46,7 +48,9 @@ __all__ = [
     "evaluate_companion",
     "run_companion_create",
     "map_companion_candidates",
+    "build_daily_report",
     "notify_companion_create",
+    "notify_companion_daily_report",
     "notify_companion_error",
     "notify_companion_resolved",
     "resolve_open_companions",

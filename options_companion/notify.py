@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 
 _SIGNAL_ENV = "DISCORD_OPTIONS_SIGNAL"
 _ERROR_ENV = "DISCORD_OPTIONS_ERROR"
+_DAILY_REPORT_ENV = "DISCORD_OPTIONS_DAILY_REPORT"
 _DECISIONS_ENV = "DISCORD_OPTIONS_NOTIFY_DECISIONS"
 
 
@@ -114,3 +115,10 @@ def notify_companion_error(message: str) -> None:
     if not _discord_enabled():
         return
     _post(_ERROR_ENV, f"⚠️ Options companion error: {message}")
+
+
+def notify_companion_daily_report(message: str) -> bool:
+    """Post the end-of-day summary to the options daily-report channel."""
+    if not _discord_enabled():
+        return False
+    return _post(_DAILY_REPORT_ENV, message)
