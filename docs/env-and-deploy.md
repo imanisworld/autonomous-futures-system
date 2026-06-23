@@ -34,7 +34,21 @@ sudo systemctl restart futures-bot         # REQUIRED — .env loads only at sta
 
 curl -s http://5.78.84.223/health          # confirm it's up + value is live
 curl -s http://5.78.84.223/status/diagnostics   # for safety-critical flags
+curl -s http://5.78.84.223/status/today    # use journal_path as runtime truth
 ```
+
+Runtime evidence is frozen to the active box/API:
+
+```text
+/root/autonomous-futures-system/logs/journal_YYYY-MM-DD.jsonl
+/root/autonomous-futures-system/logs/errors.log
+/status/today
+/status/broker-account
+```
+
+After config freeze, count the next 30 resolved MNQ live/demo-paper trades only
+from the active box journal. Replay output, local ignored logs, Discord messages
+alone, and Tradovate P&L alone are not end-to-end trade proof.
 
 Why the restart is mandatory: `config/settings.py` calls `load_dotenv()` inside
 `load_config()`, and `webhook/app.py` runs `_config = load_config()` **once at

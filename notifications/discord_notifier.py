@@ -186,6 +186,13 @@ def _risk_line(risk: dict) -> str:
 
 def _format_message(payload: AlertPayload, result: dict) -> str:
     decision = result.get("decision") or "UNKNOWN"
+    prefix = []
+    if result.get("smoke_test"):
+        prefix.extend([
+            "DISCORD SMOKE TEST - NOT A JOURNALED TRADE",
+            "Synthetic notification preview only.",
+            "",
+        ])
 
     # ── Non-TRADE: keep the existing minimal format ───────────────────────────
     if decision != "TRADE":
@@ -208,7 +215,7 @@ def _format_message(payload: AlertPayload, result: dict) -> str:
             lines.append(f"Resolution: {resolution}")
         if risk:
             lines.append(_risk_line(risk))
-        return "\n".join(lines)
+        return "\n".join(prefix + lines)
 
     # ── TRADE: rich format with confluence score ──────────────────────────────
     context = result.get("context") or {}
@@ -280,7 +287,7 @@ def _format_message(payload: AlertPayload, result: dict) -> str:
         f"Bar time: {_format_bar_time(payload.timestamp)}"
     )
 
-    return "\n".join(lines)
+    return "\n".join(prefix + lines)
 
 
 def _post_json(url: str, body: bytes, headers: dict[str, str]) -> None:
@@ -300,6 +307,7 @@ def smoke_test_payload(decision: str = "TRADE") -> tuple[AlertPayload, dict]:
         close=19505.25,
     )
     result = {
+        "smoke_test": True,
         "decision": decision,
         "resolution": None,
         "risk": {"result": "APPROVED", "failed_rule": None, "reason": None},

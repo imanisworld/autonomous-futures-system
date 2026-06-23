@@ -121,6 +121,7 @@ def test_smoke_test_payload_is_synthetic_paper_decision():
     payload, result = smoke_test_payload()
 
     assert payload.ticker == "MNQ1!"
+    assert result["smoke_test"] is True
     assert result["decision"] == "TRADE"
     assert result["context"]["instrument"] == "MNQ"
 
@@ -130,6 +131,7 @@ def test_discord_cli_dry_run_prints_message(capsys):
 
     captured = capsys.readouterr()
     assert exit_code == 0
+    assert "DISCORD SMOKE TEST - NOT A JOURNALED TRADE" in captured.out
     assert "RiskSentinel paper decision: TRADE" in captured.out
     assert "MNQ" in captured.out
 

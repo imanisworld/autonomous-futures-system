@@ -84,6 +84,22 @@ reduce partial-file and interleaving risk.
 The CLI exits with a usage error instead of a traceback for invalid dates,
 missing risk config, or live-trading block errors.
 
+### Runtime Evidence Freeze
+
+For live/demo-paper evidence on the active Hetzner box, use only these sources:
+
+```text
+/root/autonomous-futures-system/logs/journal_YYYY-MM-DD.jsonl
+/root/autonomous-futures-system/logs/errors.log
+/status/today
+/status/broker-account
+```
+
+Do not use local ignored `logs/`, replay folders, screenshots alone, Discord
+messages alone, or Tradovate P&L alone as proof of an end-to-end system trade.
+The next proof window is the next 30 resolved MNQ live/demo-paper trades from
+the active box journal after config freeze.
+
 ### Optional Discord Output
 
 Discord notifications are read-only and disabled by default. To test them
