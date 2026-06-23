@@ -688,6 +688,7 @@ def _companion_provider_and_store(cfg: SystemConfig):
         provider = PublicChainProvider(
             base_url=getattr(cfg, "public_base_url", "https://api.public.com"),
             api_key=os.getenv("PUBLIC_API_KEY", "").strip(),
+            account_id=os.getenv("PUBLIC_ACCOUNT_ID", "").strip(),
         )
         store = OptionsCompanionStore(
             getattr(cfg, "options_companion_sqlite_path", "logs/options_companion.sqlite")
