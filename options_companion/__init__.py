@@ -25,6 +25,11 @@ from .chain_provider import (
 )
 from .evaluator import CompanionConfig, evaluate_companion, run_companion_create
 from .mapping import map_companion_candidates
+from .notify import (
+    notify_companion_create,
+    notify_companion_error,
+    notify_companion_resolved,
+)
 from .resolver import resolve_open_companions, run_companion_resolve
 from .signa_gate import CompanionSignaResult, evaluate_companion_signa
 from .selection import CompanionSelection, SelectionRejected, select_contract
@@ -41,6 +46,9 @@ __all__ = [
     "evaluate_companion",
     "run_companion_create",
     "map_companion_candidates",
+    "notify_companion_create",
+    "notify_companion_error",
+    "notify_companion_resolved",
     "resolve_open_companions",
     "run_companion_resolve",
     "CompanionSignaResult",

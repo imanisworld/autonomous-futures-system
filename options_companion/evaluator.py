@@ -114,6 +114,13 @@ async def evaluate_companion(
             created_at=now,
         )
 
+        audit_ctx = {
+            "underlying": underlying,
+            "contract_type": contract_type,
+            "futures_instrument": futures_instrument,
+            "futures_direction": futures_direction,
+        }
+
         if not signa_result.passed:
             row_id = store.record(
                 status="REJECTED",
@@ -121,7 +128,7 @@ async def evaluate_companion(
                 risk_failed_rule=signa_result.failed_rule,
                 **base,
             )
-            audit.append({"underlying": underlying, "status": "REJECTED", "rule": signa_result.failed_rule, "id": row_id})
+            audit.append({**audit_ctx, "status": "REJECTED", "rule": signa_result.failed_rule, "id": row_id})
             continue
 
         snapshot = await provider.fetch_chain(underlying, max_dte=cfg.max_dte)
@@ -139,7 +146,7 @@ async def evaluate_companion(
                 risk_failed_rule=selection.failed_rule,
                 **base,
             )
-            audit.append({"underlying": underlying, "status": "REJECTED", "rule": selection.failed_rule, "id": row_id})
+            audit.append({**audit_ctx, "status": "REJECTED", "rule": selection.failed_rule, "id": row_id})
             continue
 
         assert isinstance(selection, CompanionSelection)
@@ -178,7 +185,7 @@ async def evaluate_companion(
                 **base,
                 **sel_fields,
             )
-            audit.append({"underlying": underlying, "status": "REJECTED", "rule": risk.failed_rule, "id": row_id})
+            audit.append({**audit_ctx, "status": "REJECTED", "rule": risk.failed_rule, "id": row_id})
             continue
 
         row_id = store.record(
@@ -190,7 +197,7 @@ async def evaluate_companion(
         )
         audit.append(
             {
-                "underlying": underlying,
+                **audit_ctx,
                 "status": "OPEN",
                 "option_symbol": selection.option_symbol,
                 "entry_mark": selection.entry_mark,
@@ -229,4 +236,15 @@ def run_companion_create(
                 futures_timestamp=futures_timestamp,
             )
 
-    return asyncio.run(_run())
+    try:
+        result = asyncio.run(_run())
+    except Exception as exc:  # noqa: BLE001 — surface to Discord, then re-raise for the runner
+        from .notify import notify_companion_error
+
+        notify_companion_error(f"create: {exc}")
+        raise
+    # Fail-soft Discord notifications (opens / opted-in rejections).
+    from .notify import notify_companion_create as _notify
+
+    _notify(result)
+    return result

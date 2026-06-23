@@ -7,6 +7,7 @@ mock providers (no live network), frozen-dataclass state via the conftest fixtur
 from __future__ import annotations
 
 import asyncio
+import json
 from dataclasses import replace
 from datetime import date, datetime, timezone
 
@@ -610,6 +611,94 @@ class TestPublicChainProvider:
         prov = PublicChainProvider(api_key="sek", account_id="ACC1")
         with pytest.raises(ValueError):
             _run(prov._post("/userapigateway/trading/ACC1/order", {"side": "BUY"}))
+
+
+class TestDiscordNotify:
+    """Companion Discord routing — env-gated, fail-soft, reuses the low-level poster."""
+
+    def _capture(self, monkeypatch):
+        posts: list[tuple[str, str]] = []
+        import notifications.discord_notifier as dn
+
+        def fake_post(url, body, headers):
+            posts.append((url, json.loads(body.decode())["content"]))
+
+        monkeypatch.setattr(dn, "_post_json", fake_post)
+        return posts
+
+    def _env(self, monkeypatch, **kw):
+        monkeypatch.setenv("DISCORD_NOTIFICATIONS_ENABLED", kw.get("enabled", "true"))
+        monkeypatch.setenv("DISCORD_OPTIONS_SIGNAL", kw.get("signal", "https://discord/sig"))
+        monkeypatch.setenv("DISCORD_OPTIONS_ERROR", kw.get("error", "https://discord/err"))
+        monkeypatch.setenv("DISCORD_OPTIONS_NOTIFY_DECISIONS", kw.get("decisions", "TRADE,RISK_REJECTED"))
+
+    def test_open_posts_to_signal(self, monkeypatch):
+        from options_companion.notify import notify_companion_create
+
+        self._env(monkeypatch)
+        posts = self._capture(monkeypatch)
+        notify_companion_create({"candidates": [
+            {"status": "OPEN", "underlying": "QQQ", "contract_type": "CALL",
+             "option_symbol": "QQQ_C", "entry_mark": 2.1, "stop_mark": 1.05, "target_mark": 4.2,
+             "futures_instrument": "MNQ", "futures_direction": "LONG"},
+        ]})
+        assert len(posts) == 1
+        url, msg = posts[0]
+        assert url == "https://discord/sig" and "OPEN" in msg and "QQQ" in msg
+
+    def test_reject_posts_only_when_opted_in(self, monkeypatch):
+        from options_companion.notify import notify_companion_create
+
+        self._env(monkeypatch, decisions="TRADE")  # RISK_REJECTED NOT opted in
+        posts = self._capture(monkeypatch)
+        notify_companion_create({"candidates": [
+            {"status": "REJECTED", "underlying": "QQQ", "contract_type": "CALL", "rule": "signa_opposes"},
+        ]})
+        assert posts == []  # rejection suppressed
+        self._env(monkeypatch, decisions="TRADE,RISK_REJECTED")
+        notify_companion_create({"candidates": [
+            {"status": "REJECTED", "underlying": "QQQ", "contract_type": "CALL", "rule": "signa_opposes"},
+        ]})
+        assert len(posts) == 1 and "signa_opposes" in posts[0][1]
+
+    def test_resolution_posts(self, monkeypatch):
+        from options_companion.notify import notify_companion_resolved
+
+        self._env(monkeypatch)
+        posts = self._capture(monkeypatch)
+        notify_companion_resolved({"resolved": [
+            {"status": "WIN", "option_symbol": "QQQ_C", "pnl_dollars": 100.0},
+            {"status": "LOSS", "option_symbol": "SPY_P", "pnl_dollars": -50.0},
+        ]})
+        assert len(posts) == 2
+        assert "WIN" in posts[0][1] and "LOSS" in posts[1][1]
+
+    def test_error_posts_to_error_channel(self, monkeypatch):
+        from options_companion.notify import notify_companion_error
+
+        self._env(monkeypatch)
+        posts = self._capture(monkeypatch)
+        notify_companion_error("boom")
+        assert len(posts) == 1 and posts[0][0] == "https://discord/err" and "boom" in posts[0][1]
+
+    def test_disabled_posts_nothing(self, monkeypatch):
+        from options_companion.notify import notify_companion_create, notify_companion_error
+
+        self._env(monkeypatch, enabled="false")
+        posts = self._capture(monkeypatch)
+        notify_companion_create({"candidates": [{"status": "OPEN", "underlying": "QQQ"}]})
+        notify_companion_error("x")
+        assert posts == []
+
+    def test_missing_url_is_soft_noop(self, monkeypatch):
+        from options_companion.notify import notify_companion_create
+
+        monkeypatch.setenv("DISCORD_NOTIFICATIONS_ENABLED", "true")
+        monkeypatch.delenv("DISCORD_OPTIONS_SIGNAL", raising=False)
+        monkeypatch.setenv("DISCORD_OPTIONS_NOTIFY_DECISIONS", "TRADE")
+        posts = self._capture(monkeypatch)
+        notify_companion_create({"candidates": [{"status": "OPEN", "underlying": "QQQ"}]})
+        assert posts == []  # no URL -> silent no-op, no raise
 
 
 class TestStatus:
