@@ -144,6 +144,10 @@ class ReplayEngine:
             if decision.decision == "TRADE" and decision.setup is not None:
                 confluence = _score_setup(state, decision.setup)
                 journal_entry = decision.to_dict()
+                # Persist the historical candle time (the record's own `ts` is the
+                # wall-clock replay-run time) so downstream analysis — e.g. the MFE
+                # study — can locate the trade's real price window.
+                journal_entry["bar_ts"] = candle.timestamp
                 if shadow_candidates:
                     journal_entry["shadow_candidates"] = shadow_candidates
                 journal_entry["confluence"] = {
