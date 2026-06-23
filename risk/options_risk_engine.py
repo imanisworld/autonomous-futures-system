@@ -57,6 +57,10 @@ class OptionsRiskConfig:
     max_contracts: int = 1
     max_premium_per_contract: float = 250.0
     max_total_premium: float = 250.0
+    # Optional per-underlying premium caps (e.g. {"SPX": 500.0}). When an entry's
+    # underlying is present here, these override the flat caps above; otherwise the
+    # flat max_premium_per_contract / max_total_premium apply (backward-compatible).
+    premium_caps_by_underlying: dict = field(default_factory=dict)
     max_daily_trades: int = 3
     max_daily_loss: float = 150.0
     max_consecutive_losses: int = 2
@@ -87,6 +91,10 @@ class OptionsRiskConfig:
             max_contracts=int(raw.get("max_contracts", 1) or 1),
             max_premium_per_contract=float(raw.get("max_premium_per_contract", 250) or 0),
             max_total_premium=float(raw.get("max_total_premium", 250) or 0),
+            premium_caps_by_underlying={
+                str(k).upper(): float(v)
+                for k, v in (raw.get("premium_caps_by_underlying", {}) or {}).items()
+            },
             max_daily_trades=int(raw.get("max_daily_trades", 3) or 0),
             max_daily_loss=float(raw.get("max_daily_loss", 150) or 0),
             max_consecutive_losses=int(raw.get("max_consecutive_losses", 2) or 0),
@@ -263,16 +271,20 @@ class OptionsRiskEngine:
     def _check_premium_risk(self, plan: OptionTradePlan) -> Optional[OptionsRiskResult]:
         if plan.entry_premium is None:
             return None
+        # Per-underlying caps override the flat caps when present (e.g. SPX $500).
+        override = self.config.premium_caps_by_underlying.get(plan.underlying.upper())
+        per_contract_cap = override if override is not None else self.config.max_premium_per_contract
+        total_cap = override if override is not None else self.config.max_total_premium
         total_premium = plan.entry_premium * 100 * plan.quantity
-        if self.config.max_premium_per_contract > 0 and plan.entry_premium * 100 > self.config.max_premium_per_contract:
+        if per_contract_cap > 0 and plan.entry_premium * 100 > per_contract_cap:
             return self._reject(
                 "premium_per_contract",
-                f"Premium ${plan.entry_premium * 100:.2f}/contract exceeds max ${self.config.max_premium_per_contract:.2f}.",
+                f"Premium ${plan.entry_premium * 100:.2f}/contract exceeds max ${per_contract_cap:.2f}.",
             )
-        if self.config.max_total_premium > 0 and total_premium > self.config.max_total_premium:
+        if total_cap > 0 and total_premium > total_cap:
             return self._reject(
                 "total_premium",
-                f"Total debit ${total_premium:.2f} exceeds max ${self.config.max_total_premium:.2f}.",
+                f"Total debit ${total_premium:.2f} exceeds max ${total_cap:.2f}.",
             )
         return None
 

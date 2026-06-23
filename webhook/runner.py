@@ -292,6 +292,11 @@ def process_alert(
         result["failed_gates"] = [f"Duplicate bar already processed: {state.instrument} {bar_ts}"]
         return result
 
+    # Companion options paper lane: refresh marks on any OPEN paper option rows so
+    # each incoming bar advances them toward WIN/LOSS/EXPIRED. Independent of whether
+    # THIS alert produces a futures fill. Fail-soft; never touches futures state.
+    _maybe_resolve_companions(cfg, state)
+
     # ── Step 1: Resolve any open position ────────────────────────────────────
     # Paper mode: simulate using next-bar OHLC.
     # Tradovate mode: query actual fills from the broker — the bracket child
@@ -662,10 +667,79 @@ def process_alert(
         "strategy": decision.setup.strategy,
         "contracts": order.contracts,
     }
+
+    # Companion options paper lane: a fully-approved, OPENED futures trade derives an
+    # internal paper options candidate (Signa-gated). Fail-soft, audit-only; never
+    # mutates futures state/journal/counts. No-op unless the lane is enabled.
+    _maybe_create_companion(cfg, state, decision, order, result)
     return result
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
+
+
+def _companion_provider_and_store(cfg: SystemConfig):
+    """Build a read-only Public chain provider + companion ledger. Returns
+    (provider, store) or None if the lane is disabled/misconfigured. Never raises."""
+    try:
+        from options_companion.chain_provider import PublicChainProvider
+        from options_companion.store import OptionsCompanionStore
+
+        provider = PublicChainProvider(
+            base_url=getattr(cfg, "public_base_url", "https://api.public.com"),
+            api_key=os.getenv("PUBLIC_API_KEY", "").strip(),
+        )
+        store = OptionsCompanionStore(
+            getattr(cfg, "options_companion_sqlite_path", "logs/options_companion.sqlite")
+        )
+        return provider, store
+    except Exception:  # noqa: BLE001 — companion setup must never affect futures
+        logger.warning("companion provider/store init failed", exc_info=True)
+        return None
+
+
+def _maybe_create_companion(cfg: SystemConfig, state, decision, order, result: dict) -> None:
+    """Post-fill hook: derive a paper options companion from an OPENED futures trade.
+
+    Fail-soft and isolated — a companion error must NEVER affect the futures result.
+    Gated on cfg.options_companion_enabled. Attaches audit to result["companion"].
+    """
+    if not getattr(cfg, "options_companion_enabled", False):
+        return
+    try:
+        built = _companion_provider_and_store(cfg)
+        if built is None:
+            return
+        provider, store = built
+        from options_companion.evaluator import run_companion_create
+
+        result["companion"] = run_companion_create(
+            state=state,
+            futures_instrument=state.instrument,
+            futures_direction=decision.setup.direction,
+            provider=provider,
+            store=store,
+            now=state.timestamp,
+            futures_timestamp=state.timestamp.isoformat() if state.timestamp else None,
+        )
+    except Exception:  # noqa: BLE001 — never break futures on a companion error
+        logger.warning("companion create hook failed", exc_info=True)
+
+
+def _maybe_resolve_companions(cfg: SystemConfig, state) -> None:
+    """Per-webhook hook: refresh open companion paper marks. Fail-soft, isolated."""
+    if not getattr(cfg, "options_companion_enabled", False):
+        return
+    try:
+        built = _companion_provider_and_store(cfg)
+        if built is None:
+            return
+        provider, store = built
+        from options_companion.resolver import run_companion_resolve
+
+        run_companion_resolve(provider, store, now=state.timestamp)
+    except Exception:  # noqa: BLE001 — never break ingestion on a companion error
+        logger.warning("companion resolve hook failed", exc_info=True)
 
 
 def _maybe_enrich_payload_with_signa(payload: AlertPayload, cfg: SystemConfig) -> None:
