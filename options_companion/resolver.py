@@ -50,7 +50,14 @@ async def resolve_open_companions(
                                  "id": row.id, "status": "EXPIRED", "reason": "no_mark_past_expiry"})
             continue
 
-        ctx = {"option_symbol": row.option_symbol, "underlying": row.underlying}
+        ctx = {
+            "option_symbol": row.option_symbol,
+            "underlying": row.underlying,
+            "contract_type": row.contract_type,
+            "strike": row.strike,
+            "expiry": row.expiry,
+            "dte": row.dte,
+        }
         if mid >= row.target_mark:
             dollars, percent = _pnl(row.entry_mark, row.target_mark)
             store.resolve(row.id, status="WIN", paper_pnl_dollars=dollars, paper_pnl_percent=percent, resolved_at=now)
