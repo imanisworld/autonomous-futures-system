@@ -46,21 +46,23 @@ async def resolve_open_companions(
             # No mark this tick. Only force EXPIRED once the contract is past expiry.
             if _expired(row.expiry, today):
                 store.resolve(row.id, status="EXPIRED", paper_pnl_dollars=0.0, paper_pnl_percent=0.0, resolved_at=now)
-                resolved.append({"id": row.id, "status": "EXPIRED", "reason": "no_mark_past_expiry"})
+                resolved.append({"option_symbol": row.option_symbol, "underlying": row.underlying,
+                                 "id": row.id, "status": "EXPIRED", "reason": "no_mark_past_expiry"})
             continue
 
+        ctx = {"option_symbol": row.option_symbol, "underlying": row.underlying}
         if mid >= row.target_mark:
             dollars, percent = _pnl(row.entry_mark, row.target_mark)
             store.resolve(row.id, status="WIN", paper_pnl_dollars=dollars, paper_pnl_percent=percent, resolved_at=now)
-            resolved.append({"id": row.id, "status": "WIN", "pnl_dollars": dollars})
+            resolved.append({**ctx, "id": row.id, "status": "WIN", "pnl_dollars": dollars})
         elif mid <= row.stop_mark:
             dollars, percent = _pnl(row.entry_mark, row.stop_mark)
             store.resolve(row.id, status="LOSS", paper_pnl_dollars=dollars, paper_pnl_percent=percent, resolved_at=now)
-            resolved.append({"id": row.id, "status": "LOSS", "pnl_dollars": dollars})
+            resolved.append({**ctx, "id": row.id, "status": "LOSS", "pnl_dollars": dollars})
         elif _expired(row.expiry, today):
             dollars, percent = _pnl(row.entry_mark, mid)
             store.resolve(row.id, status="EXPIRED", paper_pnl_dollars=dollars, paper_pnl_percent=percent, resolved_at=now)
-            resolved.append({"id": row.id, "status": "EXPIRED", "pnl_dollars": dollars})
+            resolved.append({**ctx, "id": row.id, "status": "EXPIRED", "pnl_dollars": dollars})
 
     return {"resolved": resolved}
 
@@ -86,4 +88,14 @@ def run_companion_resolve(
         async with provider:  # type: ignore[union-attr]
             return await resolve_open_companions(provider, store, now=now)
 
-    return asyncio.run(_run())
+    try:
+        result = asyncio.run(_run())
+    except Exception as exc:  # noqa: BLE001 — surface to Discord, then re-raise for the runner
+        from .notify import notify_companion_error
+
+        notify_companion_error(f"resolve: {exc}")
+        raise
+    from .notify import notify_companion_resolved
+
+    notify_companion_resolved(result)
+    return result
