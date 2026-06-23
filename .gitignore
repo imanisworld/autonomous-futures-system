@@ -21,6 +21,7 @@ strategy/*.pdf
 data/replay/
 data/replay_polygon/
 data/htf/
+data/mfe_cache/
 replay_out/
 ibc/
 CME_MINI_*.csv
