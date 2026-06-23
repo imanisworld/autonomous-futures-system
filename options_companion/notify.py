@@ -110,8 +110,56 @@ def _fmt_open(c: dict[str, Any]) -> str:
     )
 
 
+# Plain-English reasons for the internal skip codes (the Discord reader is human,
+# not a debugger). Unmapped codes fall back to a humanised form of the code itself.
+_REJECT_ENGLISH = {
+    # ── Signa gate ──
+    "signa_direction_absent": "no futures direction to mirror",
+    "signa_missing": "no Signa read available",
+    "signa_grade": "Signa grade too low (needs A or B)",
+    "signa_daily_neutral": "Signa daily trend was neutral",
+    "signa_opposes": "Signa daily trend opposed the trade",
+    # ── Contract selection ──
+    "market_data_unavailable": "option quotes unavailable",
+    "no_valid_expiry": "no option expiry in the allowed window",
+    "spread_too_wide": "option bid/ask spread too wide",
+    # ── Options risk engine ──
+    "options_disabled": "options lane is turned off",
+    "live_options_blocked": "lane is paper-only (live blocked)",
+    "underlying_not_allowed": "underlying not on the options list",
+    "contract_type_not_allowed": "that option type isn't allowed",
+    "short_options_blocked": "only buying options is allowed",
+    "session_not_allowed": "not allowed in this trading session",
+    "session_window": "outside the options trading window",
+    "daily_trade_limit": "hit the daily options trade limit",
+    "daily_loss_limit": "hit the daily options loss limit",
+    "consecutive_losses": "hit the consecutive-loss limit",
+    "max_open_positions": "already at max open option positions",
+    "quantity_invalid": "invalid contract quantity",
+    "max_contracts": "over the contract cap",
+    "market_order_blocked": "market orders disabled (limit only)",
+    "order_type_invalid": "unsupported order type",
+    "entry_required": "missing entry price",
+    "stop_required": "missing stop price",
+    "target_required": "missing target price",
+    "bracket_invalid": "stop/target bracket is invalid",
+    "premium_per_contract": "premium per contract over the cap",
+    "total_premium": "total cost over the cap",
+    "risk_invalid": "premium risk must be positive",
+    "rr_too_low": "reward-to-risk too low",
+    "confluence_grade": "setup quality below the bar",
+}
+
+
+def _english_rule(rule: Any) -> str:
+    code = str(rule or "").strip()
+    if not code:
+        return "no reason given"
+    return _REJECT_ENGLISH.get(code, code.replace("_", " "))
+
+
 def _fmt_reject(c: dict[str, Any]) -> str:
-    return f"🚫 Companion skipped — {_fmt_contract(c)}: `{c.get('rule')}`"
+    return f"🚫 Companion skipped — {_fmt_contract(c)}: {_english_rule(c.get('rule'))}"
 
 
 def _fmt_resolved(r: dict[str, Any]) -> str:
