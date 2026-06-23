@@ -28,6 +28,7 @@ from execution.broker_interface import (
     Fill,
     Position,
 )
+from execution.trailing import compute_trailed_stop
 
 
 # ─── Tick Values (approximate, Phase 1 simplified) ────────────────────────────
@@ -179,20 +180,15 @@ class PaperBroker(BrokerInterface):
         uses only PRIOR bars (no intra-bar look-ahead); a straddle still exits on
         the trailed stop (worst case). 1-contract only."""
         is_long = pos.direction == "LONG"
-        R = abs(pos.entry_price - pos.stop)
         if self._runner_max_fav is None:
             self._runner_max_fav = pos.entry_price
         slip = self._slippage_ticks * tick
 
-        prior_fav = ((self._runner_max_fav - pos.entry_price) if is_long
-                     else (pos.entry_price - self._runner_max_fav))
-        active_stop = pos.stop
-        trailing = R > 0 and prior_fav >= self._runner_activation_r * R
-        if trailing:
-            offset = self._runner_trail_r * R
-            trailed = (self._runner_max_fav - offset) if is_long else (self._runner_max_fav + offset)
-            # never loosen past the original stop
-            active_stop = max(trailed, pos.stop) if is_long else min(trailed, pos.stop)
+        active_stop, trailing = compute_trailed_stop(
+            is_long=is_long, entry=pos.entry_price, original_stop=pos.stop,
+            max_favorable=self._runner_max_fav,
+            activation_r=self._runner_activation_r, trail_r=self._runner_trail_r,
+        )
 
         stop_hit = (next_bar.low <= active_stop) if is_long else (next_bar.high >= active_stop)
         if stop_hit:
