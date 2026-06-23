@@ -191,7 +191,7 @@ def main() -> None:
             by_inst[t["instrument"]].append(t)
 
     client = PolygonFuturesClient()
-    if not client.is_configured():
+    if not client.configured:
         raise SystemExit("POLYGON_API_KEY not set — cannot fetch 1-min bars.")
 
     results: list[dict] = []
