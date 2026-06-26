@@ -13,7 +13,7 @@ from .store import OptionsCompanionStore
 
 def companion_summary(store: OptionsCompanionStore) -> dict[str, Any]:
     rows = store.all_rows()
-    counts = {s: 0 for s in ("OPEN", "WIN", "LOSS", "EXPIRED", "REJECTED")}
+    counts = {s: 0 for s in ("OPEN", "WIN", "LOSS", "EXPIRED", "REJECTED", "WATCHLIST")}
     total_pnl = 0.0
     for row in rows:
         counts[row.status] = counts.get(row.status, 0) + 1
@@ -34,6 +34,7 @@ def companion_summary(store: OptionsCompanionStore) -> dict[str, Any]:
         "losses": losses,
         "expired": counts.get("EXPIRED", 0),
         "rejected": counts.get("REJECTED", 0),
+        "watchlist": counts.get("WATCHLIST", 0),
         "win_rate_percent": win_rate,
         "total_paper_pnl_dollars": round(total_pnl, 2),
     }

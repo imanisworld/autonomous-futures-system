@@ -28,8 +28,9 @@ def _pct(value) -> str:
 def build_report(rows: list[CompanionRow], summary: dict, *, day_iso: str) -> str:
     """Format a daily report from ledger rows + the all-time summary."""
     created_today = [r for r in rows if (r.created_at or "")[:10] == day_iso]
-    opened_today = [r for r in created_today if r.status != "REJECTED"]
+    opened_today = [r for r in created_today if r.status not in {"REJECTED", "WATCHLIST"}]
     skipped_today = [r for r in created_today if r.status == "REJECTED"]
+    watchlist_today = [r for r in created_today if r.status == "WATCHLIST"]
 
     resolved_today = [
         r for r in rows
@@ -45,7 +46,8 @@ def build_report(rows: list[CompanionRow], summary: dict, *, day_iso: str) -> st
         (
             f"Today: **{len(opened_today)}** opened · "
             f"**{wins}W / {losses}L / {expired}exp** · "
-            f"paper P&L **{_fmt_money(today_pnl)}** · {len(skipped_today)} skipped"
+            f"paper P&L **{_fmt_money(today_pnl)}** · "
+            f"{len(watchlist_today)} watchlist · {len(skipped_today)} skipped"
         ),
         (
             f"All-time: {summary.get('formed', 0)} formed · {summary.get('open', 0)} open · "
