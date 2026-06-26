@@ -28,6 +28,14 @@ from strategy.regime_classifier import classify_regime
 from strategy.signa_gate import evaluate_signa
 
 
+# LIMIT/level setups eligible for momentum re-anchor (entry rests AT a level → misses
+# when price leaves it). STOP/breakout setups already fill on momentum, so excluded.
+# continuation_pullback already enters at the close, so it needs no re-anchor.
+_MOMENTUM_REANCHOR_SETUPS = frozenset(
+    {"vwap_reclaim", "vwap_hold", "vwap_rejection", "pdh_reclaim", "pdl_reclaim"}
+)
+
+
 # ─── Output Types ─────────────────────────────────────────────────────────────
 
 @dataclass
@@ -521,6 +529,7 @@ class DecisionEngine:
 
         setup = self._apply_advisory_bracket(setup, state)
         setup = self._enforce_min_target_distance(setup, state.instrument)
+        setup = self._maybe_reanchor_entry(setup, state)
 
         # ── Entry-sanity guard (stale/detached level) ─────────────────────────
         # Every setup anchors its entry to a level (VWAP/ORB/PDH...). After a
@@ -1218,6 +1227,56 @@ class DecisionEngine:
             entry=setup.entry,
             stop=setup.stop,
             target=round(target, 4),
+            rr_ratio=rr,
+            strategy=setup.strategy,
+            notes=notes,
+        )
+
+    def _maybe_reanchor_entry(self, setup: SetupDetail, state: MarketState) -> SetupDetail:
+        """Momentum re-anchor for LIMIT/level setups that would miss on a trend day.
+
+        When price has already moved in the trade's favor PAST the resting entry — the
+        exact trend-day no-fill case (~54% of limit setups; see fill_realism_report) —
+        re-anchor the entry to the live close and rebuild stop/target preserving the
+        ORIGINAL risk and reward distances (R:R unchanged). Bounded to the
+        favorable-but-inside-the-original-bracket zone (1 tick < gap <= reward), so it
+        can NEVER chase a feed-gap dislocation: anything past the bracket still falls to
+        the entry-detachment guard. Gated on config.momentum_entry_reanchor (default off).
+        """
+        if not getattr(self.config, "momentum_entry_reanchor", False):
+            return setup
+        if setup.strategy not in _MOMENTUM_REANCHOR_SETUPS:
+            return setup
+        close = state.ohlc.close if state.ohlc else None
+        if close is None:
+            return setup
+        tick = self.TICK_SIZE.get(state.instrument, 0.25)
+        risk = abs(setup.entry - setup.stop)
+        reward = abs(setup.target - setup.entry)
+        if risk <= 0 or reward <= 0:
+            return setup
+
+        if setup.direction == "LONG":
+            gap = close - setup.entry           # >0: price ran up past the buy-limit
+            if not (tick < gap <= reward):
+                return setup
+            new_entry, new_stop, new_target = close, close - risk, close + reward
+        elif setup.direction == "SHORT":
+            gap = setup.entry - close           # >0: price ran down past the sell-limit
+            if not (tick < gap <= reward):
+                return setup
+            new_entry, new_stop, new_target = close, close + risk, close - reward
+        else:
+            return setup
+
+        rr = RiskEngine.calculate_rr(setup.direction, new_entry, new_stop, new_target)
+        note = f"momentum re-anchor: entry {setup.entry:g}→{new_entry:g} (favorable gap {gap:+.2f})"
+        notes = f"{setup.notes} | {note}" if setup.notes else note
+        return SetupDetail(
+            direction=setup.direction,
+            entry=round(new_entry, 4),
+            stop=round(new_stop, 4),
+            target=round(new_target, 4),
             rr_ratio=rr,
             strategy=setup.strategy,
             notes=notes,
