@@ -25,17 +25,19 @@ CONTRACT_MULTIPLIER = 100  # shares per option contract
 # Public reports sane IV as a decimal (~0.18 at 6 DTE); expiry-day/after-hours 0DTE
 # contracts blow up to 5+ (500%+) and would corrupt the flip.
 _MAX_SANE_IV = 3.0
+_N_WALLS = 3  # how many resistance / support strikes to surface
 
 
 @dataclass(frozen=True)
 class GexLeg:
-    """One strike/side. ``iv`` (fraction) and ``tte_years`` are optional and only
-    needed for the Black-Scholes zero-gamma flip; net GEX / walls ignore them."""
+    """One strike/side. ``delta`` feeds DEX; ``iv``/``tte_years`` feed the
+    Black-Scholes flip. All optional — net GEX / walls only need gamma + OI."""
 
     strike: float
     is_call: bool
     gamma: float
     open_interest: float
+    delta: Optional[float] = None
     iv: Optional[float] = None
     tte_years: Optional[float] = None
 
@@ -48,9 +50,15 @@ class GexProfile:
     spot: Optional[float] = None
     net_gex: Optional[float] = None
     flip_point: Optional[float] = None
-    call_wall: Optional[float] = None
-    put_wall: Optional[float] = None
-    regime: Optional[str] = None  # "positive" | "negative"
+    dist_to_flip: Optional[float] = None       # flip − spot (signed)
+    spot_vs_flip: Optional[str] = None         # "above" | "below"
+    call_wall: Optional[float] = None          # dominant resistance strike
+    put_wall: Optional[float] = None           # dominant support strike
+    call_walls: list = field(default_factory=list)  # top-N resistance strikes
+    put_walls: list = field(default_factory=list)    # top-N support strikes
+    regime: Optional[str] = None               # "positive" | "negative"
+    net_dex: Optional[float] = None            # OI-weighted $-delta of the chain
+    delta_bias: Optional[str] = None           # "bullish" | "bearish" | "neutral"
     per_strike: dict = field(default_factory=dict)  # strike -> net $-gamma
     n_legs: int = 0
     error: Optional[str] = None
@@ -62,9 +70,15 @@ class GexProfile:
             "spot": _round(self.spot, 2),
             "net_gex": _round(self.net_gex, 0),
             "flip_point": _round(self.flip_point, 2),
+            "dist_to_flip": _round(self.dist_to_flip, 2),
+            "spot_vs_flip": self.spot_vs_flip,
             "call_wall": _round(self.call_wall, 2),
             "put_wall": _round(self.put_wall, 2),
+            "call_walls": self.call_walls,
+            "put_walls": self.put_walls,
             "regime": self.regime,
+            "net_dex": _round(self.net_dex, 0),
+            "delta_bias": self.delta_bias,
             "n_legs": self.n_legs,
             "error": self.error,
         }
@@ -74,6 +88,14 @@ def dollar_gamma(leg: GexLeg, spot: float) -> float:
     """Signed dollar-gamma for one leg (calls +, puts −)."""
     sign = 1.0 if leg.is_call else -1.0
     return sign * leg.gamma * leg.open_interest * CONTRACT_MULTIPLIER * spot * spot * 0.01
+
+
+def dollar_delta(leg: GexLeg, spot: float) -> float:
+    """OI-weighted dollar-delta for one leg. Uses the contract's natural delta
+    (calls +, puts −), so the sum is the chain's net delta exposure (DEX)."""
+    if leg.delta is None:
+        return 0.0
+    return leg.delta * leg.open_interest * CONTRACT_MULTIPLIER * spot
 
 
 def _norm_pdf(x: float) -> float:
@@ -186,8 +208,11 @@ def compute_gex(legs: list[GexLeg], spot: Optional[float]) -> GexProfile:
     # strike at $0 and max()/min() return an arbitrary deep-OTM strike.
     call_candidates = {k: v for k, v in call_gex.items() if v > 0}
     put_candidates = {k: v for k, v in put_gex.items() if v < 0}
-    call_wall = max(call_candidates, key=call_candidates.__getitem__) if call_candidates else None
-    put_wall = min(put_candidates, key=put_candidates.__getitem__) if put_candidates else None
+    # Top-N walls (most resistance / most support), strongest first.
+    call_walls = sorted(call_candidates, key=call_candidates.__getitem__, reverse=True)[:_N_WALLS]
+    put_walls = sorted(put_candidates, key=put_candidates.__getitem__)[:_N_WALLS]
+    call_wall = call_walls[0] if call_walls else None
+    put_wall = put_walls[0] if put_walls else None
     # Flip: prefer the precise Black-Scholes zero-gamma solve (needs per-leg IV +
     # time-to-expiry). Fall back to the cumulative zero-cross — banded to ±10% of
     # spot, since a crossing far out (deep-OTM OI noise) is not a real gamma flip —
@@ -196,16 +221,38 @@ def compute_gex(legs: list[GexLeg], spot: Optional[float]) -> GexProfile:
     if flip_point is None:
         flip_raw = _flip_point(per_strike)
         flip_point = flip_raw if (flip_raw is not None and abs(flip_raw - spot) <= 0.10 * spot) else None
+    dist_to_flip = (flip_point - spot) if flip_point is not None else None
+    spot_vs_flip = None if dist_to_flip is None else ("below" if dist_to_flip > 0 else "above")
     regime = "positive" if net_gex >= 0 else "negative"
+
+    # DEX: OI-weighted net dollar-delta across legs that carry a delta. Positive ⇒
+    # net long-delta positioning (bullish tilt), negative ⇒ bearish. Raw OI tilt,
+    # not dealer-signed — the shadow study learns the relationship to outcomes.
+    dex_legs = [leg for leg in legs if leg.delta is not None and leg.open_interest]
+    net_dex = sum(dollar_delta(leg, spot) for leg in dex_legs) if dex_legs else None
+    if net_dex is None:
+        delta_bias = None
+    elif net_dex > 0:
+        delta_bias = "bullish"
+    elif net_dex < 0:
+        delta_bias = "bearish"
+    else:
+        delta_bias = "neutral"
 
     return GexProfile(
         ok=True,
         spot=spot,
         net_gex=net_gex,
         flip_point=flip_point,
+        dist_to_flip=dist_to_flip,
+        spot_vs_flip=spot_vs_flip,
         call_wall=call_wall,
         put_wall=put_wall,
+        call_walls=call_walls,
+        put_walls=put_walls,
         regime=regime,
+        net_dex=net_dex,
+        delta_bias=delta_bias,
         per_strike=per_strike,
         n_legs=len(legs),
     )

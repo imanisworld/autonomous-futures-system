@@ -1,5 +1,7 @@
 """Unit tests for the pure GEX math (sources/gex_compute.py)."""
 
+import pytest
+
 from sources.gex_compute import (
     CONTRACT_MULTIPLIER,
     GexLeg,
@@ -158,8 +160,62 @@ def test_to_dict_is_compact_and_rounded():
     legs = [GexLeg(690, False, 0.05, 2000), GexLeg(710, True, 0.05, 2000)]
     d = compute_gex(legs, spot=700.0).to_dict()
     assert set(d) == {
-        "ok", "spot", "net_gex", "flip_point", "call_wall",
-        "put_wall", "regime", "n_legs", "error",
+        "ok", "spot", "net_gex", "flip_point", "dist_to_flip", "spot_vs_flip",
+        "call_wall", "put_wall", "call_walls", "put_walls", "regime",
+        "net_dex", "delta_bias", "n_legs", "error",
     }
     assert "per_strike" not in d  # heavy field excluded from journal record
     assert d["ok"] is True
+
+
+def test_net_dex_sign_and_bias():
+    spot = 700.0
+    # heavier long-call delta than short-put delta → net long → bullish
+    bull = [
+        GexLeg(700, True, 0.04, 5000, delta=0.55),
+        GexLeg(690, False, 0.04, 1000, delta=-0.30),
+    ]
+    prof = compute_gex(bull, spot)
+    assert prof.net_dex > 0
+    assert prof.delta_bias == "bullish"
+    # put delta dominates → net short → bearish
+    bear = [
+        GexLeg(700, True, 0.04, 1000, delta=0.45),
+        GexLeg(690, False, 0.04, 6000, delta=-0.55),
+    ]
+    assert compute_gex(bear, spot).delta_bias == "bearish"
+
+
+def test_net_dex_none_without_delta():
+    legs = [GexLeg(700, True, 0.05, 2000), GexLeg(710, False, 0.05, 2000)]  # no delta
+    prof = compute_gex(legs, spot=700.0)
+    assert prof.net_dex is None
+    assert prof.delta_bias is None
+
+
+def test_multi_walls_top_n_ordered():
+    legs = [
+        GexLeg(720, True, 0.05, 9000),   # strongest call wall
+        GexLeg(715, True, 0.05, 5000),
+        GexLeg(725, True, 0.05, 1000),
+        GexLeg(680, False, 0.05, 9000),  # strongest put wall
+        GexLeg(685, False, 0.05, 4000),
+    ]
+    prof = compute_gex(legs, spot=700.0)
+    assert prof.call_walls[0] == 720 and prof.call_wall == 720
+    assert prof.call_walls == [720, 715, 725]      # strongest-first, capped at 3
+    assert prof.put_walls[0] == 680 and prof.put_wall == 680
+    assert prof.put_walls == [680, 685]
+
+
+def test_dist_to_flip_and_spot_side():
+    legs = [
+        GexLeg(690, False, 0.04, 1632.6531, iv=0.2, tte_years=7 / 365),
+        GexLeg(695, False, 0.04, 1000, iv=0.2, tte_years=7 / 365),
+        GexLeg(705, True, 0.04, 1000, iv=0.2, tte_years=7 / 365),
+        GexLeg(710, True, 0.04, 4000, iv=0.2, tte_years=7 / 365),
+    ]
+    prof = compute_gex(legs, spot=700.0)
+    if prof.flip_point is not None:
+        assert prof.dist_to_flip == pytest.approx(prof.flip_point - 700.0)
+        assert prof.spot_vs_flip in {"above", "below"}
