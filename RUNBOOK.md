@@ -60,6 +60,11 @@ python3 scripts/doctor.py
 python3 scripts/doctor.py --json
 ```
 
+Before controlled live/demo validation, confirm the live box drift guard is
+green in the doctor output or `/status/diagnostics`. The guard is read-only and
+checks the active checkout branch, commit, `risk_rules.yaml` hash, repo/log
+paths, and runtime evidence source against the `EXPECTED_*` pins in `.env`.
+
 Open the read-only dashboard:
 
 ```text
@@ -99,6 +104,55 @@ Do not use local ignored `logs/`, replay folders, screenshots alone, Discord
 messages alone, or Tradovate P&L alone as proof of an end-to-end system trade.
 The next proof window is the next 30 resolved MNQ live/demo-paper trades from
 the active box journal after config freeze.
+
+First-class read-only report endpoint:
+
+```bash
+curl -s "http://127.0.0.1:8000/status/proof/mnq-30?freeze_ts=2026-06-23T17:00:00Z"
+```
+
+Equivalent CLI wrapper:
+
+```bash
+cd /root/autonomous-futures-system
+python3 scripts/proof_30_mnq.py --freeze-ts 2026-06-23T17:00:00+00:00
+```
+
+Use the actual config-freeze timestamp. Both paths read journals/API status
+only; they do not write files or touch orders.
+
+At config freeze, pin the active box before running live preflight:
+
+```bash
+cd /root/autonomous-futures-system
+git rev-parse --abbrev-ref HEAD
+git rev-parse HEAD
+sha256sum risk_rules.yaml
+```
+
+Set those values in `.env` as `EXPECTED_LIVE_BRANCH`,
+`EXPECTED_LIVE_COMMIT`, and `EXPECTED_RISK_RULES_SHA256`, then run
+`python3 scripts/doctor.py --strict` and `/status/live-preflight`.
+
+### GEX Shadow Analysis
+
+GEXsniper context is observe-only. `GEX_API_ENABLED=true` journals compact
+`gex_observed` snapshots when available, and never changes `DecisionEngine`,
+`RiskEngine`, or trade gating.
+
+Start the server with `GEX_SHADOW_ANALYSIS_ENABLED=true`, then measure whether
+the lane deserves promotion beyond journaling:
+
+```bash
+curl -s 'http://127.0.0.1:8000/status/gex-shadow?days=30'
+```
+
+Inspect the returned GEX shadow summary, or `gex_shadow_analysis` inside
+`/status/today` for the current day only. Promotion requires enough measured resolved
+trades (`min_sample`, default 20), positive expectancy in candidate cohorts,
+and clearly worse cohorts that can be replayed or shadow-run before any gate is
+enforced. Until then, `verdict.status` remains `JOURNAL_ONLY` or
+`NO_PROMOTION_YET`.
 
 ### Optional Discord Output
 
