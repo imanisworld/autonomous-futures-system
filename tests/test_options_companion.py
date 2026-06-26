@@ -592,7 +592,11 @@ class TestPublicChainProvider:
 
         prov = PublicChainProvider(api_key="sek", account_id="ACC1", client=client)
         snap = _run(prov.fetch_chain("QQQ", max_dte=2))
-        res = select_contract(snap, "CALL", now=NOW)
+        # _transport builds expiries from real date.today(); anchor `now` to the
+        # same day (11:00 ET, before the 14:00 cutoff) so DTE math agrees.
+        today = date.today()
+        now = datetime(today.year, today.month, today.day, 15, 0, tzinfo=timezone.utc)
+        res = select_contract(snap, "CALL", now=now)
         assert isinstance(res, CompanionSelection)
         assert res.option_symbol == "QQQ_C_505"
         assert res.entry_mark == pytest.approx(1.05)
