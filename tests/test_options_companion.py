@@ -236,8 +236,6 @@ class TestSignaGate:
             ("C", "UP", "signa_grade"),
             ("F", "UP", "signa_grade"),
             (None, "UP", "signa_grade"),       # missing/stale grade
-            ("A", "NEUTRAL", "signa_daily_neutral"),
-            ("A", None, "signa_daily_neutral"),  # missing daily direction
         ],
     )
     def test_fail_closed_cases(self, fresh_market_state, grade, daily, rule):
@@ -245,6 +243,25 @@ class TestSignaGate:
         res = evaluate_companion_signa(state, "LONG")
         assert not res.passed
         assert res.failed_rule == rule
+
+    @pytest.mark.parametrize("daily", ["NEUTRAL", None, "WAIT"])
+    def test_wait_or_neutral_daily_becomes_watchlist(self, fresh_market_state, tmp_path, daily):
+        store = OptionsCompanionStore(tmp_path / "c.sqlite")
+        provider = MockChainProvider(_good_chain())
+        state = _state(fresh_market_state, instrument="MNQ", grade="A", daily=daily)
+        res = evaluate_companion_signa(state, "LONG")
+        assert not res.passed
+        assert res.watchlist
+        assert res.failed_rule == "signa_daily_neutral"
+
+        out = _evaluate(state, store, provider, instrument="MNQ", direction="LONG")
+        rows = store.all_rows()
+        assert len(rows) == 1
+        assert rows[0].status == "WATCHLIST"
+        assert rows[0].risk_result == "WATCHLIST"
+        assert rows[0].risk_failed_rule == "signa_daily_neutral"
+        assert out["candidates"][0]["status"] == "WATCHLIST"
+        assert provider.chain_calls == []  # watchlist before fetching a chain
 
     def test_missing_signa_fails_closed(self, fresh_market_state):
         state = replace(fresh_market_state, signa=None)
@@ -762,10 +779,13 @@ class TestStatus:
                      status="LOSS", paper_pnl_dollars=-50.0, created_at=NOW)
         store.record(futures_instrument="MES", futures_direction="SHORT", underlying="SPY",
                      status="REJECTED", risk_failed_rule="signa_grade", created_at=NOW)
+        store.record(futures_instrument="MES", futures_direction="LONG", underlying="SPY",
+                     status="WATCHLIST", risk_failed_rule="signa_daily_neutral", created_at=NOW)
         summary = companion_summary(store)
         assert summary["wins"] == 1
         assert summary["losses"] == 1
         assert summary["rejected"] == 1
+        assert summary["watchlist"] == 1
         assert summary["win_rate_percent"] == 50.0
         assert summary["total_paper_pnl_dollars"] == pytest.approx(50.0)
 

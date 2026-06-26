@@ -81,6 +81,7 @@ async def evaluate_companion(
     """Form, risk-check, and ledger a companion paper options candidate.
 
     Returns an audit dict (``{"candidates": [...]}``). Records:
+    - WATCHLIST rows for grade A/B Signa candidates whose daily direction is WAIT/neutral,
     - REJECTED rows for FORMED candidates that fail Signa / selection / risk,
     - exactly one OPEN row for an approved candidate.
     Produces NO row when mapping yields nothing.
@@ -122,6 +123,15 @@ async def evaluate_companion(
         }
 
         if not signa_result.passed:
+            if signa_result.watchlist:
+                row_id = store.record(
+                    status="WATCHLIST",
+                    risk_result="WATCHLIST",
+                    risk_failed_rule=signa_result.failed_rule,
+                    **base,
+                )
+                audit.append({**audit_ctx, "status": "WATCHLIST", "rule": signa_result.failed_rule, "id": row_id})
+                continue
             row_id = store.record(
                 status="REJECTED",
                 risk_result="REJECTED",

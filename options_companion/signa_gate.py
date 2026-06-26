@@ -2,11 +2,12 @@
 
 The futures ``strategy/signa_gate.evaluate_signa`` keys on the WEEKLY direction and
 treats missing Signa as a NEUTRAL pass. That is wrong for this lane: the companion
-options trade should only form when Signa actively confirms, so this gate:
+options trade should only open when Signa actively confirms, so this gate:
 
 - requires grade in {A, B} (C/D/F or missing -> REJECT),
 - requires DAILY direction aligned with the futures direction,
-- FAILS CLOSED: missing Signa, missing/neutral daily direction, or opposition -> REJECT.
+- records grade A/B + neutral/missing daily direction as WATCHLIST,
+- FAILS CLOSED: missing Signa, low grade, or opposition -> REJECT.
 """
 
 from __future__ import annotations
@@ -17,7 +18,7 @@ from typing import Literal
 from context.market_context import MarketState
 from strategy.signa_gate import _direction  # shared up/down/neutral normalizer
 
-CompanionSignaStatus = Literal["PASS", "REJECT"]
+CompanionSignaStatus = Literal["PASS", "WATCHLIST", "REJECT"]
 
 
 @dataclass(frozen=True)
@@ -29,6 +30,10 @@ class CompanionSignaResult:
     @property
     def passed(self) -> bool:
         return self.status == "PASS"
+
+    @property
+    def watchlist(self) -> bool:
+        return self.status == "WATCHLIST"
 
 
 def evaluate_companion_signa(state: MarketState, direction: str) -> CompanionSignaResult:
@@ -50,7 +55,7 @@ def evaluate_companion_signa(state: MarketState, direction: str) -> CompanionSig
     daily = _direction(signa.daily_direction)
     if not daily or daily == "NEUTRAL":
         return CompanionSignaResult(
-            "REJECT", "signa_daily_neutral", "Signa daily direction missing/neutral"
+            "WATCHLIST", "signa_daily_neutral", "Signa grade A/B but daily direction is missing/neutral"
         )
     if daily != side:
         return CompanionSignaResult(

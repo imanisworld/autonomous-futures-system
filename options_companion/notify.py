@@ -5,14 +5,14 @@ notification-router): reads the webhook URL from the environment at send time an
 never stores it on config (matches the repo's "no secret values on config" rule).
 
 Routes (env var -> Discord channel):
-    DISCORD_OPTIONS_SIGNAL  -> options-signals  (opens + resolutions, and rejections
-                                                 when RISK_REJECTED is opted in)
+    DISCORD_OPTIONS_SIGNAL  -> options-signals  (opens + resolutions, watchlist,
+                                                 and rejections when opted in)
     DISCORD_OPTIONS_ERROR   -> error             (lane failures)
 
 Gated on DISCORD_NOTIFICATIONS_ENABLED + per-channel URL presence. Every function is
 fail-soft: a notification problem must NEVER affect the futures path or the lane.
 ``DISCORD_OPTIONS_NOTIFY_DECISIONS`` (CSV) reuses the futures vocabulary: ``TRADE``
-opts in opens + resolutions, ``RISK_REJECTED`` opts in rejected candidates.
+opts in opens + resolutions, ``RISK_REJECTED`` opts in watchlist/rejected candidates.
 """
 
 from __future__ import annotations
@@ -117,7 +117,7 @@ _REJECT_ENGLISH = {
     "signa_direction_absent": "no futures direction to mirror",
     "signa_missing": "no Signa read available",
     "signa_grade": "Signa grade too low (needs A or B)",
-    "signa_daily_neutral": "Signa daily trend was neutral",
+    "signa_daily_neutral": "Signa daily trend is WAIT/neutral",
     "signa_opposes": "Signa daily trend opposed the trade",
     # ── Contract selection ──
     "market_data_unavailable": "option quotes unavailable",
@@ -162,6 +162,15 @@ def _fmt_reject(c: dict[str, Any]) -> str:
     return f"🚫 Companion skipped — {_fmt_contract(c)}: {_english_rule(c.get('rule'))}"
 
 
+def _fmt_watchlist(c: dict[str, Any]) -> str:
+    fut = c.get("futures_instrument") or "?"
+    side = c.get("futures_direction") or "?"
+    return (
+        f"👀 Companion watchlist — {_fmt_contract(c)}: {_english_rule(c.get('rule'))} "
+        f"_(from {side} {fut})_"
+    )
+
+
 def _fmt_resolved(r: dict[str, Any]) -> str:
     status = r.get("status")
     icon = {"WIN": "✅", "LOSS": "❌", "EXPIRED": "⌛"}.get(status, "•")
@@ -183,6 +192,8 @@ def notify_companion_create(audit: dict[str, Any] | None) -> None:
         status = c.get("status")
         if status == "OPEN" and "TRADE" in decisions:
             _post(_SIGNAL_ENV, _fmt_open(c))
+        elif status == "WATCHLIST" and "RISK_REJECTED" in decisions:
+            _post(_SIGNAL_ENV, _fmt_watchlist(c))
         elif status == "REJECTED" and "RISK_REJECTED" in decisions:
             _post(_SIGNAL_ENV, _fmt_reject(c))
 
