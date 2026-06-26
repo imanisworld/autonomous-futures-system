@@ -50,6 +50,19 @@ After config freeze, count the next 30 resolved MNQ live/demo-paper trades only
 from the active box journal. Replay output, local ignored logs, Discord messages
 alone, and Tradovate P&L alone are not end-to-end trade proof.
 
+First-class read-only report endpoint:
+
+```bash
+curl -s "http://127.0.0.1:8000/status/proof/mnq-30?freeze_ts=2026-06-23T17:00:00Z"
+```
+
+Equivalent CLI wrapper:
+
+```bash
+cd /root/autonomous-futures-system
+python3 scripts/proof_30_mnq.py --freeze-ts 2026-06-23T17:00:00+00:00
+```
+
 Why the restart is mandatory: `config/settings.py` calls `load_dotenv()` inside
 `load_config()`, and `webhook/app.py` runs `_config = load_config()` **once at
 import (startup)**. `load_dotenv` defaults to `override=False`, so the running
@@ -83,5 +96,10 @@ Hetzner live values: `PAPER_MODE=false`, `BROKER=tradovate`, `TRADOVATE_ENV=demo
 - **Don't `git pull` Hetzner blindly** if the box's `main` has diverged / has
   uncommitted changes (e.g. a hand-edited `app.py`). Check `git status` on the
   box first.
+- **Pin live-box expectations before validation.** Set `EXPECTED_LIVE_BRANCH`,
+  `EXPECTED_LIVE_COMMIT`, `EXPECTED_RISK_RULES_SHA256`,
+  `EXPECTED_LIVE_REPO_ROOT`, and `EXPECTED_RUNTIME_JOURNAL_DIR` on the active
+  box after config freeze, then check `python3 scripts/doctor.py --strict` or
+  `/status/diagnostics` before `/admin/live-preflight/run`.
 - **Back up before editing** `.env` (the `.env.bak.*` pattern) so a bad edit is
   one `cp` away from recovery.

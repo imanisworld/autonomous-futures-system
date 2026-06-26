@@ -23,6 +23,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import hmac
+import inspect
 import json
 import logging
 import os
@@ -47,6 +48,10 @@ from execution.tradovate_supervisor import (
 )
 from journal.journal_logger import JournalLogger
 from notifications.discord_notifier import notify_discord, send_discord_alert
+from ops.live_box_guard import live_box_drift_report
+from ops.proof_30_mnq import DEFAULT_LIMIT as PROOF_30_MNQ_LIMIT
+from ops.proof_30_mnq import build_report as build_mnq_proof_report
+from ops.proof_30_mnq import parse_proof_ts
 from webhook.payload import AlertPayload
 from webhook.reconciler import run_reconciler_loop
 from notifications.heartbeat import run_heartbeat_loop
@@ -944,6 +949,28 @@ async def status_review(
     return agent.preview_morning(target_date) if mode == "morning" else agent.preview_eod(target_date)
 
 
+@app.get("/status/proof/mnq-30")
+async def status_proof_mnq_30(
+    freeze_ts: str | None = Query(default=None, description="Only count trades/outcomes at or after this ISO timestamp."),
+    limit: int = Query(default=PROOF_30_MNQ_LIMIT, ge=1, le=300),
+) -> dict:
+    """Return the read-only MNQ proof-window report from approved runtime sources."""
+    freeze = parse_proof_ts(freeze_ts) if freeze_ts else None
+    if freeze_ts and freeze is None:
+        raise HTTPException(status_code=422, detail="freeze_ts must be an ISO timestamp or Unix epoch.")
+    status_payload = _dashboard_payload(date.today())
+    broker_result = status_broker_account()
+    broker_payload = await broker_result if inspect.isawaitable(broker_result) else broker_result
+    return build_mnq_proof_report(
+        journal_dir=Path(_config.log_dir),
+        freeze_ts=freeze,
+        limit=limit,
+        api_base=None,
+        status_payload=status_payload,
+        broker_payload=broker_payload,
+    )
+
+
 # ─── Adaptive committee endpoints ────────────────────────────────────────────
 
 
@@ -1012,6 +1039,25 @@ async def status_signa(symbol: str = Query(default="AAPL")) -> dict:
         "display": " · ".join(display_parts),
         **signal.to_dict(),
     }
+
+
+@app.get("/status/gex-shadow")
+async def status_gex_shadow(days: int = Query(default=30, ge=1, le=180)) -> dict:
+    """Return default-off, read-only GEX shadow analysis across recent journals."""
+    today = date.today()
+    journal = JournalLogger(log_dir=_config.log_dir)
+    entries: list[dict] = []
+    journal_files_scanned = 0
+    for offset in range(days):
+        day = today - timedelta(days=offset)
+        path = journal._journal_path(day)
+        if path.exists():
+            journal_files_scanned += 1
+            entries.extend(journal._read_entries(path))
+    payload = _gex_shadow_analysis_payload(entries)
+    payload["days"] = days
+    payload["journal_files_scanned"] = journal_files_scanned
+    return payload
 
 
 @app.get("/status/risk")
@@ -1194,6 +1240,7 @@ _DIAG_CODE_OVERRIDES = {
     "Backend API": "backend_api",
     "Broker": "broker",
     "Webhook secret": "webhook_secret",
+    "Live box guard": "live_box_guard",
 }
 
 
@@ -1462,6 +1509,19 @@ def _diagnostics_payload(for_date: date) -> dict:
     else:
         items.append(_diagnostic("ok", "Broker", f"Broker is set to {broker}; no external gateway required."))
 
+    guard = live_box_drift_report(
+        risk_rules_path=getattr(_config, "risk_rules_path", "risk_rules.yaml"),
+        log_dir=_config.log_dir,
+        for_date=for_date,
+    )
+    guard_status = str(guard.get("status") or "warn")
+    items.append(_diagnostic(
+        guard_status if guard_status in {"ok", "info", "warn", "error"} else "warn",
+        "Live box guard",
+        str(guard.get("summary") or "Live box guard unavailable."),
+        None if guard.get("ok") else str(guard.get("next_step") or ""),
+    ))
+
     if _config.discord_notifications_enabled and not _config.discord_webhook_url:
         items.append(_diagnostic(
             "warn",
@@ -1656,6 +1716,7 @@ def _dashboard_payload(for_date: date) -> dict:
     account_peak = journal.get_account_peak_balance(_config.position_sizing.starting_balance, for_date)
     realized_pnl = round(account_balance - _config.position_sizing.starting_balance, 2)
     diagnostics = _diagnostics_payload(for_date)
+    gex_shadow_analysis = _gex_shadow_analysis_payload(entries)
     return {
         "date": daily_state.date,
         "live_trading_enabled": _config.live_trading_enabled,
@@ -1694,7 +1755,13 @@ def _dashboard_payload(for_date: date) -> dict:
         "performance": journal.get_performance_stats(_config.position_sizing.starting_balance),
         "broker_gateway_reachable": None,  # IBKR-only concept; broker removed
         "diagnostics": diagnostics,
+        "gex_shadow_analysis": gex_shadow_analysis,
         "live_preflight": _safe_live_preflight_status(),
+        "live_box_drift_guard": live_box_drift_report(
+            risk_rules_path=getattr(_config, "risk_rules_path", "risk_rules.yaml"),
+            log_dir=_config.log_dir,
+            for_date=for_date,
+        ),
         "alert_validation": alert_validation,
         "expected_timeframe_minutes": int(getattr(_config, "expected_timeframe_minutes", 15)),
         # Feed-health window + stale threshold from the one shared definition, so the
@@ -1705,6 +1772,22 @@ def _dashboard_payload(for_date: date) -> dict:
         ),
         "instrument_universe": list(_config.allowed_instruments),
     }
+
+
+def _gex_shadow_analysis_payload(entries: list[dict]) -> dict:
+    try:
+        from sources.gex_shadow_analysis import disabled_summary, summarize_gex_shadow
+
+        if not getattr(_config, "gex_shadow_analysis_enabled", False):
+            return disabled_summary()
+        return summarize_gex_shadow(entries)
+    except Exception as exc:  # noqa: BLE001 - status analysis must never affect dashboard
+        return {
+            "enabled": bool(getattr(_config, "gex_shadow_analysis_enabled", False)),
+            "mode": "observe_only",
+            "trade_gating_changed": False,
+            "error": exc.__class__.__name__,
+        }
 
 
 def _instrument_breakdown(entries: list[dict]) -> list[dict]:

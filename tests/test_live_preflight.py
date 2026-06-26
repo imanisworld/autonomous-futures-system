@@ -33,6 +33,7 @@ def _healthy_snapshot():
 def test_preflight_passes_then_arm_allows_live_orders(monkeypatch, tmp_path):
     state_path = tmp_path / "preflight.json"
     monkeypatch.setattr(live_preflight, "reliability_snapshot", _healthy_snapshot)
+    monkeypatch.setattr(live_preflight, "live_box_drift_report", lambda **_: {"ok": True, "summary": "guard ok"})
 
     result = live_preflight.run_preflight(FakeBroker(), state_path=state_path)
 
@@ -49,6 +50,7 @@ def test_preflight_passes_then_arm_allows_live_orders(monkeypatch, tmp_path):
 def test_preflight_failure_disarms_and_reports_failed_check(monkeypatch, tmp_path):
     state_path = tmp_path / "preflight.json"
     monkeypatch.setattr(live_preflight, "reliability_snapshot", _healthy_snapshot)
+    monkeypatch.setattr(live_preflight, "live_box_drift_report", lambda **_: {"ok": True, "summary": "guard ok"})
 
     result = live_preflight.run_preflight(
         FakeBroker(positions=[{"netPos": 1}]),
@@ -73,6 +75,7 @@ def test_arm_requires_today_preflight(monkeypatch, tmp_path):
 def test_working_order_blocks_preflight(monkeypatch, tmp_path):
     state_path = tmp_path / "preflight.json"
     monkeypatch.setattr(live_preflight, "reliability_snapshot", _healthy_snapshot)
+    monkeypatch.setattr(live_preflight, "live_box_drift_report", lambda **_: {"ok": True, "summary": "guard ok"})
 
     result = live_preflight.run_preflight(
         FakeBroker(orders=[{"ordStatus": "Working"}]),
@@ -81,3 +84,19 @@ def test_working_order_blocks_preflight(monkeypatch, tmp_path):
 
     assert result["passed"] is False
     assert result["reason"] == "preflight_failed:no_working_orders"
+
+
+def test_drift_guard_blocks_preflight(monkeypatch, tmp_path):
+    state_path = tmp_path / "preflight.json"
+    monkeypatch.setattr(live_preflight, "reliability_snapshot", _healthy_snapshot)
+    monkeypatch.setattr(
+        live_preflight,
+        "live_box_drift_report",
+        lambda **_: {"ok": False, "status": "error", "summary": "branch mismatch"},
+    )
+
+    result = live_preflight.run_preflight(FakeBroker(), state_path=state_path)
+
+    assert result["passed"] is False
+    assert result["reason"] == "preflight_failed:live_box_drift_guard"
+    assert result["live_box_drift_guard"]["summary"] == "branch mismatch"

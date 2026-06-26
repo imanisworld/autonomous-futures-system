@@ -1,0 +1,1 @@
+"""Operational read-only helpers."""

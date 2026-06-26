@@ -989,6 +989,7 @@ def test_fastapi_status_today_endpoint():
     assert "diagnostics" in data
     assert "items" in data["diagnostics"]
     assert "live_preflight" in data
+    assert "live_box_drift_guard" in data
 
 
 def test_fastapi_status_diagnostics_endpoint(monkeypatch, tmp_path):
@@ -1011,7 +1012,7 @@ def test_fastapi_status_diagnostics_endpoint(monkeypatch, tmp_path):
     assert resp.status_code == 200
     data = resp.json()
     assert data["overall_status"] == "warn"
-    assert data["top_issue"]["component"] in {"Discord alerts", "TradingView feed"}
+    assert data["top_issue"]["component"] in {"Discord alerts", "TradingView feed", "Live box guard"}
     components = {item["component"] for item in data["items"]}
     assert {
         "Backend API",
@@ -1020,6 +1021,7 @@ def test_fastapi_status_diagnostics_endpoint(monkeypatch, tmp_path):
         "Discord alerts",
         "Quality gates",
         "Configured windows",
+        "Live box guard",
     }.issubset(components)
 
 
@@ -1257,6 +1259,7 @@ def test_live_preflight_run_endpoint_passes_clean_broker(monkeypatch, tmp_path):
         "ready": True,
         "last_successful_heartbeat": datetime.now(timezone.utc).isoformat(),
     })
+    monkeypatch.setattr(live_preflight, "live_box_drift_report", lambda **_: {"ok": True, "summary": "guard ok"})
     monkeypatch.setattr(app_module, "_TV_BROKER", FakeBroker())
     monkeypatch.setenv("BROKER", "tradovate")
     monkeypatch.setenv("WEBHOOK_SECRET", "test-secret")
@@ -1321,6 +1324,7 @@ def test_diagnostics_items_carry_stable_codes(monkeypatch, tmp_path):
     by_label = {i["component"]: i["code"] for i in items}
     assert by_label.get("TradingView feed") == "tradingview_feed"
     assert by_label.get("Tradovate config") == "tradovate_config"
+    assert by_label.get("Live box guard") == "live_box_guard"
     # The pinned code is independent of the (renameable) display label.
     assert app_module._diagnostic("ok", "TradingView alerts", "x")["code"] == "tradingview_feed"
 
@@ -1668,6 +1672,84 @@ def test_fastapi_review_endpoint_rejects_invalid_date(monkeypatch, tmp_path):
 
     assert resp.status_code == 422
     assert "YYYY-MM-DD" in resp.json()["detail"]
+
+
+def test_fastapi_proof_mnq_30_endpoint_is_read_only(monkeypatch, tmp_path):
+    try:
+        from fastapi.testclient import TestClient
+        import webhook.app as app_module
+    except ImportError:
+        pytest.skip("fastapi[testclient] not installed")
+
+    _isolate_app_logs(monkeypatch, tmp_path)
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    (log_dir / "journal_2026-06-23.jsonl").write_text(
+        "\n".join([
+            json.dumps({
+                "ts": "2026-06-23T15:15:00+00:00",
+                "instrument": "MNQ",
+                "decision": "TRADE",
+                "risk_check": {"result": "APPROVED"},
+                "setup": {
+                    "direction": "SHORT",
+                    "strategy": "orb_reclaim",
+                    "entry": 29805.25,
+                    "stop": 29807.25,
+                    "target": 29790.25,
+                    "contracts": 1,
+                },
+            }),
+            json.dumps({
+                "ts": "2026-06-23T15:30:00+00:00",
+                "type": "OUTCOME",
+                "instrument": "MNQ",
+                "outcome": {
+                    "result": "WIN",
+                    "exit_reason": "TARGET_HIT",
+                    "pnl_dollars": 22.5,
+                    "contracts": 1,
+                },
+            }),
+        ]) + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(app_module, "status_broker_account", lambda: {
+        "ok": False,
+        "error": "broker_not_tradovate",
+        "realized_pnl": None,
+    })
+
+    client = TestClient(app_module.app)
+    resp = client.get("/status/proof/mnq-30?freeze_ts=2026-06-23T12:00:00Z")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["proof_name"] == "next_30_mnq_resolved_trades"
+    assert data["resolved_mnq_trades"] == 1
+    assert data["remaining_to_target"] == 29
+    assert data["runtime_sources"]["journal_dir"] == str(log_dir)
+    assert data["runtime_sources"]["status_today"] == "/status/today"
+    assert data["runtime_sources"]["broker_account"] == "/status/broker-account"
+    assert "broker P&L alone" in data["source_of_truth_rule"]
+    assert data["trades"][0]["strategy"] == "orb_reclaim"
+    assert not (log_dir / "review_2026-06-23.json").exists()
+    assert not (log_dir / "daily_review_2026-06-23.md").exists()
+
+
+def test_fastapi_proof_mnq_30_endpoint_rejects_bad_freeze_ts(monkeypatch, tmp_path):
+    try:
+        from fastapi.testclient import TestClient
+        import webhook.app as app_module
+    except ImportError:
+        pytest.skip("fastapi[testclient] not installed")
+
+    _isolate_app_logs(monkeypatch, tmp_path)
+
+    resp = TestClient(app_module.app).get("/status/proof/mnq-30?freeze_ts=nope")
+
+    assert resp.status_code == 422
+    assert "freeze_ts" in resp.json()["detail"]
 
 
 def test_fastapi_latest_webhook_endpoint_after_alert(monkeypatch, tmp_path):
