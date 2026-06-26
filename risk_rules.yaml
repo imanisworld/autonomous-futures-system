@@ -300,6 +300,9 @@ market_condition:
 # ─── Strategy Concepts ───────────────────────────────────────
 strategy:
   selection_mode: "ranked"         # first_match | ranked. Enabled: 555-day Polygon replay +$9,727 MNQ / +$2,461 MES vs first_match.
+  # VWAP setups are retest trades; if live price is too far from VWAP, the
+  # capped entry rests behind price and cancels unfilled. Keep these near VWAP.
+  vwap_entry_max_distance_ticks: 12
   enabled_concepts:
     # ── Core structural setups ────────────────────────────────
     - orb_breakout            # Initial break above ORB high (long) or below ORB low (short)
