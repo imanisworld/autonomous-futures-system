@@ -269,6 +269,9 @@ class SystemConfig:
     gex_base_url: str = "https://api.gexsniper.com/v1"
     gex_timeout_seconds: float = 3.0
     gex_symbol_map: dict = field(default_factory=dict)
+    # Default-off status analysis over journaled observe-only GEX snapshots.
+    # Read-only; never used by DecisionEngine/RiskEngine/gex_gate.
+    gex_shadow_analysis_enabled: bool = False
 
     # ── Companion options paper lane (options_companion/) ──────────────────────
     # When a futures trade is fully approved + opened, derive an INTERNAL paper
@@ -490,6 +493,7 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
             "GEX_SYMBOL_MAP",
             {"MNQ": "NDX", "NQ": "NDX", "MES": "SPX", "ES": "SPX"},
         ),
+        gex_shadow_analysis_enabled=_env_bool("GEX_SHADOW_ANALYSIS_ENABLED", False),
 
         options_companion_enabled=_env_bool("OPTIONS_COMPANION_ENABLED", False),
         options_companion_mode=os.getenv("OPTIONS_COMPANION_MODE", "paper").strip().lower(),
