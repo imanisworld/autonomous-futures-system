@@ -3,9 +3,11 @@
 from sources.gex_compute import (
     CONTRACT_MULTIPLIER,
     GexLeg,
+    bs_gamma,
     compute_gex,
     dollar_gamma,
     infer_spot_from_parity,
+    zero_gamma_level,
 )
 
 
@@ -100,6 +102,56 @@ def test_compute_failsoft_on_empty_and_no_spot():
     legs = [GexLeg(700, True, 0.05, 1000)]
     assert compute_gex(legs, spot=None).ok is False
     assert compute_gex(legs, spot=0).error == "no_spot"
+
+
+def test_bs_gamma_peaks_near_atm_and_guards():
+    # Gamma is largest at-the-money and decays away from it.
+    atm = bs_gamma(700, 700, 7 / 365, 0.20)
+    otm = bs_gamma(700, 760, 7 / 365, 0.20)
+    assert atm > otm > 0
+    # degenerate inputs → 0, never a crash or NaN
+    assert bs_gamma(700, 700, 0, 0.20) == 0.0
+    assert bs_gamma(700, 700, 7 / 365, 0) == 0.0
+    assert bs_gamma(0, 700, 7 / 365, 0.20) == 0.0
+
+
+def test_zero_gamma_recovers_symmetric_flip():
+    # Symmetric book around 700: puts below, calls above, equal OI/IV/TTE.
+    # Total dealer gamma crosses zero ≈ 700.
+    iv, tte = 0.20, 7 / 365
+    legs = [
+        GexLeg(690, False, 0.0, 4000, iv=iv, tte_years=tte),
+        GexLeg(695, False, 0.0, 4000, iv=iv, tte_years=tte),
+        GexLeg(705, True, 0.0, 4000, iv=iv, tte_years=tte),
+        GexLeg(710, True, 0.0, 4000, iv=iv, tte_years=tte),
+    ]
+    flip = zero_gamma_level(legs, spot=700.0)
+    assert flip is not None
+    assert abs(flip - 700.0) < 3.0
+
+
+def test_zero_gamma_none_without_iv_or_tte():
+    legs = [GexLeg(700, True, 0.05, 4000), GexLeg(710, False, 0.05, 4000)]  # no iv/tte
+    assert zero_gamma_level(legs, spot=700.0) is None
+
+
+def test_zero_gamma_drops_insane_iv_legs():
+    # All legs carry the expiry-day 500%+ IV blowup → none usable → None.
+    legs = [GexLeg(690 + 5 * i, i % 2 == 0, 0.0, 4000, iv=5.7, tte_years=1 / 365) for i in range(6)]
+    assert zero_gamma_level(legs, spot=700.0) is None
+
+
+def test_compute_gex_prefers_bs_flip_when_iv_present():
+    iv, tte = 0.20, 7 / 365
+    legs = [
+        GexLeg(690, False, 0.04, 4000, iv=iv, tte_years=tte),
+        GexLeg(695, False, 0.04, 4000, iv=iv, tte_years=tte),
+        GexLeg(705, True, 0.04, 4000, iv=iv, tte_years=tte),
+        GexLeg(710, True, 0.04, 4000, iv=iv, tte_years=tte),
+    ]
+    prof = compute_gex(legs, spot=700.0)
+    assert prof.flip_point is not None
+    assert abs(prof.flip_point - 700.0) < 3.0  # BS solve, near spot
 
 
 def test_to_dict_is_compact_and_rounded():
