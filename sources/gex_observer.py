@@ -75,6 +75,7 @@ async def _profile_record(provider, etf: str, max_dte: int) -> dict:
                     is_call=is_call,
                     gamma=c.gamma,
                     open_interest=c.open_interest,
+                    delta=c.delta,
                     iv=c.iv,
                     tte_years=tte,
                 )
