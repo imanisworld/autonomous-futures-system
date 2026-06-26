@@ -1405,6 +1405,22 @@ class DecisionEngine:
             notes="ORB high rejection, fading failed breakout",
         )
 
+    def _vwap_entry_out_of_range(self, state: MarketState) -> bool:
+        """True when the live close sits further from VWAP than the configured gate.
+
+        VWAP setups place their entry AT VWAP (a retest play). If the live close has
+        run far from VWAP there is no retest to short/buy — the entry would rest
+        off-market and never fill, while (being higher-priority) it blocks momentum
+        setups below it. 0 = disabled (legacy behaviour: never gates).
+        """
+        max_ticks = getattr(self.config, "vwap_entry_max_distance_ticks", 0.0) or 0.0
+        if max_ticks <= 0:
+            return False
+        if not (state.vwap and state.vwap.value and state.ohlc):
+            return False
+        tick = self.TICK_SIZE.get(state.instrument, 0.25)
+        return abs(state.ohlc.close - state.vwap.value) > max_ticks * tick
+
     def _try_vwap_reclaim(self, state: MarketState) -> Optional[SetupDetail]:
         """
         VWAP Reclaim: Price was below VWAP, crossed above and held.
@@ -1414,6 +1430,8 @@ class DecisionEngine:
         if not (state.vwap.reclaimed and state.vwap.holding and state.vwap.price_vs_vwap == "above"):
             return None
         if not (state.trend and state.trend.direction == "UP"):
+            return None
+        if self._vwap_entry_out_of_range(state):
             return None
 
         tick = self.TICK_SIZE.get(state.instrument, 0.25)
@@ -1447,6 +1465,8 @@ class DecisionEngine:
         if not (state.vwap.holding and state.vwap.price_vs_vwap == "below"):
             return None
         if not (state.trend and state.trend.direction == "DOWN"):
+            return None
+        if self._vwap_entry_out_of_range(state):
             return None
         # Strat confirmation: bar must be a two_down (lower high AND lower low)
         if state.strat and state.strat.current_bar_type not in ("two_down", "2d", "2"):
@@ -1507,6 +1527,8 @@ class DecisionEngine:
         if state.vwap.price_vs_vwap != "below":
             return None
         if not (state.trend and state.trend.direction == "DOWN"):
+            return None
+        if self._vwap_entry_out_of_range(state):
             return None
 
         # If BOS/MSS data is present, prefer MSS bearish (highest conviction)

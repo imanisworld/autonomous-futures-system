@@ -171,6 +171,13 @@ class SystemConfig:
     # so this is zero-regression on the validated edge while blocking the live
     # out-of-distribution false-breakout entries (e.g. RANGE_BOUND orb_breakout).
     require_trending_condition: bool = True
+    # Quality gate: max distance (in ticks) the live close may sit from VWAP for a
+    # VWAP-anchored setup (vwap_hold / vwap_reclaim / vwap_rejection) to fire. Those
+    # setups place the entry AT VWAP (a retest play); on a strong trend day price
+    # runs far from VWAP and never retests, so the entry rests off-market and the
+    # live IOC/limit order cancels unfilled — and, being higher-priority, it blocks
+    # the momentum setups below it from taking the bar. 0 = disabled (no gate).
+    vwap_entry_max_distance_ticks: float = 0.0
     # Quality gate (#3): ORB-anchored stop offset in ticks beyond the ORB boundary.
     # Per instrument; falls back to the legacy hard-coded 8 ticks when unset. The
     # legacy 8-ticks-past-ORB stop is only ~10 ticks from entry — noise-width — so a
@@ -439,6 +446,11 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         require_trending_condition=_env_bool(
             "REQUIRE_TRENDING_CONDITION",
             bool(condition.get("require_trending", True)),
+        ),
+        vwap_entry_max_distance_ticks=float(
+            os.getenv("VWAP_ENTRY_MAX_DISTANCE_TICKS")
+            or strategy.get("vwap_entry_max_distance_ticks", 0.0)
+            or 0.0
         ),
 
         enabled_concepts=strategy.get("enabled_concepts", []),
