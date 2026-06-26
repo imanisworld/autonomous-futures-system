@@ -178,6 +178,16 @@ class SystemConfig:
     # live IOC/limit order cancels unfilled — and, being higher-priority, it blocks
     # the momentum setups below it from taking the bar. 0 = disabled (no gate).
     vwap_entry_max_distance_ticks: float = 0.0
+    # Momentum entry re-anchor: the OTHER answer to the trend-day no-fill. Instead of
+    # BLOCKING a level setup whose price has run away (vwap_entry_max_distance_ticks),
+    # this RE-ANCHORS the entry to the live close and recomputes stop/target preserving
+    # the original risk/reward, so the trade is taken at market on the move it would
+    # otherwise miss. LIMIT/level setups only (vwap_*/pdh_reclaim/pdl_reclaim), and ONLY
+    # when price moved in the trade's favor but is still INSIDE the original bracket — so
+    # it can never chase a feed-gap dislocation (those still hit the entry-detachment
+    # guard). Default OFF; backtest-gate before enabling live. See
+    # scripts/fill_realism_report.py for the measured ~54% limit-setup miss rate.
+    momentum_entry_reanchor: bool = False
     # Quality gate (#3): ORB-anchored stop offset in ticks beyond the ORB boundary.
     # Per instrument; falls back to the legacy hard-coded 8 ticks when unset. The
     # legacy 8-ticks-past-ORB stop is only ~10 ticks from entry — noise-width — so a
@@ -451,6 +461,10 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
             os.getenv("VWAP_ENTRY_MAX_DISTANCE_TICKS")
             or strategy.get("vwap_entry_max_distance_ticks", 0.0)
             or 0.0
+        ),
+        momentum_entry_reanchor=_env_bool(
+            "MOMENTUM_ENTRY_REANCHOR",
+            bool(strategy.get("momentum_entry_reanchor", False)),
         ),
 
         enabled_concepts=strategy.get("enabled_concepts", []),
