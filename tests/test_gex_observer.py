@@ -109,7 +109,10 @@ def test_parse_chain_extracts_gamma_and_open_interest():
             {
                 "instrument": {"symbol": "SPY...C00700"},
                 "bid": "4.30", "ask": "4.40", "openInterest": 8686,
-                "optionDetails": {"strikePrice": "700", "greeks": {"delta": "0.62", "gamma": "0.0495"}},
+                "optionDetails": {
+                    "strikePrice": "700",
+                    "greeks": {"delta": "0.62", "gamma": "0.0495", "impliedVolatility": "0.1879"},
+                },
             }
         ],
         "puts": [],
@@ -120,3 +123,4 @@ def test_parse_chain_extracts_gamma_and_open_interest():
     assert c.gamma == pytest.approx(0.0495)
     assert c.open_interest == pytest.approx(8686)
     assert c.delta == pytest.approx(0.62)
+    assert c.iv == pytest.approx(0.1879)

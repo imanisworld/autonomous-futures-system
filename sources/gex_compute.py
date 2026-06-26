@@ -16,20 +16,28 @@ Dollar-gamma per contract (the "$ of dealer delta to hedge per 1% move"):
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import Optional
 
 CONTRACT_MULTIPLIER = 100  # shares per option contract
+# Drop legs whose implied vol exceeds this (fraction) from the BS zero-gamma solve.
+# Public reports sane IV as a decimal (~0.18 at 6 DTE); expiry-day/after-hours 0DTE
+# contracts blow up to 5+ (500%+) and would corrupt the flip.
+_MAX_SANE_IV = 3.0
 
 
 @dataclass(frozen=True)
 class GexLeg:
-    """One strike/side with the two fields GEX needs."""
+    """One strike/side. ``iv`` (fraction) and ``tte_years`` are optional and only
+    needed for the Black-Scholes zero-gamma flip; net GEX / walls ignore them."""
 
     strike: float
     is_call: bool
     gamma: float
     open_interest: float
+    iv: Optional[float] = None
+    tte_years: Optional[float] = None
 
 
 @dataclass(frozen=True)
@@ -66,6 +74,63 @@ def dollar_gamma(leg: GexLeg, spot: float) -> float:
     """Signed dollar-gamma for one leg (calls +, puts −)."""
     sign = 1.0 if leg.is_call else -1.0
     return sign * leg.gamma * leg.open_interest * CONTRACT_MULTIPLIER * spot * spot * 0.01
+
+
+def _norm_pdf(x: float) -> float:
+    return math.exp(-0.5 * x * x) / math.sqrt(2.0 * math.pi)
+
+
+def bs_gamma(spot: float, strike: float, tte_years: float, iv: float) -> float:
+    """Black-Scholes gamma at a hypothetical spot (rates/divs ≈ 0 for short-dated)."""
+    if spot <= 0 or strike <= 0 or tte_years <= 0 or iv <= 0:
+        return 0.0
+    srt = iv * math.sqrt(tte_years)
+    d1 = (math.log(spot / strike) + 0.5 * iv * iv * tte_years) / srt
+    return _norm_pdf(d1) / (spot * srt)
+
+
+def zero_gamma_level(
+    legs: list[GexLeg], spot: Optional[float], *, band: float = 0.20, steps: int = 200
+) -> Optional[float]:
+    """Precise gamma-flip: the spot S where total dealer gamma exposure = 0.
+
+    Recomputes each leg's gamma via Black-Scholes across a ±``band`` grid around
+    spot (using the per-leg IV) and finds the zero-crossing nearest spot. Unlike the
+    cumulative-strike heuristic, this models how gamma shifts with price. Returns
+    None when fewer than 4 legs carry a sane IV + positive time-to-expiry.
+    """
+    if spot is None or spot <= 0:
+        return None
+    usable = [
+        (leg, 1.0 if leg.is_call else -1.0)
+        for leg in legs
+        if leg.iv and 0 < leg.iv < _MAX_SANE_IV
+        and leg.tte_years and leg.tte_years > 0
+        and leg.open_interest
+    ]
+    if len(usable) < 4:
+        return None
+
+    def total(s: float) -> float:
+        return sum(
+            sign * bs_gamma(s, leg.strike, leg.tte_years, leg.iv) * leg.open_interest
+            for leg, sign in usable
+        )
+
+    lo, hi = spot * (1.0 - band), spot * (1.0 + band)
+    prev_s, prev_v, best = lo, total(lo), None
+    for i in range(1, steps + 1):
+        s = lo + (hi - lo) * i / steps
+        v = total(s)
+        cand: Optional[float] = None
+        if prev_v == 0:
+            cand = prev_s
+        elif (prev_v < 0 < v) or (prev_v > 0 > v):
+            cand = prev_s + (0.0 - prev_v) / (v - prev_v) * (s - prev_s)
+        if cand is not None and (best is None or abs(cand - spot) < abs(best - spot)):
+            best = cand
+        prev_s, prev_v = s, v
+    return round(best, 2) if best is not None else None
 
 
 def infer_spot_from_parity(
@@ -123,12 +188,14 @@ def compute_gex(legs: list[GexLeg], spot: Optional[float]) -> GexProfile:
     put_candidates = {k: v for k, v in put_gex.items() if v < 0}
     call_wall = max(call_candidates, key=call_candidates.__getitem__) if call_candidates else None
     put_wall = min(put_candidates, key=put_candidates.__getitem__) if put_candidates else None
-    # Flip via cumulative zero-cross is only meaningful near spot; a crossing far
-    # out (deep-OTM OI noise) is not a real gamma flip, so band it to ±10% of spot.
-    # A precise zero-gamma level needs a Black-Scholes re-solve over spot (uses the
-    # per-contract IV Public provides) — deferred to a follow-up.
-    flip_raw = _flip_point(per_strike)
-    flip_point = flip_raw if (flip_raw is not None and abs(flip_raw - spot) <= 0.10 * spot) else None
+    # Flip: prefer the precise Black-Scholes zero-gamma solve (needs per-leg IV +
+    # time-to-expiry). Fall back to the cumulative zero-cross — banded to ±10% of
+    # spot, since a crossing far out (deep-OTM OI noise) is not a real gamma flip —
+    # when IV/TTE are absent.
+    flip_point = zero_gamma_level(legs, spot)
+    if flip_point is None:
+        flip_raw = _flip_point(per_strike)
+        flip_point = flip_raw if (flip_raw is not None and abs(flip_raw - spot) <= 0.10 * spot) else None
     regime = "positive" if net_gex >= 0 else "negative"
 
     return GexProfile(

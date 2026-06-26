@@ -17,6 +17,7 @@ import asyncio
 import logging
 import os
 import time
+from datetime import date
 from typing import Any, Optional
 
 from sources.gex_compute import GexLeg, compute_gex, infer_spot_from_parity
@@ -60,11 +61,23 @@ async def _profile_record(provider, etf: str, max_dte: int) -> dict:
     legs: list[GexLeg] = []
     call_mid: dict[float, float] = {}
     put_mid: dict[float, float] = {}
+    today = date.today()
     for c in snap.contracts:
         is_call = c.contract_type == "CALL"
         if c.gamma is not None and c.open_interest is not None:
+            # Years to expiry for the BS flip; same-day (0DTE) floored at half a
+            # session so it isn't dropped. Already-expired contracts get None.
+            days = (c.expiry - today).days
+            tte = (max(days, 0.5) / 365.0) if days >= 0 else None
             legs.append(
-                GexLeg(strike=c.strike, is_call=is_call, gamma=c.gamma, open_interest=c.open_interest)
+                GexLeg(
+                    strike=c.strike,
+                    is_call=is_call,
+                    gamma=c.gamma,
+                    open_interest=c.open_interest,
+                    iv=c.iv,
+                    tte_years=tte,
+                )
             )
         if c.mid is not None:
             (call_mid if is_call else put_mid)[c.strike] = c.mid
