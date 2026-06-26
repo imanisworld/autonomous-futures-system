@@ -61,6 +61,8 @@ class ChainContract:
     bid: Optional[float] = None
     ask: Optional[float] = None
     delta: Optional[float] = None
+    gamma: Optional[float] = None
+    open_interest: Optional[float] = None
 
     @property
     def mid(self) -> Optional[float]:
@@ -309,6 +311,8 @@ def _parse_chain(payload: dict[str, Any], expiry_iso: str) -> list[ChainContract
                     bid=_first_float(el, ("bid", "bidPrice", "bp")),
                     ask=_first_float(el, ("ask", "askPrice", "ap")),
                     delta=_first_float(greeks, ("delta",)),
+                    gamma=_first_float(greeks, ("gamma",)),
+                    open_interest=_first_float(el, ("openInterest", "open_interest", "oi")),
                 )
             )
     return out

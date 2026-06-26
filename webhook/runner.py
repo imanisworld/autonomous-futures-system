@@ -510,6 +510,9 @@ def process_alert(
         journal_entry["context"] = _market_state_context(state)
         if shadow_candidates:
             journal_entry["shadow_candidates"] = shadow_candidates
+        gex_observed = _maybe_observe_gex(state, cfg)
+        if gex_observed:
+            journal_entry["gex_observed"] = gex_observed
         journal.log_decision(journal_entry, None, for_date=today)
         return result
 
@@ -527,6 +530,9 @@ def process_alert(
     if shadow_candidates:
         journal_entry["shadow_candidates"] = shadow_candidates
     journal_entry["confluence"] = result["confluence"]
+    gex_observed = _maybe_observe_gex(state, cfg)
+    if gex_observed:
+        journal_entry["gex_observed"] = gex_observed
 
     # ── Step 4: Risk validation ───────────────────────────────────────────────
     journal_balance = journal.get_account_balance(
@@ -799,6 +805,29 @@ def _maybe_enrich_payload_with_signa(payload: AlertPayload, cfg: SystemConfig) -
             logger.info("Signa enrichment skipped: %s", signal.error)
     except Exception as exc:  # pragma: no cover - defensive guard
         logger.warning("Signa enrichment failed: %s", exc)
+
+
+def _maybe_observe_gex(state, cfg: SystemConfig) -> Optional[dict]:
+    """Observe-only GEX context for the journal, computed in-house from the
+    Public.com chain (sources/gex_observer.py).
+
+    Disabled by default (gex_observe_enabled). When on, returns a compact GEX
+    record (net GEX / gamma-flip / walls for the instrument's tracking ETF) to be
+    journaled as `gex_observed`. NEVER mutates state.gex or the gex_gate — this
+    exists so the GEX shadow analysis can measure whether the gamma context
+    predicts our outcomes BEFORE letting it gate anything. Never raises, blocks.
+    """
+    if not getattr(cfg, "gex_observe_enabled", False):
+        return None
+    try:
+        from sources.gex_observer import observe_gex
+        record = observe_gex(getattr(state, "instrument", ""), cfg)
+        if record and record.get("ok"):
+            return record
+        return None
+    except Exception as exc:  # pragma: no cover - defensive guard
+        logger.warning("GEX observe failed: %s", exc)
+        return None
 
 
 def _notify_force_close(

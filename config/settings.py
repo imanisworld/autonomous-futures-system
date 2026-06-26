@@ -264,6 +264,14 @@ class SystemConfig:
     # Read-only; never used by DecisionEngine/RiskEngine/gex_gate.
     gex_shadow_analysis_enabled: bool = False
 
+    # Observe-only GEX producer (sources/gex_observer.py). Computes net GEX /
+    # gamma-flip / walls in-house from the Public.com chain (gamma + OI) for the
+    # instrument's tracking ETF and journals it as `gex_observed`. OBSERVE-ONLY —
+    # never mutates state.gex or the gex_gate. Default off.
+    gex_observe_enabled: bool = False
+    gex_observe_max_dte: int = 7
+    gex_observe_symbol_map: dict = field(default_factory=dict)
+
     # ── Companion options paper lane (options_companion/) ──────────────────────
     # When a futures trade is fully approved + opened, derive an INTERNAL paper
     # options trade (long-premium call/put on the matching ETF) and track it in a
@@ -476,6 +484,13 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         signa_gate_enforced=_env_bool("SIGNA_GATE_ENFORCED", False),
 
         gex_shadow_analysis_enabled=_env_bool("GEX_SHADOW_ANALYSIS_ENABLED", False),
+        gex_observe_enabled=_env_bool("GEX_OBSERVE_ENABLED", False),
+        gex_observe_max_dte=int(os.getenv("GEX_OBSERVE_MAX_DTE", "7") or 7),
+        gex_observe_symbol_map=_env_symbol_map(
+            # MNQ/NQ → QQQ, MES/ES → SPY (liquid ETF options on Public).
+            "GEX_OBSERVE_SYMBOL_MAP",
+            {"MNQ": "QQQ", "NQ": "QQQ", "MES": "SPY", "ES": "SPY"},
+        ),
 
         options_companion_enabled=_env_bool("OPTIONS_COMPANION_ENABLED", False),
         options_companion_mode=os.getenv("OPTIONS_COMPANION_MODE", "paper").strip().lower(),
