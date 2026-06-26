@@ -260,15 +260,6 @@ class SystemConfig:
     # accumulated shadow data proves Signa-aligned trades actually outperform.
     signa_gate_enforced: bool = False
 
-    # GEXsniper dealer-mechanics source. Populates the GEXContext the engine
-    # already models (see strategy.gex_gate); key value is never stored on config.
-    # Disabled by default — when on it is OBSERVE-ONLY (journaled, never gates)
-    # until accumulated data proves the gamma context predicts our outcomes.
-    gex_api_enabled: bool = False
-    gex_api_key_configured: bool = False
-    gex_base_url: str = "https://api.gexsniper.com/v1"
-    gex_timeout_seconds: float = 3.0
-    gex_symbol_map: dict = field(default_factory=dict)
     # Default-off status analysis over journaled observe-only GEX snapshots.
     # Read-only; never used by DecisionEngine/RiskEngine/gex_gate.
     gex_shadow_analysis_enabled: bool = False
@@ -484,15 +475,6 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         ),
         signa_gate_enforced=_env_bool("SIGNA_GATE_ENFORCED", False),
 
-        gex_api_enabled=_env_bool("GEX_API_ENABLED", False),
-        gex_api_key_configured=bool(os.getenv("GEX_API_KEY", "").strip()),
-        gex_base_url=os.getenv("GEX_BASE_URL", "https://api.gexsniper.com/v1").strip().rstrip("/"),
-        gex_timeout_seconds=float(os.getenv("GEX_TIMEOUT_SECONDS", "3") or 3),
-        gex_symbol_map=_env_symbol_map(
-            # MNQ/NQ -> NDX, MES/ES -> SPX (GEXsniper covers indices, not futures).
-            "GEX_SYMBOL_MAP",
-            {"MNQ": "NDX", "NQ": "NDX", "MES": "SPX", "ES": "SPX"},
-        ),
         gex_shadow_analysis_enabled=_env_bool("GEX_SHADOW_ANALYSIS_ENABLED", False),
 
         options_companion_enabled=_env_bool("OPTIONS_COMPANION_ENABLED", False),
@@ -596,8 +578,6 @@ def _validate_config(config: SystemConfig) -> None:
             raise ConfigError("position sizing max_contracts must be >= 1.")
     if config.signa_timeout_seconds <= 0:
         raise ConfigError("signa_timeout_seconds must be > 0.")
-    if config.gex_timeout_seconds <= 0:
-        raise ConfigError("gex_timeout_seconds must be > 0.")
     if config.live_trading_enabled:
         # This should never be reached, but belt-and-suspenders
         raise LiveTradingBlockedError(source="post-parse validation")

@@ -136,9 +136,10 @@ Set those values in `.env` as `EXPECTED_LIVE_BRANCH`,
 
 ### GEX Shadow Analysis
 
-GEXsniper context is observe-only. `GEX_API_ENABLED=true` journals compact
-`gex_observed` snapshots when available, and never changes `DecisionEngine`,
-`RiskEngine`, or trade gating.
+GEX context is observe-only. When a producer journals compact `gex_observed`
+snapshots, this analysis scores them against resolved outcomes — it never changes
+`DecisionEngine`, `RiskEngine`, or trade gating. (The observe-only GEX producer is
+rebuilt separately on the Public.com chain feed.)
 
 Start the server with `GEX_SHADOW_ANALYSIS_ENABLED=true`, then measure whether
 the lane deserves promotion beyond journaling:
