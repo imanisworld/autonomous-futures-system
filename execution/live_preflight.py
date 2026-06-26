@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from execution.tradovate_supervisor import HEARTBEAT_FRESH_SECONDS, reliability_snapshot
+from ops.live_box_guard import live_box_drift_report
 
 
 DEFAULT_STATE_PATH = Path("logs/live_preflight_state.json")
@@ -138,6 +139,13 @@ def _check(name: str, ok: bool, detail: str = "") -> PreflightCheck:
     return PreflightCheck(name=name, ok=bool(ok), detail=detail)
 
 
+def _drift_report() -> dict[str, Any]:
+    return live_box_drift_report(
+        risk_rules_path=os.getenv("RISK_RULES_PATH", "risk_rules.yaml"),
+        log_dir=os.getenv("LOG_DIR", "logs"),
+    )
+
+
 def _parse_iso(value: object) -> Optional[datetime]:
     if not value:
         return None
@@ -230,6 +238,8 @@ def run_preflight(
     working_orders = [o for o in orders if _order_status(o) in WORKING_ORDER_STATUSES]
     checks.append(_check("no_open_positions", not open_positions, f"{len(open_positions)} open position(s)"))
     checks.append(_check("no_working_orders", not working_orders, f"{len(working_orders)} working order(s)"))
+    drift = _drift_report()
+    checks.append(_check("live_box_drift_guard", drift.get("ok") is True, drift.get("summary", "")))
 
     passed = all(check.ok for check in checks)
     state.date = _today()
@@ -248,6 +258,7 @@ def run_preflight(
 
     payload = state.as_dict()
     payload["passed"] = passed
+    payload["live_box_drift_guard"] = drift
     if notify and not passed:
         notify(f"LIVE PREFLIGHT FAILED: {state.disarmed_reason}. Live orders remain blocked.")
     return payload
@@ -287,4 +298,6 @@ def live_order_ready(*, state_path: str | Path | None = None) -> bool:
 
 
 def live_order_status(*, state_path: str | Path | None = None) -> dict[str, Any]:
-    return load_state(state_path).as_dict()
+    payload = load_state(state_path).as_dict()
+    payload["live_box_drift_guard"] = _drift_report()
+    return payload
