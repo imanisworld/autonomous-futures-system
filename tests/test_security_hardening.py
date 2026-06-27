@@ -109,6 +109,47 @@ def test_wrong_secret_in_body_is_rejected(monkeypatch):
     assert resp.status_code == 401
 
 
+@pytest.mark.parametrize(
+    "env_name",
+    ["TRADINGVIEW_WEBHOOK_SECRET", "TRADINGVIEW_WEBHOOK_SECRET_NEXT"],
+)
+def test_rotation_secret_is_accepted(monkeypatch, env_name):
+    monkeypatch.setenv("WEBHOOK_SECRET", "primary-secret")
+    monkeypatch.setenv(env_name, "rotation-secret")
+    monkeypatch.setenv("PUBLIC_DEMO_MODE", "false")
+    client, _ = _client(monkeypatch)
+
+    resp = client.post(
+        "/webhook/alert",
+        json=_alert_body(),
+        headers={"X-Webhook-Secret": "rotation-secret"},
+    )
+
+    assert resp.status_code == 200
+    assert resp.json().get("decision") == "IGNORED"
+
+
+def test_rotation_secrets_do_not_replace_primary(monkeypatch):
+    monkeypatch.setenv("WEBHOOK_SECRET", "primary-secret")
+    monkeypatch.setenv("TRADINGVIEW_WEBHOOK_SECRET", "rotation-secret")
+    monkeypatch.setenv("PUBLIC_DEMO_MODE", "false")
+    client, _ = _client(monkeypatch)
+
+    primary = client.post(
+        "/webhook/alert",
+        json=_alert_body(),
+        headers={"X-Webhook-Secret": "primary-secret"},
+    )
+    wrong = client.post(
+        "/webhook/alert",
+        json=_alert_body(),
+        headers={"X-Webhook-Secret": "retired-secret"},
+    )
+
+    assert primary.status_code == 200
+    assert wrong.status_code == 401
+
+
 def test_secret_in_query_allowed_by_default(monkeypatch):
     monkeypatch.setenv("WEBHOOK_SECRET", "s3cret")
     monkeypatch.setenv("PUBLIC_DEMO_MODE", "false")

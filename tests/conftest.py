@@ -13,6 +13,10 @@ from pathlib import Path
 
 import pytest
 
+# Unit tests must never inherit deployment values from a developer's .env.
+# Individual tests still control environment variables through monkeypatch.
+os.environ["PYTHON_DOTENV_DISABLED"] = "1"
+
 # Ensure project root is on path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 

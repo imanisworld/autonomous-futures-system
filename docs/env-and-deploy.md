@@ -1,14 +1,17 @@
 # `.env` & Deploy — operator reference
 
-Two things move on **different tracks**:
+Code and runtime configuration move on **different tracks**:
 
-- **Code** auto-syncs. Push to `main` → the GitHub Action (`deploy.yml`) SSHes to
-  Hetzner and runs `git pull` + pip install + `systemctl restart futures-bot`.
+- **Code does not auto-deploy.** The repository currently runs CI only. The
+  Hetzner worktree is intentionally divergent and must not receive a broad
+  `git pull`. Deploy reviewed files with a timestamped backup, then compile and
+  restart explicitly.
 - **`.env` never syncs.** It is **gitignored** (`.gitignore`: `.env`, `.env.*`;
-  only `.env.example` is tracked). `git push`/`pull` never carries it. Each
-  machine has its own `.env`, edited by hand.
+  only `.env.example` is tracked). Each machine has its own `.env`, edited by
+  hand.
 
-So: **code change = push. env change = SSH + edit + restart.** Different actions.
+So: **merge is not deployment**, and `.env` changes always require a deliberate
+box edit plus restart.
 
 ---
 
@@ -82,17 +85,19 @@ nothing to the live process.
 Hetzner live values: `PAPER_MODE=false`, `BROKER=tradovate`, `TRADOVATE_ENV=demo`,
 `LIVE_TRADING_ENABLED=false` (leave this last one alone).
 
-**Shared secrets — same value both boxes, only ever edited by hand:**
+**Secrets — edited by hand and never copied blindly between machines:**
 
-`WEBHOOK_SECRET` · `TRADOVATE_*` · `ALPACA_*` · `TASTYTRADE_*` ·
-`DISCORD_WEBHOOK_URL` · `SIGNA_API_KEY` · `TELEGRAM_*` · `PUBLIC_API_KEY`
+`WEBHOOK_SECRET` · `TRADINGVIEW_WEBHOOK_SECRET` ·
+`TRADINGVIEW_WEBHOOK_SECRET_NEXT` · `TRADOVATE_*` · `ALPACA_*` ·
+`TASTYTRADE_*` · `DISCORD_WEBHOOK_URL` · `SIGNA_API_KEY` · `TELEGRAM_*` ·
+`PUBLIC_API_KEY`
 
 ---
 
 ## Gotchas
 
-- **Deploy only fires on `main`.** A feature branch (e.g.
-  `fix/false-chop-and-session-cutoff`) is NOT deployed until merged to `main`.
+- **Merging to `main` does not deploy.** CI validates the merge; deployment is a
+  separate, operator-controlled action.
 - **Don't `git pull` Hetzner blindly** if the box's `main` has diverged / has
   uncommitted changes (e.g. a hand-edited `app.py`). Check `git status` on the
   box first.
