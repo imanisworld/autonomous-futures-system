@@ -260,10 +260,9 @@ class SystemConfig:
     # Independent live index quote (ES=F/NQ=F via Yahoo) for the Discord display price.
     live_quote_enabled: bool = True
 
-    # Visible manual execution controls (force-open / close-all / flatten buttons).
-    # Default OFF: the system is in monitor / alert-validation mode. When False the
-    # dashboard renders NO order-sending buttons — backend /webhook/manual endpoints
-    # are unchanged, just not surfaced in the UI.
+    # Manual execution controls (close-all / flatten).
+    # Default OFF: the dashboard hides the controls and /webhook/manual rejects
+    # requests before parsing or dispatching an action.
     enable_manual_execution_controls: bool = False
 
     # Future signal/data vendor planning; key value is never stored on config.

@@ -1476,6 +1476,7 @@ def test_manual_open_action_is_removed(monkeypatch, tmp_path):
     _isolate_app_logs(monkeypatch, tmp_path)
     monkeypatch.setenv("WEBHOOK_SECRET", "test-secret")
     monkeypatch.setattr(app_module, "_configured_webhook_secret", lambda: "test-secret")
+    monkeypatch.setattr(app_module._config, "enable_manual_execution_controls", True)
 
     # The force-open code paths and their bypass helpers are gone.
     assert not hasattr(app_module, "_manual_open")
@@ -1491,6 +1492,53 @@ def test_manual_open_action_is_removed(monkeypatch, tmp_path):
     )
     assert resp.status_code == 410
     assert "removed" in resp.json()["detail"].lower()
+
+
+def test_manual_endpoint_is_inert_when_controls_disabled(monkeypatch, tmp_path):
+    """A valid client-visible secret cannot dispatch actions while controls are off."""
+    import webhook.app as app_module
+    from fastapi.testclient import TestClient
+
+    _isolate_app_logs(monkeypatch, tmp_path)
+    monkeypatch.setattr(app_module, "_configured_webhook_secret", lambda: "test-secret")
+    monkeypatch.setattr(app_module._config, "enable_manual_execution_controls", False)
+    close_called = False
+
+    def fake_close_all():
+        nonlocal close_called
+        close_called = True
+        return {"ok": True}
+
+    monkeypatch.setattr(app_module, "_manual_close_all", fake_close_all)
+
+    resp = TestClient(app_module.app).post(
+        "/webhook/manual",
+        json={"action": "CLOSE_ALL"},
+        headers={"X-Webhook-Secret": "test-secret"},
+    )
+
+    assert resp.status_code == 403
+    assert resp.json()["detail"] == "Manual execution controls are disabled."
+    assert close_called is False
+
+
+def test_manual_endpoint_dispatches_when_controls_enabled(monkeypatch, tmp_path):
+    import webhook.app as app_module
+    from fastapi.testclient import TestClient
+
+    _isolate_app_logs(monkeypatch, tmp_path)
+    monkeypatch.setattr(app_module, "_configured_webhook_secret", lambda: "test-secret")
+    monkeypatch.setattr(app_module._config, "enable_manual_execution_controls", True)
+    monkeypatch.setattr(app_module, "_manual_close_all", lambda: {"ok": True, "action": "CLOSE_ALL"})
+
+    resp = TestClient(app_module.app).post(
+        "/webhook/manual",
+        json={"action": "CLOSE_ALL"},
+        headers={"X-Webhook-Secret": "test-secret"},
+    )
+
+    assert resp.status_code == 200
+    assert resp.json() == {"ok": True, "action": "CLOSE_ALL"}
 
 
 def test_public_entry_flags_target_hit_negative_pnl():
