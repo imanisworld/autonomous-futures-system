@@ -174,6 +174,16 @@ def _configured_webhook_secret() -> str:
     return os.getenv("WEBHOOK_SECRET", "").strip()
 
 
+def _accepted_webhook_secrets() -> list[str]:
+    """Return the primary and temporary rotation secrets, without duplicates."""
+    candidates = (
+        _configured_webhook_secret(),
+        os.getenv("TRADINGVIEW_WEBHOOK_SECRET", "").strip(),
+        os.getenv("TRADINGVIEW_WEBHOOK_SECRET_NEXT", "").strip(),
+    )
+    return list(dict.fromkeys(secret for secret in candidates if secret))
+
+
 async def _resolve_inbound_secret(
     request: Request,
     header_secret: str | None,
@@ -207,12 +217,17 @@ async def _resolve_inbound_secret(
 
 
 def _verify_webhook_secret(provided: str | None) -> None:
-    expected = _configured_webhook_secret()
+    accepted = _accepted_webhook_secrets()
     # No secret configured → reject every inbound webhook unconditionally.
     # A blank secret means the endpoint is public; that is never acceptable.
-    if not expected:
+    if not accepted:
         raise HTTPException(status_code=401, detail="WEBHOOK_SECRET is not configured.")
-    if not provided or not hmac.compare_digest(provided, expected):
+    if not provided:
+        raise HTTPException(status_code=401, detail="Invalid webhook secret")
+    matched = False
+    for expected in accepted:
+        matched = hmac.compare_digest(provided, expected) or matched
+    if not matched:
         raise HTTPException(status_code=401, detail="Invalid webhook secret")
 
 
