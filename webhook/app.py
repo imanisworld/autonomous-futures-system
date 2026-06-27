@@ -517,6 +517,9 @@ async def manual_action(
              -d '{"action": "CLOSE_ALL"}'
     """
     _verify_webhook_secret(await _resolve_inbound_secret(request, x_webhook_secret, secret))
+    if not getattr(_config, "enable_manual_execution_controls", False):
+        raise HTTPException(status_code=403, detail="Manual execution controls are disabled.")
+
     body = await request.json()
     action = str(body.get("action", "")).upper().strip()
 
