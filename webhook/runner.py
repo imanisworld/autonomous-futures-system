@@ -636,24 +636,30 @@ def process_alert(
 
     fill = broker.execute_bracket(order)
     if fill.result != "OPEN":
-        # Broker rejected or failed to place the order — do NOT mark position open.
-        logger.error(
-            "Bracket order failed for %s %s: fill_result=%s",
-            order.instrument, order.direction, fill.result,
-        )
-        logger.error("ORDER FAILED: %s %s — %s", order.instrument, order.direction, fill.result)
-        if os.getenv("BROKER", "paper").strip().lower() == "tradovate":
-            try:
-                from notifications.discord_notifier import send_discord_alert
-                send_discord_alert(
-                    cfg,
-                    "LIVE ORDER BLOCKED: Tradovate did not accept the order. "
-                    f"No order sent/kept open. Reason: {fill.result}. "
-                    f"Setup: {order.direction} {order.instrument} {order.contracts}c "
-                    f"@ {order.entry} stop {order.stop} target {order.target}.",
-                )
-            except Exception as exc:  # pragma: no cover - notification must never affect trading
-                logger.warning("Live-order-blocked Discord alert failed: %s", exc)
+        # Broker did NOT establish a position. A CANCELLED result is an EXPECTED
+        # IOC limit no-fill (the broker accepted the order; the limit just didn't
+        # fill) — log it at WARNING so it doesn't pollute error counts / alerting.
+        # Anything else (rejected / exception / naked-flatten) is a genuine
+        # execution failure: log ERROR and fire the live-order-blocked alert.
+        if fill.result == "CANCELLED":
+            logger.warning(
+                "ENTRY_NOT_FILLED: %s %s — limit not filled (CANCELLED)",
+                order.instrument, order.direction,
+            )
+        else:
+            logger.error("ORDER FAILED: %s %s — %s", order.instrument, order.direction, fill.result)
+            if os.getenv("BROKER", "paper").strip().lower() == "tradovate":
+                try:
+                    from notifications.discord_notifier import send_discord_alert
+                    send_discord_alert(
+                        cfg,
+                        "LIVE ORDER BLOCKED: Tradovate did not accept the order. "
+                        f"No order sent/kept open. Reason: {fill.result}. "
+                        f"Setup: {order.direction} {order.instrument} {order.contracts}c "
+                        f"@ {order.entry} stop {order.stop} target {order.target}.",
+                    )
+                except Exception as exc:  # pragma: no cover - notification must never affect trading
+                    logger.warning("Live-order-blocked Discord alert failed: %s", exc)
         # The decision was journaled as a TRADE (open) above, but the broker did
         # NOT establish a position (rejected / no-fill / naked-flattened). Book a
         # CANCELLED outcome NOW so the journal doesn't carry a phantom-open that
