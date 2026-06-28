@@ -112,12 +112,11 @@ def _errors_today() -> Optional[int]:
         ).stdout
     except (OSError, subprocess.SubprocessError):
         return None
+    # Expected limit-misses log at WARNING (ENTRY_NOT_FILLED), so error-level lines
+    # are genuine failures — count directly.
     return sum(
         1 for ln in out.splitlines()
         if any(t in ln.lower() for t in ("error", "traceback", "exception", "critical"))
-        and "order failed" not in ln.lower()
-        and "fill_result=cancelled" not in ln.lower()
-        and "entry_not_filled" not in ln.lower()
     )
 
 

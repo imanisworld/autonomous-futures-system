@@ -215,12 +215,11 @@ def collect_health(monday: date) -> dict:
     except (OSError, subprocess.SubprocessError):
         return {}
     low = out.lower()
-    # "ORDER FAILED ... CANCELLED" lines are expected limit-misses, not real errors.
+    # Expected limit-misses now log at WARNING (ENTRY_NOT_FILLED), so error-level
+    # lines are genuine failures — count them directly, no string-exclusion needed.
     real_errors = sum(
         1 for ln in out.splitlines()
         if any(t in ln.lower() for t in ("error", "traceback", "exception", "critical"))
-        and "order failed" not in ln.lower()
-        and "fill_result=cancelled" not in ln.lower()
     )
     return {
         "errors": real_errors,
