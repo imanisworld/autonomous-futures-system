@@ -1066,15 +1066,28 @@ async def status_gex_shadow(days: int = Query(default=30, ge=1, le=180)) -> dict
     journal = JournalLogger(log_dir=_config.log_dir)
     entries: list[dict] = []
     journal_files_scanned = 0
+    journal_entries_scanned = 0
     for offset in range(days):
         day = today - timedelta(days=offset)
         path = journal._journal_path(day)
         if path.exists():
             journal_files_scanned += 1
-            entries.extend(journal._read_entries(path))
+            day_entries = journal._read_entries(path)
+            journal_entries_scanned += len(day_entries)
+            entries.extend(
+                entry
+                for entry in day_entries
+                if entry.get("type") == "OUTCOME"
+                or (
+                    entry.get("decision") == "TRADE"
+                    and (entry.get("risk_check") or {}).get("result") == "APPROVED"
+                )
+            )
     payload = _gex_shadow_analysis_payload(entries)
     payload["days"] = days
     payload["journal_files_scanned"] = journal_files_scanned
+    payload["journal_entries_scanned"] = journal_entries_scanned
+    payload["analysis_entries_retained"] = len(entries)
     return payload
 
 

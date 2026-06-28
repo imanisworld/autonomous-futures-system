@@ -118,6 +118,8 @@ def test_status_gex_shadow_endpoint_aggregates_recent_journals(monkeypatch, tmp_
 
     assert payload["days"] == 2
     assert payload["journal_files_scanned"] == 2
+    assert payload["journal_entries_scanned"] == 4
+    assert payload["analysis_entries_retained"] == 4
     assert payload["measured_trades"] == 2
     assert payload["overall"]["expectancy"] == 30.0
     delta_rows = {
@@ -125,3 +127,28 @@ def test_status_gex_shadow_endpoint_aggregates_recent_journals(monkeypatch, tmp_
     }
     assert delta_rows["bullish"]["expectancy"] == 80.0
     assert delta_rows["bearish"]["expectancy"] == -20.0
+
+
+def test_status_gex_shadow_discards_irrelevant_journal_rows(monkeypatch, tmp_path, config):
+    cfg = replace(config, log_dir=str(tmp_path), gex_shadow_analysis_enabled=True)
+    monkeypatch.setattr(app_module, "_config", cfg)
+    journal = app_module.JournalLogger(log_dir=str(tmp_path))
+    today = app_module.date.today()
+    journal.log_decision(
+        {
+            "ts": f"{today.isoformat()}T14:15:00+00:00",
+            "instrument": "MNQ",
+            "decision": "NO_TRADE",
+            "risk_check": {"result": "NOT_RUN"},
+        },
+        None,
+        for_date=today,
+    )
+
+    import asyncio
+
+    payload = asyncio.run(app_module.status_gex_shadow(days=1))
+
+    assert payload["journal_entries_scanned"] == 1
+    assert payload["analysis_entries_retained"] == 0
+    assert payload["measured_trades"] == 0
