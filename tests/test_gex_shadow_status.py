@@ -37,6 +37,11 @@ def test_dashboard_gex_shadow_enabled_uses_journal_entries(monkeypatch, tmp_path
                 "flip_point": 19500,
                 "call_wall": 19600,
                 "put_wall": 19400,
+                "delta_bias": "bullish",
+                "spot_vs_flip": "above",
+                "dist_to_flip": -80,
+                "call_walls": [19600, 19650],
+                "put_walls": [19400, 19350],
             },
         },
         None,
@@ -82,10 +87,15 @@ def test_status_gex_shadow_endpoint_aggregates_recent_journals(monkeypatch, tmp_
                     "ok": True,
                     "ticker": "NDX",
                     "regime": "positive",
-                    "flip_point": 19500,
-                    "call_wall": 19600,
-                    "put_wall": 19400,
-                },
+                "flip_point": 19500,
+                "call_wall": 19600,
+                "put_wall": 19400,
+                "delta_bias": "bullish" if pnl > 0 else "bearish",
+                "spot_vs_flip": "above",
+                "dist_to_flip": -80,
+                "call_walls": [19600, 19650],
+                "put_walls": [19400, 19350],
+            },
             },
             None,
             for_date=day,
@@ -110,3 +120,8 @@ def test_status_gex_shadow_endpoint_aggregates_recent_journals(monkeypatch, tmp_
     assert payload["journal_files_scanned"] == 2
     assert payload["measured_trades"] == 2
     assert payload["overall"]["expectancy"] == 30.0
+    delta_rows = {
+        row["key"]: row for row in payload["cohorts"]["by_delta_bias"]
+    }
+    assert delta_rows["bullish"]["expectancy"] == 80.0
+    assert delta_rows["bearish"]["expectancy"] == -20.0
