@@ -34,6 +34,11 @@ from strategy.shadow_setups import evaluate_shadow_setups
 from strategy.signal_engine import DecisionEngine
 from webhook.payload import AlertPayload
 from webhook.state_builder import build_market_state
+from context.wall_context import build_wall_context as _build_wall_context
+from context.range_signal import (
+    build_range_state as _build_range_state,
+    build_range_signal as _build_range_signal,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -241,6 +246,30 @@ def process_alert(
         )
     except Exception:  # noqa: BLE001 — fail-soft, never break ingestion
         logger.warning("bar history update failed", exc_info=True)
+
+    # ── Range observation (journal-only, no effect on decisions) ──────────────
+    # Wall context + range state/signal, mirroring the GEX observe pattern: we
+    # measure whether range structure predicts our outcomes BEFORE letting it
+    # gate anything. Disabled by default (range_observe_enabled); fail-soft —
+    # a build hiccup must never affect ingestion, the decision, or risk.
+    _wall_ctx_dict: dict = {}
+    _range_state_dict: dict = {}
+    _range_signal_dict: dict = {}
+    if getattr(cfg, "range_observe_enabled", False):
+        try:
+            _wall_ctx = _build_wall_context(
+                state, zone_state=getattr(payload, "zone_state", None)
+            )
+            _wall_ctx_dict = _wall_ctx.to_dict()
+            _orb_status = str(getattr(getattr(state, "orb", None), "status", None) or "")
+            _range_state = _build_range_state(
+                _wall_ctx, state.market_condition or "", orb_status=_orb_status
+            )
+            _range_state_dict = _range_state.to_dict()
+            _range_signal = _build_range_signal(_range_state, _wall_ctx)
+            _range_signal_dict = _range_signal.to_dict()
+        except Exception:  # noqa: BLE001 — fail-soft, never break ingestion
+            logger.debug("wall_context/range_signal build failed", exc_info=True)
 
     journal = JournalLogger(log_dir=log_dir)
     today = for_date or date.today()
@@ -513,6 +542,13 @@ def process_alert(
         gex_observed = _maybe_observe_gex(state, cfg)
         if gex_observed:
             journal_entry["gex_observed"] = gex_observed
+        if _wall_ctx_dict:
+            journal_entry["wall_context"] = _wall_ctx_dict
+        if state.market_condition in ("RANGE_BOUND", "CHOPPY"):
+            if _range_state_dict:
+                journal_entry["range_state"] = _range_state_dict
+            if _range_signal_dict:
+                journal_entry["range_signal"] = _range_signal_dict
         journal.log_decision(journal_entry, None, for_date=today)
         return result
 
@@ -533,6 +569,10 @@ def process_alert(
     gex_observed = _maybe_observe_gex(state, cfg)
     if gex_observed:
         journal_entry["gex_observed"] = gex_observed
+    if _wall_ctx_dict:
+        journal_entry["wall_context"] = _wall_ctx_dict
+    if _range_signal_dict:
+        journal_entry["shadow_range_signal"] = _range_signal_dict
 
     # ── Step 4: Risk validation ───────────────────────────────────────────────
     journal_balance = journal.get_account_balance(
