@@ -21,6 +21,7 @@ from __future__ import annotations
 import os
 import re
 import shutil
+import json
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -104,6 +105,17 @@ def main(argv: Optional[list[str]] = None) -> int:
         except OSError:
             pass
 
+    try:
+        (dest / "backup_proof_data_latest.json").write_text(json.dumps({
+            "job": "backup_proof_data",
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "evidence_dir": str(dest),
+            "copied": copied,
+            "ledger_snapshots": snapped,
+            "pruned": pruned,
+        }, indent=2))
+    except OSError:
+        pass
     print(f"[backup] {today} -> {dest}: {copied} copied, {snapped} ledger snapshot(s), {pruned} pruned")
     return 0
 

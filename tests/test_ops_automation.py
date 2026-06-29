@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+import json
 from datetime import date
 
 from scripts import backup_proof_data as bk
@@ -83,5 +84,24 @@ def test_backup_main_failsoft(tmp_path, monkeypatch):
     assert (dest / "journal_2026-06-27.jsonl").exists()
     snaps = list((dest / "snapshots").glob("options_companion.*.sqlite"))
     assert len(snaps) == 1
+    receipt = json.loads((dest / "backup_proof_data_latest.json").read_text())
+    assert receipt["job"] == "backup_proof_data"
+    assert receipt["evidence_dir"] == str(dest)
     # idempotent: re-run copies nothing new (same size)
     assert bk.main() == 0
+
+
+def test_health_main_writes_fail_soft_receipt(tmp_path, monkeypatch):
+    monkeypatch.setenv("LOG_DIR", str(tmp_path))
+    monkeypatch.delenv("DISCORD_ROUTE_HEARTBEAT", raising=False)
+    monkeypatch.delenv("DISCORD_ROUTE_DAILY_REPORT", raising=False)
+    monkeypatch.delenv("DISCORD_WEBHOOK_URL", raising=False)
+    monkeypatch.setattr(hd, "collect", lambda: {
+        "service_ok": True, "broker_reachable": True, "position_flat": True,
+        "auth_state": "HEALTHY", "errors_today": 0, "disk_pct": 17.0,
+    })
+
+    assert hd.main() == 0
+    receipt = json.loads((tmp_path / "health_digest_latest.json").read_text())
+    assert receipt["job"] == "health_digest"
+    assert receipt["verdict"] == "OK"

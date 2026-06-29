@@ -16,6 +16,12 @@ i_london_session= input.session("0300-0830", "London Session (ET)", group=GROUP_
 i_extra_session = input.session("1700-2200", "Additional Alert Session (ET)", group=GROUP_ALERT)
 i_alert_on      = input.bool(true, "Send confirmed-bar alerts", group=GROUP_ALERT)
 i_alert_all_sessions = input.bool(true, "Send alerts 24 hours", group=GROUP_ALERT)
+// Visuals OFF by default: this script is a data/alert engine, so it paints nothing on the
+// chart unless you opt in. Flip on if you want the EMA/VWAP/ORB/zone plots overlaid.
+i_show_plots    = input.bool(false, "Show chart plots (off = clean chart)", group=GROUP_ALERT)
+// Webhook secret travels in the JSON body (not the URL) so it stays out of proxy/access logs.
+// Paste the secret here in the alert's settings; leave blank to fall back to the URL ?secret= param.
+i_webhook_secret = input.string("", "Webhook Secret (body auth)", group=GROUP_ALERT, confirm=false)
 i_ema_fast      = input.int(9, "Fast EMA", minval=2, group=GROUP_TREND)
 i_ema_slow      = input.int(21, "Slow EMA", minval=5, group=GROUP_TREND)
 i_ema_mid       = input.int(55, "Mid EMA", minval=20, group=GROUP_TREND)
@@ -310,6 +316,34 @@ else if cur_type == "two_down" and prev_type == "two_up" and t2b_type == "inside
     strat_seq := "strat_122"
     strat_dir_ctx := "SHORT"
     strat_trigger_ctx := "reversal"
+else if cur_type == "two_up" and prev_type == "two_down" and t2b_type == "outside_bar"
+    strat_seq := "strat_322_reversal"
+    strat_dir_ctx := "LONG"
+    strat_trigger_ctx := "reversal"
+else if cur_type == "two_down" and prev_type == "two_up" and t2b_type == "outside_bar"
+    strat_seq := "strat_322_reversal"
+    strat_dir_ctx := "SHORT"
+    strat_trigger_ctx := "reversal"
+else if (cur_type == "two_up" or cur_type == "two_down") and prev_type == "inside_bar" and t2b_type == "outside_bar"
+    strat_seq := "strat_312"
+    strat_dir_ctx := cur_type == "two_up" ? "LONG" : "SHORT"
+    strat_trigger_ctx := "breakout"
+else if cur_type == "two_up" and prev_type == "two_up"
+    strat_seq := "strat_22_continuation"
+    strat_dir_ctx := "LONG"
+    strat_trigger_ctx := "continuation"
+else if cur_type == "two_down" and prev_type == "two_down"
+    strat_seq := "strat_22_continuation"
+    strat_dir_ctx := "SHORT"
+    strat_trigger_ctx := "continuation"
+else if cur_type == "two_up" and prev_type == "two_down"
+    strat_seq := "strat_22_reversal"
+    strat_dir_ctx := "LONG"
+    strat_trigger_ctx := "reversal"
+else if cur_type == "two_down" and prev_type == "two_up"
+    strat_seq := "strat_22_reversal"
+    strat_dir_ctx := "SHORT"
+    strat_trigger_ctx := "reversal"
 else if (cur_type == "two_up" or cur_type == "two_down") and prev_type == "inside_bar"
     strat_seq := "strat_inside_break"
     strat_dir_ctx     := cur_type == "two_up" ? "LONG" : "SHORT"
@@ -471,6 +505,7 @@ string event_type  = has_signal ? "signal" : "heartbeat"
 
 // ─── BUILD JSON ───────────────────────────────────────────────────────────────
 string msg = "{"
+msg := msg + "\"secret\":"             + s2j(i_webhook_secret) + ","
 msg := msg + "\"ticker\":"             + "\"" + syminfo.ticker + "\","
 msg := msg + "\"timestamp\":"          + str.tostring(time) + ","
 msg := msg + "\"open\":"               + str.tostring(open,  "#.####") + ","
@@ -570,25 +605,28 @@ if should_send
     alert(msg, alert.freq_once_per_bar_close)
 
 // ─── CHARTS ───────────────────────────────────────────────────────────────────
-plot(ema_fast, "EMA 9",   color=color.new(color.aqua,   30))
-plot(ema_slow, "EMA 21",  color=color.new(color.orange, 30))
-plot(ema_mid,  "EMA 55",  color=color.new(color.purple, 40))
-plot(ema_long, "EMA 200", color=color.new(color.gray,   40))
-plot(vwap_val, "VWAP",    color=color.new(color.yellow, 20))
-plot(hod, "HOD", color=color.new(color.lime, 60), style=plot.style_stepline, linewidth=1)
-plot(lod, "LOD", color=color.new(color.red,  60), style=plot.style_stepline, linewidth=1)
+// All plots respect the "Show chart plots" toggle. Default off ⇒ display.none ⇒
+// nothing is drawn on the chart (data stays in the Data Window / alerts only).
+plot_disp = i_show_plots ? display.all : display.none
+plot(ema_fast, "EMA 9",   color=color.new(color.aqua,   30), display=plot_disp)
+plot(ema_slow, "EMA 21",  color=color.new(color.orange, 30), display=plot_disp)
+plot(ema_mid,  "EMA 55",  color=color.new(color.purple, 40), display=plot_disp)
+plot(ema_long, "EMA 200", color=color.new(color.gray,   40), display=plot_disp)
+plot(vwap_val, "VWAP",    color=color.new(color.yellow, 20), display=plot_disp)
+plot(hod, "HOD", color=color.new(color.lime, 60), style=plot.style_stepline, linewidth=1, display=plot_disp)
+plot(lod, "LOD", color=color.new(color.red,  60), style=plot.style_stepline, linewidth=1, display=plot_disp)
 
 orb_h_plot = in_ny     or in_ny[1]     ? orb_h : na
 orb_l_plot = in_ny     or in_ny[1]     ? orb_l : na
 l_orb_h_plot = in_london or in_london[1] ? london_orb_h : na
 l_orb_l_plot = in_london or in_london[1] ? london_orb_l : na
-plot(orb_h_plot,   "NY ORB High",     color=color.new(color.lime,   40), style=plot.style_stepline)
-plot(orb_l_plot,   "NY ORB Low",      color=color.new(color.red,    40), style=plot.style_stepline)
-plot(l_orb_h_plot, "London ORB High", color=color.new(color.teal,   50), style=plot.style_stepline)
-plot(l_orb_l_plot, "London ORB Low",  color=color.new(color.orange, 50), style=plot.style_stepline)
+plot(orb_h_plot,   "NY ORB High",     color=color.new(color.lime,   40), style=plot.style_stepline, display=plot_disp)
+plot(orb_l_plot,   "NY ORB Low",      color=color.new(color.red,    40), style=plot.style_stepline, display=plot_disp)
+plot(l_orb_h_plot, "London ORB High", color=color.new(color.teal,   50), style=plot.style_stepline, display=plot_disp)
+plot(l_orb_l_plot, "London ORB Low",  color=color.new(color.orange, 50), style=plot.style_stepline, display=plot_disp)
 
 // Supply & Demand zone visualization
-plot(supply_top,    "Supply Top",    color=color.new(color.red,  60), style=plot.style_stepline, linewidth=1)
-plot(supply_bottom, "Supply Bottom", color=color.new(color.red,  80), style=plot.style_stepline, linewidth=1)
-plot(demand_top,    "Demand Top",    color=color.new(color.blue, 80), style=plot.style_stepline, linewidth=1)
-plot(demand_bottom, "Demand Bottom", color=color.new(color.blue, 60), style=plot.style_stepline, linewidth=1)
+plot(supply_top,    "Supply Top",    color=color.new(color.red,  60), style=plot.style_stepline, linewidth=1, display=plot_disp)
+plot(supply_bottom, "Supply Bottom", color=color.new(color.red,  80), style=plot.style_stepline, linewidth=1, display=plot_disp)
+plot(demand_top,    "Demand Top",    color=color.new(color.blue, 80), style=plot.style_stepline, linewidth=1, display=plot_disp)
+plot(demand_bottom, "Demand Bottom", color=color.new(color.blue, 60), style=plot.style_stepline, linewidth=1, display=plot_disp)

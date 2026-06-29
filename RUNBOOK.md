@@ -78,8 +78,14 @@ curl http://127.0.0.1:8000/status/today
 curl 'http://127.0.0.1:8000/status/history?days=7'
 curl http://127.0.0.1:8000/status/latest-webhook
 curl http://127.0.0.1:8000/status/strategy
+curl 'http://127.0.0.1:8000/status/fill-realism?days=7&recent_limit=20'
 curl 'http://127.0.0.1:8000/status/review?date=2026-05-23&mode=eod'
 ```
+
+`/status/fill-realism` is read-only and journal-derived. It reports the actual
+resolved no-fill rate overall and by setup, the requested sample window, unresolved
+attempt count, and recent recorded misses. It does not infer fills from bar prices,
+replay, broker state outside the journal, or hypothetical alternate entries.
 
 The review endpoint supports `mode=morning` or `mode=eod` and does not write
 review artifacts. Dates must use exact `YYYY-MM-DD` format. Use the daily
@@ -134,6 +140,44 @@ Set those values in `.env` as `EXPECTED_LIVE_BRANCH`,
 `EXPECTED_LIVE_COMMIT`, and `EXPECTED_RISK_RULES_SHA256`, then run
 `python3 scripts/doctor.py --strict` and `/status/live-preflight`.
 
+The same guard inventories proof-critical environment overrides. Any active
+override must be pinned to its exact value as `EXPECTED_PROOF_<NAME>` (for
+example `EXPECTED_PROOF_VWAP_ENTRY_MAX_DISTANCE_TICKS=12`). Use `<unset>` to
+pin absence and catch a knob being introduced mid-window. The guard reports
+these values through doctor, `/status/diagnostics`, and live preflight; it never
+edits `.env`, configuration, Git state, or broker state.
+
+The guard also reports the PR #96/#99 security-sensitive runtime state. It uses
+the loaded application config to say whether `/webhook/manual` is effectively
+inert, and reports only presence and distinct-value counts for `WEBHOOK_SECRET`,
+`TRADINGVIEW_WEBHOOK_SECRET`, and `TRADINGVIEW_WEBHOOK_SECRET_NEXT`. Secret
+values, hashes, prefixes, and lengths are never returned. A missing primary
+secret or enabled manual controls is an error; a primary secret without a
+distinct staged rotation alias is a warning (and fails `doctor --strict`).
+
+This is repo/process evidence, not an end-to-end deployment attestation. It
+cannot prove which systemd unit, reverse proxy, container, or TradingView alert
+is active, or that TradingView has switched to the staged secret. Confirm those
+separately on the active box without printing credentials.
+
+### Research Evidence Readiness
+
+Use the unified, read-only scorecard to see which observation tracks are
+inactive, collecting, sample-limited, data-quality blocked, or ready for human
+review:
+
+```bash
+curl -s 'http://127.0.0.1:8000/status/evidence-readiness?days=30'
+```
+
+The same payload appears under `evidence_readiness` in `/status/today` and
+`/status/diagnostics`; doctor prints a compact informational summary. Research
+status never changes operational health, runs a collector, enables a strategy,
+or changes a gate. `READY FOR REVIEW` authorizes only human replay/paper review.
+RangeSignal and shadow setup observations remain `COLLECTING` until a causal
+future-bar resolver produces fee/slippage-adjusted outcomes; observation counts
+alone cannot satisfy promotion criteria.
+
 ### GEX Shadow Analysis
 
 GEX context is observe-only. When a producer journals compact `gex_observed`
@@ -154,6 +198,14 @@ trades (`min_sample`, default 20), positive expectancy in candidate cohorts,
 and clearly worse cohorts that can be replayed or shadow-run before any gate is
 enforced. Until then, `verdict.status` remains `JOURNAL_ONLY` or
 `NO_PROMOTION_YET`.
+
+For the PR #91 enrichments specifically, inspect `enrichment_evidence`. It reports
+field coverage and expectancy separation for `delta_bias`, trade-direction
+alignment, `spot_vs_flip`, distance-to-flip buckets, and primary/secondary wall
+context. `ENRICHMENT_CANDIDATE_ONLY` means aggregate separation has not repeated
+across both chronological halves. The fields have earned more than journal space
+only when the status becomes `ENRICHMENT_PROMISING`; that still authorizes
+replay/shadow validation, never a live gate.
 
 ### Optional Discord Output
 

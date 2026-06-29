@@ -9,7 +9,9 @@ order by itself.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from datetime import time as _time
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from context.market_context import MarketState
 from risk.risk_engine import RiskEngine
@@ -31,6 +33,112 @@ class ShadowSetupCandidate:
         return asdict(self)
 
 
+@dataclass(frozen=True)
+class ShadowOutcome:
+    """Read-only resolution of a shadow candidate against forward price action.
+
+    result is one of:
+      WIN     — target reached after a fill
+      LOSS    — stop reached after a fill
+      NO_FILL — entry level never traded within the forward window
+      OPEN    — filled but neither stop nor target reached by window end
+    """
+
+    result: str
+    entry_filled: bool
+    exit_reason: str | None
+    exit_price: float | None
+    pnl_ticks: float | None
+    bars_to_fill: int | None
+    bars_to_exit: int | None
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+def resolve_shadow_candidate(
+    candidate: ShadowSetupCandidate,
+    forward_bars: list[tuple[float, float]],
+    *,
+    instrument: str,
+    pessimistic_both_hit: bool = True,
+) -> ShadowOutcome:
+    """Resolve a shadow candidate against forward (high, low) bars — read-only.
+
+    Models entry-fill realism: the entry is a resting level that only fills when
+    a forward bar's range trades through it. This is deliberately stricter than
+    the executable PaperBroker path (which assumes the entry always fills) because
+    these are limit/stop entries that frequently never fill — measuring them as
+    always-filled reproduces the unfillable-fill fiction this lane exists to avoid.
+
+    On the bar that straddles both stop and target, intrabar order is unknowable;
+    ``pessimistic_both_hit`` resolves it as the STOP (worst case). The same applies
+    on the fill bar itself when it also straddles the stop.
+    """
+    tick = TICK_SIZE.get(instrument, 0.25)
+    is_long = candidate.direction == "LONG"
+    entry = candidate.entry
+    stop = candidate.stop
+    target = candidate.target
+
+    fill_idx: int | None = None
+    for i, (high, low) in enumerate(forward_bars):
+        if low <= entry <= high:
+            fill_idx = i
+            break
+
+    if fill_idx is None:
+        return ShadowOutcome(
+            result="NO_FILL",
+            entry_filled=False,
+            exit_reason="NO_FILL",
+            exit_price=None,
+            pnl_ticks=None,
+            bars_to_fill=None,
+            bars_to_exit=None,
+        )
+
+    for j in range(fill_idx + 1, len(forward_bars)):
+        high, low = forward_bars[j]
+        if is_long:
+            target_hit = high >= target
+            stop_hit = low <= stop
+        else:
+            target_hit = low <= target
+            stop_hit = high >= stop
+
+        if target_hit and stop_hit:
+            won = not pessimistic_both_hit
+        elif target_hit:
+            won = True
+        elif stop_hit:
+            won = False
+        else:
+            continue
+
+        exit_price = target if won else stop
+        pnl_ticks = ((exit_price - entry) if is_long else (entry - exit_price)) / tick
+        return ShadowOutcome(
+            result="WIN" if won else "LOSS",
+            entry_filled=True,
+            exit_reason="TARGET_HIT" if won else "STOP_HIT",
+            exit_price=round(exit_price, 4),
+            pnl_ticks=round(pnl_ticks, 2),
+            bars_to_fill=fill_idx + 1,
+            bars_to_exit=j + 1,
+        )
+
+    return ShadowOutcome(
+        result="OPEN",
+        entry_filled=True,
+        exit_reason="EOD_OPEN",
+        exit_price=None,
+        pnl_ticks=None,
+        bars_to_fill=fill_idx + 1,
+        bars_to_exit=None,
+    )
+
+
 TICK_SIZE = {
     "MNQ": 0.25,
     "MES": 0.25,
@@ -42,6 +150,13 @@ TICK_SIZE = {
 
 
 RISK_MATRIX = {
+    "strat_22_continuation_observed": ("B", 0.5),
+    "strat_22_reversal_observed": ("B", 0.5),
+    "strat_312_observed": ("B", 0.5),
+    "strat_322_reversal_observed": ("B", 0.5),
+    "strat_122_observed": ("B", 0.5),
+    "strat_122_pullback": ("B", 0.5),
+    "strat_4hr_retrigger_observed": ("B", 0.5),
     "orb_false_break_fade": ("B", 0.5),
     "ovn_high_sweep_reclaim": ("B", 0.5),
     "ovn_low_sweep_reclaim": ("B", 0.5),
@@ -49,16 +164,238 @@ RISK_MATRIX = {
     "ema_pullback_trend": ("B", 0.75),
 }
 
+# Mirrors the hard RiskEngine backstop for the instruments currently traded.
+# This is deliberately local to the observe-only detector: changing it cannot
+# loosen executable risk limits.
+STRAT_122_MAX_STOP_TICKS = {
+    "MNQ": 120,
+    "MES": 60,
+    "NQ": 60,
+    "ES": 60,
+}
+
+# 4HR re-trigger proxy mirror — see _strat_4hr_retrigger_observed. These mirror the
+# executable engine's constants (signal_engine.py:_4HR_WINDOW_*, MAX_ORB_STOP_TICKS)
+# so the journaled shadow matches what the demoted proxy would have done. Local to
+# the observe-only path: changing them cannot affect executable trading.
+_FOURHR_ET = ZoneInfo("America/New_York")
+_FOURHR_WINDOW_START = _time(9, 30)
+_FOURHR_WINDOW_END = _time(11, 0)
+_FOURHR_MAX_STOP_TICKS = {"MNQ": 80, "MES": 40}
+
 
 def evaluate_shadow_setups(state: MarketState) -> list[ShadowSetupCandidate]:
     """Return all shadow-only setup candidates visible on this bar."""
     candidates = [
+        _missing_strat_family(state),
+        _strat_122_pullback(state),
+        _strat_4hr_retrigger_observed(state),
         _orb_false_break_fade(state),
         _overnight_sweep_reclaim(state),
         _gap_fill(state),
         _ema_pullback_trend(state),
     ]
     return [candidate for candidate in candidates if candidate is not None]
+
+
+def _missing_strat_family(state: MarketState) -> ShadowSetupCandidate | None:
+    """Journal PDF-defined Strat families that are not executable strategies."""
+    strat = state.strat
+    sequence = getattr(strat, "strat_sequence", None)
+    direction = getattr(strat, "strat_direction", None)
+    names = {
+        "strat_22_continuation": "strat_22_continuation_observed",
+        "strat_22_reversal": "strat_22_reversal_observed",
+        "strat_312": "strat_312_observed",
+        "strat_322_reversal": "strat_322_reversal_observed",
+    }
+    if sequence not in names or direction not in {"LONG", "SHORT"}:
+        return None
+    raw = state.raw if isinstance(state.raw, dict) else {}
+    tick = _tick(state)
+    previous_high = _raw_num(state, "previous_bar_high")
+    previous_low = _raw_num(state, "previous_bar_low")
+    if previous_high is None or previous_low is None:
+        return None
+    if direction == "LONG":
+        entry, stop = previous_high + tick, previous_low - tick
+        risk = entry - stop
+        target = entry + (risk * 2)
+    else:
+        entry, stop = previous_low - tick, previous_high + tick
+        risk = stop - entry
+        target = entry - (risk * 2)
+    if risk <= 0:
+        return None
+    return _candidate(
+        strategy=names[sequence],
+        direction=direction,
+        entry=entry,
+        stop=stop,
+        target=target,
+        notes=(
+            f"Shadow: PDF-defined {sequence}; trigger at prior-bar break, "
+            "invalidation beyond the opposite side; evidence-only"
+        ),
+    )
+
+
+def _strat_122_pullback(state: MarketState) -> ShadowSetupCandidate | None:
+    """Observe a stop-aware alternative when a classified 1-2-2 bar is too wide.
+
+    The executable 1-2-2 uses the completed reversal bar's far side as structural
+    invalidation.  That is correct structurally, but a large reversal candle can
+    exceed the instrument risk cap.  Instead of tightening that stop or raising
+    the global cap, record the nearest pullback entry that preserves the
+    structural stop and fits the existing cap.  This candidate is journal-only;
+    a later resolver must prove that the limit would fill and perform well.
+    """
+    strat = state.strat
+    if not (
+        strat
+        and strat.strat_sequence == "strat_122"
+        and strat.strat_direction in {"LONG", "SHORT"}
+    ):
+        return None
+
+    max_ticks = STRAT_122_MAX_STOP_TICKS.get(state.instrument)
+    if not max_ticks:
+        return None
+    tick = _tick(state)
+    max_risk = tick * max_ticks
+    direction = str(strat.strat_direction)
+
+    if direction == "LONG":
+        breakout_entry = state.ohlc.high + tick
+        structural_stop = state.ohlc.low - (tick * 4)
+        structural_risk = breakout_entry - structural_stop
+        if structural_risk <= max_risk:
+            return _candidate(
+                strategy="strat_122_observed",
+                direction=direction,
+                entry=breakout_entry,
+                stop=structural_stop,
+                target=breakout_entry + (structural_risk * 2.0),
+                notes=(
+                    "Shadow: normal-width classified 1-2-2 structural bracket; "
+                    "observe-only until resolved evidence earns promotion"
+                ),
+            )
+        pullback_entry = structural_stop + max_risk
+        target = pullback_entry + (max_risk * 2.0)
+    else:
+        breakout_entry = state.ohlc.low - tick
+        structural_stop = state.ohlc.high + (tick * 4)
+        structural_risk = structural_stop - breakout_entry
+        if structural_risk <= max_risk:
+            return _candidate(
+                strategy="strat_122_observed",
+                direction=direction,
+                entry=breakout_entry,
+                stop=structural_stop,
+                target=breakout_entry - (structural_risk * 2.0),
+                notes=(
+                    "Shadow: normal-width classified 1-2-2 structural bracket; "
+                    "observe-only until resolved evidence earns promotion"
+                ),
+            )
+        pullback_entry = structural_stop - max_risk
+        target = pullback_entry - (max_risk * 2.0)
+
+    return _candidate(
+        strategy="strat_122_pullback",
+        direction=direction,
+        entry=pullback_entry,
+        stop=structural_stop,
+        target=target,
+        notes=(
+            "Shadow: classified 1-2-2 signal bar exceeded the executable stop "
+            f"cap ({max_ticks} ticks); preserve structural stop and require a "
+            "pullback limit fill before measuring the 2R alternative"
+        ),
+    )
+
+
+def _strat_4hr_retrigger_observed(state: MarketState) -> ShadowSetupCandidate | None:
+    """Journal the demoted 4HR re-trigger proxy — observe-only, never trades.
+
+    Faithful mirror of signal_engine.py:_try_strat_4hr_retrigger (+ _short). The
+    proxy was removed from executable enabled_concepts: it is a 15M approximation
+    of a doctrine pattern that needs a 5M feed, and its "83.3% WR" was 6 trades
+    (noise). Journaling it here keeps the earn-the-gate evidence trail without
+    letting it place an order. Spec: .private-companion/strategy/
+    strat_4hr_retrigger_rules_v1.md.
+    """
+    if state.instrument not in ("MNQ", "MES"):
+        return None
+    if state.session != "new_york":
+        return None
+    # Pre-market 04:00/08:00 structure is only meaningful in the early NY session.
+    et_time = state.timestamp.astimezone(_FOURHR_ET).time()
+    if not (_FOURHR_WINDOW_START <= et_time <= _FOURHR_WINDOW_END):
+        return None
+
+    trend = state.trend
+    vol_rel = state.volume.relative
+    tick = _tick(state)
+    max_ticks = _FOURHR_MAX_STOP_TICKS.get(state.instrument, 80)
+
+    # LONG: ORB high reclaimed, STRONG uptrend, price above VWAP, volume confirms.
+    if (
+        state.orb.status == "reclaimed_high"
+        and trend is not None
+        and trend.direction == "UP"
+        and trend.strength == "STRONG"
+        and state.vwap.price_vs_vwap == "above"
+        and (vol_rel is None or vol_rel >= 0.7)
+    ):
+        entry = state.orb.high + tick
+        raw_stop = state.orb.low - (tick * 6)
+        stop = max(raw_stop, entry - (tick * max_ticks))
+        risk = entry - stop
+        if risk <= 0:
+            return None
+        return _candidate(
+            strategy="strat_4hr_retrigger_observed",
+            direction="LONG",
+            entry=entry,
+            stop=stop,
+            target=entry + (risk * 2.0),
+            notes=(
+                "Shadow: 4HR re-trigger 15M proxy (NY-open ORB-high reclaim, STRONG "
+                "uptrend, VWAP-above); demoted from executable, observe-only until a "
+                "5M feed proves the doctrine pattern"
+            ),
+        )
+
+    # SHORT mirror: ORB low reclaimed (rejected), STRONG downtrend, price below VWAP.
+    if (
+        state.orb.status == "reclaimed_low"
+        and trend is not None
+        and trend.direction == "DOWN"
+        and trend.strength == "STRONG"
+        and state.vwap.price_vs_vwap == "below"
+        and (vol_rel is None or vol_rel >= 0.7)
+    ):
+        entry = state.orb.low - tick
+        raw_stop = state.orb.high + (tick * 6)
+        stop = min(raw_stop, entry + (tick * max_ticks))
+        risk = stop - entry
+        if risk <= 0:
+            return None
+        return _candidate(
+            strategy="strat_4hr_retrigger_observed",
+            direction="SHORT",
+            entry=entry,
+            stop=stop,
+            target=entry - (risk * 2.0),
+            notes=(
+                "Shadow: 4HR re-trigger 15M proxy SHORT (NY-open ORB-low reject, "
+                "STRONG downtrend, VWAP-below); demoted from executable, observe-only"
+            ),
+        )
+
+    return None
 
 
 def _tick(state: MarketState) -> float:

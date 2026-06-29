@@ -49,6 +49,9 @@ from execution.tradovate_supervisor import (
 from journal.journal_logger import JournalLogger
 from notifications.discord_notifier import notify_discord, send_discord_alert
 from ops.live_box_guard import live_box_drift_report
+from ops.fill_realism import build_fill_realism_status
+from ops.automation_evidence import automation_evidence_status
+from ops.evidence_readiness import build_evidence_readiness
 from ops.proof_30_mnq import DEFAULT_LIMIT as PROOF_30_MNQ_LIMIT
 from ops.proof_30_mnq import build_report as build_mnq_proof_report
 from ops.proof_30_mnq import parse_proof_ts
@@ -91,7 +94,14 @@ def _cors_allow_origins() -> list[str]:
 
 # Public demo deployment: when on, serve ONLY a small sanitized read-only surface
 # and 404 everything else (default-deny). The real/operator box leaves this OFF.
-_DEMO_ALLOWED_PATHS = {"/health", "/status/public", "/share", "/favicon.ico", "/manifest.json"}
+_DEMO_ALLOWED_PATHS = {
+    "/health",
+    "/status/public",
+    "/status/fill-realism",
+    "/share",
+    "/favicon.ico",
+    "/manifest.json",
+}
 
 
 def _public_demo_mode() -> bool:
@@ -600,6 +610,27 @@ async def status_today() -> dict:
     return _dashboard_payload(date.today())
 
 
+@app.get("/status/fill-realism")
+async def status_fill_realism(
+    days: int = Query(default=7, ge=1, le=90),
+    recent_limit: int = Query(default=20, ge=0, le=100),
+) -> dict:
+    """Return journal-derived resolved fill attempts and actual no-fill rates."""
+    return build_fill_realism_status(
+        _config.log_dir,
+        days=days,
+        recent_limit=recent_limit,
+    )
+
+
+@app.get("/status/evidence-readiness")
+async def status_evidence_readiness(
+    days: int = Query(default=30, ge=1, le=180),
+) -> dict:
+    """Return unified read-only research evidence readiness."""
+    return build_evidence_readiness(_config.log_dir, days=days, config=_config)
+
+
 @app.get("/status/history")
 async def status_history(days: int = Query(default=7, ge=1, le=90)) -> dict:
     """Return recent read-only daily summaries from the journal."""
@@ -1066,15 +1097,28 @@ async def status_gex_shadow(days: int = Query(default=30, ge=1, le=180)) -> dict
     journal = JournalLogger(log_dir=_config.log_dir)
     entries: list[dict] = []
     journal_files_scanned = 0
+    journal_entries_scanned = 0
     for offset in range(days):
         day = today - timedelta(days=offset)
         path = journal._journal_path(day)
         if path.exists():
             journal_files_scanned += 1
-            entries.extend(journal._read_entries(path))
+            day_entries = journal._read_entries(path)
+            journal_entries_scanned += len(day_entries)
+            entries.extend(
+                entry
+                for entry in day_entries
+                if entry.get("type") == "OUTCOME"
+                or (
+                    entry.get("decision") == "TRADE"
+                    and (entry.get("risk_check") or {}).get("result") == "APPROVED"
+                )
+            )
     payload = _gex_shadow_analysis_payload(entries)
     payload["days"] = days
     payload["journal_files_scanned"] = journal_files_scanned
+    payload["journal_entries_scanned"] = journal_entries_scanned
+    payload["analysis_entries_retained"] = len(entries)
     return payload
 
 
@@ -1457,9 +1501,39 @@ def _diagnostics_payload(for_date: date) -> dict:
     latest_age = _latest_webhook_age_seconds(latest)
     journal = JournalLogger(log_dir=_config.log_dir)
     journal_path = journal._journal_path(for_date)
+    evidence_readiness = build_evidence_readiness(
+        _config.log_dir,
+        days=30,
+        through_date=for_date,
+        config=_config,
+    )
     items = [
         _diagnostic("ok", "Backend API", "FastAPI is responding on the public API routes."),
     ]
+    automation_status = automation_evidence_status(_config.log_dir)
+    for job in automation_status["jobs"]:
+        label = job["job"].replace("_", " ").title()
+        path = job["evidence_path"] or "no matching artifact found"
+        if job["status"] == "fresh":
+            items.append(_diagnostic(
+                "ok",
+                f"Ops automation: {label}",
+                f"Fresh evidence from {job['generated_at']} at {path}.",
+            ))
+        elif job["status"] == "stale":
+            items.append(_diagnostic(
+                "warn",
+                f"Ops automation: {label}",
+                f"Evidence is stale (age {job['age_seconds']}s; limit {job['fresh_for_seconds']}s) at {path}.",
+                f"Check the external cron and its logs; do not run it from this status surface.",
+            ))
+        else:
+            items.append(_diagnostic(
+                "warn",
+                f"Ops automation: {label}",
+                f"No readable run evidence at {path}.",
+                f"Check the external cron and its logs; evidence appears after the next successful job write.",
+            ))
 
     if _config.live_trading_enabled:
         items.append(_diagnostic(
@@ -1531,6 +1605,9 @@ def _diagnostics_payload(for_date: date) -> dict:
         risk_rules_path=getattr(_config, "risk_rules_path", "risk_rules.yaml"),
         log_dir=_config.log_dir,
         for_date=for_date,
+        manual_controls_enabled=getattr(
+            _config, "enable_manual_execution_controls", False
+        ),
     )
     guard_status = str(guard.get("status") or "warn")
     items.append(_diagnostic(
@@ -1539,6 +1616,66 @@ def _diagnostics_payload(for_date: date) -> dict:
         str(guard.get("summary") or "Live box guard unavailable."),
         None if guard.get("ok") else str(guard.get("next_step") or ""),
     ))
+    active_overrides = list(guard.get("proof_critical_runtime_overrides") or [])
+    active_overrides = [item for item in active_overrides if item.get("active")]
+    unpinned_overrides = list(guard.get("unpinned_runtime_overrides") or [])
+    if active_overrides:
+        rendered = ", ".join(
+            f"{item.get('name')}={item.get('observed')} "
+            f"({'pinned' if item.get('pinned') else 'UNPINNED'})"
+            for item in active_overrides
+        )
+        items.append(_diagnostic(
+            "warn" if unpinned_overrides else "ok",
+            "Proof runtime overrides",
+            rendered,
+            (
+                "Pin each active value with EXPECTED_PROOF_<NAME> and restart "
+                "before continuing the proof window."
+                if unpinned_overrides else None
+            ),
+        ))
+    else:
+        items.append(_diagnostic(
+            "ok",
+            "Proof runtime overrides",
+            "No proof-critical runtime strategy overrides are active.",
+        ))
+
+    security_runtime = guard.get("security_runtime") or {}
+    if security_runtime:
+        manual = security_runtime.get("manual_endpoint") or {}
+        rotation = security_runtime.get("webhook_secret_rotation") or {}
+        manual_inert = manual.get("effectively_inert") is True
+        items.append(_diagnostic(
+            "ok" if manual_inert else "error",
+            "Manual webhook control",
+            (
+                "/webhook/manual is effectively inert; loaded runtime controls are disabled."
+                if manual_inert else
+                "/webhook/manual is active; loaded runtime controls are enabled."
+            ),
+            None if manual_inert else (
+                "Disable ENABLE_MANUAL_EXECUTION_CONTROLS and restart the service."
+            ),
+        ))
+        rotation_ready = rotation.get("rotation_ready") is True
+        primary_configured = rotation.get("primary_configured") is True
+        configured_names = ", ".join(rotation.get("configured_env_names") or []) or "none"
+        items.append(_diagnostic(
+            "ok" if rotation_ready else ("warn" if primary_configured else "error"),
+            "Webhook secret rotation",
+            (
+                f"Secret env presence: {configured_names}; "
+                f"distinct configured values: {rotation.get('distinct_configured_count', 0)}; "
+                f"rotation ready: {'yes' if rotation_ready else 'no'}. "
+                "Secret material is redacted."
+            ),
+            None if rotation_ready else (
+                "Keep WEBHOOK_SECRET configured and stage a distinct value in "
+                "TRADINGVIEW_WEBHOOK_SECRET or TRADINGVIEW_WEBHOOK_SECRET_NEXT."
+            ),
+        ))
 
     if _config.discord_notifications_enabled and not _config.discord_webhook_url:
         items.append(_diagnostic(
@@ -1678,6 +1815,19 @@ def _diagnostics_payload(for_date: date) -> dict:
     else:
         items.append(_diagnostic("info", "Journal", "No journal file exists yet today; no decisions have been recorded."))
 
+    readiness_summary = evidence_readiness["summary"]
+    items.append(_diagnostic(
+        "info",
+        "Research evidence",
+        (
+            f"{readiness_summary['ready_for_review']} ready for human review · "
+            f"{readiness_summary['collecting']} collecting/insufficient · "
+            f"{readiness_summary['blocked']} data-quality blocked · "
+            f"{readiness_summary['inactive']} inactive."
+        ),
+        "Use /status/evidence-readiness for the read-only per-track scorecard.",
+    ))
+
     rank = {"error": 3, "warn": 2, "info": 1, "ok": 0}
     worst = max(items, key=lambda item: rank.get(item["status"], 0))
     overall = "error" if worst["status"] == "error" else "warn" if worst["status"] == "warn" else "ok"
@@ -1686,6 +1836,8 @@ def _diagnostics_payload(for_date: date) -> dict:
         "overall_status": overall,
         "checked_at": datetime.now(timezone.utc).isoformat(),
         "top_issue": None if overall == "ok" else worst,
+        "ops_automations": automation_status,
+        "evidence_readiness": evidence_readiness,
         "items": items,
     }
 
@@ -1735,6 +1887,7 @@ def _dashboard_payload(for_date: date) -> dict:
     realized_pnl = round(account_balance - _config.position_sizing.starting_balance, 2)
     diagnostics = _diagnostics_payload(for_date)
     gex_shadow_analysis = _gex_shadow_analysis_payload(entries)
+    evidence_readiness = diagnostics["evidence_readiness"]
     return {
         "date": daily_state.date,
         "live_trading_enabled": _config.live_trading_enabled,
@@ -1774,6 +1927,7 @@ def _dashboard_payload(for_date: date) -> dict:
         "broker_gateway_reachable": None,  # IBKR-only concept; broker removed
         "diagnostics": diagnostics,
         "gex_shadow_analysis": gex_shadow_analysis,
+        "evidence_readiness": evidence_readiness,
         "live_preflight": _safe_live_preflight_status(),
         "live_box_drift_guard": live_box_drift_report(
             risk_rules_path=getattr(_config, "risk_rules_path", "risk_rules.yaml"),
@@ -2766,7 +2920,7 @@ _DASHBOARD_HTML = r"""<!doctype html>
     // + 1m delivery grace (matches the ops monitor, the feed watchdog, and the
     // mobile UI). A hardcoded 6m flagged STALE during normal 15m bar spacing.
     var FRESH_MAX_MIN = (INIT.expected_timeframe_minutes || 15) * 2 + 1;
-    var state = { tab: 'home', today: INIT.today || {}, risk: null, filter: 'ALL', history: null, lastUpdate: Date.now(), firstLoad: !(INIT.today && INIT.today.date) };
+    var state = { tab: 'home', today: INIT.today || {}, risk: null, filter: 'ALL', history: null, fillRealism: null, lastUpdate: Date.now(), firstLoad: !(INIT.today && INIT.today.date) };
 
     // ── helpers ────────────────────────────────────────────────────────
     function esc(v) {
@@ -2900,6 +3054,34 @@ _DASHBOARD_HTML = r"""<!doctype html>
         '<button class="btn slim" id="open-ops" type="button">Open Ops</button>' +
         '</div></div>';
     }
+    function fillRealismCard() {
+      var fill = state.fillRealism;
+      if (!fill) {
+        return '<div class="panel"><h2>Fill Realism</h2>' +
+          '<p class="placeholder" style="margin-top:8px;font-size:12px;">Loading journal-derived fill outcomes…</p></div>';
+      }
+      var overall = fill.overall || {};
+      var windowData = fill.window || {};
+      var rate = overall.no_fill_rate_pct;
+      var rateText = rate == null ? '—' : num(rate).toFixed(1) + '%';
+      var setupRows = (fill.by_setup || []).slice(0, 4).map(function (row) {
+        var setupRate = row.no_fill_rate_pct == null ? '—' : num(row.no_fill_rate_pct).toFixed(1) + '%';
+        return kv(esc(row.setup), esc(row.no_fills + ' / ' + row.resolved_attempts + ' · ' + setupRate));
+      }).join('');
+      if (!setupRows) setupRows = kv('Setups', emptyValue('No resolved attempts in this window'));
+      return '<div class="panel ' + (num(overall.no_fills) > 0 ? 'accent-yellow' : '') + '">' +
+        '<h2>Fill Realism <span class="source-pill pulled">Journal only</span></h2>' +
+        '<div class="metric-grid">' +
+        '<div class="metric"><label>Actual no-fill rate</label><strong class="' + (num(overall.no_fills) > 0 ? 'yellow' : 'green') + '">' + rateText + '</strong></div>' +
+        '<div class="metric"><label>Recent sample</label><strong>' + esc(overall.no_fills || 0) + ' / ' + esc(overall.resolved_attempts || 0) + '</strong></div>' +
+        '</div><dl class="kv">' + setupRows + '</dl>' +
+        '<p class="muted" style="margin-top:10px;font-size:12px;">' +
+        esc(windowData.start_date || '—') + ' → ' + esc(windowData.end_date || '—') +
+        ' · ' + esc(windowData.journal_files_found || 0) + ' journal file(s)' +
+        ' · ' + esc(windowData.unresolved_attempts || 0) + ' unresolved</p>' +
+        '<a class="btn slim" id="fill-realism-details" style="display:inline-block;width:auto;margin-top:12px;text-decoration:none;" href="/status/fill-realism?days=7" target="_blank" rel="noopener">View fill details</a>' +
+        '</div>';
+    }
 
     function latestHeadline(today) {
       var entries = today.latest_entries || [];
@@ -3015,6 +3197,7 @@ _DASHBOARD_HTML = r"""<!doctype html>
         '</div>';
       html += sourceBoundaryPanel();
       html += opsCard();
+      html += fillRealismCard();
 
       html += '<div class="tabhead"><h1>Today</h1><span class="when">' + esc(today.date || '') + '</span></div>';
 
@@ -3558,10 +3741,12 @@ _DASHBOARD_HTML = r"""<!doctype html>
     function refresh() {
       Promise.all([
         fetch('/status/today', { cache: 'no-store' }).then(function (r) { return r.json(); }),
-        fetch('/status/history?days=7', { cache: 'no-store' }).then(function (r) { return r.json(); })
+        fetch('/status/history?days=7', { cache: 'no-store' }).then(function (r) { return r.json(); }),
+        fetch('/status/fill-realism?days=7', { cache: 'no-store' }).then(function (r) { return r.json(); })
       ]).then(function (res) {
         state.today = res[0] || state.today;
         state.history = res[1] || state.history;
+        state.fillRealism = res[2] || state.fillRealism;
         state.lastUpdate = Date.now();
         state.firstLoad = false;
         renderStatusBar();
@@ -3625,6 +3810,7 @@ _DASHBOARD_HTML = r"""<!doctype html>
     updateAgeText();
     // initial history fetch for compact-pnl / chart decisions
     fetch('/status/history?days=7', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (d) { state.history = d; state.firstLoad = false; renderActive(); }).catch(function () {});
+    fetch('/status/fill-realism?days=7', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (d) { state.fillRealism = d; renderActive(); }).catch(function () {});
     setInterval(function () { renderStatusBar(); }, 1000 * 20);
     setInterval(updateAgeText, 1000);
     setInterval(refresh, POLL);

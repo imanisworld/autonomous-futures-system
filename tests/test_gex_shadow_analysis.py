@@ -3,7 +3,14 @@ from __future__ import annotations
 from sources.gex_shadow_analysis import disabled_summary, summarize_gex_shadow
 
 
-def _trade(ts: str, *, regime: str, close: float, direction: str = "LONG") -> dict:
+def _trade(
+    ts: str,
+    *,
+    regime: str,
+    close: float,
+    direction: str = "LONG",
+    gex_extra: dict | None = None,
+) -> dict:
     return {
         "ts": ts,
         "instrument": "MNQ",
@@ -25,6 +32,7 @@ def _trade(ts: str, *, regime: str, close: float, direction: str = "LONG") -> di
             "flip_point": 19500,
             "call_wall": 19600,
             "put_wall": 19400,
+            **(gex_extra or {}),
         },
     }
 
@@ -114,3 +122,88 @@ def test_sufficient_cohort_separation_gets_promising_shadow_verdict():
     assert summary["best_cohort"]["expectancy"] == 30.0
     assert summary["worst_cohort"]["expectancy"] == -20.0
     assert summary["verdict"]["status"] == "PROMISING_SHADOW_EDGE"
+
+
+def test_new_gex_fields_get_compact_cohorts_and_enrichment_verdict():
+    entries = []
+    bullish = {
+        "spot": 19580,
+        "delta_bias": "bullish",
+        "spot_vs_flip": "above",
+        "dist_to_flip": -80,
+        "call_walls": [19600, 19585, 19650],
+        "put_walls": [19400, 19450],
+    }
+    bearish = {
+        "spot": 19420,
+        "delta_bias": "bearish",
+        "spot_vs_flip": "below",
+        "dist_to_flip": 80,
+        "call_walls": [19600, 19550],
+        "put_walls": [19400, 19418, 19350],
+    }
+    for i in range(2):
+        entries += [
+            _trade(
+                f"2026-06-23T14:{30 + 2*i:02d}:00+00:00",
+                regime="positive",
+                close=19584,
+                gex_extra=bullish,
+            ),
+            _outcome("WIN", 40),
+            _trade(
+                f"2026-06-23T14:{31 + 2*i:02d}:00+00:00",
+                regime="negative",
+                close=19418,
+                gex_extra=bearish,
+            ),
+            _outcome("LOSS", -30),
+        ]
+
+    summary = summarize_gex_shadow(entries, min_sample=2)
+
+    assert {row["key"] for row in summary["cohorts"]["by_delta_bias"]} == {
+        "bullish", "bearish"
+    }
+    assert {row["key"] for row in summary["cohorts"]["by_spot_vs_flip"]} == {
+        "above", "below"
+    }
+    assert summary["cohorts"]["by_flip_distance"][0]["key"] == "mid_0.25_1pct"
+    wall_keys = {row["key"] for row in summary["cohorts"]["by_wall_rank_context"]}
+    assert wall_keys == {"near_call_secondary", "near_put_secondary"}
+    evidence = summary["enrichment_evidence"]
+    assert evidence["status"] == "ENRICHMENT_PROMISING"
+    assert "delta_bias" in evidence["earned_dimensions"]
+    assert "delta_alignment" in evidence["earned_dimensions"]
+    assert "delta_bias" in evidence["stable_earned_dimensions"]
+    delta = next(row for row in evidence["dimensions"] if row["dimension"] == "delta_bias")
+    assert delta["coverage_pct"] == 100.0
+    assert delta["expectancy_spread"] == 70.0
+    assert delta["stable_across_time"] is True
+
+
+def test_new_field_cohorts_fail_soft_on_malformed_or_missing_values():
+    trade = _trade(
+        "2026-06-23T14:30:00+00:00",
+        regime="positive",
+        close=19580,
+        gex_extra={
+            "delta_bias": {"unexpected": True},
+            "spot_vs_flip": "sideways",
+            "dist_to_flip": "not-a-number",
+            "call_walls": "not-a-list",
+            "put_walls": [None, "bad"],
+        },
+    )
+    trade["gex_observed"]["flip_point"] = None
+    trade["gex_observed"]["call_wall"] = None
+    trade["gex_observed"]["put_wall"] = None
+
+    summary = summarize_gex_shadow([trade, _outcome("WIN", 10)], min_sample=2)
+
+    for name in (
+        "by_delta_bias", "by_delta_alignment", "by_spot_vs_flip",
+        "by_flip_distance", "by_wall_rank_context"
+    ):
+        assert summary["cohorts"][name][0]["key"] == "unknown"
+    assert summary["enrichment_evidence"]["status"] == "JOURNAL_ONLY"

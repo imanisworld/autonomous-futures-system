@@ -104,7 +104,15 @@ Hetzner live values: `PAPER_MODE=false`, `BROKER=tradovate`, `TRADOVATE_ENV=demo
 - **Pin live-box expectations before validation.** Set `EXPECTED_LIVE_BRANCH`,
   `EXPECTED_LIVE_COMMIT`, `EXPECTED_RISK_RULES_SHA256`,
   `EXPECTED_LIVE_REPO_ROOT`, and `EXPECTED_RUNTIME_JOURNAL_DIR` on the active
-  box after config freeze, then check `python3 scripts/doctor.py --strict` or
+  box after config freeze. Pin active proof-critical environment overrides as
+  `EXPECTED_PROOF_<NAME>=<value>`; use `<unset>` to assert that an override
+  remains absent. Then check `python3 scripts/doctor.py --strict` or
   `/status/diagnostics` before `/admin/live-preflight/run`.
+- **Check security runtime state without revealing credentials.** Doctor and
+  `/status/diagnostics` report whether the loaded config makes
+  `/webhook/manual` inert and whether a distinct webhook rotation secret is
+  staged. They expose env names, booleans, and counts only—not secret values,
+  hashes, prefixes, or lengths. This cannot prove which service/proxy instance
+  receives traffic or whether TradingView has adopted the staged credential.
 - **Back up before editing** `.env` (the `.env.bak.*` pattern) so a bad edit is
   one `cp` away from recovery.

@@ -313,8 +313,18 @@ strategy:
     # ── The Strat patterns ───────────────────────────────────
     # Phase 1: approximated from single-bar market_state flags
     # Phase 2: full multi-bar Strat classification available
-    - strat_122               # 1-2-2 reversal (1→2→reverse 2)
-    - strat_4hr_retrigger     # 4HR re-trigger — 6 trades 83.3% WR (clean data). Re-enabled.
+    # SHADOW-ONLY — strat_4hr_retrigger: the live engine fires a 15M PROXY
+    # (ORB-reclaim + STRONG-UP + VWAP-above + vol≥0.7), NOT the doctrine pattern
+    # (04:00 ET 1H 2-down → 08:00 ET 1H 2-up reclaim → NY-open dip-then-5M-reclaim).
+    # Faithful entry needs a 5M feed the live 15M-only pipeline cannot supply, and
+    # the "83.3% WR" was 6 trades (n=6 = noise). Doctrine "no proof, no run" ⇒ demote
+    # from executable. strategy/shadow_setups.py journals strat_4hr_retrigger_observed
+    # so the proxy keeps earning evidence; promote only on validated edge + a 5M feed.
+    # Rules spec: .private-companion/strategy/strat_4hr_retrigger_rules_v1.md
+    # SHADOW-ONLY — strat_122: no reproducible resolved trades in the verified
+    # 77-day journals; wide versions were negative on MES/MNQ Polygon studies.
+    # strategy/shadow_setups.py still journals normal structural candidates and
+    # stop-aware wide-bar pullbacks so it can earn its way back with evidence.
     # REMOVED — strat_outside_continuation: 0 trades in 237 replay days. Never fired.
     # REMOVED — strat_inside_break: confirmed loser at SUFFICIENT sample on the
     #   2yr Polygon dataset (553 session-days/instrument): MES 79tr 16.9% WR
@@ -341,12 +351,24 @@ strat:
   # Full multi-bar history required for Phase 2 classification
   candle_types: [inside_bar, two_up, two_down, outside_bar]
   combo_patterns:
+    strat_22_continuation:
+      sequence: [two_directional, same_directional]
+      description: "2-2 continuation — directional expansion continues"
+    strat_22_reversal:
+      sequence: [two_directional, reverse_directional]
+      description: "2-2 reversal — prior directional move fails"
     strat_212:
       sequence: [two_up_or_down, inside_bar, two_up_or_down]
       description: "2-1-2 continuation — compress then extend"
     strat_122:
       sequence: [inside_bar, two_directional, two_reverse]
       description: "1-2-2 reversal — trap then flip"
+    strat_312:
+      sequence: [outside_bar, inside_bar, two_up_or_down]
+      description: "3-1-2 — outside range compresses, then chooses direction"
+    strat_322_reversal:
+      sequence: [outside_bar, two_directional, two_reverse]
+      description: "3-2-2 reversal — expansion, directional move, then reversal"
     strat_4hr_retrigger:
       description: "4AM 2DOWN, 8AM 2UP, NY open dip below 8AM high then reclaim"
     strat_inside_break:

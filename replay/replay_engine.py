@@ -39,7 +39,7 @@ from replay.manifest import ReplayManifest
 from replay.replay_report import MultiDayReplayReport, ReplayReport
 from risk.risk_engine import DailyState, RiskEngine, TradeSetup
 from strategy.confluence_scorer import score_setup as _score_setup
-from strategy.shadow_setups import evaluate_shadow_setups
+from strategy.shadow_setups import evaluate_shadow_setups, resolve_shadow_candidate
 from strategy.signal_engine import DecisionEngine
 from strategy.strat_classifier import StratContext, classify_from_ohlc
 
@@ -132,8 +132,18 @@ class ReplayEngine:
 
             state = self._market_state_from_candle(candle, prev_candle)
             # Shadow setups: audit-only observation (read-only, never trades).
+            # Each candidate is resolved against the remaining bars of the day so
+            # the journal records WIN/LOSS/NO_FILL — turning observation into
+            # measurable edge — without touching the broker or daily_state.
             try:
-                shadow_candidates = [c.to_dict() for c in evaluate_shadow_setups(state)]
+                forward_bars = [(c.high, c.low) for c in candles[idx + 1:]]
+                shadow_candidates = []
+                for cand in evaluate_shadow_setups(state):
+                    record = cand.to_dict()
+                    record["outcome"] = resolve_shadow_candidate(
+                        cand, forward_bars, instrument=state.instrument
+                    ).to_dict()
+                    shadow_candidates.append(record)
             except Exception:
                 shadow_candidates = []
             decision = decision_engine.evaluate(state, daily_state)

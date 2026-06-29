@@ -28,6 +28,12 @@ import json
 import os
 import sys
 from collections import defaultdict
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+from ops.fill_realism import is_entry_nofill
 
 TICK = 0.25
 # ENTRY_SLIPPAGE_TOLERANCE_TICKS_<root> — the live IOC limit offset, in ticks.
@@ -64,10 +70,7 @@ def naive_would_fill(direction, entry, close, tol):
 
 
 def is_nofill(result: str, reason: str) -> bool:
-    reason = (reason or "")
-    return result == "CANCELLED" and (
-        "ENTRY_NOT_FILLED" in reason.upper() or "execution_failed:CANCELLED" in reason
-    )
+    return is_entry_nofill(result, reason)
 
 
 def pair_journal(files):
