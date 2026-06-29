@@ -160,6 +160,24 @@ cannot prove which systemd unit, reverse proxy, container, or TradingView alert
 is active, or that TradingView has switched to the staged secret. Confirm those
 separately on the active box without printing credentials.
 
+### Research Evidence Readiness
+
+Use the unified, read-only scorecard to see which observation tracks are
+inactive, collecting, sample-limited, data-quality blocked, or ready for human
+review:
+
+```bash
+curl -s 'http://127.0.0.1:8000/status/evidence-readiness?days=30'
+```
+
+The same payload appears under `evidence_readiness` in `/status/today` and
+`/status/diagnostics`; doctor prints a compact informational summary. Research
+status never changes operational health, runs a collector, enables a strategy,
+or changes a gate. `READY FOR REVIEW` authorizes only human replay/paper review.
+RangeSignal and shadow setup observations remain `COLLECTING` until a causal
+future-bar resolver produces fee/slippage-adjusted outcomes; observation counts
+alone cannot satisfy promotion criteria.
+
 ### GEX Shadow Analysis
 
 GEX context is observe-only. When a producer journals compact `gex_observed`

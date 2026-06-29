@@ -51,6 +51,7 @@ from notifications.discord_notifier import notify_discord, send_discord_alert
 from ops.live_box_guard import live_box_drift_report
 from ops.fill_realism import build_fill_realism_status
 from ops.automation_evidence import automation_evidence_status
+from ops.evidence_readiness import build_evidence_readiness
 from ops.proof_30_mnq import DEFAULT_LIMIT as PROOF_30_MNQ_LIMIT
 from ops.proof_30_mnq import build_report as build_mnq_proof_report
 from ops.proof_30_mnq import parse_proof_ts
@@ -620,6 +621,14 @@ async def status_fill_realism(
         days=days,
         recent_limit=recent_limit,
     )
+
+
+@app.get("/status/evidence-readiness")
+async def status_evidence_readiness(
+    days: int = Query(default=30, ge=1, le=180),
+) -> dict:
+    """Return unified read-only research evidence readiness."""
+    return build_evidence_readiness(_config.log_dir, days=days, config=_config)
 
 
 @app.get("/status/history")
@@ -1492,6 +1501,12 @@ def _diagnostics_payload(for_date: date) -> dict:
     latest_age = _latest_webhook_age_seconds(latest)
     journal = JournalLogger(log_dir=_config.log_dir)
     journal_path = journal._journal_path(for_date)
+    evidence_readiness = build_evidence_readiness(
+        _config.log_dir,
+        days=30,
+        through_date=for_date,
+        config=_config,
+    )
     items = [
         _diagnostic("ok", "Backend API", "FastAPI is responding on the public API routes."),
     ]
@@ -1800,6 +1815,19 @@ def _diagnostics_payload(for_date: date) -> dict:
     else:
         items.append(_diagnostic("info", "Journal", "No journal file exists yet today; no decisions have been recorded."))
 
+    readiness_summary = evidence_readiness["summary"]
+    items.append(_diagnostic(
+        "info",
+        "Research evidence",
+        (
+            f"{readiness_summary['ready_for_review']} ready for human review · "
+            f"{readiness_summary['collecting']} collecting/insufficient · "
+            f"{readiness_summary['blocked']} data-quality blocked · "
+            f"{readiness_summary['inactive']} inactive."
+        ),
+        "Use /status/evidence-readiness for the read-only per-track scorecard.",
+    ))
+
     rank = {"error": 3, "warn": 2, "info": 1, "ok": 0}
     worst = max(items, key=lambda item: rank.get(item["status"], 0))
     overall = "error" if worst["status"] == "error" else "warn" if worst["status"] == "warn" else "ok"
@@ -1809,6 +1837,7 @@ def _diagnostics_payload(for_date: date) -> dict:
         "checked_at": datetime.now(timezone.utc).isoformat(),
         "top_issue": None if overall == "ok" else worst,
         "ops_automations": automation_status,
+        "evidence_readiness": evidence_readiness,
         "items": items,
     }
 
@@ -1858,6 +1887,7 @@ def _dashboard_payload(for_date: date) -> dict:
     realized_pnl = round(account_balance - _config.position_sizing.starting_balance, 2)
     diagnostics = _diagnostics_payload(for_date)
     gex_shadow_analysis = _gex_shadow_analysis_payload(entries)
+    evidence_readiness = diagnostics["evidence_readiness"]
     return {
         "date": daily_state.date,
         "live_trading_enabled": _config.live_trading_enabled,
@@ -1897,6 +1927,7 @@ def _dashboard_payload(for_date: date) -> dict:
         "broker_gateway_reachable": None,  # IBKR-only concept; broker removed
         "diagnostics": diagnostics,
         "gex_shadow_analysis": gex_shadow_analysis,
+        "evidence_readiness": evidence_readiness,
         "live_preflight": _safe_live_preflight_status(),
         "live_box_drift_guard": live_box_drift_report(
             risk_rules_path=getattr(_config, "risk_rules_path", "risk_rules.yaml"),
