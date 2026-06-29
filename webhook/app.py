@@ -610,6 +610,17 @@ async def status_today() -> dict:
     return _dashboard_payload(date.today())
 
 
+@app.get("/status/five-min")
+async def status_five_min() -> dict:
+    """Observe-only 5M entry-feed summary: whether the feed is enabled and today's
+    per-instrument 5M bar count + last timestamp (ingest-only; never trades)."""
+    from context.five_min_feed import five_min_status
+    return five_min_status(
+        _config.log_dir,
+        instruments=list(getattr(_config, "allowed_instruments", []) or []) or None,
+    )
+
+
 @app.get("/status/fill-realism")
 async def status_fill_realism(
     days: int = Query(default=7, ge=1, le=90),

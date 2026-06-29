@@ -255,6 +255,7 @@ def test_execution_env_reads_are_classified_for_proof_guard():
         "OPTIONS_COMPANION_ENABLED",
             "OPTIONS_COMPANION_MODE",
             "OPTIONS_COMPANION_SQLITE_PATH",
+            "OPTIONS_COMPANION_STRICT_SIGNA",
             "PUBLIC_ACCOUNT_ID",
             "PUBLIC_API_KEY",
             "PUBLIC_BASE_URL",
