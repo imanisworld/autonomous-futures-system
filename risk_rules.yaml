@@ -352,6 +352,16 @@ strategy:
   # Empty = no change (the runner exit is the validated lever; ship that first).
   stop_multiplier_per_instrument: {}
 
+  # Per-instrument ORB-breakout stop offset (ticks beyond the ORB boundary).
+  # Default 8 → ~2.5pt risk on MNQ = noise-width: the trade stops out before the
+  # runner's 1R activation can engage. 622-day replay (runner ON, 1c) sweep on
+  # MNQ orb_breakout: 8t=43.8% / 16t=50.0% / 32t=70.7% / 48t=80.6% WR (PnL +$3.06k,
+  # exp $49/trade) — all losses were STOP_HIT, all wins RUNNER_TRAIL. 48t (12.5pt,
+  # within MNQ's 80-tick cap) restores MES-level WR. Per-SETUP so it does NOT touch
+  # orb_reclaim (which the blanket multiplier above would break). MES unset (already
+  # ~84% with the runner). Replay = fills assumed → live-shadow before trusting.
+  orb_stop_ticks: {MNQ: 48}
+
 # ─── The Strat Config ────────────────────────────────────────
 strat:
   # Candle classification flags used in market_state (Phase 1 approximation)

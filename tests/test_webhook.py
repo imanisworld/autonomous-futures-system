@@ -378,12 +378,21 @@ def test_runner_invalid_timestamp_fails_closed(config, tmp_path):
     from webhook.runner import process_alert
 
     cfg = replace(config, max_staleness_seconds=60)
+    log_dir = str(tmp_path / "logs")
     payload = _base_payload(timestamp="not-a-timestamp")
 
-    result = process_alert(payload, config=cfg, log_dir=str(tmp_path / "logs"))
+    result = process_alert(payload, config=cfg, log_dir=log_dir)
 
     assert result["decision"] == "BLOCKED_DATA_QUALITY"
     assert "Invalid bar timestamp" in result["failed_gates"][0]
+
+    journal_path = next((tmp_path / "logs").glob("journal_*.jsonl"))
+    entry = json.loads(journal_path.read_text().splitlines()[-1])
+    assert entry["decision"] == "BLOCKED_DATA_QUALITY"
+    assert "Invalid bar timestamp" in entry["reason"]
+    assert entry["failed_gates"] == result["failed_gates"]
+    assert "risk_check" not in entry
+    assert entry["setup"] is None
 
 
 # ─── runner: TRADE → APPROVED path ───────────────────────────────────────────

@@ -74,6 +74,12 @@ class _KeyLevels:
 
 
 @dataclass
+class _VWAP:
+    value: Optional[float] = None
+    price_vs_vwap: Optional[str] = None
+
+
+@dataclass
 class _SD:
     supply_top: Optional[float] = None
     supply_bottom: Optional[float] = None
@@ -91,6 +97,7 @@ class _GEX:
     max_pain: Optional[float] = None
     ghost: Optional[float] = None
     gex_flip: Optional[float] = None
+    updated_at: Optional[str] = None
 
 
 @dataclass
@@ -100,10 +107,12 @@ class _State:
     price: _Price = field(default_factory=_Price)
     ohlc: _OHLC = field(default_factory=_OHLC)
     orb: _ORB = field(default_factory=_ORB)
+    vwap: Optional[_VWAP] = None
     previous_day: _PrevDay = field(default_factory=_PrevDay)
     key_levels: Optional[_KeyLevels] = None
     sd: Optional[_SD] = None
     gex: Optional[_GEX] = None
+    raw: dict = field(default_factory=dict)
 
 
 def _state(price: float = 20000.0, **kwargs) -> _State:
@@ -318,6 +327,13 @@ class TestWallAlignment:
         ctx = build_wall_context(s)
         assert ctx.wall_alignment == "PIN_RISK"
 
+    def test_breaking_wall_when_resistance_is_below_price(self):
+        price = 20000.0
+        s = _state(price)
+        s.orb = _ORB(high=price * 0.998, low=price * 0.99, status="above")
+        ctx = build_wall_context(s)
+        assert ctx.wall_alignment == "BREAKING_WALL"
+
     def test_reclaiming_wall_from_orb_status(self):
         price = 20000.0
         s = _state(price)
@@ -390,6 +406,48 @@ class TestZoneFreshness:
         supply = next((w for w in ctx.walls_above if w.name == "SUPPLY_ZONE"), None)
         assert supply is not None
         assert supply.fresh is True
+
+
+# ─── VWAP / options proxy safety ──────────────────────────────────────────────
+
+class TestWallProxySafety:
+
+    def test_vwap_is_normalized_as_regime_boundary(self):
+        s = _state(20000.0)
+        s.vwap = _VWAP(value=19995.0, price_vs_vwap="above")
+        ctx = build_wall_context(s)
+        assert ctx.nearest_magnet is not None
+        assert ctx.nearest_magnet.name == "VWAP"
+        assert ctx.nearest_magnet.kind == "regime_boundary"
+
+    def test_stale_options_timestamp_marks_options_levels_stale(self):
+        s = _state(20000.0)
+        s.gex = _GEX(call_wall=20250.0, updated_at="2026-06-24T12:00:00+00:00")
+        ctx = build_wall_context(s)
+        call_wall = next(w for w in ctx.walls_above if w.name == "CALL_WALL")
+        assert call_wall.fresh is False
+        assert call_wall.stale is True
+
+    def test_raw_bar_timestamp_is_not_used_as_options_freshness(self):
+        s = _state(20000.0)
+        s.raw = {"timestamp": "2026-06-24T12:00:00+00:00"}
+        s.gex = _GEX(call_wall=20250.0)
+        ctx = build_wall_context(s)
+        call_wall = next(w for w in ctx.walls_above if w.name == "CALL_WALL")
+        assert call_wall.fresh is True
+        assert call_wall.stale is False
+
+    def test_futures_options_proxy_not_direct_price_equivalent(self):
+        s = _state(20000.0)
+        s.raw = {"underlying": "QQQ"}
+        s.gex = _GEX(call_wall=20050.0)
+        ctx = build_wall_context(s)
+        call_wall = next(w for w in ctx.walls_above if w.name == "CALL_WALL")
+        assert call_wall.direct_price_equivalent is False
+        assert call_wall.distance_mode == "percent_context"
+        assert call_wall.source_symbol == "QQQ"
+        assert ctx.resistance_distance_points is None
+        assert ctx.resistance_distance_pct is not None
 
 
 # ─── Robustness: missing fields ───────────────────────────────────────────────

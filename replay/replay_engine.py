@@ -266,6 +266,10 @@ class ReplayEngine:
                 continue
 
             journal_entry = decision.to_dict()
+            # Persist the historical candle time (the record's own `ts` is the
+            # wall-clock replay-run time) so shadow candidates can be re-resolved
+            # offline — e.g. a runner-exit A/B that needs each setup's real bars.
+            journal_entry["bar_ts"] = candle.timestamp
             if shadow_candidates:
                 journal_entry["shadow_candidates"] = shadow_candidates
             journal.log_decision(journal_entry, risk_result_dict, for_date=journal_date)
