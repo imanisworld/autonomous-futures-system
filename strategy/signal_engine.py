@@ -28,11 +28,18 @@ from strategy.regime_classifier import classify_regime
 from strategy.signa_gate import evaluate_signa
 
 
-# LIMIT/level setups eligible for momentum re-anchor (entry rests AT a level → misses
-# when price leaves it). STOP/breakout setups already fill on momentum, so excluded.
+# Setups eligible for momentum re-anchor: entry rests AT a level, so price leaving
+# that level in the trade's favor produces a no-fill. This includes the ORB
+# breakout/reclaim setups: although their entry sits beyond the ORB boundary, the
+# live broker places the entry as an IOC *limit* (the ENTRY_SLIPPAGE_TOLERANCE_TICKS
+# cap path), NOT a stop — so a momentum break that closes past the entry leaves the
+# limit unfilled (observed 100% live no-fill on orb_breakout/orb_reclaim, 2026-06-29).
 # continuation_pullback already enters at the close, so it needs no re-anchor.
 _MOMENTUM_REANCHOR_SETUPS = frozenset(
-    {"vwap_reclaim", "vwap_hold", "vwap_rejection", "pdh_reclaim", "pdl_reclaim"}
+    {
+        "vwap_reclaim", "vwap_hold", "vwap_rejection", "pdh_reclaim", "pdl_reclaim",
+        "orb_breakout", "orb_reclaim",
+    }
 )
 
 
