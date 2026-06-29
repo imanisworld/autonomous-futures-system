@@ -1141,6 +1141,83 @@ class TradovateBroker(BrokerInterface):
         self._last_position = None
         self._last_order_ids = None
 
+    def replace_stop(self, new_stop_price: float) -> bool:
+        """Move the resting protective stop to a new, tighter-only price (live runner trail).
+
+        Increment 3 of the live-trailing build (see execution/trail_shadow.py for
+        the log-only increment 2). Modifies the existing bracket2 Stop child IN
+        PLACE via /order/modifyorder — an atomic replace, so if it is rejected the
+        OLD stop stays resting and the position is never left unprotected.
+
+        Hard safety rails:
+          - REFUSES to loosen: a LONG stop may only rise, a SHORT stop may only fall.
+          - Same live-env guard as execute_bracket/flatten (LIVE_TRADING_ENABLED).
+          - Fail-safe: any auth/post/reject/exception → log, return False, and leave
+            the existing resting stop untouched.
+
+        Returns True only on a confirmed move. No-ops (return False) when there is
+        no open position, no known stop order id, or the new price is not tighter.
+        """
+        pos = self._last_position
+        if not (pos and pos.open):
+            return False
+        stop_id = (self._last_order_ids or {}).get("stop")
+        if not stop_id:
+            logger.warning("replace_stop: no resting stop order id — cannot trail safely")
+            return False
+
+        root = (pos.instrument or "").replace("1!", "").upper()
+        new_stop = _round_to_tick(float(new_stop_price), root)
+        cur = float(pos.stop)
+        # Never loosen — the whole point of a runner trail is a monotonic stop.
+        if pos.direction == "LONG" and new_stop <= cur:
+            return False
+        if pos.direction == "SHORT" and new_stop >= cur:
+            return False
+
+        if self.config.env == "live":
+            if os.getenv("LIVE_TRADING_ENABLED", "false").strip().lower() != "true":
+                logger.error(
+                    "BLOCKED replace_stop: TRADOVATE_ENV=live but LIVE_TRADING_ENABLED not true"
+                )
+                return False
+
+        try:
+            if not self._authenticate():
+                return False
+            resp = self._post("/order/modifyorder", {
+                "orderId": stop_id,
+                "orderType": "Stop",
+                "stopPrice": new_stop,
+                "orderQty": int(pos.quantity or 1),
+                "isAutomated": True,
+            })
+            fail = None
+            if isinstance(resp, dict):
+                fail = resp.get("failureReason") or resp.get("failureText") or resp.get("errorText")
+            if fail:
+                logger.error(
+                    "replace_stop REJECTED (%s→%s id=%s): %s — old stop still resting",
+                    cur, new_stop, stop_id, fail,
+                )
+                return False
+            # modifyorder may mint a new order id; track it so the next trail and
+            # any exit attribution reference the live resting order.
+            new_id = resp.get("orderId") if isinstance(resp, dict) else None
+            if new_id:
+                self._last_order_ids["stop"] = new_id
+            self._last_position.stop = new_stop
+            logger.info(
+                "Tradovate trail: stop %s→%s (id=%s) %s",
+                cur, new_stop, self._last_order_ids.get("stop"), pos.instrument,
+            )
+            return True
+        except Exception as exc:
+            logger.warning(
+                "replace_stop failed (%s→%s): %s — old stop still resting", cur, new_stop, exc
+            )
+            return False
+
     def flatten_position(self) -> dict:
         """Liquidate any open position at market, then cancel working orders."""
         result: dict = {"cancelled_orders": False, "close_sent": False, "position_was": None}
