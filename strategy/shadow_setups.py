@@ -42,6 +42,7 @@ TICK_SIZE = {
 
 
 RISK_MATRIX = {
+    "strat_122_observed": ("B", 0.5),
     "strat_122_pullback": ("B", 0.5),
     "orb_false_break_fade": ("B", 0.5),
     "ovn_high_sweep_reclaim": ("B", 0.5),
@@ -101,15 +102,37 @@ def _strat_122_pullback(state: MarketState) -> ShadowSetupCandidate | None:
     if direction == "LONG":
         breakout_entry = state.ohlc.high + tick
         structural_stop = state.ohlc.low - (tick * 4)
-        if breakout_entry - structural_stop <= max_risk:
-            return None
+        structural_risk = breakout_entry - structural_stop
+        if structural_risk <= max_risk:
+            return _candidate(
+                strategy="strat_122_observed",
+                direction=direction,
+                entry=breakout_entry,
+                stop=structural_stop,
+                target=breakout_entry + (structural_risk * 2.0),
+                notes=(
+                    "Shadow: normal-width classified 1-2-2 structural bracket; "
+                    "observe-only until resolved evidence earns promotion"
+                ),
+            )
         pullback_entry = structural_stop + max_risk
         target = pullback_entry + (max_risk * 2.0)
     else:
         breakout_entry = state.ohlc.low - tick
         structural_stop = state.ohlc.high + (tick * 4)
-        if structural_stop - breakout_entry <= max_risk:
-            return None
+        structural_risk = structural_stop - breakout_entry
+        if structural_risk <= max_risk:
+            return _candidate(
+                strategy="strat_122_observed",
+                direction=direction,
+                entry=breakout_entry,
+                stop=structural_stop,
+                target=breakout_entry - (structural_risk * 2.0),
+                notes=(
+                    "Shadow: normal-width classified 1-2-2 structural bracket; "
+                    "observe-only until resolved evidence earns promotion"
+                ),
+            )
         pullback_entry = structural_stop - max_risk
         target = pullback_entry - (max_risk * 2.0)
 

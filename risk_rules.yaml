@@ -313,8 +313,11 @@ strategy:
     # ── The Strat patterns ───────────────────────────────────
     # Phase 1: approximated from single-bar market_state flags
     # Phase 2: full multi-bar Strat classification available
-    - strat_122               # 1-2-2 reversal (1→2→reverse 2)
     - strat_4hr_retrigger     # 4HR re-trigger — 6 trades 83.3% WR (clean data). Re-enabled.
+    # SHADOW-ONLY — strat_122: no reproducible resolved trades in the verified
+    # 77-day journals; wide versions were negative on MES/MNQ Polygon studies.
+    # strategy/shadow_setups.py still journals normal structural candidates and
+    # stop-aware wide-bar pullbacks so it can earn its way back with evidence.
     # REMOVED — strat_outside_continuation: 0 trades in 237 replay days. Never fired.
     # REMOVED — strat_inside_break: confirmed loser at SUFFICIENT sample on the
     #   2yr Polygon dataset (553 session-days/instrument): MES 79tr 16.9% WR

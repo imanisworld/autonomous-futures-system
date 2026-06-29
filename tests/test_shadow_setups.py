@@ -92,7 +92,9 @@ def test_wide_strat_122_records_stop_aware_pullback_without_changing_trade(
     assert "require a pullback limit fill" in pullback.notes
 
 
-def test_normal_width_strat_122_does_not_emit_pullback(fresh_market_state):
+def test_normal_width_strat_122_emits_observed_structural_candidate(
+    fresh_market_state,
+):
     state = copy.deepcopy(fresh_market_state)
     state.instrument = "MES"
     state.strat = StratContext(
@@ -102,7 +104,13 @@ def test_normal_width_strat_122_does_not_emit_pullback(fresh_market_state):
     state.ohlc.high = 7452.75
     state.ohlc.low = 7440.0
 
-    assert "strat_122_pullback" not in _strategies(state)
+    candidates = _strategies(state)
+    assert "strat_122_pullback" not in candidates
+    observed = candidates["strat_122_observed"]
+    assert observed.entry == 7453.0
+    assert observed.stop == 7439.0
+    assert observed.target == 7481.0
+    assert "observe-only" in observed.notes
 
 
 def test_replay_journals_shadow_candidates_without_enabling_trade(config, tmp_path):
