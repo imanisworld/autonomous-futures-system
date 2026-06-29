@@ -1,4 +1,5 @@
 {
+  "secret": "",
   "ticker": "{{ticker}}",
   "timestamp": "{{time}}",
   "open": {{open}},
