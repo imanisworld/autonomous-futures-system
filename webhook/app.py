@@ -41,6 +41,7 @@ from fastapi.staticfiles import StaticFiles
 
 from agent.daily_summary import DailySummaryAgent, validate_review_date
 from config.settings import load_config
+from webhook import log_redaction as _log_redaction  # noqa: F401 — installs uvicorn.access secret redaction on import
 from context.futures_session import futures_session_active, feed_stale_after_minutes
 from execution.tradovate_supervisor import (
     reliability_snapshot,
