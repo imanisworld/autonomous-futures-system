@@ -102,6 +102,9 @@ class ReplayEngine:
             slippage_ticks=float(getattr(self.config, "fill_slippage_ticks", 0.0) or 0.0),
             pessimistic_both_hit=bool(getattr(self.config, "fill_pessimistic_both_hit", False)),
             breakeven_at_1r=bool(getattr(self.config, "breakeven_at_1r", True)),
+            runner_mode=bool(getattr(self.config, "runner_mode", False)),
+            runner_activation_r=float(getattr(self.config, "runner_activation_r", 1.0) or 1.0),
+            runner_trail_r=float(getattr(self.config, "runner_trail_r", 0.5) or 0.5),
         )
         daily_state = DailyState(
             date=run_date,
@@ -152,6 +155,21 @@ class ReplayEngine:
             prev_candle = candle
 
             if decision.decision == "TRADE" and decision.setup is not None:
+                # Per-instrument stop-width multiplier (mirrors webhook.runner): widen
+                # the stop (entry→stop risk) before sizing/bracket; target fixed,
+                # rr recomputed. 1.0/unset = no change.
+                _mult = (getattr(self.config, "stop_multiplier_per_instrument", None) or {}).get(state.instrument, 1.0)
+                if _mult and _mult != 1.0:
+                    _s = decision.setup
+                    _risk = abs(_s.entry - _s.stop)
+                    if _risk > 0:
+                        from execution.paper_broker import TICK_SIZE as _TS
+                        _tick = _TS.get(state.instrument, 0.25)
+                        _raw = (_s.entry - _mult * _risk) if _s.direction == "LONG" else (_s.entry + _mult * _risk)
+                        _s.stop = round(round(_raw / _tick) * _tick, 4)
+                        _nr = abs(_s.entry - _s.stop)
+                        if _nr > 0:
+                            _s.rr_ratio = round(abs(_s.target - _s.entry) / _nr, 2)
                 confluence = _score_setup(state, decision.setup)
                 journal_entry = decision.to_dict()
                 # Persist the historical candle time (the record's own `ts` is the

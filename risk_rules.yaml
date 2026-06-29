@@ -345,6 +345,13 @@ strategy:
       - orb_reclaim    # mild WR drag: removing it +0.6% WR (leave-one-out)
       - pdl_reclaim    # WR-neutral but P&L-negative: removing it +$2.2k, same WR
 
+  # Per-instrument INITIAL stop-width multiplier (machinery present; values
+  # DEFERRED). The 622-day replay showed a blanket MNQ 2.5x lifts vwap setups
+  # to ~70% WR but DROPS orb_reclaim (its best, 73.5%) — the wide stop collides
+  # with the ORB-anchored stop logic. Needs per-SETUP tuning, not per-instrument.
+  # Empty = no change (the runner exit is the validated lever; ship that first).
+  stop_multiplier_per_instrument: {}
+
 # ─── The Strat Config ────────────────────────────────────────
 strat:
   # Candle classification flags used in market_state (Phase 1 approximation)

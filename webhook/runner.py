@@ -81,6 +81,9 @@ def _paper_broker(starting_balance: float, cfg: Optional[SystemConfig]) -> Paper
         starting_balance=starting_balance,
         slippage_ticks=float(getattr(cfg, "fill_slippage_ticks", 0.0) or 0.0),
         pessimistic_both_hit=bool(getattr(cfg, "fill_pessimistic_both_hit", False)),
+        runner_mode=bool(getattr(cfg, "runner_mode", False)),
+        runner_activation_r=float(getattr(cfg, "runner_activation_r", 1.0) or 1.0),
+        runner_trail_r=float(getattr(cfg, "runner_trail_r", 0.5) or 0.5),
     )
 
 
@@ -158,6 +161,23 @@ def process_alert(
     # ── Step 0: Data-quality gate ─────────────────────────────────────────────
     quality_error = _check_payload_quality(payload, cfg)
     if quality_error:
+        today = for_date or date.today()
+        journal = JournalLogger(log_dir=log_dir)
+        journal.log_decision(
+            {
+                "ts": _safe_bar_ts(payload),
+                "instrument": payload.ticker,
+                "session": payload.session,
+                "decision": "BLOCKED_DATA_QUALITY",
+                "reason": quality_error,
+                "market_condition": payload.market_condition,
+                "setup": None,
+                "failed_gates": [quality_error],
+                "received_timeframe": payload.timeframe,
+            },
+            None,
+            for_date=today,
+        )
         return {
             "timestamp": payload.timestamp,
             "instrument": payload.ticker,
@@ -410,6 +430,26 @@ def process_alert(
                     target=float(open_pos["target"]),
                     contracts=int(open_pos.get("contracts", 1)),
                 )
+                # Active runner: the broker is rebuilt every bar, so its
+                # _runner_max_fav resets to entry each call and the trail can never
+                # accumulate (the runner is inert without this). Reconstruct the
+                # favourable extreme from bars-since-entry (PRIOR bars only — drop
+                # the current bar, no intra-bar look-ahead) and seed it so
+                # _resolve_runner trails correctly across the trade's life.
+                if bool(getattr(cfg, "runner_mode", False)):
+                    try:
+                        _r_inst = open_pos.get("instrument") or state.instrument
+                        _r_bars = BarHistory(log_dir=log_dir).recent(_r_inst, 200)
+                        _r_ets = str(open_pos.get("ts") or "")
+                        _r_since = [b for b in _r_bars if str(b.get("ts", "")) >= _r_ets] if _r_ets else _r_bars
+                        _r_prior = _r_since[:-1]  # exclude the current (latest) bar
+                        if _r_prior:
+                            if open_pos["direction"] == "LONG":
+                                broker._runner_max_fav = max(float(b["high"]) for b in _r_prior)
+                            else:
+                                broker._runner_max_fav = min(float(b["low"]) for b in _r_prior)
+                    except Exception as _exc:  # never break resolution
+                        logger.debug("runner max-fav reconstruct skipped: %s", _exc)
                 fill = broker.resolve_position(
                     NextBarOHLC(high=payload.high, low=payload.low)
                 )
@@ -617,6 +657,30 @@ def process_alert(
                 journal_entry["range_signal"] = _range_signal_dict
         journal.log_decision(journal_entry, None, for_date=today)
         return result
+
+    # ── Step 3a: Per-instrument stop-width multiplier ─────────────────────────
+    # MNQ's tight stops get swept then reverse (81% of stopped MNQ trades later
+    # hit the original target vs 43% MES), so widen the stop (entry→stop risk) by
+    # the configured multiplier BEFORE sizing/bracketing. Target is left fixed
+    # (matches the validated backtest); the runner, when on, drops it anyway.
+    # 1.0 / unset instrument = no change. Mutates the SetupDetail in place so the
+    # journal records the actual stop used.
+    _mult = (cfg.stop_multiplier_per_instrument or {}).get(state.instrument, 1.0)
+    if _mult and _mult != 1.0 and decision.setup.stop is not None:
+        _s = decision.setup
+        _risk = abs(_s.entry - _s.stop)
+        if _risk > 0:
+            _s.stop = _round_to_tick(
+                _s.entry - _mult * _risk if _s.direction == "LONG" else _s.entry + _mult * _risk,
+                state.instrument,
+            )
+            _new_risk = abs(_s.entry - _s.stop)
+            if _new_risk > 0:
+                _s.rr_ratio = round(abs(_s.target - _s.entry) / _new_risk, 2)
+            logger.info(
+                "stop-width ×%.2f on %s: stop→%s (R/R %.2f)",
+                _mult, state.instrument, _s.stop, _s.rr_ratio,
+            )
 
     # ── Step 3b: Score confluence ─────────────────────────────────────────────
     confluence = _score_setup(state, decision.setup)

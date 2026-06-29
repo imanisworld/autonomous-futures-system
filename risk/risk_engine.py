@@ -884,7 +884,15 @@ class RiskEngine:
     def _check_rr_ratio(
         self, setup: TradeSetup, daily_state: DailyState
     ) -> Optional[RiskResult]:
-        """R:R ratio must meet minimum threshold."""
+        """R:R ratio must meet minimum threshold.
+
+        Skipped when the runner exit is on: the runner DROPS the fixed target and
+        trails instead, so the fixed-target R:R is meaningless (a wider stop only
+        lowers it on paper). Gating on it would reject exactly the wider-stop
+        setups the runner is designed to ride.
+        """
+        if getattr(self.config, "runner_mode", False):
+            return None
         if setup.rr_ratio < self.config.min_rr_ratio:
             return RiskResult(
                 result="REJECTED",
