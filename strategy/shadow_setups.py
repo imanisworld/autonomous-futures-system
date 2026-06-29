@@ -31,6 +31,112 @@ class ShadowSetupCandidate:
         return asdict(self)
 
 
+@dataclass(frozen=True)
+class ShadowOutcome:
+    """Read-only resolution of a shadow candidate against forward price action.
+
+    result is one of:
+      WIN     — target reached after a fill
+      LOSS    — stop reached after a fill
+      NO_FILL — entry level never traded within the forward window
+      OPEN    — filled but neither stop nor target reached by window end
+    """
+
+    result: str
+    entry_filled: bool
+    exit_reason: str | None
+    exit_price: float | None
+    pnl_ticks: float | None
+    bars_to_fill: int | None
+    bars_to_exit: int | None
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+def resolve_shadow_candidate(
+    candidate: ShadowSetupCandidate,
+    forward_bars: list[tuple[float, float]],
+    *,
+    instrument: str,
+    pessimistic_both_hit: bool = True,
+) -> ShadowOutcome:
+    """Resolve a shadow candidate against forward (high, low) bars — read-only.
+
+    Models entry-fill realism: the entry is a resting level that only fills when
+    a forward bar's range trades through it. This is deliberately stricter than
+    the executable PaperBroker path (which assumes the entry always fills) because
+    these are limit/stop entries that frequently never fill — measuring them as
+    always-filled reproduces the unfillable-fill fiction this lane exists to avoid.
+
+    On the bar that straddles both stop and target, intrabar order is unknowable;
+    ``pessimistic_both_hit`` resolves it as the STOP (worst case). The same applies
+    on the fill bar itself when it also straddles the stop.
+    """
+    tick = TICK_SIZE.get(instrument, 0.25)
+    is_long = candidate.direction == "LONG"
+    entry = candidate.entry
+    stop = candidate.stop
+    target = candidate.target
+
+    fill_idx: int | None = None
+    for i, (high, low) in enumerate(forward_bars):
+        if low <= entry <= high:
+            fill_idx = i
+            break
+
+    if fill_idx is None:
+        return ShadowOutcome(
+            result="NO_FILL",
+            entry_filled=False,
+            exit_reason="NO_FILL",
+            exit_price=None,
+            pnl_ticks=None,
+            bars_to_fill=None,
+            bars_to_exit=None,
+        )
+
+    for j in range(fill_idx + 1, len(forward_bars)):
+        high, low = forward_bars[j]
+        if is_long:
+            target_hit = high >= target
+            stop_hit = low <= stop
+        else:
+            target_hit = low <= target
+            stop_hit = high >= stop
+
+        if target_hit and stop_hit:
+            won = not pessimistic_both_hit
+        elif target_hit:
+            won = True
+        elif stop_hit:
+            won = False
+        else:
+            continue
+
+        exit_price = target if won else stop
+        pnl_ticks = ((exit_price - entry) if is_long else (entry - exit_price)) / tick
+        return ShadowOutcome(
+            result="WIN" if won else "LOSS",
+            entry_filled=True,
+            exit_reason="TARGET_HIT" if won else "STOP_HIT",
+            exit_price=round(exit_price, 4),
+            pnl_ticks=round(pnl_ticks, 2),
+            bars_to_fill=fill_idx + 1,
+            bars_to_exit=j + 1,
+        )
+
+    return ShadowOutcome(
+        result="OPEN",
+        entry_filled=True,
+        exit_reason="EOD_OPEN",
+        exit_price=None,
+        pnl_ticks=None,
+        bars_to_fill=fill_idx + 1,
+        bars_to_exit=None,
+    )
+
+
 TICK_SIZE = {
     "MNQ": 0.25,
     "MES": 0.25,

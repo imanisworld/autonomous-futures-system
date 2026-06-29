@@ -18,6 +18,11 @@ def main() -> int:
     by_instrument: collections.Counter[tuple[str, str]] = collections.Counter()
     by_risk_tier: collections.Counter[tuple[str, str]] = collections.Counter()
     by_size: collections.Counter[tuple[str, str]] = collections.Counter()
+    # outcome[strategy] = {result: count}; ticks[strategy] = summed pnl_ticks of filled
+    outcome: dict[str, collections.Counter[str]] = collections.defaultdict(
+        collections.Counter
+    )
+    ticks: collections.Counter[str] = collections.Counter()
     rows = 0
 
     for journal in args.journals:
@@ -35,6 +40,12 @@ def main() -> int:
                 counts[strategy] += 1
                 by_instrument[(instrument, strategy)] += 1
                 by_risk_tier[(risk_tier, strategy)] += 1
+                result = candidate.get("outcome") or {}
+                if result:
+                    outcome[strategy][str(result.get("result") or "?")] += 1
+                    pnl = result.get("pnl_ticks")
+                    if pnl is not None:
+                        ticks[strategy] += float(pnl)
                 by_size[(size_multiplier, strategy)] += 1
 
     print(f"journal_rows={rows}")
@@ -50,6 +61,22 @@ def main() -> int:
     print("by_size_multiplier")
     for (size_multiplier, strategy), count in by_size.most_common():
         print(f"  {size_multiplier}x {strategy}: {count}")
+    print("edge_by_strategy (filled = WIN+LOSS; WR over filled; NO_FILL excluded)")
+    header = (
+        f"  {'strategy':<32} {'N':>5} {'WIN':>5} {'LOSS':>5} {'OPEN':>5} "
+        f"{'NOFILL':>6} {'WR%':>6} {'pnlT':>9}"
+    )
+    print(header)
+    for strategy, _ in counts.most_common():
+        o = outcome.get(strategy, collections.Counter())
+        wins, losses = o.get("WIN", 0), o.get("LOSS", 0)
+        filled = wins + losses
+        wr = (wins / filled * 100.0) if filled else 0.0
+        print(
+            f"  {strategy:<32} {counts[strategy]:>5} {wins:>5} {losses:>5} "
+            f"{o.get('OPEN', 0):>5} {o.get('NO_FILL', 0):>6} {wr:>6.1f} "
+            f"{ticks.get(strategy, 0.0):>9.1f}"
+        )
     return 0
 
 

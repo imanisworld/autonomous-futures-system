@@ -33,6 +33,29 @@ class StratContext:
     strat_direction: Optional[str] = None
 
 
+# Canonical bar types use the long string forms above. Upstream sources speak
+# other dialects: Pine emits the canonical names, but Polygon/CSV replay candle
+# data stores numeric Strat codes (1=inside, 2=directional, 3=outside) and some
+# CSV tooling uses "2U"/"2D". classify_sequence compares against the canonical
+# constants, so any non-canonical code must be normalized first or sequences that
+# depend on two_bars_back_type (1-2-2, 2-1-2, 3-1-2, 3-2-2) silently collapse to
+# plain 2-2. Bare "2" stays as-is: it carries no direction, so it cannot be
+# resolved to two_up/two_down here.
+_BAR_TYPE_ALIASES = {
+    "1": INSIDE_BAR,
+    "3": OUTSIDE_BAR,
+    "2u": TWO_UP,
+    "2d": TWO_DOWN,
+}
+
+
+def normalize_bar_type(bar_type: Optional[str]) -> Optional[str]:
+    """Map known bar-type dialects to canonical constants; pass others through."""
+    if bar_type is None:
+        return None
+    return _BAR_TYPE_ALIASES.get(bar_type.strip().lower(), bar_type)
+
+
 def classify_bar(current: StratBar, previous: StratBar) -> str:
     """Classify one candle relative to the prior candle."""
     breaks_high = current.high > previous.high
@@ -53,6 +76,10 @@ def classify_sequence(
     current_bar_type: Optional[str],
 ) -> StratContext:
     """Classify simple three-candle Strat sequences."""
+    two_bars_back_type = normalize_bar_type(two_bars_back_type)
+    previous_bar_type = normalize_bar_type(previous_bar_type)
+    current_bar_type = normalize_bar_type(current_bar_type)
+
     sequence = None
     trigger = None
     direction = None
