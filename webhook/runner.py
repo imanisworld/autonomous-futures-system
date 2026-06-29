@@ -161,6 +161,23 @@ def process_alert(
     # ── Step 0: Data-quality gate ─────────────────────────────────────────────
     quality_error = _check_payload_quality(payload, cfg)
     if quality_error:
+        today = for_date or date.today()
+        journal = JournalLogger(log_dir=log_dir)
+        journal.log_decision(
+            {
+                "ts": _safe_bar_ts(payload),
+                "instrument": payload.ticker,
+                "session": payload.session,
+                "decision": "BLOCKED_DATA_QUALITY",
+                "reason": quality_error,
+                "market_condition": payload.market_condition,
+                "setup": None,
+                "failed_gates": [quality_error],
+                "received_timeframe": payload.timeframe,
+            },
+            None,
+            for_date=today,
+        )
         return {
             "timestamp": payload.timestamp,
             "instrument": payload.ticker,
@@ -620,6 +637,30 @@ def process_alert(
                 journal_entry["range_signal"] = _range_signal_dict
         journal.log_decision(journal_entry, None, for_date=today)
         return result
+
+    # ── Step 3a: Per-instrument stop-width multiplier ─────────────────────────
+    # MNQ's tight stops get swept then reverse (81% of stopped MNQ trades later
+    # hit the original target vs 43% MES), so widen the stop (entry→stop risk) by
+    # the configured multiplier BEFORE sizing/bracketing. Target is left fixed
+    # (matches the validated backtest); the runner, when on, drops it anyway.
+    # 1.0 / unset instrument = no change. Mutates the SetupDetail in place so the
+    # journal records the actual stop used.
+    _mult = (cfg.stop_multiplier_per_instrument or {}).get(state.instrument, 1.0)
+    if _mult and _mult != 1.0 and decision.setup.stop is not None:
+        _s = decision.setup
+        _risk = abs(_s.entry - _s.stop)
+        if _risk > 0:
+            _s.stop = _round_to_tick(
+                _s.entry - _mult * _risk if _s.direction == "LONG" else _s.entry + _mult * _risk,
+                state.instrument,
+            )
+            _new_risk = abs(_s.entry - _s.stop)
+            if _new_risk > 0:
+                _s.rr_ratio = round(abs(_s.target - _s.entry) / _new_risk, 2)
+            logger.info(
+                "stop-width ×%.2f on %s: stop→%s (R/R %.2f)",
+                _mult, state.instrument, _s.stop, _s.rr_ratio,
+            )
 
     # ── Step 3b: Score confluence ─────────────────────────────────────────────
     confluence = _score_setup(state, decision.setup)
