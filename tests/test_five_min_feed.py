@@ -11,6 +11,8 @@ from datetime import datetime, timezone
 from context.bar_history import BarHistory
 from context.five_min_feed import (
     FIVE_MIN_LANE,
+    _root,
+    five_min_status,
     is_five_min,
     normalize_minutes,
     recent_five_min,
@@ -45,6 +47,27 @@ def test_is_five_min():
     assert is_five_min("5m") and is_five_min("5") and is_five_min("5min")
     assert not is_five_min("15m")
     assert not is_five_min("1h")
+
+
+def test_root_does_not_overstrip_month_letter_roots():
+    # the old rstrip("!1234567890HMUZ") turned MYM -> 'MY'; the regex must not.
+    assert _root("MYM1!") == "MYM"
+    assert _root("MES1!") == "MES"
+    assert _root("MNQ1!") == "MNQ"
+    assert _root("MGC1!") == "MGC"
+    assert _root("MES") == "MES"
+
+
+def test_five_min_status_reports_counts(tmp_path):
+    log_dir = str(tmp_path)
+    before = five_min_status(log_dir, instruments=["MES1!"])
+    assert before["instruments"]["MES"]["bars"] == 0
+    assert before["instruments"]["MES"]["last_ts"] is None
+
+    record_five_min(_payload("5m", ticker="MES1!"), log_dir)
+    after = five_min_status(log_dir, instruments=["MES1!"])
+    assert after["instruments"]["MES"]["bars"] == 1
+    assert after["instruments"]["MES"]["last_ts"] is not None
 
 
 def test_record_and_read_isolated_lane(tmp_path):

@@ -18,6 +18,7 @@ deliberately enabled.
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 from typing import List, Optional
 
@@ -59,9 +60,18 @@ def is_five_min(timeframe: object) -> bool:
 
 
 def _root(instrument: str) -> str:
-    """Contract root (e.g. 'MES1!' → 'MES'), matching the 15M lane's instrument
-    key so increment 2 can join 5M context to the 15M decision by instrument."""
-    return (instrument or "").upper().rstrip("!1234567890HMUZ")
+    """Contract root from a TradingView continuous symbol, e.g. 'MES1!' → 'MES',
+    'MYM1!' → 'MYM'. Matches the 15M lane's instrument key so increment 2 can join
+    5M context to the 15M decision by instrument.
+
+    A plain ``rstrip("!1234567890HMUZ")`` over-strips roots that END in a month-
+    code letter (MYM → 'MY'). This parses the structured suffix instead: the
+    leading alphabetic run, then an optional contract index and '!'. Falls back to
+    the upper-cased input when the shape is unexpected (kept internally consistent
+    because record/recent both apply _root)."""
+    s = (instrument or "").upper().strip()
+    m = re.match(r"^([A-Z]+?)\d*!?$", s)
+    return m.group(1) if m else s
 
 
 def _history(log_dir: str) -> BarHistory:
@@ -93,3 +103,16 @@ def recent_five_min(
 ) -> List[dict]:
     """Most recent ``n`` stored 5M bars for an instrument (oldest→newest)."""
     return _history(log_dir).recent(_root(instrument), n, for_date=for_date)
+
+
+def five_min_status(log_dir: str, instruments=None, for_date=None) -> dict:
+    """Observe-only summary of the 5M lane for /status: whether the feed is on,
+    and per-instrument bar count + last timestamp for the day. Read-only."""
+    insts = instruments or ["MES", "MNQ"]
+    hist = _history(log_dir)
+    per: dict = {}
+    for inst in insts:
+        root = _root(inst)
+        bars = hist.recent(root, 500, for_date=for_date)
+        per[root] = {"bars": len(bars), "last_ts": bars[-1]["ts"] if bars else None}
+    return {"enabled": five_min_enabled(), "instruments": per}
