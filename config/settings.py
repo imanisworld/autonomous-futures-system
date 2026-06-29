@@ -300,6 +300,11 @@ class SystemConfig:
     options_companion_enabled: bool = False
     options_companion_mode: str = "paper"
     options_companion_sqlite_path: str = "logs/options_companion.sqlite"
+    # Strict (default) = only grade A/B + daily-aligned candidates record an OPEN.
+    # Set OPTIONS_COMPANION_STRICT_SIGNA=false to run "loose" (demo observe): the
+    # Signa verdict is still recorded but non-blocking, so every directional candidate
+    # logs a real paper OPEN. Still paper-ledger only — never places a broker order.
+    options_companion_strict_signa: bool = True
     # Public is the strategic data target (read-only chains/quotes; never orders).
     # Account id scopes the market-data paths (/userapigateway/marketdata/{accountId}/...).
     public_base_url: str = "https://api.public.com"
@@ -527,6 +532,7 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         options_companion_sqlite_path=os.getenv(
             "OPTIONS_COMPANION_SQLITE_PATH", "logs/options_companion.sqlite"
         ).strip(),
+        options_companion_strict_signa=_env_bool("OPTIONS_COMPANION_STRICT_SIGNA", True),
         public_base_url=os.getenv("PUBLIC_BASE_URL", "https://api.public.com").strip().rstrip("/"),
         public_api_key_configured=bool(os.getenv("PUBLIC_API_KEY", "").strip()),
         public_account_id_configured=bool(os.getenv("PUBLIC_ACCOUNT_ID", "").strip()),

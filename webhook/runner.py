@@ -809,14 +809,18 @@ def _maybe_create_companion(cfg: SystemConfig, state, decision, order, result: d
         if built is None:
             return
         provider, store = built
-        from options_companion.evaluator import run_companion_create
+        from options_companion.evaluator import CompanionConfig, run_companion_create
 
+        companion_cfg = CompanionConfig(
+            enforce_signa_gate=getattr(cfg, "options_companion_strict_signa", True),
+        )
         result["companion"] = run_companion_create(
             state=state,
             futures_instrument=state.instrument,
             futures_direction=decision.setup.direction,
             provider=provider,
             store=store,
+            config=companion_cfg,
             now=state.timestamp,
             futures_timestamp=state.timestamp.isoformat() if state.timestamp else None,
         )
