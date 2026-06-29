@@ -39,6 +39,7 @@ from replay.manifest import ReplayManifest
 from replay.replay_report import MultiDayReplayReport, ReplayReport
 from risk.risk_engine import DailyState, RiskEngine, TradeSetup
 from strategy.confluence_scorer import score_setup as _score_setup
+from strategy.stop_sizing import apply_stop_multiplier
 from strategy.shadow_setups import evaluate_shadow_setups, resolve_shadow_candidate
 from strategy.signal_engine import DecisionEngine
 from strategy.strat_classifier import StratContext, classify_from_ohlc
@@ -155,21 +156,12 @@ class ReplayEngine:
             prev_candle = candle
 
             if decision.decision == "TRADE" and decision.setup is not None:
-                # Per-instrument stop-width multiplier (mirrors webhook.runner): widen
-                # the stop (entry→stop risk) before sizing/bracket; target fixed,
-                # rr recomputed. 1.0/unset = no change.
-                _mult = (getattr(self.config, "stop_multiplier_per_instrument", None) or {}).get(state.instrument, 1.0)
-                if _mult and _mult != 1.0:
-                    _s = decision.setup
-                    _risk = abs(_s.entry - _s.stop)
-                    if _risk > 0:
-                        from execution.paper_broker import TICK_SIZE as _TS
-                        _tick = _TS.get(state.instrument, 0.25)
-                        _raw = (_s.entry - _mult * _risk) if _s.direction == "LONG" else (_s.entry + _mult * _risk)
-                        _s.stop = round(round(_raw / _tick) * _tick, 4)
-                        _nr = abs(_s.entry - _s.stop)
-                        if _nr > 0:
-                            _s.rr_ratio = round(abs(_s.target - _s.entry) / _nr, 2)
+                # Per-instrument stop-width multiplier — shared with webhook.runner
+                # via strategy.stop_sizing so live and replay can never diverge.
+                apply_stop_multiplier(
+                    decision.setup, state.instrument,
+                    getattr(self.config, "stop_multiplier_per_instrument", None),
+                )
                 confluence = _score_setup(state, decision.setup)
                 journal_entry = decision.to_dict()
                 # Persist the historical candle time (the record's own `ts` is the

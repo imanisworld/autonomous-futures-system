@@ -35,6 +35,7 @@ from execution.paper_broker import NextBarOHLC, PaperBroker
 from journal.journal_logger import JournalLogger
 from risk.risk_engine import DailyState, RiskEngine, TradeSetup
 from strategy.confluence_scorer import score_setup as _score_setup
+from strategy.stop_sizing import apply_stop_multiplier
 from strategy.shadow_setups import evaluate_shadow_setups
 from strategy.signal_engine import DecisionEngine
 from webhook.payload import AlertPayload
@@ -665,22 +666,14 @@ def process_alert(
     # (matches the validated backtest); the runner, when on, drops it anyway.
     # 1.0 / unset instrument = no change. Mutates the SetupDetail in place so the
     # journal records the actual stop used.
-    _mult = (cfg.stop_multiplier_per_instrument or {}).get(state.instrument, 1.0)
-    if _mult and _mult != 1.0 and decision.setup.stop is not None:
-        _s = decision.setup
-        _risk = abs(_s.entry - _s.stop)
-        if _risk > 0:
-            _s.stop = _round_to_tick(
-                _s.entry - _mult * _risk if _s.direction == "LONG" else _s.entry + _mult * _risk,
-                state.instrument,
-            )
-            _new_risk = abs(_s.entry - _s.stop)
-            if _new_risk > 0:
-                _s.rr_ratio = round(abs(_s.target - _s.entry) / _new_risk, 2)
-            logger.info(
-                "stop-width ×%.2f on %s: stop→%s (R/R %.2f)",
-                _mult, state.instrument, _s.stop, _s.rr_ratio,
-            )
+    _mult = apply_stop_multiplier(
+        decision.setup, state.instrument, cfg.stop_multiplier_per_instrument
+    )
+    if _mult != 1.0:
+        logger.info(
+            "stop-width ×%.2f on %s: stop→%s (R/R %.2f)",
+            _mult, state.instrument, decision.setup.stop, decision.setup.rr_ratio,
+        )
 
     # ── Step 3b: Score confluence ─────────────────────────────────────────────
     confluence = _score_setup(state, decision.setup)
