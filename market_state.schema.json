@@ -201,7 +201,7 @@
         },
         "strat_sequence": {
           "type": ["string", "null"],
-          "enum": ["strat_212", "strat_122", "strat_inside_break", "strat_outside_continuation", null]
+          "enum": ["strat_22_continuation", "strat_22_reversal", "strat_212", "strat_122", "strat_312", "strat_322_reversal", "strat_inside_break", "strat_outside_continuation", null]
         },
         "strat_trigger": {
           "type": ["string", "null"],

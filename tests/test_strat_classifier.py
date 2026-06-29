@@ -68,6 +68,24 @@ def test_classify_122_bearish_reversal():
     assert result.strat_direction == "SHORT"
 
 
+def test_classify_22_continuation_and_reversal():
+    continuation = classify_sequence(TWO_DOWN, TWO_UP, TWO_UP)
+    reversal = classify_sequence(TWO_DOWN, TWO_UP, TWO_DOWN)
+    assert continuation.strat_sequence == "strat_22_continuation"
+    assert continuation.strat_direction == "LONG"
+    assert reversal.strat_sequence == "strat_22_reversal"
+    assert reversal.strat_direction == "SHORT"
+
+
+def test_classify_312_and_322_reversal():
+    pattern_312 = classify_sequence(OUTSIDE_BAR, INSIDE_BAR, TWO_UP)
+    pattern_322 = classify_sequence(OUTSIDE_BAR, TWO_DOWN, TWO_UP)
+    assert pattern_312.strat_sequence == "strat_312"
+    assert pattern_312.strat_direction == "LONG"
+    assert pattern_322.strat_sequence == "strat_322_reversal"
+    assert pattern_322.strat_direction == "LONG"
+
+
 def test_classify_from_ohlc_without_history_returns_empty_context():
     result = classify_from_ohlc(current_high=101.0, current_low=99.0)
 

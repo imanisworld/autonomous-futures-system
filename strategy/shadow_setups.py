@@ -42,6 +42,10 @@ TICK_SIZE = {
 
 
 RISK_MATRIX = {
+    "strat_22_continuation_observed": ("B", 0.5),
+    "strat_22_reversal_observed": ("B", 0.5),
+    "strat_312_observed": ("B", 0.5),
+    "strat_322_reversal_observed": ("B", 0.5),
     "strat_122_observed": ("B", 0.5),
     "strat_122_pullback": ("B", 0.5),
     "orb_false_break_fade": ("B", 0.5),
@@ -65,6 +69,7 @@ STRAT_122_MAX_STOP_TICKS = {
 def evaluate_shadow_setups(state: MarketState) -> list[ShadowSetupCandidate]:
     """Return all shadow-only setup candidates visible on this bar."""
     candidates = [
+        _missing_strat_family(state),
         _strat_122_pullback(state),
         _orb_false_break_fade(state),
         _overnight_sweep_reclaim(state),
@@ -72,6 +77,48 @@ def evaluate_shadow_setups(state: MarketState) -> list[ShadowSetupCandidate]:
         _ema_pullback_trend(state),
     ]
     return [candidate for candidate in candidates if candidate is not None]
+
+
+def _missing_strat_family(state: MarketState) -> ShadowSetupCandidate | None:
+    """Journal PDF-defined Strat families that are not executable strategies."""
+    strat = state.strat
+    sequence = getattr(strat, "strat_sequence", None)
+    direction = getattr(strat, "strat_direction", None)
+    names = {
+        "strat_22_continuation": "strat_22_continuation_observed",
+        "strat_22_reversal": "strat_22_reversal_observed",
+        "strat_312": "strat_312_observed",
+        "strat_322_reversal": "strat_322_reversal_observed",
+    }
+    if sequence not in names or direction not in {"LONG", "SHORT"}:
+        return None
+    raw = state.raw if isinstance(state.raw, dict) else {}
+    tick = _tick(state)
+    previous_high = _raw_num(state, "previous_bar_high")
+    previous_low = _raw_num(state, "previous_bar_low")
+    if previous_high is None or previous_low is None:
+        return None
+    if direction == "LONG":
+        entry, stop = previous_high + tick, previous_low - tick
+        risk = entry - stop
+        target = entry + (risk * 2)
+    else:
+        entry, stop = previous_low - tick, previous_high + tick
+        risk = stop - entry
+        target = entry - (risk * 2)
+    if risk <= 0:
+        return None
+    return _candidate(
+        strategy=names[sequence],
+        direction=direction,
+        entry=entry,
+        stop=stop,
+        target=target,
+        notes=(
+            f"Shadow: PDF-defined {sequence}; trigger at prior-bar break, "
+            "invalidation beyond the opposite side; evidence-only"
+        ),
+    )
 
 
 def _strat_122_pullback(state: MarketState) -> ShadowSetupCandidate | None:

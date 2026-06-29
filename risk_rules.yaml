@@ -344,12 +344,24 @@ strat:
   # Full multi-bar history required for Phase 2 classification
   candle_types: [inside_bar, two_up, two_down, outside_bar]
   combo_patterns:
+    strat_22_continuation:
+      sequence: [two_directional, same_directional]
+      description: "2-2 continuation — directional expansion continues"
+    strat_22_reversal:
+      sequence: [two_directional, reverse_directional]
+      description: "2-2 reversal — prior directional move fails"
     strat_212:
       sequence: [two_up_or_down, inside_bar, two_up_or_down]
       description: "2-1-2 continuation — compress then extend"
     strat_122:
       sequence: [inside_bar, two_directional, two_reverse]
       description: "1-2-2 reversal — trap then flip"
+    strat_312:
+      sequence: [outside_bar, inside_bar, two_up_or_down]
+      description: "3-1-2 — outside range compresses, then chooses direction"
+    strat_322_reversal:
+      sequence: [outside_bar, two_directional, two_reverse]
+      description: "3-2-2 reversal — expansion, directional move, then reversal"
     strat_4hr_retrigger:
       description: "4AM 2DOWN, 8AM 2UP, NY open dip below 8AM high then reclaim"
     strat_inside_break:

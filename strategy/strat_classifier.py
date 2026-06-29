@@ -58,17 +58,27 @@ def classify_sequence(
     direction = None
 
     if current_bar_type in (TWO_UP, TWO_DOWN):
-        if previous_bar_type == INSIDE_BAR and two_bars_back_type == current_bar_type:
+        if previous_bar_type in (TWO_UP, TWO_DOWN):
+            if two_bars_back_type == OUTSIDE_BAR and previous_bar_type != current_bar_type:
+                sequence = "strat_322_reversal"
+                trigger = "reversal"
+            elif two_bars_back_type == INSIDE_BAR and previous_bar_type != current_bar_type:
+                sequence = "strat_122"
+                trigger = "reversal"
+            elif previous_bar_type == current_bar_type:
+                sequence = "strat_22_continuation"
+                trigger = "continuation"
+            else:
+                sequence = "strat_22_reversal"
+                trigger = "reversal"
+            direction = "LONG" if current_bar_type == TWO_UP else "SHORT"
+        elif previous_bar_type == INSIDE_BAR and two_bars_back_type == OUTSIDE_BAR:
+            sequence = "strat_312"
+            trigger = "breakout"
+            direction = "LONG" if current_bar_type == TWO_UP else "SHORT"
+        elif previous_bar_type == INSIDE_BAR and two_bars_back_type == current_bar_type:
             sequence = "strat_212"
             trigger = "continuation"
-            direction = "LONG" if current_bar_type == TWO_UP else "SHORT"
-        elif (
-            two_bars_back_type == INSIDE_BAR
-            and previous_bar_type in (TWO_UP, TWO_DOWN)
-            and previous_bar_type != current_bar_type
-        ):
-            sequence = "strat_122"
-            trigger = "reversal"
             direction = "LONG" if current_bar_type == TWO_UP else "SHORT"
         elif previous_bar_type == INSIDE_BAR:
             sequence = "strat_inside_break"

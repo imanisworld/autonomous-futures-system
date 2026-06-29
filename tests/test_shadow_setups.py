@@ -113,6 +113,25 @@ def test_normal_width_strat_122_emits_observed_structural_candidate(
     assert "observe-only" in observed.notes
 
 
+def test_pdf_defined_312_is_journal_only_with_prior_bar_bracket(
+    fresh_market_state,
+):
+    state = copy.deepcopy(fresh_market_state)
+    state.instrument = "MES"
+    state.strat = StratContext(
+        strat_sequence="strat_312",
+        strat_direction="LONG",
+    )
+    state.raw = {"previous_bar_high": 100.0, "previous_bar_low": 95.0}
+
+    candidate = _strategies(state)["strat_312_observed"]
+
+    assert candidate.entry == 100.25
+    assert candidate.stop == 94.75
+    assert candidate.target == 111.25
+    assert "evidence-only" in candidate.notes
+
+
 def test_replay_journals_shadow_candidates_without_enabling_trade(config, tmp_path):
     config.enabled_concepts = []
     candle = {
