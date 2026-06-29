@@ -26,6 +26,11 @@ from typing import Optional
 from config.settings import SystemConfig, load_config
 from execution.broker_interface import BracketOrder, BrokerInterface
 from context.bar_history import BarHistory
+from context.five_min_feed import (
+    five_min_enabled,
+    is_five_min,
+    record_five_min,
+)
 from execution.paper_broker import NextBarOHLC, PaperBroker
 from journal.journal_logger import JournalLogger
 from risk.risk_engine import DailyState, RiskEngine, TradeSetup
@@ -166,6 +171,33 @@ def process_alert(
             "gex_status": None,
             "signa_status": None,
             "failed_gates": [quality_error],
+            "confidence_score": None,
+        }
+
+    # ── Step 0a: 5-minute entry feed (ingest-only, OFF the decision path) ──────
+    # When FIVE_MIN_FEED_ENABLED, a 5M alert is NOT a misconfigured 15M bar — it
+    # is entry-timing context. Store it on its own lane and acknowledge; it never
+    # runs the 15M decision path and never trades by itself (increment 1 of the
+    # 5M feed — see context/five_min_feed.py). Default OFF → 5M falls through to
+    # the timeframe guard below exactly as before.
+    if five_min_enabled() and is_five_min(payload.timeframe):
+        try:
+            record_five_min(payload, log_dir, for_date=for_date)
+        except Exception as _exc:  # ingestion must never break alert handling
+            logger.warning("5m feed: record skipped: %s", _exc)
+        return {
+            "timestamp": payload.timestamp,
+            "instrument": payload.ticker,
+            "session": payload.session,
+            "resolution": None,
+            "decision": "FIVE_MIN_CONTEXT",
+            "risk": None,
+            "fill": None,
+            "context": None,
+            "regime": None,
+            "gex_status": None,
+            "signa_status": None,
+            "failed_gates": [],
             "confidence_score": None,
         }
 
