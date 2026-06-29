@@ -73,11 +73,37 @@ def test_long_reanchors_symmetric(config):
     assert out.rr_ratio == 2.0
 
 
-def test_stop_setup_not_reanchored(config):
+def test_orb_breakout_reanchors(config):
+    # orb_breakout entry rests at orb.high+2t; on a live momentum break the bar
+    # closes ABOVE it and the broker's IOC limit entry (slippage-cap path) can't
+    # fill above its price → 100% no-fill in live demo. Re-anchor to the close.
     eng = _eng(config)
-    setup = replace(_short_setup(), strategy="orb_breakout")
+    setup = SetupDetail(direction="LONG", entry=19500.0, stop=19492.5, target=19515.0,
+                        rr_ratio=2.0, strategy="orb_breakout", notes=None)  # risk 7.5, reward 15
+    out = eng._maybe_reanchor_entry(setup, _state(19510.0))  # ran up 10pt, inside reward
+    assert out.entry == 19510.0
+    assert out.stop == 19502.5    # close - risk
+    assert out.target == 19525.0  # close + reward
+    assert out.rr_ratio == 2.0
+    assert "re-anchor" in out.notes
+
+
+def test_orb_reclaim_reanchors(config):
+    eng = _eng(config)
+    setup = SetupDetail(direction="LONG", entry=19500.0, stop=19492.5, target=19515.0,
+                        rr_ratio=2.0, strategy="orb_reclaim", notes=None)
+    out = eng._maybe_reanchor_entry(setup, _state(19510.0))
+    assert out.entry == 19510.0
+    assert out.stop == 19502.5
+    assert out.target == 19525.0
+
+
+def test_continuation_pullback_not_reanchored(config):
+    # continuation_pullback already enters AT the close, so it needs no re-anchor.
+    eng = _eng(config)
+    setup = replace(_short_setup(), strategy="continuation_pullback")
     out = eng._maybe_reanchor_entry(setup, _state(19490.0))
-    assert out is setup  # momentum/breakout setups already fill — excluded
+    assert out is setup  # genuinely excluded — enters at close
 
 
 def test_gap_past_bracket_not_reanchored(config):
