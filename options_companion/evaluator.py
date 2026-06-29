@@ -41,6 +41,13 @@ class CompanionConfig:
     require_confluence_grade: str = "B"
     max_dte: int = 2
     max_spread_ratio: float = 0.25
+    # When True (default), the stricter companion Signa gate blocks candidates that
+    # are not grade A/B + daily-aligned (WATCHLIST/REJECTED rows, no contract picked).
+    # When False ("loose"/demo observe mode), the Signa verdict is still computed and
+    # stored (grade + daily_direction columns) but is NON-blocking: every directional
+    # candidate proceeds to selection + risk so the paper ledger records a real OPEN.
+    # The risk caps (premium, RR, spread, DTE) still apply — only Signa is relaxed.
+    enforce_signa_gate: bool = True
 
     def risk_config(self, session: str) -> OptionsRiskConfig:
         return OptionsRiskConfig(
@@ -63,7 +70,11 @@ class CompanionConfig:
             require_target=True,
             min_rr_ratio=self.min_rr_ratio,
             allow_market_orders=False,
-            require_confluence_grade=self.require_confluence_grade,
+            # In loose mode the Signa gate is already relaxed upstream; don't let the
+            # risk engine re-impose a grade floor ("" disables _check_confluence).
+            require_confluence_grade=(
+                self.require_confluence_grade if self.enforce_signa_gate else ""
+            ),
         )
 
 
@@ -120,9 +131,13 @@ async def evaluate_companion(
             "contract_type": contract_type,
             "futures_instrument": futures_instrument,
             "futures_direction": futures_direction,
+            # Strict-gate verdict carried through even when non-blocking, so loose-mode
+            # OPEN rows are still attributable to what Signa would have said.
+            "signa_status": signa_result.status,
+            "signa_rule": signa_result.failed_rule,
         }
 
-        if not signa_result.passed:
+        if cfg.enforce_signa_gate and not signa_result.passed:
             if signa_result.watchlist:
                 row_id = store.record(
                     status="WATCHLIST",

@@ -270,6 +270,84 @@ class TestSignaGate:
         assert res.failed_rule == "signa_missing"
 
 
+# ─── 4b. loose (demo observe) mode: Signa non-blocking, still paper-ledger ────
+# enforce_signa_gate=False makes the Signa verdict informational but non-blocking,
+# so every directional candidate records a real paper OPEN (risk caps still apply).
+# The strict verdict is preserved (grade/daily columns + audit signa_status).
+
+
+class TestLooseSignaGate:
+    LOOSE = CompanionConfig(enforce_signa_gate=False)
+
+    def test_opposing_daily_opens_in_loose_mode(self, fresh_market_state, tmp_path):
+        store = OptionsCompanionStore(tmp_path / "c.sqlite")
+        provider = MockChainProvider(_good_chain("QQQ", "CALL"))
+        state = _state(fresh_market_state, instrument="MNQ", grade="A", daily="DOWN")
+        out = _evaluate(
+            state, store, provider, instrument="MNQ", direction="LONG", config=self.LOOSE
+        )
+        rows = store.all_rows()
+        assert len(rows) == 1
+        assert rows[0].status == "OPEN"          # strict would have REJECTED (signa_opposes)
+        assert rows[0].signa_grade == "A"
+        assert rows[0].signa_daily_direction == "DOWN"
+        assert provider.chain_calls == ["QQQ"]   # loose mode does fetch a chain
+        assert out["candidates"][0]["signa_status"] == "REJECT"
+        assert out["candidates"][0]["signa_rule"] == "signa_opposes"
+
+    @pytest.mark.parametrize("daily", ["NEUTRAL", None, "WAIT"])
+    def test_watchlist_daily_opens_in_loose_mode(self, fresh_market_state, tmp_path, daily):
+        store = OptionsCompanionStore(tmp_path / "c.sqlite")
+        provider = MockChainProvider(_good_chain("QQQ", "CALL"))
+        state = _state(fresh_market_state, instrument="MNQ", grade="A", daily=daily)
+        out = _evaluate(
+            state, store, provider, instrument="MNQ", direction="LONG", config=self.LOOSE
+        )
+        rows = store.all_rows()
+        assert len(rows) == 1
+        assert rows[0].status == "OPEN"
+        assert out["candidates"][0]["signa_status"] == "WATCHLIST"
+
+    def test_low_grade_opens_in_loose_mode(self, fresh_market_state, tmp_path):
+        # Grade C + missing Signa would both fail strict; loose lets them open and the
+        # risk engine must NOT re-impose a confluence-grade floor.
+        store = OptionsCompanionStore(tmp_path / "c.sqlite")
+        provider = MockChainProvider(_good_chain("QQQ", "CALL"))
+        state = _state(fresh_market_state, instrument="MNQ", grade="C", daily="UP")
+        _evaluate(state, store, provider, instrument="MNQ", direction="LONG", config=self.LOOSE)
+        rows = store.all_rows()
+        assert len(rows) == 1
+        assert rows[0].status == "OPEN"
+        assert rows[0].signa_grade == "C"
+
+    def test_loose_still_respects_risk_caps(self, fresh_market_state, tmp_path):
+        # Loosening Signa must NOT loosen the premium cap: an oversized contract is
+        # still REJECTED (not opened) in loose mode.
+        store = OptionsCompanionStore(tmp_path / "c.sqlite")
+        pricey = ChainSnapshot(
+            underlying="QQQ",
+            underlying_price=500.0,
+            contracts=[_contract("QQQ_0", 0, 505, "CALL", 6.00, 6.10, delta=0.40)],
+        )
+        provider = MockChainProvider(pricey)
+        state = _state(fresh_market_state, instrument="MNQ", grade="C", daily="UP")
+        _evaluate(state, store, provider, instrument="MNQ", direction="LONG", config=self.LOOSE)
+        rows = store.all_rows()
+        assert len(rows) == 1
+        assert rows[0].status == "REJECTED"
+        assert rows[0].risk_failed_rule == "premium_per_contract"
+
+    def test_strict_is_default(self, fresh_market_state, tmp_path):
+        # Default config (no override) still blocks: opposing daily -> REJECTED row.
+        store = OptionsCompanionStore(tmp_path / "c.sqlite")
+        provider = MockChainProvider(_good_chain())
+        state = _state(fresh_market_state, instrument="MNQ", grade="A", daily="DOWN")
+        _evaluate(state, store, provider, instrument="MNQ", direction="LONG")
+        rows = store.all_rows()
+        assert rows[0].status == "REJECTED"
+        assert provider.chain_calls == []
+
+
 # ─── 5. MES short -> SPY put (no SPX) ────────────────────────────────────────
 
 
