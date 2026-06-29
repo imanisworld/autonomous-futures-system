@@ -9,7 +9,9 @@ order by itself.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from datetime import time as _time
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from context.market_context import MarketState
 from risk.risk_engine import RiskEngine
@@ -154,6 +156,7 @@ RISK_MATRIX = {
     "strat_322_reversal_observed": ("B", 0.5),
     "strat_122_observed": ("B", 0.5),
     "strat_122_pullback": ("B", 0.5),
+    "strat_4hr_retrigger_observed": ("B", 0.5),
     "orb_false_break_fade": ("B", 0.5),
     "ovn_high_sweep_reclaim": ("B", 0.5),
     "ovn_low_sweep_reclaim": ("B", 0.5),
@@ -171,12 +174,22 @@ STRAT_122_MAX_STOP_TICKS = {
     "ES": 60,
 }
 
+# 4HR re-trigger proxy mirror — see _strat_4hr_retrigger_observed. These mirror the
+# executable engine's constants (signal_engine.py:_4HR_WINDOW_*, MAX_ORB_STOP_TICKS)
+# so the journaled shadow matches what the demoted proxy would have done. Local to
+# the observe-only path: changing them cannot affect executable trading.
+_FOURHR_ET = ZoneInfo("America/New_York")
+_FOURHR_WINDOW_START = _time(9, 30)
+_FOURHR_WINDOW_END = _time(11, 0)
+_FOURHR_MAX_STOP_TICKS = {"MNQ": 80, "MES": 40}
+
 
 def evaluate_shadow_setups(state: MarketState) -> list[ShadowSetupCandidate]:
     """Return all shadow-only setup candidates visible on this bar."""
     candidates = [
         _missing_strat_family(state),
         _strat_122_pullback(state),
+        _strat_4hr_retrigger_observed(state),
         _orb_false_break_fade(state),
         _overnight_sweep_reclaim(state),
         _gap_fill(state),
@@ -301,6 +314,88 @@ def _strat_122_pullback(state: MarketState) -> ShadowSetupCandidate | None:
             "pullback limit fill before measuring the 2R alternative"
         ),
     )
+
+
+def _strat_4hr_retrigger_observed(state: MarketState) -> ShadowSetupCandidate | None:
+    """Journal the demoted 4HR re-trigger proxy — observe-only, never trades.
+
+    Faithful mirror of signal_engine.py:_try_strat_4hr_retrigger (+ _short). The
+    proxy was removed from executable enabled_concepts: it is a 15M approximation
+    of a doctrine pattern that needs a 5M feed, and its "83.3% WR" was 6 trades
+    (noise). Journaling it here keeps the earn-the-gate evidence trail without
+    letting it place an order. Spec: .private-companion/strategy/
+    strat_4hr_retrigger_rules_v1.md.
+    """
+    if state.instrument not in ("MNQ", "MES"):
+        return None
+    if state.session != "new_york":
+        return None
+    # Pre-market 04:00/08:00 structure is only meaningful in the early NY session.
+    et_time = state.timestamp.astimezone(_FOURHR_ET).time()
+    if not (_FOURHR_WINDOW_START <= et_time <= _FOURHR_WINDOW_END):
+        return None
+
+    trend = state.trend
+    vol_rel = state.volume.relative
+    tick = _tick(state)
+    max_ticks = _FOURHR_MAX_STOP_TICKS.get(state.instrument, 80)
+
+    # LONG: ORB high reclaimed, STRONG uptrend, price above VWAP, volume confirms.
+    if (
+        state.orb.status == "reclaimed_high"
+        and trend is not None
+        and trend.direction == "UP"
+        and trend.strength == "STRONG"
+        and state.vwap.price_vs_vwap == "above"
+        and (vol_rel is None or vol_rel >= 0.7)
+    ):
+        entry = state.orb.high + tick
+        raw_stop = state.orb.low - (tick * 6)
+        stop = max(raw_stop, entry - (tick * max_ticks))
+        risk = entry - stop
+        if risk <= 0:
+            return None
+        return _candidate(
+            strategy="strat_4hr_retrigger_observed",
+            direction="LONG",
+            entry=entry,
+            stop=stop,
+            target=entry + (risk * 2.0),
+            notes=(
+                "Shadow: 4HR re-trigger 15M proxy (NY-open ORB-high reclaim, STRONG "
+                "uptrend, VWAP-above); demoted from executable, observe-only until a "
+                "5M feed proves the doctrine pattern"
+            ),
+        )
+
+    # SHORT mirror: ORB low reclaimed (rejected), STRONG downtrend, price below VWAP.
+    if (
+        state.orb.status == "reclaimed_low"
+        and trend is not None
+        and trend.direction == "DOWN"
+        and trend.strength == "STRONG"
+        and state.vwap.price_vs_vwap == "below"
+        and (vol_rel is None or vol_rel >= 0.7)
+    ):
+        entry = state.orb.low - tick
+        raw_stop = state.orb.high + (tick * 6)
+        stop = min(raw_stop, entry + (tick * max_ticks))
+        risk = stop - entry
+        if risk <= 0:
+            return None
+        return _candidate(
+            strategy="strat_4hr_retrigger_observed",
+            direction="SHORT",
+            entry=entry,
+            stop=stop,
+            target=entry - (risk * 2.0),
+            notes=(
+                "Shadow: 4HR re-trigger 15M proxy SHORT (NY-open ORB-low reject, "
+                "STRONG downtrend, VWAP-below); demoted from executable, observe-only"
+            ),
+        )
+
+    return None
 
 
 def _tick(state: MarketState) -> float:

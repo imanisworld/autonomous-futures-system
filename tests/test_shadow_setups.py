@@ -184,6 +184,31 @@ def test_normal_width_strat_122_emits_observed_structural_candidate(
     assert "observe-only" in observed.notes
 
 
+def test_strat_4hr_retrigger_observed_emits_on_strong_trend(fresh_market_state):
+    """Demoted 4HR proxy is journaled (observe-only) when the proxy gate is met.
+
+    Mirrors signal_engine._try_strat_4hr_retrigger: MNQ, NY 9:30–11:00 ET,
+    ORB reclaimed_high, STRONG up, VWAP-above, vol>=0.7. The stop cap (80t MNQ)
+    binds because the raw ORB-low stop is wider.
+    """
+    state = copy.deepcopy(fresh_market_state)  # MNQ, 10:30 ET, reclaimed_high, vwap above, vol 1.10
+    state.trend.strength = "STRONG"
+
+    observed = _strategies(state)["strat_4hr_retrigger_observed"]
+    assert observed.direction == "LONG"
+    assert observed.entry == 19498.25          # orb.high + 1 tick
+    assert observed.stop == 19478.25           # capped at entry - 80 ticks (raw ORB-low stop is wider)
+    assert observed.target == 19538.25         # entry + 2R (R = 20.0)
+    assert observed.rr_ratio == 2.0
+    assert "observe-only" in observed.notes
+
+
+def test_strat_4hr_retrigger_observed_absent_without_strong_trend(fresh_market_state):
+    """The proxy requires STRONG trend; a MODERATE bar must not journal it."""
+    state = copy.deepcopy(fresh_market_state)  # fixture trend strength is MODERATE
+    assert "strat_4hr_retrigger_observed" not in _strategies(state)
+
+
 def test_pdf_defined_312_is_journal_only_with_prior_bar_bracket(
     fresh_market_state,
 ):

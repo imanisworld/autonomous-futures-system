@@ -313,7 +313,14 @@ strategy:
     # ── The Strat patterns ───────────────────────────────────
     # Phase 1: approximated from single-bar market_state flags
     # Phase 2: full multi-bar Strat classification available
-    - strat_4hr_retrigger     # 4HR re-trigger — 6 trades 83.3% WR (clean data). Re-enabled.
+    # SHADOW-ONLY — strat_4hr_retrigger: the live engine fires a 15M PROXY
+    # (ORB-reclaim + STRONG-UP + VWAP-above + vol≥0.7), NOT the doctrine pattern
+    # (04:00 ET 1H 2-down → 08:00 ET 1H 2-up reclaim → NY-open dip-then-5M-reclaim).
+    # Faithful entry needs a 5M feed the live 15M-only pipeline cannot supply, and
+    # the "83.3% WR" was 6 trades (n=6 = noise). Doctrine "no proof, no run" ⇒ demote
+    # from executable. strategy/shadow_setups.py journals strat_4hr_retrigger_observed
+    # so the proxy keeps earning evidence; promote only on validated edge + a 5M feed.
+    # Rules spec: .private-companion/strategy/strat_4hr_retrigger_rules_v1.md
     # SHADOW-ONLY — strat_122: no reproducible resolved trades in the verified
     # 77-day journals; wide versions were negative on MES/MNQ Polygon studies.
     # strategy/shadow_setups.py still journals normal structural candidates and
