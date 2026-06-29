@@ -1005,6 +1005,17 @@ def test_fastapi_status_diagnostics_endpoint(monkeypatch, tmp_path):
     monkeypatch.setenv("WEBHOOK_SECRET", "test-secret")
     monkeypatch.setattr(app_module._config, "discord_notifications_enabled", True)
     monkeypatch.setattr(app_module._config, "discord_webhook_url", "")
+    monkeypatch.setattr(
+        app_module,
+        "live_box_drift_report",
+        lambda **_: {
+            "ok": False,
+            "status": "warn",
+            "summary": "test pins are not configured",
+            "proof_critical_runtime_overrides": [],
+            "unpinned_runtime_overrides": [],
+        },
+    )
 
     client = TestClient(app)
     resp = client.get("/status/diagnostics")
@@ -1012,7 +1023,17 @@ def test_fastapi_status_diagnostics_endpoint(monkeypatch, tmp_path):
     assert resp.status_code == 200
     data = resp.json()
     assert data["overall_status"] == "warn"
-    assert data["top_issue"]["component"] in {"Discord alerts", "TradingView feed", "Live box guard"}
+    assert data["top_issue"]["component"] in {
+        "Discord alerts",
+        "TradingView feed",
+        "Live box guard",
+        "Ops automation: Health Digest",
+    }
+    assert {job["job"] for job in data["ops_automations"]["jobs"]} == {
+        "health_digest",
+        "backup_proof_data",
+        "weekly_review",
+    }
     components = {item["component"] for item in data["items"]}
     assert {
         "Backend API",
@@ -1457,6 +1478,29 @@ def test_doctor_command_prints_diagnostics(monkeypatch, tmp_path, capsys):
     monkeypatch.setenv("WEBHOOK_SECRET", "test-secret")
     monkeypatch.setattr(app_module._config, "discord_notifications_enabled", False)
     monkeypatch.setattr(app_module._config, "signa_api_enabled", False)
+    monkeypatch.setattr(
+        app_module,
+        "live_box_drift_report",
+        lambda **_: {
+            "ok": True,
+            "status": "ok",
+            "summary": "test guard verified",
+            "proof_critical_runtime_overrides": [],
+            "unpinned_runtime_overrides": [],
+            "security_runtime": {
+                "manual_endpoint": {"effectively_inert": True},
+                "webhook_secret_rotation": {
+                    "primary_configured": True,
+                    "rotation_ready": True,
+                    "configured_env_names": [
+                        "WEBHOOK_SECRET",
+                        "TRADINGVIEW_WEBHOOK_SECRET",
+                    ],
+                    "distinct_configured_count": 2,
+                },
+            },
+        },
+    )
 
     exit_code = doctor.main([])
 
@@ -1465,6 +1509,30 @@ def test_doctor_command_prints_diagnostics(monkeypatch, tmp_path, capsys):
     assert "RiskSentinel doctor:" in out
     assert "Backend API" in out
     assert "Webhook secret" in out
+
+
+def test_diagnostics_report_active_proof_runtime_override(monkeypatch, tmp_path):
+    import webhook.app as app_module
+    from ops.live_box_guard import PROOF_CRITICAL_RUNTIME_OVERRIDES
+
+    _isolate_app_logs(monkeypatch, tmp_path)
+    for name in PROOF_CRITICAL_RUNTIME_OVERRIDES:
+        monkeypatch.delenv(name, raising=False)
+        monkeypatch.delenv(f"EXPECTED_PROOF_{name}", raising=False)
+    monkeypatch.setenv("BROKER", "paper")
+    monkeypatch.setenv("EXPECTED_PROOF_BROKER", "paper")
+    monkeypatch.setenv("WEBHOOK_SECRET", "test-secret")
+    monkeypatch.setenv("VWAP_ENTRY_MAX_DISTANCE_TICKS", "12")
+    monkeypatch.setenv("EXPECTED_PROOF_VWAP_ENTRY_MAX_DISTANCE_TICKS", "12")
+
+    payload = app_module._diagnostics_payload(date.today())
+    item = next(
+        item for item in payload["items"]
+        if item["component"] == "Proof runtime overrides"
+    )
+
+    assert item["status"] == "ok"
+    assert "VWAP_ENTRY_MAX_DISTANCE_TICKS=12 (pinned)" in item["message"]
 
 
 def test_manual_open_action_is_removed(monkeypatch, tmp_path):

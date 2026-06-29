@@ -21,6 +21,7 @@ import shutil
 import subprocess
 import urllib.request
 from datetime import date, datetime, timezone
+from pathlib import Path
 from typing import Optional
 
 DISK_WARN_PCT = 80.0
@@ -151,7 +152,8 @@ def _post_discord(url: str, content: str) -> bool:
 
 
 def main(argv: Optional[list[str]] = None) -> int:
-    day_iso = datetime.now(timezone.utc).date().isoformat()
+    generated_at = datetime.now(timezone.utc)
+    day_iso = generated_at.date().isoformat()
     checks = collect()
     verdict = evaluate_health(checks)
     text = format_digest(verdict, checks, day_iso=day_iso)
@@ -162,11 +164,24 @@ def main(argv: Optional[list[str]] = None) -> int:
         or os.getenv("DISCORD_WEBHOOK_URL")
         or ""
     ).strip()
+    posted = None
     if webhook:
-        print(f"[health_digest] posted: {_post_discord(webhook, text)}")
+        posted = _post_discord(webhook, text)
+        print(f"[health_digest] posted: {posted}")
     else:
         print("[health_digest] no webhook configured; printing only")
     print(text)
+    try:
+        log_dir = Path(os.getenv("LOG_DIR", "logs"))
+        log_dir.mkdir(parents=True, exist_ok=True)
+        (log_dir / "health_digest_latest.json").write_text(json.dumps({
+            "job": "health_digest",
+            "generated_at": generated_at.isoformat(),
+            "verdict": verdict["status"],
+            "discord_posted": posted,
+        }, indent=2))
+    except OSError:
+        pass
     # Non-zero exit on ALERT so cron mail / monitoring can also catch it.
     return 2 if verdict["status"] == "ALERT" else 0
 
