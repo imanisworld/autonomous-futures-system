@@ -180,10 +180,16 @@ alone cannot satisfy promotion criteria.
 
 ### GEX Shadow Analysis
 
-GEX context is observe-only. When a producer journals compact `gex_observed`
-snapshots, this analysis scores them against resolved outcomes — it never changes
-`DecisionEngine`, `RiskEngine`, or trade gating. (The observe-only GEX producer is
-rebuilt separately on the Public.com chain feed.)
+`gex_observed` snapshots are observe-only. When a producer journals compact
+`gex_observed` records, this analysis scores them against resolved outcomes — it
+never changes `DecisionEngine`, `RiskEngine`, or trade gating. The separate
+observe-only GEX producer is rebuilt on the Public.com chain feed.
+
+Important distinction: payload-provided `state.gex` fields are not the same as
+`gex_observed`. The active decision path currently calls `strategy/gex_gate.py`,
+so payload fields such as `call_wall`, `put_wall`, `gex_flip`, and mid-range
+levels can hard-reject trades. Do not describe that path as journal-only until it
+is separately audited or changed.
 
 Start the server with `GEX_SHADOW_ANALYSIS_ENABLED=true`, then measure whether
 the lane deserves promotion beyond journaling:
