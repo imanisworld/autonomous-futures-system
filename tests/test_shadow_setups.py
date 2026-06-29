@@ -7,6 +7,7 @@ from pathlib import Path
 from context.market_context import KeyLevels
 from replay import ReplayEngine
 from strategy.shadow_setups import evaluate_shadow_setups
+from strategy.strat_classifier import StratContext
 
 
 def _strategies(state):
@@ -63,6 +64,45 @@ def test_ema_pullback_trend_uses_ema_zone(fresh_market_state):
     assert candidates["ema_pullback_trend"].direction == "LONG"
     assert candidates["ema_pullback_trend"].risk_tier == "B"
     assert candidates["ema_pullback_trend"].size_multiplier == 0.75
+
+
+def test_wide_strat_122_records_stop_aware_pullback_without_changing_trade(
+    fresh_market_state,
+):
+    state = copy.deepcopy(fresh_market_state)
+    state.instrument = "MES"
+    state.strat = StratContext(
+        strat_sequence="strat_122",
+        strat_direction="LONG",
+    )
+    state.ohlc.high = 7452.75
+    state.ohlc.low = 7436.0
+    state.ohlc.close = 7450.25
+
+    candidates = _strategies(state)
+
+    pullback = candidates["strat_122_pullback"]
+    assert pullback.direction == "LONG"
+    assert pullback.entry == 7450.0
+    assert pullback.stop == 7435.0
+    assert pullback.target == 7480.0
+    assert pullback.rr_ratio == 2.0
+    assert pullback.risk_tier == "B"
+    assert pullback.size_multiplier == 0.5
+    assert "require a pullback limit fill" in pullback.notes
+
+
+def test_normal_width_strat_122_does_not_emit_pullback(fresh_market_state):
+    state = copy.deepcopy(fresh_market_state)
+    state.instrument = "MES"
+    state.strat = StratContext(
+        strat_sequence="strat_122",
+        strat_direction="LONG",
+    )
+    state.ohlc.high = 7452.75
+    state.ohlc.low = 7440.0
+
+    assert "strat_122_pullback" not in _strategies(state)
 
 
 def test_replay_journals_shadow_candidates_without_enabling_trade(config, tmp_path):

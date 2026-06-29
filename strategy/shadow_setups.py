@@ -42,6 +42,7 @@ TICK_SIZE = {
 
 
 RISK_MATRIX = {
+    "strat_122_pullback": ("B", 0.5),
     "orb_false_break_fade": ("B", 0.5),
     "ovn_high_sweep_reclaim": ("B", 0.5),
     "ovn_low_sweep_reclaim": ("B", 0.5),
@@ -49,16 +50,81 @@ RISK_MATRIX = {
     "ema_pullback_trend": ("B", 0.75),
 }
 
+# Mirrors the hard RiskEngine backstop for the instruments currently traded.
+# This is deliberately local to the observe-only detector: changing it cannot
+# loosen executable risk limits.
+STRAT_122_MAX_STOP_TICKS = {
+    "MNQ": 120,
+    "MES": 60,
+    "NQ": 60,
+    "ES": 60,
+}
+
 
 def evaluate_shadow_setups(state: MarketState) -> list[ShadowSetupCandidate]:
     """Return all shadow-only setup candidates visible on this bar."""
     candidates = [
+        _strat_122_pullback(state),
         _orb_false_break_fade(state),
         _overnight_sweep_reclaim(state),
         _gap_fill(state),
         _ema_pullback_trend(state),
     ]
     return [candidate for candidate in candidates if candidate is not None]
+
+
+def _strat_122_pullback(state: MarketState) -> ShadowSetupCandidate | None:
+    """Observe a stop-aware alternative when a classified 1-2-2 bar is too wide.
+
+    The executable 1-2-2 uses the completed reversal bar's far side as structural
+    invalidation.  That is correct structurally, but a large reversal candle can
+    exceed the instrument risk cap.  Instead of tightening that stop or raising
+    the global cap, record the nearest pullback entry that preserves the
+    structural stop and fits the existing cap.  This candidate is journal-only;
+    a later resolver must prove that the limit would fill and perform well.
+    """
+    strat = state.strat
+    if not (
+        strat
+        and strat.strat_sequence == "strat_122"
+        and strat.strat_direction in {"LONG", "SHORT"}
+    ):
+        return None
+
+    max_ticks = STRAT_122_MAX_STOP_TICKS.get(state.instrument)
+    if not max_ticks:
+        return None
+    tick = _tick(state)
+    max_risk = tick * max_ticks
+    direction = str(strat.strat_direction)
+
+    if direction == "LONG":
+        breakout_entry = state.ohlc.high + tick
+        structural_stop = state.ohlc.low - (tick * 4)
+        if breakout_entry - structural_stop <= max_risk:
+            return None
+        pullback_entry = structural_stop + max_risk
+        target = pullback_entry + (max_risk * 2.0)
+    else:
+        breakout_entry = state.ohlc.low - tick
+        structural_stop = state.ohlc.high + (tick * 4)
+        if structural_stop - breakout_entry <= max_risk:
+            return None
+        pullback_entry = structural_stop - max_risk
+        target = pullback_entry - (max_risk * 2.0)
+
+    return _candidate(
+        strategy="strat_122_pullback",
+        direction=direction,
+        entry=pullback_entry,
+        stop=structural_stop,
+        target=target,
+        notes=(
+            "Shadow: classified 1-2-2 signal bar exceeded the executable stop "
+            f"cap ({max_ticks} ticks); preserve structural stop and require a "
+            "pullback limit fill before measuring the 2R alternative"
+        ),
+    )
 
 
 def _tick(state: MarketState) -> float:
