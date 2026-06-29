@@ -457,6 +457,24 @@ class TestORBBreakoutStopWidth:
         # stop = orb.high - 20t = 7500 - 5.0 = 7495.0 (wider risk than legacy)
         assert setup.stop == pytest.approx(7495.0)
 
+    def test_mnq_orb_stop_widens_to_48_ticks(self, config, fresh_market_state):
+        # MNQ default 8t stop = ~2.5pt noise-width → stops out before the runner's
+        # 1R activation. 622d replay: 48t lifts MNQ orb_breakout 43.8%→80.6% WR.
+        import dataclasses
+        state = self._breakout_state(fresh_market_state)
+        state.instrument = "MNQ"
+        engine = DecisionEngine(config=dataclasses.replace(config, orb_stop_ticks={"MNQ": 48}))
+        setup = engine._try_orb_breakout(state)
+        assert setup is not None and setup.strategy == "orb_breakout"
+        # stop = orb.high - 48t = 7500 - 12.0 = 7488.0 (12.5pt risk incl. +2t entry)
+        assert setup.stop == pytest.approx(7488.0)
+
+    def test_shipped_risk_rules_sets_mnq_orb_stop_to_48(self):
+        import yaml
+        from pathlib import Path
+        rules = yaml.safe_load(Path("risk_rules.yaml").read_text())
+        assert rules["strategy"]["orb_stop_ticks"]["MNQ"] == 48
+
 
 class TestStrategyCandidateRanking:
 
