@@ -430,6 +430,26 @@ def process_alert(
                     target=float(open_pos["target"]),
                     contracts=int(open_pos.get("contracts", 1)),
                 )
+                # Active runner: the broker is rebuilt every bar, so its
+                # _runner_max_fav resets to entry each call and the trail can never
+                # accumulate (the runner is inert without this). Reconstruct the
+                # favourable extreme from bars-since-entry (PRIOR bars only — drop
+                # the current bar, no intra-bar look-ahead) and seed it so
+                # _resolve_runner trails correctly across the trade's life.
+                if bool(getattr(cfg, "runner_mode", False)):
+                    try:
+                        _r_inst = open_pos.get("instrument") or state.instrument
+                        _r_bars = BarHistory(log_dir=log_dir).recent(_r_inst, 200)
+                        _r_ets = str(open_pos.get("ts") or "")
+                        _r_since = [b for b in _r_bars if str(b.get("ts", "")) >= _r_ets] if _r_ets else _r_bars
+                        _r_prior = _r_since[:-1]  # exclude the current (latest) bar
+                        if _r_prior:
+                            if open_pos["direction"] == "LONG":
+                                broker._runner_max_fav = max(float(b["high"]) for b in _r_prior)
+                            else:
+                                broker._runner_max_fav = min(float(b["low"]) for b in _r_prior)
+                    except Exception as _exc:  # never break resolution
+                        logger.debug("runner max-fav reconstruct skipped: %s", _exc)
                 fill = broker.resolve_position(
                     NextBarOHLC(high=payload.high, low=payload.low)
                 )

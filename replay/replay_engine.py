@@ -102,6 +102,9 @@ class ReplayEngine:
             slippage_ticks=float(getattr(self.config, "fill_slippage_ticks", 0.0) or 0.0),
             pessimistic_both_hit=bool(getattr(self.config, "fill_pessimistic_both_hit", False)),
             breakeven_at_1r=bool(getattr(self.config, "breakeven_at_1r", True)),
+            runner_mode=bool(getattr(self.config, "runner_mode", False)),
+            runner_activation_r=float(getattr(self.config, "runner_activation_r", 1.0) or 1.0),
+            runner_trail_r=float(getattr(self.config, "runner_trail_r", 0.5) or 0.5),
         )
         daily_state = DailyState(
             date=run_date,
