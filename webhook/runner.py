@@ -81,6 +81,9 @@ def _paper_broker(starting_balance: float, cfg: Optional[SystemConfig]) -> Paper
         starting_balance=starting_balance,
         slippage_ticks=float(getattr(cfg, "fill_slippage_ticks", 0.0) or 0.0),
         pessimistic_both_hit=bool(getattr(cfg, "fill_pessimistic_both_hit", False)),
+        runner_mode=bool(getattr(cfg, "runner_mode", False)),
+        runner_activation_r=float(getattr(cfg, "runner_activation_r", 1.0) or 1.0),
+        runner_trail_r=float(getattr(cfg, "runner_trail_r", 0.5) or 0.5),
     )
 
 

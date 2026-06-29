@@ -165,6 +165,16 @@ class SystemConfig:
     # winners the box actually lets run.) Set True to model a future trailing
     # stop. The live box never uses PaperBroker, so this flag has no live impact.
     breakeven_at_1r: bool = False
+    # Runner exit (1-contract paper/replay only): once price reaches
+    # runner_activation_r * R in our favour, DROP the fixed target and trail the
+    # stop runner_trail_r * R behind the favourable extreme. Validated on the
+    # 622-day replay (2026-06-29): beats a fixed target on BOTH instruments —
+    # MES runner @1x stop = 74% WR, MNQ runner @2.5x stop = 57% WR, both higher
+    # expectancy than fixed. DEFAULT False (matches the static-bracket live box);
+    # enable behind a config-freeze + shadow-verify before trusting it live.
+    runner_mode: bool = False
+    runner_activation_r: float = 1.0
+    runner_trail_r: float = 0.5
     # Quality gate (#1): when True, only a TRENDING market condition may trade —
     # RANGE_BOUND / CHOPPY / DEAD all reject (MARKET_CONDITION_NOT_TRENDING). The
     # 555-day replay never took a single trade in a non-TRENDING condition (0/1274),
@@ -194,6 +204,13 @@ class SystemConfig:
     # good fill still gets shaken out on normal post-breakout wiggle. Widen here and
     # validate on replay before changing live.
     orb_stop_ticks: dict = field(default_factory=dict)
+    # Per-instrument INITIAL stop-width multiplier applied to the setup's risk
+    # (entry->stop) before bracketing. MNQ's tight stops get swept then reverse —
+    # 81% of stopped MNQ trades later hit the original target (vs 43% MES) — so
+    # widen MNQ (~2.5x) while keeping MES at 1x. {} or unset instrument = 1.0
+    # (no change). Validated on the 622-day replay (2026-06-29). Re-derives the
+    # fixed target to preserve R when runner_mode is off.
+    stop_multiplier_per_instrument: dict = field(default_factory=dict)
     # Execution (#2) — entry-slippage cap (Limit-vs-Market entry) is PER-INSTRUMENT
     # and read by the live Tradovate broker straight from the environment, NOT from
     # this config (the broker only has TradovateConfig). Set it via env:
@@ -425,6 +442,16 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
             "BREAKEVEN_AT_1R",
             bool(fill_model.get("breakeven_at_1r", False)),
         ),
+        runner_mode=_env_bool(
+            "RUNNER_MODE",
+            bool(fill_model.get("runner_mode", False)),
+        ),
+        runner_activation_r=float(
+            os.getenv("RUNNER_ACTIVATION_R", fill_model.get("runner_activation_r", 1.0)) or 1.0
+        ),
+        runner_trail_r=float(
+            os.getenv("RUNNER_TRAIL_R", fill_model.get("runner_trail_r", 0.5)) or 0.5
+        ),
 
         max_open_positions=position.get("max_open_positions", 1),
         averaging_down_allowed=position.get("averaging_down", False),
@@ -477,6 +504,7 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
 
         enabled_concepts=strategy.get("enabled_concepts", []),
         orb_stop_ticks=strategy.get("orb_stop_ticks", {}),
+        stop_multiplier_per_instrument=strategy.get("stop_multiplier_per_instrument", {}),
         strategy_selection_mode=str(
             strategy.get("selection_mode", "first_match") or "first_match"
         ).lower(),
