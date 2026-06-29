@@ -440,6 +440,40 @@ def process_alert(
                 except Exception as _exc:  # shadow must never affect trading
                     logger.debug("trail-shadow skipped: %s", _exc)
 
+            # ── Trailing-stop LIVE (active stop-replace) ──────────────────────
+            # Increment 3: actually MOVE the resting Tradovate stop where the
+            # shadow trail (same math) says it should go. Flag-gated
+            # (RUNNER_LIVE_ENABLED, default OFF), Tradovate path only, and only
+            # when this bar did NOT already resolve the position (fill is None).
+            # replace_stop is atomic + never-loosen + fail-safe, and this whole
+            # block is fail-soft, so it can never break trading or leave a naked
+            # position even if it errors.
+            if (
+                not simulate
+                and broker_type == "tradovate"
+                and same_instrument
+                and fill is None
+                and os.getenv("RUNNER_LIVE_ENABLED", "").strip().lower() in ("1", "true", "yes")
+            ):
+                try:
+                    from execution.trail_shadow import shadow_trail
+                    _inst = open_pos.get("instrument") or state.instrument
+                    _bars = BarHistory(log_dir=cfg.log_dir).recent(_inst, 60)
+                    _entry_ts = str(open_pos.get("ts") or "")
+                    _since = [b for b in _bars if str(b.get("ts", "")) >= _entry_ts] if _entry_ts else _bars
+                    _t = shadow_trail(
+                        open_pos, _since,
+                        activation_r=float(os.getenv("RUNNER_ACTIVATION_R", "1.0") or 1.0),
+                        trail_r=float(os.getenv("RUNNER_TRAIL_R", "0.5") or 0.5),
+                    )
+                    if _t and _t.get("moved") and tv.replace_stop(_t["would_stop"]):
+                        logger.info(
+                            "[trail-live] %s stop %s → %s (order sent)",
+                            _inst, _t["original_stop"], _t["would_stop"],
+                        )
+                except Exception as _exc:  # live trail must never break trading
+                    logger.warning("trail-live skipped: %s", _exc)
+
             # ── Stale-position safety net (paper mode only) ───────────────────
             # If resolve_position returned None (stop/target not hit), check
             # whether the position has gone stale:
