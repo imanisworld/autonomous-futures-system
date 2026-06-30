@@ -462,8 +462,8 @@ def process_alert(
                 if bool(getattr(cfg, "runner_mode", False)):
                     try:
                         _r_inst = open_pos.get("instrument") or state.instrument
-                        _r_bars = BarHistory(log_dir=log_dir).recent(_r_inst, 200)
-                        _r_ets = str(open_pos.get("ts") or "")
+                        _r_bars = BarHistory(log_dir=log_dir).recent(_r_inst, 200, for_date=today)
+                        _r_ets = str(open_pos.get("bar_ts") or open_pos.get("ts") or "")
                         _r_since = [b for b in _r_bars if str(b.get("ts", "")) >= _r_ets] if _r_ets else _r_bars
                         _r_prior = _r_since[:-1]  # exclude the current (latest) bar
                         if _r_prior:
@@ -490,8 +490,8 @@ def process_alert(
                 try:
                     from execution.trail_shadow import shadow_trail, format_shadow_log
                     _inst = open_pos.get("instrument") or state.instrument
-                    _bars = BarHistory(log_dir=cfg.log_dir).recent(_inst, 60)
-                    _entry_ts = str(open_pos.get("ts") or "")
+                    _bars = BarHistory(log_dir=log_dir).recent(_inst, 60, for_date=today)
+                    _entry_ts = str(open_pos.get("bar_ts") or open_pos.get("ts") or "")
                     _since = [b for b in _bars if str(b.get("ts", "")) >= _entry_ts] if _entry_ts else _bars
                     _shadow = shadow_trail(
                         open_pos, _since,
@@ -500,6 +500,18 @@ def process_alert(
                     )
                     if _shadow:
                         logger.info(format_shadow_log(_shadow, _inst))
+                        try:
+                            from ops.runner_shadow_evidence import append_runner_shadow_evidence
+                            _setup = open_pos.get("strategy")
+                            append_runner_shadow_evidence(
+                                log_dir,
+                                instrument=_inst,
+                                setup=str(_setup) if _setup else None,
+                                bar_ts=getattr(payload, "timestamp", None),
+                                result=_shadow,
+                            )
+                        except Exception as _evidence_exc:
+                            logger.debug("runner shadow evidence write skipped: %s", _evidence_exc)
                 except Exception as _exc:  # shadow must never affect trading
                     logger.debug("trail-shadow skipped: %s", _exc)
 
@@ -521,8 +533,8 @@ def process_alert(
                 try:
                     from execution.trail_shadow import shadow_trail
                     _inst = open_pos.get("instrument") or state.instrument
-                    _bars = BarHistory(log_dir=cfg.log_dir).recent(_inst, 60)
-                    _entry_ts = str(open_pos.get("ts") or "")
+                    _bars = BarHistory(log_dir=log_dir).recent(_inst, 60, for_date=today)
+                    _entry_ts = str(open_pos.get("bar_ts") or open_pos.get("ts") or "")
                     _since = [b for b in _bars if str(b.get("ts", "")) >= _entry_ts] if _entry_ts else _bars
                     _t = shadow_trail(
                         open_pos, _since,

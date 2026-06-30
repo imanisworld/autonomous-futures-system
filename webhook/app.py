@@ -56,6 +56,7 @@ from ops.evidence_readiness import build_evidence_readiness
 from ops.proof_30_mnq import DEFAULT_LIMIT as PROOF_30_MNQ_LIMIT
 from ops.proof_30_mnq import build_report as build_mnq_proof_report
 from ops.proof_30_mnq import parse_proof_ts
+from ops.runner_shadow_evidence import runner_shadow_status
 from webhook.payload import AlertPayload
 from webhook.reconciler import run_reconciler_loop
 from notifications.heartbeat import run_heartbeat_loop
@@ -1519,9 +1520,21 @@ def _diagnostics_payload(for_date: date) -> dict:
         through_date=for_date,
         config=_config,
     )
+    runner_shadow = runner_shadow_status(_config.log_dir)
     items = [
         _diagnostic("ok", "Backend API", "FastAPI is responding on the public API routes."),
     ]
+    runner_shadow_diag_status = (
+        "ok" if runner_shadow["recent"] else
+        "warn" if runner_shadow["enabled"] or runner_shadow["live_enabled"] else
+        "info"
+    )
+    items.append(_diagnostic(
+        runner_shadow_diag_status,
+        "Runner shadow proof",
+        runner_shadow["summary"],
+        runner_shadow["next_step"],
+    ))
     automation_status = automation_evidence_status(_config.log_dir)
     for job in automation_status["jobs"]:
         label = job["job"].replace("_", " ").title()
@@ -1850,6 +1863,7 @@ def _diagnostics_payload(for_date: date) -> dict:
         "top_issue": None if overall == "ok" else worst,
         "ops_automations": automation_status,
         "evidence_readiness": evidence_readiness,
+        "runner_shadow": runner_shadow,
         "items": items,
     }
 
@@ -1900,6 +1914,7 @@ def _dashboard_payload(for_date: date) -> dict:
     diagnostics = _diagnostics_payload(for_date)
     gex_shadow_analysis = _gex_shadow_analysis_payload(entries)
     evidence_readiness = diagnostics["evidence_readiness"]
+    runner_shadow = diagnostics["runner_shadow"]
     return {
         "date": daily_state.date,
         "live_trading_enabled": _config.live_trading_enabled,
@@ -1940,6 +1955,7 @@ def _dashboard_payload(for_date: date) -> dict:
         "diagnostics": diagnostics,
         "gex_shadow_analysis": gex_shadow_analysis,
         "evidence_readiness": evidence_readiness,
+        "runner_shadow": runner_shadow,
         "live_preflight": _safe_live_preflight_status(),
         "live_box_drift_guard": live_box_drift_report(
             risk_rules_path=getattr(_config, "risk_rules_path", "risk_rules.yaml"),

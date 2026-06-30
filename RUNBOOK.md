@@ -160,6 +160,19 @@ cannot prove which systemd unit, reverse proxy, container, or TradingView alert
 is active, or that TradingView has switched to the staged secret. Confirm those
 separately on the active box without printing credentials.
 
+### Runner shadow proof
+
+Before enabling live trailing, set `RUNNER_SHADOW_ENABLED=true` and leave
+`RUNNER_LIVE_ENABLED=false`. The live `process_alert` path appends read-only
+observations to `runner_shadow_evidence.jsonl` in the configured log directory.
+Check `runner_shadow` in `/status/today` or `/status/diagnostics`, or run doctor.
+
+`recent_evidence` proves that an open position received a same-instrument bar
+through the live runner-shadow path; it includes the instrument, setup when
+available, armed/moved state, and proposed stop. `awaiting_evidence` or
+`stale_evidence` means live trailing remains blocked. Replay results do not
+write this evidence and therefore cannot satisfy the live-path proof.
+
 ### Research Evidence Readiness
 
 Use the unified, read-only scorecard to see which observation tracks are
