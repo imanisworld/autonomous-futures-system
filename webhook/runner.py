@@ -677,6 +677,7 @@ def process_alert(
                         contracts=contracts,
                         pnl_dollars=pnl_dollars,
                         config=cfg,
+                        simulate=simulate,
                     )
 
             if fill is not None:
@@ -705,6 +706,14 @@ def process_alert(
                     daily_state.last_loss_at = state.timestamp
                 elif fill.result in ("WIN", "BREAKEVEN"):
                     daily_state.consecutive_losses = 0
+                if fill.result in {"WIN", "LOSS", "BREAKEVEN"}:
+                    _notify_trade_closed(
+                        fill=fill,
+                        session=state.session,
+                        day_pnl_dollars=daily_state.realized_pnl_dollars,
+                        config=cfg,
+                        simulate=simulate,
+                    )
 
     # ── Step 2: Check hard daily capacity before evaluating a new signal ─────
     total_daily_capacity = cfg.max_trades_per_day + int(getattr(cfg, "bonus_trades_after_max", 0) or 0)
@@ -1162,13 +1171,17 @@ def _notify_force_close(
     contracts: int,
     pnl_dollars: float,
     config,
+    simulate: bool = False,
 ) -> None:
     """Fire a Discord notification when a position is force-closed.
 
     Force-close means the candle feed or position tracking has drifted —
     the operator should investigate. Runs in a background thread so it
-    never blocks the webhook response.
+    never blocks the webhook response. Simulated paper/replay closes never
+    notify live operator channels.
     """
+    if simulate:
+        return
     import threading
     from notifications.discord_notifier import _post_json
     import json as _json
@@ -1192,6 +1205,64 @@ def _notify_force_close(
             _post_json(url, body, {"Content-Type": "application/json"})
         except Exception as exc:
             logger.warning("Force-close Discord notification failed: %s", exc)
+
+    threading.Thread(target=_send, daemon=True).start()
+
+
+def _notify_trade_closed(
+    *,
+    fill,
+    session: str,
+    day_pnl_dollars: float,
+    config,
+    simulate: bool = False,
+) -> None:
+    """Send one fail-soft live broker outcome notification in the background."""
+    if simulate:
+        return
+
+    import threading
+
+    pnl = float(fill.pnl_dollars or 0.0)
+    ticks = float(fill.pnl_ticks or 0.0)
+    if fill.result == "WIN":
+        icon, label = "🟢", "WIN"
+    elif fill.result == "LOSS":
+        icon, label = "🔴", "LOSS"
+    else:
+        icon, label = "⚪", "BREAKEVEN"
+    sign = "+" if pnl >= 0 else "-"
+    root = (fill.instrument or "").upper().rstrip("!1234567890HMUZ")
+    points = abs(ticks) * _TICK_SIZE_BY_ROOT.get(root, 0.25)
+    points_sign = "+" if ticks >= 0 else "-"
+    day_sign = "+" if day_pnl_dollars >= 0 else "-"
+    reason = fill.exit_reason or "CLOSED"
+    entry = "?" if fill.entry_price is None else f"{fill.entry_price:g}"
+    exit_price = "?" if fill.exit_price is None else f"{fill.exit_price:g}"
+    session_label = (session or "").replace("_", " ").title()
+    message = (
+        f"{icon} {label} — {fill.instrument} {fill.direction}  "
+        f"{sign}${abs(pnl):.2f}  ({points_sign}{points:.2f} pts)\n"
+        f"Entry {entry} → Exit {exit_price} · {reason} · {fill.contracts}c · {session_label}\n"
+        f"Day P&L: {day_sign}${abs(day_pnl_dollars):.2f}"
+    )
+
+    def _send() -> None:
+        try:
+            from notifications.discord_router import DiscordRouter
+
+            router = DiscordRouter()
+            if router.is_enabled("daily_report"):
+                router.send("daily_report", message)
+                return
+        except Exception as exc:
+            logger.debug("Discord daily_report route unavailable: %s", exc)
+        try:
+            from notifications.discord_notifier import send_discord_alert
+
+            send_discord_alert(config, message)
+        except Exception as exc:
+            logger.warning("Trade-closed Discord notification failed: %s", exc)
 
     threading.Thread(target=_send, daemon=True).start()
 
