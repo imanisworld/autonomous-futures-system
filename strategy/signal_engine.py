@@ -891,40 +891,6 @@ class DecisionEngine:
             return "DOWN"
         return None
 
-    def _is_structural_breakout(self, state: MarketState) -> bool:
-        """True when the bar unambiguously shows a confirmed trend-day breakout.
-
-        Three-way agreement required: EMA-stack STRONG in one direction, price
-        confirmed through the prior-day extreme in that direction, and VWAP
-        supporting the bias. All three must agree — any missing piece falls
-        back to trusting Pine's RANGE_BOUND label.
-
-        This upgrades RANGE_BOUND → TRENDING on bars where Pine's oscillator
-        lags the structural reality (e.g. the RTH open breakout bar that closes
-        20+ points above PDH on a STRONG-trend day, which Pine still calls
-        RANGE_BOUND because its lookback window hasn't caught up).
-        """
-        if not getattr(self.config, "range_bound_breakout_override", True):
-            return False
-        trend = state.trend
-        if trend is None or trend.strength != "STRONG":
-            return False
-        if trend.direction == "UP":
-            pdh_cleared = (
-                state.previous_day is not None
-                and state.previous_day.price_vs_pdh == "above"
-            )
-            vwap_above = state.vwap.price_vs_vwap == "above"
-            return pdh_cleared and vwap_above
-        if trend.direction == "DOWN":
-            pdl_broken = (
-                state.previous_day is not None
-                and state.previous_day.price_vs_pdl == "below"
-            )
-            vwap_below = state.vwap.price_vs_vwap == "below"
-            return pdl_broken and vwap_below
-        return False
-
     def _has_directional_structure(self, state: MarketState) -> bool:
         """True when the bar shows an UNAMBIGUOUS directional impulse: a full
         3-bar strat run agreeing with the EMA-stack trend direction.
@@ -969,17 +935,7 @@ class DecisionEngine:
         ) else None
 
         # Trust Pine's tradable labels as-is (no downstream perturbation).
-        # Exception: RANGE_BOUND is upgraded to TRENDING when the bar shows
-        # all three hallmarks of a confirmed structural breakout — strong
-        # EMA-stack, price confirmed through the prior-day extreme, and VWAP
-        # aligned. This is the condition that produced two consecutive missed
-        # trend days (2026-06-29/30): Pine called the RTH breakout bar
-        # RANGE_BOUND; the TRENDING gate blocked every entry while MES ran 50+
-        # points. The gate exists to block false-breakouts in range conditions,
-        # not to block confirmed trend days.
         if pine in ("TRENDING", "RANGE_BOUND"):
-            if pine == "RANGE_BOUND" and self._is_structural_breakout(state):
-                return "TRENDING"
             return pine
 
         # The core fix: a CHOPPY label is vetoed by clear directional structure.

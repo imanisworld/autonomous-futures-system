@@ -181,12 +181,6 @@ class SystemConfig:
     # so this is zero-regression on the validated edge while blocking the live
     # out-of-distribution false-breakout entries (e.g. RANGE_BOUND orb_breakout).
     require_trending_condition: bool = True
-    # Structural breakout override: when True, a Pine RANGE_BOUND label is
-    # upgraded to TRENDING when the bar shows all three hallmarks of a
-    # confirmed trend-day breakout — EMA-stack STRONG, price through the
-    # prior-day extreme, and VWAP aligned. Prevents the TRENDING gate from
-    # blocking the very bars that matter most on real trend days.
-    range_bound_breakout_override: bool = True
     # Quality gate: max distance (in ticks) the live close may sit from VWAP for a
     # VWAP-anchored setup (vwap_hold / vwap_reclaim / vwap_rejection) to fire. Those
     # setups place the entry AT VWAP (a retest play); on a strong trend day price
@@ -497,10 +491,6 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         require_trending_condition=_env_bool(
             "REQUIRE_TRENDING_CONDITION",
             bool(condition.get("require_trending", True)),
-        ),
-        range_bound_breakout_override=_env_bool(
-            "RANGE_BOUND_BREAKOUT_OVERRIDE",
-            bool(condition.get("range_bound_breakout_override", True)),
         ),
         vwap_entry_max_distance_ticks=float(
             os.getenv("VWAP_ENTRY_MAX_DISTANCE_TICKS")
