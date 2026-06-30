@@ -126,6 +126,55 @@ def _round_to_tick(price: Optional[float], instrument: str) -> Optional[float]:
     return round(round(float(price) / tick) * tick, 4)
 
 
+def _candidate_snapshot(
+    *,
+    setup,
+    instrument: str,
+    session: Optional[str],
+    timeframe,
+    reject_code: Optional[str],
+    reject_reason: Optional[str],
+    blocking_gate: Optional[str],
+    contracts: Optional[int] = None,
+    entry: Optional[float] = None,
+    stop: Optional[float] = None,
+    target: Optional[float] = None,
+    event_id: Optional[str] = None,
+) -> dict:
+    """Return an audit-only snapshot of a rejected would-be trade.
+
+    The snapshot is derived only after a decision or risk gate has rejected the
+    setup. It is never queued, retried, or routed to a broker.
+    """
+    candidate_entry = entry if entry is not None else getattr(setup, "entry", None)
+    candidate_stop = stop if stop is not None else getattr(setup, "stop", None)
+    candidate_target = target if target is not None else getattr(setup, "target", None)
+    snapshot = {
+        "symbol": instrument,
+        "direction": getattr(setup, "direction", None),
+        "strategy": getattr(setup, "strategy", None),
+        "entry": candidate_entry,
+        "stop": candidate_stop,
+        "target": candidate_target,
+        "contracts": contracts,
+        "timeframe": timeframe,
+        "session": session,
+        "rr": getattr(setup, "rr_ratio", None),
+        "reject_code": reject_code,
+        "reject_reason": reject_reason,
+        "blocking_gate": blocking_gate,
+        "no_trade_taken": True,
+    }
+    snapshot["missing_fields"] = [
+        key
+        for key in ("symbol", "direction", "strategy", "entry", "stop", "target", "session")
+        if snapshot.get(key) in (None, "")
+    ]
+    if event_id:
+        snapshot["event_id"] = event_id
+    return snapshot
+
+
 def process_alert(
     payload: AlertPayload,
     config: Optional[SystemConfig] = None,
@@ -728,6 +777,19 @@ def process_alert(
             if _range_signal_dict:
                 journal_entry["range_signal"] = _range_signal_dict
         journal.log_decision(journal_entry, None, for_date=today)
+        if decision.setup is not None:
+            result["candidate"] = _candidate_snapshot(
+                setup=decision.setup,
+                instrument=state.instrument,
+                session=state.session,
+                timeframe=state.ohlc.timeframe if state.ohlc else None,
+                reject_code=decision.decision,
+                reject_reason=decision.reason,
+                blocking_gate=(
+                    decision.failed_gates[-1] if decision.failed_gates else None
+                ),
+                event_id=result.get("event_id"),
+            )
         return result
 
     # ── Step 3a: Per-instrument stop-width multiplier ─────────────────────────
@@ -825,6 +887,20 @@ def process_alert(
 
     if not risk_result.approved:
         result["decision"] = "RISK_REJECTED"
+        result["candidate"] = _candidate_snapshot(
+            setup=decision.setup,
+            instrument=state.instrument,
+            session=state.session,
+            timeframe=state.ohlc.timeframe if state.ohlc else None,
+            reject_code=risk_result.failed_rule,
+            reject_reason=risk_result.reason,
+            blocking_gate=risk_result.failed_rule,
+            contracts=contracts,
+            entry=entry_px,
+            stop=stop_px,
+            target=target_px,
+            event_id=result.get("event_id"),
+        )
         if risk_result.failed_rule in {"circuit_breaker", "max_daily_loss", "max_drawdown"}:
             logger.warning("CIRCUIT_BREAKER: %s", risk_result.reason)
         return result

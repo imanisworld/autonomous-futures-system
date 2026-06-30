@@ -223,6 +223,9 @@ def test_scenario_a_max_daily_loss_blocks_after_large_loss(tmp_path):
     assert result.get("risk", {}).get("failed_rule") == "max_daily_loss", (
         f"failed_rule={result.get('risk', {}).get('failed_rule')!r}"
     )
+    assert result["candidate"]["blocking_gate"] == "max_daily_loss"
+    assert result["candidate"]["no_trade_taken"] is True
+    assert result["candidate"]["entry"] is not None
 
 
 def test_scenario_a_max_daily_loss_not_triggered_by_small_loss(tmp_path):
