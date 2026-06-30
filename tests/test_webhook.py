@@ -532,6 +532,34 @@ def test_runner_blocks_when_open_position_does_not_resolve(config, tmp_path):
     assert r2["decision"] == "BLOCKED_OPEN_POSITION"
 
 
+def test_process_alert_writes_runner_shadow_proof(config, tmp_path, monkeypatch):
+    """The proof must come from the live per-bar runner path, not replay."""
+    from ops.runner_shadow_evidence import runner_shadow_status
+    from webhook.runner import process_alert
+
+    monkeypatch.setenv("RUNNER_SHADOW_ENABLED", "true")
+    log_dir = str(tmp_path / "logs")
+    today = date(2026, 5, 23)
+    r1 = process_alert(_base_payload(), config=config, log_dir=log_dir, for_date=today)
+    if r1["decision"] != "TRADE" or r1["fill"] is None:
+        pytest.skip("Signal engine produced NO_TRADE on bar 1")
+
+    fill = r1["fill"]
+    p2 = _base_payload(
+        timestamp="2026-05-23T14:35:00+00:00",
+        high=float(fill["entry"]) + 0.25,
+        low=float(fill["stop"]) + 0.25,
+        close=float(fill["entry"]),
+    )
+    r2 = process_alert(p2, config=config, log_dir=log_dir, for_date=today)
+
+    assert r2["decision"] == "BLOCKED_OPEN_POSITION"
+    proof = runner_shadow_status(log_dir)
+    assert proof["recent"] is True
+    assert proof["latest"]["source"] == "process_alert"
+    assert proof["latest"]["instrument"] == r1["instrument"]
+
+
 def _seed_open_trade(journal, for_date):
     journal._append({
         "ts": f"{for_date.isoformat()}T17:55:00+00:00",
@@ -997,6 +1025,8 @@ def test_fastapi_status_today_endpoint():
     assert "top_no_trade_reasons" in data
     assert "diagnostics" in data
     assert "items" in data["diagnostics"]
+    assert "runner_shadow" in data
+    assert data["runner_shadow"]["live_trailing_blocked"] is True
     assert "live_preflight" in data
     assert "live_box_drift_guard" in data
 
@@ -1052,6 +1082,7 @@ def test_fastapi_status_diagnostics_endpoint(monkeypatch, tmp_path):
         "Quality gates",
         "Configured windows",
         "Live box guard",
+        "Runner shadow proof",
     }.issubset(components)
 
 
@@ -1518,6 +1549,7 @@ def test_doctor_command_prints_diagnostics(monkeypatch, tmp_path, capsys):
     assert "RiskSentinel doctor:" in out
     assert "Backend API" in out
     assert "Webhook secret" in out
+    assert "Runner shadow proof" in out
 
 
 def test_diagnostics_report_active_proof_runtime_override(monkeypatch, tmp_path):

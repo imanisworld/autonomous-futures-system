@@ -27,9 +27,12 @@ from config.settings import SystemConfig, load_config
 from execution.broker_interface import BracketOrder, BrokerInterface
 from context.bar_history import BarHistory
 from context.five_min_feed import (
+    arm_fifteen_min_setup,
+    clear_armed_setup,
     five_min_enabled,
     is_five_min,
     record_five_min,
+    triggered_armed_setup,
 )
 from execution.paper_broker import NextBarOHLC, PaperBroker
 from journal.journal_logger import JournalLogger
@@ -148,6 +151,8 @@ def process_alert(
                           strategy} | None),
     """
     cfg = config or load_config()
+    five_min_trigger = None
+    five_min_trigger_payload = None
 
     # In paper mode we SIMULATE entry + resolution locally via PaperBroker
     # (next-bar OHLC), regardless of the BROKER env var. BROKER=tradovate is kept
@@ -195,32 +200,42 @@ def process_alert(
             "confidence_score": None,
         }
 
-    # ── Step 0a: 5-minute entry feed (ingest-only, OFF the decision path) ──────
+    # ── Step 0a: 5-minute entry feed ──────────────────────────────────────────
     # When FIVE_MIN_FEED_ENABLED, a 5M alert is NOT a misconfigured 15M bar — it
-    # is entry-timing context. Store it on its own lane and acknowledge; it never
-    # runs the 15M decision path and never trades by itself (increment 1 of the
-    # 5M feed — see context/five_min_feed.py). Default OFF → 5M falls through to
-    # the timeframe guard below exactly as before.
+    # is entry-timing context. Store it on its own lane. It may trigger only the
+    # exact original bracket armed by an authoritative 15M decision; it never
+    # evaluates strategy from 5M data. Default OFF → 5M falls through to the
+    # timeframe guard below exactly as before.
     if five_min_enabled() and is_five_min(payload.timeframe):
+        five_min_trigger_payload = payload
         try:
             record_five_min(payload, log_dir, for_date=for_date)
+            five_min_trigger = triggered_armed_setup(payload, log_dir, for_date)
         except Exception as _exc:  # ingestion must never break alert handling
             logger.warning("5m feed: record skipped: %s", _exc)
-        return {
-            "timestamp": payload.timestamp,
-            "instrument": payload.ticker,
-            "session": payload.session,
-            "resolution": None,
-            "decision": "FIVE_MIN_CONTEXT",
-            "risk": None,
-            "fill": None,
-            "context": None,
-            "regime": None,
-            "gex_status": None,
-            "signa_status": None,
-            "failed_gates": [],
-            "confidence_score": None,
-        }
+            five_min_trigger = None
+        if five_min_trigger:
+            try:
+                payload = AlertPayload(**five_min_trigger["payload"])
+            except Exception as _exc:
+                logger.warning("5m feed: invalid armed 15m payload: %s", _exc)
+                five_min_trigger = None
+        if not five_min_trigger:
+            return {
+                "timestamp": five_min_trigger_payload.timestamp,
+                "instrument": five_min_trigger_payload.ticker,
+                "session": five_min_trigger_payload.session,
+                "resolution": None,
+                "decision": "FIVE_MIN_CONTEXT",
+                "risk": None,
+                "fill": None,
+                "context": None,
+                "regime": None,
+                "gex_status": None,
+                "signa_status": None,
+                "failed_gates": [],
+                "confidence_score": None,
+            }
 
     # ── Step 0b: Timeframe guard (CONFIG_BLOCKED / TIMEFRAME_MISMATCH) ─────────
     # The strategy is tuned and replay-validated on 15m. A webhook arriving on
@@ -268,37 +283,47 @@ def process_alert(
 
     _maybe_enrich_payload_with_signa(payload, cfg)
     state = build_market_state(payload)
+    if five_min_trigger and five_min_trigger_payload:
+        # Keep strategy authority/context from the validated 15M payload, but
+        # execute and journal against the CURRENT 5M bar's timestamp and prices.
+        # Otherwise risk/confluence would see the stale 15M close while an order
+        # is being sent from a later 5M retest.
+        _trigger_state = build_market_state(five_min_trigger_payload)
+        state.timestamp = _trigger_state.timestamp
+        state.session = _trigger_state.session
+        state.ohlc = _trigger_state.ohlc
 
     # ── Rolling bar history (Phase 3): continuous price record + gap detection ──
     # Record EVERY ingested bar (traded or not) so regime can be judged over a
     # window and ingestion gaps are visible. Fail-soft: a history hiccup must
     # never affect ingestion, the decision, or risk.
     bar_gap = None
-    try:
-        bar_hist = BarHistory(log_dir=log_dir)
-        tf_min = _bar_timeframe_minutes(payload, cfg)
-        # Reference date for gap/window reads. Defaults to today (live behavior);
-        # an explicit for_date (replay/tests) anchors reads to the bar's own day so
-        # they don't depend on wall-clock now.
-        bar_gap = bar_hist.detect_gap(
-            state.instrument, payload.timestamp, tf_min, for_date=for_date
-        )
-        bar_hist.record(
-            state.instrument,
-            ts=payload.timestamp,
-            open=state.ohlc.open,
-            high=state.ohlc.high,
-            low=state.ohlc.low,
-            close=state.ohlc.close,
-            volume=state.volume.current_bar if state.volume else None,
-            timeframe=state.ohlc.timeframe,
-        )
-        # Window regime: include this just-recorded bar in the lookback.
-        state.window_direction = BarHistory.window_direction(
-            bar_hist.recent(state.instrument, 6, for_date=for_date)
-        )
-    except Exception:  # noqa: BLE001 — fail-soft, never break ingestion
-        logger.warning("bar history update failed", exc_info=True)
+    if not five_min_trigger:
+        try:
+            bar_hist = BarHistory(log_dir=log_dir)
+            tf_min = _bar_timeframe_minutes(payload, cfg)
+            # Reference date for gap/window reads. Defaults to today (live behavior);
+            # an explicit for_date (replay/tests) anchors reads to the bar's own day so
+            # they don't depend on wall-clock now.
+            bar_gap = bar_hist.detect_gap(
+                state.instrument, payload.timestamp, tf_min, for_date=for_date
+            )
+            bar_hist.record(
+                state.instrument,
+                ts=payload.timestamp,
+                open=state.ohlc.open,
+                high=state.ohlc.high,
+                low=state.ohlc.low,
+                close=state.ohlc.close,
+                volume=state.volume.current_bar if state.volume else None,
+                timeframe=state.ohlc.timeframe,
+            )
+            # Window regime: include this just-recorded bar in the lookback.
+            state.window_direction = BarHistory.window_direction(
+                bar_hist.recent(state.instrument, 6, for_date=for_date)
+            )
+        except Exception:  # noqa: BLE001 — fail-soft, never break ingestion
+            logger.warning("bar history update failed", exc_info=True)
 
     # ── Range observation (journal-only, no effect on decisions) ──────────────
     # Wall context + range state/signal, mirroring the GEX observe pattern: we
@@ -341,7 +366,9 @@ def process_alert(
                 break
 
     result: dict = {
-        "timestamp": payload.timestamp,
+        "timestamp": (
+            five_min_trigger_payload.timestamp if five_min_trigger_payload else payload.timestamp
+        ),
         "instrument": state.instrument,
         "session": state.session,
         "resolution": None,
@@ -440,8 +467,8 @@ def process_alert(
                 if bool(getattr(cfg, "runner_mode", False)):
                     try:
                         _r_inst = open_pos.get("instrument") or state.instrument
-                        _r_bars = BarHistory(log_dir=log_dir).recent(_r_inst, 200)
-                        _r_ets = str(open_pos.get("ts") or "")
+                        _r_bars = BarHistory(log_dir=log_dir).recent(_r_inst, 200, for_date=today)
+                        _r_ets = str(open_pos.get("bar_ts") or open_pos.get("ts") or "")
                         _r_since = [b for b in _r_bars if str(b.get("ts", "")) >= _r_ets] if _r_ets else _r_bars
                         _r_prior = _r_since[:-1]  # exclude the current (latest) bar
                         if _r_prior:
@@ -468,8 +495,8 @@ def process_alert(
                 try:
                     from execution.trail_shadow import shadow_trail, format_shadow_log
                     _inst = open_pos.get("instrument") or state.instrument
-                    _bars = BarHistory(log_dir=cfg.log_dir).recent(_inst, 60)
-                    _entry_ts = str(open_pos.get("ts") or "")
+                    _bars = BarHistory(log_dir=log_dir).recent(_inst, 60, for_date=today)
+                    _entry_ts = str(open_pos.get("bar_ts") or open_pos.get("ts") or "")
                     _since = [b for b in _bars if str(b.get("ts", "")) >= _entry_ts] if _entry_ts else _bars
                     _shadow = shadow_trail(
                         open_pos, _since,
@@ -478,6 +505,18 @@ def process_alert(
                     )
                     if _shadow:
                         logger.info(format_shadow_log(_shadow, _inst))
+                        try:
+                            from ops.runner_shadow_evidence import append_runner_shadow_evidence
+                            _setup = open_pos.get("strategy")
+                            append_runner_shadow_evidence(
+                                log_dir,
+                                instrument=_inst,
+                                setup=str(_setup) if _setup else None,
+                                bar_ts=getattr(payload, "timestamp", None),
+                                result=_shadow,
+                            )
+                        except Exception as _evidence_exc:
+                            logger.debug("runner shadow evidence write skipped: %s", _evidence_exc)
                 except Exception as _exc:  # shadow must never affect trading
                     logger.debug("trail-shadow skipped: %s", _exc)
 
@@ -499,8 +538,8 @@ def process_alert(
                 try:
                     from execution.trail_shadow import shadow_trail
                     _inst = open_pos.get("instrument") or state.instrument
-                    _bars = BarHistory(log_dir=cfg.log_dir).recent(_inst, 60)
-                    _entry_ts = str(open_pos.get("ts") or "")
+                    _bars = BarHistory(log_dir=log_dir).recent(_inst, 60, for_date=today)
+                    _entry_ts = str(open_pos.get("bar_ts") or open_pos.get("ts") or "")
                     _since = [b for b in _bars if str(b.get("ts", "")) >= _entry_ts] if _entry_ts else _bars
                     _t = shadow_trail(
                         open_pos, _since,
@@ -633,7 +672,24 @@ def process_alert(
         return result
 
     # ── Step 3: Decision engine ───────────────────────────────────────────────
-    decision = DecisionEngine(config=cfg).evaluate(state, daily_state)
+    if five_min_trigger:
+        from strategy.signal_engine import DecisionOutput, SetupDetail
+        _s = five_min_trigger["setup"]
+        decision = DecisionOutput(
+            timestamp=state.timestamp,
+            instrument=state.instrument,
+            session=state.session,
+            decision="TRADE",
+            reason="Armed 15m setup triggered by 5m retest of original entry.",
+            market_condition=five_min_trigger.get("payload", {}).get("market_condition"),
+            setup=SetupDetail(**_s),
+            failed_gates=[],
+        )
+    else:
+        # Every new authoritative 15M decision invalidates the previous arm.
+        if five_min_enabled():
+            clear_armed_setup(state.instrument, log_dir, for_date)
+        decision = DecisionEngine(config=cfg).evaluate(state, daily_state)
     result["decision"] = decision.decision
     result["regime"] = decision.regime
     result["gex_status"] = decision.gex_status
@@ -642,6 +698,21 @@ def process_alert(
     result["confidence_score"] = decision.confidence_score
 
     if decision.decision != "TRADE" or decision.setup is None:
+        if (
+            five_min_enabled()
+            and decision.setup is not None
+            and "ENTRY_DETACHED_FROM_PRICE" in decision.failed_gates
+        ):
+            try:
+                arm_fifteen_min_setup(
+                    state.instrument,
+                    log_dir,
+                    setup=decision.to_dict()["setup"],
+                    payload=payload.model_dump(),
+                    for_date=for_date,
+                )
+            except OSError as _exc:
+                logger.warning("5m feed: setup arm skipped: %s", _exc)
         journal_entry = decision.to_dict()
         journal_entry["context"] = _market_state_context(state)
         if shadow_candidates:
@@ -857,6 +928,11 @@ def process_alert(
         "TRADE: %s %s %sc @ %s stop %s target %s",
         order.instrument, order.direction, order.contracts, order.entry, order.stop, order.target,
     )
+    if five_min_trigger:
+        # Consume the 15M authority only after the broker confirms an OPEN
+        # position. Risk/schedule/capacity blocks and IOC no-fills may retry
+        # within the short arm TTL.
+        clear_armed_setup(state.instrument, log_dir, for_date)
     daily_state.trade_count += 1
     daily_state.has_open_position = True
 

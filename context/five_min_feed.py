@@ -1,4 +1,4 @@
-"""5-minute entry feed — increment 1: ingest + store, OFF the 15M decision path.
+"""5-minute entry feed — ingest, store, and trigger an armed 15M setup.
 
 The live decision engine is 15M-only, but STRAT doctrine wants a higher-timeframe
 setup + a 5M entry trigger (see memory `project_timeframe_gap`). Today a 5M
@@ -7,8 +7,9 @@ is the foundation of the fix:
 
   * accepts 5M bars on a SEPARATE lane (a `tf5m/` subdir under the journal dir)
     so they never mix with the 15M bar history that trend/window reads depend on;
-  * stores them for the entry-trigger phase (increment 2) to consume;
-  * NEVER produces a trade by itself — a stored 5M bar only records context.
+  * stores them for the entry-trigger phase;
+  * can trigger only an exact setup already validated and armed by the 15M
+    decision engine. The 5M lane never discovers or modifies a setup.
 
 Flag-gated by FIVE_MIN_FEED_ENABLED, default OFF. When off, nothing changes: 5M
 alerts continue to hit the existing 15M timeframe guard and are rejected. This
@@ -19,14 +20,19 @@ from __future__ import annotations
 
 import os
 import re
+import json
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import List, Optional
 
-from context.bar_history import BarHistory
+from context.bar_history import BarHistory, _parse_dt
 
 # Subdirectory under the journal dir that isolates the 5M lane from 15M bars.
 FIVE_MIN_LANE = "tf5m"
 FIVE_MIN_MINUTES = 5
+ARM_TTL_MINUTES = 20
+MAX_TRIGGER_DISTANCE_TICKS = 1
+_TICK_SIZE = {"MES": 0.25, "MNQ": 0.25, "MGC": 0.1, "MCL": 0.01}
 
 
 def five_min_enabled() -> bool:
@@ -78,6 +84,104 @@ def _history(log_dir: str) -> BarHistory:
     """The 5M BarHistory, isolated in its own subdir so recent()/window reads
     over 15M bars never see 5M bars and vice-versa."""
     return BarHistory(log_dir=str(Path(log_dir) / FIVE_MIN_LANE))
+
+
+def _arm_path(instrument: str, log_dir: str, for_date=None) -> Path:
+    d = for_date or date.today()
+    return Path(log_dir) / FIVE_MIN_LANE / f"armed_{_root(instrument)}_{d.isoformat()}.json"
+
+
+def arm_fifteen_min_setup(
+    instrument: str,
+    log_dir: str,
+    *,
+    setup: dict,
+    payload: dict,
+    for_date=None,
+) -> dict:
+    """Persist the exact setup approved by the 15M engine before detachment.
+
+    This is deliberately a single replaceable arm per instrument/day. A later
+    15M decision clears it before evaluation, so stale authority cannot stack.
+    """
+    record = {
+        "instrument": _root(instrument),
+        "armed_from_ts": str(payload.get("timestamp") or ""),
+        "setup": setup,
+        "payload": payload,
+    }
+    path = _arm_path(instrument, log_dir, for_date)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(record, separators=(",", ":"), default=str))
+    tmp.replace(path)
+    return record
+
+
+def clear_armed_setup(instrument: str, log_dir: str, for_date=None) -> None:
+    """Invalidate prior 15M authority. Optional-lane storage is fail-soft."""
+    path = _arm_path(instrument, log_dir, for_date)
+    try:
+        path.unlink()
+    except OSError:
+        pass
+
+
+def read_armed_setup(instrument: str, log_dir: str, for_date=None) -> Optional[dict]:
+    path = _arm_path(instrument, log_dir, for_date)
+    try:
+        raw = json.loads(path.read_text())
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return None
+    return raw if isinstance(raw, dict) else None
+
+
+def triggered_armed_setup(
+    payload, log_dir: str, for_date=None, *, now: Optional[datetime] = None
+) -> Optional[dict]:
+    """Return an armed 15M setup only on a close-near-entry retest.
+
+    LONG requires the 5M bar to trade at/below the original entry and close
+    back no more than one tick above it; SHORT is the mirror image. Keeping the
+    close near entry matters because the downstream broker enters at bar close
+    while the original bracket remains unchanged. The caller consumes authority
+    only after an order actually opens. Missing/malformed/stale state fails closed.
+    """
+    armed = read_armed_setup(payload.ticker, log_dir, for_date)
+    if not armed:
+        return None
+    setup = armed.get("setup")
+    if not isinstance(setup, dict):
+        clear_armed_setup(payload.ticker, log_dir, for_date)
+        return None
+    armed_ts = _parse_dt(str(armed.get("armed_from_ts") or ""))
+    trigger_ts = _parse_dt(str(payload.timestamp))
+    current = now or trigger_ts or datetime.now(timezone.utc)
+    if (
+        armed_ts is None
+        or trigger_ts is None
+        or trigger_ts < armed_ts
+        or current - armed_ts > timedelta(minutes=ARM_TTL_MINUTES)
+    ):
+        clear_armed_setup(payload.ticker, log_dir, for_date)
+        return None
+    try:
+        entry = float(setup["entry"])
+        direction = str(setup["direction"]).upper()
+        tick = _TICK_SIZE.get(_root(payload.ticker), 0.25)
+        max_distance = MAX_TRIGGER_DISTANCE_TICKS * tick
+        triggered = (
+            direction == "LONG"
+            and float(payload.low) <= entry <= float(payload.close) <= entry + max_distance
+        ) or (
+            direction == "SHORT"
+            and entry - max_distance <= float(payload.close) <= entry <= float(payload.high)
+        )
+    except (KeyError, TypeError, ValueError):
+        triggered = False
+    if not triggered:
+        return None
+    return armed
 
 
 def record_five_min(payload, log_dir: str, for_date=None) -> dict:

@@ -449,6 +449,7 @@ class JournalLogger:
                 if outcome.get("result") not in ("WIN", "LOSS", "BREAKEVEN"):
                     # Approved trade with no resolved outcome — position is open.
                     setup = entry.get("setup") or {}
+                    context = entry.get("context") or {}
                     last_open = {
                         "instrument": entry.get("instrument"),
                         "direction": setup.get("direction"),
@@ -456,7 +457,11 @@ class JournalLogger:
                         "stop": setup.get("stop"),
                         "target": setup.get("target"),
                         "contracts": setup.get("contracts", 1),
-                        "ts": entry.get("ts"),  # opened_at timestamp for stale detection
+                        "strategy": setup.get("strategy"),
+                        "ts": entry.get("ts"),  # processing-time age/stale reference
+                        # Decision time is after the bar close, so runner history
+                        # needs the originating bar timestamp as a separate bound.
+                        "bar_ts": context.get("timestamp") or entry.get("ts"),
                     }
                 else:
                     last_open = None
