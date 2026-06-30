@@ -562,6 +562,7 @@ class DecisionEngine:
                     f"straddle the live price) — stale level after a feed gap; "
                     f"not chasing a market fill."
                 ),
+                setup=setup,
                 regime=regime.regime,
                 gex_status=gex_gate.status,
                 signa_status=signa_gate.status,

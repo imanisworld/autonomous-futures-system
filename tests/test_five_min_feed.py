@@ -6,17 +6,21 @@ intercept — including that the default-OFF behaviour is byte-for-byte the old
 WITHOUT touching the 15M decision path or the 15M bar history.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from context.bar_history import BarHistory
 from context.five_min_feed import (
     FIVE_MIN_LANE,
     _root,
+    arm_fifteen_min_setup,
+    clear_armed_setup,
     five_min_status,
     is_five_min,
     normalize_minutes,
+    read_armed_setup,
     recent_five_min,
     record_five_min,
+    triggered_armed_setup,
 )
 from webhook.payload import AlertPayload
 from webhook.runner import process_alert
@@ -119,3 +123,110 @@ def test_process_alert_15m_unaffected_when_feed_enabled(monkeypatch, tmp_path):
     assert result["decision"] != "FIVE_MIN_CONTEXT"
     # 5M lane stays empty
     assert recent_five_min("MES1!", str(tmp_path / "logs"), 10) == []
+
+
+def _arm(log_dir, *, direction="LONG", entry=5240.0, ts=None):
+    ts = ts or datetime.now(timezone.utc)
+    setup = {
+        "direction": direction,
+        "entry": entry,
+        "stop": 5230.0 if direction == "LONG" else 5250.0,
+        "target": 5260.0 if direction == "LONG" else 5220.0,
+        "rr_ratio": 2.0,
+        "strategy": "vwap_hold",
+        "notes": "validated on 15m",
+    }
+    payload = _payload("15m").model_dump()
+    payload["timestamp"] = ts.isoformat()
+    payload["session"] = "new_york"
+    return arm_fifteen_min_setup(
+        "MES", log_dir, setup=setup, payload=payload, for_date=ts.date()
+    )
+
+
+def test_armed_setup_fails_closed_without_entry_retest(tmp_path):
+    now = datetime.now(timezone.utc)
+    log_dir = str(tmp_path)
+    _arm(log_dir, entry=5240.0, ts=now)
+    bar = _payload("5m")
+    bar.timestamp = (now + timedelta(minutes=5)).isoformat()
+    bar.low, bar.close = 5241.0, 5242.0
+    assert triggered_armed_setup(bar, log_dir, now.date()) is None
+    assert read_armed_setup("MES", log_dir, now.date()) is not None
+
+
+def test_long_retest_triggers_original_unmodified_bracket_once(tmp_path):
+    now = datetime.now(timezone.utc)
+    log_dir = str(tmp_path)
+    armed = _arm(log_dir, entry=5240.0, ts=now)
+    bar = _payload("5m")
+    bar.timestamp = (now + timedelta(minutes=5)).isoformat()
+    bar.low, bar.close = 5239.75, 5240.5
+    triggered = triggered_armed_setup(bar, log_dir, now.date())
+    assert triggered["setup"] == armed["setup"]
+    assert triggered["setup"]["entry"] == 5240.0
+    assert read_armed_setup("MES", log_dir, now.date()) is None
+    assert triggered_armed_setup(bar, log_dir, now.date()) is None
+
+
+def test_short_retest_is_mirrored(tmp_path):
+    now = datetime.now(timezone.utc)
+    log_dir = str(tmp_path)
+    _arm(log_dir, direction="SHORT", entry=5240.0, ts=now)
+    bar = _payload("5m")
+    bar.timestamp = (now + timedelta(minutes=5)).isoformat()
+    bar.high, bar.close = 5240.25, 5239.5
+    assert triggered_armed_setup(bar, log_dir, now.date()) is not None
+
+
+def test_stale_or_malformed_arm_fails_closed_and_is_cleared(tmp_path):
+    now = datetime.now(timezone.utc)
+    log_dir = str(tmp_path)
+    _arm(log_dir, ts=now - timedelta(minutes=21))
+    bar = _payload("5m")
+    bar.timestamp = now.isoformat()
+    assert triggered_armed_setup(bar, log_dir, now.date(), now=now) is None
+    assert read_armed_setup("MES", log_dir, now.date()) is None
+
+    _arm(log_dir, ts=now)
+    path = tmp_path / FIVE_MIN_LANE / f"armed_MES_{now.date().isoformat()}.json"
+    path.write_text("{broken")
+    assert triggered_armed_setup(bar, log_dir, now.date(), now=now) is None
+
+
+def test_clear_arm_is_idempotent(tmp_path):
+    now = datetime.now(timezone.utc)
+    _arm(str(tmp_path), ts=now)
+    clear_armed_setup("MES", str(tmp_path), now.date())
+    clear_armed_setup("MES", str(tmp_path), now.date())
+    assert read_armed_setup("MES", str(tmp_path), now.date()) is None
+
+
+def test_process_alert_executes_only_the_armed_15m_setup(
+    monkeypatch, tmp_path, config
+):
+    monkeypatch.setenv("FIVE_MIN_FEED_ENABLED", "true")
+    monkeypatch.setenv("BROKER", "paper")
+    config.min_confluence_grade = ""
+    config.allowed_sessions = [*config.allowed_sessions, "asian"]
+    now = datetime.now(timezone.utc)
+    log_dir = str(tmp_path / "logs")
+    armed = _arm(log_dir, entry=5240.0, ts=now)
+
+    # Prove the 5M path cannot become a second decision engine.
+    def _must_not_evaluate(*args, **kwargs):
+        raise AssertionError("5m trigger must not evaluate a new strategy setup")
+
+    monkeypatch.setattr(
+        "webhook.runner.DecisionEngine.evaluate", _must_not_evaluate
+    )
+    bar = _payload("5m")
+    bar.timestamp = (now + timedelta(minutes=5)).isoformat()
+    bar.low, bar.close = 5239.75, 5240.5
+    result = process_alert(bar, config=config, log_dir=log_dir, for_date=now.date())
+
+    assert result["decision"] == "TRADE", result["risk"]
+    assert result["fill"]["status"] == "OPEN"
+    assert result["fill"]["entry"] == armed["setup"]["entry"]
+    assert result["fill"]["stop"] == armed["setup"]["stop"]
+    assert result["fill"]["target"] == armed["setup"]["target"]
