@@ -167,11 +167,12 @@ Before enabling live trailing, set `RUNNER_SHADOW_ENABLED=true` and leave
 observations to `runner_shadow_evidence.jsonl` in the configured log directory.
 Check `runner_shadow` in `/status/today` or `/status/diagnostics`, or run doctor.
 
-`recent_evidence` proves that an open position received a same-instrument bar
-through the live runner-shadow path; it includes the instrument, setup when
-available, armed/moved state, and proposed stop. `awaiting_evidence` or
-`stale_evidence` means live trailing remains blocked. Replay results do not
-write this evidence and therefore cannot satisfy the live-path proof.
+`recent_path_evidence` proves only that an open position received a
+same-instrument bar through the live runner-shadow path. `proof_sufficient`
+additionally requires that the trail armed and proposed a moved stop; only that
+state clears `live_trailing_blocked`. The payload includes the instrument, setup
+when available, armed/moved state, and proposed stop. Replay results do not write
+this evidence and therefore cannot satisfy the live-path proof.
 
 ### Research Evidence Readiness
 

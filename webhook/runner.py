@@ -284,9 +284,14 @@ def process_alert(
     _maybe_enrich_payload_with_signa(payload, cfg)
     state = build_market_state(payload)
     if five_min_trigger and five_min_trigger_payload:
-        # Keep all strategy context from the authoritative 15M payload, but use
-        # the 5M bar time as the execution/claim timestamp.
-        state.timestamp = build_market_state(five_min_trigger_payload).timestamp
+        # Keep strategy authority/context from the validated 15M payload, but
+        # execute and journal against the CURRENT 5M bar's timestamp and prices.
+        # Otherwise risk/confluence would see the stale 15M close while an order
+        # is being sent from a later 5M retest.
+        _trigger_state = build_market_state(five_min_trigger_payload)
+        state.timestamp = _trigger_state.timestamp
+        state.session = _trigger_state.session
+        state.ohlc = _trigger_state.ohlc
 
     # ── Rolling bar history (Phase 3): continuous price record + gap detection ──
     # Record EVERY ingested bar (traded or not) so regime can be judged over a
@@ -682,7 +687,8 @@ def process_alert(
         )
     else:
         # Every new authoritative 15M decision invalidates the previous arm.
-        clear_armed_setup(state.instrument, log_dir, for_date)
+        if five_min_enabled():
+            clear_armed_setup(state.instrument, log_dir, for_date)
         decision = DecisionEngine(config=cfg).evaluate(state, daily_state)
     result["decision"] = decision.decision
     result["regime"] = decision.regime
@@ -697,13 +703,16 @@ def process_alert(
             and decision.setup is not None
             and "ENTRY_DETACHED_FROM_PRICE" in decision.failed_gates
         ):
-            arm_fifteen_min_setup(
-                state.instrument,
-                log_dir,
-                setup=decision.to_dict()["setup"],
-                payload=payload.model_dump(),
-                for_date=for_date,
-            )
+            try:
+                arm_fifteen_min_setup(
+                    state.instrument,
+                    log_dir,
+                    setup=decision.to_dict()["setup"],
+                    payload=payload.model_dump(),
+                    for_date=for_date,
+                )
+            except OSError as _exc:
+                logger.warning("5m feed: setup arm skipped: %s", _exc)
         journal_entry = decision.to_dict()
         journal_entry["context"] = _market_state_context(state)
         if shadow_candidates:
@@ -919,6 +928,11 @@ def process_alert(
         "TRADE: %s %s %sc @ %s stop %s target %s",
         order.instrument, order.direction, order.contracts, order.entry, order.stop, order.target,
     )
+    if five_min_trigger:
+        # Consume the 15M authority only after the broker confirms an OPEN
+        # position. Risk/schedule/capacity blocks and IOC no-fills may retry
+        # within the short arm TTL.
+        clear_armed_setup(state.instrument, log_dir, for_date)
     daily_state.trade_count += 1
     daily_state.has_open_position = True
 

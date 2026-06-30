@@ -33,13 +33,35 @@ def test_runner_shadow_status_reports_recent_live_path_evidence(monkeypatch, tmp
 
     status = runner_shadow_status(tmp_path)
 
-    assert status["state"] == "recent_evidence"
+    assert status["state"] == "proof_sufficient"
     assert status["recent"] is True
+    assert status["path_observed_recently"] is True
+    assert status["proof_sufficient"] is True
     assert status["live_trailing_blocked"] is False
     assert status["latest"]["source"] == "process_alert"
     assert status["latest"]["instrument"] == "MNQ"
     assert status["latest"]["setup"] == "orb_reclaim"
     assert status["latest"]["armed"] is True
+
+
+def test_recent_unarmed_path_evidence_does_not_unblock_live_trailing(monkeypatch, tmp_path):
+    monkeypatch.setenv("RUNNER_SHADOW_ENABLED", "true")
+    result = _result()
+    result.update({"trailing": False, "moved": False})
+    append_runner_shadow_evidence(
+        tmp_path,
+        instrument="MES",
+        setup="vwap_hold",
+        bar_ts="2026-06-30T14:30:00+00:00",
+        result=result,
+    )
+
+    status = runner_shadow_status(tmp_path)
+
+    assert status["state"] == "recent_path_evidence"
+    assert status["path_observed_recently"] is True
+    assert status["proof_sufficient"] is False
+    assert status["live_trailing_blocked"] is True
 
 
 def test_runner_shadow_status_is_fail_soft_and_actionable(monkeypatch, tmp_path):

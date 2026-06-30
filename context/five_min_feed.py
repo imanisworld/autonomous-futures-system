@@ -31,6 +31,8 @@ from context.bar_history import BarHistory, _parse_dt
 FIVE_MIN_LANE = "tf5m"
 FIVE_MIN_MINUTES = 5
 ARM_TTL_MINUTES = 20
+MAX_TRIGGER_DISTANCE_TICKS = 1
+_TICK_SIZE = {"MES": 0.25, "MNQ": 0.25, "MGC": 0.1, "MCL": 0.01}
 
 
 def five_min_enabled() -> bool:
@@ -117,11 +119,11 @@ def arm_fifteen_min_setup(
 
 
 def clear_armed_setup(instrument: str, log_dir: str, for_date=None) -> None:
-    """Invalidate any prior 15M authority for this instrument."""
+    """Invalidate prior 15M authority. Optional-lane storage is fail-soft."""
     path = _arm_path(instrument, log_dir, for_date)
     try:
         path.unlink()
-    except FileNotFoundError:
+    except OSError:
         pass
 
 
@@ -137,12 +139,13 @@ def read_armed_setup(instrument: str, log_dir: str, for_date=None) -> Optional[d
 def triggered_armed_setup(
     payload, log_dir: str, for_date=None, *, now: Optional[datetime] = None
 ) -> Optional[dict]:
-    """Return and consume an armed 15M setup only on an original-entry retest.
+    """Return an armed 15M setup only on a close-near-entry retest.
 
     LONG requires the 5M bar to trade at/below the original entry and close
-    back at/above it; SHORT is the mirror image. This waits for the pullback the
-    rejected momentum re-anchor skipped, while leaving the original bracket
-    untouched. Missing/malformed/stale state always fails closed.
+    back no more than one tick above it; SHORT is the mirror image. Keeping the
+    close near entry matters because the downstream broker enters at bar close
+    while the original bracket remains unchanged. The caller consumes authority
+    only after an order actually opens. Missing/malformed/stale state fails closed.
     """
     armed = read_armed_setup(payload.ticker, log_dir, for_date)
     if not armed:
@@ -165,16 +168,19 @@ def triggered_armed_setup(
     try:
         entry = float(setup["entry"])
         direction = str(setup["direction"]).upper()
+        tick = _TICK_SIZE.get(_root(payload.ticker), 0.25)
+        max_distance = MAX_TRIGGER_DISTANCE_TICKS * tick
         triggered = (
-            direction == "LONG" and float(payload.low) <= entry <= float(payload.close)
+            direction == "LONG"
+            and float(payload.low) <= entry <= float(payload.close) <= entry + max_distance
         ) or (
-            direction == "SHORT" and float(payload.close) <= entry <= float(payload.high)
+            direction == "SHORT"
+            and entry - max_distance <= float(payload.close) <= entry <= float(payload.high)
         )
     except (KeyError, TypeError, ValueError):
         triggered = False
     if not triggered:
         return None
-    clear_armed_setup(payload.ticker, log_dir, for_date)
     return armed
 
 

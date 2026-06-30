@@ -96,19 +96,25 @@ def runner_shadow_status(
             latest = None
 
     recent = latest is not None and age_seconds is not None and age_seconds <= fresh_seconds
+    proof_sufficient = bool(
+        recent and latest is not None and latest.get("armed") and latest.get("moved")
+    )
     if recent:
-        state = "recent_evidence"
+        state = "proof_sufficient" if proof_sufficient else "recent_path_evidence"
         summary = (
             f"Live process_alert runner shadow observed {age_seconds}s ago for "
             f"{latest.get('instrument') or 'unknown instrument'}"
             f"{' / ' + str(latest.get('setup')) if latest.get('setup') else ''}; "
-            f"{'trail armed' if latest.get('armed') else 'not yet armed'}."
+            f"{'trail armed and stop moved' if proof_sufficient else 'path observed, but no armed stop movement yet'}."
         )
-        next_step = (
-            "Shadow proof is recent; review multiple observations before enabling live trailing."
-            if not live_enabled else
+        if proof_sufficient and live_enabled:
+            next_step = (
             "Live trailing is enabled; continue monitoring shadow evidence and broker stop replacements."
-        )
+            )
+        elif proof_sufficient:
+            next_step = "Shadow proof is sufficient; review multiple observations before enabling live trailing."
+        else:
+            next_step = "Keep live trailing blocked until recent evidence shows an armed, moved stop."
     elif latest is not None:
         state = "stale_evidence"
         summary = (
@@ -131,9 +137,11 @@ def runner_shadow_status(
         "state": state,
         "evidence_observed": latest is not None,
         "recent": recent,
+        "path_observed_recently": recent,
+        "proof_sufficient": proof_sufficient,
         "fresh_for_seconds": fresh_seconds,
         "age_seconds": age_seconds,
-        "live_trailing_blocked": not recent,
+        "live_trailing_blocked": not proof_sufficient,
         "latest": latest,
         "evidence_path": str(path),
         "read_error": read_error,

@@ -125,6 +125,17 @@ def test_process_alert_15m_unaffected_when_feed_enabled(monkeypatch, tmp_path):
     assert recent_five_min("MES1!", str(tmp_path / "logs"), 10) == []
 
 
+def test_default_off_does_not_touch_arm_storage(monkeypatch, tmp_path):
+    monkeypatch.delenv("FIVE_MIN_FEED_ENABLED", raising=False)
+
+    def _must_not_clear(*args, **kwargs):
+        raise AssertionError("default-off 15m path must not touch 5m arm storage")
+
+    monkeypatch.setattr("webhook.runner.clear_armed_setup", _must_not_clear)
+    result = process_alert(_payload("15m"), log_dir=str(tmp_path / "logs"))
+    assert result["decision"] != "FIVE_MIN_CONTEXT"
+
+
 def _arm(log_dir, *, direction="LONG", entry=5240.0, ts=None):
     ts = ts or datetime.now(timezone.utc)
     setup = {
@@ -161,12 +172,13 @@ def test_long_retest_triggers_original_unmodified_bracket_once(tmp_path):
     armed = _arm(log_dir, entry=5240.0, ts=now)
     bar = _payload("5m")
     bar.timestamp = (now + timedelta(minutes=5)).isoformat()
-    bar.low, bar.close = 5239.75, 5240.5
+    bar.low, bar.close = 5239.75, 5240.25
     triggered = triggered_armed_setup(bar, log_dir, now.date())
     assert triggered["setup"] == armed["setup"]
     assert triggered["setup"]["entry"] == 5240.0
-    assert read_armed_setup("MES", log_dir, now.date()) is None
-    assert triggered_armed_setup(bar, log_dir, now.date()) is None
+    # Matching the retest does not consume authority; process_alert does that
+    # only after the broker confirms an OPEN position.
+    assert read_armed_setup("MES", log_dir, now.date()) is not None
 
 
 def test_short_retest_is_mirrored(tmp_path):
@@ -175,8 +187,19 @@ def test_short_retest_is_mirrored(tmp_path):
     _arm(log_dir, direction="SHORT", entry=5240.0, ts=now)
     bar = _payload("5m")
     bar.timestamp = (now + timedelta(minutes=5)).isoformat()
-    bar.high, bar.close = 5240.25, 5239.5
+    bar.high, bar.close = 5240.25, 5239.75
     assert triggered_armed_setup(bar, log_dir, now.date()) is not None
+
+
+def test_retest_close_must_remain_within_one_tick_of_entry(tmp_path):
+    now = datetime.now(timezone.utc)
+    log_dir = str(tmp_path)
+    _arm(log_dir, entry=5240.0, ts=now)
+    bar = _payload("5m")
+    bar.timestamp = (now + timedelta(minutes=5)).isoformat()
+    bar.low, bar.close = 5239.75, 5241.0
+    assert triggered_armed_setup(bar, log_dir, now.date()) is None
+    assert read_armed_setup("MES", log_dir, now.date()) is not None
 
 
 def test_stale_or_malformed_arm_fails_closed_and_is_cleared(tmp_path):
@@ -222,7 +245,7 @@ def test_process_alert_executes_only_the_armed_15m_setup(
     )
     bar = _payload("5m")
     bar.timestamp = (now + timedelta(minutes=5)).isoformat()
-    bar.low, bar.close = 5239.75, 5240.5
+    bar.low, bar.close = 5239.75, 5240.25
     result = process_alert(bar, config=config, log_dir=log_dir, for_date=now.date())
 
     assert result["decision"] == "TRADE", result["risk"]
@@ -230,3 +253,41 @@ def test_process_alert_executes_only_the_armed_15m_setup(
     assert result["fill"]["entry"] == armed["setup"]["entry"]
     assert result["fill"]["stop"] == armed["setup"]["stop"]
     assert result["fill"]["target"] == armed["setup"]["target"]
+    assert result["context"]["close"] == 5240.25
+    assert result["context"]["timeframe"] == "5m"
+    assert read_armed_setup("MES", log_dir, now.date()) is None
+
+
+def test_failed_5m_execution_retains_arm_for_retry(monkeypatch, tmp_path, config):
+    from execution.broker_interface import Fill
+    from execution.paper_broker import PaperBroker
+
+    monkeypatch.setenv("FIVE_MIN_FEED_ENABLED", "true")
+    config.min_confluence_grade = ""
+    config.allowed_sessions = [*config.allowed_sessions, "asian"]
+    now = datetime.now(timezone.utc)
+    log_dir = str(tmp_path / "logs")
+    _arm(log_dir, entry=5240.0, ts=now)
+
+    def _cancel(self, order):
+        return Fill(
+            instrument=order.instrument,
+            direction=order.direction,
+            contracts=order.contracts,
+            entry_price=order.entry,
+            exit_price=None,
+            exit_reason="ENTRY_NOT_FILLED",
+            result="CANCELLED",
+            pnl_ticks=None,
+            pnl_dollars=None,
+        )
+
+    monkeypatch.setattr(PaperBroker, "execute_bracket", _cancel)
+    bar = _payload("5m")
+    bar.timestamp = (now + timedelta(minutes=5)).isoformat()
+    bar.low, bar.close = 5239.75, 5240.25
+
+    result = process_alert(bar, config=config, log_dir=log_dir, for_date=now.date())
+
+    assert result["decision"] == "BLOCKED_EXECUTION_FAILED"
+    assert read_armed_setup("MES", log_dir, now.date()) is not None

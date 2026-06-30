@@ -1525,7 +1525,7 @@ def _diagnostics_payload(for_date: date) -> dict:
         _diagnostic("ok", "Backend API", "FastAPI is responding on the public API routes."),
     ]
     runner_shadow_diag_status = (
-        "ok" if runner_shadow["recent"] else
+        "ok" if runner_shadow["proof_sufficient"] else
         "warn" if runner_shadow["enabled"] or runner_shadow["live_enabled"] else
         "info"
     )
