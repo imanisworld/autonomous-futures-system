@@ -342,8 +342,17 @@ strategy:
       #   keep pdh_reclaim + vwap_hold (WR carriers) + strat_4hr_retrigger.
       #   Disabling these three lifts WR 73.0%→73.7%, P&L $40,988→$41,708, PF 7.8→8.0.
       - vwap_reclaim   # 40% WR on MES vs 100% MNQ — reclaim conditions fire too loosely
-      - orb_reclaim    # mild WR drag: removing it +0.6% WR (leave-one-out)
       - pdl_reclaim    # WR-neutral but P&L-negative: removing it +$2.2k, same WR
+      # orb_reclaim RE-ENABLED 2026-06-30: the 74-day finding above ("mild WR drag")
+      # optimized for win rate, not total P&L. Re-validated on the full 622-day MES
+      # Polygon set: ON adds 127 resolved trades and +$14,982 total P&L (+6.5%,
+      # $228,897→$243,880) at the cost of -1.5pt blended WR (51.0%→49.5%) — net
+      # positive on the objective that matters (total $), and it is the exact
+      # strategy that would have caught the 06-29/06-30 missed-trend-day misses
+      # (pdh_reclaim's static PDH-anchor goes stale on fast moves; orb_reclaim's
+      # ORB-anchored bracket survives the entry-detachment check on the same bar —
+      # verified by direct reconstruction of the 06-30 13:45 MES breakout bar).
+      # See AGENT_HANDOFF.md 2026-06-30 entries for full investigation.
 
   # Per-instrument INITIAL stop-width multiplier (machinery present; values
   # DEFERRED). The 622-day replay showed a blanket MNQ 2.5x lifts vwap setups
