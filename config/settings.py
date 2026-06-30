@@ -203,6 +203,20 @@ class SystemConfig:
     # it can never chase a feed-gap dislocation (those still hit the entry-detachment
     # guard). Default OFF; backtest-gate before enabling live. See
     # scripts/fill_realism_report.py for the measured ~54% limit-setup miss rate.
+    #
+    # BACKTEST-GATED AND REJECTED (2026-06-30): this DOES fix the no-fill, but at a
+    # worse cost — shifting the whole bracket to the live close means buying/selling
+    # AFTER the favorable move already happened, with a stop still close enough to get
+    # clipped on the immediate pullback. Live: 3/3 resolved re-anchored trades LOST
+    # (2 days, all gaps 13-30 ticks). 622-day MES replay backtest-confirmed at much
+    # higher power: 18 resolved re-anchored trades, 15 losses / 3 wins (16.7% WR),
+    # -$199.75 total, -$10.51 avg/trade — across all three eligible strategies
+    # (vwap_hold, pdh_reclaim, orb_breakout), not just the big-gap cases. The early
+    # losses were severe enough to trip the system's own max_drawdown breaker in
+    # backtest. DO NOT re-enable without a fundamentally different design (e.g.
+    # require a retest/pullback confirmation before re-entering, not just shift the
+    # bracket to market) — capping the chase distance alone is not evidence-backed;
+    # losses occurred at every gap size tested, not just the largest ones.
     momentum_entry_reanchor: bool = False
     # Quality gate (#3): ORB-anchored stop offset in ticks beyond the ORB boundary.
     # Per instrument; falls back to the legacy hard-coded 8 ticks when unset. The
