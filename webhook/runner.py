@@ -1189,12 +1189,6 @@ def _notify_force_close(
     from notifications.discord_notifier import _post_json
     import json as _json
 
-    if not getattr(config, "discord_notifications_enabled", False):
-        return
-    url = getattr(config, "discord_webhook_url", "")
-    if not url:
-        return
-
     sign = "+" if pnl_dollars >= 0 else ""
     message = (
         f"⚠️ FORCE_CLOSE ({reason})\n"
@@ -1212,6 +1206,15 @@ def _notify_force_close(
                 return
         except Exception as exc:
             logger.debug("Discord error route unavailable: %s", exc)
+        # Legacy fallback — gated on its OWN config, independent of the router
+        # attempt above, so an unset DISCORD_WEBHOOK_URL never suppresses the
+        # router path (that was the bug: these checks used to gate the entire
+        # function, before the router was ever tried).
+        if not getattr(config, "discord_notifications_enabled", False):
+            return
+        url = getattr(config, "discord_webhook_url", "")
+        if not url:
+            return
         try:
             body = _json.dumps({"content": message}).encode("utf-8")
             _post_json(url, body, {"Content-Type": "application/json"})
