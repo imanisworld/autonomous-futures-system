@@ -39,6 +39,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from ops.release_integrity import enforce_release_integrity
+
+# Refuse to serve on drifted source. No-op unless RELEASE_INTEGRITY_ENFORCED
+# is set (production); raises SystemExit before the app object exists, so
+# uvicorn exits and systemd marks the unit failed instead of trading on
+# unverified code.
+enforce_release_integrity()
+
 from agent.daily_summary import DailySummaryAgent, validate_review_date
 from config.settings import load_config
 from webhook import log_redaction as _log_redaction  # noqa: F401 — installs uvicorn.access secret redaction on import
