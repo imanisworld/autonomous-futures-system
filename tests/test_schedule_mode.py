@@ -104,3 +104,26 @@ def test_generator_no_candidate_when_shadow_also_blocks(config, fresh_market_sta
     state.trend = dataclasses.replace(fresh_market_state.trend, direction="FLAT", strength="WEAK")
     cfg = dataclasses.replace(config, allowed_sessions=["london"])
     assert evaluate_with_shadow(state, DailyState(), cfg) is None
+
+
+# ── SCHEDULE_MODE env override ───────────────────────────────────────────────
+
+def test_schedule_mode_env_override(monkeypatch):
+    from config.settings import load_config
+    monkeypatch.setenv("SCHEDULE_MODE", "always_on_shadow")
+    cfg = load_config()
+    assert cfg.schedule_mode == "always_on_shadow"
+
+
+def test_schedule_mode_env_absent_uses_yaml(monkeypatch):
+    from config.settings import load_config
+    monkeypatch.delenv("SCHEDULE_MODE", raising=False)
+    cfg = load_config()
+    assert cfg.schedule_mode == "current"  # risk_rules.yaml schedule.mode
+
+
+def test_schedule_mode_env_invalid_rejected(monkeypatch):
+    from config.settings import load_config, ConfigError
+    monkeypatch.setenv("SCHEDULE_MODE", "yolo")
+    with pytest.raises(ConfigError):
+        load_config()
