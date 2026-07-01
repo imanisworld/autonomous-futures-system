@@ -312,7 +312,7 @@ class TestQualityGates:
         assert decision.reason == "HTF/FTFC alignment failed"
         assert "HTF_ALIGNMENT_FAIL" in (decision.failed_gates or [])
 
-    def test_htf_absent_does_not_block_when_enabled(self, config, fresh_market_state):
+    def test_htf_absent_blocks_when_enabled(self, config, fresh_market_state):
         from dataclasses import replace
 
         qconfig = replace(
@@ -326,7 +326,38 @@ class TestQualityGates:
 
         decision = DecisionEngine(config=qconfig).evaluate(state, DailyState())
 
-        assert "HTF_ALIGNMENT_FAIL" not in (decision.failed_gates or [])
+        assert decision.decision == "NO_TRADE"
+        assert decision.reason == "HTF context unavailable"
+        assert "HTF_ALIGNMENT_FAIL" in (decision.failed_gates or [])
+
+    def test_daily_up_blocks_short_when_htf_gate_enabled(self, config, fresh_market_state):
+        from dataclasses import replace
+
+        qconfig = replace(
+            config,
+            require_htf_alignment={"MNQ": True},
+            require_strong_trend={"MNQ": True},
+            min_signal_bar_volume={"MNQ": 0.8},
+        )
+        state = self._strong_state(fresh_market_state)
+        state.trend = TrendData(direction="DOWN", strength="STRONG")
+        state.vwap.price_vs_vwap = "below"
+        state.vwap.reclaimed = False
+        state.orb.status = "rejected_high"
+        state.strat = StratContext(current_bar_type="two_down")
+        state.htf = HTFContext(
+            daily_direction="UP",
+            four_hour_direction="DOWN",
+            one_hour_direction="DOWN",
+            ftfc_direction="DOWN",
+            ftfc_aligned=True,
+        )
+
+        decision = DecisionEngine(config=qconfig).evaluate(state, DailyState())
+
+        assert decision.decision == "NO_TRADE"
+        assert decision.reason == "Daily direction UP opposes SHORT"
+        assert "HTF_ALIGNMENT_FAIL" in (decision.failed_gates or [])
 
 
 class TestDecisionEngineInstrumentFilter:

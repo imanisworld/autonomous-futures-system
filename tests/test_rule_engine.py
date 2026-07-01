@@ -48,13 +48,14 @@ def test_daily_2u_buying_into_call_wall_gex_red_light_rejection(config, fresh_ma
     assert "GEX_UNDER_CALL_WALL" in decision.failed_gates
 
 
-def test_daily_1_clean_context_is_restricted_watch_approval(config, fresh_market_state):
+def test_daily_1_restricted_context_is_blocked(config, fresh_market_state):
+    config.block_restricted_regime = True
     state = _base_long_state(fresh_market_state)
     state.strat = StratContext(current_bar_type="1")
 
     decision = DecisionEngine(config=config).evaluate(state, DailyState())
 
-    assert decision.decision == "TRADE"
+    assert decision.decision == "NO_TRADE"
     assert decision.regime == "RESTRICTED"
     assert "REGIME_RESTRICTED" in decision.failed_gates
 
@@ -136,13 +137,14 @@ def test_mid_range_gex_rejected_watch_only(config, fresh_market_state):
     assert "GEX_MID_RANGE" in decision.failed_gates
 
 
-def test_chase_over_70_extension_warning_not_rejection(config, fresh_market_state):
+def test_chase_over_70_extension_is_blocked(config, fresh_market_state):
+    config.block_restricted_regime = True
     state = _base_long_state(fresh_market_state)
     state.icc.phase = "chase_70_extension"
 
     decision = DecisionEngine(config=config).evaluate(state, DailyState())
 
-    assert decision.decision == "TRADE"
+    assert decision.decision == "NO_TRADE"
     assert decision.regime == "RESTRICTED"
     assert "REGIME_CHASE_EXTENSION" in decision.failed_gates
 

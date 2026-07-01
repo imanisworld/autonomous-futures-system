@@ -181,8 +181,8 @@ quality_gates:
     MGC: 0.0
     MCL: 0.0
   require_htf_alignment:            # Require daily/4H FTFC alignment when HTF data is present
-    MNQ: false                      # Passive — replay over-filtered when active without WR improvement
-    MES: false                      # Passive — replay over-filtered when active without WR improvement
+    MNQ: false                      # Research default; live deployment can enforce via env
+    MES: false                      # STRICT_DIRECTIONAL_ALIGNMENT=true is fail-closed
     MGC: false
     MCL: false
   min_confluence_grade: "B"         # Reject weak/C setups; require at least 2-of-3 style confirmation
