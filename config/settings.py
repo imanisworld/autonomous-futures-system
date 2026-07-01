@@ -435,7 +435,12 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         allowed_sessions=sessions.get("allowed", []),
         disabled_sessions=sessions.get("disabled", []),
         session_hours=session_hours,
-        schedule_mode=str(schedule.get("mode", "current")).strip().lower(),
+        # SCHEDULE_MODE env overrides the yaml so the box can flip to a shadow/
+        # paper posture without editing the hash-pinned risk_rules.yaml.
+        # Proof-critical: classified in ops/live_box_guard.py, pin when set.
+        schedule_mode=str(
+            os.getenv("SCHEDULE_MODE") or schedule.get("mode", "current")
+        ).strip().lower(),
         paper_eligible_sessions=schedule.get(
             "paper_eligible_sessions", ["asian", "london", "new_york"]
         ),
