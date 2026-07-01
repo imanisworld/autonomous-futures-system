@@ -118,6 +118,34 @@ def test_force_close_falls_back_to_legacy_webhook_when_router_disabled(monkeypat
     assert b"FORCE_CLOSE" in sent[0][1]
 
 
+def test_force_close_router_fires_even_with_no_legacy_webhook_configured(monkeypatch):
+    """Regression test: the router attempt must not be gated behind the legacy
+    discord_notifications_enabled/discord_webhook_url checks. Those checks used to
+    sit ABOVE the thread dispatch, so an operator running router-only (no legacy
+    webhook URL at all — a perfectly valid config) got the force-close alert
+    silently dropped instead of routed."""
+    monkeypatch.setenv("DISCORD_ROUTE_ERROR", "https://router.invalid")
+    monkeypatch.setattr("threading.Thread", _ImmediateThread)
+
+    router_calls = []
+    monkeypatch.setattr(
+        "notifications.discord_router.DiscordRouter.send",
+        lambda self, route, message, metadata=None: router_calls.append((route, message)) or True,
+    )
+
+    runner._notify_force_close(
+        instrument="MES",
+        reason="SESSION_TIMEOUT",
+        contracts=1,
+        pnl_dollars=-5.0,
+        config=SimpleNamespace(discord_notifications_enabled=False, discord_webhook_url=""),
+        simulate=False,
+    )
+
+    assert router_calls == [("error", router_calls[0][1])]
+    assert "FORCE_CLOSE" in router_calls[0][1]
+
+
 def test_force_close_prefers_router_error_route_when_enabled(monkeypatch):
     monkeypatch.setenv("DISCORD_ROUTE_ERROR", "https://router.invalid")
     monkeypatch.setattr("threading.Thread", _ImmediateThread)
