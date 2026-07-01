@@ -21,8 +21,10 @@ import logging
 import os
 import threading
 import time
+from datetime import date, datetime, timedelta
 from dataclasses import dataclass, field
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 import requests
 
@@ -35,6 +37,41 @@ from execution.broker_interface import (
 )
 
 logger = logging.getLogger(__name__)
+
+# ── Front-month contract roll ─────────────────────────────────────────────────
+# CME equity-index micros (MES/MNQ) are quarterly: Mar/Jun/Sep/Dec → H/M/U/Z.
+# Liquidity rolls to the next quarter ~8 days before the expiring contract's
+# 3rd-Friday expiration. Trading the expiring front month past its roll window
+# leaves you on a dying contract (thin book, protective-stop rejections, forced
+# settlement). _front_month_symbol() picks the contract you should actually trade.
+_QUARTERLY_CODE = {3: "H", 6: "M", 9: "U", 12: "Z"}
+_ROLL_DAYS = 8
+
+
+def _third_friday(year: int, month: int) -> date:
+    """The 3rd Friday of a month — CME equity-index futures expiration."""
+    first = date(year, month, 1)
+    first_friday = 1 + (4 - first.weekday()) % 7
+    return date(year, month, first_friday + 14)
+
+
+def _front_month_symbol(root: str, today: date, roll_days: int = _ROLL_DAYS) -> Optional[str]:
+    """Active front-month symbol (e.g. 'MESU6') for a quarterly micro on `today`.
+
+    Returns the nearest quarterly contract whose expiration is more than
+    `roll_days` away — i.e. it rolls OFF a contract once inside its roll window.
+    Returns None for non-quarterly roots so the caller falls back to /suggest.
+    """
+    root = root.replace("1!", "").upper()
+    if root not in ("MES", "MNQ", "MYM", "M2K", "ES", "NQ", "YM", "RTY"):
+        return None
+    candidates = [(yr, mo) for yr in (today.year, today.year + 1) for mo in (3, 6, 9, 12)]
+    candidates.sort()
+    for yr, mo in candidates:
+        if today <= _third_friday(yr, mo) - timedelta(days=roll_days):
+            return f"{root}{_QUARTERLY_CODE[mo]}{yr % 10}"
+    return None
+
 
 AUTH_HEALTHY = "healthy"
 AUTH_TEMPORARY_FAILURE = "temporary_failure"
@@ -579,14 +616,46 @@ class TradovateBroker(BrokerInterface):
         root = instrument.replace("1!", "").upper()
         if root in self._contract_cache:
             return self._contract_cache[root]
-        # Cache miss — use /contract/suggest (find/search endpoints 404 on Tradovate REST)
+        # Cache miss — use /contract/suggest (find/search endpoints 404 on Tradovate REST).
+        # Prefer the rolled front-month symbol (e.g. MESU6) over the nearest expiry
+        # (l=1 returns the EXPIRING contract during roll week → thin book + stop
+        # rejections). We ask for several and pick the active front month by name,
+        # falling back to nearest-expiry if the computed symbol isn't listed.
+        try:
+            today = datetime.now(ZoneInfo("America/New_York")).date()
+        except Exception:
+            today = datetime.utcnow().date()
+        desired = _front_month_symbol(root, today)
+
         last_exc: Exception = RuntimeError("no attempts made")
         for attempt in range(3):
             try:
-                results = self._get(f"/contract/suggest?t={root}&l=1")
+                results = self._get(f"/contract/suggest?t={root}&l=8")
                 if isinstance(results, list) and results:
-                    self._contract_cache[root] = int(results[0]["id"])
-                    self._contract_symbol_cache[root] = str(results[0].get("name") or root)
+                    chosen = None
+                    if desired:
+                        for r in results:
+                            if str(r.get("name", "")).upper() == desired:
+                                chosen = r
+                                break
+                    if chosen is None:
+                        # Computed roll symbol not in the list (or non-quarterly root):
+                        # keep the old behavior — nearest expiry.
+                        chosen = results[0]
+                        if desired:
+                            logger.warning(
+                                "Contract roll: wanted %s for %s but it wasn't in "
+                                "/suggest (%s); falling back to nearest expiry %s",
+                                desired, root,
+                                [str(r.get("name")) for r in results],
+                                chosen.get("name"),
+                            )
+                    self._contract_cache[root] = int(chosen["id"])
+                    self._contract_symbol_cache[root] = str(chosen.get("name") or root)
+                    logger.warning(
+                        "Resolved %s → contract %s (id=%s)",
+                        root, self._contract_symbol_cache[root], self._contract_cache[root],
+                    )
                     return self._contract_cache[root]
                 raise ValueError(f"Contract not found for {instrument}")
             except Exception as exc:
@@ -782,6 +851,16 @@ class TradovateBroker(BrokerInterface):
             )
             self._last_bracket_confirmed = stop_ok and target_ok
             if not self._last_bracket_confirmed:
+                # Diagnostic: capture exactly what was submitted when a child fails
+                # to confirm — contract symbol (roll), prices, and which leg failed.
+                logger.error(
+                    "BRACKET UNCONFIRMED diag: instrument=%s symbol=%s dir=%s entry=%s "
+                    "tick_stop=%s tick_target=%s qty=%s stop_ok=%s target_ok=%s "
+                    "entry_id=%s stop_id=%s target_id=%s",
+                    order.instrument, contract_symbol, order.direction, order.entry,
+                    tick_stop, tick_target, qty, stop_ok, target_ok,
+                    order_id, stop_id, target_id,
+                )
                 return self._handle_naked_position(order, qty, stop_ok=stop_ok, target_ok=target_ok)
 
             logger.info("Tradovate bracket fully confirmed (entry+stop+target): %s", order.instrument)

@@ -104,6 +104,10 @@ class AlertPayload(BaseModel):
     has_signal: Optional[bool] = None
     event_type: Optional[str] = None
 
+    # ── Optional correlation id (preserved if valid, else generated) ─────────
+    event_id: Optional[str] = None
+    alert_name: Optional[str] = None
+
     # ── Optional GEX / gamma context ────────────────────────────────────────
     gex_flip: Optional[float] = None
     call_wall: Optional[float] = None
