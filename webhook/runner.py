@@ -809,7 +809,9 @@ def process_alert(
     # 1.0 / unset instrument = no change. Mutates the SetupDetail in place so the
     # journal records the actual stop used.
     _mult = apply_stop_multiplier(
-        decision.setup, state.instrument, cfg.stop_multiplier_per_instrument
+        decision.setup,
+        state.instrument,
+        getattr(cfg, "stop_multiplier_per_instrument", {}) or {},
     )
     if _mult != 1.0:
         logger.info(
