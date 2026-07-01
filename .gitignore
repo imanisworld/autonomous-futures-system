@@ -57,3 +57,7 @@ reports/
 journal/*.jsonl
 *.sqlite
 *.sqlite3
+
+# Release-deploy artifacts on the box (afs-deploy.sh --release)
+.deploy-bak/
+release_manifest.json
