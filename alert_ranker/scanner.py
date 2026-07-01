@@ -8,9 +8,12 @@ from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
+import httpx
+
 from .config import ScannerConfig
 from .discord import DiscordAlerter
 from .market_data import MarketDataClient, build_provider_capabilities
+from .rh_options import build_candidate_embed
 from .scorer import ScoreResult, is_ny_open, score_setup
 from .storage import ScanStorage
 from sources.signa_client import SignaClient
@@ -95,7 +98,95 @@ class OptionsScanner:
             selected_contract=_selected_contract(result.raw),
             timestamp=now,
         )
+        # Fire enriched options candidate alert when Signa qualifies
+        await self._maybe_send_candidate_alert(ticker, normalized, now)
         return ScanOutcome(result, decision.sent, decision.reason, storage_id, shadow_id)
+
+    async def _maybe_send_candidate_alert(
+        self, ticker: str, normalized: dict[str, Any], now: datetime
+    ) -> None:
+        """Send enriched options Discord when Signa score/grade qualify.
+
+        Uses Signa pivots as proxy GEX walls (same approach as evaluate-auto).
+        Fires in addition to (not instead of) the generic watchlist alert.
+        Advisory only — no gates blocked, no orders placed.
+        """
+        discord_url = self.config.discord_webhook_url
+        if not discord_url:
+            return
+
+        score = normalized.get("signa_score")
+        grade = normalized.get("signa_grade")
+        direction_raw = normalized.get("signa_daily_direction") or ""
+        price_raw = normalized.get("price")
+
+        if not score or not grade or not direction_raw or not price_raw:
+            return
+        try:
+            score_f = float(score)
+            price_f = float(price_raw)
+        except (TypeError, ValueError):
+            return
+
+        if score_f < 70:
+            return
+        if str(grade).upper() not in ("A+", "A", "B"):
+            return
+
+        direction = "LONG" if str(direction_raw).upper() in ("BULLISH", "UP", "LONG") else "SHORT"
+
+        # Earnings guard — suppress alert if earnings within 5 days
+        earnings_note: str | None = None
+        earnings_raw = normalized.get("earnings_date")
+        if earnings_raw:
+            try:
+                from datetime import date
+                earnings_dt = date.fromisoformat(str(earnings_raw))
+                days_to_earnings = (earnings_dt - now.date()).days
+                if 0 <= days_to_earnings <= 5:
+                    return  # too close to earnings — don't ping
+                if days_to_earnings <= 14:
+                    earnings_note = f"Earnings in {days_to_earnings}d ({earnings_raw})"
+            except ValueError:
+                pass
+
+        # GEX walls: use Signa pivots as proxy (S1 = put wall, R1 = call wall)
+        pivot_s1 = normalized.get("signa_pivot_s1")
+        pivot_r1 = normalized.get("signa_pivot_r1")
+        call_wall: float | None = None
+        put_wall: float | None = None
+        regime = "TRANSITION"
+        try:
+            if pivot_s1 and pivot_r1:
+                put_wall = float(pivot_s1)
+                call_wall = float(pivot_r1)
+                if price_f > call_wall:
+                    regime = "BREAKOUT"
+                elif price_f < put_wall:
+                    regime = "BREAKDOWN"
+                elif abs(price_f - call_wall) / price_f <= 0.01 or abs(price_f - put_wall) / price_f <= 0.01:
+                    regime = "LOW_PINNING"
+        except (TypeError, ValueError):
+            pass
+
+        embed = build_candidate_embed(
+            ticker,
+            direction,
+            score_f,
+            str(grade).upper(),
+            price_f,
+            call_wall=call_wall,
+            put_wall=put_wall,
+            regime=regime,
+            note=earnings_note,
+        )
+        payload = {"embeds": [embed]}
+        try:
+            await asyncio.to_thread(
+                httpx.post, discord_url, json=payload, timeout=5.0
+            )
+        except Exception:
+            pass
 
     async def _build_normalized_data(
         self, ticker: str, context: dict[str, Any], now: datetime
@@ -180,6 +271,8 @@ class OptionsScanner:
                 "signa_weekly_direction": context.get("signa_weekly_direction"),
                 "signa_action": context.get("signa_action"),
                 "signa_risk_rating": context.get("signa_risk_rating"),
+                "signa_pivot_s1": context.get("signa_pivot_s1"),
+                "signa_pivot_r1": context.get("signa_pivot_r1"),
             }
         symbol = self._signa_symbol_for(ticker)
         client = self.signa_client or SignaClient(
@@ -197,6 +290,8 @@ class OptionsScanner:
             "signa_weekly_direction": signal.weekly_direction,
             "signa_action": signal.action,
             "signa_risk_rating": signal.risk_rating,
+            "signa_pivot_s1": getattr(signal, "pivot_s1", None),
+            "signa_pivot_r1": getattr(signal, "pivot_r1", None),
         }
 
     def _signa_symbol_for(self, ticker: str) -> str:
@@ -210,6 +305,31 @@ class OptionsScanner:
             self.config,
             last_error=getattr(self.market_data, "last_error", None),
         ).to_dict()
+        scans = [
+            {
+                "symbol": s["ticker"],
+                "time": s["timestamp"],
+                "score": s["score"],
+                "direction": s["direction"],
+                "pattern": s["pattern"],
+                "contract": s["raw"].get("contract") or s["raw"].get("strike"),
+                "premium": s["raw"].get("option_mark"),
+            }
+            for s in latest
+        ]
+        signa = [
+            {
+                "symbol": s["ticker"],
+                "grade": s["raw"].get("signa_grade"),
+                "score": s["raw"].get("signa_score"),
+                "action": s["raw"].get("signa_action"),
+                "direction": s["raw"].get("signa_daily_direction") or s["raw"].get("signa_direction"),
+                "alertSent": s["alert_sent"],
+                "suppressedReason": s["alert_suppression_reason"] or None,
+            }
+            for s in latest
+            if s["raw"].get("signa_grade") or s["raw"].get("signa_score")
+        ]
         return {
             "service": "options-scanner",
             "advisory_only": True,
@@ -223,6 +343,8 @@ class OptionsScanner:
             "signa_api_enabled": self.config.signa_api_enabled,
             "signa_api_key_configured": self.config.signa_api_key_configured,
             "latest": latest,
+            "scans": scans,
+            "signa": signa,
         }
 
     def terminal_state(self) -> dict[str, Any]:
