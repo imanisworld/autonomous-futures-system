@@ -350,8 +350,21 @@ class DecisionEngine:
                 failed_gates=[failed_gate],
                 confidence_score=0,
             )
-        if regime.regime == "RESTRICTED" and regime.failed_gate:
-            failed_gates.append(regime.failed_gate)
+        if regime.regime == "RESTRICTED" and getattr(
+            self.config, "block_restricted_regime", False
+        ):
+            failed_gate = regime.failed_gate or "REGIME_RESTRICTED"
+            return DecisionOutput(
+                timestamp=now,
+                instrument=state.instrument,
+                session=state.session,
+                decision="NO_TRADE",
+                market_condition=condition,
+                reason=f"Regime gate rejected: {failed_gate}",
+                regime=regime.regime,
+                failed_gates=[failed_gate],
+                confidence_score=0,
+            )
 
         gex_gate = evaluate_gex(state, gate_direction)
         if gex_gate.status == "RED_LIGHT":
@@ -430,7 +443,10 @@ class DecisionEngine:
                 )
 
         # ── Quality gate: HTF / FTFC alignment ────────────────────────────────
-        if self.config.require_htf_alignment.get(state.instrument, False):
+        if (
+            self.config.require_htf_alignment.get(state.instrument, False)
+            or getattr(self.config, "strict_directional_alignment", False)
+        ):
             htf_failure = self._check_htf_alignment(state, gate_direction)
             if htf_failure is not None:
                 return DecisionOutput(
@@ -726,14 +742,27 @@ class DecisionEngine:
     # ── Market Condition Scoring ───────────────────────────────────────────────
 
     def _check_htf_alignment(self, state: MarketState, direction: str | None) -> Optional[str]:
-        """Block only when HTF data is present and explicitly conflicts."""
+        """Require explicit, directionally consistent HTF context.
+
+        This gate is fail-closed when enabled: missing or mixed HTF data cannot
+        authorize an entry, and the daily direction may never oppose the order.
+        """
         htf = getattr(state, "htf", None)
-        if htf is None or direction not in {"LONG", "SHORT"}:
-            return None
+        if direction not in {"LONG", "SHORT"}:
+            return "Trade direction unavailable for HTF alignment"
+        if htf is None:
+            return "HTF context unavailable"
         if htf.ftfc_aligned is False:
             return "HTF/FTFC alignment failed"
 
         expected = "UP" if direction == "LONG" else "DOWN"
+        opposing = "DOWN" if expected == "UP" else "UP"
+        daily = str(htf.daily_direction or "").strip().upper()
+        if not daily:
+            return "Daily direction unavailable"
+        if daily == opposing:
+            return f"Daily direction {daily} opposes {direction}"
+
         directions = [
             str(value).strip().upper()
             for value in (
@@ -744,7 +773,8 @@ class DecisionEngine:
             )
             if value not in (None, "")
         ]
-        opposing = "DOWN" if expected == "UP" else "UP"
+        if not directions:
+            return "HTF directions unavailable"
         if opposing in directions and expected not in directions:
             return f"HTF direction opposes {direction}"
         return None

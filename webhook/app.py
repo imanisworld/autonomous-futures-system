@@ -1450,11 +1450,15 @@ def _quality_gate_summary() -> str:
         for instrument, enabled in (_config.require_htf_alignment or {}).items()
         if enabled
     ]
+    if getattr(_config, "strict_directional_alignment", False):
+        htf_summary = "strict (fail-closed)"
+    else:
+        htf_summary = ", ".join(htf) if htf else "passive"
     parts = [
         f"strong trend: {', '.join(strong) if strong else 'off'}",
         f"volume: {', '.join(volume) if volume else 'off'}",
         f"confluence: {(_config.min_confluence_grade or 'off')}",
-        f"HTF: {', '.join(htf) if htf else 'passive'}",
+        f"HTF: {htf_summary}",
     ]
     return "; ".join(parts) + "."
 

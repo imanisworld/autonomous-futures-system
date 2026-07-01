@@ -140,6 +140,12 @@ class SystemConfig:
     min_signal_bar_volume: dict = field(default_factory=dict)
     # Quality gates: require explicit daily/4H FTFC alignment when HTF data is present
     require_htf_alignment: dict = field(default_factory=dict)
+    # Deployment-only strict direction gate. Unlike the per-instrument research
+    # map, this is controlled by env so historical replay fixtures remain stable.
+    strict_directional_alignment: bool = False
+    # Fail closed on classifier states that are informative but not fully aligned.
+    # Default off preserves research/replay compatibility; production opts in.
+    block_restricted_regime: bool = False
     # Minimum confluence grade required for ordinary futures entries; blank disables.
     min_confluence_grade: str = ""
     # Required chart timeframe (minutes). Live TradingView alerts MUST be created
@@ -453,6 +459,11 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         ),
         min_signal_bar_volume=quality.get("min_signal_bar_volume", {}),
         require_htf_alignment=quality.get("require_htf_alignment", {}),
+        strict_directional_alignment=_env_bool("STRICT_DIRECTIONAL_ALIGNMENT", False),
+        block_restricted_regime=_env_bool(
+            "BLOCK_RESTRICTED_REGIME",
+            bool(quality.get("block_restricted_regime", False)),
+        ),
         min_confluence_grade=str(quality.get("min_confluence_grade", "") or "").upper(),
         fill_slippage_ticks=float(
             os.getenv("FILL_SLIPPAGE_TICKS")
