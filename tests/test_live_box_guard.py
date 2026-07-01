@@ -285,3 +285,41 @@ def test_execution_env_reads_are_classified_for_proof_guard():
         "Execution-path environment reads need proof-critical classification: "
         f"{sorted(discovered - classified)}"
     )
+
+
+# ── Release-dir identity (no .git) ───────────────────────────────────────────
+
+def test_guard_reads_identity_from_manifest_when_git_absent(tmp_path, monkeypatch):
+    """Atomic release dirs have no .git; the shipped manifest is the identity."""
+    import json
+    from ops.live_box_guard import live_box_drift_report
+
+    (tmp_path / "risk_rules.yaml").write_text("daily_limits: {}\n", encoding="utf-8")
+    (tmp_path / "logs").mkdir()
+    manifest = {
+        "repo": {"branch": "HEAD", "commit": "f" * 40},
+        "source_files": {},
+        "fingerprint_sha256": "0" * 64,
+    }
+    (tmp_path / "release_manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    monkeypatch.setenv("EXPECTED_LIVE_BRANCH", "HEAD")
+    monkeypatch.setenv("EXPECTED_LIVE_COMMIT", "f" * 40)
+
+    report = live_box_drift_report(repo_root=tmp_path, log_dir=tmp_path / "logs")
+
+    assert report["identity_source"] == "release_manifest"
+    assert report["branch"] == "HEAD"
+    assert report["commit"] == "f" * 40
+    assert report["git_dirty"] is False
+    by_name = {c["name"]: c for c in report["comparisons"]}
+    assert by_name["branch"]["ok"] is True
+    assert by_name["commit"]["ok"] is True
+
+
+def test_guard_identity_unavailable_without_git_or_manifest(tmp_path):
+    from ops.live_box_guard import live_box_drift_report
+
+    (tmp_path / "risk_rules.yaml").write_text("daily_limits: {}\n", encoding="utf-8")
+    report = live_box_drift_report(repo_root=tmp_path, log_dir=tmp_path)
+    assert report["identity_source"] == "unavailable"
+    assert report["branch"] is None and report["commit"] is None
