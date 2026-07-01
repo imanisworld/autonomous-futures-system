@@ -243,6 +243,16 @@ def test_execution_env_reads_are_classified_for_proof_guard():
     # These cannot alter futures setup eligibility, sizing, entry/fill behavior,
     # or exits. A new exemption should carry the same level of scrutiny.
     non_proof_runtime_env = {
+        # Webhook intake / ops hardening (dedupe, maintenance 503, rate limit,
+        # status auth, secret rotation): they gate ingest availability, never
+        # setup eligibility, sizing, entry/fill behavior, or exits.
+        "DEDUPE_TTL_SECONDS",
+        "MAINTENANCE_FLAG_PATH",
+        "MAINTENANCE_MODE",
+        "STATUS_AUTH_TOKEN",
+        "TRADINGVIEW_WEBHOOK_SECRET",
+        "TRADINGVIEW_WEBHOOK_SECRET_NEXT",
+        "WEBHOOK_RATE_LIMIT_PER_MINUTE",
         "DISCORD_HEARTBEAT_ENABLED",
         "DISCORD_NOTIFICATIONS_ENABLED",
         "DISCORD_WEBHOOK_URL",

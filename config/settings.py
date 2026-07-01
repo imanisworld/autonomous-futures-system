@@ -359,6 +359,20 @@ class SystemConfig:
     public_api_key_configured: bool = False
     public_account_id_configured: bool = False
 
+    # ── Safe config-driven routing / maintenance / hardening ────────────────
+    # All additive. Secret/token VALUES are never stored here — only "configured"
+    # booleans — so config snapshots and /status responses cannot leak them.
+    dedupe_ttl_seconds: int = 600
+    maintenance_mode: bool = False              # startup-time snapshot of MAINTENANCE_MODE
+    maintenance_flag_path: str = ""             # optional runtime file flag
+    status_auth_token_configured: bool = False  # STATUS_AUTH_TOKEN present?
+    webhook_rate_limit_per_minute: int = 60
+    tradingview_allowed_ips: List[str] = field(default_factory=list)
+    # TradingView secret rotation: WEBHOOK_SECRET remains primary; these are
+    # ADDITIONAL accepted secrets so a key can be rotated with zero downtime.
+    tradingview_webhook_secret_configured: bool = False
+    tradingview_webhook_secret_next_configured: bool = False
+
 
 # ─── Loader ──────────────────────────────────────────────────────────────────
 
@@ -604,6 +618,14 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         public_base_url=os.getenv("PUBLIC_BASE_URL", "https://api.public.com").strip().rstrip("/"),
         public_api_key_configured=bool(os.getenv("PUBLIC_API_KEY", "").strip()),
         public_account_id_configured=bool(os.getenv("PUBLIC_ACCOUNT_ID", "").strip()),
+        dedupe_ttl_seconds=int(os.getenv("DEDUPE_TTL_SECONDS", "600") or 600),
+        maintenance_mode=_env_bool("MAINTENANCE_MODE", False),
+        maintenance_flag_path=os.getenv("MAINTENANCE_FLAG_PATH", "").strip(),
+        status_auth_token_configured=bool(os.getenv("STATUS_AUTH_TOKEN", "").strip()),
+        webhook_rate_limit_per_minute=int(os.getenv("WEBHOOK_RATE_LIMIT_PER_MINUTE", "60") or 60),
+        tradingview_allowed_ips=_env_csv("TRADINGVIEW_ALLOWED_IPS", []),
+        tradingview_webhook_secret_configured=bool(os.getenv("TRADINGVIEW_WEBHOOK_SECRET", "").strip()),
+        tradingview_webhook_secret_next_configured=bool(os.getenv("TRADINGVIEW_WEBHOOK_SECRET_NEXT", "").strip()),
     )
 
     _validate_config(config)
