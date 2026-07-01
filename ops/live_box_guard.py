@@ -322,7 +322,7 @@ def live_box_drift_report(
             f"Live box guard verified branch {branch}, commit {_short(commit)}, "
             f"risk_rules {_short(config_sha)}, and evidence journal {journal_path}."
         )
-    elif (missing_pins or unpinned_overrides) and not mismatches and not dirty_problem:
+    elif (missing_pins or unpinned_overrides or security_warn) and not mismatches and not dirty_problem:
         bits = []
         if missing_pins:
             bits.append(f"missing expected pin(s): {', '.join(missing_pins)}")
