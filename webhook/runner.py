@@ -1180,7 +1180,8 @@ def _notify_force_close(
     Force-close means the candle feed or position tracking has drifted —
     the operator should investigate. Runs in a background thread so it
     never blocks the webhook response. Simulated paper/replay closes never
-    notify live operator channels.
+    notify live operator channels. Prefers the DiscordRouter "error" channel
+    when configured; falls back to the legacy single webhook URL.
     """
     if simulate:
         return
@@ -1202,6 +1203,15 @@ def _notify_force_close(
     )
 
     def _send():
+        try:
+            from notifications.discord_router import DiscordRouter
+
+            router = DiscordRouter()
+            if router.is_enabled("error"):
+                router.send("error", message)
+                return
+        except Exception as exc:
+            logger.debug("Discord error route unavailable: %s", exc)
         try:
             body = _json.dumps({"content": message}).encode("utf-8")
             _post_json(url, body, {"Content-Type": "application/json"})

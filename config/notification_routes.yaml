@@ -1,0 +1,35 @@
+# ============================================================
+# Notification route → environment-variable mapping
+# ============================================================
+# Parsed at RUNTIME by notifications/discord_router.py.
+#
+# This file is the single source of truth for which logical notification
+# routes exist and which environment variable holds each route's real URL.
+#
+# IMPORTANT:
+#   - This file contains NO secrets and NO real URLs. Only logical route
+#     names and the env var name that carries the destination URL.
+#   - heartbeat, signal, and error are REQUIRED. A required route whose env
+#     var is unset/blank must fail the startup self-check.
+#   - signa, daily_report, and deployment are OPTIONAL. An unset optional
+#     route is simply disabled (router returns False, logs a warning once).
+# ============================================================
+routes:
+  heartbeat:
+    env_var: DISCORD_ROUTE_HEARTBEAT
+    required: true
+  signal:
+    env_var: DISCORD_ROUTE_SIGNAL
+    required: true
+  signa:
+    env_var: DISCORD_ROUTE_SIGNA
+    required: false
+  error:
+    env_var: DISCORD_ROUTE_ERROR
+    required: true
+  daily_report:
+    env_var: DISCORD_ROUTE_DAILY_REPORT
+    required: false
+  deployment:
+    env_var: DISCORD_ROUTE_DEPLOYMENT
+    required: false
