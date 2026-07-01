@@ -26,6 +26,13 @@ from webhook.payload import AlertPayload
 from webhook.runner import process_alert
 
 
+# Fixed in-session timestamp (Tuesday 15:00 UTC = 11:00 ET = new_york) so the
+# end-to-end process_alert tests pass the session gate regardless of when the
+# suite runs. Session (and arm staleness) derive from the payload timestamp,
+# never wall clock, so pinning keeps every check self-consistent.
+_IN_SESSION_NOW = datetime(2026, 6, 2, 15, 0, tzinfo=timezone.utc)
+
+
 def _payload(tf="5m", ticker="MES1!"):
     # Fresh timestamp: keeps the bar inside the staleness budget and aligns the
     # record/read date so recent() (which defaults to today) sees it.
@@ -232,7 +239,7 @@ def test_process_alert_executes_only_the_armed_15m_setup(
     monkeypatch.setenv("BROKER", "paper")
     config.min_confluence_grade = ""
     config.allowed_sessions = [*config.allowed_sessions, "asian"]
-    now = datetime.now(timezone.utc)
+    now = _IN_SESSION_NOW
     log_dir = str(tmp_path / "logs")
     armed = _arm(log_dir, entry=5240.0, ts=now)
 
@@ -265,7 +272,7 @@ def test_failed_5m_execution_retains_arm_for_retry(monkeypatch, tmp_path, config
     monkeypatch.setenv("FIVE_MIN_FEED_ENABLED", "true")
     config.min_confluence_grade = ""
     config.allowed_sessions = [*config.allowed_sessions, "asian"]
-    now = datetime.now(timezone.utc)
+    now = _IN_SESSION_NOW
     log_dir = str(tmp_path / "logs")
     _arm(log_dir, entry=5240.0, ts=now)
 
