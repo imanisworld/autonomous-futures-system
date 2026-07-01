@@ -22,7 +22,7 @@ from context.market_context import (
     PreviousDayData, VolumeData, TrendData, HTFContext,
 )
 from risk.risk_engine import DailyState
-from strategy.signal_engine import DecisionEngine
+from strategy.signal_engine import DecisionEngine, SetupDetail
 from strategy.strat_classifier import StratContext
 
 
@@ -516,6 +516,126 @@ class TestStrategyCandidateRanking:
         assert decision.setup is not None
         assert decision.setup.strategy == "vwap_reclaim"
         assert "ranked candidate" in (decision.setup.notes or "")
+
+
+class TestCandidateFallback:
+    """Fallback-to-next-candidate (strategy_fallback_enabled, default off).
+
+    Today the engine picks exactly one candidate per bar and gives up on the
+    whole bar if it fails STRAT_DIRECTION_CONFLICT / ENTRY_DETACHED_FROM_PRICE /
+    RR_BELOW_MINIMUM downstream, even if a second candidate on the same bar
+    would clear every gate. These tests drive the mechanism directly via
+    SetupDetail fixtures (monkeypatching _find_setup_candidates) rather than
+    through real strategy detection, so the pass/fail behavior of each gate is
+    unambiguous and doesn't depend on strategy-specific entry math.
+    """
+
+    @staticmethod
+    def _detached_setup(strategy="orb_reclaim"):
+        # Bracket nowhere near fresh_market_state's close (19505.25) -> ENTRY_DETACHED_FROM_PRICE.
+        return SetupDetail(
+            direction="LONG", entry=25000.0, stop=24990.0, target=25040.0,
+            rr_ratio=4.0, strategy=strategy,
+        )
+
+    @staticmethod
+    def _low_rr_setup(strategy="vwap_reclaim"):
+        # Straddles price fine but R:R is below the 2.0 test-config minimum.
+        return SetupDetail(
+            direction="LONG", entry=19505.0, stop=19495.0, target=19510.0,
+            rr_ratio=0.5, strategy=strategy,
+        )
+
+    @staticmethod
+    def _clean_setup(strategy="pdh_reclaim"):
+        return SetupDetail(
+            direction="LONG", entry=19500.0, stop=19480.0, target=19560.0,
+            rr_ratio=3.0, strategy=strategy,
+        )
+
+    def test_default_off_stops_at_first_rejection(self, config, fresh_market_state):
+        assert config.strategy_fallback_enabled is False  # default
+        engine = DecisionEngine(config=config)
+        engine._find_setup_candidates = lambda *a, **kw: [
+            self._detached_setup(), self._clean_setup()
+        ]
+
+        decision = engine.evaluate(deepcopy(fresh_market_state), DailyState())
+
+        assert decision.decision == "NO_TRADE"
+        assert "ENTRY_DETACHED_FROM_PRICE" in decision.failed_gates
+        assert decision.setup is not None
+        assert decision.setup.strategy == "orb_reclaim"  # the rejected top candidate, not the clean one
+
+    def test_fallback_enabled_trades_the_next_clean_candidate(self, config, fresh_market_state):
+        config.strategy_fallback_enabled = True
+        engine = DecisionEngine(config=config)
+        engine._find_setup_candidates = lambda *a, **kw: [
+            self._detached_setup(), self._clean_setup()
+        ]
+
+        decision = engine.evaluate(deepcopy(fresh_market_state), DailyState())
+
+        assert decision.decision == "TRADE"
+        assert decision.setup.strategy == "pdh_reclaim"
+        assert "fallback candidate 2/2" in (decision.setup.notes or "")
+
+    def test_fallback_enabled_skips_rr_rejection_too(self, config, fresh_market_state):
+        config.strategy_fallback_enabled = True
+        engine = DecisionEngine(config=config)
+        engine._find_setup_candidates = lambda *a, **kw: [
+            self._low_rr_setup(), self._clean_setup()
+        ]
+
+        decision = engine.evaluate(deepcopy(fresh_market_state), DailyState())
+
+        assert decision.decision == "TRADE"
+        assert decision.setup.strategy == "pdh_reclaim"
+
+    def test_fallback_enabled_reports_last_candidate_when_all_rejected(self, config, fresh_market_state):
+        config.strategy_fallback_enabled = True
+        engine = DecisionEngine(config=config)
+        engine._find_setup_candidates = lambda *a, **kw: [
+            self._detached_setup(strategy="orb_reclaim"),
+            self._low_rr_setup(strategy="vwap_reclaim"),
+        ]
+
+        decision = engine.evaluate(deepcopy(fresh_market_state), DailyState())
+
+        assert decision.decision == "NO_TRADE"
+        assert "RR_BELOW_MINIMUM" in decision.failed_gates
+        assert decision.setup is not None
+        assert decision.setup.strategy == "vwap_reclaim"  # the last candidate tried
+
+    def test_strat_direction_conflict_has_no_setup_in_audit_with_or_without_fallback(
+        self, config, fresh_market_state
+    ):
+        """STRAT_DIRECTION_CONFLICT has always reported setup=None (no bracket to
+        show) — confirm the fallback loop preserves that shape, then still falls
+        through to a clean second candidate when fallback is enabled."""
+        state = deepcopy(fresh_market_state)
+        state.strat = StratContext(
+            current_bar_type="2U", strat_sequence="2-2", strat_direction="SHORT"
+        )
+        engine = DecisionEngine(config=config)
+        engine._find_setup_candidates = lambda *a, **kw: [self._clean_setup()]  # LONG setup, SHORT-vetoed
+
+        decision = engine.evaluate(state, DailyState())
+
+        assert decision.decision == "NO_TRADE"
+        assert "STRAT_DIRECTION_CONFLICT" in decision.failed_gates
+        assert decision.setup is None
+
+        config.strategy_fallback_enabled = True
+        engine2 = DecisionEngine(config=config)
+        engine2._find_setup_candidates = lambda *a, **kw: [
+            self._clean_setup(strategy="orb_reclaim"),  # vetoed (LONG vs SHORT strat)
+            self._clean_setup(strategy="pdh_reclaim"),  # also LONG, also vetoed
+        ]
+        decision2 = engine2.evaluate(deepcopy(state), DailyState())
+        assert decision2.decision == "NO_TRADE"
+        assert "STRAT_DIRECTION_CONFLICT" in decision2.failed_gates
+        assert decision2.setup is None
 
 
 class TestDecisionEngineRRFilter:

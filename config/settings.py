@@ -271,6 +271,17 @@ class SystemConfig:
     # Opt-in ranked strategy selection. "first_match" = default live behavior.
     # "ranked" = score all candidates and pick the highest-ranked one.
     strategy_selection_mode: str = "first_match"
+    # Fallback-to-next-candidate (default OFF). Today the engine picks exactly one
+    # setup per bar (top-ranked, or first match in fixed order) and gives up on the
+    # whole bar if it fails STRAT_DIRECTION_CONFLICT / ENTRY_DETACHED_FROM_PRICE /
+    # RR_BELOW_MINIMUM downstream — even when a second candidate on the same bar
+    # would have cleared every gate cleanly. This retries the remaining candidates
+    # in selection order instead of giving up after the first rejection. Safe by
+    # construction: state mutations (orb_break_*_played) only happen after a
+    # candidate clears every gate, so trying candidate 2/3/... before committing
+    # has no side effects to unwind. Backtest-gate walk-forward (both halves) before
+    # ever flipping this on live — same discipline as every other strategy change.
+    strategy_fallback_enabled: bool = False
     # After daily P&L reaches this threshold, only allow a new trade if its
     # planned max loss (stop_distance * point_value * contracts) does not exceed
     # the current daily profit. 0 = disabled (default).
@@ -522,6 +533,10 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         strategy_selection_mode=str(
             strategy.get("selection_mode", "first_match") or "first_match"
         ).lower(),
+        strategy_fallback_enabled=_env_bool(
+            "STRATEGY_FALLBACK_ENABLED",
+            bool(strategy.get("fallback_enabled", False)),
+        ),
         disabled_concepts_per_instrument=strategy.get("disabled_concepts_per_instrument", {}),
 
         broker_priority=broker.get("broker_priority", ["paper", "tradovate"]),
