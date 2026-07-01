@@ -582,6 +582,7 @@ class DecisionEngine:
                     f"Setup found ({setup.strategy}) but R:R {setup.rr_ratio:.2f} "
                     f"is below minimum {self.config.min_rr_ratio:.2f}."
                 ),
+                setup=setup,
                 regime=regime.regime,
                 gex_status=gex_gate.status,
                 signa_status=signa_gate.status,

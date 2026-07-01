@@ -49,6 +49,19 @@ class TestDecisionEnginePreFlight:
         assert decision.decision == "WAIT"
 
 
+def test_rr_rejection_retains_setup_for_audit_candidate(config, fresh_market_state):
+    config.min_rr_ratio = 99.0
+
+    decision = DecisionEngine(config=config).evaluate(
+        fresh_market_state, DailyState()
+    )
+
+    assert decision.decision == "NO_TRADE"
+    assert "RR_BELOW_MINIMUM" in decision.failed_gates
+    assert decision.setup is not None
+    assert decision.setup.strategy
+
+
 class TestDecisionEngineSessionFilter:
 
     def test_asian_session_no_trade(self, engine, fresh_market_state):
