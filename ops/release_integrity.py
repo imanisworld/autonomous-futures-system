@@ -79,6 +79,14 @@ def manifest_fingerprint(manifest: dict[str, Any]) -> str:
 
 def _runtime_extras(root: Path, listed: set[str]) -> list[str]:
     extras: list[str] = []
+    # Root-level modules (non-recursive): a stray repo-root .py can shadow a
+    # first-party package on sys.path — the live box accumulated several
+    # (app.py, settings.py, heartbeat.py) from its pre-release deploy history.
+    for path in root.glob("*.py"):
+        if path.is_file() and path.name not in listed:
+            rel = path.relative_to(root).as_posix()
+            if rel not in listed:
+                extras.append(rel)
     for dirname in RUNTIME_DIRS:
         base = root / dirname
         if not base.is_dir():

@@ -88,6 +88,16 @@ def test_extra_runtime_module_fails(tmp_path):
     assert report["extra_runtime_files"] == ["webhook/hotfix_copy.py"]
 
 
+def test_extra_root_module_fails(tmp_path):
+    """A stray repo-root .py (e.g. a leftover settings.py) is drift too —
+    it can shadow a first-party package on sys.path."""
+    _make_release(tmp_path)
+    _write(tmp_path, "settings.py", "OLD = True\n")
+    report = verify_release(repo_root=tmp_path)
+    assert report["ok"] is False
+    assert report["extra_runtime_files"] == ["settings.py"]
+
+
 def test_extra_scan_ignores_pycache_and_non_runtime(tmp_path):
     _make_release(tmp_path)
     _write(tmp_path, "webhook/__pycache__/junk.py", "x = 1\n")
