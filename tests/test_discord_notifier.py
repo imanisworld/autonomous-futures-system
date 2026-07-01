@@ -113,7 +113,7 @@ def test_discord_notification_sends_paper_decision(config):
     assert result.sent is True
     assert sent["url"] == "https://discord.example/webhook"
     assert sent["headers"]["Content-Type"] == "application/json"
-    assert "RiskSentinel paper decision: TRADE" in sent["body"]["content"]
+    assert "Vantage Point paper decision: TRADE" in sent["body"]["content"]
     assert "MNQ" in sent["body"]["content"]
 
 
@@ -132,7 +132,7 @@ def test_discord_cli_dry_run_prints_message(capsys):
     captured = capsys.readouterr()
     assert exit_code == 0
     assert "DISCORD SMOKE TEST - NOT A JOURNALED TRADE" in captured.out
-    assert "RiskSentinel paper decision: TRADE" in captured.out
+    assert "Vantage Point paper decision: TRADE" in captured.out
     assert "MNQ" in captured.out
 
 
@@ -163,7 +163,7 @@ def test_no_trade_alert_stays_minimal():
     result = _result("NO_TRADE")
     msg = _format_message(_payload(), result)
 
-    assert "RiskSentinel paper decision: NO_TRADE" in msg
+    assert "Vantage Point paper decision: NO_TRADE" in msg
     assert "SETUP" not in msg
     assert "Score:" not in msg
 
@@ -204,7 +204,7 @@ def test_no_trade_alert_shows_reference_price_clearly_labelled():
     }
     msg = _format_message(_payload(), result)
 
-    assert "Reference price: 25180.75 (ES=F/NQ=F HTTP proxy · FRESH · 3s ago)" in msg
+    assert "Reference price: 25180.75 (live · fresh)" in msg
     assert "Bar close: 19505.25" in msg  # bar close kept, distinct
 
 
@@ -219,7 +219,7 @@ def test_no_trade_alert_reference_price_unavailable():
     }
     msg = _format_message(_payload(), result)
 
-    assert "Reference price: unavailable (ES=F/NQ=F HTTP proxy · UNAVAILABLE)" in msg
+    assert "Reference price: unavailable" in msg
 
 
 def test_rejected_alert_states_the_reason():

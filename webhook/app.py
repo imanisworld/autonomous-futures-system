@@ -39,6 +39,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from ops.release_integrity import enforce_release_integrity
+
+# Refuse to serve on drifted source. No-op unless RELEASE_INTEGRITY_ENFORCED
+# is set (production); raises SystemExit before the app object exists, so
+# uvicorn exits and systemd marks the unit failed instead of trading on
+# unverified code.
+enforce_release_integrity()
+
 from agent.daily_summary import DailySummaryAgent, validate_review_date
 from config.settings import load_config
 from webhook import log_redaction as _log_redaction  # noqa: F401 — installs uvicorn.access secret redaction on import
@@ -57,6 +65,9 @@ from ops.proof_30_mnq import DEFAULT_LIMIT as PROOF_30_MNQ_LIMIT
 from ops.proof_30_mnq import build_report as build_mnq_proof_report
 from ops.proof_30_mnq import parse_proof_ts
 from ops.runner_shadow_evidence import runner_shadow_status
+from webhook.dedupe import DedupeCache
+from webhook.event_id import ensure_event_id
+from webhook.maintenance import maintenance_active
 from webhook.payload import AlertPayload
 from webhook.reconciler import run_reconciler_loop
 from notifications.heartbeat import run_heartbeat_loop
@@ -73,6 +84,11 @@ _RATE_BUCKETS: dict[tuple[str, str], list[float]] = {}
 _PUBLIC_RATE_LIMIT = int(os.getenv("PUBLIC_RATE_LIMIT_PER_MINUTE", "120") or 120)
 _WEBHOOK_RATE_LIMIT = int(os.getenv("WEBHOOK_RATE_LIMIT_PER_MINUTE", "60") or 60)
 _PRIVATE_RATE_LIMIT = int(os.getenv("PRIVATE_RATE_LIMIT_PER_MINUTE", "240") or 240)
+
+# Duplicate-alert protection. TTL from DEDUPE_TTL_SECONDS (default 600). The
+# cache is module-level so duplicates are caught across requests; restarting the
+# process clears all dedupe state (acceptable for the paper phase).
+_DEDUPE = DedupeCache(ttl_seconds=int(os.getenv("DEDUPE_TTL_SECONDS", "600") or 600))
 
 _TRUTHY = {"1", "true", "yes", "on"}
 
@@ -111,7 +127,12 @@ def _public_demo_mode() -> bool:
 
 
 def _demo_path_allowed(path: str) -> bool:
-    return path in _DEMO_ALLOWED_PATHS or path.startswith("/static/")
+    return (
+        path in _DEMO_ALLOWED_PATHS
+        or path.startswith("/static/")
+        or path == "/viewer"
+        or path.startswith("/viewer/")  # sanitized viewer survives demo mode
+    )
 
 
 # ── Simple site access code ───────────────────────────────────────────────────
@@ -123,6 +144,15 @@ _GATE_COOKIE = "vp_access"
 _GATE_EXEMPT_PATHS = {
     "/gate", "/health", "/webhook/alert", "/webhook/manual",
     "/favicon.ico", "/manifest.json",
+}
+
+# Sensitive admin reads — gated even in the default "sensitive" scope because
+# they leak balances / account id / raw payloads / config / the signa edge.
+_SENSITIVE_PATHS = {
+    "/status/broker-account",
+    "/status/latest-webhook",
+    "/status/diagnostics",
+    "/status/signa",
 }
 
 
@@ -144,12 +174,34 @@ def _gate_token() -> str:
 
 
 def _gate_path_exempt(path: str) -> bool:
-    return path in _GATE_EXEMPT_PATHS or path.startswith("/static/")
+    return (
+        path in _GATE_EXEMPT_PATHS
+        or path.startswith("/static/")
+        or path == "/viewer"
+        or path.startswith("/viewer/")  # viewer has its own VIEWER_TOKEN auth
+    )
 
 
 def _has_valid_gate_cookie(request: Request) -> bool:
     token = request.cookies.get(_GATE_COOKIE)
     return bool(token) and hmac.compare_digest(token, _gate_token())
+
+
+def _site_gate_scope() -> str:
+    """'full' (default, backward-compatible) gates the whole site (minus exempt)
+    like a classic login wall; 'sensitive' gates ONLY the sensitive admin reads,
+    leaving the dashboard + /viewer public. Default stays 'full' so setting a code
+    never silently under-protects an existing deployment."""
+    return os.getenv("SITE_GATE_SCOPE", "full").strip().lower() or "full"
+
+
+def _path_requires_gate(path: str) -> bool:
+    """Which paths the access-code gate protects, given the current scope."""
+    if _gate_path_exempt(path):
+        return False
+    if _site_gate_scope() == "full":
+        return True
+    return path in _SENSITIVE_PATHS
 
 
 def _gate_html(next_path: str, error: bool) -> str:
@@ -187,7 +239,13 @@ def _configured_webhook_secret() -> str:
 
 
 def _accepted_webhook_secrets() -> list[str]:
-    """Return the primary and temporary rotation secrets, without duplicates."""
+    """Every currently-accepted inbound secret.
+
+    WEBHOOK_SECRET remains the primary secret. TRADINGVIEW_WEBHOOK_SECRET and
+    TRADINGVIEW_WEBHOOK_SECRET_NEXT are ADDITIONAL accepted secrets so a secret
+    can be rotated with zero downtime (set _NEXT, switch TradingView, promote,
+    clear _NEXT). Blank values are ignored.
+    """
     candidates = (
         _configured_webhook_secret(),
         os.getenv("TRADINGVIEW_WEBHOOK_SECRET", "").strip(),
@@ -233,12 +291,15 @@ def _verify_webhook_secret(provided: str | None) -> None:
     # No secret configured → reject every inbound webhook unconditionally.
     # A blank secret means the endpoint is public; that is never acceptable.
     if not accepted:
-        raise HTTPException(status_code=401, detail="WEBHOOK_SECRET is not configured.")
+        raise HTTPException(status_code=401, detail="Webhook secret is not configured.")
     if not provided:
         raise HTTPException(status_code=401, detail="Invalid webhook secret")
+    # Constant-time compare against every accepted secret (rotation-safe). The
+    # loop does not short-circuit, preserving constant-time behaviour.
     matched = False
-    for expected in accepted:
-        matched = hmac.compare_digest(provided, expected) or matched
+    for secret in accepted:
+        if hmac.compare_digest(provided, secret):
+            matched = True
     if not matched:
         raise HTTPException(status_code=401, detail="Invalid webhook secret")
 
@@ -258,12 +319,24 @@ def _rate_bucket_for_path(path: str) -> tuple[str, int]:
     return "private", _PRIVATE_RATE_LIMIT
 
 
+def _evict_stale_rate_buckets(cutoff: float) -> None:
+    """Drop per-IP buckets whose stamps are all older than the window so the
+    rate-limit map cannot grow unbounded as new client IPs appear."""
+    stale = [
+        key for key, stamps in _RATE_BUCKETS.items()
+        if not any(stamp >= cutoff for stamp in stamps)
+    ]
+    for key in stale:
+        del _RATE_BUCKETS[key]
+
+
 def _enforce_rate_limit(request: Request) -> None:
     bucket, limit = _rate_bucket_for_path(request.url.path)
     if limit <= 0:
         return
     now = time.monotonic()
     cutoff = now - 60.0
+    _evict_stale_rate_buckets(cutoff)
     key = (_client_ip(request), bucket)
     hits = [stamp for stamp in _RATE_BUCKETS.get(key, []) if stamp >= cutoff]
     if len(hits) >= limit:
@@ -272,14 +345,34 @@ def _enforce_rate_limit(request: Request) -> None:
     _RATE_BUCKETS[key] = hits
 
 
+def _allowed_tradingview_ips() -> list[str]:
+    raw = os.getenv("TRADINGVIEW_ALLOWED_IPS", "").strip()
+    return [ip.strip() for ip in raw.split(",") if ip.strip()]
+
+
+def _enforce_ip_allowlist(request: Request) -> None:
+    """If TRADINGVIEW_ALLOWED_IPS is non-empty, reject non-allowed client IPs on
+    the webhook path BEFORE the body is processed. Empty list = disabled."""
+    if request.url.path != "/webhook/alert":
+        return
+    allowed = _allowed_tradingview_ips()
+    if not allowed:
+        return
+    if _client_ip(request) not in allowed:
+        raise HTTPException(status_code=403, detail="Client IP not allowed")
+
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
-    """Startup gate: refuse to serve if WEBHOOK_SECRET is blank."""
-    if not _configured_webhook_secret():
+    """Startup gate: refuse to serve if no inbound webhook secret is configured.
+
+    Accepts WEBHOOK_SECRET (primary) or the rotation aliases
+    TRADINGVIEW_WEBHOOK_SECRET / TRADINGVIEW_WEBHOOK_SECRET_NEXT.
+    """
+    if not _accepted_webhook_secrets():
         raise RuntimeError(
-            "WEBHOOK_SECRET env var is required but not set. "
-            "Set WEBHOOK_SECRET in the server .env before deploying."
+            "A webhook secret is required but not set. Set WEBHOOK_SECRET "
+            "(or TRADINGVIEW_WEBHOOK_SECRET) in the server .env before deploying."
         )
     # Loud startup visibility for the loaded universe + decision timeframe. This
     # makes a stale in-memory config (e.g. MNQ silently dropped) obvious in the
@@ -318,6 +411,10 @@ app = FastAPI(
     description="TradingView → paper engine → JSONL journal. No live trading.",
     version="1.0.0",
     lifespan=_lifespan,
+    # Security: do not expose the interactive API docs / schema publicly.
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
 )
 
 app.add_middleware(
@@ -343,12 +440,13 @@ async def _security_headers_middleware(request: Request, call_next):
 
 @app.middleware("http")
 async def _site_access_gate_middleware(request: Request, call_next):
-    # When SITE_ACCESS_CODE is set, every non-exempt path requires a valid gate
-    # cookie. Browsers are redirected to the /gate code page; API/non-HTML callers
-    # get a 401. Disabled (pass-through) when no code is configured.
+    # When SITE_ACCESS_CODE is set, the gate protects paths per SITE_GATE_SCOPE:
+    # "sensitive" (default) gates only the sensitive admin reads, leaving the rest
+    # of the dashboard + /viewer public; "full" gates the whole site. Browsers are
+    # redirected to /gate; API/non-HTML callers get 401. Off when no code is set.
     if (
         _site_gate_enabled()
-        and not _gate_path_exempt(request.url.path)
+        and _path_requires_gate(request.url.path)
         and not _has_valid_gate_cookie(request)
     ):
         accepts_html = "text/html" in request.headers.get("accept", "")
@@ -371,6 +469,8 @@ async def _public_demo_gate_middleware(request: Request, call_next):
 @app.middleware("http")
 async def _rate_limit_middleware(request: Request, call_next):
     try:
+        # IP allowlist runs before the body is read (default: disabled).
+        _enforce_ip_allowlist(request)
         _enforce_rate_limit(request)
     except HTTPException as exc:
         return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
@@ -379,6 +479,10 @@ async def _rate_limit_middleware(request: Request, call_next):
 
 _static = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=_static), name="static")
+
+# Sanitized read-only public viewer tier (own VIEWER_TOKEN; see webhook/viewer.py).
+from webhook import viewer as _viewer_module  # noqa: E402
+app.include_router(_viewer_module.router)
 
 
 @app.get("/gate", response_class=HTMLResponse, include_in_schema=False)
@@ -440,6 +544,16 @@ async def pwa_manifest():
 _config = load_config()
 
 
+def _configured_discord_route_names() -> list[str]:
+    """Logical Discord route names whose env var is set — safe metadata only,
+    never the URLs. Returns [] if the routes file is missing/unreadable."""
+    try:
+        from notifications.discord_router import DiscordRouter
+        return DiscordRouter().configured_route_names()
+    except Exception:  # noqa: BLE001 - introspection must never break a request
+        return []
+
+
 # ─── Routes ───────────────────────────────────────────────────────────────────
 
 # Serializes alert processing so two bars can't race on position state, while
@@ -471,7 +585,17 @@ def _handle_alert_blocking(payload: AlertPayload) -> None:
                     result["live_quote"] = live_quote
             except Exception as exc:
                 logger.warning("live_quote attach failed: %s", exc)
-        notify_discord(payload=payload, result=result, config=_config)
+        try:
+            from notifications.discord_router import DiscordRouter as _DR
+            from notifications.discord_notifier import _format_message as _fmt
+            _router = _DR()
+            if _router.is_enabled("signal") and result.get("decision") in _config.discord_notify_decisions:
+                _router.send("signal", _fmt(payload, result))
+            else:
+                notify_discord(payload=payload, result=result, config=_config)
+        except Exception as _disc_exc:
+            logger.warning("Discord notification error: %s", _disc_exc)
+            notify_discord(payload=payload, result=result, config=_config)
         logger.info("Alert processed: %s -> %s", payload.ticker, result.get("decision"))
     except Exception as exc:
         logger.exception("Error processing alert for %s: %s", payload.ticker, exc)
@@ -501,15 +625,42 @@ async def receive_alert(
     validate + authenticate synchronously, then hand off and return 200 fast.
     """
     _verify_webhook_secret(await _resolve_inbound_secret(request, x_webhook_secret, secret))
+
+    # Generate or preserve a correlation id for end-to-end traceability.
+    event_id = ensure_event_id(getattr(payload, "event_id", None))
+
     # Silently ignore non-futures tickers (e.g. stock alerts sharing the same
     # webhook). Exact root + contract-suffix matching — NOT a startswith prefix
     # — so a stock like ESTC or NQXX is never mistaken for the ES/NQ future.
     if futures_root(payload.ticker, _INGEST_FUTURES_ROOTS) is None:
-        return JSONResponse(content={"ok": True, "decision": "IGNORED", "reason": "non-futures ticker"})
+        return JSONResponse(content={"ok": True, "event_id": event_id, "decision": "IGNORED", "reason": "non-futures ticker"})
+
+    # ── Maintenance gate (default OFF) ───────────────────────────────────────
+    if maintenance_active():
+        logger.info("Maintenance mode active — alert rejected. event_id=%s ticker=%s", event_id, payload.ticker)
+        return JSONResponse(
+            status_code=503,
+            content={"ok": False, "event_id": event_id, "decision": "MAINTENANCE_MODE", "detail": "maintenance mode active"},
+        )
+
+    # ── Duplicate-alert protection ────────────────────────────────────────────
+    alert_name = (
+        getattr(payload, "alert_name", None)
+        or getattr(payload, "event_type", None)
+        or getattr(payload, "signal_strategy", None)
+        or "alert"
+    )
+    if _DEDUPE.is_duplicate(payload.ticker, alert_name, payload.timestamp):
+        logger.info(
+            "Duplicate alert ignored. event_id=%s symbol=%s alert=%s bar_time=%s",
+            event_id, payload.ticker, alert_name, payload.timestamp,
+        )
+        return JSONResponse(content={"ok": True, "event_id": event_id, "decision": "DUPLICATE_IGNORED"})
+
     task = asyncio.create_task(_process_alert_async(payload))
     _alert_tasks.add(task)
     task.add_done_callback(_alert_tasks.discard)
-    return JSONResponse(content={"ok": True, "queued": True, "ticker": payload.ticker})
+    return JSONResponse(content={"ok": True, "event_id": event_id, "queued": True, "ticker": payload.ticker})
 
 
 @app.get("/futures", include_in_schema=False)
@@ -634,6 +785,38 @@ async def status_fill_realism(
         days=days,
         recent_limit=recent_limit,
     )
+
+
+@app.get("/status/gex-shadow")
+async def status_gex_shadow(days: int = Query(default=30, ge=1, le=180)) -> dict:
+    """Return default-off, read-only GEX shadow analysis across recent journals."""
+    today = date.today()
+    journal = JournalLogger(log_dir=_config.log_dir)
+    entries: list[dict] = []
+    journal_files_scanned = 0
+    journal_entries_scanned = 0
+    for offset in range(days):
+        day = today - timedelta(days=offset)
+        path = journal._journal_path(day)
+        if path.exists():
+            journal_files_scanned += 1
+            day_entries = journal._read_entries(path)
+            journal_entries_scanned += len(day_entries)
+            entries.extend(
+                entry
+                for entry in day_entries
+                if entry.get("type") == "OUTCOME"
+                or (
+                    entry.get("decision") == "TRADE"
+                    and (entry.get("risk_check") or {}).get("result") == "APPROVED"
+                )
+            )
+    payload = _gex_shadow_analysis_payload(entries)
+    payload["days"] = days
+    payload["journal_files_scanned"] = journal_files_scanned
+    payload["journal_entries_scanned"] = journal_entries_scanned
+    payload["analysis_entries_retained"] = len(entries)
+    return payload
 
 
 @app.get("/status/evidence-readiness")
@@ -934,22 +1117,51 @@ async def status_test_bracket(
     if direction not in ("LONG", "SHORT"):
         return {"ok": False, "error": "direction must be LONG or SHORT"}
     try:
-        from execution.tradovate_broker import TradovateBroker
-        broker = TradovateBroker()
-        # Step 1 — get live quote
-        q = broker.get_quote(instrument)
-        if not q.get("ok"):
-            return {"ok": False, "stage": "quote", "error": q.get("error")}
-        price = q.get("price") or q.get("last")
-        if price is None:
-            return {"ok": False, "stage": "quote", "error": "no price in quote response"}
-        # Step 2 — resolve contract ID (exercises the cache)
+        # Use the shared singleton (one auth token across endpoints) — a fresh
+        # TradovateBroker() has an empty _last_price, so it ALWAYS reported
+        # "no_bar_received_yet" regardless of the feed. The singleton also gets
+        # its price seeded by _compute_quote() below.
+        broker = _tv_broker()
+        # Step 1 — resolve the contract FIRST. This is price-independent and is
+        # the key thing this endpoint proves ("what front-month am I on?"), so it
+        # must work even when no fresh bar/price is available.
         try:
             contract_id = broker._find_contract_id(instrument)
+            contract = broker._get(f"/contract/item?id={contract_id}")
+            symbol = contract.get("name", instrument.replace("1!", "").upper())
         except Exception as exc:
             return {"ok": False, "stage": "contract_lookup", "error": str(exc)}
-        # Step 3 — compute illustrative bracket (7-pt stop, 14-pt target — standard MES)
-        tick = 0.25
+        # Step 2 — price via the working quote path (_compute_quote seeds the
+        # broker's last price from the latest webhook bar + Yahoo reference).
+        # Blocking (~network I/O) → off-thread so it can't stall the event loop.
+        q = await asyncio.to_thread(_compute_quote, instrument)
+        # Prefer the seeded broker price; fall back to the reference proxy, which
+        # is a DICT ({price,status,age_seconds}) — extract its scalar, never the dict.
+        price = q.get("price")
+        if price is None:
+            ref = q.get("reference_price")
+            if isinstance(ref, dict):
+                price = ref.get("price") or ref.get("last")
+            elif isinstance(ref, (int, float)):
+                price = ref
+        if not isinstance(price, (int, float)):
+            price = None
+        resp = {
+            "ok": True,
+            "dry_run": True,
+            "instrument": instrument,
+            "contract_id": contract_id,
+            "symbol": symbol,
+            "direction": direction,
+            "price": price,
+        }
+        # Step 3 — illustrative bracket only when a price is available.
+        if price is None:
+            resp["note"] = (
+                "Contract resolved. No live price yet (no fresh bar) — bracket "
+                "omitted. Contract resolution confirmed end-to-end."
+            )
+            return resp
         stop_pts = 7.0
         target_pts = 14.0
         if direction == "LONG":
@@ -958,19 +1170,9 @@ async def status_test_bracket(
         else:
             stop  = round(price + stop_pts, 2)
             target = round(price - target_pts, 2)
-        return {
-            "ok": True,
-            "dry_run": True,
-            "instrument": instrument,
-            "contract_id": contract_id,
-            "symbol": q.get("symbol"),
-            "direction": direction,
-            "price": price,
-            "bid": q.get("bid"),
-            "ask": q.get("ask"),
-            "bracket": {"entry": price, "stop": stop, "target": target},
-            "note": "No order placed. Confirms quote + contract resolution works end-to-end.",
-        }
+        resp["bracket"] = {"entry": price, "stop": stop, "target": target}
+        resp["note"] = "No order placed. Confirms contract resolution + live price end-to-end."
+        return resp
     except Exception as exc:
         logger.exception("status_test_bracket failed: %s", exc)
         return {"ok": False, "error": str(exc)}
@@ -1103,38 +1305,6 @@ async def status_signa(symbol: str = Query(default="AAPL")) -> dict:
     }
 
 
-@app.get("/status/gex-shadow")
-async def status_gex_shadow(days: int = Query(default=30, ge=1, le=180)) -> dict:
-    """Return default-off, read-only GEX shadow analysis across recent journals."""
-    today = date.today()
-    journal = JournalLogger(log_dir=_config.log_dir)
-    entries: list[dict] = []
-    journal_files_scanned = 0
-    journal_entries_scanned = 0
-    for offset in range(days):
-        day = today - timedelta(days=offset)
-        path = journal._journal_path(day)
-        if path.exists():
-            journal_files_scanned += 1
-            day_entries = journal._read_entries(path)
-            journal_entries_scanned += len(day_entries)
-            entries.extend(
-                entry
-                for entry in day_entries
-                if entry.get("type") == "OUTCOME"
-                or (
-                    entry.get("decision") == "TRADE"
-                    and (entry.get("risk_check") or {}).get("result") == "APPROVED"
-                )
-            )
-    payload = _gex_shadow_analysis_payload(entries)
-    payload["days"] = days
-    payload["journal_files_scanned"] = journal_files_scanned
-    payload["journal_entries_scanned"] = journal_entries_scanned
-    payload["analysis_entries_retained"] = len(entries)
-    return payload
-
-
 @app.get("/status/risk")
 async def status_risk() -> dict:
     """Return risk limits (config) and today's journal-derived risk state."""
@@ -1144,7 +1314,10 @@ async def status_risk() -> dict:
     account_balance = journal.get_account_balance(_config.position_sizing.starting_balance, today)
     account_peak = journal.get_account_peak_balance(_config.position_sizing.starting_balance, today)
 
-    daily_loss_used = max(0.0, account_peak - account_balance)
+    # Daily loss used = TODAY's realized loss (resets each day), matching the
+    # _check_daily_loss_limit gate. (account_peak-account_balance is peak
+    # drawdown, which never resets — that showed a stale "used" figure.)
+    daily_loss_used = max(0.0, -float(daily_state.realized_pnl_dollars or 0.0))
     drawdown_pct = round(((account_peak - account_balance) / account_peak * 100), 2) if account_peak else 0.0
     max_dd_pct = _config.max_drawdown_percent * 100
     drawdown_state = (
@@ -3417,9 +3590,19 @@ _DASHBOARD_HTML = r"""<!doctype html>
     var POINTS = { MES: { stop: 7, target: 15, dollar: 5 }, MNQ: { stop: 7, target: 15, dollar: 2 }, MGC: { stop: 5, target: 10, dollar: 10 }, MCL: { stop: 0.3, target: 0.6, dollar: 100 } };
     function modeWord() { return INIT.live_trading_enabled && !INIT.paper_mode ? 'LIVE' : 'PAPER'; }
     function renderForce() {
-      return '<div class="panel accent-yellow"><h2>Manual Execution — Disabled</h2>' +
-        '<div class="force-meta">Entries only run through the risk-gated alert pipeline. ' +
-        'Emergency flattening is handled directly in Tradovate, which remains the broker source of truth.</div></div>';
+      // Monitor-only mode (default): render NO order-sending controls.
+      if (!INIT.manual_controls_enabled) {
+        return '<div class="panel accent-yellow"><h2>Manual Execution — Disabled</h2>' +
+          '<div class="force-meta">MODE: MONITOR ONLY · Broker actions hidden until the alert pipeline is validated. ' +
+          'No force-open, close-all, or flatten controls render in this phase. ' +
+          'Read-only broker status is shown on the Home tab.</div></div>';
+      }
+      // Force-OPEN was removed (it bypassed all risk gates). Only the CLOSE_ALL
+      // kill-switch remains — it can never open risk, only flatten it.
+      var meta = '<div class="force-meta">Force-entry is disabled. Entries only via the risk-gated alert pipeline. This is an emergency exit only.</div>';
+      var close = '<div style="margin-top:12px;"><button class="btn danger" data-force="*|CLOSE">CLOSE ALL ' + modeWord() + ' POSITIONS</button></div>';
+      return '<div class="panel accent-red"><h2>Emergency Exit — ' + modeWord() + '</h2>' +
+        meta + close + '</div>';
     }
     function wireForce() {
       var btns = document.querySelectorAll('[data-force]');

@@ -86,6 +86,13 @@ class ScannerConfig:
     signa_base_url: str = "https://app.getsigna.ai"
     signa_timeout_seconds: float = 3.0
     signa_symbol_map: dict[str, str] = field(default_factory=dict)
+    rh_bearer_token: str = ""
+    rh_refresh_token: str = ""
+    rh_auto_check_interval_minutes: int = 15
+
+    @property
+    def rh_configured(self) -> bool:
+        return bool(self.rh_bearer_token)
 
     @property
     def tastytrade_configured(self) -> bool:
@@ -129,4 +136,7 @@ def load_config(environ: Iterable[tuple[str, str]] | None = None) -> ScannerConf
         signa_base_url=env.get("SIGNA_BASE_URL", "https://app.getsigna.ai").strip().rstrip("/"),
         signa_timeout_seconds=_as_float(env.get("SIGNA_TIMEOUT_SECONDS"), 3.0),
         signa_symbol_map=_symbol_map(env.get("SIGNA_SYMBOL_MAP")),
+        rh_bearer_token=env.get("RH_BEARER_TOKEN", "").strip(),
+        rh_refresh_token=env.get("RH_REFRESH_TOKEN", "").strip(),
+        rh_auto_check_interval_minutes=_as_int(env.get("RH_AUTO_CHECK_INTERVAL_MINUTES"), 15),
     )

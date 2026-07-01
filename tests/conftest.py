@@ -43,6 +43,16 @@ def isolate_live_broker_env(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def clear_webhook_dedupe_cache():
+    """The webhook app keeps a module-level duplicate-alert cache; tests reuse
+    the same bar timestamps, so clear it between tests to keep them independent."""
+    app_module = sys.modules.get("webhook.app")
+    if app_module is not None and hasattr(app_module, "_DEDUPE"):
+        app_module._DEDUPE.clear()
+    yield
+
+
+@pytest.fixture(autouse=True)
 def reset_tradovate_shared_auth():
     """Clear the process-shared Tradovate auth state between tests so token /
     circuit-breaker state never leaks across broker auth tests."""

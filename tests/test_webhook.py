@@ -996,12 +996,13 @@ def test_fastapi_dashboard_endpoint():
     assert "Options Lab" in resp.text
     # Embedded JSON view-model the client renders from.
     assert 'id="init-data"' in resp.text
-    # Ops modal is present; manual flatten controls are intentionally not shown.
+    # Ops modal is present; force-open confirmation modal + close-all path live
+    # in the client script (rendered only when manual controls are enabled).
     assert 'id="force-modal"' in resp.text
     assert 'id="ops-modal"' in resp.text
     assert 'data-ops="preflight"' in resp.text
     assert 'data-ops="discord"' in resp.text
-    assert "Emergency flattening is handled directly in Tradovate" in resp.text
+    assert "CLOSE ALL " in resp.text
     # Options Lab demo data must be unmistakably simulated.
     assert "OPTIONS LAB · DEMO DATA" in resp.text
     assert "SIMULATED" in resp.text

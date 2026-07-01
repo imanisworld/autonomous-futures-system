@@ -84,20 +84,3 @@ Every advisory scan also records a hypothetical setup row in SQLite. The row cap
 Outcome updates are also advisory-only. Valid shadow statuses are `OPEN`, `WIN`, `LOSS`, `BREAKEVEN`, `CANCELLED`, and `EXPIRED`. When an outcome includes an exit mark, the service derives hypothetical `pnl_percent` and `pnl_dollars` from the original option mark.
 
 `GET /shadow-journal/summary` reports total/open/closed rows, win/loss counts, win rate, aggregate hypothetical dollars, and average hypothetical percent. It can be filtered with `ticker`.
-
-## Research Notes
-
-Keep every options alert auditable: log the total score, component weights, raw setup inputs, provider snapshot, selected contract context, and later hypothetical outcome in the shadow journal.
-
-Useful references reviewed:
-
-- `tradovate/*` official GitHub examples: best reference for Tradovate auth, order lifecycle, bracket/OCO assumptions, and API behavior. Use as read-only execution reference, not as strategy code.
-- Tradovate community DOM thread: useful for a future DOM/order-flow shadow logger. `md/subscribedom` and Market Replay can help test whether rejected or stopped setups had bad depth/liquidity context. Do not wire DOM directly into live execution before shadow validation.
-- Tradovate community trading-engine thread: useful operational warning. A real bot is mostly state management, retries, rate-limit defense, audit logs, alerts, reconciliation, and circuit breakers. This supports request-rate telemetry and explicit pre-429 shutdowns.
-- Lumibot Tradovate broker docs: useful architecture validation. Treat Tradovate mainly as the execution/reconciliation venue; keep market data adapters separate.
-- PickMyTrade 2026 automation article: useful only as a safety checklist. It reinforces demo-first testing, brackets/OCO, rejection monitoring, daily loss limits, position sizing, WebSocket health, and API rate-limit monitoring. Treat platform claims as marketing.
-- `dearvn/tradovate` and `cullen-b/Tradovate-Python-Client`: useful lightweight endpoint examples for Python sanity checks. Too small/old to drive production design.
-- `michaeljwright/robobull-trading-bot`: useful only as product inspiration for transparent weighted setup scoring and configurable thresholds. Do not integrate its code: it is an Alpaca stock/crypto bot, not a Tradovate/futures or options execution reference.
-- `dearvn/tradovate-bot` and `dearvn/tradovate-trading-bot` docs: low value. Mostly boilerplate or thin wrapper material; no meaningful execution or setup-quality lessons.
-- Mahdi451 bot gist: low value concept sketch. Avoid Selenium/browser-driven order execution; keep API execution and explicit reconciliation.
-- `luncibelkedh34/Tradovate-Free`: reject completely. Looks like scam/piracy/malware bait, with external download and fake-looking registration/product keys.

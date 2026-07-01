@@ -153,22 +153,22 @@ def _bar_close_label(payload: AlertPayload, context: dict) -> str:
 
 
 def _reference_price_line(live_quote: Optional[dict]) -> Optional[str]:
-    """A clearly-labelled, display-only reference price line.
+    """A plain, display-only reference price line.
 
-    Reference price is an independent index proxy (ES=F/NQ=F over HTTP) — NOT the
-    broker execution price. Returns None for instruments with no proxy so the
-    caller can omit the line entirely.
+    Reference price is an independent live index proxy — NOT the broker execution
+    price. Returns None for instruments with no proxy so the caller can omit the
+    line entirely.
     """
     if not live_quote:
         return None
-    source = live_quote.get("source", "HTTP proxy")
-    status = live_quote.get("status", "UNAVAILABLE")
+    status = str(live_quote.get("status", "UNAVAILABLE")).lower()
     price = live_quote.get("price")
     age = live_quote.get("age_seconds")
-    if price is None or status == "UNAVAILABLE":
-        return f"Reference price: unavailable ({source} · UNAVAILABLE)"
-    age_str = f" · {age}s ago" if isinstance(age, int) else ""
-    return f"Reference price: {_format_price(price)} ({source} · {status}{age_str})"
+    if price is None or status == "unavailable":
+        return "Reference price: unavailable"
+    # Show the age only when the quote isn't fresh — staleness is the useful signal.
+    age_str = f" · {age}s ago" if isinstance(age, int) and status != "fresh" else ""
+    return f"Reference price: {_format_price(price)} (live · {status}{age_str})"
 
 
 def _risk_line(risk: dict) -> str:
@@ -182,6 +182,28 @@ def _risk_line(risk: dict) -> str:
     result = risk.get("result")
     reason = risk.get("reason") or risk.get("failed_rule")
     return f"Risk: {result} — {reason}" if reason else f"Risk: {result}"
+
+
+def _candidate_line(candidate: dict) -> str:
+    """One-line near-miss snapshot: the would-be trade that was rejected.
+
+    Audit-only — ``candidate`` is a read of an already-rejected decision; nothing
+    here can place, queue, or retry an order. Shown so a rejection answers
+    "did it see that move, and what would the trade have been?" in Discord.
+    """
+    direction = candidate.get("direction") or "?"
+    symbol = candidate.get("symbol") or "?"
+    entry = candidate.get("entry")
+    stop = candidate.get("stop")
+    target = candidate.get("target")
+    gate = candidate.get("blocking_gate") or candidate.get("reject_code")
+    why = gate.replace("_", " ").lower() if gate else (candidate.get("reject_reason") or "rejected")
+    icon = "🟢" if direction == "LONG" else "🔴"
+    return (
+        f"⚠️ Almost traded — {icon} {symbol} {direction} "
+        f"{_format_price(entry)} / stop {_format_price(stop)} / target {_format_price(target)} "
+        f"· skipped: {why}"
+    )
 
 
 def _format_message(payload: AlertPayload, result: dict) -> str:
@@ -203,7 +225,7 @@ def _format_message(payload: AlertPayload, result: dict) -> str:
         session = context.get("session") or "unknown_session"
 
         lines = [
-            f"RiskSentinel paper decision: {decision}",
+            f"Vantage Point paper decision: {decision}",
             f"{symbol} | {session}",
         ]
         ref_line = _reference_price_line(result.get("live_quote"))
@@ -215,6 +237,9 @@ def _format_message(payload: AlertPayload, result: dict) -> str:
             lines.append(f"Resolution: {resolution}")
         if risk:
             lines.append(_risk_line(risk))
+        candidate = result.get("candidate")
+        if candidate:
+            lines.append(_candidate_line(candidate))
         return "\n".join(prefix + lines)
 
     # ── TRADE: rich format with confluence score ──────────────────────────────
@@ -255,7 +280,7 @@ def _format_message(payload: AlertPayload, result: dict) -> str:
     rr_str = f"{rr:.1f}" if rr is not None else "?"
 
     lines = [
-        f"RiskSentinel paper decision: {decision}",
+        f"Vantage Point paper decision: {decision}",
         f"{dir_icon} {grade} SETUP — {symbol} | Score: {score}/10",
         _DIVIDER,
         f"Direction : {direction}",
