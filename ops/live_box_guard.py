@@ -267,8 +267,24 @@ def live_box_drift_report(
 
     branch = _git(root, "rev-parse", "--abbrev-ref", "HEAD")
     commit = _git(root, "rev-parse", "HEAD")
-    config_sha = _sha256(risk_path)
     dirty = _git(root, "status", "--porcelain")
+    identity_source = "git"
+    if branch is None and commit is None:
+        # Atomic release dirs carry no .git — the shipped manifest is the
+        # release identity, and file truth is enforced by ops/release_integrity.
+        try:
+            import json
+            manifest = json.loads(
+                (root / "release_manifest.json").read_text(encoding="utf-8")
+            )
+            repo_info = manifest.get("repo") or {}
+            branch = repo_info.get("branch")
+            commit = repo_info.get("commit")
+            identity_source = "release_manifest"
+            dirty = None  # no git worktree to be dirty
+        except (OSError, ValueError):
+            identity_source = "unavailable"
+    config_sha = _sha256(risk_path)
     dirty_state = "dirty" if dirty else "clean"
 
     expected_branch = _env("EXPECTED_LIVE_BRANCH")
@@ -351,6 +367,7 @@ def live_box_drift_report(
         "status": status,
         "summary": summary,
         "repo_root": str(root),
+        "identity_source": identity_source,
         "branch": branch,
         "commit": commit,
         "risk_rules_path": str(risk_path),
