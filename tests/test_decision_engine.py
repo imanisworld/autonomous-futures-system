@@ -38,6 +38,16 @@ class TestDecisionEnginePreFlight:
         decision = engine.evaluate(fresh_market_state, daily)
         assert decision.decision == "DONE_FOR_DAY"
 
+    def test_done_for_day_at_loss_limit(self, engine, fresh_market_state):
+        daily = DailyState(consecutive_losses=2)
+        decision = engine.evaluate(fresh_market_state, daily)
+        assert decision.decision == "DONE_FOR_DAY"
+
+    def test_wait_when_position_open(self, engine, fresh_market_state):
+        daily = DailyState(has_open_position=True)
+        decision = engine.evaluate(fresh_market_state, daily)
+        assert decision.decision == "WAIT"
+
 
 def test_rr_rejection_retains_setup_for_audit_candidate(config, fresh_market_state):
     config.min_rr_ratio = 99.0
@@ -50,16 +60,6 @@ def test_rr_rejection_retains_setup_for_audit_candidate(config, fresh_market_sta
     assert "RR_BELOW_MINIMUM" in decision.failed_gates
     assert decision.setup is not None
     assert decision.setup.strategy
-
-    def test_done_for_day_at_loss_limit(self, engine, fresh_market_state):
-        daily = DailyState(consecutive_losses=2)
-        decision = engine.evaluate(fresh_market_state, daily)
-        assert decision.decision == "DONE_FOR_DAY"
-
-    def test_wait_when_position_open(self, engine, fresh_market_state):
-        daily = DailyState(has_open_position=True)
-        decision = engine.evaluate(fresh_market_state, daily)
-        assert decision.decision == "WAIT"
 
 
 class TestDecisionEngineSessionFilter:
