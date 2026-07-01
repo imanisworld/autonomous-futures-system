@@ -502,9 +502,15 @@ class DecisionEngine:
                     failed_gates.append("EMA_STACK_NOT_ALIGNED_SOFT")
 
         # ── Strategy evaluation ───────────────────────────────────────────────
-        setup = self._find_setup(state, condition, daily_state)
+        # Try candidates in selection order (ranked by rank_score, or fixed
+        # first-match order). By default only the top candidate is tried, same
+        # as historical behavior. With strategy_fallback_enabled, a candidate
+        # that fails STRAT_DIRECTION_CONFLICT/ENTRY_DETACHED_FROM_PRICE/
+        # RR_BELOW_MINIMUM no longer kills the whole bar — the next candidate on
+        # the same bar gets a chance instead.
+        candidates = self._find_setup_candidates(state, condition, daily_state)
 
-        if setup is None:
+        if not candidates:
             return DecisionOutput(
                 timestamp=now,
                 instrument=state.instrument,
@@ -518,7 +524,27 @@ class DecisionEngine:
                 failed_gates=failed_gates,
                 confidence_score=0,
             )
-        setup = self._apply_strat_confirmation(setup, state)
+
+        fallback_enabled = getattr(self.config, "strategy_fallback_enabled", False)
+        setup = None
+        last_setup = None
+        reject_code = None
+        reject_reason = None
+        for idx, candidate in enumerate(candidates):
+            evaluated, reject_code, reject_reason = self._evaluate_candidate(candidate, state)
+            if reject_code is None:
+                setup = evaluated
+                if idx > 0:
+                    note = (
+                        f"fallback candidate {idx + 1}/{len(candidates)} "
+                        f"(earlier candidate(s) rejected on this bar)"
+                    )
+                    setup.notes = f"{setup.notes} | {note}" if setup.notes else note
+                break
+            last_setup = evaluated
+            if not fallback_enabled:
+                break
+
         if setup is None:
             return DecisionOutput(
                 timestamp=now,
@@ -526,67 +552,12 @@ class DecisionEngine:
                 session=state.session,
                 decision="NO_TRADE",
                 market_condition=condition,
-                reason="Strat bar sequence contradicts setup direction.",
+                reason=reject_reason,
+                setup=last_setup,
                 regime=regime.regime,
                 gex_status=gex_gate.status,
                 signa_status=signa_gate.status,
-                failed_gates=failed_gates + ["STRAT_DIRECTION_CONFLICT"],
-                confidence_score=0,
-            )
-
-        setup = self._apply_advisory_bracket(setup, state)
-        setup = self._enforce_min_target_distance(setup, state.instrument)
-        setup = self._maybe_reanchor_entry(setup, state)
-
-        # ── Entry-sanity guard (stale/detached level) ─────────────────────────
-        # Every setup anchors its entry to a level (VWAP/ORB/PDH...). After a
-        # feed gap that level can be stranded far from the live price, so a
-        # MARKET entry would fill ~120pt from plan and the absolute bracket lands
-        # on the wrong side of the fill (this caused the 2026-06-05 03:15 ET MNQ
-        # scratch: SHORT with target 30178.75 ABOVE the 30080.75 fill). Require
-        # the bracket to still straddle the current price; otherwise the signal
-        # is stale — refuse rather than chase a broken market fill.
-        entry_price = state.ohlc.close if state.ohlc else None
-        if entry_price is not None and not self._entry_bracket_straddles_price(
-            setup.direction, setup.entry, setup.stop, setup.target, entry_price
-        ):
-            return DecisionOutput(
-                timestamp=now,
-                instrument=state.instrument,
-                session=state.session,
-                decision="NO_TRADE",
-                market_condition=condition,
-                reason=(
-                    f"Entry {setup.entry:g} detached from price {entry_price:g} "
-                    f"(stop {setup.stop:g} / target {setup.target:g} no longer "
-                    f"straddle the live price) — stale level after a feed gap; "
-                    f"not chasing a market fill."
-                ),
-                setup=setup,
-                regime=regime.regime,
-                gex_status=gex_gate.status,
-                signa_status=signa_gate.status,
-                failed_gates=failed_gates + ["ENTRY_DETACHED_FROM_PRICE"],
-                confidence_score=0,
-            )
-
-        # ── R:R validation ────────────────────────────────────────────────────
-        if setup.rr_ratio < self.config.min_rr_ratio:
-            return DecisionOutput(
-                timestamp=now,
-                instrument=state.instrument,
-                session=state.session,
-                decision="NO_TRADE",
-                market_condition=condition,
-                reason=(
-                    f"Setup found ({setup.strategy}) but R:R {setup.rr_ratio:.2f} "
-                    f"is below minimum {self.config.min_rr_ratio:.2f}."
-                ),
-                setup=setup,
-                regime=regime.regime,
-                gex_status=gex_gate.status,
-                signa_status=signa_gate.status,
-                failed_gates=failed_gates + ["RR_BELOW_MINIMUM"],
+                failed_gates=failed_gates + [reject_code],
                 confidence_score=0,
             )
 
@@ -1017,73 +988,87 @@ class DecisionEngine:
         condition: str,
         daily_state: Optional[DailyState] = None,
     ) -> Optional[SetupDetail]:
+        """Return the single top-priority setup (highest rank_score, or first
+        match in fixed order). Kept for callers that only want one candidate;
+        the engine's own decide() uses _find_setup_candidates directly so it
+        can fall back to the next candidate when the top one is rejected."""
+        candidates = self._find_setup_candidates(state, condition, daily_state)
+        return candidates[0] if candidates else None
+
+    def _find_setup_candidates(
+        self,
+        state: MarketState,
+        condition: str,
+        daily_state: Optional[DailyState] = None,
+    ) -> list[SetupDetail]:
         """
-        Try each enabled strategy concept and return the first qualifying setup.
-        Returns None if no valid setup is found.
+        Return every currently-qualifying setup, in selection-priority order
+        (highest rank_score first in "ranked" mode, fixed strategy order in
+        "first_match" mode — see collect_strategy_candidates / _iter_enabled_setups).
 
         When daily_state is provided, continuation strategies are skipped after
         the first ORB break trade in each direction — only pull-back setups
         (orb_reclaim, orb_rejection, vwap_reclaim, strat_4hr_retrigger) remain
         eligible until price returns to the ORB level.
         """
-        enabled = self.config.enabled_concepts
-        instrument_disabled = set(
-            self.config.disabled_concepts_per_instrument.get(state.instrument, [])
-        )
+        del condition  # retained for API symmetry with collect_strategy_candidates
 
         if getattr(self.config, "strategy_selection_mode", "first_match") == "ranked":
-            candidate = self._find_ranked_setup(state, daily_state)
-            return candidate.setup if candidate is not None else None
+            return [
+                c.setup
+                for c in self.collect_strategy_candidates(state, "", daily_state)
+            ]
 
-        # Gate: if the ORB break has already been played in this direction,
-        # block continuation strategies so we don't re-enter on every bar
-        # that stays above/below the ORB. Pull-back strategies remain eligible.
-        orb_continuation_blocked = False
-        if daily_state is not None:
-            if state.orb.status == "above" and daily_state.orb_break_long_played:
-                orb_continuation_blocked = True
-            elif state.orb.status == "below" and daily_state.orb_break_short_played:
-                orb_continuation_blocked = True
+        return [setup for _, setup in self._iter_enabled_setups(state, daily_state)]
 
-        strategies = [
-            # ── The Strat 4HR Re-Trigger must be evaluated BEFORE orb_reclaim.
-            # Both share the reclaimed_high condition; 4hr_retrigger is the more
-            # specific setup (MNQ/MES only, early NY, strong trend, volume).
-            # If it doesn't fire, orb_reclaim gets the same bar as a fallback.
-            ("strat_4hr_retrigger", self._try_strat_4hr_retrigger),
-            ("strat_4hr_retrigger", self._try_strat_4hr_retrigger_short),
-            # ── Core structural setups ─────────────────────────────────────
-            ("orb_breakout", self._try_orb_breakout),
-            ("orb_reclaim", self._try_orb_reclaim),
-            ("orb_rejection", self._try_orb_rejection),
-            ("vwap_reclaim", self._try_vwap_reclaim),
-            ("vwap_rejection", self._try_vwap_rejection),
-            ("vwap_hold", self._try_vwap_hold),
-            ("pdh_reclaim", self._try_pdh_reclaim),
-            ("pdl_reclaim", self._try_pdl_reclaim),
-            ("continuation_pullback", self._try_continuation_pullback),
-            # ── The Strat patterns ─────────────────────────────────────────
-            # Phase 1: approximated from market_state flags.
-            # Full multi-bar classification in Phase 2.
-            # Full proprietary pattern doctrine lives outside the public repo.
-            ("strat_212", self._try_strat_212),
-            ("strat_122", self._try_strat_122),
-            ("strat_inside_break", self._try_strat_inside_break),
-            ("strat_outside_continuation", self._try_strat_outside_continuation),
-        ]
+    def _evaluate_candidate(
+        self, setup: SetupDetail, state: MarketState
+    ) -> tuple[Optional[SetupDetail], Optional[str], Optional[str]]:
+        """
+        Apply the per-candidate confirmation / entry-sanity / R:R gates to one
+        setup. Returns (validated_setup, None, None) on success, or
+        (setup_or_None, reject_code, reject_reason) on rejection — setup is
+        None for STRAT_DIRECTION_CONFLICT (no bracket to show) and the fully
+        transformed setup for the other two rejections (matches the audit
+        shape decide() has always produced for a single-candidate rejection).
+        """
+        confirmed = self._apply_strat_confirmation(setup, state)
+        if confirmed is None:
+            return None, "STRAT_DIRECTION_CONFLICT", "Strat bar sequence contradicts setup direction."
 
-        for name, fn in strategies:
-            if name not in enabled:
-                continue
-            if name in instrument_disabled:
-                continue
-            if orb_continuation_blocked and name not in self._ORB_PULLBACK_STRATEGIES:
-                continue
-            setup = fn(state)
-            if setup is not None:
-                return self._enforce_min_target_distance(setup, state.instrument)
+        confirmed = self._apply_advisory_bracket(confirmed, state)
+        confirmed = self._enforce_min_target_distance(confirmed, state.instrument)
+        confirmed = self._maybe_reanchor_entry(confirmed, state)
 
-        return None
+        # ── Entry-sanity guard (stale/detached level) ─────────────────────────
+        # Every setup anchors its entry to a level (VWAP/ORB/PDH...). After a
+        # feed gap that level can be stranded far from the live price, so a
+        # MARKET entry would fill ~120pt from plan and the absolute bracket lands
+        # on the wrong side of the fill (this caused the 2026-06-05 03:15 ET MNQ
+        # scratch: SHORT with target 30178.75 ABOVE the 30080.75 fill). Require
+        # the bracket to still straddle the current price; otherwise the signal
+        # is stale — refuse rather than chase a broken market fill.
+        entry_price = state.ohlc.close if state.ohlc else None
+        if entry_price is not None and not self._entry_bracket_straddles_price(
+            confirmed.direction, confirmed.entry, confirmed.stop, confirmed.target, entry_price
+        ):
+            reason = (
+                f"Entry {confirmed.entry:g} detached from price {entry_price:g} "
+                f"(stop {confirmed.stop:g} / target {confirmed.target:g} no longer "
+                f"straddle the live price) — stale level after a feed gap; "
+                f"not chasing a market fill."
+            )
+            return confirmed, "ENTRY_DETACHED_FROM_PRICE", reason
+
+        # ── R:R validation ────────────────────────────────────────────────────
+        if confirmed.rr_ratio < self.config.min_rr_ratio:
+            reason = (
+                f"Setup found ({confirmed.strategy}) but R:R {confirmed.rr_ratio:.2f} "
+                f"is below minimum {self.config.min_rr_ratio:.2f}."
+            )
+            return confirmed, "RR_BELOW_MINIMUM", reason
+
+        return confirmed, None, None
 
     def collect_strategy_candidates(
         self,
