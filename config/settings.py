@@ -149,6 +149,12 @@ class SystemConfig:
     #   prioritize — Daily/4H establishes a primary direction; aligned setups
     #                rank first and qualified countertrend setups require 5m entry
     htf_direction_mode: str = "off"
+    # Where daily/4H direction comes from when htf_direction_mode is active:
+    #   payload — TradingView's completed-bar labels (structurally lag turns:
+    #             2026-07-02 they read UP through a full-afternoon selloff)
+    #   live    — computed server-side from price vs yesterday's range and the
+    #             prior 4h window (context/live_direction.py); flips intraday
+    htf_direction_source: str = "payload"
     # Fail closed on classifier states that are informative but not fully aligned.
     # Default off preserves research/replay compatibility; production opts in.
     block_restricted_regime: bool = False
@@ -494,6 +500,9 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
                 else "off"
             )
         ),
+        htf_direction_source=str(
+            os.getenv("HTF_DIRECTION_SOURCE") or "payload"
+        ).strip().lower(),
         block_restricted_regime=_env_bool(
             "BLOCK_RESTRICTED_REGIME",
             bool(quality.get("block_restricted_regime", False)),
@@ -716,6 +725,8 @@ def _validate_config(config: SystemConfig) -> None:
         raise ConfigError("min_rr_ratio must be >= 1.0.")
     if config.htf_direction_mode not in {"off", "strict", "prioritize"}:
         raise ConfigError("htf_direction_mode must be one of: off, strict, prioritize.")
+    if config.htf_direction_source not in {"payload", "live"}:
+        raise ConfigError("htf_direction_source must be one of: payload, live.")
     if config.max_staleness_seconds < 1:
         raise ConfigError("max_staleness_seconds must be >= 1.")
     if config.minimum_starting_capital < 0:

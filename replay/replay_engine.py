@@ -7,6 +7,7 @@ decision, risk, paper broker, journal, and review path.
 
 from __future__ import annotations
 
+from collections import deque
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -33,6 +34,7 @@ from execution.broker_interface import BracketOrder
 from execution.paper_broker import NextBarOHLC, PaperBroker
 from journal.journal_logger import JournalLogger
 from context.htf_loader import HTFLookup
+from context.live_direction import apply_live_direction
 from context.trend import moderate_subtype
 from replay.candle_loader import ReplayCandle, ReplayCandleLoader
 from replay.manifest import ReplayManifest
@@ -64,6 +66,10 @@ class ReplayEngine:
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.htf = htf_lookup or self._load_default_htf()
         self._rolling_balance: float | None = None
+        # Rolling per-instrument 15m history for htf_direction_source=live —
+        # persists across days in run_many/run_manifest so the first bars of a
+        # day still have a prior 4h window (like BarHistory's lookback live).
+        self._live_dir_bars: dict[str, deque] = {}
 
     @staticmethod
     def _load_default_htf() -> HTFLookup:
@@ -119,6 +125,19 @@ class ReplayEngine:
 
         for idx, candle in enumerate(candles):
             candles_processed += 1
+            # Live-direction history sees EVERY candle (including skipped
+            # ones), mirroring BarHistory recording every ingested bar live.
+            if getattr(self.config, "htf_direction_source", "payload") == "live":
+                self._live_dir_bars.setdefault(
+                    candle.instrument, deque(maxlen=120)
+                ).append(
+                    {
+                        "ts": candle.timestamp,
+                        "high": candle.high,
+                        "low": candle.low,
+                        "close": candle.close,
+                    }
+                )
             if idx < skip_to:
                 prev_candle = candle
                 continue
@@ -135,6 +154,10 @@ class ReplayEngine:
                 break
 
             state = self._market_state_from_candle(candle, prev_candle)
+            if getattr(self.config, "htf_direction_source", "payload") == "live":
+                apply_live_direction(
+                    state, self._live_dir_bars.get(candle.instrument, ())
+                )
             # Shadow setups: audit-only observation (read-only, never trades).
             # Each candidate is resolved against the remaining bars of the day so
             # the journal records WIN/LOSS/NO_FILL — turning observation into
