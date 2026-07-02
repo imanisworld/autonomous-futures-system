@@ -13,6 +13,7 @@ def _ctx(close=100.0, trend="UP", pdh="below", pdl="above", pdc=99.0):
                          "price_vs_pdh": pdh, "price_vs_pdl": pdl},
         "signa": {"grade": "A", "score": 70.0, "daily_direction": "WAIT",
                   "weekly_direction": None},
+        "htf": {"daily_direction": "UP", "four_hour_direction": "UP"},
     }
 
 
@@ -96,6 +97,8 @@ def test_report_classifications(tmp_path):
     assert "15m trend: UP/STRONG" in report
     assert "daily_direction=WAIT" in report
     assert "vs_pdh=below vs_pdl=above" in report
+    assert "direction role: PRIMARY | primary=LONG | daily=UP 4H=UP" in report
+    assert "direction role: UNRESOLVED | primary=LONG | daily=UP 4H=UP" in report
     # ORDER_IDS presence: masked ids for the first trade, NO for the others
     assert "order ids logged: yes" in report
     assert "'entry': '…1704'" in report

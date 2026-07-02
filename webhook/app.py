@@ -774,6 +774,64 @@ async def status_five_min() -> dict:
     )
 
 
+@app.get("/status/opportunities")
+async def status_opportunities(
+    for_date: str | None = Query(default=None, alias="date"),
+) -> dict:
+    """Read-only candidate/opportunity ledger summary for one UTC date."""
+    from adaptive.opportunity_tracker import OpportunityStore
+
+    try:
+        selected_date = date.fromisoformat(for_date) if for_date else date.today()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="date must be YYYY-MM-DD") from exc
+
+    store = OpportunityStore(
+        log_dir=str(Path(_config.log_dir) / "opportunities")
+    )
+    rows = store.read_day(selected_date)
+    candidates = [row for row in rows if row.get("_type") == "candidate"]
+    outcomes = [row for row in rows if row.get("_type") == "outcome"]
+    lifecycle = [row for row in rows if row.get("_type") == "lifecycle"]
+    roles = Counter(
+        str(row.get("direction_role") or "UNCLASSIFIED") for row in candidates
+    )
+    gates = Counter(
+        str(row.get("reject_code"))
+        for row in candidates
+        if row.get("reject_code")
+    )
+    broker_results = Counter(
+        str(row.get("broker_result"))
+        for row in lifecycle
+        if row.get("broker_result")
+    )
+    resolved_misses = [
+        row
+        for row in outcomes
+        if row.get("result") in {
+            "TARGET_HIT", "STOP_HIT", "ENTRY_NOT_TOUCHED", "EXPIRED_OPEN"
+        }
+    ]
+    return {
+        "date": selected_date.isoformat(),
+        "candidate_count": len(candidates),
+        "primary_candidates": roles["PRIMARY"],
+        "countertrend_scalps": roles["COUNTERTREND_SCALP"],
+        "unresolved_candidates": roles["UNRESOLVED"],
+        "selected_candidates": sum(bool(row.get("selected")) for row in candidates),
+        "rejected_candidates": sum(bool(row.get("reject_code")) for row in candidates),
+        "resolved_misses": len(resolved_misses),
+        "top_blocking_gates": [
+            {"gate": gate, "count": count} for gate, count in gates.most_common(10)
+        ],
+        "broker_results": dict(broker_results),
+        "candidates": candidates[-100:],
+        "outcomes": outcomes[-100:],
+        "lifecycle": lifecycle[-200:],
+    }
+
+
 @app.get("/status/fill-realism")
 async def status_fill_realism(
     days: int = Query(default=7, ge=1, le=90),

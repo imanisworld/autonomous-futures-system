@@ -117,6 +117,17 @@ class OpportunityCandidate:
     snapshots: dict = field(default_factory=dict)   # trend/vwap/volume/orb/htf/confluence/regime
     status: str = "PENDING"     # PENDING | RESOLVED | EXPIRED
     expires_at: Optional[str] = None
+    direction_role: Optional[str] = None
+    htf_primary_direction: Optional[str] = None
+    daily_direction: Optional[str] = None
+    four_hour_direction: Optional[str] = None
+    direction_reason: Optional[str] = None
+    selected: bool = False
+    attempted: bool = False
+    fallback_attempt: bool = False
+    reject_code: Optional[str] = None
+    reject_reason: Optional[str] = None
+    broker_result: Optional[str] = None
 
     @staticmethod
     def make_id(instrument: str, source_bar_id: str, strategy: str, direction: str) -> str:
@@ -156,6 +167,10 @@ class OpportunityOutcome:
     bars_to_resolution: int
     est_commission: float
     est_slippage_ticks: float
+    entry_touched: bool = False
+    stop_touched: bool = False
+    target_touched: bool = False
+    pessimistic_same_bar: bool = False
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -181,8 +196,12 @@ def resolve_outcome(
     long = candidate.direction == "LONG"
     entry, stop, target = candidate.entry, candidate.stop, candidate.target
 
-    mfe_price = 0.0   # max favorable excursion from entry (>=0)
-    mae_price = 0.0   # max adverse excursion from entry (<=0)
+    mfe_price = 0.0   # max favorable excursion from entry (>=0), after entry touch
+    mae_price = 0.0   # max adverse excursion from entry (<=0), after entry touch
+    entry_touched = False
+    stop_touched = False
+    target_touched = False
+    pessimistic_same_bar = False
 
     def _finish(result: str, exit_price: float, idx: int, reason: str) -> OpportunityOutcome:
         # Adverse slippage on the market entry; target = clean limit, stop = slipped.
@@ -208,11 +227,19 @@ def resolve_outcome(
             bars_to_resolution=idx + 1,
             est_commission=commission_rt,
             est_slippage_ticks=slippage_ticks,
+            entry_touched=entry_touched,
+            stop_touched=stop_touched,
+            target_touched=target_touched,
+            pessimistic_same_bar=pessimistic_same_bar,
         )
 
     for i, bar in enumerate(future_bars):
         hi = float(bar["high"])
         lo = float(bar["low"])
+        if not entry_touched:
+            entry_touched = lo <= entry <= hi
+            if not entry_touched:
+                continue
         if long:
             mfe_price = max(mfe_price, hi - entry)
             mae_price = min(mae_price, lo - entry)
@@ -224,7 +251,11 @@ def resolve_outcome(
             hit_target = lo <= target
             hit_stop = hi >= stop
 
+        stop_touched = stop_touched or hit_stop
+        target_touched = target_touched or hit_target
+
         if hit_target and hit_stop:
+            pessimistic_same_bar = pessimistic_both_hit
             if pessimistic_both_hit:
                 return _finish("STOP_HIT", stop, i, "same-bar stop+target → pessimistic stop")
             return _finish("TARGET_HIT", target, i, "same-bar stop+target → optimistic target")
@@ -233,12 +264,18 @@ def resolve_outcome(
         if hit_target:
             return _finish("TARGET_HIT", target, i, "target hit")
 
-    # Unresolved — report as open, do not drop.
+    # Unresolved — distinguish an unfilled resting entry from a filled/open one.
+    unresolved_result = "EXPIRED_OPEN" if entry_touched else "ENTRY_NOT_TOUCHED"
+    unresolved_reason = (
+        "no stop/target reached within available bars"
+        if entry_touched
+        else "planned entry never traded within available bars"
+    )
     return OpportunityOutcome(
         candidate_id=candidate.candidate_id,
         resolved_at="",
-        result="EXPIRED_OPEN",
-        exit_reason="no stop/target reached within available bars",
+        result=unresolved_result,
+        exit_reason=unresolved_reason,
         pnl_ticks=0.0,
         pnl_dollars=0.0,
         contracts=1,
@@ -247,6 +284,10 @@ def resolve_outcome(
         bars_to_resolution=len(future_bars),
         est_commission=commission_rt,
         est_slippage_ticks=slippage_ticks,
+        entry_touched=entry_touched,
+        stop_touched=stop_touched,
+        target_touched=target_touched,
+        pessimistic_same_bar=pessimistic_same_bar,
     )
 
 
@@ -272,6 +313,25 @@ class OpportunityStore:
 
     def record_outcome(self, o: OpportunityOutcome, for_date: Optional[date] = None) -> None:
         self._append(o.to_dict(), for_date)
+
+    def record_lifecycle(
+        self,
+        candidate_id: str,
+        stage: str,
+        *,
+        for_date: Optional[date] = None,
+        **fields,
+    ) -> None:
+        self._append(
+            {
+                "_type": "lifecycle",
+                "candidate_id": candidate_id,
+                "stage": stage,
+                "recorded_at": datetime.now(timezone.utc).isoformat(),
+                **fields,
+            },
+            for_date,
+        )
 
     def read_day(self, for_date: Optional[date] = None) -> list[dict]:
         path = self._path(for_date)

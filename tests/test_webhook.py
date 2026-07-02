@@ -67,6 +67,41 @@ def _isolate_app_logs(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(app_module._config, "log_dir", str(tmp_path / "logs"))
 
 
+def test_status_opportunities_summarizes_direction_roles(monkeypatch, tmp_path):
+    from fastapi.testclient import TestClient
+    from adaptive.opportunity_tracker import OpportunityCandidate, OpportunityStore
+    from webhook.app import app
+
+    _isolate_app_logs(monkeypatch, tmp_path)
+    store = OpportunityStore(log_dir=str(tmp_path / "logs" / "opportunities"))
+    store.record_candidate(
+        OpportunityCandidate(
+            candidate_id="MES:b1:orb_reclaim:LONG",
+            source_bar_id="b1",
+            detected_at="2026-07-01T14:00:00+00:00",
+            instrument="MES",
+            session="new_york",
+            timeframe="15",
+            strategy="orb_reclaim",
+            direction="LONG",
+            entry=7500,
+            stop=7495,
+            target=7515,
+            direction_role="PRIMARY",
+            selected=True,
+        ),
+        for_date=date.today(),
+    )
+
+    payload = TestClient(app).get(
+        f"/status/opportunities?date={date.today().isoformat()}"
+    ).json()
+
+    assert payload["candidate_count"] == 1
+    assert payload["primary_candidates"] == 1
+    assert payload["selected_candidates"] == 1
+
+
 # ─── state_builder: parse_timestamp ───────────────────────────────────────────
 
 def test_state_builder_preserves_pine_advisory_bracket_fields():

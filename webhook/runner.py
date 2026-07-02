@@ -21,6 +21,7 @@ from __future__ import annotations
 import logging
 import os
 from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
 from typing import Optional
 
 from config.settings import SystemConfig, load_config
@@ -36,7 +37,7 @@ from context.five_min_feed import (
 )
 from execution.paper_broker import NextBarOHLC, PaperBroker
 from journal.journal_logger import JournalLogger
-from risk.risk_engine import DailyState, RiskEngine, TradeSetup
+from risk.risk_engine import DailyState, RiskEngine, RiskResult, TradeSetup
 from strategy.confluence_scorer import score_setup as _score_setup
 from strategy.stop_sizing import apply_stop_multiplier
 from strategy.shadow_setups import evaluate_shadow_setups
@@ -77,6 +78,144 @@ _STALE_PRICE_MISMATCH_THRESHOLD: dict[str, float] = {
 def _tick_value_for(instrument: str) -> float:
     root = (instrument or "").upper().rstrip("!1234567890HMUZ")
     return _TICK_VALUES.get(root, 1.25)
+
+
+def _record_candidate_audit(
+    decision,
+    state,
+    log_dir: str,
+    for_date: date,
+) -> list[str]:
+    """Persist every formed strategy candidate, not only the selected one."""
+    rows = list(getattr(decision, "candidate_audit", []) or [])
+    if not rows or not any(row.get("direction_role") for row in rows):
+        return []
+    try:
+        from adaptive.opportunity_tracker import (
+            NO_SETUP,
+            QUALITY_BLOCKED,
+            OpportunityCandidate,
+            OpportunityStore,
+        )
+
+        store = OpportunityStore(log_dir=str(Path(log_dir) / "opportunities"))
+        candidate_ids: list[str] = []
+        source_bar_id = state.timestamp.isoformat()
+        for row in rows:
+            candidate_id = OpportunityCandidate.make_id(
+                state.instrument,
+                source_bar_id,
+                str(row.get("strategy") or "unknown"),
+                str(row.get("direction") or "unknown"),
+            )
+            if row.get("selected"):
+                candidate_ids.append(candidate_id)
+            reject_code = row.get("reject_code")
+            candidate = OpportunityCandidate(
+                candidate_id=candidate_id,
+                source_bar_id=source_bar_id,
+                detected_at=state.timestamp.isoformat(),
+                instrument=state.instrument,
+                session=state.session,
+                timeframe=str(getattr(state.ohlc, "timeframe", "15")),
+                strategy=str(row.get("strategy") or "unknown"),
+                direction=str(row.get("direction") or ""),
+                entry=float(row.get("entry")),
+                stop=float(row.get("stop")),
+                target=float(row.get("target")),
+                failed_gates=[reject_code] if reject_code else [],
+                market_condition=decision.market_condition,
+                block_type=QUALITY_BLOCKED if reject_code else NO_SETUP,
+                snapshots={"decision": decision.decision},
+                expires_at=(state.timestamp + timedelta(hours=8)).isoformat(),
+                direction_role=row.get("direction_role"),
+                htf_primary_direction=row.get("htf_primary_direction"),
+                daily_direction=row.get("daily_direction"),
+                four_hour_direction=row.get("four_hour_direction"),
+                direction_reason=row.get("direction_reason"),
+                selected=bool(row.get("selected")),
+                attempted=bool(row.get("attempted")),
+                fallback_attempt=bool(row.get("fallback_attempt")),
+                reject_code=reject_code,
+                reject_reason=row.get("reject_reason"),
+            )
+            store.record_candidate(candidate, for_date=for_date)
+        return candidate_ids
+    except Exception:
+        logger.warning("opportunity candidate audit write failed", exc_info=True)
+        return []
+
+
+def _record_candidate_lifecycle(
+    candidate_ids: list[str],
+    log_dir: str,
+    for_date: date,
+    stage: str,
+    **fields,
+) -> None:
+    if not candidate_ids:
+        return
+    try:
+        from adaptive.opportunity_tracker import OpportunityStore
+
+        store = OpportunityStore(log_dir=str(Path(log_dir) / "opportunities"))
+        for candidate_id in candidate_ids:
+            store.record_lifecycle(
+                candidate_id, stage, for_date=for_date, **fields
+            )
+    except Exception:
+        logger.warning("opportunity lifecycle write failed", exc_info=True)
+
+
+def _resolve_pending_opportunities(
+    state,
+    log_dir: str,
+    for_date: date,
+) -> None:
+    """Resolve earlier same-day candidates from causal future bars."""
+    try:
+        from adaptive.opportunity_tracker import (
+            OpportunityCandidate,
+            OpportunityStore,
+            resolve_outcome,
+        )
+
+        store = OpportunityStore(log_dir=str(Path(log_dir) / "opportunities"))
+        rows = store.read_day(for_date)
+        resolved_ids = {
+            row.get("candidate_id")
+            for row in rows
+            if row.get("_type") == "outcome"
+        }
+        bars = BarHistory(log_dir=log_dir).recent(
+            state.instrument, 500, for_date=for_date
+        )
+        for row in rows:
+            if row.get("_type") != "candidate":
+                continue
+            if row.get("instrument") != state.instrument:
+                continue
+            if row.get("candidate_id") in resolved_ids:
+                continue
+            candidate = OpportunityCandidate.from_dict(row)
+            future = [
+                bar
+                for bar in bars
+                if str(bar.get("ts") or "") > candidate.detected_at
+            ]
+            if not future:
+                continue
+            outcome = resolve_outcome(candidate, future)
+            expired = False
+            if candidate.expires_at:
+                expires = datetime.fromisoformat(
+                    candidate.expires_at.replace("Z", "+00:00")
+                )
+                expired = state.timestamp >= expires
+            if outcome.result in {"TARGET_HIT", "STOP_HIT"} or expired:
+                store.record_outcome(outcome, for_date=for_date)
+    except Exception:
+        logger.warning("opportunity resolution failed", exc_info=True)
 
 
 def _paper_broker(starting_balance: float, cfg: Optional[SystemConfig]) -> PaperBroker:
@@ -172,6 +311,16 @@ def _candidate_snapshot(
     ]
     if event_id:
         snapshot["event_id"] = event_id
+    for key in (
+        "direction_role",
+        "htf_primary_direction",
+        "daily_direction",
+        "four_hour_direction",
+        "direction_reason",
+    ):
+        value = getattr(setup, key, None)
+        if value is not None:
+            snapshot[key] = value
     return snapshot
 
 
@@ -371,6 +520,10 @@ def process_alert(
             state.window_direction = BarHistory.window_direction(
                 bar_hist.recent(state.instrument, 6, for_date=for_date)
             )
+            if getattr(cfg, "htf_direction_mode", "off") == "prioritize":
+                _resolve_pending_opportunities(
+                    state, log_dir, for_date or date.today()
+                )
         except Exception:  # noqa: BLE001 — fail-soft, never break ingestion
             logger.warning("bar history update failed", exc_info=True)
 
@@ -582,6 +735,7 @@ def process_alert(
                 and broker_type == "tradovate"
                 and same_instrument
                 and fill is None
+                and open_pos.get("direction_role") != "COUNTERTREND_SCALP"
                 and os.getenv("RUNNER_LIVE_ENABLED", "").strip().lower() in ("1", "true", "yes")
             ):
                 try:
@@ -754,12 +908,18 @@ def process_alert(
     result["signa_status"] = decision.signa_status
     result["failed_gates"] = decision.failed_gates
     result["confidence_score"] = decision.confidence_score
+    opportunity_candidate_ids = _record_candidate_audit(
+        decision, state, log_dir, today
+    )
 
     if decision.decision != "TRADE" or decision.setup is None:
         if (
             five_min_enabled()
             and decision.setup is not None
-            and "ENTRY_DETACHED_FROM_PRICE" in decision.failed_gates
+            and (
+                "ENTRY_DETACHED_FROM_PRICE" in decision.failed_gates
+                or "COUNTERTREND_REQUIRES_5M" in decision.failed_gates
+            )
         ):
             try:
                 arm_fifteen_min_setup(
@@ -799,6 +959,14 @@ def process_alert(
                 ),
                 event_id=result.get("event_id"),
             )
+        _record_candidate_lifecycle(
+            opportunity_candidate_ids,
+            log_dir,
+            today,
+            "DECISION_BLOCKED",
+            decision=decision.decision,
+            failed_gates=list(decision.failed_gates or []),
+        )
         return result
 
     # ── Step 3a: Per-instrument stop-width multiplier ─────────────────────────
@@ -859,6 +1027,8 @@ def process_alert(
     )
     risk_engine = RiskEngine(config=cfg)
     contracts = risk_engine.recommended_contracts(state.instrument, account_balance)
+    if decision.setup.direction_role == "COUNTERTREND_SCALP":
+        contracts = 1
     # Tick-align entry/stop/target to valid broker prices.
     entry_px = _round_to_tick(decision.setup.entry, state.instrument)
     stop_px = _round_to_tick(decision.setup.stop, state.instrument)
@@ -884,12 +1054,42 @@ def process_alert(
         confluence_grade=confluence.grade,
     )
     risk_result = risk_engine.validate(trade_setup, daily_state)
+    if risk_result.approved and decision.setup.direction_role == "COUNTERTREND_SCALP":
+        root = state.instrument.upper().rstrip("!1234567890HMUZ")
+        tick_size = _TICK_SIZE_BY_ROOT.get(root, 0.25)
+        tick_value = _tick_value_for(root)
+        stop_ticks = abs(float(entry_px) - float(stop_px)) / tick_size
+        planned_risk = stop_ticks * tick_value
+        normal_budget = (
+            float(account_balance or 0)
+            * float(getattr(cfg, "max_account_risk_per_trade_percent", 1.0) or 1.0)
+            / 100.0
+        )
+        countertrend_budget = normal_budget * 0.5
+        if planned_risk > countertrend_budget:
+            risk_result = RiskResult(
+                result="REJECTED",
+                failed_rule="countertrend_risk_cap",
+                reason=(
+                    f"Countertrend scalp risk ${planned_risk:.2f} exceeds "
+                    f"50% risk budget ${countertrend_budget:.2f}; structural stop "
+                    "is not tightened or widened."
+                ),
+            )
     risk_dict = {
         "result": risk_result.result,
         "failed_rule": risk_result.failed_rule,
         "reason": risk_result.reason,
     }
     result["risk"] = risk_dict
+    _record_candidate_lifecycle(
+        opportunity_candidate_ids,
+        log_dir,
+        today,
+        "RISK_CHECK",
+        risk_result=risk_result.result,
+        risk_failed_rule=risk_result.failed_rule,
+    )
     if not risk_result.approved:
         # Update journal entry decision before writing so the log reflects reality.
         journal_entry["decision"] = "RISK_REJECTED"
@@ -953,9 +1153,24 @@ def process_alert(
         logger.info("Order suppressed by schedule gate: %s", _gate_reason)
         result["decision"] = "SHADOW_NO_ORDER"
         result["gate_reason"] = _gate_reason
+        _record_candidate_lifecycle(
+            opportunity_candidate_ids,
+            log_dir,
+            today,
+            "ORDER_SUPPRESSED",
+            broker_result="NOT_SENT",
+            gate_reason=_gate_reason,
+        )
         return result
 
     fill = broker.execute_bracket(order)
+    _record_candidate_lifecycle(
+        opportunity_candidate_ids,
+        log_dir,
+        today,
+        "BROKER_RESULT",
+        broker_result=fill.result,
+    )
     if fill.result != "OPEN":
         # Broker did NOT establish a position. A CANCELLED result is an EXPECTED
         # IOC limit no-fill (the broker accepted the order; the limit just didn't
@@ -1330,6 +1545,13 @@ def _market_state_context(state) -> dict:
             "strat_sequence": state.strat.strat_sequence if state.strat else None,
             "strat_trigger": state.strat.strat_trigger if state.strat else None,
             "strat_direction": state.strat.strat_direction if state.strat else None,
+        },
+        "htf": {
+            "daily_direction": state.htf.daily_direction if state.htf else None,
+            "four_hour_direction": state.htf.four_hour_direction if state.htf else None,
+            "one_hour_direction": state.htf.one_hour_direction if state.htf else None,
+            "ftfc_direction": state.htf.ftfc_direction if state.htf else None,
+            "ftfc_aligned": state.htf.ftfc_aligned if state.htf else None,
         },
         "gex": {
             "gex_flip": state.gex.gex_flip if state.gex else None,
