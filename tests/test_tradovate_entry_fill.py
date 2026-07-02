@@ -169,3 +169,82 @@ def test_global_fallback_when_no_per_instrument(monkeypatch):
     cap = _capture_body(monkeypatch, b)
     b.execute_bracket(_long_order())  # MES → no _MES → global 2t → +0.5 → 7560.0
     assert cap["body"]["price"] == 7560.0
+
+
+# ── #3 unknown (read-lagged) entry → positive confirmation, never phantom-open ──
+# 2026-07-01 incident follow-ups #1-3: an unreadable entry is PENDING. Only a
+# positively-confirmed fill journals a position; a confirmed flat tears the OSO
+# down; still-unreadable becomes ENTRY_UNCONFIRMED with no open journaled.
+
+from execution.broker_interface import Position
+
+
+def _pos(direction="LONG"):
+    return Position(instrument="MESU6", direction=direction, entry_price=7559.5,
+                    stop=7557.0, target=7574.5, quantity=1, open=True)
+
+
+def _unknown_entry_broker(monkeypatch, snapshots):
+    """Broker whose entry order is never readable; get_position_snapshot pops
+    from `snapshots` (last one repeats)."""
+    monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS", "2")
+    b = _broker(monkeypatch)
+    posts = _mock_oso(monkeypatch, b, entry_status=None)
+    # override _get: /order/item gives an unreadable (empty) record every time
+    def fake_get(path, **k):
+        if "/order/item" in path:
+            return {}
+        return []
+    monkeypatch.setattr(b, "_get", fake_get)
+    def fake_snapshot():
+        return snapshots.pop(0) if len(snapshots) > 1 else snapshots[0]
+    monkeypatch.setattr(b, "get_position_snapshot", fake_snapshot)
+    return b, posts
+
+
+def test_unknown_entry_confirmed_filled_by_position(monkeypatch):
+    b, _ = _unknown_entry_broker(monkeypatch, [(True, _pos())])
+    monkeypatch.setattr(b, "_verify_bracket_children", lambda **k: (True, True))
+    fill = b.execute_bracket(_long_order())
+    assert fill.result == "OPEN"
+    assert b._last_position is not None and b._last_position.open
+
+
+def test_unknown_entry_confirmed_flat_cancels_all(monkeypatch):
+    b, posts = _unknown_entry_broker(monkeypatch, [(True, None)])
+    fill = b.execute_bracket(_long_order())
+    assert fill.result == "CANCELLED"
+    assert fill.exit_reason == "ENTRY_NOT_FILLED"
+    assert b._last_position is None
+    cancels = {body.get("orderId") for path, body in posts if path == "/order/cancelorder"}
+    assert cancels == {111, 222, 333}
+
+
+def test_unknown_entry_never_confirmed_journals_nothing(monkeypatch):
+    b, posts = _unknown_entry_broker(monkeypatch, [(False, None)])
+    fill = b.execute_bracket(_long_order())
+    assert fill.result == "CANCELLED"
+    assert fill.exit_reason == "ENTRY_UNCONFIRMED"
+    assert b._last_position is None
+    # the entry cancel attempt (late-fill prevention) must have gone out
+    cancels = {body.get("orderId") for path, body in posts if path == "/order/cancelorder"}
+    assert 111 in cancels
+
+
+def test_unknown_entry_direction_mismatch_not_adopted(monkeypatch):
+    # A confirmed position in the WRONG direction is not our fill — with the
+    # ladder unable to prove our entry, journal nothing open.
+    b, _ = _unknown_entry_broker(monkeypatch, [(True, _pos(direction="SHORT"))])
+    fill = b.execute_bracket(_long_order())
+    assert fill.result == "CANCELLED"
+    assert b._last_position is None
+
+
+def test_unknown_entry_late_fill_appears_after_entry_cancel(monkeypatch):
+    # First read unconfirmed; after the protective entry-cancel the position
+    # read finally works and shows our fill → open it (brackets are armed).
+    b, _ = _unknown_entry_broker(monkeypatch, [(False, None), (True, _pos())])
+    monkeypatch.setattr(b, "_verify_bracket_children", lambda **k: (True, True))
+    fill = b.execute_bracket(_long_order())
+    assert fill.result == "OPEN"
+    assert b._last_position is not None and b._last_position.open
