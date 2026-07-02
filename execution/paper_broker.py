@@ -57,6 +57,9 @@ class NextBarOHLC:
     """Optional next-bar data for trade resolution simulation."""
     high: float
     low: float
+    # Next-bar open — used by pending-entry fill models (e.g. a stop entry that
+    # gaps through its trigger). Optional so existing callers are unaffected.
+    open: Optional[float] = None
 
 
 # ─── Paper Broker ─────────────────────────────────────────────────────────────
@@ -76,6 +79,9 @@ class PaperBroker(BrokerInterface):
         runner_mode: bool = False,
         runner_activation_r: float = 1.0,
         runner_trail_r: float = 0.5,
+        entry_fill_model: str = "market",
+        entry_tolerance_ticks_by_root: Optional[dict] = None,
+        entry_tolerance_ticks_default: float = 0.0,
     ):
         """
         Args:
@@ -103,6 +109,24 @@ class PaperBroker(BrokerInterface):
         self._runner_activation_r = float(runner_activation_r)
         self._runner_trail_r = float(runner_trail_r)
         self._runner_max_fav: Optional[float] = None  # running favourable price extreme
+        # Entry fill model (IOC-faithful baseline). "market" = legacy: every
+        # entry fills at the plan price ± slippage. "ioc_limit" mirrors the live
+        # Tradovate entry leg (#2): a Limit-IOC capped at entry ± tolerance —
+        # the order fills at the CURRENT market (never worse than the cap) or
+        # self-cancels. Replay's fiction was filling 100% while live fills ~14%.
+        model = str(entry_fill_model or "market").strip().lower()
+        if model not in ("market", "ioc_limit"):
+            raise ValueError(f"PaperBroker: unknown entry_fill_model {entry_fill_model!r}")
+        self._entry_fill_model = model
+        self._entry_tol_by_root = dict(entry_tolerance_ticks_by_root or {})
+        self._entry_tol_default = max(0.0, float(entry_tolerance_ticks_default or 0.0))
+
+    def _entry_tolerance_ticks(self, instrument: str) -> float:
+        root = "".join(ch for ch in str(instrument or "").upper() if ch.isalpha())[:3]
+        try:
+            return max(0.0, float(self._entry_tol_by_root.get(root, self._entry_tol_default)))
+        except (TypeError, ValueError):
+            return self._entry_tol_default
 
     @property
     def is_live(self) -> bool:
@@ -124,11 +148,20 @@ class PaperBroker(BrokerInterface):
             supports_options=False,
         )
 
-    def execute_bracket(self, order: BracketOrder) -> Fill:
+    def execute_bracket(
+        self, order: BracketOrder, market_price: Optional[float] = None
+    ) -> Fill:
         """
         Simulate a bracket order fill.
 
-        Phase 1 behavior: fills at entry price immediately.
+        market model (legacy): fills at entry price ± slippage immediately.
+        ioc_limit model: mirrors the live Tradovate entry leg (#2) — a Limit-IOC
+        capped at entry ± tolerance ticks. `market_price` (the decision bar's
+        close) is where the market actually is when the order arrives: the fill
+        happens AT the market (capped at the limit), or not at all. An
+        unmarketable IOC self-cancels → result=CANCELLED / ENTRY_NOT_FILLED,
+        exactly how the live box books it, and no position is opened.
+
         Resolution requires a call to resolve_position() with next-bar data,
         or returns OPEN if no next-bar data is available.
         """
@@ -144,7 +177,27 @@ class PaperBroker(BrokerInterface):
         # SHORT fills lower. Stop/target stay at their ordered (resting) prices.
         tick = TICK_SIZE.get(order.instrument, 0.25)
         slip = self._slippage_ticks * tick
-        if order.direction == "LONG":
+        if self._entry_fill_model == "ioc_limit":
+            if market_price is None:
+                raise ValueError(
+                    "PaperBroker(entry_fill_model='ioc_limit') requires "
+                    "market_price (the decision bar's close) on execute_bracket()"
+                )
+            tol = self._entry_tolerance_ticks(order.instrument) * tick
+            market = float(market_price)
+            if order.direction == "LONG":
+                limit_px = order.entry + tol
+                if market > limit_px:
+                    return self._entry_not_filled(order, contracts)
+                fill_entry = min(limit_px, market + slip)
+            elif order.direction == "SHORT":
+                limit_px = order.entry - tol
+                if market < limit_px:
+                    return self._entry_not_filled(order, contracts)
+                fill_entry = max(limit_px, market - slip)
+            else:
+                fill_entry = market
+        elif order.direction == "LONG":
             fill_entry = order.entry + slip
         elif order.direction == "SHORT":
             fill_entry = order.entry - slip
@@ -172,6 +225,22 @@ class PaperBroker(BrokerInterface):
             result="OPEN",
             pnl_ticks=None,
             pnl_dollars=None,
+        )
+
+    def _entry_not_filled(self, order: BracketOrder, contracts: int) -> Fill:
+        """The IOC entry self-cancelled: no position, no P&L, booked the way the
+        live box books it (CANCELLED / ENTRY_NOT_FILLED) so daily-state
+        reconstruction and fill-realism audits treat replay and live the same."""
+        return Fill(
+            instrument=order.instrument,
+            direction=order.direction,
+            contracts=contracts,
+            entry_price=order.entry,
+            exit_price=None,
+            exit_reason="ENTRY_NOT_FILLED",
+            result="CANCELLED",
+            pnl_ticks=0.0,
+            pnl_dollars=0.0,
         )
 
     def _resolve_runner(self, next_bar, pos, tick, tick_val) -> Optional[Fill]:

@@ -200,6 +200,17 @@ class SystemConfig:
     exit_mode: str = "static"  # static | runner_shadow | runner_live
     runner_activation_r: float = 1.0
     runner_trail_r: float = 0.5
+    # Entry fill model for replay/paper (IOC-faithful baseline, Workstream A
+    # Phase 0). "market" = legacy: every replay entry fills unconditionally (the
+    # fiction — live fills ~14%). "ioc_limit" mirrors the live Tradovate entry
+    # leg: Limit-IOC capped at entry ± tolerance; unmarketable → booked
+    # CANCELLED/ENTRY_NOT_FILLED like live, no trade counted. Default "market"
+    # = zero behavior change.
+    entry_fill_model: str = "market"  # market | ioc_limit
+    # Per-root tolerance ticks for ioc_limit — read from the SAME env names the
+    # live broker uses (ENTRY_SLIPPAGE_TOLERANCE_TICKS_<ROOT>, then the global);
+    # unset roots fall back to the live box's known values (MES=16, MNQ=32).
+    entry_tolerance_ticks_by_root: dict = field(default_factory=dict)
     # Quality gate (#1): when True, only a TRENDING market condition may trade —
     # RANGE_BOUND / CHOPPY / DEAD all reject (MARKET_CONDITION_NOT_TRENDING). The
     # 555-day replay never took a single trade in a non-TRENDING condition (0/1274),
@@ -401,6 +412,32 @@ class SystemConfig:
 
 # ─── Loader ──────────────────────────────────────────────────────────────────
 
+def _entry_tolerance_map() -> dict:
+    """Per-root IOC entry tolerance (ticks) for the replay/paper ioc_limit model.
+
+    Reads the SAME env names the live broker's `_entry_slippage_tolerance_ticks`
+    uses, so a replay configured like the box behaves like the box. Roots with
+    no env value fall back to the live box's known settings (MES=16, MNQ=32);
+    a global ENTRY_SLIPPAGE_TOLERANCE_TICKS overrides those fallbacks.
+    """
+    defaults = {"MES": 16.0, "MNQ": 32.0}
+    global_raw = os.getenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS")
+    out: dict = {}
+    for root in ("MES", "MNQ", "ES", "NQ", "MGC", "MCL"):
+        raw = os.getenv(f"ENTRY_SLIPPAGE_TOLERANCE_TICKS_{root}")
+        if raw is None:
+            raw = global_raw
+        try:
+            value = float(raw) if raw is not None and str(raw).strip() != "" else None
+        except (TypeError, ValueError):
+            value = None
+        if value is None:
+            value = defaults.get(root)
+        if value is not None:
+            out[root] = max(0.0, value)
+    return out
+
+
 def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
     """
     Load and validate system configuration.
@@ -558,6 +595,11 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         runner_trail_r=float(
             os.getenv("RUNNER_TRAIL_R", fill_model.get("runner_trail_r", 0.5)) or 0.5
         ),
+        entry_fill_model=str(
+            os.getenv("ENTRY_FILL_MODEL", fill_model.get("entry_fill_model", "market"))
+            or "market"
+        ).strip().lower(),
+        entry_tolerance_ticks_by_root=_entry_tolerance_map(),
 
         max_open_positions=position.get("max_open_positions", 1),
         averaging_down_allowed=position.get("averaging_down", False),
@@ -765,6 +807,11 @@ def _validate_config(config: SystemConfig) -> None:
     if config.exit_mode not in {"static", "runner_shadow", "runner_live"}:
         raise ConfigError(
             "exit_mode must be one of: static, runner_shadow, runner_live."
+        )
+    if config.entry_fill_model not in {"market", "ioc_limit"}:
+        raise ConfigError(
+            "entry_fill_model must be one of: market, ioc_limit "
+            "(stop_market arrives with Workstream A Phase 1)."
         )
     if config.max_staleness_seconds < 1:
         raise ConfigError("max_staleness_seconds must be >= 1.")
