@@ -68,8 +68,14 @@ def runner_shadow_status(
     fresh_seconds: int = DEFAULT_FRESH_SECONDS,
 ) -> dict[str, Any]:
     """Return the latest readable live-path proof, or an actionable empty state."""
-    enabled = _enabled("RUNNER_SHADOW_ENABLED")
-    live_enabled = _enabled("RUNNER_LIVE_ENABLED")
+    explicit_mode = os.getenv("EXIT_MODE")
+    if explicit_mode is not None:
+        mode = explicit_mode.strip().lower()
+        enabled = mode == "runner_shadow"
+        live_enabled = mode == "runner_live"
+    else:
+        enabled = _enabled("RUNNER_SHADOW_ENABLED")
+        live_enabled = _enabled("RUNNER_LIVE_ENABLED")
     path = Path(log_dir) / EVIDENCE_FILENAME
     latest: dict[str, Any] | None = None
     read_error: str | None = None
@@ -129,7 +135,7 @@ def runner_shadow_status(
     else:
         state = "disabled"
         summary = "Runner shadow proof collection is disabled."
-        next_step = "Set RUNNER_SHADOW_ENABLED=true and restart before considering live trailing."
+        next_step = "Set EXIT_MODE=runner_shadow and restart before considering live trailing."
 
     return {
         "enabled": enabled,

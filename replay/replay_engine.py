@@ -71,6 +71,7 @@ class ReplayEngine:
         # persists across days in run_many/run_manifest so the first bars of a
         # day still have a prior 4h window (like BarHistory's lookback live).
         self._live_dir_bars: dict[str, deque] = {}
+        self._research_bars: dict[str, deque] = {}
 
     @staticmethod
     def _load_default_htf() -> HTFLookup:
@@ -96,6 +97,9 @@ class ReplayEngine:
             return self._empty_report(candle_path, review_date)
 
         run_date = review_date or _date_from_timestamp(candles[0].timestamp)
+        # Continuation observers are intraday studies. Never let the previous
+        # replay file/day seed the next day's impulse or consolidation.
+        self._research_bars.clear()
         self._reset_run_outputs(run_date)
         journal = JournalLogger(log_dir=str(self.log_dir))
         journal_date = _date_to_date(run_date)
@@ -139,6 +143,18 @@ class ReplayEngine:
                         "close": candle.close,
                     }
                 )
+            self._research_bars.setdefault(
+                candle.instrument, deque(maxlen=8)
+            ).append(
+                {
+                    "ts": candle.timestamp,
+                    "open": candle.open,
+                    "high": candle.high,
+                    "low": candle.low,
+                    "close": candle.close,
+                    "volume": candle.volume,
+                }
+            )
             if idx < skip_to:
                 prev_candle = candle
                 continue
@@ -166,7 +182,9 @@ class ReplayEngine:
             try:
                 forward_bars = [(c.high, c.low) for c in candles[idx + 1:]]
                 shadow_candidates = []
-                for cand in evaluate_shadow_setups(state):
+                for cand in evaluate_shadow_setups(
+                    state, list(self._research_bars.get(candle.instrument, ()))
+                ):
                     record = cand.to_dict()
                     record["outcome"] = resolve_shadow_candidate(
                         cand, forward_bars, instrument=state.instrument

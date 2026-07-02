@@ -497,6 +497,7 @@ def process_alert(
     # window and ingestion gaps are visible. Fail-soft: a history hiccup must
     # never affect ingestion, the decision, or risk.
     bar_gap = None
+    recent_bars: list[dict] = []
     if not five_min_trigger:
         try:
             bar_hist = BarHistory(log_dir=log_dir)
@@ -521,6 +522,7 @@ def process_alert(
             state.window_direction = BarHistory.window_direction(
                 bar_hist.recent(state.instrument, 6, for_date=for_date)
             )
+            recent_bars = bar_hist.recent(state.instrument, 8, for_date=for_date)
             if getattr(cfg, "htf_direction_mode", "off") == "prioritize":
                 _resolve_pending_opportunities(
                     state, log_dir, for_date or date.today()
@@ -613,7 +615,9 @@ def process_alert(
     # the live strategy does NOT trade. Read-only — never places an order; just
     # surfaced on `result` + journal for offline study. Fail-soft.
     try:
-        shadow_candidates = [c.to_dict() for c in evaluate_shadow_setups(state)]
+        shadow_candidates = [
+            c.to_dict() for c in evaluate_shadow_setups(state, recent_bars)
+        ]
     except Exception:
         shadow_candidates = []
     if shadow_candidates:
@@ -654,7 +658,11 @@ def process_alert(
                     direction=open_pos["direction"],
                     entry_price=float(open_pos["entry"]),
                     stop=float(open_pos["stop"]),
-                    target=float(open_pos["target"]),
+                    target=(
+                        None
+                        if open_pos.get("exit_mode") == "runner_live"
+                        else float(open_pos["target"])
+                    ),
                     quantity=int(open_pos.get("contracts", 1)),
                     open=True,
                 )
@@ -715,7 +723,14 @@ def process_alert(
             # WOULD move the stop this bar, using the SAME math as the sim. Flag-
             # gated (RUNNER_SHADOW_ENABLED) and fail-soft — inert by default and
             # never affects resolution, orders, or state.
-            if same_instrument and os.getenv("RUNNER_SHADOW_ENABLED", "").strip().lower() in ("1", "true", "yes"):
+            _explicit_exit_mode = os.getenv("EXIT_MODE")
+            _shadow_exit_active = (
+                getattr(cfg, "exit_mode", "static") == "runner_shadow"
+                if _explicit_exit_mode is not None
+                else os.getenv("RUNNER_SHADOW_ENABLED", "").strip().lower()
+                in ("1", "true", "yes")
+            )
+            if same_instrument and _shadow_exit_active:
                 try:
                     from execution.trail_shadow import shadow_trail, format_shadow_log
                     _inst = open_pos.get("instrument") or state.instrument
@@ -758,7 +773,12 @@ def process_alert(
                 and same_instrument
                 and fill is None
                 and open_pos.get("direction_role") != "COUNTERTREND_SCALP"
-                and os.getenv("RUNNER_LIVE_ENABLED", "").strip().lower() in ("1", "true", "yes")
+                and (
+                    getattr(cfg, "exit_mode", "static") == "runner_live"
+                    if _explicit_exit_mode is not None
+                    else os.getenv("RUNNER_LIVE_ENABLED", "").strip().lower()
+                    in ("1", "true", "yes")
+                )
             ):
                 try:
                     from execution.trail_shadow import shadow_trail
@@ -775,6 +795,17 @@ def process_alert(
                         logger.info(
                             "[trail-live] %s stop %s → %s (order sent)",
                             _inst, _t["original_stop"], _t["would_stop"],
+                        )
+                        # Persist both the possibly-reminted stop order id and
+                        # accepted stop price. A restart must resume from the
+                        # broker-confirmed trail, never the original bracket.
+                        journal.log_order_ids(
+                            instrument=_inst,
+                            session=state.session,
+                            order_ids=getattr(tv, "_last_order_ids", None) or {},
+                            for_date=open_position_date,
+                            stop=float(_t["would_stop"]),
+                            exit_mode="runner_live",
                         )
                 except Exception as _exc:  # live trail must never break trading
                     logger.warning("trail-live skipped: %s", _exc)
@@ -1272,6 +1303,8 @@ def process_alert(
                 session=state.session,
                 order_ids=_order_ids,
                 for_date=today,
+                stop=decision.setup.stop,
+                exit_mode=getattr(cfg, "exit_mode", "static"),
             )
     except Exception as _exc:  # pragma: no cover - persistence must never break trading
         logger.warning("order-id persist skipped: %s", _exc)

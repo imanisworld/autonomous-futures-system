@@ -104,9 +104,18 @@ def arm_fifteen_min_setup(
     This is deliberately a single replaceable arm per instrument/day. A later
     15M decision clears it before evaluation, so stale authority cannot stack.
     """
+    source_ts = _parse_dt(str(payload.get("timestamp") or ""))
+    source_minutes = normalize_minutes(payload.get("timeframe")) or 15
+    authorized_at = (
+        source_ts + timedelta(minutes=source_minutes) if source_ts else None
+    )
     record = {
         "instrument": _root(instrument),
         "armed_from_ts": str(payload.get("timestamp") or ""),
+        # TradingView bar timestamps identify the bar OPEN. The setup is not
+        # knowable until that bar closes, so TTL and causal triggering begin at
+        # open + timeframe, not at the source timestamp.
+        "authorized_at": authorized_at.isoformat() if authorized_at else None,
         "setup": setup,
         "payload": payload,
     }
@@ -137,7 +146,13 @@ def read_armed_setup(instrument: str, log_dir: str, for_date=None) -> Optional[d
 
 
 def triggered_armed_setup(
-    payload, log_dir: str, for_date=None, *, now: Optional[datetime] = None
+    payload,
+    log_dir: str,
+    for_date=None,
+    *,
+    now: Optional[datetime] = None,
+    ttl_minutes: int = ARM_TTL_MINUTES,
+    max_distance_ticks: int = MAX_TRIGGER_DISTANCE_TICKS,
 ) -> Optional[dict]:
     """Return an armed 15M setup only on a close-near-entry retest.
 
@@ -154,14 +169,16 @@ def triggered_armed_setup(
     if not isinstance(setup, dict):
         clear_armed_setup(payload.ticker, log_dir, for_date)
         return None
-    armed_ts = _parse_dt(str(armed.get("armed_from_ts") or ""))
+    armed_ts = _parse_dt(
+        str(armed.get("authorized_at") or armed.get("armed_from_ts") or "")
+    )
     trigger_ts = _parse_dt(str(payload.timestamp))
     current = now or trigger_ts or datetime.now(timezone.utc)
     if (
         armed_ts is None
         or trigger_ts is None
         or trigger_ts < armed_ts
-        or current - armed_ts > timedelta(minutes=ARM_TTL_MINUTES)
+        or current - armed_ts > timedelta(minutes=ttl_minutes)
     ):
         clear_armed_setup(payload.ticker, log_dir, for_date)
         return None
@@ -169,19 +186,45 @@ def triggered_armed_setup(
         entry = float(setup["entry"])
         direction = str(setup["direction"]).upper()
         tick = _TICK_SIZE.get(_root(payload.ticker), 0.25)
-        max_distance = MAX_TRIGGER_DISTANCE_TICKS * tick
-        triggered = (
-            direction == "LONG"
-            and float(payload.low) <= entry <= float(payload.close) <= entry + max_distance
-        ) or (
-            direction == "SHORT"
-            and entry - max_distance <= float(payload.close) <= entry <= float(payload.high)
+        triggered = retest_triggered(
+            direction=direction,
+            entry=entry,
+            bar_high=float(payload.high),
+            bar_low=float(payload.low),
+            bar_close=float(payload.close),
+            tick_size=tick,
+            max_distance_ticks=max_distance_ticks,
         )
     except (KeyError, TypeError, ValueError):
         triggered = False
     if not triggered:
         return None
     return armed
+
+
+def retest_triggered(
+    *,
+    direction: str,
+    entry: float,
+    bar_high: float,
+    bar_low: float,
+    bar_close: float,
+    tick_size: float,
+    max_distance_ticks: int = MAX_TRIGGER_DISTANCE_TICKS,
+) -> bool:
+    """Pure close-confirmed retest predicate shared by live and replay.
+
+    The caller must supply only a completed 5-minute bar.  Keeping time/arm
+    lifecycle outside this predicate makes causal replay straightforward and
+    prevents a research implementation from drifting away from live behavior.
+    """
+    max_distance = max(0, int(max_distance_ticks)) * float(tick_size)
+    direction = str(direction).upper()
+    if direction == "LONG":
+        return bar_low <= entry <= bar_close <= entry + max_distance
+    if direction == "SHORT":
+        return entry - max_distance <= bar_close <= entry <= bar_high
+    return False
 
 
 def record_five_min(payload, log_dir: str, for_date=None) -> dict:

@@ -119,6 +119,14 @@ def _round_to_tick(price: float, instrument: str) -> float:
     return round(round(float(price) / tick) * tick, 4)
 
 
+def _runner_live_enabled() -> bool:
+    """Authoritative live exit contract with backward-compatible flag support."""
+    mode = os.getenv("EXIT_MODE", "").strip().lower()
+    if mode:
+        return mode == "runner_live"
+    return os.getenv("RUNNER_LIVE_ENABLED", "").strip().lower() in ("1", "true", "yes")
+
+
 def _entry_slippage_tolerance_ticks(instrument: str = "") -> float:
     """PER-INSTRUMENT limit-entry slippage cap in ticks (#2), read from env.
 
@@ -740,7 +748,12 @@ class TradovateBroker(BrokerInterface):
                     root, order.direction, order.entry, limit_px, tol_ticks,
                 )
 
-            # Place bracket via OSO (On Submit, send bracket child orders)
+            # Place protective children via OSO. Tradovate's official schema
+            # requires bracket1 and makes bracket2 optional, so runner_live uses
+            # a STOP as bracket1 and omits the fixed target entirely. This makes
+            # the live contract match PaperBroker/replay while preserving
+            # continuous stop protection from the instant the entry fills.
+            runner_live = _runner_live_enabled()
             body = {
                 "accountSpec": self.config.username,
                 "accountId": self._account_id,
@@ -751,15 +764,21 @@ class TradovateBroker(BrokerInterface):
                 "isAutomated": True,
                 "bracket1": {
                     "action": close_action,
-                    "orderType": "Limit",
-                    "price": tick_target,
-                },
-                "bracket2": {
-                    "action": close_action,
                     "orderType": "Stop",
                     "stopPrice": tick_stop,
                 },
             }
+            if not runner_live:
+                body["bracket1"] = {
+                    "action": close_action,
+                    "orderType": "Limit",
+                    "price": tick_target,
+                }
+                body["bracket2"] = {
+                    "action": close_action,
+                    "orderType": "Stop",
+                    "stopPrice": tick_stop,
+                }
 
             result = self._post("/order/placeOSO", body)
             # Detect API-level rejection — Tradovate returns errorText/failureReason on bad payloads
@@ -777,10 +796,10 @@ class TradovateBroker(BrokerInterface):
                     result,
                 )
                 return self._cancelled_fill(order, "TRADOVATE_NO_ORDER_ID")
-            # OSO confirms the bracket children with their own order IDs:
-            # oso1 = bracket1 (Limit/target), oso2 = bracket2 (Stop).
-            target_id = result.get("oso1Id")
-            stop_id = result.get("oso2Id")
+            # OSO child IDs follow bracket order. runner_live has one child:
+            # oso1 = Stop. Static has oso1 = target and oso2 = Stop.
+            target_id = None if runner_live else result.get("oso1Id")
+            stop_id = result.get("oso1Id") if runner_live else result.get("oso2Id")
             logger.info(
                 "Tradovate bracket placed: entry=%s target=%s stop=%s instrument=%s dir=%s",
                 order_id, target_id, stop_id, order.instrument, order.direction,
@@ -842,7 +861,7 @@ class TradovateBroker(BrokerInterface):
                 direction=order.direction,
                 entry_price=order.entry,
                 stop=tick_stop,
-                target=tick_target,
+                target=None if runner_live else tick_target,
                 quantity=qty,
                 open=True,
             )
@@ -858,13 +877,17 @@ class TradovateBroker(BrokerInterface):
             self._position_opened_at = time.time()
             self._resolve_fail_count = 0
 
-            # Verify BOTH protective children (stop + target) actually went live.
+            # Static requires both children. runner_live deliberately has no
+            # target, but its protective stop is still mandatory and verified.
             # A market entry can fill while its bracket children are rejected,
             # leaving a naked position. If either is unconfirmed we do NOT leave
             # the entry exposed: alert loudly AND auto-flatten immediately —
             # a few ticks of slippage beats unbounded unprotected risk.
             stop_ok, target_ok = self._verify_bracket_children(
-                stop_id=stop_id, target_id=target_id, order=order,
+                stop_id=stop_id,
+                target_id=target_id,
+                order=order,
+                require_target=not runner_live,
             )
             self._last_bracket_confirmed = stop_ok and target_ok
             if not self._last_bracket_confirmed:
@@ -880,7 +903,11 @@ class TradovateBroker(BrokerInterface):
                 )
                 return self._handle_naked_position(order, qty, stop_ok=stop_ok, target_ok=target_ok)
 
-            logger.info("Tradovate bracket fully confirmed (entry+stop+target): %s", order.instrument)
+            logger.info(
+                "Tradovate protection confirmed (entry+stop%s): %s",
+                "" if runner_live else "+target",
+                order.instrument,
+            )
             return Fill(
                 instrument=order.instrument,
                 direction=order.direction,
@@ -934,7 +961,7 @@ class TradovateBroker(BrokerInterface):
 
     def _verify_bracket_children(
         self, stop_id, target_id, order: BracketOrder,
-        retries: int = None, delay: float = None,
+        retries: int = None, delay: float = None, require_target: bool = True,
     ) -> tuple[bool, bool]:
         """Confirm the OSO's stop + target child orders are live.
 
@@ -948,7 +975,9 @@ class TradovateBroker(BrokerInterface):
         """
         retries = self._BRACKET_CONFIRM_RETRIES if retries is None else retries
         delay = self._BRACKET_CONFIRM_DELAY if delay is None else delay
-        return self._child_live(stop_id, retries, delay), self._child_live(target_id, retries, delay)
+        stop_ok = self._child_live(stop_id, retries, delay)
+        target_ok = self._child_live(target_id, retries, delay) if require_target else True
+        return stop_ok, target_ok
 
     def _child_live(self, order_id, retries: int, delay: float) -> bool:
         """True if a bracket child order exists and is not explicitly dead.

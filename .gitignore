@@ -20,6 +20,7 @@ strategy/*.pdf
 *.dmg
 data/replay/
 data/replay_polygon/
+data/replay_polygon_5m/
 data/htf/
 data/mfe_cache/
 replay_out/
