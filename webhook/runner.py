@@ -27,6 +27,7 @@ from typing import Optional
 from config.settings import SystemConfig, load_config
 from execution.broker_interface import BracketOrder, BrokerInterface
 from context.bar_history import BarHistory
+from context.live_direction import apply_live_direction
 from context.five_min_feed import (
     arm_fifteen_min_setup,
     clear_armed_setup,
@@ -526,6 +527,27 @@ def process_alert(
                 )
         except Exception:  # noqa: BLE001 — fail-soft, never break ingestion
             logger.warning("bar history update failed", exc_info=True)
+
+    # ── Live HTF direction (opt-in): compute daily/4H from price, not labels ──
+    # The payload's higher-TF labels come from completed bars and lag turns
+    # (2026-07-02: UP labels through a full-afternoon FULL_SHORT selloff kept
+    # gate_direction LONG on every bar). With htf_direction_source=live the two
+    # direction fields are always live-computed; on any failure they are
+    # cleared to None (source unavailable) — never left holding a stale payload
+    # label the operator believes was replaced. Runs for the 5m-trigger path
+    # too so execution bars are judged with the same direction source.
+    if getattr(cfg, "htf_direction_source", "payload") == "live":
+        try:
+            _dir_bars = BarHistory(log_dir=log_dir).recent(
+                state.instrument, 40, for_date=for_date
+            )
+            apply_live_direction(state, _dir_bars)
+        except Exception:  # noqa: BLE001 — ingestion survives; direction fails closed
+            logger.warning("live direction computation failed", exc_info=True)
+            if state.htf is not None:
+                state.htf.daily_direction = None
+                state.htf.four_hour_direction = None
+                state.htf.direction_source = "live"
 
     # ── Range observation (journal-only, no effect on decisions) ──────────────
     # Wall context + range state/signal, mirroring the GEX observe pattern: we

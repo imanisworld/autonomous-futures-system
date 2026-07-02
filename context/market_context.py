@@ -142,6 +142,10 @@ class HTFContext:
     one_hour_direction: Optional[str] = None
     ftfc_direction: Optional[str] = None
     ftfc_aligned: Optional[bool] = None
+    # "live" when daily/4H direction were computed server-side from price
+    # (context/live_direction.py) instead of taken from the payload's lagged
+    # higher-timeframe bar labels. None/absent = payload-sourced.
+    direction_source: Optional[str] = None
 
 
 @dataclass
