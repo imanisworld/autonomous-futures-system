@@ -30,7 +30,7 @@ build_release() {
   work="$(mktemp -d "/tmp/afs-release-${short}.XXXX")"
   archive="/tmp/afs-release-${short}.tgz"
   manifest="$work/release_manifest.json"
-  trap 'git worktree remove -f "$work" >/dev/null 2>&1 || true; rm -f "$archive"' EXIT
+  trap "git worktree remove -f '$work' >/dev/null 2>&1 || true; rm -f '$archive'" EXIT
 
   git worktree add --detach "$work" "$sha" >/dev/null
   (

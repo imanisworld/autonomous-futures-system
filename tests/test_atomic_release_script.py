@@ -28,3 +28,8 @@ def test_promotion_and_rollback_use_atomic_symlink_replacement():
     text = SCRIPT.read_text()
     assert "mv -Tf '$CURRENT.next' '$CURRENT'" in text
     assert "current.previous" in text
+
+
+def test_build_cleanup_trap_captures_paths_before_function_returns():
+    text = SCRIPT.read_text()
+    assert "trap \"git worktree remove -f '$work'" in text
