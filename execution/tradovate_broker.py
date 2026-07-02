@@ -815,10 +815,27 @@ class TradovateBroker(BrokerInterface):
                     self._last_position = None
                     self._last_order_ids = None
                     return self._cancelled_fill(order, "ENTRY_NOT_FILLED")
-                # status "filled" or "unknown" → fall through to open + bracket verify.
-                # "unknown" (read-lag) NEVER cancels a possibly-filled entry — the
-                # naked-flatten safety net in _verify_bracket_children covers the case
-                # the brackets turn out not to be live.
+                if status == "unknown":
+                    # Positive confirmation required before journaling a position
+                    # (2026-07-01 incident follow-ups #1-3): an unreadable entry is
+                    # PENDING, never open. Six phantoms in one week each blocked the
+                    # single position slot 20-35 min until reconciliation.
+                    status = self._confirm_unknown_entry(
+                        order_id, target_id, stop_id, order,
+                    )
+                    if status == "dead":
+                        self._last_position = None
+                        self._last_order_ids = None
+                        return self._cancelled_fill(order, "ENTRY_NOT_FILLED")
+                    if status == "unknown":
+                        # Never confirmed either way even after cancelling the
+                        # entry. Journal NOTHING open; the reconciler/supervisor
+                        # remains the tail safety net for the (rare) case a fill
+                        # happened but stayed unreadable — those brackets are armed.
+                        self._last_position = None
+                        self._last_order_ids = None
+                        return self._cancelled_fill(order, "ENTRY_UNCONFIRMED")
+                # status "filled" → fall through to open + bracket verify.
 
             self._last_position = Position(
                 instrument=order.instrument,
@@ -1207,6 +1224,81 @@ class TradovateBroker(BrokerInterface):
             if attempt + 1 < retries:
                 time.sleep(delay)
         return "working" if working_seen else "unknown"
+
+    # How long the unknown-entry confirmation ladder keeps trying before giving
+    # up and reporting ENTRY_UNCONFIRMED (never an ambiguous open).
+    _ENTRY_CONFIRM_RETRIES = 4
+    _ENTRY_CONFIRM_DELAY = 2.0
+
+    def _confirm_unknown_entry(self, order_id, target_id, stop_id, order) -> str:
+        """Resolve an unreadable (read-lagged) limit entry to a definite state.
+
+        Returns "filled", "dead", or "unknown". The caller journals a position
+        ONLY on "filled"; "unknown" becomes ENTRY_UNCONFIRMED (no open journaled)
+        — the 2026-07-01 incident rule: unreadable is pending, never open.
+
+        Ladder, each rung a strictly stronger probe:
+          1. extended /order/item re-poll (longer than the first pass);
+          2. /position/list delta — a confirmed matching position = filled,
+             a confirmed flat = not filled (cancel the whole OSO to prevent a
+             late fill outside signal context);
+          3. cancel the ENTRY only (harmless reject if it already filled; the
+             bracket children only arm on entry fill), then one final position
+             read to classify the outcome.
+        """
+        root = order.instrument.replace("1!", "").upper()
+
+        status = self._entry_status(
+            order_id,
+            retries=self._ENTRY_CONFIRM_RETRIES,
+            delay=self._ENTRY_CONFIRM_DELAY,
+        )
+        if status == "filled":
+            return "filled"
+        if status == "dead":
+            return "dead"
+        if status == "working":
+            self._cancel_oso(order_id, target_id, stop_id)
+            logger.warning(
+                "Entry confirm: %s resting unfilled on extended poll — OSO cancelled", order_id,
+            )
+            return "dead"
+
+        confirmed, position = self.get_position_snapshot()
+        if confirmed and position is not None and (
+            position.instrument.replace("1!", "").upper().startswith(root)
+            and position.direction == order.direction
+        ):
+            logger.warning(
+                "Entry confirm: order %s unreadable but position confirms fill (%s %s)",
+                order_id, position.instrument, position.direction,
+            )
+            return "filled"
+        if confirmed and position is None:
+            self._cancel_oso(order_id, target_id, stop_id)
+            logger.warning(
+                "Entry confirm: order %s unreadable, broker confirmed FLAT — OSO cancelled", order_id,
+            )
+            return "dead"
+
+        # Nothing readable at all: prevent a late fill, then classify once more.
+        self._cancel_oso(order_id)
+        time.sleep(self._ENTRY_CONFIRM_DELAY)
+        confirmed, position = self.get_position_snapshot()
+        if confirmed and position is not None and (
+            position.instrument.replace("1!", "").upper().startswith(root)
+            and position.direction == order.direction
+        ):
+            return "filled"
+        if confirmed and position is None:
+            self._cancel_oso(target_id, stop_id)
+            return "dead"
+        logger.error(
+            "Entry confirm: order %s UNCONFIRMED after cancel attempt — journaling "
+            "no position; reconciler owns the tail case (brackets armed if filled)",
+            order_id,
+        )
+        return "unknown"
 
     def cancel_all(self) -> None:
         """Cancel all open orders."""
