@@ -12,6 +12,8 @@ def test_atomic_release_tool_is_host_agnostic_and_three_phase():
     assert "verify) verify_release" in text
     assert "promote) promote_release" in text
     assert "rollback) rollback_release" in text
+    assert 'AFS_RELEASES_DIR:-/root/afs-releases' in text
+    assert 'AFS_CURRENT_LINK:-/root/autonomous-futures-system' in text
 
 
 def test_candidate_is_forced_observe_only_before_promotion():

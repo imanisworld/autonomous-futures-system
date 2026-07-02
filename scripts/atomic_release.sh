@@ -12,9 +12,9 @@ set -euo pipefail
 ACTION="${1:-}"
 REF="${2:-origin/main}"
 BOX="${AFS_BOX:?set AFS_BOX (for example root@host)}"
-RELEASES="${AFS_RELEASES_DIR:-/root/releases}"
+RELEASES="${AFS_RELEASES_DIR:-/root/afs-releases}"
 SHARED="${AFS_SHARED_DIR:-/root/afs-shared}"
-CURRENT="${AFS_CURRENT_LINK:-/root/autonomous-futures-current}"
+CURRENT="${AFS_CURRENT_LINK:-/root/autonomous-futures-system}"
 SERVICE="${AFS_SERVICE:-futures-bot}"
 ROOT="$(git rev-parse --show-toplevel)"
 
