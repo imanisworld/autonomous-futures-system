@@ -167,6 +167,28 @@ class JournalLogger:
         record.setdefault("ts", datetime.now(timezone.utc).isoformat())
         self._append(record, for_date)
 
+    def log_shadow_outcome(self, entry: dict, for_date: Optional[date] = None) -> None:
+        """Append a resolved observe-only candidate outcome (evidence lane).
+
+        Audit output ONLY — never places, sizes, or authorizes a trade. The
+        record is written under type="SHADOW_OUTCOME" with its payload in
+        `shadow_outcome` (deliberately NOT `outcome`/`decision`, so daily-state
+        reconstruction, claim_bar, and trade-pair matching all ignore it).
+        """
+        record = dict(entry)
+        record["type"] = "SHADOW_OUTCOME"
+        record.pop("outcome", None)
+        record.pop("decision", None)
+        record.setdefault("ts", datetime.now(timezone.utc).isoformat())
+        self._append(record, for_date)
+
+    def read_day(self, for_date: Optional[date] = None) -> List[dict]:
+        """Return all parsed journal rows for one day (cached, read-only)."""
+        path = self._journal_path(for_date)
+        if not path.exists():
+            return []
+        return self._read_entries(path)
+
     def claim_bar(
         self,
         *,

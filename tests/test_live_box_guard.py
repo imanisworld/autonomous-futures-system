@@ -270,6 +270,10 @@ def test_execution_env_reads_are_classified_for_proof_guard():
             "PUBLIC_API_KEY",
             "PUBLIC_BASE_URL",
             "RANGE_OBSERVE_ENABLED",
+            # Observe-only evidence resolver: appends SHADOW_OUTCOME journal
+            # rows for shadow/range candidates; never touches setup eligibility,
+            # sizing, entry/fill behavior, or exits.
+            "SHADOW_RESOLVER_ENABLED",
             "SIGNA_API_ENABLED",
         "SIGNA_API_KEY",
         "SIGNA_BASE_URL",
