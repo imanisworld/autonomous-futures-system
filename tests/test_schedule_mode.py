@@ -127,3 +127,24 @@ def test_schedule_mode_env_invalid_rejected(monkeypatch):
     monkeypatch.setenv("SCHEDULE_MODE", "yolo")
     with pytest.raises(ConfigError):
         load_config()
+
+
+def test_htf_direction_mode_env_override(monkeypatch):
+    from config.settings import load_config
+    monkeypatch.setenv("HTF_DIRECTION_MODE", "prioritize")
+    monkeypatch.setenv("STRICT_DIRECTIONAL_ALIGNMENT", "true")
+    assert load_config().htf_direction_mode == "prioritize"
+
+
+def test_legacy_strict_flag_maps_to_strict_mode(monkeypatch):
+    from config.settings import load_config
+    monkeypatch.delenv("HTF_DIRECTION_MODE", raising=False)
+    monkeypatch.setenv("STRICT_DIRECTIONAL_ALIGNMENT", "true")
+    assert load_config().htf_direction_mode == "strict"
+
+
+def test_htf_direction_mode_invalid_rejected(monkeypatch):
+    from config.settings import ConfigError, load_config
+    monkeypatch.setenv("HTF_DIRECTION_MODE", "guess")
+    with pytest.raises(ConfigError):
+        load_config()

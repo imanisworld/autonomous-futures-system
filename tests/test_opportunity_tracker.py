@@ -98,6 +98,8 @@ def test_pessimistic_same_bar_is_a_loss():
     bars = [{"ts": "t1", "high": 30025, "low": 29990}]  # straddles BOTH
     o = resolve_outcome(c, bars)
     assert o.result == "STOP_HIT"           # pessimistic
+    assert o.entry_touched and o.stop_touched and o.target_touched
+    assert o.pessimistic_same_bar is True
     o2 = resolve_outcome(c, bars, pessimistic_both_hit=False)
     assert o2.result == "TARGET_HIT"        # optimistic toggle for comparison
 
@@ -117,6 +119,17 @@ def test_unresolved_returns_expired_open_not_dropped():
     assert o.result == "EXPIRED_OPEN"
     assert o.pnl_dollars == 0.0
     assert o.bars_to_resolution == 2
+    assert o.entry_touched is True
+
+
+def test_entry_never_touched_is_reported_as_unfilled():
+    c = _cand("LONG", 30000, 29992, 30024)
+    bars = [{"ts": "t1", "high": 29990, "low": 29980}]
+    o = resolve_outcome(c, bars)
+    assert o.result == "ENTRY_NOT_TOUCHED"
+    assert o.entry_touched is False
+    assert o.stop_touched is False
+    assert o.target_touched is False
 
 
 def test_mfe_mae_tracked_until_resolution():

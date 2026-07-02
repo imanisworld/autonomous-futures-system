@@ -13,7 +13,7 @@ valid setup can be formed. Otherwise decision=NO_TRADE with reason.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, time as _time, timezone
 from typing import Optional
 from zoneinfo import ZoneInfo
@@ -54,6 +54,11 @@ class SetupDetail:
     rr_ratio: float
     strategy: str
     notes: Optional[str] = None
+    direction_role: Optional[str] = None
+    htf_primary_direction: Optional[str] = None
+    daily_direction: Optional[str] = None
+    four_hour_direction: Optional[str] = None
+    direction_reason: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -81,6 +86,7 @@ class DecisionOutput:
     signa_status: Optional[str] = None
     failed_gates: list[str] = field(default_factory=list)
     confidence_score: Optional[int] = None
+    candidate_audit: list[dict] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         d = {
@@ -96,6 +102,7 @@ class DecisionOutput:
             "signa_status": self.signa_status,
             "failed_gates": self.failed_gates,
             "confidence_score": self.confidence_score,
+            "candidate_audit": self.candidate_audit,
         }
         if self.setup:
             d["setup"] = {
@@ -106,6 +113,11 @@ class DecisionOutput:
                 "rr_ratio": self.setup.rr_ratio,
                 "strategy": self.setup.strategy,
                 "notes": self.setup.notes,
+                "direction_role": self.setup.direction_role,
+                "htf_primary_direction": self.setup.htf_primary_direction,
+                "daily_direction": self.setup.daily_direction,
+                "four_hour_direction": self.setup.four_hour_direction,
+                "direction_reason": self.setup.direction_reason,
             }
         return d
 
@@ -333,7 +345,12 @@ class DecisionEngine:
                 confidence_score=0,
             )
 
-        gate_direction = self._infer_gate_direction(state)
+        direction_mode = getattr(self.config, "htf_direction_mode", "off")
+        gate_direction = (
+            self._primary_setup_direction(state)
+            if direction_mode == "prioritize"
+            else None
+        ) or self._infer_gate_direction(state)
         failed_gates: list[str] = []
 
         regime = classify_regime(state, daily_state)
@@ -442,27 +459,6 @@ class DecisionEngine:
                     confidence_score=0,
                 )
 
-        # ── Quality gate: HTF / FTFC alignment ────────────────────────────────
-        if (
-            self.config.require_htf_alignment.get(state.instrument, False)
-            or getattr(self.config, "strict_directional_alignment", False)
-        ):
-            htf_failure = self._check_htf_alignment(state, gate_direction)
-            if htf_failure is not None:
-                return DecisionOutput(
-                    timestamp=now,
-                    instrument=state.instrument,
-                    session=state.session,
-                    decision="NO_TRADE",
-                    market_condition=condition,
-                    reason=htf_failure,
-                    regime=regime.regime,
-                    gex_status=gex_gate.status,
-                    signa_status=signa_gate.status,
-                    failed_gates=failed_gates + ["HTF_ALIGNMENT_FAIL"],
-                    confidence_score=0,
-                )
-
         # ── Quality gate: bar close location ─────────────────────────────────
         # Require the signal bar to close with conviction in the trade direction.
         # A bar closing mid-range (doji, wick) on a key level is a weak entry.
@@ -541,15 +537,80 @@ class DecisionEngine:
                 confidence_score=0,
             )
 
+        if direction_mode == "off" and self.config.require_htf_alignment.get(
+            state.instrument, False
+        ):
+            direction_mode = "strict"
+        if direction_mode == "strict":
+            aligned: list[SetupDetail] = []
+            first_failure = None
+            for candidate in candidates:
+                failure = self._check_htf_alignment(state, candidate.direction)
+                if failure is None:
+                    aligned.append(
+                        self._classify_setup_direction(candidate, state)
+                    )
+                elif first_failure is None:
+                    first_failure = failure
+            if not aligned:
+                rejected_audit = [
+                    self._setup_audit_row(
+                        self._classify_setup_direction(candidate, state),
+                        reject_code="HTF_ALIGNMENT_FAIL",
+                    )
+                    for candidate in candidates
+                ]
+                return DecisionOutput(
+                    timestamp=now,
+                    instrument=state.instrument,
+                    session=state.session,
+                    decision="NO_TRADE",
+                    market_condition=condition,
+                    reason=first_failure or "HTF alignment failed",
+                    setup=self._classify_setup_direction(candidates[0], state),
+                    regime=regime.regime,
+                    gex_status=gex_gate.status,
+                    signa_status=signa_gate.status,
+                    failed_gates=failed_gates + ["HTF_ALIGNMENT_FAIL"],
+                    confidence_score=0,
+                    candidate_audit=rejected_audit,
+                )
+            candidates = aligned
+        elif direction_mode == "prioritize":
+            candidates = [
+                self._classify_setup_direction(candidate, state)
+                for candidate in candidates
+            ]
+            role_priority = {"PRIMARY": 0, "COUNTERTREND_SCALP": 1, "UNRESOLVED": 2}
+            candidates.sort(
+                key=lambda candidate: role_priority.get(
+                    candidate.direction_role or "UNRESOLVED", 2
+                )
+            )
+
+        candidate_audit = [self._setup_audit_row(candidate) for candidate in candidates]
+
         fallback_enabled = getattr(self.config, "strategy_fallback_enabled", False)
         setup = None
         last_setup = None
         reject_code = None
         reject_reason = None
         for idx, candidate in enumerate(candidates):
+            candidate_audit[idx]["attempted"] = True
+            candidate_audit[idx]["fallback_attempt"] = idx > 0
+            if direction_mode == "prioritize" and candidate.direction_role == "UNRESOLVED":
+                last_setup = candidate
+                reject_code = "HTF_DIRECTION_UNRESOLVED"
+                reject_reason = candidate.direction_reason or "HTF direction is unresolved"
+                candidate_audit[idx]["reject_code"] = reject_code
+                candidate_audit[idx]["reject_reason"] = reject_reason
+                if not fallback_enabled:
+                    break
+                continue
             evaluated, reject_code, reject_reason = self._evaluate_candidate(candidate, state)
             if reject_code is None:
                 setup = evaluated
+                candidate_audit[idx]["selected"] = True
                 if idx > 0:
                     note = (
                         f"fallback candidate {idx + 1}/{len(candidates)} "
@@ -558,6 +619,8 @@ class DecisionEngine:
                     setup.notes = f"{setup.notes} | {note}" if setup.notes else note
                 break
             last_setup = evaluated
+            candidate_audit[idx]["reject_code"] = reject_code
+            candidate_audit[idx]["reject_reason"] = reject_reason
             if not fallback_enabled:
                 break
 
@@ -575,6 +638,30 @@ class DecisionEngine:
                 signa_status=signa_gate.status,
                 failed_gates=failed_gates + [reject_code],
                 confidence_score=0,
+                candidate_audit=candidate_audit,
+            )
+
+        if (
+            direction_mode == "prioritize"
+            and setup.direction_role == "COUNTERTREND_SCALP"
+        ):
+            return DecisionOutput(
+                timestamp=now,
+                instrument=state.instrument,
+                session=state.session,
+                decision="NO_TRADE",
+                market_condition=condition,
+                reason=(
+                    "Qualified countertrend scalp requires the matching armed "
+                    "5-minute entry confirmation."
+                ),
+                setup=setup,
+                regime=regime.regime,
+                gex_status=gex_gate.status,
+                signa_status=signa_gate.status,
+                failed_gates=failed_gates + ["COUNTERTREND_REQUIRES_5M"],
+                confidence_score=0,
+                candidate_audit=candidate_audit,
             )
 
         # ── TRADE: mark ORB break as played so continuation strategies are
@@ -611,6 +698,86 @@ class DecisionEngine:
             signa_status=signa_gate.status,
             failed_gates=failed_gates,
             confidence_score=None,
+            candidate_audit=candidate_audit,
+        )
+
+    @staticmethod
+    def _setup_audit_row(
+        setup: SetupDetail, reject_code: Optional[str] = None
+    ) -> dict:
+        return {
+            "strategy": setup.strategy,
+            "direction": setup.direction,
+            "entry": setup.entry,
+            "stop": setup.stop,
+            "target": setup.target,
+            "rr_ratio": setup.rr_ratio,
+            "direction_role": setup.direction_role,
+            "htf_primary_direction": setup.htf_primary_direction,
+            "daily_direction": setup.daily_direction,
+            "four_hour_direction": setup.four_hour_direction,
+            "direction_reason": setup.direction_reason,
+            "attempted": False,
+            "selected": False,
+            "fallback_attempt": False,
+            "reject_code": reject_code,
+            "reject_reason": None,
+        }
+
+    @staticmethod
+    def _direction_value(value: object) -> Optional[str]:
+        normalized = str(value or "").strip().upper()
+        return normalized if normalized in {"UP", "DOWN"} else None
+
+    def _primary_setup_direction(self, state: MarketState) -> Optional[str]:
+        htf = getattr(state, "htf", None)
+        primary = self._direction_value(
+            getattr(htf, "daily_direction", None)
+        ) or self._direction_value(getattr(htf, "four_hour_direction", None))
+        return "LONG" if primary == "UP" else "SHORT" if primary == "DOWN" else None
+
+    def _classify_setup_direction(
+        self, setup: SetupDetail, state: MarketState
+    ) -> SetupDetail:
+        """Classify a setup without changing its bracket or strategy semantics."""
+        htf = getattr(state, "htf", None)
+        daily = self._direction_value(getattr(htf, "daily_direction", None))
+        four_hour = self._direction_value(
+            getattr(htf, "four_hour_direction", None)
+        )
+        primary_htf = daily or four_hour
+        primary_direction = self._primary_setup_direction(state)
+
+        if primary_direction is None:
+            role = "UNRESOLVED"
+            reason = "Daily and 4H directions are unavailable or neutral."
+        elif setup.direction == primary_direction:
+            role = "PRIMARY"
+            source = "Daily" if daily else "4H fallback"
+            reason = f"{source} direction {primary_htf} supports {setup.direction}."
+        else:
+            expected_four_hour = "UP" if setup.direction == "LONG" else "DOWN"
+            local_direction = getattr(getattr(state, "strat", None), "strat_direction", None)
+            if daily and four_hour == expected_four_hour and local_direction == setup.direction:
+                role = "COUNTERTREND_SCALP"
+                reason = (
+                    f"Daily {daily} remains primary; 4H {four_hour} and 15m "
+                    f"Strat {local_direction} confirm a tactical {setup.direction} pullback."
+                )
+            else:
+                role = "UNRESOLVED"
+                reason = (
+                    f"{setup.direction} opposes primary {primary_direction} without "
+                    "matching 4H and 15m confirmation."
+                )
+
+        return replace(
+            setup,
+            direction_role=role,
+            htf_primary_direction=primary_direction,
+            daily_direction=daily,
+            four_hour_direction=four_hour,
+            direction_reason=reason,
         )
 
     def _infer_gate_direction(self, state: MarketState) -> Optional[str]:
@@ -650,15 +817,7 @@ class DecisionEngine:
 
         notes = setup.notes or ""
         suffix = "; ".join(parts)
-        return SetupDetail(
-            direction=setup.direction,
-            entry=setup.entry,
-            stop=setup.stop,
-            target=setup.target,
-            rr_ratio=setup.rr_ratio,
-            strategy=setup.strategy,
-            notes=f"{notes} | {suffix}" if notes else suffix,
-        )
+        return replace(setup, notes=f"{notes} | {suffix}" if notes else suffix)
 
     def _apply_advisory_bracket(self, setup: SetupDetail, state: MarketState) -> SetupDetail:
         """
@@ -729,13 +888,12 @@ class DecisionEngine:
 
         note = "Pine bracket override"
         notes = f"{setup.notes} | {note}" if setup.notes else note
-        return SetupDetail(
-            direction=setup.direction,
+        return replace(
+            setup,
             entry=round(entry, 4),
             stop=round(stop, 4),
             target=round(target, 4),
             rr_ratio=rr,
-            strategy=setup.strategy,
             notes=notes,
         )
 
@@ -1201,15 +1359,7 @@ class DecisionEngine:
             f"priority {priority_index}"
         )
         notes = f"{setup.notes} | {reason}" if setup.notes else reason
-        ranked_setup = SetupDetail(
-            direction=setup.direction,
-            entry=setup.entry,
-            stop=setup.stop,
-            target=setup.target,
-            rr_ratio=setup.rr_ratio,
-            strategy=setup.strategy,
-            notes=notes,
-        )
+        ranked_setup = replace(setup, notes=notes)
         return StrategyCandidate(
             setup=ranked_setup,
             confluence_score=confluence.score,
@@ -1246,13 +1396,10 @@ class DecisionEngine:
             f"(was {current_distance:.2f}pt)"
         )
         notes = f"{setup.notes} | {note}" if setup.notes else note
-        return SetupDetail(
-            direction=setup.direction,
-            entry=setup.entry,
-            stop=setup.stop,
+        return replace(
+            setup,
             target=round(target, 4),
             rr_ratio=rr,
-            strategy=setup.strategy,
             notes=notes,
         )
 
@@ -1296,13 +1443,12 @@ class DecisionEngine:
         rr = RiskEngine.calculate_rr(setup.direction, new_entry, new_stop, new_target)
         note = f"momentum re-anchor: entry {setup.entry:g}→{new_entry:g} (favorable gap {gap:+.2f})"
         notes = f"{setup.notes} | {note}" if setup.notes else note
-        return SetupDetail(
-            direction=setup.direction,
+        return replace(
+            setup,
             entry=round(new_entry, 4),
             stop=round(new_stop, 4),
             target=round(new_target, 4),
             rr_ratio=rr,
-            strategy=setup.strategy,
             notes=notes,
         )
 

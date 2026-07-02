@@ -136,8 +136,35 @@ def prev_day_summary(ctx):
     )
 
 
+def direction_summary(entry):
+    setup = entry.get("setup") or {}
+    context = entry.get("context") or {}
+    htf = context.get("htf") or {}
+    daily = setup.get("daily_direction") or htf.get("daily_direction")
+    four_hour = setup.get("four_hour_direction") or htf.get("four_hour_direction")
+    primary = setup.get("htf_primary_direction")
+    if primary is None:
+        primary = "LONG" if daily == "UP" else "SHORT" if daily == "DOWN" else (
+            "LONG" if four_hour == "UP" else "SHORT" if four_hour == "DOWN" else None
+        )
+    role = setup.get("direction_role")
+    if role is None:
+        direction = setup.get("direction")
+        if primary is None:
+            role = "UNRESOLVED"
+        elif direction == primary:
+            role = "PRIMARY"
+        else:
+            role = "UNRESOLVED"
+    return role, primary, daily, four_hour
+
+
 def is_near_miss(e):
-    return bool(e.get("setup")) or bool(e.get("shadow_candidates"))
+    return (
+        bool(e.get("setup"))
+        or bool(e.get("shadow_candidates"))
+        or bool(e.get("candidate_audit"))
+    )
 
 
 # ---------------------------------------------------------------- sections
@@ -166,6 +193,11 @@ def section1(trades, outcome_by_trade, orderids_by_trade, out):
         out.append(
             f"- entry={s.get('entry')} stop={s.get('stop')} target={s.get('target')} "
             f"rr={s.get('rr_ratio')} contracts={s.get('contracts')}"
+        )
+        role, primary, daily, four_hour = direction_summary(t)
+        out.append(
+            f"- direction role: {role} | primary={primary} | "
+            f"daily={daily} 4H={four_hour}"
         )
         out.append(
             f"- 15m trend: {tr.get('direction')}/{tr.get('strength')} | "
@@ -363,7 +395,12 @@ def section4(entries, out):
         for cand in e.get("shadow_candidates") or []:
             if (cand.get("direction") or "").upper() == "LONG":
                 long_strats.append((cand.get("strategy") or "?", "shadow candidate"))
-        for strat, kind in long_strats:
+        for cand in e.get("candidate_audit") or []:
+            if (cand.get("direction") or "").upper() == "LONG":
+                long_strats.append(
+                    (cand.get("strategy") or "?", "ranked candidate audit")
+                )
+        for strat, kind in dict.fromkeys(long_strats):
             rec = per_strat[strat]
             rec["count"] += 1
             rec["days"].add(e["_day"])

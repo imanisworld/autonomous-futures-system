@@ -549,6 +549,75 @@ class TestStrategyCandidateRanking:
         assert "ranked candidate" in (decision.setup.notes or "")
 
 
+class TestHTFDirectionPrioritization:
+    @staticmethod
+    def _setup(direction: str, strategy: str) -> SetupDetail:
+        if direction == "LONG":
+            return SetupDetail(
+                direction="LONG", entry=19500.0, stop=19480.0,
+                target=19560.0, rr_ratio=3.0, strategy=strategy,
+            )
+        return SetupDetail(
+            direction="SHORT", entry=19510.0, stop=19530.0,
+            target=19450.0, rr_ratio=3.0, strategy=strategy,
+        )
+
+    def _engine(self, config, candidates):
+        config.htf_direction_mode = "prioritize"
+        config.require_htf_alignment = {}
+        engine = DecisionEngine(config=config)
+        engine._find_setup_candidates = lambda *a, **kw: list(candidates)
+        return engine
+
+    def test_daily_primary_long_ranks_ahead_of_short(self, config, fresh_market_state):
+        state = deepcopy(fresh_market_state)
+        state.htf = HTFContext(daily_direction="UP", four_hour_direction="DOWN")
+        state.strat = None
+        engine = self._engine(
+            config,
+            [self._setup("SHORT", "orb_rejection"), self._setup("LONG", "orb_reclaim")],
+        )
+
+        decision = engine.evaluate(state, DailyState())
+
+        assert decision.decision == "TRADE"
+        assert decision.setup.direction == "LONG"
+        assert decision.setup.direction_role == "PRIMARY"
+        assert [row["direction"] for row in decision.candidate_audit] == ["LONG", "SHORT"]
+
+    def test_qualified_countertrend_waits_for_five_minute_trigger(
+        self, config, fresh_market_state
+    ):
+        state = deepcopy(fresh_market_state)
+        state.htf = HTFContext(daily_direction="UP", four_hour_direction="DOWN")
+        state.strat = StratContext(
+            current_bar_type="two_down",
+            strat_sequence="strat_22_continuation",
+            strat_direction="SHORT",
+        )
+        state.key_levels = None
+        engine = self._engine(config, [self._setup("SHORT", "orb_rejection")])
+
+        decision = engine.evaluate(state, DailyState())
+
+        assert decision.decision == "NO_TRADE"
+        assert decision.setup.direction_role == "COUNTERTREND_SCALP"
+        assert "COUNTERTREND_REQUIRES_5M" in decision.failed_gates
+
+    def test_missing_htf_is_unresolved_and_never_full_risk(
+        self, config, fresh_market_state
+    ):
+        state = deepcopy(fresh_market_state)
+        state.htf = None
+        engine = self._engine(config, [self._setup("LONG", "orb_reclaim")])
+
+        decision = engine.evaluate(state, DailyState())
+
+        assert decision.decision == "NO_TRADE"
+        assert decision.setup.direction_role == "UNRESOLVED"
+        assert "HTF_DIRECTION_UNRESOLVED" in decision.failed_gates
+
+
 class TestCandidateFallback:
     """Fallback-to-next-candidate (strategy_fallback_enabled, default off).
 

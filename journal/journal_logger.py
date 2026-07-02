@@ -458,6 +458,7 @@ class JournalLogger:
                         "target": setup.get("target"),
                         "contracts": setup.get("contracts", 1),
                         "strategy": setup.get("strategy"),
+                        "direction_role": setup.get("direction_role"),
                         "ts": entry.get("ts"),  # processing-time age/stale reference
                         # Decision time is after the bar close, so runner history
                         # needs the originating bar timestamp as a separate bound.

@@ -105,7 +105,10 @@ def build_release_manifest(
         "schema_version": SCHEMA_VERSION,
         "generated_at": (generated_at or datetime.now(timezone.utc)).isoformat(),
         "repo": {
-            "branch": _git(root, "rev-parse", "--abbrev-ref", "HEAD"),
+            "branch": (
+                os.getenv("RELEASE_BRANCH")
+                or _git(root, "rev-parse", "--abbrev-ref", "HEAD")
+            ),
             "commit": _git(root, "rev-parse", "HEAD"),
             "dirty": bool(dirty_lines),
             "dirty_paths": dirty_lines,

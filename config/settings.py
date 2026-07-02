@@ -143,6 +143,12 @@ class SystemConfig:
     # Deployment-only strict direction gate. Unlike the per-instrument research
     # map, this is controlled by env so historical replay fixtures remain stable.
     strict_directional_alignment: bool = False
+    # Direction policy:
+    #   off        — no HTF direction classification/gating
+    #   strict     — only explicitly HTF-aligned setups may proceed
+    #   prioritize — Daily/4H establishes a primary direction; aligned setups
+    #                rank first and qualified countertrend setups require 5m entry
+    htf_direction_mode: str = "off"
     # Fail closed on classifier states that are informative but not fully aligned.
     # Default off preserves research/replay compatibility; production opts in.
     block_restricted_regime: bool = False
@@ -479,6 +485,15 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         min_signal_bar_volume=quality.get("min_signal_bar_volume", {}),
         require_htf_alignment=quality.get("require_htf_alignment", {}),
         strict_directional_alignment=_env_bool("STRICT_DIRECTIONAL_ALIGNMENT", False),
+        htf_direction_mode=(
+            str(os.getenv("HTF_DIRECTION_MODE")).strip().lower()
+            if os.getenv("HTF_DIRECTION_MODE") is not None
+            else (
+                "strict"
+                if _env_bool("STRICT_DIRECTIONAL_ALIGNMENT", False)
+                else "off"
+            )
+        ),
         block_restricted_regime=_env_bool(
             "BLOCK_RESTRICTED_REGIME",
             bool(quality.get("block_restricted_regime", False)),
@@ -699,6 +714,8 @@ def _validate_config(config: SystemConfig) -> None:
         raise ConfigError("min_confluence_grade must be one of: A+, A, B, C, WEAK, F.")
     if config.min_rr_ratio < 1.0:
         raise ConfigError("min_rr_ratio must be >= 1.0.")
+    if config.htf_direction_mode not in {"off", "strict", "prioritize"}:
+        raise ConfigError("htf_direction_mode must be one of: off, strict, prioritize.")
     if config.max_staleness_seconds < 1:
         raise ConfigError("max_staleness_seconds must be >= 1.")
     if config.minimum_starting_capital < 0:
