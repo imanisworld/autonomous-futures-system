@@ -403,6 +403,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         help="Compare LIVE risk gates vs psychology-gates-OFF (keeps max_daily_loss "
              "+ max_drawdown). Holds strategy posture constant (first_match).",
     )
+    parser.add_argument(
+        "--htf-conflict",
+        action="store_true",
+        help="Compare Daily-first vs 4H-first behavior when those directions disagree.",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -454,7 +459,39 @@ def main(argv: Optional[List[str]] = None) -> int:
     # ── Gate-rip axis: hold strategy posture constant, vary ONLY the risk gates.
     # "live" = current risk_rules.yaml gates. "gates_off" = all psychology/throttle
     # gates disabled, KEEPING max_daily_loss + max_drawdown_percent (survival floor).
-    if args.gate_rip:
+    if args.htf_conflict:
+        live_strategy = dict(
+            strategy_selection_mode="ranked",
+            allow_moderate_pullback=on,
+            allow_moderate_early=on,
+            htf_direction_mode="prioritize",
+        )
+        mode_configs = {
+            "daily": replace(
+                base_config,
+                **live_strategy,
+                htf_conflict_policy="daily",
+            ),
+            "four_hour": replace(
+                base_config,
+                **live_strategy,
+                htf_conflict_policy="four_hour",
+            ),
+            "four_hour_confirmed": replace(
+                base_config,
+                **live_strategy,
+                htf_conflict_policy="four_hour_confirmed",
+            ),
+            "block": replace(
+                base_config,
+                **live_strategy,
+                htf_conflict_policy="block",
+            ),
+        }
+        active_modes = ["daily", "four_hour", "four_hour_confirmed", "block"]
+        base_key = "daily"
+        report_title = "HTF CONFLICT POLICY (Daily-first vs 4H-first)"
+    elif args.gate_rip:
         live_strategy = dict(
             strategy_selection_mode="first_match",  # matches the deployed box
             allow_moderate_pullback=on,             # moderate admission is live on box

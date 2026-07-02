@@ -20,7 +20,8 @@ def test_candidate_is_forced_observe_only_before_promotion():
     text = SCRIPT.read_text()
     assert "--setenv=SCHEDULE_MODE=always_on_shadow" in text
     assert "--setenv=EXPECTED_PROOF_SCHEDULE_MODE=always_on_shadow" in text
-    assert "--setenv=HTF_DIRECTION_MODE=prioritize" in text
+    assert "--setenv=HTF_DIRECTION_MODE=off" in text
+    assert "--setenv=EXPECTED_PROOF_HTF_DIRECTION_MODE=off" in text
     assert "--port 8010" in text
 
 
