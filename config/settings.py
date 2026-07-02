@@ -357,6 +357,12 @@ class SystemConfig:
     # `wall_context`/`range_state`/`range_signal`/`shadow_range_signal`. OBSERVE-ONLY —
     # never affects decisions or risk. Default off; enable to start collecting.
     range_observe_enabled: bool = False
+    # Causal live resolver for journaled observe-only candidates (shadow_setups
+    # + range_signal lanes): on each ingested bar, resolve prior bars' candidates
+    # against the bars seen since and append SHADOW_OUTCOME evidence rows.
+    # READ-ONLY for trading, fail-soft, additive journal rows only. Default on;
+    # SHADOW_RESOLVER_ENABLED=false is the kill switch.
+    shadow_resolver_enabled: bool = True
     gex_observe_symbol_map: dict = field(default_factory=dict)
 
     # ── Companion options paper lane (options_companion/) ──────────────────────
@@ -653,6 +659,7 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         gex_observe_enabled=_env_bool("GEX_OBSERVE_ENABLED", False),
         gex_observe_max_dte=int(os.getenv("GEX_OBSERVE_MAX_DTE", "7") or 7),
         range_observe_enabled=_env_bool("RANGE_OBSERVE_ENABLED", False),
+        shadow_resolver_enabled=_env_bool("SHADOW_RESOLVER_ENABLED", True),
         gex_observe_symbol_map=_env_symbol_map(
             # MNQ/NQ → QQQ, MES/ES → SPY (liquid ETF options on Public).
             "GEX_OBSERVE_SYMBOL_MAP",

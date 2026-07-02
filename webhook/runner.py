@@ -41,6 +41,7 @@ from journal.journal_logger import JournalLogger
 from risk.risk_engine import DailyState, RiskEngine, RiskResult, TradeSetup
 from strategy.confluence_scorer import score_setup as _score_setup
 from strategy.stop_sizing import apply_stop_multiplier
+from strategy.shadow_resolver import resolve_pending_shadow_outcomes
 from strategy.shadow_setups import evaluate_shadow_setups
 from strategy.signal_engine import DecisionEngine
 from webhook.payload import AlertPayload
@@ -628,6 +629,25 @@ def process_alert(
         result["decision"] = "BLOCKED_DUPLICATE_BAR"
         result["failed_gates"] = [f"Duplicate bar already processed: {state.instrument} {bar_ts}"]
         return result
+
+    # Shadow candidate resolution: causally resolve PRIOR bars' journaled
+    # observe-only candidates (shadow_setups + range_signal lanes) against the
+    # bars ingested since, appending SHADOW_OUTCOME evidence rows. Runs AFTER
+    # claim_bar (its rows must never precede a bar claim) and only on the 15M
+    # ingestion path. Read-only for trading; fail-soft — a resolver hiccup must
+    # never affect the decision, risk, or execution.
+    if not five_min_trigger and getattr(cfg, "shadow_resolver_enabled", True):
+        try:
+            _resolved_shadow = resolve_pending_shadow_outcomes(
+                log_dir=log_dir,
+                instrument=state.instrument,
+                current_bar_ts=bar_ts,
+                for_date=for_date,
+            )
+            if _resolved_shadow:
+                result["shadow_outcomes_resolved"] = len(_resolved_shadow)
+        except Exception:  # noqa: BLE001 — evidence lane must never break ingestion
+            logger.warning("shadow outcome resolution failed", exc_info=True)
 
     # Companion options paper lane: refresh marks on any OPEN paper option rows so
     # each incoming bar advances them toward WIN/LOSS/EXPIRED. Independent of whether

@@ -88,7 +88,9 @@ def test_live_range_and_shadow_candidates_report_collecting_without_fake_outcome
     range_track = _track(report, "range_signal")
     assert range_track["status"] == "COLLECTING"
     assert range_track["resolved_examples"] == 0
-    assert range_track["outcome_resolution_available"] is False
+    # The live resolver ships with the system now; observations without
+    # SHADOW_OUTCOME rows still report zero resolved — never fake outcomes.
+    assert range_track["outcome_resolution_available"] is True
     shadow = _track(report, "shadow_setups")
     assert shadow["status"] == "COLLECTING"
     assert shadow["observations"] == 1

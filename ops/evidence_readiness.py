@@ -59,6 +59,20 @@ def build_evidence_readiness(
         )
         if isinstance(candidate, dict)
     ]
+    # Dedupe by candidate_key so a rare double-append (concurrent bar workers)
+    # cannot inflate resolved counts.
+    shadow_outcomes: list[dict] = []
+    _seen_outcome_keys: set = set()
+    for entry in entries:
+        if entry.get("type") != "SHADOW_OUTCOME":
+            continue
+        if not isinstance(entry.get("shadow_outcome"), dict):
+            continue
+        key = (entry.get("lane"), entry.get("candidate_key"))
+        if key[1] is not None and key in _seen_outcome_keys:
+            continue
+        _seen_outcome_keys.add(key)
+        shadow_outcomes.append(entry)
 
     tracks = [
         _candidate_track(
@@ -66,9 +80,12 @@ def build_evidence_readiness(
             "RangeSignal / WallContext",
             range_rows,
             corrupt_rows=corrupt_rows,
+            resolved_rows=[
+                row for row in shadow_outcomes if row.get("lane") == "range_signal"
+            ],
             outcome_contract=(
-                "Candidate observations are live; a causal future-bar outcome "
-                "resolver is still required before expectancy can be measured."
+                "Candidate observations are live; the causal live resolver links "
+                "SHADOW_OUTCOME rows to bracketed candidates on later bars."
             ),
         ),
         _candidate_track(
@@ -80,9 +97,12 @@ def build_evidence_readiness(
                 not _valid_bracket(candidate) for _, candidate in shadow_candidates
             ),
             corrupt_rows=corrupt_rows,
+            resolved_rows=[
+                row for row in shadow_outcomes if row.get("lane") == "shadow_setups"
+            ],
             outcome_contract=(
-                "Candidates include entry/stop/target, but no live journal outcome "
-                "is linked to them yet."
+                "Candidates include entry/stop/target; the causal live resolver "
+                "links SHADOW_OUTCOME rows to them on later bars."
             ),
         ),
         _artifact_track(
@@ -214,12 +234,37 @@ def _candidate_track(
     observation_count: int | None = None,
     malformed: int = 0,
     corrupt_rows: int = 0,
+    resolved_rows: list[dict] | None = None,
     outcome_contract: str,
 ) -> dict[str, Any]:
     observations = len(rows) if observation_count is None else observation_count
     distinct_days = len({day for row in rows if (day := _day(row))})
+    resolved_rows = resolved_rows or []
+    breakdown = Counter(
+        str((row.get("shadow_outcome") or {}).get("result") or "UNKNOWN")
+        for row in resolved_rows
+    )
+    terminal = breakdown["WIN"] + breakdown["LOSS"]
+    resolved_days = len(
+        {
+            day
+            for row in resolved_rows
+            if (day := (row.get("candidate_day") or _day(row)))
+        }
+    )
+    pnl_ticks = [
+        pnl
+        for row in resolved_rows
+        if isinstance(
+            (pnl := (row.get("shadow_outcome") or {}).get("pnl_ticks")), (int, float)
+        )
+    ]
     if malformed or corrupt_rows:
         status = "DATA QUALITY BLOCKED"
+    elif terminal >= STRATEGY_MIN_EXAMPLES and resolved_days >= STRATEGY_MIN_DAYS:
+        status = "READY FOR REVIEW"
+    elif resolved_rows:
+        status = "INSUFFICIENT SAMPLE"
     elif observations:
         status = "COLLECTING"
     else:
@@ -229,10 +274,14 @@ def _candidate_track(
         name,
         status,
         observations=observations,
-        resolved_examples=0,
+        resolved_examples=len(resolved_rows),
+        resolved_terminal_examples=terminal,
+        resolved_breakdown=dict(breakdown),
+        resolved_distinct_days=resolved_days,
+        resolved_pnl_ticks_net=round(sum(pnl_ticks), 2),
         distinct_days=distinct_days,
         malformed_examples=malformed,
-        outcome_resolution_available=False,
+        outcome_resolution_available=True,
         note=outcome_contract,
     )
 
