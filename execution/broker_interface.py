@@ -38,7 +38,7 @@ class Position:
     direction: str
     entry_price: float
     stop: float
-    target: float
+    target: Optional[float]
     quantity: int = 1
     open: bool = True
 

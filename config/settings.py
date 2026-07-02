@@ -195,6 +195,9 @@ class SystemConfig:
     # expectancy than fixed. DEFAULT False (matches the static-bracket live box);
     # enable behind a config-freeze + shadow-verify before trusting it live.
     runner_mode: bool = False
+    # One authoritative execution contract across replay, paper, and live.
+    # runner_mode remains as a compatibility mirror for existing replay code.
+    exit_mode: str = "static"  # static | runner_shadow | runner_live
     runner_activation_r: float = 1.0
     runner_trail_r: float = 0.5
     # Quality gate (#1): when True, only a TRENDING market condition may trade —
@@ -529,9 +532,19 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
             "BREAKEVEN_AT_1R",
             bool(fill_model.get("breakeven_at_1r", False)),
         ),
-        runner_mode=_env_bool(
-            "RUNNER_MODE",
-            bool(fill_model.get("runner_mode", False)),
+        runner_mode=(
+            str(os.getenv("EXIT_MODE", "")).strip().lower() == "runner_live"
+            if os.getenv("EXIT_MODE") is not None
+            else _env_bool("RUNNER_MODE", bool(fill_model.get("runner_mode", False)))
+        ),
+        exit_mode=(
+            str(os.getenv("EXIT_MODE")).strip().lower()
+            if os.getenv("EXIT_MODE") is not None
+            else (
+                "runner_live"
+                if _env_bool("RUNNER_MODE", bool(fill_model.get("runner_mode", False)))
+                else "static"
+            )
         ),
         runner_activation_r=float(
             os.getenv("RUNNER_ACTIVATION_R", fill_model.get("runner_activation_r", 1.0)) or 1.0
@@ -741,6 +754,10 @@ def _validate_config(config: SystemConfig) -> None:
         raise ConfigError(
             "htf_conflict_policy must be one of: block, daily, four_hour, "
             "four_hour_confirmed."
+        )
+    if config.exit_mode not in {"static", "runner_shadow", "runner_live"}:
+        raise ConfigError(
+            "exit_mode must be one of: static, runner_shadow, runner_live."
         )
     if config.max_staleness_seconds < 1:
         raise ConfigError("max_staleness_seconds must be >= 1.")

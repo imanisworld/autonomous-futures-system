@@ -167,7 +167,7 @@ def test_armed_setup_fails_closed_without_entry_retest(tmp_path):
     log_dir = str(tmp_path)
     _arm(log_dir, entry=5240.0, ts=now)
     bar = _payload("5m")
-    bar.timestamp = (now + timedelta(minutes=5)).isoformat()
+    bar.timestamp = (now + timedelta(minutes=20)).isoformat()
     bar.low, bar.close = 5241.0, 5242.0
     assert triggered_armed_setup(bar, log_dir, now.date()) is None
     assert read_armed_setup("MES", log_dir, now.date()) is not None
@@ -178,7 +178,7 @@ def test_long_retest_triggers_original_unmodified_bracket_once(tmp_path):
     log_dir = str(tmp_path)
     armed = _arm(log_dir, entry=5240.0, ts=now)
     bar = _payload("5m")
-    bar.timestamp = (now + timedelta(minutes=5)).isoformat()
+    bar.timestamp = (now + timedelta(minutes=20)).isoformat()
     bar.low, bar.close = 5239.75, 5240.25
     triggered = triggered_armed_setup(bar, log_dir, now.date())
     assert triggered["setup"] == armed["setup"]
@@ -193,7 +193,7 @@ def test_short_retest_is_mirrored(tmp_path):
     log_dir = str(tmp_path)
     _arm(log_dir, direction="SHORT", entry=5240.0, ts=now)
     bar = _payload("5m")
-    bar.timestamp = (now + timedelta(minutes=5)).isoformat()
+    bar.timestamp = (now + timedelta(minutes=20)).isoformat()
     bar.high, bar.close = 5240.25, 5239.75
     assert triggered_armed_setup(bar, log_dir, now.date()) is not None
 
@@ -203,7 +203,7 @@ def test_retest_close_must_remain_within_one_tick_of_entry(tmp_path):
     log_dir = str(tmp_path)
     _arm(log_dir, entry=5240.0, ts=now)
     bar = _payload("5m")
-    bar.timestamp = (now + timedelta(minutes=5)).isoformat()
+    bar.timestamp = (now + timedelta(minutes=20)).isoformat()
     bar.low, bar.close = 5239.75, 5241.0
     assert triggered_armed_setup(bar, log_dir, now.date()) is None
     assert read_armed_setup("MES", log_dir, now.date()) is not None
@@ -212,7 +212,7 @@ def test_retest_close_must_remain_within_one_tick_of_entry(tmp_path):
 def test_stale_or_malformed_arm_fails_closed_and_is_cleared(tmp_path):
     now = datetime.now(timezone.utc)
     log_dir = str(tmp_path)
-    _arm(log_dir, ts=now - timedelta(minutes=21))
+    _arm(log_dir, ts=now - timedelta(minutes=36))
     bar = _payload("5m")
     bar.timestamp = now.isoformat()
     assert triggered_armed_setup(bar, log_dir, now.date(), now=now) is None
@@ -251,7 +251,7 @@ def test_process_alert_executes_only_the_armed_15m_setup(
         "webhook.runner.DecisionEngine.evaluate", _must_not_evaluate
     )
     bar = _payload("5m")
-    bar.timestamp = (now + timedelta(minutes=5)).isoformat()
+    bar.timestamp = (now + timedelta(minutes=20)).isoformat()
     bar.low, bar.close = 5239.75, 5240.25
     result = process_alert(bar, config=config, log_dir=log_dir, for_date=now.date())
 
@@ -291,7 +291,7 @@ def test_failed_5m_execution_retains_arm_for_retry(monkeypatch, tmp_path, config
 
     monkeypatch.setattr(PaperBroker, "execute_bracket", _cancel)
     bar = _payload("5m")
-    bar.timestamp = (now + timedelta(minutes=5)).isoformat()
+    bar.timestamp = (now + timedelta(minutes=20)).isoformat()
     bar.low, bar.close = 5239.75, 5240.25
 
     result = process_alert(bar, config=config, log_dir=log_dir, for_date=now.date())

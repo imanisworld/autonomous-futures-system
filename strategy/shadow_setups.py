@@ -162,6 +162,8 @@ RISK_MATRIX = {
     "ovn_low_sweep_reclaim": ("B", 0.5),
     "gap_fill": ("C", 0.25),
     "ema_pullback_trend": ("B", 0.75),
+    "impulse_first_pullback_observed": ("B", 0.5),
+    "trend_consolidation_break_observed": ("B", 0.5),
 }
 
 # Mirrors the hard RiskEngine backstop for the instruments currently traded.
@@ -184,7 +186,10 @@ _FOURHR_WINDOW_END = _time(11, 0)
 _FOURHR_MAX_STOP_TICKS = {"MNQ": 80, "MES": 40}
 
 
-def evaluate_shadow_setups(state: MarketState) -> list[ShadowSetupCandidate]:
+def evaluate_shadow_setups(
+    state: MarketState,
+    recent_bars: list[dict] | None = None,
+) -> list[ShadowSetupCandidate]:
     """Return all shadow-only setup candidates visible on this bar."""
     candidates = [
         _missing_strat_family(state),
@@ -194,8 +199,105 @@ def evaluate_shadow_setups(state: MarketState) -> list[ShadowSetupCandidate]:
         _overnight_sweep_reclaim(state),
         _gap_fill(state),
         _ema_pullback_trend(state),
+        _impulse_first_pullback(state, recent_bars or []),
+        _trend_consolidation_break(state, recent_bars or []),
     ]
     return [candidate for candidate in candidates if candidate is not None]
+
+
+def _bar_num(bar: dict, key: str) -> float:
+    return float(bar[key])
+
+
+def _impulse_first_pullback(
+    state: MarketState, bars: list[dict]
+) -> ShadowSetupCandidate | None:
+    """Observe the first one-bar pullback after a three-bar directional impulse.
+
+    The completed pullback bar creates a stop-entry one tick beyond its high/low;
+    therefore no same-bar break or future data is used.
+    """
+    if len(bars) < 4 or not state.trend or state.trend.direction not in {"UP", "DOWN"}:
+        return None
+    seq = bars[-4:]
+    direction = state.trend.direction
+    closes = [_bar_num(b, "close") for b in seq]
+    impulse_up = closes[0] < closes[1] < closes[2]
+    impulse_down = closes[0] > closes[1] > closes[2]
+    pullback_down = closes[3] < closes[2]
+    pullback_up = closes[3] > closes[2]
+    if direction == "UP" and not (impulse_up and pullback_down):
+        return None
+    if direction == "DOWN" and not (impulse_down and pullback_up):
+        return None
+
+    tick = _tick(state)
+    pullback = seq[-1]
+    if direction == "UP":
+        entry = _bar_num(pullback, "high") + tick
+        stop = min(_bar_num(b, "low") for b in seq[-2:]) - tick
+        risk = entry - stop
+        target = entry + 2.0 * risk
+        trade_direction = "LONG"
+    else:
+        entry = _bar_num(pullback, "low") - tick
+        stop = max(_bar_num(b, "high") for b in seq[-2:]) + tick
+        risk = stop - entry
+        target = entry - 2.0 * risk
+        trade_direction = "SHORT"
+    if risk <= 0:
+        return None
+    return _candidate(
+        strategy="impulse_first_pullback_observed",
+        direction=trade_direction,
+        entry=entry,
+        stop=stop,
+        target=target,
+        notes="Shadow: first local pullback after a causal three-close impulse",
+    )
+
+
+def _trend_consolidation_break(
+    state: MarketState, bars: list[dict]
+) -> ShadowSetupCandidate | None:
+    """Observe a stop-entry beyond a tight three-bar post-impulse range."""
+    if len(bars) < 5 or not state.trend or state.trend.direction not in {"UP", "DOWN"}:
+        return None
+    seq = bars[-5:]
+    direction = state.trend.direction
+    first, second = seq[0], seq[1]
+    if direction == "UP" and _bar_num(second, "close") <= _bar_num(first, "close"):
+        return None
+    if direction == "DOWN" and _bar_num(second, "close") >= _bar_num(first, "close"):
+        return None
+    impulse_range = max(
+        _bar_num(first, "high"), _bar_num(second, "high")
+    ) - min(_bar_num(first, "low"), _bar_num(second, "low"))
+    cluster = seq[-3:]
+    cluster_high = max(_bar_num(b, "high") for b in cluster)
+    cluster_low = min(_bar_num(b, "low") for b in cluster)
+    cluster_range = cluster_high - cluster_low
+    if impulse_range <= 0 or cluster_range > impulse_range * 0.60:
+        return None
+    tick = _tick(state)
+    if direction == "UP":
+        entry, stop = cluster_high + tick, cluster_low - tick
+        risk = entry - stop
+        target, trade_direction = entry + 2.0 * risk, "LONG"
+    else:
+        entry, stop = cluster_low - tick, cluster_high + tick
+        risk = stop - entry
+        target, trade_direction = entry - 2.0 * risk, "SHORT"
+    if risk <= 0:
+        return None
+    return _candidate(
+        strategy="trend_consolidation_break_observed",
+        direction=trade_direction,
+        entry=entry,
+        stop=stop,
+        target=target,
+        notes="Shadow: causal break beyond a tight three-bar post-impulse range",
+    )
 
 
 def _missing_strat_family(state: MarketState) -> ShadowSetupCandidate | None:

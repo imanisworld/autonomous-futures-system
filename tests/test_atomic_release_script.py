@@ -22,6 +22,8 @@ def test_candidate_is_forced_observe_only_before_promotion():
     assert "--setenv=EXPECTED_PROOF_SCHEDULE_MODE=always_on_shadow" in text
     assert "--setenv=HTF_DIRECTION_MODE=off" in text
     assert "--setenv=EXPECTED_PROOF_HTF_DIRECTION_MODE=off" in text
+    assert "--setenv=EXIT_MODE=static" in text
+    assert "--setenv=EXPECTED_PROOF_EXIT_MODE=static" in text
     assert "--port 8010" in text
 
 

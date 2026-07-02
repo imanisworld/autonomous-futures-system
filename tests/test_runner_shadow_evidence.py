@@ -87,10 +87,20 @@ def test_runner_shadow_status_is_fail_soft_and_actionable(monkeypatch, tmp_path)
 
 
 def test_runner_shadow_status_distinguishes_disabled_from_awaiting(monkeypatch, tmp_path):
+    monkeypatch.delenv("EXIT_MODE", raising=False)
     monkeypatch.delenv("RUNNER_SHADOW_ENABLED", raising=False)
     assert runner_shadow_status(tmp_path)["state"] == "disabled"
 
     monkeypatch.setenv("RUNNER_SHADOW_ENABLED", "1")
     status = runner_shadow_status(tmp_path)
     assert status["state"] == "awaiting_evidence"
+
+
+def test_explicit_static_mode_overrides_legacy_runner_flags(monkeypatch, tmp_path):
+    monkeypatch.setenv("EXIT_MODE", "static")
+    monkeypatch.setenv("RUNNER_SHADOW_ENABLED", "true")
+    monkeypatch.setenv("RUNNER_LIVE_ENABLED", "true")
+    status = runner_shadow_status(tmp_path)
+    assert status["enabled"] is False
+    assert status["live_enabled"] is False
     assert status["evidence_observed"] is False

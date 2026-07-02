@@ -118,6 +118,9 @@ class JournalLogger:
         session: str,
         order_ids: dict,
         for_date: Optional[date] = None,
+        *,
+        stop: Optional[float] = None,
+        exit_mode: Optional[str] = None,
     ) -> None:
         """Append the broker's OSO order ids for the currently-open position.
 
@@ -133,6 +136,10 @@ class JournalLogger:
             "session": session,
             "order_ids": dict(order_ids or {}),
         }
+        if stop is not None:
+            record["stop"] = float(stop)
+        if exit_mode:
+            record["exit_mode"] = str(exit_mode)
         self._append(record, for_date)
 
     def log_error(self, message: str, exc: Optional[Exception] = None) -> None:
@@ -440,6 +447,12 @@ class JournalLogger:
                 if (last_open is not None and isinstance(order_ids, dict)
                         and entry.get("instrument") == last_open.get("instrument")):
                     last_open["order_ids"] = order_ids
+                    if entry.get("stop") is not None:
+                        last_open["stop"] = entry.get("stop")
+                    if entry.get("exit_mode"):
+                        last_open["exit_mode"] = entry.get("exit_mode")
+                        if entry.get("exit_mode") == "runner_live":
+                            last_open["target"] = None
                 continue
 
             decision = entry.get("decision")
