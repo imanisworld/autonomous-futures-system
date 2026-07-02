@@ -117,6 +117,10 @@ class ReplayEngine:
             runner_mode=bool(getattr(self.config, "runner_mode", False)),
             runner_activation_r=float(getattr(self.config, "runner_activation_r", 1.0) or 1.0),
             runner_trail_r=float(getattr(self.config, "runner_trail_r", 0.5) or 0.5),
+            entry_fill_model=str(getattr(self.config, "entry_fill_model", "market") or "market"),
+            entry_tolerance_ticks_by_root=dict(
+                getattr(self.config, "entry_tolerance_ticks_by_root", {}) or {}
+            ),
         )
         daily_state = DailyState(
             date=run_date,
@@ -257,7 +261,25 @@ class ReplayEngine:
                         notes=decision.setup.notes,
                         contracts=contracts,
                     )
-                    broker.execute_bracket(order)
+                    entry_fill = broker.execute_bracket(order, market_price=candle.close)
+                    if entry_fill.result == "CANCELLED":
+                        # IOC-faithful baseline: the entry self-cancelled (market
+                        # beyond entry ± tolerance at decision time). Book it the
+                        # way live does — CANCELLED/ENTRY_NOT_FILLED outcome, NO
+                        # trade counted, no session budget consumed, no position.
+                        journal.log_outcome(
+                            instrument=entry_fill.instrument,
+                            session=state.session,
+                            result=entry_fill.result,
+                            entry_price=entry_fill.entry_price,
+                            exit_price=None,
+                            exit_reason=entry_fill.exit_reason,
+                            pnl_ticks=0.0,
+                            pnl_dollars=0.0,
+                            contracts=entry_fill.contracts,
+                            for_date=journal_date,
+                        )
+                        continue
                     session_key = state.session or ""
                     if session_key:
                         daily_state.session_trade_counts[session_key] = (
