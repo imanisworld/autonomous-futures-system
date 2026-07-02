@@ -76,8 +76,8 @@ verify_release() {
       --setenv=LOG_DIR='$SHARED/candidate-logs/$sha' \
       --setenv=SCHEDULE_MODE=always_on_shadow \
       --setenv=EXPECTED_PROOF_SCHEDULE_MODE=always_on_shadow \
-      --setenv=HTF_DIRECTION_MODE=prioritize \
-      --setenv=EXPECTED_PROOF_HTF_DIRECTION_MODE=prioritize \
+      --setenv=HTF_DIRECTION_MODE=off \
+      --setenv=EXPECTED_PROOF_HTF_DIRECTION_MODE=off \
       --setenv=RELEASE_INTEGRITY_ENFORCED=true \
       --setenv=EXPECTED_RELEASE_FINGERPRINT='$fingerprint' \
       '$RELEASES/$sha/.venv/bin/python' -m uvicorn webhook.app:app \
@@ -102,8 +102,8 @@ promote_release() {
     test -f '$SHARED/.env'
     grep -qx 'SCHEDULE_MODE=always_on_shadow' '$SHARED/.env'
     grep -qx 'EXPECTED_PROOF_SCHEDULE_MODE=always_on_shadow' '$SHARED/.env'
-    grep -qx 'HTF_DIRECTION_MODE=prioritize' '$SHARED/.env'
-    grep -qx 'EXPECTED_PROOF_HTF_DIRECTION_MODE=prioritize' '$SHARED/.env'
+    grep -qx 'HTF_DIRECTION_MODE=off' '$SHARED/.env'
+    grep -qx 'EXPECTED_PROOF_HTF_DIRECTION_MODE=off' '$SHARED/.env'
     fp=\$('$RELEASES/$sha/.venv/bin/python' -c \"import json;print(json.load(open('$RELEASES/$sha/release_manifest.json'))['fingerprint_sha256'])\")
     risk_sha=\$('$RELEASES/$sha/.venv/bin/python' -c \"import json;print(json.load(open('$RELEASES/$sha/release_manifest.json'))['risk_rules_sha256'])\")
     sed -i '/^EXPECTED_RELEASE_FINGERPRINT=/d;/^EXPECTED_LIVE_BRANCH=/d;/^EXPECTED_LIVE_COMMIT=/d;/^EXPECTED_RISK_RULES_SHA256=/d' '$SHARED/.env'

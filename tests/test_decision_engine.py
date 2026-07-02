@@ -19,7 +19,7 @@ import pytest
 
 from context.market_context import (
     MarketState, PriceData, OHLCData, VWAPData, ORBData,
-    PreviousDayData, VolumeData, TrendData, HTFContext,
+    PreviousDayData, VolumeData, TrendData, HTFContext, KeyLevels,
 )
 from risk.risk_engine import DailyState
 from strategy.signal_engine import DecisionEngine, SetupDetail
@@ -564,15 +564,17 @@ class TestHTFDirectionPrioritization:
 
     def _engine(self, config, candidates):
         config.htf_direction_mode = "prioritize"
+        config.htf_conflict_policy = "four_hour"
         config.require_htf_alignment = {}
         engine = DecisionEngine(config=config)
         engine._find_setup_candidates = lambda *a, **kw: list(candidates)
         return engine
 
-    def test_daily_primary_long_ranks_ahead_of_short(self, config, fresh_market_state):
+    def test_four_hour_controls_when_daily_conflicts(self, config, fresh_market_state):
         state = deepcopy(fresh_market_state)
         state.htf = HTFContext(daily_direction="UP", four_hour_direction="DOWN")
         state.strat = None
+        state.key_levels = None
         engine = self._engine(
             config,
             [self._setup("SHORT", "orb_rejection"), self._setup("LONG", "orb_reclaim")],
@@ -581,11 +583,100 @@ class TestHTFDirectionPrioritization:
         decision = engine.evaluate(state, DailyState())
 
         assert decision.decision == "TRADE"
-        assert decision.setup.direction == "LONG"
+        assert decision.setup.direction == "SHORT"
         assert decision.setup.direction_role == "PRIMARY"
-        assert [row["direction"] for row in decision.candidate_audit] == ["LONG", "SHORT"]
+        assert decision.setup.htf_primary_direction == "SHORT"
+        assert "Daily UP conflicts with 4H DOWN" in decision.setup.direction_reason
+        assert "four_hour direction supports SHORT" in decision.setup.direction_reason
+        assert [row["direction"] for row in decision.candidate_audit] == ["SHORT", "LONG"]
 
-    def test_qualified_countertrend_waits_for_five_minute_trigger(
+    def test_daily_conflict_policy_reproduces_old_behavior(
+        self, config, fresh_market_state
+    ):
+        state = deepcopy(fresh_market_state)
+        state.htf = HTFContext(daily_direction="UP", four_hour_direction="DOWN")
+        state.key_levels = None
+        engine = self._engine(
+            config,
+            [self._setup("SHORT", "orb_rejection"), self._setup("LONG", "orb_reclaim")],
+        )
+        config.htf_conflict_policy = "daily"
+
+        decision = engine.evaluate(state, DailyState())
+
+        assert decision.decision == "TRADE"
+        assert decision.setup.direction == "LONG"
+        assert decision.setup.htf_primary_direction == "LONG"
+
+    def test_confirmed_policy_blocks_todays_unconfirmed_long(
+        self, config, fresh_market_state
+    ):
+        state = deepcopy(fresh_market_state)
+        state.htf = HTFContext(
+            daily_direction="UP",
+            four_hour_direction="DOWN",
+            one_hour_direction="UP",
+        )
+        state.trend = TrendData(direction="UP", strength="STRONG")
+        state.key_levels = None
+        config.htf_conflict_policy = "four_hour_confirmed"
+        engine = self._engine(config, [self._setup("LONG", "orb_reclaim")])
+        config.htf_conflict_policy = "four_hour_confirmed"
+
+        decision = engine.evaluate(state, DailyState())
+
+        assert decision.decision == "NO_TRADE"
+        assert decision.setup.direction_role == "UNRESOLVED"
+        assert "HTF_DIRECTION_UNRESOLVED" in decision.failed_gates
+
+    def test_confirmed_policy_allows_short_when_4h_1h_and_trend_agree(
+        self, config, fresh_market_state
+    ):
+        state = deepcopy(fresh_market_state)
+        state.htf = HTFContext(
+            daily_direction="UP",
+            four_hour_direction="DOWN",
+            one_hour_direction="DOWN",
+        )
+        state.trend = TrendData(direction="DOWN", strength="STRONG")
+        state.key_levels = None
+        config.htf_conflict_policy = "four_hour_confirmed"
+        engine = self._engine(config, [self._setup("SHORT", "orb_rejection")])
+        config.htf_conflict_policy = "four_hour_confirmed"
+
+        decision = engine.evaluate(state, DailyState())
+
+        assert decision.decision == "TRADE"
+        assert decision.setup.direction == "SHORT"
+
+    def test_daily_long_does_not_latch_ema_gate_during_four_hour_downtrend(
+        self, config, fresh_market_state
+    ):
+        state = deepcopy(fresh_market_state)
+        state.htf = HTFContext(daily_direction="UP", four_hour_direction="DOWN")
+        state.ohlc.close = 7497.5
+        state.key_levels = KeyLevels(
+            ema_9=7519.4977,
+            ema_21=7533.967,
+            ema_55=7541.0273,
+        )
+        short = SetupDetail(
+            direction="SHORT",
+            entry=7497.5,
+            stop=7507.5,
+            target=7472.5,
+            rr_ratio=2.5,
+            strategy="orb_rejection",
+        )
+        engine = self._engine(config, [short])
+
+        decision = engine.evaluate(state, DailyState())
+
+        assert decision.decision == "TRADE"
+        assert decision.setup.direction == "SHORT"
+        assert "EMA_STACK_NOT_ALIGNED" not in decision.failed_gates
+
+    def test_four_hour_aligned_short_is_primary_not_countertrend(
         self, config, fresh_market_state
     ):
         state = deepcopy(fresh_market_state)
@@ -600,9 +691,8 @@ class TestHTFDirectionPrioritization:
 
         decision = engine.evaluate(state, DailyState())
 
-        assert decision.decision == "NO_TRADE"
-        assert decision.setup.direction_role == "COUNTERTREND_SCALP"
-        assert "COUNTERTREND_REQUIRES_5M" in decision.failed_gates
+        assert decision.decision == "TRADE"
+        assert decision.setup.direction_role == "PRIMARY"
 
     def test_missing_htf_is_unresolved_and_never_full_risk(
         self, config, fresh_market_state

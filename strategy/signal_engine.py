@@ -731,9 +731,40 @@ class DecisionEngine:
 
     def _primary_setup_direction(self, state: MarketState) -> Optional[str]:
         htf = getattr(state, "htf", None)
-        primary = self._direction_value(
-            getattr(htf, "daily_direction", None)
-        ) or self._direction_value(getattr(htf, "four_hour_direction", None))
+        daily = self._direction_value(getattr(htf, "daily_direction", None))
+        four_hour = self._direction_value(
+            getattr(htf, "four_hour_direction", None)
+        )
+        # The Daily candle is slow context, not an intraday execution signal.
+        # When Daily and 4H disagree, using Daily first can keep every downstream
+        # gate latched to yesterday's direction through a full 4H reversal. The
+        # 4H direction is the actionable primary in that conflict; Daily remains
+        # recorded on the setup for audit and countertrend classification.
+        conflict_policy = getattr(
+            self.config, "htf_conflict_policy", "four_hour_confirmed"
+        )
+        conflict_primary = daily if conflict_policy == "daily" else four_hour
+        if conflict_policy == "block":
+            conflict_primary = None
+        if (
+            conflict_policy == "four_hour_confirmed"
+            and daily
+            and four_hour
+            and daily != four_hour
+        ):
+            one_hour = self._direction_value(
+                getattr(htf, "one_hour_direction", None)
+            )
+            trend = self._direction_value(
+                getattr(getattr(state, "trend", None), "direction", None)
+            )
+            if one_hour != four_hour or trend != four_hour:
+                conflict_primary = None
+        primary = (
+            conflict_primary
+            if daily and four_hour and daily != four_hour
+            else daily or four_hour
+        )
         return "LONG" if primary == "UP" else "SHORT" if primary == "DOWN" else None
 
     def _classify_setup_direction(
@@ -745,20 +776,50 @@ class DecisionEngine:
         four_hour = self._direction_value(
             getattr(htf, "four_hour_direction", None)
         )
-        primary_htf = daily or four_hour
         primary_direction = self._primary_setup_direction(state)
+        htf_conflict = bool(daily and four_hour and daily != four_hour)
+        conflict_policy = getattr(
+            self.config, "htf_conflict_policy", "four_hour_confirmed"
+        )
+        conflict_primary_direction = self._primary_setup_direction(state)
+        conflict_primary = (
+            "UP" if conflict_primary_direction == "LONG"
+            else "DOWN" if conflict_primary_direction == "SHORT"
+            else None
+        )
+        primary_htf = conflict_primary if htf_conflict else daily or four_hour
 
         if primary_direction is None:
             role = "UNRESOLVED"
-            reason = "Daily and 4H directions are unavailable or neutral."
+            reason = (
+                f"Daily {daily} conflicts with 4H {four_hour}; "
+                + (
+                    "conflict policy blocks execution."
+                    if conflict_policy == "block"
+                    else "4H lacks matching 1H and active-trend confirmation."
+                )
+                if htf_conflict and conflict_policy in {"block", "four_hour_confirmed"}
+                else "Daily and 4H directions are unavailable or neutral."
+            )
         elif setup.direction == primary_direction:
             role = "PRIMARY"
-            source = "Daily" if daily else "4H fallback"
-            reason = f"{source} direction {primary_htf} supports {setup.direction}."
+            if htf_conflict:
+                reason = (
+                    f"Daily {daily} conflicts with 4H {four_hour}; configured "
+                    f"{conflict_policy} direction supports {setup.direction}."
+                )
+            else:
+                source = "Daily" if daily else "4H fallback"
+                reason = f"{source} direction {primary_htf} supports {setup.direction}."
         else:
             expected_four_hour = "UP" if setup.direction == "LONG" else "DOWN"
             local_direction = getattr(getattr(state, "strat", None), "strat_direction", None)
-            if daily and four_hour == expected_four_hour and local_direction == setup.direction:
+            if (
+                not htf_conflict
+                and daily
+                and four_hour == expected_four_hour
+                and local_direction == setup.direction
+            ):
                 role = "COUNTERTREND_SCALP"
                 reason = (
                     f"Daily {daily} remains primary; 4H {four_hour} and 15m "

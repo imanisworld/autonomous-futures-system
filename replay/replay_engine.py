@@ -8,6 +8,7 @@ decision, risk, paper broker, journal, and review path.
 from __future__ import annotations
 
 from collections import deque
+from dataclasses import replace
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -297,10 +298,12 @@ class ReplayEngine:
             stopped_reason = "max_trades_per_day"
 
         summary = journal.get_summary(_date_to_date(run_date))
-        review = DailySummaryAgent(self.config)
-        review.log_dir = self.log_dir
-        review.risk_reviewer.config.log_dir = str(self.log_dir)
-        review.trade_grader.config.log_dir = str(self.log_dir)
+        # Construct the review stack with the isolated replay directory from
+        # the start. Reassigning log_dir after construction is too late because
+        # DailySummaryAgent.__init__ creates config.log_dir immediately (and a
+        # production /app/logs path is not writable in local/offline replay).
+        review_config = replace(self.config, log_dir=str(self.log_dir))
+        review = DailySummaryAgent(review_config)
         review_payload = review.eod(run_date)
         report = ReplayReport(
             source_path=str(candle_path),
