@@ -1489,6 +1489,25 @@ class TradovateBroker(BrokerInterface):
         self._last_order_ids = None
         return result
 
+    def entry_order_filled(self, order_id) -> Optional[bool]:
+        """Whether the given entry order has at least one fill on this account.
+
+        Returns True/False only on a definitive read of /fill/list; returns None
+        when the fill list is unreadable (transient API failure). Callers MUST
+        treat None as uncertainty — never as "no fill" — or a completed trade can
+        be misclassified as a phantom (the 2026-07-06 erased-win incident).
+        """
+        if order_id is None:
+            return None
+        try:
+            fills = self._get(f"/fill/list?accountId={self._account_id}")
+        except Exception as exc:
+            logger.warning("entry_order_filled: fill list unreadable: %s", exc)
+            return None
+        if not isinstance(fills, list):
+            return None
+        return any(f.get("orderId") == order_id for f in fills)
+
     def resolve_position(self) -> Optional[Fill]:
         """Check if a bracket child order (stop or target) has filled."""
         if not self._last_position or not self._last_position.open:
