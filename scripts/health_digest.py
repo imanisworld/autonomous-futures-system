@@ -15,6 +15,8 @@ DISCORD_ROUTE_DAILY_REPORT, DISCORD_WEBHOOK_URL); no webhook -> prints only.
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import os
 import shutil
@@ -27,6 +29,42 @@ from typing import Optional
 DISK_WARN_PCT = 80.0
 DISK_ALERT_PCT = 90.0
 _BASE = "http://127.0.0.1:8000"
+
+
+def _load_env() -> None:
+    """Load the repo .env into the process (fail-soft).
+
+    The cron entry runs this script WITHOUT the service's EnvironmentFile, so
+    the Discord routes and the status-gate credentials are invisible unless we
+    load .env ourselves — that gap is exactly why the digest silently degraded
+    to "printing only" + 401 broker reads from 2026-07-03. Never overrides
+    values already present in the environment.
+    """
+    try:
+        from dotenv import load_dotenv
+        env_path = Path(".env")
+        if env_path.exists():
+            load_dotenv(env_path)
+    except Exception:
+        pass
+
+
+def _gate_cookie() -> Optional[str]:
+    """Cookie authorizing the sensitive status reads (/status/broker-account).
+
+    Mirrors webhook.app._gate_token exactly: HMAC-SHA256 keyed by WEBHOOK_SECRET
+    over "site-access:" + SITE_ACCESS_CODE (parity-tested against the app in
+    tests/test_health_digest_auth.py so drift breaks loudly). Returns None when
+    the gate is not configured — sending nothing preserves today's behavior.
+    """
+    code = os.getenv("SITE_ACCESS_CODE", "").strip()
+    secret = os.getenv("WEBHOOK_SECRET", "").strip()
+    if not code or not secret:
+        return None
+    token = hmac.new(
+        secret.encode(), ("site-access:" + code).encode(), hashlib.sha256
+    ).hexdigest()
+    return f"vp_access={token}"
 
 
 # ── pure ───────────────────────────────────────────────────────────────────
@@ -99,7 +137,11 @@ def format_digest(verdict: dict, checks: dict, *, day_iso: str) -> str:
 # ── I/O (fail-soft) ────────────────────────────────────────────────────────
 def _get_json(path: str, timeout: float = 6.0) -> Optional[dict]:
     try:
-        with urllib.request.urlopen(_BASE + path, timeout=timeout) as r:
+        req = urllib.request.Request(_BASE + path)
+        cookie = _gate_cookie()
+        if cookie:
+            req.add_header("Cookie", cookie)
+        with urllib.request.urlopen(req, timeout=timeout) as r:
             return json.loads(r.read().decode())
     except Exception:
         return None
@@ -152,6 +194,7 @@ def _post_discord(url: str, content: str) -> bool:
 
 
 def main(argv: Optional[list[str]] = None) -> int:
+    _load_env()
     generated_at = datetime.now(timezone.utc)
     day_iso = generated_at.date().isoformat()
     checks = collect()
