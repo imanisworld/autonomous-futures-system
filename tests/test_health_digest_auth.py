@@ -61,6 +61,22 @@ def test_get_json_sends_no_cookie_when_unconfigured(monkeypatch):
     assert seen["cookie"] is None
 
 
+def test_post_discord_sends_real_user_agent(monkeypatch):
+    """Discord's edge 403s urllib's default Python-urllib UA (box-verified
+    2026-07-06: same webhook, curl 204 / bare urllib 403) — the post must carry
+    an explicit User-Agent or delivery silently fails."""
+    from scripts.health_digest import _post_discord
+    seen = {}
+
+    def _fake_urlopen(req, timeout=None):
+        seen["ua"] = req.get_header("User-agent")
+        raise OSError("stop — header captured")
+
+    monkeypatch.setattr(urllib.request, "urlopen", _fake_urlopen)
+    assert _post_discord("https://discord.test/hook", "hi") is False  # fail-soft
+    assert seen["ua"] == "afs-health-digest/1.0"
+
+
 def test_load_env_reads_repo_dotenv_without_overriding(tmp_path, monkeypatch):
     # conftest disables dotenv globally (PYTHON_DOTENV_DISABLED=1) so tests never
     # ingest the developer's real .env; re-enable it against this tmp .env only.
