@@ -186,7 +186,13 @@ def collect() -> dict:
 def _post_discord(url: str, content: str) -> bool:
     try:
         body = json.dumps({"content": content}).encode()
-        req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
+        req = urllib.request.Request(url, data=body, headers={
+            "Content-Type": "application/json",
+            # Discord's edge 403s urllib's default "Python-urllib/x" UA — the
+            # service's own posts work because httpx sends a real UA. Verified
+            # on the box 2026-07-06: same webhook, curl 204 / bare urllib 403.
+            "User-Agent": "afs-health-digest/1.0",
+        })
         with urllib.request.urlopen(req, timeout=15) as resp:
             return 200 <= resp.status < 300
     except Exception:
