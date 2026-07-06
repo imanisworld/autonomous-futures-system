@@ -14,6 +14,13 @@ the broker is AUTHENTICATED and DEFINITIVELY FLAT, and the position is stale
 enough to be past any fill-propagation/settle window. On any uncertainty
 (broker unauthenticated, broker still holding a position, position too recent) it
 does NOTHING — it never books a close on a guess.
+
+"Journal open + broker flat" is NOT proof the entry never filled: a completed
+trade whose exit filled between 15m bar resolves looks identical (2026-07-06: a
+target-hit MES win was erased as CANCELLED $0 this way). Before clearing, the
+sweep therefore checks the persisted entry order's fills — fills present → book
+the REAL outcome via the broker's order-id-scoped resolver; only a zero-fill
+entry is cleared as a phantom.
 """
 from __future__ import annotations
 
@@ -36,6 +43,49 @@ def _parse_ts(ts) -> Optional[datetime]:
         return datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
     except Exception:
         return None
+
+
+def _resolve_completed_trade(broker, open_pos: dict):
+    """Book the real outcome of a filled-then-closed position through the
+    broker's own order-id-scoped resolver (weighted partial-fill averaging,
+    never prices from an unrelated fill).
+
+    Mirrors the runner's restart-restore path (webhook/runner.py Step 1):
+    rebuild Position + order ids from the journal snapshot, then let
+    resolve_position() attribute the exit. It is called up to three times so
+    its internal fail counter can engage the designed FORCE_CLOSE_UNMATCHED
+    degradation (e.g. a manual close with no bracket fill) instead of looping
+    unresolved forever across sweeps. Returns a Fill or None (leave open).
+    """
+    from execution.broker_interface import Position
+
+    stop = open_pos.get("stop")
+    target = open_pos.get("target")
+    broker._last_position = Position(
+        instrument=open_pos.get("instrument"),
+        direction=open_pos.get("direction"),
+        entry_price=float(open_pos.get("entry") or 0.0),
+        stop=float(stop) if stop is not None else None,
+        target=(
+            None
+            if open_pos.get("exit_mode") == "runner_live" or target is None
+            else float(target)
+        ),
+        quantity=int(open_pos.get("contracts", 1) or 1),
+        open=True,
+    )
+    order_ids = open_pos.get("order_ids")
+    broker._last_order_ids = order_ids if isinstance(order_ids, dict) else None
+    fill = None
+    for _ in range(3):
+        try:
+            fill = broker.resolve_position()
+        except Exception as exc:
+            logger.warning("reconcile: resolve_position failed: %s", exc)
+            return None
+        if fill is not None:
+            break
+    return fill
 
 
 def reconcile_open_position(
@@ -84,6 +134,64 @@ def reconcile_open_position(
         return {"action": "broker_position_unconfirmed"}
     if pos is not None and getattr(pos, "open", False):
         return {"action": "broker_has_position"}
+
+    # ── Completed-trade guard (2026-07-06 erased-win incident) ────────────────
+    # "Journal open + broker flat" has TWO causes: the entry never filled (true
+    # phantom), or the trade COMPLETED — the exit filled between 15m bar resolves
+    # and this sweep won the race against the next alert-driven resolve. Clearing
+    # a completed trade as CANCELLED erases a real outcome (a target-hit MES win
+    # was misbooked $0 on 2026-07-06). Discriminate on the entry order's fills:
+    # fills present → book the REAL outcome through the broker's order-id-scoped
+    # resolver; only a zero-fill entry may be cleared as a phantom below.
+    order_ids = open_pos.get("order_ids")
+    order_ids = order_ids if isinstance(order_ids, dict) else None
+    entry_id = (order_ids or {}).get("entry")
+    if entry_id is not None:
+        try:
+            entry_filled = broker.entry_order_filled(entry_id)
+        except Exception as exc:
+            logger.warning("reconcile: entry fill check failed: %s", exc)
+            entry_filled = None
+        if entry_filled is None:
+            # Uncertainty rule (same as an unconfirmed position read): do
+            # NOTHING this sweep rather than risk erasing a real trade.
+            return {"action": "entry_fill_unconfirmed"}
+        if entry_filled:
+            fill = _resolve_completed_trade(broker, open_pos)
+            if fill is None:
+                # Fills exist but attribution isn't readable yet (settle
+                # window). Leave the position for the next bar resolve/sweep.
+                return {"action": "entry_filled_unresolved"}
+            journal.log_outcome(
+                instrument=fill.instrument,
+                session="reconcile",
+                result=fill.result,
+                entry_price=fill.entry_price,
+                exit_price=fill.exit_price,
+                exit_reason=fill.exit_reason,
+                pnl_ticks=fill.pnl_ticks,
+                pnl_dollars=fill.pnl_dollars,
+                contracts=fill.contracts,
+                for_date=today,
+            )
+            msg = (
+                f"Auto-reconcile: completed trade resolved — {fill.result} "
+                f"{fill.direction} {fill.instrument} P&L ${float(fill.pnl_dollars or 0):.2f} "
+                f"({fill.exit_reason}). The exit filled between bar resolves; "
+                f"journal updated, no orders sent."
+            )
+            logger.warning(msg)
+            try:
+                from notifications.system_notifier import notify_system
+                notify_system(msg, config=config)
+            except Exception as exc:
+                logger.warning("reconcile alert failed: %s", exc)
+            return {
+                "action": "resolved_completed_trade",
+                "instrument": fill.instrument,
+                "result": fill.result,
+                "pnl_dollars": fill.pnl_dollars,
+            }
 
     # Journal OPEN, broker FLAT, position stale → clear the phantom (CANCELLED,
     # exactly what a manual reconcile does — no P&L/win-rate impact).
