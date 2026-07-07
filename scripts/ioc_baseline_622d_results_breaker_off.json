@@ -1,0 +1,1994 @@
+{
+  "market_static": {
+    "MES": {
+      "all": {
+        "attempts": 1456,
+        "ioc_no_fill": 0,
+        "day_no_fill": 0,
+        "filled": 1456,
+        "fill_rate": 1.0,
+        "wins": 690,
+        "losses": 685,
+        "resolved": 1375,
+        "win_rate": 0.5018,
+        "net_pnl": 241242.12,
+        "expectancy": 175.45
+      },
+      "first_half": {
+        "attempts": 710,
+        "ioc_no_fill": 0,
+        "day_no_fill": 0,
+        "filled": 710,
+        "fill_rate": 1.0,
+        "wins": 320,
+        "losses": 350,
+        "resolved": 670,
+        "win_rate": 0.4776,
+        "net_pnl": 95460.87,
+        "expectancy": 142.48
+      },
+      "second_half": {
+        "attempts": 746,
+        "ioc_no_fill": 0,
+        "day_no_fill": 0,
+        "filled": 746,
+        "fill_rate": 1.0,
+        "wins": 370,
+        "losses": 335,
+        "resolved": 705,
+        "win_rate": 0.5248,
+        "net_pnl": 145781.25,
+        "expectancy": 206.78
+      },
+      "per_strategy": {
+        "orb_breakout": {
+          "all": {
+            "attempts": 217,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 217,
+            "fill_rate": 1.0,
+            "wins": 137,
+            "losses": 75,
+            "resolved": 212,
+            "win_rate": 0.6462,
+            "net_pnl": 43706.25,
+            "expectancy": 206.16
+          },
+          "first_half": {
+            "attempts": 106,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 106,
+            "fill_rate": 1.0,
+            "wins": 66,
+            "losses": 36,
+            "resolved": 102,
+            "win_rate": 0.6471,
+            "net_pnl": 18138.75,
+            "expectancy": 177.83
+          },
+          "second_half": {
+            "attempts": 111,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 111,
+            "fill_rate": 1.0,
+            "wins": 71,
+            "losses": 39,
+            "resolved": 110,
+            "win_rate": 0.6455,
+            "net_pnl": 25567.5,
+            "expectancy": 232.43
+          }
+        },
+        "orb_reclaim": {
+          "all": {
+            "attempts": 305,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 305,
+            "fill_rate": 1.0,
+            "wins": 119,
+            "losses": 151,
+            "resolved": 270,
+            "win_rate": 0.4407,
+            "net_pnl": 37681.87,
+            "expectancy": 139.56
+          },
+          "first_half": {
+            "attempts": 145,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 145,
+            "fill_rate": 1.0,
+            "wins": 55,
+            "losses": 70,
+            "resolved": 125,
+            "win_rate": 0.44,
+            "net_pnl": 15605.62,
+            "expectancy": 124.84
+          },
+          "second_half": {
+            "attempts": 160,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 160,
+            "fill_rate": 1.0,
+            "wins": 64,
+            "losses": 81,
+            "resolved": 145,
+            "win_rate": 0.4414,
+            "net_pnl": 22076.25,
+            "expectancy": 152.25
+          }
+        },
+        "pdh_reclaim": {
+          "all": {
+            "attempts": 160,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 160,
+            "fill_rate": 1.0,
+            "wins": 68,
+            "losses": 89,
+            "resolved": 157,
+            "win_rate": 0.4331,
+            "net_pnl": 12065.25,
+            "expectancy": 76.85
+          },
+          "first_half": {
+            "attempts": 81,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 81,
+            "fill_rate": 1.0,
+            "wins": 29,
+            "losses": 50,
+            "resolved": 79,
+            "win_rate": 0.3671,
+            "net_pnl": 3114.75,
+            "expectancy": 39.43
+          },
+          "second_half": {
+            "attempts": 79,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 79,
+            "fill_rate": 1.0,
+            "wins": 39,
+            "losses": 39,
+            "resolved": 78,
+            "win_rate": 0.5,
+            "net_pnl": 8950.5,
+            "expectancy": 114.75
+          }
+        },
+        "vwap_hold": {
+          "all": {
+            "attempts": 774,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 774,
+            "fill_rate": 1.0,
+            "wins": 366,
+            "losses": 370,
+            "resolved": 736,
+            "win_rate": 0.4973,
+            "net_pnl": 147788.75,
+            "expectancy": 200.8
+          },
+          "first_half": {
+            "attempts": 388,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 388,
+            "fill_rate": 1.0,
+            "wins": 172,
+            "losses": 200,
+            "resolved": 372,
+            "win_rate": 0.4624,
+            "net_pnl": 59093.75,
+            "expectancy": 158.85
+          },
+          "second_half": {
+            "attempts": 386,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 386,
+            "fill_rate": 1.0,
+            "wins": 194,
+            "losses": 170,
+            "resolved": 364,
+            "win_rate": 0.533,
+            "net_pnl": 88695.0,
+            "expectancy": 243.67
+          }
+        }
+      }
+    },
+    "MNQ": {
+      "all": {
+        "attempts": 1005,
+        "ioc_no_fill": 0,
+        "day_no_fill": 0,
+        "filled": 1005,
+        "fill_rate": 1.0,
+        "wins": 522,
+        "losses": 477,
+        "resolved": 999,
+        "win_rate": 0.5225,
+        "net_pnl": 106207.8,
+        "expectancy": 106.31
+      },
+      "first_half": {
+        "attempts": 513,
+        "ioc_no_fill": 0,
+        "day_no_fill": 0,
+        "filled": 513,
+        "fill_rate": 1.0,
+        "wins": 272,
+        "losses": 237,
+        "resolved": 509,
+        "win_rate": 0.5344,
+        "net_pnl": 53141.4,
+        "expectancy": 104.4
+      },
+      "second_half": {
+        "attempts": 492,
+        "ioc_no_fill": 0,
+        "day_no_fill": 0,
+        "filled": 492,
+        "fill_rate": 1.0,
+        "wins": 250,
+        "losses": 240,
+        "resolved": 490,
+        "win_rate": 0.5102,
+        "net_pnl": 53066.4,
+        "expectancy": 108.3
+      },
+      "per_strategy": {
+        "orb_breakout": {
+          "all": {
+            "attempts": 63,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 63,
+            "fill_rate": 1.0,
+            "wins": 45,
+            "losses": 18,
+            "resolved": 63,
+            "win_rate": 0.7143,
+            "net_pnl": 10070.0,
+            "expectancy": 159.84
+          },
+          "first_half": {
+            "attempts": 31,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 31,
+            "fill_rate": 1.0,
+            "wins": 26,
+            "losses": 5,
+            "resolved": 31,
+            "win_rate": 0.8387,
+            "net_pnl": 5885.0,
+            "expectancy": 189.84
+          },
+          "second_half": {
+            "attempts": 32,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 32,
+            "fill_rate": 1.0,
+            "wins": 19,
+            "losses": 13,
+            "resolved": 32,
+            "win_rate": 0.5938,
+            "net_pnl": 4185.0,
+            "expectancy": 130.78
+          }
+        },
+        "orb_reclaim": {
+          "all": {
+            "attempts": 253,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 253,
+            "fill_rate": 1.0,
+            "wins": 136,
+            "losses": 112,
+            "resolved": 248,
+            "win_rate": 0.5484,
+            "net_pnl": 47133.5,
+            "expectancy": 190.05
+          },
+          "first_half": {
+            "attempts": 127,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 127,
+            "fill_rate": 1.0,
+            "wins": 75,
+            "losses": 48,
+            "resolved": 123,
+            "win_rate": 0.6098,
+            "net_pnl": 26460.5,
+            "expectancy": 215.13
+          },
+          "second_half": {
+            "attempts": 126,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 126,
+            "fill_rate": 1.0,
+            "wins": 61,
+            "losses": 64,
+            "resolved": 125,
+            "win_rate": 0.488,
+            "net_pnl": 20673.0,
+            "expectancy": 165.38
+          }
+        },
+        "pdh_reclaim": {
+          "all": {
+            "attempts": 68,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 68,
+            "fill_rate": 1.0,
+            "wins": 28,
+            "losses": 39,
+            "resolved": 67,
+            "win_rate": 0.4179,
+            "net_pnl": 1759.2,
+            "expectancy": 26.26
+          },
+          "first_half": {
+            "attempts": 35,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 35,
+            "fill_rate": 1.0,
+            "wins": 12,
+            "losses": 22,
+            "resolved": 34,
+            "win_rate": 0.3529,
+            "net_pnl": 380.4,
+            "expectancy": 11.19
+          },
+          "second_half": {
+            "attempts": 33,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 33,
+            "fill_rate": 1.0,
+            "wins": 16,
+            "losses": 17,
+            "resolved": 33,
+            "win_rate": 0.4848,
+            "net_pnl": 1378.8,
+            "expectancy": 41.78
+          }
+        },
+        "pdl_reclaim": {
+          "all": {
+            "attempts": 13,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 13,
+            "fill_rate": 1.0,
+            "wins": 9,
+            "losses": 4,
+            "resolved": 13,
+            "win_rate": 0.6923,
+            "net_pnl": 1094.1,
+            "expectancy": 84.16
+          },
+          "first_half": {
+            "attempts": 6,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 6,
+            "fill_rate": 1.0,
+            "wins": 4,
+            "losses": 2,
+            "resolved": 6,
+            "win_rate": 0.6667,
+            "net_pnl": 365.1,
+            "expectancy": 60.85
+          },
+          "second_half": {
+            "attempts": 7,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 7,
+            "fill_rate": 1.0,
+            "wins": 5,
+            "losses": 2,
+            "resolved": 7,
+            "win_rate": 0.7143,
+            "net_pnl": 729.0,
+            "expectancy": 104.14
+          }
+        },
+        "vwap_hold": {
+          "all": {
+            "attempts": 348,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 348,
+            "fill_rate": 1.0,
+            "wins": 191,
+            "losses": 157,
+            "resolved": 348,
+            "win_rate": 0.5489,
+            "net_pnl": 32132.0,
+            "expectancy": 92.33
+          },
+          "first_half": {
+            "attempts": 177,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 177,
+            "fill_rate": 1.0,
+            "wins": 101,
+            "losses": 76,
+            "resolved": 177,
+            "win_rate": 0.5706,
+            "net_pnl": 15878.0,
+            "expectancy": 89.71
+          },
+          "second_half": {
+            "attempts": 171,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 171,
+            "fill_rate": 1.0,
+            "wins": 90,
+            "losses": 81,
+            "resolved": 171,
+            "win_rate": 0.5263,
+            "net_pnl": 16254.0,
+            "expectancy": 95.05
+          }
+        },
+        "vwap_reclaim": {
+          "all": {
+            "attempts": 260,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 260,
+            "fill_rate": 1.0,
+            "wins": 113,
+            "losses": 147,
+            "resolved": 260,
+            "win_rate": 0.4346,
+            "net_pnl": 14019.0,
+            "expectancy": 53.92
+          },
+          "first_half": {
+            "attempts": 129,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 129,
+            "fill_rate": 1.0,
+            "wins": 50,
+            "losses": 79,
+            "resolved": 129,
+            "win_rate": 0.3876,
+            "net_pnl": 3726.0,
+            "expectancy": 28.88
+          },
+          "second_half": {
+            "attempts": 131,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 131,
+            "fill_rate": 1.0,
+            "wins": 63,
+            "losses": 68,
+            "resolved": 131,
+            "win_rate": 0.4809,
+            "net_pnl": 10293.0,
+            "expectancy": 78.57
+          }
+        }
+      }
+    }
+  },
+  "market_runner": {
+    "MES": {
+      "all": {
+        "attempts": 1457,
+        "ioc_no_fill": 0,
+        "day_no_fill": 0,
+        "filled": 1457,
+        "fill_rate": 1.0,
+        "wins": 700,
+        "losses": 680,
+        "resolved": 1380,
+        "win_rate": 0.5072,
+        "net_pnl": 244461.68,
+        "expectancy": 177.15
+      },
+      "first_half": {
+        "attempts": 711,
+        "ioc_no_fill": 0,
+        "day_no_fill": 0,
+        "filled": 711,
+        "fill_rate": 1.0,
+        "wins": 330,
+        "losses": 345,
+        "resolved": 675,
+        "win_rate": 0.4889,
+        "net_pnl": 98680.43,
+        "expectancy": 146.19
+      },
+      "second_half": {
+        "attempts": 746,
+        "ioc_no_fill": 0,
+        "day_no_fill": 0,
+        "filled": 746,
+        "fill_rate": 1.0,
+        "wins": 370,
+        "losses": 335,
+        "resolved": 705,
+        "win_rate": 0.5248,
+        "net_pnl": 145781.25,
+        "expectancy": 206.78
+      },
+      "per_strategy": {
+        "orb_breakout": {
+          "all": {
+            "attempts": 217,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 217,
+            "fill_rate": 1.0,
+            "wins": 139,
+            "losses": 74,
+            "resolved": 213,
+            "win_rate": 0.6526,
+            "net_pnl": 44188.14,
+            "expectancy": 207.46
+          },
+          "first_half": {
+            "attempts": 106,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 106,
+            "fill_rate": 1.0,
+            "wins": 68,
+            "losses": 35,
+            "resolved": 103,
+            "win_rate": 0.6602,
+            "net_pnl": 18620.64,
+            "expectancy": 180.78
+          },
+          "second_half": {
+            "attempts": 111,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 111,
+            "fill_rate": 1.0,
+            "wins": 71,
+            "losses": 39,
+            "resolved": 110,
+            "win_rate": 0.6455,
+            "net_pnl": 25567.5,
+            "expectancy": 232.43
+          }
+        },
+        "orb_reclaim": {
+          "all": {
+            "attempts": 306,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 306,
+            "fill_rate": 1.0,
+            "wins": 123,
+            "losses": 150,
+            "resolved": 273,
+            "win_rate": 0.4505,
+            "net_pnl": 38543.76,
+            "expectancy": 141.19
+          },
+          "first_half": {
+            "attempts": 146,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 146,
+            "fill_rate": 1.0,
+            "wins": 59,
+            "losses": 69,
+            "resolved": 128,
+            "win_rate": 0.4609,
+            "net_pnl": 16467.51,
+            "expectancy": 128.65
+          },
+          "second_half": {
+            "attempts": 160,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 160,
+            "fill_rate": 1.0,
+            "wins": 64,
+            "losses": 81,
+            "resolved": 145,
+            "win_rate": 0.4414,
+            "net_pnl": 22076.25,
+            "expectancy": 152.25
+          }
+        },
+        "pdh_reclaim": {
+          "all": {
+            "attempts": 160,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 160,
+            "fill_rate": 1.0,
+            "wins": 70,
+            "losses": 87,
+            "resolved": 157,
+            "win_rate": 0.4459,
+            "net_pnl": 12535.26,
+            "expectancy": 79.84
+          },
+          "first_half": {
+            "attempts": 81,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 81,
+            "fill_rate": 1.0,
+            "wins": 31,
+            "losses": 48,
+            "resolved": 79,
+            "win_rate": 0.3924,
+            "net_pnl": 3584.76,
+            "expectancy": 45.38
+          },
+          "second_half": {
+            "attempts": 79,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 79,
+            "fill_rate": 1.0,
+            "wins": 39,
+            "losses": 39,
+            "resolved": 78,
+            "win_rate": 0.5,
+            "net_pnl": 8950.5,
+            "expectancy": 114.75
+          }
+        },
+        "vwap_hold": {
+          "all": {
+            "attempts": 774,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 774,
+            "fill_rate": 1.0,
+            "wins": 368,
+            "losses": 369,
+            "resolved": 737,
+            "win_rate": 0.4993,
+            "net_pnl": 149194.52,
+            "expectancy": 202.43
+          },
+          "first_half": {
+            "attempts": 388,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 388,
+            "fill_rate": 1.0,
+            "wins": 174,
+            "losses": 199,
+            "resolved": 373,
+            "win_rate": 0.4665,
+            "net_pnl": 60499.52,
+            "expectancy": 162.2
+          },
+          "second_half": {
+            "attempts": 386,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 386,
+            "fill_rate": 1.0,
+            "wins": 194,
+            "losses": 170,
+            "resolved": 364,
+            "win_rate": 0.533,
+            "net_pnl": 88695.0,
+            "expectancy": 243.67
+          }
+        }
+      }
+    },
+    "MNQ": {
+      "all": {
+        "attempts": 1004,
+        "ioc_no_fill": 0,
+        "day_no_fill": 0,
+        "filled": 1004,
+        "fill_rate": 1.0,
+        "wins": 521,
+        "losses": 477,
+        "resolved": 998,
+        "win_rate": 0.522,
+        "net_pnl": 105406.18,
+        "expectancy": 105.62
+      },
+      "first_half": {
+        "attempts": 512,
+        "ioc_no_fill": 0,
+        "day_no_fill": 0,
+        "filled": 512,
+        "fill_rate": 1.0,
+        "wins": 271,
+        "losses": 237,
+        "resolved": 508,
+        "win_rate": 0.5335,
+        "net_pnl": 52339.78,
+        "expectancy": 103.03
+      },
+      "second_half": {
+        "attempts": 492,
+        "ioc_no_fill": 0,
+        "day_no_fill": 0,
+        "filled": 492,
+        "fill_rate": 1.0,
+        "wins": 250,
+        "losses": 240,
+        "resolved": 490,
+        "win_rate": 0.5102,
+        "net_pnl": 53066.4,
+        "expectancy": 108.3
+      },
+      "per_strategy": {
+        "orb_breakout": {
+          "all": {
+            "attempts": 63,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 63,
+            "fill_rate": 1.0,
+            "wins": 45,
+            "losses": 18,
+            "resolved": 63,
+            "win_rate": 0.7143,
+            "net_pnl": 9906.5,
+            "expectancy": 157.25
+          },
+          "first_half": {
+            "attempts": 31,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 31,
+            "fill_rate": 1.0,
+            "wins": 26,
+            "losses": 5,
+            "resolved": 31,
+            "win_rate": 0.8387,
+            "net_pnl": 5721.5,
+            "expectancy": 184.56
+          },
+          "second_half": {
+            "attempts": 32,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 32,
+            "fill_rate": 1.0,
+            "wins": 19,
+            "losses": 13,
+            "resolved": 32,
+            "win_rate": 0.5938,
+            "net_pnl": 4185.0,
+            "expectancy": 130.78
+          }
+        },
+        "orb_reclaim": {
+          "all": {
+            "attempts": 252,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 252,
+            "fill_rate": 1.0,
+            "wins": 135,
+            "losses": 112,
+            "resolved": 247,
+            "win_rate": 0.5466,
+            "net_pnl": 46518.5,
+            "expectancy": 188.33
+          },
+          "first_half": {
+            "attempts": 128,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 128,
+            "fill_rate": 1.0,
+            "wins": 75,
+            "losses": 49,
+            "resolved": 124,
+            "win_rate": 0.6048,
+            "net_pnl": 26196.5,
+            "expectancy": 211.26
+          },
+          "second_half": {
+            "attempts": 124,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 124,
+            "fill_rate": 1.0,
+            "wins": 60,
+            "losses": 63,
+            "resolved": 123,
+            "win_rate": 0.4878,
+            "net_pnl": 20322.0,
+            "expectancy": 165.22
+          }
+        },
+        "pdh_reclaim": {
+          "all": {
+            "attempts": 68,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 68,
+            "fill_rate": 1.0,
+            "wins": 28,
+            "losses": 39,
+            "resolved": 67,
+            "win_rate": 0.4179,
+            "net_pnl": 1774.2,
+            "expectancy": 26.48
+          },
+          "first_half": {
+            "attempts": 35,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 35,
+            "fill_rate": 1.0,
+            "wins": 12,
+            "losses": 22,
+            "resolved": 34,
+            "win_rate": 0.3529,
+            "net_pnl": 395.4,
+            "expectancy": 11.63
+          },
+          "second_half": {
+            "attempts": 33,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 33,
+            "fill_rate": 1.0,
+            "wins": 16,
+            "losses": 17,
+            "resolved": 33,
+            "win_rate": 0.4848,
+            "net_pnl": 1378.8,
+            "expectancy": 41.78
+          }
+        },
+        "pdl_reclaim": {
+          "all": {
+            "attempts": 13,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 13,
+            "fill_rate": 1.0,
+            "wins": 9,
+            "losses": 4,
+            "resolved": 13,
+            "win_rate": 0.6923,
+            "net_pnl": 1094.1,
+            "expectancy": 84.16
+          },
+          "first_half": {
+            "attempts": 6,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 6,
+            "fill_rate": 1.0,
+            "wins": 4,
+            "losses": 2,
+            "resolved": 6,
+            "win_rate": 0.6667,
+            "net_pnl": 365.1,
+            "expectancy": 60.85
+          },
+          "second_half": {
+            "attempts": 7,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 7,
+            "fill_rate": 1.0,
+            "wins": 5,
+            "losses": 2,
+            "resolved": 7,
+            "win_rate": 0.7143,
+            "net_pnl": 729.0,
+            "expectancy": 104.14
+          }
+        },
+        "vwap_hold": {
+          "all": {
+            "attempts": 348,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 348,
+            "fill_rate": 1.0,
+            "wins": 191,
+            "losses": 157,
+            "resolved": 348,
+            "win_rate": 0.5489,
+            "net_pnl": 32011.46,
+            "expectancy": 91.99
+          },
+          "first_half": {
+            "attempts": 177,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 177,
+            "fill_rate": 1.0,
+            "wins": 101,
+            "losses": 76,
+            "resolved": 177,
+            "win_rate": 0.5706,
+            "net_pnl": 15757.46,
+            "expectancy": 89.03
+          },
+          "second_half": {
+            "attempts": 171,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 171,
+            "fill_rate": 1.0,
+            "wins": 90,
+            "losses": 81,
+            "resolved": 171,
+            "win_rate": 0.5263,
+            "net_pnl": 16254.0,
+            "expectancy": 95.05
+          }
+        },
+        "vwap_reclaim": {
+          "all": {
+            "attempts": 260,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 260,
+            "fill_rate": 1.0,
+            "wins": 113,
+            "losses": 147,
+            "resolved": 260,
+            "win_rate": 0.4346,
+            "net_pnl": 14101.42,
+            "expectancy": 54.24
+          },
+          "first_half": {
+            "attempts": 129,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 129,
+            "fill_rate": 1.0,
+            "wins": 50,
+            "losses": 79,
+            "resolved": 129,
+            "win_rate": 0.3876,
+            "net_pnl": 3808.42,
+            "expectancy": 29.52
+          },
+          "second_half": {
+            "attempts": 131,
+            "ioc_no_fill": 0,
+            "day_no_fill": 0,
+            "filled": 131,
+            "fill_rate": 1.0,
+            "wins": 63,
+            "losses": 68,
+            "resolved": 131,
+            "win_rate": 0.4809,
+            "net_pnl": 10293.0,
+            "expectancy": 78.57
+          }
+        }
+      }
+    }
+  },
+  "ioc_limit_static": {
+    "MES": {
+      "all": {
+        "attempts": 1654,
+        "ioc_no_fill": 1038,
+        "day_no_fill": 0,
+        "filled": 616,
+        "fill_rate": 0.3724,
+        "wins": 184,
+        "losses": 386,
+        "resolved": 570,
+        "win_rate": 0.3228,
+        "net_pnl": -1549.73,
+        "expectancy": -2.72
+      },
+      "first_half": {
+        "attempts": 812,
+        "ioc_no_fill": 485,
+        "day_no_fill": 0,
+        "filled": 327,
+        "fill_rate": 0.4027,
+        "wins": 94,
+        "losses": 210,
+        "resolved": 304,
+        "win_rate": 0.3092,
+        "net_pnl": -1219.36,
+        "expectancy": -4.01
+      },
+      "second_half": {
+        "attempts": 842,
+        "ioc_no_fill": 553,
+        "day_no_fill": 0,
+        "filled": 289,
+        "fill_rate": 0.3432,
+        "wins": 90,
+        "losses": 176,
+        "resolved": 266,
+        "win_rate": 0.3383,
+        "net_pnl": -330.37,
+        "expectancy": -1.24
+      },
+      "per_strategy": {
+        "orb_breakout": {
+          "all": {
+            "attempts": 281,
+            "ioc_no_fill": 222,
+            "day_no_fill": 0,
+            "filled": 59,
+            "fill_rate": 0.21,
+            "wins": 20,
+            "losses": 37,
+            "resolved": 57,
+            "win_rate": 0.3509,
+            "net_pnl": -81.25,
+            "expectancy": -1.43
+          },
+          "first_half": {
+            "attempts": 137,
+            "ioc_no_fill": 114,
+            "day_no_fill": 0,
+            "filled": 23,
+            "fill_rate": 0.1679,
+            "wins": 7,
+            "losses": 14,
+            "resolved": 21,
+            "win_rate": 0.3333,
+            "net_pnl": -37.5,
+            "expectancy": -1.79
+          },
+          "second_half": {
+            "attempts": 144,
+            "ioc_no_fill": 108,
+            "day_no_fill": 0,
+            "filled": 36,
+            "fill_rate": 0.25,
+            "wins": 13,
+            "losses": 23,
+            "resolved": 36,
+            "win_rate": 0.3611,
+            "net_pnl": -43.75,
+            "expectancy": -1.22
+          }
+        },
+        "orb_reclaim": {
+          "all": {
+            "attempts": 302,
+            "ioc_no_fill": 119,
+            "day_no_fill": 0,
+            "filled": 183,
+            "fill_rate": 0.606,
+            "wins": 58,
+            "losses": 96,
+            "resolved": 154,
+            "win_rate": 0.3766,
+            "net_pnl": 1013.77,
+            "expectancy": 6.58
+          },
+          "first_half": {
+            "attempts": 148,
+            "ioc_no_fill": 47,
+            "day_no_fill": 0,
+            "filled": 101,
+            "fill_rate": 0.6824,
+            "wins": 31,
+            "losses": 54,
+            "resolved": 85,
+            "win_rate": 0.3647,
+            "net_pnl": 431.89,
+            "expectancy": 5.08
+          },
+          "second_half": {
+            "attempts": 154,
+            "ioc_no_fill": 72,
+            "day_no_fill": 0,
+            "filled": 82,
+            "fill_rate": 0.5325,
+            "wins": 27,
+            "losses": 42,
+            "resolved": 69,
+            "win_rate": 0.3913,
+            "net_pnl": 581.88,
+            "expectancy": 8.43
+          }
+        },
+        "pdh_reclaim": {
+          "all": {
+            "attempts": 154,
+            "ioc_no_fill": 75,
+            "day_no_fill": 0,
+            "filled": 79,
+            "fill_rate": 0.513,
+            "wins": 19,
+            "losses": 59,
+            "resolved": 78,
+            "win_rate": 0.2436,
+            "net_pnl": -1404.5,
+            "expectancy": -18.01
+          },
+          "first_half": {
+            "attempts": 73,
+            "ioc_no_fill": 29,
+            "day_no_fill": 0,
+            "filled": 44,
+            "fill_rate": 0.6027,
+            "wins": 8,
+            "losses": 35,
+            "resolved": 43,
+            "win_rate": 0.186,
+            "net_pnl": -1036.5,
+            "expectancy": -24.1
+          },
+          "second_half": {
+            "attempts": 81,
+            "ioc_no_fill": 46,
+            "day_no_fill": 0,
+            "filled": 35,
+            "fill_rate": 0.4321,
+            "wins": 11,
+            "losses": 24,
+            "resolved": 35,
+            "win_rate": 0.3143,
+            "net_pnl": -368.0,
+            "expectancy": -10.51
+          }
+        },
+        "vwap_hold": {
+          "all": {
+            "attempts": 917,
+            "ioc_no_fill": 622,
+            "day_no_fill": 0,
+            "filled": 295,
+            "fill_rate": 0.3217,
+            "wins": 87,
+            "losses": 194,
+            "resolved": 281,
+            "win_rate": 0.3096,
+            "net_pnl": -1077.75,
+            "expectancy": -3.84
+          },
+          "first_half": {
+            "attempts": 484,
+            "ioc_no_fill": 315,
+            "day_no_fill": 0,
+            "filled": 169,
+            "fill_rate": 0.3492,
+            "wins": 51,
+            "losses": 113,
+            "resolved": 164,
+            "win_rate": 0.311,
+            "net_pnl": -574.5,
+            "expectancy": -3.5
+          },
+          "second_half": {
+            "attempts": 433,
+            "ioc_no_fill": 307,
+            "day_no_fill": 0,
+            "filled": 126,
+            "fill_rate": 0.291,
+            "wins": 36,
+            "losses": 81,
+            "resolved": 117,
+            "win_rate": 0.3077,
+            "net_pnl": -503.25,
+            "expectancy": -4.3
+          }
+        }
+      }
+    },
+    "MNQ": {
+      "all": {
+        "attempts": 823,
+        "ioc_no_fill": 524,
+        "day_no_fill": 0,
+        "filled": 299,
+        "fill_rate": 0.3633,
+        "wins": 101,
+        "losses": 195,
+        "resolved": 296,
+        "win_rate": 0.3412,
+        "net_pnl": -1523.46,
+        "expectancy": -5.15
+      },
+      "first_half": {
+        "attempts": 393,
+        "ioc_no_fill": 261,
+        "day_no_fill": 0,
+        "filled": 132,
+        "fill_rate": 0.3359,
+        "wins": 45,
+        "losses": 85,
+        "resolved": 130,
+        "win_rate": 0.3462,
+        "net_pnl": -467.4,
+        "expectancy": -3.6
+      },
+      "second_half": {
+        "attempts": 430,
+        "ioc_no_fill": 263,
+        "day_no_fill": 0,
+        "filled": 167,
+        "fill_rate": 0.3884,
+        "wins": 56,
+        "losses": 110,
+        "resolved": 166,
+        "win_rate": 0.3373,
+        "net_pnl": -1056.06,
+        "expectancy": -6.36
+      },
+      "per_strategy": {
+        "orb_breakout": {
+          "all": {
+            "attempts": 75,
+            "ioc_no_fill": 61,
+            "day_no_fill": 0,
+            "filled": 14,
+            "fill_rate": 0.1867,
+            "wins": 6,
+            "losses": 8,
+            "resolved": 14,
+            "win_rate": 0.4286,
+            "net_pnl": 11.0,
+            "expectancy": 0.79
+          },
+          "first_half": {
+            "attempts": 38,
+            "ioc_no_fill": 34,
+            "day_no_fill": 0,
+            "filled": 4,
+            "fill_rate": 0.1053,
+            "wins": 2,
+            "losses": 2,
+            "resolved": 4,
+            "win_rate": 0.5,
+            "net_pnl": 24.0,
+            "expectancy": 6.0
+          },
+          "second_half": {
+            "attempts": 37,
+            "ioc_no_fill": 27,
+            "day_no_fill": 0,
+            "filled": 10,
+            "fill_rate": 0.2703,
+            "wins": 4,
+            "losses": 6,
+            "resolved": 10,
+            "win_rate": 0.4,
+            "net_pnl": -13.0,
+            "expectancy": -1.3
+          }
+        },
+        "orb_reclaim": {
+          "all": {
+            "attempts": 189,
+            "ioc_no_fill": 138,
+            "day_no_fill": 0,
+            "filled": 51,
+            "fill_rate": 0.2698,
+            "wins": 12,
+            "losses": 36,
+            "resolved": 48,
+            "win_rate": 0.25,
+            "net_pnl": -762.5,
+            "expectancy": -15.89
+          },
+          "first_half": {
+            "attempts": 98,
+            "ioc_no_fill": 71,
+            "day_no_fill": 0,
+            "filled": 27,
+            "fill_rate": 0.2755,
+            "wins": 8,
+            "losses": 17,
+            "resolved": 25,
+            "win_rate": 0.32,
+            "net_pnl": -136.5,
+            "expectancy": -5.46
+          },
+          "second_half": {
+            "attempts": 91,
+            "ioc_no_fill": 67,
+            "day_no_fill": 0,
+            "filled": 24,
+            "fill_rate": 0.2637,
+            "wins": 4,
+            "losses": 19,
+            "resolved": 23,
+            "win_rate": 0.1739,
+            "net_pnl": -626.0,
+            "expectancy": -27.22
+          }
+        },
+        "pdh_reclaim": {
+          "all": {
+            "attempts": 47,
+            "ioc_no_fill": 22,
+            "day_no_fill": 0,
+            "filled": 25,
+            "fill_rate": 0.5319,
+            "wins": 9,
+            "losses": 16,
+            "resolved": 25,
+            "win_rate": 0.36,
+            "net_pnl": -154.3,
+            "expectancy": -6.17
+          },
+          "first_half": {
+            "attempts": 22,
+            "ioc_no_fill": 10,
+            "day_no_fill": 0,
+            "filled": 12,
+            "fill_rate": 0.5455,
+            "wins": 4,
+            "losses": 8,
+            "resolved": 12,
+            "win_rate": 0.3333,
+            "net_pnl": -118.8,
+            "expectancy": -9.9
+          },
+          "second_half": {
+            "attempts": 25,
+            "ioc_no_fill": 12,
+            "day_no_fill": 0,
+            "filled": 13,
+            "fill_rate": 0.52,
+            "wins": 5,
+            "losses": 8,
+            "resolved": 13,
+            "win_rate": 0.3846,
+            "net_pnl": -35.5,
+            "expectancy": -2.73
+          }
+        },
+        "pdl_reclaim": {
+          "all": {
+            "attempts": 7,
+            "ioc_no_fill": 3,
+            "day_no_fill": 0,
+            "filled": 4,
+            "fill_rate": 0.5714,
+            "wins": 3,
+            "losses": 1,
+            "resolved": 4,
+            "win_rate": 0.75,
+            "net_pnl": 41.4,
+            "expectancy": 10.35
+          },
+          "first_half": {
+            "attempts": 3,
+            "ioc_no_fill": 1,
+            "day_no_fill": 0,
+            "filled": 2,
+            "fill_rate": 0.6667,
+            "wins": 1,
+            "losses": 1,
+            "resolved": 2,
+            "win_rate": 0.5,
+            "net_pnl": 4.3,
+            "expectancy": 2.15
+          },
+          "second_half": {
+            "attempts": 4,
+            "ioc_no_fill": 2,
+            "day_no_fill": 0,
+            "filled": 2,
+            "fill_rate": 0.5,
+            "wins": 2,
+            "losses": 0,
+            "resolved": 2,
+            "win_rate": 1.0,
+            "net_pnl": 37.1,
+            "expectancy": 18.55
+          }
+        },
+        "vwap_hold": {
+          "all": {
+            "attempts": 299,
+            "ioc_no_fill": 209,
+            "day_no_fill": 0,
+            "filled": 90,
+            "fill_rate": 0.301,
+            "wins": 31,
+            "losses": 59,
+            "resolved": 90,
+            "win_rate": 0.3444,
+            "net_pnl": -245.96,
+            "expectancy": -2.73
+          },
+          "first_half": {
+            "attempts": 150,
+            "ioc_no_fill": 108,
+            "day_no_fill": 0,
+            "filled": 42,
+            "fill_rate": 0.28,
+            "wins": 18,
+            "losses": 24,
+            "resolved": 42,
+            "win_rate": 0.4286,
+            "net_pnl": 84.36,
+            "expectancy": 2.01
+          },
+          "second_half": {
+            "attempts": 149,
+            "ioc_no_fill": 101,
+            "day_no_fill": 0,
+            "filled": 48,
+            "fill_rate": 0.3221,
+            "wins": 13,
+            "losses": 35,
+            "resolved": 48,
+            "win_rate": 0.2708,
+            "net_pnl": -330.32,
+            "expectancy": -6.88
+          }
+        },
+        "vwap_reclaim": {
+          "all": {
+            "attempts": 206,
+            "ioc_no_fill": 91,
+            "day_no_fill": 0,
+            "filled": 115,
+            "fill_rate": 0.5583,
+            "wins": 40,
+            "losses": 75,
+            "resolved": 115,
+            "win_rate": 0.3478,
+            "net_pnl": -413.1,
+            "expectancy": -3.59
+          },
+          "first_half": {
+            "attempts": 95,
+            "ioc_no_fill": 45,
+            "day_no_fill": 0,
+            "filled": 50,
+            "fill_rate": 0.5263,
+            "wins": 15,
+            "losses": 35,
+            "resolved": 50,
+            "win_rate": 0.3,
+            "net_pnl": -286.56,
+            "expectancy": -5.73
+          },
+          "second_half": {
+            "attempts": 111,
+            "ioc_no_fill": 46,
+            "day_no_fill": 0,
+            "filled": 65,
+            "fill_rate": 0.5856,
+            "wins": 25,
+            "losses": 40,
+            "resolved": 65,
+            "win_rate": 0.3846,
+            "net_pnl": -126.54,
+            "expectancy": -1.95
+          }
+        }
+      }
+    }
+  },
+  "ioc_limit_runner": {
+    "MES": {
+      "all": {
+        "attempts": 1946,
+        "ioc_no_fill": 1235,
+        "day_no_fill": 0,
+        "filled": 711,
+        "fill_rate": 0.3654,
+        "wins": 318,
+        "losses": 360,
+        "resolved": 678,
+        "win_rate": 0.469,
+        "net_pnl": 224.12,
+        "expectancy": 0.33
+      },
+      "first_half": {
+        "attempts": 966,
+        "ioc_no_fill": 584,
+        "day_no_fill": 0,
+        "filled": 382,
+        "fill_rate": 0.3954,
+        "wins": 177,
+        "losses": 188,
+        "resolved": 365,
+        "win_rate": 0.4849,
+        "net_pnl": 391.51,
+        "expectancy": 1.07
+      },
+      "second_half": {
+        "attempts": 980,
+        "ioc_no_fill": 651,
+        "day_no_fill": 0,
+        "filled": 329,
+        "fill_rate": 0.3357,
+        "wins": 141,
+        "losses": 172,
+        "resolved": 313,
+        "win_rate": 0.4505,
+        "net_pnl": -167.39,
+        "expectancy": -0.53
+      },
+      "per_strategy": {
+        "orb_breakout": {
+          "all": {
+            "attempts": 339,
+            "ioc_no_fill": 264,
+            "day_no_fill": 0,
+            "filled": 75,
+            "fill_rate": 0.2212,
+            "wins": 35,
+            "losses": 37,
+            "resolved": 72,
+            "win_rate": 0.4861,
+            "net_pnl": 278.78,
+            "expectancy": 3.87
+          },
+          "first_half": {
+            "attempts": 166,
+            "ioc_no_fill": 135,
+            "day_no_fill": 0,
+            "filled": 31,
+            "fill_rate": 0.1867,
+            "wins": 13,
+            "losses": 16,
+            "resolved": 29,
+            "win_rate": 0.4483,
+            "net_pnl": -50.6,
+            "expectancy": -1.74
+          },
+          "second_half": {
+            "attempts": 173,
+            "ioc_no_fill": 129,
+            "day_no_fill": 0,
+            "filled": 44,
+            "fill_rate": 0.2543,
+            "wins": 22,
+            "losses": 21,
+            "resolved": 43,
+            "win_rate": 0.5116,
+            "net_pnl": 329.38,
+            "expectancy": 7.66
+          }
+        },
+        "orb_reclaim": {
+          "all": {
+            "attempts": 357,
+            "ioc_no_fill": 146,
+            "day_no_fill": 0,
+            "filled": 211,
+            "fill_rate": 0.591,
+            "wins": 106,
+            "losses": 85,
+            "resolved": 191,
+            "win_rate": 0.555,
+            "net_pnl": 2419.37,
+            "expectancy": 12.67
+          },
+          "first_half": {
+            "attempts": 175,
+            "ioc_no_fill": 63,
+            "day_no_fill": 0,
+            "filled": 112,
+            "fill_rate": 0.64,
+            "wins": 60,
+            "losses": 42,
+            "resolved": 102,
+            "win_rate": 0.5882,
+            "net_pnl": 1877.49,
+            "expectancy": 18.41
+          },
+          "second_half": {
+            "attempts": 182,
+            "ioc_no_fill": 83,
+            "day_no_fill": 0,
+            "filled": 99,
+            "fill_rate": 0.544,
+            "wins": 46,
+            "losses": 43,
+            "resolved": 89,
+            "win_rate": 0.5169,
+            "net_pnl": 541.88,
+            "expectancy": 6.09
+          }
+        },
+        "pdh_reclaim": {
+          "all": {
+            "attempts": 185,
+            "ioc_no_fill": 100,
+            "day_no_fill": 0,
+            "filled": 85,
+            "fill_rate": 0.4595,
+            "wins": 26,
+            "losses": 58,
+            "resolved": 84,
+            "win_rate": 0.3095,
+            "net_pnl": -1672.11,
+            "expectancy": -19.91
+          },
+          "first_half": {
+            "attempts": 89,
+            "ioc_no_fill": 39,
+            "day_no_fill": 0,
+            "filled": 50,
+            "fill_rate": 0.5618,
+            "wins": 13,
+            "losses": 36,
+            "resolved": 49,
+            "win_rate": 0.2653,
+            "net_pnl": -1132.0,
+            "expectancy": -23.1
+          },
+          "second_half": {
+            "attempts": 96,
+            "ioc_no_fill": 61,
+            "day_no_fill": 0,
+            "filled": 35,
+            "fill_rate": 0.3646,
+            "wins": 13,
+            "losses": 22,
+            "resolved": 35,
+            "win_rate": 0.3714,
+            "net_pnl": -540.11,
+            "expectancy": -15.43
+          }
+        },
+        "vwap_hold": {
+          "all": {
+            "attempts": 1065,
+            "ioc_no_fill": 725,
+            "day_no_fill": 0,
+            "filled": 340,
+            "fill_rate": 0.3192,
+            "wins": 151,
+            "losses": 180,
+            "resolved": 331,
+            "win_rate": 0.4562,
+            "net_pnl": -801.92,
+            "expectancy": -2.42
+          },
+          "first_half": {
+            "attempts": 553,
+            "ioc_no_fill": 355,
+            "day_no_fill": 0,
+            "filled": 198,
+            "fill_rate": 0.358,
+            "wins": 96,
+            "losses": 98,
+            "resolved": 194,
+            "win_rate": 0.4948,
+            "net_pnl": -15.08,
+            "expectancy": -0.08
+          },
+          "second_half": {
+            "attempts": 512,
+            "ioc_no_fill": 370,
+            "day_no_fill": 0,
+            "filled": 142,
+            "fill_rate": 0.2773,
+            "wins": 55,
+            "losses": 82,
+            "resolved": 137,
+            "win_rate": 0.4015,
+            "net_pnl": -786.84,
+            "expectancy": -5.74
+          }
+        }
+      }
+    },
+    "MNQ": {
+      "all": {
+        "attempts": 1073,
+        "ioc_no_fill": 685,
+        "day_no_fill": 0,
+        "filled": 388,
+        "fill_rate": 0.3616,
+        "wins": 152,
+        "losses": 232,
+        "resolved": 384,
+        "win_rate": 0.3958,
+        "net_pnl": 227.77,
+        "expectancy": 0.59
+      },
+      "first_half": {
+        "attempts": 553,
+        "ioc_no_fill": 366,
+        "day_no_fill": 0,
+        "filled": 187,
+        "fill_rate": 0.3382,
+        "wins": 76,
+        "losses": 108,
+        "resolved": 184,
+        "win_rate": 0.413,
+        "net_pnl": 597.57,
+        "expectancy": 3.25
+      },
+      "second_half": {
+        "attempts": 520,
+        "ioc_no_fill": 319,
+        "day_no_fill": 0,
+        "filled": 201,
+        "fill_rate": 0.3865,
+        "wins": 76,
+        "losses": 124,
+        "resolved": 200,
+        "win_rate": 0.38,
+        "net_pnl": -369.8,
+        "expectancy": -1.85
+      },
+      "per_strategy": {
+        "orb_breakout": {
+          "all": {
+            "attempts": 89,
+            "ioc_no_fill": 73,
+            "day_no_fill": 0,
+            "filled": 16,
+            "fill_rate": 0.1798,
+            "wins": 6,
+            "losses": 10,
+            "resolved": 16,
+            "win_rate": 0.375,
+            "net_pnl": 200.25,
+            "expectancy": 12.52
+          },
+          "first_half": {
+            "attempts": 44,
+            "ioc_no_fill": 40,
+            "day_no_fill": 0,
+            "filled": 4,
+            "fill_rate": 0.0909,
+            "wins": 2,
+            "losses": 2,
+            "resolved": 4,
+            "win_rate": 0.5,
+            "net_pnl": 199.75,
+            "expectancy": 49.94
+          },
+          "second_half": {
+            "attempts": 45,
+            "ioc_no_fill": 33,
+            "day_no_fill": 0,
+            "filled": 12,
+            "fill_rate": 0.2667,
+            "wins": 4,
+            "losses": 8,
+            "resolved": 12,
+            "win_rate": 0.3333,
+            "net_pnl": 0.5,
+            "expectancy": 0.04
+          }
+        },
+        "orb_reclaim": {
+          "all": {
+            "attempts": 265,
+            "ioc_no_fill": 190,
+            "day_no_fill": 0,
+            "filled": 75,
+            "fill_rate": 0.283,
+            "wins": 29,
+            "losses": 43,
+            "resolved": 72,
+            "win_rate": 0.4028,
+            "net_pnl": -379.0,
+            "expectancy": -5.26
+          },
+          "first_half": {
+            "attempts": 135,
+            "ioc_no_fill": 99,
+            "day_no_fill": 0,
+            "filled": 36,
+            "fill_rate": 0.2667,
+            "wins": 16,
+            "losses": 18,
+            "resolved": 34,
+            "win_rate": 0.4706,
+            "net_pnl": 139.25,
+            "expectancy": 4.1
+          },
+          "second_half": {
+            "attempts": 130,
+            "ioc_no_fill": 91,
+            "day_no_fill": 0,
+            "filled": 39,
+            "fill_rate": 0.3,
+            "wins": 13,
+            "losses": 25,
+            "resolved": 38,
+            "win_rate": 0.3421,
+            "net_pnl": -518.25,
+            "expectancy": -13.64
+          }
+        },
+        "pdh_reclaim": {
+          "all": {
+            "attempts": 74,
+            "ioc_no_fill": 37,
+            "day_no_fill": 0,
+            "filled": 37,
+            "fill_rate": 0.5,
+            "wins": 12,
+            "losses": 25,
+            "resolved": 37,
+            "win_rate": 0.3243,
+            "net_pnl": -441.9,
+            "expectancy": -11.94
+          },
+          "first_half": {
+            "attempts": 38,
+            "ioc_no_fill": 18,
+            "day_no_fill": 0,
+            "filled": 20,
+            "fill_rate": 0.5263,
+            "wins": 6,
+            "losses": 14,
+            "resolved": 20,
+            "win_rate": 0.3,
+            "net_pnl": -234.15,
+            "expectancy": -11.71
+          },
+          "second_half": {
+            "attempts": 36,
+            "ioc_no_fill": 19,
+            "day_no_fill": 0,
+            "filled": 17,
+            "fill_rate": 0.4722,
+            "wins": 6,
+            "losses": 11,
+            "resolved": 17,
+            "win_rate": 0.3529,
+            "net_pnl": -207.75,
+            "expectancy": -12.22
+          }
+        },
+        "pdl_reclaim": {
+          "all": {
+            "attempts": 12,
+            "ioc_no_fill": 5,
+            "day_no_fill": 0,
+            "filled": 7,
+            "fill_rate": 0.5833,
+            "wins": 3,
+            "losses": 4,
+            "resolved": 7,
+            "win_rate": 0.4286,
+            "net_pnl": 168.1,
+            "expectancy": 24.01
+          },
+          "first_half": {
+            "attempts": 6,
+            "ioc_no_fill": 3,
+            "day_no_fill": 0,
+            "filled": 3,
+            "fill_rate": 0.5,
+            "wins": 1,
+            "losses": 2,
+            "resolved": 3,
+            "win_rate": 0.3333,
+            "net_pnl": -5.4,
+            "expectancy": -1.8
+          },
+          "second_half": {
+            "attempts": 6,
+            "ioc_no_fill": 2,
+            "day_no_fill": 0,
+            "filled": 4,
+            "fill_rate": 0.6667,
+            "wins": 2,
+            "losses": 2,
+            "resolved": 4,
+            "win_rate": 0.5,
+            "net_pnl": 173.5,
+            "expectancy": 43.38
+          }
+        },
+        "vwap_hold": {
+          "all": {
+            "attempts": 373,
+            "ioc_no_fill": 260,
+            "day_no_fill": 0,
+            "filled": 113,
+            "fill_rate": 0.3029,
+            "wins": 43,
+            "losses": 70,
+            "resolved": 113,
+            "win_rate": 0.3805,
+            "net_pnl": 255.98,
+            "expectancy": 2.27
+          },
+          "first_half": {
+            "attempts": 191,
+            "ioc_no_fill": 135,
+            "day_no_fill": 0,
+            "filled": 56,
+            "fill_rate": 0.2932,
+            "wins": 25,
+            "losses": 31,
+            "resolved": 56,
+            "win_rate": 0.4464,
+            "net_pnl": 406.0,
+            "expectancy": 7.25
+          },
+          "second_half": {
+            "attempts": 182,
+            "ioc_no_fill": 125,
+            "day_no_fill": 0,
+            "filled": 57,
+            "fill_rate": 0.3132,
+            "wins": 18,
+            "losses": 39,
+            "resolved": 57,
+            "win_rate": 0.3158,
+            "net_pnl": -150.02,
+            "expectancy": -2.63
+          }
+        },
+        "vwap_reclaim": {
+          "all": {
+            "attempts": 260,
+            "ioc_no_fill": 120,
+            "day_no_fill": 0,
+            "filled": 140,
+            "fill_rate": 0.5385,
+            "wins": 59,
+            "losses": 80,
+            "resolved": 139,
+            "win_rate": 0.4245,
+            "net_pnl": 424.34,
+            "expectancy": 3.05
+          },
+          "first_half": {
+            "attempts": 129,
+            "ioc_no_fill": 64,
+            "day_no_fill": 0,
+            "filled": 65,
+            "fill_rate": 0.5039,
+            "wins": 24,
+            "losses": 40,
+            "resolved": 64,
+            "win_rate": 0.375,
+            "net_pnl": 112.32,
+            "expectancy": 1.75
+          },
+          "second_half": {
+            "attempts": 131,
+            "ioc_no_fill": 56,
+            "day_no_fill": 0,
+            "filled": 75,
+            "fill_rate": 0.5725,
+            "wins": 35,
+            "losses": 40,
+            "resolved": 75,
+            "win_rate": 0.4667,
+            "net_pnl": 312.02,
+            "expectancy": 4.16
+          }
+        }
+      }
+    }
+  }
+}
