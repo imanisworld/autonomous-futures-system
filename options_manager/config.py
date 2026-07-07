@@ -97,6 +97,17 @@ class OptionsManagerConfig:
     order_ticket_max_limit_price: float = 3.00
     order_ticket_allowed_account_tags: tuple[str, ...] = ("agentic_micro_account",)
 
+    # Phase 9 — inert broker boundary schema. Independent of risk_rules.yaml;
+    # converts a Phase 7 order ticket into a local preview request and
+    # re-validates it with its own independent safety caps only. No broker
+    # calls, no real preview, no order placement, no storage.
+    broker_boundary_enabled: bool = True
+    broker_boundary_allow_real_preview: bool = False
+    broker_boundary_max_contracts: int = 2
+    broker_boundary_max_notional: float = 300.00
+    broker_boundary_max_limit_price: float = 3.00
+    broker_boundary_allowed_account_tags: tuple[str, ...] = ("agentic_micro_account",)
+
     @classmethod
     def from_env(cls) -> "OptionsManagerConfig":
         load_dotenv()
@@ -272,6 +283,26 @@ class OptionsManagerConfig:
             ),
             order_ticket_allowed_account_tags=_as_tuple(
                 os.getenv("OPTIONS_MANAGER_ORDER_TICKET_ALLOWED_ACCOUNT_TAGS"),
+                ("agentic_micro_account",),
+            ),
+            broker_boundary_enabled=_as_bool(
+                os.getenv("OPTIONS_MANAGER_BROKER_BOUNDARY_ENABLED"), default=True
+            ),
+            broker_boundary_allow_real_preview=_as_bool(
+                os.getenv("OPTIONS_MANAGER_BROKER_BOUNDARY_ALLOW_REAL_PREVIEW"),
+                default=False,
+            ),
+            broker_boundary_max_contracts=_as_int(
+                os.getenv("OPTIONS_MANAGER_BROKER_BOUNDARY_MAX_CONTRACTS"), 2
+            ),
+            broker_boundary_max_notional=_as_float(
+                os.getenv("OPTIONS_MANAGER_BROKER_BOUNDARY_MAX_NOTIONAL"), 300.00
+            ),
+            broker_boundary_max_limit_price=_as_float(
+                os.getenv("OPTIONS_MANAGER_BROKER_BOUNDARY_MAX_LIMIT_PRICE"), 3.00
+            ),
+            broker_boundary_allowed_account_tags=_as_tuple(
+                os.getenv("OPTIONS_MANAGER_BROKER_BOUNDARY_ALLOWED_ACCOUNT_TAGS"),
                 ("agentic_micro_account",),
             ),
         )
