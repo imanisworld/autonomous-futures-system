@@ -51,6 +51,16 @@ def _plain_bullet_value(line: str) -> str | None:
     return value or None
 
 
+def _is_explicit_operator_ruling(ruling: str | None) -> bool:
+    if not ruling:
+        return False
+    normalized = re.sub(r"[\W_]+", " ", ruling.lower()).strip()
+    if not normalized:
+        return False
+    pending_terms = {"pending", "unresolved", "tbd", "todo", "none", "n a", "na", "placeholder"}
+    return not any(term in normalized.split() or normalized == term for term in pending_terms)
+
+
 def load_operator_overrides(path: Path) -> list[OperatorOverride]:
     """Extract public-safe matching hints from docs/proof-operator-overrides.md."""
     if not path.exists():
@@ -70,6 +80,10 @@ def load_operator_overrides(path: Path) -> list[OperatorOverride]:
         if not current:
             return
         ruling = " ".join(line.strip() for line in ruling_lines if line.strip()) or None
+        if not current.get("has_operator_ruling") or not _is_explicit_operator_ruling(ruling):
+            current = None
+            ruling_lines = []
+            return
         overrides.append(
             OperatorOverride(
                 heading=str(current.get("heading") or ""),
@@ -84,7 +98,7 @@ def load_operator_overrides(path: Path) -> list[OperatorOverride]:
     for line in lines:
         if line.startswith("## "):
             flush()
-            current = {"heading": line[3:].strip()}
+            current = {"heading": line[3:].strip(), "has_operator_ruling": False}
             in_ruling = False
             continue
         if current is None:
@@ -99,6 +113,8 @@ def load_operator_overrides(path: Path) -> list[OperatorOverride]:
             continue
         if stripped.startswith("### "):
             in_ruling = stripped.lower() == "### operator ruling"
+            if in_ruling:
+                current["has_operator_ruling"] = True
             continue
         if in_ruling and stripped and not stripped.startswith("-"):
             ruling_lines.append(stripped)

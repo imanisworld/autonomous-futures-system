@@ -84,6 +84,57 @@ def test_load_operator_overrides_extracts_matching_hints(tmp_path):
     assert "broker-verified resolved win" in (overrides[0].ruling or "")
 
 
+def test_pending_audit_evidence_without_operator_ruling_is_not_override(tmp_path):
+    overrides_doc = tmp_path / "overrides.md"
+    overrides_doc.write_text(
+        """# Proof Operator Overrides
+
+## 2026-07-07 - Full-history phantom-clear audit
+
+- Instrument: `MES`
+- Session date: `2026-06-18`
+- Evidence: reconstructed from bar data
+- Operator ruling: pending
+""",
+        encoding="utf-8",
+    )
+    _write_jsonl(
+        tmp_path / "journal_2026-06-18.jsonl",
+        [
+            _trade("2026-06-18T11:15:11+00:00", instrument="MES"),
+            _outcome("2026-06-18T12:30:00+00:00", instrument="MES"),
+        ],
+    )
+
+    assert load_operator_overrides(overrides_doc) == []
+    report = build_audit_report(journal_dir=tmp_path, overrides_doc=overrides_doc)
+
+    assert report["summary"]["classified"] == 0
+    assert report["summary"]["unaudited"] == 1
+    assert report["unaudited"][0]["classification_source"] is None
+    assert report["unaudited"][0]["needs_broker_verification"] is True
+
+
+def test_pending_operator_ruling_subsection_is_not_override(tmp_path):
+    overrides_doc = tmp_path / "overrides.md"
+    overrides_doc.write_text(
+        """# Proof Operator Overrides
+
+## 2026-07-07 - MES reconstructed loss
+
+- Instrument: `MES`
+- Session date: `2026-06-18`
+
+### Operator ruling
+
+Pending
+""",
+        encoding="utf-8",
+    )
+
+    assert load_operator_overrides(overrides_doc) == []
+
+
 def test_touched_detection_uses_session_or_reason_markers():
     assert is_reconciler_touched_outcome(
         _outcome("2026-07-07T12:00:00+00:00", session="reconcile", result="WIN", exit_reason="TARGET_HIT")
