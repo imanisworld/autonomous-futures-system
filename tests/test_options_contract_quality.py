@@ -82,6 +82,45 @@ def test_valid_bac_snapshot_approves():
     assert result.failed_rule is None
 
 
+def test_non_pending_packet_rejects():
+    packet = _packet(status="REJECTED", rejection_reason="some prior reason")
+    result = evaluate_contract_quality(packet, _snapshot(), _config())
+    assert result.approved is False
+    assert result.status == "REJECTED"
+    assert result.failed_rule == "packet_not_pending"
+
+
+def test_zero_entry_price_rejects_without_crashing():
+    # A quality gate must not approve/warn-only on structurally invalid
+    # packet data — and this also guarantees no ZeroDivisionError.
+    result = evaluate_contract_quality(
+        _packet(entry_price=0), _snapshot(), _config()
+    )
+    assert result.approved is False
+    assert result.status == "REJECTED"
+    assert result.failed_rule == "entry_price_invalid"
+    assert "entry price" in result.reason.lower() or "entry_price" in result.reason
+
+
+def test_negative_entry_price_rejects_without_crashing():
+    result = evaluate_contract_quality(
+        _packet(entry_price=-5.0), _snapshot(), _config()
+    )
+    assert result.approved is False
+    assert result.status == "REJECTED"
+    assert result.failed_rule == "entry_price_invalid"
+
+
+def test_naive_quote_timestamp_data_blocked():
+    naive_timestamp = datetime.now()  # no tzinfo
+    result = evaluate_contract_quality(
+        _packet(), _snapshot(quote_timestamp=naive_timestamp), _config()
+    )
+    assert result.approved is False
+    assert result.status == "DATA_BLOCKED"
+    assert result.failed_rule == "quote_timestamp_not_timezone_aware"
+
+
 def test_missing_bid_data_blocked():
     result = evaluate_contract_quality(_packet(), _snapshot(bid=None), _config())
     assert result.approved is False

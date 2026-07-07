@@ -89,6 +89,27 @@ def evaluate_contract_quality(
     cfg = config
     warnings: list[str] = []
 
+    # 0. Only PENDING packets may be quality-reviewed — defensive re-check,
+    # same pattern as risk_gate.py's first check. A packet that failed Phase 1
+    # validation (or was otherwise never PENDING) must not come back APPROVED
+    # here on the strength of good market data alone.
+    if packet.status != "PENDING":
+        return _rejected(
+            "packet_not_pending",
+            f"packet status is '{packet.status}' (must be PENDING); "
+            f"original rejection_reason={packet.rejection_reason!r}",
+        )
+
+    # 0b. packet.entry_price must be structurally valid — hard reject, not a
+    # warn-and-skip. A quality gate must not approve on top of invalid packet
+    # data; it also guarantees the underlying-price diff below never divides
+    # by zero/negative.
+    if packet.entry_price <= 0:
+        return _rejected(
+            "entry_price_invalid",
+            f"packet.entry_price {packet.entry_price} is invalid (must be > 0)",
+        )
+
     # 1. Provider.
     provider = (snapshot.provider or "").strip()
     if not provider:
@@ -187,6 +208,7 @@ def evaluate_contract_quality(
             "snapshot.underlying_price is missing; skipping underlying price check"
         )
     else:
+        # packet.entry_price > 0 is guaranteed by the 0b check above.
         diff_pct = (
             abs(snapshot.underlying_price - packet.entry_price)
             / packet.entry_price
@@ -212,6 +234,14 @@ def evaluate_contract_quality(
             )
         warnings.append(
             "snapshot.quote_timestamp is missing; skipping freshness check"
+        )
+    elif snapshot.quote_timestamp.tzinfo is None:
+        # A naive timestamp has no reliable timezone — we cannot safely
+        # compute its age. Treat as untrustworthy data rather than assume UTC
+        # (or crash comparing naive/aware datetimes).
+        return _data_blocked(
+            "quote_timestamp_not_timezone_aware",
+            "snapshot.quote_timestamp has no timezone info; cannot assess freshness",
         )
     else:
         age_seconds = (
