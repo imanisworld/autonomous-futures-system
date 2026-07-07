@@ -1426,6 +1426,64 @@ def test_diagnostics_items_carry_stable_codes(monkeypatch, tmp_path):
     assert app_module._diagnostic("ok", "TradingView alerts", "x")["code"] == "tradingview_feed"
 
 
+def test_diagnostics_warn_when_range_observe_has_no_recent_evidence(monkeypatch, tmp_path):
+    try:
+        import webhook.app as app_module
+    except ImportError:
+        pytest.skip("fastapi[testclient] not installed")
+
+    _isolate_app_logs(monkeypatch, tmp_path)
+    monkeypatch.setattr(app_module._config, "range_observe_enabled", True)
+    journal_dir = Path(app_module._config.log_dir)
+    journal_dir.mkdir(parents=True, exist_ok=True)
+    today = date.today()
+    rows = [
+        {
+            "ts": f"{today.isoformat()}T14:{minute:02d}:00+00:00",
+            "instrument": "MNQ",
+            "decision": "CONFIG_BLOCKED",
+            "config_block": "TIMEFRAME_MISMATCH",
+            "reason": "Expected 15m alert, received 5m.",
+        }
+        for minute in range(3)
+    ]
+    (journal_dir / f"journal_{today.isoformat()}.jsonl").write_text(
+        "\n".join(json.dumps(row) for row in rows) + "\n"
+    )
+
+    data = app_module._diagnostics_payload(today)
+    item = next(i for i in data["items"] if i["code"] == "range_observe_evidence")
+    assert item["status"] == "warn"
+    assert "RANGE_OBSERVE_ENABLED is loaded true" in item["message"]
+    assert "TradingView alert timeframe" in item["next_step"]
+
+
+def test_diagnostics_do_not_warn_when_recent_range_evidence_exists(monkeypatch, tmp_path):
+    try:
+        import webhook.app as app_module
+    except ImportError:
+        pytest.skip("fastapi[testclient] not installed")
+
+    _isolate_app_logs(monkeypatch, tmp_path)
+    monkeypatch.setattr(app_module._config, "range_observe_enabled", True)
+    journal_dir = Path(app_module._config.log_dir)
+    journal_dir.mkdir(parents=True, exist_ok=True)
+    today = date.today()
+    row = {
+        "ts": f"{today.isoformat()}T14:30:00+00:00",
+        "instrument": "MNQ",
+        "decision": "NO_TRADE",
+        "wall_context": {"ok": True},
+        "range_signal": {"signal_type": "RANGE_REJECT"},
+    }
+    (journal_dir / f"journal_{today.isoformat()}.jsonl").write_text(json.dumps(row) + "\n")
+
+    data = app_module._diagnostics_payload(today)
+    item = next(i for i in data["items"] if i["code"] == "range_observe_evidence")
+    assert item["status"] == "ok"
+    assert "carry range evidence" in item["message"]
+
+
 def test_backend_console_uses_tf_freshness_and_non_live_labels(monkeypatch):
     """Regression for the embedded console: freshness keyed off the timeframe (no
     hardcoded 6m), and 'API: LIVE'/'LIVE' badge reworded so they can't read as
