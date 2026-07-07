@@ -7,22 +7,41 @@
 #   scripts/atomic_release.sh verify <sha>
 #   scripts/atomic_release.sh promote <sha>
 #   scripts/atomic_release.sh rollback
+#
+# Each action acquires a box-side deploy mutex ($AFS_SHARED_DIR/deploy.lock,
+# see scripts/deploy_lock.sh) before touching the box and releases it on exit
+# (normal, error, or interrupt). If another deploy holds the lock, the action
+# refuses and prints that lock's metadata (ref/user/host/time/pid). Pass
+# --force-lock as the trailing arg to break a stale/abandoned lock.
 set -euo pipefail
 
 ACTION="${1:-}"
 REF="${2:-origin/main}"
+FORCE_LOCK="${3:-}"
 BOX="${AFS_BOX:?set AFS_BOX (for example root@host)}"
 RELEASES="${AFS_RELEASES_DIR:-/root/afs-releases}"
 SHARED="${AFS_SHARED_DIR:-/root/afs-shared}"
 CURRENT="${AFS_CURRENT_LINK:-/root/autonomous-futures-system}"
 SERVICE="${AFS_SERVICE:-futures-bot}"
 ROOT="$(git rev-parse --show-toplevel)"
+LOCK_DIR="$SHARED/deploy.lock"
+
+# rollback takes no ref — let a bare --force-lock land in $2 for that action.
+if [[ "$ACTION" == "rollback" && "$REF" == "--force-lock" ]]; then
+  FORCE_LOCK="--force-lock"
+fi
+
+source "$ROOT/scripts/deploy_lock.sh"
 
 remote() {
   ssh -o BatchMode=yes -o ConnectTimeout=20 "$BOX" "$@"
 }
+REMOTE_EXEC=remote
 
 build_release() {
+  deploy_lock_acquire "$LOCK_DIR" "build $REF" "$0" "$FORCE_LOCK" || exit 1
+  trap "deploy_lock_release '$LOCK_DIR'" EXIT
+
   git fetch -q origin
   local sha short work archive manifest
   sha="$(git rev-parse "$REF")"
@@ -30,7 +49,7 @@ build_release() {
   work="$(mktemp -d "/tmp/afs-release-${short}.XXXX")"
   archive="/tmp/afs-release-${short}.tgz"
   manifest="$work/release_manifest.json"
-  trap "git worktree remove -f '$work' >/dev/null 2>&1 || true; rm -f '$archive'" EXIT
+  trap "git worktree remove -f '$work' >/dev/null 2>&1 || true; rm -f '$archive'; deploy_lock_release '$LOCK_DIR'" EXIT
 
   git worktree add --detach "$work" "$sha" >/dev/null
   (
@@ -60,6 +79,9 @@ build_release() {
 }
 
 verify_release() {
+  deploy_lock_acquire "$LOCK_DIR" "verify $REF" "$0" "$FORCE_LOCK" || exit 1
+  trap "deploy_lock_release '$LOCK_DIR'" EXIT
+
   local sha="$REF" short="${REF:0:12}" unit="afs-candidate-${REF:0:12}" fingerprint
   fingerprint="$(remote "'$RELEASES/$sha/.venv/bin/python' -c \"import json;print(json.load(open('$RELEASES/$sha/release_manifest.json'))['fingerprint_sha256'])\"")"
   remote "
@@ -97,6 +119,9 @@ verify_release() {
 }
 
 promote_release() {
+  deploy_lock_acquire "$LOCK_DIR" "promote $REF" "$0" "$FORCE_LOCK" || exit 1
+  trap "deploy_lock_release '$LOCK_DIR'" EXIT
+
   local sha="$REF"
   remote "
     set -e
@@ -140,6 +165,9 @@ promote_release() {
 }
 
 rollback_release() {
+  deploy_lock_acquire "$LOCK_DIR" "rollback" "$0" "$FORCE_LOCK" || exit 1
+  trap "deploy_lock_release '$LOCK_DIR'" EXIT
+
   remote "
     set -e
     previous=\$(cat '$SHARED/current.previous')
@@ -161,7 +189,7 @@ case "$ACTION" in
   promote) promote_release ;;
   rollback) rollback_release ;;
   *)
-    echo "usage: $0 {build [ref]|verify <sha>|promote <sha>|rollback}" >&2
+    echo "usage: $0 {build [ref]|verify <sha>|promote <sha>|rollback} [--force-lock]" >&2
     exit 64
     ;;
 esac
