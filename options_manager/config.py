@@ -76,6 +76,16 @@ class OptionsManagerConfig:
     dry_run_order_action: str = "BUY_TO_OPEN"
     dry_run_require_paper_simulated: bool = True
 
+    # Phase 6 — human-confirmed order prep. Independent of risk_rules.yaml;
+    # verifies a caller-supplied confirmation record against a local dry-run
+    # review only. No storage, no broker calls, no order placement.
+    human_confirm_enabled: bool = True
+    human_confirm_ttl_seconds: int = 300
+    human_confirm_required_phrase: str = "CONFIRM DRY RUN ORDER PREP"
+    human_confirm_case_sensitive: bool = True
+    human_confirm_require_reviewer: bool = True
+    human_confirm_require_nonce: bool = True
+
     @classmethod
     def from_env(cls) -> "OptionsManagerConfig":
         load_dotenv()
@@ -210,6 +220,28 @@ class OptionsManagerConfig:
             ),
             dry_run_require_paper_simulated=_as_bool(
                 os.getenv("OPTIONS_MANAGER_DRY_RUN_REQUIRE_PAPER_SIMULATED"),
+                default=True,
+            ),
+            human_confirm_enabled=_as_bool(
+                os.getenv("OPTIONS_MANAGER_HUMAN_CONFIRM_ENABLED"), default=True
+            ),
+            human_confirm_ttl_seconds=_as_int(
+                os.getenv("OPTIONS_MANAGER_HUMAN_CONFIRM_TTL_SECONDS"), 300
+            ),
+            human_confirm_required_phrase=os.getenv(
+                "OPTIONS_MANAGER_HUMAN_CONFIRM_REQUIRED_PHRASE",
+                "CONFIRM DRY RUN ORDER PREP",
+            ),
+            human_confirm_case_sensitive=_as_bool(
+                os.getenv("OPTIONS_MANAGER_HUMAN_CONFIRM_CASE_SENSITIVE"),
+                default=True,
+            ),
+            human_confirm_require_reviewer=_as_bool(
+                os.getenv("OPTIONS_MANAGER_HUMAN_CONFIRM_REQUIRE_REVIEWER"),
+                default=True,
+            ),
+            human_confirm_require_nonce=_as_bool(
+                os.getenv("OPTIONS_MANAGER_HUMAN_CONFIRM_REQUIRE_NONCE"),
                 default=True,
             ),
         )
