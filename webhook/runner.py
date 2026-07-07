@@ -1310,7 +1310,9 @@ def process_alert(
             )
             return result
 
+    _submit_ts = datetime.now(timezone.utc)
     fill = broker.execute_bracket(order)
+    _cancel_ts = datetime.now(timezone.utc)
     _record_candidate_lifecycle(
         opportunity_candidate_ids,
         log_dir,
@@ -1360,6 +1362,23 @@ def process_alert(
             pnl_dollars=0.0,
             contracts=order.contracts,
             for_date=today,
+            no_fill_reason=getattr(fill, "no_fill_reason", None),
+            order_type=getattr(fill, "order_type", None),
+            broker_status_raw=fill.exit_reason,
+            strategy=order.strategy,
+            signal_timestamp=state.timestamp.isoformat() if state.timestamp else None,
+            submit_timestamp=_submit_ts.isoformat(),
+            cancel_timestamp=_cancel_ts.isoformat(),
+            seconds_until_cancel=(_cancel_ts - _submit_ts).total_seconds(),
+            requested_entry=order.entry,
+            # Not currently captured anywhere in the execution path (no live
+            # quote/order-book snapshot at submit or cancel time) — reserved
+            # for future instrumentation rather than faked.
+            last_price_at_submit=None,
+            last_price_at_cancel=None,
+            best_bid_at_submit=None,
+            best_ask_at_submit=None,
+            ticks_moved_from_entry=None,
         )
         daily_state.has_open_position = False
         result["decision"] = "BLOCKED_EXECUTION_FAILED"

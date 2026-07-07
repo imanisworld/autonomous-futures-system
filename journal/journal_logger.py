@@ -90,6 +90,24 @@ class JournalLogger:
         pnl_dollars: Optional[float],
         contracts: int = 1,
         for_date: Optional[date] = None,
+        *,
+        # Diagnostic-only fields (no-fill cause taxonomy). All optional,
+        # default None so every existing caller is unaffected. See
+        # execution/no_fill_taxonomy.py for no_fill_reason bucket meanings.
+        no_fill_reason: Optional[str] = None,
+        order_type: Optional[str] = None,
+        broker_status_raw: Optional[str] = None,
+        strategy: Optional[str] = None,
+        signal_timestamp: Optional[str] = None,
+        submit_timestamp: Optional[str] = None,
+        cancel_timestamp: Optional[str] = None,
+        seconds_until_cancel: Optional[float] = None,
+        requested_entry: Optional[float] = None,
+        last_price_at_submit: Optional[float] = None,
+        last_price_at_cancel: Optional[float] = None,
+        best_bid_at_submit: Optional[float] = None,
+        best_ask_at_submit: Optional[float] = None,
+        ticks_moved_from_entry: Optional[float] = None,
     ) -> None:
         """
         Append a trade outcome entry to today's journal.
@@ -108,6 +126,20 @@ class JournalLogger:
                 "pnl_ticks": pnl_ticks,
                 "pnl_dollars": pnl_dollars,
                 "contracts": contracts,
+                "no_fill_reason": no_fill_reason,
+                "order_type": order_type,
+                "broker_status_raw": broker_status_raw,
+                "strategy": strategy,
+                "signal_timestamp": signal_timestamp,
+                "submit_timestamp": submit_timestamp,
+                "cancel_timestamp": cancel_timestamp,
+                "seconds_until_cancel": seconds_until_cancel,
+                "requested_entry": requested_entry,
+                "last_price_at_submit": last_price_at_submit,
+                "last_price_at_cancel": last_price_at_cancel,
+                "best_bid_at_submit": best_bid_at_submit,
+                "best_ask_at_submit": best_ask_at_submit,
+                "ticks_moved_from_entry": ticks_moved_from_entry,
             },
         }
         self._append(entry, for_date)

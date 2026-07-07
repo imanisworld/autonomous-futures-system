@@ -209,3 +209,50 @@ def test_execution_failure_clears_phantom_open(tmp_path, monkeypatch):
     ds = JournalLogger(log_dir=log_dir).get_daily_state(fd)
     assert ds.has_open_position is False, "phantom open left in journal"
     assert ds.trade_count == 0, "failed attempt should not consume a trade slot"
+
+
+def test_cancelled_outcome_carries_no_fill_taxonomy_fields(tmp_path, monkeypatch):
+    """The no-fill cause taxonomy must reach the journal end-to-end: runner.py
+    passes fill.no_fill_reason/order_type through, and the ORIGINAL exit_reason
+    format ("execution_failed:CANCELLED") is UNCHANGED so ops/fill_realism.py
+    and ops/proof_30_mnq.py's existing substring/equality matching still works
+    (logging-only addition, no metric drift)."""
+    import json
+    from datetime import date
+    from config.settings import load_config
+    from webhook.runner import process_alert
+    from execution.broker_interface import Fill
+    import execution.paper_broker as pb
+    import sys
+    sys.path.insert(0, "tests")
+    from test_e2e_scenarios import _base_payload
+
+    def _cancelled(self, order):
+        return Fill(instrument=order.instrument, direction=order.direction,
+                    contracts=order.contracts, entry_price=order.entry,
+                    exit_price=None, exit_reason="ENTRY_NOT_FILLED",
+                    result="CANCELLED", pnl_ticks=None, pnl_dollars=None,
+                    no_fill_reason="NO_FILL_LIMIT_TOO_PASSIVE", order_type="Limit")
+    monkeypatch.setattr(pb.PaperBroker, "execute_bracket", _cancelled, raising=False)
+
+    cfg = dataclasses.replace(load_config(), max_staleness_seconds=10 ** 9)
+    payload = _base_payload(timestamp="2026-05-23T14:30:00+00:00")
+    fd = date(2026, 5, 23)
+    log_dir = str(tmp_path / "j")
+
+    res = process_alert(payload, config=cfg, log_dir=log_dir, for_date=fd)
+    assert res["decision"] == "BLOCKED_EXECUTION_FAILED", res
+
+    lines = (tmp_path / "j" / f"journal_{fd.isoformat()}.jsonl").read_text().splitlines()
+    outcomes = [json.loads(l)["outcome"] for l in lines if json.loads(l).get("type") == "OUTCOME"]
+    assert outcomes, "expected an OUTCOME entry"
+    outcome = outcomes[-1]
+    assert outcome["exit_reason"] == "execution_failed:CANCELLED"  # unchanged, existing consumers rely on this
+    assert outcome["no_fill_reason"] == "NO_FILL_LIMIT_TOO_PASSIVE"
+    assert outcome["order_type"] == "Limit"
+    assert outcome["broker_status_raw"] == "ENTRY_NOT_FILLED"
+    assert outcome["strategy"]
+    assert outcome["signal_timestamp"] is not None
+    assert outcome["submit_timestamp"] is not None
+    assert outcome["cancel_timestamp"] is not None
+    assert outcome["seconds_until_cancel"] is not None and outcome["seconds_until_cancel"] >= 0

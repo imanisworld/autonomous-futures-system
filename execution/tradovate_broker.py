@@ -35,6 +35,7 @@ from execution.broker_interface import (
     Fill,
     Position,
 )
+from execution.no_fill_taxonomy import classify_no_fill_reason
 
 logger = logging.getLogger(__name__)
 
@@ -788,14 +789,18 @@ class TradovateBroker(BrokerInterface):
                     "Tradovate placeOSO REJECTED: %s | instrument=%s dir=%s body=%s",
                     error_text, order.instrument, order.direction, body,
                 )
-                return self._cancelled_fill(order, f"TRADOVATE_REJECTED")
+                return self._cancelled_fill(
+                    order, "TRADOVATE_REJECTED", order_type=entry_leg.get("orderType"),
+                )
             order_id = result.get("orderId") or (result.get("orderStatus", {}) or {}).get("orderId")
             if not order_id:
                 logger.error(
                     "Tradovate placeOSO returned no orderId — possible silent rejection: %s",
                     result,
                 )
-                return self._cancelled_fill(order, "TRADOVATE_NO_ORDER_ID")
+                return self._cancelled_fill(
+                    order, "TRADOVATE_NO_ORDER_ID", order_type=entry_leg.get("orderType"),
+                )
             # OSO child IDs follow bracket order. runner_live has one child:
             # oso1 = Stop. Static has oso1 = target and oso2 = Stop.
             target_id = None if runner_live else result.get("oso1Id")
@@ -821,7 +826,10 @@ class TradovateBroker(BrokerInterface):
                     )
                     self._last_position = None
                     self._last_order_ids = None
-                    return self._cancelled_fill(order, "ENTRY_NOT_FILLED")
+                    return self._cancelled_fill(
+                        order, "ENTRY_NOT_FILLED",
+                        entry_status="dead", order_type=entry_leg.get("orderType"),
+                    )
                 if status == "working":
                     # Resting limit (IOC ignored) → cancel the OSO now so it can't
                     # fill late. Safe: an unfilled entry means the children are
@@ -833,7 +841,10 @@ class TradovateBroker(BrokerInterface):
                     )
                     self._last_position = None
                     self._last_order_ids = None
-                    return self._cancelled_fill(order, "ENTRY_NOT_FILLED")
+                    return self._cancelled_fill(
+                        order, "ENTRY_NOT_FILLED",
+                        entry_status="working", order_type=entry_leg.get("orderType"),
+                    )
                 if status == "unknown":
                     # Positive confirmation required before journaling a position
                     # (2026-07-01 incident follow-ups #1-3): an unreadable entry is
@@ -845,7 +856,10 @@ class TradovateBroker(BrokerInterface):
                     if status == "dead":
                         self._last_position = None
                         self._last_order_ids = None
-                        return self._cancelled_fill(order, "ENTRY_NOT_FILLED")
+                        return self._cancelled_fill(
+                            order, "ENTRY_NOT_FILLED",
+                            entry_status="dead", order_type=entry_leg.get("orderType"),
+                        )
                     if status == "unknown":
                         # Never confirmed either way even after cancelling the
                         # entry. Journal NOTHING open; the reconciler/supervisor
@@ -853,7 +867,10 @@ class TradovateBroker(BrokerInterface):
                         # happened but stayed unreadable — those brackets are armed.
                         self._last_position = None
                         self._last_order_ids = None
-                        return self._cancelled_fill(order, "ENTRY_UNCONFIRMED")
+                        return self._cancelled_fill(
+                            order, "ENTRY_UNCONFIRMED",
+                            order_type=entry_leg.get("orderType"),
+                        )
                 # status "filled" → fall through to open + bracket verify.
 
             self._last_position = Position(
@@ -1820,7 +1837,13 @@ class TradovateBroker(BrokerInterface):
     # ── Helpers ───────────────────────────────────────────────────────────────
 
     @staticmethod
-    def _cancelled_fill(order: BracketOrder, reason: str) -> Fill:
+    def _cancelled_fill(
+        order: BracketOrder,
+        reason: str,
+        *,
+        entry_status: Optional[str] = None,
+        order_type: Optional[str] = None,
+    ) -> Fill:
         return Fill(
             instrument=order.instrument,
             direction=order.direction,
@@ -1831,4 +1854,6 @@ class TradovateBroker(BrokerInterface):
             result="CANCELLED",
             pnl_ticks=None,
             pnl_dollars=None,
+            no_fill_reason=classify_no_fill_reason(reason, entry_status=entry_status),
+            order_type=order_type,
         )
