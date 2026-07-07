@@ -53,6 +53,7 @@ def build_packet(raw_input: dict) -> OptionTradePacket:
     price_target = float(price_target_raw) if price_target_raw is not None else 0.0
 
     rejection_reason = _validate(
+        ticker=ticker,
         direction=direction,
         signa_score=signa_score,
         signa_grade=signa_grade,
@@ -107,6 +108,7 @@ def build_packet(raw_input: dict) -> OptionTradePacket:
 
 def _validate(
     *,
+    ticker: Any,
     direction: str,
     signa_score: int,
     signa_grade: str,
@@ -119,6 +121,9 @@ def _validate(
     price_target_raw: Optional[Any],
     price_target: float,
 ) -> Optional[str]:
+    if not isinstance(ticker, str) or not ticker.strip():
+        return "ticker must be a non-empty, non-whitespace string"
+
     if direction not in ALLOWED_DIRECTIONS:
         return f"direction '{direction}' is invalid; must be CALL or PUT"
 

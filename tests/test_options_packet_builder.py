@@ -187,6 +187,33 @@ def test_live_options_trading_disabled_or_unset_does_not_raise(monkeypatch):
     assert_live_options_trading_disabled() is None
 
 
+# --- ticker validation --------------------------------------------------------
+
+
+def test_ticker_none_is_rejected():
+    packet = build_packet(_valid_raw_input(ticker=None))
+    assert packet.status == "REJECTED"
+    assert "ticker" in packet.rejection_reason.lower()
+
+
+def test_ticker_empty_string_is_rejected():
+    packet = build_packet(_valid_raw_input(ticker=""))
+    assert packet.status == "REJECTED"
+    assert "ticker" in packet.rejection_reason.lower()
+
+
+def test_ticker_whitespace_only_is_rejected():
+    packet = build_packet(_valid_raw_input(ticker="   "))
+    assert packet.status == "REJECTED"
+    assert "ticker" in packet.rejection_reason.lower()
+
+
+def test_valid_ticker_is_still_pending():
+    packet = build_packet(_valid_raw_input(ticker="BAC"))
+    assert packet.status == "PENDING"
+    assert packet.rejection_reason is None
+
+
 # --- direction validation ---------------------------------------------------
 
 
