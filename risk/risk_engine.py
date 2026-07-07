@@ -10,12 +10,21 @@ Returns RiskResult(APPROVED) or RiskResult(REJECTED, failed_rule, reason).
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime, time as _time, timedelta, timezone
 from typing import Dict, Optional
 from zoneinfo import ZoneInfo
 
+logger = logging.getLogger(__name__)
+
 _ET = ZoneInfo("America/New_York")
+
+# Small clock-skew allowance for the alert-freshness check: an alert timestamped
+# a few seconds ahead of "now" is normal clock drift between the webhook sender
+# and this server, not a corrupted/future-dated payload. Not configurable —
+# this is a skew tolerance, not a risk policy knob.
+_ALERT_FUTURE_TOLERANCE_SECONDS = 5.0
 
 
 def _parse_hhmm(value: str) -> _time:
@@ -138,6 +147,7 @@ class RiskEngine:
         checks = [
             self._check_live_trading_disabled,
             self._check_instrument,
+            self._check_alert_freshness,
             self._check_position_sizing,
             self._check_max_contracts,
             self._check_win_streak_contracts,
@@ -178,6 +188,67 @@ class RiskEngine:
         """Live trading must never be enabled in Phase 1."""
         if self.config.live_trading_enabled:
             raise LiveTradingBlockedError(source="RiskEngine._check_live_trading_disabled")
+        return None
+
+    def _check_alert_freshness(
+        self, setup: TradeSetup, daily_state: DailyState
+    ) -> Optional[RiskResult]:
+        """Reject a candidate built from a missing, stale, or future-dated alert.
+
+        setup.entry_time traces back to the TradingView webhook payload's own
+        timestamp (webhook/state_builder.py -> MarketState.timestamp ->
+        TradeSetup.entry_time). No proof, no run: an untrustworthy alert age
+        must not silently pass.
+
+        execution_safety.log_alert_age_only (default True) starts this gate in
+        observe-only mode — age is logged, never rejected for age — until a
+        real max_alert_age_seconds threshold is set from observed latency data.
+        The missing-timestamp and future-timestamp rejections are NOT gated by
+        log_alert_age_only: those are data-integrity failures, not a threshold
+        being tuned.
+        """
+        if setup.entry_time is None:
+            if getattr(self.config, "reject_on_missing_alert_timestamp", True):
+                return RiskResult(
+                    result="REJECTED",
+                    failed_rule="alert_timestamp_missing",
+                    reason="TradeSetup.entry_time is missing; cannot verify alert freshness.",
+                )
+            return None
+
+        entry_time = setup.entry_time
+        if entry_time.tzinfo is None:
+            entry_time = entry_time.replace(tzinfo=timezone.utc)
+        age_seconds = (datetime.now(timezone.utc) - entry_time).total_seconds()
+
+        if age_seconds < -_ALERT_FUTURE_TOLERANCE_SECONDS:
+            return RiskResult(
+                result="REJECTED",
+                failed_rule="alert_timestamp_future",
+                reason=(
+                    f"Alert timestamp for {setup.instrument} is "
+                    f"{abs(age_seconds):.1f}s in the future "
+                    f"(tolerance {_ALERT_FUTURE_TOLERANCE_SECONDS:.0f}s)."
+                ),
+            )
+
+        if getattr(self.config, "log_alert_age_only", True):
+            logger.info(
+                "alert_age_seconds instrument=%s age=%.1f (log-only, not enforced)",
+                setup.instrument, age_seconds,
+            )
+            return None
+
+        max_age = getattr(self.config, "max_alert_age_seconds", None)
+        if max_age is not None and age_seconds > max_age:
+            return RiskResult(
+                result="REJECTED",
+                failed_rule="stale_alert",
+                reason=(
+                    f"Alert age {age_seconds:.1f}s for {setup.instrument} exceeds "
+                    f"max_alert_age_seconds={max_age}."
+                ),
+            )
         return None
 
     def _check_max_contracts(

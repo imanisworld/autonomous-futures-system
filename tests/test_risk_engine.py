@@ -7,7 +7,9 @@ Each rule is tested: valid pass, and each failure mode.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import replace
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from risk.risk_engine import RiskEngine, DailyState, TradeSetup, RiskResult
@@ -926,6 +928,86 @@ class TestSessionCutoffCrossMidnight:
         engine = self._engine(config)
         result = engine._check_session_cutoff(self._setup_at_et("new_york", 14, 30), DailyState())
         assert result is not None and result.failed_rule == "session_cutoff"
+
+
+class TestAlertFreshnessCheck:
+    """execution_safety gate: risk/risk_engine.py._check_alert_freshness.
+
+    The shared `config` fixture disables reject_on_missing_alert_timestamp
+    (see conftest.py) so the other ~200 tests in this file — which build
+    TradeSetup without entry_time — are unaffected. Each test here explicitly
+    re-enables whichever execution_safety flag it's testing via
+    dataclasses.replace, the same pattern test_production_config_allows_24h_sessions
+    uses for entry_time elsewhere in this file.
+    """
+
+    def _setup(self, **overrides) -> TradeSetup:
+        base = dict(
+            direction="LONG", entry=19500.0, stop=19480.0, target=19540.0,
+            rr_ratio=2.0, strategy="orb_reclaim", instrument="MNQ", session="new_york",
+        )
+        base.update(overrides)
+        return TradeSetup(**base)
+
+    def test_fresh_timestamp_passes(self, config, clean_daily_state):
+        cfg = replace(config, reject_on_missing_alert_timestamp=True, log_alert_age_only=True)
+        engine = RiskEngine(config=cfg)
+        setup = self._setup(entry_time=datetime.now(timezone.utc))
+        result = engine.validate(setup, clean_daily_state)
+        assert result.approved
+
+    def test_missing_timestamp_rejects_by_default(self, config, clean_daily_state):
+        cfg = replace(config, reject_on_missing_alert_timestamp=True)
+        engine = RiskEngine(config=cfg)
+        setup = self._setup(entry_time=None)
+        result = engine.validate(setup, clean_daily_state)
+        assert result.rejected
+        assert result.failed_rule == "alert_timestamp_missing"
+
+    def test_missing_timestamp_falls_through_only_when_toggle_false(self, config, clean_daily_state):
+        cfg = replace(config, reject_on_missing_alert_timestamp=False)
+        engine = RiskEngine(config=cfg)
+        setup = self._setup(entry_time=None)
+        result = engine.validate(setup, clean_daily_state)
+        assert result.approved
+
+    def test_old_timestamp_logs_only_when_log_alert_age_only_true(self, config, clean_daily_state, caplog):
+        cfg = replace(
+            config,
+            reject_on_missing_alert_timestamp=True,
+            log_alert_age_only=True,
+            max_alert_age_seconds=60,
+        )
+        engine = RiskEngine(config=cfg)
+        old_time = datetime.now(timezone.utc) - timedelta(hours=2)
+        setup = self._setup(entry_time=old_time)
+        with caplog.at_level(logging.INFO, logger="risk.risk_engine"):
+            result = engine.validate(setup, clean_daily_state)
+        assert result.approved  # log-only: age is NOT enforced, even past max_alert_age_seconds
+        assert any("alert_age_seconds" in record.message for record in caplog.records)
+
+    def test_old_timestamp_rejects_when_enforcement_enabled(self, config, clean_daily_state):
+        cfg = replace(
+            config,
+            reject_on_missing_alert_timestamp=True,
+            log_alert_age_only=False,
+            max_alert_age_seconds=60,
+        )
+        engine = RiskEngine(config=cfg)
+        old_time = datetime.now(timezone.utc) - timedelta(hours=2)
+        setup = self._setup(entry_time=old_time)
+        result = engine.validate(setup, clean_daily_state)
+        assert result.rejected
+        assert result.failed_rule == "stale_alert"
+
+    def test_future_timestamp_rejects(self, config, clean_daily_state):
+        cfg = replace(config, reject_on_missing_alert_timestamp=True)
+        engine = RiskEngine(config=cfg)
+        future_time = datetime.now(timezone.utc) + timedelta(minutes=10)
+        setup = self._setup(entry_time=future_time)
+        result = engine.validate(setup, clean_daily_state)
+        assert result.rejected
+        assert result.failed_rule == "alert_timestamp_future"
 
 
 def test_production_config_allows_24h_sessions():

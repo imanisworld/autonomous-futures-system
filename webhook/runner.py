@@ -1262,6 +1262,54 @@ def process_alert(
         )
         return result
 
+    # ── Final working-order recheck (execution-safety gate) ──────────────────
+    # Immediately before sending a real order: re-read the broker's own order
+    # book for this account. A working/pending order the local journal/paper
+    # state doesn't know about (manual intervention, a crashed prior run, an
+    # order placed outside this system) must block a new entry, not be
+    # silently missed. Only meaningful for a real broker connection — PaperBroker
+    # cannot have this conflict (execute_bracket already refuses a second
+    # concurrent order internally: `self._position is not None or
+    # self._pending_stop_entry is not None`) and has no order book to read.
+    # Gated on "not PaperBroker" rather than broker.is_live: TradovateBroker.is_live
+    # is True ONLY for TRADOVATE_ENV=live, not demo, but this recheck must run for
+    # Tradovate demo too (demo is the realistic dry run for this exact gate).
+    if getattr(cfg, "working_order_recheck_enabled", True) and not isinstance(broker, PaperBroker):
+        _wo_reason = None
+        try:
+            from execution.live_preflight import _list_orders, _order_status, WORKING_ORDER_STATUSES
+
+            _account_id = getattr(broker, "_account_id", None)
+            _existing_orders = _list_orders(broker)
+            _working = [
+                o for o in _existing_orders
+                if _order_status(o) in WORKING_ORDER_STATUSES
+                and (_account_id is None or o.get("accountId") in (None, _account_id))
+            ]
+            if _working:
+                _wo_reason = (
+                    f"working_order_conflict: {len(_working)} working order(s) on account"
+                )
+        except Exception as exc:
+            # Fail closed: an unreadable order book is NOT the same as "no
+            # working orders." Never treat a failed read as clear.
+            logger.warning("Working-order recheck failed to read broker state: %s", exc)
+            _wo_reason = f"order_state_unreadable: {exc}"
+
+        if _wo_reason:
+            logger.info("Order suppressed by working-order recheck: %s", _wo_reason)
+            result["decision"] = "ORDER_SUPPRESSED"
+            result["gate_reason"] = _wo_reason
+            _record_candidate_lifecycle(
+                opportunity_candidate_ids,
+                log_dir,
+                today,
+                "ORDER_SUPPRESSED",
+                broker_result="NOT_SENT",
+                gate_reason=_wo_reason,
+            )
+            return result
+
     fill = broker.execute_bracket(order)
     _record_candidate_lifecycle(
         opportunity_candidate_ids,
