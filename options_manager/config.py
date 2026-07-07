@@ -86,6 +86,17 @@ class OptionsManagerConfig:
     human_confirm_require_reviewer: bool = True
     human_confirm_require_nonce: bool = True
 
+    # Phase 7 — controlled order ticket preparation. Independent of
+    # risk_rules.yaml; builds a local, non-executable order ticket from a
+    # Phase 6 confirmed order prep only. No storage, no broker calls, no
+    # order placement.
+    order_ticket_enabled: bool = True
+    order_ticket_ttl_seconds: int = 120
+    order_ticket_max_contracts: int = 2
+    order_ticket_max_notional: float = 300.00
+    order_ticket_max_limit_price: float = 3.00
+    order_ticket_allowed_account_tags: tuple[str, ...] = ("agentic_micro_account",)
+
     @classmethod
     def from_env(cls) -> "OptionsManagerConfig":
         load_dotenv()
@@ -243,6 +254,25 @@ class OptionsManagerConfig:
             human_confirm_require_nonce=_as_bool(
                 os.getenv("OPTIONS_MANAGER_HUMAN_CONFIRM_REQUIRE_NONCE"),
                 default=True,
+            ),
+            order_ticket_enabled=_as_bool(
+                os.getenv("OPTIONS_MANAGER_ORDER_TICKET_ENABLED"), default=True
+            ),
+            order_ticket_ttl_seconds=_as_int(
+                os.getenv("OPTIONS_MANAGER_ORDER_TICKET_TTL_SECONDS"), 120
+            ),
+            order_ticket_max_contracts=_as_int(
+                os.getenv("OPTIONS_MANAGER_ORDER_TICKET_MAX_CONTRACTS"), 2
+            ),
+            order_ticket_max_notional=_as_float(
+                os.getenv("OPTIONS_MANAGER_ORDER_TICKET_MAX_NOTIONAL"), 300.00
+            ),
+            order_ticket_max_limit_price=_as_float(
+                os.getenv("OPTIONS_MANAGER_ORDER_TICKET_MAX_LIMIT_PRICE"), 3.00
+            ),
+            order_ticket_allowed_account_tags=_as_tuple(
+                os.getenv("OPTIONS_MANAGER_ORDER_TICKET_ALLOWED_ACCOUNT_TAGS"),
+                ("agentic_micro_account",),
             ),
         )
 
