@@ -28,6 +28,7 @@ from execution.broker_interface import (
     Fill,
     Position,
 )
+from execution.no_fill_taxonomy import classify_no_fill_reason
 from execution.trailing import compute_trailed_stop
 
 
@@ -251,7 +252,12 @@ class PaperBroker(BrokerInterface):
     def _entry_not_filled(self, order: BracketOrder, contracts: int) -> Fill:
         """The IOC entry self-cancelled: no position, no P&L, booked the way the
         live box books it (CANCELLED / ENTRY_NOT_FILLED) so daily-state
-        reconstruction and fill-realism audits treat replay and live the same."""
+        reconstruction and fill-realism audits treat replay and live the same.
+
+        Unlike live Tradovate, replay knows for certain the bar-close market
+        price never reached the limit (that's the caller's own condition for
+        reaching this method) — so this is provably the "dead" case, not a
+        resting-then-cancelled one."""
         return Fill(
             instrument=order.instrument,
             direction=order.direction,
@@ -262,6 +268,8 @@ class PaperBroker(BrokerInterface):
             result="CANCELLED",
             pnl_ticks=0.0,
             pnl_dollars=0.0,
+            no_fill_reason=classify_no_fill_reason("ENTRY_NOT_FILLED", entry_status="dead"),
+            order_type="limit",
         )
 
     def _cancel_pending_entry(self, reason: str = "ENTRY_NOT_TRIGGERED") -> Fill:
@@ -279,6 +287,8 @@ class PaperBroker(BrokerInterface):
             result="CANCELLED",
             pnl_ticks=0.0,
             pnl_dollars=0.0,
+            no_fill_reason=classify_no_fill_reason(reason),
+            order_type="stop",
         )
 
     def _activate_pending_stop_entry(

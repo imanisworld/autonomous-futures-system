@@ -55,6 +55,11 @@ class Fill:
     result: str                  # WIN | LOSS | BREAKEVEN | OPEN | CANCELLED
     pnl_ticks: Optional[float]
     pnl_dollars: Optional[float]
+    # Diagnostic-only fields for CANCELLED/no-fill outcomes. Never read by
+    # execution/risk logic — populated best-effort, None when unknown. See
+    # execution/no_fill_taxonomy.py for the no_fill_reason bucket meanings.
+    no_fill_reason: Optional[str] = None
+    order_type: Optional[str] = None
 
 
 @dataclass(frozen=True)

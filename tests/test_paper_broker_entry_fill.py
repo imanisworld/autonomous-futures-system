@@ -97,9 +97,14 @@ def test_ioc_long_beyond_tolerance_books_cancelled_like_live():
     assert fill.exit_reason == "ENTRY_NOT_FILLED"
     assert fill.pnl_dollars == 0.0
     assert broker.get_position() is None  # no position was opened
+    # No-fill taxonomy: replay knows for certain price never reached the
+    # limit, so this is provably NO_FILL_PRICE_MOVED_AWAY, not "unknown".
+    assert fill.no_fill_reason == "NO_FILL_PRICE_MOVED_AWAY"
+    assert fill.order_type == "limit"
     # broker is immediately reusable — a no-fill must not wedge the sim
     refill = broker.execute_bracket(_order(), market_price=100.0)
     assert refill.result == "OPEN"
+    assert refill.no_fill_reason is None
 
 
 def test_ioc_short_beyond_tolerance_cancels():
@@ -196,6 +201,8 @@ def test_stop_market_not_triggered_on_next_bar_cancels():
     assert fill is not None
     assert fill.result == "CANCELLED"
     assert fill.exit_reason == "ENTRY_NOT_TRIGGERED"
+    assert fill.no_fill_reason == "NO_FILL_PRICE_MOVED_AWAY"
+    assert fill.order_type == "stop"
 
 
 def test_stop_market_gap_beyond_original_bracket_fails_closed():
