@@ -53,9 +53,16 @@ def _data_blocked(rule: str, reason: str) -> RiskGateResult:
 
 
 def evaluate_packet(
-    packet: OptionTradePacket, config: Optional[OptionsManagerConfig] = None
+    packet: OptionTradePacket, config: OptionsManagerConfig
 ) -> RiskGateResult:
-    cfg = config or OptionsManagerConfig.from_env()
+    """Pure function of (packet, config) -> RiskGateResult.
+
+    config is required and must be passed explicitly by the caller (e.g. via
+    OptionsManagerConfig.from_env() at the call site) — this function itself
+    must never read env vars, .env files, or any other external mutable
+    state, or it stops being deterministic.
+    """
+    cfg = config
     warnings: list[str] = []
 
     # 1. Only PENDING packets may be risk-reviewed.

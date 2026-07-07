@@ -13,6 +13,8 @@ from dataclasses import replace
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
+import pytest
+
 import options_manager.risk_gate as risk_gate_module
 from options_manager.config import OptionsManagerConfig
 from options_manager.models import OptionTradePacket
@@ -263,3 +265,23 @@ def test_risk_gate_module_has_no_journal_or_config_file_reads():
     assert "open(" not in source
     assert ".write(" not in source
     assert "mkdir" not in source
+
+
+def test_evaluate_packet_requires_explicit_config():
+    # config has no default — omitting it must fail loudly at call time,
+    # never silently fall back to reading env/.env.
+    with pytest.raises(TypeError):
+        evaluate_packet(_packet())
+
+
+def test_risk_gate_does_not_call_config_from_env():
+    # Structural guarantee via real AST Name/Attribute nodes only (never
+    # docstrings/comments, so this can't false-positive on descriptive text).
+    # Catches any reintroduction of the from_env()/getenv/load_dotenv fallback
+    # this fix removed.
+    identifiers = _risk_gate_referenced_identifiers()
+    for forbidden in ("from_env", "getenv", "load_dotenv", "environ"):
+        assert forbidden not in identifiers, (
+            f"risk_gate.py must not reference {forbidden!r} — "
+            "config must always be passed in explicitly by the caller"
+        )
