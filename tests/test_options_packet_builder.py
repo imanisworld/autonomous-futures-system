@@ -1,0 +1,182 @@
+"""
+tests/test_options_packet_builder.py
+
+Phase 1 options_manager tests. Packet-level validation only — no broker,
+no Robinhood, no Tradovate, no real Discord calls.
+"""
+
+from __future__ import annotations
+
+from datetime import date, timedelta
+
+import pytest
+
+from options_manager import journal as journal_mod
+from options_manager.live_lock import (
+    LiveOptionsTradingBlockedError,
+    assert_live_options_trading_disabled,
+)
+from options_manager.packet_builder import build_packet
+
+
+def _valid_raw_input(**overrides) -> dict:
+    base = {
+        "ticker": "BAC",
+        "direction": "CALL",
+        "entry_price": 60.11,
+        "price_target": 62.50,
+        "signa_score": 78,
+        "signa_grade": "B",
+        "signa_bias": "BULLISH",
+        "gex_regime": "LOW_PINNING",
+        "gex_wall_above": None,
+        "gex_wall_below": None,
+        "contract_strike": 60.00,
+        "contract_expiry": date.today() + timedelta(days=30),
+        "max_premium": 2.00,
+        "max_contracts": 1,
+    }
+    base.update(overrides)
+    return base
+
+
+@pytest.fixture(autouse=True)
+def _mock_discord(monkeypatch):
+    """Never allow a real Discord call from this test module."""
+    sent = []
+
+    def _fake_send(webhook_url: str, payload: dict) -> bool:
+        sent.append((webhook_url, payload))
+        return True
+
+    monkeypatch.setattr("options_manager.notify._default_send", _fake_send)
+    return sent
+
+
+@pytest.fixture(autouse=True)
+def _isolated_journal_dir(tmp_path, monkeypatch):
+    """Redirect all journal writes to a throwaway directory for every test,
+    so tests never write into the real repo's logs/ directory."""
+    monkeypatch.setattr(
+        "options_manager.packet_builder.log_packet",
+        lambda packet: journal_mod.log_packet(packet, journal_dir=str(tmp_path)),
+    )
+    return tmp_path
+
+
+def test_valid_call_packet_target_above_entry_is_pending():
+    packet = build_packet(_valid_raw_input())
+    assert packet.status == "PENDING"
+    assert packet.rejection_reason is None
+
+
+def test_signa_score_below_minimum_is_rejected():
+    packet = build_packet(_valid_raw_input(signa_score=25))
+    assert packet.status == "REJECTED"
+    assert "score" in packet.rejection_reason
+
+
+def test_grade_c_is_rejected():
+    packet = build_packet(_valid_raw_input(signa_grade="C"))
+    assert packet.status == "REJECTED"
+    assert "grade" in packet.rejection_reason.lower()
+
+
+def test_expiry_too_close_is_rejected():
+    packet = build_packet(
+        _valid_raw_input(contract_expiry=date.today() + timedelta(days=7))
+    )
+    assert packet.status == "REJECTED"
+    assert "expiry" in packet.rejection_reason.lower()
+
+
+def test_premium_above_ceiling_is_rejected():
+    packet = build_packet(_valid_raw_input(max_premium=3.50))
+    assert packet.status == "REJECTED"
+    assert "premium" in packet.rejection_reason.lower()
+
+
+def test_contracts_above_ceiling_is_capped_not_rejected():
+    packet = build_packet(_valid_raw_input(max_contracts=3))
+    assert packet.status == "PENDING"
+    assert packet.max_contracts == 2
+
+
+def test_missing_price_target_is_rejected():
+    raw = _valid_raw_input()
+    del raw["price_target"]
+    packet = build_packet(raw)
+    assert packet.status == "REJECTED"
+    assert "price_target" in packet.rejection_reason.lower()
+
+
+def test_call_with_target_below_entry_is_rejected():
+    packet = build_packet(
+        _valid_raw_input(direction="CALL", entry_price=60.0, price_target=59.0)
+    )
+    assert packet.status == "REJECTED"
+    assert "price_target" in packet.rejection_reason.lower()
+
+
+def test_put_with_target_above_entry_is_rejected():
+    packet = build_packet(
+        _valid_raw_input(
+            direction="PUT",
+            signa_bias="BEARISH",
+            entry_price=60.0,
+            price_target=61.0,
+        )
+    )
+    assert packet.status == "REJECTED"
+    assert "price_target" in packet.rejection_reason.lower()
+
+
+def test_journal_writes_only_to_options_journal_file(_isolated_journal_dir):
+    build_packet(_valid_raw_input())
+
+    today = date.today().isoformat()
+    options_path = _isolated_journal_dir / f"options_journal_{today}.jsonl"
+    futures_path = _isolated_journal_dir / f"journal_{today}.jsonl"
+
+    assert options_path.exists()
+    assert not futures_path.exists()
+
+
+def test_journal_never_writes_futures_journal_filename(_isolated_journal_dir):
+    build_packet(_valid_raw_input())
+
+    today = date.today().isoformat()
+    path = _isolated_journal_dir / f"options_journal_{today}.jsonl"
+
+    assert path.exists()
+    assert path.name != f"journal_{today}.jsonl"
+
+
+def test_discord_notify_is_mocked_no_real_webhook_call(monkeypatch):
+    calls = []
+
+    def _fake_send(webhook_url: str, payload: dict) -> bool:
+        calls.append((webhook_url, payload))
+        return True
+
+    monkeypatch.setattr("options_manager.notify._default_send", _fake_send)
+    monkeypatch.setenv("OPTIONS_MANAGER_DISCORD_WEBHOOK_URL", "https://discord.example/webhook")
+
+    build_packet(_valid_raw_input())
+
+    assert len(calls) == 1
+    assert calls[0][0] == "https://discord.example/webhook"
+
+
+def test_live_options_trading_enabled_true_raises(monkeypatch):
+    monkeypatch.setenv("LIVE_OPTIONS_TRADING_ENABLED", "true")
+    with pytest.raises(LiveOptionsTradingBlockedError):
+        assert_live_options_trading_disabled()
+
+
+def test_live_options_trading_disabled_or_unset_does_not_raise(monkeypatch):
+    monkeypatch.delenv("LIVE_OPTIONS_TRADING_ENABLED", raising=False)
+    assert_live_options_trading_disabled() is None
+
+    monkeypatch.setenv("LIVE_OPTIONS_TRADING_ENABLED", "false")
+    assert_live_options_trading_disabled() is None
