@@ -2,7 +2,9 @@ __pycache__/
 .pytest_cache/
 *.pyc
 .DS_Store
-.claude/
+.claude/*
+!.claude/commands/
+!.claude/commands/*.md
 .venv/
 venv/
 logs/
