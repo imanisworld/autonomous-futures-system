@@ -124,7 +124,7 @@ no-fill determination, not broker-verified like 07-06.
 - Evidence: `TRADE` entry=7469.75, stop=7467.5, target=7484.75, `context.close`=7473.25 → cap 7473.75 (entry+4.00) → marketable by 0.50 pt. Forward bars: fill-bar+1 (`15:00-15:15`) O=7473.25 H=7476.75 L=7468.5 C=7470.5 (no touch); fill-bar+2 (`15:15-15:30`) L=7453.75 ≤ stop 7467.5 → **STOP hit**, target (7484.75) never approached (max high across the sequence 7476.75).
 - Reconstructed result: **LOSS**, entry≈7473.25 → stop 7467.5 = 5.75 pt = 23 ticks × $1.25 = **-$28.75** (1 contract)
 - Root cause: same pre-`#146` reconciler bug — cleared a real filled+stopped-out position as a phantom because it never checked entry fills.
-- Operator ruling: _(pending — count as a broker-unconfirmed reconstructed LOSS for manual proof review?)_
+- Operator ruling (2026-07-07): **Count as a confirmed loss.** The reconstruction has no ambiguity (marketable by 0.50pt, single clean stop touch); ruled consistently with the equally clean 06-29/06-30 cases below.
 - Why the journal was not edited: same as above — append-only, TRADE-to-OUTCOME pairing must not be corrupted.
 - Audit caveat: reconstructed from the box's own 15m bar feed, not broker fill records (unavailable for this date). Automated `ops.proof_30_mnq` scans will not count this without this override being applied by a human/tool that reads this file.
 - Classification note: recorded as a reconstructed `MES` loss; does not auto-change any running `MNQ`-only tally.
@@ -134,7 +134,7 @@ no-fill determination, not broker-verified like 07-06.
 - Instrument: `MES`, session date `2026-06-09`, trade window `10:15:08Z` entry → stop hit `11:15:00Z-11:30:00Z`
 - Evidence: entry=7447.25, stop=7444.75, target=7462.25, close=7449.0 → cap 7451.25 (marketable by 2.25 pt). Forward bars never approached target (max high 7456.0); bar+5 (`11:15-11:30`) L=7444.75 == stop → **STOP hit**.
 - Reconstructed result: **LOSS**, entry≈7449.0 → stop 7444.75 = 4.25 pt = 17 ticks × $1.25 = **-$21.25** (1 contract)
-- Operator ruling: _(pending)_
+- Operator ruling (2026-07-07): **Count as a confirmed loss.** Same reasoning as 06-08 above — marketable by 2.25pt, single clean stop touch, no ambiguity.
 - Same root cause / journal-not-edited / audit-caveat / classification notes as above.
 
 #### 2026-06-18 - MES `vwap_hold` SHORT — erased LOSS (marginal marketability)
@@ -142,9 +142,9 @@ no-fill determination, not broker-verified like 07-06.
 - Instrument: `MES`, session date `2026-06-18`, trade window `11:15:11Z` entry → stop hit `12:30:00Z-12:45:00Z`
 - Evidence: entry=7548.25, stop=7555.75, target=7525.75, close=7544.5 → cap 7544.25 (entry-4.00) → marketable by only **0.25 pt (1 tick)** — the thinnest margin of any case in this audit, worth extra scrutiny before counting. Forward bars: low never got within 6 pt of target 7525.75 (lowest low 7531.25); bar+6 (`12:30-12:45`) H=7559.5 ≥ stop 7555.75 → **STOP hit**.
 - Reconstructed result: **LOSS**, entry≈7544.5 → stop 7555.75 = 11.25 pt = 45 ticks × $1.25 = **-$56.25** (1 contract)
-- Operator ruling: _(pending — this one is the lowest-confidence fill call in the batch; consider excluding from any formal count given the 1-tick margin)_
+- Operator ruling (2026-07-07): **Count as a confirmed loss.** Independently re-verified before ruling: the decision-bar close (10:45Z-11:00Z bar) was cross-checked against the locally-held Polygon feed (`data/replay_polygon/MES/MES_2026-06-18.jsonl`), a source independent of the box's own live bar feed. Both report the identical close, **7544.5**, with zero discrepancy — not a partial tick apart. The 1-tick marketability margin is therefore confirmed real, not a data-vendor rounding artifact, and this case is promoted out of "lowest-confidence" status.
 - Same root cause / journal-not-edited / classification notes as above.
-- Audit caveat: additionally, marketability here hinges on a single tick of the decision bar's close — a data-vendor rounding difference of 1 tick would flip this to a genuine no-fill.
+- Audit caveat (superseded): the original note below flagged that a 1-tick rounding difference between data vendors would flip this to a no-fill — the independent-source check above rules that out.
 
 #### 2026-06-29 - MES `pdh_reclaim` LONG — erased LOSS
 
@@ -152,14 +152,14 @@ no-fill determination, not broker-verified like 07-06.
 - Evidence: entry=7462.0, stop=7455.0, target=7477.5, close=7462.0 (entry == close, unambiguously marketable). Forward bars never reached target (max high 7473.75, 3.75 pt short); bar+6 L=7455.0 == stop → **STOP hit**.
 - Reconstructed result: **LOSS**, entry 7462.0 → stop 7455.0 = 7.0 pt = 28 ticks × $1.25 = **-$35.00** (1 contract)
 - Audit caveat: the live bar feed has two missing 15m bars in this window (`11:00Z` and `11:45Z` absent — a live-feed gap, not a reconstruction choice); the highest high observed in the surrounding data (7473.75) stays well clear of the 7477.5 target, so a missed spike-and-reverse inside a gap is possible but would need an unusually large round-trip to change the outcome.
-- Operator ruling: _(pending)_. Same root cause / journal-not-edited / classification notes as above.
+- Operator ruling (2026-07-07): **Count as a confirmed loss.** The 2-bar gap doesn't change the stop-hit conclusion given how far the surviving highs stay from target. Same root cause / journal-not-edited / classification notes as above.
 
 #### 2026-06-30 - MES `pdh_reclaim` LONG — erased LOSS
 
 - Instrument: `MES`, session date `2026-06-30`, trade window `10:15:02Z` entry → stop hit `12:15:00Z-12:30:00Z`
 - Evidence: entry=7507.0, stop=7500.0, target=7522.5, close=7507.0 (entry == close, unambiguously marketable). Forward bars got as close as 7517.5 to the 7522.5 target (bar+4/+7) but never touched it; bar+9 L=7495.75 ≤ stop 7500.0 → **STOP hit**.
 - Reconstructed result: **LOSS**, entry 7507.0 → stop 7500.0 = 7.0 pt = 28 ticks × $1.25 = **-$35.00** (1 contract)
-- Operator ruling: _(pending)_. Same root cause / journal-not-edited / classification notes as above.
+- Operator ruling (2026-07-07): **Count as a confirmed loss.** No data gaps, entry==close unambiguous marketability, clean stop touch. Same root cause / journal-not-edited / classification notes as above.
 
 #### 2026-07-01 - MNQ `orb_rejection` SHORT — erased fill, WIN/LOSS **UNRESOLVED**
 
@@ -171,7 +171,7 @@ no-fill determination, not broker-verified like 07-06.
   - 1m bar (`16:00-16:01Z`, Polygon `MNQU6`): O=30254.75 H=30264.0 L=30245.0 C=30255.5 — both touched (low hits target exactly; high clears stop by 2 pt).
   - Second-resolution Polygon data is not available on the current API tier (403); no ORDER_IDS row was journaled for this trade (ORDER_IDS logging appears to have been silently absent box-wide on 2026-07-01, a separate finding worth its own follow-up), so there is no broker order id to query for a fill-by-fill record either.
 - Reconstructed result: **genuinely unresolved**. Bounded outcomes: if target hit first → WIN, entry 30254.75 → target 30245.0 = 9.75 pt = 39 ticks × $0.50 = **+$19.50**; if stop hit first → LOSS, entry 30254.75 → stop 30262.0 = 7.25 pt = 29 ticks × $0.50 = **-$14.50** (1 contract either way).
-- Operator ruling: _(pending — recommend treating as unresolved/excluded from any formal count rather than guessing; only a broker fill record, which does not appear to exist for this trade, could resolve it definitively)_.
+- Operator ruling (2026-07-07): **Treat as unresolved/excluded.** Confirmed no further verification is possible: the second-resolution Polygon pull needed to disambiguate is blocked (403) on the current data-vendor tier, and no broker order id was journaled that day to check against. This stays a permanent data gap, not a guessed W or L — it does not count toward either side of the honest tally.
 - Root cause / why-not-edited: same as above.
 - Classification note: recorded as a confirmed marketable/erased fill with **indeterminate** W/L; not counted toward either a win or loss tally pending resolution or an operator decision to accept the bounded range.
 
@@ -180,8 +180,16 @@ no-fill determination, not broker-verified like 07-06.
 - 21 total phantom-cleared rows found since 2026-06-08; 2 previously solved (07-02 no-fill, 07-06 erased win); **19 newly audited here**.
 - 13 of 19 confirmed **genuine no-fills** — no change, `CANCELLED $0` stands.
 - 6 of 19 were **erased fills**, all previously invisible to the honest filled-trade count and P&L:
-  - 5 MES, all reconstructed as **LOSSES**: -$28.75, -$21.25, -$56.25 (marginal, 1-tick marketability), -$35.00, -$35.00 → **-$176.25 total** (-$120.00 if the marginal 1-tick case is excluded).
+  - 5 MES, all reconstructed as **LOSSES**: -$28.75, -$21.25, -$56.25, -$35.00, -$35.00 → **-$176.25 total**.
   - 1 MNQ, **unresolved** W/L (bounded +$19.50 / -$14.50).
 - None of this is broker-confirmed the way the 07-06 win was — every number above is a bar-data reconstruction and should be labeled as such if it enters any report.
-- Net effect if the operator accepts these: the honest go-live filled-trade count (see the go-live gate note) gains up to 6 more real filled trades (5 confirmed losses + 1 indeterminate), and the honest cumulative P&L moves **down**, not up — this cuts the opposite direction from the 07-06 case and should not be assumed to net out against it.
-- These are ops-proof-review facts only; they do not change any automated `ops.proof_30_mnq` MNQ-only tally by themselves. A human (or a future tool reading this file) must apply them.
+
+### RESOLVED 2026-07-07 (evening) — operator rulings on all 6 pending cases
+
+All 6 "(pending)" placeholders above are now resolved. Per-case rulings inline; summary:
+
+- **All 5 MES cases counted as confirmed losses** (no exclusions): 06-08 -$28.75, 06-09 -$21.25, 06-18 -$56.25, 06-29 -$35.00, 06-30 -$35.00. Total **-$176.25**.
+  - The 06-18 case (originally flagged as the lowest-confidence, 1-tick-margin call) was independently re-verified before ruling: the decision-bar close was cross-checked against a locally-held Polygon feed (`data/replay_polygon/MES/MES_2026-06-18.jsonl`), a source independent of the box's own live bar feed. Both agree exactly on 7544.5 — the 1-tick marketability margin is real, not a data-vendor rounding artifact.
+- **1 MNQ case (07-01) confirmed permanently unresolved/excluded** — does not count toward either W or L. No further verification is possible (second-resolution Polygon data 403s on the current tier; no broker order id was journaled that day).
+- **Net effect on the honest tally**: +5 filled trades (all losses, -$176.25 total) beyond the 07-06 erased-win case; +1 known unresolved data gap (excluded). This moves the honest cumulative P&L **down**, opposite direction from the 07-06 case — it does not net out against it.
+- These are ops-proof-review facts only; they do not change any automated `ops.proof_30_mnq` MNQ-only tally by themselves. A human (or a future tool reading this file) must apply them. Next step (not done here): rebuild the honest filled-trade baseline incorporating these rulings.
