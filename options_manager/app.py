@@ -7,6 +7,7 @@ risk/risk_engine.py.
 
 from __future__ import annotations
 
+import logging
 import secrets as secrets_module
 
 from fastapi import FastAPI, Request
@@ -16,6 +17,8 @@ from .config import OptionsManagerConfig
 from .live_lock import assert_live_options_trading_disabled
 from .packet_builder import build_packet
 
+logger = logging.getLogger(__name__)
+
 # Checked at import/startup time — mirrors the futures system's fail-closed
 # pattern. options_manager must not boot at all if this is set true.
 assert_live_options_trading_disabled()
@@ -23,6 +26,7 @@ assert_live_options_trading_disabled()
 app = FastAPI(title="options_manager", version="0.1.0-phase1")
 
 SECRET_HEADER = "X-Options-Manager-Secret"
+GENERIC_INVALID_PACKET_DETAIL = "missing or malformed packet field"
 
 
 def _auth_ok(request: Request, config: OptionsManagerConfig) -> bool:
@@ -59,9 +63,12 @@ async def receive_packet(request: Request) -> JSONResponse:
     try:
         packet = build_packet(raw_input)
     except (KeyError, ValueError, TypeError) as exc:
+        # Log the real exception server-side only — never return raw exception
+        # text (field names, parse errors, internal values) to the caller.
+        logger.warning("options_manager: rejected malformed packet input: %r", exc)
         return JSONResponse(
             status_code=400,
-            content={"error": "invalid_packet", "detail": str(exc)},
+            content={"error": "invalid_packet", "detail": GENERIC_INVALID_PACKET_DETAIL},
         )
 
     return JSONResponse(

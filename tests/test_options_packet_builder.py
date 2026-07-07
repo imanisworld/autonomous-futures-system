@@ -277,9 +277,13 @@ def test_endpoint_missing_required_field_returns_400(monkeypatch):
     del raw["ticker"]
 
     response = client.post("/options/packet", json=raw)
+    body = response.json()
 
     assert response.status_code == 400
-    assert response.json()["error"] == "invalid_packet"
+    assert body["error"] == "invalid_packet"
+    assert body["detail"] == "missing or malformed packet field"
+    assert "'ticker'" not in response.text
+    assert "KeyError" not in response.text
 
 
 def test_endpoint_missing_direction_returns_400(monkeypatch):
@@ -288,8 +292,24 @@ def test_endpoint_missing_direction_returns_400(monkeypatch):
     del raw["direction"]
 
     response = client.post("/options/packet", json=raw)
+    body = response.json()
 
     assert response.status_code == 400
+    assert body["detail"] == "missing or malformed packet field"
+    assert "'direction'" not in response.text
+
+
+def test_endpoint_malformed_field_does_not_leak_exception_text(monkeypatch):
+    monkeypatch.delenv("OPTIONS_MANAGER_INGEST_SECRET", raising=False)
+    raw = _json_safe_raw_input(entry_price="not-a-number")
+
+    response = client.post("/options/packet", json=raw)
+    body = response.json()
+
+    assert response.status_code == 400
+    assert body == {"error": "invalid_packet", "detail": "missing or malformed packet field"}
+    assert "could not convert" not in response.text
+    assert "not-a-number" not in response.text
 
 
 def test_endpoint_requires_secret_when_configured(monkeypatch):
