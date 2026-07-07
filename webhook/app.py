@@ -29,7 +29,7 @@ import logging
 import os
 import time
 from urllib.parse import parse_qs
-from collections import Counter
+from collections import Counter, deque
 from contextlib import asynccontextmanager, suppress
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -72,7 +72,7 @@ from webhook.payload import AlertPayload
 from webhook.reconciler import run_reconciler_loop
 from notifications.heartbeat import run_heartbeat_loop
 from webhook.runner import process_alert
-from webhook.state_builder import futures_root
+from webhook.state_builder import futures_root, parse_timestamp
 
 # Roots accepted by the webhook ingest filter — the traded micros plus the ES/NQ
 # e-minis (recognized so they're acknowledged, then RISK_REJECTED downstream as
@@ -1248,6 +1248,12 @@ async def strategy_status() -> dict:
     return _strategy_payload(date.today())
 
 
+@app.get("/status/options-lab")
+async def options_lab_status() -> dict:
+    """Return read-only options packet, risk-gate, and paper-lane status."""
+    return _options_lab_payload(date.today())
+
+
 @app.get("/status/diagnostics")
 async def status_diagnostics() -> dict:
     """Return plain-English component health and likely break reasons."""
@@ -1625,6 +1631,166 @@ def _range_observe_diagnostic(entries: list[dict], *, recent_limit: int = 25) ->
     )
 
 
+def _timeframe_minutes_for_payload(payload: AlertPayload) -> int:
+    raw = getattr(payload, "timeframe", None)
+    digits = "".join(c for c in str(raw or "") if c.isdigit())
+    if digits:
+        return int(digits)
+    expected = int(getattr(_config, "expected_timeframe_minutes", 15) or 0)
+    return expected if expected > 0 else 15
+
+
+def _alert_age_observation(payload: AlertPayload, received_at: datetime) -> dict:
+    base = {
+        "received_at": received_at.isoformat(),
+        "ticker": getattr(payload, "ticker", None),
+        "instrument": _instrument_root_of(getattr(payload, "ticker", None)),
+        "payload_timestamp": getattr(payload, "timestamp", None),
+        "timeframe_minutes": _timeframe_minutes_for_payload(payload),
+        "age_basis": "received_at_minus_bar_close_at",
+    }
+    try:
+        bar_open_at = parse_timestamp(str(getattr(payload, "timestamp")))
+        if bar_open_at.tzinfo is None:
+            bar_open_at = bar_open_at.replace(tzinfo=timezone.utc)
+        bar_close_at = bar_open_at + timedelta(minutes=base["timeframe_minutes"])
+        age_seconds = (received_at - bar_close_at).total_seconds()
+        return {
+            **base,
+            "bar_close_at": bar_close_at.isoformat(),
+            "alert_age_seconds": round(age_seconds, 3),
+            "parse_error": None,
+        }
+    except Exception as exc:  # noqa: BLE001 - diagnostics must stay fail-soft
+        return {
+            **base,
+            "bar_close_at": None,
+            "alert_age_seconds": None,
+            "parse_error": str(exc),
+        }
+
+
+def _record_alert_age_observation(observation: dict) -> None:
+    path = _alert_age_observations_path()
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(observation, sort_keys=True) + "\n")
+    except OSError:
+        logger.warning("Failed to record alert-age observation", exc_info=True)
+
+
+def _percentile(sorted_values: list[float], percentile: float) -> float | None:
+    if not sorted_values:
+        return None
+    if len(sorted_values) == 1:
+        return round(sorted_values[0], 3)
+    idx = (len(sorted_values) - 1) * percentile
+    lo = int(idx)
+    hi = min(lo + 1, len(sorted_values) - 1)
+    frac = idx - lo
+    value = sorted_values[lo] + (sorted_values[hi] - sorted_values[lo]) * frac
+    return round(value, 3)
+
+
+def _age_stats(values: list[float]) -> dict:
+    ordered = sorted(values)
+    if not ordered:
+        return {}
+    return {
+        "min": round(ordered[0], 3),
+        "p50": _percentile(ordered, 0.50),
+        "p90": _percentile(ordered, 0.90),
+        "p95": _percentile(ordered, 0.95),
+        "max": round(ordered[-1], 3),
+        "avg": round(sum(ordered) / len(ordered), 3),
+    }
+
+
+def _alert_age_stats(limit: int = 100) -> dict:
+    path = _alert_age_observations_path()
+    rows: deque[dict] = deque(maxlen=limit)
+    malformed = 0
+    if path.exists():
+        try:
+            with path.open("r", encoding="utf-8") as fh:
+                for line in fh:
+                    if not line.strip():
+                        continue
+                    try:
+                        row = json.loads(line)
+                    except json.JSONDecodeError:
+                        malformed += 1
+                        continue
+                    if isinstance(row, dict):
+                        rows.append(row)
+        except OSError:
+            malformed += 1
+
+    recent = list(rows)
+    valid = [
+        row for row in recent
+        if isinstance(row.get("alert_age_seconds"), (int, float))
+        and row.get("parse_error") in (None, "")
+    ]
+    by_instrument: dict[str, list[float]] = {}
+    for row in valid:
+        inst = str(row.get("instrument") or "unknown")
+        by_instrument.setdefault(inst, []).append(float(row["alert_age_seconds"]))
+
+    log_only = bool(getattr(_config, "log_alert_age_only", True))
+    max_age = getattr(_config, "max_alert_age_seconds", None)
+    mode = "observe_only" if log_only else "enforced" if max_age is not None else "unbounded"
+    return {
+        "mode": mode,
+        "log_alert_age_only": log_only,
+        "max_alert_age_seconds": max_age,
+        "live_behavior_changed": False,
+        "age_basis": "received_at_minus_bar_close_at",
+        "evidence_path": str(path),
+        "window_limit": limit,
+        "sample_count": len(recent),
+        "valid_count": len(valid),
+        "invalid_count": len(recent) - len(valid) + malformed,
+        "stats_seconds": _age_stats([float(row["alert_age_seconds"]) for row in valid]),
+        "by_instrument": {
+            inst: {"count": len(vals), "stats_seconds": _age_stats(vals)}
+            for inst, vals in sorted(by_instrument.items())
+        },
+        "latest": recent[-1] if recent else None,
+        "recent": recent[-5:],
+    }
+
+
+def _alert_age_diagnostic(stats: dict) -> dict:
+    mode = stats.get("mode") or "unknown"
+    valid_count = int(stats.get("valid_count") or 0)
+    sample_count = int(stats.get("sample_count") or 0)
+    if valid_count == 0:
+        return _diagnostic(
+            "info",
+            "TradingView alert age",
+            (
+                f"Alert-age evidence is {mode}; no valid observations yet "
+                f"({sample_count} recent sample(s), cutoff not inferred)."
+            ),
+            "Let live TradingView alerts accumulate before choosing any hard freshness cutoff.",
+        )
+
+    s = stats.get("stats_seconds") or {}
+    return _diagnostic(
+        "info",
+        "TradingView alert age",
+        (
+            f"Alert-age evidence is {mode}; n={valid_count}/{sample_count}, "
+            f"p50={s.get('p50')}s, p90={s.get('p90')}s, "
+            f"p95={s.get('p95')}s, max={s.get('max')}s. "
+            "Read-only; no cutoff inferred."
+        ),
+        "Use /status/diagnostics JSON or /status/today alert_age_stats for recent distribution details.",
+    )
+
+
 def _latest_webhook_age_seconds(latest: dict | None = None) -> int | None:
     latest = latest or _latest_webhook_payload()
     received_at = latest.get("received_at")
@@ -1808,6 +1974,7 @@ def _diagnostics_payload(for_date: date) -> dict:
     broker = os.getenv("BROKER", "paper").strip().lower()
     latest = _latest_webhook_payload()
     latest_age = _latest_webhook_age_seconds(latest)
+    alert_age_stats = _alert_age_stats()
     journal = JournalLogger(log_dir=_config.log_dir)
     journal_path = journal._journal_path(for_date)
     evidence_readiness = build_evidence_readiness(
@@ -2116,6 +2283,7 @@ def _diagnostics_payload(for_date: date) -> dict:
     latest_summary = _latest_webhook_summary(latest)
     if latest_summary:
         items.append(_diagnostic("info", "Latest webhook", latest_summary))
+    items.append(_alert_age_diagnostic(alert_age_stats))
 
     range_diag = _range_observe_diagnostic(diag_entries)
     if range_diag:
@@ -2164,6 +2332,7 @@ def _diagnostics_payload(for_date: date) -> dict:
         "ops_automations": automation_status,
         "evidence_readiness": evidence_readiness,
         "runner_shadow": runner_shadow,
+        "alert_age_stats": alert_age_stats,
         "items": items,
     }
 
@@ -2215,6 +2384,15 @@ def _dashboard_payload(for_date: date) -> dict:
     gex_shadow_analysis = _gex_shadow_analysis_payload(entries)
     evidence_readiness = diagnostics["evidence_readiness"]
     runner_shadow = diagnostics["runner_shadow"]
+    trade_attempts = _trade_attempt_summary(entries)
+    live_box_guard = live_box_drift_report(
+        risk_rules_path=getattr(_config, "risk_rules_path", "risk_rules.yaml"),
+        log_dir=_config.log_dir,
+        for_date=for_date,
+        manual_controls_enabled=getattr(
+            _config, "enable_manual_execution_controls", False
+        ),
+    )
     return {
         "date": daily_state.date,
         "live_trading_enabled": _config.live_trading_enabled,
@@ -2222,6 +2400,11 @@ def _dashboard_payload(for_date: date) -> dict:
         "account_balance": account_balance,
         "account_peak_balance": account_peak,
         "trade_count": daily_state.trade_count,
+        "approved_trades": daily_state.trade_count,
+        "counted_trades": daily_state.trade_count,
+        "trade_attempts": trade_attempts["trade_attempts"],
+        "cancelled_attempts": trade_attempts["cancelled_attempts"],
+        "filled_trades": trade_attempts["filled_trades"],
         "max_trades_per_day": _config.max_trades_per_day + int(getattr(_config, "bonus_trades_after_max", 0) or 0),
         "consecutive_losses": daily_state.consecutive_losses,
         "max_consecutive_losses": _config.max_consecutive_losses,
@@ -2253,15 +2436,13 @@ def _dashboard_payload(for_date: date) -> dict:
         "performance": journal.get_performance_stats(_config.position_sizing.starting_balance),
         "broker_gateway_reachable": None,  # IBKR-only concept; broker removed
         "diagnostics": diagnostics,
+        "alert_age_stats": diagnostics["alert_age_stats"],
         "gex_shadow_analysis": gex_shadow_analysis,
         "evidence_readiness": evidence_readiness,
         "runner_shadow": runner_shadow,
         "live_preflight": _safe_live_preflight_status(),
-        "live_box_drift_guard": live_box_drift_report(
-            risk_rules_path=getattr(_config, "risk_rules_path", "risk_rules.yaml"),
-            log_dir=_config.log_dir,
-            for_date=for_date,
-        ),
+        "live_box_drift_guard": live_box_guard,
+        "operator_warnings": _operator_warnings(live_box_guard),
         "alert_validation": alert_validation,
         "expected_timeframe_minutes": int(getattr(_config, "expected_timeframe_minutes", 15)),
         # Feed-health window + stale threshold from the one shared definition, so the
@@ -2290,6 +2471,84 @@ def _gex_shadow_analysis_payload(entries: list[dict]) -> dict:
         }
 
 
+def _operator_warnings(live_box_guard: dict | None) -> list[dict]:
+    guard = live_box_guard or {}
+    warnings: list[dict] = []
+    security = guard.get("security_runtime") or {}
+    rotation = security.get("webhook_secret_rotation") or {}
+    if rotation and not rotation.get("rotation_ready", True):
+        missing = rotation.get("missing_env_names") or []
+        missing_text = ", ".join(str(name) for name in missing) or "rotation aliases"
+        warnings.append({
+            "severity": "warn",
+            "component": "webhook_secret_rotation",
+            "title": "Webhook rotation not ready",
+            "message": f"Webhook rotation not ready: missing {missing_text}.",
+            "next_step": (
+                "Configure WEBHOOK_SECRET plus distinct TRADINGVIEW_WEBHOOK_SECRET "
+                "and TRADINGVIEW_WEBHOOK_SECRET_NEXT values before live preflight."
+            ),
+        })
+
+    if guard and guard.get("ok") is False and not warnings:
+        warnings.append({
+            "severity": str(guard.get("status") or "warn"),
+            "component": "live_box_guard",
+            "title": "Live box guard warning",
+            "message": str(guard.get("summary") or "Live box guard cannot fully verify drift."),
+            "next_step": str(guard.get("next_step") or ""),
+        })
+
+    return warnings
+
+
+def _trade_attempt_summary(entries: list[dict]) -> dict:
+    trade_attempts = 0
+    counted_trades = 0
+    cancelled_attempts = 0
+    filled_trades = 0
+    open_attempt_counted = False
+
+    for entry in entries:
+        if entry.get("type") == "OUTCOME":
+            result = (entry.get("outcome") or {}).get("result")
+            if result == "CANCELLED":
+                cancelled_attempts += 1
+                if open_attempt_counted:
+                    counted_trades = max(0, counted_trades - 1)
+                    open_attempt_counted = False
+            elif result in {"WIN", "LOSS", "BREAKEVEN"}:
+                filled_trades += 1
+                open_attempt_counted = False
+            continue
+
+        if entry.get("decision") != "TRADE":
+            continue
+        if (entry.get("risk_check") or {}).get("result") != "APPROVED":
+            continue
+
+        trade_attempts += 1
+        outcome_result = (entry.get("outcome") or {}).get("result")
+        if outcome_result == "CANCELLED":
+            cancelled_attempts += 1
+            open_attempt_counted = False
+            continue
+
+        counted_trades += 1
+        if outcome_result in {"WIN", "LOSS", "BREAKEVEN"}:
+            filled_trades += 1
+            open_attempt_counted = False
+        else:
+            open_attempt_counted = True
+
+    return {
+        "trade_attempts": trade_attempts,
+        "counted_trades": counted_trades,
+        "cancelled_attempts": cancelled_attempts,
+        "filled_trades": filled_trades,
+    }
+
+
 def _instrument_breakdown(entries: list[dict]) -> list[dict]:
     instruments = [
         instrument
@@ -2307,11 +2566,7 @@ def _instrument_breakdown(entries: list[dict]) -> list[dict]:
         ]
         decision_entries = [entry for entry in inst_entries if entry.get("type") != "OUTCOME"]
         outcome_entries = [entry for entry in inst_entries if entry.get("type") == "OUTCOME"]
-        trades = [
-            entry for entry in decision_entries
-            if entry.get("decision") == "TRADE"
-            and (entry.get("risk_check") or {}).get("result") == "APPROVED"
-        ]
+        trade_attempts = _trade_attempt_summary(inst_entries)
         no_trades = [entry for entry in decision_entries if entry.get("decision") == "NO_TRADE"]
         pnl = 0.0
         wins = 0
@@ -2329,7 +2584,11 @@ def _instrument_breakdown(entries: list[dict]) -> list[dict]:
         breakdown.append({
             "instrument": instrument,
             "decisions": len(decision_entries),
-            "trades": len(trades),
+            "trades": trade_attempts["counted_trades"],
+            "counted_trades": trade_attempts["counted_trades"],
+            "trade_attempts": trade_attempts["trade_attempts"],
+            "cancelled_attempts": trade_attempts["cancelled_attempts"],
+            "filled_trades": trade_attempts["filled_trades"],
             "no_trades": len(no_trades),
             "wins": wins,
             "losses": losses,
@@ -2459,6 +2718,351 @@ def _counter_items(counter: Counter, key_name: str) -> list[dict]:
     ]
 
 
+def _options_lab_payload(for_date: date) -> dict:
+    """Aggregate options status without creating packets, DBs, or orders."""
+    try:
+        from options_manager.config import OptionsManagerConfig
+        from options_manager.live_lock import assert_live_options_trading_disabled
+    except Exception as exc:  # noqa: BLE001 - status must fail closed
+        return _options_lab_error("options_manager_unavailable", exc)
+
+    cfg = OptionsManagerConfig.from_env()
+    live_lock = {"status": "PASS", "reason": "LIVE_OPTIONS_TRADING_ENABLED is false"}
+    try:
+        assert_live_options_trading_disabled()
+    except Exception as exc:  # noqa: BLE001 - do not leak stack; fail closed
+        live_lock = {
+            "status": "BLOCKED",
+            "reason": str(exc),
+        }
+
+    packet_payload = _latest_options_packet_payload(cfg.journal_dir, for_date)
+    risk_payload = _options_risk_gate_payload(
+        packet_payload.get("_packet_object"),
+        cfg,
+        live_lock,
+    )
+    packet_payload.pop("_packet_object", None)
+
+    return {
+        "ok": live_lock["status"] == "PASS",
+        "mode": "paper_only",
+        "trade_execution_enabled": False,
+        "order_controls": "disabled",
+        "live_lock": live_lock,
+        "packet": packet_payload,
+        "risk_gate": risk_payload,
+        "options_lane": _options_companion_lane_payload(),
+        "runtime_sources": {
+            "packet_journal_dir": cfg.journal_dir,
+            "companion_sqlite_path": getattr(
+                _config, "options_companion_sqlite_path", "logs/options_companion.sqlite"
+            ),
+            "risk_gate": "options_manager.risk_gate.evaluate_packet",
+        },
+    }
+
+
+def _options_lab_error(code: str, exc: Exception) -> dict:
+    return {
+        "ok": False,
+        "mode": "paper_only",
+        "trade_execution_enabled": False,
+        "order_controls": "disabled",
+        "live_lock": {"status": "BLOCKED", "reason": code},
+        "packet": {
+            "status": "UNAVAILABLE",
+            "reason": code,
+            "latest": None,
+        },
+        "risk_gate": {
+            "approved": False,
+            "status": "DATA_BLOCKED",
+            "failed_rule": code,
+            "reason": exc.__class__.__name__,
+            "warnings": [],
+        },
+        "options_lane": {
+            "enabled": bool(getattr(_config, "options_companion_enabled", False)),
+            "mode": getattr(_config, "options_companion_mode", "paper"),
+            "status": "UNAVAILABLE",
+            "reason": code,
+            "summary": None,
+        },
+        "runtime_sources": {},
+    }
+
+
+def _latest_options_packet_payload(journal_dir: str, for_date: date) -> dict:
+    try:
+        from options_manager.journal import JOURNAL_FILENAME_PREFIX, journal_path
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "status": "UNAVAILABLE",
+            "reason": "options_journal_unavailable",
+            "error": exc.__class__.__name__,
+            "latest": None,
+        }
+
+    today_path = journal_path(journal_dir, for_date=for_date)
+    candidates = [today_path]
+    try:
+        root = Path(journal_dir)
+        candidates.extend(
+            sorted(
+                root.glob(f"{JOURNAL_FILENAME_PREFIX}*.jsonl"),
+                key=lambda p: (p.name, p.stat().st_mtime),
+                reverse=True,
+            )
+        )
+    except Exception:
+        pass
+
+    seen: set[Path] = set()
+    for path in candidates:
+        if path in seen:
+            continue
+        seen.add(path)
+        record = _last_jsonl_record(path)
+        if record is None:
+            continue
+        packet = _option_packet_from_record(record)
+        if packet is None:
+            return {
+                "status": "DATA_BLOCKED",
+                "reason": "latest_packet_malformed",
+                "journal_path": str(path),
+                "latest": _public_options_packet(record),
+                "_packet_object": None,
+            }
+        return {
+            "status": str(record.get("status") or "UNKNOWN"),
+            "reason": record.get("rejection_reason"),
+            "journal_path": str(path),
+            "latest": _public_options_packet(record),
+            "_packet_object": packet,
+        }
+
+    return {
+        "status": "NO_PACKET",
+        "reason": "No options_manager packet journal rows found.",
+        "journal_path": str(today_path),
+        "latest": None,
+        "_packet_object": None,
+    }
+
+
+def _last_jsonl_record(path: Path) -> dict | None:
+    if not path.exists():
+        return None
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except Exception:
+        return None
+    for line in reversed(lines):
+        if not line.strip():
+            continue
+        try:
+            data = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(data, dict):
+            return data
+    return None
+
+
+def _option_packet_from_record(record: dict):
+    try:
+        from options_manager.models import OptionTradePacket
+
+        data = dict(record)
+        data["contract_expiry"] = date.fromisoformat(str(data["contract_expiry"]))
+        created_raw = data.get("created_at")
+        data["created_at"] = datetime.fromisoformat(str(created_raw))
+        return OptionTradePacket(**data)
+    except Exception:
+        return None
+
+
+def _public_options_packet(record: dict) -> dict:
+    return {
+        "created_at": record.get("created_at"),
+        "ticker": record.get("ticker"),
+        "direction": record.get("direction"),
+        "entry_price": record.get("entry_price"),
+        "price_target": record.get("price_target"),
+        "contract_strike": record.get("contract_strike"),
+        "contract_expiry": record.get("contract_expiry"),
+        "max_premium": record.get("max_premium"),
+        "max_contracts": record.get("max_contracts"),
+        "signa_score": record.get("signa_score"),
+        "signa_grade": record.get("signa_grade"),
+        "signa_bias": record.get("signa_bias"),
+        "gex_regime": record.get("gex_regime"),
+        "account_tag": record.get("account_tag"),
+        "status": record.get("status"),
+        "rejection_reason": record.get("rejection_reason"),
+    }
+
+
+def _options_risk_gate_payload(packet, cfg, live_lock: dict) -> dict:
+    if live_lock.get("status") != "PASS":
+        return {
+            "approved": False,
+            "status": "DATA_BLOCKED",
+            "failed_rule": "live_options_trading_enabled",
+            "reason": live_lock.get("reason") or "options live lock is active",
+            "warnings": [],
+        }
+    if packet is None:
+        return {
+            "approved": False,
+            "status": "DATA_BLOCKED",
+            "failed_rule": "no_packet",
+            "reason": "No valid options packet is available for risk review.",
+            "warnings": [],
+        }
+    try:
+        from options_manager.risk_gate import evaluate_packet
+
+        result = evaluate_packet(packet, cfg)
+        return {
+            "approved": result.approved,
+            "status": result.status,
+            "failed_rule": result.failed_rule,
+            "reason": result.reason,
+            "warnings": result.warnings,
+        }
+    except Exception as exc:  # noqa: BLE001 - status must fail closed
+        return {
+            "approved": False,
+            "status": "DATA_BLOCKED",
+            "failed_rule": "risk_gate_unavailable",
+            "reason": exc.__class__.__name__,
+            "warnings": [],
+        }
+
+
+def _options_companion_lane_payload() -> dict:
+    path = Path(getattr(_config, "options_companion_sqlite_path", "logs/options_companion.sqlite"))
+    enabled = bool(getattr(_config, "options_companion_enabled", False))
+    mode = getattr(_config, "options_companion_mode", "paper")
+    if not path.exists():
+        return {
+            "enabled": enabled,
+            "mode": mode,
+            "status": "NO_LEDGER",
+            "reason": "Options companion paper ledger has not been initialized.",
+            "summary": _empty_options_lane_summary(),
+            "latest": [],
+        }
+
+    try:
+        import sqlite3
+
+        uri = path.resolve().as_uri() + "?mode=ro"
+        with sqlite3.connect(uri, uri=True) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """
+                SELECT created_at, resolved_at, futures_instrument, futures_direction,
+                       underlying, option_symbol, contract_type, expiry, strike, dte,
+                       entry_mark, stop_mark, target_mark, signa_grade, signa_score,
+                       signa_daily_direction, risk_result, risk_failed_rule, status,
+                       paper_pnl_dollars, paper_pnl_percent
+                FROM options_companion
+                ORDER BY id ASC
+                """
+            ).fetchall()
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "enabled": enabled,
+            "mode": mode,
+            "status": "DATA_BLOCKED",
+            "reason": exc.__class__.__name__,
+            "summary": _empty_options_lane_summary(),
+            "latest": [],
+        }
+
+    summary = _summarize_options_lane_rows(rows)
+    return {
+        "enabled": enabled,
+        "mode": mode,
+        "status": "PAPER_LEDGER",
+        "reason": None,
+        "summary": summary,
+        "latest": [_public_options_lane_row(row) for row in rows[-5:]],
+    }
+
+
+def _empty_options_lane_summary() -> dict:
+    return {
+        "total": 0,
+        "formed": 0,
+        "open": 0,
+        "wins": 0,
+        "losses": 0,
+        "expired": 0,
+        "rejected": 0,
+        "watchlist": 0,
+        "win_rate_percent": None,
+        "total_paper_pnl_dollars": 0.0,
+    }
+
+
+def _summarize_options_lane_rows(rows: list) -> dict:
+    summary = _empty_options_lane_summary()
+    counts = {key: 0 for key in ("OPEN", "WIN", "LOSS", "EXPIRED", "REJECTED", "WATCHLIST")}
+    total_pnl = 0.0
+    for row in rows:
+        status = row["status"]
+        counts[status] = counts.get(status, 0) + 1
+        if status in {"WIN", "LOSS", "EXPIRED"}:
+            total_pnl += float(row["paper_pnl_dollars"] or 0.0)
+    wins = counts.get("WIN", 0)
+    losses = counts.get("LOSS", 0)
+    decided = wins + losses
+    summary.update({
+        "total": len(rows),
+        "formed": wins + losses + counts.get("EXPIRED", 0) + counts.get("OPEN", 0),
+        "open": counts.get("OPEN", 0),
+        "wins": wins,
+        "losses": losses,
+        "expired": counts.get("EXPIRED", 0),
+        "rejected": counts.get("REJECTED", 0),
+        "watchlist": counts.get("WATCHLIST", 0),
+        "win_rate_percent": round((wins / decided) * 100.0, 2) if decided else None,
+        "total_paper_pnl_dollars": round(total_pnl, 2),
+    })
+    return summary
+
+
+def _public_options_lane_row(row) -> dict:
+    return {
+        "created_at": row["created_at"],
+        "resolved_at": row["resolved_at"],
+        "futures_instrument": row["futures_instrument"],
+        "futures_direction": row["futures_direction"],
+        "underlying": row["underlying"],
+        "option_symbol": row["option_symbol"],
+        "contract_type": row["contract_type"],
+        "expiry": row["expiry"],
+        "strike": row["strike"],
+        "dte": row["dte"],
+        "entry_mark": row["entry_mark"],
+        "stop_mark": row["stop_mark"],
+        "target_mark": row["target_mark"],
+        "signa_grade": row["signa_grade"],
+        "signa_score": row["signa_score"],
+        "signa_daily_direction": row["signa_daily_direction"],
+        "risk_result": row["risk_result"],
+        "risk_failed_rule": row["risk_failed_rule"],
+        "status": row["status"],
+        "paper_pnl_dollars": row["paper_pnl_dollars"],
+        "paper_pnl_percent": row["paper_pnl_percent"],
+    }
+
+
 def _load_committee_panel(log_dir: str) -> dict:
     """Read the latest cached adaptive review artifact (never recomputes)."""
     try:
@@ -2532,6 +3136,7 @@ def _dashboard_init(status: dict) -> dict:
         "manual_controls_enabled": bool(
             getattr(_config, "enable_manual_execution_controls", False)
         ),
+        "options_lab": _options_lab_payload(date.today()),
     }
 
 
@@ -2898,6 +3503,7 @@ _DASHBOARD_HTML = r"""<!doctype html>
     }
     .metric label { display: block; color: var(--muted); font-size: 10px; font-weight: 750; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 5px; }
     .metric strong { font-family: var(--font-console); font-size: 18px; font-weight: 800; }
+    .metric .metric-sub { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; line-height: 1.35; }
     .sparkline { font-family: var(--font-console); color: var(--blue); font-size: 12px; letter-spacing: 0.05em; margin-left: 8px; white-space: nowrap; }
     .empty-val { color: var(--gray); opacity: 0.65; cursor: help; }
     .placeholder { color: var(--gray); opacity: 0.7; font-style: italic; }
@@ -3061,16 +3667,31 @@ _DASHBOARD_HTML = r"""<!doctype html>
     @media (max-width: 560px) { .jrow { grid-template-columns: 78px 46px 1fr; } .jrow .jx { grid-column: 2 / -1; text-align: left; } }
 
     /* options lab */
-    .demo-banner {
+    .demo-banner, .status-banner {
       display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
       background: rgba(255,184,0,0.10); border: 1px dashed rgba(255,184,0,0.55);
       color: var(--yellow); border-radius: 10px; padding: 11px 13px; margin-bottom: 12px;
       font-size: 13px; font-weight: 700;
     }
+    .status-banner.pass {
+      background: rgba(0,255,136,0.07); border-color: rgba(0,255,136,0.45); color: var(--green);
+    }
+    .option-status-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
+    .option-status-cell {
+      min-height: 92px; padding: 12px; border: 1px solid var(--line-soft);
+      border-radius: 9px; background: rgba(255,255,255,0.018);
+    }
+    .option-status-cell label {
+      display: block; color: var(--muted); font-family: var(--font-console);
+      font-size: 11px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase;
+    }
+    .option-status-cell strong { display: block; margin-top: 6px; font-size: 20px; overflow-wrap: anywhere; }
+    .option-status-cell span { display: block; margin-top: 5px; color: var(--muted); font-size: 12px; line-height: 1.35; overflow-wrap: anywhere; }
     .opt-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); align-items: center; }
     .opt-row:first-child { border-top: 0; }
     .opt-row .on { font-weight: 800; }
     .opt-row .om { color: var(--muted); font-size: 12px; }
+    @media (max-width: 780px) { .option-status-grid { grid-template-columns: 1fr; } }
 
     /* buttons */
     .btn {
@@ -3092,6 +3713,14 @@ _DASHBOARD_HTML = r"""<!doctype html>
     .ops-card b { font-family: var(--font-console); font-size: 13px; letter-spacing: 0.04em; }
     .ops-card p { margin-top: 4px; color: var(--muted); font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
     .ops-card .btn { width: auto; min-width: 128px; }
+    .operator-warning {
+      margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--line);
+      color: var(--yellow); font-size: 12px; line-height: 1.45; overflow-wrap: anywhere;
+    }
+    .operator-warning b {
+      display: block; margin-bottom: 2px; color: var(--yellow);
+      font-family: var(--font-console); font-size: 11px; letter-spacing: 0.04em;
+    }
     .ops-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; margin-top: 12px; }
     .ops-grid .btn { min-height: 44px; }
     .ops-secret { margin-top: 12px; }
@@ -3248,7 +3877,7 @@ _DASHBOARD_HTML = r"""<!doctype html>
     // + 1m delivery grace (matches the ops monitor, the feed watchdog, and the
     // mobile UI). A hardcoded 6m flagged STALE during normal 15m bar spacing.
     var FRESH_MAX_MIN = (INIT.expected_timeframe_minutes || 15) * 2 + 1;
-    var state = { tab: 'home', today: INIT.today || {}, risk: null, filter: 'ALL', history: null, fillRealism: null, lastUpdate: Date.now(), firstLoad: !(INIT.today && INIT.today.date) };
+    var state = { tab: 'home', today: INIT.today || {}, risk: null, filter: 'ALL', history: null, fillRealism: null, optionsLab: INIT.options_lab || null, lastUpdate: Date.now(), firstLoad: !(INIT.today && INIT.today.date) };
 
     // ── helpers ────────────────────────────────────────────────────────
     function esc(v) {
@@ -3375,10 +4004,15 @@ _DASHBOARD_HTML = r"""<!doctype html>
     }
     function opsCard() {
       var pf = preflightStatusLine();
+      var warnings = (state.today && state.today.operator_warnings) || [];
+      var warningRows = warnings.slice(0, 3).map(function (w) {
+        return '<div class="operator-warning"><b>' + esc(w.title || 'Operator warning') + '</b>' +
+          esc(w.message || '') + (w.next_step ? '<p>' + esc(w.next_step) + '</p>' : '') + '</div>';
+      }).join('');
       return '<div class="panel"><h2>Ops</h2>' +
         '<div class="ops-card">' +
         '<div><b class="' + pf[0] + '">LIVE PREFLIGHT: ' + esc(pf[1]) + '</b>' +
-        '<p>' + esc(pf[2]) + '</p></div>' +
+        '<p>' + esc(pf[2]) + '</p>' + warningRows + '</div>' +
         '<button class="btn slim" id="open-ops" type="button">Open Ops</button>' +
         '</div></div>';
     }
@@ -3508,7 +4142,14 @@ _DASHBOARD_HTML = r"""<!doctype html>
       var traded = hasTradeData(today);
       var pnlDisplay = traded ? money(pnl) : emptyValue('No trades yet');
       var winRateDisplay = traded ? (num(today.win_rate).toFixed(1) + '%') : emptyValue('Win rate appears after at least 1 trade');
-      var tradesDisplay = num(today.trade_count) + ' / ' + num(today.max_trades_per_day);
+      var countedTrades = num(today.counted_trades == null ? today.trade_count : today.counted_trades);
+      var tradeAttempts = num(today.trade_attempts);
+      var cancelledAttempts = num(today.cancelled_attempts);
+      var tradesDisplay = countedTrades + ' / ' + num(today.max_trades_per_day);
+      var tradeAttemptLine = '';
+      if (tradeAttempts > countedTrades || cancelledAttempts > 0) {
+        tradeAttemptLine = '<span class="metric-sub">' + esc(tradeAttempts + ' attempts' + (cancelledAttempts > 0 ? ' · ' + cancelledAttempts + ' cancelled/non-counted' : '')) + '</span>';
+      }
       var html = '';
       if (state.firstLoad) {
         html += '<div class="hero"><div class="hero-top"><h1>Backend Console</h1><div class="badges"><span class="badge gray">Loading</span></div></div>' +
@@ -3534,7 +4175,7 @@ _DASHBOARD_HTML = r"""<!doctype html>
         '<div class="decision d-' + esc(dv.decision) + '"><span class="dot"></span>' + esc(dv.decision) + '</div>' +
         '<div class="metric-grid">' +
         '<div class="metric"><label>💰 Today P&amp;L</label><strong class="' + (!traded ? 'gray' : (pnl < 0 ? 'red' : 'green')) + '">' + pnlDisplay + '</strong><span class="sparkline">▁▂▃▅▇█▇▅▃▂▁</span></div>' +
-        '<div class="metric"><label>📊 Trades Used</label><strong>' + tradesDisplay + '</strong></div>' +
+        '<div class="metric"><label>📊 Trades Used</label><strong>' + tradesDisplay + '</strong>' + tradeAttemptLine + '</div>' +
         '<div class="metric"><label>🏁 Win Rate</label><strong>' + winRateDisplay + '</strong></div>' +
         '</div>' +
         '<dl class="kv">' +
@@ -3830,26 +4471,83 @@ _DASHBOARD_HTML = r"""<!doctype html>
       });
     }
 
-    // ── OPTIONS LAB (demo) ─────────────────────────────────────────────
-    var DEMO_OPTIONS = [
-      { sym: 'NVDA', type: 'CALL', strike: 88, score: 'A' },
-      { sym: 'AAPL', type: 'CALL', strike: 72, score: 'B' },
-      { sym: 'AMD', type: 'PUT', strike: 61, score: 'B' },
-      { sym: 'TSLA', type: 'CALL', strike: 240, score: 'C' }
-    ];
-    function renderOptions() {
-      var html = '<div class="tabhead"><h1>Options Lab</h1><span class="when">demo</span></div>';
-      html += '<div class="demo-banner">🧪 OPTIONS LAB · DEMO DATA · Scanner not live yet</div>';
-      var rows = DEMO_OPTIONS.map(function (o) {
-        return '<div class="opt-row">' +
-          '<div><span class="on">' + esc(o.sym) + ' ' + esc(o.type) + ' ' + esc(o.strike) + '</span>' +
-          '<div class="om">Confluence grade ' + esc(o.score) + ' · simulated ranking</div></div>' +
-          '<span class="pill yellow">SIMULATED</span></div>';
+    // ── OPTIONS LAB ───────────────────────────────────────────────────
+    function statusColor(value) {
+      var v = String(value || '').toUpperCase();
+      if (v === 'PASS' || v === 'APPROVED' || v === 'PENDING' || v === 'PAPER_LEDGER') return 'green';
+      if (v === 'NO_PACKET' || v === 'NO_LEDGER' || v === 'DATA_BLOCKED') return 'yellow';
+      if (v === 'BLOCKED' || v === 'REJECTED' || v === 'UNAVAILABLE') return 'red';
+      return 'gray';
+    }
+    function statusCell(label, value, note) {
+      var color = statusColor(value);
+      return '<div class="option-status-cell"><label>' + esc(label) + '</label>' +
+        '<strong class="' + color + '">' + esc(value || 'UNKNOWN') + '</strong>' +
+        '<span>' + esc(note || '') + '</span></div>';
+    }
+    function optionPacketRows(packet) {
+      var latest = packet && packet.latest;
+      if (!latest) return '<p class="muted" style="font-size:13px;">No options_manager packet journal rows found.</p>';
+      return '<div class="opt-row"><div><span class="on">' +
+        esc(latest.ticker || '—') + ' ' + esc(latest.direction || '—') +
+        (latest.contract_strike != null ? ' ' + esc(latest.contract_strike) : '') +
+        '</span><div class="om">expiry ' + esc(latest.contract_expiry || '—') +
+        ' · max premium ' + esc(latest.max_premium == null ? '—' : latest.max_premium) +
+        ' · contracts ' + esc(latest.max_contracts == null ? '—' : latest.max_contracts) +
+        '</div></div><span class="pill ' + statusColor(latest.status) + '">' + esc(latest.status || 'UNKNOWN') + '</span></div>' +
+        '<dl class="kv" style="margin-top:10px;">' +
+        kv('Created', esc(latest.created_at || '—')) +
+        kv('Entry / target', esc((latest.entry_price == null ? '—' : latest.entry_price) + ' / ' + (latest.price_target == null ? '—' : latest.price_target))) +
+        kv('Signa', esc((latest.signa_grade || '—') + ' · ' + (latest.signa_score == null ? '—' : latest.signa_score) + ' · ' + (latest.signa_bias || '—'))) +
+        kv('GEX regime', esc(latest.gex_regime || '—')) +
+        (latest.rejection_reason ? kv('Packet reason', esc(latest.rejection_reason)) : '') +
+        '</dl>';
+    }
+    function optionLaneRows(lane) {
+      var rows = lane && lane.latest ? lane.latest.slice().reverse() : [];
+      if (!rows.length) return '<p class="muted" style="font-size:13px;">No companion paper-lane rows recorded.</p>';
+      return rows.map(function (o) {
+        var title = (o.underlying || '—') + ' ' + (o.contract_type || '—') + (o.strike != null ? ' ' + o.strike : '');
+        var meta = 'from ' + (o.futures_instrument || '—') + ' ' + (o.futures_direction || '—') +
+          ' · risk ' + (o.risk_result || '—') + (o.risk_failed_rule ? ' / ' + o.risk_failed_rule : '');
+        return '<div class="opt-row"><div><span class="on">' + esc(title) + '</span><div class="om">' +
+          esc(meta) + '</div></div><span class="pill ' + statusColor(o.status) + '">' + esc(o.status || 'UNKNOWN') + '</span></div>';
       }).join('');
-      html += '<div class="panel"><h2>Simulated Alerts</h2>' + rows + '</div>';
-      html += '<div class="panel"><h2>About</h2><p class="muted" style="font-size:13px;line-height:1.6;">' +
-        'These rows are placeholder/demo output. No live options scanner is connected, and nothing here is sent to any broker. ' +
-        'Every row is labelled <b>SIMULATED</b> so it can never be mistaken for a live futures decision.</p></div>';
+    }
+    function renderOptions() {
+      var opt = state.optionsLab || {};
+      var packet = opt.packet || {};
+      var risk = opt.risk_gate || {};
+      var lane = opt.options_lane || {};
+      var lock = opt.live_lock || {};
+      var html = '<div class="tabhead"><h1>Options Lab</h1><span class="when">' + esc(opt.mode || 'paper_only') + '</span></div>';
+      var lockPass = lock.status === 'PASS';
+      html += '<div class="status-banner ' + (lockPass ? 'pass' : '') + '">' +
+        'OPTIONS LAB · PAPER ONLY · orders disabled · live lock ' + esc(lock.status || 'UNKNOWN') + '</div>';
+      html += '<div class="option-status-grid">' +
+        statusCell('Packet', packet.status || 'NO_PACKET', packet.reason || packet.journal_path || '') +
+        statusCell('Risk Gate', risk.status || 'DATA_BLOCKED', risk.reason || risk.failed_rule || '') +
+        statusCell('Options Lane', lane.status || 'NO_LEDGER', (lane.enabled ? 'enabled' : 'disabled') + ' · ' + (lane.reason || lane.mode || 'paper')) +
+        '</div>';
+      html += '<div class="panel"><h2>Latest Packet</h2>' + optionPacketRows(packet) + '</div>';
+      html += '<div class="panel"><h2>Risk Gate</h2><dl class="kv">' +
+        kv('Approved', risk.approved ? '<span class="green">YES</span>' : '<span class="' + statusColor(risk.status) + '">NO</span>') +
+        kv('Failed rule', esc(risk.failed_rule || '—')) +
+        kv('Reason', esc(risk.reason || '—')) +
+        kv('Warnings', esc((risk.warnings || []).join('; ') || '—')) +
+        '</dl></div>';
+      var s = lane.summary || {};
+      html += '<div class="panel"><h2>Paper Options Lane</h2><dl class="kv">' +
+        kv('Mode', esc(lane.mode || 'paper')) +
+        kv('Open', esc(s.open == null ? 0 : s.open)) +
+        kv('W / L / Expired', esc((s.wins || 0) + ' / ' + (s.losses || 0) + ' / ' + (s.expired || 0))) +
+        kv('Paper P&L', money(s.total_paper_pnl_dollars || 0)) +
+        '</dl><div style="margin-top:10px;">' + optionLaneRows(lane) + '</div></div>';
+      html += '<div class="panel"><h2>Runtime Sources</h2><dl class="kv">' +
+        kv('Packets', esc((opt.runtime_sources || {}).packet_journal_dir || '—')) +
+        kv('Lane ledger', esc((opt.runtime_sources || {}).companion_sqlite_path || '—')) +
+        kv('Execution', esc(opt.order_controls || 'disabled')) +
+        '</dl></div>';
       el('tab-options').innerHTML = html;
     }
 
@@ -4080,11 +4778,13 @@ _DASHBOARD_HTML = r"""<!doctype html>
       Promise.all([
         fetch('/status/today', { cache: 'no-store' }).then(function (r) { return r.json(); }),
         fetch('/status/history?days=7', { cache: 'no-store' }).then(function (r) { return r.json(); }),
-        fetch('/status/fill-realism?days=7', { cache: 'no-store' }).then(function (r) { return r.json(); })
+        fetch('/status/fill-realism?days=7', { cache: 'no-store' }).then(function (r) { return r.json(); }),
+        fetch('/status/options-lab', { cache: 'no-store' }).then(function (r) { return r.json(); })
       ]).then(function (res) {
         state.today = res[0] || state.today;
         state.history = res[1] || state.history;
         state.fillRealism = res[2] || state.fillRealism;
+        state.optionsLab = res[3] || state.optionsLab;
         state.lastUpdate = Date.now();
         state.firstLoad = false;
         renderStatusBar();
@@ -4149,6 +4849,7 @@ _DASHBOARD_HTML = r"""<!doctype html>
     // initial history fetch for compact-pnl / chart decisions
     fetch('/status/history?days=7', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (d) { state.history = d; state.firstLoad = false; renderActive(); }).catch(function () {});
     fetch('/status/fill-realism?days=7', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (d) { state.fillRealism = d; renderActive(); }).catch(function () {});
+    fetch('/status/options-lab', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (d) { state.optionsLab = d; renderActive(); }).catch(function () {});
     setInterval(function () { renderStatusBar(); }, 1000 * 20);
     setInterval(updateAgeText, 1000);
     setInterval(refresh, POLL);
@@ -4186,8 +4887,10 @@ def _latest_webhook_inst_path(inst: str) -> Path:
 
 def _record_latest_webhook(payload: AlertPayload, result: dict) -> None:
     path = _latest_webhook_path()
+    received_at = datetime.now(timezone.utc)
+    alert_age = _alert_age_observation(payload, received_at)
     data = {
-        "received_at": datetime.now(timezone.utc).isoformat(),
+        "received_at": received_at.isoformat(),
         "payload": _payload_to_dict(payload),
         "context": result.get("context"),
         "result": {
@@ -4197,10 +4900,12 @@ def _record_latest_webhook(payload: AlertPayload, result: dict) -> None:
             "fill": result.get("fill"),
             "failed_gates": result.get("failed_gates") or [],
         },
+        "alert_age": alert_age,
     }
     from agent.daily_summary import atomic_write_text
     path.parent.mkdir(parents=True, exist_ok=True)
     atomic_write_text(path, json.dumps(data, indent=2, sort_keys=True))
+    _record_alert_age_observation(alert_age)
     # Also keep the latest webhook per instrument so the dashboard can show a
     # dedicated MES side and MNQ side instead of one global slot that flips
     # MES↔MNQ on every bar.
@@ -4239,6 +4944,10 @@ def _latest_webhook_payload() -> dict:
 
 def _latest_webhook_path() -> Path:
     return Path(_config.log_dir) / "latest_webhook.json"
+
+
+def _alert_age_observations_path() -> Path:
+    return Path(_config.log_dir) / "alert_age_observations.jsonl"
 
 
 def _payload_to_dict(payload: AlertPayload) -> dict:

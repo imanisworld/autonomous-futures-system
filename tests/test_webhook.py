@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import replace
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -1038,9 +1038,12 @@ def test_fastapi_dashboard_endpoint():
     assert 'data-ops="preflight"' in resp.text
     assert 'data-ops="discord"' in resp.text
     assert "CLOSE ALL " in resp.text
-    # Options Lab demo data must be unmistakably simulated.
-    assert "OPTIONS LAB · DEMO DATA" in resp.text
-    assert "SIMULATED" in resp.text
+    # Options Lab now renders real read-only status, not hardcoded demo rows.
+    assert "/status/options-lab" in resp.text
+    assert "Latest Packet" in resp.text
+    assert "Paper Options Lane" in resp.text
+    assert "OPTIONS LAB · DEMO DATA" not in resp.text
+    assert "SIMULATED" not in resp.text
 
 
 def test_fastapi_status_today_endpoint():
@@ -1059,12 +1062,249 @@ def test_fastapi_status_today_endpoint():
     assert data["max_trades_per_day"] == 9999  # trade-count throttle RIPPED 2026-06-17 (algo, not a person)
     assert "latest_entries" in data
     assert "top_no_trade_reasons" in data
+    assert {"approved_trades", "counted_trades", "trade_attempts", "cancelled_attempts"}.issubset(data)
+    assert "operator_warnings" in data
     assert "diagnostics" in data
     assert "items" in data["diagnostics"]
     assert "runner_shadow" in data
     assert data["runner_shadow"]["live_trailing_blocked"] is True
     assert "live_preflight" in data
     assert "live_box_drift_guard" in data
+
+
+def _valid_options_packet_record(**overrides) -> dict:
+    record = {
+        "ticker": "BAC",
+        "direction": "CALL",
+        "entry_price": 60.11,
+        "price_target": 62.50,
+        "signa_score": 78,
+        "signa_grade": "B",
+        "signa_bias": "BULLISH",
+        "gex_regime": "LOW_PINNING",
+        "gex_wall_above": None,
+        "gex_wall_below": None,
+        "contract_strike": 60.00,
+        "contract_expiry": (date.today() + timedelta(days=30)).isoformat(),
+        "max_premium": 2.00,
+        "max_contracts": 1,
+        "account_tag": "agentic_micro_account",
+        "source": "test",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "status": "PENDING",
+        "rejection_reason": None,
+    }
+    record.update(overrides)
+    return record
+
+
+def test_fastapi_options_lab_status_fails_closed_without_packet(monkeypatch, tmp_path):
+    try:
+        from fastapi.testclient import TestClient
+        import webhook.app as app_module
+    except ImportError:
+        pytest.skip("fastapi[testclient] not installed")
+
+    journal_dir = tmp_path / "options_journal"
+    companion_db = tmp_path / "missing_options_companion.sqlite"
+    monkeypatch.setenv("OPTIONS_MANAGER_JOURNAL_DIR", str(journal_dir))
+    monkeypatch.setenv("LIVE_OPTIONS_TRADING_ENABLED", "false")
+    monkeypatch.setattr(app_module._config, "options_companion_sqlite_path", str(companion_db))
+
+    resp = TestClient(app_module.app).get("/status/options-lab")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["trade_execution_enabled"] is False
+    assert data["order_controls"] == "disabled"
+    assert data["packet"]["status"] == "NO_PACKET"
+    assert data["risk_gate"]["status"] == "DATA_BLOCKED"
+    assert data["risk_gate"]["failed_rule"] == "no_packet"
+    assert data["options_lane"]["status"] == "NO_LEDGER"
+    assert not companion_db.exists()
+
+
+def test_fastapi_options_lab_status_reads_packet_and_risk_gate(monkeypatch, tmp_path):
+    try:
+        from fastapi.testclient import TestClient
+        import webhook.app as app_module
+    except ImportError:
+        pytest.skip("fastapi[testclient] not installed")
+
+    journal_dir = tmp_path / "options_journal"
+    journal_dir.mkdir()
+    packet_path = journal_dir / f"options_journal_{date.today().isoformat()}.jsonl"
+    packet_path.write_text(json.dumps(_valid_options_packet_record()) + "\n", encoding="utf-8")
+    companion_db = tmp_path / "missing_options_companion.sqlite"
+    monkeypatch.setenv("OPTIONS_MANAGER_JOURNAL_DIR", str(journal_dir))
+    monkeypatch.setenv("LIVE_OPTIONS_TRADING_ENABLED", "false")
+    monkeypatch.setattr(app_module._config, "options_companion_sqlite_path", str(companion_db))
+
+    resp = TestClient(app_module.app).get("/status/options-lab")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["packet"]["latest"]["ticker"] == "BAC"
+    assert data["packet"]["status"] == "PENDING"
+    assert data["risk_gate"]["status"] == "APPROVED"
+    assert data["risk_gate"]["approved"] is True
+    assert data["options_lane"]["status"] == "NO_LEDGER"
+    assert not companion_db.exists()
+
+
+def test_fastapi_options_lab_live_options_lock_blocks_risk(monkeypatch, tmp_path):
+    try:
+        from fastapi.testclient import TestClient
+        import webhook.app as app_module
+    except ImportError:
+        pytest.skip("fastapi[testclient] not installed")
+
+    journal_dir = tmp_path / "options_journal"
+    journal_dir.mkdir()
+    packet_path = journal_dir / f"options_journal_{date.today().isoformat()}.jsonl"
+    packet_path.write_text(json.dumps(_valid_options_packet_record()) + "\n", encoding="utf-8")
+    monkeypatch.setenv("OPTIONS_MANAGER_JOURNAL_DIR", str(journal_dir))
+    monkeypatch.setenv("LIVE_OPTIONS_TRADING_ENABLED", "true")
+    monkeypatch.setattr(
+        app_module._config,
+        "options_companion_sqlite_path",
+        str(tmp_path / "missing_options_companion.sqlite"),
+    )
+
+    data = TestClient(app_module.app).get("/status/options-lab").json()
+
+    assert data["ok"] is False
+    assert data["live_lock"]["status"] == "BLOCKED"
+    assert data["risk_gate"]["approved"] is False
+    assert data["risk_gate"]["failed_rule"] == "live_options_trading_enabled"
+
+
+def test_fastapi_options_lab_reads_companion_ledger_read_only(monkeypatch, tmp_path):
+    try:
+        from fastapi.testclient import TestClient
+        import webhook.app as app_module
+    except ImportError:
+        pytest.skip("fastapi[testclient] not installed")
+
+    from options_companion.store import OptionsCompanionStore
+
+    db = tmp_path / "options_companion.sqlite"
+    store = OptionsCompanionStore(db)
+    store.record(
+        futures_instrument="MES",
+        futures_direction="LONG",
+        underlying="SPY",
+        status="OPEN",
+        option_symbol="SPY260731C00500000",
+        contract_type="CALL",
+        expiry=(date.today() + timedelta(days=30)).isoformat(),
+        strike=500.0,
+        dte=30,
+        entry_mark=2.1,
+        stop_mark=1.05,
+        target_mark=4.2,
+        signa_grade="A",
+        signa_score=82,
+        signa_daily_direction="BULLISH",
+        risk_result="APPROVED",
+    )
+    monkeypatch.setenv("OPTIONS_MANAGER_JOURNAL_DIR", str(tmp_path / "missing_packets"))
+    monkeypatch.setenv("LIVE_OPTIONS_TRADING_ENABLED", "false")
+    monkeypatch.setattr(app_module._config, "options_companion_enabled", True)
+    monkeypatch.setattr(app_module._config, "options_companion_sqlite_path", str(db))
+
+    data = TestClient(app_module.app).get("/status/options-lab").json()
+
+    assert data["options_lane"]["status"] == "PAPER_LEDGER"
+    assert data["options_lane"]["summary"]["open"] == 1
+    assert data["options_lane"]["latest"][0]["underlying"] == "SPY"
+
+
+def test_trade_attempt_summary_separates_cancelled_attempts():
+    import webhook.app as app_module
+
+    entries = [
+        {
+            "type": "DECISION",
+            "instrument": "MES",
+            "decision": "TRADE",
+            "risk_check": {"result": "APPROVED"},
+            "ts": "2026-07-07T14:00:00+00:00",
+        },
+        {
+            "type": "OUTCOME",
+            "instrument": "MES",
+            "outcome": {"result": "CANCELLED", "pnl_dollars": 0.0},
+            "ts": "2026-07-07T14:01:00+00:00",
+        },
+        {
+            "type": "DECISION",
+            "instrument": "MES",
+            "decision": "TRADE",
+            "risk_check": {"result": "APPROVED"},
+            "ts": "2026-07-07T15:00:00+00:00",
+        },
+        {
+            "type": "OUTCOME",
+            "instrument": "MES",
+            "outcome": {"result": "WIN", "pnl_dollars": 42.0},
+            "ts": "2026-07-07T15:05:00+00:00",
+        },
+    ]
+
+    summary = app_module._trade_attempt_summary(entries)
+    assert summary["trade_attempts"] == 2
+    assert summary["cancelled_attempts"] == 1
+    assert summary["counted_trades"] == 1
+    assert summary["filled_trades"] == 1
+
+    mes = next(
+        row for row in app_module._instrument_breakdown(entries)
+        if row["instrument"] == "MES"
+    )
+    assert mes["trades"] == 1
+    assert mes["trade_attempts"] == 2
+    assert mes["cancelled_attempts"] == 1
+    assert mes["filled_trades"] == 1
+
+
+def test_status_today_surfaces_webhook_rotation_operator_warning(monkeypatch, tmp_path):
+    try:
+        from fastapi.testclient import TestClient
+        import webhook.app as app_module
+    except ImportError:
+        pytest.skip("fastapi[testclient] not installed")
+
+    _isolate_app_logs(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        app_module,
+        "live_box_drift_report",
+        lambda **_: {
+            "ok": False,
+            "status": "warn",
+            "summary": "Live box guard cannot fully verify drift; webhook secret rotation is not ready.",
+            "next_step": "Configure rotation aliases.",
+            "proof_critical_runtime_overrides": [],
+            "unpinned_runtime_overrides": [],
+            "security_runtime": {
+                "webhook_secret_rotation": {
+                    "rotation_ready": False,
+                    "missing_env_names": [
+                        "TRADINGVIEW_WEBHOOK_SECRET",
+                        "TRADINGVIEW_WEBHOOK_SECRET_NEXT",
+                    ],
+                },
+            },
+        },
+    )
+
+    data = TestClient(app_module.app).get("/status/today").json()
+
+    warning = data["operator_warnings"][0]
+    assert warning["component"] == "webhook_secret_rotation"
+    assert warning["severity"] == "warn"
+    assert warning["title"] == "Webhook rotation not ready"
+    assert "TRADINGVIEW_WEBHOOK_SECRET_NEXT" in warning["message"]
 
 
 def test_fastapi_status_diagnostics_endpoint(monkeypatch, tmp_path):
@@ -1484,6 +1724,86 @@ def test_diagnostics_do_not_warn_when_recent_range_evidence_exists(monkeypatch, 
     assert "carry range evidence" in item["message"]
 
 
+def test_alert_age_observation_uses_bar_close_latency(monkeypatch, tmp_path):
+    import webhook.app as app_module
+
+    _isolate_app_logs(monkeypatch, tmp_path)
+    payload = _base_payload(
+        timestamp="2026-07-07T14:30:00+00:00",
+        timeframe="15",
+    )
+    received_at = datetime(2026, 7, 7, 14, 45, 7, tzinfo=timezone.utc)
+
+    observation = app_module._alert_age_observation(payload, received_at)
+
+    assert observation["age_basis"] == "received_at_minus_bar_close_at"
+    assert observation["bar_close_at"] == "2026-07-07T14:45:00+00:00"
+    assert observation["alert_age_seconds"] == 7.0
+    assert observation["parse_error"] is None
+
+
+def test_latest_webhook_records_alert_age_evidence(monkeypatch, tmp_path):
+    import webhook.app as app_module
+
+    _isolate_app_logs(monkeypatch, tmp_path)
+    payload = _base_payload(
+        timestamp=(datetime.now(timezone.utc) - timedelta(minutes=15, seconds=4)).isoformat(),
+        timeframe="15",
+    )
+
+    app_module._record_latest_webhook(payload, {"context": {"instrument": "MNQ"}, "decision": "NO_TRADE"})
+
+    latest = app_module._latest_webhook_payload()
+    assert latest["alert_age"]["instrument"] == "MNQ"
+    assert latest["alert_age"]["age_basis"] == "received_at_minus_bar_close_at"
+    assert latest["alert_age"]["alert_age_seconds"] >= 0
+    evidence_path = Path(app_module._config.log_dir) / "alert_age_observations.jsonl"
+    rows = [json.loads(line) for line in evidence_path.read_text(encoding="utf-8").splitlines()]
+    assert rows[-1]["payload_timestamp"] == payload.timestamp
+
+
+def test_diagnostics_surface_recent_alert_age_distribution(monkeypatch, tmp_path):
+    import webhook.app as app_module
+
+    _isolate_app_logs(monkeypatch, tmp_path)
+    monkeypatch.setattr(app_module._config, "log_alert_age_only", True)
+    monkeypatch.setattr(app_module._config, "max_alert_age_seconds", None)
+    monkeypatch.setattr(app_module, "_feed_window_active", lambda *a, **k: False)
+    log_dir = Path(app_module._config.log_dir)
+    log_dir.mkdir(parents=True, exist_ok=True)
+    rows = [
+        {
+            "received_at": "2026-07-07T14:45:01+00:00",
+            "ticker": "MNQ1!",
+            "instrument": "MNQ",
+            "payload_timestamp": "2026-07-07T14:30:00+00:00",
+            "timeframe_minutes": 15,
+            "bar_close_at": "2026-07-07T14:45:00+00:00",
+            "alert_age_seconds": age,
+            "age_basis": "received_at_minus_bar_close_at",
+            "parse_error": None,
+        }
+        for age in (1.0, 2.0, 10.0)
+    ]
+    (log_dir / "alert_age_observations.jsonl").write_text(
+        "\n".join(json.dumps(row) for row in rows) + "\n",
+        encoding="utf-8",
+    )
+
+    data = app_module._diagnostics_payload(date.today())
+
+    stats = data["alert_age_stats"]
+    assert stats["mode"] == "observe_only"
+    assert stats["live_behavior_changed"] is False
+    assert stats["sample_count"] == 3
+    assert stats["valid_count"] == 3
+    assert stats["stats_seconds"]["p50"] == 2.0
+    assert stats["stats_seconds"]["p95"] == 9.2
+    item = next(i for i in data["items"] if i["component"] == "TradingView alert age")
+    assert item["status"] == "info"
+    assert "Read-only; no cutoff inferred" in item["message"]
+
+
 def test_backend_console_uses_tf_freshness_and_non_live_labels(monkeypatch):
     """Regression for the embedded console: freshness keyed off the timeframe (no
     hardcoded 6m), and 'API: LIVE'/'LIVE' badge reworded so they can't read as
@@ -1644,6 +1964,7 @@ def test_doctor_command_prints_diagnostics(monkeypatch, tmp_path, capsys):
     assert "Backend API" in out
     assert "Webhook secret" in out
     assert "Runner shadow proof" in out
+    assert "TradingView alert age" in out
 
 
 def test_diagnostics_report_active_proof_runtime_override(monkeypatch, tmp_path):
