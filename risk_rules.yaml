@@ -280,6 +280,19 @@ data_quality:
   # rejected as CONFIG_BLOCKED / TIMEFRAME_MISMATCH, not evaluated as NO_TRADE.
   expected_timeframe_minutes: 15
 
+# ─── Execution Safety ──────────────────────────────────────────
+# Later-pipeline-stage gates, complementary to data_quality.max_staleness_seconds
+# above (which only guards webhook ingestion lag against the bar close). These
+# run at RiskEngine evaluation time (risk/risk_engine.py._check_alert_freshness)
+# and immediately before broker.execute_bracket (webhook/runner.py), so they
+# also cover internal processing time and a final live broker order-book read.
+execution_safety:
+  max_alert_age_seconds: null              # unset — log_alert_age_only observes
+                                            # real latency before a threshold is set
+  reject_on_missing_alert_timestamp: true
+  working_order_recheck_enabled: true
+  log_alert_age_only: true                 # observe-only: logs age, never rejects for it
+
 # ─── Paper Fill Realism ──────────────────────────────────────
 # Applied by PaperBroker in live paper mode AND in replay, so the simulated
 # win rate reflects reality instead of optimistic next-bar fills. The legacy

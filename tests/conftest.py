@@ -94,6 +94,12 @@ def config() -> SystemConfig:
         max_staleness_seconds=0,   # disabled in tests (historical timestamps)
         reject_null_required_fields=True,
         reject_contradictory_data=True,
+        # Most existing fixtures/tests build a TradeSetup without entry_time
+        # (same reason max_staleness_seconds is disabled above: historical/
+        # synthetic timestamps aren't the point of those tests). Tests that
+        # specifically exercise the alert-freshness gate override this back to
+        # True (the real production default) via dataclasses.replace(config, ...).
+        reject_on_missing_alert_timestamp=False,
         tradable_states=["TRENDING", "RANGE_BOUND"],
         non_tradable_states=["CHOPPY", "DEAD"],
         enabled_concepts=[

@@ -197,6 +197,7 @@ def main() -> int:
             notes=setup.notes,
             contracts=contracts,
             confluence_grade=confluence.grade,
+            entry_time=state.timestamp,
         )
 
         risk_result = risk_engine.validate(trade_setup, daily_state)

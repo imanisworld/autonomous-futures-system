@@ -409,6 +409,17 @@ class SystemConfig:
     tradingview_webhook_secret_configured: bool = False
     tradingview_webhook_secret_next_configured: bool = False
 
+    # ── Execution safety (alert freshness + working-order recheck) ──────────
+    # Additive gates on top of the existing risk checks. See risk/risk_engine.py
+    # (_check_alert_freshness) and webhook/runner.py (working-order recheck
+    # immediately before broker.execute_bracket).
+    max_alert_age_seconds: Optional[float] = None
+    reject_on_missing_alert_timestamp: bool = True
+    working_order_recheck_enabled: bool = True
+    # Starts the freshness gate in observe-only mode: age is logged, never
+    # enforced, until max_alert_age_seconds is set from real observed latency.
+    log_alert_age_only: bool = True
+
 
 # ─── Loader ──────────────────────────────────────────────────────────────────
 
@@ -480,6 +491,7 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
     orders = rules.get("order_rules", {})
     rr = rules.get("risk_reward", {})
     data = rules.get("data_quality", {})
+    execution_safety = rules.get("execution_safety", {}) or {}
     condition = rules.get("market_condition", {})
     strategy = rules.get("strategy", {})
     broker = rules.get("broker_roadmap", {})
@@ -623,6 +635,21 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         max_staleness_seconds=data.get("max_staleness_seconds", 300),
         reject_null_required_fields=data.get("reject_null_required_fields", True),
         reject_contradictory_data=data.get("reject_contradictory_data", True),
+
+        # execution_safety: a later-pipeline-stage freshness/order-conflict gate,
+        # complementary to (not a replacement for) the Step-0 max_staleness_seconds
+        # ingestion gate in webhook/runner.py's _check_payload_quality — that one
+        # measures webhook delivery lag against the bar close; this one measures
+        # total age at RiskEngine evaluation time (delivery + processing) and
+        # additionally catches a missing/future-dated entry_time.
+        max_alert_age_seconds=execution_safety.get("max_alert_age_seconds"),
+        reject_on_missing_alert_timestamp=bool(
+            execution_safety.get("reject_on_missing_alert_timestamp", True)
+        ),
+        working_order_recheck_enabled=bool(
+            execution_safety.get("working_order_recheck_enabled", True)
+        ),
+        log_alert_age_only=bool(execution_safety.get("log_alert_age_only", True)),
         expected_timeframe_minutes=int(
             os.getenv("PRIMARY_DECISION_TF")
             or os.getenv("EXPECTED_TIMEFRAME_MINUTES")
