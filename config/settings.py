@@ -200,13 +200,13 @@ class SystemConfig:
     exit_mode: str = "static"  # static | runner_shadow | runner_live
     runner_activation_r: float = 1.0
     runner_trail_r: float = 0.5
-    # Entry fill model for replay/paper (IOC-faithful baseline, Workstream A
-    # Phase 0). "market" = legacy: every replay entry fills unconditionally (the
-    # fiction — live fills ~14%). "ioc_limit" mirrors the live Tradovate entry
-    # leg: Limit-IOC capped at entry ± tolerance; unmarketable → booked
-    # CANCELLED/ENTRY_NOT_FILLED like live, no trade counted. Default "market"
-    # = zero behavior change.
-    entry_fill_model: str = "market"  # market | ioc_limit
+    # Entry fill model for replay/paper. "market" = legacy: every replay entry
+    # fills unconditionally. "ioc_limit" mirrors the live Tradovate entry leg:
+    # Limit-IOC capped at entry ± tolerance; unmarketable → CANCELLED /
+    # ENTRY_NOT_FILLED, no trade counted. "stop_market" arms a causal next-bar
+    # stop entry using NextBarOHLC.open for gaps; missing next-bar open fails
+    # closed. Default "market" = zero behavior change.
+    entry_fill_model: str = "market"  # market | ioc_limit | stop_market
     # Per-root tolerance ticks for ioc_limit — read from the SAME env names the
     # live broker uses (ENTRY_SLIPPAGE_TOLERANCE_TICKS_<ROOT>, then the global);
     # unset roots fall back to the live box's known values (MES=16, MNQ=32).
@@ -808,10 +808,9 @@ def _validate_config(config: SystemConfig) -> None:
         raise ConfigError(
             "exit_mode must be one of: static, runner_shadow, runner_live."
         )
-    if config.entry_fill_model not in {"market", "ioc_limit"}:
+    if config.entry_fill_model not in {"market", "ioc_limit", "stop_market"}:
         raise ConfigError(
-            "entry_fill_model must be one of: market, ioc_limit "
-            "(stop_market arrives with Workstream A Phase 1)."
+            "entry_fill_model must be one of: market, ioc_limit, stop_market."
         )
     if config.max_staleness_seconds < 1:
         raise ConfigError("max_staleness_seconds must be >= 1.")
