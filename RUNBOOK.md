@@ -254,6 +254,18 @@ row or a fill-status incident touches the window you are evaluating. They are
 reliable by default; they stop being reliable the moment this workflow's step
 3 trigger fires, until reconciliation closes it out.
 
+For a repo-local inventory of every reconciler/phantom/naked/auto-flatten
+outcome, run:
+
+```bash
+python3 scripts/reconciler_outcome_audit.py --journal-dir /root/autonomous-futures-system/logs
+```
+
+The audit is read-only. It groups outcomes already covered by
+`docs/proof-operator-overrides.md` or by the post-fix completed-trade
+reconciler path separately from unaudited rows that still need broker
+verification follow-up.
+
 ### Repo Docs vs. Operator Memory — Handoff Rule
 
 Neither side is sufficient alone for an exception case:
