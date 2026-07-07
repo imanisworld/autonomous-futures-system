@@ -160,6 +160,116 @@ cannot prove which systemd unit, reverse proxy, container, or TradingView alert
 is active, or that TradingView has switched to the staged secret. Confirm those
 separately on the active box without printing credentials.
 
+### Evidence-Chain Reconciliation
+
+Use this workflow for any single trade whose status matters to proof
+readiness — a trade you are about to count, exclude, or ask an operator to
+rule on. It always starts from the narrow evidence sources above; it never
+substitutes replay, Discord, screenshots, or broker P&L alone.
+
+1. **Check journal truth first.** Find the `TRADE` decision row (must have
+   `risk_check.result == APPROVED`) and its paired `OUTCOME` row for the same
+   instrument, in file order. This pairing is what `scripts/proof_30_mnq.py`
+   and `/status/proof/mnq-30` use — the same journal, the same pairing rule,
+   every time.
+2. **Check `/status/today`** for the same trading day. Confirm `trade_count`,
+   `wins`, `losses`, and `today_pnl_dollars` are consistent with what the
+   journal shows for that instrument and day.
+3. **Only when journal truth looks suspect** — a `CANCELLED`/no-fill outcome
+   on a setup that plausibly filled, a reconciler-authored outcome
+   (`session: "reconcile"` or an `exit_reason` mentioning phantom/auto-reconcile),
+   or a mismatch against `/status/today` — check `/status/broker-account` for
+   the same instrument and approximate window. This is the only case where a
+   broker-side number is allowed to inform a ruling; it is never consulted
+   first, and it never overrides the journal by itself.
+4. **Classify the trade into exactly one bucket:**
+   - **Normal proof-eligible resolved trade** — journal `TRADE` paired with a
+     real `OUTCOME` (`WIN`/`LOSS`/`BREAKEVEN`), no reconciler involvement, no
+     broker mismatch. Counts automatically; no operator action needed.
+   - **Legitimate `CANCELLED` / no-fill** — the entry-fill tolerance genuinely
+     was not met at the decision bar (verified against candle/tick data or
+     `/status/fill-realism`, not assumed). Correctly excluded from proof;
+     no operator action needed.
+   - **Reconciler-touched but correctly resolved** — a reconciler outcome row
+     exists, but broker evidence confirms the reconciler's own resolution was
+     right (e.g. the position really was flat, or really was a loss booked at
+     the correct price). No operator action needed beyond noting it happened.
+   - **Broker-verified exception requiring manual ruling** — broker evidence
+     contradicts a journal-recorded `CANCELLED`/no-fill outcome for a trade
+     that resolved a different way. This is the only bucket that produces an
+     operator exception (see below). It is never resolved by editing the
+     journal.
+
+**Decision rule when journal and exception ledger disagree:** the automated
+proof checker (`scripts/proof_30_mnq.py` / `/status/proof/mnq-30`) is the
+single source of truth for the normal MNQ path. A documented operator
+exception in `docs/proof-operator-overrides.md` is authoritative only for the
+specific trade it names. If a mechanical proof re-scan and a documented
+exception ever appear to disagree about the same trade, **stop and record a
+ruling** — do not average the two readings, do not silently prefer one, and
+do not extend an exception's scope by inference to any other trade.
+
+### Recording An Operator Exception
+
+When a trade lands in the "broker-verified exception" bucket:
+
+1. **Never edit the journal.** It is append-only; a synthetic outcome row
+   would corrupt the same `TRADE`-to-`OUTCOME` pairing the proof tooling
+   relies on for every other trade in the file.
+2. **Add an entry to `docs/proof-operator-overrides.md`** with only
+   public-safe facts: instrument, approximate session date/window, the
+   broker evidence value, the journal history that produced the wrong
+   outcome, the root cause (with a commit/PR reference if fixed), the
+   operator ruling in one sentence, why the journal was not edited, and an
+   explicit classification note stating which count (if any) the exception
+   does **not** change.
+3. **Do not put tally state, thresholds, or gate math in that file.** The
+   exact live proof count, the specific gate criteria being evaluated, and
+   any per-exception weighting are operator process state, not public repo
+   content — keep those in operator-side notes outside this repository.
+4. **The exception stands alone.** It does not retroactively change what the
+   automated checker reports for that instrument, and it does not change any
+   other trade's classification. A later full proof re-scan will not
+   automatically pick it up; that is expected, not a bug — see the audit
+   caveat pattern in the existing `docs/proof-operator-overrides.md` entries.
+
+### Distinguishing "Strategy Not Ready" From "Evidence Chain Inconsistent"
+
+These look similar from a summary metric alone and need different responses:
+
+- **Strategy not ready** looks like: the proof checker runs clean (no journal
+  read errors, no unmatched outcomes, broker account consistent with the
+  journal), the trades it counted are real, and the result is simply not yet
+  where it needs to be. The fix is more evidence over time, or a strategy/exit
+  change — not a reconciliation exercise.
+- **Evidence chain inconsistent** looks like: unmatched outcomes, journal read
+  errors, a reconciler-authored outcome row, or `/status/today` numbers that
+  do not match what the journal shows. The fix is reconciliation (this
+  workflow) before the count means anything — trusting the raw number here
+  would be trusting a broken measurement, not a bad result.
+
+Treat `trade_count`, `today_pnl_dollars`, and raw journal outcome tallies as
+**operational indicators, not unquestionable truth**, whenever a reconciler
+row or a fill-status incident touches the window you are evaluating. They are
+reliable by default; they stop being reliable the moment this workflow's step
+3 trigger fires, until reconciliation closes it out.
+
+### Repo Docs vs. Operator Memory — Handoff Rule
+
+Neither side is sufficient alone for an exception case:
+
+- **This repository** holds public-safe incident facts and the process above
+  — what happened, what evidence proved it, what the ruling was, and why the
+  journal was not touched. Safe to be public: no thresholds, no live tally
+  state, no forward-looking gate math.
+- **Operator-side process notes** (outside this repository) hold the
+  sensitive proof-gate methodology: exact thresholds, tally rules, freeze
+  logic, and the current live count toward any gate. This is where "is this
+  exception enough to change a go-live decision" gets decided.
+- An exception case is only fully documented when both exist and reference
+  each other. A repo note without an operator ruling is an unresolved
+  incident; an operator ruling without a repo note is unauditable.
+
 ### Runner shadow proof
 
 Before enabling live trailing, set `RUNNER_SHADOW_ENABLED=true` and leave
