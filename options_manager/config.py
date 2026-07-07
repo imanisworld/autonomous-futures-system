@@ -66,6 +66,16 @@ class OptionsManagerConfig:
     paper_sim_require_approved_risk: bool = True
     paper_sim_require_approved_quality: bool = True
 
+    # Phase 5 — dry-run order review. Independent of risk_rules.yaml; builds a
+    # local review object for options_manager's own packets only. No broker
+    # calls, no order preview, no order placement.
+    dry_run_enabled: bool = True
+    dry_run_max_contracts: int = 2
+    dry_run_max_notional: float = 300.00
+    dry_run_allowed_account_tags: tuple[str, ...] = ("agentic_micro_account",)
+    dry_run_order_action: str = "BUY_TO_OPEN"
+    dry_run_require_paper_simulated: bool = True
+
     @classmethod
     def from_env(cls) -> "OptionsManagerConfig":
         load_dotenv()
@@ -180,6 +190,26 @@ class OptionsManagerConfig:
             ),
             paper_sim_require_approved_quality=_as_bool(
                 os.getenv("OPTIONS_MANAGER_PAPER_SIM_REQUIRE_APPROVED_QUALITY"),
+                default=True,
+            ),
+            dry_run_enabled=_as_bool(
+                os.getenv("OPTIONS_MANAGER_DRY_RUN_ENABLED"), default=True
+            ),
+            dry_run_max_contracts=_as_int(
+                os.getenv("OPTIONS_MANAGER_DRY_RUN_MAX_CONTRACTS"), 2
+            ),
+            dry_run_max_notional=_as_float(
+                os.getenv("OPTIONS_MANAGER_DRY_RUN_MAX_NOTIONAL"), 300.00
+            ),
+            dry_run_allowed_account_tags=_as_tuple(
+                os.getenv("OPTIONS_MANAGER_DRY_RUN_ALLOWED_ACCOUNT_TAGS"),
+                ("agentic_micro_account",),
+            ),
+            dry_run_order_action=os.getenv(
+                "OPTIONS_MANAGER_DRY_RUN_ORDER_ACTION", "BUY_TO_OPEN"
+            ),
+            dry_run_require_paper_simulated=_as_bool(
+                os.getenv("OPTIONS_MANAGER_DRY_RUN_REQUIRE_PAPER_SIMULATED"),
                 default=True,
             ),
         )
