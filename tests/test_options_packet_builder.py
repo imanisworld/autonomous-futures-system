@@ -7,12 +7,15 @@ no Robinhood, no Tradovate, no real Discord calls.
 
 from __future__ import annotations
 
+import ast
 from datetime import date, timedelta
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
 from options_manager import journal as journal_mod
+from options_manager import packet_builder as packet_builder_module
 from options_manager.app import SECRET_HEADER
 from options_manager.app import app as fastapi_app
 from options_manager.live_lock import (
@@ -335,3 +338,40 @@ def test_endpoint_accepts_valid_packet_with_correct_secret(monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["status"] == "PENDING"
+
+
+# --- structural safety (Phase 10 audit gap closure) --------------------------
+
+
+def _packet_builder_imported_modules() -> list[str]:
+    path = Path(packet_builder_module.__file__)
+    tree = ast.parse(path.read_text())
+    modules = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            modules.extend(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            modules.append(node.module)
+    return modules
+
+
+def test_packet_builder_has_no_forbidden_imports():
+    # Real imports only — ast.Import/ImportFrom nodes never include
+    # docstrings or comments, so this can't false-positive on descriptive
+    # text. Scoped to packet_builder.py's own imports only; journal.py and
+    # notify.py retain their existing Phase 1 I/O behavior unchanged.
+    modules = _packet_builder_imported_modules()
+    forbidden_module_fragments = (
+        "execution",
+        "webhook",
+        "risk_engine",
+        "alert_ranker",
+        "httpx",
+        "requests",
+        "urllib",
+        "socket",
+        "live_lock",
+    )
+    for module in modules:
+        for forbidden in forbidden_module_fragments:
+            assert forbidden not in module, f"packet_builder.py must not import {module!r}"
