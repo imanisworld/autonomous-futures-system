@@ -36,6 +36,25 @@ class OptionsManagerConfig:
     risk_reject_empty_gex_regime: bool = True
     risk_warn_unknown_gex_regime: bool = True
 
+    # Phase 3 — contract quality / market data gate. Independent of
+    # risk_rules.yaml; gates options_manager's own contract snapshots only.
+    quality_max_spread_percent: float = 20.0
+    quality_min_option_volume: int = 100
+    quality_min_open_interest: int = 500
+    quality_missing_greeks_blocks: bool = False
+    quality_missing_quote_blocks: bool = True
+    quality_missing_oi_volume_blocks: bool = True
+    quality_max_quote_age_seconds: int = 900
+    quality_require_quote_timestamp: bool = True
+    quality_require_underlying_price: bool = True
+    quality_underlying_price_max_diff_percent: float = 3.0
+    quality_reject_underlying_price_mismatch: bool = False
+    quality_min_abs_delta: float = 0.30
+    quality_max_abs_delta: float = 0.70
+    quality_high_iv_warning_threshold: float = 1.00
+    quality_theta_warning_ratio: float = 0.10
+    quality_allow_mock_provider: bool = True
+
     @classmethod
     def from_env(cls) -> "OptionsManagerConfig":
         load_dotenv()
@@ -75,6 +94,62 @@ class OptionsManagerConfig:
             ),
             risk_warn_unknown_gex_regime=_as_bool(
                 os.getenv("OPTIONS_MANAGER_RISK_WARN_UNKNOWN_GEX_REGIME"),
+                default=True,
+            ),
+            quality_max_spread_percent=_as_float(
+                os.getenv("OPTIONS_MANAGER_QUALITY_MAX_SPREAD_PERCENT"), 20.0
+            ),
+            quality_min_option_volume=_as_int(
+                os.getenv("OPTIONS_MANAGER_QUALITY_MIN_OPTION_VOLUME"), 100
+            ),
+            quality_min_open_interest=_as_int(
+                os.getenv("OPTIONS_MANAGER_QUALITY_MIN_OPEN_INTEREST"), 500
+            ),
+            quality_missing_greeks_blocks=_as_bool(
+                os.getenv("OPTIONS_MANAGER_QUALITY_MISSING_GREEKS_BLOCKS"),
+                default=False,
+            ),
+            quality_missing_quote_blocks=_as_bool(
+                os.getenv("OPTIONS_MANAGER_QUALITY_MISSING_QUOTE_BLOCKS"),
+                default=True,
+            ),
+            quality_missing_oi_volume_blocks=_as_bool(
+                os.getenv("OPTIONS_MANAGER_QUALITY_MISSING_OI_VOLUME_BLOCKS"),
+                default=True,
+            ),
+            quality_max_quote_age_seconds=_as_int(
+                os.getenv("OPTIONS_MANAGER_QUALITY_MAX_QUOTE_AGE_SECONDS"), 900
+            ),
+            quality_require_quote_timestamp=_as_bool(
+                os.getenv("OPTIONS_MANAGER_QUALITY_REQUIRE_QUOTE_TIMESTAMP"),
+                default=True,
+            ),
+            quality_require_underlying_price=_as_bool(
+                os.getenv("OPTIONS_MANAGER_QUALITY_REQUIRE_UNDERLYING_PRICE"),
+                default=True,
+            ),
+            quality_underlying_price_max_diff_percent=_as_float(
+                os.getenv("OPTIONS_MANAGER_QUALITY_UNDERLYING_PRICE_MAX_DIFF_PERCENT"),
+                3.0,
+            ),
+            quality_reject_underlying_price_mismatch=_as_bool(
+                os.getenv("OPTIONS_MANAGER_QUALITY_REJECT_UNDERLYING_PRICE_MISMATCH"),
+                default=False,
+            ),
+            quality_min_abs_delta=_as_float(
+                os.getenv("OPTIONS_MANAGER_QUALITY_MIN_ABS_DELTA"), 0.30
+            ),
+            quality_max_abs_delta=_as_float(
+                os.getenv("OPTIONS_MANAGER_QUALITY_MAX_ABS_DELTA"), 0.70
+            ),
+            quality_high_iv_warning_threshold=_as_float(
+                os.getenv("OPTIONS_MANAGER_QUALITY_HIGH_IV_WARNING_THRESHOLD"), 1.00
+            ),
+            quality_theta_warning_ratio=_as_float(
+                os.getenv("OPTIONS_MANAGER_QUALITY_THETA_WARNING_RATIO"), 0.10
+            ),
+            quality_allow_mock_provider=_as_bool(
+                os.getenv("OPTIONS_MANAGER_QUALITY_ALLOW_MOCK_PROVIDER"),
                 default=True,
             ),
         )
