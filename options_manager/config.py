@@ -108,6 +108,15 @@ class OptionsManagerConfig:
     broker_boundary_max_limit_price: float = 3.00
     broker_boundary_allowed_account_tags: tuple[str, ...] = ("agentic_micro_account",)
 
+    # Phase 12 — inert append-only storage layer. Independent of
+    # risk_rules.yaml; durably records confirmation-consumed and
+    # ticket-created events for replay protection only. No broker calls,
+    # no HTTP, no order queue, no update/delete of any stored row.
+    storage_enabled: bool = True
+    storage_backend: str = "sqlite"
+    storage_require_append_only: bool = True
+    storage_reject_order_queue_fields: bool = True
+
     @classmethod
     def from_env(cls) -> "OptionsManagerConfig":
         load_dotenv()
@@ -304,6 +313,17 @@ class OptionsManagerConfig:
             broker_boundary_allowed_account_tags=_as_tuple(
                 os.getenv("OPTIONS_MANAGER_BROKER_BOUNDARY_ALLOWED_ACCOUNT_TAGS"),
                 ("agentic_micro_account",),
+            ),
+            storage_enabled=_as_bool(
+                os.getenv("OPTIONS_MANAGER_STORAGE_ENABLED"), default=True
+            ),
+            storage_backend=os.getenv("OPTIONS_MANAGER_STORAGE_BACKEND", "sqlite"),
+            storage_require_append_only=_as_bool(
+                os.getenv("OPTIONS_MANAGER_STORAGE_REQUIRE_APPEND_ONLY"), default=True
+            ),
+            storage_reject_order_queue_fields=_as_bool(
+                os.getenv("OPTIONS_MANAGER_STORAGE_REJECT_ORDER_QUEUE_FIELDS"),
+                default=True,
             ),
         )
 
