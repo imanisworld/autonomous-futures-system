@@ -7,8 +7,12 @@ risk/risk_engine.py.
 
 from __future__ import annotations
 
-from fastapi import FastAPI, Request
+import secrets as secrets_module
 
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+
+from .config import OptionsManagerConfig
 from .live_lock import assert_live_options_trading_disabled
 from .packet_builder import build_packet
 
@@ -18,24 +22,62 @@ assert_live_options_trading_disabled()
 
 app = FastAPI(title="options_manager", version="0.1.0-phase1")
 
+SECRET_HEADER = "X-Options-Manager-Secret"
+
+
+def _auth_ok(request: Request, config: OptionsManagerConfig) -> bool:
+    """If OPTIONS_MANAGER_INGEST_SECRET is unset, auth is disabled — local/dev
+    use only. This is a distinct credential from the futures webhook's secret
+    and must never reuse it."""
+    if not config.ingest_secret:
+        return True
+    provided = request.headers.get(SECRET_HEADER, "")
+    return secrets_module.compare_digest(provided, config.ingest_secret)
+
 
 @app.post("/options/packet")
-async def receive_packet(request: Request) -> dict:
-    raw_input = await request.json()
-    packet = build_packet(raw_input)
-    return {
-        "status": packet.status,
-        "rejection_reason": packet.rejection_reason,
-        "ticker": packet.ticker,
-        "direction": packet.direction,
-        "created_at": packet.created_at.isoformat(),
-    }
+async def receive_packet(request: Request) -> JSONResponse:
+    config = OptionsManagerConfig.from_env()
+
+    if not _auth_ok(request, config):
+        return JSONResponse(
+            status_code=401,
+            content={
+                "error": "unauthorized",
+                "detail": f"missing or invalid {SECRET_HEADER} header",
+            },
+        )
+
+    try:
+        raw_input = await request.json()
+    except Exception:
+        return JSONResponse(
+            status_code=400,
+            content={"error": "invalid_json", "detail": "request body must be valid JSON"},
+        )
+
+    try:
+        packet = build_packet(raw_input)
+    except (KeyError, ValueError, TypeError) as exc:
+        return JSONResponse(
+            status_code=400,
+            content={"error": "invalid_packet", "detail": str(exc)},
+        )
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "status": packet.status,
+            "rejection_reason": packet.rejection_reason,
+            "ticker": packet.ticker,
+            "direction": packet.direction,
+            "created_at": packet.created_at.isoformat(),
+        },
+    )
 
 
 def run() -> None:
     import uvicorn
-
-    from .config import OptionsManagerConfig
 
     config = OptionsManagerConfig.from_env()
     uvicorn.run("options_manager.app:app", host="0.0.0.0", port=config.port)

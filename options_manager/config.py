@@ -18,6 +18,11 @@ class OptionsManagerConfig:
     discord_webhook_url: str = ""
     live_options_trading_enabled: bool = False
     journal_dir: str = "logs"
+    # Shared secret for POST /options/packet, via OPTIONS_MANAGER_INGEST_SECRET.
+    # This is intentionally independent of the futures webhook's secret — never
+    # reuse it. If left unset, endpoint auth is disabled: fine for local/dev
+    # use, but must be set before this endpoint is reachable from anywhere else.
+    ingest_secret: str = ""
 
     @classmethod
     def from_env(cls) -> "OptionsManagerConfig":
@@ -29,6 +34,7 @@ class OptionsManagerConfig:
                 os.getenv("LIVE_OPTIONS_TRADING_ENABLED")
             ),
             journal_dir=os.getenv("OPTIONS_MANAGER_JOURNAL_DIR", "logs"),
+            ingest_secret=os.getenv("OPTIONS_MANAGER_INGEST_SECRET", ""),
         )
 
 

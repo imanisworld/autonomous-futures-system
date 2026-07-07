@@ -10,13 +10,18 @@ from __future__ import annotations
 from datetime import date, timedelta
 
 import pytest
+from fastapi.testclient import TestClient
 
 from options_manager import journal as journal_mod
+from options_manager.app import SECRET_HEADER
+from options_manager.app import app as fastapi_app
 from options_manager.live_lock import (
     LiveOptionsTradingBlockedError,
     assert_live_options_trading_disabled,
 )
 from options_manager.packet_builder import build_packet
+
+client = TestClient(fastapi_app)
 
 
 def _valid_raw_input(**overrides) -> dict:
@@ -180,3 +185,106 @@ def test_live_options_trading_disabled_or_unset_does_not_raise(monkeypatch):
 
     monkeypatch.setenv("LIVE_OPTIONS_TRADING_ENABLED", "false")
     assert_live_options_trading_disabled() is None
+
+
+# --- direction validation ---------------------------------------------------
+
+
+def test_invalid_direction_is_rejected():
+    packet = build_packet(_valid_raw_input(direction="SPREAD"))
+    assert packet.status == "REJECTED"
+    assert "direction" in packet.rejection_reason.lower()
+
+
+# --- floor validation --------------------------------------------------------
+
+
+def test_signa_score_negative_is_rejected():
+    packet = build_packet(_valid_raw_input(signa_score=-1))
+    assert packet.status == "REJECTED"
+
+
+def test_signa_score_above_100_is_rejected():
+    packet = build_packet(_valid_raw_input(signa_score=101))
+    assert packet.status == "REJECTED"
+
+
+def test_entry_price_zero_is_rejected():
+    packet = build_packet(_valid_raw_input(entry_price=0))
+    assert packet.status == "REJECTED"
+
+
+def test_contract_strike_zero_is_rejected():
+    packet = build_packet(_valid_raw_input(contract_strike=0))
+    assert packet.status == "REJECTED"
+
+
+def test_max_premium_zero_is_rejected():
+    packet = build_packet(_valid_raw_input(max_premium=0))
+    assert packet.status == "REJECTED"
+
+
+def test_max_contracts_zero_is_rejected():
+    packet = build_packet(_valid_raw_input(max_contracts=0))
+    assert packet.status == "REJECTED"
+
+
+def test_price_target_zero_is_rejected():
+    packet = build_packet(_valid_raw_input(price_target=0))
+    assert packet.status == "REJECTED"
+
+
+# --- endpoint hardening ------------------------------------------------------
+
+
+def _json_safe_raw_input(**overrides) -> dict:
+    raw = _valid_raw_input(**overrides)
+    if isinstance(raw.get("contract_expiry"), date):
+        raw["contract_expiry"] = raw["contract_expiry"].isoformat()
+    return raw
+
+
+def test_endpoint_missing_required_field_returns_400(monkeypatch):
+    monkeypatch.delenv("OPTIONS_MANAGER_INGEST_SECRET", raising=False)
+    raw = _json_safe_raw_input()
+    del raw["ticker"]
+
+    response = client.post("/options/packet", json=raw)
+
+    assert response.status_code == 400
+    assert response.json()["error"] == "invalid_packet"
+
+
+def test_endpoint_missing_direction_returns_400(monkeypatch):
+    monkeypatch.delenv("OPTIONS_MANAGER_INGEST_SECRET", raising=False)
+    raw = _json_safe_raw_input()
+    del raw["direction"]
+
+    response = client.post("/options/packet", json=raw)
+
+    assert response.status_code == 400
+
+
+def test_endpoint_requires_secret_when_configured(monkeypatch):
+    monkeypatch.setenv("OPTIONS_MANAGER_INGEST_SECRET", "s3cr3t")
+    raw = _json_safe_raw_input()
+
+    missing_header = client.post("/options/packet", json=raw)
+    assert missing_header.status_code == 401
+
+    wrong_header = client.post(
+        "/options/packet", json=raw, headers={SECRET_HEADER: "wrong"}
+    )
+    assert wrong_header.status_code == 401
+
+
+def test_endpoint_accepts_valid_packet_with_correct_secret(monkeypatch):
+    monkeypatch.setenv("OPTIONS_MANAGER_INGEST_SECRET", "s3cr3t")
+    raw = _json_safe_raw_input()
+
+    response = client.post(
+        "/options/packet", json=raw, headers={SECRET_HEADER: "s3cr3t"}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "PENDING"
