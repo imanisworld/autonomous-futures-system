@@ -65,3 +65,17 @@ def test_default_market_model_unchanged(config, tmp_path):
     assert report.approved_trades == 1
     assert report.wins == 1
     assert report.realized_pnl_dollars > 0
+
+
+def test_stop_market_keeps_decision_but_uses_next_bar_entry(config, tmp_path):
+    config.log_dir = str(tmp_path)
+    config.entry_fill_model = "stop_market"
+    report = ReplayEngine(config=config, log_dir=str(tmp_path)).run(
+        SAMPLE, review_date="2026-05-23"
+    )
+    # Signal formation/risk approval is unchanged from the legacy market model.
+    assert report.approved_trades == 1
+    outcomes = _outcomes(report.journal_path)
+    assert len(outcomes) == 1
+    assert outcomes[0]["result"] in {"WIN", "LOSS", "BREAKEVEN", "CANCELLED"}
+    assert outcomes[0]["exit_reason"] != "ENTRY_OPEN_UNAVAILABLE"

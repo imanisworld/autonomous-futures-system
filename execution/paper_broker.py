@@ -62,6 +62,12 @@ class NextBarOHLC:
     open: Optional[float] = None
 
 
+@dataclass
+class _PendingStopMarketEntry:
+    order: BracketOrder
+    contracts: int
+
+
 # ─── Paper Broker ─────────────────────────────────────────────────────────────
 
 class PaperBroker(BrokerInterface):
@@ -109,17 +115,19 @@ class PaperBroker(BrokerInterface):
         self._runner_activation_r = float(runner_activation_r)
         self._runner_trail_r = float(runner_trail_r)
         self._runner_max_fav: Optional[float] = None  # running favourable price extreme
-        # Entry fill model (IOC-faithful baseline). "market" = legacy: every
+        # Entry fill model. "market" = legacy: every
         # entry fills at the plan price ± slippage. "ioc_limit" mirrors the live
         # Tradovate entry leg (#2): a Limit-IOC capped at entry ± tolerance —
         # the order fills at the CURRENT market (never worse than the cap) or
-        # self-cancels. Replay's fiction was filling 100% while live fills ~14%.
+        # self-cancels. "stop_market" arms a one-next-bar stop entry; it fills
+        # causally from NextBarOHLC.open/high/low or fails closed.
         model = str(entry_fill_model or "market").strip().lower()
-        if model not in ("market", "ioc_limit"):
+        if model not in ("market", "ioc_limit", "stop_market"):
             raise ValueError(f"PaperBroker: unknown entry_fill_model {entry_fill_model!r}")
         self._entry_fill_model = model
         self._entry_tol_by_root = dict(entry_tolerance_ticks_by_root or {})
         self._entry_tol_default = max(0.0, float(entry_tolerance_ticks_default or 0.0))
+        self._pending_stop_entry: Optional[_PendingStopMarketEntry] = None
 
     def _entry_tolerance_ticks(self, instrument: str) -> float:
         root = "".join(ch for ch in str(instrument or "").upper() if ch.isalpha())[:3]
@@ -165,13 +173,26 @@ class PaperBroker(BrokerInterface):
         Resolution requires a call to resolve_position() with next-bar data,
         or returns OPEN if no next-bar data is available.
         """
-        if self._position is not None:
+        if self._position is not None or self._pending_stop_entry is not None:
             raise RuntimeError(
                 "PaperBroker: Cannot open a new position while one is already open. "
                 "Call resolve_position() first."
             )
 
         contracts = max(1, int(order.contracts or 1))
+        if self._entry_fill_model == "stop_market":
+            self._pending_stop_entry = _PendingStopMarketEntry(order=order, contracts=contracts)
+            return Fill(
+                instrument=order.instrument,
+                direction=order.direction,
+                contracts=contracts,
+                entry_price=order.entry,
+                exit_price=None,
+                exit_reason=None,
+                result="PENDING",
+                pnl_ticks=None,
+                pnl_dollars=None,
+            )
 
         # Entry is a MARKET order — apply adverse slippage. LONG fills higher,
         # SHORT fills lower. Stop/target stay at their ordered (resting) prices.
@@ -243,6 +264,73 @@ class PaperBroker(BrokerInterface):
             pnl_dollars=0.0,
         )
 
+    def _cancel_pending_entry(self, reason: str = "ENTRY_NOT_TRIGGERED") -> Fill:
+        pending = self._pending_stop_entry
+        if pending is None:
+            raise RuntimeError("PaperBroker: no pending stop-market entry to cancel.")
+        self._pending_stop_entry = None
+        return Fill(
+            instrument=pending.order.instrument,
+            direction=pending.order.direction,
+            contracts=pending.contracts,
+            entry_price=pending.order.entry,
+            exit_price=None,
+            exit_reason=reason,
+            result="CANCELLED",
+            pnl_ticks=0.0,
+            pnl_dollars=0.0,
+        )
+
+    def _activate_pending_stop_entry(
+        self, next_bar: NextBarOHLC, tick: float
+    ) -> Optional[Fill]:
+        """One-next-bar stop-market entry.
+
+        Missing next-bar open fails closed so replay/paper never upgrades a
+        signal into an assumed fill without the causal data needed to price a
+        gap through the trigger.
+        """
+        pending = self._pending_stop_entry
+        if pending is None:
+            return None
+        if next_bar.open is None:
+            return self._cancel_pending_entry("ENTRY_OPEN_UNAVAILABLE")
+
+        order = pending.order
+        slip = self._slippage_ticks * tick
+        fill_entry: float | None = None
+        if order.direction == "LONG":
+            if next_bar.open >= order.entry:
+                fill_entry = next_bar.open + slip
+            elif next_bar.high >= order.entry:
+                fill_entry = order.entry + slip
+        elif order.direction == "SHORT":
+            if next_bar.open <= order.entry:
+                fill_entry = next_bar.open - slip
+            elif next_bar.low <= order.entry:
+                fill_entry = order.entry - slip
+        else:
+            fill_entry = next_bar.open
+
+        if fill_entry is None:
+            return self._cancel_pending_entry("ENTRY_NOT_TRIGGERED")
+        if order.direction == "LONG" and not (order.stop < fill_entry < order.target):
+            return self._cancel_pending_entry("ENTRY_BRACKET_INVALID_AT_FILL")
+        if order.direction == "SHORT" and not (order.target < fill_entry < order.stop):
+            return self._cancel_pending_entry("ENTRY_BRACKET_INVALID_AT_FILL")
+
+        self._pending_stop_entry = None
+        self._position = Position(
+            instrument=order.instrument,
+            direction=order.direction,
+            entry_price=fill_entry,
+            stop=order.stop,
+            target=order.target,
+            quantity=pending.contracts,
+            open=True,
+        )
+        return None
+
     def _resolve_runner(self, next_bar, pos, tick, tick_val) -> Optional[Fill]:
         """Runner exit: no fixed target; once +activation_R is reached, trail the
         stop trail_R behind the running favourable extreme. Favourable tracking
@@ -302,13 +390,25 @@ class PaperBroker(BrokerInterface):
         Multi-contract positions hold the full position until target or stop is hit.
         No partial exits, no 1R management for 2+ contracts.
         """
+        instrument = (
+            self._position.instrument
+            if self._position is not None
+            else self._pending_stop_entry.order.instrument
+            if self._pending_stop_entry is not None
+            else ""
+        )
+        tick = TICK_SIZE.get(instrument, 0.25)
+        tick_val = TICK_VALUE.get(instrument, 1.0)
+
+        pending_result = self._activate_pending_stop_entry(next_bar, tick)
+        if pending_result is not None:
+            return pending_result
+
         if self._position is None or not self._position.open:
             return None
 
         pos = self._position
         instrument = pos.instrument
-        tick = TICK_SIZE.get(instrument, 0.25)
-        tick_val = TICK_VALUE.get(instrument, 1.0)
 
         if self._runner_mode and pos.quantity == 1:
             return self._resolve_runner(next_bar, pos, tick, tick_val)
@@ -432,6 +532,14 @@ class PaperBroker(BrokerInterface):
     def get_position(self) -> Optional[Position]:
         return self._position if (self._position and self._position.open) else None
 
+    def has_pending_entry(self) -> bool:
+        return self._pending_stop_entry is not None
+
+    def cancel_pending_entry(self, reason: str = "ENTRY_NOT_TRIGGERED") -> Optional[Fill]:
+        if self._pending_stop_entry is None:
+            return None
+        return self._cancel_pending_entry(reason)
+
     def get_account_balance(self) -> Optional[float]:
         return round(self._balance, 2)
 
@@ -440,6 +548,7 @@ class PaperBroker(BrokerInterface):
         if self._position:
             self._position.open = False
             self._position = None
+        self._pending_stop_entry = None
 
     def force_resolve(self, result: str, exit_price: float) -> Optional[Fill]:
         """

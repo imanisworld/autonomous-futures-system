@@ -126,7 +126,7 @@ def test_ioc_requires_market_price():
 
 def test_unknown_model_rejected():
     with pytest.raises(ValueError):
-        PaperBroker(entry_fill_model="stop_market")  # Phase 1, not yet
+        PaperBroker(entry_fill_model="wat")
 
 
 # ── resolution still works after an ioc fill ─────────────────────────────────
@@ -137,3 +137,72 @@ def test_ioc_fill_resolves_normally():
     assert fill.result == "OPEN"
     resolved = broker.resolve_position(NextBarOHLC(high=111.0, low=99.0))
     assert resolved is not None and resolved.result == "WIN"
+
+
+# ── stop_market: causal next-bar stop entry ──────────────────────────────────
+
+def test_stop_market_arms_without_opening_position():
+    broker = PaperBroker(entry_fill_model="stop_market")
+    fill = broker.execute_bracket(_order())
+    assert fill.result == "PENDING"
+    assert broker.get_position() is None
+    assert broker.has_pending_entry()
+
+
+def test_stop_market_long_gap_through_fills_at_next_open_with_slip():
+    broker = PaperBroker(entry_fill_model="stop_market", slippage_ticks=1.0)
+    broker.execute_bracket(_order(entry=100.0, stop=95.0, target=110.0))
+    fill = broker.resolve_position(NextBarOHLC(open=102.0, high=111.0, low=101.0))
+    assert fill is not None
+    assert fill.result == "WIN"
+    assert fill.entry_price == 102.25
+    assert fill.exit_price == 110.0
+
+
+def test_stop_market_long_triggers_inside_next_bar_at_stop_level():
+    broker = PaperBroker(entry_fill_model="stop_market", slippage_ticks=1.0)
+    broker.execute_bracket(_order(entry=100.0, stop=95.0, target=110.0))
+    fill = broker.resolve_position(NextBarOHLC(open=99.0, high=111.0, low=98.5))
+    assert fill is not None
+    assert fill.result == "WIN"
+    assert fill.entry_price == 100.25
+
+
+def test_stop_market_short_mirror_gap_through():
+    broker = PaperBroker(entry_fill_model="stop_market", slippage_ticks=1.0)
+    broker.execute_bracket(_order(direction="SHORT", entry=100.0, stop=105.0, target=90.0))
+    fill = broker.resolve_position(NextBarOHLC(open=98.0, high=99.0, low=89.0))
+    assert fill is not None
+    assert fill.result == "WIN"
+    assert fill.entry_price == 97.75
+    assert fill.exit_price == 90.0
+
+
+def test_stop_market_missing_next_open_fails_closed():
+    broker = PaperBroker(entry_fill_model="stop_market")
+    broker.execute_bracket(_order())
+    fill = broker.resolve_position(NextBarOHLC(high=111.0, low=99.0))
+    assert fill is not None
+    assert fill.result == "CANCELLED"
+    assert fill.exit_reason == "ENTRY_OPEN_UNAVAILABLE"
+    assert broker.get_position() is None
+    assert not broker.has_pending_entry()
+
+
+def test_stop_market_not_triggered_on_next_bar_cancels():
+    broker = PaperBroker(entry_fill_model="stop_market")
+    broker.execute_bracket(_order(entry=100.0, stop=95.0, target=110.0))
+    fill = broker.resolve_position(NextBarOHLC(open=98.0, high=99.75, low=97.0))
+    assert fill is not None
+    assert fill.result == "CANCELLED"
+    assert fill.exit_reason == "ENTRY_NOT_TRIGGERED"
+
+
+def test_stop_market_gap_beyond_original_bracket_fails_closed():
+    broker = PaperBroker(entry_fill_model="stop_market", slippage_ticks=1.0)
+    broker.execute_bracket(_order(entry=100.0, stop=95.0, target=110.0))
+    fill = broker.resolve_position(NextBarOHLC(open=112.0, high=113.0, low=111.0))
+    assert fill is not None
+    assert fill.result == "CANCELLED"
+    assert fill.exit_reason == "ENTRY_BRACKET_INVALID_AT_FILL"
+    assert broker.get_position() is None

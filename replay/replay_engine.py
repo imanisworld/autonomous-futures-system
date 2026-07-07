@@ -280,20 +280,18 @@ class ReplayEngine:
                             for_date=journal_date,
                         )
                         continue
-                    session_key = state.session or ""
-                    if session_key:
-                        daily_state.session_trade_counts[session_key] = (
-                            daily_state.session_trade_counts.get(session_key, 0) + 1
-                        )
                     fill = None
                     for future_idx in range(idx + 1, len(candles)):
                         fc = candles[future_idx]
                         fill = broker.resolve_position(
-                            NextBarOHLC(high=fc.high, low=fc.low)
+                            NextBarOHLC(open=fc.open, high=fc.high, low=fc.low)
                         )
                         if fill is not None:
-                            skip_to = future_idx + 1
+                            if fill.result != "CANCELLED":
+                                skip_to = future_idx + 1
                             break
+                    if fill is None and broker.has_pending_entry():
+                        fill = broker.cancel_pending_entry("ENTRY_NO_NEXT_BAR")
                     if fill is not None:
                         journal.log_outcome(
                             instrument=fill.instrument,
@@ -307,6 +305,13 @@ class ReplayEngine:
                             contracts=fill.contracts,
                             for_date=journal_date,
                         )
+                        if fill.result == "CANCELLED":
+                            continue
+                        session_key = state.session or ""
+                        if session_key:
+                            daily_state.session_trade_counts[session_key] = (
+                                daily_state.session_trade_counts.get(session_key, 0) + 1
+                            )
                         daily_state.trade_count += 1
                         daily_state.realized_pnl_dollars += float(fill.pnl_dollars or 0.0)
                         if fill.result == "LOSS":

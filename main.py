@@ -289,7 +289,11 @@ def load_next_bar(path: str) -> NextBarOHLC:
     with open(path, encoding="utf-8") as f:
         raw = json.load(f)
     try:
-        return NextBarOHLC(high=float(raw["high"]), low=float(raw["low"]))
+        return NextBarOHLC(
+            high=float(raw["high"]),
+            low=float(raw["low"]),
+            open=float(raw["open"]) if raw.get("open") is not None else None,
+        )
     except KeyError as e:
         raise ValueError(f"Next-bar file missing required field: {e.args[0]}") from e
 
