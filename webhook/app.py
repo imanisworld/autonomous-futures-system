@@ -1547,6 +1547,7 @@ _DIAG_CODE_OVERRIDES = {
     "Broker": "broker",
     "Webhook secret": "webhook_secret",
     "Live box guard": "live_box_guard",
+    "Range observe evidence": "range_observe_evidence",
 }
 
 
@@ -1562,6 +1563,66 @@ def _diagnostic(status: str, component: str, message: str, next_step: str | None
     if next_step:
         item["next_step"] = next_step
     return item
+
+
+_RANGE_EVIDENCE_FIELDS = (
+    "wall_context",
+    "range_state",
+    "range_signal",
+    "shadow_range_signal",
+)
+
+
+def _range_observe_diagnostic(entries: list[dict], *, recent_limit: int = 25) -> dict | None:
+    """Warn when range observe is enabled but recent decision rows show no evidence.
+
+    This catches the July 2/6 failure mode: the runtime flag can be true while
+    bars are rejected by pre-collector guards such as TIMEFRAME_MISMATCH, leaving
+    the PR #144 resolver with no range candidates to resolve.
+    """
+    if not getattr(_config, "range_observe_enabled", False):
+        return None
+
+    decision_rows = [
+        row for row in entries
+        if row.get("type") not in {"OUTCOME", "SHADOW_OUTCOME", "ORDER_IDS"}
+    ]
+    recent_rows = decision_rows[-recent_limit:]
+    if not recent_rows:
+        return None
+
+    evidence_rows = [
+        row for row in recent_rows
+        if any(row.get(field) for field in _RANGE_EVIDENCE_FIELDS)
+    ]
+    if evidence_rows:
+        return _diagnostic(
+            "ok",
+            "Range observe evidence",
+            f"Range observe is enabled; {len(evidence_rows)}/{len(recent_rows)} recent decision row(s) carry range evidence.",
+        )
+
+    config_blocks = Counter(str(row.get("config_block") or "") for row in recent_rows)
+    top_block = config_blocks.most_common(1)[0][0] if config_blocks else ""
+    if top_block == "TIMEFRAME_MISMATCH":
+        next_step = (
+            "Recent bars are being blocked before the range collector runs; align the "
+            "TradingView alert timeframe with EXPECTED_TIMEFRAME_MINUTES or enable the intended 5m lane."
+        )
+    else:
+        next_step = (
+            "Inspect recent journal decisions and service logs; the range collector runs only after "
+            "pre-strategy ingest/config guards pass."
+        )
+    return _diagnostic(
+        "warn",
+        "Range observe evidence",
+        (
+            f"RANGE_OBSERVE_ENABLED is loaded true, but 0/{len(recent_rows)} recent "
+            "decision row(s) contain wall_context/range_state/range_signal evidence."
+        ),
+        next_step,
+    )
 
 
 def _latest_webhook_age_seconds(latest: dict | None = None) -> int | None:
@@ -2055,6 +2116,10 @@ def _diagnostics_payload(for_date: date) -> dict:
     latest_summary = _latest_webhook_summary(latest)
     if latest_summary:
         items.append(_diagnostic("info", "Latest webhook", latest_summary))
+
+    range_diag = _range_observe_diagnostic(diag_entries)
+    if range_diag:
+        items.append(range_diag)
 
     active_windows = _active_configured_windows()
     if active_windows:
