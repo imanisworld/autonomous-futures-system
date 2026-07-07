@@ -33,8 +33,16 @@ def append_runner_shadow_evidence(
     setup: str | None,
     bar_ts: str | None,
     result: dict[str, Any],
+    fill_confirmed: bool | None = None,
 ) -> None:
-    """Append one live-path observation. Callers own fail-soft exception handling."""
+    """Append one live-path observation. Callers own fail-soft exception handling.
+
+    ``fill_confirmed``: whether the position's ENTRY order verifiably filled at
+    the broker (True), or the fill status was unreadable at write time (None —
+    kept but tagged so evidence review can filter). Callers must NOT write a row
+    for a definitive no-fill: shadow math on a never-filled entry is fill
+    fiction (2026-07-02 MES orb_reclaim row; same artifact class as PR #150).
+    """
     path = Path(log_dir) / EVIDENCE_FILENAME
     path.parent.mkdir(parents=True, exist_ok=True)
     record = {
@@ -49,6 +57,7 @@ def append_runner_shadow_evidence(
         "moved": bool(result.get("moved")),
         "would_stop": result.get("would_stop"),
         "original_stop": result.get("original_stop"),
+        "fill_confirmed": fill_confirmed,
     }
     with open(path, "a") as handle:
         if fcntl is not None:
@@ -102,16 +111,30 @@ def runner_shadow_status(
             latest = None
 
     recent = latest is not None and age_seconds is not None and age_seconds <= fresh_seconds
-    proof_sufficient = bool(
+    armed_and_moved = bool(
         recent and latest is not None and latest.get("armed") and latest.get("moved")
     )
+    # Proof requires the entry fill to be broker-CONFIRMED. Rows tagged
+    # fill_confirmed:null (status unreadable at write time) and legacy rows
+    # missing the key entirely (e.g. the contaminated 2026-07-02 MES row, whose
+    # entry never filled) are path evidence only — never promotion proof.
+    proof_sufficient = armed_and_moved and latest.get("fill_confirmed") is True
     if recent:
         state = "proof_sufficient" if proof_sufficient else "recent_path_evidence"
+        if proof_sufficient:
+            detail = "trail armed and stop moved on a broker-confirmed entry fill"
+        elif armed_and_moved:
+            detail = (
+                "trail armed and moved, but the entry fill is unconfirmed at the "
+                "broker — excluded from proof"
+            )
+        else:
+            detail = "path observed, but no armed stop movement yet"
         summary = (
             f"Live process_alert runner shadow observed {age_seconds}s ago for "
             f"{latest.get('instrument') or 'unknown instrument'}"
             f"{' / ' + str(latest.get('setup')) if latest.get('setup') else ''}; "
-            f"{'trail armed and stop moved' if proof_sufficient else 'path observed, but no armed stop movement yet'}."
+            f"{detail}."
         )
         if proof_sufficient and live_enabled:
             next_step = (
@@ -119,6 +142,11 @@ def runner_shadow_status(
             )
         elif proof_sufficient:
             next_step = "Shadow proof is sufficient; review multiple observations before enabling live trailing."
+        elif armed_and_moved:
+            next_step = (
+                "Keep live trailing blocked: the armed observation lacks a "
+                "broker-confirmed entry fill (fill-fiction guard)."
+            )
         else:
             next_step = "Keep live trailing blocked until recent evidence shows an armed, moved stop."
     elif latest is not None:

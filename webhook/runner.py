@@ -766,14 +766,40 @@ def process_alert(
                         logger.info(format_shadow_log(_shadow, _inst))
                         try:
                             from ops.runner_shadow_evidence import append_runner_shadow_evidence
-                            _setup = open_pos.get("strategy")
-                            append_runner_shadow_evidence(
-                                log_dir,
-                                instrument=_inst,
-                                setup=str(_setup) if _setup else None,
-                                bar_ts=getattr(payload, "timestamp", None),
-                                result=_shadow,
-                            )
+                            # Fill-fiction guard (2026-07-02 incident): a journal-
+                            # open position whose IOC entry NEVER filled at the
+                            # broker still produces shadow math here — armed
+                            # evidence for a trade that didn't exist (same
+                            # artifact class PR #150 exposed in replay). Gate the
+                            # evidence row on the broker-confirmed entry fill:
+                            # definitive no-fill → suppress (the reconciler will
+                            # phantom-clear the position); unreadable → keep the
+                            # row tagged fill_confirmed=null so review filters it.
+                            if not simulate and broker_type == "tradovate":
+                                _oids = open_pos.get("order_ids")
+                                _entry_oid = (
+                                    _oids.get("entry") if isinstance(_oids, dict) else None
+                                )
+                                _fill_confirmed = tv.entry_order_filled(_entry_oid)
+                            else:
+                                # Paper sim: the entry fills by construction.
+                                _fill_confirmed = True
+                            if _fill_confirmed is False:
+                                logger.info(
+                                    "[trail-shadow] %s evidence suppressed — entry "
+                                    "order never filled at broker (fill fiction)",
+                                    _inst,
+                                )
+                            else:
+                                _setup = open_pos.get("strategy")
+                                append_runner_shadow_evidence(
+                                    log_dir,
+                                    instrument=_inst,
+                                    setup=str(_setup) if _setup else None,
+                                    bar_ts=getattr(payload, "timestamp", None),
+                                    result=_shadow,
+                                    fill_confirmed=_fill_confirmed,
+                                )
                         except Exception as _evidence_exc:
                             logger.debug("runner shadow evidence write skipped: %s", _evidence_exc)
                 except Exception as _exc:  # shadow must never affect trading
