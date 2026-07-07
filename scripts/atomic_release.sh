@@ -40,7 +40,7 @@ REMOTE_EXEC=remote
 
 build_release() {
   deploy_lock_acquire "$LOCK_DIR" "build $REF" "$0" "$FORCE_LOCK" || exit 1
-  trap "deploy_lock_release '$LOCK_DIR'" EXIT
+  trap "deploy_lock_release '$LOCK_DIR' '$DEPLOY_LOCK_OWNER'" EXIT
 
   git fetch -q origin
   local sha short work archive manifest
@@ -49,7 +49,7 @@ build_release() {
   work="$(mktemp -d "/tmp/afs-release-${short}.XXXX")"
   archive="/tmp/afs-release-${short}.tgz"
   manifest="$work/release_manifest.json"
-  trap "git worktree remove -f '$work' >/dev/null 2>&1 || true; rm -f '$archive'; deploy_lock_release '$LOCK_DIR'" EXIT
+  trap "git worktree remove -f '$work' >/dev/null 2>&1 || true; rm -f '$archive'; deploy_lock_release '$LOCK_DIR' '$DEPLOY_LOCK_OWNER'" EXIT
 
   git worktree add --detach "$work" "$sha" >/dev/null
   (
@@ -80,7 +80,7 @@ build_release() {
 
 verify_release() {
   deploy_lock_acquire "$LOCK_DIR" "verify $REF" "$0" "$FORCE_LOCK" || exit 1
-  trap "deploy_lock_release '$LOCK_DIR'" EXIT
+  trap "deploy_lock_release '$LOCK_DIR' '$DEPLOY_LOCK_OWNER'" EXIT
 
   local sha="$REF" short="${REF:0:12}" unit="afs-candidate-${REF:0:12}" fingerprint
   fingerprint="$(remote "'$RELEASES/$sha/.venv/bin/python' -c \"import json;print(json.load(open('$RELEASES/$sha/release_manifest.json'))['fingerprint_sha256'])\"")"
@@ -120,7 +120,7 @@ verify_release() {
 
 promote_release() {
   deploy_lock_acquire "$LOCK_DIR" "promote $REF" "$0" "$FORCE_LOCK" || exit 1
-  trap "deploy_lock_release '$LOCK_DIR'" EXIT
+  trap "deploy_lock_release '$LOCK_DIR' '$DEPLOY_LOCK_OWNER'" EXIT
 
   local sha="$REF"
   remote "
@@ -166,7 +166,7 @@ promote_release() {
 
 rollback_release() {
   deploy_lock_acquire "$LOCK_DIR" "rollback" "$0" "$FORCE_LOCK" || exit 1
-  trap "deploy_lock_release '$LOCK_DIR'" EXIT
+  trap "deploy_lock_release '$LOCK_DIR' '$DEPLOY_LOCK_OWNER'" EXIT
 
   remote "
     set -e
