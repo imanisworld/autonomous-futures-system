@@ -22,6 +22,38 @@ DEFAULT_API_BASE = "http://5.78.84.223"
 DEFAULT_INSTRUMENT = "MNQ"
 DEFAULT_LIMIT = 30
 
+# Only FILLED wins/losses advance the formal go-live proof bar. A resolved
+# TRADE<->OUTCOME pair is NOT automatically a filled trade: an unfilled IOC
+# limit books as CANCELLED, and a reconciler that cleared a journal-open
+# position writes an OUTCOME too. Classify every paired outcome so the headline
+# can report filled W/L instead of the broader "resolved" superset.
+FILLED_RESULTS = {"WIN", "LOSS"}
+# Exit-reason substrings that mark a reconciler/auto-management-authored outcome.
+# These need manual (broker-verified) classification before they can count —
+# a phantom-clear can be a genuine no-fill OR a misbooked real fill (2026-07-06).
+RECONCILER_MARKERS = ("reconcile", "phantom", "naked", "auto-flatten", "auto_flatten")
+
+
+def classify_outcome(outcome_body: dict[str, Any]) -> str:
+    """Bucket one resolved trade's OUTCOME for proof accounting.
+
+    Precedence is deliberate: a reconciler-authored row is flagged first (it
+    needs broker verification regardless of the result it happens to carry),
+    then genuine filled W/L, then breakeven, then a plain no-fill CANCELLED.
+    Only ``filled_win_loss`` advances the MNQ proof bar.
+    """
+    result = str(outcome_body.get("result") or "").upper()
+    exit_reason = str(outcome_body.get("exit_reason") or "").lower()
+    if any(marker in exit_reason for marker in RECONCILER_MARKERS):
+        return "reconciler_touched"
+    if result in FILLED_RESULTS:
+        return "filled_win_loss"
+    if result == "BREAKEVEN":
+        return "breakeven"
+    if result == "CANCELLED":
+        return "cancelled_nofill"
+    return "other"
+
 
 @dataclass
 class ResolvedTrade:
@@ -62,6 +94,7 @@ class ResolvedTrade:
             "exit_reason": outcome.get("exit_reason"),
             "pnl_dollars": outcome.get("pnl_dollars"),
             "contracts": outcome.get("contracts") or setup.get("contracts"),
+            "category": classify_outcome(outcome),
         }
 
 
@@ -199,6 +232,21 @@ def build_report(
         broker_payload, broker_error = _payload_from_path_or_url(broker_json, api_base, "/status/broker-account")
     pnl = sum(float((trade.outcome_body.get("pnl_dollars") or 0.0)) for trade in resolved)
     trade_summaries = [trade.to_summary() for trade in resolved]
+
+    # Separate the FILLED proof trades (the go-live bar) from the broader
+    # "resolved" set, which also contains no-fill CANCELLEDs and reconciler
+    # phantom-clears. Only filled_win_loss advances the MNQ proof count.
+    categories = [classify_outcome(trade.outcome_body) for trade in resolved]
+    filled_wl_count = categories.count("filled_win_loss")
+    breakeven_count = categories.count("breakeven")
+    cancelled_nofill_count = categories.count("cancelled_nofill")
+    reconciler_touched_count = categories.count("reconciler_touched")
+    other_outcome_count = categories.count("other")
+    filled_wl_pnl = sum(
+        float((trade.outcome_body.get("pnl_dollars") or 0.0))
+        for trade, cat in zip(resolved, categories)
+        if cat == "filled_win_loss"
+    )
     rejected_count = sum(
         1 for entry in entries
         if (entry.get("instrument") or "").upper() == instrument
@@ -232,6 +280,17 @@ def build_report(
     except (TypeError, ValueError):
         pass
 
+    # The pairing scan stops at `limit` RESOLVED pairs. If that cap is hit while
+    # filled W/L is still short of target, filled trades beyond the 30th pair
+    # were not scanned — the filled count is a floor, not exact. In practice the
+    # journal holds far fewer than `limit` pairs so this never fires; warn if it
+    # ever does rather than silently under-report.
+    if len(resolved) >= limit and filled_wl_count < limit:
+        warnings.append(
+            f"Resolved-pair scan hit the {limit} cap with only {filled_wl_count} filled "
+            "W/L; filled_wl_count is a floor. Increase --limit to scan the full journal."
+        )
+
     return {
         "ok": not read_errors,
         "proof_name": f"next_{limit}_{instrument.lower()}_resolved_trades",
@@ -250,6 +309,17 @@ def build_report(
         ),
         "freeze_ts": freeze_ts.isoformat() if freeze_ts else None,
         "target_trades": limit,
+        # FILLED W/L is the formal proof bar. resolved_* below is the broader
+        # superset (kept for backward compatibility) and MUST NOT be read as
+        # proof progress on its own.
+        "filled_wl_count": filled_wl_count,
+        "filled_remaining_to_target": max(0, limit - filled_wl_count),
+        "filled_wl_pnl_dollars": round(filled_wl_pnl, 2),
+        "breakeven_count": breakeven_count,
+        "cancelled_nofill_count": cancelled_nofill_count,
+        "reconciler_touched_count": reconciler_touched_count,
+        "other_outcome_count": other_outcome_count,
+        "total_resolved_pairs": len(resolved),
         "resolved_mnq_trades": len(resolved),
         "resolved_trades": len(resolved),
         "remaining_to_target": max(0, limit - len(resolved)),

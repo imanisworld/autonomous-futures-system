@@ -26,9 +26,24 @@ def print_human(report: dict) -> None:
     print("RiskSentinel 30-Trade Proof")
     print(f"Journal dir: {report['runtime_sources']['journal_dir']}")
     print(f"Freeze ts: {report['freeze_ts'] or 'not set'}")
-    print(f"MNQ resolved: {report['resolved_mnq_trades']}/{report['target_trades']}")
-    print(f"Remaining: {report['remaining_to_target']}")
-    print(f"Journal P&L: ${report['journal_pnl_dollars']:.2f}")
+    # Proof bar = FILLED W/L only. The resolved superset (below) also contains
+    # no-fill CANCELLEDs and reconciler phantom-clears, which do NOT count.
+    print(f"MNQ FILLED W/L (proof bar): {report['filled_wl_count']}/{report['target_trades']}")
+    print(f"Filled remaining to target: {report['filled_remaining_to_target']}")
+    print(f"Filled W/L P&L: ${report['filled_wl_pnl_dollars']:.2f}")
+    print(
+        f"  raw resolved pairs: {report['total_resolved_pairs']} "
+        f"(= filled {report['filled_wl_count']} + breakeven {report['breakeven_count']} "
+        f"+ cancelled/no-fill {report['cancelled_nofill_count']} "
+        f"+ reconciler-touched {report['reconciler_touched_count']} "
+        f"+ other {report['other_outcome_count']})"
+    )
+    if report['reconciler_touched_count']:
+        print(
+            f"  ⚠ {report['reconciler_touched_count']} reconciler-touched outcome(s) need "
+            "broker-verified classification before they can count (see RUNBOOK)."
+        )
+    print(f"Journal P&L (all resolved): ${report['journal_pnl_dollars']:.2f}")
     print(f"MNQ risk rejected: {report['mnq_risk_rejected_count']}")
     print(f"Unmatched MNQ outcomes: {report['unmatched_mnq_outcomes']}")
     err = report["errors_log"]
@@ -62,7 +77,7 @@ def print_human(report: dict) -> None:
     print()
     for idx, trade in enumerate(report["trades"], start=1):
         print(
-            f"{idx:02d}. {trade['trade_ts']} -> {trade['outcome_ts']} "
+            f"{idx:02d}. [{trade.get('category', '?')}] {trade['trade_ts']} -> {trade['outcome_ts']} "
             f"{trade['instrument']} {trade['direction']} {trade['strategy']} "
             f"{trade['result']} {trade['exit_reason']} pnl=${float(trade['pnl_dollars'] or 0):.2f}"
         )
