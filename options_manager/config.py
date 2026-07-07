@@ -55,6 +55,17 @@ class OptionsManagerConfig:
     quality_theta_warning_ratio: float = 0.10
     quality_allow_mock_provider: bool = True
 
+    # Phase 4 — paper simulation (backtest/replay). Independent of
+    # risk_rules.yaml; simulates options_manager's own packets against
+    # supplied entry/exit snapshots only, no provider fetching.
+    paper_sim_entry_fill: str = "ASK"
+    paper_sim_exit_fill: str = "BID"
+    paper_sim_slippage_percent: float = 0.0
+    paper_sim_per_contract_fee: float = 0.0
+    paper_sim_contract_multiplier: int = 100
+    paper_sim_require_approved_risk: bool = True
+    paper_sim_require_approved_quality: bool = True
+
     @classmethod
     def from_env(cls) -> "OptionsManagerConfig":
         load_dotenv()
@@ -150,6 +161,25 @@ class OptionsManagerConfig:
             ),
             quality_allow_mock_provider=_as_bool(
                 os.getenv("OPTIONS_MANAGER_QUALITY_ALLOW_MOCK_PROVIDER"),
+                default=True,
+            ),
+            paper_sim_entry_fill=os.getenv("OPTIONS_MANAGER_PAPER_SIM_ENTRY_FILL", "ASK"),
+            paper_sim_exit_fill=os.getenv("OPTIONS_MANAGER_PAPER_SIM_EXIT_FILL", "BID"),
+            paper_sim_slippage_percent=_as_float(
+                os.getenv("OPTIONS_MANAGER_PAPER_SIM_SLIPPAGE_PERCENT"), 0.0
+            ),
+            paper_sim_per_contract_fee=_as_float(
+                os.getenv("OPTIONS_MANAGER_PAPER_SIM_PER_CONTRACT_FEE"), 0.0
+            ),
+            paper_sim_contract_multiplier=_as_int(
+                os.getenv("OPTIONS_MANAGER_PAPER_SIM_CONTRACT_MULTIPLIER"), 100
+            ),
+            paper_sim_require_approved_risk=_as_bool(
+                os.getenv("OPTIONS_MANAGER_PAPER_SIM_REQUIRE_APPROVED_RISK"),
+                default=True,
+            ),
+            paper_sim_require_approved_quality=_as_bool(
+                os.getenv("OPTIONS_MANAGER_PAPER_SIM_REQUIRE_APPROVED_QUALITY"),
                 default=True,
             ),
         )
