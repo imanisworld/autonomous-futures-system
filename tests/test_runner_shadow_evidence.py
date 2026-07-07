@@ -29,6 +29,7 @@ def test_runner_shadow_status_reports_recent_live_path_evidence(monkeypatch, tmp
         setup="orb_reclaim",
         bar_ts="2026-06-30T14:30:00+00:00",
         result=_result(),
+        fill_confirmed=True,
     )
 
     status = runner_shadow_status(tmp_path)
@@ -42,6 +43,55 @@ def test_runner_shadow_status_reports_recent_live_path_evidence(monkeypatch, tmp
     assert status["latest"]["instrument"] == "MNQ"
     assert status["latest"]["setup"] == "orb_reclaim"
     assert status["latest"]["armed"] is True
+    assert status["latest"]["fill_confirmed"] is True
+
+
+def test_armed_evidence_without_confirmed_fill_is_not_proof(monkeypatch, tmp_path):
+    """Unreadable fill status → row kept, tagged null, but NEVER promotion proof."""
+    monkeypatch.setenv("RUNNER_SHADOW_ENABLED", "true")
+    append_runner_shadow_evidence(
+        tmp_path,
+        instrument="MES",
+        setup="orb_reclaim",
+        bar_ts="2026-07-02T14:30:00+00:00",
+        result=_result(),
+        fill_confirmed=None,
+    )
+
+    status = runner_shadow_status(tmp_path)
+
+    assert status["state"] == "recent_path_evidence"
+    assert status["proof_sufficient"] is False
+    assert status["live_trailing_blocked"] is True
+    assert status["latest"]["fill_confirmed"] is None
+    assert "entry fill is unconfirmed" in status["summary"]
+    assert "fill-fiction guard" in status["next_step"]
+
+
+def test_legacy_rows_without_fill_key_are_excluded_from_proof(tmp_path, monkeypatch):
+    """Rows written before the fill gate (e.g. the contaminated 2026-07-02 MES
+    orb_reclaim row, whose IOC entry never filled) lack fill_confirmed and must
+    never count as proof, even when armed+moved and fresh."""
+    monkeypatch.setenv("RUNNER_SHADOW_ENABLED", "true")
+    path = tmp_path / EVIDENCE_FILENAME
+    path.write_text(
+        json.dumps({
+            "observed_at": datetime.now(timezone.utc).isoformat(),
+            "source": "process_alert",
+            "instrument": "MES",
+            "setup": "orb_reclaim",
+            "armed": True,
+            "moved": True,
+            "favorable_r": 1.0,
+        })
+        + "\n"
+    )
+
+    status = runner_shadow_status(tmp_path)
+
+    assert status["state"] == "recent_path_evidence"
+    assert status["proof_sufficient"] is False
+    assert status["live_trailing_blocked"] is True
 
 
 def test_recent_unarmed_path_evidence_does_not_unblock_live_trailing(monkeypatch, tmp_path):
