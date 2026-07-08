@@ -19,11 +19,11 @@ import options_manager.adapters.robinhood_readonly as rh_readonly_module
 from options_manager.adapters.robinhood_readonly import (
     RobinhoodAccountSummary,
     RobinhoodPosition,
-    get_accounts_summary,
-    get_option_chain,
-    get_option_quote,
-    get_portfolio_positions,
-    get_underlying_quote,
+    normalize_account_summary,
+    normalize_option_chain,
+    normalize_option_quote,
+    normalize_portfolio_positions,
+    normalize_underlying_quote,
 )
 from options_manager.adapters.base import AdapterOptionQuote, AdapterUnderlyingSnapshot
 from options_manager.contracts import ContractConstraintsInputs, evaluate_contract_constraints
@@ -72,11 +72,11 @@ _FORBIDDEN_CREDENTIAL_IDENTIFIERS = (
 )
 
 _ALLOWED_PUBLIC_FUNCTION_NAMES = {
-    "get_accounts_summary",
-    "get_portfolio_positions",
-    "get_option_chain",
-    "get_option_quote",
-    "get_underlying_quote",
+    "normalize_account_summary",
+    "normalize_portfolio_positions",
+    "normalize_option_chain",
+    "normalize_option_quote",
+    "normalize_underlying_quote",
 }
 
 
@@ -162,7 +162,7 @@ def test_mocked_quote_maps_into_adapter_option_quote():
         "theta": "-0.05",
         "implied_volatility": "0.28",
     }
-    quote = get_option_quote(raw_quote)
+    quote = normalize_option_quote(raw_quote)
     assert isinstance(quote, AdapterOptionQuote)
     assert quote.expiration == "2026-08-21"
     assert quote.dte == 30
@@ -183,7 +183,7 @@ def test_mocked_chain_maps_each_row_into_adapter_option_quote():
         {"strike_price": "60.0", "bid_price": "2.0", "ask_price": "2.1"},
         {"strike_price": "65.0", "bid_price": "1.0", "ask_price": "1.1"},
     ]
-    quotes = get_option_chain(raw_chain)
+    quotes = normalize_option_chain(raw_chain)
     assert len(quotes) == 2
     assert all(isinstance(q, AdapterOptionQuote) for q in quotes)
     assert quotes[0].strike == 60.0
@@ -191,7 +191,7 @@ def test_mocked_chain_maps_each_row_into_adapter_option_quote():
 
 
 def test_mocked_underlying_quote_maps_into_adapter_underlying_snapshot():
-    snapshot = get_underlying_quote({"mark_price": "60.11"})
+    snapshot = normalize_underlying_quote({"mark_price": "60.11"})
     assert isinstance(snapshot, AdapterUnderlyingSnapshot)
     assert snapshot.spot_price == 60.11
     assert snapshot.resistance_levels == ()
@@ -199,13 +199,13 @@ def test_mocked_underlying_quote_maps_into_adapter_underlying_snapshot():
 
 
 def test_mocked_account_and_positions_map_into_local_models():
-    summary = get_accounts_summary(
+    summary = normalize_account_summary(
         {"cash_available": "1000.0", "cash": "500.0", "portfolio_value": "5000.0", "equity": "5000.0"}
     )
     assert isinstance(summary, RobinhoodAccountSummary)
     assert summary.cash_available == 1000.0
 
-    positions = get_portfolio_positions(
+    positions = normalize_portfolio_positions(
         [{"symbol": "BAC", "quantity": "10", "average_cost_basis": "59.5", "current_price": "60.1"}]
     )
     assert len(positions) == 1
@@ -217,7 +217,7 @@ def test_mocked_account_and_positions_map_into_local_models():
 
 
 def test_missing_quote_fields_map_to_none_not_fabricated():
-    quote = get_option_quote({"strike_price": "60.0"})
+    quote = normalize_option_quote({"strike_price": "60.0"})
     assert quote.bid is None
     assert quote.ask is None
     assert quote.volume is None
@@ -231,12 +231,12 @@ def test_missing_quote_fields_map_to_none_not_fabricated():
 
 
 def test_missing_underlying_price_maps_to_none():
-    snapshot = get_underlying_quote({})
+    snapshot = normalize_underlying_quote({})
     assert snapshot.spot_price is None
 
 
 def test_missing_account_fields_map_to_none():
-    summary = get_accounts_summary({})
+    summary = normalize_account_summary({})
     assert summary.cash_available is None
     assert summary.cash is None
     assert summary.portfolio_value is None
@@ -249,7 +249,7 @@ def test_malformed_chain_row_is_skipped_not_fabricated():
     ]
     # strike/bid become None (can't be parsed as float) rather than raising --
     # the row is still mapped, just with those fields left None.
-    quotes = get_option_chain(raw_chain)
+    quotes = normalize_option_chain(raw_chain)
     assert len(quotes) == 1
     assert quotes[0].strike is None
     assert quotes[0].bid is None
@@ -268,7 +268,7 @@ def test_quote_with_missing_fields_fails_closed_in_contract_validator():
         "ask_price": "2.20",
         # volume/open_interest/delta/theta/iv intentionally omitted
     }
-    quote = get_option_quote(raw_quote)
+    quote = normalize_option_quote(raw_quote)
     inputs = ContractConstraintsInputs(
         direction="CALL",
         ticker="BAC",
