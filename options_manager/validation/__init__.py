@@ -30,11 +30,13 @@ from .fixtures import (
 from .management_cases import (
     DecisionBasis,
     DecisionType,
+    EvidenceStatus,
     ManagementCase,
     ManagementCaseSummary,
     ManagementClassification,
     PositionSizing,
     ThesisStatus,
+    build_active_management_case_dataset,
     build_management_case_dataset,
     summarize_management_case_dataset,
 )
@@ -52,11 +54,13 @@ __all__ = [
     "summarize_real_setup_validation_dataset",
     "DecisionBasis",
     "DecisionType",
+    "EvidenceStatus",
     "ManagementCase",
     "ManagementCaseSummary",
     "ManagementClassification",
     "PositionSizing",
     "ThesisStatus",
+    "build_active_management_case_dataset",
     "build_management_case_dataset",
     "summarize_management_case_dataset",
 ]
