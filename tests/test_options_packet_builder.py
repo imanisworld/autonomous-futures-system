@@ -8,7 +8,7 @@ no Robinhood, no Tradovate, no real Discord calls.
 from __future__ import annotations
 
 import ast
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -142,7 +142,7 @@ def test_put_with_target_above_entry_is_rejected():
 def test_journal_writes_only_to_options_journal_file(_isolated_journal_dir):
     build_packet(_valid_raw_input())
 
-    today = date.today().isoformat()
+    today = datetime.now(timezone.utc).date().isoformat()
     options_path = _isolated_journal_dir / f"options_journal_{today}.jsonl"
     futures_path = _isolated_journal_dir / f"journal_{today}.jsonl"
 
@@ -153,7 +153,7 @@ def test_journal_writes_only_to_options_journal_file(_isolated_journal_dir):
 def test_journal_never_writes_futures_journal_filename(_isolated_journal_dir):
     build_packet(_valid_raw_input())
 
-    today = date.today().isoformat()
+    today = datetime.now(timezone.utc).date().isoformat()
     path = _isolated_journal_dir / f"options_journal_{today}.jsonl"
 
     assert path.exists()
