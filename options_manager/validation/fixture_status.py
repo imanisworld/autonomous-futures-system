@@ -134,7 +134,14 @@ def _hood_candidate() -> FixtureCandidate:
             "any dated artifact predating or concurrent with the "
             "2026-06-12 entry that names 92/95/100 as planned levels",
         ),
-        notes="Working entry-rule framing: support-hold continuation/pullback reclaim.",
+        notes=(
+            "Working entry-rule framing: support-hold continuation/"
+            "pullback reclaim. A separate, unrelated HOOD $70P exp "
+            "2026-05-01 trade (BTO 2026-04-30, STC 2026-05-01, net ~-$30) "
+            "also exists in the May 2026 broker statement -- it is a "
+            "distinct position from this $100C exp 2026-06-18 fixture "
+            "window and must not be conflated with it."
+        ),
     )
 
 
@@ -230,47 +237,83 @@ def _orcl_candidate() -> FixtureCandidate:
             "the actual source of the claimed Signa/Minervini scoring (a "
             "named tool, export, or screenshot) -- not yet located",
         ),
-        notes="",
+        notes=(
+            "Statement activity for ORCL exists across the Jan-May 2026 "
+            "broker statements but has not yet been analyzed or "
+            "reconciled against the recalled claims above. NOT_RECONCILED."
+        ),
     )
 
 
 def _fitb_candidate() -> FixtureCandidate:
     return FixtureCandidate(
         ticker="FITB",
-        window="unknown",
-        status=FixtureStatus.INCOMPLETE,
-        best_future_use="Reject unless a source appears.",
-        proof_confirmed=(),
-        proof_missing=(
-            "everything -- not even watchlist-confirmed, no trade, no "
-            "contract, no thesis",
+        window="2026-05-04/2026-05-08",
+        status=FixtureStatus.SPECIAL_CASE_FIXTURE,
+        best_future_use=(
+            "Management case test for early rule-based invalidation "
+            "followed by a recovery and +30% MFE before later failure -- "
+            "not a first scanner-identification proof fixture."
         ),
-        reason_not_first_proof="zero corroborating data anywhere checked (watchlists, order history, repo)",
-        promotion_requirements=("any real source at all",),
-        notes="",
+        proof_confirmed=(
+            "May 2026 broker statement confirms FITB $50C exp 2026-06-18: "
+            "BTO 2026-05-04 1x $2.20 + 1x $2.10 ($430.08 total cost), STC "
+            "2026-05-08 1x $1.75 + 1x $1.76 ($350.88 total proceeds), net "
+            "-$79.20",
+            "exact order timestamps recovered from live order history: "
+            "buys at 9:34:30 ET / 9:55:04 ET on 2026-05-04, sells at "
+            "2:28:59 ET / 2:34:45 ET on 2026-05-08",
+            "underlying traded within ~15 cents of $50 at both entry fills",
+            "$49.50 invalidation level breached intraday same-day as entry "
+            "(2026-05-04 low $49.19), then reclaimed the next session and "
+            "held firmly above $50 for a full day (2026-05-06) before "
+            "failing again",
+            "option premium (from actual contract price bars): MFE +$0.65 "
+            "(+30%, 2026-05-06), MAE -$0.60 (-28%, 2026-05-08 pre-exit), "
+            "final exit realized at roughly -18% blended",
+        ),
+        proof_missing=(
+            "no dated source for the recalled institutional call-flow/OI "
+            "claim -- no historical OI/flow data source exists in the "
+            "toolset used to check this",
+            "no target was ever defined or reached",
+        ),
+        reason_not_first_proof=(
+            "the $49.50 invalidation was breached same-day as entry, but "
+            "price then recovered and produced a +30% MFE before failing "
+            "again days later -- a same-day invalidation breach followed "
+            "by recovery, not a clean single trigger-to-invalidation loser"
+        ),
+        promotion_requirements=(),
+        notes=(
+            "BROKER_VERIFIED_LOSER / RECONSTRUCTED. Best modeled going "
+            "forward as a management_cases.py case (early-invalidation-"
+            "then-recovery decision logic), not pursued for "
+            "CLEAN_COMPLETE_FIXTURE."
+        ),
     )
 
 
 def _bac_candidate() -> FixtureCandidate:
     return FixtureCandidate(
         ticker="BAC",
-        window="unknown",
+        window="2026-05-01/2026-05-04",
         status=FixtureStatus.INCOMPLETE,
-        best_future_use="Low-priority candidate pending a specific date/contract to reconcile.",
+        best_future_use="Low-priority candidate pending candle-level reconstruction.",
         proof_confirmed=(
-            "real BAC trades exist in the account's order history across "
-            "the 3-month window",
+            "May 2026 broker statement confirms BAC $55C exp 2026-05-08: "
+            "BTO 2026-05-01 3x $0.12 ($36.12 debit), STC 2026-05-04 2x "
+            "$0.05 + 1x $0.05 ($14.84 total proceeds), net -$21.28",
         ),
         proof_missing=(
-            "the originally recalled levels never reconciled to a single "
-            "clean trade",
+            "candle-level reconstruction (underlying spot/range, 5-minute "
+            "context, MFE/MAE) -- not yet performed",
         ),
-        reason_not_first_proof="conflicting levels never resolved to one specific trade",
+        reason_not_first_proof="broker-verified real loser, but not yet candle-reconstructed",
         promotion_requirements=(
-            "a specific date/contract pointed to, then the same order-level "
-            "pull + candle check used for HOOD/EBAY",
+            "the same candle reconstruction pass already run for FITB",
         ),
-        notes="",
+        notes="BROKER_VERIFIED_LOSER / PENDING_CANDLE_RECONSTRUCTION.",
     )
 
 

@@ -1,4 +1,4 @@
-# Options Fixture-Candidate Inventory (Increment 25B)
+# Options Fixture-Candidate Inventory (Increment 25B, updated 25F)
 
 Static, hand-authored inventory of every real trade candidate discussed
 as a possible scanner-identification proof fixture, tracked via
@@ -20,9 +20,9 @@ As of this increment, **no candidate has reached `CLEAN_COMPLETE_FIXTURE`.**
 | HOOD | 2026-06-12/2026-06-15 | `PENDING_PROOF_FIXTURE` | Support-hold continuation scanner-proof fixture, pending a planned-level source |
 | EBAY | 2026-04-30/2026-05-01 | `SPECIAL_CASE_FIXTURE` | Management-case test for real-vs-post-exit target hits (corrected by PR #221) |
 | AMD | 2026-02-05/2026-02-06 | `SPECIAL_CASE_FIXTURE` | Regression test for premarket-trigger / RTH-already-through-target handling |
-| ORCL | unknown | `INCOMPLETE` | Scanner-identification candidate, only if a real source packet surfaces |
-| FITB | unknown | `INCOMPLETE` | Reject unless a source appears |
-| BAC | unknown | `INCOMPLETE` | Low priority pending a specific date/contract |
+| ORCL | unknown | `INCOMPLETE` | Scanner-identification candidate, only if a real source packet surfaces (statement activity exists, not yet analyzed) |
+| FITB | 2026-05-04/2026-05-08 | `SPECIAL_CASE_FIXTURE` | Management case for early invalidation-then-recovery decision logic |
+| BAC | 2026-05-01/2026-05-04 | `INCOMPLETE` | Broker-verified loser, pending candle reconstruction |
 | SPXW | unknown | `SCALP_NOISE` | Not recommended for this proof lane |
 | NVDA | 2026-07-07/2026-07-08 | `SCALP_NOISE` | Not pursued for this proof lane |
 | NOK | 2026-05-15/2026-06-12 | `MANAGEMENT_CASE` | Scaled-exit-over-weeks test (corrected by PR #221) |
@@ -37,7 +37,10 @@ confirmed, and the recalled 92/95/100 levels line up with the
 reconstructed candles almost exactly. What's missing is a *contemporaneous*
 source (screenshot, note, alert) proving those levels were the actual plan
 rather than a good post-hoc match. That single artifact is the only thing
-that promotes this candidate.
+that promotes this candidate. Note: a separate, unrelated HOOD $70P exp
+2026-05-01 trade (BTO 2026-04-30, STC 2026-05-01, net ~-$30) also appears
+in the May 2026 broker statement -- it is a distinct position from this
+$100C exp 2026-06-18 fixture window and must not be conflated with it.
 
 **EBAY** — fills are fully confirmed and corrected (PR #221). The setup
 itself has a ~55-minute whipsaw before the real trigger candle, and
@@ -56,10 +59,27 @@ detail (Signa Score, Minervini count, trigger/invalidation/target) has
 no corroborating source anywhere in this repo or the account — verified
 by direct search (`Minervini` returns zero hits; `Signa` only matches the
 substring "signal" in unrelated code). Promotable only if that source is
-found.
+found. Real ORCL activity exists across the Jan-May 2026 broker
+statements but has not yet been analyzed or reconciled against the
+recalled claims above -- `NOT_RECONCILED`.
 
-**FITB / BAC** — no trade or an unresolved trade exists; low priority
-until a specific date/contract is supplied.
+**FITB** — broker-statement confirmed and fully candle-reconstructed
+(Increment 25E/25F): FITB $50C exp 2026-06-18, BTO 2026-05-04 ($2.20 +
+$2.10), STC 2026-05-08 ($1.75 + $1.76), net -$79.20. Entry was real and
+coherent around the $50 level, but the $49.50 invalidation was breached
+intraday same-day as entry, then price recovered and produced a +30% MFE
+(2026-05-06) before failing again -- exit at roughly -18% blended was a
+delayed management decision after a round trip, not a clean immediate
+invalidation exit. No target was ever defined. This disqualifies it from
+`CLEAN_COMPLETE_FIXTURE`; it is better modeled as a `management_cases.py`
+case for early-invalidation-then-recovery decision logic than pursued
+further as a scanner-proof fixture.
+
+**BAC** — broker-statement confirmed (Increment 25E): BAC $55C exp
+2026-05-08, BTO 2026-05-01 (3x $0.12), STC 2026-05-04 (2x $0.05 + 1x
+$0.05), net -$21.28. Real, broker-verified loser, but candle-level
+reconstruction (underlying spot/range, MFE/MAE) has not yet been run --
+pending the same pass already completed for FITB.
 
 **SPXW / NVDA** — the account's actual trading pattern here is
 high-frequency, same-session 0DTE scalping (SPXW: dozens of closing
