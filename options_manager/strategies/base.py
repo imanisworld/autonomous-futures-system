@@ -87,6 +87,14 @@ class StrategySignal:
     context_score: Optional[float] = None
     context_warnings: list[str] = field(default_factory=list)
     market_context_reason_code: Optional[str] = None
+    # Populated only when contract constraints were derived via
+    # options_manager.contracts.contract_validator.evaluate_contract_constraints()
+    # (Increment 4B); left None/empty when an explicit
+    # StrategyContractConstraints was supplied instead.
+    contract_status: Optional[str] = None
+    contract_score: Optional[float] = None
+    contract_warnings: list[str] = field(default_factory=list)
+    contract_reason_code: Optional[str] = None
     warnings: list[str] = field(default_factory=list)
 
 
