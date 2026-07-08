@@ -433,17 +433,28 @@ def test_runner_invalid_timestamp_fails_closed(config, tmp_path):
 # ─── runner: TRADE → APPROVED path ───────────────────────────────────────────
 
 def test_runner_trending_orb_breakout_mes_produces_trade(config, tmp_path):
-    """MNQ is disabled; test orb_breakout on MES (orb_reclaim disabled on MES, orb_breakout is not)."""
+    """MNQ is disabled; test orb_breakout on MES (orb_reclaim disabled on MES, orb_breakout is not).
+
+    The shared `config` fixture's enabled_concepts doesn't include orb_breakout
+    (it's tuned for other tests), so it's added here explicitly. The bracket
+    (entry 5898.5 / stop 5896.0 / target 5904.0 — derived from orb_high=5898.0,
+    tick=0.25, default orb_stop_ticks=8, MES max_stop_ticks=40, 2.2R target) is
+    computed from _try_orb_breakout's own arithmetic; close=5900.0 sits inside
+    the stop/target band so the setup isn't rejected by the ENTRY_DETACHED_FROM_PRICE
+    staleness gate, and volume=5000/avg=3800 (1.32x) clears the >=1.2x confirmation
+    gate. These values are the deterministic happy path, not a synthetic guess.
+    """
     from webhook.runner import process_alert
 
+    cfg = replace(config, enabled_concepts=config.enabled_concepts + ["orb_breakout"])
     log_dir = str(tmp_path / "logs")
     payload = _base_payload(
         ticker="MES1!",
-        open=5880.0,
-        high=5910.0,
-        low=5875.0,
-        close=5905.25,
-        volume=4200,
+        open=5885.0,
+        high=5901.0,
+        low=5880.0,
+        close=5900.0,
+        volume=5000,
         avg_volume=3800,
         vwap=5895.0,
         orb_high=5898.0,
@@ -453,10 +464,9 @@ def test_runner_trending_orb_breakout_mes_produces_trade(config, tmp_path):
         previous_day_low=5840.0,
         previous_day_close=5875.0,
     )
-    result = process_alert(payload, config=config, log_dir=log_dir)
+    result = process_alert(payload, config=cfg, log_dir=log_dir)
 
-    if result["decision"] == "NO_TRADE":
-        pytest.skip("Signal engine produced NO_TRADE — conditions not met")
+    assert result["decision"] == "TRADE"
     assert result["fill"] is not None
     assert result["fill"]["status"] == "OPEN"
     assert result["fill"]["instrument"] == "MES"
