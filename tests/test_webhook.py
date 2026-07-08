@@ -2056,6 +2056,20 @@ def test_fastapi_latest_webhook_endpoint_after_alert(monkeypatch, tmp_path):
     alert_resp = client.post("/webhook/alert", json=body, headers={"X-Webhook-Secret": "test-secret"})
     assert alert_resp.status_code == 200
 
+    # Unauthenticated (no site-gate session): public-safe summary only, no raw
+    # payload/context (GEX/HTF/ICC/strat internals never leak here).
+    public_resp = client.get("/status/latest-webhook")
+    assert public_resp.status_code == 200
+    public_data = public_resp.json()
+    assert public_data["sanitized"] is True
+    assert public_data["symbol"] == "MNQ1!"
+    assert public_data["timeframe"] == "15"
+    assert "payload" not in public_data
+    assert "context" not in public_data
+
+    # With a valid site-gate session: full raw payload/context, unchanged from
+    # the endpoint's pre-existing (authenticated) behavior.
+    client.cookies.set("vp_access", app_module._gate_token())
     latest_resp = client.get("/status/latest-webhook")
     assert latest_resp.status_code == 200
     data = latest_resp.json()

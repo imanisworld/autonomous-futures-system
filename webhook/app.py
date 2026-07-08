@@ -1263,10 +1263,35 @@ async def status_test_bracket(
         return {"ok": False, "error": str(exc)}
 
 
+def _sanitize_latest_webhook_response(latest: dict) -> dict:
+    """Public-safe summary only — no raw payload, no context (GEX/HTF/ICC/strat
+    internals). Those fields are exactly what _SENSITIVE_PATHS's own comment
+    warns about leaking ("raw payloads / config / the signa edge") — this is
+    the actual proprietary indicator state, not just an account identifier."""
+    payload = latest.get("payload") or {}
+    received_at = latest.get("received_at")
+    age = _latest_webhook_age_seconds(latest)
+    max_staleness = int(getattr(_config, "max_staleness_seconds", 0) or 0)
+    return {
+        "sanitized": True,
+        "last_event_time": received_at,
+        "symbol": payload.get("ticker"),
+        "timeframe": payload.get("timeframe"),
+        "received_recently": (
+            age is not None and max_staleness > 0 and age <= max_staleness
+        ),
+    }
+
+
 @app.get("/status/latest-webhook")
-async def latest_webhook() -> dict:
-    """Return the last TradingView payload and derived market context."""
-    return _latest_webhook_payload()
+async def latest_webhook(request: Request) -> dict:
+    """Return the last TradingView payload and derived market context to a
+    caller with a valid site-gate session; everyone else gets a public-safe
+    summary only (no raw payload/context) — see _sanitize_latest_webhook_response."""
+    latest = _latest_webhook_payload()
+    if _has_valid_gate_cookie(request):
+        return latest
+    return _sanitize_latest_webhook_response(latest)
 
 
 @app.get("/status/strategy")

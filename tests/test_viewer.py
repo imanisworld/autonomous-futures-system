@@ -258,6 +258,70 @@ def test_broker_account_id_visible_with_valid_gate_session(monkeypatch, tmp_path
     assert resp.json()["account_id"] == 987654
 
 
+# ─── /status/latest-webhook strategy-internals sanitization ───────────────────
+
+_LATEST_WEBHOOK_RAW = {
+    "received_at": "2026-07-08T01:00:00+00:00",
+    "payload": {
+        "ticker": "MES1!", "timeframe": "15", "close": 5580.25,
+        "vwap": 5579.0, "orb_high": 5585.0, "orb_low": 5570.0,
+    },
+    "context": {
+        "close": 5580.25,
+        "gex": {"call_wall": 5600.0, "put_wall": 5550.0, "gex_regime": "positive"},
+        "htf": {"daily_direction": "UP", "ftfc_aligned": True},
+        "icc": {
+            "correction_high": 5590.0, "correction_low": 5570.0,
+            "phase": "correction", "indication_type": "long",
+            "last_swing_high": 5595.0, "last_swing_low": 5565.0,
+            "stop_loss": 5560.0, "tp1": 5610.0,
+        },
+    },
+    "result": {"decision": "TRADE", "resolution": "PENDING"},
+}
+_STRATEGY_INTERNAL_SUBSTRINGS = (
+    "gex", "call_wall", "put_wall", "htf", "ftfc", "icc", "correction",
+    "swing_high", "swing_low", "stop_loss", "tp1", "vwap", "orb_high", "orb_low",
+    "context", "payload", "result", "decision", "resolution",
+)
+
+
+def test_latest_webhook_sanitized_without_gate_session(monkeypatch, tmp_path):
+    """Unauthenticated callers get a public-safe summary only — no raw
+    payload/context, and specifically none of GEX/HTF/ICC/strat-internal
+    fields, which are the actual proprietary indicator state (not just an
+    account identifier like the broker-account fix)."""
+    client, app_module = _client(monkeypatch, tmp_path, token="demo", code=None)
+    monkeypatch.setattr(app_module, "_latest_webhook_payload", lambda: dict(_LATEST_WEBHOOK_RAW))
+
+    resp = client.get("/status/latest-webhook")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["sanitized"] is True
+    assert data["symbol"] == "MES1!"
+    assert data["timeframe"] == "15"
+    assert data["last_event_time"] == "2026-07-08T01:00:00+00:00"
+
+    leaked = [k for k in _deep_keys(data) if any(s in k for s in _STRATEGY_INTERNAL_SUBSTRINGS)]
+    assert not leaked, f"leaked strategy-internal keys: {leaked}"
+
+
+def test_latest_webhook_raw_with_valid_gate_session(monkeypatch, tmp_path):
+    """A caller who has authenticated through the site gate still gets the
+    full raw payload/context — unchanged pre-existing operator-facing
+    behavior, not removed by the public-response sanitization."""
+    client, app_module = _client(monkeypatch, tmp_path, token="demo", code="admincode", scope="sensitive")
+    monkeypatch.setattr(app_module, "_latest_webhook_payload", lambda: dict(_LATEST_WEBHOOK_RAW))
+    client.cookies.set("vp_access", app_module._gate_token())
+
+    resp = client.get("/status/latest-webhook")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["payload"]["ticker"] == "MES1!"
+    assert data["context"]["icc"]["stop_loss"] == 5560.0
+    assert data["context"]["gex"]["call_wall"] == 5600.0
+
+
 # ─── env interplay + read-only ────────────────────────────────────────────────
 
 def test_viewer_survives_public_demo_mode(monkeypatch, tmp_path):
