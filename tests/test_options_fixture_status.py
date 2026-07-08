@@ -193,10 +193,47 @@ def test_adp_arm_qcom_remain_reject():
         assert inventory[ticker].status == FixtureStatus.REJECT, ticker
 
 
-def test_orcl_fitb_bac_are_incomplete():
+def test_orcl_bac_are_incomplete():
     inventory = build_fixture_candidate_inventory()
-    for ticker in ("ORCL", "FITB", "BAC"):
+    for ticker in ("ORCL", "BAC"):
         assert inventory[ticker].status == FixtureStatus.INCOMPLETE, ticker
+
+
+def test_fitb_is_special_case_not_clean():
+    """As of Increment 25F, the FITB $50C trade is broker-verified and
+    candle-reconstructed, but the same-day invalidation breach followed
+    by a +30% MFE recovery disqualifies it from a clean loser fixture."""
+    candidate = build_fixture_candidate_inventory()["FITB"]
+    assert candidate.status == FixtureStatus.SPECIAL_CASE_FIXTURE
+    assert candidate.status != FixtureStatus.CLEAN_COMPLETE_FIXTURE
+
+
+def test_fitb_best_future_use_points_to_management_case():
+    candidate = build_fixture_candidate_inventory()["FITB"]
+    assert "management case" in candidate.best_future_use.lower()
+
+
+def test_fitb_reason_cites_same_day_invalidation_and_mfe():
+    candidate = build_fixture_candidate_inventory()["FITB"]
+    reason = candidate.reason_not_first_proof
+    assert "same-day" in reason.lower()
+    assert "invalidation" in reason.lower()
+    assert "30%" in reason
+
+
+def test_bac_remains_not_clean_pending_candle_reconstruction():
+    candidate = build_fixture_candidate_inventory()["BAC"]
+    assert candidate.status != FixtureStatus.CLEAN_COMPLETE_FIXTURE
+    assert "BROKER_VERIFIED_LOSER" in candidate.notes
+    assert "PENDING_CANDLE_RECONSTRUCTION" in candidate.notes
+
+
+def test_hood_70p_not_conflated_with_hood_100c():
+    candidate = build_fixture_candidate_inventory()["HOOD"]
+    notes = candidate.notes
+    assert "$70P" in notes
+    assert "$100C" in notes
+    assert any(word in notes.lower() for word in ("separate", "unrelated", "distinct"))
 
 
 def test_spxw_nvda_are_scalp_noise():
