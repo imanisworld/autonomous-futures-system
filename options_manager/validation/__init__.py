@@ -27,6 +27,13 @@ from .fixtures import (
     run_real_setup_validation_dataset,
     summarize_real_setup_validation_dataset,
 )
+from .fixture_status import (
+    FixtureCandidate,
+    FixtureCandidateSummary,
+    FixtureStatus,
+    build_fixture_candidate_inventory,
+    summarize_fixture_candidate_inventory,
+)
 from .management_cases import (
     DecisionBasis,
     DecisionType,
@@ -63,4 +70,9 @@ __all__ = [
     "build_active_management_case_dataset",
     "build_management_case_dataset",
     "summarize_management_case_dataset",
+    "FixtureCandidate",
+    "FixtureCandidateSummary",
+    "FixtureStatus",
+    "build_fixture_candidate_inventory",
+    "summarize_fixture_candidate_inventory",
 ]
