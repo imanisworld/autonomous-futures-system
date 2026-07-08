@@ -117,6 +117,14 @@ class OptionsManagerConfig:
     storage_require_append_only: bool = True
     storage_reject_order_queue_fields: bool = True
 
+    # Phase 15 — inert read-only HTTP status API. Independent of
+    # risk_rules.yaml and of OPTIONS_MANAGER_INGEST_SECRET; gates a
+    # dedicated, read-only confirmation/ticket status surface only. No
+    # writes, no broker calls, no order placement.
+    http_status_enabled: bool = True
+    http_status_secret: str = ""
+    http_status_require_secret: bool = True
+
     @classmethod
     def from_env(cls) -> "OptionsManagerConfig":
         load_dotenv()
@@ -324,6 +332,13 @@ class OptionsManagerConfig:
             storage_reject_order_queue_fields=_as_bool(
                 os.getenv("OPTIONS_MANAGER_STORAGE_REJECT_ORDER_QUEUE_FIELDS"),
                 default=True,
+            ),
+            http_status_enabled=_as_bool(
+                os.getenv("OPTIONS_MANAGER_HTTP_STATUS_ENABLED"), default=True
+            ),
+            http_status_secret=os.getenv("OPTIONS_MANAGER_HTTP_STATUS_SECRET", ""),
+            http_status_require_secret=_as_bool(
+                os.getenv("OPTIONS_MANAGER_HTTP_STATUS_REQUIRE_SECRET"), default=True
             ),
         )
 
