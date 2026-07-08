@@ -244,6 +244,21 @@ def test_session_cutoff_blocks_trade_at_1145_et(config, tmp_path):
     assert report.approved_trades == 0, (
         "Trade at 11:45 ET should be blocked by 11:30 session cutoff"
     )
+    rows = [
+        json.loads(line)
+        for line in Path(report.journal_path).read_text().splitlines()
+        if line.strip()
+    ]
+    decision_rows = [row for row in rows if row.get("decision")]
+    outcome_rows = [row for row in rows if row.get("type") == "OUTCOME"]
+    assert len(decision_rows) == 1
+    entry = decision_rows[0]
+    assert entry["decision"] == "RISK_REJECTED"
+    assert entry["risk_check"]["result"] == "REJECTED"
+    assert entry["risk_check"]["failed_rule"] == "session_cutoff"
+    assert entry["reason"] == entry["risk_check"]["reason"]
+    assert "session_cutoff" in entry["failed_gates"]
+    assert outcome_rows == []
 
 
 # ---------------------------------------------------------------------------

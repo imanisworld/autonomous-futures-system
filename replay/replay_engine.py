@@ -245,6 +245,19 @@ class ReplayEngine:
                     "failed_rule": risk_result.failed_rule,
                     "reason": risk_result.reason,
                 }
+                if not risk_result.approved:
+                    journal_entry["decision"] = "RISK_REJECTED"
+                    journal_entry["reason"] = (
+                        risk_result.reason or journal_entry.get("reason")
+                    )
+                    failed_gates = list(journal_entry.get("failed_gates") or [])
+                    if (
+                        risk_result.failed_rule
+                        and risk_result.failed_rule not in failed_gates
+                    ):
+                        journal_entry["failed_gates"] = (
+                            failed_gates + [risk_result.failed_rule]
+                        )
 
                 journal.log_decision(journal_entry, risk_result_dict, for_date=journal_date)
 
