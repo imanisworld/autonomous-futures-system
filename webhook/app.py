@@ -738,9 +738,14 @@ async def manual_action(
 
 
 @app.get("/", response_class=HTMLResponse)
-async def dashboard() -> HTMLResponse:
-    """Read-only operator dashboard."""
-    status = _dashboard_payload(date.today())
+async def dashboard(request: Request) -> HTMLResponse:
+    """Read-only operator dashboard. Embedded latest_webhook/latest_webhooks
+    are sanitized for callers without a valid site-gate session — same rule
+    as /status/today, see _sanitize_dashboard_payload. (This route is also
+    expected to be unreachable externally on the production box, where nginx
+    serves a different static app at "/" and :8000 is firewalled — this is
+    defense-in-depth, not reliance on that infra staying correctly configured.)"""
+    status = _sanitize_dashboard_payload(_dashboard_payload(date.today()), request)
     return HTMLResponse(_render_dashboard(status))
 
 
@@ -759,10 +764,37 @@ async def health() -> dict:
     }
 
 
+def _sanitize_dashboard_payload(payload: dict, request: Request) -> dict:
+    """Sanitize the embedded latest_webhook/latest_webhooks fields for a
+    caller without a valid site-gate session. /status/today is the main
+    public dashboard endpoint (unauthenticated by default) and was found to
+    re-embed the exact same raw strategy internals that
+    _sanitize_latest_webhook_response already protects on the standalone
+    /status/latest-webhook endpoint — everything else in the payload (trade
+    count, P&L, win rate, etc.) is untouched either way."""
+    if _has_valid_gate_cookie(request):
+        return payload
+    out = dict(payload)
+    if isinstance(out.get("latest_webhook"), dict):
+        out["latest_webhook"] = _sanitize_latest_webhook_response(out["latest_webhook"])
+    if isinstance(out.get("latest_webhooks"), dict):
+        out["latest_webhooks"] = {
+            inst: (
+                _sanitize_latest_webhook_response(data)
+                if isinstance(data, dict) else data
+            )
+            for inst, data in out["latest_webhooks"].items()
+        }
+    return out
+
+
 @app.get("/status/today")
-async def status_today() -> dict:
-    """Return today's reconstructed daily state from the journal."""
-    return _dashboard_payload(date.today())
+async def status_today(request: Request) -> dict:
+    """Return today's reconstructed daily state from the journal. Embedded
+    latest_webhook/latest_webhooks are sanitized for callers without a valid
+    site-gate session — see _sanitize_dashboard_payload."""
+    payload = _dashboard_payload(date.today())
+    return _sanitize_dashboard_payload(payload, request)
 
 
 @app.get("/status/five-min")
@@ -1263,10 +1295,35 @@ async def status_test_bracket(
         return {"ok": False, "error": str(exc)}
 
 
+def _sanitize_latest_webhook_response(latest: dict) -> dict:
+    """Public-safe summary only — no raw payload, no context (GEX/HTF/ICC/strat
+    internals). Those fields are exactly what _SENSITIVE_PATHS's own comment
+    warns about leaking ("raw payloads / config / the signa edge") — this is
+    the actual proprietary indicator state, not just an account identifier."""
+    payload = latest.get("payload") or {}
+    received_at = latest.get("received_at")
+    age = _latest_webhook_age_seconds(latest)
+    max_staleness = int(getattr(_config, "max_staleness_seconds", 0) or 0)
+    return {
+        "sanitized": True,
+        "last_event_time": received_at,
+        "symbol": payload.get("ticker"),
+        "timeframe": payload.get("timeframe"),
+        "received_recently": (
+            age is not None and max_staleness > 0 and age <= max_staleness
+        ),
+    }
+
+
 @app.get("/status/latest-webhook")
-async def latest_webhook() -> dict:
-    """Return the last TradingView payload and derived market context."""
-    return _latest_webhook_payload()
+async def latest_webhook(request: Request) -> dict:
+    """Return the last TradingView payload and derived market context to a
+    caller with a valid site-gate session; everyone else gets a public-safe
+    summary only (no raw payload/context) — see _sanitize_latest_webhook_response."""
+    latest = _latest_webhook_payload()
+    if _has_valid_gate_cookie(request):
+        return latest
+    return _sanitize_latest_webhook_response(latest)
 
 
 @app.get("/status/strategy")
@@ -1940,10 +1997,11 @@ def _diagnostics_payload(for_date: date) -> dict:
                     "Run /admin/live-preflight/run, resolve any failed checks, then arm today.",
                 ))
         except Exception as exc:
+            logger.exception("Live preflight diagnostic check failed: %s", exc)
             items.append(_diagnostic(
                 "warn",
                 "Live preflight",
-                f"Live preflight state is unavailable: {exc}",
+                "Live preflight state is unavailable.",
             ))
     else:
         items.append(_diagnostic("ok", "Broker", f"Broker is set to {broker}; no external gateway required."))
@@ -2199,7 +2257,8 @@ def _safe_live_preflight_status() -> dict:
         from execution.live_preflight import live_order_status
         return live_order_status()
     except Exception as exc:
-        return {"ready": False, "reason": f"unavailable:{exc}", "armed": False}
+        logger.exception("live_order_status failed: %s", exc)
+        return {"ready": False, "reason": "unavailable", "armed": False}
 
 
 def _dashboard_payload(for_date: date) -> dict:

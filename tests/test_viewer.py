@@ -258,6 +258,186 @@ def test_broker_account_id_visible_with_valid_gate_session(monkeypatch, tmp_path
     assert resp.json()["account_id"] == 987654
 
 
+# ─── /status/latest-webhook strategy-internals sanitization ───────────────────
+
+_LATEST_WEBHOOK_RAW = {
+    "received_at": "2026-07-08T01:00:00+00:00",
+    "payload": {
+        "ticker": "MES1!", "timeframe": "15", "close": 5580.25,
+        "vwap": 5579.0, "orb_high": 5585.0, "orb_low": 5570.0,
+    },
+    "context": {
+        "close": 5580.25,
+        "gex": {"call_wall": 5600.0, "put_wall": 5550.0, "gex_regime": "positive"},
+        "htf": {"daily_direction": "UP", "ftfc_aligned": True},
+        "icc": {
+            "correction_high": 5590.0, "correction_low": 5570.0,
+            "phase": "correction", "indication_type": "long",
+            "last_swing_high": 5595.0, "last_swing_low": 5565.0,
+            "stop_loss": 5560.0, "tp1": 5610.0,
+        },
+    },
+    "result": {"decision": "TRADE", "resolution": "PENDING"},
+}
+_STRATEGY_INTERNAL_SUBSTRINGS = (
+    "gex", "call_wall", "put_wall", "htf", "ftfc", "icc", "correction",
+    "swing_high", "swing_low", "stop_loss", "tp1", "vwap", "orb_high", "orb_low",
+    "context", "payload", "result", "decision", "resolution",
+)
+
+
+def test_latest_webhook_sanitized_without_gate_session(monkeypatch, tmp_path):
+    """Unauthenticated callers get a public-safe summary only — no raw
+    payload/context, and specifically none of GEX/HTF/ICC/strat-internal
+    fields, which are the actual proprietary indicator state (not just an
+    account identifier like the broker-account fix)."""
+    client, app_module = _client(monkeypatch, tmp_path, token="demo", code=None)
+    monkeypatch.setattr(app_module, "_latest_webhook_payload", lambda: dict(_LATEST_WEBHOOK_RAW))
+
+    resp = client.get("/status/latest-webhook")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["sanitized"] is True
+    assert data["symbol"] == "MES1!"
+    assert data["timeframe"] == "15"
+    assert data["last_event_time"] == "2026-07-08T01:00:00+00:00"
+
+    leaked = [k for k in _deep_keys(data) if any(s in k for s in _STRATEGY_INTERNAL_SUBSTRINGS)]
+    assert not leaked, f"leaked strategy-internal keys: {leaked}"
+
+
+def test_latest_webhook_raw_with_valid_gate_session(monkeypatch, tmp_path):
+    """A caller who has authenticated through the site gate still gets the
+    full raw payload/context — unchanged pre-existing operator-facing
+    behavior, not removed by the public-response sanitization."""
+    client, app_module = _client(monkeypatch, tmp_path, token="demo", code="admincode", scope="sensitive")
+    monkeypatch.setattr(app_module, "_latest_webhook_payload", lambda: dict(_LATEST_WEBHOOK_RAW))
+    client.cookies.set("vp_access", app_module._gate_token())
+
+    resp = client.get("/status/latest-webhook")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["payload"]["ticker"] == "MES1!"
+    assert data["context"]["icc"]["stop_loss"] == 5560.0
+    assert data["context"]["gex"]["call_wall"] == 5600.0
+
+
+# ─── /status/today embedded latest_webhook/latest_webhooks sanitization ───────
+
+def _fake_dashboard_payload(**overrides):
+    base = {
+        "trade_count": 3,
+        "wins": 1,
+        "losses": 1,
+        "today_pnl_dollars": 22.5,
+        "has_open_position": False,
+        "latest_webhook": dict(_LATEST_WEBHOOK_RAW),
+        "latest_webhooks": {
+            "MES": dict(_LATEST_WEBHOOK_RAW),
+            "MNQ": dict(_LATEST_WEBHOOK_RAW),
+        },
+    }
+    base.update(overrides)
+    return base
+
+
+def test_status_today_latest_webhook_sanitized_without_gate_session(monkeypatch, tmp_path):
+    """/status/today is the main public dashboard endpoint (unauthenticated by
+    default) — it must not re-expose the same raw GEX/HTF/ICC internals that
+    /status/latest-webhook already sanitizes, while still rendering the
+    ordinary dashboard summary fields (trade count, P&L, etc.)."""
+    client, app_module = _client(monkeypatch, tmp_path, token="demo", code=None)
+    monkeypatch.setattr(app_module, "_dashboard_payload", lambda for_date: _fake_dashboard_payload())
+
+    resp = client.get("/status/today")
+    assert resp.status_code == 200
+    data = resp.json()
+
+    # dashboard still has enough safe summary data to render
+    assert data["trade_count"] == 3
+    assert data["wins"] == 1
+    assert data["today_pnl_dollars"] == 22.5
+    assert data["has_open_position"] is False
+
+    # embedded latest_webhook / latest_webhooks are sanitized, not raw
+    assert data["latest_webhook"]["sanitized"] is True
+    assert data["latest_webhooks"]["MES"]["sanitized"] is True
+    assert data["latest_webhooks"]["MNQ"]["sanitized"] is True
+
+    leaked = [k for k in _deep_keys(data) if any(s in k for s in _STRATEGY_INTERNAL_SUBSTRINGS)]
+    assert not leaked, f"/status/today leaked strategy-internal keys: {leaked}"
+
+
+def test_status_today_latest_webhook_raw_with_valid_gate_session(monkeypatch, tmp_path):
+    """A caller with a valid site-gate session still gets the raw embedded
+    payload/context via /status/today — the operator-facing view is
+    preserved, only unauthenticated callers are sanitized."""
+    client, app_module = _client(monkeypatch, tmp_path, token="demo", code="admincode", scope="sensitive")
+    monkeypatch.setattr(app_module, "_dashboard_payload", lambda for_date: _fake_dashboard_payload())
+    client.cookies.set("vp_access", app_module._gate_token())
+
+    resp = client.get("/status/today")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["latest_webhook"]["payload"]["ticker"] == "MES1!"
+    assert data["latest_webhooks"]["MES"]["context"]["icc"]["stop_loss"] == 5560.0
+    assert data["latest_webhooks"]["MNQ"]["context"]["gex"]["call_wall"] == 5600.0
+
+
+# ─── "/" HTML dashboard embedded init-data sanitization ───────────────────────
+
+def _extract_init_data(html: str) -> dict:
+    import json
+    import re
+    m = re.search(
+        r'<script type="application/json" id="init-data">(.*?)</script>',
+        html, re.DOTALL,
+    )
+    assert m, "init-data script tag not found in dashboard HTML"
+    return json.loads(m.group(1))
+
+
+def test_root_dashboard_sanitized_without_gate_session(monkeypatch, tmp_path):
+    """The FastAPI "/" HTML dashboard embeds its view-model directly in the
+    page (not via a client-side fetch to /status/today), so it needs its own
+    sanitization pass — confirmed live on the production box that this route
+    generates raw GEX/HTF/ICC fields when hit directly, even though nginx is
+    expected to shadow it externally. Defense-in-depth: don't rely solely on
+    that infra staying correctly configured."""
+    client, app_module = _client(monkeypatch, tmp_path, token="demo", code=None)
+    monkeypatch.setattr(app_module, "_dashboard_payload", lambda for_date: _fake_dashboard_payload())
+
+    resp = client.get("/")
+    assert resp.status_code == 200
+    init = _extract_init_data(resp.text)
+    today = init["today"]
+
+    # dashboard still has enough safe summary data to render
+    assert today["trade_count"] == 3
+    assert today["today_pnl_dollars"] == 22.5
+
+    assert today["latest_webhook"]["sanitized"] is True
+    assert today["latest_webhooks"]["MES"]["sanitized"] is True
+
+    leaked = [k for k in _deep_keys(init) if any(s in k for s in _STRATEGY_INTERNAL_SUBSTRINGS)]
+    assert not leaked, f"/ leaked strategy-internal keys via init-data: {leaked}"
+
+
+def test_root_dashboard_raw_with_valid_gate_session(monkeypatch, tmp_path):
+    """A caller with a valid site-gate session still gets the raw embedded
+    payload/context in the dashboard's init-data — operator-facing behavior
+    is preserved, only unauthenticated callers are sanitized."""
+    client, app_module = _client(monkeypatch, tmp_path, token="demo", code="admincode", scope="sensitive")
+    monkeypatch.setattr(app_module, "_dashboard_payload", lambda for_date: _fake_dashboard_payload())
+    client.cookies.set("vp_access", app_module._gate_token())
+
+    resp = client.get("/")
+    assert resp.status_code == 200
+    init = _extract_init_data(resp.text)
+    assert init["today"]["latest_webhook"]["payload"]["ticker"] == "MES1!"
+    assert init["today"]["latest_webhooks"]["MES"]["context"]["icc"]["stop_loss"] == 5560.0
+
+
 # ─── env interplay + read-only ────────────────────────────────────────────────
 
 def test_viewer_survives_public_demo_mode(monkeypatch, tmp_path):
