@@ -47,6 +47,11 @@ from .management_cases import (
     build_management_case_dataset,
     summarize_management_case_dataset,
 )
+from .proof_packet import (
+    ProofPacket,
+    ProofPacketStatus,
+    validate_proof_packet,
+)
 
 __all__ = [
     "DataProvenance",
@@ -75,4 +80,7 @@ __all__ = [
     "FixtureStatus",
     "build_fixture_candidate_inventory",
     "summarize_fixture_candidate_inventory",
+    "ProofPacket",
+    "ProofPacketStatus",
+    "validate_proof_packet",
 ]
