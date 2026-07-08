@@ -79,6 +79,14 @@ class StrategySignal:
     reward_2: Optional[float] = None
     rr_1: Optional[float] = None
     rr_2: Optional[float] = None
+    # Populated only when market context was derived via
+    # options_manager.context.market_validator.evaluate_market_context()
+    # (Increment 3B); left None/empty when an explicit StrategyMarketContext
+    # was supplied instead.
+    context_status: Optional[str] = None
+    context_score: Optional[float] = None
+    context_warnings: list[str] = field(default_factory=list)
+    market_context_reason_code: Optional[str] = None
     warnings: list[str] = field(default_factory=list)
 
 
