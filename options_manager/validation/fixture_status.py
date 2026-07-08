@@ -211,36 +211,73 @@ def _amd_candidate() -> FixtureCandidate:
 def _orcl_candidate() -> FixtureCandidate:
     return FixtureCandidate(
         ticker="ORCL",
-        window="unknown",
+        window="2026-03-23/2026-05-22",
         status=FixtureStatus.INCOMPLETE,
         best_future_use=(
-            "Scanner-identification proof candidate, only if a real source "
-            "packet (score/grade/thesis/date) is ever located."
+            "Four reconciled ORCL option packets (A-D), none a first "
+            "scanner-identification proof candidate. Packet B is a "
+            "MANAGEMENT_CASE candidate (scaled exit into strength), not a "
+            "scanner proof; a scanner-proof candidate remains possible "
+            "only if a real source packet (score/grade/thesis/date) is "
+            "ever located for any of these contracts."
         ),
         proof_confirmed=(
             "real membership on the account's \"BPCWS\" Robinhood watchlist",
+            "full Jan-May 2026 order-history pagination reconciled 15 "
+            "filled ORCL orders into 4 distinct contracts, separated by "
+            "expiration/strike and lifecycle (Packets A-D)",
+            "Packet A -- ORCL $170C exp 2026-04-10: BTO 2026-03-23 1x "
+            "$1.52, STC 2026-03-24 1x $0.81, net -$71/-46.7%, clean single "
+            "BTO/STC lifecycle, not yet candle-reconstructed",
+            "Packet B -- ORCL $200C exp 2026-05-15: candle-reconstructed, "
+            "BTO 2026-05-04 09:44:25 ET 2x $1.87, STC #1 2026-05-06 "
+            "11:51:09 ET 1x $3.61, STC #2 2026-05-07 09:30:43 ET 1x $5.80, "
+            "net +$567/+151.6%; entry rode a genuine multi-day underlying "
+            "rally, both exits sold into strength (not weakness), final "
+            "exit landed in the same 5-minute bar spot came within ~$0.55 "
+            "of the $200 strike",
+            "Packet C -- ORCL $210C exp 2026-05-15: three same-day round "
+            "trips (two on 2026-05-11, one on 2026-05-14), each fully flat "
+            "before the next opened",
+            "Packet D -- ORCL $210C exp 2026-05-22: candle-reconstructed, "
+            "BTO 2026-05-15 1x $1.80, STC 2026-05-19 1x $0.48, net "
+            "-$132/-73.3%, clean single BTO/STC lifecycle, no recognizable "
+            "setup/trigger/invalidation/target in the candle data",
         ),
         proof_missing=(
-            "trigger, invalidation, target levels",
+            "trigger, invalidation, target levels for any of the 4 "
+            "reconciled packets",
             "any Signa score/grade or Minervini count -- no such scoring "
             "system exists anywhere in this repo or account (checked: no "
             "'Minervini' hits at all; 'Signa' only matches the substring "
             "'signal' in unrelated webhook code)",
-            "date/time of identification, contract, fill data",
+            "Packet A candle-level reconstruction (secondary candidate, "
+            "pending)",
         ),
         reason_not_first_proof=(
-            "watchlist membership only proves attention, not a recorded "
-            "setup -- no scanner output, alert log, or dated thesis exists "
-            "anywhere checked"
+            "every packet's order lifecycle is now reconciled, but none "
+            "has a provable setup/trigger/invalidation/target source -- "
+            "Packet B is real management value (a scaled exit into "
+            "strength), Packet D is a clean order packet with no provable "
+            "setup, Packet C is same-day scalp noise, and Packet A remains "
+            "an unreconstructed secondary candidate"
         ),
         promotion_requirements=(
-            "the actual source of the claimed Signa/Minervini scoring (a "
-            "named tool, export, or screenshot) -- not yet located",
+            "a dated source naming a trigger/invalidation/target for any "
+            "of these 4 contracts, before CLEAN_COMPLETE_FIXTURE could be "
+            "considered -- not yet located",
         ),
         notes=(
-            "Statement activity for ORCL exists across the Jan-May 2026 "
-            "broker statements but has not yet been analyzed or "
-            "reconciled against the recalled claims above. NOT_RECONCILED."
+            "ORDER_RECONCILED / PACKETS_CLASSIFIED. Packet A ($170C exp "
+            "2026-04-10): CLEAN_PACKET, secondary clean-loser candidate, "
+            "not yet candle-reconstructed. Packet B ($200C exp "
+            "2026-05-15): MANAGEMENT_CASE candidate -- no proven setup, "
+            "trigger, invalidation, or target source; value is the "
+            "scaled-exit-into-strength management pattern, not scanner "
+            "proof. Packet C ($210C exp 2026-05-15): SCALP_NOISE, three "
+            "same-day round trips. Packet D ($210C exp 2026-05-22): "
+            "INCOMPLETE / CLEAN_ORDER_PACKET / CANDLE_RECONSTRUCTED / "
+            "NO_PROVABLE_SETUP -- not a clean loser fixture."
         ),
     )
 

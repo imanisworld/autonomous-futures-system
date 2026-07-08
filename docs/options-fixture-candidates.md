@@ -1,4 +1,4 @@
-# Options Fixture-Candidate Inventory (Increment 25B, updated 25F)
+# Options Fixture-Candidate Inventory (Increment 25B, updated 25F, 25G)
 
 Static, hand-authored inventory of every real trade candidate discussed
 as a possible scanner-identification proof fixture, tracked via
@@ -20,7 +20,7 @@ As of this increment, **no candidate has reached `CLEAN_COMPLETE_FIXTURE`.**
 | HOOD | 2026-06-12/2026-06-15 | `PENDING_PROOF_FIXTURE` | Support-hold continuation scanner-proof fixture, pending a planned-level source |
 | EBAY | 2026-04-30/2026-05-01 | `SPECIAL_CASE_FIXTURE` | Management-case test for real-vs-post-exit target hits (corrected by PR #221) |
 | AMD | 2026-02-05/2026-02-06 | `SPECIAL_CASE_FIXTURE` | Regression test for premarket-trigger / RTH-already-through-target handling |
-| ORCL | unknown | `INCOMPLETE` | Scanner-identification candidate, only if a real source packet surfaces (statement activity exists, not yet analyzed) |
+| ORCL | 2026-03-23/2026-05-22 | `INCOMPLETE` | 4 reconciled packets (A-D); Packet B is a `MANAGEMENT_CASE` candidate, none is a scanner-proof candidate |
 | FITB | 2026-05-04/2026-05-08 | `SPECIAL_CASE_FIXTURE` | Management case for early invalidation-then-recovery decision logic |
 | BAC | 2026-05-01/2026-05-04 | `INCOMPLETE` | Broker-verified loser, pending candle reconstruction |
 | SPXW | unknown | `SCALP_NOISE` | Not recommended for this proof lane |
@@ -59,9 +59,33 @@ detail (Signa Score, Minervini count, trigger/invalidation/target) has
 no corroborating source anywhere in this repo or the account — verified
 by direct search (`Minervini` returns zero hits; `Signa` only matches the
 substring "signal" in unrelated code). Promotable only if that source is
-found. Real ORCL activity exists across the Jan-May 2026 broker
-statements but has not yet been analyzed or reconciled against the
-recalled claims above -- `NOT_RECONCILED`.
+found. `ORDER_RECONCILED / PACKETS_CLASSIFIED` (Increment 25G): full
+Jan-May 2026 order-history pagination separated the account's real ORCL
+activity into 4 distinct contracts by expiration/strike/lifecycle:
+
+- **Packet A** — $170C exp 2026-04-10: BTO 2026-03-23 1x $1.52, STC
+  2026-03-24 1x $0.81, net -$71/-46.7%. `CLEAN_PACKET` as an order
+  lifecycle; a secondary clean-loser candidate, not yet
+  candle-reconstructed.
+- **Packet B** — $200C exp 2026-05-15: BTO 2026-05-04 09:44 ET 2x $1.87,
+  STC #1 2026-05-06 11:51 ET 1x $3.61, STC #2 2026-05-07 09:30 ET 1x
+  $5.80, net +$567/+151.6%. Candle-reconstructed: entry rode a genuine
+  multi-day underlying rally, both exits sold into strength, and the
+  final exit landed in the same 5-minute bar where spot came within
+  ~$0.55 of the $200 strike. `MANAGEMENT_CASE` candidate — no proven
+  setup, trigger, invalidation, or target source; the value here is the
+  scaled-exit-into-strength management pattern, not scanner proof.
+- **Packet C** — $210C exp 2026-05-15: three same-day round trips (two
+  on 2026-05-11, one on 2026-05-14), each fully flat before the next
+  opened. `SCALP_NOISE`.
+- **Packet D** — $210C exp 2026-05-22: BTO 2026-05-15 1x $1.80, STC
+  2026-05-19 1x $0.48, net -$132/-73.3%. Candle-reconstructed: clean
+  single BTO/STC lifecycle, but no recognizable setup, trigger,
+  invalidation, or target in the candle data. `INCOMPLETE /
+  CLEAN_ORDER_PACKET / CANDLE_RECONSTRUCTED / NO_PROVABLE_SETUP` — a
+  clean order packet is not a clean fixture.
+
+None of these four packets promotes ORCL to `CLEAN_COMPLETE_FIXTURE`.
 
 **FITB** — broker-statement confirmed and fully candle-reconstructed
 (Increment 25E/25F): FITB $50C exp 2026-06-18, BTO 2026-05-04 ($2.20 +

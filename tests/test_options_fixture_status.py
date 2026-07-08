@@ -249,6 +249,31 @@ def test_orcl_documents_absence_of_signa_minervini_scoring():
     assert "signa" in joined
 
 
+def test_orcl_remains_incomplete_not_clean_complete_fixture():
+    candidate = build_fixture_candidate_inventory()["ORCL"]
+    assert candidate.status == FixtureStatus.INCOMPLETE
+    assert candidate.status != FixtureStatus.CLEAN_COMPLETE_FIXTURE
+
+
+def test_orcl_notes_cite_packet_b_as_management_case_candidate():
+    notes = build_fixture_candidate_inventory()["ORCL"].notes
+    assert "Packet B" in notes
+    assert "MANAGEMENT_CASE" in notes
+
+
+def test_orcl_notes_cite_packet_d_as_incomplete_after_candle_reconstruction():
+    notes = build_fixture_candidate_inventory()["ORCL"].notes
+    assert "Packet D" in notes
+    assert "CANDLE_RECONSTRUCTED" in notes
+    assert "NO_PROVABLE_SETUP" in notes
+
+
+def test_orcl_notes_cite_packet_c_as_scalp_noise():
+    notes = build_fixture_candidate_inventory()["ORCL"].notes
+    assert "Packet C" in notes
+    assert "SCALP_NOISE" in notes
+
+
 # --- 4. summary rollup is deterministic and matches the dataset --------------------------------------
 
 
