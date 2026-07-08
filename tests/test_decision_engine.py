@@ -547,6 +547,52 @@ class TestStrategyCandidateRanking:
         assert decision.setup is not None
         assert decision.setup.strategy == "vwap_reclaim"
         assert "ranked candidate" in (decision.setup.notes or "")
+        audit = decision.candidate_audit
+        assert audit[0]["strategy"] == "vwap_reclaim"
+        assert audit[0]["selected"] is True
+        assert audit[0]["winner"] is True
+        assert audit[0]["candidate_direction"] == audit[0]["direction"]
+        assert audit[0]["rank_score"] == candidates[0].rank_score
+        assert audit[0]["rank_reason"] == candidates[0].rank_reason
+        assert audit[0]["rank_confluence_score"] == candidates[0].confluence_score
+        assert audit[0]["rank_confluence_grade"] == candidates[0].confluence_grade
+        assert audit[0]["selection_mode"] == "ranked"
+        assert audit[0]["context_ref"] == "journal.context"
+        assert audit[0]["market_condition"] == decision.market_condition
+        assert audit[0]["regime"] == decision.regime
+        assert audit[0]["stale_data_flags"] == []
+
+    def test_default_candidate_audit_keeps_rank_metadata_without_changing_selection(
+        self, config, fresh_market_state
+    ):
+        config.enabled_concepts = ["orb_reclaim", "vwap_reclaim"]
+        engine = DecisionEngine(config=config)
+
+        decision = engine.evaluate(deepcopy(fresh_market_state), DailyState())
+
+        assert decision.decision == "TRADE"
+        assert decision.setup is not None
+        assert decision.setup.strategy == "orb_reclaim"
+        audit = decision.candidate_audit
+        assert [row["strategy"] for row in audit[:2]] == ["orb_reclaim", "vwap_reclaim"]
+        assert audit[0]["selection_mode"] == "first_match"
+        assert audit[0]["rank_score"] is not None
+        assert "first_match candidate audit" in audit[0]["rank_reason"]
+        assert audit[0]["selected"] is True
+        assert audit[0]["winner"] is True
+
+    def test_candidate_audit_surfaces_stale_data_flags(self, config, fresh_market_state):
+        config.enabled_concepts = ["orb_reclaim"]
+        state = deepcopy(fresh_market_state)
+        state.raw = {"zone_state": "stale", "data_status": "stale"}
+
+        decision = DecisionEngine(config=config).evaluate(state, DailyState())
+
+        assert decision.decision == "TRADE"
+        assert decision.candidate_audit[0]["stale_data_flags"] == [
+            "zone_state_stale",
+            "data_status_stale",
+        ]
 
 
 class TestHTFDirectionPrioritization:
@@ -756,6 +802,11 @@ class TestCandidateFallback:
         assert "ENTRY_DETACHED_FROM_PRICE" in decision.failed_gates
         assert decision.setup is not None
         assert decision.setup.strategy == "orb_reclaim"  # the rejected top candidate, not the clean one
+        assert decision.candidate_audit[0]["attempted"] is True
+        assert decision.candidate_audit[0]["failed_gates"] == ["ENTRY_DETACHED_FROM_PRICE"]
+        assert decision.candidate_audit[1]["attempted"] is False
+        assert decision.candidate_audit[1]["fallback_skipped"] is True
+        assert decision.candidate_audit[1]["skip_reason"] == "fallback_disabled_after_rejection"
 
     def test_fallback_enabled_trades_the_next_clean_candidate(self, config, fresh_market_state):
         config.strategy_fallback_enabled = True
@@ -769,6 +820,11 @@ class TestCandidateFallback:
         assert decision.decision == "TRADE"
         assert decision.setup.strategy == "pdh_reclaim"
         assert "fallback candidate 2/2" in (decision.setup.notes or "")
+        assert decision.candidate_audit[0]["fallback_enabled"] is True
+        assert decision.candidate_audit[0]["fallback_skipped"] is False
+        assert decision.candidate_audit[1]["fallback_attempt"] is True
+        assert decision.candidate_audit[1]["selected"] is True
+        assert decision.candidate_audit[1]["winner"] is True
 
     def test_fallback_enabled_skips_rr_rejection_too(self, config, fresh_market_state):
         config.strategy_fallback_enabled = True
