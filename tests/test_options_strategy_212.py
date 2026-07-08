@@ -15,6 +15,7 @@ from pathlib import Path
 
 import options_manager.strategies.base as strategies_base_module
 import options_manager.strategies.strat_212 as strat_212_module
+from options_manager.context import MarketContextInputs
 from options_manager.levels import LevelFinderInputs
 from options_manager.strategies.base import (
     StrategyContractConstraints,
@@ -94,6 +95,54 @@ def _confirmed_context() -> StrategyMarketContext:
 
 def _met_constraints() -> StrategyContractConstraints:
     return StrategyContractConstraints(constraints_met=True)
+
+
+def _valid_call_market_context_inputs(**overrides) -> MarketContextInputs:
+    fields = dict(
+        direction="CALL",
+        ticker="SPY",
+        underlying_price=500.0,
+        spy_trend="bullish",
+        qqq_trend="bullish",
+        spy_above_flip=True,
+        qqq_above_flip=True,
+        gex_regime="positive",
+        price_above_gex_flip=True,
+        signa_direction="bullish",
+        signa_grade="A",
+        signa_score=80.0,
+        higher_timeframe_alignment="aligned",
+        gap_direction="none",
+        distance_to_gamma_resistance=5.0,
+        distance_to_gamma_support=5.0,
+        event_risk="none",
+    )
+    fields.update(overrides)
+    return MarketContextInputs(**fields)
+
+
+def _valid_put_market_context_inputs(**overrides) -> MarketContextInputs:
+    fields = dict(
+        direction="PUT",
+        ticker="QQQ",
+        underlying_price=400.0,
+        spy_trend="bearish",
+        qqq_trend="bearish",
+        spy_above_flip=False,
+        qqq_above_flip=False,
+        gex_regime="negative",
+        price_above_gex_flip=False,
+        signa_direction="bearish",
+        signa_grade="A",
+        signa_score=80.0,
+        higher_timeframe_alignment="aligned",
+        gap_direction="none",
+        distance_to_gamma_resistance=5.0,
+        distance_to_gamma_support=5.0,
+        event_risk="none",
+    )
+    fields.update(overrides)
+    return MarketContextInputs(**fields)
 
 
 # --- 1. valid bullish 2-1-2 ----------------------------------------------------------
@@ -433,6 +482,210 @@ def test_explicit_targets_do_not_populate_derived_only_fields():
     assert result.distance_to_target_1 is None
 
 
+# --- 6c. Increment 3B: market-context-validator wiring -------------------------------------
+
+
+def test_explicit_strategy_market_context_still_works_unchanged():
+    result = evaluate_strat_212(
+        _bullish_bars(),
+        direction="CALL",
+        entry_trigger=99.0,
+        underlying_invalidation=95.5,
+        target_1=103.0,
+        target_2=106.0,
+        market_context=_confirmed_context(),
+        contract_constraints=_met_constraints(),
+    )
+    assert result.status == "VALID"
+    assert result.context_status is None
+    assert result.context_score is None
+    assert result.context_warnings == []
+    assert result.market_context_reason_code is None
+
+
+def test_bullish_212_derives_clean_valid_context_from_market_context_inputs():
+    result = evaluate_strat_212(
+        _bullish_bars(),
+        direction="CALL",
+        entry_trigger=99.0,
+        underlying_invalidation=95.5,
+        target_1=103.0,
+        target_2=106.0,
+        market_context=StrategyMarketContext(),  # confirmed=None -> derive instead
+        market_context_inputs=_valid_call_market_context_inputs(),
+        contract_constraints=_met_constraints(),
+    )
+    assert result.status == "VALID"
+    assert result.context_status == "VALID"
+    assert result.market_context_reason_code == "context_confirmed"
+    assert result.context_warnings == []
+    assert result.context_score == 5.0
+
+
+def test_bearish_212_derives_clean_valid_context_from_market_context_inputs():
+    result = evaluate_strat_212(
+        _bearish_bars(),
+        direction="PUT",
+        entry_trigger=96.0,
+        underlying_invalidation=99.5,
+        target_1=92.0,
+        target_2=89.0,
+        market_context=StrategyMarketContext(),
+        market_context_inputs=_valid_put_market_context_inputs(),
+        contract_constraints=_met_constraints(),
+    )
+    assert result.status == "VALID"
+    assert result.context_status == "VALID"
+    assert result.market_context_reason_code == "context_confirmed"
+
+
+def test_caution_context_preserves_warnings_and_does_not_fake_a_clean_valid_context():
+    result = evaluate_strat_212(
+        _bullish_bars(),
+        direction="CALL",
+        entry_trigger=99.0,
+        underlying_invalidation=95.5,
+        target_1=103.0,
+        target_2=106.0,
+        market_context=StrategyMarketContext(),
+        market_context_inputs=_valid_call_market_context_inputs(
+            qqq_trend="neutral", qqq_above_flip=False
+        ),
+        contract_constraints=_met_constraints(),
+    )
+    # The strategy is still tradeable (status VALID -- context does not
+    # itself invalidate the setup), but the CAUTION context must be
+    # surfaced honestly rather than reported as a clean VALID context.
+    assert result.status == "VALID"
+    assert result.context_status == "CAUTION"
+    assert result.market_context_reason_code == "context_mixed"
+    assert result.context_warnings
+
+
+def test_invalid_market_context_propagates_as_strategy_invalid():
+    result = evaluate_strat_212(
+        _bullish_bars(),
+        direction="CALL",
+        entry_trigger=99.0,
+        underlying_invalidation=95.5,
+        target_1=103.0,
+        target_2=106.0,
+        market_context=StrategyMarketContext(),
+        market_context_inputs=_valid_call_market_context_inputs(
+            spy_trend="bearish", qqq_trend="bearish", signa_direction="neutral"
+        ),
+        contract_constraints=_met_constraints(),
+    )
+    assert result.status == "INVALID"
+    assert result.reason_code == "market_context_market_conflict"
+
+
+def test_no_strategy_market_context_and_no_market_context_inputs_fails_closed():
+    result = evaluate_strat_212(
+        _bullish_bars(),
+        direction="CALL",
+        entry_trigger=99.0,
+        underlying_invalidation=95.5,
+        target_1=103.0,
+        target_2=106.0,
+        market_context=StrategyMarketContext(),  # confirmed=None
+        contract_constraints=_met_constraints(),
+    )
+    assert result.status == "INVALID"
+    assert result.reason_code == "missing_market_context"
+
+
+def test_derived_context_high_event_risk_fails_through_the_strategy():
+    result = evaluate_strat_212(
+        _bullish_bars(),
+        direction="CALL",
+        entry_trigger=99.0,
+        underlying_invalidation=95.5,
+        target_1=103.0,
+        target_2=106.0,
+        market_context=StrategyMarketContext(),
+        market_context_inputs=_valid_call_market_context_inputs(event_risk="high"),
+        contract_constraints=_met_constraints(),
+    )
+    assert result.status == "INVALID"
+    assert result.reason_code == "market_context_event_risk_high"
+
+
+def test_derived_context_htf_opposite_fails_through_the_strategy():
+    result = evaluate_strat_212(
+        _bullish_bars(),
+        direction="CALL",
+        entry_trigger=99.0,
+        underlying_invalidation=95.5,
+        target_1=103.0,
+        target_2=106.0,
+        market_context=StrategyMarketContext(),
+        market_context_inputs=_valid_call_market_context_inputs(
+            higher_timeframe_alignment="opposite"
+        ),
+        contract_constraints=_met_constraints(),
+    )
+    assert result.status == "INVALID"
+    assert result.reason_code == "market_context_htf_opposite"
+
+
+def test_derived_context_both_indexes_against_direction_fails_through_the_strategy():
+    result = evaluate_strat_212(
+        _bearish_bars(),
+        direction="PUT",
+        entry_trigger=96.0,
+        underlying_invalidation=99.5,
+        target_1=92.0,
+        target_2=89.0,
+        market_context=StrategyMarketContext(),
+        market_context_inputs=_valid_put_market_context_inputs(
+            spy_trend="bullish", qqq_trend="bullish", signa_direction="neutral"
+        ),
+        contract_constraints=_met_constraints(),
+    )
+    assert result.status == "INVALID"
+    assert result.reason_code == "market_context_market_conflict"
+
+
+def test_derived_context_does_not_break_target_finder_derivation():
+    result = evaluate_strat_212(
+        _bullish_bars(),
+        direction="CALL",
+        entry_trigger=100.0,
+        underlying_invalidation=97.0,
+        level_inputs=LevelFinderInputs(
+            direction="CALL",
+            entry=100.0,
+            underlying_invalidation=97.0,
+            resistance_levels=(103.0, 108.0),
+            gamma_resistance=105.0,
+        ),
+        market_context=StrategyMarketContext(),
+        market_context_inputs=_valid_call_market_context_inputs(),
+        contract_constraints=_met_constraints(),
+    )
+    assert result.status == "VALID"
+    assert result.target_1 == 103.0
+    assert result.target_2 == 105.0
+    assert result.context_status == "VALID"
+
+
+def test_derived_context_still_requires_contract_constraints():
+    result = evaluate_strat_212(
+        _bullish_bars(),
+        direction="CALL",
+        entry_trigger=99.0,
+        underlying_invalidation=95.5,
+        target_1=103.0,
+        target_2=106.0,
+        market_context=StrategyMarketContext(),
+        market_context_inputs=_valid_call_market_context_inputs(),
+        contract_constraints=StrategyContractConstraints(),  # constraints_met=None
+    )
+    assert result.status == "INVALID"
+    assert result.reason_code == "missing_contract_constraints"
+
+
 # --- 7. missing market context -----------------------------------------------------------
 
 
@@ -592,6 +845,16 @@ def test_strategy_modules_have_no_forbidden_imports():
         for name in imported:
             for forbidden in _FORBIDDEN_IMPORT_FRAGMENTS:
                 assert forbidden not in name, f"{module.__name__} must not import {name!r}"
+
+
+def test_strategy_modules_do_not_import_live_context_loader():
+    for module in _SCANNED_STRATEGY_MODULES:
+        imported = _imported_modules(module)
+        for name in imported:
+            assert name != "context" and not name.startswith("context."), (
+                f"{module.__name__} must not import the live context.* loader "
+                f"(pulls config, not caller-supplied): {name}"
+            )
 
 
 def test_strategy_modules_have_no_order_action_verbs():

@@ -18,6 +18,17 @@ supplied levels via options_manager.levels.target_finder.find_targets()
 when level_inputs is provided instead. find_targets() is a pure, local,
 already-tested module with no I/O of its own; wiring it in adds no
 execution, broker, scanner, replay, or market-data-fetching path.
+
+Increment 3B: market context may either be supplied explicitly via
+StrategyMarketContext (the original Increment 1 behavior — confirmed=
+True/False) or derived from caller-supplied SPY/QQQ/GEX/Signa/HTF/
+event-risk inputs via
+options_manager.context.market_validator.evaluate_market_context() when
+market_context_inputs is provided and market_context.confirmed is still
+unresolved (None). evaluate_market_context() is a pure, local, already-
+tested module with no I/O of its own; wiring it in adds no execution,
+broker, scanner, replay, contract-selection, or market-data-fetching
+path, and does not import the live context/market_context.py loader.
 """
 
 from __future__ import annotations
@@ -27,6 +38,7 @@ from typing import Literal, Optional
 
 from strategy.strat_classifier import INSIDE_BAR, TWO_DOWN, TWO_UP, classify_from_ohlc
 
+from options_manager.context import MarketContextInputs, evaluate_market_context
 from options_manager.levels import LevelFinderInputs, find_targets
 
 from .base import (
@@ -70,6 +82,7 @@ def evaluate_strat_212(
     target_2: Optional[float] = None,
     level_inputs: Optional[LevelFinderInputs] = None,
     market_context: StrategyMarketContext,
+    market_context_inputs: Optional[MarketContextInputs] = None,
     contract_constraints: StrategyContractConstraints,
 ) -> StrategySignal:
     """Pure function of its explicit inputs -> StrategySignal.
@@ -94,6 +107,22 @@ def evaluate_strat_212(
     finder's own reason code and message. If neither explicit targets nor
     level_inputs are supplied, this fails closed exactly as before
     (missing_target_1 / missing_target_2).
+
+    Market context: if market_context.confirmed is explicitly True or
+    False, that is used as-is (original Increment 1 behavior, unchanged).
+    If market_context.confirmed is still None (unresolved) and
+    market_context_inputs is supplied instead, market context is derived
+    by calling evaluate_market_context(). If the market validator returns
+    INVALID, this validator returns INVALID with a
+    "market_context_<reason_code>" reason code that exposes the market
+    validator's own reason code and message (e.g.
+    "market_context_market_conflict"). If it returns VALID or CAUTION,
+    the setup is allowed to proceed and context_status/context_score/
+    context_warnings/market_context_reason_code are populated on the
+    final StrategySignal — a CAUTION context is never reported as a
+    clean VALID one. If neither an explicit confirmation nor
+    market_context_inputs is supplied, this fails closed exactly as
+    before (missing_market_context).
     """
     ctx = classify_from_ohlc(
         current_high=bars.current_high,
@@ -212,14 +241,32 @@ def evaluate_strat_212(
             "targets must be below entry_trigger for PUT",
         )
 
+    context_status = None
+    context_score = None
+    context_warnings: list[str] = []
+    market_context_reason_code = None
+
     if market_context.confirmed is None:
-        return _invalid(
-            STRATEGY_NAME,
-            direction,
-            "missing_market_context",
-            "market_context.confirmed is not resolved",
-        )
-    if market_context.confirmed is False:
+        if market_context_inputs is None:
+            return _invalid(
+                STRATEGY_NAME,
+                direction,
+                "missing_market_context",
+                "market_context.confirmed is not resolved",
+            )
+        context_result = evaluate_market_context(market_context_inputs)
+        if context_result.status == "INVALID":
+            return _invalid(
+                STRATEGY_NAME,
+                direction,
+                f"market_context_{context_result.reason_code}",
+                context_result.reason,
+            )
+        context_status = context_result.status
+        context_score = context_result.context_score
+        context_warnings = context_result.warnings
+        market_context_reason_code = context_result.reason_code
+    elif market_context.confirmed is False:
         return _invalid(
             STRATEGY_NAME,
             direction,
@@ -260,4 +307,8 @@ def evaluate_strat_212(
         reward_2=derived_targets.reward_2 if derived_targets else None,
         rr_1=derived_targets.rr_1 if derived_targets else None,
         rr_2=derived_targets.rr_2 if derived_targets else None,
+        context_status=context_status,
+        context_score=context_score,
+        context_warnings=context_warnings,
+        market_context_reason_code=market_context_reason_code,
     )
