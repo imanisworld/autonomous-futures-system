@@ -199,6 +199,65 @@ def test_full_scope_gates_whole_site(monkeypatch, tmp_path):
     assert client.get("/status/today").status_code == 200
 
 
+# ─── /status/test-bracket sensitive-path gating ───────────────────────────────
+
+def test_test_bracket_requires_gate_when_configured(monkeypatch, tmp_path):
+    """/status/test-bracket is an admin-style dry-run tool (resolves live
+    contract/quote/account state) — it must be gated the same as the other
+    sensitive reads once SITE_ACCESS_CODE is set, even though it never places
+    an order."""
+    client, app_module = _client(monkeypatch, tmp_path, token="demo", code="admincode", scope="sensitive")
+    assert client.get("/status/test-bracket").status_code == 401
+    client.cookies.set("vp_access", app_module._gate_token())
+    assert client.get("/status/test-bracket").status_code != 401
+
+
+def test_test_bracket_open_when_no_code_configured(monkeypatch, tmp_path):
+    """Unchanged pre-existing behavior: with no SITE_ACCESS_CODE set, the gate
+    is off entirely and /status/test-bracket is reachable (still never places
+    an order — it's read-only regardless of gate state)."""
+    client, _ = _client(monkeypatch, tmp_path, token="demo", code=None)
+    assert client.get("/status/test-bracket").status_code != 401
+
+
+# ─── /status/broker-account account_id sanitization ───────────────────────────
+
+def test_broker_account_id_sanitized_without_gate_session(monkeypatch, tmp_path):
+    """account_id is not a secret, but it should not be handed to a caller with
+    no site-gate session — this holds even when the gate is off entirely
+    (blank SITE_ACCESS_CODE, the default public posture), which is exactly the
+    state that previously leaked it unauthenticated."""
+    client, app_module = _client(monkeypatch, tmp_path, token="demo", code=None)
+    monkeypatch.setenv("BROKER", "tradovate")
+    app_module._ACCOUNT_CACHE.clear()
+    monkeypatch.setattr(
+        app_module, "_account_summary_blocking",
+        lambda: {"ok": True, "account_id": 987654, "equity": 50000.0},
+    )
+    resp = client.get("/status/broker-account")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["account_id"] is None
+    assert data["equity"] == 50000.0  # rest of the payload is untouched
+
+
+def test_broker_account_id_visible_with_valid_gate_session(monkeypatch, tmp_path):
+    """A caller who has actually authenticated through the site gate keeps
+    seeing account_id — the sanitization is only for unauthenticated callers,
+    not a blanket removal of the field."""
+    client, app_module = _client(monkeypatch, tmp_path, token="demo", code="admincode", scope="sensitive")
+    monkeypatch.setenv("BROKER", "tradovate")
+    app_module._ACCOUNT_CACHE.clear()
+    monkeypatch.setattr(
+        app_module, "_account_summary_blocking",
+        lambda: {"ok": True, "account_id": 987654, "equity": 50000.0},
+    )
+    client.cookies.set("vp_access", app_module._gate_token())
+    resp = client.get("/status/broker-account")
+    assert resp.status_code == 200
+    assert resp.json()["account_id"] == 987654
+
+
 # ─── env interplay + read-only ────────────────────────────────────────────────
 
 def test_viewer_survives_public_demo_mode(monkeypatch, tmp_path):
