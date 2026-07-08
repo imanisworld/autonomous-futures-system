@@ -17,9 +17,20 @@ outcome fields are never derived from the scanner's own verdict.
 `provenance` exists so no fixture can silently claim to be a real trade
 example it isn't: "placeholder" means the values are synthetic
 stand-ins awaiting replacement with an actual historical setup;
-"user_supplied" means a caller has confirmed the values came from a real
-trade. Nothing in this package upgrades a fixture from one to the other on
-its own.
+"partial_real" means some fields come from a real, previously-stored
+record but the setup is not complete enough to run end to end (missing
+candle data in particular is never invented to fill the gap); "user_supplied"
+means a caller has confirmed the values came from a real, complete trade.
+Nothing in this package upgrades a fixture from one of these to another
+on its own.
+
+The 7 candle-bar fields below (`two_bars_back_type` through
+`current_low`) are optional precisely so a "partial_real" fixture can
+honestly represent a real setup for which no candle sequence was ever
+captured, rather than forcing a fabricated bar into a required field.
+When any of the 7 is missing, the fixture runner (fixtures.py) never
+attempts to build a row from it -- it reports a "NOT_RUN" result instead
+of guessing.
 """
 
 from __future__ import annotations
@@ -32,7 +43,7 @@ from options_manager.contracts import ContractConstraintsInputs
 from options_manager.levels import LevelFinderInputs
 from options_manager.strategies import StrategyContractConstraints, StrategyMarketContext
 
-DataProvenance = Literal["placeholder", "user_supplied"]
+DataProvenance = Literal["placeholder", "partial_real", "user_supplied"]
 
 RealSetupOutcome = Literal[
     "hit_target_1",
@@ -54,7 +65,7 @@ RealSetupClassification = Literal[
 ]
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class RealSetupFixture:
     """One manually-authored historical trade setup, plus its recorded
     real-world outcome. Nothing here is fetched — bars, entry/
@@ -76,14 +87,14 @@ class RealSetupFixture:
     setup_datetime: str
     direction: Literal["CALL", "PUT"]
     provenance: DataProvenance
-    two_bars_back_type: Literal["two_up", "two_down"]
-    two_bars_back_high: float
-    two_bars_back_low: float
-    previous_high: float
-    previous_low: float
-    current_high: float
-    current_low: float
     actual_outcome: RealSetupOutcome
+    two_bars_back_type: Optional[Literal["two_up", "two_down"]] = None
+    two_bars_back_high: Optional[float] = None
+    two_bars_back_low: Optional[float] = None
+    previous_high: Optional[float] = None
+    previous_low: Optional[float] = None
+    current_high: Optional[float] = None
+    current_low: Optional[float] = None
     entry_trigger: Optional[float] = None
     underlying_invalidation: Optional[float] = None
     spot_at_setup: Optional[float] = None
@@ -127,6 +138,7 @@ class RealSetupValidationSummary:
 
     total_cases: int
     placeholder_cases: int
+    partial_real_cases: int
     user_supplied_cases: int
     counts_by_classification: dict[str, int]
     counts_by_scan_status: dict[str, int]

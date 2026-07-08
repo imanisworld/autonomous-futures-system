@@ -67,6 +67,7 @@ _EXPECTED_CASE_NAMES = {
     "rejected_missing_context",
     "rejected_missing_contract",
     "incomplete_data_fail_closed",
+    "bac_partial_real_manual_pending",
 }
 
 
@@ -76,7 +77,7 @@ _EXPECTED_CASE_NAMES = {
 def test_fixture_dataset_contains_expected_named_cases():
     cases = build_real_setup_validation_dataset()
     assert set(cases.keys()) == _EXPECTED_CASE_NAMES
-    assert len(cases) == 5
+    assert len(cases) == 6
 
 
 def test_fixture_helpers_do_not_mutate_state_between_calls():
@@ -89,20 +90,39 @@ def test_fixture_helpers_do_not_mutate_state_between_calls():
 # --- no fixture claims to be real if values are synthetic/placeholders --------------------------
 
 
-def test_all_current_fixtures_are_marked_placeholder_not_real():
+def test_no_current_fixture_claims_complete_real_status():
+    # No case supplied so far is a complete, user-supplied real trade --
+    # each is either a synthetic placeholder or an honestly-partial real
+    # seed. Neither may claim to be "user_supplied" (complete real).
     cases = build_real_setup_validation_dataset()
     for name, fixture in cases.items():
-        assert fixture.provenance == "placeholder", (
-            f"{name} must be marked provenance='placeholder' -- no real "
-            f"historical setups have been supplied yet"
+        assert fixture.provenance in ("placeholder", "partial_real"), (
+            f"{name} must be marked provenance='placeholder' or "
+            f"'partial_real' -- no complete real historical setup has "
+            f"been supplied yet"
         )
-        assert "PLACEHOLDER" in fixture.notes
+
+
+def test_placeholder_fixtures_are_marked_placeholder_in_notes():
+    cases = build_real_setup_validation_dataset()
+    for name, fixture in cases.items():
+        if fixture.provenance == "placeholder":
+            assert "PLACEHOLDER" in fixture.notes, f"{name} notes must say PLACEHOLDER"
+
+
+def test_partial_real_fixture_is_marked_partial_not_complete():
+    cases = build_real_setup_validation_dataset()
+    bac = cases["bac_partial_real_manual_pending"]
+    assert bac.provenance == "partial_real"
+    assert "PARTIAL_REAL" in bac.notes
+    assert "MANUAL_PENDING" in bac.actual_outcome_notes
 
 
 def test_no_fixture_id_or_ticker_implies_real_data():
     cases = build_real_setup_validation_dataset()
+    recognized_markers = ("real_like", "rejected", "incomplete", "partial_real", "manual_pending")
     for fixture in cases.values():
-        assert "real_like" in fixture.id or "rejected" in fixture.id or "incomplete" in fixture.id
+        assert any(marker in fixture.id for marker in recognized_markers)
         assert fixture.id != "real" and not fixture.id.startswith("actual_")
 
 
@@ -150,6 +170,78 @@ def test_incomplete_data_fails_closed():
     assert entry.reason_code == "missing_entry_trigger"
 
 
+# --- BAC partial-real fixture: missing bars, NOT_RUN, no fabrication -------------------------------
+
+
+def test_bac_partial_real_fixture_can_be_represented_with_missing_bar_fields():
+    cases = build_real_setup_validation_dataset()
+    bac = cases["bac_partial_real_manual_pending"]
+    assert bac.ticker == "BAC"
+    assert bac.two_bars_back_type is None
+    assert bac.two_bars_back_high is None
+    assert bac.two_bars_back_low is None
+    assert bac.previous_high is None
+    assert bac.previous_low is None
+    assert bac.current_high is None
+    assert bac.current_low is None
+
+
+def test_bac_partial_real_fixture_preserves_real_stored_signa_gex_fragments():
+    cases = build_real_setup_validation_dataset()
+    bac = cases["bac_partial_real_manual_pending"]
+    assert bac.market_context_inputs is not None
+    assert bac.market_context_inputs.signa_grade == "B"
+    assert bac.market_context_inputs.signa_score == 78.0
+    assert bac.market_context_inputs.signa_direction == "bullish"
+    # LOW_PINNING is not a valid GexRegime value in this system -- it must
+    # never be force-mapped onto gex_regime; it is quoted as raw reference
+    # text in the notes only.
+    assert bac.market_context_inputs.gex_regime is None
+    assert "LOW_PINNING" in bac.actual_outcome_notes
+
+
+def test_bac_partial_real_fixture_returns_not_run_due_to_missing_candle_data():
+    entries = run_real_setup_validation_dataset()
+    entry = entries["bac_partial_real_manual_pending"]
+    assert entry.scan_status == "NOT_RUN"
+    assert entry.reason_code == "missing_candle_data"
+
+
+def test_not_run_is_separate_from_scanner_verdict_vocabulary():
+    entries = run_real_setup_validation_dataset()
+    entry = entries["bac_partial_real_manual_pending"]
+    assert entry.scan_status not in ("TRIGGERED", "WATCH", "INVALID", "NO_TRADE")
+
+
+def test_bac_partial_real_fixture_actual_outcome_is_unknown_manual_pending():
+    cases = build_real_setup_validation_dataset()
+    bac = cases["bac_partial_real_manual_pending"]
+    assert bac.actual_outcome == "unknown"
+    assert "MANUAL_PENDING" in bac.actual_outcome_notes
+
+
+def test_complete_fixtures_still_run_normally_when_a_not_run_fixture_is_present():
+    entries = run_real_setup_validation_dataset()
+    winner = entries["complete_real_like_triggered_winner"]
+    loser = entries["complete_real_like_triggered_loser"]
+    assert winner.scan_status == "TRIGGERED"
+    assert loser.scan_status == "TRIGGERED"
+    # The NOT_RUN fixture must not have been silently included in the
+    # rows handed to the scanner, and must not affect other fixtures'
+    # own results.
+    assert entries["bac_partial_real_manual_pending"].scan_status == "NOT_RUN"
+
+
+def test_not_run_fixture_is_excluded_from_rows_built_for_the_scanner():
+    cases = build_real_setup_validation_dataset()
+    runnable = [
+        name for name, fx in cases.items() if validation_fixtures_module._bars_complete(fx)
+    ]
+    assert "bac_partial_real_manual_pending" not in runnable
+    for name in ("complete_real_like_triggered_winner", "complete_real_like_triggered_loser"):
+        assert name in runnable
+
+
 # --- actual outcome labels are stored separately from scanner verdict -----------------------------
 
 
@@ -159,7 +251,7 @@ def test_actual_outcome_is_stored_separately_from_scan_status():
         # scan_status/reason_code come only from the scanner; actual_outcome
         # comes only from the fixture's own recorded result -- neither field
         # is derived from the other.
-        assert entry.scan_status in ("TRIGGERED", "WATCH", "INVALID", "NO_TRADE")
+        assert entry.scan_status in ("TRIGGERED", "WATCH", "INVALID", "NO_TRADE", "NOT_RUN")
         assert entry.actual_outcome in (
             "hit_target_1",
             "hit_target_2",
@@ -232,11 +324,12 @@ def test_summary_counts_are_stable():
     summary_2 = summarize_real_setup_validation_dataset()
     assert isinstance(summary_1, RealSetupValidationSummary)
     assert summary_1 == summary_2
-    assert summary_1.total_cases == 5
+    assert summary_1.total_cases == 6
     assert summary_1.placeholder_cases == 5
+    assert summary_1.partial_real_cases == 1
     assert summary_1.user_supplied_cases == 0
-    assert sum(summary_1.counts_by_classification.values()) == 5
-    assert sum(summary_1.counts_by_scan_status.values()) == 5
+    assert sum(summary_1.counts_by_classification.values()) == 6
+    assert sum(summary_1.counts_by_scan_status.values()) == 6
 
 
 # --- structural safety (matches this buildout's established pattern) -----------------------------
