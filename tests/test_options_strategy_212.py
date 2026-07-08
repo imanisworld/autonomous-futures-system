@@ -16,6 +16,7 @@ from pathlib import Path
 import options_manager.strategies.base as strategies_base_module
 import options_manager.strategies.strat_212 as strat_212_module
 from options_manager.context import MarketContextInputs
+from options_manager.contracts import ContractConstraintsInputs
 from options_manager.levels import LevelFinderInputs
 from options_manager.strategies.base import (
     StrategyContractConstraints,
@@ -143,6 +144,64 @@ def _valid_put_market_context_inputs(**overrides) -> MarketContextInputs:
     )
     fields.update(overrides)
     return MarketContextInputs(**fields)
+
+
+def _valid_call_contract_constraints_inputs(**overrides) -> ContractConstraintsInputs:
+    fields = dict(
+        direction="CALL",
+        ticker="SPY",
+        expiration="2026-08-01",
+        dte=30,
+        strike=505.0,
+        premium=2.50,
+        bid=2.45,
+        ask=2.55,
+        spread_percent=0.04,
+        volume=500,
+        open_interest=1000,
+        delta=0.35,
+        theta=-0.05,
+        iv=0.25,
+        max_premium=5.0,
+        max_spread_percent=0.10,
+        min_volume=100,
+        min_open_interest=200,
+        min_dte=7,
+        max_theta_abs=0.10,
+        earnings_risk="NONE",
+        event_risk="NONE",
+    )
+    fields.update(overrides)
+    return ContractConstraintsInputs(**fields)
+
+
+def _valid_put_contract_constraints_inputs(**overrides) -> ContractConstraintsInputs:
+    fields = dict(
+        direction="PUT",
+        ticker="QQQ",
+        expiration="2026-08-01",
+        dte=30,
+        strike=395.0,
+        premium=2.50,
+        bid=2.45,
+        ask=2.55,
+        spread_percent=0.04,
+        volume=500,
+        open_interest=1000,
+        delta=-0.35,
+        theta=-0.05,
+        iv=0.25,
+        max_premium=5.0,
+        max_spread_percent=0.10,
+        min_volume=100,
+        min_open_interest=200,
+        min_dte=7,
+        max_theta_abs=0.10,
+        earnings_risk="NONE",
+        event_risk="NONE",
+    )
+    fields.update(overrides)
+    return ContractConstraintsInputs(**fields)
 
 
 # --- 1. valid bullish 2-1-2 ----------------------------------------------------------
@@ -684,6 +743,295 @@ def test_derived_context_still_requires_contract_constraints():
     )
     assert result.status == "INVALID"
     assert result.reason_code == "missing_contract_constraints"
+
+
+# --- 6d. Increment 4B: contract-constraints-validator wiring --------------------------------
+
+
+def test_explicit_strategy_contract_constraints_still_works_unchanged():
+    result = evaluate_strat_212(
+        _bullish_bars(),
+        direction="CALL",
+        entry_trigger=99.0,
+        underlying_invalidation=95.5,
+        target_1=103.0,
+        target_2=106.0,
+        market_context=_confirmed_context(),
+        contract_constraints=_met_constraints(),
+    )
+    assert result.status == "VALID"
+    assert result.contract_status is None
+    assert result.contract_score is None
+    assert result.contract_warnings == []
+    assert result.contract_reason_code is None
+
+
+def test_bullish_212_derives_clean_valid_contract_from_contract_constraints_inputs():
+    result = evaluate_strat_212(
+        _bullish_bars(),
+        direction="CALL",
+        entry_trigger=99.0,
+        underlying_invalidation=95.5,
+        target_1=103.0,
+        target_2=106.0,
+        market_context=_confirmed_context(),
+        contract_constraints=StrategyContractConstraints(),  # constraints_met=None -> derive
+        contract_constraints_inputs=_valid_call_contract_constraints_inputs(),
+    )
+    assert result.status == "VALID"
+    assert result.contract_status == "VALID"
+    assert result.contract_reason_code == "contract_confirmed"
+    assert result.contract_warnings == []
+    assert result.contract_score == 6.0
+
+
+def test_bearish_212_derives_clean_valid_contract_from_contract_constraints_inputs():
+    result = evaluate_strat_212(
+        _bearish_bars(),
+        direction="PUT",
+        entry_trigger=96.0,
+        underlying_invalidation=99.5,
+        target_1=92.0,
+        target_2=89.0,
+        market_context=_confirmed_context(),
+        contract_constraints=StrategyContractConstraints(),
+        contract_constraints_inputs=_valid_put_contract_constraints_inputs(),
+    )
+    assert result.status == "VALID"
+    assert result.contract_status == "VALID"
+    assert result.contract_reason_code == "contract_confirmed"
+
+
+def test_caution_contract_preserves_warnings_and_does_not_fake_a_clean_valid_contract():
+    result = evaluate_strat_212(
+        _bullish_bars(),
+        direction="CALL",
+        entry_trigger=99.0,
+        underlying_invalidation=95.5,
+        target_1=103.0,
+        target_2=106.0,
+        market_context=_confirmed_context(),
+        contract_constraints=StrategyContractConstraints(),
+        contract_constraints_inputs=_valid_call_contract_constraints_inputs(iv=0.85),
+    )
+    # The strategy is still tradeable (status VALID -- contract quality
+    # does not itself invalidate the setup), but the CAUTION contract
+    # must be surfaced honestly rather than reported as a clean VALID
+    # contract.
+    assert result.status == "VALID"
+    assert result.contract_status == "CAUTION"
+    assert result.contract_reason_code == "contract_mixed"
+    assert result.contract_warnings
+
+
+def test_invalid_contract_constraints_propagates_as_strategy_invalid():
+    result = evaluate_strat_212(
+        _bullish_bars(),
+        direction="CALL",
+        entry_trigger=99.0,
+        underlying_invalidation=95.5,
+        target_1=103.0,
+        target_2=106.0,
+        market_context=_confirmed_context(),
+        contract_constraints=StrategyContractConstraints(),
+        contract_constraints_inputs=_valid_call_contract_constraints_inputs(
+            spread_percent=0.25
+        ),
+    )
+    assert result.status == "INVALID"
+    assert result.reason_code == "contract_constraints_spread_too_wide"
+
+
+def test_no_strategy_contract_constraints_and_no_contract_constraints_inputs_fails_closed():
+    result = evaluate_strat_212(
+        _bullish_bars(),
+        direction="CALL",
+        entry_trigger=99.0,
+        underlying_invalidation=95.5,
+        target_1=103.0,
+        target_2=106.0,
+        market_context=_confirmed_context(),
+        contract_constraints=StrategyContractConstraints(),  # constraints_met=None
+    )
+    assert result.status == "INVALID"
+    assert result.reason_code == "missing_contract_constraints"
+
+
+def test_derived_contract_premium_over_max_fails_through_the_strategy():
+    result = evaluate_strat_212(
+        _bullish_bars(),
+        direction="CALL",
+        entry_trigger=99.0,
+        underlying_invalidation=95.5,
+        target_1=103.0,
+        target_2=106.0,
+        market_context=_confirmed_context(),
+        contract_constraints=StrategyContractConstraints(),
+        contract_constraints_inputs=_valid_call_contract_constraints_inputs(premium=6.0),
+    )
+    assert result.status == "INVALID"
+    assert result.reason_code == "contract_constraints_premium_over_max"
+
+
+def test_derived_contract_low_volume_open_interest_fails_through_the_strategy():
+    result = evaluate_strat_212(
+        _bullish_bars(),
+        direction="CALL",
+        entry_trigger=99.0,
+        underlying_invalidation=95.5,
+        target_1=103.0,
+        target_2=106.0,
+        market_context=_confirmed_context(),
+        contract_constraints=StrategyContractConstraints(),
+        contract_constraints_inputs=_valid_call_contract_constraints_inputs(volume=50),
+    )
+    assert result.status == "INVALID"
+    assert result.reason_code == "contract_constraints_volume_too_low"
+
+    oi_result = evaluate_strat_212(
+        _bullish_bars(),
+        direction="CALL",
+        entry_trigger=99.0,
+        underlying_invalidation=95.5,
+        target_1=103.0,
+        target_2=106.0,
+        market_context=_confirmed_context(),
+        contract_constraints=StrategyContractConstraints(),
+        contract_constraints_inputs=_valid_call_contract_constraints_inputs(
+            open_interest=50
+        ),
+    )
+    assert oi_result.status == "INVALID"
+    assert oi_result.reason_code == "contract_constraints_open_interest_too_low"
+
+
+def test_derived_contract_dte_too_short_fails_through_the_strategy():
+    result = evaluate_strat_212(
+        _bullish_bars(),
+        direction="CALL",
+        entry_trigger=99.0,
+        underlying_invalidation=95.5,
+        target_1=103.0,
+        target_2=106.0,
+        market_context=_confirmed_context(),
+        contract_constraints=StrategyContractConstraints(),
+        contract_constraints_inputs=_valid_call_contract_constraints_inputs(dte=3),
+    )
+    assert result.status == "INVALID"
+    assert result.reason_code == "contract_constraints_dte_too_short"
+
+
+def test_derived_contract_high_event_and_earnings_risk_fails_through_the_strategy():
+    earnings_result = evaluate_strat_212(
+        _bullish_bars(),
+        direction="CALL",
+        entry_trigger=99.0,
+        underlying_invalidation=95.5,
+        target_1=103.0,
+        target_2=106.0,
+        market_context=_confirmed_context(),
+        contract_constraints=StrategyContractConstraints(),
+        contract_constraints_inputs=_valid_call_contract_constraints_inputs(
+            earnings_risk="HIGH"
+        ),
+    )
+    assert earnings_result.status == "INVALID"
+    assert earnings_result.reason_code == "contract_constraints_earnings_risk_high"
+
+    event_result = evaluate_strat_212(
+        _bullish_bars(),
+        direction="CALL",
+        entry_trigger=99.0,
+        underlying_invalidation=95.5,
+        target_1=103.0,
+        target_2=106.0,
+        market_context=_confirmed_context(),
+        contract_constraints=StrategyContractConstraints(),
+        contract_constraints_inputs=_valid_call_contract_constraints_inputs(
+            event_risk="HIGH"
+        ),
+    )
+    assert event_result.status == "INVALID"
+    assert event_result.reason_code == "contract_constraints_event_risk_high"
+
+
+def test_derived_contract_bad_bid_ask_fails_through_the_strategy():
+    bid_result = evaluate_strat_212(
+        _bullish_bars(),
+        direction="CALL",
+        entry_trigger=99.0,
+        underlying_invalidation=95.5,
+        target_1=103.0,
+        target_2=106.0,
+        market_context=_confirmed_context(),
+        contract_constraints=StrategyContractConstraints(),
+        contract_constraints_inputs=_valid_call_contract_constraints_inputs(bid=0.0),
+    )
+    assert bid_result.status == "INVALID"
+    assert bid_result.reason_code == "contract_constraints_bid_invalid"
+
+    ask_result = evaluate_strat_212(
+        _bullish_bars(),
+        direction="CALL",
+        entry_trigger=99.0,
+        underlying_invalidation=95.5,
+        target_1=103.0,
+        target_2=106.0,
+        market_context=_confirmed_context(),
+        contract_constraints=StrategyContractConstraints(),
+        contract_constraints_inputs=_valid_call_contract_constraints_inputs(
+            bid=2.50, ask=2.50
+        ),
+    )
+    assert ask_result.status == "INVALID"
+    assert ask_result.reason_code == "contract_constraints_ask_invalid"
+
+
+def test_derived_contract_does_not_break_target_finder_or_market_context():
+    result = evaluate_strat_212(
+        _bullish_bars(),
+        direction="CALL",
+        entry_trigger=100.0,
+        underlying_invalidation=97.0,
+        level_inputs=LevelFinderInputs(
+            direction="CALL",
+            entry=100.0,
+            underlying_invalidation=97.0,
+            resistance_levels=(103.0, 108.0),
+            gamma_resistance=105.0,
+        ),
+        market_context=StrategyMarketContext(),
+        market_context_inputs=_valid_call_market_context_inputs(),
+        contract_constraints=StrategyContractConstraints(),
+        contract_constraints_inputs=_valid_call_contract_constraints_inputs(),
+    )
+    assert result.status == "VALID"
+    assert result.target_1 == 103.0
+    assert result.target_2 == 105.0
+    assert result.context_status == "VALID"
+    assert result.contract_status == "VALID"
+
+
+def test_explicit_strategy_market_context_wins_over_market_context_inputs():
+    result = evaluate_strat_212(
+        _bullish_bars(),
+        direction="CALL",
+        entry_trigger=99.0,
+        underlying_invalidation=95.5,
+        target_1=103.0,
+        target_2=106.0,
+        # Explicit confirmed=True should win even though market_context_inputs
+        # is also supplied and would otherwise derive a context.
+        market_context=_confirmed_context(),
+        market_context_inputs=_valid_call_market_context_inputs(
+            spy_trend="bearish", qqq_trend="bearish", signa_direction="neutral"
+        ),
+        contract_constraints=_met_constraints(),
+    )
+    assert result.status == "VALID"
+    assert result.context_status is None
+    assert result.context_score is None
+    assert result.market_context_reason_code is None
 
 
 # --- 7. missing market context -----------------------------------------------------------

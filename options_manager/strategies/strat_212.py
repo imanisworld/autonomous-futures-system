@@ -29,6 +29,18 @@ unresolved (None). evaluate_market_context() is a pure, local, already-
 tested module with no I/O of its own; wiring it in adds no execution,
 broker, scanner, replay, contract-selection, or market-data-fetching
 path, and does not import the live context/market_context.py loader.
+
+Increment 4B: contract constraints may either be supplied explicitly via
+StrategyContractConstraints (the original Increment 1 behavior —
+constraints_met=True/False) or derived from caller-supplied contract
+data (liquidity, spread, greeks, DTE, earnings/event risk) via
+options_manager.contracts.contract_validator.evaluate_contract_constraints()
+when contract_constraints_inputs is provided and
+contract_constraints.constraints_met is still unresolved (None).
+evaluate_contract_constraints() is a pure, local, already-tested module
+with no I/O of its own; wiring it in adds no execution, broker, scanner,
+replay, contract-selection, or option-chain-fetching path, and does not
+import options_companion.
 """
 
 from __future__ import annotations
@@ -39,6 +51,7 @@ from typing import Literal, Optional
 from strategy.strat_classifier import INSIDE_BAR, TWO_DOWN, TWO_UP, classify_from_ohlc
 
 from options_manager.context import MarketContextInputs, evaluate_market_context
+from options_manager.contracts import ContractConstraintsInputs, evaluate_contract_constraints
 from options_manager.levels import LevelFinderInputs, find_targets
 
 from .base import (
@@ -84,6 +97,7 @@ def evaluate_strat_212(
     market_context: StrategyMarketContext,
     market_context_inputs: Optional[MarketContextInputs] = None,
     contract_constraints: StrategyContractConstraints,
+    contract_constraints_inputs: Optional[ContractConstraintsInputs] = None,
 ) -> StrategySignal:
     """Pure function of its explicit inputs -> StrategySignal.
 
@@ -123,6 +137,23 @@ def evaluate_strat_212(
     clean VALID one. If neither an explicit confirmation nor
     market_context_inputs is supplied, this fails closed exactly as
     before (missing_market_context).
+
+    Contract constraints: if contract_constraints.constraints_met is
+    explicitly True or False, that is used as-is (original Increment 1
+    behavior, unchanged). If contract_constraints.constraints_met is
+    still None (unresolved) and contract_constraints_inputs is supplied
+    instead, contract constraints are derived by calling
+    evaluate_contract_constraints(). If the contract validator returns
+    INVALID, this validator returns INVALID with a
+    "contract_constraints_<reason_code>" reason code that exposes the
+    contract validator's own reason code and message (e.g.
+    "contract_constraints_spread_too_wide"). If it returns VALID or
+    CAUTION, the setup is allowed to proceed and contract_status/
+    contract_score/contract_warnings/contract_reason_code are populated
+    on the final StrategySignal — a CAUTION contract is never reported
+    as a clean VALID one. If neither an explicit confirmation nor
+    contract_constraints_inputs is supplied, this fails closed exactly as
+    before (missing_contract_constraints).
     """
     ctx = classify_from_ohlc(
         current_high=bars.current_high,
@@ -274,14 +305,32 @@ def evaluate_strat_212(
             market_context.notes or "market context rejected this setup",
         )
 
+    contract_status = None
+    contract_score = None
+    contract_warnings: list[str] = []
+    contract_reason_code = None
+
     if contract_constraints.constraints_met is None:
-        return _invalid(
-            STRATEGY_NAME,
-            direction,
-            "missing_contract_constraints",
-            "contract_constraints.constraints_met is not resolved",
-        )
-    if contract_constraints.constraints_met is False:
+        if contract_constraints_inputs is None:
+            return _invalid(
+                STRATEGY_NAME,
+                direction,
+                "missing_contract_constraints",
+                "contract_constraints.constraints_met is not resolved",
+            )
+        contract_result = evaluate_contract_constraints(contract_constraints_inputs)
+        if contract_result.status == "INVALID":
+            return _invalid(
+                STRATEGY_NAME,
+                direction,
+                f"contract_constraints_{contract_result.reason_code}",
+                contract_result.reason,
+            )
+        contract_status = contract_result.status
+        contract_score = contract_result.contract_score
+        contract_warnings = contract_result.warnings
+        contract_reason_code = contract_result.reason_code
+    elif contract_constraints.constraints_met is False:
         return _invalid(
             STRATEGY_NAME,
             direction,
@@ -311,4 +360,8 @@ def evaluate_strat_212(
         context_score=context_score,
         context_warnings=context_warnings,
         market_context_reason_code=market_context_reason_code,
+        contract_status=contract_status,
+        contract_score=contract_score,
+        contract_warnings=contract_warnings,
+        contract_reason_code=contract_reason_code,
     )
