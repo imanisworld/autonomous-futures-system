@@ -18,6 +18,7 @@ import options_manager.validation.management_cases as management_cases_module
 from options_manager.validation import (
     ManagementCase,
     ManagementCaseSummary,
+    build_active_management_case_dataset,
     build_management_case_dataset,
     summarize_management_case_dataset,
 )
@@ -104,53 +105,89 @@ def test_all_cases_are_real_construct_objects():
         assert isinstance(case, ManagementCase), name
 
 
-def test_nok_case_reflects_real_known_fields():
+def test_nok_case_reflects_broker_corrected_fields():
     case = build_management_case_dataset()["nok_management_case"]
     assert case.ticker == "NOK"
     assert case.contract_strike == 14.0
     assert case.entry_premium == 1.27
-    assert case.exit_premium == 1.02
+    assert case.exit_premium == 0.93
+    assert case.exit_tranche_count == 3
     assert case.position_size_contracts == 3
     assert case.decision_type == "full_exit"
     assert case.decision_basis == "emotional"
     assert case.thesis_status_at_decision == "intact"
     assert case.classification == "premature_exit_thesis_intact"
+    assert case.evidence_status == "corrected_from_broker_records"
+    assert case.realized_pnl_dollars == -101.0
 
 
-def test_ebay_case_reflects_real_known_fields():
+def test_ebay_case_reflects_broker_corrected_fields():
     case = build_management_case_dataset()["ebay_management_case"]
     assert case.ticker == "EBAY"
     assert case.contract_strike == 105.0
-    assert case.entry_premium == 1.06
-    assert case.position_size_contracts == 4
+    assert case.entry_premium == 1.18
+    assert case.position_size_contracts == 5
     assert case.decision_type == "full_exit"
     assert case.decision_basis == "rule_based"
     assert case.thesis_status_at_decision == "intact"
     assert case.position_sizing == "defined_risk"
     assert case.realized_pnl_dollars == 538.0 + 470.0 + 455.0 + 421.0
     assert case.classification == "correct_rule_based_hold_or_scale"
+    assert case.evidence_status == "corrected_from_broker_records"
 
 
-def test_adp_case_reflects_real_known_fields():
+def test_adp_case_marked_contradicted_as_described():
+    """ADP's original 8-contract/+116%/-93% narrative is preserved as the
+    historical claim (not deleted), but is flagged contradicted rather
+    than presented as verified fact -- see build_active_management_case_dataset."""
     case = build_management_case_dataset()["adp_management_case"]
     assert case.ticker == "ADP"
+    assert case.evidence_status == "contradicted_as_described"
+    # the original (contradicted) claim is preserved unchanged for the record:
     assert case.position_size_contracts == 8
-    assert case.decision_type == "hold"
-    assert case.decision_basis == "no_rule_defined"
-    assert case.position_sizing == "oversized"
     assert case.realized_pnl_percent == -93.0
-    assert case.classification == "oversized_no_exit_rule"
+    assert "CONTRADICTED BY BROKER RECORDS" in case.notes
+    assert "2 contracts" in case.notes
 
 
-def test_arm_case_reflects_real_known_fields():
+def test_arm_case_marked_contradicted_as_described():
+    """ARM's original $624-profit narrative is preserved as the historical
+    claim (not deleted), but is flagged contradicted rather than presented
+    as verified fact -- see build_active_management_case_dataset."""
     case = build_management_case_dataset()["arm_management_case"]
     assert case.ticker == "ARM"
-    assert case.contract_strike == 215.0
-    assert case.decision_type == "full_exit"
-    assert case.decision_basis == "external_recommendation"
-    assert case.thesis_status_at_decision == "intact"
+    assert case.evidence_status == "contradicted_as_described"
+    # the original (contradicted) claim is preserved unchanged for the record:
     assert case.realized_pnl_dollars == 624.0
     assert case.classification == "premature_exit_thesis_intact"
+    assert "CONTRADICTED BY BROKER RECORDS" in case.notes
+    assert "-$380" in case.notes
+
+
+# --- 1b. active dataset excludes contradicted cases --------------------------------------------------
+
+
+def test_active_dataset_excludes_contradicted_cases():
+    active = build_active_management_case_dataset()
+    assert set(active.keys()) == {"nok_management_case", "ebay_management_case"}
+    assert all(case.evidence_status != "contradicted_as_described" for case in active.values())
+
+
+def test_active_dataset_is_a_strict_subset_of_full_dataset():
+    full = build_management_case_dataset()
+    active = build_active_management_case_dataset()
+    assert set(active.keys()) <= set(full.keys())
+    for name, case in active.items():
+        assert case == full[name]
+
+
+def test_evidence_status_field_has_no_default_value():
+    import dataclasses
+
+    fields_by_name = {f.name: f for f in dataclasses.fields(ManagementCase)}
+    evidence_status_field = fields_by_name["evidence_status"]
+    assert evidence_status_field.default is dataclasses.MISSING
+    assert evidence_status_field.default_factory is dataclasses.MISSING
 
 
 def test_dataset_helper_does_not_mutate_state_between_calls():
