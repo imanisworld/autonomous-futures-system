@@ -156,8 +156,33 @@ def test_post_taxonomy_suspect_with_unknown_reason_flags_option_c_recurrence(tmp
 
 
 def test_post_taxonomy_suspect_with_real_reason_does_not_flag_option_c(tmp_path):
-    # Taxonomy actually explained this one with a specific bucket, so it is
-    # not the "generic cancel with no explanation" recurrence signature.
+    # Taxonomy actually explained this one with a specific bucket backed by a
+    # real raw broker status, so it is not the "generic cancel with no
+    # credible explanation" recurrence signature.
+    _write_jsonl(
+        tmp_path / "journal_2026-07-08.jsonl",
+        [
+            _trade("2026-07-08T02:15:00+00:00", "MNQ", direction="SHORT", entry=30000.0, close=29995.0),
+            _cancelled(
+                "2026-07-08T02:20:00+00:00", "MNQ",
+                no_fill_reason="NO_FILL_BROKER_REJECTED",
+                broker_status_raw="TRADOVATE_REJECTED",
+            ),
+        ],
+    )
+    entries = read_journal_entries(tmp_path)
+    report = audit_instrument(entries, "MNQ")
+
+    row = report["suspect_rows"][0]
+    assert row["post_taxonomy"] is True
+    assert row["option_c_recurrence"] is False
+    assert report["option_c_recurrence_rows"] == []
+
+
+def test_post_taxonomy_suspect_with_reason_but_no_broker_status_raw_still_flags(tmp_path):
+    # A specific no_fill_reason bucket with no backing broker_status_raw is
+    # not a credible explanation on its own -- still flags, per the operator's
+    # explicit ask to not let the recurrence check be too narrow.
     _write_jsonl(
         tmp_path / "journal_2026-07-08.jsonl",
         [
@@ -169,9 +194,7 @@ def test_post_taxonomy_suspect_with_real_reason_does_not_flag_option_c(tmp_path)
     report = audit_instrument(entries, "MNQ")
 
     row = report["suspect_rows"][0]
-    assert row["post_taxonomy"] is True
-    assert row["option_c_recurrence"] is False
-    assert report["option_c_recurrence_rows"] == []
+    assert row["option_c_recurrence"] is True
 
 
 def test_confirmed_no_fill_row_never_flagged_option_c_even_if_post_taxonomy(tmp_path):

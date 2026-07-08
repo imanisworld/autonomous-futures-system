@@ -16,7 +16,7 @@ Required checks, via `ops/audit_plain_cancelled.py` (excludes rows already in `o
 - Matching OUTCOME row (confirm pairing, not just presence)
 - `no_fill_reason` / `order_type`, if the row postdates the no-fill taxonomy deploy (`3c7a6b044cc8`, 2026-07-07T18:35:33Z)
 - `signal_to_submit_latency_seconds` (auto-computed by the tool from `signal_timestamp`/`submit_timestamp`, when both are present)
-- `option_c_recurrence` (auto-flagged by the tool: a `MISLABELED_FILL_SUSPECT` row that postdates the taxonomy deploy AND still has `no_fill_reason` absent or `NO_FILL_UNKNOWN` — the exact signature from the 2026-06-25 MNQ `pdh_reclaim` anomaly, which the operator is watching for rather than resolving historically)
+- `option_c_recurrence` (auto-flagged by the tool: a `MISLABELED_FILL_SUSPECT` row that postdates the taxonomy deploy AND lacks a credible explanation — `no_fill_reason` absent, `NO_FILL_UNKNOWN`, or `broker_status_raw` absent even if `no_fill_reason` names a specific bucket — the exact signature from the 2026-06-25 MNQ `pdh_reclaim` anomaly, which the operator is watching for rather than resolving historically. A specific bucket backed by a real `broker_status_raw` does NOT trip this flag.)
 
 Classification (pick exactly one per row):
 - `CONFIRMED_NO_FILL` — decision close was beyond the IOC cap; the CANCELLED label is honest

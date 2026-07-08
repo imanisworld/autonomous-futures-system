@@ -149,13 +149,20 @@ def audit_instrument(entries: list[dict[str, Any]], instrument: str) -> dict[str
         # Option C (per the 2026-06-25 MNQ pdh_reclaim anomaly, see
         # project_no_fill_taxonomy memory): a marketable-per-arithmetic close
         # logged as a generic cancel, with the taxonomy fields that should
-        # explain a genuine post-taxonomy no-fill either absent entirely or
-        # stuck at the catch-all NO_FILL_UNKNOWN bucket. This does not prove
-        # a bug on its own -- it flags the exact signature to watch for.
-        if (
-            row["classification"] == "MISLABELED_FILL_SUSPECT"
-            and post_taxonomy
-            and (not no_fill_reason or no_fill_reason == NO_FILL_UNKNOWN)
+        # explain a genuine post-taxonomy no-fill either absent entirely,
+        # stuck at the catch-all NO_FILL_UNKNOWN bucket, or missing the raw
+        # broker status that would back up a specific bucket (defense in
+        # depth against a no_fill_reason getting set without its supporting
+        # broker_status_raw -- classify_no_fill_reason(None) already maps to
+        # NO_FILL_UNKNOWN, so this mainly guards a malformed/incomplete row).
+        # This does not prove a bug on its own -- it flags the exact
+        # signature to watch for; any credible specific bucket (e.g.
+        # NO_FILL_BROKER_REJECTED) backed by a real broker_status_raw does
+        # NOT trip this flag.
+        if row["classification"] == "MISLABELED_FILL_SUSPECT" and post_taxonomy and (
+            not no_fill_reason
+            or no_fill_reason == NO_FILL_UNKNOWN
+            or not trade.outcome_body.get("broker_status_raw")
         ):
             row["option_c_recurrence"] = True
         rows.append(row)
