@@ -53,6 +53,18 @@ reconciliation (Increment 25A/25C) found:
   same-day ARM scalp, may be added in a future increment; it does not
   exist yet.
 
+Increment 25H added a fifth case (ORCL) built directly from a fully
+reconciled broker order history and candle reconstruction (Increment
+25G/`fixture_status.py` Packet B) -- unlike NOK/EBAY, there was no prior
+recalled narrative to correct, so its `evidence_status` is
+`"broker_verified"` rather than `"corrected_from_broker_records"`. It
+teaches a real, profitable scaled-exit pattern (trim into strength, let
+the runner work, exit the remainder into further strength) but, like
+every other case here, is not a scanner-identification proof -- no
+trigger, invalidation, or target source exists for it either (see
+`options_manager/validation/fixture_status.py`'s ORCL candidate, which
+stays `INCOMPLETE` for the same reason).
+
 Every field other than the small required set is optional and left None
 when not actually known -- nothing here is fabricated to fill a gap.
 Cases whose real history blends more than one distinct trade/decision
@@ -338,18 +350,77 @@ def _arm_case() -> ManagementCase:
     )
 
 
+def _orcl_case() -> ManagementCase:
+    """Real trade: 2x $200C May 15 ORCL calls, entered 2026-05-04 at $1.87
+    (broker order history + candle reconstruction, Increment 25G/25H --
+    ORCL Packet B in fixture_status.py). Scaled out in two tranches: 1
+    contract sold 2026-05-06 at $3.61 (trimmed into strength, underlying
+    still ~5% below the $200 strike), the remaining contract sold
+    2026-05-07 at $5.80 in the same 5-minute bar the underlying came
+    within roughly $0.55 of the $200 strike before reversing. Net realized
+    +$567 (+151.6%). No thesis, trigger, invalidation, or target source
+    was ever attached to this trade -- this case records the real
+    scaled-exit management pattern only, not a validated setup."""
+    return ManagementCase(
+        id="orcl_management_case_001",
+        ticker="ORCL",
+        direction="CALL",
+        provenance="user_supplied",
+        contract_strike=200.0,
+        contract_expiration="2026-05-15",
+        entry_premium=1.87,
+        exit_premium=(3.61 + 5.80) / 2,
+        position_size_contracts=2,
+        exit_tranche_count=2,
+        decision_type="full_exit",
+        decision_basis="no_rule_defined",
+        thesis_status_at_decision="unknown",
+        position_sizing="undefined_risk",
+        classification="mixed_or_ambiguous",
+        evidence_status="broker_verified",
+        realized_pnl_dollars=567.0,
+        realized_pnl_percent=151.6,
+        post_decision_price_action=(
+            "First exit (2026-05-06, 1 of 2 contracts at $3.61) trimmed "
+            "into strength while the underlying was still roughly 5% below "
+            "the $200 strike -- no level alignment visible, a discretionary "
+            "partial profit-take. Final exit (2026-05-07, remaining "
+            "contract at $5.80) landed in the same 5-minute bar the "
+            "underlying pushed to within about $0.55 of the $200 strike "
+            "before reversing -- a real, observable coincidence with "
+            "strike proximity, not a proven causal trigger."
+        ),
+        thesis_notes="",
+        notes=(
+            "BROKER_VERIFIED / CANDLE_RECONSTRUCTED (Increment 25G/25H, "
+            "ORCL Packet B). No proven setup, trigger, invalidation, or "
+            "target source exists for this trade -- entry rode a genuine "
+            "multi-day underlying rally, but nothing establishes it was a "
+            "planned level or rule rather than discretionary momentum "
+            "buying. This is not scanner proof and not a clean fixture "
+            "candidate; the value here is the real management pattern -- "
+            "trim a winner into strength, let the runner work, exit the "
+            "remainder into further strength near the strike -- recorded "
+            "as management evidence only. See "
+            "options_manager/validation/fixture_status.py's ORCL "
+            "candidate, which stays INCOMPLETE for the same reason."
+        ),
+    )
+
+
 _MANAGEMENT_CASE_BUILDERS = (
     ("nok_management_case", _nok_case),
     ("ebay_management_case", _ebay_case),
     ("adp_management_case", _adp_case),
     ("arm_management_case", _arm_case),
+    ("orcl_management_case", _orcl_case),
 )
 
 _CONTRADICTED_EVIDENCE_STATUS: EvidenceStatus = "contradicted_as_described"
 
 
 def build_management_case_dataset() -> dict[str, ManagementCase]:
-    """Returns a fresh dict of all 4 management cases, keyed by a fixed
+    """Returns a fresh dict of all 5 management cases, keyed by a fixed
     case name -- including the two (ADP, ARM) whose original narrative is
     now known to be contradicted by broker records. This is the full
     historical record; use `build_active_management_case_dataset()` for

@@ -72,6 +72,7 @@ _EXPECTED_CASE_NAMES = {
     "ebay_management_case",
     "adp_management_case",
     "arm_management_case",
+    "orcl_management_case",
 }
 
 
@@ -96,7 +97,7 @@ def _imported_modules(module) -> list[str]:
 def test_dataset_contains_expected_named_cases():
     cases = build_management_case_dataset()
     assert set(cases.keys()) == _EXPECTED_CASE_NAMES
-    assert len(cases) == 4
+    assert len(cases) == 5
 
 
 def test_all_cases_are_real_construct_objects():
@@ -164,12 +165,39 @@ def test_arm_case_marked_contradicted_as_described():
     assert "-$380" in case.notes
 
 
+def test_orcl_case_reflects_broker_verified_fields():
+    """Increment 25H: ORCL Packet B (fixture_status.py), a real scaled-exit
+    winner, added as management evidence only -- not scanner proof."""
+    case = build_management_case_dataset()["orcl_management_case"]
+    assert case.ticker == "ORCL"
+    assert case.contract_strike == 200.0
+    assert case.contract_expiration == "2026-05-15"
+    assert case.entry_premium == 1.87
+    assert case.position_size_contracts == 2
+    assert case.exit_tranche_count == 2
+    assert case.evidence_status == "broker_verified"
+    assert case.realized_pnl_dollars == 567.0
+    assert case.realized_pnl_percent == 151.6
+
+
+def test_orcl_case_is_not_contradicted_and_not_scanner_proof():
+    case = build_management_case_dataset()["orcl_management_case"]
+    assert case.evidence_status != "contradicted_as_described"
+    notes = case.notes.lower()
+    assert "not scanner proof" in notes
+    assert "not a clean fixture" in notes
+
+
 # --- 1b. active dataset excludes contradicted cases --------------------------------------------------
 
 
 def test_active_dataset_excludes_contradicted_cases():
     active = build_active_management_case_dataset()
-    assert set(active.keys()) == {"nok_management_case", "ebay_management_case"}
+    assert set(active.keys()) == {
+        "nok_management_case",
+        "ebay_management_case",
+        "orcl_management_case",
+    }
     assert all(case.evidence_status != "contradicted_as_described" for case in active.values())
 
 
@@ -344,12 +372,14 @@ def test_summary_counts_are_stable_and_correct():
     summary_2 = summarize_management_case_dataset()
     assert isinstance(summary_1, ManagementCaseSummary)
     assert summary_1 == summary_2
-    assert summary_1.total_cases == 4
+    assert summary_1.total_cases == 5
     assert summary_1.placeholder_cases == 0
     assert summary_1.partial_real_cases == 2  # ADP, ARM
-    assert summary_1.user_supplied_cases == 2  # NOK, EBAY
-    assert sum(summary_1.counts_by_classification.values()) == 4
-    assert sum(summary_1.counts_by_decision_type.values()) == 4
+    assert summary_1.user_supplied_cases == 3  # NOK, EBAY, ORCL
+    assert sum(summary_1.counts_by_classification.values()) == 5
+    assert sum(summary_1.counts_by_decision_type.values()) == 5
     assert summary_1.counts_by_classification["premature_exit_thesis_intact"] == 2
     assert summary_1.counts_by_classification["correct_rule_based_hold_or_scale"] == 1
     assert summary_1.counts_by_classification["oversized_no_exit_rule"] == 1
+    assert summary_1.counts_by_classification["mixed_or_ambiguous"] == 1  # ORCL
+    assert summary_1.counts_by_evidence_status["broker_verified"] == 1  # ORCL
