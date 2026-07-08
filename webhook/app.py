@@ -23,7 +23,6 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import hmac
-import inspect
 import json
 import logging
 import os
@@ -153,6 +152,9 @@ _SENSITIVE_PATHS = {
     "/status/latest-webhook",
     "/status/diagnostics",
     "/status/signa",
+    # Admin-style dry-run tool: never places an order, but resolves live
+    # contract/quote/account state the same as the other sensitive reads above.
+    "/status/test-bracket",
 }
 
 
@@ -945,12 +947,26 @@ _ACCOUNT_CACHE: dict = {"ts": 0.0, "data": None}
 _ACCOUNT_TTL_SECONDS = 30.0
 
 
-@app.get("/status/broker-account")
-async def status_broker_account() -> dict:
-    """Live Tradovate demo/live account truth (equity / open P&L / realized P&L /
-    open position) for the dashboard mirror — read straight from the broker so the
-    UI never diverges from Tradovate. Cached ~30s; only meaningful when
-    BROKER=tradovate."""
+def _sanitize_broker_account_response(summary: dict, request: Request) -> dict:
+    """Strip the numeric Tradovate account_id from the response unless the
+    caller already holds a valid site-gate session. account_id isn't a secret,
+    but it's an unnecessary identifier to hand out to an unauthenticated caller
+    — this endpoint is also in _SENSITIVE_PATHS, so this only matters when the
+    site gate is disabled entirely (blank SITE_ACCESS_CODE, the default public
+    posture) or the caller reached this code path some other way."""
+    if _has_valid_gate_cookie(request):
+        return summary
+    out = dict(summary)
+    if out.get("account_id") is not None:
+        out["account_id"] = None
+    return out
+
+
+async def _broker_account_summary_payload() -> dict:
+    """Fetch (or reuse the ~30s cache of) the raw, unsanitized Tradovate account
+    summary. Internal helper shared by the public HTTP endpoint (which sanitizes
+    account_id before returning) and internal server-side callers like the mnq-30
+    proof report (which never echoes account_id in its own output)."""
     broker_mode = os.getenv("BROKER", "paper").strip().lower()
     if broker_mode != "tradovate":
         return {
@@ -974,6 +990,17 @@ async def status_broker_account() -> dict:
     _ACCOUNT_CACHE["ts"] = now
     _ACCOUNT_CACHE["data"] = summary
     return summary
+
+
+@app.get("/status/broker-account")
+async def status_broker_account(request: Request) -> dict:
+    """Live Tradovate demo/live account truth (equity / open P&L / realized P&L /
+    open position) for the dashboard mirror — read straight from the broker so the
+    UI never diverges from Tradovate. Cached ~30s; only meaningful when
+    BROKER=tradovate. account_id is sanitized out unless the caller holds a
+    valid site-gate session — see _sanitize_broker_account_response."""
+    summary = await _broker_account_summary_payload()
+    return _sanitize_broker_account_response(summary, request)
 
 
 @app.get("/status/tradovate-reliability")
@@ -1281,8 +1308,7 @@ async def status_proof_mnq_30(
     if freeze_ts and freeze is None:
         raise HTTPException(status_code=422, detail="freeze_ts must be an ISO timestamp or Unix epoch.")
     status_payload = _dashboard_payload(date.today())
-    broker_result = status_broker_account()
-    broker_payload = await broker_result if inspect.isawaitable(broker_result) else broker_result
+    broker_payload = await _broker_account_summary_payload()
     return build_mnq_proof_report(
         journal_dir=Path(_config.log_dir),
         freeze_ts=freeze,

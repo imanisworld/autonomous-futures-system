@@ -1975,11 +1975,14 @@ def test_fastapi_proof_mnq_30_endpoint_is_read_only(monkeypatch, tmp_path):
         ]) + "\n",
         encoding="utf-8",
     )
-    monkeypatch.setattr(app_module, "status_broker_account", lambda: {
-        "ok": False,
-        "error": "broker_not_tradovate",
-        "realized_pnl": None,
-    })
+    async def _fake_broker_account_summary_payload():
+        return {
+            "ok": False,
+            "error": "broker_not_tradovate",
+            "realized_pnl": None,
+        }
+
+    monkeypatch.setattr(app_module, "_broker_account_summary_payload", _fake_broker_account_summary_payload)
 
     client = TestClient(app_module.app)
     resp = client.get("/status/proof/mnq-30?freeze_ts=2026-06-23T12:00:00Z")
