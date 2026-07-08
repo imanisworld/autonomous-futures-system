@@ -27,6 +27,17 @@ from .fixtures import (
     run_real_setup_validation_dataset,
     summarize_real_setup_validation_dataset,
 )
+from .management_cases import (
+    DecisionBasis,
+    DecisionType,
+    ManagementCase,
+    ManagementCaseSummary,
+    ManagementClassification,
+    PositionSizing,
+    ThesisStatus,
+    build_management_case_dataset,
+    summarize_management_case_dataset,
+)
 
 __all__ = [
     "DataProvenance",
@@ -39,4 +50,13 @@ __all__ = [
     "build_real_setup_validation_dataset",
     "run_real_setup_validation_dataset",
     "summarize_real_setup_validation_dataset",
+    "DecisionBasis",
+    "DecisionType",
+    "ManagementCase",
+    "ManagementCaseSummary",
+    "ManagementClassification",
+    "PositionSizing",
+    "ThesisStatus",
+    "build_management_case_dataset",
+    "summarize_management_case_dataset",
 ]
