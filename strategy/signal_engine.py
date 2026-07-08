@@ -59,6 +59,12 @@ class SetupDetail:
     daily_direction: Optional[str] = None
     four_hour_direction: Optional[str] = None
     direction_reason: Optional[str] = None
+    rank_score: Optional[float] = None
+    rank_reason: Optional[str] = None
+    rank_priority_index: Optional[int] = None
+    rank_confluence_score: Optional[int] = None
+    rank_confluence_grade: Optional[str] = None
+    selection_mode: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -537,6 +543,8 @@ class DecisionEngine:
                 confidence_score=0,
             )
 
+        fallback_enabled = getattr(self.config, "strategy_fallback_enabled", False)
+
         if direction_mode == "off" and self.config.require_htf_alignment.get(
             state.instrument, False
         ):
@@ -560,6 +568,13 @@ class DecisionEngine:
                     )
                     for candidate in candidates
                 ]
+                self._add_context_to_candidate_audit(
+                    rejected_audit,
+                    condition=condition,
+                    regime=regime.regime,
+                    state=state,
+                    fallback_enabled=fallback_enabled,
+                )
                 return DecisionOutput(
                     timestamp=now,
                     instrument=state.instrument,
@@ -589,12 +604,19 @@ class DecisionEngine:
             )
 
         candidate_audit = [self._setup_audit_row(candidate) for candidate in candidates]
+        self._add_context_to_candidate_audit(
+            candidate_audit,
+            condition=condition,
+            regime=regime.regime,
+            state=state,
+            fallback_enabled=fallback_enabled,
+        )
 
-        fallback_enabled = getattr(self.config, "strategy_fallback_enabled", False)
         setup = None
         last_setup = None
         reject_code = None
         reject_reason = None
+        fallback_stop_index = None
         for idx, candidate in enumerate(candidates):
             candidate_audit[idx]["attempted"] = True
             candidate_audit[idx]["fallback_attempt"] = idx > 0
@@ -604,13 +626,16 @@ class DecisionEngine:
                 reject_reason = candidate.direction_reason or "HTF direction is unresolved"
                 candidate_audit[idx]["reject_code"] = reject_code
                 candidate_audit[idx]["reject_reason"] = reject_reason
+                candidate_audit[idx]["failed_gates"] = [reject_code]
                 if not fallback_enabled:
+                    fallback_stop_index = idx
                     break
                 continue
             evaluated, reject_code, reject_reason = self._evaluate_candidate(candidate, state)
             if reject_code is None:
                 setup = evaluated
                 candidate_audit[idx]["selected"] = True
+                candidate_audit[idx]["winner"] = True
                 if idx > 0:
                     note = (
                         f"fallback candidate {idx + 1}/{len(candidates)} "
@@ -621,8 +646,15 @@ class DecisionEngine:
             last_setup = evaluated
             candidate_audit[idx]["reject_code"] = reject_code
             candidate_audit[idx]["reject_reason"] = reject_reason
+            candidate_audit[idx]["failed_gates"] = [reject_code] if reject_code else []
             if not fallback_enabled:
+                fallback_stop_index = idx
                 break
+
+        if fallback_stop_index is not None and not fallback_enabled:
+            for row in candidate_audit[fallback_stop_index + 1:]:
+                row["fallback_skipped"] = True
+                row["skip_reason"] = "fallback_disabled_after_rejection"
 
         if setup is None:
             return DecisionOutput(
@@ -708,10 +740,17 @@ class DecisionEngine:
         return {
             "strategy": setup.strategy,
             "direction": setup.direction,
+            "candidate_direction": setup.direction,
             "entry": setup.entry,
             "stop": setup.stop,
             "target": setup.target,
             "rr_ratio": setup.rr_ratio,
+            "rank_score": setup.rank_score,
+            "rank_reason": setup.rank_reason,
+            "rank_priority_index": setup.rank_priority_index,
+            "rank_confluence_score": setup.rank_confluence_score,
+            "rank_confluence_grade": setup.rank_confluence_grade,
+            "selection_mode": setup.selection_mode,
             "direction_role": setup.direction_role,
             "htf_primary_direction": setup.htf_primary_direction,
             "daily_direction": setup.daily_direction,
@@ -719,10 +758,45 @@ class DecisionEngine:
             "direction_reason": setup.direction_reason,
             "attempted": False,
             "selected": False,
+            "winner": False,
             "fallback_attempt": False,
+            "fallback_enabled": False,
+            "fallback_skipped": False,
+            "skip_reason": None,
             "reject_code": reject_code,
             "reject_reason": None,
+            "failed_gates": [reject_code] if reject_code else [],
+            "context_ref": "journal.context",
+            "market_condition": None,
+            "regime": None,
+            "stale_data_flags": [],
         }
+
+    @staticmethod
+    def _stale_data_flags(state: MarketState) -> list[str]:
+        raw = state.raw if isinstance(getattr(state, "raw", None), dict) else {}
+        flags: list[str] = []
+        if str(raw.get("zone_state") or "").lower() == "stale":
+            flags.append("zone_state_stale")
+        if str(raw.get("data_status") or "").lower() == "stale":
+            flags.append("data_status_stale")
+        return flags
+
+    def _add_context_to_candidate_audit(
+        self,
+        rows: list[dict],
+        *,
+        condition: str,
+        regime: str,
+        state: MarketState,
+        fallback_enabled: bool,
+    ) -> None:
+        stale_flags = self._stale_data_flags(state)
+        for row in rows:
+            row["market_condition"] = condition
+            row["regime"] = regime
+            row["fallback_enabled"] = fallback_enabled
+            row["stale_data_flags"] = list(stale_flags)
 
     @staticmethod
     def _direction_value(value: object) -> Optional[str]:
@@ -1268,7 +1342,16 @@ class DecisionEngine:
                 for c in self.collect_strategy_candidates(state, "", daily_state)
             ]
 
-        return [setup for _, setup in self._iter_enabled_setups(state, daily_state)]
+        return [
+            self._with_candidate_audit_metadata(
+                state,
+                setup,
+                priority_index,
+                selection_mode="first_match",
+                add_rank_note=False,
+            )
+            for priority_index, setup in self._iter_enabled_setups(state, daily_state)
+        ]
 
     def _evaluate_candidate(
         self, setup: SetupDetail, state: MarketState
@@ -1420,7 +1503,16 @@ class DecisionEngine:
             f"priority {priority_index}"
         )
         notes = f"{setup.notes} | {reason}" if setup.notes else reason
-        ranked_setup = replace(setup, notes=notes)
+        ranked_setup = replace(
+            setup,
+            notes=notes,
+            rank_score=rank_score,
+            rank_reason=reason,
+            rank_priority_index=priority_index,
+            rank_confluence_score=confluence.score,
+            rank_confluence_grade=confluence.grade,
+            selection_mode="ranked",
+        )
         return StrategyCandidate(
             setup=ranked_setup,
             confluence_score=confluence.score,
@@ -1428,6 +1520,46 @@ class DecisionEngine:
             rank_score=rank_score,
             rank_reason=reason,
             priority_index=priority_index,
+        )
+
+    def _with_candidate_audit_metadata(
+        self,
+        state: MarketState,
+        setup: SetupDetail,
+        priority_index: int,
+        *,
+        selection_mode: str,
+        add_rank_note: bool,
+    ) -> SetupDetail:
+        from strategy.confluence_scorer import score_setup
+
+        confluence = score_setup(state, setup)
+        expectancy_bonus = self._RANK_EXPECTANCY_BONUS.get(
+            (state.instrument, setup.strategy), 0.0
+        )
+        rank_score = (
+            (confluence.score * 100.0)
+            + (setup.rr_ratio * 10.0)
+            + expectancy_bonus
+            - priority_index
+        )
+        reason = (
+            f"{selection_mode} candidate audit: confluence {confluence.score}/10 "
+            f"{confluence.grade}, R:R {setup.rr_ratio:.2f}, "
+            f"expectancy_bonus {expectancy_bonus:.1f}, priority {priority_index}"
+        )
+        notes = setup.notes
+        if add_rank_note:
+            notes = f"{setup.notes} | {reason}" if setup.notes else reason
+        return replace(
+            setup,
+            notes=notes,
+            rank_score=rank_score,
+            rank_reason=reason,
+            rank_priority_index=priority_index,
+            rank_confluence_score=confluence.score,
+            rank_confluence_grade=confluence.grade,
+            selection_mode=selection_mode,
         )
 
     def _enforce_min_target_distance(
