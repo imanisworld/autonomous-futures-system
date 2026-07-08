@@ -15,6 +15,8 @@ Required checks, via `ops/audit_plain_cancelled.py` (excludes rows already in `o
 - Partial-fill evidence
 - Matching OUTCOME row (confirm pairing, not just presence)
 - `no_fill_reason` / `order_type`, if the row postdates the no-fill taxonomy deploy (`3c7a6b044cc8`, 2026-07-07T18:35:33Z)
+- `signal_to_submit_latency_seconds` (auto-computed by the tool from `signal_timestamp`/`submit_timestamp`, when both are present)
+- `option_c_recurrence` (auto-flagged by the tool: a `MISLABELED_FILL_SUSPECT` row that postdates the taxonomy deploy AND still has `no_fill_reason` absent or `NO_FILL_UNKNOWN` — the exact signature from the 2026-06-25 MNQ `pdh_reclaim` anomaly, which the operator is watching for rather than resolving historically)
 
 Classification (pick exactly one per row):
 - `CONFIRMED_NO_FILL` — decision close was beyond the IOC cap; the CANCELLED label is honest
@@ -68,6 +70,7 @@ Safety gates:
 - Any `MISLABELED_FILL` row caps the verdict at HOLD and the classification at `SUSPECT_FOUND`, regardless of how many other rows are clean — one real anomaly is not diluted by a large clean sample.
 - A `MISLABELED_FILL` with margin ≤ 1 tick (0.25pt) must still be listed, with a note that it may be a rounding/comparison-operator artifact rather than a real anomaly — it is not dropped.
 - Re-running this command after new journal data lands must re-scan everything not yet in the `OVERRIDES` map — a prior clean run does not grandfather in new rows.
+- Any row with `option_c_recurrence: true` caps the verdict at HOLD regardless of sample size — this is the specific historical anomaly signature recurring post-taxonomy, not a generic suspect row, and it directly answers the open question in the MNQ 2026-06-25 `pdh_reclaim` thread. Report it explicitly, do not fold it into the generic `SUSPECT_FOUND` count without calling it out by name.
 
 Safe next step:
 If `CLEAN`, the safe next step is to feed the confirmed no-fill count into `/futures-proof-baseline-audit` and `/futures-fill-audit`. If `SUSPECT_FOUND`, the safe next step is the same reconstruction discipline used for the phantom-clear audit (finer-resolution data, broker order id check) — and if that hits a hard data wall, document it as `PRE_TAXONOMY_UNVERIFIABLE` in `private/` and surface the open question to the operator rather than resolving it either direction by assumption.
