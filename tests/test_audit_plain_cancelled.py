@@ -22,12 +22,33 @@ def _trade(ts: str, instrument: str, *, direction: str, entry: float, close: flo
     }
 
 
-def _cancelled(ts: str, instrument: str) -> dict:
+def _cancelled(
+    ts: str,
+    instrument: str,
+    *,
+    no_fill_reason: str | None = None,
+    broker_status_raw: str | None = None,
+    signal_timestamp: str | None = None,
+    submit_timestamp: str | None = None,
+    cancel_timestamp: str | None = None,
+    seconds_until_cancel: float | None = None,
+) -> dict:
     return {
         "ts": ts,
         "type": "OUTCOME",
         "instrument": instrument,
-        "outcome": {"result": "CANCELLED", "exit_reason": "execution_failed:CANCELLED", "pnl_dollars": 0.0, "contracts": 1},
+        "outcome": {
+            "result": "CANCELLED",
+            "exit_reason": "execution_failed:CANCELLED",
+            "pnl_dollars": 0.0,
+            "contracts": 1,
+            "no_fill_reason": no_fill_reason,
+            "broker_status_raw": broker_status_raw,
+            "signal_timestamp": signal_timestamp,
+            "submit_timestamp": submit_timestamp,
+            "cancel_timestamp": cancel_timestamp,
+            "seconds_until_cancel": seconds_until_cancel,
+        },
     }
 
 
@@ -92,3 +113,138 @@ def test_missing_context_close_is_a_data_gap(tmp_path):
     report = audit_instrument(entries, "MES")
 
     assert report["classification_counts"] == {"DATA_GAP_EXCLUDED": 1}
+
+
+def test_pre_taxonomy_suspect_row_is_not_flagged_option_c(tmp_path):
+    # Marketable-per-arithmetic (MNQ SHORT, cap = entry - 8.0, close comfortably
+    # below cap) but dated well before the 2026-07-07T18:35:33Z taxonomy deploy.
+    _write_jsonl(
+        tmp_path / "journal_2026-06-25.jsonl",
+        [
+            _trade("2026-06-25T01:00:00+00:00", "MNQ", direction="SHORT", entry=30000.0, close=29995.0),
+            _cancelled("2026-06-25T01:05:00+00:00", "MNQ"),
+        ],
+    )
+    entries = read_journal_entries(tmp_path)
+    report = audit_instrument(entries, "MNQ")
+
+    row = report["suspect_rows"][0]
+    assert row["post_taxonomy"] is False
+    assert row["option_c_recurrence"] is False
+    assert report["option_c_recurrence_rows"] == []
+
+
+def test_post_taxonomy_suspect_with_unknown_reason_flags_option_c_recurrence(tmp_path):
+    # Same marketable-per-arithmetic signature, but the OUTCOME row postdates
+    # the taxonomy deploy and still has no explanatory no_fill_reason -- the
+    # exact anomaly the operator asked this tool to watch for.
+    _write_jsonl(
+        tmp_path / "journal_2026-07-08.jsonl",
+        [
+            _trade("2026-07-08T02:15:00+00:00", "MNQ", direction="SHORT", entry=30000.0, close=29995.0),
+            _cancelled("2026-07-08T02:20:00+00:00", "MNQ", no_fill_reason="NO_FILL_UNKNOWN"),
+        ],
+    )
+    entries = read_journal_entries(tmp_path)
+    report = audit_instrument(entries, "MNQ")
+
+    row = report["suspect_rows"][0]
+    assert row["post_taxonomy"] is True
+    assert row["option_c_recurrence"] is True
+    assert report["option_c_recurrence_rows"] == [row]
+    assert report["post_taxonomy_total"] == 1
+
+
+def test_post_taxonomy_suspect_with_real_reason_does_not_flag_option_c(tmp_path):
+    # Taxonomy actually explained this one with a specific bucket backed by a
+    # real raw broker status, so it is not the "generic cancel with no
+    # credible explanation" recurrence signature.
+    _write_jsonl(
+        tmp_path / "journal_2026-07-08.jsonl",
+        [
+            _trade("2026-07-08T02:15:00+00:00", "MNQ", direction="SHORT", entry=30000.0, close=29995.0),
+            _cancelled(
+                "2026-07-08T02:20:00+00:00", "MNQ",
+                no_fill_reason="NO_FILL_BROKER_REJECTED",
+                broker_status_raw="TRADOVATE_REJECTED",
+            ),
+        ],
+    )
+    entries = read_journal_entries(tmp_path)
+    report = audit_instrument(entries, "MNQ")
+
+    row = report["suspect_rows"][0]
+    assert row["post_taxonomy"] is True
+    assert row["option_c_recurrence"] is False
+    assert report["option_c_recurrence_rows"] == []
+
+
+def test_post_taxonomy_suspect_with_reason_but_no_broker_status_raw_still_flags(tmp_path):
+    # A specific no_fill_reason bucket with no backing broker_status_raw is
+    # not a credible explanation on its own -- still flags, per the operator's
+    # explicit ask to not let the recurrence check be too narrow.
+    _write_jsonl(
+        tmp_path / "journal_2026-07-08.jsonl",
+        [
+            _trade("2026-07-08T02:15:00+00:00", "MNQ", direction="SHORT", entry=30000.0, close=29995.0),
+            _cancelled("2026-07-08T02:20:00+00:00", "MNQ", no_fill_reason="NO_FILL_BROKER_REJECTED"),
+        ],
+    )
+    entries = read_journal_entries(tmp_path)
+    report = audit_instrument(entries, "MNQ")
+
+    row = report["suspect_rows"][0]
+    assert row["option_c_recurrence"] is True
+
+
+def test_confirmed_no_fill_row_never_flagged_option_c_even_if_post_taxonomy(tmp_path):
+    # Genuinely unmarketable, post-taxonomy, no reason populated -- should
+    # stay CONFIRMED_NO_FILL and never be flagged, since option_c_recurrence
+    # only applies to the MISLABELED_FILL_SUSPECT classification.
+    _write_jsonl(
+        tmp_path / "journal_2026-07-08.jsonl",
+        [
+            _trade("2026-07-08T02:15:00+00:00", "MES", direction="LONG", entry=7500.0, close=7520.0),
+            _cancelled("2026-07-08T02:20:00+00:00", "MES"),
+        ],
+    )
+    entries = read_journal_entries(tmp_path)
+    report = audit_instrument(entries, "MES")
+
+    row = report["all_rows"][0]
+    assert row["classification"] == "CONFIRMED_NO_FILL"
+    assert row["post_taxonomy"] is True
+    assert row["option_c_recurrence"] is False
+
+
+def test_signal_to_submit_latency_computed_when_present(tmp_path):
+    _write_jsonl(
+        tmp_path / "journal_2026-07-08.jsonl",
+        [
+            _trade("2026-07-08T02:15:00+00:00", "MES", direction="LONG", entry=7500.0, close=7520.0),
+            _cancelled(
+                "2026-07-08T02:20:00+00:00", "MES",
+                signal_timestamp="2026-07-08T02:15:00+00:00",
+                submit_timestamp="2026-07-08T02:15:01.500000+00:00",
+            ),
+        ],
+    )
+    entries = read_journal_entries(tmp_path)
+    report = audit_instrument(entries, "MES")
+
+    row = report["all_rows"][0]
+    assert row["signal_to_submit_latency_seconds"] == 1.5
+
+
+def test_signal_to_submit_latency_none_when_fields_missing(tmp_path):
+    _write_jsonl(
+        tmp_path / "journal_2026-06-23.jsonl",
+        [
+            _trade("2026-06-23T01:00:00+00:00", "MES", direction="LONG", entry=7500.0, close=7520.0),
+            _cancelled("2026-06-23T01:05:00+00:00", "MES"),
+        ],
+    )
+    entries = read_journal_entries(tmp_path)
+    report = audit_instrument(entries, "MES")
+
+    assert report["all_rows"][0]["signal_to_submit_latency_seconds"] is None
