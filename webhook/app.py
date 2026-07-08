@@ -1545,10 +1545,21 @@ async def status_public() -> dict:
     status = _dashboard_payload(date.today())
     webhook = status.get("latest_webhook") or {}
     received_at = (webhook.get("received_at") or "") if isinstance(webhook, dict) else ""
+    mode_info = _execution_mode_info()
+    broker_env = os.getenv("TRADOVATE_ENV", "").strip().lower() or None
     return {
         "ok": True,
         "online": True,
-        "mode": "paper" if status.get("paper_mode") else "live",
+        # "mode" kept for backward compatibility but now reflects the real
+        # 3-state truth (paper/demo/live) instead of a paper-vs-live guess
+        # that mislabeled Tradovate demo as "live".
+        "mode": mode_info["key"],
+        "execution_mode": mode_info["key"],
+        "broker": os.getenv("BROKER", "paper").strip().lower(),
+        "broker_env": broker_env,
+        "live_money_enabled": not mode_info["money_blocked"],
+        "paper_simulator": mode_info["key"] == "paper",
+        "display_label": mode_info["label"],
         "today_pnl": round(float(status.get("today_pnl_dollars") or 0), 2),
         "trades": status.get("trade_count", 0),
         "max_trades": status.get("max_trades_per_day", 0),
@@ -3598,8 +3609,9 @@ _DASHBOARD_HTML = r"""<!doctype html>
       var risk = baseRisk(today);
       if (risk === 'CLEAR' && fr.state === 'STALE') risk = 'WATCH';
       var lock = num(today.consecutive_losses) >= num(today.max_consecutive_losses) && num(today.max_consecutive_losses) > 0;
-      var mode = INIT.paper_mode ? 'PAPER' : 'LIVE';
-      var modeC = INIT.paper_mode ? 'blue' : 'red';
+      var em = execMode();
+      var mode = em.word;
+      var modeC = em.key === 'LIVE' ? 'red' : (em.key === 'DEMO' ? 'yellow' : 'blue');
       var whTag = fr.state === 'NONE' ? 'gray' : (fr.state === 'FRESH' ? 'green' : (fr.state === 'IDLE' ? 'gray' : 'yellow'));
       var segs = [
         ['BACKEND:', 'ONLINE', 'green'],

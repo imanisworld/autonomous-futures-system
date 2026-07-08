@@ -199,3 +199,71 @@ def test_dashboard_source_no_longer_conflates_demo_with_paper_or_live(monkeypatc
     # The old buggy two-way ternaries must be gone, not just shadowed.
     assert "INIT.live_trading_enabled && !INIT.paper_mode ? 'LIVE' : 'PAPER'" not in resp.text
     assert "INIT.paper_mode ? '📄 PAPER MODE' : '⚡ LIVE MODE'" not in resp.text
+    # renderStatusBar()'s MODE segment must also delegate to execMode(), not a
+    # standalone paper-vs-live ternary.
+    assert "INIT.paper_mode ? 'PAPER' : 'LIVE'" not in resp.text
+
+
+# ─── /status/public — structured, correctly-labeled execution mode ─────────
+
+
+def _public_client(monkeypatch, tmp_path, *, paper_mode, live_trading_enabled, broker="paper", tradovate_env=""):
+    try:
+        from fastapi.testclient import TestClient
+        import webhook.app as app_module
+    except ImportError:  # pragma: no cover
+        pytest.skip("fastapi[testclient] not installed")
+
+    monkeypatch.setenv("WEBHOOK_SECRET", "testsecret")
+    _isolate_app_logs(monkeypatch, tmp_path)
+    _set_mode(
+        monkeypatch, app_module,
+        paper_mode=paper_mode, live_trading_enabled=live_trading_enabled,
+        broker=broker, tradovate_env=tradovate_env,
+    )
+    return TestClient(app_module.app)
+
+
+def test_status_public_reports_tradovate_demo_accurately(monkeypatch, tmp_path):
+    client = _public_client(
+        monkeypatch, tmp_path,
+        paper_mode=False, live_trading_enabled=False,
+        broker="tradovate", tradovate_env="demo",
+    )
+
+    resp = client.get("/status/public")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["execution_mode"] == "demo"
+    assert data["mode"] == "demo"
+    assert data["broker"] == "tradovate"
+    assert data["broker_env"] == "demo"
+    assert data["live_money_enabled"] is False
+    assert data["paper_simulator"] is False
+    assert data["display_label"] == "Tradovate demo"
+
+
+def test_status_public_paper_mode(monkeypatch, tmp_path):
+    client = _public_client(monkeypatch, tmp_path, paper_mode=True, live_trading_enabled=False)
+
+    data = client.get("/status/public").json()
+
+    assert data["execution_mode"] == "paper"
+    assert data["paper_simulator"] is True
+    assert data["live_money_enabled"] is False
+    assert data["display_label"] == "Paper simulator"
+
+
+def test_status_public_live(monkeypatch, tmp_path):
+    client = _public_client(
+        monkeypatch, tmp_path,
+        paper_mode=False, live_trading_enabled=True,
+        broker="tradovate", tradovate_env="live",
+    )
+
+    data = client.get("/status/public").json()
+
+    assert data["execution_mode"] == "live"
+    assert data["live_money_enabled"] is True
+    assert data["paper_simulator"] is False
