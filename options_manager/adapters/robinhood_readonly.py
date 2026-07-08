@@ -105,7 +105,7 @@ def _map_option_quote(raw: dict[str, Any]) -> AdapterOptionQuote:
     )
 
 
-def get_option_quote(raw: dict[str, Any]) -> AdapterOptionQuote:
+def normalize_option_quote(raw: dict[str, Any]) -> AdapterOptionQuote:
     """Maps one already-obtained raw contract quote dict into an
     AdapterOptionQuote. `earnings_risk`/`event_risk` are always left None
     here -- a quote payload does not natively carry either, and this
@@ -113,7 +113,7 @@ def get_option_quote(raw: dict[str, Any]) -> AdapterOptionQuote:
     return _map_option_quote(raw)
 
 
-def get_option_chain(raw: list[dict[str, Any]]) -> list[AdapterOptionQuote]:
+def normalize_option_chain(raw: list[dict[str, Any]]) -> list[AdapterOptionQuote]:
     """Maps an already-obtained list of raw contract dicts into
     AdapterOptionQuote entries, skipping any row that fails to map
     rather than fabricating a value for it."""
@@ -126,7 +126,7 @@ def get_option_chain(raw: list[dict[str, Any]]) -> list[AdapterOptionQuote]:
     return quotes
 
 
-def get_underlying_quote(raw: dict[str, Any]) -> AdapterUnderlyingSnapshot:
+def normalize_underlying_quote(raw: dict[str, Any]) -> AdapterUnderlyingSnapshot:
     """Maps an already-obtained raw underlying quote dict into an
     AdapterUnderlyingSnapshot. This module never detects levels itself --
     resistance_levels/support_levels/gamma_resistance/gamma_support are
@@ -135,7 +135,7 @@ def get_underlying_quote(raw: dict[str, Any]) -> AdapterUnderlyingSnapshot:
     return AdapterUnderlyingSnapshot(spot_price=spot_price)
 
 
-def get_accounts_summary(raw: dict[str, Any]) -> RobinhoodAccountSummary:
+def normalize_account_summary(raw: dict[str, Any]) -> RobinhoodAccountSummary:
     """Maps an already-obtained raw account dict into a
     RobinhoodAccountSummary. Deliberately carries no account number or
     other identifying detail -- only the four display figures below."""
@@ -147,7 +147,7 @@ def get_accounts_summary(raw: dict[str, Any]) -> RobinhoodAccountSummary:
     )
 
 
-def get_portfolio_positions(raw: list[dict[str, Any]]) -> list[RobinhoodPosition]:
+def normalize_portfolio_positions(raw: list[dict[str, Any]]) -> list[RobinhoodPosition]:
     """Maps an already-obtained list of raw position dicts into
     RobinhoodPosition entries, skipping any row that fails to map rather
     than fabricating a value for it."""
