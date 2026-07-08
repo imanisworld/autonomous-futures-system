@@ -759,10 +759,37 @@ async def health() -> dict:
     }
 
 
+def _sanitize_dashboard_payload(payload: dict, request: Request) -> dict:
+    """Sanitize the embedded latest_webhook/latest_webhooks fields for a
+    caller without a valid site-gate session. /status/today is the main
+    public dashboard endpoint (unauthenticated by default) and was found to
+    re-embed the exact same raw strategy internals that
+    _sanitize_latest_webhook_response already protects on the standalone
+    /status/latest-webhook endpoint — everything else in the payload (trade
+    count, P&L, win rate, etc.) is untouched either way."""
+    if _has_valid_gate_cookie(request):
+        return payload
+    out = dict(payload)
+    if isinstance(out.get("latest_webhook"), dict):
+        out["latest_webhook"] = _sanitize_latest_webhook_response(out["latest_webhook"])
+    if isinstance(out.get("latest_webhooks"), dict):
+        out["latest_webhooks"] = {
+            inst: (
+                _sanitize_latest_webhook_response(data)
+                if isinstance(data, dict) else data
+            )
+            for inst, data in out["latest_webhooks"].items()
+        }
+    return out
+
+
 @app.get("/status/today")
-async def status_today() -> dict:
-    """Return today's reconstructed daily state from the journal."""
-    return _dashboard_payload(date.today())
+async def status_today(request: Request) -> dict:
+    """Return today's reconstructed daily state from the journal. Embedded
+    latest_webhook/latest_webhooks are sanitized for callers without a valid
+    site-gate session — see _sanitize_dashboard_payload."""
+    payload = _dashboard_payload(date.today())
+    return _sanitize_dashboard_payload(payload, request)
 
 
 @app.get("/status/five-min")
