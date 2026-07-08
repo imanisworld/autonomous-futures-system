@@ -15,6 +15,7 @@ from pathlib import Path
 
 import options_manager.strategies.base as strategies_base_module
 import options_manager.strategies.strat_212 as strat_212_module
+from options_manager.levels import LevelFinderInputs
 from options_manager.strategies.base import (
     StrategyContractConstraints,
     StrategyMarketContext,
@@ -242,6 +243,194 @@ def test_missing_target_2_fails_closed_to_invalid():
     )
     assert result.status == "INVALID"
     assert result.reason_code == "missing_target_2"
+
+
+# --- 6b. Increment 2B: level/target-finder wiring ------------------------------------------
+
+
+def test_no_targets_and_no_level_inputs_fails_closed_to_invalid():
+    result = evaluate_strat_212(
+        _bullish_bars(),
+        direction="CALL",
+        entry_trigger=99.0,
+        underlying_invalidation=95.5,
+        target_1=None,
+        target_2=None,
+        market_context=_confirmed_context(),
+        contract_constraints=_met_constraints(),
+    )
+    assert result.status == "INVALID"
+    assert result.reason_code == "missing_target_1"
+
+
+def test_bullish_212_derives_targets_from_resistance_and_gamma_levels():
+    result = evaluate_strat_212(
+        _bullish_bars(),
+        direction="CALL",
+        entry_trigger=100.0,
+        underlying_invalidation=97.0,
+        level_inputs=LevelFinderInputs(
+            direction="CALL",
+            entry=100.0,
+            underlying_invalidation=97.0,
+            resistance_levels=(103.0, 108.0),
+            gamma_resistance=105.0,
+        ),
+        market_context=_confirmed_context(),
+        contract_constraints=_met_constraints(),
+    )
+    assert result.status == "VALID"
+    assert result.reason_code == "valid_212_continuation"
+    assert result.target_1 == 103.0
+    assert result.target_2 == 105.0
+    assert result.risk_amount == 3.0
+    assert result.reward_1 == 3.0
+    assert result.reward_2 == 5.0
+    assert result.rr_1 == 1.0
+    assert result.distance_to_target_1 == 3.0
+    assert result.distance_to_target_2 == 5.0
+
+
+def test_bearish_212_derives_targets_from_support_and_gamma_levels():
+    result = evaluate_strat_212(
+        _bearish_bars(),
+        direction="PUT",
+        entry_trigger=100.0,
+        underlying_invalidation=103.0,
+        level_inputs=LevelFinderInputs(
+            direction="PUT",
+            entry=100.0,
+            underlying_invalidation=103.0,
+            support_levels=(97.0, 94.0),
+            gamma_support=95.0,
+        ),
+        market_context=_confirmed_context(),
+        contract_constraints=_met_constraints(),
+    )
+    assert result.status == "VALID"
+    assert result.reason_code == "valid_212_continuation"
+    assert result.target_1 == 97.0
+    assert result.target_2 == 95.0
+    assert result.risk_amount == 3.0
+    assert result.reward_1 == 3.0
+    assert result.rr_1 == 1.0
+
+
+def test_target_finder_invalid_propagates_as_strategy_invalid():
+    result = evaluate_strat_212(
+        _bullish_bars(),
+        direction="CALL",
+        entry_trigger=100.0,
+        underlying_invalidation=97.0,
+        level_inputs=LevelFinderInputs(
+            direction="CALL",
+            entry=100.0,
+            underlying_invalidation=97.0,
+            resistance_levels=(95.0,),  # below entry -- no valid candidate
+        ),
+        market_context=_confirmed_context(),
+        contract_constraints=_met_constraints(),
+    )
+    assert result.status == "INVALID"
+    assert result.reason_code == "target_finder_no_target_1"
+
+
+def test_target_finder_too_close_propagates_as_strategy_invalid():
+    result = evaluate_strat_212(
+        _bullish_bars(),
+        direction="CALL",
+        entry_trigger=100.0,
+        underlying_invalidation=97.0,
+        level_inputs=LevelFinderInputs(
+            direction="CALL",
+            entry=100.0,
+            underlying_invalidation=97.0,
+            resistance_levels=(103.0, 108.0),
+            min_distance_to_target=5.0,  # target_1 distance is only 3.0
+        ),
+        market_context=_confirmed_context(),
+        contract_constraints=_met_constraints(),
+    )
+    assert result.status == "INVALID"
+    assert result.reason_code == "target_finder_target_too_close"
+
+
+def test_target_finder_rr_below_threshold_propagates_as_strategy_invalid():
+    result = evaluate_strat_212(
+        _bullish_bars(),
+        direction="CALL",
+        entry_trigger=100.0,
+        underlying_invalidation=97.0,  # risk = 3
+        level_inputs=LevelFinderInputs(
+            direction="CALL",
+            entry=100.0,
+            underlying_invalidation=97.0,
+            resistance_levels=(102.0, 108.0),  # reward_1 = 2 -> rr_1 = 0.667
+            min_rr_threshold=1.0,
+        ),
+        market_context=_confirmed_context(),
+        contract_constraints=_met_constraints(),
+    )
+    assert result.status == "INVALID"
+    assert result.reason_code == "target_finder_rr_below_threshold"
+
+
+def test_derived_targets_still_require_market_context():
+    result = evaluate_strat_212(
+        _bullish_bars(),
+        direction="CALL",
+        entry_trigger=100.0,
+        underlying_invalidation=97.0,
+        level_inputs=LevelFinderInputs(
+            direction="CALL",
+            entry=100.0,
+            underlying_invalidation=97.0,
+            resistance_levels=(103.0, 108.0),
+            gamma_resistance=105.0,
+        ),
+        market_context=StrategyMarketContext(),  # confirmed=None
+        contract_constraints=_met_constraints(),
+    )
+    assert result.status == "INVALID"
+    assert result.reason_code == "missing_market_context"
+
+
+def test_derived_targets_still_require_contract_constraints():
+    result = evaluate_strat_212(
+        _bullish_bars(),
+        direction="CALL",
+        entry_trigger=100.0,
+        underlying_invalidation=97.0,
+        level_inputs=LevelFinderInputs(
+            direction="CALL",
+            entry=100.0,
+            underlying_invalidation=97.0,
+            resistance_levels=(103.0, 108.0),
+            gamma_resistance=105.0,
+        ),
+        market_context=_confirmed_context(),
+        contract_constraints=StrategyContractConstraints(),  # constraints_met=None
+    )
+    assert result.status == "INVALID"
+    assert result.reason_code == "missing_contract_constraints"
+
+
+def test_explicit_targets_do_not_populate_derived_only_fields():
+    result = evaluate_strat_212(
+        _bullish_bars(),
+        direction="CALL",
+        entry_trigger=99.0,
+        underlying_invalidation=95.5,
+        target_1=103.0,
+        target_2=106.0,
+        market_context=_confirmed_context(),
+        contract_constraints=_met_constraints(),
+    )
+    assert result.status == "VALID"
+    assert result.risk_amount is None
+    assert result.reward_1 is None
+    assert result.rr_1 is None
+    assert result.distance_to_target_1 is None
 
 
 # --- 7. missing market context -----------------------------------------------------------

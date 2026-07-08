@@ -69,6 +69,16 @@ class StrategySignal:
     underlying_invalidation: Optional[float] = None
     target_1: Optional[float] = None
     target_2: Optional[float] = None
+    # Populated only when targets were derived via
+    # options_manager.levels.target_finder.find_targets() (Increment 2B);
+    # left None when target_1/target_2 were supplied explicitly.
+    distance_to_target_1: Optional[float] = None
+    distance_to_target_2: Optional[float] = None
+    risk_amount: Optional[float] = None
+    reward_1: Optional[float] = None
+    reward_2: Optional[float] = None
+    rr_1: Optional[float] = None
+    rr_2: Optional[float] = None
     warnings: list[str] = field(default_factory=list)
 
 

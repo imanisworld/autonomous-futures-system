@@ -11,6 +11,13 @@ previews an order, and performs no I/O of any kind — it only reads three
 already-known OHLC bars plus the caller-supplied entry/invalidation/
 target/market-context/contract-constraint inputs, and returns a
 StrategySignal.
+
+Increment 2B: targets may either be supplied explicitly (target_1/
+target_2, the original Increment 1 behavior) or derived from caller-
+supplied levels via options_manager.levels.target_finder.find_targets()
+when level_inputs is provided instead. find_targets() is a pure, local,
+already-tested module with no I/O of its own; wiring it in adds no
+execution, broker, scanner, replay, or market-data-fetching path.
 """
 
 from __future__ import annotations
@@ -19,6 +26,8 @@ from dataclasses import dataclass
 from typing import Literal, Optional
 
 from strategy.strat_classifier import INSIDE_BAR, TWO_DOWN, TWO_UP, classify_from_ohlc
+
+from options_manager.levels import LevelFinderInputs, find_targets
 
 from .base import (
     StrategyContractConstraints,
@@ -57,8 +66,9 @@ def evaluate_strat_212(
     direction: Literal["CALL", "PUT"],
     entry_trigger: Optional[float],
     underlying_invalidation: Optional[float],
-    target_1: Optional[float],
-    target_2: Optional[float],
+    target_1: Optional[float] = None,
+    target_2: Optional[float] = None,
+    level_inputs: Optional[LevelFinderInputs] = None,
     market_context: StrategyMarketContext,
     contract_constraints: StrategyContractConstraints,
 ) -> StrategySignal:
@@ -72,6 +82,18 @@ def evaluate_strat_212(
     not INVALID. Missing entry, invalidation, target, market context, or
     contract constraints all fail closed to INVALID — a strategy must
     never assume a favorable default for data it wasn't given.
+
+    Targets: if target_1 and target_2 are both supplied explicitly, they
+    are used as-is (original Increment 1 behavior, unchanged). If either
+    is missing and level_inputs is supplied instead, targets are derived
+    by calling options_manager.levels.target_finder.find_targets() with
+    the already-known entry_trigger/underlying_invalidation plus
+    level_inputs' resistance/support/gamma levels and thresholds. If the
+    target finder returns INVALID, this validator returns INVALID with a
+    "target_finder_<reason_code>" reason code that exposes the target
+    finder's own reason code and message. If neither explicit targets nor
+    level_inputs are supplied, this fails closed exactly as before
+    (missing_target_1 / missing_target_2).
     """
     ctx = classify_from_ohlc(
         current_high=bars.current_high,
@@ -126,10 +148,39 @@ def evaluate_strat_212(
             "missing_invalidation",
             "underlying_invalidation is required",
         )
-    if target_1 is None:
-        return _invalid(STRATEGY_NAME, direction, "missing_target_1", "target_1 is required")
-    if target_2 is None:
-        return _invalid(STRATEGY_NAME, direction, "missing_target_2", "target_2 is required")
+    derived_targets = None
+    if target_1 is None or target_2 is None:
+        if level_inputs is not None:
+            derived_targets = find_targets(
+                LevelFinderInputs(
+                    direction=direction,
+                    entry=entry_trigger,
+                    underlying_invalidation=underlying_invalidation,
+                    resistance_levels=level_inputs.resistance_levels,
+                    support_levels=level_inputs.support_levels,
+                    gamma_resistance=level_inputs.gamma_resistance,
+                    gamma_support=level_inputs.gamma_support,
+                    min_rr_threshold=level_inputs.min_rr_threshold,
+                    min_distance_to_target=level_inputs.min_distance_to_target,
+                )
+            )
+            if derived_targets.status == "INVALID":
+                return _invalid(
+                    STRATEGY_NAME,
+                    direction,
+                    f"target_finder_{derived_targets.reason_code}",
+                    derived_targets.reason,
+                )
+            target_1 = derived_targets.target_1
+            target_2 = derived_targets.target_2
+        elif target_1 is None:
+            return _invalid(
+                STRATEGY_NAME, direction, "missing_target_1", "target_1 is required"
+            )
+        else:
+            return _invalid(
+                STRATEGY_NAME, direction, "missing_target_2", "target_2 is required"
+            )
 
     if direction == "CALL" and underlying_invalidation >= entry_trigger:
         return _invalid(
@@ -202,4 +253,11 @@ def evaluate_strat_212(
         underlying_invalidation=underlying_invalidation,
         target_1=target_1,
         target_2=target_2,
+        distance_to_target_1=derived_targets.distance_to_target_1 if derived_targets else None,
+        distance_to_target_2=derived_targets.distance_to_target_2 if derived_targets else None,
+        risk_amount=derived_targets.risk_amount if derived_targets else None,
+        reward_1=derived_targets.reward_1 if derived_targets else None,
+        reward_2=derived_targets.reward_2 if derived_targets else None,
+        rr_1=derived_targets.rr_1 if derived_targets else None,
+        rr_2=derived_targets.rr_2 if derived_targets else None,
     )
