@@ -1508,6 +1508,34 @@ async def status_adaptive_history(days: int = Query(default=7, ge=1, le=90)) -> 
     return {"days": committee.load_history(days=days)}
 
 
+def _execution_mode_info() -> dict:
+    """Single source of truth for operator-facing execution-mode wording.
+
+    Three states must never be conflated: an internal paper simulator
+    (PAPER_MODE=true, no real broker involved), a real Tradovate demo account
+    (BROKER=tradovate, TRADOVATE_ENV=demo — a real broker position, just with
+    real money blocked), and genuine live trading (LIVE_TRADING_ENABLED=true
+    with TRADOVATE_ENV=live).
+    """
+    broker = os.getenv("BROKER", "paper").strip().lower()
+    tv_env = os.getenv("TRADOVATE_ENV", "").strip().lower()
+    paper = bool(_config.paper_mode)
+    live_enabled = bool(_config.live_trading_enabled)
+    if paper:
+        return {"key": "paper", "word": "PAPER", "label": "Paper simulator", "money_blocked": True}
+    if live_enabled and tv_env == "live":
+        return {"key": "live", "word": "LIVE", "label": "Live", "money_blocked": False}
+    if broker == "tradovate" and tv_env == "demo":
+        return {"key": "demo", "word": "DEMO", "label": "Tradovate demo", "money_blocked": not live_enabled}
+    # Any other combination is neither proven paper nor proven live — never claim either.
+    return {
+        "key": "demo",
+        "word": "DEMO",
+        "label": f"{broker or 'unknown'} execution",
+        "money_blocked": not live_enabled,
+    }
+
+
 # ─── Public / shareable endpoints ────────────────────────────────────────────
 
 
@@ -1537,7 +1565,8 @@ async def share_dashboard() -> HTMLResponse:
     status = _dashboard_payload(date.today())
     webhook = status.get("latest_webhook") or {}
     received_at = (webhook.get("received_at") or "") if isinstance(webhook, dict) else ""
-    mode = "Paper" if status.get("paper_mode") else "Live"
+    mode_info = _execution_mode_info()
+    money_line = "REAL MONEY BLOCKED" if mode_info["money_blocked"] else "LIVE MONEY AT RISK"
     pnl = round(float(status.get("today_pnl_dollars") or 0), 2)
     pnl_sign = "+" if pnl >= 0 else ""
     trades = status.get("trade_count", 0)
@@ -1574,7 +1603,7 @@ async def share_dashboard() -> HTMLResponse:
     <div class="header">
       <span class="title">RISKSENTINEL</span>
       <div style="display:flex;gap:8px;align-items:center">
-        <span class="badge">{_escape(mode.upper())}</span>
+        <span class="badge">{_escape(mode_info['word'])}</span>
         <span class="dot"></span>
       </div>
     </div>
@@ -1594,7 +1623,7 @@ async def share_dashboard() -> HTMLResponse:
       <span class="label">LAST SIGNAL</span>
       <span class="value muted">{_escape(last_signal)}</span>
     </div>
-    <div class="footer">READ-ONLY · PAPER SYSTEM · AUTOMATED FUTURES TRADING</div>
+    <div class="footer">READ-ONLY · {_escape(mode_info['label'].upper())} · {money_line} · AUTOMATED FUTURES TRADING</div>
   </div>
 </body>
 </html>"""
@@ -2609,6 +2638,7 @@ def _dashboard_init(status: dict) -> dict:
         "alert_validation": status.get("alert_validation"),
         "expected_timeframe_minutes": int(getattr(_config, "expected_timeframe_minutes", 15)),
         "broker": broker,
+        "tradovate_env": os.getenv("TRADOVATE_ENV", "").strip().lower(),
         "paper_mode": bool(status.get("paper_mode", True)),
         "live_trading_enabled": bool(status.get("live_trading_enabled")),
         "max_drawdown_pct": round(float(getattr(_config, "max_drawdown_percent", 0.10)) * 100, 2),
@@ -3432,7 +3462,24 @@ _DASHBOARD_HTML = r"""<!doctype html>
       LOCKED: 'No trades — wait for conditions to improve'
     };
     function moodLine(risk) { return RISK_MOOD[risk] || RISK_MOOD.CLEAR; }
-    function modeLabel() { return INIT.paper_mode ? '📄 PAPER MODE' : '⚡ LIVE MODE'; }
+    // Single source of truth for execution-mode wording — mirrors
+    // _execution_mode_info() in webhook/app.py. Three states, never conflated:
+    // an internal paper simulator, a real Tradovate demo account (real broker,
+    // real money blocked), and genuine live trading.
+    function execMode() {
+      var paper = !!INIT.paper_mode;
+      var tvEnv = (INIT.tradovate_env || '').toLowerCase();
+      var liveEnabled = !!INIT.live_trading_enabled;
+      var broker = (INIT.broker || '').toUpperCase();
+      if (paper) return { key: 'PAPER', word: 'PAPER', badge: '📄 PAPER MODE', moneyBlocked: true };
+      if (liveEnabled && tvEnv === 'live') return { key: 'LIVE', word: 'LIVE', badge: '⚡ LIVE MODE', moneyBlocked: false };
+      if (broker === 'TRADOVATE' && tvEnv === 'demo') {
+        return { key: 'DEMO', word: 'DEMO', badge: '🧪 TRADOVATE DEMO', moneyBlocked: !liveEnabled };
+      }
+      // Any other combination is neither proven paper nor proven live — never claim either.
+      return { key: 'DEMO', word: 'DEMO', badge: '🧪 ' + (broker || 'UNKNOWN') + ' DEMO', moneyBlocked: !liveEnabled };
+    }
+    function modeLabel() { return execMode().badge; }
     function lockLabel(lock) { return lock ? '🔒 ACTIVE' : '🔓 NONE'; }
     function livePreflight() { return (state.today && state.today.live_preflight) || {}; }
     function preflightStatusLine() {
@@ -3796,7 +3843,7 @@ _DASHBOARD_HTML = r"""<!doctype html>
 
     // ── force-open controls ────────────────────────────────────────────
     var POINTS = { MES: { stop: 7, target: 15, dollar: 5 }, MNQ: { stop: 7, target: 15, dollar: 2 }, MGC: { stop: 5, target: 10, dollar: 10 }, MCL: { stop: 0.3, target: 0.6, dollar: 100 } };
-    function modeWord() { return INIT.live_trading_enabled && !INIT.paper_mode ? 'LIVE' : 'PAPER'; }
+    function modeWord() { return execMode().word; }
     function renderForce() {
       // Monitor-only mode (default): render NO order-sending controls.
       if (!INIT.manual_controls_enabled) {
@@ -3822,16 +3869,19 @@ _DASHBOARD_HTML = r"""<!doctype html>
     function openForceModal(spec) {
       var parts = spec.split('|');
       var sym = parts[0], side = parts[1];
-      var mode = modeWord();
-      var live = mode === 'LIVE';
-      el('fm-mode').innerHTML = '<span class="' + (live ? 'red' : 'blue') + '">MODE: ' + mode + '</span>';
+      var m = execMode();
+      var mode = m.word;
+      var live = m.key === 'LIVE';
+      el('fm-mode').innerHTML = '<span class="' + (live ? 'red' : (m.key === 'DEMO' ? 'yellow' : 'blue')) + '">MODE: ' + mode + '</span>';
       // CLOSE_ALL is the only manual action — force-OPEN was removed.
       if (side !== 'CLOSE') return;
       el('fm-title').textContent = 'Close all ' + mode.toLowerCase() + ' positions?';
       el('fm-kv').innerHTML = kv('Action', 'CLOSE ALL') + kv('Mode', mode) + kv('Scope', 'Cancel working orders + flatten');
-      el('fm-warn').textContent = live
+      el('fm-warn').textContent = m.key === 'LIVE'
         ? 'LIVE MODE — this cancels real working orders and flattens a real broker position. This cannot be undone.'
-        : 'Paper mode — cancels working orders and flattens the simulated position.';
+        : (m.key === 'DEMO'
+          ? 'Tradovate demo — cancels real working orders and flattens a real demo-account position. Real money is blocked.'
+          : 'Paper simulator — cancels working orders and flattens the simulated position.');
       pendingForce = { action: 'CLOSE_ALL' };
       el('fm-confirm').className = 'btn danger';
       el('fm-confirm').textContent = 'CONFIRM CLOSE';
