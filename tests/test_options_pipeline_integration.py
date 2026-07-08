@@ -547,7 +547,7 @@ def test_pipeline_writes_no_journal_beyond_options_journal(tmp_path, monkeypatch
     preview_request = build_preview_request(order_ticket_result.ticket, config)
     validate_preview_boundary(preview_request, config)
 
-    today = date.today().isoformat()
+    today = now.date().isoformat()
     assert (tmp_path / f"options_journal_{today}.jsonl").exists()
     assert not (tmp_path / f"journal_{today}.jsonl").exists()
 
