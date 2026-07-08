@@ -1997,10 +1997,11 @@ def _diagnostics_payload(for_date: date) -> dict:
                     "Run /admin/live-preflight/run, resolve any failed checks, then arm today.",
                 ))
         except Exception as exc:
+            logger.exception("Live preflight diagnostic check failed: %s", exc)
             items.append(_diagnostic(
                 "warn",
                 "Live preflight",
-                f"Live preflight state is unavailable: {exc}",
+                "Live preflight state is unavailable.",
             ))
     else:
         items.append(_diagnostic("ok", "Broker", f"Broker is set to {broker}; no external gateway required."))
@@ -2256,7 +2257,8 @@ def _safe_live_preflight_status() -> dict:
         from execution.live_preflight import live_order_status
         return live_order_status()
     except Exception as exc:
-        return {"ready": False, "reason": f"unavailable:{exc}", "armed": False}
+        logger.exception("live_order_status failed: %s", exc)
+        return {"ready": False, "reason": "unavailable", "armed": False}
 
 
 def _dashboard_payload(for_date: date) -> dict:

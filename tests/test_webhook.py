@@ -1183,6 +1183,52 @@ def test_status_diagnostics_reports_bad_tradovate_env(monkeypatch, tmp_path):
     assert "numeric CID only" in tradovate["message"]
 
 
+def test_diagnostics_live_preflight_exception_message_not_exposed(monkeypatch, tmp_path):
+    """Live-preflight failures used to interpolate the raw exception object
+    (f"...{exc}") straight into diagnostic text that flows into
+    /status/diagnostics, /status/today, and the "/" dashboard's embedded
+    init-data — a CodeQL py/stack-trace-exposure finding. The exception's
+    message must never reach any of those public responses; only a generic
+    "unavailable" message should."""
+    try:
+        from fastapi.testclient import TestClient
+        import webhook.app as app_module
+        from webhook.app import app
+    except ImportError:
+        pytest.skip("fastapi[testclient] not installed")
+
+    _isolate_app_logs(monkeypatch, tmp_path)
+    monkeypatch.setenv("BROKER", "tradovate")
+    monkeypatch.setenv("WEBHOOK_SECRET", "test-secret")
+    monkeypatch.setattr(app_module._config, "discord_notifications_enabled", False)
+
+    marker = "SECRET_INTERNAL_STACK_TRACE_MARKER_9f3c"
+
+    def _boom():
+        raise RuntimeError(marker)
+
+    from execution import live_preflight
+    monkeypatch.setattr(live_preflight, "live_order_status", _boom)
+
+    client = TestClient(app)
+
+    diag_resp = client.get("/status/diagnostics")
+    assert diag_resp.status_code == 200
+    assert marker not in diag_resp.text
+    preflight_item = next(i for i in diag_resp.json()["items"] if i["component"] == "Live preflight")
+    assert preflight_item["status"] == "warn"
+    assert "unavailable" in preflight_item["message"].lower()
+
+    today_resp = client.get("/status/today")
+    assert today_resp.status_code == 200
+    assert marker not in today_resp.text
+    assert today_resp.json()["live_preflight"]["reason"] == "unavailable"
+
+    root_resp = client.get("/")
+    assert root_resp.status_code == 200
+    assert marker not in root_resp.text
+
+
 def test_status_diagnostics_tradovate_config_ok_is_not_session_auth(monkeypatch, tmp_path):
     """A parsing Tradovate config must read 'ok' AND explicitly disclaim that it
     proves an authenticated broker session. Config-valid != session-active: the
