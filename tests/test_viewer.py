@@ -384,6 +384,60 @@ def test_status_today_latest_webhook_raw_with_valid_gate_session(monkeypatch, tm
     assert data["latest_webhooks"]["MNQ"]["context"]["gex"]["call_wall"] == 5600.0
 
 
+# ─── "/" HTML dashboard embedded init-data sanitization ───────────────────────
+
+def _extract_init_data(html: str) -> dict:
+    import json
+    import re
+    m = re.search(
+        r'<script type="application/json" id="init-data">(.*?)</script>',
+        html, re.DOTALL,
+    )
+    assert m, "init-data script tag not found in dashboard HTML"
+    return json.loads(m.group(1))
+
+
+def test_root_dashboard_sanitized_without_gate_session(monkeypatch, tmp_path):
+    """The FastAPI "/" HTML dashboard embeds its view-model directly in the
+    page (not via a client-side fetch to /status/today), so it needs its own
+    sanitization pass — confirmed live on the production box that this route
+    generates raw GEX/HTF/ICC fields when hit directly, even though nginx is
+    expected to shadow it externally. Defense-in-depth: don't rely solely on
+    that infra staying correctly configured."""
+    client, app_module = _client(monkeypatch, tmp_path, token="demo", code=None)
+    monkeypatch.setattr(app_module, "_dashboard_payload", lambda for_date: _fake_dashboard_payload())
+
+    resp = client.get("/")
+    assert resp.status_code == 200
+    init = _extract_init_data(resp.text)
+    today = init["today"]
+
+    # dashboard still has enough safe summary data to render
+    assert today["trade_count"] == 3
+    assert today["today_pnl_dollars"] == 22.5
+
+    assert today["latest_webhook"]["sanitized"] is True
+    assert today["latest_webhooks"]["MES"]["sanitized"] is True
+
+    leaked = [k for k in _deep_keys(init) if any(s in k for s in _STRATEGY_INTERNAL_SUBSTRINGS)]
+    assert not leaked, f"/ leaked strategy-internal keys via init-data: {leaked}"
+
+
+def test_root_dashboard_raw_with_valid_gate_session(monkeypatch, tmp_path):
+    """A caller with a valid site-gate session still gets the raw embedded
+    payload/context in the dashboard's init-data — operator-facing behavior
+    is preserved, only unauthenticated callers are sanitized."""
+    client, app_module = _client(monkeypatch, tmp_path, token="demo", code="admincode", scope="sensitive")
+    monkeypatch.setattr(app_module, "_dashboard_payload", lambda for_date: _fake_dashboard_payload())
+    client.cookies.set("vp_access", app_module._gate_token())
+
+    resp = client.get("/")
+    assert resp.status_code == 200
+    init = _extract_init_data(resp.text)
+    assert init["today"]["latest_webhook"]["payload"]["ticker"] == "MES1!"
+    assert init["today"]["latest_webhooks"]["MES"]["context"]["icc"]["stop_loss"] == 5560.0
+
+
 # ─── env interplay + read-only ────────────────────────────────────────────────
 
 def test_viewer_survives_public_demo_mode(monkeypatch, tmp_path):

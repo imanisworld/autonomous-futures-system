@@ -738,9 +738,14 @@ async def manual_action(
 
 
 @app.get("/", response_class=HTMLResponse)
-async def dashboard() -> HTMLResponse:
-    """Read-only operator dashboard."""
-    status = _dashboard_payload(date.today())
+async def dashboard(request: Request) -> HTMLResponse:
+    """Read-only operator dashboard. Embedded latest_webhook/latest_webhooks
+    are sanitized for callers without a valid site-gate session — same rule
+    as /status/today, see _sanitize_dashboard_payload. (This route is also
+    expected to be unreachable externally on the production box, where nginx
+    serves a different static app at "/" and :8000 is firewalled — this is
+    defense-in-depth, not reliance on that infra staying correctly configured.)"""
+    status = _sanitize_dashboard_payload(_dashboard_payload(date.today()), request)
     return HTMLResponse(_render_dashboard(status))
 
 
