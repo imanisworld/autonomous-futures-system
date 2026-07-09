@@ -293,6 +293,49 @@ execution_safety:
   working_order_recheck_enabled: true
   log_alert_age_only: true                 # observe-only: logs age, never rejects for it
 
+# ─── Strategy Permission Gate ─────────────────────────────────────────────
+# Separate from every existing strategy/risk gate: those decide whether a
+# setup is technically valid; this decides whether that strategy has earned
+# the right to reach paper/live execution at all. A strategy not listed below
+# (including any new strategy added later) falls back to default_status —
+# closed by default, so nothing new can start trading without an explicit,
+# reviewed entry here.
+#
+# vwap_hold is demoted to SHADOW_ONLY: flagged suspect, not yet proven, per
+# the 2026-07-09 evidence review. Every other currently-implemented strategy
+# keeps its existing (pre-gate) behavior at PAPER_ELIGIBLE — this gate adds a
+# floor, it does not silently re-approve or re-deny anything not explicitly
+# reviewed. All journaling, shadow candidates, and research/observation paths
+# are unaffected either way; this only gates the final TRADE decision.
+strategy_permission_gate:
+  enabled: true
+  default_status: SHADOW_ONLY
+  strategy_status:
+    orb_breakout: PAPER_ELIGIBLE
+    orb_reclaim: PAPER_ELIGIBLE
+    orb_rejection: PAPER_ELIGIBLE
+    orb_false_break_fade: PAPER_ELIGIBLE
+    vwap_hold: SHADOW_ONLY
+    vwap_reclaim: PAPER_ELIGIBLE
+    vwap_rejection: PAPER_ELIGIBLE
+    pdh_reclaim: PAPER_ELIGIBLE
+    pdl_reclaim: PAPER_ELIGIBLE
+    strat_212: PAPER_ELIGIBLE
+    strat_122: PAPER_ELIGIBLE
+    strat_122_observed: PAPER_ELIGIBLE
+    strat_122_pullback: PAPER_ELIGIBLE
+    strat_inside_break: PAPER_ELIGIBLE
+    strat_outside_continuation: PAPER_ELIGIBLE
+    strat_4hr_retrigger: PAPER_ELIGIBLE
+    strat_4hr_retrigger_observed: PAPER_ELIGIBLE
+    continuation_pullback: PAPER_ELIGIBLE
+    ema_pullback_trend: PAPER_ELIGIBLE
+    gap_fill: PAPER_ELIGIBLE
+    ovn_high_sweep_reclaim: PAPER_ELIGIBLE
+    ovn_low_sweep_reclaim: PAPER_ELIGIBLE
+    impulse_first_pullback_observed: PAPER_ELIGIBLE
+    trend_consolidation_break_observed: PAPER_ELIGIBLE
+
 # ─── Paper Fill Realism ──────────────────────────────────────
 # Applied by PaperBroker in live paper mode AND in replay, so the simulated
 # win rate reflects reality instead of optimistic next-bar fills. The legacy

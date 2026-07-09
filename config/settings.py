@@ -420,6 +420,24 @@ class SystemConfig:
     # enforced, until max_alert_age_seconds is set from real observed latency.
     log_alert_age_only: bool = True
 
+    # ── Strategy permission gate ─────────────────────────────────────────────
+    # Separates "strategy can technically fire" (existing gate logic in
+    # strategy/signal_engine.py) from "strategy is allowed to reach paper/live
+    # execution" (this gate). See DecisionEngine.evaluate()'s final TRADE
+    # return in strategy/signal_engine.py.
+    #
+    # Disabled (False) at the dataclass level so ad-hoc SystemConfig()
+    # construction (tests, scripts) is unaffected — production behavior comes
+    # from risk_rules.yaml's strategy_permission_gate block. When disabled,
+    # every strategy behaves exactly as before this gate was added.
+    strategy_permission_gate_enabled: bool = False
+    # Status applied to a strategy with no entry in strategy_status below.
+    # Deliberately closed by default: an unlisted/new strategy must be
+    # explicitly reviewed and added before it can reach paper execution.
+    strategy_permission_default_status: str = "SHADOW_ONLY"
+    # strategy name -> one of PAPER_ELIGIBLE / SHADOW_ONLY / RESEARCH_ONLY / DISABLED
+    strategy_status: dict = field(default_factory=dict)
+
 
 # ─── Loader ──────────────────────────────────────────────────────────────────
 
@@ -492,6 +510,7 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
     rr = rules.get("risk_reward", {})
     data = rules.get("data_quality", {})
     execution_safety = rules.get("execution_safety", {}) or {}
+    strategy_permission_gate = rules.get("strategy_permission_gate", {}) or {}
     condition = rules.get("market_condition", {})
     strategy = rules.get("strategy", {})
     broker = rules.get("broker_roadmap", {})
@@ -650,6 +669,16 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
             execution_safety.get("working_order_recheck_enabled", True)
         ),
         log_alert_age_only=bool(execution_safety.get("log_alert_age_only", True)),
+        strategy_permission_gate_enabled=bool(
+            strategy_permission_gate.get("enabled", False)
+        ),
+        strategy_permission_default_status=str(
+            strategy_permission_gate.get("default_status", "SHADOW_ONLY")
+        ).strip().upper(),
+        strategy_status={
+            str(k): str(v).strip().upper()
+            for k, v in (strategy_permission_gate.get("strategy_status", {}) or {}).items()
+        },
         expected_timeframe_minutes=int(
             os.getenv("PRIMARY_DECISION_TF")
             or os.getenv("EXPECTED_TIMEFRAME_MINUTES")
@@ -864,6 +893,18 @@ def _validate_config(config: SystemConfig) -> None:
             raise ConfigError("position sizing max_contracts must be >= 1.")
     if config.signa_timeout_seconds <= 0:
         raise ConfigError("signa_timeout_seconds must be > 0.")
+    _valid_strategy_statuses = {"PAPER_ELIGIBLE", "SHADOW_ONLY", "RESEARCH_ONLY", "DISABLED"}
+    if config.strategy_permission_default_status not in _valid_strategy_statuses:
+        raise ConfigError(
+            "strategy_permission_gate.default_status must be one of "
+            f"{sorted(_valid_strategy_statuses)}."
+        )
+    for _name, _status in config.strategy_status.items():
+        if _status not in _valid_strategy_statuses:
+            raise ConfigError(
+                f"strategy_permission_gate.strategy_status[{_name!r}] = {_status!r} "
+                f"is not one of {sorted(_valid_strategy_statuses)}."
+            )
     if config.live_trading_enabled:
         # This should never be reached, but belt-and-suspenders
         raise LiveTradingBlockedError(source="post-parse validation")

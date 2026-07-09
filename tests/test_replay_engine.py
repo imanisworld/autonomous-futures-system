@@ -395,9 +395,12 @@ class TestFullDayReplay2026_05_22:
         report = self._run(tmp_path)
         assert report.candles_processed == 13
 
-    def test_mnq_approves_two_trades(self, tmp_path):
+    def test_mnq_approves_one_trade_after_vwap_hold_demotion(self, tmp_path):
+        """This day's candles produce 2 candidate trades (orb_reclaim, vwap_hold);
+        risk_rules.yaml's strategy_permission_gate demotes vwap_hold to
+        SHADOW_ONLY (2026-07-09), so only orb_reclaim reaches TRADE now."""
         report = self._run(tmp_path)
-        assert report.approved_trades == 2
+        assert report.approved_trades == 1
 
     def test_not_stopped_at_daily_limit(self, tmp_path):
         report = self._run(tmp_path)
@@ -412,7 +415,13 @@ class TestFullDayReplay2026_05_22:
         assert report.realized_pnl_dollars > 0
 
     def test_strategy_mix_in_journal(self, tmp_path):
-        """Journal must contain exactly one entry for each expected strategy."""
+        """Journal must contain exactly one entry for each expected strategy.
+
+        vwap_hold is demoted to SHADOW_ONLY by risk_rules.yaml's
+        strategy_permission_gate (2026-07-09) — it still generates a
+        candidate here, but the gate now blocks it from reaching TRADE, same
+        as strat_212 being disabled below.
+        """
         report = self._run(tmp_path)
         journal_path = Path(report.journal_path)
         strategies_traded = []
@@ -421,7 +430,7 @@ class TestFullDayReplay2026_05_22:
             if entry.get("decision") == "TRADE":
                 strategies_traded.append(entry.get("setup", {}).get("strategy"))
         assert "orb_reclaim" in strategies_traded
-        assert "vwap_hold" in strategies_traded
+        assert "vwap_hold" not in strategies_traded  # demoted: strategy_permission_gate
         assert "strat_212" not in strategies_traded  # disabled
 
     def test_strat_fields_loaded_from_candle(self, tmp_path):
