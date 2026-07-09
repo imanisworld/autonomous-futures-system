@@ -696,6 +696,42 @@ class DecisionEngine:
                 candidate_audit=candidate_audit,
             )
 
+        # ── Strategy permission gate ──────────────────────────────────────────
+        # Separate from every gate above: those decide whether a setup is
+        # technically valid; this decides whether its strategy has earned the
+        # right to reach paper/live execution at all. Disabled by default
+        # (see config.strategy_permission_gate_enabled) so this is a no-op
+        # until risk_rules.yaml explicitly turns it on.
+        if getattr(self.config, "strategy_permission_gate_enabled", False):
+            status = self.config.strategy_status.get(
+                setup.strategy,
+                getattr(self.config, "strategy_permission_default_status", "SHADOW_ONLY"),
+            )
+            if status != "PAPER_ELIGIBLE":
+                for row in candidate_audit:
+                    if row.get("winner"):
+                        row["strategy_permission_status"] = status
+                        row["strategy_permission_blocked"] = True
+                        row["reject_code"] = "STRATEGY_NOT_PAPER_ELIGIBLE"
+                return DecisionOutput(
+                    timestamp=now,
+                    instrument=state.instrument,
+                    session=state.session,
+                    decision="NO_TRADE",
+                    market_condition=condition,
+                    reason=(
+                        f"Strategy '{setup.strategy}' is not paper-eligible "
+                        f"(status={status}). Setup otherwise qualified."
+                    ),
+                    setup=setup,
+                    regime=regime.regime,
+                    gex_status=gex_gate.status,
+                    signa_status=signa_gate.status,
+                    failed_gates=failed_gates + ["STRATEGY_NOT_PAPER_ELIGIBLE"],
+                    confidence_score=0,
+                    candidate_audit=candidate_audit,
+                )
+
         # ── TRADE: mark ORB break as played so continuation strategies are
         # blocked on subsequent bars above/below the same ORB level.
         # Pull-back strategies (orb_reclaim, vwap_reclaim, etc.) remain eligible.
@@ -770,6 +806,8 @@ class DecisionEngine:
             "market_condition": None,
             "regime": None,
             "stale_data_flags": [],
+            "strategy_permission_status": None,
+            "strategy_permission_blocked": False,
         }
 
     @staticmethod
