@@ -290,6 +290,10 @@ def _failed_breakdown_reclaim(
     if not (swept_low and reclaimed_inside and held_reclaim):
         return None
 
+    max_entry_distance = max(range_width * 0.45, tick * 4)
+    if hold_close > range_low + max_entry_distance:
+        return None
+
     sweep_range = _bar_num(sweep, "high") - sweep_low
     hold_range = _bar_num(hold, "high") - hold_low
     recent_volumes = [v for v in (_bar_volume(b) for b in range_bars) if v is not None]

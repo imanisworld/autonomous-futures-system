@@ -35,6 +35,30 @@ def _candidate(direction, entry, stop, target):
     )
 
 
+def _failed_breakdown_reclaim_fixture(fresh_market_state):
+    state = copy.deepcopy(fresh_market_state)
+    state.market_condition = "RANGE_BOUND"
+    state.ohlc.open = 99.0
+    state.ohlc.high = 103.0
+    state.ohlc.low = 99.0
+    state.ohlc.close = 102.0
+    state.volume.current_bar = 1800
+    state.volume.avg_bar = 1100
+    bars = [
+        {"open": 105.0, "high": 106.0, "low": 100.0, "close": 104.0, "volume": 1000},
+        {"open": 104.0, "high": 107.0, "low": 101.0, "close": 103.0, "volume": 950},
+        {"open": 103.0, "high": 106.0, "low": 100.5, "close": 105.0, "volume": 900},
+        {"open": 105.0, "high": 108.0, "low": 101.0, "close": 102.0, "volume": 980},
+        {"open": 102.0, "high": 106.5, "low": 100.25, "close": 104.0, "volume": 1025},
+        {"open": 104.0, "high": 107.5, "low": 100.75, "close": 103.0, "volume": 990},
+        # Sweep/reclaim bar.
+        {"open": 101.0, "high": 104.0, "low": 98.5, "close": 101.5, "volume": 1700},
+        # Hold bar is represented by state and may also be present in live history.
+        {"open": 99.0, "high": 103.0, "low": 99.0, "close": 102.0, "volume": 1800},
+    ]
+    return state, bars
+
+
 def test_resolve_shadow_no_fill_when_entry_never_traded():
     cand = _candidate("LONG", entry=100.0, stop=90.0, target=120.0)
     # all forward bars stay below the entry → never fills
@@ -143,26 +167,7 @@ def test_ema_pullback_trend_uses_ema_zone(fresh_market_state):
 def test_failed_breakdown_reclaim_observed_only_in_range_transition(
     fresh_market_state,
 ):
-    state = copy.deepcopy(fresh_market_state)
-    state.market_condition = "RANGE_BOUND"
-    state.ohlc.open = 99.0
-    state.ohlc.high = 103.0
-    state.ohlc.low = 99.0
-    state.ohlc.close = 102.0
-    state.volume.current_bar = 1800
-    state.volume.avg_bar = 1100
-    bars = [
-        {"open": 105.0, "high": 106.0, "low": 100.0, "close": 104.0, "volume": 1000},
-        {"open": 104.0, "high": 107.0, "low": 101.0, "close": 103.0, "volume": 950},
-        {"open": 103.0, "high": 106.0, "low": 100.5, "close": 105.0, "volume": 900},
-        {"open": 105.0, "high": 108.0, "low": 101.0, "close": 102.0, "volume": 980},
-        {"open": 102.0, "high": 106.5, "low": 100.25, "close": 104.0, "volume": 1025},
-        {"open": 104.0, "high": 107.5, "low": 100.75, "close": 103.0, "volume": 990},
-        # Sweep/reclaim bar.
-        {"open": 101.0, "high": 104.0, "low": 98.5, "close": 101.5, "volume": 1700},
-        # Hold bar is represented by state and may also be present in live history.
-        {"open": 99.0, "high": 103.0, "low": 99.0, "close": 102.0, "volume": 1800},
-    ]
+    state, bars = _failed_breakdown_reclaim_fixture(fresh_market_state)
 
     candidates = _strategies(state, bars)
 
@@ -174,6 +179,36 @@ def test_failed_breakdown_reclaim_observed_only_in_range_transition(
     assert reclaim.risk_tier == "C"
     assert reclaim.size_multiplier == 0.25
     assert "failed breakdown reclaim" in reclaim.notes
+
+
+def test_failed_breakdown_reclaim_negative_structure_gates(fresh_market_state):
+    cases = {
+        "range exists but no sweep": lambda state, bars: bars[-2].update({"low": 100.0}),
+        "sweep but no reclaim": lambda state, bars: bars[-2].update({"close": 100.0}),
+        "reclaim but no hold": lambda state, bars: (
+            bars[-1].update({"low": 98.0}),
+            setattr(state.ohlc, "low", 98.0),
+        ),
+        "hold but no expansion": lambda state, bars: (
+            bars[-2].update({"volume": 1000}),
+            bars[-1].update({"volume": 1000}),
+        ),
+        "expansion but entry too detached": lambda state, bars: (
+            bars[-1].update({"high": 108.0, "low": 101.0, "close": 107.0}),
+            setattr(state.ohlc, "high", 108.0),
+            setattr(state.ohlc, "low", 101.0),
+            setattr(state.ohlc, "close", 107.0),
+        ),
+        "dead choppy random bounce": lambda state, bars: (
+            setattr(state, "market_condition", "CHOPPY"),
+            bars[-2].update({"low": 100.25, "close": 101.0}),
+        ),
+    }
+    for label, mutate in cases.items():
+        state, bars = _failed_breakdown_reclaim_fixture(fresh_market_state)
+        mutate(state, bars)
+
+        assert "transition_failed_breakdown_reclaim" not in _strategies(state, bars), label
 
 
 def test_failed_breakdown_reclaim_not_journaled_as_trend_continuation(
