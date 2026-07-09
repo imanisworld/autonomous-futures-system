@@ -14,8 +14,11 @@ from strategy.shadow_setups import (
 from strategy.strat_classifier import StratContext
 
 
-def _strategies(state):
-    return {candidate.strategy: candidate for candidate in evaluate_shadow_setups(state)}
+def _strategies(state, bars=None):
+    return {
+        candidate.strategy: candidate
+        for candidate in evaluate_shadow_setups(state, bars)
+    }
 
 
 def _candidate(direction, entry, stop, target):
@@ -135,6 +138,61 @@ def test_ema_pullback_trend_uses_ema_zone(fresh_market_state):
     assert candidates["ema_pullback_trend"].direction == "LONG"
     assert candidates["ema_pullback_trend"].risk_tier == "B"
     assert candidates["ema_pullback_trend"].size_multiplier == 0.75
+
+
+def test_failed_breakdown_reclaim_observed_only_in_range_transition(
+    fresh_market_state,
+):
+    state = copy.deepcopy(fresh_market_state)
+    state.market_condition = "RANGE_BOUND"
+    state.ohlc.open = 99.0
+    state.ohlc.high = 103.0
+    state.ohlc.low = 99.0
+    state.ohlc.close = 102.0
+    state.volume.current_bar = 1800
+    state.volume.avg_bar = 1100
+    bars = [
+        {"open": 105.0, "high": 106.0, "low": 100.0, "close": 104.0, "volume": 1000},
+        {"open": 104.0, "high": 107.0, "low": 101.0, "close": 103.0, "volume": 950},
+        {"open": 103.0, "high": 106.0, "low": 100.5, "close": 105.0, "volume": 900},
+        {"open": 105.0, "high": 108.0, "low": 101.0, "close": 102.0, "volume": 980},
+        {"open": 102.0, "high": 106.5, "low": 100.25, "close": 104.0, "volume": 1025},
+        {"open": 104.0, "high": 107.5, "low": 100.75, "close": 103.0, "volume": 990},
+        # Sweep/reclaim bar.
+        {"open": 101.0, "high": 104.0, "low": 98.5, "close": 101.5, "volume": 1700},
+        # Hold bar is represented by state and may also be present in live history.
+        {"open": 99.0, "high": 103.0, "low": 99.0, "close": 102.0, "volume": 1800},
+    ]
+
+    candidates = _strategies(state, bars)
+
+    reclaim = candidates["transition_failed_breakdown_reclaim"]
+    assert reclaim.direction == "LONG"
+    assert reclaim.entry == 102.0
+    assert reclaim.stop == 98.0
+    assert reclaim.target == 104.0
+    assert reclaim.risk_tier == "C"
+    assert reclaim.size_multiplier == 0.25
+    assert "failed breakdown reclaim" in reclaim.notes
+
+
+def test_failed_breakdown_reclaim_not_journaled_as_trend_continuation(
+    fresh_market_state,
+):
+    state = copy.deepcopy(fresh_market_state)
+    state.market_condition = "TRENDING"
+    bars = [
+        {"open": 105.0, "high": 106.0, "low": 100.0, "close": 104.0, "volume": 1000},
+        {"open": 104.0, "high": 107.0, "low": 101.0, "close": 103.0, "volume": 950},
+        {"open": 103.0, "high": 106.0, "low": 100.5, "close": 105.0, "volume": 900},
+        {"open": 105.0, "high": 108.0, "low": 101.0, "close": 102.0, "volume": 980},
+        {"open": 102.0, "high": 106.5, "low": 100.25, "close": 104.0, "volume": 1025},
+        {"open": 104.0, "high": 107.5, "low": 100.75, "close": 103.0, "volume": 990},
+        {"open": 101.0, "high": 104.0, "low": 98.5, "close": 101.5, "volume": 1700},
+        {"open": 99.0, "high": 103.0, "low": 98.0, "close": 102.0, "volume": 1800},
+    ]
+
+    assert "transition_failed_breakdown_reclaim" not in _strategies(state, bars)
 
 
 def test_wide_strat_122_records_stop_aware_pullback_without_changing_trade(

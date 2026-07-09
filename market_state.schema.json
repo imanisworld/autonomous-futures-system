@@ -161,7 +161,7 @@
     },
     "market_condition": {
       "type": ["string", "null"],
-      "enum": ["TRENDING", "RANGE_BOUND", "CHOPPY", "DEAD", null],
+      "enum": ["TRENDING", "RANGE_BOUND", "CHOPPY", "TRANSITION", "DEAD", null],
       "description": "Pre-scored market condition. If null, engine will score internally."
     },
     "trend": {

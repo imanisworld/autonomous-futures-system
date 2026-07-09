@@ -8,6 +8,18 @@ Types: `Added`, `Changed`, `Fixed`, `Removed`, `Security`, `Rulebook`
 
 ---
 
+## [1.6.1] 2026-07-09
+
+### Rulebook
+- Risk rules version `1.0.1`: accept `TRANSITION` as a market-condition label
+  but keep it non-tradable while transition/reclaim candidates collect
+  observe-only evidence.
+
+### Added
+- Shadow-only `transition_failed_breakdown_reclaim` candidate and CSV missed-move
+  report harness for measuring failed breakdown reclaim setups before any paper
+  or live promotion.
+
 ## [1.6.0] 2026-06-04
 
 Live paper pipeline closed end-to-end for the first time: a TradingView 15m

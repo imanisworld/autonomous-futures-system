@@ -1216,7 +1216,7 @@ class DecisionEngine:
         Decide the market regime, intervening on chop ONLY.
 
         The fix is deliberately minimal-surface: Pine's TRADABLE labels
-        (TRENDING / RANGE_BOUND) are trusted verbatim so downstream regime-
+        (TRENDING / RANGE_BOUND / TRANSITION) are trusted verbatim so downstream regime-
         dependent setup/confluence logic is unchanged. We intervene in exactly
         one case — a CHOPPY label on a bar with clear directional structure — to
         VETO the chop call. This is the same lesson already applied to
@@ -1227,11 +1227,11 @@ class DecisionEngine:
         hard floor and is never vetoed.
         """
         pine = state.market_condition if state.market_condition in (
-            "TRENDING", "RANGE_BOUND", "CHOPPY", "DEAD"
+            "TRENDING", "RANGE_BOUND", "CHOPPY", "TRANSITION", "DEAD"
         ) else None
 
         # Trust Pine's tradable labels as-is (no downstream perturbation).
-        if pine in ("TRENDING", "RANGE_BOUND"):
+        if pine in ("TRENDING", "RANGE_BOUND", "TRANSITION"):
             return pine
 
         # The core fix: a CHOPPY label is vetoed by clear directional structure.
