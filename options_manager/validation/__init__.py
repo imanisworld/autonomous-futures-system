@@ -64,6 +64,13 @@ from .no_trade_reasons import (
     reasons_from_intake_result,
     record_no_trade_decision,
 )
+from .contract_quality_gate import (
+    ContractQualityInput,
+    ContractQualityResult,
+    GateVerdict,
+    check_contract_quality_intake,
+    evaluate_contract_quality,
+)
 
 __all__ = [
     "DataProvenance",
@@ -103,4 +110,9 @@ __all__ = [
     "build_no_trade_decision_from_intake",
     "reasons_from_intake_result",
     "record_no_trade_decision",
+    "ContractQualityInput",
+    "ContractQualityResult",
+    "GateVerdict",
+    "check_contract_quality_intake",
+    "evaluate_contract_quality",
 ]
