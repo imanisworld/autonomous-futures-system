@@ -164,6 +164,7 @@ RISK_MATRIX = {
     "ema_pullback_trend": ("B", 0.75),
     "impulse_first_pullback_observed": ("B", 0.5),
     "trend_consolidation_break_observed": ("B", 0.5),
+    "transition_failed_breakdown_reclaim": ("C", 0.25),
 }
 
 # Mirrors the hard RiskEngine backstop for the instruments currently traded.
@@ -201,12 +202,131 @@ def evaluate_shadow_setups(
         _ema_pullback_trend(state),
         _impulse_first_pullback(state, recent_bars or []),
         _trend_consolidation_break(state, recent_bars or []),
+        _failed_breakdown_reclaim(state, recent_bars or []),
     ]
     return [candidate for candidate in candidates if candidate is not None]
 
 
 def _bar_num(bar: dict, key: str) -> float:
     return float(bar[key])
+
+
+def _bars_with_current(state: MarketState, bars: list[dict]) -> list[dict]:
+    """Return recent bars with the current state bar present as the final item."""
+    current_ts = state.timestamp.isoformat()
+    current = {
+        "ts": current_ts,
+        "open": state.ohlc.open,
+        "high": state.ohlc.high,
+        "low": state.ohlc.low,
+        "close": state.ohlc.close,
+        "volume": state.volume.current_bar if state.volume else None,
+    }
+    if not bars:
+        return [current]
+    last = bars[-1]
+    if (
+        str(last.get("ts") or "") == current_ts
+        or (
+            abs(_bar_num(last, "open") - state.ohlc.open) < 1e-9
+            and abs(_bar_num(last, "high") - state.ohlc.high) < 1e-9
+            and abs(_bar_num(last, "low") - state.ohlc.low) < 1e-9
+            and abs(_bar_num(last, "close") - state.ohlc.close) < 1e-9
+        )
+    ):
+        return bars
+    return [*bars, current]
+
+
+def _bar_volume(bar: dict) -> float | None:
+    value = bar.get("volume")
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _failed_breakdown_reclaim(
+    state: MarketState, bars: list[dict]
+) -> ShadowSetupCandidate | None:
+    """Observe transition structure: range compression, downside sweep, reclaim, hold.
+
+    This is deliberately evidence-only. It promotes the "CHOPPY/RANGE_BOUND is
+    always blind" problem into a measured candidate without changing executable
+    strategy permissions.
+    """
+    condition = str(state.market_condition or "").upper()
+    if condition not in {"RANGE_BOUND", "CHOPPY", "TRANSITION"}:
+        return None
+
+    seq = _bars_with_current(state, bars)
+    if len(seq) < 8:
+        return None
+
+    range_bars = seq[-8:-2]
+    sweep = seq[-2]
+    hold = seq[-1]
+    tick = _tick(state)
+
+    range_high = max(_bar_num(b, "high") for b in range_bars)
+    range_low = min(_bar_num(b, "low") for b in range_bars)
+    range_width = range_high - range_low
+    avg_range = sum(_bar_num(b, "high") - _bar_num(b, "low") for b in range_bars) / len(range_bars)
+    min_width = max(tick * 12, state.ohlc.close * 0.00045)
+    if range_width < min_width or avg_range <= 0:
+        return None
+
+    sweep_low = _bar_num(sweep, "low")
+    sweep_close = _bar_num(sweep, "close")
+    hold_low = _bar_num(hold, "low")
+    hold_close = _bar_num(hold, "close")
+    hold_open = _bar_num(hold, "open")
+
+    swept_low = sweep_low <= range_low - tick
+    reclaimed_inside = sweep_close >= range_low + tick
+    held_reclaim = hold_low > sweep_low + tick and hold_close >= range_low + tick
+    if not (swept_low and reclaimed_inside and held_reclaim):
+        return None
+
+    sweep_range = _bar_num(sweep, "high") - sweep_low
+    hold_range = _bar_num(hold, "high") - hold_low
+    recent_volumes = [v for v in (_bar_volume(b) for b in range_bars) if v is not None]
+    avg_volume = sum(recent_volumes) / len(recent_volumes) if recent_volumes else None
+    sweep_volume = _bar_volume(sweep)
+    hold_volume = _bar_volume(hold)
+    volume_expanded = (
+        avg_volume is not None
+        and max(sweep_volume or 0.0, hold_volume or 0.0) >= avg_volume * 1.25
+    )
+    range_expanded = max(sweep_range, hold_range) >= avg_range * 1.15
+    if not (volume_expanded or range_expanded):
+        return None
+
+    entry = hold_close
+    stop = sweep_low - (tick * 2)
+    risk = entry - stop
+    if risk <= 0:
+        return None
+    midpoint = (range_high + range_low) / 2.0
+    target = midpoint if midpoint > entry + tick else range_high
+    if target <= entry:
+        return None
+
+    close_quality = "green hold" if hold_close >= hold_open else "inside hold"
+    return _candidate(
+        strategy="transition_failed_breakdown_reclaim",
+        direction="LONG",
+        entry=entry,
+        stop=stop,
+        target=target,
+        notes=(
+            "Shadow: failed breakdown reclaim from RANGE/CHOP transition; "
+            f"prior_range={range_low:.2f}-{range_high:.2f}, sweep_low={sweep_low:.2f}, "
+            f"{close_quality}, expansion={'volume' if volume_expanded else 'range'}"
+        ),
+    )
 
 
 def _impulse_first_pullback(

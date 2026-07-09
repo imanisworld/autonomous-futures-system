@@ -33,7 +33,7 @@
     },
     "market_condition": {
       "type": ["string", "null"],
-      "enum": ["TRENDING", "RANGE_BOUND", "CHOPPY", "DEAD", null],
+      "enum": ["TRENDING", "RANGE_BOUND", "CHOPPY", "TRANSITION", "DEAD", null],
       "description": "Assessed market condition at time of decision."
     },
     "setup": {

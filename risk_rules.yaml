@@ -7,7 +7,7 @@
 # incrementing the version and updating CHANGELOG.md.
 # ============================================================
 
-version: "1.0.0"
+version: "1.0.1"
 
 # ─── Trading Mode ────────────────────────────────────────────
 trading_mode:
@@ -351,6 +351,7 @@ market_condition:
     - RANGE_BOUND
   non_tradable_states:
     - CHOPPY
+    - TRANSITION  # evidence-only until transition/reclaim lanes are replay-proven
     - DEAD
 
 # ─── Strategy Concepts ───────────────────────────────────────

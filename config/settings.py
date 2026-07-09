@@ -212,7 +212,8 @@ class SystemConfig:
     # unset roots fall back to the live box's known values (MES=16, MNQ=32).
     entry_tolerance_ticks_by_root: dict = field(default_factory=dict)
     # Quality gate (#1): when True, only a TRENDING market condition may trade —
-    # RANGE_BOUND / CHOPPY / DEAD all reject (MARKET_CONDITION_NOT_TRENDING). The
+    # RANGE_BOUND / CHOPPY / TRANSITION / DEAD all reject
+    # (MARKET_CONDITION_NOT_TRENDING). The
     # 555-day replay never took a single trade in a non-TRENDING condition (0/1274),
     # so this is zero-regression on the validated edge while blocking the live
     # out-of-distribution false-breakout entries (e.g. RANGE_BOUND orb_breakout).
@@ -691,7 +692,7 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         ],
 
         tradable_states=condition.get("tradable_states", ["TRENDING", "RANGE_BOUND"]),
-        non_tradable_states=condition.get("non_tradable_states", ["CHOPPY", "DEAD"]),
+        non_tradable_states=condition.get("non_tradable_states", ["CHOPPY", "TRANSITION", "DEAD"]),
         require_trending_condition=_env_bool(
             "REQUIRE_TRENDING_CONDITION",
             bool(condition.get("require_trending", True)),

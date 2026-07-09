@@ -445,6 +445,21 @@ class TestDecisionEngineMarketCondition:
         decision = engine.evaluate(state, DailyState())
         assert "NOT_TRENDING" not in (decision.reason or "")
 
+    def test_transition_market_remains_evidence_only_when_trending_gate_disabled(
+        self, config, fresh_market_state
+    ):
+        """TRANSITION may be scored and journaled, but is not executable yet."""
+        import dataclasses
+        engine = DecisionEngine(config=dataclasses.replace(config, require_trending_condition=False))
+        state = deepcopy(fresh_market_state)
+        state.market_condition = "TRANSITION"
+
+        decision = engine.evaluate(state, DailyState())
+
+        assert decision.decision == "NO_TRADE"
+        assert decision.market_condition == "TRANSITION"
+        assert "MARKET_CONDITION_NOT_TRADABLE" in decision.failed_gates
+
 
 class TestDecisionEngineORBSetup:
 

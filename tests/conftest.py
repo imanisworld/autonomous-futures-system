@@ -101,7 +101,7 @@ def config() -> SystemConfig:
         # True (the real production default) via dataclasses.replace(config, ...).
         reject_on_missing_alert_timestamp=False,
         tradable_states=["TRENDING", "RANGE_BOUND"],
-        non_tradable_states=["CHOPPY", "DEAD"],
+        non_tradable_states=["CHOPPY", "TRANSITION", "DEAD"],
         enabled_concepts=[
             "orb_reclaim", "orb_rejection", "vwap_reclaim",
             "vwap_hold", "pdh_reclaim", "pdl_reclaim", "continuation_pullback"
