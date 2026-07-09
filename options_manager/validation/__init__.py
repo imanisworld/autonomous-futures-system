@@ -31,6 +31,7 @@ from .fixture_status import (
     FixtureCandidate,
     FixtureCandidateSummary,
     FixtureStatus,
+    PROOF_PACKET_FORWARD_CAPTURE_FIELDS,
     build_fixture_candidate_inventory,
     summarize_fixture_candidate_inventory,
 )
@@ -82,6 +83,7 @@ __all__ = [
     "FixtureCandidate",
     "FixtureCandidateSummary",
     "FixtureStatus",
+    "PROOF_PACKET_FORWARD_CAPTURE_FIELDS",
     "build_fixture_candidate_inventory",
     "summarize_fixture_candidate_inventory",
     "ProofPacket",

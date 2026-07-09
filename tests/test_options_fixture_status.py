@@ -19,6 +19,7 @@ from options_manager.validation import (
     FixtureCandidate,
     FixtureCandidateSummary,
     FixtureStatus,
+    PROOF_PACKET_FORWARD_CAPTURE_FIELDS,
     build_fixture_candidate_inventory,
     summarize_fixture_candidate_inventory,
 )
@@ -84,6 +85,10 @@ _EXPECTED_TICKERS = {
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 
+_EXPECTED_MISSING_FORWARD_CAPTURE_FIELDS = tuple(
+    name for name in PROOF_PACKET_FORWARD_CAPTURE_FIELDS if name != "ticker"
+)
+
 
 def _module_source() -> str:
     return Path(fixture_status_module.__file__).read_text()
@@ -133,6 +138,17 @@ def test_all_candidates_are_real_construct_objects():
         assert isinstance(candidate.status, FixtureStatus), ticker
 
 
+def test_forward_capture_field_list_reflects_proof_packet_required_fields():
+    assert PROOF_PACKET_FORWARD_CAPTURE_FIELDS
+    assert "entry_trigger" in PROOF_PACKET_FORWARD_CAPTURE_FIELDS
+    assert "underlying_invalidation" in PROOF_PACKET_FORWARD_CAPTURE_FIELDS
+    assert "premium_stop" in PROOF_PACKET_FORWARD_CAPTURE_FIELDS
+    assert "qqq_context" in PROOF_PACKET_FORWARD_CAPTURE_FIELDS
+    assert "source_references" in PROOF_PACKET_FORWARD_CAPTURE_FIELDS
+    assert "actual_entry_time" not in PROOF_PACKET_FORWARD_CAPTURE_FIELDS
+    assert "realized_pnl_dollars" not in PROOF_PACKET_FORWARD_CAPTURE_FIELDS
+
+
 # --- 2. every candidate carries real evidence, not a bare label --------------------------------------
 
 
@@ -157,6 +173,16 @@ def test_no_candidate_is_clean_complete_fixture_yet():
         candidate.status == FixtureStatus.CLEAN_COMPLETE_FIXTURE
         for candidate in inventory.values()
     )
+
+
+def test_existing_candidates_are_not_forward_proof_packet_ready():
+    inventory = build_fixture_candidate_inventory()
+    for ticker, candidate in inventory.items():
+        assert candidate.proof_packet_ready is False, ticker
+        assert (
+            candidate.missing_forward_capture_fields
+            == _EXPECTED_MISSING_FORWARD_CAPTURE_FIELDS
+        ), ticker
 
 
 # --- 3. specific status assignments match the current board -----------------------------------------

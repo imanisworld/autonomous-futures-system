@@ -18,6 +18,7 @@ import options_manager.http_api as http_api_module
 from options_manager.config import OptionsManagerConfig
 from options_manager.http_api import STATUS_SECRET_HEADER, create_options_status_app
 from options_manager.storage import init_options_storage
+from options_manager.validation import PROOF_PACKET_FORWARD_CAPTURE_FIELDS
 
 SECRET = "fixture-candidate-status-secret"
 EXPECTED_TICKERS = ("HOOD", "EBAY", "AMD", "ORCL", "FITB", "BAC")
@@ -29,6 +30,9 @@ EXPECTED_COUNTS_BY_STATUS = {
     "management_case": 1,
     "reject": 3,
 }
+EXPECTED_MISSING_FORWARD_CAPTURE_FIELDS = tuple(
+    name for name in PROOF_PACKET_FORWARD_CAPTURE_FIELDS if name != "ticker"
+)
 
 
 def _config(**overrides) -> OptionsManagerConfig:
@@ -67,6 +71,27 @@ def test_fixture_candidate_status_exposes_requested_tickers(tmp_path):
     assert candidates["ORCL"]["fixture_status"] == "incomplete"
     assert candidates["FITB"]["fixture_status"] == "special_case_fixture"
     assert candidates["BAC"]["fixture_status"] == "incomplete"
+
+
+def test_fixture_candidate_status_exposes_proof_packet_readiness(tmp_path):
+    response = _fixture_response(tmp_path)
+    body = response.json()
+
+    for ticker, candidate in body["candidates"].items():
+        assert candidate["proof_packet_ready"] is False, ticker
+        assert (
+            tuple(candidate["missing_forward_capture_fields"])
+            == EXPECTED_MISSING_FORWARD_CAPTURE_FIELDS
+        ), ticker
+
+    hood_missing = body["candidates"]["HOOD"]["missing_forward_capture_fields"]
+    assert "ticker" not in hood_missing
+    assert "entry_trigger" in hood_missing
+    assert "underlying_invalidation" in hood_missing
+    assert "premium_stop" in hood_missing
+    assert "qqq_context" in hood_missing
+    assert "source_references" in hood_missing
+    assert "actual_entry_time" not in hood_missing
 
 
 def test_fixture_candidate_status_exposes_summary_counts(tmp_path):
@@ -112,6 +137,8 @@ def test_fixture_candidate_status_uses_allowlisted_read_only_shape(tmp_path):
         "reason_not_first_proof",
         "promotion_requirements",
         "notes",
+        "proof_packet_ready",
+        "missing_forward_capture_fields",
     }
     for candidate in body["candidates"].values():
         assert set(candidate.keys()) == allowed_candidate_keys

@@ -33,7 +33,8 @@ response, regardless of what storage returns. `approval_text`, `nonce`, and
 even present on the StorageReadResult.record shapes this module reads.
 
 The fixture-candidate endpoint is also explicitly allowlisted and exposes
-only the six requested labels (HOOD, EBAY, AMD, ORCL, FITB, BAC) plus the
+only the six requested labels (HOOD, EBAY, AMD, ORCL, FITB, BAC), their
+forward proof-packet readiness, missing forward-capture fields, and the
 inventory's deterministic summary counts. It imports fixture_status directly,
 not the scanner, broker, execution, webhook, or broader validation package.
 
@@ -104,6 +105,8 @@ _ALLOWED_FIXTURE_CANDIDATE_FIELDS = frozenset(
         "reason_not_first_proof",
         "promotion_requirements",
         "notes",
+        "proof_packet_ready",
+        "missing_forward_capture_fields",
     }
 )
 
@@ -178,6 +181,10 @@ def _fixture_candidate_response() -> dict:
             "reason_not_first_proof": candidate.reason_not_first_proof,
             "promotion_requirements": list(candidate.promotion_requirements),
             "notes": candidate.notes,
+            "proof_packet_ready": candidate.proof_packet_ready,
+            "missing_forward_capture_fields": list(
+                candidate.missing_forward_capture_fields
+            ),
         }
         assert set(item.keys()) == _ALLOWED_FIXTURE_CANDIDATE_FIELDS
         candidates[ticker] = item

@@ -45,8 +45,23 @@ decision path.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import MISSING, dataclass, field, fields
 from enum import Enum
+
+from .proof_packet import ProofPacket
+
+
+PROOF_PACKET_FORWARD_CAPTURE_FIELDS = tuple(
+    field_def.name
+    for field_def in fields(ProofPacket)
+    if field_def.default is MISSING and field_def.default_factory is MISSING
+)
+_TRACKED_CANDIDATE_SUPPLIED_FORWARD_CAPTURE_FIELDS = frozenset({"ticker"})
+_DEFAULT_MISSING_FORWARD_CAPTURE_FIELDS = tuple(
+    name
+    for name in PROOF_PACKET_FORWARD_CAPTURE_FIELDS
+    if name not in _TRACKED_CANDIDATE_SUPPLIED_FORWARD_CAPTURE_FIELDS
+)
 
 
 class FixtureStatus(str, Enum):
@@ -86,6 +101,10 @@ class FixtureCandidate:
     reason_not_first_proof: str = ""
     promotion_requirements: tuple[str, ...] = ()
     notes: str = ""
+    proof_packet_ready: bool = False
+    missing_forward_capture_fields: tuple[str, ...] = (
+        _DEFAULT_MISSING_FORWARD_CAPTURE_FIELDS
+    )
 
 
 @dataclass(kw_only=True)
