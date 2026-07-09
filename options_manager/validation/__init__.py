@@ -91,6 +91,12 @@ from .watchlist_lifecycle import (
     create_watchlist_candidate,
     transition_candidate,
 )
+from .advisory_decision import (
+    AdvisoryDecisionResult,
+    AdvisoryVerdict,
+    check_advisory_decision_intake,
+    evaluate_advisory_decision,
+)
 
 __all__ = [
     "DataProvenance",
@@ -151,4 +157,8 @@ __all__ = [
     "check_watchlist_candidate_intake",
     "create_watchlist_candidate",
     "transition_candidate",
+    "AdvisoryDecisionResult",
+    "AdvisoryVerdict",
+    "check_advisory_decision_intake",
+    "evaluate_advisory_decision",
 ]
