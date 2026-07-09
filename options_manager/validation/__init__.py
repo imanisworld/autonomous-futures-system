@@ -97,6 +97,15 @@ from .advisory_decision import (
     check_advisory_decision_intake,
     evaluate_advisory_decision,
 )
+from .position_management_checklist import (
+    ChecklistItemResult,
+    ChecklistItemStatus,
+    PositionAction,
+    PositionManagementChecklistResult,
+    PositionManagementInput,
+    check_position_management_checklist_intake,
+    evaluate_position_management_checklist,
+)
 
 __all__ = [
     "DataProvenance",
@@ -161,4 +170,11 @@ __all__ = [
     "AdvisoryVerdict",
     "check_advisory_decision_intake",
     "evaluate_advisory_decision",
+    "ChecklistItemResult",
+    "ChecklistItemStatus",
+    "PositionAction",
+    "PositionManagementChecklistResult",
+    "PositionManagementInput",
+    "check_position_management_checklist_intake",
+    "evaluate_position_management_checklist",
 ]
