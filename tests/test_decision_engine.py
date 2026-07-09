@@ -1582,3 +1582,78 @@ class TestAsianSessionWindows:
         assert decision.decision == "NO_TRADE"
         assert decision.failed_gates == ["SESSION_WINDOW"]
         assert "Tokyo open" in decision.reason
+
+
+class TestDisabledConceptsPerInstrument:
+    """disabled_concepts_per_instrument overrides enabled_concepts for one
+    instrument only — added 2026-07-09 alongside the MES posture-narrowing
+    change (risk_rules.yaml), which had no prior test coverage at all."""
+
+    def _pdh_state(self, fresh_market_state, instrument="MES"):
+        state = deepcopy(fresh_market_state)
+        state.instrument = instrument
+        state.previous_day.high = 19490.0
+        state.previous_day.price_vs_pdh = "above"
+        state.trend = TrendData(direction="UP", strength="MODERATE")
+        state.vwap.price_vs_vwap = "above"
+        state.orb.status = "inside"
+        return state
+
+    def test_blocked_for_one_instrument_but_not_another(self, config, fresh_market_state):
+        from dataclasses import replace
+        cfg = replace(
+            config,
+            enabled_concepts=["pdh_reclaim"],
+            disabled_concepts_per_instrument={"MES": ["pdh_reclaim"]},
+        )
+        engine = DecisionEngine(config=cfg)
+
+        mes_decision = engine.evaluate(self._pdh_state(fresh_market_state, "MES"), DailyState())
+        assert mes_decision.decision == "NO_TRADE"
+
+        mnq_decision = engine.evaluate(self._pdh_state(fresh_market_state, "MNQ"), DailyState())
+        assert mnq_decision.decision == "TRADE"
+        assert mnq_decision.setup.strategy == "pdh_reclaim"
+
+    def test_real_mes_posture_only_orb_reclaim_live_eligible(self, config, fresh_market_state):
+        """Mirrors the real risk_rules.yaml MES disabled-list (as of the
+        2026-07-09 posture narrowing): pdh_reclaim must be blocked for MES
+        even with an otherwise-qualifying setup, while orb_reclaim stays
+        reachable."""
+        from dataclasses import replace
+        cfg = replace(
+            config,
+            enabled_concepts=["orb_reclaim", "pdh_reclaim"],
+            disabled_concepts_per_instrument={
+                "MES": ["orb_breakout", "orb_rejection", "vwap_reclaim", "vwap_rejection", "pdh_reclaim", "pdl_reclaim"],
+            },
+        )
+        engine = DecisionEngine(config=cfg)
+
+        pdh_decision = engine.evaluate(self._pdh_state(fresh_market_state, "MES"), DailyState())
+        assert pdh_decision.decision == "NO_TRADE"
+
+        orb_state = deepcopy(fresh_market_state)
+        orb_state.instrument = "MES"
+        orb_state.orb.status = "reclaimed_high"
+        orb_state.trend = TrendData(direction="UP", strength="STRONG", ema_fast_above_slow=True)
+        orb_state.vwap.price_vs_vwap = "above"
+        orb_decision = engine.evaluate(orb_state, DailyState())
+        assert orb_decision.decision == "TRADE"
+        assert orb_decision.setup.strategy == "orb_reclaim"
+
+    def test_mnq_unaffected_by_mes_only_disabled_list(self, config, fresh_market_state):
+        """The MES posture change adds no MNQ key at all — MNQ must remain
+        fully evaluable for a concept newly disabled on MES."""
+        from dataclasses import replace
+        cfg = replace(
+            config,
+            enabled_concepts=["pdh_reclaim"],
+            disabled_concepts_per_instrument={
+                "MES": ["orb_breakout", "orb_rejection", "vwap_reclaim", "vwap_rejection", "pdh_reclaim", "pdl_reclaim"],
+            },
+        )
+        engine = DecisionEngine(config=cfg)
+        decision = engine.evaluate(self._pdh_state(fresh_market_state, "MNQ"), DailyState())
+        assert decision.decision == "TRADE"
+        assert decision.setup.strategy == "pdh_reclaim"

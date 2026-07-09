@@ -409,6 +409,20 @@ strategy:
       # ORB-anchored bracket survives the entry-detachment check on the same bar —
       # verified by direct reconstruction of the 06-30 13:45 MES breakout bar).
       # See AGENT_HANDOFF.md 2026-06-30 entries for full investigation.
+      #
+      # 2026-07-09 posture narrowing (PRs #236/#237/#238 evidence chain): MES orb_reclaim
+      # is the ONLY strategy with validated positive expectancy under honest fills, both
+      # walk-forward halves, both exit modes (docs/ioc-faithful-baseline-622d-2026-07-06.md).
+      # Everything else below is disabled to make it the sole active MES proof lane.
+      # vwap_hold is NOT listed here — already globally SHADOW_ONLY via
+      # strategy_permission_gate (risk_rules.yaml strategy_status block), not duplicated.
+      # MNQ is intentionally untouched by this posture change — see AGENT_HANDOFF.md
+      # 2026-07-09 for the separate, unresolved MNQ gate-timing question that must be
+      # investigated before any MNQ posture decision.
+      - orb_breakout   # never the validated cell in the #236/#237/#238 evidence chain
+      - orb_rejection  # never the validated cell in the #236/#237/#238 evidence chain
+      - vwap_rejection # never the validated cell in the #236/#237/#238 evidence chain
+      - pdh_reclaim    # loses in 8/8 honest walk-forward half-period cells (ioc-faithful-baseline-622d)
 
   # Per-instrument INITIAL stop-width multiplier (machinery present; values
   # DEFERRED). The 622-day replay showed a blanket MNQ 2.5x lifts vwap setups
