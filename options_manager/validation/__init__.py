@@ -81,6 +81,16 @@ from .morning_scan_packet import (
     check_morning_scan_packet_intake,
     evaluate_morning_scan_packet,
 )
+from .watchlist_lifecycle import (
+    ALLOWED_TRANSITIONS,
+    TERMINAL_STATUSES,
+    WatchlistCandidate,
+    WatchlistCandidateResult,
+    WatchlistCandidateStatus,
+    check_watchlist_candidate_intake,
+    create_watchlist_candidate,
+    transition_candidate,
+)
 
 __all__ = [
     "DataProvenance",
@@ -133,4 +143,12 @@ __all__ = [
     "TickerCandidateStatus",
     "check_morning_scan_packet_intake",
     "evaluate_morning_scan_packet",
+    "ALLOWED_TRANSITIONS",
+    "TERMINAL_STATUSES",
+    "WatchlistCandidate",
+    "WatchlistCandidateResult",
+    "WatchlistCandidateStatus",
+    "check_watchlist_candidate_intake",
+    "create_watchlist_candidate",
+    "transition_candidate",
 ]
