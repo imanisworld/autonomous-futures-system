@@ -52,6 +52,10 @@ from .proof_packet import (
     ProofPacketStatus,
     validate_proof_packet,
 )
+from .proof_packet_intake import (
+    IntakeResult,
+    check_proof_packet_intake,
+)
 
 __all__ = [
     "DataProvenance",
@@ -83,4 +87,6 @@ __all__ = [
     "ProofPacket",
     "ProofPacketStatus",
     "validate_proof_packet",
+    "IntakeResult",
+    "check_proof_packet_intake",
 ]
