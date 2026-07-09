@@ -56,6 +56,14 @@ from .proof_packet_intake import (
     IntakeResult,
     check_proof_packet_intake,
 )
+from .no_trade_reasons import (
+    NoTradeDecision,
+    NoTradeDecisionResult,
+    NoTradeReason,
+    build_no_trade_decision_from_intake,
+    reasons_from_intake_result,
+    record_no_trade_decision,
+)
 
 __all__ = [
     "DataProvenance",
@@ -89,4 +97,10 @@ __all__ = [
     "validate_proof_packet",
     "IntakeResult",
     "check_proof_packet_intake",
+    "NoTradeDecision",
+    "NoTradeDecisionResult",
+    "NoTradeReason",
+    "build_no_trade_decision_from_intake",
+    "reasons_from_intake_result",
+    "record_no_trade_decision",
 ]
