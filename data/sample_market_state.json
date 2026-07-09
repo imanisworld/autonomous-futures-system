@@ -25,7 +25,7 @@
     "high": 5898.0,
     "low": 5862.0,
     "timeframe_minutes": 15,
-    "status": "above"
+    "status": "reclaimed_high"
   },
   "previous_day": {
     "high": 5920.0,
@@ -45,5 +45,5 @@
     "strength": "STRONG",
     "ema_fast_above_slow": true
   },
-  "notes": "NY open momentum. ORB formed 9:30-9:45. Price broke above ORB high at 10:10 with volume confirmation. VWAP holding. MES active instrument."
+  "notes": "NY open momentum. ORB formed 9:30-9:45. Price pulled back and reclaimed ORB high at 10:10 with VWAP support. MES active instrument."
 }
