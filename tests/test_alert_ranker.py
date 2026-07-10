@@ -248,6 +248,66 @@ def test_health_status_watchlist_and_webhook_endpoints_work(tmp_path):
         assert terminal["shadow_journal"][0]["scan_id"] == body["results"][0]["storage_id"]
 
 
+def test_scanner_dashboard_html_is_served(tmp_path):
+    cfg = scanner_config(tmp_path)
+    app = create_app(cfg)
+
+    with TestClient(app) as client:
+        response = client.get("/")
+        assert response.status_code == 200
+        assert "Options Scanner" in response.text
+        assert "ADVISORY ONLY" in response.text
+        assert "fetch('/terminal')" in response.text
+        assert "/rh-options" in response.text
+        assert 'role="status"' in response.text
+        assert "Loading..." in response.text
+
+        dashboard = client.get("/dashboard")
+        assert dashboard.status_code == 200
+        assert "Shadow Ledger" in dashboard.text
+
+
+def test_scanner_dashboard_data_dependencies_match_browser_contract(tmp_path):
+    cfg = scanner_config(tmp_path)
+    object.__setattr__(cfg, "signa_api_enabled", True)
+    app = create_app(cfg)
+
+    with TestClient(app) as client:
+        webhook = client.post(
+            "/webhook/alert",
+            json=setup_payload(
+                ticker="SPY",
+                option_type="CALL",
+                option_mark=2.15,
+                strike=505,
+                dte=5,
+                signa_grade="A",
+                signa_score=82,
+                signa_daily_direction="UP",
+                signa_pivot_s1=500,
+                signa_pivot_r1=510,
+            ),
+        )
+        shadow_id = webhook.json()["results"][0]["shadow_id"]
+
+        terminal = client.get("/terminal").json()
+        assert terminal["advisory_only"] is True
+        assert terminal["provider_profile"]["order_supported"] is False
+        assert terminal["latest"][0]["ticker"] == "SPY"
+        assert terminal["latest"][0]["raw"]["option_mark"] == 2.15
+        assert terminal["signa"][0]["grade"] == "A"
+        assert terminal["shadow_summary"]["open"] == 1
+
+        health = client.get("/health").json()
+        assert health["advisory_only"] is True
+        assert health["provider_profile"]["read_only"] is True
+
+        ledger = client.get("/shadow-journal?ticker=SPY&status=OPEN").json()
+        assert ledger["advisory_only"] is True
+        assert ledger["items"][0]["id"] == shadow_id
+        assert ledger["items"][0]["selected_contract"]["strike"] == 505
+
+
 def test_shadow_journal_endpoint_lists_and_updates_outcomes(tmp_path):
     cfg = scanner_config(tmp_path)
     app = create_app(cfg)
