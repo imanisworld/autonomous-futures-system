@@ -32,19 +32,27 @@ _BASE = "http://127.0.0.1:8000"
 
 
 def _load_env() -> None:
-    """Load the repo .env into the process (fail-soft).
+    """Load env files into the process (fail-soft).
 
     The cron entry runs this script WITHOUT the service's EnvironmentFile, so
     the Discord routes and the status-gate credentials are invisible unless we
-    load .env ourselves — that gap is exactly why the digest silently degraded
-    to "printing only" + 401 broker reads from 2026-07-03. Never overrides
-    values already present in the environment.
+    load them ourselves — that gap is exactly why the digest silently degraded
+    to "printing only" + 401 broker reads from 2026-07-03. A relative ``.env``
+    alone isn't enough: it resolves against the current release folder (cwd),
+    which an atomic release swap can leave without one — the same gap
+    resurfaced that way afterward. ``AFS_SHARED_DIR`` (same default as
+    scripts/atomic_release.sh) is the one location guaranteed to survive a
+    release swap, so it's loaded second as the durable fallback. Never
+    overrides values already present in the environment.
     """
     try:
         from dotenv import load_dotenv
         env_path = Path(".env")
         if env_path.exists():
             load_dotenv(env_path)
+        shared_env_path = Path(os.getenv("AFS_SHARED_DIR", "/root/afs-shared")) / ".env"
+        if shared_env_path.exists():
+            load_dotenv(shared_env_path)
     except Exception:
         pass
 
