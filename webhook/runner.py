@@ -1310,9 +1310,28 @@ def process_alert(
             )
             return result
 
+    # Diagnostic-only tracing around the broker call (EXECUTION_STATE_BUG
+    # investigation, 2026-07-10): confirms whether execute_bracket is reached
+    # and what it actually returns, independent of whether the broker's own
+    # internal success/failure logging fires. No behavior depends on these
+    # log lines — safe to remove once the mechanism is understood.
+    logger.info(
+        "EXEC_TRACE pre-submit: instrument=%s strategy=%s direction=%s "
+        "entry=%s stop=%s target=%s broker=%s paper_mode=%s broker_env=%s",
+        order.instrument, order.strategy, order.direction,
+        order.entry, order.stop, order.target,
+        type(broker).__name__, getattr(cfg, "paper_mode", None),
+        getattr(getattr(broker, "config", None), "env", None),
+    )
     _submit_ts = datetime.now(timezone.utc)
     fill = broker.execute_bracket(order)
     _cancel_ts = datetime.now(timezone.utc)
+    logger.info(
+        "EXEC_TRACE post-submit: instrument=%s fill_result=%s fill_reason=%s "
+        "order_ids_present=%s",
+        order.instrument, fill.result, getattr(fill, "reason", None),
+        bool(getattr(broker, "_last_order_ids", None)),
+    )
     _record_candidate_lifecycle(
         opportunity_candidate_ids,
         log_dir,
