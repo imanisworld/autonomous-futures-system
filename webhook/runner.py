@@ -1193,6 +1193,15 @@ def process_alert(
         # Update journal entry decision before writing so the log reflects reality.
         journal_entry["decision"] = "RISK_REJECTED"
         journal_entry["reason"] = risk_result.reason or journal_entry.get("reason")
+    else:
+        # Confirmed-execution model (2026-07-10, EXECUTION_STATE_BUG fix): the
+        # pre-broker row is an INTENT, not an open position. Log it as
+        # decision="TRADE_INTENT" so NO reader (get_open_position /
+        # _compute_daily_state / risk gates / reconciler / status) treats it as an
+        # open, counted trade. The authoritative decision="TRADE" row — the only row
+        # any reader treats as an open position — is written ONLY after the broker
+        # confirms an OPEN position with order ids, further below.
+        journal_entry["decision"] = "TRADE_INTENT"
     journal.log_decision(journal_entry, risk_dict, for_date=today)
 
     if not risk_result.approved:
@@ -1411,6 +1420,74 @@ def process_alert(
         }
         return result
 
+    # ── Broker returned OPEN: confirm before journaling an open position ──────
+    # Fail closed if a REAL broker reports OPEN without order ids. execute_bracket
+    # only returns OPEN after setting _last_order_ids, so this is defence-in-depth
+    # against a broker/journal divergence: never mark a position open (and never
+    # consume trade budget) on an unconfirmable fill. PaperBroker has no order ids
+    # by design, so the order-id requirement applies to real brokers only.
+    _order_ids = getattr(broker, "_last_order_ids", None)
+    _requires_order_ids = not isinstance(broker, PaperBroker)
+    if _requires_order_ids and not _order_ids:
+        logger.error(
+            "ORDER_CONFIRMATION_MISSING: %s %s — broker returned OPEN but no order "
+            "ids; failing closed (not marking open, not counting the trade).",
+            order.instrument, order.direction,
+        )
+        if os.getenv("BROKER", "paper").strip().lower() == "tradovate":
+            try:
+                from notifications.discord_notifier import send_discord_alert
+                send_discord_alert(
+                    cfg,
+                    "LIVE ORDER BLOCKED: broker reported OPEN but returned no order ids. "
+                    "Position NOT marked open (fail-closed) — verify in Tradovate. "
+                    f"Setup: {order.direction} {order.instrument} {order.contracts}c "
+                    f"@ {order.entry} stop {order.stop} target {order.target}.",
+                )
+            except Exception as exc:  # pragma: no cover - notification must never affect trading
+                logger.warning("Order-confirmation-missing Discord alert failed: %s", exc)
+        # Book a non-open CANCELLED so the attempt is un-counted and audit-visible,
+        # exactly like the non-OPEN path. no_fill_reason distinguishes it from a
+        # plain IOC no-fill for the taxonomy.
+        journal.log_outcome(
+            instrument=order.instrument,
+            session=state.session,
+            result="CANCELLED",
+            entry_price=order.entry,
+            exit_price=None,
+            exit_reason="order_confirmation_missing:OPEN_without_order_ids",
+            pnl_ticks=0.0,
+            pnl_dollars=0.0,
+            contracts=order.contracts,
+            for_date=today,
+            no_fill_reason="ORDER_CONFIRMATION_MISSING",
+            order_type=getattr(fill, "order_type", None),
+            broker_status_raw=fill.exit_reason,
+            strategy=order.strategy,
+            signal_timestamp=state.timestamp.isoformat() if state.timestamp else None,
+            submit_timestamp=_submit_ts.isoformat(),
+            cancel_timestamp=_cancel_ts.isoformat(),
+            seconds_until_cancel=(_cancel_ts - _submit_ts).total_seconds(),
+            requested_entry=order.entry,
+        )
+        daily_state.has_open_position = False
+        result["decision"] = "BLOCKED_ORDER_CONFIRMATION_MISSING"
+        result["fill"] = {
+            "status": "ORDER_CONFIRMATION_MISSING",
+            "instrument": state.instrument,
+            "direction": decision.setup.direction,
+            "entry": decision.setup.entry,
+            "stop": decision.setup.stop,
+            "target": decision.setup.target,
+        }
+        return result
+
+    # Broker confirmed an OPEN position (with order ids on a real broker). NOW write
+    # the authoritative decision="TRADE" row — the ONLY row any reader treats as an
+    # open, counted position — carrying the same full payload as the TRADE_INTENT row.
+    journal_entry["decision"] = "TRADE"
+    journal.log_decision(journal_entry, risk_dict, for_date=today)
+
     logger.info(
         "TRADE: %s %s %sc @ %s stop %s target %s",
         order.instrument, order.direction, order.contracts, order.entry, order.stop, order.target,
@@ -1428,7 +1505,6 @@ def process_alert(
     # to price-matching. Tradovate only — PaperBroker has none, so this is skipped.
     # Fail-soft: a persistence hiccup must never affect trading.
     try:
-        _order_ids = getattr(broker, "_last_order_ids", None)
         if _order_ids:
             journal.log_order_ids(
                 instrument=order.instrument,

@@ -32,6 +32,10 @@ class _FakeLiveBroker:
 
     def __init__(self):
         self.execute_bracket_called = False
+        # A real TradovateBroker sets _last_order_ids before returning OPEN; mirror
+        # that so the confirmed-execution gate (which fails closed on OPEN without
+        # order ids) doesn't mask what THIS test isolates — the working-order recheck.
+        self._last_order_ids = None
 
     @property
     def is_live(self) -> bool:
@@ -39,6 +43,7 @@ class _FakeLiveBroker:
 
     def execute_bracket(self, order) -> Fill:
         self.execute_bracket_called = True
+        self._last_order_ids = {"entry": "E1", "stop": "S1", "target": "T1"}
         return Fill(
             instrument=order.instrument,
             direction=order.direction,

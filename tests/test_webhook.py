@@ -529,6 +529,168 @@ def test_runner_logs_exec_trace_around_broker_call(config, tmp_path, caplog):
     assert "fill_result=OPEN" in post[0]
 
 
+# ── Confirmed-execution model (2026-07-10, EXECUTION_STATE_BUG fix) ───────────
+# The pre-broker approved row is decision="TRADE_INTENT" (non-open); the
+# authoritative decision="TRADE" row is written ONLY after the broker confirms an
+# OPEN position with order ids (real broker) or OPEN (PaperBroker, which has none).
+
+def _mes_orb_payload() -> AlertPayload:
+    """The deterministic MES orb_breakout happy path (same values as
+    test_runner_trending_orb_breakout_mes_produces_trade)."""
+    return _base_payload(
+        ticker="MES1!", open=5885.0, high=5901.0, low=5880.0, close=5900.0,
+        volume=5000, avg_volume=3800, vwap=5895.0,
+        orb_high=5898.0, orb_low=5862.0, orb_status="above",
+        previous_day_high=5920.0, previous_day_low=5840.0, previous_day_close=5875.0,
+    )
+
+
+def _mes_real_broker_cfg(config):
+    """Drive the REAL-broker path: paper_mode off, working-order recheck off (no
+    live order book in a unit test), current schedule (always allows)."""
+    return replace(
+        config,
+        enabled_concepts=config.enabled_concepts + ["orb_breakout"],
+        paper_mode=False,
+        working_order_recheck_enabled=False,
+        schedule_mode="current",
+        live_trading_enabled=False,
+    )
+
+
+class _FakeRealBroker:
+    """Non-PaperBroker stub for the confirmed-execution path. is_live=False passes
+    the live-block gate; execute_bracket returns a caller-supplied Fill and exposes
+    a caller-supplied _last_order_ids (dict, or None to simulate a missing-id fill)."""
+    is_live = False
+
+    def __init__(self, fill, order_ids):
+        import types as _types
+        self._fill = fill
+        self._last_order_ids = order_ids
+        self._last_position = None
+        self.config = _types.SimpleNamespace(env="demo")
+
+    def get_account_balance(self):
+        return 50000.0
+
+    def execute_bracket(self, order):
+        return self._fill
+
+
+def _read_journal_rows(tmp_path):
+    p = next((tmp_path / "logs").glob("journal_*.jsonl"))
+    return [json.loads(line) for line in p.read_text().splitlines() if line.strip()]
+
+
+def _journal_date(tmp_path):
+    p = next((tmp_path / "logs").glob("journal_*.jsonl"))
+    return date.fromisoformat(p.stem[len("journal_"):])
+
+
+def _open_fill(result="OPEN", exit_reason=None):
+    from execution.broker_interface import Fill
+    return Fill(
+        instrument="MES", direction="LONG", contracts=1, entry_price=5898.5,
+        exit_price=None, exit_reason=exit_reason, result=result,
+        pnl_ticks=None, pnl_dollars=None,
+    )
+
+
+def test_paper_open_writes_intent_then_confirmed_trade(config, tmp_path):
+    from journal.journal_logger import JournalLogger
+    from webhook.runner import process_alert
+
+    cfg = replace(config, enabled_concepts=config.enabled_concepts + ["orb_breakout"])
+    log_dir = str(tmp_path / "logs")
+    result = process_alert(_mes_orb_payload(), config=cfg, log_dir=log_dir)
+
+    assert result["decision"] == "TRADE"
+    assert result["fill"]["status"] == "OPEN"
+
+    rows = _read_journal_rows(tmp_path)
+    intents = [r for r in rows if r.get("decision") == "TRADE_INTENT"]
+    confirmed = [r for r in rows if r.get("decision") == "TRADE"]
+    assert len(intents) == 1
+    assert len(confirmed) == 1
+    # The confirmed row carries the full payload readers depend on.
+    assert confirmed[0]["context"]["orb"]["status"] == "above"
+    assert confirmed[0]["confluence"]["grade"]
+    assert confirmed[0]["risk_check"]["result"] == "APPROVED"
+    # Intent is written before the confirmed row in the append-only log.
+    assert rows.index(intents[0]) < rows.index(confirmed[0])
+    # Open/counted state derives from the confirmed row only.
+    ds = JournalLogger(log_dir=log_dir).get_daily_state(_journal_date(tmp_path))
+    assert ds.has_open_position is True
+    assert ds.trade_count == 1
+
+
+def test_real_broker_open_with_order_ids_confirms_and_counts(config, tmp_path, monkeypatch):
+    from journal.journal_logger import JournalLogger
+    from webhook import runner
+
+    fake = _FakeRealBroker(_open_fill(), {"entry": "E1", "stop": "S1", "target": "T1"})
+    monkeypatch.setattr(runner, "_make_broker", lambda **kw: fake)
+    log_dir = str(tmp_path / "logs")
+    result = runner.process_alert(_mes_orb_payload(), config=_mes_real_broker_cfg(config), log_dir=log_dir)
+
+    assert result["decision"] == "TRADE"
+    assert result["fill"]["status"] == "OPEN"
+
+    rows = _read_journal_rows(tmp_path)
+    assert len([r for r in rows if r.get("decision") == "TRADE_INTENT"]) == 1
+    assert len([r for r in rows if r.get("decision") == "TRADE"]) == 1
+    assert any(r.get("type") == "ORDER_IDS" for r in rows)
+    ds = JournalLogger(log_dir=log_dir).get_daily_state(_journal_date(tmp_path))
+    assert ds.has_open_position is True
+    assert ds.trade_count == 1
+
+
+def test_real_broker_open_without_order_ids_fails_closed(config, tmp_path, monkeypatch):
+    from journal.journal_logger import JournalLogger
+    from webhook import runner
+
+    # Broker reports OPEN but returns NO order ids -> must fail closed.
+    fake = _FakeRealBroker(_open_fill(), None)
+    monkeypatch.setattr(runner, "_make_broker", lambda **kw: fake)
+    log_dir = str(tmp_path / "logs")
+    result = runner.process_alert(_mes_orb_payload(), config=_mes_real_broker_cfg(config), log_dir=log_dir)
+
+    assert result["decision"] == "BLOCKED_ORDER_CONFIRMATION_MISSING"
+    rows = _read_journal_rows(tmp_path)
+    assert [r for r in rows if r.get("decision") == "TRADE"] == []  # NO confirmed trade
+    assert any(
+        r.get("type") == "OUTCOME"
+        and (r.get("outcome") or {}).get("result") == "CANCELLED"
+        and (r.get("outcome") or {}).get("no_fill_reason") == "ORDER_CONFIRMATION_MISSING"
+        for r in rows
+    )
+    ds = JournalLogger(log_dir=log_dir).get_daily_state(_journal_date(tmp_path))
+    assert ds.has_open_position is False
+    assert ds.trade_count == 0
+
+
+def test_real_broker_non_open_writes_cancelled_no_confirmed_trade(config, tmp_path, monkeypatch):
+    from journal.journal_logger import JournalLogger
+    from webhook import runner
+
+    fake = _FakeRealBroker(_open_fill(result="CANCELLED", exit_reason="ioc_no_fill"), None)
+    monkeypatch.setattr(runner, "_make_broker", lambda **kw: fake)
+    log_dir = str(tmp_path / "logs")
+    result = runner.process_alert(_mes_orb_payload(), config=_mes_real_broker_cfg(config), log_dir=log_dir)
+
+    assert result["decision"] == "BLOCKED_EXECUTION_FAILED"
+    rows = _read_journal_rows(tmp_path)
+    assert [r for r in rows if r.get("decision") == "TRADE"] == []
+    assert any(
+        r.get("type") == "OUTCOME" and (r.get("outcome") or {}).get("result") == "CANCELLED"
+        for r in rows
+    )
+    ds = JournalLogger(log_dir=log_dir).get_daily_state(_journal_date(tmp_path))
+    assert ds.has_open_position is False
+    assert ds.trade_count == 0
+
+
 def test_journal_reconstructs_orb_break_flags_from_persisted_context(tmp_path):
     from journal.journal_logger import JournalLogger
 
