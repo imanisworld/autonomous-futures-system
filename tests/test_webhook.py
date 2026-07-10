@@ -480,6 +480,55 @@ def test_runner_trending_orb_breakout_mes_produces_trade(config, tmp_path):
     assert entry["confluence"]["grade"]
 
 
+def test_runner_logs_exec_trace_around_broker_call(config, tmp_path, caplog):
+    """EXECUTION_STATE_BUG diagnostic tracing (2026-07-10): confirms
+    execute_bracket is reached and logs its actual return, independent of
+    the broker's own internal success logging. Diagnostic-only — must not
+    change the decision/fill/journal outcome versus the undecorated path
+    proven by test_runner_trending_orb_breakout_mes_produces_trade above."""
+    import logging
+
+    from webhook.runner import process_alert
+
+    cfg = replace(config, enabled_concepts=config.enabled_concepts + ["orb_breakout"])
+    log_dir = str(tmp_path / "logs")
+    payload = _base_payload(
+        ticker="MES1!",
+        open=5885.0,
+        high=5901.0,
+        low=5880.0,
+        close=5900.0,
+        volume=5000,
+        avg_volume=3800,
+        vwap=5895.0,
+        orb_high=5898.0,
+        orb_low=5862.0,
+        orb_status="above",
+        previous_day_high=5920.0,
+        previous_day_low=5840.0,
+        previous_day_close=5875.0,
+    )
+    with caplog.at_level(logging.INFO, logger="webhook.runner"):
+        result = process_alert(payload, config=cfg, log_dir=log_dir)
+
+    assert result["decision"] == "TRADE"
+    assert result["fill"]["status"] == "OPEN"
+    assert result["fill"]["instrument"] == "MES"
+
+    pre = [r.message for r in caplog.records if "EXEC_TRACE pre-submit" in r.message]
+    post = [r.message for r in caplog.records if "EXEC_TRACE post-submit" in r.message]
+    assert len(pre) == 1
+    assert "instrument=MES" in pre[0]
+    assert "strategy=orb_breakout" in pre[0]
+    assert "direction=LONG" in pre[0]
+    assert "broker=PaperBroker" in pre[0]
+    assert "paper_mode=True" in pre[0]
+
+    assert len(post) == 1
+    assert "instrument=MES" in post[0]
+    assert "fill_result=OPEN" in post[0]
+
+
 def test_journal_reconstructs_orb_break_flags_from_persisted_context(tmp_path):
     from journal.journal_logger import JournalLogger
 
@@ -1657,6 +1706,68 @@ def test_webhook_alert_rejects_bad_secret_before_queueing(monkeypatch, tmp_path)
     resp = client.post("/webhook/alert?secret=wrong", json=body)
     assert resp.status_code == 401
     assert called["n"] == 0
+
+
+def test_alert_task_exception_is_logged(caplog):
+    """EXECUTION_STATE_BUG diagnostic (2026-07-10): the fire-and-forget alert
+    task's done-callback must surface any exception that escapes it, rather
+    than discarding the task silently. Exercises the callback directly (not
+    via TestClient's event loop) for a deterministic, fast unit test."""
+    import logging
+
+    import webhook.app as app_module
+
+    class _FakeTask:
+        def cancelled(self):
+            return False
+
+        def exception(self):
+            return ValueError("boom")
+
+    with caplog.at_level(logging.ERROR, logger="webhook.app"):
+        app_module._log_alert_task_exception(_FakeTask())
+
+    matches = [r for r in caplog.records if "unhandled exception" in r.message]
+    assert len(matches) == 1
+    assert "boom" in matches[0].message
+
+
+def test_alert_task_no_exception_logs_nothing(caplog):
+    import logging
+
+    import webhook.app as app_module
+
+    class _FakeTask:
+        def cancelled(self):
+            return False
+
+        def exception(self):
+            return None
+
+    with caplog.at_level(logging.ERROR, logger="webhook.app"):
+        app_module._log_alert_task_exception(_FakeTask())
+
+    assert not [r for r in caplog.records if "unhandled exception" in r.message]
+
+
+def test_alert_task_cancelled_is_not_treated_as_exception(caplog):
+    """A cancelled task must not call .exception() (asyncio raises
+    CancelledError from it) and must not be logged as a failure."""
+    import logging
+
+    import webhook.app as app_module
+
+    class _FakeTask:
+        def cancelled(self):
+            return True
+
+        def exception(self):
+            raise AssertionError("must not call exception() on a cancelled task")
+
+    with caplog.at_level(logging.ERROR, logger="webhook.app"):
+        app_module._log_alert_task_exception(_FakeTask())
+
+    assert not [r for r in caplog.records if "unhandled exception" in r.message]
 
 
 def test_doctor_command_prints_diagnostics(monkeypatch, tmp_path, capsys):

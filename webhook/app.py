@@ -566,6 +566,21 @@ _alert_lock = asyncio.Lock()
 _alert_tasks: set[asyncio.Task] = set()
 
 
+def _log_alert_task_exception(task: asyncio.Task) -> None:
+    """Done-callback for the fire-and-forget alert task. Diagnostic only
+    (EXECUTION_STATE_BUG investigation, 2026-07-10): _handle_alert_blocking
+    already catches and logs everything raised by process_alert() itself, so
+    this exists to catch anything that escapes above that — e.g. a failure in
+    asyncio.to_thread or the lock acquire — which would otherwise vanish
+    silently since nothing else ever calls task.exception()."""
+    _alert_tasks.discard(task)
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc is not None:
+        logger.error("Alert processing task raised an unhandled exception: %s", exc, exc_info=exc)
+
+
 def _handle_alert_blocking(payload: AlertPayload) -> None:
     """Full alert pipeline — decision engine, broker, reference quote, Discord.
 
@@ -661,7 +676,7 @@ async def receive_alert(
 
     task = asyncio.create_task(_process_alert_async(payload))
     _alert_tasks.add(task)
-    task.add_done_callback(_alert_tasks.discard)
+    task.add_done_callback(_log_alert_task_exception)
     return JSONResponse(content={"ok": True, "event_id": event_id, "queued": True, "ticker": payload.ticker})
 
 
