@@ -352,12 +352,24 @@ class JournalLogger:
                     # A failed attempt must NOT consume the daily/per-session trade
                     # limit (that locks the session into "doing nothing"). P&L,
                     # win/loss streak, and win rate are untouched.
+                    #
+                    # Reverse ONLY when there is an open counted position this cancel
+                    # actually closes (has_open_position). Under the confirmed-
+                    # execution model (2026-07-10) a trade intent that never became a
+                    # confirmed TRADE is logged as decision="TRADE_INTENT" and is never
+                    # counted; its later CANCELLED must therefore NOT decrement a PRIOR
+                    # filled trade's count. Without this guard, TRADE→WIN→(intent)→
+                    # CANCELLED would wrongly report trade_count=0 and re-open the daily
+                    # budget. Legacy TRADE→CANCELLED sequences and reconciler clears of
+                    # legacy phantom-open TRADE rows still reverse correctly, because the
+                    # position is open when its CANCELLED is read.
+                    if has_open_position:
+                        if trade_count > 0:
+                            trade_count -= 1
+                        if open_trade_session and session_trade_counts.get(open_trade_session, 0) > 0:
+                            session_trade_counts[open_trade_session] -= 1
+                        open_trade_session = None
                     has_open_position = False
-                    if trade_count > 0:
-                        trade_count -= 1
-                    if open_trade_session and session_trade_counts.get(open_trade_session, 0) > 0:
-                        session_trade_counts[open_trade_session] -= 1
-                    open_trade_session = None
                 continue
 
             decision = entry.get("decision")
