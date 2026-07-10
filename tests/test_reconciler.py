@@ -12,6 +12,7 @@ from types import SimpleNamespace
 
 from execution.broker_interface import Fill
 from journal.journal_logger import JournalLogger
+from notifications.system_notifier import SystemNotificationResult
 from webhook.reconciler import reconcile_open_position
 
 _NOW = datetime(2026, 6, 5, 16, 0, tzinfo=timezone.utc)
@@ -220,3 +221,70 @@ def test_no_order_ids_still_clears_phantom(monkeypatch, tmp_path, config):
     res = reconcile_open_position(config, str(tmp_path), now=_NOW, broker=broker)
     assert res["action"] == "reconciled"
     assert j.get_open_position(_NOW.date()) is None
+
+
+# ── notify_system() result observability (silent disabled/missing/failed → logged) ──
+
+def _patch_notify_system(monkeypatch, result: SystemNotificationResult):
+    import notifications.system_notifier as system_notifier_module
+    monkeypatch.setattr(system_notifier_module, "notify_system", lambda *a, **k: result)
+
+
+def test_phantom_clear_logs_success_when_discord_sends(monkeypatch, tmp_path, config, caplog):
+    _tradovate(monkeypatch)
+    _patch_notify_system(monkeypatch, SystemNotificationResult(sent=True, reason="sent"))
+    j = _seed_open(tmp_path, age_min=30)
+    with caplog.at_level("INFO"):
+        res = reconcile_open_position(config, str(tmp_path), now=_NOW,
+                                      broker=_FakeBroker(authed=True, position=None))
+    assert res["action"] == "reconciled"                     # trading behavior unchanged
+    assert j.get_open_position(_NOW.date()) is None           # journal outcome unchanged
+    assert "Phantom-clear Discord notification sent" in caplog.text
+    assert "NOT sent" not in caplog.text
+
+
+def test_phantom_clear_logs_reason_when_discord_not_sent(monkeypatch, tmp_path, config, caplog):
+    _tradovate(monkeypatch)
+    _patch_notify_system(
+        monkeypatch, SystemNotificationResult(sent=False, reason="missing_webhook_url")
+    )
+    j = _seed_open(tmp_path, age_min=30)
+    with caplog.at_level("WARNING"):
+        res = reconcile_open_position(config, str(tmp_path), now=_NOW,
+                                      broker=_FakeBroker(authed=True, position=None))
+    assert res["action"] == "reconciled"                     # trading behavior unchanged
+    assert j.get_open_position(_NOW.date()) is None           # journal outcome unchanged
+    assert "Phantom-clear Discord notification NOT sent (reason=missing_webhook_url)" in caplog.text
+
+
+def test_resolved_completed_trade_logs_success_when_discord_sends(
+    monkeypatch, tmp_path, config, caplog
+):
+    _tradovate(monkeypatch)
+    _patch_notify_system(monkeypatch, SystemNotificationResult(sent=True, reason="sent"))
+    j = _seed_open(tmp_path, age_min=30, order_ids=_IDS)
+    broker = _FakeBroker(authed=True, position=None, entry_filled=True, resolve_fill=_win_fill())
+    with caplog.at_level("INFO"):
+        res = reconcile_open_position(config, str(tmp_path), now=_NOW, broker=broker)
+    assert res["action"] == "resolved_completed_trade"       # trading behavior unchanged
+    assert res["result"] == "WIN"
+    entries = j._read_entries(j._journal_path(_NOW.date()))
+    outcome = [e for e in entries if e.get("type") == "OUTCOME"][-1]["outcome"]
+    assert outcome["result"] == "WIN"                          # journal outcome unchanged
+    assert "Reconciled-trade Discord notification sent" in caplog.text
+
+
+def test_resolved_completed_trade_logs_reason_when_discord_not_sent(
+    monkeypatch, tmp_path, config, caplog
+):
+    _tradovate(monkeypatch)
+    _patch_notify_system(monkeypatch, SystemNotificationResult(sent=False, reason="disabled"))
+    j = _seed_open(tmp_path, age_min=30, order_ids=_IDS)
+    broker = _FakeBroker(authed=True, position=None, entry_filled=True, resolve_fill=_win_fill())
+    with caplog.at_level("WARNING"):
+        res = reconcile_open_position(config, str(tmp_path), now=_NOW, broker=broker)
+    assert res["action"] == "resolved_completed_trade"       # trading behavior unchanged
+    entries = j._read_entries(j._journal_path(_NOW.date()))
+    outcome = [e for e in entries if e.get("type") == "OUTCOME"][-1]["outcome"]
+    assert outcome["result"] == "WIN"                          # journal outcome unchanged
+    assert "Reconciled-trade Discord notification NOT sent (reason=disabled)" in caplog.text

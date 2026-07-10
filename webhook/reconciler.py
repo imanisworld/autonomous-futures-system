@@ -183,7 +183,14 @@ def reconcile_open_position(
             logger.warning(msg)
             try:
                 from notifications.system_notifier import notify_system
-                notify_system(msg, config=config)
+                result = notify_system(msg, config=config)
+                if result.sent:
+                    logger.info("Reconciled-trade Discord notification sent")
+                else:
+                    logger.warning(
+                        "Reconciled-trade Discord notification NOT sent (reason=%s)",
+                        result.reason,
+                    )
             except Exception as exc:
                 logger.warning("reconcile alert failed: %s", exc)
             return {
@@ -215,7 +222,13 @@ def reconcile_open_position(
     logger.error(msg)  # ERROR so it surfaces in journald
     try:
         from notifications.system_notifier import notify_system
-        notify_system(msg, config=config)
+        result = notify_system(msg, config=config)
+        if result.sent:
+            logger.info("Phantom-clear Discord notification sent")
+        else:
+            logger.warning(
+                "Phantom-clear Discord notification NOT sent (reason=%s)", result.reason
+            )
     except Exception as exc:
         logger.warning("reconcile alert failed: %s", exc)
     return {"action": "reconciled", "instrument": open_pos.get("instrument")}
