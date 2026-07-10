@@ -4,8 +4,10 @@ tests/test_health_digest_auth.py
 The health digest is an EXTERNAL cron watchdog: it must be able to read the
 gated status endpoints (401 since the site-access gate landed) and find its
 Discord route without the service's EnvironmentFile. Guards the 2026-07-03..06
-silent failure: cron ran without .env → "no webhook configured" + 401 broker
-reads → red digest that never reached Discord.
+silent failure (cron ran without .env → "no webhook configured" + 401 broker
+reads → red digest that never reached Discord) and its 07-10 recurrence (a
+release-relative .env alone doesn't survive an atomic release swap that leaves
+the fresh release folder without one).
 """
 from __future__ import annotations
 
@@ -92,3 +94,42 @@ def test_load_env_reads_repo_dotenv_without_overriding(tmp_path, monkeypatch):
     import os
     assert os.getenv("DISCORD_ROUTE_HEARTBEAT") == "https://discord.test/hook"
     assert os.getenv("ALREADY_SET") == "from-env"  # env wins over file
+
+
+def test_load_env_falls_back_to_shared_dir_when_release_folder_has_no_dotenv(
+    tmp_path, monkeypatch
+):
+    """Guards the 07-10 recurrence: an atomic release swap can land the cron's
+    cwd in a fresh release folder with no ``.env`` of its own — the relative
+    load alone silently no-ops in that case (confirmed live: cwd resolved to
+    the current release folder, no .env present, DISCORD_WEBHOOK_URL invisible
+    to the cron run). AFS_SHARED_DIR is the one location an atomic release
+    swap never touches, so it must be checked too."""
+    monkeypatch.delenv("PYTHON_DOTENV_DISABLED", raising=False)
+    release_dir = tmp_path / "release"
+    release_dir.mkdir()
+    monkeypatch.chdir(release_dir)  # no .env here — simulates a fresh release
+    shared_dir = tmp_path / "shared"
+    shared_dir.mkdir()
+    (shared_dir / ".env").write_text("DISCORD_WEBHOOK_URL=https://discord.test/shared-hook\n")
+    monkeypatch.setenv("AFS_SHARED_DIR", str(shared_dir))
+    monkeypatch.delenv("DISCORD_WEBHOOK_URL", raising=False)
+    _load_env()
+    import os
+    assert os.getenv("DISCORD_WEBHOOK_URL") == "https://discord.test/shared-hook"
+
+
+def test_load_env_relative_dotenv_takes_precedence_over_shared(tmp_path, monkeypatch):
+    monkeypatch.delenv("PYTHON_DOTENV_DISABLED", raising=False)
+    release_dir = tmp_path / "release"
+    release_dir.mkdir()
+    (release_dir / ".env").write_text("DISCORD_WEBHOOK_URL=https://discord.test/release-hook\n")
+    monkeypatch.chdir(release_dir)
+    shared_dir = tmp_path / "shared"
+    shared_dir.mkdir()
+    (shared_dir / ".env").write_text("DISCORD_WEBHOOK_URL=https://discord.test/shared-hook\n")
+    monkeypatch.setenv("AFS_SHARED_DIR", str(shared_dir))
+    monkeypatch.delenv("DISCORD_WEBHOOK_URL", raising=False)
+    _load_env()
+    import os
+    assert os.getenv("DISCORD_WEBHOOK_URL") == "https://discord.test/release-hook"
