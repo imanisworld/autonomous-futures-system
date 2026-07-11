@@ -71,3 +71,36 @@ def test_collector_never_changes_the_decision(tmp_path):
     assert off["decision"] == on["decision"]
     assert (off.get("failed_gates") or []) == (on.get("failed_gates") or [])
     assert off.get("confidence_score") == on.get("confidence_score")
+
+
+def test_blocked_candidate_audit_never_reaches_risk_or_broker(monkeypatch, tmp_path):
+    import webhook.runner as runner
+
+    class _RiskMustNotBeConstructed:
+        def __init__(self, *args, **kwargs):
+            raise AssertionError("risk path must remain unreachable")
+
+    def _broker_must_not_execute(*args, **kwargs):
+        raise AssertionError("broker path must remain unreachable")
+
+    monkeypatch.setattr(runner, "RiskEngine", _RiskMustNotBeConstructed)
+    monkeypatch.setattr(runner.PaperBroker, "execute_bracket", _broker_must_not_execute)
+
+    log_dir = str(tmp_path / "logs")
+    payload = _payload(market_condition="RANGE_BOUND", trend_strength="MODERATE")
+    result = process_alert(
+        payload,
+        config=_cfg(True),
+        log_dir=log_dir,
+        for_date=_DAY,
+    )
+
+    assert result["decision"] == "NO_TRADE"
+    assert result["failed_gates"] == ["MARKET_CONDITION_NOT_TRENDING"]
+    entry = _last_entry(log_dir)
+    assert entry["decision"] == "NO_TRADE"
+    assert entry["setup"] is None
+    assert entry["candidate_audit"] == []
+    assert entry["blocked_candidate_audit"]["observation_only"] is True
+    assert entry["blocked_candidate_audit"]["risk_evaluated"] is False
+    assert entry["blocked_candidate_audit"]["broker_evaluated"] is False

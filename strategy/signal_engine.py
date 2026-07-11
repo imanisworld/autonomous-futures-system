@@ -93,6 +93,7 @@ class DecisionOutput:
     failed_gates: list[str] = field(default_factory=list)
     confidence_score: Optional[int] = None
     candidate_audit: list[dict] = field(default_factory=list)
+    blocked_candidate_audit: Optional[dict] = None
 
     def to_dict(self) -> dict:
         d = {
@@ -110,6 +111,8 @@ class DecisionOutput:
             "confidence_score": self.confidence_score,
             "candidate_audit": self.candidate_audit,
         }
+        if self.blocked_candidate_audit is not None:
+            d["blocked_candidate_audit"] = self.blocked_candidate_audit
         if self.setup:
             d["setup"] = {
                 "direction": self.setup.direction,
@@ -339,6 +342,12 @@ class DecisionEngine:
         # out-of-distribution for every setup — block it here so a live Pine
         # RANGE_BOUND label can't admit a false-breakout the backtest never saw.
         if self.config.require_trending_condition and condition != "TRENDING":
+            blocked_candidate_audit = self._collect_blocked_candidate_audit(
+                state=state,
+                condition=condition,
+                daily_state=daily_state,
+                blocking_gate="MARKET_CONDITION_NOT_TRENDING",
+            )
             return DecisionOutput(
                 timestamp=now,
                 instrument=state.instrument,
@@ -349,6 +358,7 @@ class DecisionEngine:
                        "Only TRENDING conditions are traded.",
                 failed_gates=["MARKET_CONDITION_NOT_TRENDING"],
                 confidence_score=0,
+                blocked_candidate_audit=blocked_candidate_audit,
             )
 
         direction_mode = getattr(self.config, "htf_direction_mode", "off")
@@ -1462,6 +1472,81 @@ class DecisionEngine:
             key=lambda c: (c.rank_score, -c.priority_index),
             reverse=True,
         )
+
+    def _collect_blocked_candidate_audit(
+        self,
+        *,
+        state: MarketState,
+        condition: str,
+        daily_state: DailyState,
+        blocking_gate: str,
+    ) -> dict:
+        """Describe candidates hidden by an early market-condition return.
+
+        Observation only: this method never selects a setup, mutates daily state,
+        evaluates risk, or reaches order/broker code.  Keeping this payload
+        separate from ``candidate_audit`` also prevents opportunity/lifecycle
+        tracking from treating these diagnostics as executable candidates.
+        """
+        permission_gate = bool(
+            getattr(self.config, "strategy_permission_gate_enabled", False)
+        )
+        default_status = getattr(
+            self.config, "strategy_permission_default_status", "SHADOW_ONLY"
+        )
+        strategy_status = getattr(self.config, "strategy_status", {}) or {}
+        candidates: list[dict] = []
+        for candidate in self.collect_strategy_candidates(state, condition, daily_state):
+            setup = candidate.setup
+            permission_status = (
+                strategy_status.get(setup.strategy, default_status)
+                if permission_gate
+                else "NOT_ENFORCED"
+            )
+            candidates.append(
+                {
+                    "strategy": setup.strategy,
+                    "instrument": state.instrument,
+                    "direction": setup.direction,
+                    "entry": setup.entry,
+                    "stop": setup.stop,
+                    "target": setup.target,
+                    "rr_ratio": setup.rr_ratio,
+                    "rank_score": candidate.rank_score,
+                    "rank_reason": candidate.rank_reason,
+                    "rank_priority_index": candidate.priority_index,
+                    "confluence_score": candidate.confluence_score,
+                    "confluence_grade": candidate.confluence_grade,
+                    "market_condition": condition,
+                    "trend_direction": getattr(state.trend, "direction", None),
+                    "trend_strength": getattr(state.trend, "strength", None),
+                    "session": state.session,
+                    "blocking_gate": blocking_gate,
+                    "candidate_validation_code": None,
+                    "candidate_validation_reason": None,
+                    "strategy_permission_status": permission_status,
+                    "strategy_permission_blocked": (
+                        permission_gate and permission_status != "PAPER_ELIGIBLE"
+                    ),
+                    "strategy_permission_diagnostic_only": True,
+                    "observation_only": True,
+                    "selected": False,
+                    "winner": False,
+                    "attempted": False,
+                    "risk_evaluated": False,
+                    "broker_evaluated": False,
+                    "downstream_gates_evaluated": False,
+                }
+            )
+        return {
+            "blocking_gate": blocking_gate,
+            "observation_only": True,
+            "final_decision_unchanged": True,
+            "risk_evaluated": False,
+            "broker_evaluated": False,
+            "downstream_gates_evaluated": False,
+            "candidates": candidates,
+        }
 
     def _find_ranked_setup(
         self,

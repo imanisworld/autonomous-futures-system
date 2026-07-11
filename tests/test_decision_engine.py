@@ -434,6 +434,55 @@ class TestDecisionEngineMarketCondition:
         decision = engine.evaluate(state, DailyState())
         assert decision.decision == "NO_TRADE"
         assert "MARKET_CONDITION_NOT_TRENDING" in decision.failed_gates
+        assert decision.setup is None
+        assert decision.candidate_audit == []
+        audit = decision.blocked_candidate_audit
+        assert audit is not None
+        assert audit["blocking_gate"] == "MARKET_CONDITION_NOT_TRENDING"
+        assert audit["observation_only"] is True
+        assert audit["final_decision_unchanged"] is True
+        assert audit["risk_evaluated"] is False
+        assert audit["broker_evaluated"] is False
+        assert audit["downstream_gates_evaluated"] is False
+        assert audit["candidates"]
+        orb_reclaim = next(
+            row for row in audit["candidates"] if row["strategy"] == "orb_reclaim"
+        )
+        assert orb_reclaim["selected"] is False
+        assert orb_reclaim["winner"] is False
+        assert orb_reclaim["attempted"] is False
+        assert orb_reclaim["risk_evaluated"] is False
+        assert orb_reclaim["broker_evaluated"] is False
+        assert orb_reclaim["rank_score"] is not None
+        assert orb_reclaim["confluence_score"] is not None
+        serialized = decision.to_dict()
+        assert serialized["decision"] == "NO_TRADE"
+        assert serialized["setup"] is None
+        assert serialized["candidate_audit"] == []
+        assert serialized["blocked_candidate_audit"] == audit
+
+    def test_range_bound_blocked_audit_records_empty_candidate_set(
+        self, config, fresh_market_state
+    ):
+        import dataclasses
+
+        engine = DecisionEngine(
+            config=dataclasses.replace(config, enabled_concepts=[])
+        )
+        state = deepcopy(fresh_market_state)
+        state.market_condition = "RANGE_BOUND"
+        daily_state = DailyState()
+
+        decision = engine.evaluate(state, daily_state)
+
+        assert decision.decision == "NO_TRADE"
+        assert decision.failed_gates == ["MARKET_CONDITION_NOT_TRENDING"]
+        assert decision.setup is None
+        assert decision.candidate_audit == []
+        assert decision.blocked_candidate_audit is not None
+        assert decision.blocked_candidate_audit["candidates"] == []
+        assert daily_state.trade_count == 0
+        assert daily_state.has_open_position is False
 
     def test_range_bound_tradable_when_gate_disabled(self, config, fresh_market_state):
         """With require_trending_condition off, RANGE_BOUND passes the condition
