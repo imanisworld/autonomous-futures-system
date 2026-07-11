@@ -337,19 +337,29 @@ def robinhood_realistic_cost_stress(sessions: list[DaySession], config) -> dict:
     }
 
 
-# ── Item 3 follow-up: OHLCV-only execution-realism self-consistency check ──
-def fill_plausibility_check(trades: list[BacktestTradeResult], sessions: list[DaySession]) -> dict:
-    """Verifies every trade's entry_price and exit_price actually fall
-    within [low, high] of SOME bar in that day's vehicle series -- a
-    mechanical self-consistency check on the backtest engine's own fills,
-    not a claim about real-world fillability. True bid/ask-aware execution
-    realism (was the modeled price achievable against the actual quoted
-    spread) requires NBBO/trades data, which returned 403 NOT_AUTHORIZED
-    on every endpoint tried against the current Polygon plan -- that gap
-    is NOT resolved by this check and is reported explicitly, not papered
-    over."""
+# ── Item 3 follow-up: OHLCV bar-range consistency check ─────────────────────
+# NAMING NOTE: this was originally named fill_plausibility_check(), which
+# overstated its scope -- "plausibility" reads as a claim about real-world
+# fillability. Renamed to ohlcv_fill_range_check() to make the actual, much
+# narrower scope unambiguous from the name alone: it checks arithmetic
+# consistency against OHLCV bar ranges, nothing about execution realism.
+def ohlcv_fill_range_check(trades: list[BacktestTradeResult], sessions: list[DaySession]) -> dict:
+    """Coarse consistency check ONLY: verifies every trade's entry_price
+    and exit_price fall within [low, high] of that day's vehicle OHLCV
+    bars. This proves nothing about real-world execution -- not whether a
+    fill was achievable, not the bid/ask spread at that instant, not
+    market impact, not quote staleness, not partial-fill risk. It only
+    catches the narrow defect class of a backtest fabricating a price
+    outside the day's recorded trading range.
+
+    True spread-aware execution validation requires NBBO quote or trade
+    tick data. That data was requested from Polygon and is NOT AVAILABLE
+    on the current plan: /v3/quotes, /v2/last/nbbo, and /v3/trades all
+    returned 403 NOT_AUTHORIZED. No quote-level validation of any kind
+    was performed anywhere in this script. This function does not resolve,
+    approximate, or substitute for that gap."""
     sessions_by_date = {s.date: s for s in sessions}
-    implausible: list[dict] = []
+    out_of_range: list[dict] = []
     checked = 0
     for t in trades:
         session = sessions_by_date.get(t.trade_date)
@@ -366,22 +376,28 @@ def fill_plausibility_check(trades: list[BacktestTradeResult], sessions: list[Da
         # config.slippage_percent -- that is expected, not a defect.
         tolerance = max(day_high - day_low, 0.01) * 0.05
         if t.entry_price is not None and not (day_low - tolerance <= t.entry_price <= day_high + tolerance):
-            implausible.append({"trade_date": t.trade_date, "field": "entry_price", "value": t.entry_price,
-                                 "day_range": [day_low, day_high]})
+            out_of_range.append({"trade_date": t.trade_date, "field": "entry_price", "value": t.entry_price,
+                                  "day_range": [day_low, day_high]})
         if t.exit_price is not None and not (day_low - tolerance <= t.exit_price <= day_high + tolerance):
-            implausible.append({"trade_date": t.trade_date, "field": "exit_price", "value": t.exit_price,
-                                 "day_range": [day_low, day_high]})
+            out_of_range.append({"trade_date": t.trade_date, "field": "exit_price", "value": t.exit_price,
+                                  "day_range": [day_low, day_high]})
     return {
+        "check_type": "ohlcv_bar_range_consistency_only",
         "trades_checked": checked,
-        "implausible_fills_found": len(implausible),
-        "implausible_fills": implausible[:20],
-        "true_spread_aware_fillability_note": (
-            "This check only confirms fills fall within the day's traded OHLC "
-            "range -- it does NOT confirm the modeled price was achievable "
-            "against the real bid/ask spread at that instant. Real NBBO/trades "
-            "data is required for that and was NOT AUTHORIZED (403) on this "
-            "Polygon plan for /v3/quotes, /v2/last/nbbo, and /v3/trades, all "
-            "tested. This remains an open gap, not resolved here."
+        "fills_outside_day_ohlc_range": len(out_of_range),
+        "out_of_range_fills": out_of_range[:20],
+        "polygon_quote_data_entitlement": "403 NOT_AUTHORIZED on /v3/quotes, /v2/last/nbbo, and /v3/trades",
+        "quote_level_validation_performed": False,
+        "scope_limitation_note": (
+            "This check ONLY confirms fills fall within the day's traded OHLC "
+            "range. It does NOT establish and makes NO claim about: the actual "
+            "bid/ask spread at decision time, whether a fill was available at "
+            "the modeled timestamp, market impact, quote staleness, or "
+            "partial-fill risk. Real NBBO/trades data is required for any of "
+            "those and was NOT AUTHORIZED (403) on this Polygon plan for "
+            "/v3/quotes, /v2/last/nbbo, and /v3/trades, all tested. No "
+            "quote-level validation was performed anywhere in this script. "
+            "This remains an open gap, not resolved here."
         ),
     }
 
@@ -441,7 +457,7 @@ def main() -> int:
         "9_fees_plus_slippage": fees_plus_slippage(sessions, config),
         "10_determinism_check": determinism_check(sessions, config),
         "11_robinhood_realistic_cost_stress": robinhood_realistic_cost_stress(sessions, config),
-        "12_fill_plausibility_check": fill_plausibility_check(trades, sessions),
+        "12_ohlcv_fill_range_check": ohlcv_fill_range_check(trades, sessions),
     }
 
     out_str = json.dumps(result, indent=2, default=str)

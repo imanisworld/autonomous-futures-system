@@ -179,31 +179,40 @@ class TestSummaryFromAdjustedPnl:
         assert result["max_drawdown_dollars"] == 50.0
 
 
-class TestFillPlausibilityCheck:
+class TestOhlcvFillRangeCheck:
+    """Covers ohlcv_fill_range_check() -- a coarse OHLCV bar-range
+    consistency check ONLY. Not a test of execution realism, spread
+    awareness, or fillability; see the function's own docstring."""
+
     def _session(self, date: str, tqqq_bars: list) -> DaySession:
         return DaySession(
             date=date, qqq_previous_close=100.0, qqq_previous_high=101.0, qqq_previous_low=99.0,
             qqq_bars=(), tqqq_bars=tuple(tqqq_bars), sqqq_bars=(),
         )
 
-    def test_fill_within_day_range_is_plausible(self):
+    def test_fill_within_day_range_is_consistent(self):
         bars = [_bar("2025-01-01T09:30:00-05:00", 50.0, 51.0, 49.0, 50.5)]
         session = self._session("2025-01-01", bars)
         trades = [_trade("2025-01-01", "TQQQ", TradeDirection.LONG_TQQQ, 10.0, entry_price=50.2, exit_price=50.4)]
-        result = audit.fill_plausibility_check(trades, [session])
+        result = audit.ohlcv_fill_range_check(trades, [session])
         assert result["trades_checked"] == 1
-        assert result["implausible_fills_found"] == 0
+        assert result["fills_outside_day_ohlc_range"] == 0
 
     def test_fill_outside_day_range_is_flagged(self):
         bars = [_bar("2025-01-01T09:30:00-05:00", 50.0, 51.0, 49.0, 50.5)]
         session = self._session("2025-01-01", bars)
         trades = [_trade("2025-01-01", "TQQQ", TradeDirection.LONG_TQQQ, 10.0, entry_price=999.0, exit_price=50.4)]
-        result = audit.fill_plausibility_check(trades, [session])
-        assert result["implausible_fills_found"] == 1
-        assert result["implausible_fills"][0]["field"] == "entry_price"
+        result = audit.ohlcv_fill_range_check(trades, [session])
+        assert result["fills_outside_day_ohlc_range"] == 1
+        assert result["out_of_range_fills"][0]["field"] == "entry_price"
 
     def test_missing_session_skipped_not_crashed(self):
         trades = [_trade("2099-01-01", "TQQQ", TradeDirection.LONG_TQQQ, 10.0, entry_price=50.0, exit_price=51.0)]
-        result = audit.fill_plausibility_check(trades, [])
+        result = audit.ohlcv_fill_range_check(trades, [])
         assert result["trades_checked"] == 0
-        assert result["implausible_fills_found"] == 0
+        assert result["fills_outside_day_ohlc_range"] == 0
+
+    def test_reports_quote_level_validation_not_performed(self):
+        result = audit.ohlcv_fill_range_check([], [])
+        assert result["quote_level_validation_performed"] is False
+        assert "403" in result["polygon_quote_data_entitlement"]
