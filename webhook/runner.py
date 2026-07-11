@@ -27,6 +27,10 @@ from typing import Optional
 from config.settings import SystemConfig, load_config
 from execution.broker_interface import BracketOrder, BrokerInterface
 from context.bar_history import BarHistory
+from context.structural_regime import (
+    classify_structural_regime,
+    observe_structured_range_candidates,
+)
 from context.live_direction import apply_live_direction
 from context.five_min_feed import (
     arm_fifteen_min_setup,
@@ -499,6 +503,7 @@ def process_alert(
     # never affect ingestion, the decision, or risk.
     bar_gap = None
     recent_bars: list[dict] = []
+    structural_bars: list[dict] = []
     if not five_min_trigger:
         try:
             bar_hist = BarHistory(log_dir=log_dir)
@@ -524,12 +529,31 @@ def process_alert(
                 bar_hist.recent(state.instrument, 6, for_date=for_date)
             )
             recent_bars = bar_hist.recent(state.instrument, 8, for_date=for_date)
+            structural_bars = bar_hist.recent(state.instrument, 64, for_date=for_date)
             if getattr(cfg, "htf_direction_mode", "off") == "prioritize":
                 _resolve_pending_opportunities(
                     state, log_dir, for_date or date.today()
                 )
         except Exception:  # noqa: BLE001 — fail-soft, never break ingestion
             logger.warning("bar history update failed", exc_info=True)
+
+    # Shared MES/MNQ structural regime — observation only.  The result is
+    # additive journal evidence and has no authority over decision/risk/routing.
+    try:
+        if state.instrument in {"MES", "MNQ"}:
+            structural = classify_structural_regime(
+                structural_bars, instrument=state.instrument
+            )
+            state.structural_regime = structural.to_dict(
+                current_market_condition=state.market_condition
+            )
+            state.structural_range_candidates = observe_structured_range_candidates(
+                structural, structural_bars, instrument=state.instrument
+            )
+    except Exception:  # noqa: BLE001 — evidence must never affect ingestion
+        logger.warning("structural regime observation failed", exc_info=True)
+        state.structural_regime = None
+        state.structural_range_candidates = []
 
     # ── Live HTF direction (opt-in): compute daily/4H from price, not labels ──
     # The payload's higher-TF labels come from completed bars and lag turns
@@ -1767,7 +1791,7 @@ def _position_is_complete(pos: dict) -> bool:
 
 def _market_state_context(state) -> dict:
     """Public, JSON-safe snapshot of the market state derived from the alert."""
-    return {
+    context = {
         "instrument": state.instrument,
         "session": state.session,
         "timestamp": state.timestamp.isoformat(),
@@ -1851,6 +1875,11 @@ def _market_state_context(state) -> dict:
             "htf_phase": state.icc.htf_phase if state.icc else None,
         },
     }
+    if state.structural_regime is not None:
+        context.update(state.structural_regime)
+    if state.structural_range_candidates:
+        context["structural_range_candidates"] = state.structural_range_candidates
+    return context
 
 
 def _safe_bar_ts(payload: AlertPayload) -> str:

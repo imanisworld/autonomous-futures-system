@@ -8,7 +8,7 @@ Any data quality issue → raises DataQualityError (caller logs NO_TRADE).
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional
@@ -231,6 +231,8 @@ class MarketState:
     # only (the replay/test paths leave it None → no behavior change there). Lets
     # regime see CONTINUOUS price action, not just this one bar's Pine label.
     window_direction: Optional[str] = None
+    structural_regime: Optional[dict] = None
+    structural_range_candidates: list[dict] = field(default_factory=list)
     notes: Optional[str] = None
     raw: dict = None  # Original dict for reference
 
