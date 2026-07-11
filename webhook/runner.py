@@ -32,6 +32,11 @@ from context.structural_regime import (
     observe_structured_range_candidates,
 )
 from context.live_direction import apply_live_direction
+from context.mnq_orb_reclaim_proof import (
+    evaluate_mnq_orb_reclaim_proof,
+    is_mnq_orb_reclaim_candidate,
+    record_campaign_attempt,
+)
 from context.five_min_feed import (
     arm_fifteen_min_setup,
     clear_armed_setup,
@@ -1025,6 +1030,57 @@ def process_alert(
         if five_min_enabled():
             clear_armed_setup(state.instrument, log_dir, for_date)
         decision = DecisionEngine(config=cfg).evaluate(state, daily_state)
+
+    # ── MNQ orb_reclaim proof mode (Stage 2, 2026-07-11) ──────────────────────
+    # Scoped narrowly: only ever runs for instrument==MNQ, strategy==orb_reclaim.
+    # Never touches MNQ range_break_close, MES, or the RANGE_BOUND/
+    # require_trending_condition gate above (this block runs strictly after a
+    # TRADE decision has already cleared that gate). This block is PURE
+    # AUDIT/OVERRIDE-COMPUTATION — it never changes decision.decision or
+    # decision.setup. The existing MNQ orb_reclaim path (TRADE_INTENT → risk →
+    # broker, current entry-type/exit-mode config) is byte-for-byte unaffected
+    # in observe_only mode; only paper_sim/tradovate_demo apply the market-entry
+    # + runner-exit override, and only at the broker/BracketOrder layer further
+    # below — never by suppressing or redirecting the decision itself. See
+    # context/mnq_orb_reclaim_proof.py for the mode semantics.
+    mnq_proof_decision = None
+    mnq_proof_audit = None
+    if (
+        decision.decision == "TRADE"
+        and decision.setup is not None
+        and is_mnq_orb_reclaim_candidate(state.instrument, decision.setup.strategy)
+    ):
+        mnq_proof_decision = evaluate_mnq_orb_reclaim_proof(
+            cfg=cfg,
+            log_dir=log_dir,
+            orb_high=getattr(state.orb, "high", None) if state.orb else None,
+            orb_low=getattr(state.orb, "low", None) if state.orb else None,
+            direction=decision.setup.direction,
+            for_date=for_date,
+        )
+        mnq_proof_audit = {
+            **mnq_proof_decision.to_audit_dict(),
+            "would_be_setup": {
+                "direction": decision.setup.direction,
+                "entry": decision.setup.entry,
+                "stop": decision.setup.stop,
+                "target": decision.setup.target,
+                "rr_ratio": decision.setup.rr_ratio,
+            },
+        }
+        if mnq_proof_decision.suppress:
+            # Only reachable when an operator has explicitly opted into
+            # paper_sim/tradovate_demo AND this exact ORB campaign already had
+            # its one proof attempt today — never reachable under the default
+            # observe_only mode, so default behavior is unaffected.
+            import dataclasses as _dataclasses
+            decision = _dataclasses.replace(
+                decision,
+                decision="NO_TRADE",
+                setup=None,
+                reason=mnq_proof_decision.reason,
+                failed_gates=list(decision.failed_gates or []) + ["MNQ_ORB_RECLAIM_PROOF_DUPLICATE"],
+            )
     result["decision"] = decision.decision
     result["regime"] = decision.regime
     result["gex_status"] = decision.gex_status
@@ -1058,6 +1114,8 @@ def process_alert(
         journal_entry["context"] = _market_state_context(state)
         if shadow_candidates:
             journal_entry["shadow_candidates"] = shadow_candidates
+        if mnq_proof_audit is not None:
+            journal_entry["mnq_orb_reclaim_proof_audit"] = mnq_proof_audit
         gex_observed = _maybe_observe_gex(state, cfg)
         if gex_observed:
             journal_entry["gex_observed"] = gex_observed
@@ -1123,6 +1181,8 @@ def process_alert(
     journal_entry["context"] = _market_state_context(state)
     if shadow_candidates:
         journal_entry["shadow_candidates"] = shadow_candidates
+    if mnq_proof_audit is not None:
+        journal_entry["mnq_orb_reclaim_proof_audit"] = mnq_proof_audit
     journal_entry["confluence"] = result["confluence"]
     gex_observed = _maybe_observe_gex(state, cfg)
     if gex_observed:
@@ -1141,6 +1201,23 @@ def process_alert(
         if simulate
         else _make_broker(starting_balance=journal_balance, cfg=cfg)
     )
+    if (
+        mnq_proof_decision is not None
+        and mnq_proof_decision.apply_override
+        and mnq_proof_decision.force_paper_broker
+    ):
+        # paper_sim mode: force a dedicated PaperBroker (market entry, runner
+        # exit) regardless of the box's normal paper_mode/BROKER selection —
+        # this proof mode never touches the real broker in paper_sim.
+        broker = PaperBroker(
+            starting_balance=journal_balance,
+            slippage_ticks=float(getattr(cfg, "fill_slippage_ticks", 0.0) or 0.0),
+            pessimistic_both_hit=bool(getattr(cfg, "fill_pessimistic_both_hit", False)),
+            runner_mode=True,
+            runner_activation_r=float(getattr(cfg, "runner_activation_r", 1.0) or 1.0),
+            runner_trail_r=float(getattr(cfg, "runner_trail_r", 0.5) or 0.5),
+            entry_fill_model="market",
+        )
     account_balance = broker.get_account_balance()
     if account_balance is None:
         account_balance = journal_balance
@@ -1269,6 +1346,8 @@ def process_alert(
         strategy=decision.setup.strategy,
         notes=decision.setup.notes,
         contracts=contracts,
+        force_market_entry=bool(mnq_proof_decision and mnq_proof_decision.force_market_entry),
+        force_runner_exit=bool(mnq_proof_decision and mnq_proof_decision.force_runner_exit),
     )
 
     # ── Schedule-mode execution gate (Phase 3 safety chokepoint) ──────────────
@@ -1356,6 +1435,18 @@ def process_alert(
         type(broker).__name__, getattr(cfg, "paper_mode", None),
         getattr(getattr(broker, "config", None), "env", None),
     )
+    if mnq_proof_decision is not None and mnq_proof_decision.apply_override:
+        # Record the campaign attempt right before the real broker call — a
+        # schedule-gate/working-order suppression above never reaches here, so
+        # a legitimately-retried attempt is not falsely deduped. Recorded
+        # whether or not this attempt fills.
+        record_campaign_attempt(
+            log_dir,
+            orb_high=getattr(state.orb, "high", None) if state.orb else None,
+            orb_low=getattr(state.orb, "low", None) if state.orb else None,
+            direction=decision.setup.direction,
+            for_date=for_date,
+        )
     _submit_ts = datetime.now(timezone.utc)
     fill = broker.execute_bracket(order)
     _cancel_ts = datetime.now(timezone.utc)

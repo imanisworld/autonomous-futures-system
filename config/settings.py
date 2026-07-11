@@ -438,6 +438,15 @@ class SystemConfig:
     # strategy name -> one of PAPER_ELIGIBLE / SHADOW_ONLY / RESEARCH_ONLY / DISABLED
     strategy_status: dict = field(default_factory=dict)
 
+    # ── MNQ orb_reclaim proof mode (Stage 2, 2026-07-11) ─────────────────────
+    # Scoped narrowly to MNQ + orb_reclaim only — see context/mnq_orb_reclaim_proof.py.
+    # observe_only (default): recorded as an audit observation, never reaches
+    # TRADE_INTENT/risk/broker. paper_sim: forced onto PaperBroker with a
+    # market-entry + runner-exit-only override. tradovate_demo: same override,
+    # routed through whatever broker is already configured (expected: Tradovate
+    # demo). "live" is never a valid value — validated in _validate_config.
+    mnq_orb_reclaim_proof_mode: str = "observe_only"
+
 
 # ─── Loader ──────────────────────────────────────────────────────────────────
 
@@ -679,6 +688,9 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
             str(k): str(v).strip().upper()
             for k, v in (strategy_permission_gate.get("strategy_status", {}) or {}).items()
         },
+        mnq_orb_reclaim_proof_mode=str(
+            os.getenv("MNQ_ORB_RECLAIM_PROOF_MODE", "observe_only") or "observe_only"
+        ).strip().lower(),
         expected_timeframe_minutes=int(
             os.getenv("PRIMARY_DECISION_TF")
             or os.getenv("EXPECTED_TIMEFRAME_MINUTES")
@@ -905,6 +917,13 @@ def _validate_config(config: SystemConfig) -> None:
                 f"strategy_permission_gate.strategy_status[{_name!r}] = {_status!r} "
                 f"is not one of {sorted(_valid_strategy_statuses)}."
             )
+    _valid_mnq_proof_modes = {"observe_only", "paper_sim", "tradovate_demo"}
+    if config.mnq_orb_reclaim_proof_mode not in _valid_mnq_proof_modes:
+        raise ConfigError(
+            "MNQ_ORB_RECLAIM_PROOF_MODE must be one of "
+            f"{sorted(_valid_mnq_proof_modes)} (got {config.mnq_orb_reclaim_proof_mode!r}); "
+            "'live' is never a valid value for this proof mode."
+        )
     if config.live_trading_enabled:
         # This should never be reached, but belt-and-suspenders
         raise LiveTradingBlockedError(source="post-parse validation")
