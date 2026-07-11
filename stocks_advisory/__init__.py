@@ -1,5 +1,5 @@
-"""stocks_advisory — Stock/ETF Backtest v1: QQQ -> TQQQ/SQQQ first-hour
-backtest.
+"""stocks_advisory — Stock/ETF Backtest v1: QQQ -> TQQQ/SQQQ
+opening-range backtest.
 
 Backtest/research only. QQQ is the signal source; TQQQ/SQQQ are the
 only tradeable vehicles. No broker, execution, futures, or
@@ -17,16 +17,27 @@ from .backtest_models import (
     BacktestTradeResult,
     DaySession,
     DEFAULT_SLIPPAGE_STRESS_LEVELS,
+    EquityPoint,
+    InSampleOutOfSampleResult,
     LEVERAGED_ETF_FACTOR,
     SkippedDay,
+    SkippedDayEntry,
+    SlippageSensitivityResult,
     SlippageStressPoint,
     SlippageStressReport,
+    StopModel,
+    TargetModel,
     TradeDirection,
+    TradeLogEntry,
+    WalkForwardFold,
+    WalkForwardResult,
 )
 from .tqqq_sqqq_backtest import (
     evaluate_day,
     run_backtest,
+    run_in_sample_out_of_sample,
     run_slippage_stress,
+    run_walk_forward,
     summarize_trades,
 )
 
@@ -37,13 +48,24 @@ __all__ = [
     "BacktestTradeResult",
     "DaySession",
     "DEFAULT_SLIPPAGE_STRESS_LEVELS",
+    "EquityPoint",
+    "InSampleOutOfSampleResult",
     "LEVERAGED_ETF_FACTOR",
     "SkippedDay",
+    "SkippedDayEntry",
+    "SlippageSensitivityResult",
     "SlippageStressPoint",
     "SlippageStressReport",
+    "StopModel",
+    "TargetModel",
     "TradeDirection",
+    "TradeLogEntry",
+    "WalkForwardFold",
+    "WalkForwardResult",
     "evaluate_day",
     "run_backtest",
+    "run_in_sample_out_of_sample",
     "run_slippage_stress",
+    "run_walk_forward",
     "summarize_trades",
 ]
