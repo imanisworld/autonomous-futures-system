@@ -32,6 +32,13 @@ from .backtest_models import (
     WalkForwardFold,
     WalkForwardResult,
 )
+from .csv_loader import (
+    CsvValidationError,
+    LoadedSymbolCsv,
+    SessionBuildReport,
+    build_day_sessions,
+    load_bars_from_csv,
+)
 from .tqqq_sqqq_backtest import (
     evaluate_day,
     run_backtest,
@@ -46,11 +53,14 @@ __all__ = [
     "BacktestConfig",
     "BacktestSummary",
     "BacktestTradeResult",
+    "CsvValidationError",
     "DaySession",
     "DEFAULT_SLIPPAGE_STRESS_LEVELS",
     "EquityPoint",
     "InSampleOutOfSampleResult",
     "LEVERAGED_ETF_FACTOR",
+    "LoadedSymbolCsv",
+    "SessionBuildReport",
     "SkippedDay",
     "SkippedDayEntry",
     "SlippageSensitivityResult",
@@ -62,7 +72,9 @@ __all__ = [
     "TradeLogEntry",
     "WalkForwardFold",
     "WalkForwardResult",
+    "build_day_sessions",
     "evaluate_day",
+    "load_bars_from_csv",
     "run_backtest",
     "run_in_sample_out_of_sample",
     "run_slippage_stress",
