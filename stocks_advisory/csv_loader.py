@@ -7,9 +7,9 @@ the `Bar`/`DaySession` objects `run_backtest()` consumes.
 Research/backtest only. Reads exactly the file paths the caller
 supplies -- no network fetch, no provider/API client, no broker, no
 clock access (every "today"/"previous day" notion here comes from the
-dates present in the supplied files, never `datetime.now()`). Imports
-nothing from `execution`, `webhook`, `strategy`, `risk`, or
-`options_manager`.
+dates present in the supplied files, never the current wall-clock
+time). Imports nothing from `execution`, `webhook`, `strategy`,
+`risk`, or `options_manager`.
 
 Accepts the TradingView/BATS export shape used for the first real-data
 run (`time,open,high,low,close,Bar Type 1 Label,Bar Type 2 Label,
