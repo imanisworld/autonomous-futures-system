@@ -729,8 +729,12 @@ class TradovateBroker(BrokerInterface):
             # Entry leg (#2): Market by default (legacy, guaranteed fill). When
             # ENTRY_SLIPPAGE_TOLERANCE_TICKS > 0, use a Limit entry capped at
             # entry ± tolerance so breakout fills can't chase far past plan.
+            # order.force_market_entry (MNQ orb_reclaim proof mode only) skips
+            # the tolerance lookup entirely — a forced Market entry never rests
+            # unfilled, sidestepping the IOC-limit no-fill bottleneck this proof
+            # mode exists to test.
             entry_leg = {"orderType": "Market"}
-            tol_ticks = _entry_slippage_tolerance_ticks(root)
+            tol_ticks = 0.0 if getattr(order, "force_market_entry", False) else _entry_slippage_tolerance_ticks(root)
             if tol_ticks > 0:
                 tick = _TICK_SIZE.get(root, 0.25)
                 offset = tol_ticks * tick
@@ -754,7 +758,10 @@ class TradovateBroker(BrokerInterface):
             # a STOP as bracket1 and omits the fixed target entirely. This makes
             # the live contract match PaperBroker/replay while preserving
             # continuous stop protection from the instant the entry fills.
-            runner_live = _runner_live_enabled()
+            # order.force_runner_exit (MNQ orb_reclaim proof mode only) opts THIS
+            # order into runner-exit-only regardless of the global EXIT_MODE pin —
+            # every other order's bracket shape is unaffected.
+            runner_live = _runner_live_enabled() or getattr(order, "force_runner_exit", False)
             body = {
                 "accountSpec": self.config.username,
                 "accountId": self._account_id,

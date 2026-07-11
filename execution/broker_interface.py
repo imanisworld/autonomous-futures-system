@@ -29,6 +29,13 @@ class BracketOrder:
     strategy: str
     contracts: int = 1
     notes: Optional[str] = None
+    # Per-order overrides for the MNQ orb_reclaim proof mode (Stage 2,
+    # 2026-07-11, see context/mnq_orb_reclaim_proof.py). Both default False —
+    # every other order in the system is unaffected. Broker adapters that
+    # understand these fields must fall back to their normal behavior when
+    # both are False.
+    force_market_entry: bool = False
+    force_runner_exit: bool = False
 
 
 @dataclass
