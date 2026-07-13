@@ -28,6 +28,14 @@ def test_candidate_is_forced_observe_only_before_promotion():
     assert "--port '$port'" in text
 
 
+def test_candidate_can_verify_with_current_production_pins():
+    text = SCRIPT.read_text()
+    assert "AFS_VERIFY_POSTURE:-shadow_baseline" in text
+    assert '== "preserve_current"' in text
+    assert 'candidate_overrides=""' in text
+    assert 'posture_label="current production pins"' in text
+
+
 def test_promote_supports_baseline_and_operational_postures():
     text = SCRIPT.read_text()
     # Path 1: unchanged reset-baseline gate, still checked before promoting.

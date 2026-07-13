@@ -18,6 +18,15 @@ def test_safe_prefixes_pass_with_no_content_review():
     assert result.blocking_reasons == []
 
 
+def test_separate_stock_advisory_paper_lane_is_safe_for_futures_promotion():
+    result = evaluate_changed_files([
+        ".gitignore",
+        "stocks_advisory/paper_runner.py",
+        "data/stocks_advisory_paper_proof/PROOF_MANIFEST.md",
+    ])
+    assert result.is_behavior_neutral
+
+
 def test_strategy_and_risk_paths_are_denied_by_default():
     result = evaluate_changed_files(["strategy/signal_engine.py"])
     assert not result.is_behavior_neutral

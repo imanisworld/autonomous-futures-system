@@ -18,7 +18,13 @@ import ast
 import subprocess
 from dataclasses import dataclass, field
 
-SAFE_PATH_PREFIXES = ("scripts/", "ops/", "tests/", "docs/", "research/")
+SAFE_PATH_PREFIXES = (
+    "scripts/", "ops/", "tests/", "docs/", "research/",
+    # Separate manual stock/ETF paper-advisory lane. It is not imported by the
+    # futures webhook service and cannot place a futures order.
+    "stocks_advisory/", "data/stocks_advisory_paper_proof/",
+)
+SAFE_EXACT_PATHS = frozenset({".gitignore"})
 
 APP_PY_PATH = "webhook/app.py"
 
@@ -122,7 +128,7 @@ def evaluate_changed_files(
             if not ok:
                 reasons.extend(why)
             continue
-        if any(path.startswith(prefix) for prefix in SAFE_PATH_PREFIXES):
+        if path in SAFE_EXACT_PATHS or any(path.startswith(prefix) for prefix in SAFE_PATH_PREFIXES):
             continue
         reasons.append(f"{path}: not an operational-safe path")
     return BehaviorNeutralResult(is_behavior_neutral=(len(reasons) == 0), blocking_reasons=reasons)

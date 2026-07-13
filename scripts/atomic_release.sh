@@ -82,7 +82,14 @@ verify_release() {
   deploy_lock_acquire "$LOCK_DIR" "verify $REF" "$0" "$FORCE_LOCK" || exit 1
   trap "deploy_lock_release '$LOCK_DIR' '$DEPLOY_LOCK_OWNER'" EXIT
 
-  local sha="$REF" short="${REF:0:12}" unit="afs-candidate-${REF:0:12}" fingerprint port
+  local sha="$REF" short="${REF:0:12}" unit="afs-candidate-${REF:0:12}" fingerprint port candidate_overrides posture_label
+  if [[ "${AFS_VERIFY_POSTURE:-shadow_baseline}" == "preserve_current" ]]; then
+    candidate_overrides=""
+    posture_label="current production pins"
+  else
+    candidate_overrides="--setenv=SCHEDULE_MODE=always_on_shadow --setenv=EXPECTED_PROOF_SCHEDULE_MODE=always_on_shadow --setenv=HTF_DIRECTION_MODE=off --setenv=EXPECTED_PROOF_HTF_DIRECTION_MODE=off --setenv=EXIT_MODE=static --setenv=EXPECTED_PROOF_EXIT_MODE=static"
+    posture_label="always_on_shadow/static"
+  fi
   fingerprint="$(remote "'$RELEASES/$sha/.venv/bin/python' -c \"import json;print(json.load(open('$RELEASES/$sha/release_manifest.json'))['fingerprint_sha256'])\"")"
   port="$(remote "python3 -c 'import socket; s=socket.socket(); s.bind((\"127.0.0.1\", 0)); print(s.getsockname()[1]); s.close()'")"
   remote "
@@ -101,12 +108,7 @@ verify_release() {
       --setenv=PYTHONPATH='$RELEASES/$sha' \
       --setenv=PORT='$port' \
       --setenv=LOG_DIR='$SHARED/candidate-logs/$sha' \
-      --setenv=SCHEDULE_MODE=always_on_shadow \
-      --setenv=EXPECTED_PROOF_SCHEDULE_MODE=always_on_shadow \
-      --setenv=HTF_DIRECTION_MODE=off \
-      --setenv=EXPECTED_PROOF_HTF_DIRECTION_MODE=off \
-      --setenv=EXIT_MODE=static \
-      --setenv=EXPECTED_PROOF_EXIT_MODE=static \
+      $candidate_overrides \
       --setenv=RELEASE_INTEGRITY_ENFORCED=true \
       '$RELEASES/$sha/.venv/bin/python' -m uvicorn webhook.app:app \
         --host 127.0.0.1 --port '$port'
@@ -119,7 +121,7 @@ verify_release() {
     PYTHONPATH='$RELEASES/$sha' '$RELEASES/$sha/.venv/bin/python' \
       -m ops.release_integrity --repo-root '$RELEASES/$sha'
   "
-  echo "candidate $short verified on 127.0.0.1:$port in always_on_shadow"
+  echo "candidate $short verified on 127.0.0.1:$port with $posture_label"
 }
 
 promote_release() {
