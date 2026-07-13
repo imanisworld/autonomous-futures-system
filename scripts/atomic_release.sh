@@ -88,10 +88,14 @@ verify_release() {
     set -e
     test -d '$RELEASES/$sha'
     test -f '$SHARED/.env'
+    candidate_env='$SHARED/candidate-env-$sha'
+    trap 'rm -f "\$candidate_env"' EXIT
+    grep -v '^EXPECTED_RELEASE_FINGERPRINT=' '$SHARED/.env' > "\$candidate_env"
+    printf 'EXPECTED_RELEASE_FINGERPRINT=%s\n' '$fingerprint' >> "\$candidate_env"
     systemctl stop '$unit' 2>/dev/null || true
     systemd-run --unit='$unit' \
       --property=WorkingDirectory='$RELEASES/$sha' \
-      --property=EnvironmentFile='$SHARED/.env' \
+      --property=EnvironmentFile="\$candidate_env" \
       --setenv=PYTHONDONTWRITEBYTECODE=1 \
       --setenv=PYTHONPATH='$RELEASES/$sha' \
       --setenv=PORT=8010 \
@@ -103,7 +107,6 @@ verify_release() {
       --setenv=EXIT_MODE=static \
       --setenv=EXPECTED_PROOF_EXIT_MODE=static \
       --setenv=RELEASE_INTEGRITY_ENFORCED=true \
-      --setenv=EXPECTED_RELEASE_FINGERPRINT='$fingerprint' \
       '$RELEASES/$sha/.venv/bin/python' -m uvicorn webhook.app:app \
         --host 127.0.0.1 --port 8010
     for i in 1 2 3 4 5 6 7 8 9 10; do
