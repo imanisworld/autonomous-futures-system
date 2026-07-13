@@ -1,0 +1,3296 @@
+{
+ "cells": {
+  "static_reject|runner": {
+   "orb_breakout": {
+    "all": {
+     "arms": 63,
+     "filled": 1,
+     "detached_arms": 62,
+     "detached_filled": 0,
+     "resolved": 1,
+     "win_rate": 0.0,
+     "net_pnl": -26.98,
+     "expectancy": -26.98,
+     "profit_factor": null
+    },
+    "first_half": {
+     "arms": 31,
+     "filled": 0,
+     "detached_arms": 31,
+     "detached_filled": 0,
+     "resolved": 0,
+     "win_rate": null,
+     "net_pnl": 0,
+     "expectancy": null,
+     "profit_factor": null
+    },
+    "second_half": {
+     "arms": 32,
+     "filled": 1,
+     "detached_arms": 31,
+     "detached_filled": 0,
+     "resolved": 1,
+     "win_rate": 0.0,
+     "net_pnl": -26.98,
+     "expectancy": -26.98,
+     "profit_factor": null
+    },
+    "detached_only": {
+     "arms": 62,
+     "filled": 0,
+     "detached_arms": 62,
+     "detached_filled": 0,
+     "resolved": 0,
+     "win_rate": null,
+     "net_pnl": 0,
+     "expectancy": null,
+     "profit_factor": null
+    }
+   },
+   "orb_reclaim": {
+    "all": {
+     "arms": 253,
+     "filled": 4,
+     "detached_arms": 248,
+     "detached_filled": 0,
+     "resolved": 4,
+     "win_rate": 1.0,
+     "net_pnl": 240.08,
+     "expectancy": 60.02,
+     "profit_factor": null
+    },
+    "first_half": {
+     "arms": 126,
+     "filled": 1,
+     "detached_arms": 125,
+     "detached_filled": 0,
+     "resolved": 1,
+     "win_rate": 1.0,
+     "net_pnl": 19.77,
+     "expectancy": 19.77,
+     "profit_factor": null
+    },
+    "second_half": {
+     "arms": 127,
+     "filled": 3,
+     "detached_arms": 123,
+     "detached_filled": 0,
+     "resolved": 3,
+     "win_rate": 1.0,
+     "net_pnl": 220.31,
+     "expectancy": 73.44,
+     "profit_factor": null
+    },
+    "detached_only": {
+     "arms": 248,
+     "filled": 0,
+     "detached_arms": 248,
+     "detached_filled": 0,
+     "resolved": 0,
+     "win_rate": null,
+     "net_pnl": 0,
+     "expectancy": null,
+     "profit_factor": null
+    }
+   },
+   "vwap_hold": {
+    "all": {
+     "arms": 348,
+     "filled": 8,
+     "detached_arms": 335,
+     "detached_filled": 0,
+     "resolved": 8,
+     "win_rate": 0.5,
+     "net_pnl": 3.94,
+     "expectancy": 0.49,
+     "profit_factor": 1.058
+    },
+    "first_half": {
+     "arms": 174,
+     "filled": 3,
+     "detached_arms": 166,
+     "detached_filled": 0,
+     "resolved": 3,
+     "win_rate": 0.333,
+     "net_pnl": -13.77,
+     "expectancy": -4.59,
+     "profit_factor": 0.595
+    },
+    "second_half": {
+     "arms": 174,
+     "filled": 5,
+     "detached_arms": 169,
+     "detached_filled": 0,
+     "resolved": 5,
+     "win_rate": 0.6,
+     "net_pnl": 17.71,
+     "expectancy": 3.54,
+     "profit_factor": 1.521
+    },
+    "detached_only": {
+     "arms": 335,
+     "filled": 0,
+     "detached_arms": 335,
+     "detached_filled": 0,
+     "resolved": 0,
+     "win_rate": null,
+     "net_pnl": 0,
+     "expectancy": null,
+     "profit_factor": null
+    }
+   }
+  },
+  "static_reject|static": {
+   "orb_breakout": {
+    "all": {
+     "arms": 63,
+     "filled": 1,
+     "detached_arms": 62,
+     "detached_filled": 0,
+     "resolved": 1,
+     "win_rate": 0.0,
+     "net_pnl": -26.98,
+     "expectancy": -26.98,
+     "profit_factor": null
+    },
+    "first_half": {
+     "arms": 31,
+     "filled": 0,
+     "detached_arms": 31,
+     "detached_filled": 0,
+     "resolved": 0,
+     "win_rate": null,
+     "net_pnl": 0,
+     "expectancy": null,
+     "profit_factor": null
+    },
+    "second_half": {
+     "arms": 32,
+     "filled": 1,
+     "detached_arms": 31,
+     "detached_filled": 0,
+     "resolved": 1,
+     "win_rate": 0.0,
+     "net_pnl": -26.98,
+     "expectancy": -26.98,
+     "profit_factor": null
+    },
+    "detached_only": {
+     "arms": 62,
+     "filled": 0,
+     "detached_arms": 62,
+     "detached_filled": 0,
+     "resolved": 0,
+     "win_rate": null,
+     "net_pnl": 0,
+     "expectancy": null,
+     "profit_factor": null
+    }
+   },
+   "orb_reclaim": {
+    "all": {
+     "arms": 253,
+     "filled": 4,
+     "detached_arms": 248,
+     "detached_filled": 0,
+     "resolved": 4,
+     "win_rate": 0.25,
+     "net_pnl": -27.92,
+     "expectancy": -6.98,
+     "profit_factor": 0.778
+    },
+    "first_half": {
+     "arms": 126,
+     "filled": 1,
+     "detached_arms": 125,
+     "detached_filled": 0,
+     "resolved": 1,
+     "win_rate": 0.0,
+     "net_pnl": -41.98,
+     "expectancy": -41.98,
+     "profit_factor": null
+    },
+    "second_half": {
+     "arms": 127,
+     "filled": 3,
+     "detached_arms": 123,
+     "detached_filled": 0,
+     "resolved": 3,
+     "win_rate": 0.333,
+     "net_pnl": 14.06,
+     "expectancy": 4.69,
+     "profit_factor": 1.167
+    },
+    "detached_only": {
+     "arms": 248,
+     "filled": 0,
+     "detached_arms": 248,
+     "detached_filled": 0,
+     "resolved": 0,
+     "win_rate": null,
+     "net_pnl": 0,
+     "expectancy": null,
+     "profit_factor": null
+    }
+   },
+   "vwap_hold": {
+    "all": {
+     "arms": 348,
+     "filled": 8,
+     "detached_arms": 335,
+     "detached_filled": 0,
+     "resolved": 8,
+     "win_rate": 0.125,
+     "net_pnl": -75.84,
+     "expectancy": -9.48,
+     "profit_factor": 0.362
+    },
+    "first_half": {
+     "arms": 174,
+     "filled": 3,
+     "detached_arms": 166,
+     "detached_filled": 0,
+     "resolved": 3,
+     "win_rate": 0.0,
+     "net_pnl": -50.94,
+     "expectancy": -16.98,
+     "profit_factor": null
+    },
+    "second_half": {
+     "arms": 174,
+     "filled": 5,
+     "detached_arms": 169,
+     "detached_filled": 0,
+     "resolved": 5,
+     "win_rate": 0.2,
+     "net_pnl": -24.9,
+     "expectancy": -4.98,
+     "profit_factor": 0.633
+    },
+    "detached_only": {
+     "arms": 335,
+     "filled": 0,
+     "detached_arms": 335,
+     "detached_filled": 0,
+     "resolved": 0,
+     "win_rate": null,
+     "net_pnl": 0,
+     "expectancy": null,
+     "profit_factor": null
+    }
+   }
+  },
+  "translate_cap8t|runner": {
+   "orb_breakout": {
+    "all": {
+     "arms": 63,
+     "filled": 4,
+     "detached_arms": 62,
+     "detached_filled": 3,
+     "resolved": 4,
+     "win_rate": 0.25,
+     "net_pnl": -33.42,
+     "expectancy": -8.36,
+     "profit_factor": 0.582
+    },
+    "first_half": {
+     "arms": 31,
+     "filled": 0,
+     "detached_arms": 31,
+     "detached_filled": 0,
+     "resolved": 0,
+     "win_rate": null,
+     "net_pnl": 0,
+     "expectancy": null,
+     "profit_factor": null
+    },
+    "second_half": {
+     "arms": 32,
+     "filled": 4,
+     "detached_arms": 31,
+     "detached_filled": 3,
+     "resolved": 4,
+     "win_rate": 0.25,
+     "net_pnl": -33.42,
+     "expectancy": -8.36,
+     "profit_factor": 0.582
+    },
+    "detached_only": {
+     "arms": 62,
+     "filled": 3,
+     "detached_arms": 62,
+     "detached_filled": 3,
+     "resolved": 3,
+     "win_rate": 0.333,
+     "net_pnl": -6.44,
+     "expectancy": -2.15,
+     "profit_factor": 0.878
+    }
+   },
+   "orb_reclaim": {
+    "all": {
+     "arms": 253,
+     "filled": 16,
+     "detached_arms": 248,
+     "detached_filled": 12,
+     "resolved": 15,
+     "win_rate": 0.6,
+     "net_pnl": 174.3,
+     "expectancy": 11.62,
+     "profit_factor": 1.7
+    },
+    "first_half": {
+     "arms": 126,
+     "filled": 5,
+     "detached_arms": 125,
+     "detached_filled": 4,
+     "resolved": 4,
+     "win_rate": 0.75,
+     "net_pnl": 82.83,
+     "expectancy": 20.71,
+     "profit_factor": 2.997
+    },
+    "second_half": {
+     "arms": 127,
+     "filled": 11,
+     "detached_arms": 123,
+     "detached_filled": 8,
+     "resolved": 11,
+     "win_rate": 0.545,
+     "net_pnl": 91.47,
+     "expectancy": 8.32,
+     "profit_factor": 1.441
+    },
+    "detached_only": {
+     "arms": 248,
+     "filled": 12,
+     "detached_arms": 248,
+     "detached_filled": 12,
+     "resolved": 11,
+     "win_rate": 0.455,
+     "net_pnl": -65.78,
+     "expectancy": -5.98,
+     "profit_factor": 0.736
+    }
+   },
+   "vwap_hold": {
+    "all": {
+     "arms": 348,
+     "filled": 27,
+     "detached_arms": 335,
+     "detached_filled": 19,
+     "resolved": 27,
+     "win_rate": 0.37,
+     "net_pnl": 104.32,
+     "expectancy": 3.86,
+     "profit_factor": 1.37
+    },
+    "first_half": {
+     "arms": 174,
+     "filled": 12,
+     "detached_arms": 166,
+     "detached_filled": 9,
+     "resolved": 12,
+     "win_rate": 0.333,
+     "net_pnl": 77.41,
+     "expectancy": 6.45,
+     "profit_factor": 1.583
+    },
+    "second_half": {
+     "arms": 174,
+     "filled": 15,
+     "detached_arms": 169,
+     "detached_filled": 10,
+     "resolved": 15,
+     "win_rate": 0.4,
+     "net_pnl": 26.91,
+     "expectancy": 1.79,
+     "profit_factor": 1.18
+    },
+    "detached_only": {
+     "arms": 335,
+     "filled": 19,
+     "detached_arms": 335,
+     "detached_filled": 19,
+     "resolved": 19,
+     "win_rate": 0.316,
+     "net_pnl": 100.38,
+     "expectancy": 5.28,
+     "profit_factor": 1.469
+    }
+   }
+  },
+  "translate_cap8t|static": {
+   "orb_breakout": {
+    "all": {
+     "arms": 63,
+     "filled": 4,
+     "detached_arms": 62,
+     "detached_filled": 3,
+     "resolved": 4,
+     "win_rate": 0.25,
+     "net_pnl": -26.42,
+     "expectancy": -6.6,
+     "profit_factor": 0.67
+    },
+    "first_half": {
+     "arms": 31,
+     "filled": 0,
+     "detached_arms": 31,
+     "detached_filled": 0,
+     "resolved": 0,
+     "win_rate": null,
+     "net_pnl": 0,
+     "expectancy": null,
+     "profit_factor": null
+    },
+    "second_half": {
+     "arms": 32,
+     "filled": 4,
+     "detached_arms": 31,
+     "detached_filled": 3,
+     "resolved": 4,
+     "win_rate": 0.25,
+     "net_pnl": -26.42,
+     "expectancy": -6.6,
+     "profit_factor": 0.67
+    },
+    "detached_only": {
+     "arms": 62,
+     "filled": 3,
+     "detached_arms": 62,
+     "detached_filled": 3,
+     "resolved": 3,
+     "win_rate": 0.333,
+     "net_pnl": 0.56,
+     "expectancy": 0.19,
+     "profit_factor": 1.011
+    }
+   },
+   "orb_reclaim": {
+    "all": {
+     "arms": 253,
+     "filled": 16,
+     "detached_arms": 248,
+     "detached_filled": 12,
+     "resolved": 15,
+     "win_rate": 0.2,
+     "net_pnl": -204.2,
+     "expectancy": -13.61,
+     "profit_factor": 0.591
+    },
+    "first_half": {
+     "arms": 126,
+     "filled": 5,
+     "detached_arms": 125,
+     "detached_filled": 4,
+     "resolved": 4,
+     "win_rate": 0.5,
+     "net_pnl": 113.58,
+     "expectancy": 28.39,
+     "profit_factor": 2.361
+    },
+    "second_half": {
+     "arms": 127,
+     "filled": 11,
+     "detached_arms": 123,
+     "detached_filled": 8,
+     "resolved": 11,
+     "win_rate": 0.091,
+     "net_pnl": -317.78,
+     "expectancy": -28.89,
+     "profit_factor": 0.236
+    },
+    "detached_only": {
+     "arms": 248,
+     "filled": 12,
+     "detached_arms": 248,
+     "detached_filled": 12,
+     "resolved": 11,
+     "win_rate": 0.182,
+     "net_pnl": -176.28,
+     "expectancy": -16.03,
+     "profit_factor": 0.528
+    }
+   },
+   "vwap_hold": {
+    "all": {
+     "arms": 348,
+     "filled": 27,
+     "detached_arms": 335,
+     "detached_filled": 19,
+     "resolved": 27,
+     "win_rate": 0.185,
+     "net_pnl": -148.96,
+     "expectancy": -5.52,
+     "profit_factor": 0.593
+    },
+    "first_half": {
+     "arms": 174,
+     "filled": 12,
+     "detached_arms": 166,
+     "detached_filled": 9,
+     "resolved": 12,
+     "win_rate": 0.167,
+     "net_pnl": -79.26,
+     "expectancy": -6.6,
+     "profit_factor": 0.523
+    },
+    "second_half": {
+     "arms": 174,
+     "filled": 15,
+     "detached_arms": 169,
+     "detached_filled": 10,
+     "resolved": 15,
+     "win_rate": 0.2,
+     "net_pnl": -69.7,
+     "expectancy": -4.65,
+     "profit_factor": 0.651
+    },
+    "detached_only": {
+     "arms": 335,
+     "filled": 19,
+     "detached_arms": 335,
+     "detached_filled": 19,
+     "resolved": 19,
+     "win_rate": 0.211,
+     "net_pnl": -73.12,
+     "expectancy": -3.85,
+     "profit_factor": 0.704
+    }
+   }
+  },
+  "translate_cap16t|runner": {
+   "orb_breakout": {
+    "all": {
+     "arms": 63,
+     "filled": 5,
+     "detached_arms": 62,
+     "detached_filled": 4,
+     "resolved": 5,
+     "win_rate": 0.4,
+     "net_pnl": 34.6,
+     "expectancy": 6.92,
+     "profit_factor": 1.433
+    },
+    "first_half": {
+     "arms": 31,
+     "filled": 1,
+     "detached_arms": 31,
+     "detached_filled": 1,
+     "resolved": 1,
+     "win_rate": 1.0,
+     "net_pnl": 68.02,
+     "expectancy": 68.02,
+     "profit_factor": null
+    },
+    "second_half": {
+     "arms": 32,
+     "filled": 4,
+     "detached_arms": 31,
+     "detached_filled": 3,
+     "resolved": 4,
+     "win_rate": 0.25,
+     "net_pnl": -33.42,
+     "expectancy": -8.36,
+     "profit_factor": 0.582
+    },
+    "detached_only": {
+     "arms": 62,
+     "filled": 4,
+     "detached_arms": 62,
+     "detached_filled": 4,
+     "resolved": 4,
+     "win_rate": 0.5,
+     "net_pnl": 61.58,
+     "expectancy": 15.39,
+     "profit_factor": 2.163
+    }
+   },
+   "orb_reclaim": {
+    "all": {
+     "arms": 253,
+     "filled": 32,
+     "detached_arms": 248,
+     "detached_filled": 28,
+     "resolved": 30,
+     "win_rate": 0.633,
+     "net_pnl": 393.1,
+     "expectancy": 13.1,
+     "profit_factor": 1.862
+    },
+    "first_half": {
+     "arms": 126,
+     "filled": 13,
+     "detached_arms": 125,
+     "detached_filled": 12,
+     "resolved": 12,
+     "win_rate": 0.667,
+     "net_pnl": 184.99,
+     "expectancy": 15.42,
+     "profit_factor": 2.115
+    },
+    "second_half": {
+     "arms": 127,
+     "filled": 19,
+     "detached_arms": 123,
+     "detached_filled": 16,
+     "resolved": 18,
+     "win_rate": 0.611,
+     "net_pnl": 208.11,
+     "expectancy": 11.56,
+     "profit_factor": 1.717
+    },
+    "detached_only": {
+     "arms": 248,
+     "filled": 28,
+     "detached_arms": 248,
+     "detached_filled": 28,
+     "resolved": 26,
+     "win_rate": 0.577,
+     "net_pnl": 153.02,
+     "expectancy": 5.89,
+     "profit_factor": 1.335
+    }
+   },
+   "vwap_hold": {
+    "all": {
+     "arms": 348,
+     "filled": 53,
+     "detached_arms": 335,
+     "detached_filled": 45,
+     "resolved": 53,
+     "win_rate": 0.396,
+     "net_pnl": 259.34,
+     "expectancy": 4.89,
+     "profit_factor": 1.49
+    },
+    "first_half": {
+     "arms": 174,
+     "filled": 25,
+     "detached_arms": 166,
+     "detached_filled": 22,
+     "resolved": 25,
+     "win_rate": 0.4,
+     "net_pnl": 177.67,
+     "expectancy": 7.11,
+     "profit_factor": 1.716
+    },
+    "second_half": {
+     "arms": 174,
+     "filled": 28,
+     "detached_arms": 169,
+     "detached_filled": 23,
+     "resolved": 28,
+     "win_rate": 0.393,
+     "net_pnl": 81.67,
+     "expectancy": 2.92,
+     "profit_factor": 1.29
+    },
+    "detached_only": {
+     "arms": 335,
+     "filled": 45,
+     "detached_arms": 335,
+     "detached_filled": 45,
+     "resolved": 45,
+     "win_rate": 0.378,
+     "net_pnl": 255.4,
+     "expectancy": 5.68,
+     "profit_factor": 1.553
+    }
+   }
+  },
+  "translate_cap16t|static": {
+   "orb_breakout": {
+    "all": {
+     "arms": 63,
+     "filled": 5,
+     "detached_arms": 62,
+     "detached_filled": 4,
+     "resolved": 5,
+     "win_rate": 0.4,
+     "net_pnl": 27.1,
+     "expectancy": 5.42,
+     "profit_factor": 1.339
+    },
+    "first_half": {
+     "arms": 31,
+     "filled": 1,
+     "detached_arms": 31,
+     "detached_filled": 1,
+     "resolved": 1,
+     "win_rate": 1.0,
+     "net_pnl": 53.52,
+     "expectancy": 53.52,
+     "profit_factor": null
+    },
+    "second_half": {
+     "arms": 32,
+     "filled": 4,
+     "detached_arms": 31,
+     "detached_filled": 3,
+     "resolved": 4,
+     "win_rate": 0.25,
+     "net_pnl": -26.42,
+     "expectancy": -6.6,
+     "profit_factor": 0.67
+    },
+    "detached_only": {
+     "arms": 62,
+     "filled": 4,
+     "detached_arms": 62,
+     "detached_filled": 4,
+     "resolved": 4,
+     "win_rate": 0.5,
+     "net_pnl": 54.08,
+     "expectancy": 13.52,
+     "profit_factor": 2.021
+    }
+   },
+   "orb_reclaim": {
+    "all": {
+     "arms": 253,
+     "filled": 32,
+     "detached_arms": 248,
+     "detached_filled": 28,
+     "resolved": 30,
+     "win_rate": 0.233,
+     "net_pnl": -266.4,
+     "expectancy": -8.88,
+     "profit_factor": 0.721
+    },
+    "first_half": {
+     "arms": 126,
+     "filled": 13,
+     "detached_arms": 125,
+     "detached_filled": 12,
+     "resolved": 12,
+     "win_rate": 0.333,
+     "net_pnl": 61.74,
+     "expectancy": 5.15,
+     "profit_factor": 1.186
+    },
+    "second_half": {
+     "arms": 127,
+     "filled": 19,
+     "detached_arms": 123,
+     "detached_filled": 16,
+     "resolved": 18,
+     "win_rate": 0.167,
+     "net_pnl": -328.14,
+     "expectancy": -18.23,
+     "profit_factor": 0.473
+    },
+    "detached_only": {
+     "arms": 248,
+     "filled": 28,
+     "detached_arms": 248,
+     "detached_filled": 28,
+     "resolved": 26,
+     "win_rate": 0.231,
+     "net_pnl": -238.48,
+     "expectancy": -9.17,
+     "profit_factor": 0.713
+    }
+   },
+   "vwap_hold": {
+    "all": {
+     "arms": 348,
+     "filled": 53,
+     "detached_arms": 335,
+     "detached_filled": 45,
+     "resolved": 53,
+     "win_rate": 0.226,
+     "net_pnl": -157.44,
+     "expectancy": -2.97,
+     "profit_factor": 0.768
+    },
+    "first_half": {
+     "arms": 174,
+     "filled": 25,
+     "detached_arms": 166,
+     "detached_filled": 22,
+     "resolved": 25,
+     "win_rate": 0.2,
+     "net_pnl": -113.5,
+     "expectancy": -4.54,
+     "profit_factor": 0.657
+    },
+    "second_half": {
+     "arms": 174,
+     "filled": 28,
+     "detached_arms": 169,
+     "detached_filled": 23,
+     "resolved": 28,
+     "win_rate": 0.25,
+     "net_pnl": -43.94,
+     "expectancy": -1.57,
+     "profit_factor": 0.874
+    },
+    "detached_only": {
+     "arms": 335,
+     "filled": 45,
+     "detached_arms": 335,
+     "detached_filled": 45,
+     "resolved": 45,
+     "win_rate": 0.244,
+     "net_pnl": -81.6,
+     "expectancy": -1.81,
+     "profit_factor": 0.854
+    }
+   }
+  },
+  "translate_cap32t|runner": {
+   "orb_breakout": {
+    "all": {
+     "arms": 63,
+     "filled": 11,
+     "detached_arms": 62,
+     "detached_filled": 10,
+     "resolved": 11,
+     "win_rate": 0.364,
+     "net_pnl": 116.22,
+     "expectancy": 10.57,
+     "profit_factor": 1.625
+    },
+    "first_half": {
+     "arms": 31,
+     "filled": 3,
+     "detached_arms": 31,
+     "detached_filled": 3,
+     "resolved": 3,
+     "win_rate": 0.667,
+     "net_pnl": 216.06,
+     "expectancy": 72.02,
+     "profit_factor": 9.159
+    },
+    "second_half": {
+     "arms": 32,
+     "filled": 8,
+     "detached_arms": 31,
+     "detached_filled": 7,
+     "resolved": 8,
+     "win_rate": 0.25,
+     "net_pnl": -99.84,
+     "expectancy": -12.48,
+     "profit_factor": 0.374
+    },
+    "detached_only": {
+     "arms": 62,
+     "filled": 10,
+     "detached_arms": 62,
+     "detached_filled": 10,
+     "resolved": 10,
+     "win_rate": 0.4,
+     "net_pnl": 143.2,
+     "expectancy": 14.32,
+     "profit_factor": 1.901
+    }
+   },
+   "orb_reclaim": {
+    "all": {
+     "arms": 253,
+     "filled": 72,
+     "detached_arms": 248,
+     "detached_filled": 68,
+     "resolved": 70,
+     "win_rate": 0.543,
+     "net_pnl": 667.4,
+     "expectancy": 9.53,
+     "profit_factor": 1.503
+    },
+    "first_half": {
+     "arms": 126,
+     "filled": 34,
+     "detached_arms": 125,
+     "detached_filled": 33,
+     "resolved": 33,
+     "win_rate": 0.576,
+     "net_pnl": 431.91,
+     "expectancy": 13.09,
+     "profit_factor": 1.744
+    },
+    "second_half": {
+     "arms": 127,
+     "filled": 38,
+     "detached_arms": 123,
+     "detached_filled": 35,
+     "resolved": 37,
+     "win_rate": 0.514,
+     "net_pnl": 235.49,
+     "expectancy": 6.36,
+     "profit_factor": 1.315
+    },
+    "detached_only": {
+     "arms": 248,
+     "filled": 68,
+     "detached_arms": 248,
+     "detached_filled": 68,
+     "resolved": 66,
+     "win_rate": 0.515,
+     "net_pnl": 427.32,
+     "expectancy": 6.47,
+     "profit_factor": 1.322
+    }
+   },
+   "vwap_hold": {
+    "all": {
+     "arms": 348,
+     "filled": 100,
+     "detached_arms": 335,
+     "detached_filled": 92,
+     "resolved": 100,
+     "win_rate": 0.41,
+     "net_pnl": 890.28,
+     "expectancy": 8.9,
+     "profit_factor": 1.914
+    },
+    "first_half": {
+     "arms": 174,
+     "filled": 48,
+     "detached_arms": 166,
+     "detached_filled": 45,
+     "resolved": 48,
+     "win_rate": 0.438,
+     "net_pnl": 679.13,
+     "expectancy": 14.15,
+     "profit_factor": 2.523
+    },
+    "second_half": {
+     "arms": 174,
+     "filled": 52,
+     "detached_arms": 169,
+     "detached_filled": 47,
+     "resolved": 52,
+     "win_rate": 0.385,
+     "net_pnl": 211.15,
+     "expectancy": 4.06,
+     "profit_factor": 1.4
+    },
+    "detached_only": {
+     "arms": 335,
+     "filled": 92,
+     "detached_arms": 335,
+     "detached_filled": 92,
+     "resolved": 92,
+     "win_rate": 0.402,
+     "net_pnl": 886.34,
+     "expectancy": 9.63,
+     "profit_factor": 1.978
+    }
+   }
+  },
+  "translate_cap32t|static": {
+   "orb_breakout": {
+    "all": {
+     "arms": 63,
+     "filled": 11,
+     "detached_arms": 62,
+     "detached_filled": 10,
+     "resolved": 11,
+     "win_rate": 0.364,
+     "net_pnl": 28.22,
+     "expectancy": 2.57,
+     "profit_factor": 1.152
+    },
+    "first_half": {
+     "arms": 31,
+     "filled": 3,
+     "detached_arms": 31,
+     "detached_filled": 3,
+     "resolved": 3,
+     "win_rate": 0.667,
+     "net_pnl": 80.56,
+     "expectancy": 26.85,
+     "profit_factor": 4.042
+    },
+    "second_half": {
+     "arms": 32,
+     "filled": 8,
+     "detached_arms": 31,
+     "detached_filled": 7,
+     "resolved": 8,
+     "win_rate": 0.25,
+     "net_pnl": -52.34,
+     "expectancy": -6.54,
+     "profit_factor": 0.672
+    },
+    "detached_only": {
+     "arms": 62,
+     "filled": 10,
+     "detached_arms": 62,
+     "detached_filled": 10,
+     "resolved": 10,
+     "win_rate": 0.4,
+     "net_pnl": 55.2,
+     "expectancy": 5.52,
+     "profit_factor": 1.347
+    }
+   },
+   "orb_reclaim": {
+    "all": {
+     "arms": 253,
+     "filled": 72,
+     "detached_arms": 248,
+     "detached_filled": 68,
+     "resolved": 70,
+     "win_rate": 0.229,
+     "net_pnl": -665.6,
+     "expectancy": -9.51,
+     "profit_factor": 0.703
+    },
+    "first_half": {
+     "arms": 126,
+     "filled": 34,
+     "detached_arms": 125,
+     "detached_filled": 33,
+     "resolved": 33,
+     "win_rate": 0.303,
+     "net_pnl": 30.66,
+     "expectancy": 0.93,
+     "profit_factor": 1.032
+    },
+    "second_half": {
+     "arms": 127,
+     "filled": 38,
+     "detached_arms": 123,
+     "detached_filled": 35,
+     "resolved": 37,
+     "win_rate": 0.162,
+     "net_pnl": -696.26,
+     "expectancy": -18.82,
+     "profit_factor": 0.459
+    },
+    "detached_only": {
+     "arms": 248,
+     "filled": 68,
+     "detached_arms": 248,
+     "detached_filled": 68,
+     "resolved": 66,
+     "win_rate": 0.227,
+     "net_pnl": -637.68,
+     "expectancy": -9.66,
+     "profit_factor": 0.699
+    }
+   },
+   "vwap_hold": {
+    "all": {
+     "arms": 348,
+     "filled": 100,
+     "detached_arms": 335,
+     "detached_filled": 92,
+     "resolved": 100,
+     "win_rate": 0.3,
+     "net_pnl": 148.0,
+     "expectancy": 1.48,
+     "profit_factor": 1.128
+    },
+    "first_half": {
+     "arms": 174,
+     "filled": 48,
+     "detached_arms": 166,
+     "detached_filled": 45,
+     "resolved": 48,
+     "win_rate": 0.333,
+     "net_pnl": 167.46,
+     "expectancy": 3.49,
+     "profit_factor": 1.317
+    },
+    "second_half": {
+     "arms": 174,
+     "filled": 52,
+     "detached_arms": 169,
+     "detached_filled": 47,
+     "resolved": 52,
+     "win_rate": 0.269,
+     "net_pnl": -19.46,
+     "expectancy": -0.37,
+     "profit_factor": 0.969
+    },
+    "detached_only": {
+     "arms": 335,
+     "filled": 92,
+     "detached_arms": 335,
+     "detached_filled": 92,
+     "resolved": 92,
+     "win_rate": 0.315,
+     "net_pnl": 223.84,
+     "expectancy": 2.43,
+     "profit_factor": 1.216
+    }
+   }
+  },
+  "translate_cap025R|runner": {
+   "orb_breakout": {
+    "all": {
+     "arms": 63,
+     "filled": 5,
+     "detached_arms": 62,
+     "detached_filled": 4,
+     "resolved": 5,
+     "win_rate": 0.4,
+     "net_pnl": 34.6,
+     "expectancy": 6.92,
+     "profit_factor": 1.433
+    },
+    "first_half": {
+     "arms": 31,
+     "filled": 1,
+     "detached_arms": 31,
+     "detached_filled": 1,
+     "resolved": 1,
+     "win_rate": 1.0,
+     "net_pnl": 68.02,
+     "expectancy": 68.02,
+     "profit_factor": null
+    },
+    "second_half": {
+     "arms": 32,
+     "filled": 4,
+     "detached_arms": 31,
+     "detached_filled": 3,
+     "resolved": 4,
+     "win_rate": 0.25,
+     "net_pnl": -33.42,
+     "expectancy": -8.36,
+     "profit_factor": 0.582
+    },
+    "detached_only": {
+     "arms": 62,
+     "filled": 4,
+     "detached_arms": 62,
+     "detached_filled": 4,
+     "resolved": 4,
+     "win_rate": 0.5,
+     "net_pnl": 61.58,
+     "expectancy": 15.39,
+     "profit_factor": 2.163
+    }
+   },
+   "orb_reclaim": {
+    "all": {
+     "arms": 253,
+     "filled": 39,
+     "detached_arms": 248,
+     "detached_filled": 35,
+     "resolved": 37,
+     "win_rate": 0.568,
+     "net_pnl": 284.74,
+     "expectancy": 7.7,
+     "profit_factor": 1.429
+    },
+    "first_half": {
+     "arms": 126,
+     "filled": 18,
+     "detached_arms": 125,
+     "detached_filled": 17,
+     "resolved": 17,
+     "win_rate": 0.588,
+     "net_pnl": 159.59,
+     "expectancy": 9.39,
+     "profit_factor": 1.55
+    },
+    "second_half": {
+     "arms": 127,
+     "filled": 21,
+     "detached_arms": 123,
+     "detached_filled": 18,
+     "resolved": 20,
+     "win_rate": 0.55,
+     "net_pnl": 125.15,
+     "expectancy": 6.26,
+     "profit_factor": 1.335
+    },
+    "detached_only": {
+     "arms": 248,
+     "filled": 35,
+     "detached_arms": 248,
+     "detached_filled": 35,
+     "resolved": 33,
+     "win_rate": 0.515,
+     "net_pnl": 44.66,
+     "expectancy": 1.35,
+     "profit_factor": 1.067
+    }
+   },
+   "vwap_hold": {
+    "all": {
+     "arms": 348,
+     "filled": 26,
+     "detached_arms": 335,
+     "detached_filled": 18,
+     "resolved": 26,
+     "win_rate": 0.385,
+     "net_pnl": 120.8,
+     "expectancy": 4.65,
+     "profit_factor": 1.455
+    },
+    "first_half": {
+     "arms": 174,
+     "filled": 11,
+     "detached_arms": 166,
+     "detached_filled": 8,
+     "resolved": 11,
+     "win_rate": 0.364,
+     "net_pnl": 93.89,
+     "expectancy": 8.54,
+     "profit_factor": 1.807
+    },
+    "second_half": {
+     "arms": 174,
+     "filled": 15,
+     "detached_arms": 169,
+     "detached_filled": 10,
+     "resolved": 15,
+     "win_rate": 0.4,
+     "net_pnl": 26.91,
+     "expectancy": 1.79,
+     "profit_factor": 1.18
+    },
+    "detached_only": {
+     "arms": 335,
+     "filled": 18,
+     "detached_arms": 335,
+     "detached_filled": 18,
+     "resolved": 18,
+     "win_rate": 0.333,
+     "net_pnl": 116.86,
+     "expectancy": 6.49,
+     "profit_factor": 1.591
+    }
+   }
+  },
+  "translate_cap025R|static": {
+   "orb_breakout": {
+    "all": {
+     "arms": 63,
+     "filled": 5,
+     "detached_arms": 62,
+     "detached_filled": 4,
+     "resolved": 5,
+     "win_rate": 0.4,
+     "net_pnl": 27.1,
+     "expectancy": 5.42,
+     "profit_factor": 1.339
+    },
+    "first_half": {
+     "arms": 31,
+     "filled": 1,
+     "detached_arms": 31,
+     "detached_filled": 1,
+     "resolved": 1,
+     "win_rate": 1.0,
+     "net_pnl": 53.52,
+     "expectancy": 53.52,
+     "profit_factor": null
+    },
+    "second_half": {
+     "arms": 32,
+     "filled": 4,
+     "detached_arms": 31,
+     "detached_filled": 3,
+     "resolved": 4,
+     "win_rate": 0.25,
+     "net_pnl": -26.42,
+     "expectancy": -6.6,
+     "profit_factor": 0.67
+    },
+    "detached_only": {
+     "arms": 62,
+     "filled": 4,
+     "detached_arms": 62,
+     "detached_filled": 4,
+     "resolved": 4,
+     "win_rate": 0.5,
+     "net_pnl": 54.08,
+     "expectancy": 13.52,
+     "profit_factor": 2.021
+    }
+   },
+   "orb_reclaim": {
+    "all": {
+     "arms": 253,
+     "filled": 39,
+     "detached_arms": 248,
+     "detached_filled": 35,
+     "resolved": 37,
+     "win_rate": 0.243,
+     "net_pnl": -276.76,
+     "expectancy": -7.48,
+     "profit_factor": 0.762
+    },
+    "first_half": {
+     "arms": 126,
+     "filled": 18,
+     "detached_arms": 125,
+     "detached_filled": 17,
+     "resolved": 17,
+     "win_rate": 0.353,
+     "net_pnl": 134.34,
+     "expectancy": 7.9,
+     "profit_factor": 1.294
+    },
+    "second_half": {
+     "arms": 127,
+     "filled": 21,
+     "detached_arms": 123,
+     "detached_filled": 18,
+     "resolved": 20,
+     "win_rate": 0.15,
+     "net_pnl": -411.1,
+     "expectancy": -20.55,
+     "profit_factor": 0.418
+    },
+    "detached_only": {
+     "arms": 248,
+     "filled": 35,
+     "detached_arms": 248,
+     "detached_filled": 35,
+     "resolved": 33,
+     "win_rate": 0.242,
+     "net_pnl": -248.84,
+     "expectancy": -7.54,
+     "profit_factor": 0.76
+    }
+   },
+   "vwap_hold": {
+    "all": {
+     "arms": 348,
+     "filled": 26,
+     "detached_arms": 335,
+     "detached_filled": 18,
+     "resolved": 26,
+     "win_rate": 0.192,
+     "net_pnl": -132.48,
+     "expectancy": -5.1,
+     "profit_factor": 0.621
+    },
+    "first_half": {
+     "arms": 174,
+     "filled": 11,
+     "detached_arms": 166,
+     "detached_filled": 8,
+     "resolved": 11,
+     "win_rate": 0.182,
+     "net_pnl": -62.78,
+     "expectancy": -5.71,
+     "profit_factor": 0.581
+    },
+    "second_half": {
+     "arms": 174,
+     "filled": 15,
+     "detached_arms": 169,
+     "detached_filled": 10,
+     "resolved": 15,
+     "win_rate": 0.2,
+     "net_pnl": -69.7,
+     "expectancy": -4.65,
+     "profit_factor": 0.651
+    },
+    "detached_only": {
+     "arms": 335,
+     "filled": 18,
+     "detached_arms": 335,
+     "detached_filled": 18,
+     "resolved": 18,
+     "win_rate": 0.222,
+     "net_pnl": -56.64,
+     "expectancy": -3.15,
+     "profit_factor": 0.755
+    }
+   }
+  },
+  "translate_cap05R|runner": {
+   "orb_breakout": {
+    "all": {
+     "arms": 63,
+     "filled": 8,
+     "detached_arms": 62,
+     "detached_filled": 7,
+     "resolved": 8,
+     "win_rate": 0.375,
+     "net_pnl": -5.34,
+     "expectancy": -0.67,
+     "profit_factor": 0.96
+    },
+    "first_half": {
+     "arms": 31,
+     "filled": 2,
+     "detached_arms": 31,
+     "detached_filled": 2,
+     "resolved": 2,
+     "win_rate": 0.5,
+     "net_pnl": 41.54,
+     "expectancy": 20.77,
+     "profit_factor": 2.569
+    },
+    "second_half": {
+     "arms": 32,
+     "filled": 6,
+     "detached_arms": 31,
+     "detached_filled": 5,
+     "resolved": 6,
+     "win_rate": 0.333,
+     "net_pnl": -46.88,
+     "expectancy": -7.81,
+     "profit_factor": 0.559
+    },
+    "detached_only": {
+     "arms": 62,
+     "filled": 7,
+     "detached_arms": 62,
+     "detached_filled": 7,
+     "resolved": 7,
+     "win_rate": 0.429,
+     "net_pnl": 21.64,
+     "expectancy": 3.09,
+     "profit_factor": 1.204
+    }
+   },
+   "orb_reclaim": {
+    "all": {
+     "arms": 253,
+     "filled": 86,
+     "detached_arms": 248,
+     "detached_filled": 82,
+     "resolved": 84,
+     "win_rate": 0.536,
+     "net_pnl": 952.68,
+     "expectancy": 11.34,
+     "profit_factor": 1.589
+    },
+    "first_half": {
+     "arms": 126,
+     "filled": 37,
+     "detached_arms": 125,
+     "detached_filled": 36,
+     "resolved": 36,
+     "win_rate": 0.583,
+     "net_pnl": 571.97,
+     "expectancy": 15.89,
+     "profit_factor": 1.919
+    },
+    "second_half": {
+     "arms": 127,
+     "filled": 49,
+     "detached_arms": 123,
+     "detached_filled": 46,
+     "resolved": 48,
+     "win_rate": 0.5,
+     "net_pnl": 380.71,
+     "expectancy": 7.93,
+     "profit_factor": 1.382
+    },
+    "detached_only": {
+     "arms": 248,
+     "filled": 82,
+     "detached_arms": 248,
+     "detached_filled": 82,
+     "resolved": 80,
+     "win_rate": 0.512,
+     "net_pnl": 712.6,
+     "expectancy": 8.91,
+     "profit_factor": 1.44
+    }
+   },
+   "vwap_hold": {
+    "all": {
+     "arms": 348,
+     "filled": 52,
+     "detached_arms": 335,
+     "detached_filled": 44,
+     "resolved": 52,
+     "win_rate": 0.404,
+     "net_pnl": 275.82,
+     "expectancy": 5.3,
+     "profit_factor": 1.538
+    },
+    "first_half": {
+     "arms": 174,
+     "filled": 25,
+     "detached_arms": 166,
+     "detached_filled": 22,
+     "resolved": 25,
+     "win_rate": 0.4,
+     "net_pnl": 177.67,
+     "expectancy": 7.11,
+     "profit_factor": 1.716
+    },
+    "second_half": {
+     "arms": 174,
+     "filled": 27,
+     "detached_arms": 169,
+     "detached_filled": 22,
+     "resolved": 27,
+     "win_rate": 0.407,
+     "net_pnl": 98.15,
+     "expectancy": 3.64,
+     "profit_factor": 1.371
+    },
+    "detached_only": {
+     "arms": 335,
+     "filled": 44,
+     "detached_arms": 335,
+     "detached_filled": 44,
+     "resolved": 44,
+     "win_rate": 0.386,
+     "net_pnl": 271.88,
+     "expectancy": 6.18,
+     "profit_factor": 1.611
+    }
+   }
+  },
+  "translate_cap05R|static": {
+   "orb_breakout": {
+    "all": {
+     "arms": 63,
+     "filled": 8,
+     "detached_arms": 62,
+     "detached_filled": 7,
+     "resolved": 8,
+     "win_rate": 0.375,
+     "net_pnl": 27.66,
+     "expectancy": 3.46,
+     "profit_factor": 1.208
+    },
+    "first_half": {
+     "arms": 31,
+     "filled": 2,
+     "detached_arms": 31,
+     "detached_filled": 2,
+     "resolved": 2,
+     "win_rate": 0.5,
+     "net_pnl": 27.04,
+     "expectancy": 13.52,
+     "profit_factor": 2.021
+    },
+    "second_half": {
+     "arms": 32,
+     "filled": 6,
+     "detached_arms": 31,
+     "detached_filled": 5,
+     "resolved": 6,
+     "win_rate": 0.333,
+     "net_pnl": 0.62,
+     "expectancy": 0.1,
+     "profit_factor": 1.006
+    },
+    "detached_only": {
+     "arms": 62,
+     "filled": 7,
+     "detached_arms": 62,
+     "detached_filled": 7,
+     "resolved": 7,
+     "win_rate": 0.429,
+     "net_pnl": 54.64,
+     "expectancy": 7.81,
+     "profit_factor": 1.516
+    }
+   },
+   "orb_reclaim": {
+    "all": {
+     "arms": 253,
+     "filled": 86,
+     "detached_arms": 248,
+     "detached_filled": 82,
+     "resolved": 84,
+     "win_rate": 0.262,
+     "net_pnl": -406.32,
+     "expectancy": -4.84,
+     "profit_factor": 0.842
+    },
+    "first_half": {
+     "arms": 126,
+     "filled": 37,
+     "detached_arms": 125,
+     "detached_filled": 36,
+     "resolved": 36,
+     "win_rate": 0.306,
+     "net_pnl": 46.22,
+     "expectancy": 1.28,
+     "profit_factor": 1.045
+    },
+    "second_half": {
+     "arms": 127,
+     "filled": 49,
+     "detached_arms": 123,
+     "detached_filled": 46,
+     "resolved": 48,
+     "win_rate": 0.229,
+     "net_pnl": -452.54,
+     "expectancy": -9.43,
+     "profit_factor": 0.705
+    },
+    "detached_only": {
+     "arms": 248,
+     "filled": 82,
+     "detached_arms": 248,
+     "detached_filled": 82,
+     "resolved": 80,
+     "win_rate": 0.263,
+     "net_pnl": -378.4,
+     "expectancy": -4.73,
+     "profit_factor": 0.845
+    }
+   },
+   "vwap_hold": {
+    "all": {
+     "arms": 348,
+     "filled": 52,
+     "detached_arms": 335,
+     "detached_filled": 44,
+     "resolved": 52,
+     "win_rate": 0.231,
+     "net_pnl": -140.96,
+     "expectancy": -2.71,
+     "profit_factor": 0.787
+    },
+    "first_half": {
+     "arms": 174,
+     "filled": 25,
+     "detached_arms": 166,
+     "detached_filled": 22,
+     "resolved": 25,
+     "win_rate": 0.2,
+     "net_pnl": -113.5,
+     "expectancy": -4.54,
+     "profit_factor": 0.657
+    },
+    "second_half": {
+     "arms": 174,
+     "filled": 27,
+     "detached_arms": 169,
+     "detached_filled": 22,
+     "resolved": 27,
+     "win_rate": 0.259,
+     "net_pnl": -27.46,
+     "expectancy": -1.02,
+     "profit_factor": 0.917
+    },
+    "detached_only": {
+     "arms": 335,
+     "filled": 44,
+     "detached_arms": 335,
+     "detached_filled": 44,
+     "resolved": 44,
+     "win_rate": 0.25,
+     "net_pnl": -65.12,
+     "expectancy": -1.48,
+     "profit_factor": 0.88
+    }
+   }
+  },
+  "translate_cap10R|runner": {
+   "orb_breakout": {
+    "all": {
+     "arms": 63,
+     "filled": 22,
+     "detached_arms": 62,
+     "detached_filled": 21,
+     "resolved": 22,
+     "win_rate": 0.5,
+     "net_pnl": 415.94,
+     "expectancy": 18.91,
+     "profit_factor": 2.426
+    },
+    "first_half": {
+     "arms": 31,
+     "filled": 9,
+     "detached_arms": 31,
+     "detached_filled": 9,
+     "resolved": 9,
+     "win_rate": 0.556,
+     "net_pnl": 368.68,
+     "expectancy": 40.96,
+     "profit_factor": 4.481
+    },
+    "second_half": {
+     "arms": 32,
+     "filled": 13,
+     "detached_arms": 31,
+     "detached_filled": 12,
+     "resolved": 13,
+     "win_rate": 0.462,
+     "net_pnl": 47.26,
+     "expectancy": 3.64,
+     "profit_factor": 1.254
+    },
+    "detached_only": {
+     "arms": 62,
+     "filled": 21,
+     "detached_arms": 62,
+     "detached_filled": 21,
+     "resolved": 21,
+     "win_rate": 0.524,
+     "net_pnl": 442.92,
+     "expectancy": 21.09,
+     "profit_factor": 2.673
+    }
+   },
+   "orb_reclaim": {
+    "all": {
+     "arms": 253,
+     "filled": 151,
+     "detached_arms": 248,
+     "detached_filled": 147,
+     "resolved": 149,
+     "win_rate": 0.544,
+     "net_pnl": 1933.98,
+     "expectancy": 12.98,
+     "profit_factor": 1.686
+    },
+    "first_half": {
+     "arms": 126,
+     "filled": 70,
+     "detached_arms": 125,
+     "detached_filled": 69,
+     "resolved": 69,
+     "win_rate": 0.594,
+     "net_pnl": 988.13,
+     "expectancy": 14.32,
+     "profit_factor": 1.851
+    },
+    "second_half": {
+     "arms": 127,
+     "filled": 81,
+     "detached_arms": 123,
+     "detached_filled": 78,
+     "resolved": 80,
+     "win_rate": 0.5,
+     "net_pnl": 945.85,
+     "expectancy": 11.82,
+     "profit_factor": 1.57
+    },
+    "detached_only": {
+     "arms": 248,
+     "filled": 147,
+     "detached_arms": 248,
+     "detached_filled": 147,
+     "resolved": 145,
+     "win_rate": 0.531,
+     "net_pnl": 1693.9,
+     "expectancy": 11.68,
+     "profit_factor": 1.601
+    }
+   },
+   "vwap_hold": {
+    "all": {
+     "arms": 348,
+     "filled": 96,
+     "detached_arms": 335,
+     "detached_filled": 88,
+     "resolved": 96,
+     "win_rate": 0.396,
+     "net_pnl": 618.2,
+     "expectancy": 6.44,
+     "profit_factor": 1.645
+    },
+    "first_half": {
+     "arms": 174,
+     "filled": 46,
+     "detached_arms": 166,
+     "detached_filled": 43,
+     "resolved": 46,
+     "win_rate": 0.413,
+     "net_pnl": 431.09,
+     "expectancy": 9.37,
+     "profit_factor": 1.967
+    },
+    "second_half": {
+     "arms": 174,
+     "filled": 50,
+     "detached_arms": 169,
+     "detached_filled": 45,
+     "resolved": 50,
+     "win_rate": 0.38,
+     "net_pnl": 187.11,
+     "expectancy": 3.74,
+     "profit_factor": 1.366
+    },
+    "detached_only": {
+     "arms": 335,
+     "filled": 88,
+     "detached_arms": 335,
+     "detached_filled": 88,
+     "resolved": 88,
+     "win_rate": 0.386,
+     "net_pnl": 614.26,
+     "expectancy": 6.98,
+     "profit_factor": 1.69
+    }
+   }
+  },
+  "translate_cap10R|static": {
+   "orb_breakout": {
+    "all": {
+     "arms": 63,
+     "filled": 22,
+     "detached_arms": 62,
+     "detached_filled": 21,
+     "resolved": 22,
+     "win_rate": 0.409,
+     "net_pnl": 136.94,
+     "expectancy": 6.22,
+     "profit_factor": 1.397
+    },
+    "first_half": {
+     "arms": 31,
+     "filled": 9,
+     "detached_arms": 31,
+     "detached_filled": 9,
+     "resolved": 9,
+     "win_rate": 0.556,
+     "net_pnl": 161.68,
+     "expectancy": 17.96,
+     "profit_factor": 2.526
+    },
+    "second_half": {
+     "arms": 32,
+     "filled": 13,
+     "detached_arms": 31,
+     "detached_filled": 12,
+     "resolved": 13,
+     "win_rate": 0.308,
+     "net_pnl": -24.74,
+     "expectancy": -1.9,
+     "profit_factor": 0.896
+    },
+    "detached_only": {
+     "arms": 62,
+     "filled": 21,
+     "detached_arms": 62,
+     "detached_filled": 21,
+     "resolved": 21,
+     "win_rate": 0.429,
+     "net_pnl": 163.92,
+     "expectancy": 7.81,
+     "profit_factor": 1.516
+    }
+   },
+   "orb_reclaim": {
+    "all": {
+     "arms": 253,
+     "filled": 151,
+     "detached_arms": 248,
+     "detached_filled": 147,
+     "resolved": 149,
+     "win_rate": 0.309,
+     "net_pnl": 257.48,
+     "expectancy": 1.73,
+     "profit_factor": 1.06
+    },
+    "first_half": {
+     "arms": 126,
+     "filled": 70,
+     "detached_arms": 125,
+     "detached_filled": 69,
+     "resolved": 69,
+     "win_rate": 0.304,
+     "net_pnl": 77.38,
+     "expectancy": 1.12,
+     "profit_factor": 1.039
+    },
+    "second_half": {
+     "arms": 127,
+     "filled": 81,
+     "detached_arms": 123,
+     "detached_filled": 78,
+     "resolved": 80,
+     "win_rate": 0.312,
+     "net_pnl": 180.1,
+     "expectancy": 2.25,
+     "profit_factor": 1.079
+    },
+    "detached_only": {
+     "arms": 248,
+     "filled": 147,
+     "detached_arms": 248,
+     "detached_filled": 147,
+     "resolved": 145,
+     "win_rate": 0.31,
+     "net_pnl": 285.4,
+     "expectancy": 1.97,
+     "profit_factor": 1.069
+    }
+   },
+   "vwap_hold": {
+    "all": {
+     "arms": 348,
+     "filled": 96,
+     "detached_arms": 335,
+     "detached_filled": 88,
+     "resolved": 96,
+     "win_rate": 0.281,
+     "net_pnl": 33.92,
+     "expectancy": 0.35,
+     "profit_factor": 1.03
+    },
+    "first_half": {
+     "arms": 174,
+     "filled": 46,
+     "detached_arms": 166,
+     "detached_filled": 43,
+     "resolved": 46,
+     "win_rate": 0.304,
+     "net_pnl": 80.42,
+     "expectancy": 1.75,
+     "profit_factor": 1.152
+    },
+    "second_half": {
+     "arms": 174,
+     "filled": 50,
+     "detached_arms": 169,
+     "detached_filled": 45,
+     "resolved": 50,
+     "win_rate": 0.26,
+     "net_pnl": -46.5,
+     "expectancy": -0.93,
+     "profit_factor": 0.924
+    },
+    "detached_only": {
+     "arms": 335,
+     "filled": 88,
+     "detached_arms": 335,
+     "detached_filled": 88,
+     "resolved": 88,
+     "win_rate": 0.295,
+     "net_pnl": 109.76,
+     "expectancy": 1.25,
+     "profit_factor": 1.107
+    }
+   }
+  },
+  "translate_unbounded|runner": {
+   "orb_breakout": {
+    "all": {
+     "arms": 63,
+     "filled": 63,
+     "detached_arms": 62,
+     "detached_filled": 62,
+     "resolved": 63,
+     "win_rate": 0.492,
+     "net_pnl": 701.26,
+     "expectancy": 11.13,
+     "profit_factor": 1.827
+    },
+    "first_half": {
+     "arms": 31,
+     "filled": 31,
+     "detached_arms": 31,
+     "detached_filled": 31,
+     "resolved": 31,
+     "win_rate": 0.484,
+     "net_pnl": 512.62,
+     "expectancy": 16.54,
+     "profit_factor": 2.21
+    },
+    "second_half": {
+     "arms": 32,
+     "filled": 32,
+     "detached_arms": 31,
+     "detached_filled": 31,
+     "resolved": 32,
+     "win_rate": 0.5,
+     "net_pnl": 188.64,
+     "expectancy": 5.89,
+     "profit_factor": 1.445
+    },
+    "detached_only": {
+     "arms": 62,
+     "filled": 62,
+     "detached_arms": 62,
+     "detached_filled": 62,
+     "resolved": 62,
+     "win_rate": 0.5,
+     "net_pnl": 728.24,
+     "expectancy": 11.75,
+     "profit_factor": 1.887
+    }
+   },
+   "orb_reclaim": {
+    "all": {
+     "arms": 253,
+     "filled": 252,
+     "detached_arms": 248,
+     "detached_filled": 248,
+     "resolved": 248,
+     "win_rate": 0.556,
+     "net_pnl": 5019.96,
+     "expectancy": 20.24,
+     "profit_factor": 2.1
+    },
+    "first_half": {
+     "arms": 126,
+     "filled": 126,
+     "detached_arms": 125,
+     "detached_filled": 125,
+     "resolved": 123,
+     "win_rate": 0.61,
+     "net_pnl": 3740.71,
+     "expectancy": 30.41,
+     "profit_factor": 2.879
+    },
+    "second_half": {
+     "arms": 127,
+     "filled": 126,
+     "detached_arms": 123,
+     "detached_filled": 123,
+     "resolved": 125,
+     "win_rate": 0.504,
+     "net_pnl": 1279.25,
+     "expectancy": 10.23,
+     "profit_factor": 1.497
+    },
+    "detached_only": {
+     "arms": 248,
+     "filled": 248,
+     "detached_arms": 248,
+     "detached_filled": 248,
+     "resolved": 244,
+     "win_rate": 0.549,
+     "net_pnl": 4779.88,
+     "expectancy": 19.59,
+     "profit_factor": 2.048
+    }
+   },
+   "vwap_hold": {
+    "all": {
+     "arms": 348,
+     "filled": 343,
+     "detached_arms": 335,
+     "detached_filled": 335,
+     "resolved": 343,
+     "win_rate": 0.402,
+     "net_pnl": 3875.64,
+     "expectancy": 11.3,
+     "profit_factor": 2.147
+    },
+    "first_half": {
+     "arms": 174,
+     "filled": 169,
+     "detached_arms": 166,
+     "detached_filled": 166,
+     "resolved": 169,
+     "win_rate": 0.379,
+     "net_pnl": 1409.05,
+     "expectancy": 8.34,
+     "profit_factor": 1.814
+    },
+    "second_half": {
+     "arms": 174,
+     "filled": 174,
+     "detached_arms": 169,
+     "detached_filled": 169,
+     "resolved": 174,
+     "win_rate": 0.425,
+     "net_pnl": 2466.59,
+     "expectancy": 14.18,
+     "profit_factor": 2.496
+    },
+    "detached_only": {
+     "arms": 335,
+     "filled": 335,
+     "detached_arms": 335,
+     "detached_filled": 335,
+     "resolved": 335,
+     "win_rate": 0.4,
+     "net_pnl": 3871.7,
+     "expectancy": 11.56,
+     "profit_factor": 2.169
+    }
+   }
+  },
+  "translate_unbounded|static": {
+   "orb_breakout": {
+    "all": {
+     "arms": 63,
+     "filled": 63,
+     "detached_arms": 62,
+     "detached_filled": 62,
+     "resolved": 63,
+     "win_rate": 0.397,
+     "net_pnl": 331.26,
+     "expectancy": 5.26,
+     "profit_factor": 1.329
+    },
+    "first_half": {
+     "arms": 31,
+     "filled": 31,
+     "detached_arms": 31,
+     "detached_filled": 31,
+     "resolved": 31,
+     "win_rate": 0.419,
+     "net_pnl": 219.12,
+     "expectancy": 7.07,
+     "profit_factor": 1.46
+    },
+    "second_half": {
+     "arms": 32,
+     "filled": 32,
+     "detached_arms": 31,
+     "detached_filled": 31,
+     "resolved": 32,
+     "win_rate": 0.375,
+     "net_pnl": 112.14,
+     "expectancy": 3.5,
+     "profit_factor": 1.212
+    },
+    "detached_only": {
+     "arms": 62,
+     "filled": 62,
+     "detached_arms": 62,
+     "detached_filled": 62,
+     "resolved": 62,
+     "win_rate": 0.403,
+     "net_pnl": 358.24,
+     "expectancy": 5.78,
+     "profit_factor": 1.366
+    }
+   },
+   "orb_reclaim": {
+    "all": {
+     "arms": 253,
+     "filled": 252,
+     "detached_arms": 248,
+     "detached_filled": 248,
+     "resolved": 247,
+     "win_rate": 0.34,
+     "net_pnl": 1512.44,
+     "expectancy": 6.12,
+     "profit_factor": 1.224
+    },
+    "first_half": {
+     "arms": 126,
+     "filled": 126,
+     "detached_arms": 125,
+     "detached_filled": 125,
+     "resolved": 122,
+     "win_rate": 0.352,
+     "net_pnl": 958.94,
+     "expectancy": 7.86,
+     "profit_factor": 1.293
+    },
+    "second_half": {
+     "arms": 127,
+     "filled": 126,
+     "detached_arms": 123,
+     "detached_filled": 123,
+     "resolved": 125,
+     "win_rate": 0.328,
+     "net_pnl": 553.5,
+     "expectancy": 4.43,
+     "profit_factor": 1.159
+    },
+    "detached_only": {
+     "arms": 248,
+     "filled": 248,
+     "detached_arms": 248,
+     "detached_filled": 248,
+     "resolved": 243,
+     "win_rate": 0.342,
+     "net_pnl": 1540.36,
+     "expectancy": 6.34,
+     "profit_factor": 1.232
+    }
+   },
+   "vwap_hold": {
+    "all": {
+     "arms": 348,
+     "filled": 343,
+     "detached_arms": 335,
+     "detached_filled": 335,
+     "resolved": 343,
+     "win_rate": 0.297,
+     "net_pnl": 463.36,
+     "expectancy": 1.35,
+     "profit_factor": 1.117
+    },
+    "first_half": {
+     "arms": 174,
+     "filled": 169,
+     "detached_arms": 166,
+     "detached_filled": 166,
+     "resolved": 169,
+     "win_rate": 0.284,
+     "net_pnl": 93.38,
+     "expectancy": 0.55,
+     "profit_factor": 1.047
+    },
+    "second_half": {
+     "arms": 174,
+     "filled": 174,
+     "detached_arms": 169,
+     "detached_filled": 169,
+     "resolved": 174,
+     "win_rate": 0.31,
+     "net_pnl": 369.98,
+     "expectancy": 2.13,
+     "profit_factor": 1.187
+    },
+    "detached_only": {
+     "arms": 335,
+     "filled": 335,
+     "detached_arms": 335,
+     "detached_filled": 335,
+     "resolved": 335,
+     "win_rate": 0.301,
+     "net_pnl": 539.2,
+     "expectancy": 1.61,
+     "profit_factor": 1.14
+    }
+   }
+  },
+  "structural_minrr|runner": {
+   "orb_breakout": {
+    "all": {
+     "arms": 63,
+     "filled": 5,
+     "detached_arms": 62,
+     "detached_filled": 4,
+     "resolved": 5,
+     "win_rate": 0.4,
+     "net_pnl": 26.35,
+     "expectancy": 5.27,
+     "profit_factor": 1.314
+    },
+    "first_half": {
+     "arms": 31,
+     "filled": 1,
+     "detached_arms": 31,
+     "detached_filled": 1,
+     "resolved": 1,
+     "win_rate": 1.0,
+     "net_pnl": 64.77,
+     "expectancy": 64.77,
+     "profit_factor": null
+    },
+    "second_half": {
+     "arms": 32,
+     "filled": 4,
+     "detached_arms": 31,
+     "detached_filled": 3,
+     "resolved": 4,
+     "win_rate": 0.25,
+     "net_pnl": -38.42,
+     "expectancy": -9.61,
+     "profit_factor": 0.542
+    },
+    "detached_only": {
+     "arms": 62,
+     "filled": 4,
+     "detached_arms": 62,
+     "detached_filled": 4,
+     "resolved": 4,
+     "win_rate": 0.5,
+     "net_pnl": 53.33,
+     "expectancy": 13.33,
+     "profit_factor": 1.936
+    }
+   },
+   "orb_reclaim": {
+    "all": {
+     "arms": 253,
+     "filled": 70,
+     "detached_arms": 248,
+     "detached_filled": 66,
+     "resolved": 67,
+     "win_rate": 0.493,
+     "net_pnl": 26.34,
+     "expectancy": 0.39,
+     "profit_factor": 1.015
+    },
+    "first_half": {
+     "arms": 126,
+     "filled": 32,
+     "detached_arms": 125,
+     "detached_filled": 31,
+     "resolved": 30,
+     "win_rate": 0.533,
+     "net_pnl": 123.6,
+     "expectancy": 4.12,
+     "profit_factor": 1.17
+    },
+    "second_half": {
+     "arms": 127,
+     "filled": 38,
+     "detached_arms": 123,
+     "detached_filled": 35,
+     "resolved": 37,
+     "win_rate": 0.459,
+     "net_pnl": -97.26,
+     "expectancy": -2.63,
+     "profit_factor": 0.904
+    },
+    "detached_only": {
+     "arms": 248,
+     "filled": 66,
+     "detached_arms": 248,
+     "detached_filled": 66,
+     "resolved": 63,
+     "win_rate": 0.46,
+     "net_pnl": -213.74,
+     "expectancy": -3.39,
+     "profit_factor": 0.877
+    }
+   },
+   "vwap_hold": {
+    "all": {
+     "arms": 348,
+     "filled": 49,
+     "detached_arms": 335,
+     "detached_filled": 41,
+     "resolved": 49,
+     "win_rate": 0.449,
+     "net_pnl": 336.94,
+     "expectancy": 6.88,
+     "profit_factor": 1.619
+    },
+    "first_half": {
+     "arms": 174,
+     "filled": 24,
+     "detached_arms": 166,
+     "detached_filled": 21,
+     "resolved": 24,
+     "win_rate": 0.417,
+     "net_pnl": 177.33,
+     "expectancy": 7.39,
+     "profit_factor": 1.619
+    },
+    "second_half": {
+     "arms": 174,
+     "filled": 25,
+     "detached_arms": 169,
+     "detached_filled": 20,
+     "resolved": 25,
+     "win_rate": 0.48,
+     "net_pnl": 159.61,
+     "expectancy": 6.38,
+     "profit_factor": 1.618
+    },
+    "detached_only": {
+     "arms": 335,
+     "filled": 41,
+     "detached_arms": 335,
+     "detached_filled": 41,
+     "resolved": 41,
+     "win_rate": 0.439,
+     "net_pnl": 333.0,
+     "expectancy": 8.12,
+     "profit_factor": 1.698
+    }
+   }
+  },
+  "structural_minrr|static": {
+   "orb_breakout": {
+    "all": {
+     "arms": 63,
+     "filled": 5,
+     "detached_arms": 62,
+     "detached_filled": 4,
+     "resolved": 5,
+     "win_rate": 0.4,
+     "net_pnl": 14.6,
+     "expectancy": 2.92,
+     "profit_factor": 1.174
+    },
+    "first_half": {
+     "arms": 31,
+     "filled": 1,
+     "detached_arms": 31,
+     "detached_filled": 1,
+     "resolved": 1,
+     "win_rate": 1.0,
+     "net_pnl": 47.02,
+     "expectancy": 47.02,
+     "profit_factor": null
+    },
+    "second_half": {
+     "arms": 32,
+     "filled": 4,
+     "detached_arms": 31,
+     "detached_filled": 3,
+     "resolved": 4,
+     "win_rate": 0.25,
+     "net_pnl": -32.42,
+     "expectancy": -8.11,
+     "profit_factor": 0.614
+    },
+    "detached_only": {
+     "arms": 62,
+     "filled": 4,
+     "detached_arms": 62,
+     "detached_filled": 4,
+     "resolved": 4,
+     "win_rate": 0.5,
+     "net_pnl": 41.58,
+     "expectancy": 10.4,
+     "profit_factor": 1.73
+    }
+   },
+   "orb_reclaim": {
+    "all": {
+     "arms": 253,
+     "filled": 70,
+     "detached_arms": 248,
+     "detached_filled": 66,
+     "resolved": 67,
+     "win_rate": 0.284,
+     "net_pnl": -734.16,
+     "expectancy": -10.96,
+     "profit_factor": 0.697
+    },
+    "first_half": {
+     "arms": 126,
+     "filled": 32,
+     "detached_arms": 125,
+     "detached_filled": 31,
+     "resolved": 30,
+     "win_rate": 0.367,
+     "net_pnl": -5.4,
+     "expectancy": -0.18,
+     "profit_factor": 0.995
+    },
+    "second_half": {
+     "arms": 127,
+     "filled": 38,
+     "detached_arms": 123,
+     "detached_filled": 35,
+     "resolved": 37,
+     "win_rate": 0.216,
+     "net_pnl": -728.76,
+     "expectancy": -19.7,
+     "profit_factor": 0.492
+    },
+    "detached_only": {
+     "arms": 248,
+     "filled": 66,
+     "detached_arms": 248,
+     "detached_filled": 66,
+     "resolved": 63,
+     "win_rate": 0.286,
+     "net_pnl": -706.24,
+     "expectancy": -11.21,
+     "profit_factor": 0.692
+    }
+   },
+   "vwap_hold": {
+    "all": {
+     "arms": 348,
+     "filled": 49,
+     "detached_arms": 335,
+     "detached_filled": 41,
+     "resolved": 49,
+     "win_rate": 0.306,
+     "net_pnl": -95.4,
+     "expectancy": -1.95,
+     "profit_factor": 0.859
+    },
+    "first_half": {
+     "arms": 174,
+     "filled": 24,
+     "detached_arms": 166,
+     "detached_filled": 21,
+     "resolved": 24,
+     "win_rate": 0.292,
+     "net_pnl": -73.86,
+     "expectancy": -3.08,
+     "profit_factor": 0.784
+    },
+    "second_half": {
+     "arms": 174,
+     "filled": 25,
+     "detached_arms": 169,
+     "detached_filled": 20,
+     "resolved": 25,
+     "win_rate": 0.32,
+     "net_pnl": -21.54,
+     "expectancy": -0.86,
+     "profit_factor": 0.936
+    },
+    "detached_only": {
+     "arms": 335,
+     "filled": 41,
+     "detached_arms": 335,
+     "detached_filled": 41,
+     "resolved": 41,
+     "win_rate": 0.341,
+     "net_pnl": -19.56,
+     "expectancy": -0.48,
+     "profit_factor": 0.965
+    }
+   }
+  },
+  "confirm5m_16t|runner": {
+   "orb_breakout": {
+    "all": {
+     "arms": 63,
+     "filled": 9,
+     "detached_arms": 62,
+     "detached_filled": 8,
+     "resolved": 9,
+     "win_rate": 0.444,
+     "net_pnl": 35.68,
+     "expectancy": 3.96,
+     "profit_factor": 1.268
+    },
+    "first_half": {
+     "arms": 31,
+     "filled": 4,
+     "detached_arms": 31,
+     "detached_filled": 4,
+     "resolved": 4,
+     "win_rate": 0.5,
+     "net_pnl": 29.58,
+     "expectancy": 7.39,
+     "profit_factor": 1.559
+    },
+    "second_half": {
+     "arms": 32,
+     "filled": 5,
+     "detached_arms": 31,
+     "detached_filled": 4,
+     "resolved": 5,
+     "win_rate": 0.4,
+     "net_pnl": 6.1,
+     "expectancy": 1.22,
+     "profit_factor": 1.076
+    },
+    "detached_only": {
+     "arms": 62,
+     "filled": 8,
+     "detached_arms": 62,
+     "detached_filled": 8,
+     "resolved": 8,
+     "win_rate": 0.5,
+     "net_pnl": 62.66,
+     "expectancy": 7.83,
+     "profit_factor": 1.592
+    }
+   },
+   "orb_reclaim": {
+    "all": {
+     "arms": 253,
+     "filled": 18,
+     "detached_arms": 248,
+     "detached_filled": 14,
+     "resolved": 16,
+     "win_rate": 0.75,
+     "net_pnl": 627.82,
+     "expectancy": 39.24,
+     "profit_factor": 4.784
+    },
+    "first_half": {
+     "arms": 126,
+     "filled": 5,
+     "detached_arms": 125,
+     "detached_filled": 4,
+     "resolved": 4,
+     "win_rate": 0.75,
+     "net_pnl": 99.83,
+     "expectancy": 24.96,
+     "profit_factor": 3.407
+    },
+    "second_half": {
+     "arms": 127,
+     "filled": 13,
+     "detached_arms": 123,
+     "detached_filled": 10,
+     "resolved": 12,
+     "win_rate": 0.75,
+     "net_pnl": 527.99,
+     "expectancy": 44.0,
+     "profit_factor": 5.243
+    },
+    "detached_only": {
+     "arms": 248,
+     "filled": 14,
+     "detached_arms": 248,
+     "detached_filled": 14,
+     "resolved": 12,
+     "win_rate": 0.667,
+     "net_pnl": 387.74,
+     "expectancy": 32.31,
+     "profit_factor": 3.337
+    }
+   },
+   "vwap_hold": {
+    "all": {
+     "arms": 348,
+     "filled": 51,
+     "detached_arms": 335,
+     "detached_filled": 43,
+     "resolved": 51,
+     "win_rate": 0.51,
+     "net_pnl": 673.3,
+     "expectancy": 13.2,
+     "profit_factor": 2.626
+    },
+    "first_half": {
+     "arms": 174,
+     "filled": 23,
+     "detached_arms": 166,
+     "detached_filled": 20,
+     "resolved": 23,
+     "win_rate": 0.565,
+     "net_pnl": 362.63,
+     "expectancy": 15.77,
+     "profit_factor": 3.187
+    },
+    "second_half": {
+     "arms": 174,
+     "filled": 28,
+     "detached_arms": 169,
+     "detached_filled": 23,
+     "resolved": 28,
+     "win_rate": 0.464,
+     "net_pnl": 310.67,
+     "expectancy": 11.1,
+     "profit_factor": 2.252
+    },
+    "detached_only": {
+     "arms": 335,
+     "filled": 43,
+     "detached_arms": 335,
+     "detached_filled": 43,
+     "resolved": 43,
+     "win_rate": 0.512,
+     "net_pnl": 669.36,
+     "expectancy": 15.57,
+     "profit_factor": 2.934
+    }
+   }
+  },
+  "confirm5m_16t|static": {
+   "orb_breakout": {
+    "all": {
+     "arms": 63,
+     "filled": 9,
+     "detached_arms": 62,
+     "detached_filled": 8,
+     "resolved": 9,
+     "win_rate": 0.333,
+     "net_pnl": 1.18,
+     "expectancy": 0.13,
+     "profit_factor": 1.007
+    },
+    "first_half": {
+     "arms": 31,
+     "filled": 4,
+     "detached_arms": 31,
+     "detached_filled": 4,
+     "resolved": 4,
+     "win_rate": 0.25,
+     "net_pnl": -25.92,
+     "expectancy": -6.48,
+     "profit_factor": 0.674
+    },
+    "second_half": {
+     "arms": 32,
+     "filled": 5,
+     "detached_arms": 31,
+     "detached_filled": 4,
+     "resolved": 5,
+     "win_rate": 0.4,
+     "net_pnl": 27.1,
+     "expectancy": 5.42,
+     "profit_factor": 1.339
+    },
+    "detached_only": {
+     "arms": 62,
+     "filled": 8,
+     "detached_arms": 62,
+     "detached_filled": 8,
+     "resolved": 8,
+     "win_rate": 0.375,
+     "net_pnl": 28.16,
+     "expectancy": 3.52,
+     "profit_factor": 1.213
+    }
+   },
+   "orb_reclaim": {
+    "all": {
+     "arms": 253,
+     "filled": 18,
+     "detached_arms": 248,
+     "detached_filled": 14,
+     "resolved": 16,
+     "win_rate": 0.438,
+     "net_pnl": 314.32,
+     "expectancy": 19.64,
+     "profit_factor": 1.839
+    },
+    "first_half": {
+     "arms": 126,
+     "filled": 5,
+     "detached_arms": 125,
+     "detached_filled": 4,
+     "resolved": 4,
+     "win_rate": 0.5,
+     "net_pnl": 113.58,
+     "expectancy": 28.39,
+     "profit_factor": 2.361
+    },
+    "second_half": {
+     "arms": 127,
+     "filled": 13,
+     "detached_arms": 123,
+     "detached_filled": 10,
+     "resolved": 12,
+     "win_rate": 0.417,
+     "net_pnl": 200.74,
+     "expectancy": 16.73,
+     "profit_factor": 1.689
+    },
+    "detached_only": {
+     "arms": 248,
+     "filled": 14,
+     "detached_arms": 248,
+     "detached_filled": 14,
+     "resolved": 12,
+     "win_rate": 0.5,
+     "net_pnl": 342.24,
+     "expectancy": 28.52,
+     "profit_factor": 2.375
+    }
+   },
+   "vwap_hold": {
+    "all": {
+     "arms": 348,
+     "filled": 51,
+     "detached_arms": 335,
+     "detached_filled": 43,
+     "resolved": 51,
+     "win_rate": 0.333,
+     "net_pnl": 175.52,
+     "expectancy": 3.44,
+     "profit_factor": 1.311
+    },
+    "first_half": {
+     "arms": 174,
+     "filled": 23,
+     "detached_arms": 166,
+     "detached_filled": 20,
+     "resolved": 23,
+     "win_rate": 0.348,
+     "net_pnl": 99.46,
+     "expectancy": 4.32,
+     "profit_factor": 1.4
+    },
+    "second_half": {
+     "arms": 174,
+     "filled": 28,
+     "detached_arms": 169,
+     "detached_filled": 23,
+     "resolved": 28,
+     "win_rate": 0.321,
+     "net_pnl": 76.06,
+     "expectancy": 2.72,
+     "profit_factor": 1.241
+    },
+    "detached_only": {
+     "arms": 335,
+     "filled": 43,
+     "detached_arms": 335,
+     "detached_filled": 43,
+     "resolved": 43,
+     "win_rate": 0.372,
+     "net_pnl": 251.36,
+     "expectancy": 5.85,
+     "profit_factor": 1.565
+    }
+   }
+  }
+ },
+ "fixtures": [
+  {
+   "ts": "2026-07-02T06:00:02.470816+00:00",
+   "strategy": "vwap_hold",
+   "direction": "SHORT",
+   "gap_ticks": 236.5,
+   "gap_R": 7.88,
+   "decisions": {
+    "translate_cap8t": "CAP_REJECTED",
+    "translate_cap05R": "CAP_REJECTED",
+    "translate_cap10R": "CAP_REJECTED",
+    "structural_minrr": "REJECTED_TARGET_PASSED",
+    "translate_unbounded": "TRADE"
+   }
+  },
+  {
+   "ts": "2026-07-03T12:15:10.347961+00:00",
+   "strategy": "orb_breakout",
+   "direction": "LONG",
+   "gap_ticks": 128.2,
+   "gap_R": 2.56,
+   "decisions": {
+    "translate_cap8t": "CAP_REJECTED",
+    "translate_cap05R": "CAP_REJECTED",
+    "translate_cap10R": "CAP_REJECTED",
+    "structural_minrr": "REJECTED_TARGET_PASSED",
+    "translate_unbounded": "TRADE"
+   }
+  },
+  {
+   "ts": "2026-07-03T13:15:18.152572+00:00",
+   "strategy": "orb_breakout",
+   "direction": "LONG",
+   "gap_ticks": 141.0,
+   "gap_R": 2.82,
+   "decisions": {
+    "translate_cap8t": "CAP_REJECTED",
+    "translate_cap05R": "CAP_REJECTED",
+    "translate_cap10R": "CAP_REJECTED",
+    "structural_minrr": "REJECTED_TARGET_PASSED",
+    "translate_unbounded": "TRADE"
+   }
+  },
+  {
+   "ts": "2026-07-06T02:30:10.976496+00:00",
+   "strategy": "vwap_hold",
+   "direction": "SHORT",
+   "gap_ticks": 350.3,
+   "gap_R": 11.68,
+   "decisions": {
+    "translate_cap8t": "CAP_REJECTED",
+    "translate_cap05R": "CAP_REJECTED",
+    "translate_cap10R": "CAP_REJECTED",
+    "structural_minrr": "REJECTED_TARGET_PASSED",
+    "translate_unbounded": "TRADE"
+   }
+  },
+  {
+   "ts": "2026-07-06T02:45:10.918596+00:00",
+   "strategy": "vwap_hold",
+   "direction": "SHORT",
+   "gap_ticks": 489.3,
+   "gap_R": 16.31,
+   "decisions": {
+    "translate_cap8t": "CAP_REJECTED",
+    "translate_cap05R": "CAP_REJECTED",
+    "translate_cap10R": "CAP_REJECTED",
+    "structural_minrr": "REJECTED_TARGET_PASSED",
+    "translate_unbounded": "TRADE"
+   }
+  },
+  {
+   "ts": "2026-07-06T03:00:23.261674+00:00",
+   "strategy": "vwap_hold",
+   "direction": "SHORT",
+   "gap_ticks": 379.6,
+   "gap_R": 12.65,
+   "decisions": {
+    "translate_cap8t": "CAP_REJECTED",
+    "translate_cap05R": "CAP_REJECTED",
+    "translate_cap10R": "CAP_REJECTED",
+    "structural_minrr": "REJECTED_TARGET_PASSED",
+    "translate_unbounded": "TRADE"
+   }
+  },
+  {
+   "ts": "2026-07-06T04:00:09.138942+00:00",
+   "strategy": "vwap_hold",
+   "direction": "SHORT",
+   "gap_ticks": 345.1,
+   "gap_R": 11.5,
+   "decisions": {
+    "translate_cap8t": "CAP_REJECTED",
+    "translate_cap05R": "CAP_REJECTED",
+    "translate_cap10R": "CAP_REJECTED",
+    "structural_minrr": "REJECTED_TARGET_PASSED",
+    "translate_unbounded": "TRADE"
+   }
+  },
+  {
+   "ts": "2026-07-06T12:30:05.334694+00:00",
+   "strategy": "orb_breakout",
+   "direction": "LONG",
+   "gap_ticks": 118.0,
+   "gap_R": 2.36,
+   "decisions": {
+    "translate_cap8t": "CAP_REJECTED",
+    "translate_cap05R": "CAP_REJECTED",
+    "translate_cap10R": "CAP_REJECTED",
+    "structural_minrr": "REJECTED_TARGET_PASSED",
+    "translate_unbounded": "TRADE"
+   }
+  },
+  {
+   "ts": "2026-07-06T14:15:10.613228+00:00",
+   "strategy": "orb_reclaim",
+   "direction": "LONG",
+   "gap_ticks": 339.0,
+   "gap_R": 4.24,
+   "decisions": {
+    "translate_cap8t": "CAP_REJECTED",
+    "translate_cap05R": "CAP_REJECTED",
+    "translate_cap10R": "CAP_REJECTED",
+    "structural_minrr": "REJECTED_TARGET_PASSED",
+    "translate_unbounded": "TRADE"
+   }
+  },
+  {
+   "ts": "2026-07-06T14:30:11.372528+00:00",
+   "strategy": "orb_breakout",
+   "direction": "LONG",
+   "gap_ticks": 297.8,
+   "gap_R": 5.96,
+   "decisions": {
+    "translate_cap8t": "CAP_REJECTED",
+    "translate_cap05R": "CAP_REJECTED",
+    "translate_cap10R": "CAP_REJECTED",
+    "structural_minrr": "REJECTED_TARGET_PASSED",
+    "translate_unbounded": "TRADE"
+   }
+  },
+  {
+   "ts": "2026-07-06T14:45:02.280347+00:00",
+   "strategy": "orb_breakout",
+   "direction": "LONG",
+   "gap_ticks": 401.0,
+   "gap_R": 8.02,
+   "decisions": {
+    "translate_cap8t": "CAP_REJECTED",
+    "translate_cap05R": "CAP_REJECTED",
+    "translate_cap10R": "CAP_REJECTED",
+    "structural_minrr": "REJECTED_TARGET_PASSED",
+    "translate_unbounded": "TRADE"
+   }
+  },
+  {
+   "ts": "2026-07-07T01:45:05.713668+00:00",
+   "strategy": "vwap_hold",
+   "direction": "SHORT",
+   "gap_ticks": 232.2,
+   "gap_R": 7.74,
+   "decisions": {
+    "translate_cap8t": "CAP_REJECTED",
+    "translate_cap05R": "CAP_REJECTED",
+    "translate_cap10R": "CAP_REJECTED",
+    "structural_minrr": "REJECTED_TARGET_PASSED",
+    "translate_unbounded": "TRADE"
+   }
+  },
+  {
+   "ts": "2026-07-07T02:15:02.220628+00:00",
+   "strategy": "vwap_hold",
+   "direction": "SHORT",
+   "gap_ticks": 138.7,
+   "gap_R": 4.62,
+   "decisions": {
+    "translate_cap8t": "CAP_REJECTED",
+    "translate_cap05R": "CAP_REJECTED",
+    "translate_cap10R": "CAP_REJECTED",
+    "structural_minrr": "REJECTED_TARGET_PASSED",
+    "translate_unbounded": "TRADE"
+   }
+  },
+  {
+   "ts": "2026-07-07T02:45:01.771740+00:00",
+   "strategy": "vwap_hold",
+   "direction": "SHORT",
+   "gap_ticks": 219.3,
+   "gap_R": 7.31,
+   "decisions": {
+    "translate_cap8t": "CAP_REJECTED",
+    "translate_cap05R": "CAP_REJECTED",
+    "translate_cap10R": "CAP_REJECTED",
+    "structural_minrr": "REJECTED_TARGET_PASSED",
+    "translate_unbounded": "TRADE"
+   }
+  },
+  {
+   "ts": "2026-07-07T03:30:01.915729+00:00",
+   "strategy": "vwap_hold",
+   "direction": "SHORT",
+   "gap_ticks": 550.8,
+   "gap_R": 18.36,
+   "decisions": {
+    "translate_cap8t": "CAP_REJECTED",
+    "translate_cap05R": "CAP_REJECTED",
+    "translate_cap10R": "CAP_REJECTED",
+    "structural_minrr": "REJECTED_TARGET_PASSED",
+    "translate_unbounded": "TRADE"
+   }
+  },
+  {
+   "ts": "2026-07-07T03:45:01.400650+00:00",
+   "strategy": "vwap_hold",
+   "direction": "SHORT",
+   "gap_ticks": 602.3,
+   "gap_R": 20.08,
+   "decisions": {
+    "translate_cap8t": "CAP_REJECTED",
+    "translate_cap05R": "CAP_REJECTED",
+    "translate_cap10R": "CAP_REJECTED",
+    "structural_minrr": "REJECTED_TARGET_PASSED",
+    "translate_unbounded": "TRADE"
+   }
+  },
+  {
+   "ts": "2026-07-07T04:00:04.530412+00:00",
+   "strategy": "vwap_hold",
+   "direction": "SHORT",
+   "gap_ticks": 553.8,
+   "gap_R": 18.46,
+   "decisions": {
+    "translate_cap8t": "CAP_REJECTED",
+    "translate_cap05R": "CAP_REJECTED",
+    "translate_cap10R": "CAP_REJECTED",
+    "structural_minrr": "REJECTED_TARGET_PASSED",
+    "translate_unbounded": "TRADE"
+   }
+  },
+  {
+   "ts": "2026-07-07T05:30:03.740357+00:00",
+   "strategy": "vwap_hold",
+   "direction": "SHORT",
+   "gap_ticks": 744.4,
+   "gap_R": 24.81,
+   "decisions": {
+    "translate_cap8t": "CAP_REJECTED",
+    "translate_cap05R": "CAP_REJECTED",
+    "translate_cap10R": "CAP_REJECTED",
+    "structural_minrr": "REJECTED_TARGET_PASSED",
+    "translate_unbounded": "TRADE"
+   }
+  },
+  {
+   "ts": "2026-07-07T06:15:02.391493+00:00",
+   "strategy": "vwap_hold",
+   "direction": "SHORT",
+   "gap_ticks": 491.4,
+   "gap_R": 16.38,
+   "decisions": {
+    "translate_cap8t": "CAP_REJECTED",
+    "translate_cap05R": "CAP_REJECTED",
+    "translate_cap10R": "CAP_REJECTED",
+    "structural_minrr": "REJECTED_TARGET_PASSED",
+    "translate_unbounded": "TRADE"
+   }
+  },
+  {
+   "ts": "2026-07-07T09:45:05.351226+00:00",
+   "strategy": "vwap_hold",
+   "direction": "SHORT",
+   "gap_ticks": 388.6,
+   "gap_R": 12.95,
+   "decisions": {
+    "translate_cap8t": "CAP_REJECTED",
+    "translate_cap05R": "CAP_REJECTED",
+    "translate_cap10R": "CAP_REJECTED",
+    "structural_minrr": "REJECTED_TARGET_PASSED",
+    "translate_unbounded": "TRADE"
+   }
+  },
+  {
+   "ts": "2026-07-07T11:00:16.483131+00:00",
+   "strategy": "vwap_hold",
+   "direction": "SHORT",
+   "gap_ticks": 329.4,
+   "gap_R": 10.98,
+   "decisions": {
+    "translate_cap8t": "CAP_REJECTED",
+    "translate_cap05R": "CAP_REJECTED",
+    "translate_cap10R": "CAP_REJECTED",
+    "structural_minrr": "REJECTED_TARGET_PASSED",
+    "translate_unbounded": "TRADE"
+   }
+  },
+  {
+   "ts": "2026-07-07T11:45:02.632723+00:00",
+   "strategy": "vwap_hold",
+   "direction": "SHORT",
+   "gap_ticks": 448.4,
+   "gap_R": 14.95,
+   "decisions": {
+    "translate_cap8t": "CAP_REJECTED",
+    "translate_cap05R": "CAP_REJECTED",
+    "translate_cap10R": "CAP_REJECTED",
+    "structural_minrr": "REJECTED_TARGET_PASSED",
+    "translate_unbounded": "TRADE"
+   }
+  },
+  {
+   "ts": "2026-07-07T13:15:01.468685+00:00",
+   "strategy": "vwap_hold",
+   "direction": "SHORT",
+   "gap_ticks": 330.7,
+   "gap_R": 11.02,
+   "decisions": {
+    "translate_cap8t": "CAP_REJECTED",
+    "translate_cap05R": "CAP_REJECTED",
+    "translate_cap10R": "CAP_REJECTED",
+    "structural_minrr": "REJECTED_TARGET_PASSED",
+    "translate_unbounded": "TRADE"
+   }
+  },
+  {
+   "ts": "2026-07-07T13:30:09.610917+00:00",
+   "strategy": "vwap_hold",
+   "direction": "SHORT",
+   "gap_ticks": 505.5,
+   "gap_R": 16.85,
+   "decisions": {
+    "translate_cap8t": "CAP_REJECTED",
+    "translate_cap05R": "CAP_REJECTED",
+    "translate_cap10R": "CAP_REJECTED",
+    "structural_minrr": "REJECTED_TARGET_PASSED",
+    "translate_unbounded": "TRADE"
+   }
+  },
+  {
+   "ts": "2026-07-07T14:15:15.872999+00:00",
+   "strategy": "vwap_hold",
+   "direction": "SHORT",
+   "gap_ticks": 1174.5,
+   "gap_R": 39.15,
+   "decisions": {
+    "translate_cap8t": "CAP_REJECTED",
+    "translate_cap05R": "CAP_REJECTED",
+    "translate_cap10R": "CAP_REJECTED",
+    "structural_minrr": "REJECTED_TARGET_PASSED",
+    "translate_unbounded": "TRADE"
+   }
+  },
+  {
+   "ts": "2026-07-07T14:30:03.643602+00:00",
+   "strategy": "vwap_hold",
+   "direction": "SHORT",
+   "gap_ticks": 1197.6,
+   "gap_R": 39.92,
+   "decisions": {
+    "translate_cap8t": "CAP_REJECTED",
+    "translate_cap05R": "CAP_REJECTED",
+    "translate_cap10R": "CAP_REJECTED",
+    "structural_minrr": "REJECTED_TARGET_PASSED",
+    "translate_unbounded": "TRADE"
+   }
+  },
+  {
+   "ts": "2026-07-07T14:45:15.434170+00:00",
+   "strategy": "vwap_hold",
+   "direction": "SHORT",
+   "gap_ticks": 1347.1,
+   "gap_R": 44.9,
+   "decisions": {
+    "translate_cap8t": "CAP_REJECTED",
+    "translate_cap05R": "CAP_REJECTED",
+    "translate_cap10R": "CAP_REJECTED",
+    "structural_minrr": "REJECTED_TARGET_PASSED",
+    "translate_unbounded": "TRADE"
+   }
+  },
+  {
+   "ts": "2026-07-09T00:15:12.474451+00:00",
+   "strategy": "orb_breakout",
+   "direction": "LONG",
+   "gap_ticks": 712.0,
+   "gap_R": 14.24,
+   "decisions": {
+    "translate_cap8t": "CAP_REJECTED",
+    "translate_cap05R": "CAP_REJECTED",
+    "translate_cap10R": "CAP_REJECTED",
+    "structural_minrr": "REJECTED_TARGET_PASSED",
+    "translate_unbounded": "TRADE"
+   }
+  },
+  {
+   "ts": "2026-07-09T12:00:04.908662+00:00",
+   "strategy": "orb_breakout",
+   "direction": "LONG",
+   "gap_ticks": 157.2,
+   "gap_R": 3.14,
+   "decisions": {
+    "translate_cap8t": "CAP_REJECTED",
+    "translate_cap05R": "CAP_REJECTED",
+    "translate_cap10R": "CAP_REJECTED",
+    "structural_minrr": "REJECTED_TARGET_PASSED",
+    "translate_unbounded": "TRADE"
+   }
+  },
+  {
+   "ts": "2026-07-09T12:15:03.057402+00:00",
+   "strategy": "orb_breakout",
+   "direction": "LONG",
+   "gap_ticks": 234.0,
+   "gap_R": 4.68,
+   "decisions": {
+    "translate_cap8t": "CAP_REJECTED",
+    "translate_cap05R": "CAP_REJECTED",
+    "translate_cap10R": "CAP_REJECTED",
+    "structural_minrr": "REJECTED_TARGET_PASSED",
+    "translate_unbounded": "TRADE"
+   }
+  },
+  {
+   "ts": "2026-07-09T12:30:03.652374+00:00",
+   "strategy": "orb_breakout",
+   "direction": "LONG",
+   "gap_ticks": 372.0,
+   "gap_R": 7.44,
+   "decisions": {
+    "translate_cap8t": "CAP_REJECTED",
+    "translate_cap05R": "CAP_REJECTED",
+    "translate_cap10R": "CAP_REJECTED",
+    "structural_minrr": "REJECTED_TARGET_PASSED",
+    "translate_unbounded": "TRADE"
+   }
+  },
+  {
+   "ts": "2026-07-09T12:45:01.763004+00:00",
+   "strategy": "orb_breakout",
+   "direction": "LONG",
+   "gap_ticks": 369.2,
+   "gap_R": 7.38,
+   "decisions": {
+    "translate_cap8t": "CAP_REJECTED",
+    "translate_cap05R": "CAP_REJECTED",
+    "translate_cap10R": "CAP_REJECTED",
+    "structural_minrr": "REJECTED_TARGET_PASSED",
+    "translate_unbounded": "TRADE"
+   }
+  },
+  {
+   "ts": "2026-07-09T13:15:02.572881+00:00",
+   "strategy": "orb_breakout",
+   "direction": "LONG",
+   "gap_ticks": 402.0,
+   "gap_R": 8.04,
+   "decisions": {
+    "translate_cap8t": "CAP_REJECTED",
+    "translate_cap05R": "CAP_REJECTED",
+    "translate_cap10R": "CAP_REJECTED",
+    "structural_minrr": "REJECTED_TARGET_PASSED",
+    "translate_unbounded": "TRADE"
+   }
+  },
+  {
+   "ts": "2026-07-10T08:45:03.080767+00:00",
+   "strategy": "vwap_hold",
+   "direction": "SHORT",
+   "gap_ticks": 331.3,
+   "gap_R": 11.04,
+   "decisions": {
+    "translate_cap8t": "CAP_REJECTED",
+    "translate_cap05R": "CAP_REJECTED",
+    "translate_cap10R": "CAP_REJECTED",
+    "structural_minrr": "REJECTED_TARGET_PASSED",
+    "translate_unbounded": "TRADE"
+   }
+  },
+  {
+   "ts": "2026-07-13T02:15:14.182368+00:00",
+   "strategy": "vwap_hold",
+   "direction": "SHORT",
+   "gap_ticks": 499.0,
+   "gap_R": 16.63,
+   "decisions": {
+    "translate_cap8t": "CAP_REJECTED",
+    "translate_cap05R": "CAP_REJECTED",
+    "translate_cap10R": "CAP_REJECTED",
+    "structural_minrr": "REJECTED_TARGET_PASSED",
+    "translate_unbounded": "TRADE"
+   }
+  }
+ ]
+}
