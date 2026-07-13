@@ -43,11 +43,7 @@ from .paper_journal import (
     has_decision_for,
     latest_open_positions,
 )
-from .paper_simulator import (
-    DEFAULT_POSITION_DOLLAR_SIZE,
-    LifecycleState,
-    advance_lifecycle,
-)
+from .paper_simulator import LifecycleState, advance_lifecycle
 from .qqq_signal_builder import _opening_range_bars, build_qqq_signal
 from .tqqq_sqqq_decision import evaluate_tqqq_sqqq_decision
 from .tqqq_sqqq_models import TqqqSqqqDirection, TqqqSqqqVerdict
@@ -66,6 +62,11 @@ class RunResult:
     decision: Optional[str] = None
     final_status: Optional[str] = None
     net_pnl_dollars: Optional[float] = None
+    fee_only_net_pnl_dollars: Optional[float] = None
+    """gross_pnl_dollars - regulatory_fees_dollars only -- excludes
+    modeled slippage. Reporting-only comparison value; `net_pnl_dollars`
+    (which includes the full locked friction model) is the proof
+    metric, never this one."""
     resolved_prior_positions: tuple[str, ...] = field(default_factory=tuple)
 
 
@@ -78,7 +79,7 @@ def _vehicle_bars_for(direction: TqqqSqqqDirection, tqqq_bars: Sequence[Bar], sq
 
 
 def _resolve_stale_prior_positions(
-    *, journal_path: Path, date: str, recorded_at: str, data_source: str, position_dollar_size: float
+    *, journal_path: Path, date: str, recorded_at: str, data_source: str
 ) -> list[str]:
     """Force-closes (EXPIRED, zero P&L) any journaled WATCHING/ACTIVE
     position whose trade_date is not `date` -- this trading day's own
@@ -97,13 +98,13 @@ def _resolve_stale_prior_positions(
             stop_price_qqq=position.stop_price if position.stop_price is not None else 0.0,
             status=position.status,
             target_1=position.target_1,
+            raw_entry_price=position.raw_entry_price,
             entry_price=position.modeled_entry_price,
             entry_time=position.entry_time,
             shares=position.shares,
+            entry_slippage_dollars=position.entry_slippage_dollars,
         )
-        advanced = advance_lifecycle(
-            state, qqq_bars=(), vehicle_bars=(), session_closed=True, position_dollar_size=position_dollar_size
-        )
+        advanced = advance_lifecycle(state, qqq_bars=(), vehicle_bars=(), session_closed=True)
         if not advanced.ok or advanced.state is None:
             # Fail closed: leave the stale position exactly as journaled rather
             # than guessing; the operator sees it via has_decision_for on a
@@ -125,14 +126,19 @@ def _resolve_stale_prior_positions(
             target_1=position.target_1,
             target_2=position.target_2,
             status=advanced.state.status,
+            raw_entry_price=advanced.state.raw_entry_price,
             modeled_entry_price=advanced.state.entry_price,
             entry_time=advanced.state.entry_time,
+            raw_exit_price=advanced.state.raw_exit_price,
             modeled_exit_price=advanced.state.exit_price,
             exit_time=advanced.state.exit_time,
             exit_reason=advanced.state.exit_reason,
             shares=advanced.state.shares,
+            entry_slippage_dollars=advanced.state.entry_slippage_dollars,
+            exit_slippage_dollars=advanced.state.exit_slippage_dollars,
+            regulatory_fees_dollars=advanced.state.regulatory_fees_dollars,
+            total_friction_dollars=advanced.state.total_friction_dollars,
             gross_pnl_dollars=advanced.state.gross_pnl_dollars,
-            friction_dollars=advanced.state.friction_dollars,
             net_pnl_dollars=advanced.state.net_pnl_dollars,
             notes="force-closed: carried open past its own session with no overnight hold",
         )
@@ -158,7 +164,6 @@ def run_paper_session(
     recorded_at: str,
     data_source: str,
     market_regime_label: Optional[str] = None,
-    position_dollar_size: float = DEFAULT_POSITION_DOLLAR_SIZE,
 ) -> RunResult:
     """Runs one full day's paper-proof session. `qqq_bars_full_day` /
     `tqqq_bars_full_day` / `sqqq_bars_full_day` are that day's entire
@@ -166,13 +171,16 @@ def run_paper_session(
     same convention `DaySession` already establishes). `recorded_at` is
     the caller-supplied "now" -- this module never reads the system
     clock itself.
+
+    Position sizing is not a parameter here -- `advance_lifecycle`
+    always uses the locked `DEFAULT_POSITION_DOLLAR_SIZE`; this harness
+    exposes no runtime way to change it.
     """
     resolved_prior = _resolve_stale_prior_positions(
         journal_path=journal_path,
         date=date,
         recorded_at=recorded_at,
         data_source=data_source,
-        position_dollar_size=position_dollar_size,
     )
 
     if has_decision_for(journal_path, date, STRATEGY_VERSION):
@@ -313,7 +321,6 @@ def run_paper_session(
         qqq_bars=remaining_qqq_bars,
         vehicle_bars=remaining_vehicle_bars,
         session_closed=True,
-        position_dollar_size=position_dollar_size,
     )
     if not advance_result.ok or advance_result.state is None:
         return RunResult(
@@ -341,17 +348,26 @@ def run_paper_session(
         target_1=trade.target_1,
         target_2=trade.target_2,
         status=final_state.status,
+        raw_entry_price=final_state.raw_entry_price,
         modeled_entry_price=final_state.entry_price,
         entry_time=final_state.entry_time,
+        raw_exit_price=final_state.raw_exit_price,
         modeled_exit_price=final_state.exit_price,
         exit_time=final_state.exit_time,
         exit_reason=final_state.exit_reason,
         shares=final_state.shares,
+        entry_slippage_dollars=final_state.entry_slippage_dollars,
+        exit_slippage_dollars=final_state.exit_slippage_dollars,
+        regulatory_fees_dollars=final_state.regulatory_fees_dollars,
+        total_friction_dollars=final_state.total_friction_dollars,
         gross_pnl_dollars=final_state.gross_pnl_dollars,
-        friction_dollars=final_state.friction_dollars,
         net_pnl_dollars=final_state.net_pnl_dollars,
     )
     append_record(journal_path, lifecycle_record)
+
+    fee_only_net_pnl_dollars: Optional[float] = None
+    if final_state.gross_pnl_dollars is not None and final_state.regulatory_fees_dollars is not None:
+        fee_only_net_pnl_dollars = final_state.gross_pnl_dollars - final_state.regulatory_fees_dollars
 
     return RunResult(
         ok=True,
@@ -359,6 +375,7 @@ def run_paper_session(
         decision=decision_label,
         final_status=final_state.status,
         net_pnl_dollars=final_state.net_pnl_dollars,
+        fee_only_net_pnl_dollars=fee_only_net_pnl_dollars,
         message=f"{decision_label} -> {final_state.status}",
         resolved_prior_positions=tuple(resolved_prior),
     )

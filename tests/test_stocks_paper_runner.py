@@ -90,8 +90,16 @@ def test_take_paper_then_stop_hit_journals_decision_and_exit(tmp_path):
     assert records[0].direction == "long_tqqq"
     assert records[0].vehicle_symbol == "TQQQ"
     assert records[1].status == "exited"
-    assert records[1].modeled_entry_price == 50.3
-    assert records[1].modeled_exit_price == 48.5
+    assert records[1].raw_entry_price == 50.3
+    assert records[1].raw_exit_price == 48.5
+    assert records[1].modeled_entry_price > 50.3  # buy leg slipped worse (higher)
+    assert records[1].modeled_exit_price < 48.5  # sell leg slipped worse (lower)
+    assert records[1].entry_slippage_dollars > 0
+    assert records[1].exit_slippage_dollars > 0
+    assert records[1].regulatory_fees_dollars > 0
+    assert records[1].total_friction_dollars == (
+        records[1].entry_slippage_dollars + records[1].exit_slippage_dollars + records[1].regulatory_fees_dollars
+    )
     assert "stop hit" in records[1].exit_reason
 
 
@@ -156,10 +164,18 @@ def test_dedup_refuses_second_evaluation_same_day(tmp_path):
     )
     assert first.journaled is True
     lines_after_first = len(journal_path.read_text(encoding="utf-8").splitlines())
+    records_after_first = read_all_records(journal_path)
+
+    # Rerun with DIFFERENT (mutated) bars for the same date -- if a rerun could
+    # ever alter the original decision, feeding wildly different price action
+    # (a crash instead of a breakout) would prove it. It must not.
+    mutated_qqq_bars = _flat_first_hour(100.0) + [_bar(60, 100.0, 100.1, 90.0, 90.5, 1000)]
+    mutated_tqqq_bars = _flat_vehicle_first_hour(50.0) + [_bar(60, 50.0, 50.1, 30.0, 31.0, 500)]
+    mutated_sqqq_bars = _flat_vehicle_first_hour(20.0) + [_bar(60, 20.0, 30.0, 20.0, 29.0, 500)]
 
     second = run_paper_session(
-        date="2026-07-06", qqq_bars_full_day=qqq_bars, tqqq_bars_full_day=tqqq_bars,
-        sqqq_bars_full_day=sqqq_bars, journal_path=journal_path,
+        date="2026-07-06", qqq_bars_full_day=mutated_qqq_bars, tqqq_bars_full_day=mutated_tqqq_bars,
+        sqqq_bars_full_day=mutated_sqqq_bars, journal_path=journal_path,
         recorded_at="2026-07-06T18:00:00-04:00", **COMMON_KWARGS,
     )
     assert second.ok is True
@@ -167,6 +183,85 @@ def test_dedup_refuses_second_evaluation_same_day(tmp_path):
     assert "already journaled" in second.message
     lines_after_second = len(journal_path.read_text(encoding="utf-8").splitlines())
     assert lines_after_second == lines_after_first  # append-only, but nothing new written on a dedup hit
+    assert read_all_records(journal_path) == records_after_first  # original decision byte-for-byte unchanged
+
+
+def test_decision_never_sees_bars_after_the_cutoff(tmp_path):
+    # Two runs with an IDENTICAL decision window (first hour + confirmation bar)
+    # but wildly DIFFERENT bars after the cutoff -- one keeps rallying, one
+    # crashes. If the decision peeked at future bars this would diverge; it
+    # must not, since the decision is only supposed to see bars through the
+    # confirmation bar.
+    common_prefix_qqq = _flat_first_hour(100.0) + [_bar(60, 100.0, 101.5, 100.0, 101.2, 1000)]
+    common_prefix_tqqq = _flat_vehicle_first_hour(50.0) + [_bar(60, 50.0, 50.5, 49.8, 50.3, 500)]
+    common_prefix_sqqq = _flat_vehicle_first_hour(20.0) + [_bar(60, 20.0, 20.1, 19.9, 20.0, 500)]
+
+    rallies_after = [_bar(65, 101.2, 105.0, 101.0, 104.5, 1000)]
+    rallies_after_tqqq = [_bar(65, 50.3, 60.0, 50.2, 59.0, 500)]
+    rallies_after_sqqq = [_bar(65, 20.0, 20.1, 15.0, 15.5, 500)]
+
+    crashes_after = [_bar(65, 101.2, 101.3, 50.0, 50.5, 1000)]
+    crashes_after_tqqq = [_bar(65, 50.3, 50.4, 10.0, 10.5, 500)]
+    crashes_after_sqqq = [_bar(65, 20.0, 60.0, 20.0, 59.0, 500)]
+
+    journal_a = tmp_path / "journal_a.jsonl"
+    result_a = run_paper_session(
+        date="2026-07-06",
+        qqq_bars_full_day=common_prefix_qqq + rallies_after,
+        tqqq_bars_full_day=common_prefix_tqqq + rallies_after_tqqq,
+        sqqq_bars_full_day=common_prefix_sqqq + rallies_after_sqqq,
+        journal_path=journal_a, recorded_at="2026-07-06T16:05:00-04:00", **COMMON_KWARGS,
+    )
+    journal_b = tmp_path / "journal_b.jsonl"
+    result_b = run_paper_session(
+        date="2026-07-06",
+        qqq_bars_full_day=common_prefix_qqq + crashes_after,
+        tqqq_bars_full_day=common_prefix_tqqq + crashes_after_tqqq,
+        sqqq_bars_full_day=common_prefix_sqqq + crashes_after_sqqq,
+        journal_path=journal_b, recorded_at="2026-07-06T16:05:00-04:00", **COMMON_KWARGS,
+    )
+
+    assert result_a.decision == result_b.decision == "TRADE"
+    decision_a = read_all_records(journal_a)[0]
+    decision_b = read_all_records(journal_b)[0]
+    # Every decision-time field must be identical -- only what happens AFTER
+    # the cutoff (final_status / net_pnl) is allowed to differ.
+    for field_name in (
+        "direction", "vehicle_symbol", "decision", "reason", "entry_trigger",
+        "stop_price", "target_1", "target_2", "qqq_price", "status",
+    ):
+        assert getattr(decision_a, field_name) == getattr(decision_b, field_name), field_name
+    # And the two runs DO diverge afterward -- proving the bars-after-cutoff
+    # weren't simply ignored everywhere, only during decision-making.
+    assert result_a.final_status != result_b.final_status or result_a.net_pnl_dollars != result_b.net_pnl_dollars
+
+
+def test_entry_time_is_strictly_after_the_decision_bar(tmp_path):
+    journal_path = tmp_path / "journal.jsonl"
+    decision_bar_timestamp = "2026-07-06T10:30:00-04:00"  # the confirmation bar itself
+    qqq_bars = _flat_first_hour(100.0) + [
+        _bar(60, 100.0, 101.5, 100.0, 101.2, 1000),  # decision bar
+        _bar(65, 101.2, 101.6, 101.0, 101.4, 1000),  # first bar the lifecycle may use
+    ]
+    tqqq_bars = _flat_vehicle_first_hour(50.0) + [
+        _bar(60, 50.0, 50.5, 49.8, 50.3, 500),
+        _bar(65, 50.3, 51.0, 50.2, 50.8, 500),
+    ]
+    sqqq_bars = _flat_vehicle_first_hour(20.0) + [_bar(m, 20, 20.1, 19.9, 20.0, 500) for m in (60, 65)]
+
+    result = run_paper_session(
+        date="2026-07-06", qqq_bars_full_day=qqq_bars, tqqq_bars_full_day=tqqq_bars,
+        sqqq_bars_full_day=sqqq_bars, journal_path=journal_path,
+        recorded_at="2026-07-06T16:05:00-04:00", **COMMON_KWARGS,
+    )
+    assert result.decision == "TRADE"
+    records = read_all_records(journal_path)
+    lifecycle_record = records[-1]
+    assert lifecycle_record.entry_time is not None
+    assert lifecycle_record.entry_time > decision_bar_timestamp
+    # the entry price must be the LATER bar's open (50.3 pre-slippage), never
+    # the decision bar's own open (50.0)
+    assert lifecycle_record.raw_entry_price == 50.3
 
 
 def test_before_first_hour_closes_is_not_journaled(tmp_path):

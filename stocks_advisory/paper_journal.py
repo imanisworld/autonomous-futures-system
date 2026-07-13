@@ -58,15 +58,20 @@ class PaperJournalRecord:
     target_2: Optional[float] = None
 
     status: str = ""  # PaperTradeStatus.value, or "invalid" for a rejected intake
+    raw_entry_price: Optional[float] = None
     modeled_entry_price: Optional[float] = None
     entry_time: Optional[str] = None
+    raw_exit_price: Optional[float] = None
     modeled_exit_price: Optional[float] = None
     exit_time: Optional[str] = None
     exit_reason: str = ""
 
     shares: Optional[float] = None
+    entry_slippage_dollars: Optional[float] = None
+    exit_slippage_dollars: Optional[float] = None
+    regulatory_fees_dollars: Optional[float] = None
+    total_friction_dollars: Optional[float] = None
     gross_pnl_dollars: Optional[float] = None
-    friction_dollars: Optional[float] = None
     net_pnl_dollars: Optional[float] = None
 
     notes: str = ""

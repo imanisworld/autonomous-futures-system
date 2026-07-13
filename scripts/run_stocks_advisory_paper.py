@@ -64,7 +64,6 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         "the clock; every library module underneath stays clock-free.",
     )
     parser.add_argument("--data-source", default=None, help="Free-text label for where these bars came from")
-    parser.add_argument("--position-dollar-size", type=float, default=None)
     return parser.parse_args(argv)
 
 
@@ -116,19 +115,18 @@ def main(argv: list[str]) -> int:
         data_source=data_source,
         market_regime_label=args.market_regime_label,
     )
-    if args.position_dollar_size is not None:
-        kwargs["position_dollar_size"] = args.position_dollar_size
 
     result = run_paper_session(**kwargs)
 
-    print(f"strategy_version: {STRATEGY_VERSION}")
-    print(f"date:              {session.date}")
-    print(f"ok:                {result.ok}")
-    print(f"journaled:         {result.journaled}")
-    print(f"decision:          {result.decision}")
-    print(f"final_status:      {result.final_status}")
-    print(f"net_pnl_dollars:   {result.net_pnl_dollars}")
-    print(f"message:           {result.message}")
+    print(f"strategy_version:        {STRATEGY_VERSION}")
+    print(f"date:                    {session.date}")
+    print(f"ok:                      {result.ok}")
+    print(f"journaled:               {result.journaled}")
+    print(f"decision:                {result.decision}")
+    print(f"final_status:            {result.final_status}")
+    print(f"fee_only_net_pnl_dollars: {result.fee_only_net_pnl_dollars}")
+    print(f"net_pnl_dollars:         {result.net_pnl_dollars}  <- proof metric (includes locked slippage)")
+    print(f"message:                 {result.message}")
     if result.resolved_prior_positions:
         print(f"resolved_prior_positions: {', '.join(result.resolved_prior_positions)}")
 

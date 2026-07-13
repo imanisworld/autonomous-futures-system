@@ -20,20 +20,49 @@ there) -- the target-handling branch below exists only so a same-bar
 stop/target ambiguity has an explicit, tested, conservative rule ready
 if a later increment ever populates a target.
 
-Friction: the locked Robinhood real cost model -- identical constants
-and formula to `scripts/stocks_advisory_robustness_audit.py`'s
-`robinhood_regulatory_fee_dollars()`, duplicated here (that script is a
-one-time research tool, not an importable library) rather than
-imported, so both stay independently reviewable while representing the
-exact same assumption. $0 commission; the only per-trade cost is the
-SEC Section 31 fee + FINRA TAF, both charged on the SELL leg only
-(every trade here is buy-to-open/sell-to-close, never a short sale).
-Not tunable by this module -- these are fixed, locked constants.
+Friction model -- locked, not tunable at runtime by this module, the
+CLI, or any caller:
+
+1. Modeled slippage, `MODELED_SLIPPAGE_PERCENT_PER_SIDE` = 0.15%,
+   applied to BOTH the entry leg (buy -- price moves against you, so
+   worse/higher) and the exit leg (sell -- worse/lower). 0.15% is one
+   of the four predeclared levels in
+   `backtest_models.DEFAULT_SLIPPAGE_STRESS_LEVELS` (0.00/0.05/0.10/
+   0.15/0.25) -- the conservative ceiling the prior robustness work
+   found the edge still survived at. Regulatory fees ALONE are not
+   this model; slippage is the dominant, previously-tested friction
+   term and is applied on both legs (backtest's own
+   `tqqq_sqqq_backtest.evaluate_day` only slips the exit leg -- this
+   harness is intentionally more conservative).
+2. The locked Robinhood real cost model -- identical constants and
+   formula to `scripts/stocks_advisory_robustness_audit.py`'s
+   `robinhood_regulatory_fee_dollars()`, duplicated here (that script
+   is a one-time research tool, not an importable library). $0
+   commission; the only regulatory cost is the SEC Section 31 fee +
+   FINRA TAF, both charged on the SELL leg's actual (post-slippage)
+   proceeds only (every trade here is buy-to-open/sell-to-close, never
+   a short sale).
+
+Every trade journals `gross_pnl_dollars` (computed at RAW, unslipped
+prices -- the frictionless baseline), `entry_slippage_dollars` /
+`exit_slippage_dollars` / `regulatory_fees_dollars` separately, and
+`total_friction_dollars` / `net_pnl_dollars` as the sum/difference of
+those -- never a single blended "friction" number.
+
+Position sizing -- locked, not tunable at runtime: `shares =
+max(1, floor(DEFAULT_POSITION_DOLLAR_SIZE / raw_entry_price))`. The
+$1000 notional matches `BacktestConfig.position_dollar_size`'s default
+in `backtest_models.py`; the floor-to-whole-shares-with-a-1-share-floor
+rule is this lane's own explicit, deterministic choice (the backtest
+engine itself sizes fractionally -- `position_dollar_size / entry_price`
+with no floor -- so this intentionally diverges from that for a
+simpler, more auditable paper-proof share count).
 """
 
 from __future__ import annotations
 
 import dataclasses
+import math
 from dataclasses import dataclass
 from typing import Optional, Sequence
 
@@ -43,9 +72,15 @@ SEC_FEE_RATE_PER_DOLLAR_OF_SELL_PROCEEDS = 0.0000080
 FINRA_TAF_RATE_PER_SHARE_SOLD = 0.000166
 FINRA_TAF_MAX_PER_TRADE_DOLLARS = 8.30
 
+MODELED_SLIPPAGE_PERCENT_PER_SIDE = 0.15
+"""Locked for the entire proof window -- see module docstring. Not
+exposed as a function parameter or CLI flag; changing it requires
+editing this constant and is itself a reviewable code change, not a
+runtime option."""
+
 DEFAULT_POSITION_DOLLAR_SIZE = 1000.0
 """Matches `BacktestConfig.position_dollar_size`'s default in
-`backtest_models.py` -- the same locked per-trade paper size shared
+`backtest_models.py` -- the same locked per-trade paper notional shared
 with the backtest lane, not independently tuned here."""
 
 _OPEN_STATUSES = ("watching", "active")
@@ -69,7 +104,13 @@ class LifecycleState:
     VWAP level whose breach both invalidates a WATCHING plan and stops
     out an ACTIVE one). `target_1` is accepted only so the same-bar
     stop/target ambiguity rule below has something to exercise; v1's
-    real decision output never sets it."""
+    real decision output never sets it.
+
+    `entry_price`/`exit_price` are the MODELED (slippage-adjusted) fill
+    prices; `raw_entry_price`/`raw_exit_price` are the unadjusted bar
+    prices those were derived from, kept so `gross_pnl_dollars` (the
+    frictionless baseline) and the slippage cost fields can both be
+    reconstructed and audited independently."""
 
     trade_date: str
     direction: str  # "long_tqqq" | "long_sqqq"
@@ -77,14 +118,19 @@ class LifecycleState:
     stop_price_qqq: float
     status: str  # "watching" | "active" | "exited" | "invalidated" | "expired"
     target_1: Optional[float] = None
+    raw_entry_price: Optional[float] = None
     entry_price: Optional[float] = None
     entry_time: Optional[str] = None
+    raw_exit_price: Optional[float] = None
     exit_price: Optional[float] = None
     exit_time: Optional[str] = None
     exit_reason: str = ""
     shares: Optional[float] = None
+    entry_slippage_dollars: Optional[float] = None
+    exit_slippage_dollars: Optional[float] = None
+    regulatory_fees_dollars: Optional[float] = None
+    total_friction_dollars: Optional[float] = None
     gross_pnl_dollars: Optional[float] = None
-    friction_dollars: Optional[float] = None
     net_pnl_dollars: Optional[float] = None
     notes: str = ""
 
@@ -104,25 +150,38 @@ def _invalidated_or_stopped(direction: str, qqq_close: float, stop_price_qqq: fl
     return False
 
 
-def _resolve_exit(
-    state: LifecycleState, *, exit_price: float, exit_time: str, exit_reason: str, position_dollar_size: float
-) -> LifecycleState:
+_ZERO_OUTCOME_FIELDS = dict(
+    entry_slippage_dollars=0.0,
+    exit_slippage_dollars=0.0,
+    regulatory_fees_dollars=0.0,
+    total_friction_dollars=0.0,
+    gross_pnl_dollars=0.0,
+    net_pnl_dollars=0.0,
+)
+
+
+def _resolve_exit(state: LifecycleState, *, raw_exit_price: float, exit_time: str, exit_reason: str) -> LifecycleState:
     shares = state.shares
-    if shares is None:
-        shares = position_dollar_size / state.entry_price if state.entry_price else 0.0
-    gross = shares * (exit_price - state.entry_price) if state.entry_price is not None else 0.0
-    sell_proceeds = shares * exit_price
-    friction = _robinhood_regulatory_fee_dollars(shares_sold=shares, sell_proceeds_dollars=sell_proceeds)
-    net = gross - friction
+    raw_entry = state.raw_entry_price
+    modeled_exit = raw_exit_price * (1 - MODELED_SLIPPAGE_PERCENT_PER_SIDE / 100.0)
+    exit_slippage_dollars = shares * (raw_exit_price - modeled_exit)
+    sell_proceeds = shares * modeled_exit
+    regulatory_fees_dollars = _robinhood_regulatory_fee_dollars(shares_sold=shares, sell_proceeds_dollars=sell_proceeds)
+    entry_slippage_dollars = state.entry_slippage_dollars or 0.0
+    total_friction = entry_slippage_dollars + exit_slippage_dollars + regulatory_fees_dollars
+    gross = shares * (raw_exit_price - raw_entry)
+    net = gross - total_friction
     return dataclasses.replace(
         state,
         status="exited",
-        exit_price=exit_price,
+        raw_exit_price=raw_exit_price,
+        exit_price=modeled_exit,
         exit_time=exit_time,
         exit_reason=exit_reason,
-        shares=shares,
+        exit_slippage_dollars=exit_slippage_dollars,
+        regulatory_fees_dollars=regulatory_fees_dollars,
+        total_friction_dollars=total_friction,
         gross_pnl_dollars=gross,
-        friction_dollars=friction,
         net_pnl_dollars=net,
     )
 
@@ -144,6 +203,10 @@ def advance_lifecycle(
     available for this trade's own session; a still-open position gets
     force-resolved (no overnight hold) rather than silently carried as
     if it could still trigger tomorrow.
+
+    `position_dollar_size` exists as a parameter only for test
+    isolation -- the CLI never exposes it as a runtime option; every
+    real invocation uses the locked `DEFAULT_POSITION_DOLLAR_SIZE`.
 
     Fails closed (ok=False, state=None) on:
 
@@ -180,17 +243,21 @@ def advance_lifecycle(
                     current,
                     status="invalidated",
                     exit_reason="QQQ closed back through VWAP before entry confirmed",
-                    gross_pnl_dollars=0.0,
-                    friction_dollars=0.0,
-                    net_pnl_dollars=0.0,
+                    **_ZERO_OUTCOME_FIELDS,
                 )
                 break
+            raw_entry_price = vehicle_bar.open
+            shares = float(max(1, math.floor(position_dollar_size / raw_entry_price)))
+            modeled_entry_price = raw_entry_price * (1 + MODELED_SLIPPAGE_PERCENT_PER_SIDE / 100.0)
+            entry_slippage_dollars = shares * (modeled_entry_price - raw_entry_price)
             current = dataclasses.replace(
                 current,
                 status="active",
-                entry_price=vehicle_bar.open,
+                raw_entry_price=raw_entry_price,
+                entry_price=modeled_entry_price,
                 entry_time=vehicle_bar.timestamp,
-                shares=position_dollar_size / vehicle_bar.open,
+                shares=shares,
+                entry_slippage_dollars=entry_slippage_dollars,
             )
             continue
 
@@ -200,28 +267,25 @@ def advance_lifecycle(
             if stop_hit and target_hit:
                 current = _resolve_exit(
                     current,
-                    exit_price=vehicle_bar.close,
+                    raw_exit_price=vehicle_bar.close,
                     exit_time=vehicle_bar.timestamp,
                     exit_reason="stop hit (same-bar stop+target ambiguity resolved conservatively as stop)",
-                    position_dollar_size=position_dollar_size,
                 )
                 break
             if stop_hit:
                 current = _resolve_exit(
                     current,
-                    exit_price=vehicle_bar.close,
+                    raw_exit_price=vehicle_bar.close,
                     exit_time=vehicle_bar.timestamp,
                     exit_reason="stop hit: QQQ closed back through VWAP",
-                    position_dollar_size=position_dollar_size,
                 )
                 break
             if target_hit:
                 current = _resolve_exit(
                     current,
-                    exit_price=current.target_1,
+                    raw_exit_price=current.target_1,
                     exit_time=vehicle_bar.timestamp,
                     exit_reason="target hit",
-                    position_dollar_size=position_dollar_size,
                 )
                 break
 
@@ -230,18 +294,15 @@ def advance_lifecycle(
             current,
             status="expired",
             exit_reason="session ended before entry confirmed or invalidated",
-            gross_pnl_dollars=0.0,
-            friction_dollars=0.0,
-            net_pnl_dollars=0.0,
+            **_ZERO_OUTCOME_FIELDS,
         )
     elif session_closed and current.status == "active" and vehicle_bars:
-        last_qqq, last_vehicle = qqq_bars[-1], vehicle_bars[-1]
+        last_vehicle = vehicle_bars[-1]
         current = _resolve_exit(
             current,
-            exit_price=last_vehicle.close,
+            raw_exit_price=last_vehicle.close,
             exit_time=last_vehicle.timestamp,
             exit_reason="forced session-end exit (no overnight hold)",
-            position_dollar_size=position_dollar_size,
         )
 
     return LifecycleAdvanceResult(ok=True, state=current)
