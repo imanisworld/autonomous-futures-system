@@ -1,0 +1,6 @@
+# SHA-256 of data/stocks_advisory_paper_proof/PROOF_MANIFEST.md as frozen at 2026-07-13T15:24:02Z.
+# Recorded outside the manifest itself so the manifest's own integrity can be checked
+# independently (e.g. `shasum -a 256 data/stocks_advisory_paper_proof/PROOF_MANIFEST.md`).
+# If this hash ever fails to match, the manifest was edited after freeze -- treat the
+# proof window as invalidated and start a new versioned manifest rather than trusting it.
+ab1c99ed72b01659ef195e1931c52764166e552e54acfad279f2dccdd8d3955d  data/stocks_advisory_paper_proof/PROOF_MANIFEST.md
