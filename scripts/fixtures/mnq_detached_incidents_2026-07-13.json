@@ -1,0 +1,282 @@
+[
+ {
+  "ts": "2026-07-02T06:00:02.470816+00:00",
+  "strategy": "vwap_hold",
+  "direction": "SHORT",
+  "gap_ticks": 236.5,
+  "gap_R": 7.88,
+  "structural_verdict": "REJECTED_TARGET_PASSED"
+ },
+ {
+  "ts": "2026-07-03T12:15:10.347961+00:00",
+  "strategy": "orb_breakout",
+  "direction": "LONG",
+  "gap_ticks": 128.2,
+  "gap_R": 2.56,
+  "structural_verdict": "REJECTED_TARGET_PASSED"
+ },
+ {
+  "ts": "2026-07-03T13:15:18.152572+00:00",
+  "strategy": "orb_breakout",
+  "direction": "LONG",
+  "gap_ticks": 141.0,
+  "gap_R": 2.82,
+  "structural_verdict": "REJECTED_TARGET_PASSED"
+ },
+ {
+  "ts": "2026-07-06T02:30:10.976496+00:00",
+  "strategy": "vwap_hold",
+  "direction": "SHORT",
+  "gap_ticks": 350.3,
+  "gap_R": 11.68,
+  "structural_verdict": "REJECTED_TARGET_PASSED"
+ },
+ {
+  "ts": "2026-07-06T02:45:10.918596+00:00",
+  "strategy": "vwap_hold",
+  "direction": "SHORT",
+  "gap_ticks": 489.3,
+  "gap_R": 16.31,
+  "structural_verdict": "REJECTED_TARGET_PASSED"
+ },
+ {
+  "ts": "2026-07-06T03:00:23.261674+00:00",
+  "strategy": "vwap_hold",
+  "direction": "SHORT",
+  "gap_ticks": 379.6,
+  "gap_R": 12.65,
+  "structural_verdict": "REJECTED_TARGET_PASSED"
+ },
+ {
+  "ts": "2026-07-06T04:00:09.138942+00:00",
+  "strategy": "vwap_hold",
+  "direction": "SHORT",
+  "gap_ticks": 345.1,
+  "gap_R": 11.5,
+  "structural_verdict": "REJECTED_TARGET_PASSED"
+ },
+ {
+  "ts": "2026-07-06T12:30:05.334694+00:00",
+  "strategy": "orb_breakout",
+  "direction": "LONG",
+  "gap_ticks": 118.0,
+  "gap_R": 2.36,
+  "structural_verdict": "REJECTED_TARGET_PASSED"
+ },
+ {
+  "ts": "2026-07-06T14:15:10.613228+00:00",
+  "strategy": "orb_reclaim",
+  "direction": "LONG",
+  "gap_ticks": 339.0,
+  "gap_R": 4.24,
+  "structural_verdict": "REJECTED_TARGET_PASSED"
+ },
+ {
+  "ts": "2026-07-06T14:30:11.372528+00:00",
+  "strategy": "orb_breakout",
+  "direction": "LONG",
+  "gap_ticks": 297.8,
+  "gap_R": 5.96,
+  "structural_verdict": "REJECTED_TARGET_PASSED"
+ },
+ {
+  "ts": "2026-07-06T14:45:02.280347+00:00",
+  "strategy": "orb_breakout",
+  "direction": "LONG",
+  "gap_ticks": 401.0,
+  "gap_R": 8.02,
+  "structural_verdict": "REJECTED_TARGET_PASSED"
+ },
+ {
+  "ts": "2026-07-07T01:45:05.713668+00:00",
+  "strategy": "vwap_hold",
+  "direction": "SHORT",
+  "gap_ticks": 232.2,
+  "gap_R": 7.74,
+  "structural_verdict": "REJECTED_TARGET_PASSED"
+ },
+ {
+  "ts": "2026-07-07T02:15:02.220628+00:00",
+  "strategy": "vwap_hold",
+  "direction": "SHORT",
+  "gap_ticks": 138.7,
+  "gap_R": 4.62,
+  "structural_verdict": "REJECTED_TARGET_PASSED"
+ },
+ {
+  "ts": "2026-07-07T02:45:01.771740+00:00",
+  "strategy": "vwap_hold",
+  "direction": "SHORT",
+  "gap_ticks": 219.3,
+  "gap_R": 7.31,
+  "structural_verdict": "REJECTED_TARGET_PASSED"
+ },
+ {
+  "ts": "2026-07-07T03:30:01.915729+00:00",
+  "strategy": "vwap_hold",
+  "direction": "SHORT",
+  "gap_ticks": 550.8,
+  "gap_R": 18.36,
+  "structural_verdict": "REJECTED_TARGET_PASSED"
+ },
+ {
+  "ts": "2026-07-07T03:45:01.400650+00:00",
+  "strategy": "vwap_hold",
+  "direction": "SHORT",
+  "gap_ticks": 602.3,
+  "gap_R": 20.08,
+  "structural_verdict": "REJECTED_TARGET_PASSED"
+ },
+ {
+  "ts": "2026-07-07T04:00:04.530412+00:00",
+  "strategy": "vwap_hold",
+  "direction": "SHORT",
+  "gap_ticks": 553.8,
+  "gap_R": 18.46,
+  "structural_verdict": "REJECTED_TARGET_PASSED"
+ },
+ {
+  "ts": "2026-07-07T05:30:03.740357+00:00",
+  "strategy": "vwap_hold",
+  "direction": "SHORT",
+  "gap_ticks": 744.4,
+  "gap_R": 24.81,
+  "structural_verdict": "REJECTED_TARGET_PASSED"
+ },
+ {
+  "ts": "2026-07-07T06:15:02.391493+00:00",
+  "strategy": "vwap_hold",
+  "direction": "SHORT",
+  "gap_ticks": 491.4,
+  "gap_R": 16.38,
+  "structural_verdict": "REJECTED_TARGET_PASSED"
+ },
+ {
+  "ts": "2026-07-07T09:45:05.351226+00:00",
+  "strategy": "vwap_hold",
+  "direction": "SHORT",
+  "gap_ticks": 388.6,
+  "gap_R": 12.95,
+  "structural_verdict": "REJECTED_TARGET_PASSED"
+ },
+ {
+  "ts": "2026-07-07T11:00:16.483131+00:00",
+  "strategy": "vwap_hold",
+  "direction": "SHORT",
+  "gap_ticks": 329.4,
+  "gap_R": 10.98,
+  "structural_verdict": "REJECTED_TARGET_PASSED"
+ },
+ {
+  "ts": "2026-07-07T11:45:02.632723+00:00",
+  "strategy": "vwap_hold",
+  "direction": "SHORT",
+  "gap_ticks": 448.4,
+  "gap_R": 14.95,
+  "structural_verdict": "REJECTED_TARGET_PASSED"
+ },
+ {
+  "ts": "2026-07-07T13:15:01.468685+00:00",
+  "strategy": "vwap_hold",
+  "direction": "SHORT",
+  "gap_ticks": 330.7,
+  "gap_R": 11.02,
+  "structural_verdict": "REJECTED_TARGET_PASSED"
+ },
+ {
+  "ts": "2026-07-07T13:30:09.610917+00:00",
+  "strategy": "vwap_hold",
+  "direction": "SHORT",
+  "gap_ticks": 505.5,
+  "gap_R": 16.85,
+  "structural_verdict": "REJECTED_TARGET_PASSED"
+ },
+ {
+  "ts": "2026-07-07T14:15:15.872999+00:00",
+  "strategy": "vwap_hold",
+  "direction": "SHORT",
+  "gap_ticks": 1174.5,
+  "gap_R": 39.15,
+  "structural_verdict": "REJECTED_TARGET_PASSED"
+ },
+ {
+  "ts": "2026-07-07T14:30:03.643602+00:00",
+  "strategy": "vwap_hold",
+  "direction": "SHORT",
+  "gap_ticks": 1197.6,
+  "gap_R": 39.92,
+  "structural_verdict": "REJECTED_TARGET_PASSED"
+ },
+ {
+  "ts": "2026-07-07T14:45:15.434170+00:00",
+  "strategy": "vwap_hold",
+  "direction": "SHORT",
+  "gap_ticks": 1347.1,
+  "gap_R": 44.9,
+  "structural_verdict": "REJECTED_TARGET_PASSED"
+ },
+ {
+  "ts": "2026-07-09T00:15:12.474451+00:00",
+  "strategy": "orb_breakout",
+  "direction": "LONG",
+  "gap_ticks": 712.0,
+  "gap_R": 14.24,
+  "structural_verdict": "REJECTED_TARGET_PASSED"
+ },
+ {
+  "ts": "2026-07-09T12:00:04.908662+00:00",
+  "strategy": "orb_breakout",
+  "direction": "LONG",
+  "gap_ticks": 157.2,
+  "gap_R": 3.14,
+  "structural_verdict": "REJECTED_TARGET_PASSED"
+ },
+ {
+  "ts": "2026-07-09T12:15:03.057402+00:00",
+  "strategy": "orb_breakout",
+  "direction": "LONG",
+  "gap_ticks": 234.0,
+  "gap_R": 4.68,
+  "structural_verdict": "REJECTED_TARGET_PASSED"
+ },
+ {
+  "ts": "2026-07-09T12:30:03.652374+00:00",
+  "strategy": "orb_breakout",
+  "direction": "LONG",
+  "gap_ticks": 372.0,
+  "gap_R": 7.44,
+  "structural_verdict": "REJECTED_TARGET_PASSED"
+ },
+ {
+  "ts": "2026-07-09T12:45:01.763004+00:00",
+  "strategy": "orb_breakout",
+  "direction": "LONG",
+  "gap_ticks": 369.2,
+  "gap_R": 7.38,
+  "structural_verdict": "REJECTED_TARGET_PASSED"
+ },
+ {
+  "ts": "2026-07-09T13:15:02.572881+00:00",
+  "strategy": "orb_breakout",
+  "direction": "LONG",
+  "gap_ticks": 402.0,
+  "gap_R": 8.04,
+  "structural_verdict": "REJECTED_TARGET_PASSED"
+ },
+ {
+  "ts": "2026-07-10T08:45:03.080767+00:00",
+  "strategy": "vwap_hold",
+  "direction": "SHORT",
+  "gap_ticks": 331.3,
+  "gap_R": 11.04,
+  "structural_verdict": "REJECTED_TARGET_PASSED"
+ },
+ {
+  "ts": "2026-07-13T02:15:14.182368+00:00",
+  "strategy": "vwap_hold",
+  "direction": "SHORT",
+  "gap_ticks": 499.0,
+  "gap_R": 16.63,
+  "structural_verdict": "REJECTED_TARGET_PASSED"
+ }
+]
