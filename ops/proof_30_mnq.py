@@ -1,14 +1,15 @@
 """Read-only proof report for the next resolved MNQ runtime trades.
 
 Approved runtime evidence sources are intentionally narrow:
-  /root/autonomous-futures-system/logs/journal_YYYY-MM-DD.jsonl
-  /root/autonomous-futures-system/logs/errors.log
+  $LOG_DIR/journal_YYYY-MM-DD.jsonl (production: /root/afs-shared/logs)
+  $LOG_DIR/errors.log
   /status/today
   /status/broker-account
 """
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -17,7 +18,7 @@ from urllib.error import URLError
 from urllib.request import urlopen
 
 
-DEFAULT_JOURNAL_DIR = Path("/root/autonomous-futures-system/logs")
+DEFAULT_JOURNAL_DIR = Path(os.getenv("LOG_DIR", "/root/afs-shared/logs"))
 DEFAULT_API_BASE = "http://5.78.84.223"
 DEFAULT_INSTRUMENT = "MNQ"
 DEFAULT_LIMIT = 30

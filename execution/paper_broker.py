@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Optional
+from uuid import uuid4
 
 from execution.broker_interface import (
     BrokerCapabilities,
@@ -129,6 +130,7 @@ class PaperBroker(BrokerInterface):
         self._entry_tol_by_root = dict(entry_tolerance_ticks_by_root or {})
         self._entry_tol_default = max(0.0, float(entry_tolerance_ticks_default or 0.0))
         self._pending_stop_entry: Optional[_PendingStopMarketEntry] = None
+        self._active_order_id: Optional[str] = None
 
     def _entry_tolerance_ticks(self, instrument: str) -> float:
         root = "".join(ch for ch in str(instrument or "").upper() if ch.isalpha())[:3]
@@ -180,9 +182,12 @@ class PaperBroker(BrokerInterface):
                 "Call resolve_position() first."
             )
 
+        paper_order_id = f"PAPER-{uuid4().hex}"
+
         contracts = max(1, int(order.contracts or 1))
         if self._entry_fill_model == "stop_market":
             self._pending_stop_entry = _PendingStopMarketEntry(order=order, contracts=contracts)
+            self._active_order_id = paper_order_id
             return Fill(
                 instrument=order.instrument,
                 direction=order.direction,
@@ -193,6 +198,7 @@ class PaperBroker(BrokerInterface):
                 result="PENDING",
                 pnl_ticks=None,
                 pnl_dollars=None,
+                paper_order_id=paper_order_id,
             )
 
         # Entry is a MARKET order — apply adverse slippage. LONG fills higher,
@@ -235,6 +241,7 @@ class PaperBroker(BrokerInterface):
             quantity=contracts,
             open=True,
         )
+        self._active_order_id = paper_order_id
 
         # Phase 1: return OPEN fill — caller resolves with next bar
         return Fill(
@@ -247,6 +254,7 @@ class PaperBroker(BrokerInterface):
             result="OPEN",
             pnl_ticks=None,
             pnl_dollars=None,
+            paper_order_id=paper_order_id,
         )
 
     def _entry_not_filled(self, order: BracketOrder, contracts: int) -> Fill:
@@ -372,6 +380,7 @@ class PaperBroker(BrokerInterface):
                 entry_price=pos.entry_price, exit_price=round(exit_price, 4),
                 exit_reason=("RUNNER_TRAIL" if trailing else "STOP_HIT"), result=result,
                 pnl_ticks=round(pnl_ticks, 2), pnl_dollars=round(pnl_dollars, 2),
+                paper_order_id=self._active_order_id,
             )
 
         # update favourable extreme AFTER the exit check
@@ -508,6 +517,7 @@ class PaperBroker(BrokerInterface):
             result=result,
             pnl_ticks=round(pnl_ticks, 2),
             pnl_dollars=round(pnl_dollars, 2),
+            paper_order_id=self._active_order_id,
         )
 
     def restore_position(
@@ -592,4 +602,5 @@ class PaperBroker(BrokerInterface):
             result=result,
             pnl_ticks=round(pnl_ticks, 2),
             pnl_dollars=round(pnl_dollars, 2),
+            paper_order_id=self._active_order_id,
         )

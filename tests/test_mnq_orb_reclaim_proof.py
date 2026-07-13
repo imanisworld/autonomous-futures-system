@@ -38,7 +38,7 @@ from context.mnq_orb_reclaim_proof import (
     mnq_orb_reclaim_proof_mode,
     record_campaign_attempt,
 )
-from execution.broker_interface import BracketOrder
+from execution.broker_interface import BracketOrder, Fill
 from execution.paper_broker import PaperBroker
 from execution.tradovate_broker import TradovateBroker, TradovateConfig
 import execution.tradovate_supervisor as supervisor
@@ -272,6 +272,81 @@ def test_paper_sim_forces_paper_broker_with_runner_mode_for_mnq_orb_reclaim(tmp_
     assert result["decision"] == "TRADE"
     assert captured.get("runner_mode") is True
     assert captured.get("entry_fill_model") == "market"
+    assert result["fill"]["paper_order_id"].startswith("PAPER-")
+
+    import json
+    journal_path = next(Path(cfg.log_dir).glob("journal_*.jsonl"))
+    rows = [json.loads(line) for line in journal_path.read_text().splitlines()]
+    confirmed = next(r for r in rows if r.get("decision") == "TRADE")
+    assert confirmed["paper_order_id"] == result["fill"]["paper_order_id"]
+
+
+def test_paper_sim_open_position_never_enters_tradovate_resolution(tmp_path, monkeypatch):
+    """The proof adapter choice persists across bars and process reconstruction.
+    Global BROKER=tradovate must not pull a paper proof position into Tradovate
+    for resolution, fill confirmation, or trailing-stop replacement."""
+    import json
+    import execution.tradovate_broker as tradovate_module
+
+    monkeypatch.setenv("BROKER", "tradovate")
+    monkeypatch.setenv("TRADOVATE_ENV", "demo")
+    today = date(2026, 5, 23)
+    cfg = replace(
+        _base_config(tmp_path),
+        paper_mode=False,
+        mnq_orb_reclaim_proof_mode="paper_sim",
+    )
+    opened = process_alert(
+        _base_payload(timestamp="2026-05-23T15:00:00+00:00"),
+        config=cfg, log_dir=cfg.log_dir, for_date=today,
+    )
+    assert opened["decision"] == "TRADE"
+    paper_order_id = opened["fill"]["paper_order_id"]
+
+    class _TradovateMustNotBeConstructed:
+        def __init__(self, *args, **kwargs):
+            raise AssertionError("paper_sim resolution reached Tradovate")
+
+    monkeypatch.setattr(tradovate_module, "TradovateBroker", _TradovateMustNotBeConstructed)
+    resolved = process_alert(
+        _base_payload(
+            timestamp="2026-05-23T15:15:00+00:00",
+            high=19510.0,
+            low=19000.0,
+            close=19400.0,
+        ),
+        config=cfg, log_dir=cfg.log_dir, for_date=today,
+    )
+    assert resolved["resolution"] == "LOSS"
+
+    journal_path = next(Path(cfg.log_dir).glob("journal_*.jsonl"))
+    rows = [json.loads(line) for line in journal_path.read_text().splitlines()]
+    outcome = next(r for r in rows if r.get("type") == "OUTCOME")
+    assert outcome["outcome"]["paper_order_id"] == paper_order_id
+
+
+def test_paper_sim_open_without_paper_order_id_fails_closed(tmp_path, monkeypatch):
+    def unidentifiable_open(self, order, market_price=None):
+        return Fill(
+            instrument=order.instrument,
+            direction=order.direction,
+            contracts=order.contracts,
+            entry_price=order.entry,
+            exit_price=None,
+            exit_reason=None,
+            result="OPEN",
+            pnl_ticks=None,
+            pnl_dollars=None,
+        )
+
+    monkeypatch.setattr(PaperBroker, "execute_bracket", unidentifiable_open)
+    today = date(2026, 5, 23)
+    cfg = replace(_base_config(tmp_path), mnq_orb_reclaim_proof_mode="paper_sim")
+    result = process_alert(
+        _base_payload(timestamp="2026-05-23T15:00:00+00:00"),
+        config=cfg, log_dir=cfg.log_dir, for_date=today,
+    )
+    assert result["decision"] == "BLOCKED_ORDER_CONFIRMATION_MISSING"
 
 
 def test_paper_sim_does_not_affect_a_different_strategy_on_mnq(tmp_path, monkeypatch):
