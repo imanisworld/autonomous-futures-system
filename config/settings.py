@@ -447,6 +447,18 @@ class SystemConfig:
     # demo). "live" is never a valid value — validated in _validate_config.
     mnq_orb_reclaim_proof_mode: str = "observe_only"
 
+    # ── Entry-refresh Phase 1 shadow lane (2026-07-13) ───────────────────────
+    # Scoped narrowly to MNQ + orb_reclaim only by default — see
+    # context/mnq_entry_refresh.py. off (default): module does nothing.
+    # observe_only: pure audit dict, never opens a shadow position.
+    # shadow: additionally tracks a hypothetical REFRESHED position to a real
+    # WIN/LOSS/BREAKEVEN/TIMEOUT outcome using runner-exit math, log-only. No
+    # broker call at any mode. "demo"/"live" are not valid values yet.
+    entry_refresh_mode: str = "off"
+    entry_refresh_strategies: tuple = ("orb_reclaim",)
+    entry_refresh_instruments: tuple = ("MNQ",)
+    entry_refresh_max_detachment_r: float = 1.0
+
 
 # ─── Loader ──────────────────────────────────────────────────────────────────
 
@@ -691,6 +703,20 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         mnq_orb_reclaim_proof_mode=str(
             os.getenv("MNQ_ORB_RECLAIM_PROOF_MODE", "observe_only") or "observe_only"
         ).strip().lower(),
+        entry_refresh_mode=str(
+            os.getenv("ENTRY_REFRESH_MODE", "off") or "off"
+        ).strip().lower(),
+        entry_refresh_strategies=tuple(
+            s.strip() for s in os.getenv("ENTRY_REFRESH_STRATEGIES", "orb_reclaim").split(",")
+            if s.strip()
+        ) or ("orb_reclaim",),
+        entry_refresh_instruments=tuple(
+            s.strip().upper() for s in os.getenv("ENTRY_REFRESH_INSTRUMENTS", "MNQ").split(",")
+            if s.strip()
+        ) or ("MNQ",),
+        entry_refresh_max_detachment_r=float(
+            os.getenv("ENTRY_REFRESH_MAX_DETACHMENT_R", "1.0") or "1.0"
+        ),
         expected_timeframe_minutes=int(
             os.getenv("PRIMARY_DECISION_TF")
             or os.getenv("EXPECTED_TIMEFRAME_MINUTES")
@@ -923,6 +949,18 @@ def _validate_config(config: SystemConfig) -> None:
             "MNQ_ORB_RECLAIM_PROOF_MODE must be one of "
             f"{sorted(_valid_mnq_proof_modes)} (got {config.mnq_orb_reclaim_proof_mode!r}); "
             "'live' is never a valid value for this proof mode."
+        )
+    _valid_entry_refresh_modes = {"off", "observe_only", "shadow"}
+    if config.entry_refresh_mode not in _valid_entry_refresh_modes:
+        raise ConfigError(
+            "ENTRY_REFRESH_MODE must be one of "
+            f"{sorted(_valid_entry_refresh_modes)} (got {config.entry_refresh_mode!r}); "
+            "'demo' and 'live' are not valid values in Phase 1."
+        )
+    if config.entry_refresh_max_detachment_r <= 0:
+        raise ConfigError(
+            "ENTRY_REFRESH_MAX_DETACHMENT_R must be > 0 "
+            f"(got {config.entry_refresh_max_detachment_r!r})."
         )
     if config.live_trading_enabled:
         # This should never be reached, but belt-and-suspenders
