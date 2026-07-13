@@ -1993,12 +1993,16 @@ def _shadow_feed_status(now: datetime | None = None) -> dict | None:
     tradovate_env = os.getenv("TRADOVATE_ENV", "").strip().lower()
     if broker == "tradovate" and tradovate_env == "demo":
         execution_label = "DEMO"
+        main_orders_label = "DEMO ENABLED"
     elif broker == "tradovate":
         execution_label = "LIVE BLOCKED" if not _config.live_trading_enabled else "LIVE"
+        main_orders_label = "LIVE ENABLED" if _config.live_trading_enabled else "DISABLED"
     else:
         execution_label = broker.upper()
+        main_orders_label = "PAPER SIM ENABLED" if _config.paper_mode else "DISABLED"
     footer = (
-        f"EXECUTION: {execution_label} · ORDERS: DISABLED · "
+        f"EXECUTION: {execution_label} · MAIN ORDERS: {main_orders_label} · "
+        "SHADOW ORDERS: DISABLED · "
         f"MAIN DECISION TF: {expected_tf}M · SHADOW FEED: 5M"
     )
     return {
