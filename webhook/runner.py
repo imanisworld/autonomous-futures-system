@@ -52,12 +52,25 @@ from execution.entry_refresh_shadow import (
     open_shadow_position,
     resolve_shadow_position,
 )
+from context.mnq_vwap_hold_early import (
+    detect_early_vwap_hold,
+    is_vwap_hold_early_candidate,
+    vwap_hold_early_mode,
+)
+from execution.vwap_hold_early_shadow import (
+    append_vwap_hold_early_shadow_evidence,
+    close_shadow_position as close_vwap_hold_early_shadow_position,
+    get_pending_shadow_position as get_pending_vwap_hold_early_shadow_position,
+    open_shadow_position as open_vwap_hold_early_shadow_position,
+    resolve_shadow_position as resolve_vwap_hold_early_shadow_position,
+)
 from context.five_min_feed import (
     arm_fifteen_min_setup,
     clear_armed_setup,
     five_min_enabled,
     is_five_min,
     record_five_min,
+    recent_five_min,
     triggered_armed_setup,
 )
 from execution.paper_broker import TICK_SIZE, NextBarOHLC, PaperBroker
@@ -444,6 +457,70 @@ def process_alert(
             except Exception as _exc:
                 logger.warning("5m feed: invalid armed 15m payload: %s", _exc)
                 five_min_trigger = None
+        # ── vwap_hold early-signal shadow lane (upstream-timing fix) ──────────
+        # Detection: does THIS SAME 5-minute alert, run through the real
+        # decision pipeline in isolation (context.mnq_vwap_hold_early), produce
+        # a qualifying vwap_hold TRADE 10-14 minutes before the corresponding
+        # 15-minute bar would close? Independent of the retest mechanism above
+        # — runs regardless of whether five_min_trigger fired. No risk engine,
+        # no broker, never touches `result`/`five_min_trigger`/the main
+        # decision or journal. Fail-soft: never breaks the 5-minute lane.
+        if is_vwap_hold_early_candidate(
+            five_min_trigger_payload.ticker, five_min_trigger_payload.timeframe, cfg
+        ):
+            try:
+                _vhe_today = for_date or date.today()
+                _vhe_state = build_market_state(five_min_trigger_payload)
+                _vhe_daily = JournalLogger(log_dir=log_dir).get_daily_state(_vhe_today)
+                vwap_hold_early_audit = detect_early_vwap_hold(_vhe_state, _vhe_daily, cfg)
+                if vwap_hold_early_audit is not None:
+                    append_vwap_hold_early_shadow_evidence(
+                        log_dir,
+                        {
+                            "kind": "detection",
+                            "mode": vwap_hold_early_mode(cfg),
+                            "ts": _vhe_state.timestamp.isoformat(),
+                            **vwap_hold_early_audit,
+                        },
+                    )
+                    if (
+                        vwap_hold_early_audit.get("signal_detected")
+                        and vwap_hold_early_mode(cfg) == "shadow"
+                    ):
+                        open_vwap_hold_early_shadow_position(
+                            log_dir,
+                            direction=vwap_hold_early_audit["direction"],
+                            entry=vwap_hold_early_audit["entry"],
+                            stop=vwap_hold_early_audit["stop"],
+                            target=vwap_hold_early_audit["target"],
+                            entry_ts=_vhe_state.timestamp.isoformat(),
+                            rr_ratio=vwap_hold_early_audit.get("rr_ratio"),
+                        )
+            except Exception:
+                logger.debug("vwap_hold early-signal detection skipped", exc_info=True)
+
+        # Resolution: walk any pending shadow position forward against every
+        # 5-minute bar since its entry. Independent of detection above — runs
+        # on every 5-minute bar so a position opened earlier keeps resolving.
+        if vwap_hold_early_mode(cfg) == "shadow":
+            try:
+                _vhe_position = get_pending_vwap_hold_early_shadow_position(log_dir)
+                if _vhe_position is not None:
+                    _vhe_entry_ts = str(_vhe_position.get("entry_ts") or "")
+                    _vhe_bars = [
+                        b for b in recent_five_min("MNQ", log_dir, 500, for_date=for_date)
+                        if str(b.get("ts") or "") > _vhe_entry_ts
+                    ]
+                    _vhe_outcome = resolve_vwap_hold_early_shadow_position(_vhe_position, _vhe_bars)
+                    if _vhe_outcome is not None:
+                        append_vwap_hold_early_shadow_evidence(
+                            log_dir,
+                            {"kind": "resolution", "position": _vhe_position, **_vhe_outcome},
+                        )
+                        close_vwap_hold_early_shadow_position(log_dir)
+            except Exception:
+                logger.debug("vwap_hold early-signal resolution skipped", exc_info=True)
+
         if not five_min_trigger:
             return {
                 "timestamp": five_min_trigger_payload.timestamp,

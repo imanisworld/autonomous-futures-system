@@ -459,6 +459,16 @@ class SystemConfig:
     entry_refresh_instruments: tuple = ("MNQ",)
     entry_refresh_max_detachment_r: float = 1.0
 
+    # ── vwap_hold early-signal shadow lane (2026-07-13) ──────────────────────
+    # Fixed scope: MNQ + vwap_hold only, no strategies/instruments lists — see
+    # context/mnq_vwap_hold_early.py. off (default): module does nothing.
+    # observe_only: pure audit dict on a 5-minute alert, never opens a shadow
+    # position. shadow: additionally tracks a hypothetical early-detected
+    # position to a real WIN/LOSS/BREAKEVEN/TIMEOUT outcome, log-only. No
+    # broker call at any mode. Inert unless FIVE_MIN_FEED_ENABLED is also true
+    # AND a 5-minute vwap_hold TradingView alert actually reaches the webhook.
+    vwap_hold_early_mode: str = "off"
+
 
 # ─── Loader ──────────────────────────────────────────────────────────────────
 
@@ -717,6 +727,9 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         entry_refresh_max_detachment_r=float(
             os.getenv("ENTRY_REFRESH_MAX_DETACHMENT_R", "1.0") or "1.0"
         ),
+        vwap_hold_early_mode=str(
+            os.getenv("VWAP_HOLD_EARLY_MODE", "off") or "off"
+        ).strip().lower(),
         expected_timeframe_minutes=int(
             os.getenv("PRIMARY_DECISION_TF")
             or os.getenv("EXPECTED_TIMEFRAME_MINUTES")
@@ -961,6 +974,13 @@ def _validate_config(config: SystemConfig) -> None:
         raise ConfigError(
             "ENTRY_REFRESH_MAX_DETACHMENT_R must be > 0 "
             f"(got {config.entry_refresh_max_detachment_r!r})."
+        )
+    _valid_vwap_hold_early_modes = {"off", "observe_only", "shadow"}
+    if config.vwap_hold_early_mode not in _valid_vwap_hold_early_modes:
+        raise ConfigError(
+            "VWAP_HOLD_EARLY_MODE must be one of "
+            f"{sorted(_valid_vwap_hold_early_modes)} (got {config.vwap_hold_early_mode!r}); "
+            "'demo' and 'live' are not valid values in Phase 1."
         )
     if config.live_trading_enabled:
         # This should never be reached, but belt-and-suspenders
