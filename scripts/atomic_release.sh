@@ -158,6 +158,13 @@ promote_release() {
     systemctl restart '$SERVICE'
     sleep 6
     systemctl is-active '$SERVICE'
+    pid=\$(systemctl show '$SERVICE' -p MainPID --value)
+    expected_cwd=\$(readlink -f '$CURRENT')
+    actual_cwd=\$(readlink -f "/proc/\$pid/cwd")
+    test "\$actual_cwd" = "\$expected_cwd" || {
+      echo "release activation mismatch: service cwd=\$actual_cwd expected=\$expected_cwd" >&2
+      exit 1
+    }
     curl -fsS http://127.0.0.1:8000/health
     PYTHONPATH='$CURRENT' '$CURRENT/.venv/bin/python' \
       -m ops.release_integrity --repo-root '$CURRENT'
@@ -179,6 +186,13 @@ rollback_release() {
     systemctl restart '$SERVICE'
     sleep 6
     systemctl is-active '$SERVICE'
+    pid=\$(systemctl show '$SERVICE' -p MainPID --value)
+    expected_cwd=\$(readlink -f '$CURRENT')
+    actual_cwd=\$(readlink -f "/proc/\$pid/cwd")
+    test "\$actual_cwd" = "\$expected_cwd" || {
+      echo "rollback activation mismatch: service cwd=\$actual_cwd expected=\$expected_cwd" >&2
+      exit 1
+    }
     curl -fsS http://127.0.0.1:8000/health
   "
 }

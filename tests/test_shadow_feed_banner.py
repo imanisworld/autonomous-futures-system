@@ -89,7 +89,8 @@ def test_shadow_label_with_recent_bar(monkeypatch, tmp_path):
     assert "early-signal evaluation" in status["detail"]
     assert "Main execution remains 15-minute only" in status["detail"]
     assert "SHADOW FEED: 5M" in status["footer"]
-    assert "ORDERS: DISABLED" in status["footer"]
+    assert "MAIN ORDERS: PAPER SIM ENABLED" in status["footer"]
+    assert "SHADOW ORDERS: DISABLED" in status["footer"]
 
 
 def test_observe_only_label_with_recent_bar(monkeypatch, tmp_path):
@@ -132,6 +133,8 @@ def test_footer_reflects_demo_execution(monkeypatch, tmp_path):
     status = app_module._shadow_feed_status(now=now + timedelta(minutes=1))
     assert status is not None
     assert "EXECUTION: DEMO" in status["footer"]
+    assert "MAIN ORDERS: DEMO ENABLED" in status["footer"]
+    assert "SHADOW ORDERS: DISABLED" in status["footer"]
 
 
 def test_shadow_feed_status_never_implies_live_trading(monkeypatch, tmp_path):
