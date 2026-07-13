@@ -37,6 +37,21 @@ from context.mnq_orb_reclaim_proof import (
     is_mnq_orb_reclaim_candidate,
     record_campaign_attempt,
 )
+from context.mnq_entry_refresh import (
+    entry_refresh_instruments,
+    entry_refresh_max_detachment_r,
+    entry_refresh_mode,
+    entry_refresh_strategies,
+    is_entry_refresh_candidate,
+    refresh_detached_entry,
+)
+from execution.entry_refresh_shadow import (
+    append_entry_refresh_shadow_evidence,
+    close_shadow_position,
+    get_pending_shadow_position,
+    open_shadow_position,
+    resolve_shadow_position,
+)
 from context.five_min_feed import (
     arm_fifteen_min_setup,
     clear_armed_setup,
@@ -45,7 +60,7 @@ from context.five_min_feed import (
     record_five_min,
     triggered_armed_setup,
 )
-from execution.paper_broker import NextBarOHLC, PaperBroker
+from execution.paper_broker import TICK_SIZE, NextBarOHLC, PaperBroker
 from journal.journal_logger import JournalLogger
 from risk.risk_engine import DailyState, RiskEngine, RiskResult, TradeSetup
 from strategy.confluence_scorer import score_setup as _score_setup
@@ -678,6 +693,56 @@ def process_alert(
         except Exception:  # noqa: BLE001 — evidence lane must never break ingestion
             logger.warning("shadow outcome resolution failed", exc_info=True)
 
+    # ── Entry-refresh shadow resolution (Phase 1, PR #265) ────────────────────
+    # Resolve any pending hypothetical REFRESHED position for THIS instrument
+    # against bars ingested since it opened, using the same runner-exit math
+    # real positions use. Independent of today's decision — a shadow position
+    # opened on an earlier NO_TRADE bar is checked here on every later bar
+    # until it resolves. Sends no order, calls no risk engine, calls no
+    # broker. Fail-soft: a resolution hiccup must never affect trading.
+    if entry_refresh_mode(cfg) == "shadow":
+        _er_root = (state.instrument or "").upper().replace("1!", "")
+        if _er_root in entry_refresh_instruments(cfg):
+            for _er_strategy in entry_refresh_strategies(cfg):
+                try:
+                    _er_pos = get_pending_shadow_position(log_dir, _er_root, _er_strategy)
+                    if _er_pos is None:
+                        continue
+                    _er_bars = BarHistory(log_dir=log_dir).recent(_er_root, 200, for_date=today)
+                    _er_entry_ts = str(_er_pos.get("entry_ts") or "")
+                    # STRICTLY after the entry bar — the hypothetical entry is
+                    # priced at that bar's own close, so checking that same
+                    # bar's low/high for a stop/target hit is invalid
+                    # look-ahead (it "sees" price action from before the
+                    # entry existed).
+                    _er_since = (
+                        [b for b in _er_bars if str(b.get("ts", "")) > _er_entry_ts]
+                        if _er_entry_ts else _er_bars
+                    )
+                    _er_outcome = resolve_shadow_position(
+                        _er_pos, _er_since,
+                        activation_r=float(os.getenv("RUNNER_ACTIVATION_R", "1.0") or 1.0),
+                        trail_r=float(os.getenv("RUNNER_TRAIL_R", "0.5") or 0.5),
+                    )
+                    if _er_outcome is not None:
+                        append_entry_refresh_shadow_evidence(log_dir, {
+                            "instrument": _er_root,
+                            "strategy": _er_strategy,
+                            "direction": _er_pos.get("direction"),
+                            "original_entry": _er_pos.get("entry"),
+                            "original_stop": _er_pos.get("stop"),
+                            "original_target": _er_pos.get("target"),
+                            "refresh_policy": _er_pos.get("refresh_policy"),
+                            "detachment_ticks": _er_pos.get("detachment_ticks"),
+                            "detachment_r": _er_pos.get("detachment_r"),
+                            "entry_ts": _er_pos.get("entry_ts"),
+                            "opened_at": _er_pos.get("opened_at"),
+                            **_er_outcome,
+                        })
+                        close_shadow_position(log_dir, _er_root, _er_strategy)
+                except Exception:  # noqa: BLE001 — shadow lane must never break ingestion
+                    logger.debug("entry-refresh shadow resolution skipped", exc_info=True)
+
     # Companion options paper lane: refresh marks on any OPEN paper option rows so
     # each incoming bar advances them toward WIN/LOSS/EXPIRED. Independent of whether
     # THIS alert produces a futures fill. Fail-soft; never touches futures state.
@@ -1091,6 +1156,66 @@ def process_alert(
         decision, state, log_dir, today
     )
 
+    # ── Entry-refresh decision (Phase 1, PR #265) ──────────────────────────────
+    # Pure audit/decision computation on an ENTRY_DETACHED_FROM_PRICE candidate,
+    # scoped to context.mnq_entry_refresh's configured instrument/strategy set
+    # (default MNQ + orb_reclaim only). NEVER changes decision.decision or
+    # decision.setup — the existing NO_TRADE outcome is unaffected in every
+    # mode. observe_only/shadow both attach a pure audit dict; only shadow may
+    # additionally open a hypothetical position (never a real order, never
+    # risk-evaluated, never broker-evaluated).
+    entry_refresh_audit = None
+    _er_mode = entry_refresh_mode(cfg)
+    if (
+        _er_mode != "off"
+        and decision.decision != "TRADE"
+        and "ENTRY_DETACHED_FROM_PRICE" in (decision.failed_gates or [])
+    ):
+        _er_candidate = next(
+            (
+                c for c in (decision.candidate_audit or [])
+                if c.get("reject_code") == "ENTRY_DETACHED_FROM_PRICE"
+                and is_entry_refresh_candidate(state.instrument, c.get("strategy"), cfg)
+            ),
+            None,
+        )
+        if _er_candidate is not None:
+            try:
+                _er_root = (state.instrument or "").upper().replace("1!", "")
+                _er_tick = TICK_SIZE.get(_er_root, 0.25)
+                _er_live_price = float(state.ohlc.close) if state.ohlc else float(_er_candidate["entry"])
+                _er_decision = refresh_detached_entry(
+                    direction=_er_candidate["direction"],
+                    entry=float(_er_candidate["entry"]),
+                    stop=float(_er_candidate["stop"]),
+                    target=float(_er_candidate["target"]),
+                    live_price=_er_live_price,
+                    tick=_er_tick,
+                    max_detachment_r=entry_refresh_max_detachment_r(cfg),
+                )
+                entry_refresh_audit = {
+                    "mode": _er_mode,
+                    "strategy": _er_candidate.get("strategy"),
+                    **_er_decision.to_audit_dict(),
+                }
+                if _er_mode == "shadow" and _er_decision.outcome == "REFRESHED":
+                    open_shadow_position(
+                        log_dir,
+                        instrument=_er_root,
+                        strategy=_er_candidate.get("strategy"),
+                        direction=_er_decision.direction,
+                        entry=_er_decision.refreshed_entry,
+                        stop=_er_decision.refreshed_stop,
+                        target=_er_decision.refreshed_target,
+                        entry_ts=bar_ts,
+                        refresh_policy="translate",
+                        detachment_ticks=_er_decision.detachment_ticks,
+                        detachment_r=_er_decision.detachment_r,
+                    )
+            except Exception:  # noqa: BLE001 — entry-refresh audit must never break decisions
+                logger.debug("entry-refresh decision skipped", exc_info=True)
+                entry_refresh_audit = None
+
     if decision.decision != "TRADE" or decision.setup is None:
         if (
             five_min_enabled()
@@ -1116,6 +1241,8 @@ def process_alert(
             journal_entry["shadow_candidates"] = shadow_candidates
         if mnq_proof_audit is not None:
             journal_entry["mnq_orb_reclaim_proof_audit"] = mnq_proof_audit
+        if entry_refresh_audit is not None:
+            journal_entry["entry_refresh_audit"] = entry_refresh_audit
         gex_observed = _maybe_observe_gex(state, cfg)
         if gex_observed:
             journal_entry["gex_observed"] = gex_observed
