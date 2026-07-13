@@ -124,11 +124,15 @@ verify_release() {
   echo "candidate $short verified on 127.0.0.1:$port with $posture_label"
 }
 
-promote_release() {
-  deploy_lock_acquire "$LOCK_DIR" "promote $REF" "$0" "$FORCE_LOCK" || exit 1
-  trap "deploy_lock_release '$LOCK_DIR' '$DEPLOY_LOCK_OWNER'" EXIT
-
-  local sha="$REF"
+# Decides whether $1 (a release sha) may be promoted, given the box's
+# current posture and, if on the operational posture, a behavior-neutral
+# diff against the live commit. Returns 0 to proceed, 1 to refuse (printing
+# why on stderr). Deliberately isolated from the symlink-swap/restart
+# mechanics below (no `exit`, only `return`, and it never touches $SHARED/
+# .env or $CURRENT) so it can be exercised directly in tests against a fake
+# box/git repo without a real systemd service.
+_promote_gate_check() {
+  local sha="$1"
 
   # Path 1: box is on the fully-reset baseline posture. Any release may
   # promote here -- this is the route for actual strategy/risk/exit changes,
@@ -143,44 +147,55 @@ promote_release() {
     grep -qx 'EXPECTED_PROOF_EXIT_MODE=static' '$SHARED/.env'
   " >/dev/null 2>&1 || on_baseline=1
 
-  if [[ "$on_baseline" -ne 0 ]]; then
-    # Path 2: box is on the approved operational posture (demo execution +
-    # runner-shadow exits, mid a strategy-observation window). Promotion is
-    # allowed WITHOUT resetting those pins only if (a) the posture is exactly
-    # the one currently approved, and (b) the candidate's diff against the
-    # live commit is behavior-neutral (ops/scripts/tests/docs/research only,
-    # plus non-decision webhook/app.py code -- see ops/behavior_neutral_gate.py).
-    # This lets operational/observability fixes ship without interrupting a
-    # live strategy-observation sample; it never bypasses the check silently.
-    local on_current=0
-    remote "
-      grep -qx 'SCHEDULE_MODE=current' '$SHARED/.env' &&
-      grep -qx 'EXPECTED_PROOF_SCHEDULE_MODE=current' '$SHARED/.env' &&
-      grep -qx 'HTF_DIRECTION_MODE=off' '$SHARED/.env' &&
-      grep -qx 'EXPECTED_PROOF_HTF_DIRECTION_MODE=off' '$SHARED/.env' &&
-      grep -qx 'EXIT_MODE=runner_shadow' '$SHARED/.env' &&
-      grep -qx 'EXPECTED_PROOF_EXIT_MODE=runner_shadow' '$SHARED/.env'
-    " >/dev/null 2>&1 || on_current=1
-
-    if [[ "$on_current" -ne 0 ]]; then
-      echo "promotion refused: box posture matches neither the reset baseline (always_on_shadow/static) nor the approved operational posture (current/runner_shadow) -- resolve drift before promoting" >&2
-      exit 1
-    fi
-
-    local live_sha
-    live_sha="$(remote "grep '^EXPECTED_LIVE_COMMIT=' '$SHARED/.env' | tail -1 | cut -d= -f2" || true)"
-    if [[ -z "$live_sha" ]]; then
-      echo "promotion refused: cannot determine the currently-live commit (EXPECTED_LIVE_COMMIT unset in $SHARED/.env) to run the behavior-neutral check" >&2
-      exit 1
-    fi
-
-    git -C "$ROOT" fetch -q origin
-    if ! python3 -m ops.behavior_neutral_gate --repo-root "$ROOT" --baseline-sha "$live_sha" --candidate-sha "$sha"; then
-      echo "promotion refused: candidate is not behavior-neutral relative to the live commit ($live_sha) -- box stays on the approved operational posture (not the reset baseline), so only operational-only changes may promote without a full strategy-observation reset" >&2
-      exit 1
-    fi
-    echo "behavior-neutral check passed against live commit $live_sha -- promoting under the current operational posture, no pin reset"
+  if [[ "$on_baseline" -eq 0 ]]; then
+    return 0
   fi
+
+  # Path 2: box is on the approved operational posture (demo execution +
+  # runner-shadow exits, mid a strategy-observation window). Promotion is
+  # allowed WITHOUT resetting those pins only if (a) the posture is exactly
+  # the one currently approved, and (b) the candidate's diff against the
+  # live commit is behavior-neutral (an explicit reviewed file allowlist,
+  # never whole scripts/ or ops/ -- see ops/behavior_neutral_gate.py). This
+  # lets operational/observability fixes ship without interrupting a live
+  # strategy-observation sample; it never bypasses the check silently.
+  local on_current=0
+  remote "
+    grep -qx 'SCHEDULE_MODE=current' '$SHARED/.env' &&
+    grep -qx 'EXPECTED_PROOF_SCHEDULE_MODE=current' '$SHARED/.env' &&
+    grep -qx 'HTF_DIRECTION_MODE=off' '$SHARED/.env' &&
+    grep -qx 'EXPECTED_PROOF_HTF_DIRECTION_MODE=off' '$SHARED/.env' &&
+    grep -qx 'EXIT_MODE=runner_shadow' '$SHARED/.env' &&
+    grep -qx 'EXPECTED_PROOF_EXIT_MODE=runner_shadow' '$SHARED/.env'
+  " >/dev/null 2>&1 || on_current=1
+
+  if [[ "$on_current" -ne 0 ]]; then
+    echo "promotion refused: box posture matches neither the reset baseline (always_on_shadow/static) nor the approved operational posture (current/runner_shadow) -- resolve drift before promoting" >&2
+    return 1
+  fi
+
+  local live_sha
+  live_sha="$(remote "grep '^EXPECTED_LIVE_COMMIT=' '$SHARED/.env' | tail -1 | cut -d= -f2" || true)"
+  if [[ -z "$live_sha" ]]; then
+    echo "promotion refused: cannot determine the currently-live commit (EXPECTED_LIVE_COMMIT unset in $SHARED/.env) to run the behavior-neutral check" >&2
+    return 1
+  fi
+
+  git -C "$ROOT" fetch -q origin
+  if ! python3 -m ops.behavior_neutral_gate --repo-root "$ROOT" --baseline-sha "$live_sha" --candidate-sha "$sha"; then
+    echo "promotion refused: candidate is not behavior-neutral relative to the live commit ($live_sha) -- box stays on the approved operational posture (not the reset baseline), so only operational-only changes may promote without a full strategy-observation reset" >&2
+    return 1
+  fi
+  echo "behavior-neutral check passed against live commit $live_sha -- promoting under the current operational posture, no pin reset"
+  return 0
+}
+
+promote_release() {
+  deploy_lock_acquire "$LOCK_DIR" "promote $REF" "$0" "$FORCE_LOCK" || exit 1
+  trap "deploy_lock_release '$LOCK_DIR' '$DEPLOY_LOCK_OWNER'" EXIT
+
+  local sha="$REF"
+  _promote_gate_check "$sha" || exit 1
 
   remote "
     set -e
@@ -250,13 +265,17 @@ rollback_release() {
   "
 }
 
-case "$ACTION" in
-  build) build_release ;;
-  verify) verify_release ;;
-  promote) promote_release ;;
-  rollback) rollback_release ;;
-  *)
-    echo "usage: $0 {build [ref]|verify <sha>|promote <sha>|rollback} [--force-lock]" >&2
-    exit 64
-    ;;
-esac
+# Guarded so tests can `source` this file (e.g. to call _promote_gate_check
+# directly against a fake box/git repo) without triggering a real action.
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  case "$ACTION" in
+    build) build_release ;;
+    verify) verify_release ;;
+    promote) promote_release ;;
+    rollback) rollback_release ;;
+    *)
+      echo "usage: $0 {build [ref]|verify <sha>|promote <sha>|rollback} [--force-lock]" >&2
+      exit 64
+      ;;
+  esac
+fi
