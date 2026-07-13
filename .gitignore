@@ -26,6 +26,7 @@ data/replay_polygon_5m/
 data/stocks_advisory_polygon_5m/
 data/stocks_advisory_paper_proof/journal.jsonl
 BATS_*.csv
+data/stocks_advisory_paper_proof/polygon_*/
 data/htf/
 data/mfe_cache/
 replay_out/
