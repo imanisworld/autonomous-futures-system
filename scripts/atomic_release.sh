@@ -127,16 +127,63 @@ promote_release() {
   trap "deploy_lock_release '$LOCK_DIR' '$DEPLOY_LOCK_OWNER'" EXIT
 
   local sha="$REF"
+
+  # Path 1: box is on the fully-reset baseline posture. Any release may
+  # promote here -- this is the route for actual strategy/risk/exit changes,
+  # always starting from a known-safe, no-live-orders state.
+  local on_baseline=0
+  remote "
+    grep -qx 'SCHEDULE_MODE=always_on_shadow' '$SHARED/.env' &&
+    grep -qx 'EXPECTED_PROOF_SCHEDULE_MODE=always_on_shadow' '$SHARED/.env' &&
+    grep -qx 'HTF_DIRECTION_MODE=off' '$SHARED/.env' &&
+    grep -qx 'EXPECTED_PROOF_HTF_DIRECTION_MODE=off' '$SHARED/.env' &&
+    grep -qx 'EXIT_MODE=static' '$SHARED/.env' &&
+    grep -qx 'EXPECTED_PROOF_EXIT_MODE=static' '$SHARED/.env'
+  " >/dev/null 2>&1 || on_baseline=1
+
+  if [[ "$on_baseline" -ne 0 ]]; then
+    # Path 2: box is on the approved operational posture (demo execution +
+    # runner-shadow exits, mid a strategy-observation window). Promotion is
+    # allowed WITHOUT resetting those pins only if (a) the posture is exactly
+    # the one currently approved, and (b) the candidate's diff against the
+    # live commit is behavior-neutral (ops/scripts/tests/docs/research only,
+    # plus non-decision webhook/app.py code -- see ops/behavior_neutral_gate.py).
+    # This lets operational/observability fixes ship without interrupting a
+    # live strategy-observation sample; it never bypasses the check silently.
+    local on_current=0
+    remote "
+      grep -qx 'SCHEDULE_MODE=current' '$SHARED/.env' &&
+      grep -qx 'EXPECTED_PROOF_SCHEDULE_MODE=current' '$SHARED/.env' &&
+      grep -qx 'HTF_DIRECTION_MODE=off' '$SHARED/.env' &&
+      grep -qx 'EXPECTED_PROOF_HTF_DIRECTION_MODE=off' '$SHARED/.env' &&
+      grep -qx 'EXIT_MODE=runner_shadow' '$SHARED/.env' &&
+      grep -qx 'EXPECTED_PROOF_EXIT_MODE=runner_shadow' '$SHARED/.env'
+    " >/dev/null 2>&1 || on_current=1
+
+    if [[ "$on_current" -ne 0 ]]; then
+      echo "promotion refused: box posture matches neither the reset baseline (always_on_shadow/static) nor the approved operational posture (current/runner_shadow) -- resolve drift before promoting" >&2
+      exit 1
+    fi
+
+    local live_sha
+    live_sha="$(remote "grep '^EXPECTED_LIVE_COMMIT=' '$SHARED/.env' | tail -1 | cut -d= -f2" || true)"
+    if [[ -z "$live_sha" ]]; then
+      echo "promotion refused: cannot determine the currently-live commit (EXPECTED_LIVE_COMMIT unset in $SHARED/.env) to run the behavior-neutral check" >&2
+      exit 1
+    fi
+
+    git -C "$ROOT" fetch -q origin
+    if ! python3 -m ops.behavior_neutral_gate --repo-root "$ROOT" --baseline-sha "$live_sha" --candidate-sha "$sha"; then
+      echo "promotion refused: candidate is not behavior-neutral relative to the live commit ($live_sha) -- box stays on the approved operational posture (not the reset baseline), so only operational-only changes may promote without a full strategy-observation reset" >&2
+      exit 1
+    fi
+    echo "behavior-neutral check passed against live commit $live_sha -- promoting under the current operational posture, no pin reset"
+  fi
+
   remote "
     set -e
     test -d '$RELEASES/$sha'
     test -f '$SHARED/.env'
-    grep -qx 'SCHEDULE_MODE=always_on_shadow' '$SHARED/.env'
-    grep -qx 'EXPECTED_PROOF_SCHEDULE_MODE=always_on_shadow' '$SHARED/.env'
-    grep -qx 'HTF_DIRECTION_MODE=off' '$SHARED/.env'
-    grep -qx 'EXPECTED_PROOF_HTF_DIRECTION_MODE=off' '$SHARED/.env'
-    grep -qx 'EXIT_MODE=static' '$SHARED/.env'
-    grep -qx 'EXPECTED_PROOF_EXIT_MODE=static' '$SHARED/.env'
     fp=\$('$RELEASES/$sha/.venv/bin/python' -c \"import json;print(json.load(open('$RELEASES/$sha/release_manifest.json'))['fingerprint_sha256'])\")
     risk_sha=\$('$RELEASES/$sha/.venv/bin/python' -c \"import json;print(json.load(open('$RELEASES/$sha/release_manifest.json'))['risk_rules_sha256'])\")
     sed -i '/^EXPECTED_RELEASE_FINGERPRINT=/d;/^EXPECTED_LIVE_BRANCH=/d;/^EXPECTED_LIVE_COMMIT=/d;/^EXPECTED_RISK_RULES_SHA256=/d' '$SHARED/.env'
