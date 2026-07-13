@@ -82,8 +82,9 @@ verify_release() {
   deploy_lock_acquire "$LOCK_DIR" "verify $REF" "$0" "$FORCE_LOCK" || exit 1
   trap "deploy_lock_release '$LOCK_DIR' '$DEPLOY_LOCK_OWNER'" EXIT
 
-  local sha="$REF" short="${REF:0:12}" unit="afs-candidate-${REF:0:12}" fingerprint
+  local sha="$REF" short="${REF:0:12}" unit="afs-candidate-${REF:0:12}" fingerprint port
   fingerprint="$(remote "'$RELEASES/$sha/.venv/bin/python' -c \"import json;print(json.load(open('$RELEASES/$sha/release_manifest.json'))['fingerprint_sha256'])\"")"
+  port="$(remote "python3 -c 'import socket; s=socket.socket(); s.bind((\"127.0.0.1\", 0)); print(s.getsockname()[1]); s.close()'")"
   remote "
     set -e
     test -d '$RELEASES/$sha'
@@ -98,7 +99,7 @@ verify_release() {
       --property=EnvironmentFile="\$candidate_env" \
       --setenv=PYTHONDONTWRITEBYTECODE=1 \
       --setenv=PYTHONPATH='$RELEASES/$sha' \
-      --setenv=PORT=8010 \
+      --setenv=PORT='$port' \
       --setenv=LOG_DIR='$SHARED/candidate-logs/$sha' \
       --setenv=SCHEDULE_MODE=always_on_shadow \
       --setenv=EXPECTED_PROOF_SCHEDULE_MODE=always_on_shadow \
@@ -108,17 +109,17 @@ verify_release() {
       --setenv=EXPECTED_PROOF_EXIT_MODE=static \
       --setenv=RELEASE_INTEGRITY_ENFORCED=true \
       '$RELEASES/$sha/.venv/bin/python' -m uvicorn webhook.app:app \
-        --host 127.0.0.1 --port 8010
+        --host 127.0.0.1 --port '$port'
     for i in 1 2 3 4 5 6 7 8 9 10; do
       sleep 2
-      curl -fsS http://127.0.0.1:8010/health >/dev/null && break
+      curl -fsS http://127.0.0.1:'$port'/health >/dev/null && break
     done
-    curl -fsS http://127.0.0.1:8010/health
-    curl -fsS http://127.0.0.1:8010/status/tradovate-reliability >/dev/null
+    curl -fsS http://127.0.0.1:'$port'/health
+    curl -fsS http://127.0.0.1:'$port'/status/tradovate-reliability >/dev/null
     PYTHONPATH='$RELEASES/$sha' '$RELEASES/$sha/.venv/bin/python' \
       -m ops.release_integrity --repo-root '$RELEASES/$sha'
   "
-  echo "candidate $short verified on 127.0.0.1:8010 in always_on_shadow"
+  echo "candidate $short verified on 127.0.0.1:$port in always_on_shadow"
 }
 
 promote_release() {
