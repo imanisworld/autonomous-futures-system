@@ -108,6 +108,7 @@ class JournalLogger:
         best_bid_at_submit: Optional[float] = None,
         best_ask_at_submit: Optional[float] = None,
         ticks_moved_from_entry: Optional[float] = None,
+        paper_order_id: Optional[str] = None,
     ) -> None:
         """
         Append a trade outcome entry to today's journal.
@@ -140,6 +141,7 @@ class JournalLogger:
                 "best_bid_at_submit": best_bid_at_submit,
                 "best_ask_at_submit": best_ask_at_submit,
                 "ticks_moved_from_entry": ticks_moved_from_entry,
+                "paper_order_id": paper_order_id,
             },
         }
         self._append(entry, for_date)
@@ -537,6 +539,10 @@ class JournalLogger:
                         "target": setup.get("target"),
                         "contracts": setup.get("contracts", 1),
                         "strategy": setup.get("strategy"),
+                        "paper_order_id": entry.get("paper_order_id"),
+                        "mnq_orb_reclaim_proof_audit": entry.get(
+                            "mnq_orb_reclaim_proof_audit"
+                        ),
                         "direction_role": setup.get("direction_role"),
                         "ts": entry.get("ts"),  # processing-time age/stale reference
                         # Decision time is after the bar close, so runner history

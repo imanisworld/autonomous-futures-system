@@ -67,6 +67,10 @@ class Fill:
     # execution/no_fill_taxonomy.py for the no_fill_reason bucket meanings.
     no_fill_reason: Optional[str] = None
     order_type: Optional[str] = None
+    # Internal simulator order identifier. Real broker order ids remain in the
+    # adapter's structured _last_order_ids mapping; this field gives paper
+    # fills an auditable identity without pretending they are broker orders.
+    paper_order_id: Optional[str] = None
 
 
 @dataclass(frozen=True)

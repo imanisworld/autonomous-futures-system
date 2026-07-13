@@ -832,6 +832,22 @@ def process_alert(
     if daily_state.has_open_position:
         if open_pos and _position_is_complete(open_pos):
             broker_type = os.getenv("BROKER", "paper").strip().lower()
+            _proof_audit = open_pos.get("mnq_orb_reclaim_proof_audit")
+            _proof_paper_position = bool(
+                isinstance(_proof_audit, dict)
+                and _proof_audit.get("proof_mode") == "paper_sim"
+                and _proof_audit.get("force_paper_broker") is True
+                and is_mnq_orb_reclaim_candidate(
+                    open_pos.get("instrument"), open_pos.get("strategy")
+                    or (open_pos.get("setup") or {}).get("strategy")
+                )
+            )
+            # A proof paper position remains paper-owned for its entire
+            # lifecycle. Global BROKER=tradovate must never pull it into the
+            # Tradovate resolver on a later bar.
+            _using_tradovate_position = (
+                not simulate and broker_type == "tradovate" and not _proof_paper_position
+            )
             # Only resolve a position against bars of its OWN instrument. An MNQ
             # position must never be resolved against a MES bar's OHLC (different
             # price scale → false no-hit, and the price-mismatch safety net would
@@ -840,7 +856,7 @@ def process_alert(
             _open_root = (open_pos.get("instrument") or "").upper().rstrip("!1234567890HMUZ")
             _bar_root = (state.instrument or "").upper().rstrip("!1234567890HMUZ")
             same_instrument = bool(_open_root) and _open_root == _bar_root
-            if not simulate and broker_type == "tradovate":
+            if _using_tradovate_position:
                 from execution.tradovate_broker import TradovateBroker, TradovateConfig
                 from execution.broker_interface import Position as _Position
                 tv = TradovateBroker(config=TradovateConfig.from_env())
@@ -867,12 +883,21 @@ def process_alert(
                 fill = tv.resolve_position()
             elif same_instrument:
                 # Paper simulation: resolve against THIS bar's OHLC.
-                broker = _paper_broker(
-                    journal.get_account_balance(
-                        cfg.position_sizing.starting_balance, today
-                    ),
-                    cfg,
+                _paper_balance = journal.get_account_balance(
+                    cfg.position_sizing.starting_balance, today
                 )
+                if _proof_paper_position:
+                    broker = PaperBroker(
+                        starting_balance=_paper_balance,
+                        slippage_ticks=float(getattr(cfg, "fill_slippage_ticks", 0.0) or 0.0),
+                        pessimistic_both_hit=bool(getattr(cfg, "fill_pessimistic_both_hit", False)),
+                        runner_mode=True,
+                        runner_activation_r=float(getattr(cfg, "runner_activation_r", 1.0) or 1.0),
+                        runner_trail_r=float(getattr(cfg, "runner_trail_r", 0.5) or 0.5),
+                        entry_fill_model="market",
+                    )
+                else:
+                    broker = _paper_broker(_paper_balance, cfg)
                 broker.restore_position(
                     instrument=open_pos["instrument"] or state.instrument,
                     direction=open_pos["direction"],
@@ -881,6 +906,7 @@ def process_alert(
                     target=float(open_pos["target"]),
                     contracts=int(open_pos.get("contracts", 1)),
                 )
+                broker._active_order_id = open_pos.get("paper_order_id")
                 # Active runner: the broker is rebuilt every bar, so its
                 # _runner_max_fav resets to entry each call and the trail can never
                 # accumulate (the runner is inert without this). Reconstruct the
@@ -946,7 +972,7 @@ def process_alert(
                             # definitive no-fill → suppress (the reconciler will
                             # phantom-clear the position); unreadable → keep the
                             # row tagged fill_confirmed=null so review filters it.
-                            if not simulate and broker_type == "tradovate":
+                            if _using_tradovate_position:
                                 _oids = open_pos.get("order_ids")
                                 _entry_oid = (
                                     _oids.get("entry") if isinstance(_oids, dict) else None
@@ -985,8 +1011,7 @@ def process_alert(
             # block is fail-soft, so it can never break trading or leave a naked
             # position even if it errors.
             if (
-                not simulate
-                and broker_type == "tradovate"
+                _using_tradovate_position
                 and same_instrument
                 and fill is None
                 and open_pos.get("direction_role") != "COUNTERTREND_SCALP"
@@ -1038,7 +1063,7 @@ def process_alert(
             # the system never stays blocked by an unresolvable open position.
             # Tradovate mode: skip — the broker manages the bracket; None just
             # means still open.
-            if fill is None and simulate and same_instrument:
+            if fill is None and not _using_tradovate_position and same_instrument:
                 entry_price = float(open_pos["entry"])
                 price_ratio = abs(payload.close - entry_price) / entry_price if entry_price else 1.0
                 position_age_hours: float = 999.0
@@ -1084,6 +1109,7 @@ def process_alert(
                         pnl_dollars=pnl_dollars,
                         contracts=contracts,
                         for_date=open_position_date,
+                        paper_order_id=open_pos.get("paper_order_id"),
                     )
                     result["resolution"] = f"FORCE_CLOSE_{reason}"
                     daily_state.has_open_position = False
@@ -1116,6 +1142,7 @@ def process_alert(
                     pnl_dollars=fill.pnl_dollars,
                     contracts=fill.contracts,
                     for_date=open_position_date,
+                    paper_order_id=getattr(fill, "paper_order_id", None),
                 )
                 result["resolution"] = fill.result
                 if fill.result in {"WIN", "LOSS"}:
@@ -1740,20 +1767,23 @@ def process_alert(
         return result
 
     # ── Broker returned OPEN: confirm before journaling an open position ──────
-    # Fail closed if a REAL broker reports OPEN without order ids. execute_bracket
-    # only returns OPEN after setting _last_order_ids, so this is defence-in-depth
-    # against a broker/journal divergence: never mark a position open (and never
-    # consume trade budget) on an unconfirmable fill. PaperBroker has no order ids
-    # by design, so the order-id requirement applies to real brokers only.
+    # Fail closed if either adapter reports OPEN without its required identity:
+    # structured broker ids for real adapters, or the synthetic PAPER-* id for
+    # the internal simulator. Never journal an untraceable confirmed trade.
     _order_ids = getattr(broker, "_last_order_ids", None)
     _requires_order_ids = not isinstance(broker, PaperBroker)
-    if _requires_order_ids and not _order_ids:
+    _paper_order_id = getattr(fill, "paper_order_id", None)
+    _confirmation_missing = (
+        (_requires_order_ids and not _order_ids)
+        or (isinstance(broker, PaperBroker) and not _paper_order_id)
+    )
+    if _confirmation_missing:
         logger.error(
             "ORDER_CONFIRMATION_MISSING: %s %s — broker returned OPEN but no order "
             "ids; failing closed (not marking open, not counting the trade).",
             order.instrument, order.direction,
         )
-        if os.getenv("BROKER", "paper").strip().lower() == "tradovate":
+        if _requires_order_ids and os.getenv("BROKER", "paper").strip().lower() == "tradovate":
             try:
                 from notifications.discord_notifier import send_discord_alert
                 send_discord_alert(
@@ -1774,7 +1804,7 @@ def process_alert(
             result="CANCELLED",
             entry_price=order.entry,
             exit_price=None,
-            exit_reason="order_confirmation_missing:OPEN_without_order_ids",
+            exit_reason="order_confirmation_missing:OPEN_without_order_identity",
             pnl_ticks=0.0,
             pnl_dollars=0.0,
             contracts=order.contracts,
@@ -1800,6 +1830,9 @@ def process_alert(
             "target": decision.setup.target,
         }
         return result
+
+    if isinstance(broker, PaperBroker):
+        journal_entry["paper_order_id"] = _paper_order_id
 
     # Broker confirmed an OPEN position (with order ids on a real broker). NOW write
     # the authoritative decision="TRADE" row — the ONLY row any reader treats as an
@@ -1846,6 +1879,7 @@ def process_alert(
         "rr_ratio": decision.setup.rr_ratio,
         "strategy": decision.setup.strategy,
         "contracts": order.contracts,
+        "paper_order_id": _paper_order_id,
     }
 
     # Companion options paper lane: a fully-approved, OPENED futures trade derives an
