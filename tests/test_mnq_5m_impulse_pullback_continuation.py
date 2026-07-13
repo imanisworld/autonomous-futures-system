@@ -2,12 +2,17 @@
 tests/test_mnq_5m_impulse_pullback_continuation.py
 
 Pure-logic coverage for research/mnq_5m_impulse_pullback_continuation.py --
-STATUS: PROMISING BUT UNPROVEN, short-only, R=1.5, at a 2-tick slippage
-baseline (see docs/mnq-5m-impulse-pullback-continuation-study-2026-07-13.md).
-The long side and every other R-multiple tested are REJECTED. No shadow/
-live integration has been built from this module -- it lives under
-research/, not context/, and has no config/env fields, drift-guard pins,
-execution tracker, or webhook/runner.py wiring.
+STATUS: REJECTED for runtime purposes (see
+docs/mnq-5m-ipc-short-validation-2026-07-13.md). The short-only, R=1.5
+sub-result initially cleared the replay gate but fails the operator's
+explicit build gate on outlier sensitivity (removing its best 10 trades
+flips it from +$0.815/trade to -$2.157/trade). The long side and every
+other R-multiple are REJECTED outright. No shadow/live integration exists
+-- this module lives under research/, not context/, and has no config/env
+fields, drift-guard pins, execution tracker, or webhook/runner.py wiring.
+These tests exist so the rejected module's mechanics (independently
+confirmed causal/no-lookahead via manual bar-by-bar inspection) stay
+covered in case it's ever revisited.
 """
 from __future__ import annotations
 

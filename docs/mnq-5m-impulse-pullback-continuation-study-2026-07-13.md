@@ -91,28 +91,16 @@ computed in this pass)
 
 ## Classification
 
-**PROMISING BUT UNPROVEN — short-only, R=1.5, at the 2-tick baseline.**
-Combined long+short family: still not viable at any tested R-multiple. Long
-alone: REJECTED, consistently negative. Short alone at R=1.5: clears
-"survives both halves with realistic (2-tick) fills," per the operator's
-explicit gate for this follow-up study — but the margin is thin ($0.81/
-trade net) and decays to roughly breakeven by 4 ticks, and it has not been
-manually validated against a real chart event the way the prior study was.
-
-**No shadow/live integration has been built.** This clears the specific
-technical bar set for this study, but given (a) it's only one direction of
-the two requested, (b) the margin is thin and slippage-sensitive, and (c)
-building a shadow lane is a consequential step, this is being reported for
-an explicit decision rather than built out automatically.
-
-## What a decision to proceed would require, if made
-
-- Restricting the config to short-only, R-multiple pinned at 1.5, since
-  that is the only combination that cleared the bar — not a general
-  "impulse/pullback/continuation, both directions" lane.
-- A session-specific breakdown of the short-only result (not yet computed)
-  to check whether the edge concentrates in one session or is genuinely
-  broad.
-- A manual validation against a real chart event, the way the rejected
-  study's finding was concretely reconstructed against today's real box
-  data, before any live wiring.
+**UPDATE 2026-07-13 (post-validation): REJECTED.** The short-only, R=1.5
+result initially cleared this study's own gate (survives both halves at a
+2-tick baseline). A required narrow validation pass
+(`docs/mnq-5m-ipc-short-validation-2026-07-13.md`) found it fails the
+operator's explicit build gate: removing its own best 10 trades (0.6% of
+the 1,615-trade sample) flips it from +$0.815/trade to -$2.157/trade, and
+median trade expectancy is -$29.98 (most trades lose; the mean is only
+positive because of a handful of large trend-continuation days). Long alone
+remains REJECTED as reported below, consistently negative at every
+R-multiple. **No shadow/live integration will be built from this design.**
+See the validation doc for the full checklist and manual bar-by-bar
+confirmation that the detector's mechanics are sound (this is a real-edge
+rejection, not a bug).

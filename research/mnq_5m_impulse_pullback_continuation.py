@@ -1,4 +1,20 @@
-"""MNQ 5-minute impulse -> pullback -> continuation — research-only, UNPROVEN.
+"""MNQ 5-minute impulse -> pullback -> continuation — REJECTED, research-only.
+
+STATUS: REJECTED for runtime purposes (2026-07-13, after a required narrow
+validation pass -- see docs/mnq-5m-ipc-short-validation-2026-07-13.md). The
+short-only, R=1.5 sub-result initially cleared the replay gate (walk-forward
+positive both halves at 2-tick slippage), but fails the operator's explicit
+build gate: removing its own best 10 trades (0.6% of the 1,615-trade sample)
+flips it from +$0.815/trade to -$2.157/trade. Median trade expectancy is
+-$29.98 -- most trades lose; the aggregate is propped up by a handful of
+large trend-continuation days, not a repeatable edge. This is NOT a
+candidate awaiting activation. No shadow/live integration exists or should
+be built from this module without a genuinely more robust result.
+
+The detector's MECHANICS were independently confirmed correct (causal, no
+lookahead, arithmetic matches its own formulas) via manual bar-by-bar
+inspection of 2 winners + 2 losers plus a live, still-open real trigger from
+2026-07-13 -- the rejection is about the aggregate edge, not a bug.
 
 Follow-up to the REJECTED structural-level break/retest study
 (research/mnq_structural_level_5m.py, docs/mnq-structural-level-5m-study-
