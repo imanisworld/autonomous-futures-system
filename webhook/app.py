@@ -1936,6 +1936,80 @@ def _timeframe_mismatch_state(entries: list[dict]) -> dict | None:
     return {"blocks": tf_blocks, "last": last, "current": current}
 
 
+def _shadow_feed_status(now: datetime | None = None) -> dict | None:
+    """Informational (non-blocking) status for the intentional 5-minute
+    shadow/observation feed. Returns None whenever there is nothing
+    informative to show — the caller must render no banner in that case:
+
+      - FIVE_MIN_FEED_ENABLED is off (the 5-minute feed isn't running at all;
+        a 5-minute alert in that state is a genuine misconfiguration and
+        keeps using the EXISTING red `alert_validation`/TIMEFRAME_MISMATCH
+        path unchanged — this function never touches that path).
+      - VWAP_HOLD_EARLY_MODE is "off" (feed may be on, but no early lane
+        consumes it, so there's nothing to label as active).
+      - No 5-minute bar has been recorded recently (feed enabled but idle —
+        distinct from "active").
+
+    This is deliberately separate from `_timeframe_mismatch_state`: with the
+    feed enabled, a 5-minute alert never reaches the CONFIG_BLOCKED/
+    TIMEFRAME_MISMATCH path in webhook/runner.py at all (see its "Step 0a"
+    early-return), so there is nothing to reclassify there. This function
+    only adds a new, positive, amber/neutral signal — it never suppresses or
+    weakens the existing red banner's own logic.
+    """
+    from context.five_min_feed import five_min_enabled, five_min_status
+    from context.mnq_vwap_hold_early import vwap_hold_early_mode
+
+    if not five_min_enabled():
+        return None
+    mode = vwap_hold_early_mode(_config)
+    if mode == "shadow":
+        label = "SHADOW FEED ACTIVE"
+        detail = "5-minute alert received for early-signal evaluation. Main execution remains 15-minute only."
+    elif mode == "observe_only":
+        label = "OBSERVATION FEED ACTIVE"
+        detail = "5-minute alert received for observation only. Main execution remains 15-minute only."
+    else:
+        return None
+
+    status = five_min_status(_config.log_dir, instruments=["MNQ", "MES"])
+    last_ts_values = [
+        v.get("last_ts") for v in (status.get("instruments") or {}).values() if v.get("last_ts")
+    ]
+    if not last_ts_values:
+        return None
+    latest = max(last_ts_values)
+    try:
+        latest_dt = datetime.fromisoformat(str(latest).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    current_time = now or datetime.now(timezone.utc)
+    age_seconds = (current_time - latest_dt).total_seconds()
+    if age_seconds > feed_stale_after_minutes(5) * 60:
+        return None  # feed enabled but idle right now — not "active"
+
+    expected_tf = int(getattr(_config, "expected_timeframe_minutes", 15))
+    broker = os.getenv("BROKER", "paper").strip().lower()
+    tradovate_env = os.getenv("TRADOVATE_ENV", "").strip().lower()
+    if broker == "tradovate" and tradovate_env == "demo":
+        execution_label = "DEMO"
+    elif broker == "tradovate":
+        execution_label = "LIVE BLOCKED" if not _config.live_trading_enabled else "LIVE"
+    else:
+        execution_label = broker.upper()
+    footer = (
+        f"EXECUTION: {execution_label} · ORDERS: DISABLED · "
+        f"MAIN DECISION TF: {expected_tf}M · SHADOW FEED: 5M"
+    )
+    return {
+        "label": label,
+        "detail": detail,
+        "footer": footer,
+        "mode": mode,
+        "last_ts": latest,
+    }
+
+
 def _feed_window_active(now: datetime | None = None) -> bool:
     """Thin wrapper over the shared futures_session_active() helper, kept as a
     module-level name so diagnostics and tests can reference/monkeypatch it."""
@@ -2403,6 +2477,7 @@ def _dashboard_payload(for_date: date) -> dict:
             for_date=for_date,
         ),
         "alert_validation": alert_validation,
+        "shadow_feed_status": _shadow_feed_status(),
         "expected_timeframe_minutes": int(getattr(_config, "expected_timeframe_minutes", 15)),
         # Feed-health window + stale threshold from the one shared definition, so the
         # dashboards stop deciding "is a webhook expected now?" with their own clocks.
@@ -2662,6 +2737,9 @@ def _dashboard_init(status: dict) -> dict:
         "universe_missing": universe_missing,
         # Loud "LIVE ALERT MISCONFIGURED" banner data (timeframe mismatch today).
         "alert_validation": status.get("alert_validation"),
+        # Informational (non-blocking) 5-minute shadow/observation feed status —
+        # amber/neutral, never implies trading approval. See _shadow_feed_status.
+        "shadow_feed_status": status.get("shadow_feed_status"),
         "expected_timeframe_minutes": int(getattr(_config, "expected_timeframe_minutes", 15)),
         "broker": broker,
         "tradovate_env": os.getenv("TRADOVATE_ENV", "").strip().lower(),
@@ -2939,6 +3017,18 @@ _DASHBOARD_HTML = r"""<!doctype html>
     }
     .alertbar b { color: #fff; letter-spacing: 0.05em; display: block; font-size: 14px; margin-bottom: 2px; }
     .alertbar .sub { font-weight: 500; color: #ffb3c4; font-size: 12px; }
+
+    /* Amber/neutral — informational only, never green, never implies trading
+       approval. Mirrors .alertbar's structure with the .sandbox-banner palette. */
+    .shadowbar {
+      margin: 8px 12px 0; padding: 11px 14px; border-radius: 10px;
+      background: rgba(255,184,0,0.10); border: 1px solid rgba(255,184,0,0.40);
+      color: #ffe3a3; font-size: 13px; line-height: 1.55; text-align: center;
+      font-weight: 600;
+    }
+    .shadowbar b { color: #ffe3a3; letter-spacing: 0.05em; display: block; font-size: 14px; margin-bottom: 2px; }
+    .shadowbar .sub { font-weight: 500; color: #d8bd83; font-size: 12px; }
+    .shadowbar .foot { display: block; margin-top: 6px; font-weight: 700; color: #b89a5c; font-size: 11px; letter-spacing: 0.03em; }
 
     .panel {
       background: linear-gradient(180deg, rgba(23,26,45,0.98), rgba(18,21,39,0.98));
@@ -3323,6 +3413,7 @@ _DASHBOARD_HTML = r"""<!doctype html>
     </header>
     <div class="statusbar" id="statusbar"></div>
     <div class="alertbar" id="alertbar" hidden></div>
+    <div class="shadowbar" id="shadowbar" hidden></div>
     <div class="monitorbar" id="monitorbar" hidden></div>
     <div class="sandbox-banner">SAT / BACKEND CONSOLE <span class="soft">read-only regression surface · not the operator app</span></div>
     <main>
@@ -4251,6 +4342,7 @@ _DASHBOARD_HTML = r"""<!doctype html>
         state.firstLoad = false;
         renderStatusBar();
         renderAlertBar();
+        renderShadowBar();
         renderActive();
       }).catch(function (e) { /* keep last good state */ });
     }
@@ -4303,8 +4395,24 @@ _DASHBOARD_HTML = r"""<!doctype html>
       bar.innerHTML = msgs.join('<hr style="border:none;border-top:1px solid rgba(255,61,113,0.3);margin:8px 0;">');
     }
 
+    // Informational-only banner for the intentional 5-minute shadow/observation
+    // feed. Amber/neutral, never green — this never implies trading approval,
+    // it only reports that a 5-minute alert is being received for the early-
+    // signal lane while the main 15-minute execution path is unaffected.
+    function renderShadowBar() {
+      var bar = el('shadowbar');
+      if (!bar) return;
+      var sfs = (state.today && state.today.shadow_feed_status) || INIT.shadow_feed_status;
+      if (!sfs || !sfs.label) { bar.hidden = true; bar.innerHTML = ''; return; }
+      bar.hidden = false;
+      bar.innerHTML = '<b>' + esc(sfs.label) + '</b>' +
+        '<span class="sub">' + esc(sfs.detail || '') + '</span>' +
+        (sfs.footer ? '<span class="foot">' + esc(sfs.footer) + '</span>' : '');
+    }
+
     renderMonitorBar();
     renderAlertBar();
+    renderShadowBar();
     renderStatusBar();
     renderActive();
     updateAgeText();
