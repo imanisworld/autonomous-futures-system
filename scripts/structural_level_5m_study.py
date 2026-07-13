@@ -1,15 +1,21 @@
 #!/usr/bin/env python3
 """MNQ structural-level 5-minute break/retest/reclaim/rejection replay study.
 
-Replay-first proof for context/mnq_structural_level_5m.py. Walks every day of
-data/replay_polygon_5m/MNQ (621 daily files, 2024-07-02..2026-06-26) bar by
-bar, generates candidates via detect_candidates() using ONLY prior, already-
-closed bars as history (no lookahead by construction: `window` passed to the
-detector is `bars[:i]`, `current_bar` is `bars[i]`), and resolves ACCEPTED
-candidates forward using the same PaperBroker pessimistic-both-hit resolver
-already validated in scripts/mnq_entry_refresh_study.py (fixed target = next
-mapped level, stop = structural stop, stop-priority on same-bar double-hit,
-1 tick adverse slippage, $1.48 round-trip commission).
+RESULT: REJECTED -- see docs/mnq-structural-level-5m-study-2026-07-13.md.
+This script and research/mnq_structural_level_5m.py are a research record,
+not a pending build. Fixed-target exit is robustly negative; a runner-exit
+variant fails a 2-tick slippage stress test. No shadow/live lane was built.
+
+Replay-first proof for research/mnq_structural_level_5m.py. Walks every day
+of data/replay_polygon_5m/MNQ (621 daily files, 2024-07-02..2026-06-26) bar
+by bar, generates candidates via detect_candidates() using ONLY prior,
+already-closed bars as history (no lookahead by construction: `window`
+passed to the detector is `bars[:i]`, `current_bar` is `bars[i]`), and
+resolves ACCEPTED candidates forward using the same PaperBroker
+pessimistic-both-hit resolver already validated in
+scripts/mnq_entry_refresh_study.py (fixed target = next mapped level, stop =
+structural stop, stop-priority on same-bar double-hit, 1 tick adverse
+slippage, $1.48 round-trip commission).
 
 Reproduce: python3 scripts/structural_level_5m_study.py
 """
@@ -24,7 +30,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
 
-from context.mnq_structural_level_5m import detect_candidates  # noqa: E402
+from research.mnq_structural_level_5m import detect_candidates  # noqa: E402
 from execution.broker_interface import BracketOrder  # noqa: E402
 from execution.paper_broker import NextBarOHLC, PaperBroker  # noqa: E402
 

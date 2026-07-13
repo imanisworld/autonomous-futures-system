@@ -1,16 +1,17 @@
 """
 tests/test_mnq_structural_level_5m.py
 
-Pure-logic coverage for context/mnq_structural_level_5m.py. This module is
-NOT wired into webhook/runner.py and has no config/env fields, drift-guard
-pins, or execution/shadow tracker -- see docs/mnq-structural-level-5m-study-
-2026-07-13.md. The replay study found the fixed-target exit robustly
-negative and the runner-exit variant fails a 2-tick slippage stress test, so
+Pure-logic coverage for research/mnq_structural_level_5m.py -- STATUS:
+REJECTED, research-only (see docs/mnq-structural-level-5m-study-2026-07-13.md).
+This module is NOT a candidate awaiting activation: the replay study found
+the fixed-target exit robustly negative (both walk-forward halves, every RR
+bucket) and the runner-exit variant fails a 2-tick slippage stress test, so
 per the operator's own gate ("only proceed to live integration if replay...
-survives both halves with realistic fills") this lane was not built out
-beyond the pure detector + replay study. These tests exist so the module
-that DOES live in the repo (used only by scripts/structural_level_5m_study.py)
-is not merely research-script-tested.
+survives both halves with realistic fills") no shadow/live integration was
+built. It lives under research/, not context/, and has no config/env
+fields, drift-guard pins, execution/shadow tracker, or webhook/runner.py
+wiring. These tests exist so the rejected module is not merely
+research-script-tested, in case it's ever revisited.
 """
 from __future__ import annotations
 
@@ -18,7 +19,7 @@ import os
 
 import pytest
 
-from context.mnq_structural_level_5m import (
+from research.mnq_structural_level_5m import (
     classify_context,
     detect_candidates,
     is_structural_level_5m_candidate,

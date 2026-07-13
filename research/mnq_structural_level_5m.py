@@ -1,12 +1,30 @@
-"""MNQ structural-level 5-minute break/retest/reclaim/rejection — replay/shadow lane.
+"""MNQ structural-level 5-minute break/retest/reclaim/rejection — REJECTED, research-only.
 
-Motivating gap: the deployed 15-minute engine and the vwap_hold-only 5-minute
-early-signal lane (context/mnq_vwap_hold_early.py, PR #267) both evaluate a
-SINGLE strategy family (vwap_hold) reactively. Neither evaluates a plain
-structural-level break/retest/reclaim/rejection sequence against the mapped
-levels already carried on every alert — the failure mode this lane targets is
-"the system received the context and mapped levels but never scored the
-overnight move, the bounce, or the rejection against them at all."
+STATUS: REJECTED (2026-07-13, docs/mnq-structural-level-5m-study-2026-07-13.md).
+This is NOT a candidate awaiting activation. The replay study found the
+fixed-target exit robustly negative (both walk-forward halves, every RR
+bucket) and the runner-exit variant fails a 2-tick slippage stress test
+(flips from +$0.46/trade to -$0.06/trade) -- too fragile to proceed under
+the operator's own explicit gate ("only proceed to live integration if
+replay survives both halves with realistic fills"). No shadow/live
+integration was built, and none should be built from this module without a
+NEW replay that clears that bar under a genuinely different setup design
+(see the study doc's "what would need to change" section).
+
+Deliberately kept OUT of `context/` (where the two live MNQ shadow lanes'
+pure-decision modules live) and placed under `research/` instead, so its
+directory location does not imply runtime-readiness. Nothing under
+webhook/, strategy/, or execution/ imports this module, and nothing should.
+
+Motivating gap this module was built to investigate: the deployed 15-minute
+engine and the vwap_hold-only 5-minute early-signal lane
+(context/mnq_vwap_hold_early.py, PR #267) both evaluate a SINGLE strategy
+family (vwap_hold) reactively. Neither evaluates a plain structural-level
+break/retest/reclaim/rejection sequence against the mapped levels already
+carried on every alert — "the system received the context and mapped levels
+but never scored the overnight move, the bounce, or the rejection against
+them at all." The replay study answered this: scoring them this way does not
+have a durable edge (see STATUS above).
 
 MAPPED LEVELS — scoped strictly to what the payload schema actually carries,
 per the explicit instruction not to invent new proprietary levels:

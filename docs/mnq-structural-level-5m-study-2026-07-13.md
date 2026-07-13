@@ -35,7 +35,7 @@ alerts and the 621-day historical set.
 
 ## Method
 
-- `context/mnq_structural_level_5m.py`: pure, stateless detector. For each
+- `research/mnq_structural_level_5m.py`: pure, stateless detector. For each
   bar, close-cross reclaim/rejection (`reclaim`/`failed_breakdown` long,
   `rejection`/`failed_reclaim` short) and break-then-retest continuation
   (`break_and_retest`, both directions) are evaluated against every mapped
@@ -165,16 +165,37 @@ concepts both land on "no real edge for MNQ."
 
 ## Classification
 
-**WAIT / not proven under realistic fills.** Fixed-target exit: BROKEN,
-robustly negative, both halves, every RR bucket. Runner exit: technically
-clears "PROMISING BUT UNPROVEN, survives both halves" at an optimistic
-1-tick slippage assumption, but does not survive a 2-tick stress test — per
-the operator's own explicit gate ("only proceed... if replay... survives
-both halves with realistic fills"), this does not clear the bar. **Live
-shadow integration was not built.** No config, drift-guard, execution
-tracker, or `webhook/runner.py` changes were made.
+**REJECTED.** This is not a candidate awaiting activation — it is a closed
+research finding. Fixed-target exit: BROKEN, robustly negative, both halves,
+every RR bucket. Runner exit: technically clears "PROMISING BUT UNPROVEN,
+survives both halves" at an optimistic 1-tick slippage assumption, but does
+not survive a 2-tick stress test — per the operator's own explicit gate
+("only proceed... if replay... survives both halves with realistic fills"),
+this does not clear the bar. Confirmed by manual reconstruction against real
+2026-07-13 box data: the visually-obvious short would not have been captured
+by this rule set — it fires, but is stopped out one bar later by the
+morning bounce (see Manual chart validation above); the market's later
+continuation lower would not have been captured by this specific setup,
+because the position was already closed. **No shadow/live integration was
+built, and none should be, from this design.** No config, drift-guard,
+execution tracker, or `webhook/runner.py` changes were made. The module
+lives under `research/`, not `context/`, specifically so its location does
+not imply runtime-readiness.
 
-## What would need to change before revisiting this
+**Do not build another version of this same level-fade design** (enter
+immediately on a mapped-level break/retest with a very tight structural stop
+against a distant next-level target) — that is the specific idea this study
+rejects, not just this exact parameterization of it. The next attempt at
+scoring the same motivating gap (overnight move / bounce / rejection) should
+use a different setup family — see
+`docs/mnq-5m-impulse-pullback-continuation-study-2026-07-13.md` for the
+follow-up study.
+
+## What would need to change before revisiting this design specifically
+
+Kept for completeness, not as a build recommendation -- the operator's
+direction is a different setup family (impulse/pullback/continuation, see
+above), not a retuned version of this one:
 
 1. A target-selection rule that isn't "whichever of 4 discrete levels happens
    to be next" — e.g. cap reward at some multiple of the stop distance, or
