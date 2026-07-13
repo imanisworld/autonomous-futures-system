@@ -277,10 +277,15 @@ class V2TradeResult(BacktestTradeResult):
     """`BacktestTradeResult` plus which lane produced it, so
     `summarize_trades()` (unmodified) keeps working on a sequence of
     these, while callers can filter by `.lane` for the separate Lane 1
-    / Lane 2 reports the validation requirement calls for."""
+    / Lane 2 reports the validation requirement calls for.
+    `gross_pnl_dollars` is the frictionless baseline (no slippage, no
+    regulatory fees) -- reporting-only, never used by any decision or
+    resolution logic -- so a gross-vs-friction-adjusted diagnostic never
+    needs to recompute it from scratch."""
 
     lane: str = ""
     strategy_version: str = STRATEGY_VERSION
+    gross_pnl_dollars: Optional[float] = None
 
 
 def _no_trade_v2(*, lane: str, date: str, reason: str) -> V2TradeResult:
@@ -380,6 +385,7 @@ def _evaluate_lane1(day: DaySession, config: V2Config) -> V2TradeResult | Skippe
         exit_price=state.exit_price,
         exit_reason=state.exit_reason,
         dollar_result=state.net_pnl_dollars,
+        gross_pnl_dollars=state.gross_pnl_dollars,
         percent_result=percent_result,
     )
 
@@ -532,6 +538,7 @@ def _resolve_lane2_trade(
         exit_price=modeled_exit_price,
         exit_reason=exit_reason,
         dollar_result=net_pnl,
+        gross_pnl_dollars=gross_pnl,
         percent_result=percent_result,
     )
 
