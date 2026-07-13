@@ -11,6 +11,13 @@ LIVE_ELIGIBLE / DISABLED / BROKEN_OR_INCOMPLETE) is a static map maintained by
 hand alongside risk_rules.yaml's enabled_concepts — it is NOT derived from the
 journal, because a strategy that never fired this window is not the same as
 one that can't fire. Keep it in sync when enabled_concepts changes.
+
+LANE_CLASS answers "is this strategy technically wired to be evaluated at
+all" — it is a different axis from risk_rules.yaml's strategy_permission_gate,
+which answers "has this strategy earned the right to reach paper/live
+execution." A strategy can be LIVE_ELIGIBLE here (present in enabled_concepts,
+reachable in signal_engine.py) while still being gated to SHADOW_ONLY by the
+permission gate. See LANE_NOTES for any such overrides.
 """
 
 from __future__ import annotations
@@ -72,6 +79,9 @@ LANE_NOTES: dict[str, str] = {
     "range_break_close": "continuation off a broken wall, NOT a fade",
     "range_reject": "watch-state only; entry/stop/target hardcoded None, never resolvable",
     "range_bounce": "watch-state only; entry/stop/target hardcoded None, never resolvable",
+    "vwap_hold": "LIVE_ELIGIBLE reflects code wiring only; risk_rules.yaml's "
+    "strategy_permission_gate demotes this strategy to SHADOW_ONLY as of "
+    "2026-07-09 — it cannot reach paper/live execution despite this class",
 }
 
 
