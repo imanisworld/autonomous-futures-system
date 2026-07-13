@@ -24,7 +24,8 @@ def test_candidate_is_forced_observe_only_before_promotion():
     assert "--setenv=EXPECTED_PROOF_HTF_DIRECTION_MODE=off" in text
     assert "--setenv=EXIT_MODE=static" in text
     assert "--setenv=EXPECTED_PROOF_EXIT_MODE=static" in text
-    assert "--port 8010" in text
+    assert "s.bind((\\\"127.0.0.1\\\", 0))" in text
+    assert "--port '$port'" in text
 
 
 def test_promotion_and_rollback_use_atomic_symlink_replacement():
