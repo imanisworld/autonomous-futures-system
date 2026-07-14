@@ -447,6 +447,13 @@ class SystemConfig:
     # demo). "live" is never a valid value — validated in _validate_config.
     mnq_orb_reclaim_proof_mode: str = "observe_only"
 
+    # ── MNQ orb_breakout proof mode (strategy-restoration candidate #2,
+    # 2026-07-13/14) ──────────────────────────────────────────────────────
+    # Identical tri-state contract, scoped to MNQ + orb_breakout only — see
+    # context/mnq_orb_breakout_proof.py and docs/orb-breakout-entry-study-
+    # 2026-07-11.md for the evidence this is based on.
+    mnq_orb_breakout_proof_mode: str = "observe_only"
+
     # ── Entry-refresh Phase 1 shadow lane (2026-07-13) ───────────────────────
     # Scoped narrowly to MNQ + orb_reclaim only by default — see
     # context/mnq_entry_refresh.py. off (default): module does nothing.
@@ -713,6 +720,9 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         mnq_orb_reclaim_proof_mode=str(
             os.getenv("MNQ_ORB_RECLAIM_PROOF_MODE", "observe_only") or "observe_only"
         ).strip().lower(),
+        mnq_orb_breakout_proof_mode=str(
+            os.getenv("MNQ_ORB_BREAKOUT_PROOF_MODE", "observe_only") or "observe_only"
+        ).strip().lower(),
         entry_refresh_mode=str(
             os.getenv("ENTRY_REFRESH_MODE", "off") or "off"
         ).strip().lower(),
@@ -961,6 +971,12 @@ def _validate_config(config: SystemConfig) -> None:
         raise ConfigError(
             "MNQ_ORB_RECLAIM_PROOF_MODE must be one of "
             f"{sorted(_valid_mnq_proof_modes)} (got {config.mnq_orb_reclaim_proof_mode!r}); "
+            "'live' is never a valid value for this proof mode."
+        )
+    if config.mnq_orb_breakout_proof_mode not in _valid_mnq_proof_modes:
+        raise ConfigError(
+            "MNQ_ORB_BREAKOUT_PROOF_MODE must be one of "
+            f"{sorted(_valid_mnq_proof_modes)} (got {config.mnq_orb_breakout_proof_mode!r}); "
             "'live' is never a valid value for this proof mode."
         )
     _valid_entry_refresh_modes = {"off", "observe_only", "shadow"}
