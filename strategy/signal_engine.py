@@ -717,7 +717,19 @@ class DecisionEngine:
                 setup.strategy,
                 getattr(self.config, "strategy_permission_default_status", "SHADOW_ONLY"),
             )
-            if status != "PAPER_ELIGIBLE":
+            # MNQ vwap_hold proof lane (restoration candidate #3, 2026-07-14):
+            # the ONLY exception this gate has. Opens exclusively for
+            # MNQ + vwap_hold + new_york + MNQ_VWAP_HOLD_PROOF_MODE=paper_sim
+            # — in which case webhook/runner.py's proof hook forces PaperBroker
+            # + market entry + runner exit (or suppresses a duplicate), so the
+            # excepted decision can never reach the normal IOC/static/Tradovate
+            # path. Every other strategy/instrument/session/mode is unaffected.
+            from context.mnq_vwap_hold_proof import permission_gate_exception
+
+            _vwap_hold_proof_exception = permission_gate_exception(
+                state.instrument, setup.strategy, state.session, self.config
+            )
+            if status != "PAPER_ELIGIBLE" and not _vwap_hold_proof_exception:
                 for row in candidate_audit:
                     if row.get("winner"):
                         row["strategy_permission_status"] = status

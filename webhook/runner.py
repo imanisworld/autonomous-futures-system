@@ -37,6 +37,11 @@ from context.mnq_orb_reclaim_proof import (
     is_mnq_orb_reclaim_candidate,
     record_campaign_attempt,
 )
+from context.mnq_vwap_hold_proof import (
+    evaluate_mnq_vwap_hold_proof,
+    is_mnq_vwap_hold_candidate,
+    record_campaign_attempt as record_vwap_hold_campaign_attempt,
+)
 from context.mnq_orb_breakout_proof import (
     evaluate_mnq_orb_breakout_proof,
     is_mnq_orb_breakout_candidate,
@@ -840,6 +845,7 @@ def process_alert(
             _open_pos_strategy = open_pos.get("strategy") or (open_pos.get("setup") or {}).get("strategy")
             _reclaim_proof_audit = open_pos.get("mnq_orb_reclaim_proof_audit")
             _breakout_proof_audit = open_pos.get("mnq_orb_breakout_proof_audit")
+            _vwap_hold_proof_audit = open_pos.get("mnq_vwap_hold_proof_audit")
             _proof_paper_position = bool(
                 (
                     isinstance(_reclaim_proof_audit, dict)
@@ -852,6 +858,12 @@ def process_alert(
                     and _breakout_proof_audit.get("proof_mode") == "paper_sim"
                     and _breakout_proof_audit.get("force_paper_broker") is True
                     and is_mnq_orb_breakout_candidate(open_pos.get("instrument"), _open_pos_strategy)
+                )
+                or (
+                    isinstance(_vwap_hold_proof_audit, dict)
+                    and _vwap_hold_proof_audit.get("proof_mode") == "paper_sim"
+                    and _vwap_hold_proof_audit.get("force_paper_broker") is True
+                    and is_mnq_vwap_hold_candidate(open_pos.get("instrument"), _open_pos_strategy)
                 )
             )
             # A proof paper position remains paper-owned for its entire
@@ -1233,6 +1245,8 @@ def process_alert(
     mnq_proof_audit = None
     mnq_breakout_proof_decision = None
     mnq_breakout_proof_audit = None
+    mnq_vwap_hold_proof_decision = None
+    mnq_vwap_hold_proof_audit = None
     if (
         decision.decision == "TRADE"
         and decision.setup is not None
@@ -1301,10 +1315,52 @@ def process_alert(
                 reason=mnq_breakout_proof_decision.reason,
                 failed_gates=list(decision.failed_gates or []) + ["MNQ_ORB_BREAKOUT_PROOF_DUPLICATE"],
             )
+    elif (
+        decision.decision == "TRADE"
+        and decision.setup is not None
+        and is_mnq_vwap_hold_candidate(state.instrument, decision.setup.strategy)
+    ):
+        # Restoration candidate #3 (2026-07-14, docs/strategy-matrix-tranche1-
+        # 2026-07-14.md): MNQ + vwap_hold + new_york only. A vwap_hold TRADE
+        # can only exist here because the signal engine's permission-gate
+        # exception opened for paper_sim+new_york (vwap_hold is SHADOW_ONLY
+        # globally) — or because an operator re-promoted it in risk_rules.yaml,
+        # in which case evaluate() returns a no-op and the normal path is
+        # their explicit choice. In paper_sim the decision below either gets
+        # the full paper override or is suppressed as a duplicate: it never
+        # falls through to the normal IOC/static/Tradovate path.
+        mnq_vwap_hold_proof_decision = evaluate_mnq_vwap_hold_proof(
+            cfg=cfg,
+            log_dir=log_dir,
+            session=state.session,
+            direction=decision.setup.direction,
+            for_date=for_date,
+        )
+        mnq_vwap_hold_proof_audit = {
+            **mnq_vwap_hold_proof_decision.to_audit_dict(),
+            "would_be_setup": {
+                "direction": decision.setup.direction,
+                "entry": decision.setup.entry,
+                "stop": decision.setup.stop,
+                "target": decision.setup.target,
+                "rr_ratio": decision.setup.rr_ratio,
+            },
+        }
+        if mnq_vwap_hold_proof_decision.suppress:
+            import dataclasses as _dataclasses
+            decision = _dataclasses.replace(
+                decision,
+                decision="NO_TRADE",
+                setup=None,
+                reason=mnq_vwap_hold_proof_decision.reason,
+                failed_gates=list(decision.failed_gates or []) + ["MNQ_VWAP_HOLD_PROOF_DUPLICATE"],
+            )
     # Unified handle for the downstream broker/BracketOrder override layer,
     # which does not need to know WHICH proof lane is active, only whether
     # one is. Mutually exclusive per decision, so at most one is ever non-None.
-    _active_mnq_proof_decision = mnq_proof_decision or mnq_breakout_proof_decision
+    _active_mnq_proof_decision = (
+        mnq_proof_decision or mnq_breakout_proof_decision or mnq_vwap_hold_proof_decision
+    )
     result["decision"] = decision.decision
     result["regime"] = decision.regime
     result["gex_status"] = decision.gex_status
@@ -1402,6 +1458,8 @@ def process_alert(
             journal_entry["mnq_orb_reclaim_proof_audit"] = mnq_proof_audit
         if mnq_breakout_proof_audit is not None:
             journal_entry["mnq_orb_breakout_proof_audit"] = mnq_breakout_proof_audit
+        if mnq_vwap_hold_proof_audit is not None:
+            journal_entry["mnq_vwap_hold_proof_audit"] = mnq_vwap_hold_proof_audit
         if entry_refresh_audit is not None:
             journal_entry["entry_refresh_audit"] = entry_refresh_audit
         gex_observed = _maybe_observe_gex(state, cfg)
@@ -1473,6 +1531,8 @@ def process_alert(
         journal_entry["mnq_orb_reclaim_proof_audit"] = mnq_proof_audit
     if mnq_breakout_proof_audit is not None:
         journal_entry["mnq_orb_breakout_proof_audit"] = mnq_breakout_proof_audit
+    if mnq_vwap_hold_proof_audit is not None:
+        journal_entry["mnq_vwap_hold_proof_audit"] = mnq_vwap_hold_proof_audit
     journal_entry["confluence"] = result["confluence"]
     gex_observed = _maybe_observe_gex(state, cfg)
     if gex_observed:
@@ -1742,6 +1802,12 @@ def process_alert(
             log_dir,
             orb_high=getattr(state.orb, "high", None) if state.orb else None,
             orb_low=getattr(state.orb, "low", None) if state.orb else None,
+            direction=decision.setup.direction,
+            for_date=for_date,
+        )
+    elif mnq_vwap_hold_proof_decision is not None and mnq_vwap_hold_proof_decision.apply_override:
+        record_vwap_hold_campaign_attempt(
+            log_dir,
             direction=decision.setup.direction,
             for_date=for_date,
         )
