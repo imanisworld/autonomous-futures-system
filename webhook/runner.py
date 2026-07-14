@@ -37,6 +37,11 @@ from context.mnq_orb_reclaim_proof import (
     is_mnq_orb_reclaim_candidate,
     record_campaign_attempt,
 )
+from context.mnq_orb_breakout_proof import (
+    evaluate_mnq_orb_breakout_proof,
+    is_mnq_orb_breakout_candidate,
+    record_campaign_attempt as record_orb_breakout_campaign_attempt,
+)
 from context.mnq_entry_refresh import (
     entry_refresh_instruments,
     entry_refresh_max_detachment_r,
@@ -832,14 +837,21 @@ def process_alert(
     if daily_state.has_open_position:
         if open_pos and _position_is_complete(open_pos):
             broker_type = os.getenv("BROKER", "paper").strip().lower()
-            _proof_audit = open_pos.get("mnq_orb_reclaim_proof_audit")
+            _open_pos_strategy = open_pos.get("strategy") or (open_pos.get("setup") or {}).get("strategy")
+            _reclaim_proof_audit = open_pos.get("mnq_orb_reclaim_proof_audit")
+            _breakout_proof_audit = open_pos.get("mnq_orb_breakout_proof_audit")
             _proof_paper_position = bool(
-                isinstance(_proof_audit, dict)
-                and _proof_audit.get("proof_mode") == "paper_sim"
-                and _proof_audit.get("force_paper_broker") is True
-                and is_mnq_orb_reclaim_candidate(
-                    open_pos.get("instrument"), open_pos.get("strategy")
-                    or (open_pos.get("setup") or {}).get("strategy")
+                (
+                    isinstance(_reclaim_proof_audit, dict)
+                    and _reclaim_proof_audit.get("proof_mode") == "paper_sim"
+                    and _reclaim_proof_audit.get("force_paper_broker") is True
+                    and is_mnq_orb_reclaim_candidate(open_pos.get("instrument"), _open_pos_strategy)
+                )
+                or (
+                    isinstance(_breakout_proof_audit, dict)
+                    and _breakout_proof_audit.get("proof_mode") == "paper_sim"
+                    and _breakout_proof_audit.get("force_paper_broker") is True
+                    and is_mnq_orb_breakout_candidate(open_pos.get("instrument"), _open_pos_strategy)
                 )
             )
             # A proof paper position remains paper-owned for its entire
@@ -1212,8 +1224,15 @@ def process_alert(
     # + runner-exit override, and only at the broker/BracketOrder layer further
     # below — never by suppressing or redirecting the decision itself. See
     # context/mnq_orb_reclaim_proof.py for the mode semantics.
+    # Restoration candidate #2 (2026-07-13/14, docs/orb-breakout-entry-study-
+    # 2026-07-11.md): identical architecture, independent lane, MNQ orb_breakout
+    # only. A decision matches at most ONE of these two candidate checks
+    # (decision.setup.strategy is a single string), so they are mutually
+    # exclusive by construction — never both active for the same decision.
     mnq_proof_decision = None
     mnq_proof_audit = None
+    mnq_breakout_proof_decision = None
+    mnq_breakout_proof_audit = None
     if (
         decision.decision == "TRADE"
         and decision.setup is not None
@@ -1250,6 +1269,42 @@ def process_alert(
                 reason=mnq_proof_decision.reason,
                 failed_gates=list(decision.failed_gates or []) + ["MNQ_ORB_RECLAIM_PROOF_DUPLICATE"],
             )
+    elif (
+        decision.decision == "TRADE"
+        and decision.setup is not None
+        and is_mnq_orb_breakout_candidate(state.instrument, decision.setup.strategy)
+    ):
+        mnq_breakout_proof_decision = evaluate_mnq_orb_breakout_proof(
+            cfg=cfg,
+            log_dir=log_dir,
+            orb_high=getattr(state.orb, "high", None) if state.orb else None,
+            orb_low=getattr(state.orb, "low", None) if state.orb else None,
+            direction=decision.setup.direction,
+            for_date=for_date,
+        )
+        mnq_breakout_proof_audit = {
+            **mnq_breakout_proof_decision.to_audit_dict(),
+            "would_be_setup": {
+                "direction": decision.setup.direction,
+                "entry": decision.setup.entry,
+                "stop": decision.setup.stop,
+                "target": decision.setup.target,
+                "rr_ratio": decision.setup.rr_ratio,
+            },
+        }
+        if mnq_breakout_proof_decision.suppress:
+            import dataclasses as _dataclasses
+            decision = _dataclasses.replace(
+                decision,
+                decision="NO_TRADE",
+                setup=None,
+                reason=mnq_breakout_proof_decision.reason,
+                failed_gates=list(decision.failed_gates or []) + ["MNQ_ORB_BREAKOUT_PROOF_DUPLICATE"],
+            )
+    # Unified handle for the downstream broker/BracketOrder override layer,
+    # which does not need to know WHICH proof lane is active, only whether
+    # one is. Mutually exclusive per decision, so at most one is ever non-None.
+    _active_mnq_proof_decision = mnq_proof_decision or mnq_breakout_proof_decision
     result["decision"] = decision.decision
     result["regime"] = decision.regime
     result["gex_status"] = decision.gex_status
@@ -1345,6 +1400,8 @@ def process_alert(
             journal_entry["shadow_candidates"] = shadow_candidates
         if mnq_proof_audit is not None:
             journal_entry["mnq_orb_reclaim_proof_audit"] = mnq_proof_audit
+        if mnq_breakout_proof_audit is not None:
+            journal_entry["mnq_orb_breakout_proof_audit"] = mnq_breakout_proof_audit
         if entry_refresh_audit is not None:
             journal_entry["entry_refresh_audit"] = entry_refresh_audit
         gex_observed = _maybe_observe_gex(state, cfg)
@@ -1414,6 +1471,8 @@ def process_alert(
         journal_entry["shadow_candidates"] = shadow_candidates
     if mnq_proof_audit is not None:
         journal_entry["mnq_orb_reclaim_proof_audit"] = mnq_proof_audit
+    if mnq_breakout_proof_audit is not None:
+        journal_entry["mnq_orb_breakout_proof_audit"] = mnq_breakout_proof_audit
     journal_entry["confluence"] = result["confluence"]
     gex_observed = _maybe_observe_gex(state, cfg)
     if gex_observed:
@@ -1433,9 +1492,9 @@ def process_alert(
         else _make_broker(starting_balance=journal_balance, cfg=cfg)
     )
     if (
-        mnq_proof_decision is not None
-        and mnq_proof_decision.apply_override
-        and mnq_proof_decision.force_paper_broker
+        _active_mnq_proof_decision is not None
+        and _active_mnq_proof_decision.apply_override
+        and _active_mnq_proof_decision.force_paper_broker
     ):
         # paper_sim mode: force a dedicated PaperBroker (market entry, runner
         # exit) regardless of the box's normal paper_mode/BROKER selection —
@@ -1577,8 +1636,8 @@ def process_alert(
         strategy=decision.setup.strategy,
         notes=decision.setup.notes,
         contracts=contracts,
-        force_market_entry=bool(mnq_proof_decision and mnq_proof_decision.force_market_entry),
-        force_runner_exit=bool(mnq_proof_decision and mnq_proof_decision.force_runner_exit),
+        force_market_entry=bool(_active_mnq_proof_decision and _active_mnq_proof_decision.force_market_entry),
+        force_runner_exit=bool(_active_mnq_proof_decision and _active_mnq_proof_decision.force_runner_exit),
     )
 
     # ── Schedule-mode execution gate (Phase 3 safety chokepoint) ──────────────
@@ -1672,6 +1731,14 @@ def process_alert(
         # a legitimately-retried attempt is not falsely deduped. Recorded
         # whether or not this attempt fills.
         record_campaign_attempt(
+            log_dir,
+            orb_high=getattr(state.orb, "high", None) if state.orb else None,
+            orb_low=getattr(state.orb, "low", None) if state.orb else None,
+            direction=decision.setup.direction,
+            for_date=for_date,
+        )
+    elif mnq_breakout_proof_decision is not None and mnq_breakout_proof_decision.apply_override:
+        record_orb_breakout_campaign_attempt(
             log_dir,
             orb_high=getattr(state.orb, "high", None) if state.orb else None,
             orb_low=getattr(state.orb, "low", None) if state.orb else None,

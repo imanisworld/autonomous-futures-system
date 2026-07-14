@@ -543,6 +543,9 @@ class JournalLogger:
                         "mnq_orb_reclaim_proof_audit": entry.get(
                             "mnq_orb_reclaim_proof_audit"
                         ),
+                        "mnq_orb_breakout_proof_audit": entry.get(
+                            "mnq_orb_breakout_proof_audit"
+                        ),
                         "direction_role": setup.get("direction_role"),
                         "ts": entry.get("ts"),  # processing-time age/stale reference
                         # Decision time is after the bar close, so runner history
