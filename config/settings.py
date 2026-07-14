@@ -454,6 +454,15 @@ class SystemConfig:
     # 2026-07-11.md for the evidence this is based on.
     mnq_orb_breakout_proof_mode: str = "observe_only"
 
+    # ── MNQ vwap_hold proof mode (strategy-restoration candidate #3,
+    # 2026-07-14) ─────────────────────────────────────────────────────────
+    # Same tri-state contract, scoped to MNQ + vwap_hold + new_york session
+    # only. Unlike the orb lanes, paper_sim additionally opens a narrow
+    # strategy-permission-gate exception (vwap_hold is SHADOW_ONLY globally);
+    # tradovate_demo deliberately does NOT — see context/mnq_vwap_hold_proof.py
+    # and docs/strategy-matrix-tranche1-2026-07-14.md for the evidence.
+    mnq_vwap_hold_proof_mode: str = "observe_only"
+
     # ── Entry-refresh Phase 1 shadow lane (2026-07-13) ───────────────────────
     # Scoped narrowly to MNQ + orb_reclaim only by default — see
     # context/mnq_entry_refresh.py. off (default): module does nothing.
@@ -723,6 +732,9 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         mnq_orb_breakout_proof_mode=str(
             os.getenv("MNQ_ORB_BREAKOUT_PROOF_MODE", "observe_only") or "observe_only"
         ).strip().lower(),
+        mnq_vwap_hold_proof_mode=str(
+            os.getenv("MNQ_VWAP_HOLD_PROOF_MODE", "observe_only") or "observe_only"
+        ).strip().lower(),
         entry_refresh_mode=str(
             os.getenv("ENTRY_REFRESH_MODE", "off") or "off"
         ).strip().lower(),
@@ -977,6 +989,12 @@ def _validate_config(config: SystemConfig) -> None:
         raise ConfigError(
             "MNQ_ORB_BREAKOUT_PROOF_MODE must be one of "
             f"{sorted(_valid_mnq_proof_modes)} (got {config.mnq_orb_breakout_proof_mode!r}); "
+            "'live' is never a valid value for this proof mode."
+        )
+    if config.mnq_vwap_hold_proof_mode not in _valid_mnq_proof_modes:
+        raise ConfigError(
+            "MNQ_VWAP_HOLD_PROOF_MODE must be one of "
+            f"{sorted(_valid_mnq_proof_modes)} (got {config.mnq_vwap_hold_proof_mode!r}); "
             "'live' is never a valid value for this proof mode."
         )
     _valid_entry_refresh_modes = {"off", "observe_only", "shadow"}
