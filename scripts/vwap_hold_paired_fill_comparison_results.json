@@ -1,0 +1,4975 @@
+{
+ "arm_population": {
+  "n": 348,
+  "sha256": "18cbbc8427b8afc462b1145347125ae45bb2b6af97f4ef9f374a10565a96d880",
+  "first": "2024-07-02T07:00:00+00:00",
+  "last": "2026-06-25T15:15:00+00:00"
+ },
+ "identical_inputs": "both legs consumed the same arm list object; per-arm pairing below",
+ "old_ioc": {
+  "raw": {
+   "arms": 348,
+   "filled": 105,
+   "not_filled": 243,
+   "resolved": 105,
+   "net": 1171.74,
+   "expectancy": 11.16,
+   "win_rate": 0.495,
+   "profit_factor": 1.984,
+   "halves_expectancy": [
+    18.38,
+    4.08
+   ]
+  },
+  "after_cost": {
+   "arms": 348,
+   "filled": 105,
+   "not_filled": 243,
+   "resolved": 105,
+   "net": 936.54,
+   "expectancy": 8.92,
+   "win_rate": 0.495,
+   "profit_factor": 1.715,
+   "halves_expectancy": [
+    16.14,
+    1.84
+   ]
+  }
+ },
+ "new_market": {
+  "raw": {
+   "arms": 348,
+   "filled": 343,
+   "not_filled": 5,
+   "resolved": 341,
+   "net": 4346.92,
+   "expectancy": 12.75,
+   "win_rate": 0.501,
+   "profit_factor": 1.668,
+   "halves_expectancy": [
+    9.27,
+    16.2
+   ]
+  },
+  "after_cost": {
+   "arms": 348,
+   "filled": 343,
+   "not_filled": 5,
+   "resolved": 341,
+   "net": 3583.08,
+   "expectancy": 10.51,
+   "win_rate": 0.501,
+   "profit_factor": 1.52,
+   "halves_expectancy": [
+    7.03,
+    13.96
+   ]
+  }
+ },
+ "old_ioc_ny": {
+  "raw": {
+   "arms": 107,
+   "filled": 35,
+   "not_filled": 72,
+   "resolved": 35,
+   "net": 634.56,
+   "expectancy": 18.13,
+   "win_rate": 0.429,
+   "profit_factor": 2.415,
+   "halves_expectancy": [
+    26.75,
+    9.99
+   ]
+  }
+ },
+ "new_market_ny": {
+  "raw": {
+   "arms": 107,
+   "filled": 107,
+   "not_filled": 0,
+   "resolved": 106,
+   "net": 2408.4,
+   "expectancy": 22.72,
+   "win_rate": 0.472,
+   "profit_factor": 2.181,
+   "halves_expectancy": [
+    11.16,
+    34.28
+   ]
+  }
+ },
+ "pairs": [
+  {
+   "bar_ts": "2024-07-02T07:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 13.16
+   },
+   "new": {
+    "status": "NO_FILL",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   }
+  },
+  {
+   "bar_ts": "2024-07-02T08:15:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 29.84
+   },
+   "new": {
+    "status": "NO_FILL",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   }
+  },
+  {
+   "bar_ts": "2024-07-02T11:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 37.08
+   },
+   "new": {
+    "status": "NO_FILL",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   }
+  },
+  {
+   "bar_ts": "2024-07-02T11:45:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 47.46
+   },
+   "new": {
+    "status": "NO_FILL",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   }
+  },
+  {
+   "bar_ts": "2024-07-02T12:45:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 49.96
+   },
+   "new": {
+    "status": "NO_FILL",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   }
+  },
+  {
+   "bar_ts": "2024-07-12T02:00:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 55.15
+   }
+  },
+  {
+   "bar_ts": "2024-07-16T07:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -46.66
+   }
+  },
+  {
+   "bar_ts": "2024-07-16T07:45:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 56.27
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 55.52
+   }
+  },
+  {
+   "bar_ts": "2024-07-17T03:00:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 33.3
+   }
+  },
+  {
+   "bar_ts": "2024-07-17T13:30:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -59.84
+   }
+  },
+  {
+   "bar_ts": "2024-07-18T03:15:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 24.68
+   }
+  },
+  {
+   "bar_ts": "2024-07-18T14:15:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 200.99
+   }
+  },
+  {
+   "bar_ts": "2024-07-19T07:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 14.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 13.25
+   }
+  },
+  {
+   "bar_ts": "2024-07-23T07:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 71.58
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 70.83
+   }
+  },
+  {
+   "bar_ts": "2024-07-24T03:30:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 132.48
+   }
+  },
+  {
+   "bar_ts": "2024-07-25T04:45:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 22.43
+   }
+  },
+  {
+   "bar_ts": "2024-08-02T07:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 55.5
+   }
+  },
+  {
+   "bar_ts": "2024-08-02T16:00:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -20.8
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -21.3
+   }
+  },
+  {
+   "bar_ts": "2024-08-08T09:45:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 25.93
+   }
+  },
+  {
+   "bar_ts": "2024-08-16T14:45:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -29.38
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -29.88
+   }
+  },
+  {
+   "bar_ts": "2024-08-20T16:15:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 105.75
+   }
+  },
+  {
+   "bar_ts": "2024-08-21T08:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -26.12
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -26.62
+   }
+  },
+  {
+   "bar_ts": "2024-09-03T13:30:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 85.83
+   }
+  },
+  {
+   "bar_ts": "2024-09-04T02:00:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -39.94
+   }
+  },
+  {
+   "bar_ts": "2024-09-16T15:45:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 28.47
+   }
+  },
+  {
+   "bar_ts": "2024-09-18T04:00:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 17.58
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 16.83
+   }
+  },
+  {
+   "bar_ts": "2024-09-20T08:30:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 62.64
+   }
+  },
+  {
+   "bar_ts": "2024-09-20T09:30:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 34.56
+   }
+  },
+  {
+   "bar_ts": "2024-09-20T10:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 42.12
+   }
+  },
+  {
+   "bar_ts": "2024-09-25T08:30:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -25.26
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -25.76
+   }
+  },
+  {
+   "bar_ts": "2024-09-27T07:15:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 31.78
+   }
+  },
+  {
+   "bar_ts": "2024-09-30T14:45:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -45.9
+   }
+  },
+  {
+   "bar_ts": "2024-10-02T04:30:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 43.53
+   }
+  },
+  {
+   "bar_ts": "2024-10-03T03:00:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 58.49
+   }
+  },
+  {
+   "bar_ts": "2024-10-03T07:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 30.33
+   }
+  },
+  {
+   "bar_ts": "2024-10-03T07:30:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -57.44
+   }
+  },
+  {
+   "bar_ts": "2024-10-03T13:15:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -39.58
+   }
+  },
+  {
+   "bar_ts": "2024-10-07T13:45:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -40.62
+   }
+  },
+  {
+   "bar_ts": "2024-10-08T01:30:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -49.98
+   }
+  },
+  {
+   "bar_ts": "2024-10-11T08:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -55.0
+   }
+  },
+  {
+   "bar_ts": "2024-10-11T09:45:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -45.86
+   }
+  },
+  {
+   "bar_ts": "2024-10-11T11:15:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -43.5
+   }
+  },
+  {
+   "bar_ts": "2024-10-11T12:45:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 80.48
+   }
+  },
+  {
+   "bar_ts": "2024-10-14T02:00:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -59.0
+   }
+  },
+  {
+   "bar_ts": "2024-10-15T09:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -32.22
+   }
+  },
+  {
+   "bar_ts": "2024-10-16T07:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 39.33
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 38.58
+   }
+  },
+  {
+   "bar_ts": "2024-10-16T14:30:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -49.94
+   }
+  },
+  {
+   "bar_ts": "2024-10-16T15:45:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -27.22
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -27.72
+   }
+  },
+  {
+   "bar_ts": "2024-10-17T02:30:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -44.38
+   }
+  },
+  {
+   "bar_ts": "2024-10-18T03:45:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -35.54
+   }
+  },
+  {
+   "bar_ts": "2024-10-21T08:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -20.08
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -20.58
+   }
+  },
+  {
+   "bar_ts": "2024-10-21T09:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 53.15
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 52.4
+   }
+  },
+  {
+   "bar_ts": "2024-10-21T09:30:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 86.46
+   }
+  },
+  {
+   "bar_ts": "2024-10-22T08:30:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 48.72
+   }
+  },
+  {
+   "bar_ts": "2024-10-22T11:45:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -44.34
+   }
+  },
+  {
+   "bar_ts": "2024-10-23T09:45:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 45.31
+   }
+  },
+  {
+   "bar_ts": "2024-10-23T14:00:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 51.06
+   }
+  },
+  {
+   "bar_ts": "2024-10-28T15:00:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 45.25
+   }
+  },
+  {
+   "bar_ts": "2024-10-28T16:30:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 42.29
+   }
+  },
+  {
+   "bar_ts": "2024-10-29T02:30:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -35.4
+   }
+  },
+  {
+   "bar_ts": "2024-10-30T15:00:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -44.74
+   }
+  },
+  {
+   "bar_ts": "2024-10-31T02:15:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 16.42
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 15.67
+   }
+  },
+  {
+   "bar_ts": "2024-11-04T13:15:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -18.92
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -19.42
+   }
+  },
+  {
+   "bar_ts": "2024-11-04T13:45:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 33.94
+   }
+  },
+  {
+   "bar_ts": "2024-11-11T15:00:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -44.14
+   }
+  },
+  {
+   "bar_ts": "2024-11-11T16:30:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 16.28
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 15.53
+   }
+  },
+  {
+   "bar_ts": "2024-11-12T05:15:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -54.24
+   }
+  },
+  {
+   "bar_ts": "2024-11-12T09:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -35.26
+   }
+  },
+  {
+   "bar_ts": "2024-11-13T04:00:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 25.88
+   }
+  },
+  {
+   "bar_ts": "2024-11-14T03:30:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -51.64
+   }
+  },
+  {
+   "bar_ts": "2024-11-14T14:45:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -36.92
+   }
+  },
+  {
+   "bar_ts": "2024-11-14T16:45:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 22.54
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 21.67
+   }
+  },
+  {
+   "bar_ts": "2024-11-15T04:00:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -58.22
+   }
+  },
+  {
+   "bar_ts": "2024-11-15T14:30:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -53.84
+   }
+  },
+  {
+   "bar_ts": "2024-11-18T07:45:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 16.49
+   }
+  },
+  {
+   "bar_ts": "2024-11-18T14:30:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 63.58
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 62.83
+   }
+  },
+  {
+   "bar_ts": "2024-11-19T13:15:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 123.26
+   }
+  },
+  {
+   "bar_ts": "2024-11-26T08:30:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -28.94
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -29.44
+   }
+  },
+  {
+   "bar_ts": "2024-11-27T08:45:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -29.3
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -29.8
+   }
+  },
+  {
+   "bar_ts": "2024-11-27T14:30:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 70.17
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 69.42
+   }
+  },
+  {
+   "bar_ts": "2024-12-03T15:15:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -44.3
+   }
+  },
+  {
+   "bar_ts": "2024-12-06T10:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -58.2
+   }
+  },
+  {
+   "bar_ts": "2024-12-09T15:00:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 117.15
+   }
+  },
+  {
+   "bar_ts": "2024-12-10T05:30:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 14.39
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 13.64
+   }
+  },
+  {
+   "bar_ts": "2024-12-11T04:30:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -34.46
+   }
+  },
+  {
+   "bar_ts": "2024-12-19T16:45:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 49.01
+   }
+  },
+  {
+   "bar_ts": "2024-12-20T08:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 53.67
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 52.92
+   }
+  },
+  {
+   "bar_ts": "2024-12-26T14:45:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -17.12
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -17.62
+   }
+  },
+  {
+   "bar_ts": "2024-12-27T04:45:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 56.68
+   }
+  },
+  {
+   "bar_ts": "2024-12-27T08:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -19.66
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -20.16
+   }
+  },
+  {
+   "bar_ts": "2024-12-30T09:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 19.23
+   }
+  },
+  {
+   "bar_ts": "2024-12-31T04:15:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -40.9
+   }
+  },
+  {
+   "bar_ts": "2024-12-31T05:30:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -35.88
+   }
+  },
+  {
+   "bar_ts": "2024-12-31T06:00:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 20.53
+   }
+  },
+  {
+   "bar_ts": "2024-12-31T07:30:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 22.32
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 21.57
+   }
+  },
+  {
+   "bar_ts": "2025-01-07T07:30:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -56.8
+   }
+  },
+  {
+   "bar_ts": "2025-01-08T03:15:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -13.26
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -15.5
+   }
+  },
+  {
+   "bar_ts": "2025-01-09T04:00:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -47.52
+   }
+  },
+  {
+   "bar_ts": "2025-01-09T07:00:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 75.3
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 74.55
+   }
+  },
+  {
+   "bar_ts": "2025-01-09T23:00:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 48.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 47.25
+   }
+  },
+  {
+   "bar_ts": "2025-01-09T23:30:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "OPEN",
+    "pnl": 0.0
+   }
+  },
+  {
+   "bar_ts": "2025-01-10T06:45:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -36.52
+   }
+  },
+  {
+   "bar_ts": "2025-01-13T11:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -57.36
+   }
+  },
+  {
+   "bar_ts": "2025-01-13T16:00:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -51.38
+   }
+  },
+  {
+   "bar_ts": "2025-01-15T04:00:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -48.96
+   }
+  },
+  {
+   "bar_ts": "2025-01-21T16:30:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -35.24
+   }
+  },
+  {
+   "bar_ts": "2025-01-23T06:30:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 45.92
+   }
+  },
+  {
+   "bar_ts": "2025-01-23T08:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 22.33
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 21.58
+   }
+  },
+  {
+   "bar_ts": "2025-01-23T08:45:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 28.22
+   }
+  },
+  {
+   "bar_ts": "2025-01-26T23:00:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 66.17
+   }
+  },
+  {
+   "bar_ts": "2025-01-27T08:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 86.83
+   }
+  },
+  {
+   "bar_ts": "2025-02-04T08:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -29.84
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -30.34
+   }
+  },
+  {
+   "bar_ts": "2025-02-11T06:00:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 22.75
+   }
+  },
+  {
+   "bar_ts": "2025-02-11T09:15:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 15.08
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 14.33
+   }
+  },
+  {
+   "bar_ts": "2025-02-11T12:15:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 32.74
+   }
+  },
+  {
+   "bar_ts": "2025-02-12T07:00:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -55.96
+   }
+  },
+  {
+   "bar_ts": "2025-02-12T10:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -32.3
+   }
+  },
+  {
+   "bar_ts": "2025-02-12T16:15:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -18.54
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -19.04
+   }
+  },
+  {
+   "bar_ts": "2025-02-13T12:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -52.24
+   }
+  },
+  {
+   "bar_ts": "2025-02-18T15:00:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 71.53
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 70.78
+   }
+  },
+  {
+   "bar_ts": "2025-02-19T11:45:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -59.42
+   }
+  },
+  {
+   "bar_ts": "2025-02-19T13:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 33.61
+   }
+  },
+  {
+   "bar_ts": "2025-02-19T14:45:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 76.87
+   }
+  },
+  {
+   "bar_ts": "2025-02-24T07:45:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 72.82
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 72.07
+   }
+  },
+  {
+   "bar_ts": "2025-02-25T06:30:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 60.27
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 59.52
+   }
+  },
+  {
+   "bar_ts": "2025-02-27T15:30:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 143.28
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 142.53
+   }
+  },
+  {
+   "bar_ts": "2025-02-28T01:30:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -16.08
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -16.58
+   }
+  },
+  {
+   "bar_ts": "2025-03-04T08:45:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -17.68
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -18.18
+   }
+  },
+  {
+   "bar_ts": "2025-03-06T14:30:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -48.34
+   }
+  },
+  {
+   "bar_ts": "2025-03-07T04:15:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 33.43
+   }
+  },
+  {
+   "bar_ts": "2025-03-11T15:45:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 104.12
+   }
+  },
+  {
+   "bar_ts": "2025-03-12T07:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -36.84
+   }
+  },
+  {
+   "bar_ts": "2025-03-13T14:30:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -69.42
+   }
+  },
+  {
+   "bar_ts": "2025-03-18T14:15:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -40.76
+   }
+  },
+  {
+   "bar_ts": "2025-03-19T06:00:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 38.91
+   }
+  },
+  {
+   "bar_ts": "2025-03-19T07:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -40.84
+   }
+  },
+  {
+   "bar_ts": "2025-03-19T07:45:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -56.72
+   }
+  },
+  {
+   "bar_ts": "2025-03-21T03:15:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 47.7
+   }
+  },
+  {
+   "bar_ts": "2025-03-21T07:15:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 47.9
+   }
+  },
+  {
+   "bar_ts": "2025-03-21T11:45:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -50.86
+   }
+  },
+  {
+   "bar_ts": "2025-03-21T12:15:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 186.46
+   }
+  },
+  {
+   "bar_ts": "2025-03-21T15:15:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -21.1
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -21.6
+   }
+  },
+  {
+   "bar_ts": "2025-03-26T10:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -45.02
+   }
+  },
+  {
+   "bar_ts": "2025-03-27T07:30:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 89.39
+   }
+  },
+  {
+   "bar_ts": "2025-03-27T17:00:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 39.43
+   }
+  },
+  {
+   "bar_ts": "2025-03-27T19:30:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 166.25
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 165.5
+   }
+  },
+  {
+   "bar_ts": "2025-03-28T05:30:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -20.4
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -20.9
+   }
+  },
+  {
+   "bar_ts": "2025-03-28T13:30:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -25.5
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -26.0
+   }
+  },
+  {
+   "bar_ts": "2025-03-31T08:30:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 61.86
+   }
+  },
+  {
+   "bar_ts": "2025-04-02T22:15:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -13.9
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -15.5
+   }
+  },
+  {
+   "bar_ts": "2025-04-03T07:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -46.66
+   }
+  },
+  {
+   "bar_ts": "2025-04-07T05:30:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 54.78
+   }
+  },
+  {
+   "bar_ts": "2025-04-15T02:15:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 18.6
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 17.85
+   }
+  },
+  {
+   "bar_ts": "2025-04-16T02:15:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -49.08
+   }
+  },
+  {
+   "bar_ts": "2025-04-17T13:30:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -52.0
+   }
+  },
+  {
+   "bar_ts": "2025-04-21T01:45:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 122.28
+   }
+  },
+  {
+   "bar_ts": "2025-05-02T09:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -42.4
+   }
+  },
+  {
+   "bar_ts": "2025-05-05T04:00:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -59.66
+   }
+  },
+  {
+   "bar_ts": "2025-05-05T07:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -19.84
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -20.34
+   }
+  },
+  {
+   "bar_ts": "2025-05-05T08:15:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 43.53
+   }
+  },
+  {
+   "bar_ts": "2025-05-05T10:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 34.83
+   }
+  },
+  {
+   "bar_ts": "2025-05-13T08:45:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -44.5
+   }
+  },
+  {
+   "bar_ts": "2025-05-15T07:15:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 36.7
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 78.95
+   }
+  },
+  {
+   "bar_ts": "2025-05-15T10:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -45.44
+   }
+  },
+  {
+   "bar_ts": "2025-05-19T00:00:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 82.2
+   }
+  },
+  {
+   "bar_ts": "2025-05-20T13:45:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -33.46
+   }
+  },
+  {
+   "bar_ts": "2025-05-20T15:30:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -34.36
+   }
+  },
+  {
+   "bar_ts": "2025-05-21T02:30:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 37.98
+   }
+  },
+  {
+   "bar_ts": "2025-05-23T05:30:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 40.91
+   }
+  },
+  {
+   "bar_ts": "2025-05-23T10:30:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 202.17
+   }
+  },
+  {
+   "bar_ts": "2025-05-23T15:00:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -24.4
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -24.9
+   }
+  },
+  {
+   "bar_ts": "2025-05-30T03:15:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -18.58
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -19.08
+   }
+  },
+  {
+   "bar_ts": "2025-06-02T09:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 18.08
+   }
+  },
+  {
+   "bar_ts": "2025-06-05T06:00:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -52.36
+   }
+  },
+  {
+   "bar_ts": "2025-06-09T02:30:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -50.6
+   }
+  },
+  {
+   "bar_ts": "2025-06-17T07:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 43.17
+   }
+  },
+  {
+   "bar_ts": "2025-06-17T09:15:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 15.27
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 14.52
+   }
+  },
+  {
+   "bar_ts": "2025-06-18T19:30:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 101.63
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 100.88
+   }
+  },
+  {
+   "bar_ts": "2025-06-19T07:15:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 29.79
+   }
+  },
+  {
+   "bar_ts": "2025-06-19T13:30:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 86.5
+   }
+  },
+  {
+   "bar_ts": "2025-06-30T15:15:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -32.44
+   }
+  },
+  {
+   "bar_ts": "2025-07-01T07:15:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 14.83
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 14.08
+   }
+  },
+  {
+   "bar_ts": "2025-07-01T11:45:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 122.78
+   }
+  },
+  {
+   "bar_ts": "2025-07-02T08:45:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 45.43
+   }
+  },
+  {
+   "bar_ts": "2025-07-04T10:30:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 56.81
+   }
+  },
+  {
+   "bar_ts": "2025-07-04T16:30:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "OPEN",
+    "pnl": 0.0
+   }
+  },
+  {
+   "bar_ts": "2025-07-07T08:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -41.32
+   }
+  },
+  {
+   "bar_ts": "2025-07-08T14:15:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -49.3
+   }
+  },
+  {
+   "bar_ts": "2025-07-08T14:45:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -16.44
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -16.94
+   }
+  },
+  {
+   "bar_ts": "2025-07-09T01:30:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -43.64
+   }
+  },
+  {
+   "bar_ts": "2025-07-09T05:15:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 36.72
+   }
+  },
+  {
+   "bar_ts": "2025-07-10T15:00:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -47.7
+   }
+  },
+  {
+   "bar_ts": "2025-07-10T16:00:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -20.78
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -21.28
+   }
+  },
+  {
+   "bar_ts": "2025-07-11T08:15:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 48.47
+   }
+  },
+  {
+   "bar_ts": "2025-07-13T22:00:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -15.84
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -16.34
+   }
+  },
+  {
+   "bar_ts": "2025-07-14T07:15:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -33.78
+   }
+  },
+  {
+   "bar_ts": "2025-07-16T05:15:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -14.86
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -15.5
+   }
+  },
+  {
+   "bar_ts": "2025-07-18T16:00:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 72.43
+   }
+  },
+  {
+   "bar_ts": "2025-07-22T07:45:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 35.79
+   }
+  },
+  {
+   "bar_ts": "2025-07-22T10:30:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -43.88
+   }
+  },
+  {
+   "bar_ts": "2025-07-22T16:00:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -21.36
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -21.86
+   }
+  },
+  {
+   "bar_ts": "2025-07-23T13:30:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 55.75
+   }
+  },
+  {
+   "bar_ts": "2025-07-25T07:30:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -35.94
+   }
+  },
+  {
+   "bar_ts": "2025-07-25T09:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -27.76
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -28.26
+   }
+  },
+  {
+   "bar_ts": "2025-07-25T11:45:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -28.64
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -29.14
+   }
+  },
+  {
+   "bar_ts": "2025-07-25T12:45:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 47.86
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 47.11
+   }
+  },
+  {
+   "bar_ts": "2025-07-28T14:45:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 64.85
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 64.1
+   }
+  },
+  {
+   "bar_ts": "2025-07-28T16:00:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -28.54
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -29.04
+   }
+  },
+  {
+   "bar_ts": "2025-07-30T08:15:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -37.88
+   }
+  },
+  {
+   "bar_ts": "2025-07-30T14:00:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -32.26
+   }
+  },
+  {
+   "bar_ts": "2025-07-30T15:15:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -34.38
+   }
+  },
+  {
+   "bar_ts": "2025-08-01T05:45:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 29.42
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 28.67
+   }
+  },
+  {
+   "bar_ts": "2025-08-01T14:45:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -28.42
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -28.92
+   }
+  },
+  {
+   "bar_ts": "2025-08-12T10:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 14.91
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 57.16
+   }
+  },
+  {
+   "bar_ts": "2025-08-15T12:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 36.92
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 36.17
+   }
+  },
+  {
+   "bar_ts": "2025-08-15T13:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -37.44
+   }
+  },
+  {
+   "bar_ts": "2025-08-15T13:30:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 143.58
+   }
+  },
+  {
+   "bar_ts": "2025-08-15T14:30:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 47.38
+   }
+  },
+  {
+   "bar_ts": "2025-08-18T08:15:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -61.6
+   }
+  },
+  {
+   "bar_ts": "2025-08-19T11:30:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -36.82
+   }
+  },
+  {
+   "bar_ts": "2025-08-19T13:45:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -40.66
+   }
+  },
+  {
+   "bar_ts": "2025-08-20T15:45:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -28.34
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -28.84
+   }
+  },
+  {
+   "bar_ts": "2025-08-21T10:15:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -52.76
+   }
+  },
+  {
+   "bar_ts": "2025-08-21T15:15:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -14.96
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -15.5
+   }
+  },
+  {
+   "bar_ts": "2025-08-21T19:45:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -39.88
+   }
+  },
+  {
+   "bar_ts": "2025-08-22T03:00:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 209.88
+   }
+  },
+  {
+   "bar_ts": "2025-08-25T10:30:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -51.52
+   }
+  },
+  {
+   "bar_ts": "2025-08-26T06:30:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -18.46
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -18.96
+   }
+  },
+  {
+   "bar_ts": "2025-08-26T07:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -17.84
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -18.34
+   }
+  },
+  {
+   "bar_ts": "2025-08-27T13:30:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -34.34
+   }
+  },
+  {
+   "bar_ts": "2025-08-29T08:15:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 37.95
+   }
+  },
+  {
+   "bar_ts": "2025-08-29T09:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -59.08
+   }
+  },
+  {
+   "bar_ts": "2025-08-29T13:30:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 123.42
+   }
+  },
+  {
+   "bar_ts": "2025-08-29T19:30:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 88.13
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 87.38
+   }
+  },
+  {
+   "bar_ts": "2025-09-01T23:00:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 33.18
+   }
+  },
+  {
+   "bar_ts": "2025-09-02T00:15:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -52.78
+   }
+  },
+  {
+   "bar_ts": "2025-09-02T04:30:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 27.6
+   }
+  },
+  {
+   "bar_ts": "2025-09-02T14:30:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 75.83
+   }
+  },
+  {
+   "bar_ts": "2025-09-16T15:00:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 30.54
+   }
+  },
+  {
+   "bar_ts": "2025-09-17T02:15:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -52.7
+   }
+  },
+  {
+   "bar_ts": "2025-09-17T14:00:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 58.99
+   }
+  },
+  {
+   "bar_ts": "2025-09-19T05:30:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 63.99
+   }
+  },
+  {
+   "bar_ts": "2025-09-22T08:45:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 19.62
+   }
+  },
+  {
+   "bar_ts": "2025-09-22T10:45:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -39.68
+   }
+  },
+  {
+   "bar_ts": "2025-09-23T14:45:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -36.5
+   }
+  },
+  {
+   "bar_ts": "2025-09-23T15:30:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 44.99
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 44.24
+   }
+  },
+  {
+   "bar_ts": "2025-09-23T16:00:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 269.92
+   }
+  },
+  {
+   "bar_ts": "2025-09-23T16:30:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 32.4
+   }
+  },
+  {
+   "bar_ts": "2025-09-24T13:45:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 33.37
+   }
+  },
+  {
+   "bar_ts": "2025-09-25T05:00:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 76.74
+   }
+  },
+  {
+   "bar_ts": "2025-09-25T17:30:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 182.41
+   }
+  },
+  {
+   "bar_ts": "2025-09-26T11:15:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -41.24
+   }
+  },
+  {
+   "bar_ts": "2025-09-30T05:00:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -22.6
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -23.1
+   }
+  },
+  {
+   "bar_ts": "2025-09-30T15:15:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -40.3
+   }
+  },
+  {
+   "bar_ts": "2025-10-07T08:15:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -37.02
+   }
+  },
+  {
+   "bar_ts": "2025-10-08T05:45:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 21.65
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 20.9
+   }
+  },
+  {
+   "bar_ts": "2025-10-09T16:15:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 65.29
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 64.54
+   }
+  },
+  {
+   "bar_ts": "2025-10-10T12:45:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -29.16
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -29.66
+   }
+  },
+  {
+   "bar_ts": "2025-10-14T07:30:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 33.6
+   }
+  },
+  {
+   "bar_ts": "2025-10-15T19:45:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -41.84
+   }
+  },
+  {
+   "bar_ts": "2025-10-16T03:15:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -33.08
+   }
+  },
+  {
+   "bar_ts": "2025-10-17T01:45:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 25.37
+   }
+  },
+  {
+   "bar_ts": "2025-10-21T13:45:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -49.52
+   }
+  },
+  {
+   "bar_ts": "2025-10-22T03:15:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 9.13
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 7.99
+   }
+  },
+  {
+   "bar_ts": "2025-10-22T09:15:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -50.36
+   }
+  },
+  {
+   "bar_ts": "2025-10-30T10:45:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -38.66
+   }
+  },
+  {
+   "bar_ts": "2025-10-31T14:15:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -19.12
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -19.62
+   }
+  },
+  {
+   "bar_ts": "2025-10-31T15:30:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 113.3
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 112.55
+   }
+  },
+  {
+   "bar_ts": "2025-11-04T08:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -49.0
+   }
+  },
+  {
+   "bar_ts": "2025-11-06T08:15:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 19.79
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 15.17
+   }
+  },
+  {
+   "bar_ts": "2025-11-11T11:45:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -29.88
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -30.38
+   }
+  },
+  {
+   "bar_ts": "2025-11-12T15:15:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 138.03
+   }
+  },
+  {
+   "bar_ts": "2025-11-13T10:45:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -42.02
+   }
+  },
+  {
+   "bar_ts": "2025-11-14T03:45:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 62.34
+   }
+  },
+  {
+   "bar_ts": "2025-11-17T15:00:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 113.01
+   }
+  },
+  {
+   "bar_ts": "2025-11-21T04:15:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 57.84
+   }
+  },
+  {
+   "bar_ts": "2025-11-27T15:30:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 16.95
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 16.2
+   }
+  },
+  {
+   "bar_ts": "2025-12-04T15:45:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 99.44
+   }
+  },
+  {
+   "bar_ts": "2025-12-04T20:00:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 34.15
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 32.95
+   }
+  },
+  {
+   "bar_ts": "2025-12-09T09:15:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 102.01
+   }
+  },
+  {
+   "bar_ts": "2025-12-10T13:45:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 34.91
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 34.16
+   }
+  },
+  {
+   "bar_ts": "2025-12-10T16:00:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -16.54
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -17.04
+   }
+  },
+  {
+   "bar_ts": "2025-12-12T10:30:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 55.52
+   }
+  },
+  {
+   "bar_ts": "2025-12-12T13:30:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -22.12
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -22.62
+   }
+  },
+  {
+   "bar_ts": "2025-12-16T00:15:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 25.56
+   }
+  },
+  {
+   "bar_ts": "2025-12-23T12:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 117.67
+   }
+  },
+  {
+   "bar_ts": "2025-12-23T13:15:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 93.97
+   }
+  },
+  {
+   "bar_ts": "2025-12-29T02:30:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 28.85
+   }
+  },
+  {
+   "bar_ts": "2025-12-30T07:00:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 35.93
+   }
+  },
+  {
+   "bar_ts": "2025-12-30T13:30:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 34.73
+   }
+  },
+  {
+   "bar_ts": "2025-12-30T15:30:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -54.24
+   }
+  },
+  {
+   "bar_ts": "2025-12-31T01:00:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 45.46
+   }
+  },
+  {
+   "bar_ts": "2025-12-31T19:15:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 68.09
+   }
+  },
+  {
+   "bar_ts": "2026-01-07T10:15:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -55.8
+   }
+  },
+  {
+   "bar_ts": "2026-01-08T16:30:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -26.38
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -26.88
+   }
+  },
+  {
+   "bar_ts": "2026-01-09T07:30:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -23.38
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -23.88
+   }
+  },
+  {
+   "bar_ts": "2026-01-14T04:45:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 59.12
+   }
+  },
+  {
+   "bar_ts": "2026-01-19T13:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 62.2
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 61.45
+   }
+  },
+  {
+   "bar_ts": "2026-01-19T14:30:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -45.0
+   }
+  },
+  {
+   "bar_ts": "2026-01-20T08:15:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 115.46
+   }
+  },
+  {
+   "bar_ts": "2026-01-21T09:15:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 71.28
+   }
+  },
+  {
+   "bar_ts": "2026-01-30T08:30:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -19.14
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -19.64
+   }
+  },
+  {
+   "bar_ts": "2026-02-04T12:30:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 48.55
+   }
+  },
+  {
+   "bar_ts": "2026-02-09T13:45:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 27.39
+   }
+  },
+  {
+   "bar_ts": "2026-02-11T05:30:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -51.8
+   }
+  },
+  {
+   "bar_ts": "2026-02-11T06:30:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 109.57
+   }
+  },
+  {
+   "bar_ts": "2026-02-11T08:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -46.16
+   }
+  },
+  {
+   "bar_ts": "2026-02-16T05:45:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -44.16
+   }
+  },
+  {
+   "bar_ts": "2026-02-16T14:30:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -42.16
+   }
+  },
+  {
+   "bar_ts": "2026-02-24T08:45:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -25.38
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -25.88
+   }
+  },
+  {
+   "bar_ts": "2026-03-03T08:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 56.58
+   }
+  },
+  {
+   "bar_ts": "2026-03-03T13:30:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 65.27
+   }
+  },
+  {
+   "bar_ts": "2026-03-05T08:30:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -25.18
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -25.68
+   }
+  },
+  {
+   "bar_ts": "2026-03-06T17:30:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -32.48
+   }
+  },
+  {
+   "bar_ts": "2026-03-11T11:15:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -25.48
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -25.98
+   }
+  },
+  {
+   "bar_ts": "2026-03-13T04:30:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 17.74
+   }
+  },
+  {
+   "bar_ts": "2026-03-17T05:30:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 153.99
+   }
+  },
+  {
+   "bar_ts": "2026-03-17T07:45:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -29.3
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -29.8
+   }
+  },
+  {
+   "bar_ts": "2026-03-18T15:15:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -51.54
+   }
+  },
+  {
+   "bar_ts": "2026-03-19T07:30:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -49.06
+   }
+  },
+  {
+   "bar_ts": "2026-03-19T15:15:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 104.46
+   }
+  },
+  {
+   "bar_ts": "2026-03-20T08:45:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -31.98
+   }
+  },
+  {
+   "bar_ts": "2026-03-20T12:30:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -41.28
+   }
+  },
+  {
+   "bar_ts": "2026-03-23T09:30:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -44.76
+   }
+  },
+  {
+   "bar_ts": "2026-03-27T07:30:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -19.2
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -19.7
+   }
+  },
+  {
+   "bar_ts": "2026-03-27T16:00:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 63.73
+   }
+  },
+  {
+   "bar_ts": "2026-03-30T16:00:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 92.0
+   }
+  },
+  {
+   "bar_ts": "2026-04-05T22:00:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -35.0
+   }
+  },
+  {
+   "bar_ts": "2026-04-07T07:15:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -42.84
+   }
+  },
+  {
+   "bar_ts": "2026-04-09T03:45:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 12.78
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 12.03
+   }
+  },
+  {
+   "bar_ts": "2026-04-20T05:15:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 58.7
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 57.95
+   }
+  },
+  {
+   "bar_ts": "2026-04-20T07:30:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 66.81
+   }
+  },
+  {
+   "bar_ts": "2026-04-28T08:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -44.06
+   }
+  },
+  {
+   "bar_ts": "2026-04-28T14:15:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 227.45
+   }
+  },
+  {
+   "bar_ts": "2026-05-12T14:00:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -17.74
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -18.24
+   }
+  },
+  {
+   "bar_ts": "2026-05-20T00:15:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -42.02
+   }
+  },
+  {
+   "bar_ts": "2026-05-20T01:30:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -38.44
+   }
+  },
+  {
+   "bar_ts": "2026-05-26T07:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 18.33
+   }
+  },
+  {
+   "bar_ts": "2026-06-01T14:00:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -49.18
+   }
+  },
+  {
+   "bar_ts": "2026-06-04T13:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -30.5
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -31.0
+   }
+  },
+  {
+   "bar_ts": "2026-06-04T13:45:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 172.29
+   }
+  },
+  {
+   "bar_ts": "2026-06-05T03:00:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 16.08
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 15.33
+   }
+  },
+  {
+   "bar_ts": "2026-06-05T07:00:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -41.34
+   }
+  },
+  {
+   "bar_ts": "2026-06-10T07:15:00+00:00",
+   "session": "london",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -60.46
+   }
+  },
+  {
+   "bar_ts": "2026-06-17T14:30:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 139.04
+   }
+  },
+  {
+   "bar_ts": "2026-06-23T01:15:00+00:00",
+   "session": "asian",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "WIN",
+    "pnl": 162.23
+   }
+  },
+  {
+   "bar_ts": "2026-06-24T13:45:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -25.68
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -26.18
+   }
+  },
+  {
+   "bar_ts": "2026-06-25T15:15:00+00:00",
+   "session": "new_york",
+   "old": {
+    "status": "ENTRY_NOT_FILLED",
+    "outcome": "NO_FILL",
+    "pnl": 0.0
+   },
+   "new": {
+    "status": "FILLED",
+    "outcome": "LOSS",
+    "pnl": -41.66
+   }
+  }
+ ]
+}
