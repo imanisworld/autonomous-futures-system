@@ -564,6 +564,9 @@ class PaperBroker(BrokerInterface):
         stop: float,
         target: float,
         contracts: int = 1,
+        *,
+        paper_order_id: Optional[str] = None,
+        runner_max_favorable: Optional[float] = None,
     ) -> None:
         """
         Rebuild internal position state from a persisted journal entry.
@@ -584,6 +587,16 @@ class PaperBroker(BrokerInterface):
             quantity=max(1, int(contracts or 1)),
             open=True,
         )
+        self._active_order_id = paper_order_id
+        self._runner_max_fav = runner_max_favorable
+
+    def get_runner_max_favorable(self) -> Optional[float]:
+        """Return runner state for restart-safe paper-only evidence lanes.
+
+        This is observational state only. It does not move a stop, resolve a
+        position, or change the behavior of existing callers.
+        """
+        return self._runner_max_fav
 
     def get_position(self) -> Optional[Position]:
         return self._position if (self._position and self._position.open) else None

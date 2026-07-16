@@ -83,6 +83,7 @@ from context.five_min_feed import (
     recent_five_min,
     triggered_armed_setup,
 )
+from execution.mnq_strat_evidence import process_mnq_strat_evidence
 from execution.paper_broker import TICK_SIZE, NextBarOHLC, PaperBroker
 from journal.journal_logger import JournalLogger
 from risk.risk_engine import DailyState, RiskEngine, RiskResult, TradeSetup
@@ -760,6 +761,31 @@ def process_alert(
         result["decision"] = "BLOCKED_DUPLICATE_BAR"
         result["failed_gates"] = [f"Duplicate bar already processed: {state.instrument} {bar_ts}"]
         return result
+
+    # Four independent MNQ Strat evidence lanes. Additive only: this service
+    # writes its own evidence/state files, owns hypothetical positions solely
+    # through PaperBroker, and never changes this result's decision/risk/broker
+    # path. It runs only on authoritative decision bars, never the 5m retest.
+    if not five_min_trigger and state.instrument == "MNQ":
+        try:
+            _strat_events = process_mnq_strat_evidence(
+                state=state,
+                cfg=cfg,
+                log_dir=log_dir,
+                recent_bars=recent_bars,
+                for_date=for_date,
+            )
+            if _strat_events:
+                result["mnq_strat_evidence_events"] = [
+                    {
+                        "lane": event.get("lane"),
+                        "event": event.get("event"),
+                        "candidate_key": event.get("candidate_key"),
+                    }
+                    for event in _strat_events
+                ]
+        except Exception:  # noqa: BLE001 — evidence must never affect trading
+            logger.warning("MNQ Strat evidence collection failed", exc_info=True)
 
     # Shadow candidate resolution: causally resolve PRIOR bars' journaled
     # observe-only candidates (shadow_setups + range_signal lanes) against the
