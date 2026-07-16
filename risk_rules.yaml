@@ -318,7 +318,15 @@ strategy_permission_gate:
     vwap_hold: SHADOW_ONLY
     vwap_reclaim: PAPER_ELIGIBLE
     vwap_rejection: PAPER_ELIGIBLE
-    pdh_reclaim: PAPER_ELIGIBLE
+    # pdh_reclaim demoted PAPER_ELIGIBLE -> SHADOW_ONLY 2026-07-16 (operator-approved):
+    # tranche 1 REJECTED it (-$4.65/trade MNQ, negative both instruments, docs/
+    # strategy-matrix-tranche1-2026-07-14.md) yet it produced a real Tradovate-demo
+    # loss 2026-07-15 (-$15.50, 7pt stop, actual R:R 1.90). SHADOW_ONLY (not
+    # instrument-disable) deliberately: candidates keep journaling as NO_TRADE +
+    # STRATEGY_NOT_PAPER_ELIGIBLE — the observation evidence stream stays alive,
+    # same pattern as vwap_hold. MES unaffected either way (already skipped
+    # upstream via disabled_concepts_per_instrument since 2026-07-09).
+    pdh_reclaim: SHADOW_ONLY
     pdl_reclaim: PAPER_ELIGIBLE
     strat_212: PAPER_ELIGIBLE
     strat_122: PAPER_ELIGIBLE

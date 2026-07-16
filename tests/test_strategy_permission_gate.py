@@ -155,3 +155,101 @@ def test_shipped_risk_rules_loads_via_load_config():
     cfg = load_config("risk_rules.yaml")
     assert cfg.strategy_permission_gate_enabled is True
     assert cfg.strategy_status["vwap_hold"] == "SHADOW_ONLY"
+
+
+# ─── MNQ pdh_reclaim demotion (2026-07-16, operator-approved) ────────────────
+# Tranche 1 rejected pdh_reclaim (-$4.65/t MNQ, negative both instruments) yet
+# it produced a real Tradovate-demo loss on 2026-07-15. Demoted to SHADOW_ONLY
+# so MNQ candidates journal as blocked WITH an explicit reason (the vwap_hold
+# pattern) instead of silently vanishing (the instrument-disable pattern).
+
+_EXPECTED_SHIPPED_STATUS = {
+    "orb_breakout": "PAPER_ELIGIBLE",
+    "orb_reclaim": "PAPER_ELIGIBLE",
+    "orb_rejection": "PAPER_ELIGIBLE",
+    "orb_false_break_fade": "PAPER_ELIGIBLE",
+    "vwap_hold": "SHADOW_ONLY",
+    "vwap_reclaim": "PAPER_ELIGIBLE",
+    "vwap_rejection": "PAPER_ELIGIBLE",
+    "pdh_reclaim": "SHADOW_ONLY",
+    "pdl_reclaim": "PAPER_ELIGIBLE",
+}
+
+
+def test_shipped_risk_rules_demotes_pdh_reclaim_and_changes_nothing_else():
+    """Every status the shipped yaml assigns is pinned here — a change to ANY
+    strategy's permission (not just pdh_reclaim's) fails this test."""
+    import yaml
+    from pathlib import Path
+    status = yaml.safe_load(Path("risk_rules.yaml").read_text())[
+        "strategy_permission_gate"]["strategy_status"]
+    for name, expected in _EXPECTED_SHIPPED_STATUS.items():
+        assert status[name] == expected, f"{name}: {status[name]} != {expected}"
+    unexpected = {
+        k: v for k, v in status.items()
+        if k not in _EXPECTED_SHIPPED_STATUS and v != "PAPER_ELIGIBLE"
+    }
+    assert unexpected == {}, f"statuses changed outside the pinned map: {unexpected}"
+
+
+def _pdh_long_state(fresh_market_state):
+    from copy import deepcopy
+    from context.market_context import TrendData
+    state = deepcopy(fresh_market_state)
+    state.previous_day.high = 19490.0
+    state.previous_day.price_vs_pdh = "above"
+    state.trend = TrendData(direction="UP", strength="MODERATE")
+    state.vwap.price_vs_vwap = "above"
+    state.orb.status = "inside"
+    return state
+
+
+def test_mnq_pdh_reclaim_blocked_with_explicit_reason_under_shipped_statuses(
+    config, fresh_market_state
+):
+    """MNQ pdh_reclaim candidate under the SHIPPED statuses: NO_TRADE with the
+    explicit STRATEGY_NOT_PAPER_ELIGIBLE reason — never reaches execution."""
+    import dataclasses
+    import yaml
+    from pathlib import Path
+    shipped = yaml.safe_load(Path("risk_rules.yaml").read_text())[
+        "strategy_permission_gate"]["strategy_status"]
+    cfg = dataclasses.replace(
+        config,
+        enabled_concepts=["pdh_reclaim"],
+        strategy_permission_gate_enabled=True,
+        strategy_permission_default_status="SHADOW_ONLY",
+        strategy_status=dict(shipped),
+    )
+    engine = DecisionEngine(config=cfg)
+    state = _pdh_long_state(fresh_market_state)
+    assert state.instrument == "MNQ"
+    decision = engine.evaluate(state, DailyState())
+    assert decision.decision == "NO_TRADE"
+    assert "STRATEGY_NOT_PAPER_ELIGIBLE" in decision.failed_gates
+    assert "pdh_reclaim" in decision.reason and "not paper-eligible" in decision.reason
+    # the otherwise-qualified setup is preserved on the row (observation evidence)
+    assert decision.setup is not None and decision.setup.strategy == "pdh_reclaim"
+
+
+def test_mes_pdh_reclaim_still_skipped_upstream_unchanged(config, fresh_market_state):
+    """MES posture unchanged: pdh_reclaim is skipped at candidate generation by
+    disabled_concepts_per_instrument (2026-07-09 narrowing) — the permission
+    gate never sees it, exactly as before this change."""
+    import dataclasses
+    from copy import deepcopy
+    cfg = dataclasses.replace(
+        config,
+        enabled_concepts=["pdh_reclaim"],
+        disabled_concepts_per_instrument={"MES": ["pdh_reclaim"]},
+        strategy_permission_gate_enabled=True,
+        strategy_status={"pdh_reclaim": "SHADOW_ONLY"},
+    )
+    engine = DecisionEngine(config=cfg)
+    state = _pdh_long_state(fresh_market_state)
+    state = deepcopy(state)
+    state.instrument = "MES"
+    decision = engine.evaluate(state, DailyState())
+    assert decision.decision == "NO_TRADE"
+    # blocked upstream of the permission gate: no permission-gate reason present
+    assert "STRATEGY_NOT_PAPER_ELIGIBLE" not in (decision.failed_gates or [])
