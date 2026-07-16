@@ -225,6 +225,19 @@ class PaperBroker(BrokerInterface):
                 fill_entry = max(limit_px, market - slip)
             else:
                 fill_entry = market
+        elif getattr(order, "force_market_entry", False) and market_price is not None:
+            # Proof-lane market entry: the fill is the LIVE price, not the
+            # anchored plan level. Without this, a detached candidate (live
+            # price far past the anchor) would book a fantasy fill at the
+            # stale anchor — exactly the optimism the live Tradovate leg
+            # doesn't have (its force_market_entry sends a real Market order
+            # that fills at the actual market). Adverse slippage still applies.
+            if order.direction == "LONG":
+                fill_entry = float(market_price) + slip
+            elif order.direction == "SHORT":
+                fill_entry = float(market_price) - slip
+            else:
+                fill_entry = float(market_price)
         elif order.direction == "LONG":
             fill_entry = order.entry + slip
         elif order.direction == "SHORT":

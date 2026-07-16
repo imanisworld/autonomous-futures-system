@@ -1811,8 +1811,27 @@ def process_alert(
             direction=decision.setup.direction,
             for_date=for_date,
         )
+    # Proof-lane paper market entry fills at the LIVE price (decision bar's
+    # close — the same reference the entry-sanity guard uses), never at the
+    # anchored plan level. Only the forced PaperBroker takes this argument;
+    # Tradovate's force_market_entry is a real Market order and needs nothing.
+    _proof_market_px = (
+        state.ohlc.close
+        if (
+            state.ohlc is not None
+            and isinstance(broker, PaperBroker)
+            and _active_mnq_proof_decision is not None
+            and _active_mnq_proof_decision.apply_override
+            and _active_mnq_proof_decision.force_market_entry
+        )
+        else None
+    )
     _submit_ts = datetime.now(timezone.utc)
-    fill = broker.execute_bracket(order)
+    fill = (
+        broker.execute_bracket(order, market_price=_proof_market_px)
+        if _proof_market_px is not None
+        else broker.execute_bracket(order)
+    )
     _cancel_ts = datetime.now(timezone.utc)
     logger.info(
         "EXEC_TRACE post-submit: instrument=%s fill_result=%s fill_reason=%s "
@@ -1971,6 +1990,19 @@ def process_alert(
     # the authoritative decision="TRADE" row — the ONLY row any reader treats as an
     # open, counted position — carrying the same full payload as the TRADE_INTENT row.
     journal_entry["decision"] = "TRADE"
+    # Proof-lane market entry: the paper fill was at the LIVE price, not the
+    # anchored plan. Position reconstruction (get_open_position -> restore_
+    # position) and P&L both resolve from THIS row's setup.entry, so the
+    # confirmed row must carry the actual fill; the anchored plan remains on
+    # the TRADE_INTENT row and in the proof audit's would_be_setup.
+    _proof_fill_entry = getattr(fill, "entry_price", None)
+    if (
+        _proof_market_px is not None
+        and _proof_fill_entry is not None
+        and isinstance(journal_entry.get("setup"), dict)
+    ):
+        journal_entry["setup"] = {**journal_entry["setup"], "entry": _proof_fill_entry}
+        journal_entry["proof_fill_entry_price"] = _proof_fill_entry
     journal.log_decision(journal_entry, risk_dict, for_date=today)
 
     logger.info(
@@ -2006,7 +2038,11 @@ def process_alert(
         "status": "OPEN",
         "instrument": state.instrument,
         "direction": decision.setup.direction,
-        "entry": decision.setup.entry,
+        "entry": (
+            _proof_fill_entry
+            if (_proof_market_px is not None and _proof_fill_entry is not None)
+            else decision.setup.entry
+        ),
         "stop": decision.setup.stop,
         "target": decision.setup.target,
         "rr_ratio": decision.setup.rr_ratio,

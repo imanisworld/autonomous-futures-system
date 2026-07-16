@@ -435,3 +435,67 @@ def test_confirmed_trade_still_requires_paper_order_id(tmp_path, monkeypatch):
         config=cfg, log_dir=cfg.log_dir, for_date=today,
     )
     assert result["decision"] == "BLOCKED_ORDER_CONFIRMATION_MISSING"
+
+
+# ─── Detached-candidate carve-out (2026-07-14, first natural candidate) ──────
+# The lane's first natural live candidate (2026-07-14 11:30Z) died at
+# ENTRY_DETACHED_FROM_PRICE — entry 29603.5 vs live 29641 — proving the lane
+# as first built could never capture its own target defect (the decision
+# became NO_TRADE before the proof hook, which requires TRADE). These tests
+# lock the scoped carve-out + the honest live-price paper fill that fix it.
+
+def test_detached_candidate_still_rejected_in_observe_only(tmp_path):
+    """Zero-behavior-change regression lock: observe_only keeps the
+    entry-sanity guard exactly as deployed — detached candidates die at
+    ENTRY_DETACHED_FROM_PRICE."""
+    today = date(2026, 5, 23)
+    cfg = _config_with_breakout(tmp_path)  # default observe_only
+    result = process_alert(
+        _breakout_payload(timestamp="2026-05-23T15:00:00+00:00", close=19540.0, high=19545.0),
+        config=cfg, log_dir=cfg.log_dir, for_date=today,
+    )
+    assert result["decision"] == "NO_TRADE"
+    assert "ENTRY_DETACHED_FROM_PRICE" in (result.get("failed_gates") or [])
+
+
+def test_detached_candidate_trades_in_paper_sim_at_live_price(tmp_path):
+    """paper_sim: the detached candidate reaches TRADE and the paper fill is
+    the LIVE close (+ adverse slippage), never the stale anchor — mirroring
+    what Tradovate's force_market_entry Market order would actually do."""
+    import json
+
+    today = date(2026, 5, 23)
+    cfg = replace(_config_with_breakout(tmp_path), mnq_orb_breakout_proof_mode="paper_sim")
+    live_close = 19540.0
+    result = process_alert(
+        _breakout_payload(timestamp="2026-05-23T15:00:00+00:00", close=live_close, high=19545.0),
+        config=cfg, log_dir=cfg.log_dir, for_date=today,
+    )
+    assert result["decision"] == "TRADE"
+    tick = 0.25
+    expected_fill = live_close + float(getattr(cfg, "fill_slippage_ticks", 0.0) or 0.0) * tick
+    assert result["fill"]["entry"] == pytest.approx(expected_fill)
+    # the anchored plan stays in the audit for packet review
+    journal_path = next(Path(cfg.log_dir).glob("journal_*.jsonl"))
+    rows = [json.loads(line) for line in journal_path.read_text().splitlines()]
+    confirmed = next(r for r in rows if r.get("decision") == "TRADE")
+    assert confirmed["mnq_orb_breakout_proof_audit"]["would_be_setup"]["entry"] == 19498.5
+
+
+def test_detached_orb_reclaim_is_not_carved_out(tmp_path):
+    """Scope proof: the carve-out never applies to orb_reclaim, even with its
+    own proof lane in paper_sim — its detachment question belongs to the
+    entry-refresh shadow lane, not this one."""
+    today = date(2026, 5, 23)
+    cfg = replace(
+        _config_with_breakout(tmp_path),
+        mnq_orb_reclaim_proof_mode="paper_sim",
+        mnq_orb_breakout_proof_mode="paper_sim",
+    )
+    # default fixture payload -> orb_reclaim; close far above its bracket
+    result = process_alert(
+        _base_payload(timestamp="2026-05-23T15:00:00+00:00", close=19620.0, high=19625.0),
+        config=cfg, log_dir=cfg.log_dir, for_date=today,
+    )
+    assert result["decision"] == "NO_TRADE"
+    assert "ENTRY_DETACHED_FROM_PRICE" in (result.get("failed_gates") or [])

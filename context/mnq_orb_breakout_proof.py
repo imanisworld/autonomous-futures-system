@@ -82,6 +82,26 @@ def is_mnq_orb_breakout_candidate(instrument: Optional[str], strategy: Optional[
     return root == "MNQ" and strategy == "orb_breakout"
 
 
+def proof_market_entry_active(instrument: Optional[str], strategy: Optional[str], cfg=None) -> bool:
+    """True when this lane's active mode forces a MARKET entry for the given
+    candidate — i.e. the anchored entry level no longer determines the fill.
+
+    Used by strategy/signal_engine.py's entry-sanity guard: the
+    ENTRY_DETACHED_FROM_PRICE rejection exists to stop a market fill landing
+    on the wrong side of an anchored bracket, but under this lane's override
+    the fill IS the live market price by design (the study's validated arm:
+    unbounded market entry + runner exit), so the anchored-bracket straddle
+    check no longer applies. Discovered at the lane's first natural candidate
+    (2026-07-14 11:30Z: ENTRY_DETACHED, entry 29603.5 vs price 29641) —
+    detachment is orb_breakout's DOMINANT failure mode (18/18 in the study),
+    so without this carve-out the lane could never capture its own target
+    defect."""
+    return (
+        is_mnq_orb_breakout_candidate(instrument, strategy)
+        and mnq_orb_breakout_proof_mode(cfg) in ("paper_sim", "tradovate_demo")
+    )
+
+
 def _campaign_path(log_dir: str, for_date=None) -> Path:
     d = for_date or date.today()
     return Path(log_dir) / f"mnq_orb_breakout_proof_campaigns_{d.isoformat()}.json"
