@@ -320,7 +320,9 @@ class PaperBroker(BrokerInterface):
         pending = self._pending_stop_entry
         if pending is None:
             raise RuntimeError("PaperBroker: no pending stop-market entry to cancel.")
+        paper_order_id = self._active_order_id
         self._pending_stop_entry = None
+        self._active_order_id = None
         return Fill(
             instrument=pending.order.instrument,
             direction=pending.order.direction,
@@ -333,6 +335,7 @@ class PaperBroker(BrokerInterface):
             pnl_dollars=0.0,
             no_fill_reason=classify_no_fill_reason(reason),
             order_type="stop",
+            paper_order_id=paper_order_id,
         )
 
     def _activate_pending_stop_entry(
@@ -589,6 +592,30 @@ class PaperBroker(BrokerInterface):
         )
         self._active_order_id = paper_order_id
         self._runner_max_fav = runner_max_favorable
+
+    def restore_pending_stop_entry(
+        self,
+        order: BracketOrder,
+        contracts: int = 1,
+        *,
+        paper_order_id: Optional[str] = None,
+    ) -> None:
+        """Restore a synthetic stop-market paper order created on a prior bar.
+
+        This is for paper-isolated evidence lanes only. It preserves the
+        original ``PAPER-...`` identity across bar-by-bar processing and never
+        connects to an external broker.
+        """
+        if self._position is not None or self._pending_stop_entry is not None:
+            raise RuntimeError(
+                "PaperBroker.restore_pending_stop_entry: a position/order is "
+                "already loaded."
+            )
+        self._pending_stop_entry = _PendingStopMarketEntry(
+            order=order,
+            contracts=max(1, int(contracts or 1)),
+        )
+        self._active_order_id = paper_order_id
 
     def get_runner_max_favorable(self) -> Optional[float]:
         """Return runner state for restart-safe paper-only evidence lanes.
