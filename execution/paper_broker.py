@@ -30,6 +30,7 @@ from execution.broker_interface import (
     Position,
 )
 from execution.no_fill_taxonomy import classify_no_fill_reason
+from execution.post_fill_validation import validate_post_fill
 from execution.trailing import compute_trailed_stop
 
 
@@ -245,6 +246,27 @@ class PaperBroker(BrokerInterface):
         else:
             fill_entry = order.entry
 
+        post_fill = validate_post_fill(order, fill_entry)
+        if getattr(order, "post_fill_validation_required", False) and not post_fill.accepted:
+            return Fill(
+                instrument=order.instrument,
+                direction=order.direction,
+                contracts=contracts,
+                entry_price=fill_entry,
+                exit_price=fill_entry,
+                exit_reason="POST_FILL_VALIDATION_FAILED",
+                result="CANCELLED",
+                pnl_ticks=0.0,
+                pnl_dollars=0.0,
+                no_fill_reason="POST_FILL_VALIDATION_FAILED",
+                order_type=self._entry_fill_model,
+                paper_order_id=paper_order_id,
+                execution_audit={
+                    "post_fill_validation": post_fill.to_dict(),
+                    "failure_behavior": "simulated_reject_before_open",
+                },
+            )
+
         self._position = Position(
             instrument=order.instrument,
             direction=order.direction,
@@ -268,6 +290,7 @@ class PaperBroker(BrokerInterface):
             pnl_ticks=None,
             pnl_dollars=None,
             paper_order_id=paper_order_id,
+            execution_audit={"post_fill_validation": post_fill.to_dict()},
         )
 
     def _entry_not_filled(self, order: BracketOrder, contracts: int) -> Fill:

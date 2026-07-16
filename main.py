@@ -36,6 +36,7 @@ from strategy.signal_engine import DecisionEngine
 from strategy.confluence_scorer import score_setup as _score_setup
 from risk.risk_engine import RiskEngine, TradeSetup, DailyState
 from execution.paper_broker import NextBarOHLC, PaperBroker
+from execution.post_fill_validation import TICK_SIZE as EXEC_TICK_SIZE, TICK_VALUE as EXEC_TICK_VALUE
 from journal.journal_logger import JournalLogger
 
 
@@ -228,6 +229,25 @@ def main() -> int:
                 strategy=setup.strategy,
                 notes=setup.notes,
                 contracts=contracts,
+                min_rr_ratio=float(getattr(config, "min_rr_ratio", 2.0)),
+                max_dollar_risk=(
+                    (
+                        abs(float(setup.entry) - float(setup.stop))
+                        / EXEC_TICK_SIZE.get(state.instrument, 0.25)
+                        + float(
+                            (getattr(config, "entry_tolerance_ticks_by_root", {}) or {}).get(
+                                state.instrument, 0
+                            ) or 0
+                        )
+                    )
+                    * EXEC_TICK_VALUE.get(state.instrument, 1.25)
+                    * contracts
+                ),
+                max_stop_ticks=float((getattr(config, "max_stop_ticks", {}) or {}).get(state.instrument, 0) or 0) or None,
+                max_slippage_ticks=float(
+                    (getattr(config, "entry_tolerance_ticks_by_root", {}) or {}).get(state.instrument, 0) or 0
+                ) or None,
+                post_fill_validation_required=False,
             )
             # Schedule-mode execution gate (Phase 3 safety chokepoint). "current"
             # always allows; always-on modes suppress per session eligibility.

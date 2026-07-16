@@ -36,6 +36,14 @@ class BracketOrder:
     # both are False.
     force_market_entry: bool = False
     force_runner_exit: bool = False
+    # The risk engine's configured floor, carried into execution so an adverse
+    # fill cannot silently turn an approved setup into a below-minimum trade.
+    min_rr_ratio: float = 2.0
+    max_dollar_risk: Optional[float] = None
+    max_stop_ticks: Optional[float] = None
+    max_slippage_ticks: Optional[float] = None
+    execution_model: str = "anchored_structure"
+    post_fill_validation_required: bool = False
 
 
 @dataclass
@@ -71,6 +79,8 @@ class Fill:
     # adapter's structured _last_order_ids mapping; this field gives paper
     # fills an auditable identity without pretending they are broker orders.
     paper_order_id: Optional[str] = None
+    # Structured actual-fill validation and controlled-flatten evidence.
+    execution_audit: Optional[dict] = None
 
 
 @dataclass(frozen=True)

@@ -62,6 +62,39 @@ def test_entry_is_capped_limit_when_tolerance_set(monkeypatch):
     assert cap["body"]["price"] == 7560.0
 
 
+def test_long_entry_cap_tightens_to_preserve_minimum_rr(monkeypatch):
+    """The July-14 MNQ fill at 29610.5 degraded 2.5R to 1.59R.
+
+    With a 2R execution floor, the worst valid fill is 29606.75, so the active
+    32-tick tolerance may not permit the old 29611.50 cap.
+    """
+    monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS_MNQ", "32")
+    b = _broker(monkeypatch)
+    cap = _capture_body(monkeypatch, b)
+    order = BracketOrder(
+        instrument="MNQ", direction="LONG", entry=29603.5,
+        stop=29583.5, target=29653.5, rr_ratio=2.5,
+        min_rr_ratio=2.0, strategy="orb_reclaim",
+    )
+    b.execute_bracket(order)
+    assert cap["body"]["orderType"] == "Limit"
+    assert cap["body"]["price"] == 29606.75
+
+
+def test_short_entry_cap_tightens_to_preserve_minimum_rr(monkeypatch):
+    monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS_MNQ", "32")
+    b = _broker(monkeypatch)
+    cap = _capture_body(monkeypatch, b)
+    order = BracketOrder(
+        instrument="MNQ", direction="SHORT", entry=30000.0,
+        stop=30020.0, target=29950.0, rr_ratio=2.5,
+        min_rr_ratio=2.0, strategy="orb_reclaim",
+    )
+    b.execute_bracket(order)
+    assert cap["body"]["orderType"] == "Limit"
+    assert cap["body"]["price"] == 29996.75
+
+
 def test_short_entry_cap_is_below_plan(monkeypatch):
     monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS", "2")
     b = _broker(monkeypatch)
@@ -171,13 +204,15 @@ def test_per_instrument_tolerance_mes_vs_mnq(monkeypatch):
     assert cap["body"]["orderType"] == "Limit"
     assert cap["body"]["price"] == 7560.5
     assert cap["body"]["timeInForce"] == "IOC"
-    # MNQ LONG entry 30438.75 → +16 ticks = +4.0pt → cap 30442.75 (NOT 1.0pt)
+    # MNQ's 16-tick tolerance would allow 30442.75, but that would degrade the
+    # approved bracket below 2R. The execution-quality cap tightens it to the
+    # worst tick that still preserves the configured floor: 30442.0.
     b2 = _broker(monkeypatch)
     cap2 = _capture_body(monkeypatch, b2)
     mnq = BracketOrder(instrument="MNQ", direction="LONG", entry=30438.75,
                        stop=30418.75, target=30488.75, rr_ratio=2.5, strategy="orb_reclaim")
     b2.execute_bracket(mnq)
-    assert cap2["body"]["price"] == 30442.75
+    assert cap2["body"]["price"] == 30442.0
 
 
 def test_global_fallback_when_no_per_instrument(monkeypatch):
