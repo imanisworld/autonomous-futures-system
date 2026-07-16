@@ -2433,6 +2433,11 @@ def _dashboard_payload(for_date: date) -> dict:
     gex_shadow_analysis = _gex_shadow_analysis_payload(entries)
     evidence_readiness = diagnostics["evidence_readiness"]
     runner_shadow = diagnostics["runner_shadow"]
+    execution_audits = []
+    for entry in entries:
+        audit = entry.get("execution_audit") or (entry.get("outcome") or {}).get("execution_audit")
+        if isinstance(audit, dict):
+            execution_audits.append({"ts": entry.get("ts"), **audit})
     return {
         "date": daily_state.date,
         "live_trading_enabled": _config.live_trading_enabled,
@@ -2474,6 +2479,11 @@ def _dashboard_payload(for_date: date) -> dict:
         "gex_shadow_analysis": gex_shadow_analysis,
         "evidence_readiness": evidence_readiness,
         "runner_shadow": runner_shadow,
+        "post_fill_execution": {
+            "enabled_for_external_broker": True,
+            "audits_today": len(execution_audits),
+            "latest": execution_audits[-1] if execution_audits else None,
+        },
         "live_preflight": _safe_live_preflight_status(),
         "live_box_drift_guard": live_box_drift_report(
             risk_rules_path=getattr(_config, "risk_rules_path", "risk_rules.yaml"),
@@ -2565,6 +2575,7 @@ def _public_entry(entry: dict) -> dict:
     pnl_dollars = outcome.get("pnl_dollars")
     raw_exit_reason = outcome.get("exit_reason")
     outcome_explanation = _explain_outcome(outcome)
+    execution_audit = entry.get("execution_audit") or outcome.get("execution_audit")
     return {
         "ts": entry.get("ts"),
         "type": entry.get("type", "DECISION"),
@@ -2580,6 +2591,7 @@ def _public_entry(entry: dict) -> dict:
         "pnl_dollars": pnl_dollars,
         "outcome_explanation": outcome_explanation["message"],
         "outcome_warning": outcome_explanation["warning"],
+        "execution_audit": execution_audit,
     }
 
 

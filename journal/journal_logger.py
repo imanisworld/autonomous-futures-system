@@ -109,6 +109,7 @@ class JournalLogger:
         best_ask_at_submit: Optional[float] = None,
         ticks_moved_from_entry: Optional[float] = None,
         paper_order_id: Optional[str] = None,
+        execution_audit: Optional[dict] = None,
     ) -> None:
         """
         Append a trade outcome entry to today's journal.
@@ -142,6 +143,7 @@ class JournalLogger:
                 "best_ask_at_submit": best_ask_at_submit,
                 "ticks_moved_from_entry": ticks_moved_from_entry,
                 "paper_order_id": paper_order_id,
+                "execution_audit": execution_audit,
             },
         }
         self._append(entry, for_date)

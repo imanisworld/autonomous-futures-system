@@ -33,6 +33,7 @@ from context.market_context import (
 )
 from execution.broker_interface import BracketOrder
 from execution.paper_broker import NextBarOHLC, PaperBroker
+from execution.post_fill_validation import TICK_SIZE as EXEC_TICK_SIZE, TICK_VALUE as EXEC_TICK_VALUE
 from journal.journal_logger import JournalLogger
 from context.htf_loader import HTFLookup
 from context.live_direction import apply_live_direction
@@ -273,6 +274,27 @@ class ReplayEngine:
                         strategy=decision.setup.strategy,
                         notes=decision.setup.notes,
                         contracts=contracts,
+                        min_rr_ratio=float(getattr(self.config, "min_rr_ratio", 2.0)),
+                        max_dollar_risk=(
+                            (
+                                abs(float(decision.setup.entry) - float(decision.setup.stop))
+                                / EXEC_TICK_SIZE.get(state.instrument, 0.25)
+                                + float(
+                                    (getattr(self.config, "entry_tolerance_ticks_by_root", {}) or {}).get(
+                                        state.instrument, 0
+                                    ) or 0
+                                )
+                            )
+                            * EXEC_TICK_VALUE.get(state.instrument, 1.25)
+                            * contracts
+                        ),
+                        max_stop_ticks=float(
+                            (getattr(self.config, "max_stop_ticks", {}) or {}).get(state.instrument, 0) or 0
+                        ) or None,
+                        max_slippage_ticks=float(
+                            (getattr(self.config, "entry_tolerance_ticks_by_root", {}) or {}).get(state.instrument, 0) or 0
+                        ) or None,
+                        post_fill_validation_required=False,
                     )
                     entry_fill = broker.execute_bracket(order, market_price=candle.close)
                     if entry_fill.result == "CANCELLED":

@@ -18,6 +18,7 @@ Required env vars:
 from __future__ import annotations
 
 import logging
+import math
 import os
 import threading
 import time
@@ -36,6 +37,7 @@ from execution.broker_interface import (
     Position,
 )
 from execution.no_fill_taxonomy import classify_no_fill_reason
+from execution.post_fill_validation import validate_post_fill
 
 logger = logging.getLogger(__name__)
 
@@ -118,6 +120,28 @@ def _round_to_tick(price: float, instrument: str) -> float:
     if tick <= 0:
         return float(price)
     return round(round(float(price) / tick) * tick, 4)
+
+
+def _rr_preserving_entry_cap(order: BracketOrder, instrument: str) -> float:
+    """Worst acceptable fill price that preserves the configured minimum R:R.
+
+    LONG fills must be at or below the returned price; SHORT fills must be at
+    or above it. Rounding is deliberately conservative so snapping to the tick
+    grid can never push the cap through the R:R boundary.
+    """
+    minimum_rr = max(0.0, float(getattr(order, "min_rr_ratio", 2.0) or 0.0))
+    if minimum_rr <= 0:
+        return float(order.entry)
+    stop = float(order.stop)
+    target = float(order.target)
+    boundary = (target + minimum_rr * stop) / (1.0 + minimum_rr)
+    root = instrument.replace("1!", "").upper()
+    tick = _TICK_SIZE.get(root, 0.25)
+    if tick <= 0:
+        return boundary
+    ticks = boundary / tick
+    snapped = math.floor(ticks + 1e-9) if order.direction == "LONG" else math.ceil(ticks - 1e-9)
+    return round(snapped * tick, 4)
 
 
 def _runner_live_enabled() -> bool:
@@ -733,12 +757,17 @@ class TradovateBroker(BrokerInterface):
             # the tolerance lookup entirely — a forced Market entry never rests
             # unfilled, sidestepping the IOC-limit no-fill bottleneck this proof
             # mode exists to test.
+            runner_live = _runner_live_enabled() or getattr(order, "force_runner_exit", False)
             entry_leg = {"orderType": "Market"}
             tol_ticks = 0.0 if getattr(order, "force_market_entry", False) else _entry_slippage_tolerance_ticks(root)
             if tol_ticks > 0:
                 tick = _TICK_SIZE.get(root, 0.25)
                 offset = tol_ticks * tick
                 raw_limit = float(order.entry) + (offset if order.direction == "LONG" else -offset)
+                rr_cap = _rr_preserving_entry_cap(order, root)
+                rr_limited = not runner_live
+                if rr_limited:
+                    raw_limit = min(raw_limit, rr_cap) if order.direction == "LONG" else max(raw_limit, rr_cap)
                 limit_px = _round_to_tick(raw_limit, root)
                 # timeInForce=IOC: Tradovate self-cancels an unfilled limit entry
                 # immediately, so no resting parent can fill on a LATER bar outside
@@ -749,8 +778,9 @@ class TradovateBroker(BrokerInterface):
                 # still enforcing no-fill safety.)
                 entry_leg = {"orderType": "Limit", "price": limit_px, "timeInForce": "IOC"}
                 logger.info(
-                    "Limit entry (#2) %s %s: plan=%s cap=%s (tol=%g ticks)",
+                    "Limit entry (#2) %s %s: plan=%s cap=%s (tol=%g ticks rr_floor=%s rr_cap=%s)",
                     root, order.direction, order.entry, limit_px, tol_ticks,
+                    getattr(order, "min_rr_ratio", 2.0), rr_cap if rr_limited else "runner_live",
                 )
 
             # Place protective children via OSO. Tradovate's official schema
@@ -761,7 +791,6 @@ class TradovateBroker(BrokerInterface):
             # order.force_runner_exit (MNQ orb_reclaim proof mode only) opts THIS
             # order into runner-exit-only regardless of the global EXIT_MODE pin —
             # every other order's bracket shape is unaffected.
-            runner_live = _runner_live_enabled() or getattr(order, "force_runner_exit", False)
             body = {
                 "accountSpec": self.config.username,
                 "accountId": self._account_id,
@@ -880,10 +909,15 @@ class TradovateBroker(BrokerInterface):
                         )
                 # status "filled" → fall through to open + bracket verify.
 
+            actual_entry = (
+                self._entry_fill_price(order_id, root)
+                if getattr(order, "post_fill_validation_required", False)
+                else float(order.entry)
+            )
             self._last_position = Position(
                 instrument=order.instrument,
                 direction=order.direction,
-                entry_price=order.entry,
+                entry_price=float(actual_entry if actual_entry is not None else order.entry),
                 stop=tick_stop,
                 target=None if runner_live else tick_target,
                 quantity=qty,
@@ -932,16 +966,33 @@ class TradovateBroker(BrokerInterface):
                 "" if runner_live else "+target",
                 order.instrument,
             )
+            execution_audit = None
+            if getattr(order, "post_fill_validation_required", False):
+                if actual_entry is None:
+                    execution_audit = {
+                        "post_fill_validation": {
+                            "accepted": False,
+                            "requested_entry": float(order.entry),
+                            "actual_entry": None,
+                            "failed_checks": ["actual_fill_unavailable"],
+                        }
+                    }
+                    return self._handle_invalid_post_fill(order, qty, execution_audit)
+                validation = validate_post_fill(order, float(actual_entry))
+                execution_audit = {"post_fill_validation": validation.to_dict()}
+                if not validation.accepted:
+                    return self._handle_invalid_post_fill(order, qty, execution_audit)
             return Fill(
                 instrument=order.instrument,
                 direction=order.direction,
                 contracts=qty,
-                entry_price=order.entry,
+                entry_price=float(actual_entry if actual_entry is not None else order.entry),
                 exit_price=None,
                 exit_reason=None,
                 result="OPEN",
                 pnl_ticks=None,
                 pnl_dollars=None,
+                execution_audit=execution_audit,
             )
         except Exception as exc:
             logger.exception("Tradovate execute_bracket failed: %s", exc)
@@ -1444,7 +1495,16 @@ class TradovateBroker(BrokerInterface):
 
     def flatten_position(self) -> dict:
         """Liquidate any open position at market, then cancel working orders."""
-        result: dict = {"cancelled_orders": False, "close_sent": False, "position_was": None}
+        result: dict = {
+            "cancelled_orders": False,
+            "close_sent": False,
+            "close_order_id": None,
+            "close_fill_price": None,
+            "flat_confirmed": False,
+            "position_was": None,
+        }
+        prior_position = self._last_position
+        prior_order_ids = self._last_order_ids
         try:
             # ── Safety: same live-env guard as execute_bracket ──
             if self.config.env == "live":
@@ -1488,6 +1548,7 @@ class TradovateBroker(BrokerInterface):
                 fail = None
                 if isinstance(liq, dict):
                     fail = liq.get("failureReason") or liq.get("failureText") or liq.get("errorText")
+                close_order_id = liq.get("orderId") if isinstance(liq, dict) else None
                 if fail:
                     logger.error(
                         "Tradovate liquidate REJECTED for %s: %s — position NOT closed",
@@ -1495,8 +1556,15 @@ class TradovateBroker(BrokerInterface):
                     )
                     result["close_sent"] = False
                     result["error"] = f"liquidate rejected: {fail}"
+                elif not close_order_id:
+                    logger.error(
+                        "Tradovate liquidate returned no confirmed order id for %s: %s",
+                        pos.instrument, liq,
+                    )
+                    result["error"] = "liquidate returned no orderId"
                 else:
                     result["close_sent"] = True
+                    result["close_order_id"] = close_order_id
 
             # Step 2 — after liquidation request, cancel any remaining working
             # orders (including bracket children that may still be live).
@@ -1506,11 +1574,32 @@ class TradovateBroker(BrokerInterface):
                 result["cancelled_count"] = n
             except Exception as exc:
                 logger.warning("Tradovate flatten cancel step failed: %s", exc)
+
+            if result["close_sent"]:
+                for attempt in range(6):
+                    confirmed, remaining = self.get_position_snapshot()
+                    if confirmed and remaining is None:
+                        result["flat_confirmed"] = True
+                        break
+                    if attempt < 5:
+                        time.sleep(0.4)
+                result["close_fill_price"] = self._entry_fill_price(
+                    result["close_order_id"],
+                    (result.get("position_was") or {}).get("instrument", ""),
+                )
+                if not result["flat_confirmed"]:
+                    result["error"] = result.get("error") or "liquidation not confirmed flat"
         except Exception as exc:
             logger.exception("Tradovate flatten_position failed: %s", exc)
             result["error"] = str(exc)
-        self._last_position = None
-        self._last_order_ids = None
+        if result["flat_confirmed"] or result["position_was"] is None:
+            self._last_position = None
+            self._last_order_ids = None
+        else:
+            # Fail closed: retain the assumed-open local state when broker flatness
+            # cannot be proved, so the runner blocks another entry and keeps alerting.
+            self._last_position = prior_position
+            self._last_order_ids = prior_order_ids
         return result
 
     def entry_order_filled(self, order_id) -> Optional[bool]:
@@ -1531,6 +1620,94 @@ class TradovateBroker(BrokerInterface):
         if not isinstance(fills, list):
             return None
         return any(f.get("orderId") == order_id for f in fills)
+
+    def _entry_fill_price(self, order_id, instrument: str) -> Optional[float]:
+        """Quantity-weighted actual entry fill, scoped to the exact order id."""
+        for attempt in range(6):
+            try:
+                fills = self._get(f"/fill/list?accountId={self._account_id}")
+                matches = [
+                    f for f in (fills if isinstance(fills, list) else [])
+                    if f.get("orderId") == order_id and f.get("price") is not None
+                ]
+                if matches:
+                    qty = sum(abs(float(f.get("qty") or 0)) for f in matches)
+                    if qty > 0:
+                        return sum(
+                            float(f["price"]) * abs(float(f.get("qty") or 0)) for f in matches
+                        ) / qty
+                    return sum(float(f["price"]) for f in matches) / len(matches)
+                item = self._get(f"/order/item?id={order_id}")
+                # Never use the order's `price` field here: on a Limit order it
+                # is the submitted cap, not proof of the actual execution price.
+                for key in ("avgFillPrice", "fillPrice"):
+                    if isinstance(item, dict) and item.get(key) is not None:
+                        return float(item[key])
+            except Exception:
+                pass
+            if attempt < 5:
+                time.sleep(0.3)
+        logger.error("Actual entry fill unavailable for %s order_id=%s", instrument, order_id)
+        return None
+
+    def _handle_invalid_post_fill(self, order: BracketOrder, qty: int, audit: dict) -> Fill:
+        """Flatten an already-filled position whose actual economics fail risk."""
+        failed = (audit.get("post_fill_validation") or {}).get("failed_checks") or []
+        msg = (
+            f"POST-FILL VALIDATION FAILED: {order.direction} {qty}x {order.instrument} "
+            f"failed={failed}; controlled flatten required"
+        )
+        logger.error(msg)
+        try:
+            from config.settings import load_config
+            from notifications.system_notifier import notify_system
+            notify_system(msg, config=load_config())
+        except Exception as exc:
+            logger.warning("post-fill validation alert failed: %s", exc)
+
+        audit["bracket_submission_model"] = (
+            "protective_oso_children_submitted_atomically_before_entry_fill; "
+            "invalid fill is liquidated while protection remains active"
+        )
+        flat = self.flatten_position()
+        audit["controlled_flatten"] = flat
+        confirmed = bool(
+            flat.get("close_sent") and flat.get("close_order_id") and flat.get("flat_confirmed")
+        )
+        actual_entry = float(
+            (audit.get("post_fill_validation") or {}).get("actual_entry")
+            or order.entry
+        )
+        exit_price = flat.get("close_fill_price")
+        pnl_ticks = pnl_dollars = None
+        if confirmed and exit_price is not None:
+            root = order.instrument.replace("1!", "").upper()
+            tick = _TICK_SIZE.get(root, 0.25)
+            value = _TICK_VALUE.get(root, 1.25)
+            signed = (
+                float(exit_price) - actual_entry
+                if order.direction == "LONG"
+                else actual_entry - float(exit_price)
+            )
+            pnl_ticks = signed / tick
+            pnl_dollars = round(pnl_ticks * value * qty, 2)
+        return Fill(
+            instrument=order.instrument,
+            direction=order.direction,
+            contracts=qty,
+            entry_price=actual_entry,
+            exit_price=float(exit_price) if exit_price is not None else None,
+            exit_reason=(
+                "POST_FILL_INVALID_AUTO_FLATTENED" if confirmed
+                else "POST_FILL_INVALID_FLATTEN_UNCONFIRMED"
+            ),
+            result="CANCELLED" if confirmed else "OPEN",
+            pnl_ticks=pnl_ticks,
+            pnl_dollars=pnl_dollars,
+            no_fill_reason="POST_FILL_VALIDATION_FAILED",
+            order_type="broker_fill",
+            execution_audit=audit,
+        )
 
     def resolve_position(self) -> Optional[Fill]:
         """Check if a bracket child order (stop or target) has filled."""

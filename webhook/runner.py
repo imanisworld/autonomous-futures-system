@@ -1698,6 +1698,24 @@ def process_alert(
         contracts=contracts,
         force_market_entry=bool(_active_mnq_proof_decision and _active_mnq_proof_decision.force_market_entry),
         force_runner_exit=bool(_active_mnq_proof_decision and _active_mnq_proof_decision.force_runner_exit),
+        min_rr_ratio=float(getattr(cfg, "min_rr_ratio", 2.0)),
+        max_dollar_risk=(
+            (
+                abs(float(entry_px) - float(stop_px)) / _TICK_SIZE_BY_ROOT.get(state.instrument, 0.25)
+                + float((getattr(cfg, "entry_tolerance_ticks_by_root", {}) or {}).get(state.instrument, 0) or 0)
+            )
+            * _tick_value_for(state.instrument)
+            * contracts
+        ),
+        max_stop_ticks=float((getattr(cfg, "max_stop_ticks", {}) or {}).get(state.instrument, 0) or 0) or None,
+        max_slippage_ticks=float(
+            (getattr(cfg, "entry_tolerance_ticks_by_root", {}) or {}).get(state.instrument, 0) or 0
+        ) or None,
+        execution_model="anchored_structure",
+        # This gate protects external broker fills. Paper/proof lanes keep their
+        # isolated simulator contract and use the shared formula only in explicit
+        # parity/replay studies.
+        post_fill_validation_required=not isinstance(broker, PaperBroker),
     )
 
     # ── Schedule-mode execution gate (Phase 3 safety chokepoint) ──────────────
@@ -1852,7 +1870,8 @@ def process_alert(
         # fill) — log it at WARNING so it doesn't pollute error counts / alerting.
         # Anything else (rejected / exception / naked-flatten) is a genuine
         # execution failure: log ERROR and fire the live-order-blocked alert.
-        if fill.result == "CANCELLED":
+        _post_fill_failed = str(getattr(fill, "exit_reason", "") or "").startswith("POST_FILL_INVALID")
+        if fill.result == "CANCELLED" and not _post_fill_failed:
             logger.warning(
                 "ENTRY_NOT_FILLED: %s %s — limit not filled (CANCELLED)",
                 order.instrument, order.direction,
@@ -1864,8 +1883,8 @@ def process_alert(
                     from notifications.discord_notifier import send_discord_alert
                     send_discord_alert(
                         cfg,
-                        "LIVE ORDER BLOCKED: Tradovate did not accept the order. "
-                        f"No order sent/kept open. Reason: {fill.result}. "
+                        "EXECUTION SAFETY: Tradovate order did not remain open. "
+                        f"Reason: {getattr(fill, 'exit_reason', None) or fill.result}. "
                         f"Setup: {order.direction} {order.instrument} {order.contracts}c "
                         f"@ {order.entry} stop {order.stop} target {order.target}.",
                     )
@@ -1881,11 +1900,15 @@ def process_alert(
             instrument=order.instrument,
             session=state.session,
             result="CANCELLED",
-            entry_price=order.entry,
-            exit_price=None,
-            exit_reason=f"execution_failed:{fill.result}",
-            pnl_ticks=0.0,
-            pnl_dollars=0.0,
+            entry_price=float(getattr(fill, "entry_price", None) or order.entry),
+            exit_price=getattr(fill, "exit_price", None),
+            exit_reason=(
+                getattr(fill, "exit_reason", None)
+                if _post_fill_failed
+                else f"execution_failed:{fill.result}"
+            ),
+            pnl_ticks=getattr(fill, "pnl_ticks", None),
+            pnl_dollars=getattr(fill, "pnl_dollars", None),
             contracts=order.contracts,
             for_date=today,
             no_fill_reason=getattr(fill, "no_fill_reason", None),
@@ -1905,6 +1928,7 @@ def process_alert(
             best_bid_at_submit=None,
             best_ask_at_submit=None,
             ticks_moved_from_entry=None,
+            execution_audit=getattr(fill, "execution_audit", None),
         )
         daily_state.has_open_position = False
         result["decision"] = "BLOCKED_EXECUTION_FAILED"
@@ -1996,13 +2020,14 @@ def process_alert(
     # confirmed row must carry the actual fill; the anchored plan remains on
     # the TRADE_INTENT row and in the proof audit's would_be_setup.
     _proof_fill_entry = getattr(fill, "entry_price", None)
-    if (
-        _proof_market_px is not None
-        and _proof_fill_entry is not None
-        and isinstance(journal_entry.get("setup"), dict)
-    ):
+    if _proof_fill_entry is not None and isinstance(journal_entry.get("setup"), dict):
+        journal_entry["requested_entry"] = order.entry
         journal_entry["setup"] = {**journal_entry["setup"], "entry": _proof_fill_entry}
-        journal_entry["proof_fill_entry_price"] = _proof_fill_entry
+        journal_entry["actual_fill_entry_price"] = _proof_fill_entry
+        if _proof_market_px is not None:
+            journal_entry["proof_fill_entry_price"] = _proof_fill_entry
+    if getattr(fill, "execution_audit", None) is not None:
+        journal_entry["execution_audit"] = fill.execution_audit
     journal.log_decision(journal_entry, risk_dict, for_date=today)
 
     logger.info(
@@ -2039,9 +2064,7 @@ def process_alert(
         "instrument": state.instrument,
         "direction": decision.setup.direction,
         "entry": (
-            _proof_fill_entry
-            if (_proof_market_px is not None and _proof_fill_entry is not None)
-            else decision.setup.entry
+            _proof_fill_entry if _proof_fill_entry is not None else decision.setup.entry
         ),
         "stop": decision.setup.stop,
         "target": decision.setup.target,
@@ -2049,6 +2072,7 @@ def process_alert(
         "strategy": decision.setup.strategy,
         "contracts": order.contracts,
         "paper_order_id": _paper_order_id,
+        "execution_audit": getattr(fill, "execution_audit", None),
     }
 
     # Companion options paper lane: a fully-approved, OPENED futures trade derives an

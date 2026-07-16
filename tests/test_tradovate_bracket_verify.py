@@ -264,12 +264,16 @@ def test_flatten_liquidates_before_cancel(monkeypatch):
     monkeypatch.setattr(broker, "_authenticate", lambda: True)
     monkeypatch.setattr(broker, "get_position", lambda: calls.append("get_position") or pos)
     monkeypatch.setattr(broker, "_find_contract_id", lambda instrument: 123)
-    monkeypatch.setattr(broker, "_post", lambda path, body: calls.append(path) or {"ok": True})
+    monkeypatch.setattr(broker, "_post", lambda path, body: calls.append(path) or {"orderId": 777})
     monkeypatch.setattr(broker, "_cancel_working_orders", lambda: calls.append("cancel_orders") or 2)
+    monkeypatch.setattr(broker, "get_position_snapshot", lambda: (True, None))
+    monkeypatch.setattr(broker, "_entry_fill_price", lambda *args: 5899.75)
 
     result = broker.flatten_position()
 
     assert result["close_sent"] is True
+    assert result["close_order_id"] == 777
+    assert result["flat_confirmed"] is True
     assert result["cancelled_orders"] is True
     assert calls == ["get_position", "/order/liquidateposition", "cancel_orders"]
 
