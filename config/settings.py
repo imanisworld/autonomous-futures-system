@@ -478,6 +478,13 @@ class SystemConfig:
     mnq_strat_32_mode: str = "observe_only"
     mnq_strat_322_mode: str = "observe_only"
 
+    # ── MES trend-consolidation-break proof lane (paper-isolated,
+    # 2026-07-16) ────────────────────────────────────────────────────────
+    # Scoped to MES + existing trend_consolidation_break_observed only.
+    # observe_only and paper_sim are the only valid modes; external broker
+    # values are rejected.
+    mes_trend_consolidation_break_mode: str = "observe_only"
+
     # ── Entry-refresh Phase 1 shadow lane (2026-07-13) ───────────────────────
     # Scoped narrowly to MNQ + orb_reclaim only by default — see
     # context/mnq_entry_refresh.py. off (default): module does nothing.
@@ -768,6 +775,9 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         mnq_strat_322_mode=str(
             os.getenv("MNQ_STRAT_322_MODE", "observe_only") or "observe_only"
         ).strip().lower(),
+        mes_trend_consolidation_break_mode=str(
+            os.getenv("MES_TREND_CONSOLIDATION_BREAK_MODE", "observe_only") or "observe_only"
+        ).strip().lower(),
         entry_refresh_mode=str(
             os.getenv("ENTRY_REFRESH_MODE", "off") or "off"
         ).strip().lower(),
@@ -1055,6 +1065,13 @@ def _validate_config(config: SystemConfig) -> None:
                 f"{sorted(_valid_mnq_strat_evidence_modes)} (got {_mode!r}); "
                 "Tradovate/demo/live modes are never valid for Strat evidence lanes."
             )
+    if config.mes_trend_consolidation_break_mode not in _valid_mnq_strat_evidence_modes:
+        raise ConfigError(
+            "MES_TREND_CONSOLIDATION_BREAK_MODE must be one of "
+            f"{sorted(_valid_mnq_strat_evidence_modes)} "
+            f"(got {config.mes_trend_consolidation_break_mode!r}); "
+            "Tradovate/demo/live modes are never valid for this MES evidence lane."
+        )
     _valid_entry_refresh_modes = {"off", "observe_only", "shadow"}
     if config.entry_refresh_mode not in _valid_entry_refresh_modes:
         raise ConfigError(

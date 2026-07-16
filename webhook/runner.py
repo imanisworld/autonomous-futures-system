@@ -85,6 +85,9 @@ from context.five_min_feed import (
     triggered_armed_setup,
 )
 from execution.mnq_strat_evidence import process_mnq_strat_evidence
+from execution.mes_trend_consolidation_break_evidence import (
+    process_mes_trend_consolidation_break_evidence,
+)
 from execution.paper_broker import TICK_SIZE, NextBarOHLC, PaperBroker
 from journal.journal_logger import JournalLogger
 from risk.risk_engine import DailyState, RiskEngine, RiskResult, TradeSetup
@@ -1423,6 +1426,34 @@ def process_alert(
     opportunity_candidate_ids = _record_candidate_audit(
         decision, state, log_dir, today
     )
+    # MES trend-consolidation-break proof lane. Additive only: reuses the
+    # existing shadow observer, records the normal gate that blocked/allowed the
+    # bar, and owns any paper_sim order solely through PaperBroker. It never
+    # mutates decision/risk/broker state and never reaches Tradovate.
+    if not five_min_trigger and state.instrument == "MES":
+        try:
+            _mes_tcb_events = process_mes_trend_consolidation_break_evidence(
+                state=state,
+                cfg=cfg,
+                log_dir=log_dir,
+                recent_bars=recent_bars,
+                decision=decision,
+                for_date=for_date,
+            )
+            if _mes_tcb_events:
+                result["mes_trend_consolidation_break_evidence_events"] = [
+                    {
+                        "lane": event.get("lane"),
+                        "event": event.get("event"),
+                        "candidate_key": event.get("candidate_key"),
+                    }
+                    for event in _mes_tcb_events
+                ]
+        except Exception:  # noqa: BLE001 — evidence must never affect trading
+            logger.warning(
+                "MES trend-consolidation-break evidence collection failed",
+                exc_info=True,
+            )
     if not five_min_trigger and state.instrument in {"MNQ", "MES"}:
         try:
             _context_observation = append_strategy_context_observation(
