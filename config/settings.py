@@ -111,13 +111,6 @@ class SystemConfig:
     paper_eligible_sessions: List[str] = field(
         default_factory=lambda: ["asian", "london", "new_york"]
     )
-    # Operator session hold: sessions where EXTERNAL-broker order placement is
-    # denied at the execution chokepoint (adaptive/execution_gate.py). Paper and
-    # proof routes are exempt; shadow evaluation and candidate journaling are
-    # upstream and unaffected. Env-only (DEMO_EXECUTION_HOLD_SESSIONS, comma-
-    # separated) so a temporary hold never edits the hash-pinned risk_rules.yaml.
-    # Empty (default) = no hold, behavior unchanged.
-    demo_execution_hold_sessions: List[str] = field(default_factory=list)
 
     # Fine-grained session windows (optional — no window gate if session absent)
     session_windows: dict = field(default_factory=dict)
@@ -599,12 +592,6 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         paper_eligible_sessions=schedule.get(
             "paper_eligible_sessions", ["asian", "london", "new_york"]
         ),
-        # Proof-critical: classified in ops/live_box_guard.py, pin when set.
-        demo_execution_hold_sessions=[
-            s.strip().lower()
-            for s in (os.getenv("DEMO_EXECUTION_HOLD_SESSIONS") or "").split(",")
-            if s.strip()
-        ],
         session_windows=rules.get("session_windows", {}) or {},
 
         max_trades_per_day=daily.get("max_trades_per_day", 3),
@@ -930,18 +917,6 @@ def _validate_config(config: SystemConfig) -> None:
     if config.schedule_mode not in {"current", "always_on_shadow", "always_on_paper"}:
         raise ConfigError(
             "schedule_mode must be one of: current, always_on_shadow, always_on_paper."
-        )
-    # A typo'd hold session would silently never match — i.e. the hold would
-    # fail OPEN. Reject unknown names outright.
-    _unknown_hold = [
-        s for s in config.demo_execution_hold_sessions
-        if s not in config.allowed_sessions
-    ]
-    if _unknown_hold:
-        raise ConfigError(
-            f"demo_execution_hold_sessions contains unknown session(s) "
-            f"{_unknown_hold} — must be a subset of allowed sessions "
-            f"{config.allowed_sessions}."
         )
     # Safety invariant: live execution may run ONLY the "current" schedule.
     # BOTH always-on modes are forbidden when live trading is enabled.

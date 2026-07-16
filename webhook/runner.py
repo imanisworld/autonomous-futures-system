@@ -55,6 +55,7 @@ from context.mnq_entry_refresh import (
     is_entry_refresh_candidate,
     refresh_detached_entry,
 )
+from context.strategy_context_observer import append_strategy_context_observation
 from execution.entry_refresh_shadow import (
     append_entry_refresh_shadow_evidence,
     close_shadow_position,
@@ -662,6 +663,32 @@ def process_alert(
         logger.warning("structural regime observation failed", exc_info=True)
         state.structural_regime = None
         state.structural_range_candidates = []
+
+    # Premarket location context — observation only (operator 2026-07-16).
+    # Supply/demand + key-level location evidence journaled beside every
+    # candidate; has no authority over decision/risk/routing.
+    try:
+        if state.instrument in {"MES", "MNQ"} and not five_min_trigger:
+            from context.location_context import (
+                build_location_context,
+                read_other_instrument_regime,
+            )
+            _loc_bars = BarHistory(log_dir=log_dir).recent(
+                state.instrument, 960, for_date=for_date, lookback_days=14
+            )
+            state.location_context = build_location_context(
+                bars15=_loc_bars,
+                price=float(state.ohlc.close),
+                now=state.timestamp,
+                market_condition=state.market_condition,
+                other_regime=read_other_instrument_regime(
+                    log_dir, state.instrument, state.timestamp,
+                    for_date=for_date,
+                ),
+            )
+    except Exception:  # noqa: BLE001 — evidence must never affect ingestion
+        logger.warning("location context observation failed", exc_info=True)
+        state.location_context = None
 
     # ── Live HTF direction (opt-in): compute daily/4H from price, not labels ──
     # The payload's higher-TF labels come from completed bars and lag turns
@@ -1396,6 +1423,23 @@ def process_alert(
     opportunity_candidate_ids = _record_candidate_audit(
         decision, state, log_dir, today
     )
+    if not five_min_trigger and state.instrument in {"MNQ", "MES"}:
+        try:
+            _context_observation = append_strategy_context_observation(
+                log_dir=log_dir,
+                state=state,
+                decision=decision,
+                recent_bars=recent_bars,
+                for_date=for_date,
+            )
+            if _context_observation is not None:
+                result["strategy_context_observation"] = {
+                    "observation_only": True,
+                    "gate_authoritative": False,
+                    "path": "strategy_context_observations.jsonl",
+                }
+        except Exception:  # noqa: BLE001 - observation must never affect trading
+            logger.warning("strategy context observation failed", exc_info=True)
 
     # ── Entry-refresh decision (Phase 1, PR #265) ──────────────────────────────
     # Pure audit/decision computation on an ENTRY_DETACHED_FROM_PRICE candidate,
@@ -1480,6 +1524,7 @@ def process_alert(
         journal_entry["context"] = _market_state_context(state)
         if shadow_candidates:
             journal_entry["shadow_candidates"] = shadow_candidates
+        _annotate_candidate_locations(journal_entry, state)
         if mnq_proof_audit is not None:
             journal_entry["mnq_orb_reclaim_proof_audit"] = mnq_proof_audit
         if mnq_breakout_proof_audit is not None:
@@ -1747,18 +1792,12 @@ def process_alert(
     # ── Schedule-mode execution gate (Phase 3 safety chokepoint) ──────────────
     # In "current" this always allows (no behavior change). always_on_shadow
     # suppresses ALL orders; always_on_paper allows only paper_eligible_sessions.
-    # demo_execution_hold_sessions denies external-broker placement for the
-    # listed sessions while paper/proof routes keep collecting evidence.
     from adaptive.execution_gate import order_placement_allowed
     _allowed, _gate_reason = order_placement_allowed(
         schedule_mode=getattr(cfg, "schedule_mode", "current"),
         session=state.session,
         live_trading_enabled=getattr(cfg, "live_trading_enabled", False),
         paper_eligible_sessions=getattr(cfg, "paper_eligible_sessions", []),
-        demo_execution_hold_sessions=getattr(
-            cfg, "demo_execution_hold_sessions", []
-        ),
-        broker_is_paper=isinstance(broker, PaperBroker),
     )
     if not _allowed:
         logger.info("Order suppressed by schedule gate: %s", _gate_reason)
@@ -2433,7 +2472,32 @@ def _market_state_context(state) -> dict:
         context.update(state.structural_regime)
     if state.structural_range_candidates:
         context["structural_range_candidates"] = state.structural_range_candidates
+    if getattr(state, "location_context", None) is not None:
+        context["location_context"] = state.location_context
     return context
+
+
+def _annotate_candidate_locations(journal_entry: dict, state) -> None:
+    """Attach per-candidate location fields (observation only) to every
+    candidate_audit row and shadow candidate in a journal entry. Fail-soft:
+    annotation must never break journaling."""
+    loc = getattr(state, "location_context", None)
+    if not loc:
+        return
+    try:
+        from context.location_context import candidate_location
+        for c in (journal_entry.get("candidate_audit") or []):
+            if isinstance(c, dict) and "location" not in c:
+                c["location"] = candidate_location(
+                    loc, direction=c.get("direction"),
+                    entry=c.get("entry"), target=c.get("target"))
+        for c in (journal_entry.get("shadow_candidates") or []):
+            if isinstance(c, dict) and "location" not in c:
+                c["location"] = candidate_location(
+                    loc, direction=c.get("direction"),
+                    entry=c.get("entry"), target=c.get("target"))
+    except Exception:  # noqa: BLE001 — evidence must never affect journaling
+        logger.debug("candidate location annotation skipped", exc_info=True)
 
 
 def _safe_bar_ts(payload: AlertPayload) -> str:
