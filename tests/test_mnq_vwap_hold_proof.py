@@ -468,3 +468,46 @@ def test_all_three_proof_lanes_active_stay_independent(tmp_path):
     assert "mnq_vwap_hold_proof_audit" in confirmed
     assert "mnq_orb_reclaim_proof_audit" not in confirmed
     assert "mnq_orb_breakout_proof_audit" not in confirmed
+
+
+# ─── Detached-candidate carve-out (2026-07-14) ───────────────────────────────
+# Same carve-out as the orb_breakout lane, scoped to paper_sim + new_york:
+# the paired fill study's validated market leg fills detached candidates at
+# the live price, so the anchored-bracket straddle check must not re-create
+# the IOC-starvation defect inside the proof lane.
+
+def test_detached_candidate_rejected_in_observe_only(tmp_path):
+    today = date(2026, 5, 23)
+    cfg = _gate_cfg(tmp_path)  # default observe_only
+    result = process_alert(
+        _vwap_hold_payload(timestamp="2026-05-23T15:00:00+00:00", close=19460.0, low=19455.0),
+        config=cfg, log_dir=cfg.log_dir, for_date=today,
+    )
+    assert result["decision"] == "NO_TRADE"
+    assert "ENTRY_DETACHED_FROM_PRICE" in (result.get("failed_gates") or [])
+
+
+def test_detached_candidate_trades_in_paper_sim_ny_at_live_price(tmp_path):
+    today = date(2026, 5, 23)
+    cfg = _gate_cfg(tmp_path, mnq_vwap_hold_proof_mode="paper_sim")
+    live_close = 19460.0
+    result = process_alert(
+        _vwap_hold_payload(timestamp="2026-05-23T15:00:00+00:00", close=live_close, low=19455.0),
+        config=cfg, log_dir=cfg.log_dir, for_date=today,
+    )
+    assert result["decision"] == "TRADE"
+    tick = 0.25
+    expected_fill = live_close - float(getattr(cfg, "fill_slippage_ticks", 0.0) or 0.0) * tick
+    assert result["fill"]["entry"] == pytest.approx(expected_fill)
+
+
+def test_detached_candidate_still_rejected_outside_ny_in_paper_sim(tmp_path):
+    """12:00 UTC = 08:00 ET = london: neither the detachment carve-out nor the
+    permission exception applies outside new_york."""
+    today = date(2026, 5, 23)
+    cfg = _gate_cfg(tmp_path, mnq_vwap_hold_proof_mode="paper_sim")
+    result = process_alert(
+        _vwap_hold_payload(timestamp="2026-05-23T12:00:00+00:00", close=19460.0, low=19455.0),
+        config=cfg, log_dir=cfg.log_dir, for_date=today,
+    )
+    assert result["decision"] == "NO_TRADE"

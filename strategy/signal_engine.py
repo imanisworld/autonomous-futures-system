@@ -1444,13 +1444,32 @@ class DecisionEngine:
         if entry_price is not None and not self._entry_bracket_straddles_price(
             confirmed.direction, confirmed.entry, confirmed.stop, confirmed.target, entry_price
         ):
-            reason = (
-                f"Entry {confirmed.entry:g} detached from price {entry_price:g} "
-                f"(stop {confirmed.stop:g} / target {confirmed.target:g} no longer "
-                f"straddle the live price) — stale level after a feed gap; "
-                f"not chasing a market fill."
+            # Scoped proof-lane carve-out: this guard exists to stop a MARKET
+            # fill landing on the wrong side of an anchored bracket. When a
+            # proof lane's active mode forces a market entry AT THE LIVE PRICE
+            # for this exact candidate (MNQ orb_breakout, or MNQ vwap_hold in
+            # new_york), the anchor no longer determines the fill and the
+            # rejection would only re-create the defect the lane exists to
+            # measure (detachment is orb_breakout's dominant failure mode:
+            # 18/18 in the study + the first natural candidate, 2026-07-14).
+            # orb_reclaim is deliberately NOT carved out — its detachment
+            # question belongs to the entry-refresh shadow lane.
+            from context.mnq_orb_breakout_proof import proof_market_entry_active
+            from context.mnq_vwap_hold_proof import permission_gate_exception
+
+            _proof_market_entry = proof_market_entry_active(
+                state.instrument, confirmed.strategy, self.config
+            ) or permission_gate_exception(
+                state.instrument, confirmed.strategy, state.session, self.config
             )
-            return confirmed, "ENTRY_DETACHED_FROM_PRICE", reason
+            if not _proof_market_entry:
+                reason = (
+                    f"Entry {confirmed.entry:g} detached from price {entry_price:g} "
+                    f"(stop {confirmed.stop:g} / target {confirmed.target:g} no longer "
+                    f"straddle the live price) — stale level after a feed gap; "
+                    f"not chasing a market fill."
+                )
+                return confirmed, "ENTRY_DETACHED_FROM_PRICE", reason
 
         # ── R:R validation ────────────────────────────────────────────────────
         if confirmed.rr_ratio < self.config.min_rr_ratio:
