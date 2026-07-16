@@ -13,6 +13,9 @@ Invariants enforced here:
     (session_gap / off_hours stay shadow-only).
   * Live execution may run ONLY the "current" schedule; always_on_* is refused
     when live_trading_enabled is true (belt-and-suspenders with config validation).
+  * demo_execution_hold_sessions denies EXTERNAL-broker placement for the listed
+    sessions in every mode (demo and live alike); paper/proof routes are exempt
+    so isolated evidence collection continues through a hold.
 """
 from __future__ import annotations
 
@@ -25,10 +28,27 @@ def order_placement_allowed(
     session: str,
     live_trading_enabled: bool,
     paper_eligible_sessions,
+    demo_execution_hold_sessions=(),
+    broker_is_paper: bool = False,
 ) -> tuple[bool, str]:
     """Return (allowed, reason). NEVER returns True for a shadow mode, and never
     for live execution under any always-on mode."""
     paper_eligible = set(paper_eligible_sessions or [])
+
+    # Operator session hold: external-broker entries are paused for these
+    # sessions while shadow lanes, PaperBroker proof lanes, and candidate
+    # journaling keep running. Checked before mode logic so a hold can never
+    # be bypassed by any schedule mode, including live.
+    hold = {
+        str(s).strip().lower()
+        for s in (demo_execution_hold_sessions or ())
+        if str(s).strip()
+    }
+    if hold and not broker_is_paper and str(session).strip().lower() in hold:
+        return False, (
+            f"demo_execution_hold: external-broker entries paused for session "
+            f"'{session}' — paper/proof routes unaffected"
+        )
 
     # Live execution may ONLY run the current schedule.
     if live_trading_enabled:
