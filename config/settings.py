@@ -463,6 +463,14 @@ class SystemConfig:
     # and docs/strategy-matrix-tranche1-2026-07-14.md for the evidence.
     mnq_vwap_hold_proof_mode: str = "observe_only"
 
+    # ── MNQ Strat evidence lanes (paper-isolated, 2026-07-15) ───────────────
+    # Four independent lanes. Only observe_only and paper_sim are valid;
+    # neither mode can route through the configured external broker.
+    mnq_strat_22_reversal_mode: str = "observe_only"
+    mnq_strat_22_continuation_mode: str = "observe_only"
+    mnq_strat_32_mode: str = "observe_only"
+    mnq_strat_322_mode: str = "observe_only"
+
     # ── Entry-refresh Phase 1 shadow lane (2026-07-13) ───────────────────────
     # Scoped narrowly to MNQ + orb_reclaim only by default — see
     # context/mnq_entry_refresh.py. off (default): module does nothing.
@@ -735,6 +743,18 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         mnq_vwap_hold_proof_mode=str(
             os.getenv("MNQ_VWAP_HOLD_PROOF_MODE", "observe_only") or "observe_only"
         ).strip().lower(),
+        mnq_strat_22_reversal_mode=str(
+            os.getenv("MNQ_STRAT_22_REVERSAL_MODE", "observe_only") or "observe_only"
+        ).strip().lower(),
+        mnq_strat_22_continuation_mode=str(
+            os.getenv("MNQ_STRAT_22_CONTINUATION_MODE", "observe_only") or "observe_only"
+        ).strip().lower(),
+        mnq_strat_32_mode=str(
+            os.getenv("MNQ_STRAT_32_MODE", "observe_only") or "observe_only"
+        ).strip().lower(),
+        mnq_strat_322_mode=str(
+            os.getenv("MNQ_STRAT_322_MODE", "observe_only") or "observe_only"
+        ).strip().lower(),
         entry_refresh_mode=str(
             os.getenv("ENTRY_REFRESH_MODE", "off") or "off"
         ).strip().lower(),
@@ -997,6 +1017,19 @@ def _validate_config(config: SystemConfig) -> None:
             f"{sorted(_valid_mnq_proof_modes)} (got {config.mnq_vwap_hold_proof_mode!r}); "
             "'live' is never a valid value for this proof mode."
         )
+    _valid_mnq_strat_evidence_modes = {"observe_only", "paper_sim"}
+    for _env_name, _mode in (
+        ("MNQ_STRAT_22_REVERSAL_MODE", config.mnq_strat_22_reversal_mode),
+        ("MNQ_STRAT_22_CONTINUATION_MODE", config.mnq_strat_22_continuation_mode),
+        ("MNQ_STRAT_32_MODE", config.mnq_strat_32_mode),
+        ("MNQ_STRAT_322_MODE", config.mnq_strat_322_mode),
+    ):
+        if _mode not in _valid_mnq_strat_evidence_modes:
+            raise ConfigError(
+                f"{_env_name} must be one of "
+                f"{sorted(_valid_mnq_strat_evidence_modes)} (got {_mode!r}); "
+                "Tradovate/demo/live modes are never valid for Strat evidence lanes."
+            )
     _valid_entry_refresh_modes = {"off", "observe_only", "shadow"}
     if config.entry_refresh_mode not in _valid_entry_refresh_modes:
         raise ConfigError(
