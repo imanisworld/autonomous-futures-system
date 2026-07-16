@@ -233,6 +233,9 @@ class MarketState:
     window_direction: Optional[str] = None
     structural_regime: Optional[dict] = None
     structural_range_candidates: list[dict] = field(default_factory=list)
+    # Premarket location context (context/location_context.py) — observation
+    # only, journal evidence; never consulted by decision/risk/routing.
+    location_context: Optional[dict] = None
     notes: Optional[str] = None
     raw: dict = None  # Original dict for reference
 

@@ -1598,6 +1598,7 @@ def process_alert(
     journal_entry["context"] = _market_state_context(state)
     if shadow_candidates:
         journal_entry["shadow_candidates"] = shadow_candidates
+    _annotate_candidate_locations(journal_entry, state)
     if mnq_proof_audit is not None:
         journal_entry["mnq_orb_reclaim_proof_audit"] = mnq_proof_audit
     if mnq_breakout_proof_audit is not None:
