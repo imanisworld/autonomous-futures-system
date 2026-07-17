@@ -599,7 +599,11 @@ def _advance_pending_order(
             "paper_order_id": pending["paper_order_id"],
             "requested_entry": pending["requested_entry"],
             "direction": direction,
-            "reason": "ENTRY_BRACKET_INVALID_AT_FILL",
+            "reason": (
+                "ENTRY_NOT_TRIGGERED"
+                if actual_entry is None
+                else "ENTRY_BRACKET_INVALID_AT_FILL"
+            ),
             "fill_status": "NO_FILL",
             "broker_route": "PaperBroker",
             "normal_execution_affected": False,
@@ -649,9 +653,10 @@ def _advance_pending_order(
     _save_state(log_dir, lane_state)
     _append_event(log_dir, fill_event)
     emitted.append(fill_event)
-    outcome = _resolve_position(state=state, lane_state=lane_state, log_dir=log_dir)
-    if outcome:
-        emitted.append(outcome)
+    # Same-bar stop/target resolution is owned by the caller's single
+    # _resolve_position pass — resolving here as well double-counted the fill
+    # bar (bars_held +1) and let the runner track arm off the fill bar's own
+    # extreme (intra-bar look-ahead in the observational runner evidence).
     return emitted
 
 
