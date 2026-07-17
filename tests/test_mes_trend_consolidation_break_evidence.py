@@ -464,3 +464,109 @@ def test_paperbroker_pending_restore_preserves_id_without_changing_market_behavi
     assert fill.result == "OPEN"
     assert fill.paper_order_id.startswith("PAPER-")
     assert normal.has_pending_entry() is False
+
+
+def test_bars_held_counts_each_processed_bar_exactly_once(
+    tmp_path, fresh_market_state, config
+):
+    process_mes_trend_consolidation_break_evidence(
+        state=_state(fresh_market_state),
+        cfg=_paper_cfg(config),
+        log_dir=tmp_path,
+        recent_bars=_bars(),
+        decision=_decision(),
+        flatness_snapshot=FLAT,
+    )
+    fill_bar = _state(
+        fresh_market_state,
+        ts_offset=1,
+        ohlc=OHLCData(open=102.0, high=102.5, low=100.5, close=101.0, timeframe="15"),
+    )
+    assert [row["event"] for row in process_mes_trend_consolidation_break_evidence(
+        state=fill_bar,
+        cfg=_paper_cfg(config),
+        log_dir=tmp_path,
+        recent_bars=[],
+        decision=_decision(),
+        flatness_snapshot=FLAT,
+    )] == ["FILL"]
+    hold_bar = _state(
+        fresh_market_state,
+        ts_offset=2,
+        ohlc=OHLCData(open=101.0, high=102.0, low=100.0, close=101.5, timeframe="15"),
+    )
+    assert process_mes_trend_consolidation_break_evidence(
+        state=hold_bar,
+        cfg=_paper_cfg(config),
+        log_dir=tmp_path,
+        recent_bars=[],
+        decision=_decision(),
+        flatness_snapshot=FLAT,
+    ) == []
+    exit_bar = _state(
+        fresh_market_state,
+        ts_offset=3,
+        ohlc=OHLCData(open=100.0, high=100.5, low=93.5, close=94.0, timeframe="15"),
+    )
+    outcome = process_mes_trend_consolidation_break_evidence(
+        state=exit_bar,
+        cfg=_paper_cfg(config),
+        log_dir=tmp_path,
+        recent_bars=[],
+        decision=_decision(),
+        flatness_snapshot=FLAT,
+    )[0]
+    assert outcome["event"] == "OUTCOME"
+    # fill bar + hold bar + exit bar — the fill bar must be counted once, not
+    # twice (the pre-fix double _resolve_position inflated this to 4).
+    assert outcome["bars_held"] == 3
+
+
+def test_runner_track_never_arms_off_the_fill_bars_own_extreme(
+    tmp_path, fresh_market_state, config
+):
+    process_mes_trend_consolidation_break_evidence(
+        state=_state(fresh_market_state),
+        cfg=_paper_cfg(config),
+        log_dir=tmp_path,
+        recent_bars=_bars(),
+        decision=_decision(),
+        flatness_snapshot=FLAT,
+    )
+    # SHORT entry 100.75 (fills 100.5 with 1-tick slippage), R = 3.5. The fill
+    # bar itself runs 1.6R favourable without touching the 93.75 target — the
+    # runner track must NOT arm from this bar's own extreme (intra-bar
+    # look-ahead); it may only arm on the NEXT bar, from prior-bar extremes.
+    fill_bar = _state(
+        fresh_market_state,
+        ts_offset=1,
+        ohlc=OHLCData(open=102.0, high=102.5, low=95.0, close=96.0, timeframe="15"),
+    )
+    assert [row["event"] for row in process_mes_trend_consolidation_break_evidence(
+        state=fill_bar,
+        cfg=_paper_cfg(config),
+        log_dir=tmp_path,
+        recent_bars=[],
+        decision=_decision(),
+        flatness_snapshot=FLAT,
+    )] == ["FILL"]
+    rows = [json.loads(line) for line in evidence_path(tmp_path).read_text().splitlines()]
+    assert [row["event"] for row in rows].count("RUNNER_MOVE") == 0
+
+    hold_bar = _state(
+        fresh_market_state,
+        ts_offset=2,
+        ohlc=OHLCData(open=96.0, high=97.0, low=95.5, close=96.5, timeframe="15"),
+    )
+    assert process_mes_trend_consolidation_break_evidence(
+        state=hold_bar,
+        cfg=_paper_cfg(config),
+        log_dir=tmp_path,
+        recent_bars=[],
+        decision=_decision(),
+        flatness_snapshot=FLAT,
+    ) == []
+    rows = [json.loads(line) for line in evidence_path(tmp_path).read_text().splitlines()]
+    moves = [row for row in rows if row["event"] == "RUNNER_MOVE"]
+    assert len(moves) == 1
+    assert moves[0]["to"] == pytest.approx(96.75)  # 95.0 max-fav + 0.5R trail
