@@ -667,10 +667,14 @@ async def receive_alert(
         or getattr(payload, "signal_strategy", None)
         or "alert"
     )
-    if _DEDUPE.is_duplicate(payload.ticker, alert_name, payload.timestamp):
+    if _DEDUPE.is_duplicate(
+        payload.ticker, alert_name, payload.timestamp,
+        timeframe=getattr(payload, "timeframe", None),
+    ):
         logger.info(
-            "Duplicate alert ignored. event_id=%s symbol=%s alert=%s bar_time=%s",
+            "Duplicate alert ignored. event_id=%s symbol=%s alert=%s bar_time=%s tf=%s",
             event_id, payload.ticker, alert_name, payload.timestamp,
+            getattr(payload, "timeframe", None),
         )
         return JSONResponse(content={"ok": True, "event_id": event_id, "decision": "DUPLICATE_IGNORED"})
 
