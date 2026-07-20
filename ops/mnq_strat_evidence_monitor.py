@@ -11,7 +11,7 @@ from typing import Any, Iterable
 from execution.mnq_strat_evidence import LANES, evidence_path
 
 
-def _events(log_dir: str | Path, lane: str) -> list[dict[str, Any]]:
+def read_events(log_dir: str | Path, lane: str) -> list[dict[str, Any]]:
     path = evidence_path(log_dir, lane)
     if not path.exists():
         return []
@@ -79,7 +79,7 @@ def _consistency(groups: dict[str, Any]) -> dict[str, Any]:
 def summarize_lane(log_dir: str | Path, lane: str) -> dict[str, Any]:
     if lane not in LANES:
         raise ValueError(f"unknown MNQ Strat lane: {lane}")
-    rows = _events(log_dir, lane)
+    rows = read_events(log_dir, lane)
     candidates = [row for row in rows if row.get("event") == "CANDIDATE"]
     outcomes = [row for row in rows if row.get("event") == "OUTCOME"]
     values = [float(row.get("net_dollars") or 0.0) for row in outcomes]

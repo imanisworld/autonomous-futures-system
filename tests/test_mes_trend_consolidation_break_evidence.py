@@ -437,6 +437,47 @@ def test_monitor_reports_required_metrics(tmp_path):
     assert report["excluding_largest_winner"]["net_dollars"] == -5.0
 
 
+def test_monitor_separates_observe_only_from_terminal_no_fill(tmp_path):
+    rows = [
+        {
+            "event": "CANDIDATE",
+            "accepted": True,
+            "mode": "observe_only",
+            "fill_status": "NO_FILL",
+        },
+        {
+            "event": "CANDIDATE",
+            "accepted": False,
+            "mode": "paper_sim",
+            "fill_status": "NO_FILL",
+            "rejection_reason": (
+                "LANE_ORDER_OR_POSITION_ALREADY_OPEN; "
+                "STRUCTURAL_ISOLATION_UNCONFIRMED_FAIL_CLOSED"
+            ),
+        },
+        {
+            "event": "NO_FILL",
+            "fill_status": "NO_FILL",
+            "reason": "ENTRY_NOT_TRIGGERED",
+        },
+    ]
+    evidence_path(tmp_path).write_text("".join(json.dumps(row) + "\n" for row in rows))
+
+    report = summarize_lane(tmp_path)
+
+    assert report["evidence_file_exists"] is True
+    assert report["mode_counts"] == {"observe_only": 1, "paper_sim": 1}
+    assert report["candidate_fill_statuses"] == {"NO_FILL": 2}
+    assert report["observe_only_no_order_count"] == 1
+    assert report["terminal_no_fill_count"] == 1
+    assert report["terminal_no_fill_reasons"] == {"ENTRY_NOT_TRIGGERED": 1}
+    assert report["rejection_reasons"] == {
+        "LANE_ORDER_OR_POSITION_ALREADY_OPEN": 1,
+        "STRUCTURAL_ISOLATION_UNCONFIRMED_FAIL_CLOSED": 1,
+    }
+    assert report["no_fill_count"] == 3
+
+
 def test_paperbroker_pending_restore_preserves_id_without_changing_market_behavior():
     from execution.broker_interface import BracketOrder
     from execution.paper_broker import NextBarOHLC, PaperBroker
