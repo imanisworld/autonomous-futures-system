@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import json
 import statistics
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any, Iterable
 
 from execution.mes_trend_consolidation_break_evidence import LANE, evidence_path
 
 
-def _events(log_dir: str | Path) -> list[dict[str, Any]]:
+def read_events(log_dir: str | Path) -> list[dict[str, Any]]:
     path = evidence_path(log_dir)
     if not path.exists():
         return []
@@ -77,11 +77,28 @@ def _consistency(groups: dict[str, Any]) -> dict[str, Any]:
 
 
 def summarize_lane(log_dir: str | Path) -> dict[str, Any]:
-    rows = _events(log_dir)
+    path = evidence_path(log_dir)
+    rows = read_events(log_dir)
     candidates = [row for row in rows if row.get("event") == "CANDIDATE"]
     fills = [row for row in rows if row.get("event") == "FILL"]
     no_fills = [row for row in rows if row.get("event") == "NO_FILL"]
     outcomes = [row for row in rows if row.get("event") == "OUTCOME"]
+    rejection_reasons: Counter[str] = Counter()
+    for row in candidates:
+        for reason in str(row.get("rejection_reason") or "").split(";"):
+            if reason.strip():
+                rejection_reasons[reason.strip()] += 1
+    candidate_fill_statuses = Counter(
+        str(row.get("fill_status") or "UNKNOWN") for row in candidates
+    )
+    no_fill_reasons = Counter(str(row.get("reason") or "UNKNOWN") for row in no_fills)
+    mode_counts = Counter(str(row.get("mode") or "UNKNOWN") for row in candidates)
+    observe_only_no_order = sum(
+        row.get("accepted") is True
+        and row.get("mode") == "observe_only"
+        and row.get("fill_status") == "NO_FILL"
+        for row in candidates
+    )
     values = [float(row.get("net_dollars") or 0.0) for row in outcomes]
     tick_values = [float(row.get("net_ticks") or 0.0) for row in outcomes]
     winner_values = [value for value in values if value > 0]
@@ -117,11 +134,21 @@ def summarize_lane(log_dir: str | Path) -> dict[str, Any]:
 
     return {
         "lane": LANE,
-        "evidence_path": str(evidence_path(log_dir)),
+        "evidence_path": str(path),
+        "evidence_file_exists": path.exists(),
         "candidate_count": len(candidates),
         "accepted_count": sum(row.get("accepted") is True for row in candidates),
         "rejected_count": sum(row.get("accepted") is False for row in candidates),
+        "mode_counts": dict(mode_counts),
+        "candidate_fill_statuses": dict(candidate_fill_statuses),
+        "rejection_reasons": dict(rejection_reasons),
         "fill_count": len(fills),
+        "terminal_no_fill_count": len(no_fills),
+        "terminal_no_fill_reasons": dict(no_fill_reasons),
+        "observe_only_no_order_count": observe_only_no_order,
+        # Kept for compatibility: historically this combined terminal paper
+        # no-fills with accepted observe_only candidates where no order was
+        # intentionally created. The two components above remove that ambiguity.
         "no_fill_count": len(no_fills) + sum(
             row.get("fill_status") == "NO_FILL" for row in candidates
         ),

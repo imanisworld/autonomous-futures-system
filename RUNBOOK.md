@@ -82,6 +82,20 @@ curl 'http://127.0.0.1:8000/status/fill-realism?days=7&recent_limit=20'
 curl 'http://127.0.0.1:8000/status/review?date=2026-05-23&mode=eod'
 ```
 
+For one concise, read-only view of the MES trend-consolidation collector and
+all four MNQ Strat evidence lanes, run:
+
+```bash
+python3 scripts/evidence_lane_health.py --log-dir logs
+python3 scripts/evidence_lane_health.py --log-dir logs --json
+python3 scripts/evidence_lane_health.py --log-dir logs --date 2026-07-20
+```
+
+The default view counts the current UTC day and distinguishes no pattern
+matches from stale 15-minute delivery, all-candidate rejection, paper-fill
+starvation, pending MES orders, and open paper positions. Historical dates do
+not apply current feed freshness or current open-state warnings.
+
 `/status/fill-realism` is read-only and journal-derived. It reports the actual
 resolved no-fill rate overall and by setup, the requested sample window, unresolved
 attempt count, and recent recorded misses. It does not infer fills from bar prices,
