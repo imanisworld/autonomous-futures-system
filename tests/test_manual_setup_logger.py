@@ -36,7 +36,13 @@ def _setup(**updates):
                 "available": True,
                 "observed_at": SIGNAL_TS,
                 "source": "operator_signa_screen",
-                "data": {"grade": "A", "weekly_direction": "UP"},
+                "data": {
+                    "grade": "A",
+                    "weekly_direction": "UP",
+                    "data": {"direction": "LONG"},
+                    "engine": {"direction": "BULLISH"},
+                    "signa": {"action": "BUY"},
+                },
             }
         },
         "provenance": {
@@ -80,6 +86,73 @@ def test_setup_is_observe_only_append_only_and_has_stable_id(tmp_path):
     assert row["shadow_outcome"]["status"] == "PENDING"
     assert row["context"]["zone"]["available"] is False
     assert row["context"]["signa"]["data"]["grade"] == "A"
+    assert row["context"]["signa"]["internal_agreement"] is True
+    assert row["context"]["signa"]["agreement_evaluable"] is True
+
+
+@pytest.mark.parametrize(
+    "directions, expected_agreement, expected_evaluable",
+    [
+        (
+            ("LONG", "BULLISH", "BUY"),
+            True,
+            True,
+        ),
+        (
+            ("WAIT", "NEUTRAL", "HOLD"),
+            True,
+            True,
+        ),
+        (
+            ("WAIT", "BEARISH", "BUY"),
+            False,
+            True,
+        ),
+        (
+            ("LONG", None, "BUY"),
+            False,
+            False,
+        ),
+        (
+            ("LONG", "BULLISH", "AVOID"),
+            False,
+            False,
+        ),
+    ],
+)
+def test_signa_internal_agreement_is_derived_from_three_fields(
+    tmp_path, directions, expected_agreement, expected_evaluable
+):
+    data_direction, engine_direction, signa_action = directions
+    payload = _setup(
+        context={
+            "signa": {
+                "available": True,
+                "observed_at": SIGNAL_TS,
+                "source": "signa_dual_timeframe_snapshot",
+                "data": {
+                    "data": {"direction": data_direction},
+                    "engine": {"direction": engine_direction},
+                    "signa": {"action": signa_action},
+                },
+            }
+        }
+    )
+    row = record_setup(payload, log_dir=tmp_path)
+    signa = row["context"]["signa"]
+    assert signa["internal_agreement"] is expected_agreement
+    assert signa["agreement_evaluable"] is expected_evaluable
+    assert signa["direction_components"]["data.direction"]["raw"] == (
+        data_direction
+    )
+
+
+def test_missing_signa_is_not_misclassified_as_internal_conflict(tmp_path):
+    row = record_setup(_setup(context={}), log_dir=tmp_path)
+    signa = row["context"]["signa"]
+    assert signa["available"] is False
+    assert signa["internal_agreement"] is False
+    assert signa["agreement_evaluable"] is False
 
 
 def test_duplicate_signal_is_rejected_even_if_levels_change(tmp_path):
@@ -101,6 +174,8 @@ def test_exact_context_join_copies_zone_vwap_and_hash_but_not_signa(tmp_path):
     assert row["context"]["zone"]["data"]["zone"] == "near_demand"
     assert row["context"]["vwap"]["data"]["price_vs_vwap"] == "above"
     assert row["context"]["signa"]["available"] is False
+    assert row["context"]["signa"]["internal_agreement"] is False
+    assert row["context"]["signa"]["agreement_evaluable"] is False
     assert row["context"]["signa"]["missing_reason"] == (
         "observer_does_not_record_signa"
     )

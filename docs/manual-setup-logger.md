@@ -17,6 +17,10 @@ Create a JSON object containing:
 - `context`: optional `zone`, `vwap`, and `signa` snapshots. Each available
   snapshot requires `available=true`, `observed_at`, `source`, and a non-empty
   `data` object. Missing context is recorded explicitly and is never inferred.
+  A Signa snapshot should preserve the raw `data.direction`,
+  `engine.direction`, and `signa.action` fields from the same pre-entry fetch
+  window. The logger normalizes and compares them; callers do not supply the
+  derived verdict.
 - `provenance`: `source`, `recorded_by`, and optional `notes`
 
 Then run:
@@ -38,6 +42,21 @@ timestamp. It will not use a nearest observation because no authoritative
 freshness tolerance has been defined. The existing observer supplies zone and
 VWAP data but not Signa, so Signa remains unavailable unless it was explicitly
 observed and supplied with provenance.
+
+Every Signa snapshot contains:
+
+- `internal_agreement`: `true` only when all three component fields normalize
+  to the same `UP`, `DOWN`, or `NEUTRAL` direction.
+- `agreement_evaluable`: `false` when any field is missing or unrecognized,
+  keeping unavailable data separate from a genuine three-field conflict.
+- `direction_components`: the raw and normalized value of each component for
+  audit and later cohort analysis.
+
+Normalization is explicit: long/buy/bullish map to `UP`;
+short/sell/bearish map to `DOWN`; wait/hold/neutral/flat/sideways map to
+`NEUTRAL`. Any other token is unevaluable. Daily and weekly API calls should
+be captured as one pre-entry snapshot; the logger records the supplied
+snapshot timestamp but does not make API calls itself.
 
 ## Resolve a setup
 
