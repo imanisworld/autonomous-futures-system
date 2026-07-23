@@ -54,3 +54,33 @@ def test_open_position_with_working_bracket_is_informational():
     assert v["status"] == "OK"
     assert any("position OPEN" in n for n in v["notes"])
     assert not v["problems"]
+
+
+# ── pipeline-visibility escalations (drift / stale / blinded pipeline) ─────────
+
+def test_broker_flat_but_local_open_is_drift_alert():
+    v = evaluate_health(_base(position_flat=True, working_orders=0,
+                              broker_local_drift=True))
+    assert v["status"] == "ALERT"
+    assert any("drift" in p for p in v["problems"])
+
+
+def test_stale_unresolved_position_is_alert():
+    v = evaluate_health(_base(position_flat=False, working_orders=2,
+                              block_stale=True))
+    assert v["status"] == "ALERT"
+    assert any("unresolved past threshold" in p for p in v["problems"])
+
+
+def test_bars_without_decisions_is_alert():
+    """The 2026-07-22 signature: bars kept arriving, every decision blocked."""
+    v = evaluate_health(_base(position_flat=False, working_orders=2,
+                              bars_without_decisions=True))
+    assert v["status"] == "ALERT"
+    assert any("pipeline blind" in p for p in v["problems"])
+
+
+def test_clean_state_has_no_visibility_escalations():
+    v = evaluate_health(_base(position_flat=True, working_orders=0))
+    assert v["status"] == "OK"
+    assert not v["problems"]

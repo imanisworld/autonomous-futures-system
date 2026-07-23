@@ -23,7 +23,7 @@ import re
 import shutil
 import subprocess
 import urllib.request
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -116,6 +116,27 @@ def evaluate_health(checks: dict) -> dict:
         elif disk >= DISK_WARN_PCT:
             esc("WARN")
             problems.append(f"disk {disk:.0f}% full")
+
+    # ── Pipeline-visibility escalations (the proven monitoring gap) ──────────
+    # Broker says flat while the local journal still shows an open slot — the
+    # drift class (phantom / erased-outcome). Distinct from a legitimately open
+    # position (handled below): here the broker is FLAT.
+    if checks.get("broker_local_drift"):
+        esc("ALERT")
+        problems.append(
+            "broker FLAT but local shows an OPEN position — state drift, reconcile/verify"
+        )
+    # A held position past the stale threshold is stuck, not resolving.
+    if checks.get("block_stale"):
+        esc("ALERT")
+        problems.append("open position unresolved past threshold — stuck, not resolving")
+    # Bars kept arriving while every decision was blocked — the pipeline is blind
+    # (the 2026-07-22 signature: 184 bars, 0 authorized decisions).
+    if checks.get("bars_without_decisions"):
+        esc("ALERT")
+        problems.append(
+            "bars arriving but ALL candidate evaluation blocked — pipeline blind"
+        )
 
     flat = checks.get("position_flat")
     if flat is False:
@@ -214,7 +235,78 @@ def collect() -> dict:
         checks["disk_pct"] = round(100.0 * usage.used / usage.total, 1)
     except OSError:
         checks["disk_pct"] = None
+    # Pipeline-visibility signal from today's journal (fail-soft — a read hiccup
+    # must never break the digest). Surfaces the block conditions the runner now
+    # journals: a stale/unresolved hold, bars arriving while every decision is
+    # blocked (the 2026-07-22 blinded-pipeline signature), and broker-flat /
+    # local-open drift (broker says flat while the journal still shows a slot).
+    checks["block_stale"] = False
+    checks["bars_without_decisions"] = False
+    checks["broker_local_drift"] = False
+    try:
+        _sig = _block_visibility_signal()
+        if _sig is not None:
+            # Staleness comes straight from the classifier's own verdict (a
+            # STALE_RESOLVE row) — one threshold, defined once in
+            # ops.block_visibility, used at classification time.
+            checks["block_stale"] = bool(_sig["summary"]["has_stale_resolve"])
+            checks["bars_without_decisions"] = bool(_sig["summary"]["bars_without_decisions"])
+            # Broker read (position_flat) contradicts the local slot → drift. Only
+            # meaningful when the broker was actually reachable this run.
+            if checks.get("broker_reachable") and checks.get("position_flat") is True:
+                checks["broker_local_drift"] = bool(_sig["local_open"])
+    except Exception:  # noqa: BLE001 — visibility signal is best-effort only
+        pass
     return checks
+
+
+def _block_visibility_signal() -> Optional[dict]:
+    """Read the journal for the pipeline-visibility signal: today's
+    BLOCK_VISIBILITY records aggregated (with the trailing blind-window), the
+    last bar that reached evaluation, and a CROSS-DAY local open-position flag.
+    Pure aggregation lives in ops.block_visibility; this only reads. Returns None
+    if the journal or its deps are unavailable.
+
+    The local flag walks back up to 7 days, mirroring the runner/reconciler: the
+    2026-07-21 orphan was a PRIOR-day lifecycle holding the slot, so today's
+    has_open_position is False while the position is still open — a today-only
+    read would miss BROKER_LOCAL_STATE_DRIFT for the very incident this exposes.
+    """
+    try:
+        from journal.journal_logger import JournalLogger
+        from ops.block_visibility import summarize_blocks
+    except Exception:
+        return None
+    log_dir = os.getenv("LOG_DIR", "logs")
+    j = JournalLogger(log_dir=log_dir)
+    records, last_authorized = [], None
+    path = j._journal_path()  # today
+    if path.exists():
+        for entry in j._read_entries(path):
+            if entry.get("type") == "BLOCK_VISIBILITY":
+                records.append(entry)
+                continue
+            d = entry.get("decision")
+            # A bar that REACHED evaluation (any non-BLOCKED_* decision) resets
+            # the trailing blind run.
+            if d and not str(d).startswith("BLOCKED_"):
+                ts = entry.get("ts")
+                if ts and (last_authorized is None or ts > last_authorized):
+                    last_authorized = ts
+    # Cross-day local open-position detection (walk back like the reconciler).
+    local_open = False
+    base = date.today()
+    for days_back in range(0, 8):
+        try:
+            if j.get_daily_state(base - timedelta(days=days_back)).has_open_position:
+                local_open = True
+                break
+        except Exception:
+            continue
+    return {
+        "summary": summarize_blocks(records, last_authorized_ts=last_authorized),
+        "local_open": local_open,
+    }
 
 
 def _post_discord(url: str, content: str) -> bool:
