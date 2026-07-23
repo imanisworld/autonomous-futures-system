@@ -37,12 +37,17 @@ def test_health_auth_and_disk_and_errors():
 
 
 def test_health_disk_warn_band_and_open_position_note():
+    # A BRACKETED open position (working orders present) is a note, not an
+    # alarm. (An open position with 0 working orders is NAKED → ALERT, and an
+    # unknown protection state → WARN — see tests/test_health_digest_verdict.py;
+    # changed after the 2026-07-21 MES orphan sat naked ~36h behind an "OK".)
     v = hd.evaluate_health({
         "service_ok": True, "broker_reachable": True, "position_flat": False,
         "auth_state": "HEALTHY", "errors_today": 0, "disk_pct": 83.0,
+        "working_orders": 2,
     })
     assert v["status"] == "WARN"            # disk in warn band
-    assert "position OPEN" in v["notes"]    # open position is a note, not an alert
+    assert any("position OPEN" in n for n in v["notes"])
 
 
 def test_health_format_contains_status_icon():
