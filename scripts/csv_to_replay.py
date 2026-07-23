@@ -254,7 +254,7 @@ def first_value(row: dict, *names: str, default: str = "") -> str:
     return default
 
 def detect_day_boundaries(bars: list[dict]) -> list[int]:
-    """Return indices where the CME equity futures session date changes (17:00 ET)."""
+    """Return indices where the CME equity-futures trading day rolls at 18:00 ET."""
     boundaries = [0]
     from datetime import time
     for i in range(1, len(bars)):
