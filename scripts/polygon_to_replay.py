@@ -50,6 +50,7 @@ from scripts.csv_to_replay import (  # noqa: E402
     detect_session,
     direction_from_bar,
     htf_at,
+    vwap_day_range,
 )
 from sources.polygon_client import PolygonFuturesClient  # noqa: E402
 
@@ -180,7 +181,7 @@ def derive_candles(
 
     candles: list[dict] = []
     session_bars: list[dict] = []
-    prev_session = None
+    prev_vwap_range: tuple[int, int] | None = None
     closes: list[float] = []
 
     for i, bar in enumerate(raw):
@@ -213,9 +214,14 @@ def derive_candles(
         if orb_high is None or orb_low is None:
             continue  # no ORB yet (dataset starts before its first NY open)
 
-        if session != prev_session:
+        # Reset VWAP accumulation once per CME trading day (18:00 ET) — NOT at
+        # Asian/London/New York/off-hours sub-session transitions. See
+        # vwap_day_range() in csv_to_replay.py for why detect_session() must
+        # not gate this (same helper csv_to_replay uses, single source of truth).
+        vwap_range = vwap_day_range(day_ranges, i)
+        if vwap_range != prev_vwap_range:
             session_bars = []
-            prev_session = session
+            prev_vwap_range = vwap_range
         session_bars.append(bar)
         vwap = compute_vwap(session_bars)
 
