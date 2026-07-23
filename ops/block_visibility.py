@@ -152,12 +152,25 @@ def should_escalate(record: dict, *, stale_minutes: float = DEFAULT_STALE_MINUTE
     return record.get("classification") in (BROKER_LOCAL_STATE_DRIFT, STALE_RESOLVE)
 
 
-def summarize_blocks(records: list, *, bars_claimed: int = 0) -> dict:
-    """Aggregate a day's BLOCK_VISIBILITY records into a health signal.
+def summarize_blocks(
+    records: list,
+    *,
+    last_authorized_ts=None,
+    stale_minutes: float = DEFAULT_STALE_MINUTES,
+) -> dict:
+    """Aggregate a day's BLOCK_VISIBILITY records into a health signal. Pure.
 
-    Pure. `bars_claimed` lets the caller flag the 2026-07-22 signature — bars
-    kept arriving while authorized decisions stayed absent. Returns counts by
-    classification plus escalation booleans the health digest consumes.
+    `records` are the day's BLOCK_VISIBILITY rows (each carries a journaled
+    `ts`), chronological order not required. `last_authorized_ts` is the
+    timestamp of the most recent bar that REACHED evaluation (any decision that
+    is not a BLOCKED_* early-return); None if the pipeline evaluated nothing all
+    day.
+
+    The pipeline-blind signal operates on the TRAILING run of blocked bars since
+    that last evaluated bar — NOT whole-day totals. A normal morning (40 bars)
+    followed by a stuck afternoon (30 consecutive blocked bars) must still trip:
+    whole-day `blocked >= claimed` would read 30 >= 70 and stay silent, but the
+    trailing run spans hours and is caught here.
     """
     by_class: dict = {}
     worst_age = 0.0
@@ -167,14 +180,33 @@ def summarize_blocks(records: list, *, bars_claimed: int = 0) -> dict:
         a = r.get("position_age_minutes")
         if isinstance(a, (int, float)) and a > worst_age:
             worst_age = a
-    blocked_bars = sum(by_class.values())
+
+    # Trailing consecutive-blocked run = blocked bars stamped after the last
+    # evaluated bar. Its wall-clock span is how long the pipeline has gone
+    # blind. Reuses the single stale threshold (no second constant).
+    cutoff = _parse(last_authorized_ts)
+    trailing = []
+    for r in records or []:
+        rt = _parse(r.get("ts"))
+        if rt is None:
+            continue
+        if cutoff is None or rt > cutoff:
+            trailing.append(rt)
+    trailing.sort()
+    blind_span_min = (
+        (trailing[-1] - trailing[0]).total_seconds() / 60.0 if len(trailing) >= 2 else 0.0
+    )
+
     return {
-        "blocked_bars": blocked_bars,
+        "blocked_bars": sum(by_class.values()),
         "by_classification": by_class,
         "worst_position_age_minutes": worst_age,
         "has_stale_resolve": by_class.get(STALE_RESOLVE, 0) > 0,
         "has_state_drift": by_class.get(BROKER_LOCAL_STATE_DRIFT, 0) > 0,
-        # Bars continued to arrive but every one was blocked (no authorized
-        # decision produced) — the pipeline-blinded signature.
-        "bars_without_decisions": bool(bars_claimed) and blocked_bars >= bars_claimed > 0,
+        "trailing_blocked_bars": len(trailing),
+        "trailing_blind_minutes": round(blind_span_min, 1),
+        # Bars kept arriving and NONE reached evaluation for >= the stale window
+        # (the 2026-07-22 blinded-pipeline signature), measured on the trailing
+        # run so a partial-day blind window still fires.
+        "bars_without_decisions": blind_span_min >= stale_minutes and len(trailing) >= 2,
     }

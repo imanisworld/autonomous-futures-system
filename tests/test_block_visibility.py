@@ -103,15 +103,69 @@ def test_should_escalate_only_on_drift_or_stale():
     assert bv.should_escalate(drift) is True
 
 
-def test_summarize_flags_bars_without_decisions():
-    # Every bar blocked (blocked_bars >= bars_claimed) = pipeline-blind signature.
-    recs = [bv.build_block_record(_open_pos(age_min=i), _NOW.isoformat(), instrument="MES", session="s")
-            for i in (2, 4, 6)]
-    s = bv.summarize_blocks(recs, bars_claimed=3)
-    assert s["blocked_bars"] == 3
+def _blocked_rec(ts_iso, age_min=5):
+    """A journaled-shape BLOCK_VISIBILITY record: build_block_record + the `ts`
+    that log_block_visibility stamps on write."""
+    rec = bv.build_block_record(_open_pos(age_min=age_min), _NOW.isoformat(),
+                                instrument="MES", session="s")
+    rec["ts"] = ts_iso
+    return rec
+
+
+def test_blind_window_trips_on_trailing_run_not_whole_day():
+    """Reviewer blocker 2: a normal morning then a stuck afternoon. Whole-day
+    `blocked >= claimed` (30 >= 70) would stay silent; the trailing run spans
+    hours and must trip."""
+    base = datetime(2026, 7, 21, 12, 15, tzinfo=timezone.utc)
+    # 30 consecutive blocked bars, 15 min apart → ~7.25h trailing span.
+    recs = [_blocked_rec((base + timedelta(minutes=15 * i)).isoformat()) for i in range(30)]
+    # Last evaluated bar was late morning, before the stuck run began.
+    last_auth = datetime(2026, 7, 21, 12, 0, tzinfo=timezone.utc).isoformat()
+    s = bv.summarize_blocks(recs, last_authorized_ts=last_auth)
+    assert s["trailing_blocked_bars"] == 30
+    assert s["trailing_blind_minutes"] >= bv.DEFAULT_STALE_MINUTES
     assert s["bars_without_decisions"] is True
-    s2 = bv.summarize_blocks(recs, bars_claimed=10)  # some bars produced decisions
-    assert s2["bars_without_decisions"] is False
+
+
+def test_blind_window_quiet_for_short_block_run():
+    base = datetime(2026, 7, 21, 15, 0, tzinfo=timezone.utc)
+    recs = [_blocked_rec((base + timedelta(minutes=15 * i)).isoformat()) for i in range(3)]  # 30 min
+    s = bv.summarize_blocks(recs, last_authorized_ts=base.isoformat())
+    assert s["bars_without_decisions"] is False
+
+
+def test_blind_window_whole_day_blind_still_trips():
+    """No evaluated bar all day (last_authorized_ts=None) + a full day of blocks
+    = the literal 2026-07-22 case."""
+    base = datetime(2026, 7, 22, 0, 0, tzinfo=timezone.utc)
+    recs = [_blocked_rec((base + timedelta(minutes=15 * i)).isoformat()) for i in range(60)]  # 15h
+    s = bv.summarize_blocks(recs, last_authorized_ts=None)
+    assert s["bars_without_decisions"] is True
+
+
+def test_single_stale_threshold_drives_classification_and_blind():
+    """Reviewer required test 3: one source of truth. The health module defines
+    no independent stale constant, and the same DEFAULT_STALE_MINUTES governs
+    both the STALE_RESOLVE classification and the blind-window span."""
+    import importlib.util
+    from pathlib import Path
+    spec = importlib.util.spec_from_file_location(
+        "health_digest", Path(__file__).resolve().parents[1] / "scripts" / "health_digest.py")
+    hd = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(hd)
+    # The health module carries no second threshold constant.
+    assert not hasattr(hd, "POSITION_STALE_MINUTES")
+    # Classification boundary is DEFAULT_STALE_MINUTES.
+    thr = bv.DEFAULT_STALE_MINUTES
+    young = _open_pos(age_min=int(thr) - 30)
+    old = _open_pos(age_min=int(thr) + 30)
+    assert bv.classify_block(young, _NOW.isoformat()) == bv.ACTIVE_POSITION_RESOLVING
+    assert bv.classify_block(old, _NOW.isoformat()) == bv.STALE_RESOLVE
+    # The blind-window span uses the very same constant as its default.
+    base = datetime(2026, 7, 21, 12, 0, tzinfo=timezone.utc)
+    recs = [_blocked_rec((base + timedelta(minutes=m)).isoformat())
+            for m in (0, int(thr) + 15)]  # span just over threshold
+    assert bv.summarize_blocks(recs, last_authorized_ts=None)["bars_without_decisions"] is True
 
 
 # ── journal: inert record type ────────────────────────────────────────────────
@@ -169,3 +223,51 @@ def test_last_reconcile_ts_reads_reconcile_outcome(tmp_path):
                "session": "new_york", "instrument": "MES",
                "outcome": {"result": "WIN"}}, d)  # not a reconcile row
     assert j.last_reconcile_ts(d) == "2026-07-21T17:40:00+00:00"
+
+
+# ── cross-day drift detection in the health signal (reviewer blocker 1) ────────
+
+def test_prior_day_open_lifecycle_flags_local_open_crossday(tmp_path, monkeypatch):
+    """Reviewer blocker 1: the 2026-07-21 orphan was a PRIOR-day lifecycle. The
+    health signal must detect the held slot cross-day — a today-only
+    has_open_position read returns False and would miss the drift."""
+    import importlib.util
+    from pathlib import Path
+    from datetime import date, timedelta as _td
+
+    monkeypatch.setenv("LOG_DIR", str(tmp_path))
+    j = JournalLogger(log_dir=str(tmp_path))
+    yesterday = date.today() - _td(days=1)
+    # Prior-day approved TRADE, no outcome → slot held into today.
+    j._append({
+        "ts": (datetime.now(timezone.utc) - _td(days=1)).isoformat(),
+        "instrument": "MES", "session": "new_york", "decision": "TRADE",
+        "risk_check": {"result": "APPROVED"},
+        "setup": {"direction": "LONG", "entry": 7531.0, "stop": 7520.75,
+                  "target": 7555.75, "contracts": 1},
+        "outcome": None,
+    }, yesterday)
+    # Today: a blocked bar exists, but today's own has_open_position is False.
+    today = date.today()
+    j.log_block_visibility(
+        bv.build_block_record(_open_pos(age_min=1500), _NOW.isoformat(),
+                              instrument="MES", session="new_york"),
+        for_date=today,
+    )
+    assert j.get_daily_state(today).has_open_position is False   # today-only misses it
+
+    spec = importlib.util.spec_from_file_location(
+        "health_digest", Path(__file__).resolve().parents[1] / "scripts" / "health_digest.py")
+    hd = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(hd)
+    sig = hd._block_visibility_signal()
+    assert sig is not None
+    assert sig["local_open"] is True      # cross-day walk-back caught the held slot
+
+    # Broker flat + local open (cross-day) → drift ALERT.
+    checks = {"service_ok": True, "broker_reachable": True, "auth_state": "HEALTHY",
+              "errors_today": 0, "disk_pct": 30.0, "position_flat": True,
+              "working_orders": 0, "broker_local_drift": sig["local_open"]}
+    v = hd.evaluate_health(checks)
+    assert v["status"] == "ALERT"
+    assert any("drift" in p for p in v["problems"])

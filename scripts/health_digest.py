@@ -23,15 +23,12 @@ import re
 import shutil
 import subprocess
 import urllib.request
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
 DISK_WARN_PCT = 80.0
 DISK_ALERT_PCT = 90.0
-# A held position past this age is no longer "resolving" — it is stuck (the
-# 2026-07-21 orphan sat 46.8h; the longest legitimate hold in 46 days was ~2.5h).
-POSITION_STALE_MINUTES = 180.0
 _BASE = "http://127.0.0.1:8000"
 
 
@@ -249,10 +246,10 @@ def collect() -> dict:
     try:
         _sig = _block_visibility_signal()
         if _sig is not None:
-            checks["block_stale"] = bool(
-                _sig["summary"]["has_stale_resolve"]
-                or _sig["summary"]["worst_position_age_minutes"] > POSITION_STALE_MINUTES
-            )
+            # Staleness comes straight from the classifier's own verdict (a
+            # STALE_RESOLVE row) — one threshold, defined once in
+            # ops.block_visibility, used at classification time.
+            checks["block_stale"] = bool(_sig["summary"]["has_stale_resolve"])
             checks["bars_without_decisions"] = bool(_sig["summary"]["bars_without_decisions"])
             # Broker read (position_flat) contradicts the local slot → drift. Only
             # meaningful when the broker was actually reachable this run.
@@ -264,10 +261,17 @@ def collect() -> dict:
 
 
 def _block_visibility_signal() -> Optional[dict]:
-    """Read today's journal for the pipeline-visibility signal: the day's
-    BLOCK_VISIBILITY records aggregated, the local open-position flag, and the
-    bar count. Pure aggregation lives in ops.block_visibility; this only reads.
-    Returns None if the journal or its deps are unavailable."""
+    """Read the journal for the pipeline-visibility signal: today's
+    BLOCK_VISIBILITY records aggregated (with the trailing blind-window), the
+    last bar that reached evaluation, and a CROSS-DAY local open-position flag.
+    Pure aggregation lives in ops.block_visibility; this only reads. Returns None
+    if the journal or its deps are unavailable.
+
+    The local flag walks back up to 7 days, mirroring the runner/reconciler: the
+    2026-07-21 orphan was a PRIOR-day lifecycle holding the slot, so today's
+    has_open_position is False while the position is still open — a today-only
+    read would miss BROKER_LOCAL_STATE_DRIFT for the very incident this exposes.
+    """
     try:
         from journal.journal_logger import JournalLogger
         from ops.block_visibility import summarize_blocks
@@ -275,19 +279,33 @@ def _block_visibility_signal() -> Optional[dict]:
         return None
     log_dir = os.getenv("LOG_DIR", "logs")
     j = JournalLogger(log_dir=log_dir)
+    records, last_authorized = [], None
     path = j._journal_path()  # today
-    if not path.exists():
-        return None
-    records, bars = [], 0
-    for entry in j._read_entries(path):
-        t = entry.get("type")
-        if t == "BLOCK_VISIBILITY":
-            records.append(entry)
-        elif t == "BAR_CLAIM":
-            bars += 1
+    if path.exists():
+        for entry in j._read_entries(path):
+            if entry.get("type") == "BLOCK_VISIBILITY":
+                records.append(entry)
+                continue
+            d = entry.get("decision")
+            # A bar that REACHED evaluation (any non-BLOCKED_* decision) resets
+            # the trailing blind run.
+            if d and not str(d).startswith("BLOCKED_"):
+                ts = entry.get("ts")
+                if ts and (last_authorized is None or ts > last_authorized):
+                    last_authorized = ts
+    # Cross-day local open-position detection (walk back like the reconciler).
+    local_open = False
+    base = date.today()
+    for days_back in range(0, 8):
+        try:
+            if j.get_daily_state(base - timedelta(days=days_back)).has_open_position:
+                local_open = True
+                break
+        except Exception:
+            continue
     return {
-        "summary": summarize_blocks(records, bars_claimed=bars),
-        "local_open": bool(j.get_daily_state().has_open_position),
+        "summary": summarize_blocks(records, last_authorized_ts=last_authorized),
+        "local_open": local_open,
     }
 
 
