@@ -29,6 +29,9 @@ from typing import Optional
 
 DISK_WARN_PCT = 80.0
 DISK_ALERT_PCT = 90.0
+# A held position past this age is no longer "resolving" — it is stuck (the
+# 2026-07-21 orphan sat 46.8h; the longest legitimate hold in 46 days was ~2.5h).
+POSITION_STALE_MINUTES = 180.0
 _BASE = "http://127.0.0.1:8000"
 
 
@@ -116,6 +119,27 @@ def evaluate_health(checks: dict) -> dict:
         elif disk >= DISK_WARN_PCT:
             esc("WARN")
             problems.append(f"disk {disk:.0f}% full")
+
+    # ── Pipeline-visibility escalations (the proven monitoring gap) ──────────
+    # Broker says flat while the local journal still shows an open slot — the
+    # drift class (phantom / erased-outcome). Distinct from a legitimately open
+    # position (handled below): here the broker is FLAT.
+    if checks.get("broker_local_drift"):
+        esc("ALERT")
+        problems.append(
+            "broker FLAT but local shows an OPEN position — state drift, reconcile/verify"
+        )
+    # A held position past the stale threshold is stuck, not resolving.
+    if checks.get("block_stale"):
+        esc("ALERT")
+        problems.append("open position unresolved past threshold — stuck, not resolving")
+    # Bars kept arriving while every decision was blocked — the pipeline is blind
+    # (the 2026-07-22 signature: 184 bars, 0 authorized decisions).
+    if checks.get("bars_without_decisions"):
+        esc("ALERT")
+        problems.append(
+            "bars arriving but ALL candidate evaluation blocked — pipeline blind"
+        )
 
     flat = checks.get("position_flat")
     if flat is False:
@@ -214,7 +238,57 @@ def collect() -> dict:
         checks["disk_pct"] = round(100.0 * usage.used / usage.total, 1)
     except OSError:
         checks["disk_pct"] = None
+    # Pipeline-visibility signal from today's journal (fail-soft — a read hiccup
+    # must never break the digest). Surfaces the block conditions the runner now
+    # journals: a stale/unresolved hold, bars arriving while every decision is
+    # blocked (the 2026-07-22 blinded-pipeline signature), and broker-flat /
+    # local-open drift (broker says flat while the journal still shows a slot).
+    checks["block_stale"] = False
+    checks["bars_without_decisions"] = False
+    checks["broker_local_drift"] = False
+    try:
+        _sig = _block_visibility_signal()
+        if _sig is not None:
+            checks["block_stale"] = bool(
+                _sig["summary"]["has_stale_resolve"]
+                or _sig["summary"]["worst_position_age_minutes"] > POSITION_STALE_MINUTES
+            )
+            checks["bars_without_decisions"] = bool(_sig["summary"]["bars_without_decisions"])
+            # Broker read (position_flat) contradicts the local slot → drift. Only
+            # meaningful when the broker was actually reachable this run.
+            if checks.get("broker_reachable") and checks.get("position_flat") is True:
+                checks["broker_local_drift"] = bool(_sig["local_open"])
+    except Exception:  # noqa: BLE001 — visibility signal is best-effort only
+        pass
     return checks
+
+
+def _block_visibility_signal() -> Optional[dict]:
+    """Read today's journal for the pipeline-visibility signal: the day's
+    BLOCK_VISIBILITY records aggregated, the local open-position flag, and the
+    bar count. Pure aggregation lives in ops.block_visibility; this only reads.
+    Returns None if the journal or its deps are unavailable."""
+    try:
+        from journal.journal_logger import JournalLogger
+        from ops.block_visibility import summarize_blocks
+    except Exception:
+        return None
+    log_dir = os.getenv("LOG_DIR", "logs")
+    j = JournalLogger(log_dir=log_dir)
+    path = j._journal_path()  # today
+    if not path.exists():
+        return None
+    records, bars = [], 0
+    for entry in j._read_entries(path):
+        t = entry.get("type")
+        if t == "BLOCK_VISIBILITY":
+            records.append(entry)
+        elif t == "BAR_CLAIM":
+            bars += 1
+    return {
+        "summary": summarize_blocks(records, bars_claimed=bars),
+        "local_open": bool(j.get_daily_state().has_open_position),
+    }
 
 
 def _post_discord(url: str, content: str) -> bool:

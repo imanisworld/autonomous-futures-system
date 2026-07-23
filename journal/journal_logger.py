@@ -178,6 +178,43 @@ class JournalLogger:
             record["exit_mode"] = str(exit_mode)
         self._append(record, for_date)
 
+    def log_block_visibility(self, record: dict, for_date: Optional[date] = None) -> None:
+        """Append a BLOCK_VISIBILITY record for a single-position block.
+
+        Makes a BLOCKED_OPEN_POSITION early-return visible in the journal (the
+        gate itself is unchanged and still runs upstream). The record is INERT
+        to daily state: it carries no `decision`, and its `type` is neither
+        OUTCOME, TRADE, nor ORDER_IDS, so `_compute_daily_state` and
+        `get_open_position` both skip it — repeated blocked bars can never create
+        a duplicate trade outcome or alter the position slot. Fails closed
+        (errors swallowed, never raised) so visibility can never break the block.
+        """
+        try:
+            entry = dict(record)
+            entry.setdefault("type", "BLOCK_VISIBILITY")
+            entry.setdefault("ts", datetime.now(timezone.utc).isoformat())
+            self._append(entry, for_date)
+        except Exception as exc:  # noqa: BLE001 — visibility must never raise
+            logger.debug("log_block_visibility failed: %s", exc)
+
+    def last_reconcile_ts(self, for_date: Optional[date] = None) -> Optional[str]:
+        """Best-effort timestamp of the most recent reconcile-sourced OUTCOME on
+        `for_date` (session=='reconcile'), else None. Read-only; used only to
+        populate the visibility record's `last_reconcile_ts` field."""
+        try:
+            path = self._journal_path(for_date)
+            if not path.exists():
+                return None
+            latest = None
+            for entry in self._read_entries(path):
+                if entry.get("type") == "OUTCOME" and entry.get("session") == "reconcile":
+                    ts = entry.get("ts")
+                    if ts and (latest is None or ts > latest):
+                        latest = ts
+            return latest
+        except Exception:
+            return None
+
     def log_error(self, message: str, exc: Optional[Exception] = None) -> None:
         """Append to the error log."""
         ts = datetime.now(timezone.utc).isoformat()

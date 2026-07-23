@@ -1258,6 +1258,27 @@ def process_alert(
         return result
     if daily_state.has_open_position:
         result["decision"] = "BLOCKED_OPEN_POSITION"
+        # Visibility layer (PR: pipeline-visibility): the gate above is unchanged
+        # and still blocks — but it used to early-return before any log_decision,
+        # so a blocked bar left NO journal record (the 2026-07-22 orphan blinded
+        # the pipeline for a whole session and the journal just showed zero
+        # decisions). Journal an INERT BLOCK_VISIBILITY record classifying WHY
+        # evaluation did not run. Broker state is not read here (no hot-path I/O);
+        # the reconciler remains the broker-authoritative drift detector. Fully
+        # fail-soft — visibility must never break the block or place an order.
+        try:
+            from ops.block_visibility import build_block_record
+            _vis = build_block_record(
+                open_pos or {},
+                state.timestamp.isoformat(),
+                instrument=state.instrument,
+                session=state.session,
+                last_reconcile_ts=journal.last_reconcile_ts(open_position_date),
+            )
+            result["block_visibility"] = _vis
+            journal.log_block_visibility(_vis, for_date=today)
+        except Exception:  # noqa: BLE001 — visibility is never allowed to break the gate
+            logger.debug("block visibility record failed", exc_info=True)
         return result
 
     # ── Step 3: Decision engine ───────────────────────────────────────────────
