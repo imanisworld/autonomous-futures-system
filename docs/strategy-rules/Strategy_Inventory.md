@@ -96,6 +96,7 @@ Verdict taxonomy:
 - Entry: break of 4AM high/low, 9:30–11:00 AM window
 - Stop: last completed 1H candle at entry, fixed
 - Target: prior 4PM candle high/low
+- Exit: day-only; unresolved positions exit at 3:55 PM ET and must be flat by 4:00 PM ET
 - Monday reference: MNQ/MES = Sunday 4PM–8PM ET; QQQ = Friday 4PM–8PM ET 4-hour bar
 - Retrace confirmation: first 5-min bar CLOSE beyond 4AM level before 9:30 AM
 - Honest replay at 2 ticks each side: 41/94 fills, 23 wins / 18 losses, +$1,960.16 net, PF 2.33, max drawdown $411.18
@@ -106,7 +107,9 @@ Verdict taxonomy:
 - Market counterfactual: 22/32 displaced entries retained valid brackets; 10 had already passed the target. Valid market entries returned +$793.72 overall, but H2 (-$65.90) and LONG (-$295.18) were negative.
 - Combined 41 IOC + 22 valid market fills: +$2,753.88, PF 1.98, H1 +$1,090.08, H2 +$1,663.80.
 - Historical TRENDING gate retained 45/63 fills: +$3,067.20, PF 2.71, H1 +$1,077.98, H2 +$1,989.22. It improved trade quality but left 2024 Q3 slightly negative and did not itself drive the H1 recovery.
-- Next: retain PROMISING BUT UNPROVEN; independently review whether a direction-aware market-fill policy is pre-registered rather than optimized from this small split
+- Evidence boundary: ordinary 4HR performance remains the 41-fill IOC result. The 22-fill market rescue and 45-fill combined TRENDING result are research-only counterfactuals and do not change execution policy.
+- Research tranche closed: no more performance slicing or historical filter optimization
+- Next: narrow Claude delta audit, then later reconcile the actual Phase-1 runtime implementation to the resolved specification
 
 ---
 

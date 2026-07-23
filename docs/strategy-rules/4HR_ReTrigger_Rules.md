@@ -99,6 +99,14 @@ A reversal setup on 4-hour candles. The 4AM candle must move directionally again
 
 **Exit the full position when target is reached. Do not hold through target.**
 
+### Day-only exit
+
+- This strategy is day-only. Never carry a 4HR Re-Trigger position overnight.
+- If neither the fixed stop nor the structural target has resolved the trade,
+  exit the full position at 3:55 PM ET using the 15:55 five-minute bar decision
+  so the account is flat no later than 4:00 PM ET.
+- The day-only exit applies to QQQ options, MNQ, and MES.
+
 ---
 
 ## 7. QQQ OPTIONS — EXECUTION SPEC
@@ -174,9 +182,10 @@ Run this check every morning before 9:30 AM ET.
 - Trigger not fired by 11:00 AM → Void setup. No entry.
 
 **STEP 5 — Manage the trade**
-- Drop to 1-hour chart immediately after entry
-- Monitor for 1H candle flip (stop condition)
-- Hold until target hit OR 1H flip fires — whichever comes first
+- Place the fixed stop from the last completed 1H candle at actual entry time
+- Never trail or replace that stop as later 1H candles complete
+- Hold until target or fixed stop is hit
+- If unresolved, exit at 3:55 PM ET and be flat by 4:00 PM ET
 
 ---
 
@@ -243,7 +252,9 @@ Record the following for every setup, taken or skipped. These are NOT entry gate
 - No entries if setup is not confirmed at 9:30 AM (price already through trigger)
 - No trading both MNQ and MES on the same session
 - No holding through target — exit at target
-- No overriding the 1H flip stop — if it fires, exit immediately
+- No changing or trailing the fixed-at-entry 1H stop
+- No overnight holds — unresolved positions exit at 3:55 PM ET and must be
+  flat by 4:00 PM ET
 - No chasing if entry is missed — wait for next valid setup
 - Testing phase: 1 contract only regardless of conviction level
 - Missing Signa weekly direction = skip the trade
@@ -294,6 +305,9 @@ Setup fires on ~6–7% of sessions. Expect 1–3 setups per month. This is not a
   quarters were positive; 2024 Q3 remained -$37.20.
 - The gate improves overall quality but is not what recovered H1. The added valid
   market fills drove the H1 improvement, while H1 non-trending fills were +$12.10.
+- The resolved strategy is day-only and flat by 4:00 PM ET. The replay's 15:55
+  fallback is therefore part of the documented execution rule, not an overnight
+  carry assumption.
 - Option P&L after premium, spread, and theta
 - Calls vs puts P&L split
 - Adequate sample depth by chronological half and direction
