@@ -10,6 +10,7 @@ from context.strategy_context_observer import (
     evidence_path,
 )
 from config.settings import load_config
+from risk.risk_engine import DailyState
 from strategy.signal_engine import DecisionOutput, SetupDetail
 
 
@@ -115,5 +116,92 @@ def test_runner_writes_context_observation_without_changing_trade(tmp_path):
     assert result["strategy_context_observation"]["observation_only"] is True
     row = json.loads(evidence_path(tmp_path).read_text().splitlines()[0])
     assert row["instrument"] == "MNQ"
+    assert row["risk_evaluated"] is False
+    assert row["broker_evaluated"] is False
+
+
+def test_accepted_bar_at_daily_capacity_still_writes_one_context_row(
+    tmp_path, monkeypatch
+):
+    """July 22 regression: capacity returns used to occur before observation."""
+    from journal.journal_logger import JournalLogger
+    from webhook.runner import process_alert
+    import sys
+
+    sys.path.insert(0, "tests")
+    from test_e2e_scenarios import _base_payload
+
+    cfg = replace(load_config(), max_staleness_seconds=10 ** 9)
+    monkeypatch.setattr(
+        JournalLogger,
+        "get_daily_state",
+        lambda self, for_date=None: DailyState(trade_count=cfg.max_trades_per_day),
+    )
+
+    result = process_alert(
+        _base_payload(timestamp="2026-05-23T14:30:00+00:00"),
+        config=cfg,
+        log_dir=str(tmp_path),
+        for_date=date(2026, 5, 23),
+    )
+
+    assert result["decision"] == "BLOCKED_MAX_TRADES"
+    rows = evidence_path(tmp_path).read_text().splitlines()
+    assert len(rows) == 1
+    row = json.loads(rows[0])
+    assert row["decision"] == "BLOCKED_MAX_TRADES"
+    assert row["observation_only"] is True
+    assert row["gate_authoritative"] is False
+    assert row["risk_evaluated"] is False
+    assert row["broker_evaluated"] is False
+
+
+def test_accepted_bar_with_open_position_still_writes_one_context_row(
+    tmp_path, monkeypatch
+):
+    """Open-position blocking remains identical but no longer loses context."""
+    from journal.journal_logger import JournalLogger
+    from webhook.runner import process_alert
+    import sys
+
+    sys.path.insert(0, "tests")
+    from test_e2e_scenarios import _base_payload
+
+    cfg = replace(load_config(), max_staleness_seconds=10 ** 9)
+    monkeypatch.setattr(
+        JournalLogger,
+        "get_daily_state",
+        lambda self, for_date=None: DailyState(has_open_position=True),
+    )
+    monkeypatch.setattr(
+        JournalLogger,
+        "get_open_position",
+        lambda self, for_date=None: {
+            "instrument": "MES",
+            "direction": "LONG",
+            "entry": 7500.0,
+            "stop": 7490.0,
+            "target": 7520.0,
+            "contracts": 1,
+            "strategy": "orb_reclaim",
+            "ts": "2026-05-23T14:00:00+00:00",
+            "bar_ts": "2026-05-23T13:45:00+00:00",
+        },
+    )
+
+    result = process_alert(
+        _base_payload(timestamp="2026-05-23T14:30:00+00:00"),
+        config=cfg,
+        log_dir=str(tmp_path),
+        for_date=date(2026, 5, 23),
+    )
+
+    assert result["decision"] == "BLOCKED_OPEN_POSITION"
+    rows = evidence_path(tmp_path).read_text().splitlines()
+    assert len(rows) == 1
+    row = json.loads(rows[0])
+    assert row["decision"] == "BLOCKED_OPEN_POSITION"
+    assert row["observation_only"] is True
+    assert row["gate_authoritative"] is False
     assert row["risk_evaluated"] is False
     assert row["broker_evaluated"] is False
