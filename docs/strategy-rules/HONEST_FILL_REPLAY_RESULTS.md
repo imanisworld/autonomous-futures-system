@@ -42,9 +42,54 @@ carry. The research engines are not wired into live execution.
   directions, but H2 accounts for most of the profit and only 41 signals filled.
 - **12HR Miyagi — WAIT.** Three fills cannot support an edge claim; H1 is negative
   and LONG has no filled observations.
-- **60M 3-2-2 — PROMISING BUT UNPROVEN.** Strongest replay of the three and
-  positive in every requested split, but only 20 signals filled and no historical
-  gap-open entry was observed.
+- **60M 3-2-2 — PAPER PROOF.** Strongest replay of the three and positive in
+  every requested split. Removing the three largest winners left 17 fills,
+  +$965.92 net, $56.82 expectancy per fill, and PF 5.40. The paper-proof
+  classification does not itself activate a runtime lane.
 
 These results retire the prior performance figures built from superseded or
 incomplete rule sets. They do not change configuration, execution, or deployment.
+
+## Follow-up robustness diagnostics
+
+### 60M 3-2-2 fat-tail removal
+
+The three largest net winners were:
+
+| Date | Direction | Net P&L |
+|---|---|---:|
+| 2025-09-05 | SHORT | $221.26 |
+| 2026-05-13 | LONG | $180.76 |
+| 2024-10-10 | LONG | $169.76 |
+
+Together they contributed $571.78, or 37.2% of base-case net profit. Removing
+them leaves 14 wins and 3 losses, +$965.92 net, $56.82 expectancy per remaining
+fill, and PF 5.40. Expectancy is $30.19 when the residual profit is divided by
+all 32 original signals.
+
+### 4HR half regimes and non-fill anatomy
+
+| Half | Market period | MNQ change | Max close DD | Mean intraday range | Filled net |
+|---|---|---:|---:|---:|---:|
+| H1 | 2024-07-02–2025-06-28 | +13.8% | -25.0% | 1.83% | $230.46 |
+| H2 | 2025-06-29–2026-06-26 | +28.7% | -11.8% | 1.50% | $1,729.70 |
+
+H1 contained a deeper, higher-range, less persistent regime. Its quarterly
+filled P&L was -$411.18, +$356.82, +$319.78, and -$34.96. H2 quarterly filled
+P&L was +$409.80, +$98.28, +$553.06, and +$668.56. This supports a regime
+sensitivity concern; H2 is not explained by one isolated winning quarter.
+
+The 53 non-fills split into:
+
+| Reason | Count | Share of non-fills | Market-entry interpretation |
+|---|---:|---:|---|
+| No trigger crossing in window | 16 | 30.2% | No entry under IOC or market |
+| IOC rejected crossing | 32 | 60.4% | A market order could fill, but at a materially displaced price |
+| Non-protective fixed stop after fill | 5 | 9.4% | Fail closed; not a valid bracket under resolved rules |
+
+For the 32 IOC rejections, the completed crossing-bar close was a median 135
+ticks (33.75 points) beyond the trigger; the IOC cap is 32 ticks (8 points).
+H1 and H2 median displacements were nearly identical at 34.0 and 33.5 points.
+The rejection rate therefore is not the cause of the half-performance split,
+and a market-entry replay must recalculate stop/target economics at the worse
+actual entry rather than simply converting cancellations to fills.

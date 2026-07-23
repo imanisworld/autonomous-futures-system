@@ -272,6 +272,16 @@ Setup fires on ~6–7% of sessions. Expect 1–3 setups per month. This is not a
   $230.46 in H1. That concentration and live/replay parity remain unvalidated.
 - Five candidate fills were rejected because the actual IOC fill left the fixed
   stop on the non-protective side.
+- H1 covers 2024-07-02 through 2025-06-28 and was the choppier regime: +13.8%
+  MNQ change, 25.0% maximum close drawdown, and 1.83% mean intraday range.
+  H2 covers 2025-06-29 through 2026-06-26: +28.7% change, 11.8% maximum close
+  drawdown, and 1.50% mean intraday range. Every H2 calendar quarter was
+  positive, while two of four H1 quarters were negative.
+- Of 53 non-fills, 16 never crossed the trigger, 32 crossed but were rejected
+  by IOC, and 5 failed the post-fill protective-stop check. IOC-rejected market
+  proxies were a median 33.75 points beyond the trigger versus the 8-point cap.
+- A market-entry counterfactual is still required; the rejected observations
+  cannot be treated as equivalent fills because their entry displacement is large.
 - Option P&L after premium, spread, and theta
 - Calls vs puts P&L split
 - Adequate sample depth by chronological half and direction

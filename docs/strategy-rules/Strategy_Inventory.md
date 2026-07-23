@@ -38,7 +38,7 @@ Verdict taxonomy:
 | ORB Reclaim (MNQ) | ✅ | ✅ | Partial | ✅ | ❌ insufficient | ✅ | ⚠️ n=253 thin | **PROMISING BUT UNPROVEN** |
 | 4HR Re-Trigger | ✅ blockers resolved | ✅ reconciled | Partial — research engine | ✅ IOC-faithful | ✅ both positive | ✅ 1–4 ticks | ⚠️ 94 signals / 41 fills | **PROMISING BUT UNPROVEN** |
 | 12HR Miyagi | ✅ blockers resolved | ✅ reconciled | Partial — research engine | ✅ IOC-faithful | ❌ H1 negative | ✅ 1–4 ticks overall | ❌ 13 signals / 3 fills | **WAIT — inadequate filled sample** |
-| 60M 3-2-2 First Live | ✅ blockers resolved | ✅ reconciled | Partial — research engine | ✅ IOC-faithful | ✅ both positive | ✅ 1–4 ticks | ⚠️ 32 signals / 20 fills | **PROMISING BUT UNPROVEN** |
+| 60M 3-2-2 First Live | ✅ blockers resolved | ✅ reconciled | Partial — research engine | ✅ IOC-faithful | ✅ both positive | ✅ 1–4 ticks | ⚠️ 32 signals / 20 fills | **PAPER PROOF** |
 | VWAP Hold (MNQ NY) | ❌ entry definition unclear | Partial | ❌ | ❌ incompatible studies | ❌ | ❌ | ⚠️ n=106 | **WAIT — isolated fill test pending** |
 | VWAP Reclaim (MNQ NY) | ❌ | Partial | ❌ | ❌ | ❌ | ❌ | ⚠️ n=29 thin | **WAIT** |
 | VWAP Rejection | ❌ | Partial | ❌ | ❌ | ❌ | ❌ | — | **BROKEN — unreachable predicate** |
@@ -100,8 +100,10 @@ Verdict taxonomy:
 - Retrace confirmation: first 5-min bar CLOSE beyond 4AM level before 9:30 AM
 - Honest replay at 2 ticks each side: 41/94 fills, 23 wins / 18 losses, +$1,960.16 net, PF 2.33, max drawdown $411.18
 - Walk-forward: H1 +$230.46; H2 +$1,729.70. Both directions and all 1–4 tick sensitivity cases remained positive.
-- Caveat: most profit is concentrated in H2; H1 expectancy was only +$4.70 per signal. Five IOC fills were rejected because the actual fill made the fixed stop non-protective.
-- Next: independent replay parity review, then paper-proof consideration only after the H2 concentration and sample depth are accepted
+- Regime split: H1 covers 2024-07-02 through 2025-06-28; MNQ rose 13.8% with a 25.0% close-to-close drawdown and 1.83% mean intraday range. H2 covers 2025-06-29 through 2026-06-26; MNQ rose 28.7% with an 11.8% drawdown and 1.50% mean intraday range.
+- H1 was choppier and less persistently trending. Its quarterly filled P&L was -$411.18 / +$356.82 / +$319.78 / -$34.96, while all four H2 quarters were positive. This is evidence of regime sensitivity, not merely one unlucky cluster.
+- Non-fills: 16 never triggered, 32 crossed but exceeded the IOC cap, and 5 produced a non-protective stop after fill. IOC rejections were a median 33.75 points beyond the trigger versus the 8-point cap.
+- Next: run a separate market-entry counterfactual on the 32 IOC-rejected crossings; do not assume those distant fills preserve the same stop/target economics
 
 ---
 
@@ -127,7 +129,7 @@ Verdict taxonomy:
 ---
 
 ### 60M 3-2-2 First Live
-**Verdict: PROMISING BUT UNPROVEN**
+**Verdict: PAPER PROOF**
 
 - Rules: complete as of 2026-07-23 (all blockers resolved)
 - Detector: pure detector built and reconciled 32/32 under the executable rule
@@ -143,8 +145,10 @@ Verdict taxonomy:
 - Honest replay at 2 ticks each side: 20/32 fills, 17 wins / 3 losses, +$1,537.70 net, PF 8.00, max drawdown $167.24
 - Walk-forward: H1 +$1,086.88; H2 +$450.82. LONG +$1,108.36; SHORT +$429.34.
 - Net remained positive at 1–4 ticks adverse slippage. One target was already marketable at IOC arrival and one unresolved trade used the documented 15:55 EOD replay assumption.
+- Fat-tail check: after removing the three largest net winners, the remaining 17 fills retained +$965.92 net, $56.82 expectancy per fill, and PF 5.40. The removed trades represented 37.2% of base-case profit.
 - Gaps: only 20 fills, no observed historical gap-open case, and no live/replay parity proof
-- Next: independent replay parity review, then paper-proof consideration with explicit monitoring of the unobserved gap-open path
+- Paper-proof promotion is a research verdict only; no runtime lane, configuration, or deployment change is authorized here
+- Next: accumulate forward paper observations with explicit monitoring of the unobserved gap-open path
 
 ---
 
@@ -240,7 +244,7 @@ See `ICC_ICT_Research.md` for full breakdown.
 | VWAP hold isolated fill test (IOC vs market, static vs runner) | VWAP hold verdict | External researcher |
 | 4HR replay parity / H2 concentration review | Promotion decision | Research review |
 | Miyagi additional resolved-rule sample | Strategy verdict | Research collection |
-| 3-2-2 replay parity / gap-open observation | Promotion decision | Research review + paper observation |
+| 3-2-2 replay parity / gap-open observation | Paper-proof evidence | Research review + paper observation |
 | VWAP hold / rejection overlap resolution | Both strategy verdicts | Claude Code |
 | VWAP hold entry definition from signal_engine.py | VWAP rules doc | Claude Code |
 | Runner exit promotion | ORB breakout, VWAP hold/reclaim lanes | Claude Code |

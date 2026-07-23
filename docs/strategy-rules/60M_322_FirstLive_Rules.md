@@ -126,7 +126,13 @@ Both chronological halves, both directions, and all 1–4 tick sensitivity cases
 were positive. However, only 20 signals filled, the gap-open path remains
 unobserved historically, and live/replay parity is not proven.
 
-> ⚠️ The evidence is promising but unproven. It does not authorize execution.
+A fat-tail sensitivity check removed the three largest net winners
+(2025-09-05, 2026-05-13, and 2024-10-10). The remaining 17 fills retained
+$965.92 net P&L, $56.82 expectancy per fill, and PF 5.40. The removed winners
+represented 37.2% of base-case net profit.
+
+> ⚠️ The strategy is promoted to PAPER PROOF as a research verdict. This does
+> not itself activate a paper lane or authorize live execution.
 
 ---
 
