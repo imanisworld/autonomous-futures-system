@@ -59,8 +59,11 @@ def replay_one(
     bars_5m: list[dict[str, Any]],
     bars_1h: list[dict[str, Any]],
     slippage_ticks: float,
+    entry_model: str = "ioc_limit",
 ) -> dict[str, Any]:
     """Replay one resolved detector setup with causal 5-minute information."""
+    if entry_model not in {"ioc_limit", "market"}:
+        raise ValueError(f"unsupported entry_model: {entry_model}")
     direction = signal["direction"]
     trigger = float(signal["entry_trigger"])
     target = float(signal["target"])
@@ -82,6 +85,7 @@ def replay_one(
         "entry_trigger": trigger,
         "target": target,
         "slippage_ticks": slippage_ticks,
+        "entry_model": entry_model,
         "filled": False,
         "status": None,
         "gross_pnl": 0.0,
@@ -111,7 +115,7 @@ def replay_one(
     crossing = session[crossing_index]
     market = float(crossing["close"])
     tolerance = IOC_TOLERANCE_TICKS * TICK_SIZE
-    if (
+    if entry_model == "ioc_limit" and (
         direction == "LONG"
         and market > trigger + tolerance
         or direction == "SHORT"
@@ -126,9 +130,17 @@ def replay_one(
 
     slip = slippage_ticks * TICK_SIZE
     if direction == "LONG":
-        entry_fill = min(trigger + tolerance, market + slip)
+        entry_fill = (
+            min(trigger + tolerance, market + slip)
+            if entry_model == "ioc_limit"
+            else market + slip
+        )
     else:
-        entry_fill = max(trigger - tolerance, market - slip)
+        entry_fill = (
+            max(trigger - tolerance, market - slip)
+            if entry_model == "ioc_limit"
+            else market - slip
+        )
 
     stop_bar = _last_completed_1h(bars_1h, crossing["ts"])
     if stop_bar is None:
@@ -145,8 +157,21 @@ def replay_one(
         else target < entry_fill < stop
     )
     if not bracket_valid:
+        non_protective_stop = (
+            stop >= entry_fill if direction == "LONG" else stop <= entry_fill
+        )
+        target_already_passed = (
+            entry_fill >= target if direction == "LONG" else entry_fill <= target
+        )
+        if non_protective_stop:
+            invalid_bracket_reason = "NON_PROTECTIVE_STOP"
+        elif target_already_passed:
+            invalid_bracket_reason = "TARGET_ALREADY_PASSED"
+        else:  # Defensive: the strict bracket predicate should exhaust both cases.
+            invalid_bracket_reason = "INVALID_ORDERING"
         row.update(
             status="INVALID_BRACKET_AT_FILL",
+            invalid_bracket_reason=invalid_bracket_reason,
             entry_bar_ts=crossing["ts"].isoformat(),
             decision_market_price=market,
             modeled_entry_fill=entry_fill,

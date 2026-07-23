@@ -280,8 +280,20 @@ Setup fires on ~6–7% of sessions. Expect 1–3 setups per month. This is not a
 - Of 53 non-fills, 16 never crossed the trigger, 32 crossed but were rejected
   by IOC, and 5 failed the post-fill protective-stop check. IOC-rejected market
   proxies were a median 33.75 points beyond the trigger versus the 8-point cap.
-- A market-entry counterfactual is still required; the rejected observations
-  cannot be treated as equivalent fills because their entry displacement is large.
+- The rejected observations cannot be treated as equivalent IOC fills because
+  their entry displacement is large; they were tested as a separate market-entry
+  counterfactual.
+- Counterfactual result: 22 of 32 IOC rejections retained a valid bracket at the
+  displaced market price; 10 had already passed the unchanged structural target
+  and failed closed. The 22 valid fills returned +$793.72 overall, but H2 was
+  -$65.90 and LONG was -$295.18.
+- Adding the 22 valid market fills to the original 41 IOC fills produced 63 fills,
+  +$2,753.88 net, $43.71 per fill, PF 1.98, H1 +$1,090.08, and H2 +$1,663.80.
+- The historical replay `TRENDING` gate retained 45 fills: +$3,067.20 net,
+  $68.16 per fill, PF 2.71, H1 +$1,077.98, and H2 +$1,989.22. Three of four H1
+  quarters were positive; 2024 Q3 remained -$37.20.
+- The gate improves overall quality but is not what recovered H1. The added valid
+  market fills drove the H1 improvement, while H1 non-trending fills were +$12.10.
 - Option P&L after premium, spread, and theta
 - Calls vs puts P&L split
 - Adequate sample depth by chronological half and direction

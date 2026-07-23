@@ -103,7 +103,10 @@ Verdict taxonomy:
 - Regime split: H1 covers 2024-07-02 through 2025-06-28; MNQ rose 13.8% with a 25.0% close-to-close drawdown and 1.83% mean intraday range. H2 covers 2025-06-29 through 2026-06-26; MNQ rose 28.7% with an 11.8% drawdown and 1.50% mean intraday range.
 - H1 was choppier and less persistently trending. Its quarterly filled P&L was -$411.18 / +$356.82 / +$319.78 / -$34.96, while all four H2 quarters were positive. This is evidence of regime sensitivity, not merely one unlucky cluster.
 - Non-fills: 16 never triggered, 32 crossed but exceeded the IOC cap, and 5 produced a non-protective stop after fill. IOC rejections were a median 33.75 points beyond the trigger versus the 8-point cap.
-- Next: run a separate market-entry counterfactual on the 32 IOC-rejected crossings; do not assume those distant fills preserve the same stop/target economics
+- Market counterfactual: 22/32 displaced entries retained valid brackets; 10 had already passed the target. Valid market entries returned +$793.72 overall, but H2 (-$65.90) and LONG (-$295.18) were negative.
+- Combined 41 IOC + 22 valid market fills: +$2,753.88, PF 1.98, H1 +$1,090.08, H2 +$1,663.80.
+- Historical TRENDING gate retained 45/63 fills: +$3,067.20, PF 2.71, H1 +$1,077.98, H2 +$1,989.22. It improved trade quality but left 2024 Q3 slightly negative and did not itself drive the H1 recovery.
+- Next: retain PROMISING BUT UNPROVEN; independently review whether a direction-aware market-fill policy is pre-registered rather than optimized from this small split
 
 ---
 
