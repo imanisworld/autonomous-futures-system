@@ -114,7 +114,8 @@ Verdict taxonomy:
 - Entry: trigger = midpoint of Candle 3; enter when price hits trigger from correct side
 - Stop: last completed 60-min candle at entry, fixed
 - Target: T1 = Candle 3 high/low; T2 = Candle 2 high/low (2-contract scale only)
-- Resolved MNQ scan: 13 valid setups, of which 6 later touched the midpoint and became entries
+- Resolved MNQ scan: 13 valid setups, of which 6 later touched the midpoint and became entries (46.2%)
+- Raw resolved-rule T1 context: 5/6 entries touched T1 by 4:00 PM ET; honest fills still pending
 - Prior performance result (MNQ 12/13 T1) used the superseded direction rule and is not transferable
 - Gaps: n=6 resolved-rule entries is extremely thin, walk-forward not confirmed, no honest fill P&L
 - Next: honest fill replay on the six resolved-rule entries, then walk-forward/slippage only if sample permits

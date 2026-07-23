@@ -1,6 +1,7 @@
 # 12HR MIYAGI STRATEGY
 **Complete Trading Rules — QQQ Options & MNQ/MES Futures**
-*Validated: MNQ 12/13 T1 hit (92.3%) | MES 15/20 T1 hit (75.0%) | Literal stop | 1 contract to T1*
+*Resolved executable-rule evidence: MNQ 13 setups, 6 midpoint-touch entries, 5/6 raw
+T1 touches. Honest fills pending; prior MNQ 12/13 result is retired.*
 
 ---
 
@@ -9,6 +10,11 @@
 A 4-candle reversal setup on the 12-hour chart. Three completed candles form a 1-3-1 pattern (inside → outside → inside). The fourth (live) candle's initial direction is counterintuitive — it opens in one direction and you trade the opposite. Entry is at the midpoint of the third candle (the trigger level) when price reverses back through it after market open.
 
 **This is a REVERSAL setup. The live candle opens 2U → you take PUTS. Opens 2D → you take CALLS.**
+
+> **Setup is not entry.** A detector signal at 9:30 AM only establishes a valid
+> setup. An actual trade exists only if price subsequently touches the Candle 3
+> midpoint from the required side. In the resolved MNQ sample, 6 of 13 setups
+> produced midpoint-touch entries (46.2%).
 
 ---
 
@@ -120,20 +126,33 @@ Drop to 4HR or 1HR charts to find internal highs/lows within the Candle 2 range 
 - Hold remainder to T2
 - If 60-min flip fires before T2 with runner in profit: exit at flip
 
-> ⛔ **DO NOT use T2-only exit.** MNQ T2-only: 61.5% win rate, $83.85 expectancy vs T1-only: 92.3% win rate, $102.35 expectancy. T2-only has dramatically higher drawdown ($509.75 vs $307.50) with lower expectancy.
+> ⛔ **DO NOT use T2-only exit.** The legacy superseded-rule study found materially
+> worse T2-only performance and higher drawdown than T1-only management. Those
+> numerical estimates are retired as executable-rule performance; the conservative
+> T1-first management rule remains until resolved-rule honest replay supplies replacement
+> evidence.
 
 ---
 
-## 9. VALIDATED PERFORMANCE (LITERAL STOP, T1 EXIT)
+## 9. PERFORMANCE EVIDENCE STATUS
 
-| Instrument | n | Win Rate | Expectancy | PF | Max DD |
-|---|---|---|---|---|---|
-| MNQ | 13 | 92.3% | +$102.35 | 5.33 | $307.50 |
-| MES | 20 | 75.0% | +$25.78 | 2.22 | $151.88 |
+The earlier performance study used the superseded pre-open range/midpoint direction
+definition. Its MNQ 12/13 T1 result and MES 15/20 result are retained only as historical
+research provenance and must not be used as executable-rule performance.
 
-> ⚠️ Sample sizes are small (n=13/20). Trade 1 contract until 30+ live trades establish the edge.
+Under the resolved 9:30-open rule:
 
-Setup fires approximately 1–2 times per month. This is not a frequent setup.
+- MNQ valid setups: 13
+- MNQ midpoint-touch entries: 6 (46.2% of setups)
+- Raw T1 touches after entry by 4:00 PM ET: 5/6 (83.3%)
+- Honest fills, stop/target ordering, slippage, commissions, expectancy, profit factor,
+  and drawdown: pending
+
+> ⚠️ Five raw target touches in six entries is descriptive only. The sample is far too
+> small for an edge claim, and raw touch sequencing is not an honest-fill backtest.
+
+Setup fires approximately 1–2 times per month, and fewer than half of the resolved-rule
+setups produced entries in the cached MNQ study.
 
 ---
 

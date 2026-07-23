@@ -34,6 +34,8 @@ On the cached Polygon study range:
 - Resolved setup ground truth: 13/13 true positives, zero misses, zero
   detector-only dates.
 - Six of the 13 resolved setups later touched the midpoint and became entries.
+- Five of those six entries subsequently touched T1 by 4:00 PM ET. This is a
+  raw target-touch count only, not an honest-fill result.
 
 ## Pass criteria
 
