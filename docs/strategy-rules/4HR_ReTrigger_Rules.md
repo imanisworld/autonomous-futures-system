@@ -50,7 +50,7 @@ A reversal setup on 4-hour candles. The 4AM candle must move directionally again
 
 **Step 2 — 8AM candle must be 2UP AND retrace:**
 - 8AM candle high must break ABOVE the 4AM candle high (triggers the 2UP) — using the developing 8AM candle's state (5-minute bars from 8:00 AM), an intrabar touch is sufficient
-- The first 5-minute bar AFTER that break that CLOSES below the 4AM candle high, before 9:30 AM ET, confirms the retrace. Intrabar touches do not count. A bar closing below the level before any break has occurred is not a retrace and does not qualify.
+- The first 5-minute bar at or after that break that CLOSES below the 4AM candle high, before 9:30 AM ET, confirms the retrace. The break bar itself qualifies if its high breaks the level and its final close finishes back below it; a later bar is not required. Intrabar touches do not count for the retrace. A bar closing below the level before any break has occurred is not a retrace and does not qualify.
 
 **Entry trigger level = HIGH of the 4AM candle**
 **Target = HIGH of the prior day's 4PM candle**
@@ -63,7 +63,7 @@ A reversal setup on 4-hour candles. The 4AM candle must move directionally again
 
 **Step 2 — 8AM candle must be 2DOWN AND retrace:**
 - 8AM candle low must break BELOW the 4AM candle low (triggers the 2DOWN) — using the developing 8AM candle's state (5-minute bars from 8:00 AM), an intrabar touch is sufficient
-- The first 5-minute bar AFTER that break that CLOSES above the 4AM candle low, before 9:30 AM ET, confirms the retrace. Intrabar touches do not count. A bar closing above the level before any break has occurred is not a retrace and does not qualify.
+- The first 5-minute bar at or after that break that CLOSES above the 4AM candle low, before 9:30 AM ET, confirms the retrace. The break bar itself qualifies if its low breaks the level and its final close finishes back above it; a later bar is not required. Intrabar touches do not count for the retrace. A bar closing above the level before any break has occurred is not a retrace and does not qualify.
 
 **Entry trigger level = LOW of the 4AM candle**
 **Target = LOW of the prior day's 4PM candle**

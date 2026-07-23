@@ -163,9 +163,13 @@ def detect_4hr_retrigger(
                 has_broken = True
             elif not calls and bar["low"] < four_am["low"]:
                 has_broken = True
-            continue
-        # Retrace: only evaluated on bars AFTER the break. Close only — intrabar
-        # touches do not count.
+            if not has_broken:
+                continue
+        # Retrace: evaluated once a break has occurred, including on the break
+        # bar itself. The close is the final event in a 5-minute OHLC bar, so a
+        # bar that ranges through the level and closes back across it proves the
+        # break-then-retrace sequence without requiring a later bar. Close only
+        # — intrabar touches do not count for the retrace.
         if calls and bar["close"] < four_am["high"]:
             retrace_bar = bar
             break

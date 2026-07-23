@@ -267,6 +267,32 @@ def test_retrace_close_confirms():
     assert result["signal"] is True
 
 
+def test_calls_break_bar_close_can_confirm_same_bar_retrace():
+    bars_4h = [_prior_4pm(_MON), _calls_4am(_TUE)]  # four_am high=95
+    bars_5m = _five_min_seq(_TUE, [
+        (8, 5, 94, 97, 92, 94),    # high breaks 95, then final close is back below 95
+        (9, 30, 94, 95, 93, 94),
+    ])
+    bars_1h = [_bar(_TUE, 8, 0, 90, 94, 88, 91)]
+    result = detect_4hr_retrigger(bars_4h, bars_5m, bars_1h, _TUE, "MNQ")
+    assert result is not None
+    assert result["signal"] is True
+    assert result["setup_bar_ts"] == datetime(2026, 1, 6, 8, 5, tzinfo=ET)
+
+
+def test_puts_break_bar_close_can_confirm_same_bar_retrace():
+    bars_4h = [_prior_4pm(_MON), _puts_4am(_TUE)]  # four_am low=92
+    bars_5m = _five_min_seq(_TUE, [
+        (8, 5, 93, 95, 90, 93),    # low breaks 92, then final close is back above 92
+        (9, 30, 93, 95, 92, 94),
+    ])
+    bars_1h = [_bar(_TUE, 8, 0, 95, 99, 93, 97)]
+    result = detect_4hr_retrigger(bars_4h, bars_5m, bars_1h, _TUE, "MNQ")
+    assert result is not None
+    assert result["signal"] is True
+    assert result["setup_bar_ts"] == datetime(2026, 1, 6, 8, 5, tzinfo=ET)
+
+
 def test_close_through_level_before_any_break_does_not_count_as_retrace():
     """A bar whose CLOSE is already back through the level, occurring BEFORE
     any break bar, must not satisfy the retrace — break must come first,
