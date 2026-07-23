@@ -268,6 +268,24 @@ def detect_day_boundaries(bars: list[dict]) -> list[int]:
     return boundaries
 
 
+def vwap_day_range(day_ranges: list[tuple[int, int]], bar_idx: int) -> tuple[int, int] | None:
+    """CME trading-day range (from detect_day_boundaries) containing bar_idx.
+
+    This is the sole valid reset anchor for a session VWAP accumulator.
+    TradingView's ta.vwap(hlc3) — and RiskSentinel's own Pine VWAP — resets once
+    per CME trading day at 18:00 ET; it does NOT reset at the Asian/London/New
+    York/off-hours sub-session boundaries detect_session() reports. Confirmed
+    empirically against real TradingView Pine VWAP output (0.00 divergence
+    within a day boundary, sharp divergence introduced by any extra reset).
+    Both csv_to_replay and polygon_to_replay must key their VWAP accumulator
+    reset off this function, not off detect_session(), to match Pine.
+    """
+    for r in day_ranges:
+        if r[0] <= bar_idx < r[1]:
+            return r
+    return None
+
+
 _INSTRUMENT_MAP = {
     "MNQ": "MNQ",
     "MES": "MES",
@@ -381,8 +399,8 @@ def convert(
 
     # Build candle records
     candles: list[dict] = []
-    session_bars: list[dict] = []  # for VWAP calculation within session
-    prev_session = None
+    session_bars: list[dict] = []  # for VWAP calculation within the CME trading day
+    prev_vwap_range: tuple[int, int] | None = None
     closes: list[float] = []
 
     for i, bar in enumerate(bars):
@@ -400,10 +418,13 @@ def convert(
         dt = datetime.fromtimestamp(bar["ts"], tz=_UTC)
         session = detect_session(dt)
 
-        # Reset VWAP accumulation at session change
-        if session != prev_session:
+        # Reset VWAP accumulation once per CME trading day (18:00 ET) — NOT at
+        # Asian/London/New York/off-hours sub-session transitions. See
+        # vwap_day_range() docstring for why detect_session() must not gate this.
+        vwap_range = vwap_day_range(day_ranges, i)
+        if vwap_range != prev_vwap_range:
             session_bars = []
-            prev_session = session
+            prev_vwap_range = vwap_range
 
         session_bars.append(bar)
         # Use Pine session-anchored VWAP when available; fall back to computed
