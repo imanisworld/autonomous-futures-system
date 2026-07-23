@@ -1,6 +1,7 @@
 # 60M 3-2-2 FIRST LIVE STRATEGY
 **Complete Trading Rules — MNQ Futures Only**
-*Validated: MNQ 31 strict entries | +$66.50 expectancy | Opposite 9AM boundary stop*
+*Resolved detector ground truth: MNQ 32 entries | Honest fills pending |
+Opposite 9AM boundary stop*
 
 ---
 
@@ -106,16 +107,22 @@ Sub-targets: use the 15-minute chart to find internal structure within the 8AM c
 
 ---
 
-## 7. VALIDATED PERFORMANCE
+## 7. PERFORMANCE EVIDENCE STATUS
 
-| Instrument | n | Expectancy | Stop Rule | Status |
-|---|---|---|---|---|
-| MNQ | 31 | +$66.50/trade | Opp. 9AM boundary | VALIDATED |
-| MES | marginal | +$7.08/trade | — | DO NOT TRADE |
-| QQQ | thin | Unconfirmed | — | DO NOT TRADE |
-| IWM | negative | −$0.20/share | — | REJECTED |
+The prior reconstruction reported 31 MNQ entries and +$66.50/trade. Detector
+reconciliation recovered all 31 and added 2024-08-30 under the executable rule,
+producing 32 resolved entries.
 
-> ⚠️ n=31 is encouraging but not large. Trade 1 MNQ contract throughout the testing phase.
+The prior expectancy is therefore historical provenance, not the final
+executable-rule estimate. Honest fill replay must be rerun on all 32 entries
+with the resolved gap-open contract, pessimistic same-bar ordering, slippage,
+and commissions.
+
+No historical gap-open entries occurred in the cached study window. Gap-open
+behavior remains binding and is covered by detector tests.
+
+> ⚠️ n=32 remains small. The strategy verdict stays WAIT until honest replay and
+> walk-forward/slippage checks complete.
 
 ---
 

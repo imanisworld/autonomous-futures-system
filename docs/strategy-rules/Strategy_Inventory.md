@@ -38,7 +38,7 @@ Verdict taxonomy:
 | ORB Reclaim (MNQ) | ✅ | ✅ | Partial | ✅ | ❌ insufficient | ✅ | ⚠️ n=253 thin | **PROMISING BUT UNPROVEN** |
 | 4HR Re-Trigger | ✅ blockers resolved | ✅ reconciled | ❌ | Partial — external study | ✅ | Partial | ⚠️ n=94 setups | **WAIT — honest fill replay** |
 | 12HR Miyagi | ✅ blockers resolved | ✅ reconciled | ❌ | ❌ old study incompatible | ❌ not confirmed | ❌ under resolved rule | ⚠️ n=13 setups / 6 entries | **WAIT — honest fill replay** |
-| 60M 3-2-2 First Live | ✅ blockers resolved | ❌ | ❌ | Partial — manual study | ❌ not confirmed | ❌ | ⚠️ n=31 MNQ | **WAIT — build detector** |
+| 60M 3-2-2 First Live | ✅ blockers resolved | ✅ reconciled | ❌ | ❌ old estimate incomplete | ❌ not confirmed | ❌ under resolved rule | ⚠️ n=32 MNQ | **WAIT — honest fill replay** |
 | VWAP Hold (MNQ NY) | ❌ entry definition unclear | Partial | ❌ | ❌ incompatible studies | ❌ | ❌ | ⚠️ n=106 | **WAIT — isolated fill test pending** |
 | VWAP Reclaim (MNQ NY) | ❌ | Partial | ❌ | ❌ | ❌ | ❌ | ⚠️ n=29 thin | **WAIT** |
 | VWAP Rejection | ❌ | Partial | ❌ | ❌ | ❌ | ❌ | — | **BROKEN — unreachable predicate** |
@@ -123,18 +123,21 @@ Verdict taxonomy:
 ---
 
 ### 60M 3-2-2 First Live
-**Verdict: WAIT — build detector**
+**Verdict: WAIT — honest fill replay**
 
 - Rules: complete as of 2026-07-23 (all blockers resolved)
+- Detector: pure detector built and reconciled 32/32 under the executable rule
 - Timeframe: 60-minute candles
 - Setup: 8AM = outside bar vs 7AM candle; 9AM = directional; 10AM = opposite direction
 - Entry: first live break of 9AM opposite boundary, 10:00–11:00 AM; gap-open counts
 - Stop: opposite 9AM boundary, fixed, no cap
 - Target: 8AM outside bar boundary
 - Instrument: MNQ only (MES marginal, QQQ unconfirmed, IWM negative)
-- External study results: MNQ +$66.50 expectancy (n=31)
-- Gaps: no coded detector, walk-forward halves not confirmed, slippage sensitivity unknown
-- Next: build detector → reconcile → honest fill replay
+- Reconciliation: all old 31 recovered; 2024-08-30 added after removing the undocumented pre-entry `invalidated_first` assumption
+- Historical gap-open entries: zero; both directions are covered by detector tests
+- Prior +$66.50 expectancy used the incomplete 31-entry set and is not the final executable-rule estimate
+- Gaps: honest fill replay, walk-forward halves, and slippage sensitivity
+- Next: honest fill replay on the resolved 32 entries
 
 ---
 
@@ -242,9 +245,9 @@ See `ICC_ICT_Research.md` for full breakdown.
 
 1. **4HR Re-Trigger detector** — complete and reconciled
 2. **12HR Miyagi detector** — complete and reconciled
-3. **60M 3-2-2 detector** — rules complete, build next
-4. **Reconcile 3-2-2 against manual samples** — before any backtest
-5. **Honest fill replay for 4HR and Miyagi** — reconciliation passed
+3. **60M 3-2-2 detector** — complete and reconciled
+4. **Honest fill replay for 4HR, Miyagi, and 3-2-2** — reconciliation passed
+5. **Walk-forward and slippage sensitivity** — only on resolved-rule fills
 6. **Runner exit promotion** — unblocks ORB breakout and VWAP lanes
 7. **VWAP hold isolated fill test** — parallel, external researcher
 8. **VWAP hold entry definition** — Claude Code reads signal_engine.py
