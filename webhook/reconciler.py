@@ -196,7 +196,17 @@ def reconcile_open_position(
     order_ids = open_pos.get("order_ids")
     order_ids = order_ids if isinstance(order_ids, dict) else None
     entry_id = (order_ids or {}).get("entry")
-    if entry_id is not None:
+    # ── Prior-day positions: the phantom discrimination is UNRELIABLE ─────────
+    # /fill/list is session-scoped, so for a position opened on a PRIOR day a
+    # readable-but-empty fill list proves nothing — the entry's fill may simply
+    # have aged out. entry_filled=False must then NOT phantom-clear (that would
+    # erase a real trade's outcome and reverse its trade count — the erased-win
+    # class). Book through the resolver instead: real attribution while fills
+    # are still readable, else its designed FORCE_CLOSE_UNMATCHED breakeven
+    # (loud, auditable, count-preserving).
+    stale_fill_window = open_pos_date != today
+    resolve_instead_of_clear = stale_fill_window
+    if entry_id is not None and not stale_fill_window:
         try:
             entry_filled = broker.entry_order_filled(entry_id)
         except Exception as exc:
@@ -206,51 +216,52 @@ def reconcile_open_position(
             # Uncertainty rule (same as an unconfirmed position read): do
             # NOTHING this sweep rather than risk erasing a real trade.
             return {"action": "entry_fill_unconfirmed"}
-        if entry_filled:
-            fill = _resolve_completed_trade(broker, open_pos)
-            if fill is None:
-                # Fills exist but attribution isn't readable yet (settle
-                # window). Leave the position for the next bar resolve/sweep.
-                return {"action": "entry_filled_unresolved"}
-            journal.log_outcome(
-                instrument=fill.instrument,
-                session="reconcile",
-                result=fill.result,
-                entry_price=fill.entry_price,
-                exit_price=fill.exit_price,
-                exit_reason=fill.exit_reason,
-                pnl_ticks=fill.pnl_ticks,
-                pnl_dollars=fill.pnl_dollars,
-                contracts=fill.contracts,
-                # The OUTCOME must land in the journal day that holds the TRADE
-                # row, or that day's has_open_position never clears.
-                for_date=open_pos_date,
-            )
-            msg = (
-                f"Auto-reconcile: completed trade resolved — {fill.result} "
-                f"{fill.direction} {fill.instrument} P&L ${float(fill.pnl_dollars or 0):.2f} "
-                f"({fill.exit_reason}). The exit filled between bar resolves; "
-                f"journal updated, no orders sent."
-            )
-            logger.warning(msg)
-            try:
-                from notifications.system_notifier import notify_system
-                result = notify_system(msg, config=config)
-                if result.sent:
-                    logger.info("Reconciled-trade Discord notification sent")
-                else:
-                    logger.warning(
-                        "Reconciled-trade Discord notification NOT sent (reason=%s)",
-                        result.reason,
-                    )
-            except Exception as exc:
-                logger.warning("reconcile alert failed: %s", exc)
-            return {
-                "action": "resolved_completed_trade",
-                "instrument": fill.instrument,
-                "result": fill.result,
-                "pnl_dollars": fill.pnl_dollars,
-            }
+        resolve_instead_of_clear = entry_filled
+    if resolve_instead_of_clear:
+        fill = _resolve_completed_trade(broker, open_pos)
+        if fill is None:
+            # Fills exist but attribution isn't readable yet (settle
+            # window). Leave the position for the next bar resolve/sweep.
+            return {"action": "entry_filled_unresolved"}
+        journal.log_outcome(
+            instrument=fill.instrument,
+            session="reconcile",
+            result=fill.result,
+            entry_price=fill.entry_price,
+            exit_price=fill.exit_price,
+            exit_reason=fill.exit_reason,
+            pnl_ticks=fill.pnl_ticks,
+            pnl_dollars=fill.pnl_dollars,
+            contracts=fill.contracts,
+            # The OUTCOME must land in the journal day that holds the TRADE
+            # row, or that day's has_open_position never clears.
+            for_date=open_pos_date,
+        )
+        msg = (
+            f"Auto-reconcile: completed trade resolved — {fill.result} "
+            f"{fill.direction} {fill.instrument} P&L ${float(fill.pnl_dollars or 0):.2f} "
+            f"({fill.exit_reason}). The exit filled between bar resolves; "
+            f"journal updated, no orders sent."
+        )
+        logger.warning(msg)
+        try:
+            from notifications.system_notifier import notify_system
+            result = notify_system(msg, config=config)
+            if result.sent:
+                logger.info("Reconciled-trade Discord notification sent")
+            else:
+                logger.warning(
+                    "Reconciled-trade Discord notification NOT sent (reason=%s)",
+                    result.reason,
+                )
+        except Exception as exc:
+            logger.warning("reconcile alert failed: %s", exc)
+        return {
+            "action": "resolved_completed_trade",
+            "instrument": fill.instrument,
+            "result": fill.result,
+            "pnl_dollars": fill.pnl_dollars,
+        }
 
     # Journal OPEN, broker FLAT, position stale → clear the phantom (CANCELLED,
     # exactly what a manual reconcile does — no P&L/win-rate impact).

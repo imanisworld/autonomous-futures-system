@@ -307,12 +307,13 @@ class _OrphanBroker(_FakeBroker):
         return self._census
 
 
-def test_walkback_finds_prior_day_open_and_clears_into_its_journal(
-    monkeypatch, tmp_path, config
-):
-    """A phantom opened YESTERDAY must still be visible to today's sweep, and
-    the clearing OUTCOME must land in yesterday's journal (else that day's
-    has_open_position never clears)."""
+def test_walkback_sees_prior_day_open_position(monkeypatch, tmp_path, config):
+    """A position opened YESTERDAY must be visible to today's sweep — the
+    today-only journal check made the Jul 21 MES orphan invisible from 00:00
+    Jul 22 onward (action was 'none' every sweep). Prior-day positions route
+    through the resolver, never the phantom-clear (see the stale-fill tests
+    below); here the resolver is uncertain, so the sweep reports that instead
+    of 'none' and leaves the position open."""
     _tradovate(monkeypatch)
     yesterday = _NOW.date() - timedelta(days=1)
     j = _seed_open(tmp_path, age_min=30, for_date=yesterday)
@@ -321,9 +322,8 @@ def test_walkback_finds_prior_day_open_and_clears_into_its_journal(
     res = reconcile_open_position(config, str(tmp_path), now=_NOW,
                                   broker=_FakeBroker(authed=True, position=None))
 
-    assert res["action"] == "reconciled"
-    assert j.get_open_position(yesterday) is None            # cleared in ITS day
-    assert not j.get_daily_state(yesterday).has_open_position
+    assert res["action"] == "entry_filled_unresolved"        # seen, not 'none'
+    assert j.get_open_position(yesterday) is not None        # never guess-cleared
 
 
 def test_orphan_open_alerts_when_zero_children_working(monkeypatch, tmp_path, config):
@@ -391,3 +391,38 @@ def test_broker_open_with_unknowable_census_never_reads_as_naked(
     res = reconcile_open_position(config, str(tmp_path), now=_NOW,
                                   broker=_OrphanBroker(None))
     assert res["action"] == "broker_has_position"
+
+
+def test_prior_day_position_never_phantom_cleared_on_missing_fills(
+    monkeypatch, tmp_path, config
+):
+    """/fill/list is session-scoped: for a PRIOR-day position, a readable-but-
+    empty fill list proves nothing. entry_filled=False must route through the
+    resolver (real attribution / FORCE_CLOSE breakeven), never the CANCELLED
+    phantom-clear — that would erase a real trade's outcome and trade count."""
+    _tradovate(monkeypatch)
+    yesterday = _NOW.date() - timedelta(days=1)
+    j = _seed_open(tmp_path, age_min=30, order_ids=_IDS, for_date=yesterday)
+    broker = _FakeBroker(authed=True, position=None,
+                         entry_filled=False,          # aged-out fills say "no fill"
+                         resolve_fill=_win_fill())
+    res = reconcile_open_position(config, str(tmp_path), now=_NOW, broker=broker)
+    assert res["action"] == "resolved_completed_trade"
+    assert res["result"] == "WIN"                     # real outcome booked
+    entries = j._read_entries(j._journal_path(yesterday))
+    outcome = [e for e in entries if e.get("type") == "OUTCOME"][-1]["outcome"]
+    assert outcome["result"] == "WIN"                 # landed in ITS OWN day
+    assert j.get_open_position(yesterday) is None
+
+
+def test_prior_day_position_left_open_when_resolver_uncertain(
+    monkeypatch, tmp_path, config
+):
+    _tradovate(monkeypatch)
+    yesterday = _NOW.date() - timedelta(days=1)
+    j = _seed_open(tmp_path, age_min=30, order_ids=_IDS, for_date=yesterday)
+    broker = _FakeBroker(authed=True, position=None,
+                         entry_filled=False, resolve_fill=None)
+    res = reconcile_open_position(config, str(tmp_path), now=_NOW, broker=broker)
+    assert res["action"] == "entry_filled_unresolved"
+    assert j.get_open_position(yesterday) is not None  # untouched
