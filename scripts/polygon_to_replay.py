@@ -57,6 +57,7 @@ from sources.polygon_client import PolygonFuturesClient  # noqa: E402
 LOOKBACK = 20          # bars for rolling avg_volume (matches csv_to_replay)
 ORB_MINUTES = 15       # Pine i_orb_min default
 NY_OPEN_HOUR, NY_OPEN_MINUTE = 9, 30
+LONDON_OPEN_HOUR, LONDON_OPEN_MINUTE = 3, 0
 
 
 def ema_series(closes: list[float], period: int) -> list[float | None]:
@@ -176,6 +177,9 @@ def derive_candles(
     orb_high = orb_low = None
     orb_count = 0
     orb_done = False
+    london_orb_high = london_orb_low = None
+    london_orb_count = 0
+    london_orb_done = False
     hod = lod = None
     current_day_range = None
 
@@ -209,6 +213,23 @@ def derive_candles(
             orb_low = min(orb_low, bar["low"])
             orb_count += 1
             orb_done = orb_count >= orb_bars_needed
+
+        # London ORB — independent from NY but governed by the same configured
+        # opening-range duration. Initialize on the 03:00 ET bar itself so the
+        # developing range and its status are immediately available.
+        is_london_open_bar = (
+            et.hour == LONDON_OPEN_HOUR
+            and et.minute == LONDON_OPEN_MINUTE
+        )
+        if is_london_open_bar:
+            london_orb_high, london_orb_low = bar["high"], bar["low"]
+            london_orb_count = 1
+            london_orb_done = london_orb_count >= orb_bars_needed
+        elif london_orb_high is not None and not london_orb_done:
+            london_orb_high = max(london_orb_high, bar["high"])
+            london_orb_low = min(london_orb_low, bar["low"])
+            london_orb_count += 1
+            london_orb_done = london_orb_count >= orb_bars_needed
         closes.append(bar["close"])
 
         if orb_high is None or orb_low is None:
@@ -275,6 +296,18 @@ def derive_candles(
             "orb_status": derive_orb_status(
                 bar["close"], orb_high, orb_low,
                 previous_close=prev_bar["close"] if prev_bar else None,
+            ),
+            "london_orb_high": london_orb_high,
+            "london_orb_low": london_orb_low,
+            "london_orb_status": (
+                derive_orb_status(
+                    bar["close"],
+                    london_orb_high,
+                    london_orb_low,
+                    previous_close=prev_bar["close"] if prev_bar else None,
+                )
+                if london_orb_high is not None and london_orb_low is not None
+                else None
             ),
             "market_condition": market_cond,
             "trend_direction": trend_dir,
