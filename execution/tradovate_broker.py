@@ -799,10 +799,16 @@ class TradovateBroker(BrokerInterface):
                 "orderQty": qty,
                 **entry_leg,
                 "isAutomated": True,
+                # Children carry explicit timeInForce=GTC: without it Tradovate
+                # defaults them to Day, so an overnight hold has its stop AND
+                # target expire at session close — leaving a naked position
+                # (observed live: MES 2026-07-21, children Day-expired while the
+                # position stayed open unprotected through the next session).
                 "bracket1": {
                     "action": close_action,
                     "orderType": "Stop",
                     "stopPrice": tick_stop,
+                    "timeInForce": "GTC",
                 },
             }
             if not runner_live:
@@ -810,11 +816,13 @@ class TradovateBroker(BrokerInterface):
                     "action": close_action,
                     "orderType": "Limit",
                     "price": tick_target,
+                    "timeInForce": "GTC",
                 }
                 body["bracket2"] = {
                     "action": close_action,
                     "orderType": "Stop",
                     "stopPrice": tick_stop,
+                    "timeInForce": "GTC",
                 }
 
             result = self._post("/order/placeOSO", body)
@@ -1465,6 +1473,9 @@ class TradovateBroker(BrokerInterface):
                 "orderType": "Stop",
                 "stopPrice": new_stop,
                 "orderQty": int(pos.quantity or 1),
+                # Restate GTC on modify — an omitted timeInForce on the replace
+                # would drop the child back to Day (session-close expiry).
+                "timeInForce": "GTC",
                 "isAutomated": True,
             })
             fail = None
@@ -1709,6 +1720,86 @@ class TradovateBroker(BrokerInterface):
             execution_audit=audit,
         )
 
+    def count_working_children(self) -> Optional[dict]:
+        """Liveness census of the protective children for the current position.
+
+        Returns ``{"working": int, "checked": int, "states": {role: status}}``
+        from ``_last_order_ids`` (target/stop) — or ``None`` when liveness is
+        unknowable (no persisted order ids, or no child readable). Callers MUST
+        treat ``None`` as "do nothing": an API blip must never read as naked.
+        """
+        ids = self._last_order_ids if isinstance(self._last_order_ids, dict) else None
+        if not ids:
+            return None
+        roles = [(r, ids.get(r)) for r in ("target", "stop") if ids.get(r) is not None]
+        if not roles:
+            return None
+        working = 0
+        checked = 0
+        states: dict = {}
+        order_list: Optional[list] = None
+        for role, oid in roles:
+            status = None
+            try:
+                o = self._get(f"/order/item?id={oid}")
+                status = str(o.get("ordStatus", "")).lower() or None
+            except Exception:
+                status = None
+            if status is None:
+                # /order/item can 404 on lag — corroborate via /order/list once.
+                if order_list is None:
+                    try:
+                        raw = self._get("/order/list")
+                        order_list = raw if isinstance(raw, list) else []
+                    except Exception:
+                        order_list = []
+                for o in order_list:
+                    if o.get("id") == oid:
+                        status = str(o.get("ordStatus", "")).lower() or None
+                        break
+            if status is None:
+                states[role] = "unreadable"
+                continue
+            checked += 1
+            states[role] = status
+            # A Filled child means it already closed (part of) the position — it
+            # is no longer protecting anything, so it does not count as working.
+            if status not in self._DEAD_ORDER_STATUSES and status not in ("filled", "completed"):
+                working += 1
+        if checked == 0:
+            return None
+        return {"working": working, "checked": checked, "states": states}
+
+    def _check_open_position_protection(self) -> None:
+        """The broker holds our position open — verify its protective children
+        still work. Zero working children = the position is NAKED (e.g. OSO
+        children Day-expired at session close, observed live MES 2026-07-21:
+        both children expired overnight and the position sat unprotected while
+        both exit levels printed). Alert-only, repeated every resolve pass —
+        exiting the position is an operator decision, never taken here.
+        """
+        try:
+            census = self.count_working_children()
+        except Exception:
+            return
+        if census is None or census.get("working", 0) > 0:
+            return
+        last = self._last_position
+        states = ", ".join(f"{k}={v}" for k, v in (census.get("states") or {}).items())
+        msg = (
+            f"🚨 ORPHAN OPEN POSITION: {getattr(last, 'direction', '?')} "
+            f"{getattr(last, 'quantity', '?')}x {getattr(last, 'instrument', '?')} is OPEN at the "
+            f"broker with ZERO working protective orders ({states}). The position is NAKED — "
+            f"no stop, no target. NO automatic action taken. Flatten/verify in Tradovate NOW."
+        )
+        logger.error(msg)
+        try:
+            from config.settings import load_config
+            from notifications.system_notifier import notify_system
+            notify_system(msg, config=load_config())
+        except Exception as exc:
+            logger.warning("orphan-position Discord alert failed: %s", exc)
+
     def resolve_position(self) -> Optional[Fill]:
         """Check if a bracket child order (stop or target) has filled."""
         if not self._last_position or not self._last_position.open:
@@ -1740,6 +1831,9 @@ class TradovateBroker(BrokerInterface):
                 break
             if our_open:
                 self._resolve_fail_count = 0  # successful check — genuinely open
+                # Still-open is only OK while the bracket children are working —
+                # dead children (Day-expiry, rejection) mean naked risk: alert.
+                self._check_open_position_protection()
                 return None
             # ── Our contract is FLAT on Tradovate → the OSO bracket closed it. ──
             # ── Determine WHICH bracket child closed the position, by matching our

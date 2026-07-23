@@ -19,6 +19,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import shutil
 import subprocess
 import urllib.request
@@ -118,7 +119,21 @@ def evaluate_health(checks: dict) -> dict:
 
     flat = checks.get("position_flat")
     if flat is False:
-        notes.append("position OPEN")  # informational, not an alarm on its own
+        # An open position is only routine while its bracket children are
+        # working. Zero working orders = NAKED (the MES 2026-07-21 orphan sat
+        # open ~36h while this digest said "OK" — position-open was a note).
+        working = checks.get("working_orders")
+        if working == 0:
+            esc("ALERT")
+            problems.append(
+                "position OPEN with ZERO working orders — NAKED, "
+                "flatten/verify in Tradovate"
+            )
+        elif working is None:
+            esc("WARN")
+            problems.append("position OPEN, protection state unknown")
+        else:
+            notes.append(f"position OPEN ({working} working order(s))")
 
     return {"status": level, "problems": problems, "notes": notes}
 
@@ -182,6 +197,17 @@ def collect() -> dict:
         checks["auth_state"] = rel.get("state")
     else:
         checks["broker_reachable"] = False
+    # Working-order count from the live-preflight surface — needed to tell a
+    # routine bracketed hold apart from a NAKED open position (0 working).
+    preflight = _get_json("/status/live-preflight")
+    checks["working_orders"] = None
+    if preflight is not None:
+        for c in preflight.get("checks") or []:
+            if c.get("name") == "no_working_orders":
+                m = re.match(r"\s*(\d+)", str(c.get("detail") or ""))
+                if m:
+                    checks["working_orders"] = int(m.group(1))
+                break
     checks["errors_today"] = _errors_today()
     try:
         usage = shutil.disk_usage("/")

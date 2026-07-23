@@ -324,3 +324,134 @@ def test_handle_naked_position_survives_flatten_failure(monkeypatch):
     fill = broker._handle_naked_position(_BRACKET, qty=1, stop_ok=False, target_ok=False)
     assert fill.result == "OPEN"
     assert fill.exit_reason == "NAKED_FLATTEN_UNCONFIRMED"
+
+# ── timeInForce=GTC on protective children (Day-default expiry → naked) ───────
+
+def _capture_oso(monkeypatch, broker):
+    captured = {}
+    monkeypatch.setattr(broker, "_authenticate", lambda: True)
+    monkeypatch.setattr(broker, "_find_contract_id", lambda instrument: 123)
+    monkeypatch.setattr("execution.tradovate_supervisor.tradovate_order_ready", lambda: True)
+    monkeypatch.setattr(broker, "_verify_bracket_children", lambda **kw: (True, True))
+
+    def _post(path, body):
+        captured["path"], captured["body"] = path, body
+        return {"orderId": 900, "oso1Id": 901, "oso2Id": 902}
+
+    monkeypatch.setattr(broker, "_post", _post)
+    return captured
+
+
+def test_execute_bracket_children_are_gtc(monkeypatch):
+    """Both static children must carry explicit timeInForce=GTC.
+
+    Without it Tradovate defaults the children to Day: an overnight hold has
+    its stop AND target expire at session close, leaving the position naked
+    (observed live: MES 2026-07-21, unprotected through the next session).
+    """
+    broker = TradovateBroker(config=TradovateConfig())
+    broker._account_id = 555
+    captured = _capture_oso(monkeypatch, broker)
+
+    broker.execute_bracket(_BRACKET)
+
+    body = captured["body"]
+    assert body["bracket1"]["timeInForce"] == "GTC"
+    assert body["bracket2"]["timeInForce"] == "GTC"
+
+
+def test_execute_bracket_runner_live_stop_child_is_gtc(monkeypatch):
+    """runner_live's single Stop child (bracket1, no bracket2) is GTC too."""
+    broker = TradovateBroker(config=TradovateConfig())
+    broker._account_id = 555
+    captured = _capture_oso(monkeypatch, broker)
+
+    order = BracketOrder(instrument="MES", direction="LONG", entry=5900.0,
+                         stop=5893.0, target=5915.0, rr_ratio=2.14,
+                         strategy="orb_reclaim", contracts=1,
+                         force_runner_exit=True)
+    broker.execute_bracket(order)
+
+    body = captured["body"]
+    assert body["bracket1"]["orderType"] == "Stop"
+    assert body["bracket1"]["timeInForce"] == "GTC"
+    assert "bracket2" not in body
+
+
+def test_replace_stop_restates_gtc(monkeypatch):
+    """The trail modify must restate GTC — an omitted timeInForce on
+    /order/modifyorder drops the child back to Day (session-close expiry)."""
+    broker = TradovateBroker(config=TradovateConfig())
+    broker._account_id = 555
+    broker._last_position = Position(instrument="MES", direction="LONG",
+                                     entry_price=5900.0, stop=5893.0,
+                                     target=None, quantity=1, open=True)
+    broker._last_order_ids = {"stop": 902}
+    captured = {}
+
+    monkeypatch.setattr(broker, "_authenticate", lambda: True)
+
+    def _post(path, body):
+        captured["path"], captured["body"] = path, body
+        return {}
+
+    monkeypatch.setattr(broker, "_post", _post)
+
+    assert broker.replace_stop(5895.0) is True
+    assert captured["path"] == "/order/modifyorder"
+    assert captured["body"]["timeInForce"] == "GTC"
+
+
+# ── count_working_children (naked-position census, alert-only) ────────────────
+
+def _census_broker(monkeypatch, items_by_id, ids={"instrument": "MES", "entry": 900, "target": 901, "stop": 902}):
+    broker = _broker(monkeypatch, items_by_id)
+    broker._last_order_ids = dict(ids)
+    return broker
+
+
+def test_census_both_children_expired(monkeypatch):
+    """Day-expired OSO children (the MES 2026-07-21 orphan) → 0 working."""
+    broker = _census_broker(monkeypatch, {
+        901: {"ordStatus": "Expired"}, 902: {"ordStatus": "Expired"},
+    })
+    census = broker.count_working_children()
+    assert census == {"working": 0, "checked": 2,
+                      "states": {"target": "expired", "stop": "expired"}}
+
+
+def test_census_children_working(monkeypatch):
+    broker = _census_broker(monkeypatch, {
+        901: {"ordStatus": "Working"}, 902: {"ordStatus": "Working"},
+    })
+    assert broker.count_working_children()["working"] == 2
+
+
+def test_census_filled_child_not_counted_as_working(monkeypatch):
+    """A Filled child already exited (part of) the position — not protection."""
+    broker = _census_broker(monkeypatch, {
+        901: {"ordStatus": "Filled"}, 902: {"ordStatus": "Canceled"},
+    })
+    assert broker.count_working_children()["working"] == 0
+
+
+def test_census_unreadable_is_unknowable_not_naked(monkeypatch):
+    """No child readable → None: an API blip must never read as naked."""
+    broker = _census_broker(monkeypatch, {})  # every /order/item lookup fails
+    assert broker.count_working_children() is None
+
+
+def test_census_no_ids_is_unknowable(monkeypatch):
+    broker = _broker(monkeypatch, {})
+    broker._last_order_ids = None
+    assert broker.count_working_children() is None
+
+
+def test_census_runner_live_stop_only(monkeypatch):
+    """runner_live persists no target id — census works on the stop alone."""
+    broker = _census_broker(
+        monkeypatch, {902: {"ordStatus": "Working"}},
+        ids={"instrument": "MES", "entry": 900, "target": None, "stop": 902},
+    )
+    census = broker.count_working_children()
+    assert census["checked"] == 1 and census["working"] == 1
