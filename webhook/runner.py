@@ -22,6 +22,7 @@ import logging
 import os
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Optional
 
 from config.settings import SystemConfig, load_config
@@ -773,6 +774,49 @@ def process_alert(
         "bar_gap": bar_gap,
         "window_direction": state.window_direction,
     }
+    context_observation_written = False
+
+    def _observe_strategy_context_once(decision_snapshot) -> None:
+        """Write at most one observe-only context row for an accepted 15m bar.
+
+        Capacity and open-position checks intentionally run before the strategy
+        engine, but those downstream controls must not erase otherwise-valid
+        context evidence.  Keep this helper side-effect-free with respect to
+        decisions, risk, and execution; failures remain fail-soft.
+        """
+        nonlocal context_observation_written
+        if (
+            context_observation_written
+            or five_min_trigger
+            or state.instrument not in {"MNQ", "MES"}
+        ):
+            return
+        try:
+            observation = append_strategy_context_observation(
+                log_dir=log_dir,
+                state=state,
+                decision=decision_snapshot,
+                recent_bars=recent_bars,
+                for_date=for_date,
+            )
+            if observation is not None:
+                context_observation_written = True
+                result["strategy_context_observation"] = {
+                    "observation_only": True,
+                    "gate_authoritative": False,
+                    "path": "strategy_context_observations.jsonl",
+                }
+        except Exception:  # noqa: BLE001 - observation must never affect trading
+            logger.warning("strategy context observation failed", exc_info=True)
+
+    def _capacity_observation(decision_code: str, reason: str):
+        return SimpleNamespace(
+            decision=decision_code,
+            reason=reason,
+            failed_gates=[decision_code],
+            setup=None,
+            candidate_audit=[],
+        )
 
     # Shadow setups: audit-only observation of fade/reclaim/range opportunities
     # the live strategy does NOT trade. Read-only — never places an order; just
@@ -1250,14 +1294,32 @@ def process_alert(
     total_daily_capacity = cfg.max_trades_per_day + int(getattr(cfg, "bonus_trades_after_max", 0) or 0)
     if daily_state.trade_count >= total_daily_capacity:
         result["decision"] = "BLOCKED_MAX_TRADES"
+        _observe_strategy_context_once(
+            _capacity_observation(
+                "BLOCKED_MAX_TRADES",
+                "Daily trade capacity reached before strategy evaluation.",
+            )
+        )
         return result
     # max_consecutive_losses is the hard stop regardless of circuit breaker setting.
     # circuit_breaker_losses (lower threshold) triggers a temporary pause via adaptive layer.
     if daily_state.consecutive_losses >= cfg.max_consecutive_losses:
         result["decision"] = "BLOCKED_LOSS_LOCKOUT"
+        _observe_strategy_context_once(
+            _capacity_observation(
+                "BLOCKED_LOSS_LOCKOUT",
+                "Maximum consecutive-loss limit reached before strategy evaluation.",
+            )
+        )
         return result
     if daily_state.has_open_position:
         result["decision"] = "BLOCKED_OPEN_POSITION"
+        _observe_strategy_context_once(
+            _capacity_observation(
+                "BLOCKED_OPEN_POSITION",
+                "Existing position remains open before strategy evaluation.",
+            )
+        )
         return result
 
     # ── Step 3: Decision engine ───────────────────────────────────────────────
@@ -1454,23 +1516,7 @@ def process_alert(
                 "MES trend-consolidation-break evidence collection failed",
                 exc_info=True,
             )
-    if not five_min_trigger and state.instrument in {"MNQ", "MES"}:
-        try:
-            _context_observation = append_strategy_context_observation(
-                log_dir=log_dir,
-                state=state,
-                decision=decision,
-                recent_bars=recent_bars,
-                for_date=for_date,
-            )
-            if _context_observation is not None:
-                result["strategy_context_observation"] = {
-                    "observation_only": True,
-                    "gate_authoritative": False,
-                    "path": "strategy_context_observations.jsonl",
-                }
-        except Exception:  # noqa: BLE001 - observation must never affect trading
-            logger.warning("strategy context observation failed", exc_info=True)
+    _observe_strategy_context_once(decision)
 
     # ── Entry-refresh decision (Phase 1, PR #265) ──────────────────────────────
     # Pure audit/decision computation on an ENTRY_DETACHED_FROM_PRICE candidate,
