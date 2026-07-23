@@ -56,6 +56,13 @@ This is the midpoint/50% of the inside bar (Candle 3). Also expressible as the F
 - Enter CALLS when price reverses and hits the trigger from below
 - **Entry trigger = midpoint of Candle 3 (price crossing UP through it)**
 
+Candle 4 direction is confirmed at 9:30 AM ET only. Check price location at the open:
+- Price above Candle 3 high at 9:30 AM → 2U → PUTS
+- Price below Candle 3 low at 9:30 AM → 2D → CALLS
+- Price between Candle 3 high and low at 9:30 AM → no setup, do not enter
+
+Do not classify Candle 4 direction from intrabar movement before 9:30 AM. A candle that briefly broke above Candle 3 high then pulled back below it before 9:30 AM is NOT a 2U setup.
+
 ---
 
 ## 5. PRE-ENTRY INVALIDATION

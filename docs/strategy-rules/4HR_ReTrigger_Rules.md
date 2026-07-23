@@ -40,8 +40,7 @@ A reversal setup on 4-hour candles. The 4AM candle must move directionally again
 
 **Step 2 — 8AM candle must be 2UP AND retrace:**
 - 8AM candle high must break ABOVE the 4AM candle high (triggers the 2UP)
-- Price must then retrace BELOW the 4AM candle high before 9:30 AM
-- At 9:30 AM market open, price must still be BELOW the 4AM candle high
+- The first 5-minute bar that CLOSES below the 4AM candle high before 9:30 AM ET confirms the retrace. Intrabar touches do not count.
 
 **Entry trigger level = HIGH of the 4AM candle**
 **Target = HIGH of the prior day's 4PM candle**
@@ -54,8 +53,7 @@ A reversal setup on 4-hour candles. The 4AM candle must move directionally again
 
 **Step 2 — 8AM candle must be 2DOWN AND retrace:**
 - 8AM candle low must break BELOW the 4AM candle low (triggers the 2DOWN)
-- Price must then retrace ABOVE the 4AM candle low before 9:30 AM
-- At 9:30 AM market open, price must still be ABOVE the 4AM candle low
+- The first 5-minute bar that CLOSES above the 4AM candle low before 9:30 AM ET confirms the retrace. Intrabar touches do not count.
 
 **Entry trigger level = LOW of the 4AM candle**
 **Target = LOW of the prior day's 4PM candle**
@@ -74,17 +72,10 @@ A reversal setup on 4-hour candles. The 4AM candle must move directionally again
 
 ## 5. STOP RULES
 
-**Stop is based on the 1-hour candle flip, not a fixed price level.**
-
-Once in a trade, drop to the 1-hour chart to monitor.
-
-**CALLS — exit if:** Price breaks BELOW the low of the most recent completed 1-hour candle
-
-**PUTS — exit if:** Price breaks ABOVE the high of the most recent completed 1-hour candle
-
-The 1H flip stop is dynamic — it moves in your favor as new 1H candles form. Only the most recently COMPLETED 1H candle is used as reference. A live/open candle does not count.
-
-The trade remains valid as long as no 1H flip occurs, even if price pulls back significantly before reaching target.
+- Stop = low of the last completed 1-hour candle at entry time (CALLS) or high (PUTS)
+- "Last completed" means the most recently CLOSED 1H candle at the moment of entry. The currently open candle does not count.
+- The stop is FIXED at entry. It does not trail as new candles complete.
+- Examples: entry at 9:35 or 9:55 AM → stop = 8:00–9:00 AM candle. Entry at 10:05 or 10:35 AM → stop = 9:00–10:00 AM candle.
 
 ---
 
@@ -92,7 +83,9 @@ The trade remains valid as long as no 1H flip occurs, even if price pulls back s
 
 - CALLS: Target = High of the prior day's 4PM ET candle (4PM–8PM session)
 - PUTS: Target = Low of the prior day's 4PM ET candle (4PM–8PM session)
-- For Monday: the reference candle is Sunday's 4PM–8PM ET futures session (or Friday's 4PM close for QQQ options)
+- MNQ/MES Monday: prior candle = Sunday 4:00 PM–8:00 PM ET futures session
+- QQQ Monday: prior candle = Friday 4:00 PM ET close (no Sunday session exists)
+- The same reference candle defines both the 4AM classification and the target level.
 
 **Exit the full position when target is reached. Do not hold through target.**
 
@@ -262,7 +255,7 @@ Setup fires on ~6–7% of sessions. Expect 1–3 setups per month. This is not a
 
 ## 14. WHAT IS NOT YET VALIDATED
 
-- 1H flip stop P&L (study used fixed distance stops — pending test)
+- Fixed 1H stop P&L — study used fixed distance stops, not the fixed-at-entry 1H candle rule. Pending replay test.
 - Option P&L after premium, spread, and theta
 - Calls vs puts P&L split
 - Walk-forward stability of 1H flip stop

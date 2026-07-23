@@ -34,9 +34,10 @@ A 3-bar reversal setup on the 60-minute chart that plays out in the first three 
 ## 3. SETUP CONDITIONS
 
 ### Step 1 — Confirm 8AM Outside Bar (check at 9:00 AM)
-The 8AM candle must be an outside bar (3):
+The 8AM candle must be an outside bar relative to the 7:00–8:00 AM ET candle (the immediately preceding 60-minute candle):
 - High > prior candle high (7AM candle high)
 - Low < prior candle low (7AM candle low)
+- High > 7:00–8:00 AM candle high AND Low < 7:00–8:00 AM candle low
 
 If the 8AM candle is NOT an outside bar → no setup. Stop.
 
@@ -71,6 +72,8 @@ The 9AM candle must be directional (2U or 2D). Mark its high and low.
 - No 50% breach rule — enter immediately on break
 - If break has not occurred by 11:00 AM → void. No entry.
 
+Gap-open handling: if the 10AM candle opens beyond the trigger level at exactly 10:00 AM without trading through it tick by tick, the gap counts as a valid break. Enter at the 10AM candle open price.
+
 > ⛔ **DO NOT apply the 50% breach rule.** Testing showed it materially damaged the validated MNQ edge.
 
 ---
@@ -83,6 +86,10 @@ The 9AM candle must be directional (2U or 2D). Mark its high and low.
 - CALLS: stop = LOW of the 9AM candle
 
 This is a fixed structural stop. It does not trail. If the 10AM candle reverses back through the opposite 9AM boundary, the 3-2-2 pattern is invalidated.
+
+No maximum stop distance cap. The stop is always the opposite 9AM boundary regardless of how wide the 9AM candle range is.
+
+Log the 9AM candle range (high minus low in points) as a context field on every trade. A range-based cap may be added after 20–30 live setups if range width shows correlation with outcome.
 
 ---
 
