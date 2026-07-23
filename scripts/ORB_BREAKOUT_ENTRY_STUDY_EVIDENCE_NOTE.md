@@ -2,10 +2,17 @@
 
 **HISTORICAL RESEARCH EVIDENCE. NOT VALIDATION. NOT RUNTIME. NOT DEPLOYED.**
 
-`orb_breakout_entry_study.py` and its output `orb_breakout_entry_study_results.json`
-were found sitting uncommitted in the working tree during the 2026-07-25
-repo-hygiene cleanup. Preserved here together because the result is not
-otherwise reproducible from anything else in git.
+`orb_breakout_entry_study_results.json` was found sitting uncommitted in the
+working tree during the 2026-07-25 repo-hygiene cleanup, alongside the script
+that produced it.
+
+**Correction to an earlier claim in this same cleanup pass**: the producing
+script, `scripts/orb_breakout_entry_study.py`, is *not* new here — it has
+been committed on `main` since PR #261 ("Add MNQ orb_breakout entry study:
+market entry needs runner exit"), byte-identical to what's on disk. An
+earlier report in this session incorrectly stated the script itself was
+uncommitted; it was not. Only this results file is new to git — added here
+because the run's *inputs*, not its code, are ephemeral.
 
 ## What this is
 A read-only extension of `scripts/orb_market_entry_study.py` (PR #143,
@@ -16,17 +23,17 @@ runner vs static exit mode separately, which the original study only reported
 as a combined blend.
 
 ## Why it can't be regenerated
-The script reads:
+The (already-committed) script reads:
 - `logs/retest_baseline_off/{MES,MNQ}/journal_*.jsonl` (journaled TRADE/APPROVED
   decisions for orb_breakout/orb_reclaim)
 - `data/replay_polygon_5m/{MES,MNQ}/*.jsonl` (5-minute bars)
 
-Both paths are `.gitignore`'d and were never committed. Neither is this
-script, until now. A fresh clone of this repo could not re-run this analysis
-and reproduce this exact output — this JSON is the only durable record of
-what that run found.
+Both paths are `.gitignore`'d and were never committed. A fresh clone of this
+repo has the code but not that exact input snapshot, so it could not
+reproduce this exact output — this JSON is the only durable record of what
+that run found, even though the code itself is safe.
 
-## Audit performed before preserving it (read-only, 2026-07-25)
+## Audit performed before preserving the results (read-only, 2026-07-25)
 - Confirmed research-only: no CLI flags or code path that places, sizes, or
   schedules a trade.
 - Confirmed no runtime import/wiring: not imported anywhere outside itself;
