@@ -159,12 +159,75 @@ def _missing_snapshot(
     source: str = "not_provided",
     reason: str | None = None,
 ) -> dict[str, Any]:
-    return {
+    snapshot = {
         "available": False,
         "observed_at": None,
         "source": source,
         "data": None,
         "missing_reason": reason or f"{name}_not_provided",
+    }
+    if name == "signa":
+        snapshot.update(
+            {
+                "internal_agreement": False,
+                "agreement_evaluable": False,
+                "direction_components": {
+                    "data.direction": {"raw": None, "normalized": None},
+                    "engine.direction": {"raw": None, "normalized": None},
+                    "signa.action": {"raw": None, "normalized": None},
+                },
+            }
+        )
+    return snapshot
+
+
+def _normalize_signa_direction(value: Any) -> str | None:
+    if value is None:
+        return None
+    raw = str(value).strip().upper()
+    if raw in {"LONG", "BUY", "BULL", "BULLISH", "UP"}:
+        return "UP"
+    if raw in {"SHORT", "SELL", "BEAR", "BEARISH", "DOWN"}:
+        return "DOWN"
+    if raw in {"WAIT", "HOLD", "NEUTRAL", "FLAT", "SIDEWAYS"}:
+        return "NEUTRAL"
+    return None
+
+
+def _signa_internal_agreement(data: dict[str, Any]) -> dict[str, Any]:
+    """Derive agreement from the three independently returned Signa fields."""
+    raw_components = {
+        "data.direction": (
+            data.get("data", {}).get("direction")
+            if isinstance(data.get("data"), dict)
+            else None
+        ),
+        "engine.direction": (
+            data.get("engine", {}).get("direction")
+            if isinstance(data.get("engine"), dict)
+            else None
+        ),
+        "signa.action": (
+            data.get("signa", {}).get("action")
+            if isinstance(data.get("signa"), dict)
+            else None
+        ),
+    }
+    components = {
+        name: {
+            "raw": value,
+            "normalized": _normalize_signa_direction(value),
+        }
+        for name, value in raw_components.items()
+    }
+    normalized = [item["normalized"] for item in components.values()]
+    evaluable = all(value is not None for value in normalized)
+    return {
+        "internal_agreement": bool(
+            evaluable and len(set(normalized)) == 1
+        ),
+        "agreement_evaluable": evaluable,
+        "direction_components": components,
     }
 
 
@@ -181,7 +244,7 @@ def _validate_snapshot(raw: Any, name: str, signal_ts: str) -> dict[str, Any]:
             raw.get("missing_reason", f"{name}_unavailable"),
             f"context.{name}.missing_reason",
         )
-        return {
+        snapshot = {
             "available": False,
             "observed_at": None,
             "source": _text(
@@ -190,6 +253,9 @@ def _validate_snapshot(raw: Any, name: str, signal_ts: str) -> dict[str, Any]:
             "data": None,
             "missing_reason": reason,
         }
+        if name == "signa":
+            snapshot.update(_signa_internal_agreement({}))
+        return snapshot
     observed_at = _utc_iso(raw.get("observed_at"), f"context.{name}.observed_at")
     source = _text(raw.get("source"), f"context.{name}.source")
     data = raw.get("data")
@@ -199,7 +265,7 @@ def _validate_snapshot(raw: Any, name: str, signal_ts: str) -> dict[str, Any]:
         )
     signal_dt = datetime.fromisoformat(signal_ts)
     observed_dt = datetime.fromisoformat(observed_at)
-    return {
+    snapshot = {
         "available": True,
         "observed_at": observed_at,
         "source": source,
@@ -210,6 +276,9 @@ def _validate_snapshot(raw: Any, name: str, signal_ts: str) -> dict[str, Any]:
         # undocumented maximum-age threshold is invented.
         "exact_signal_timestamp": observed_at == signal_ts,
     }
+    if name == "signa":
+        snapshot.update(_signa_internal_agreement(data))
+    return snapshot
 
 
 def _context_from_payload(raw: Any, signal_ts: str) -> dict[str, Any]:
