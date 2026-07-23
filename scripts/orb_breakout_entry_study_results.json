@@ -1,0 +1,1480 @@
+{
+ "MES": {
+  "n_arms": 522,
+  "cap2_runner": {
+   "combined": {
+    "arms": 522,
+    "filled": 66,
+    "gap_rejected": 456,
+    "resolved": 63,
+    "win_rate": 0.508,
+    "net_pnl": 370.65,
+    "expectancy": 5.88,
+    "avg_win": 58.89,
+    "avg_loss": -48.83,
+    "profit_factor": 1.245
+   },
+   "by_strategy": {
+    "orb_breakout": {
+     "all": {
+      "arms": 217,
+      "filled": 3,
+      "gap_rejected": 214,
+      "resolved": 3,
+      "win_rate": 0.333,
+      "net_pnl": 16.87,
+      "expectancy": 5.62,
+      "avg_win": 65.62,
+      "avg_loss": -24.38,
+      "profit_factor": 1.346
+     },
+     "first_half": {
+      "arms": 108,
+      "filled": 0,
+      "gap_rejected": 108,
+      "resolved": 0,
+      "win_rate": null,
+      "net_pnl": 0,
+      "expectancy": null,
+      "avg_win": null,
+      "avg_loss": null,
+      "profit_factor": null
+     },
+     "second_half": {
+      "arms": 109,
+      "filled": 3,
+      "gap_rejected": 106,
+      "resolved": 3,
+      "win_rate": 0.333,
+      "net_pnl": 16.87,
+      "expectancy": 5.62,
+      "avg_win": 65.62,
+      "avg_loss": -24.38,
+      "profit_factor": 1.346
+     }
+    },
+    "orb_reclaim": {
+     "all": {
+      "arms": 305,
+      "filled": 63,
+      "gap_rejected": 242,
+      "resolved": 60,
+      "win_rate": 0.517,
+      "net_pnl": 353.78,
+      "expectancy": 5.9,
+      "avg_win": 58.67,
+      "avg_loss": -50.52,
+      "profit_factor": 1.241
+     },
+     "first_half": {
+      "arms": 152,
+      "filled": 36,
+      "gap_rejected": 116,
+      "resolved": 34,
+      "win_rate": 0.588,
+      "net_pnl": 617.52,
+      "expectancy": 18.16,
+      "avg_win": 65.75,
+      "avg_loss": -49.82,
+      "profit_factor": 1.885
+     },
+     "second_half": {
+      "arms": 153,
+      "filled": 27,
+      "gap_rejected": 126,
+      "resolved": 26,
+      "win_rate": 0.423,
+      "net_pnl": -263.74,
+      "expectancy": -10.14,
+      "avg_win": 45.8,
+      "avg_loss": -51.17,
+      "profit_factor": 0.656
+     }
+    }
+   }
+  },
+  "cap2_static": {
+   "combined": {
+    "arms": 522,
+    "filled": 66,
+    "gap_rejected": 456,
+    "resolved": 59,
+    "win_rate": 0.356,
+    "net_pnl": 631.87,
+    "expectancy": 10.71,
+    "avg_win": 119.73,
+    "avg_loss": -49.54,
+    "profit_factor": 1.336
+   },
+   "by_strategy": {
+    "orb_breakout": {
+     "all": {
+      "arms": 217,
+      "filled": 3,
+      "gap_rejected": 214,
+      "resolved": 3,
+      "win_rate": 0.333,
+      "net_pnl": 25.0,
+      "expectancy": 8.33,
+      "avg_win": 73.75,
+      "avg_loss": -24.38,
+      "profit_factor": 1.513
+     },
+     "first_half": {
+      "arms": 108,
+      "filled": 0,
+      "gap_rejected": 108,
+      "resolved": 0,
+      "win_rate": null,
+      "net_pnl": 0,
+      "expectancy": null,
+      "avg_win": null,
+      "avg_loss": null,
+      "profit_factor": null
+     },
+     "second_half": {
+      "arms": 109,
+      "filled": 3,
+      "gap_rejected": 106,
+      "resolved": 3,
+      "win_rate": 0.333,
+      "net_pnl": 25.0,
+      "expectancy": 8.33,
+      "avg_win": 73.75,
+      "avg_loss": -24.38,
+      "profit_factor": 1.513
+     }
+    },
+    "orb_reclaim": {
+     "all": {
+      "arms": 305,
+      "filled": 63,
+      "gap_rejected": 242,
+      "resolved": 56,
+      "win_rate": 0.357,
+      "net_pnl": 606.87,
+      "expectancy": 10.84,
+      "avg_win": 122.03,
+      "avg_loss": -50.94,
+      "profit_factor": 1.331
+     },
+     "first_half": {
+      "arms": 152,
+      "filled": 36,
+      "gap_rejected": 116,
+      "resolved": 32,
+      "win_rate": 0.469,
+      "net_pnl": 970.62,
+      "expectancy": 30.33,
+      "avg_win": 121.71,
+      "avg_loss": -50.29,
+      "profit_factor": 2.135
+     },
+     "second_half": {
+      "arms": 153,
+      "filled": 27,
+      "gap_rejected": 126,
+      "resolved": 24,
+      "win_rate": 0.208,
+      "net_pnl": -363.75,
+      "expectancy": -15.16,
+      "avg_win": 123.0,
+      "avg_loss": -51.51,
+      "profit_factor": 0.628
+     }
+    }
+   }
+  },
+  "cap4_runner": {
+   "combined": {
+    "arms": 522,
+    "filled": 88,
+    "gap_rejected": 434,
+    "resolved": 84,
+    "win_rate": 0.512,
+    "net_pnl": 737.54,
+    "expectancy": 8.78,
+    "avg_win": 63.84,
+    "avg_loss": -48.96,
+    "profit_factor": 1.367
+   },
+   "by_strategy": {
+    "orb_breakout": {
+     "all": {
+      "arms": 217,
+      "filled": 6,
+      "gap_rejected": 211,
+      "resolved": 6,
+      "win_rate": 0.333,
+      "net_pnl": 8.74,
+      "expectancy": 1.46,
+      "avg_win": 56.87,
+      "avg_loss": -26.25,
+      "profit_factor": 1.083
+     },
+     "first_half": {
+      "arms": 108,
+      "filled": 2,
+      "gap_rejected": 106,
+      "resolved": 2,
+      "win_rate": 0.0,
+      "net_pnl": -56.25,
+      "expectancy": -28.12,
+      "avg_win": null,
+      "avg_loss": -28.12,
+      "profit_factor": null
+     },
+     "second_half": {
+      "arms": 109,
+      "filled": 4,
+      "gap_rejected": 105,
+      "resolved": 4,
+      "win_rate": 0.5,
+      "net_pnl": 64.99,
+      "expectancy": 16.25,
+      "avg_win": 56.87,
+      "avg_loss": -24.38,
+      "profit_factor": 2.333
+     }
+    },
+    "orb_reclaim": {
+     "all": {
+      "arms": 305,
+      "filled": 82,
+      "gap_rejected": 223,
+      "resolved": 78,
+      "win_rate": 0.526,
+      "net_pnl": 728.8,
+      "expectancy": 9.34,
+      "avg_win": 64.18,
+      "avg_loss": -51.42,
+      "profit_factor": 1.383
+     },
+     "first_half": {
+      "arms": 152,
+      "filled": 44,
+      "gap_rejected": 108,
+      "resolved": 42,
+      "win_rate": 0.595,
+      "net_pnl": 895.04,
+      "expectancy": 21.31,
+      "avg_win": 70.35,
+      "avg_loss": -50.81,
+      "profit_factor": 2.036
+     },
+     "second_half": {
+      "arms": 153,
+      "filled": 38,
+      "gap_rejected": 115,
+      "resolved": 36,
+      "win_rate": 0.444,
+      "net_pnl": -166.24,
+      "expectancy": -4.62,
+      "avg_win": 54.53,
+      "avg_loss": -51.94,
+      "profit_factor": 0.84
+     }
+    }
+   }
+  },
+  "cap4_static": {
+   "combined": {
+    "arms": 522,
+    "filled": 88,
+    "gap_rejected": 434,
+    "resolved": 79,
+    "win_rate": 0.354,
+    "net_pnl": 749.99,
+    "expectancy": 9.49,
+    "avg_win": 117.68,
+    "avg_loss": -49.9,
+    "profit_factor": 1.295
+   },
+   "by_strategy": {
+    "orb_breakout": {
+     "all": {
+      "arms": 217,
+      "filled": 6,
+      "gap_rejected": 211,
+      "resolved": 6,
+      "win_rate": 0.333,
+      "net_pnl": 37.5,
+      "expectancy": 6.25,
+      "avg_win": 71.25,
+      "avg_loss": -26.25,
+      "profit_factor": 1.357
+     },
+     "first_half": {
+      "arms": 108,
+      "filled": 2,
+      "gap_rejected": 106,
+      "resolved": 2,
+      "win_rate": 0.0,
+      "net_pnl": -56.25,
+      "expectancy": -28.12,
+      "avg_win": null,
+      "avg_loss": -28.12,
+      "profit_factor": null
+     },
+     "second_half": {
+      "arms": 109,
+      "filled": 4,
+      "gap_rejected": 105,
+      "resolved": 4,
+      "win_rate": 0.5,
+      "net_pnl": 93.75,
+      "expectancy": 23.44,
+      "avg_win": 71.25,
+      "avg_loss": -24.38,
+      "profit_factor": 2.923
+     }
+    },
+    "orb_reclaim": {
+     "all": {
+      "arms": 305,
+      "filled": 82,
+      "gap_rejected": 223,
+      "resolved": 73,
+      "win_rate": 0.356,
+      "net_pnl": 712.49,
+      "expectancy": 9.76,
+      "avg_win": 121.25,
+      "avg_loss": -51.91,
+      "profit_factor": 1.292
+     },
+     "first_half": {
+      "arms": 152,
+      "filled": 44,
+      "gap_rejected": 108,
+      "resolved": 40,
+      "win_rate": 0.45,
+      "net_pnl": 1044.99,
+      "expectancy": 26.12,
+      "avg_win": 121.04,
+      "avg_loss": -51.53,
+      "profit_factor": 1.922
+     },
+     "second_half": {
+      "arms": 153,
+      "filled": 38,
+      "gap_rejected": 115,
+      "resolved": 33,
+      "win_rate": 0.242,
+      "net_pnl": -332.5,
+      "expectancy": -10.08,
+      "avg_win": 121.72,
+      "avg_loss": -52.25,
+      "profit_factor": 0.745
+     }
+    }
+   }
+  },
+  "cap8_runner": {
+   "combined": {
+    "arms": 522,
+    "filled": 130,
+    "gap_rejected": 392,
+    "resolved": 122,
+    "win_rate": 0.516,
+    "net_pnl": 1008.78,
+    "expectancy": 8.27,
+    "avg_win": 62.06,
+    "avg_loss": -49.17,
+    "profit_factor": 1.348
+   },
+   "by_strategy": {
+    "orb_breakout": {
+     "all": {
+      "arms": 217,
+      "filled": 13,
+      "gap_rejected": 204,
+      "resolved": 13,
+      "win_rate": 0.231,
+      "net_pnl": -161.89,
+      "expectancy": -12.45,
+      "avg_win": 45.62,
+      "avg_loss": -29.88,
+      "profit_factor": 0.458
+     },
+     "first_half": {
+      "arms": 108,
+      "filled": 5,
+      "gap_rejected": 103,
+      "resolved": 5,
+      "win_rate": 0.0,
+      "net_pnl": -156.25,
+      "expectancy": -31.25,
+      "avg_win": null,
+      "avg_loss": -31.25,
+      "profit_factor": null
+     },
+     "second_half": {
+      "arms": 109,
+      "filled": 8,
+      "gap_rejected": 101,
+      "resolved": 8,
+      "win_rate": 0.375,
+      "net_pnl": -5.64,
+      "expectancy": -0.7,
+      "avg_win": 45.62,
+      "avg_loss": -28.5,
+      "profit_factor": 0.96
+     }
+    },
+    "orb_reclaim": {
+     "all": {
+      "arms": 305,
+      "filled": 117,
+      "gap_rejected": 188,
+      "resolved": 109,
+      "win_rate": 0.55,
+      "net_pnl": 1170.67,
+      "expectancy": 10.74,
+      "avg_win": 62.89,
+      "avg_loss": -53.11,
+      "profit_factor": 1.45
+     },
+     "first_half": {
+      "arms": 152,
+      "filled": 63,
+      "gap_rejected": 89,
+      "resolved": 59,
+      "win_rate": 0.593,
+      "net_pnl": 1013.16,
+      "expectancy": 17.17,
+      "avg_win": 65.3,
+      "avg_loss": -53.02,
+      "profit_factor": 1.796
+     },
+     "second_half": {
+      "arms": 153,
+      "filled": 54,
+      "gap_rejected": 99,
+      "resolved": 50,
+      "win_rate": 0.5,
+      "net_pnl": 157.51,
+      "expectancy": 3.15,
+      "avg_win": 59.5,
+      "avg_loss": -53.2,
+      "profit_factor": 1.118
+     }
+    }
+   }
+  },
+  "cap8_static": {
+   "combined": {
+    "arms": 522,
+    "filled": 130,
+    "gap_rejected": 392,
+    "resolved": 113,
+    "win_rate": 0.363,
+    "net_pnl": 1130.62,
+    "expectancy": 10.01,
+    "avg_win": 115.75,
+    "avg_loss": -50.21,
+    "profit_factor": 1.313
+   },
+   "by_strategy": {
+    "orb_breakout": {
+     "all": {
+      "arms": 217,
+      "filled": 13,
+      "gap_rejected": 204,
+      "resolved": 13,
+      "win_rate": 0.231,
+      "net_pnl": -92.5,
+      "expectancy": -7.12,
+      "avg_win": 68.75,
+      "avg_loss": -29.88,
+      "profit_factor": 0.69
+     },
+     "first_half": {
+      "arms": 108,
+      "filled": 5,
+      "gap_rejected": 103,
+      "resolved": 5,
+      "win_rate": 0.0,
+      "net_pnl": -156.25,
+      "expectancy": -31.25,
+      "avg_win": null,
+      "avg_loss": -31.25,
+      "profit_factor": null
+     },
+     "second_half": {
+      "arms": 109,
+      "filled": 8,
+      "gap_rejected": 101,
+      "resolved": 8,
+      "win_rate": 0.375,
+      "net_pnl": 63.75,
+      "expectancy": 7.97,
+      "avg_win": 68.75,
+      "avg_loss": -28.5,
+      "profit_factor": 1.447
+     }
+    },
+    "orb_reclaim": {
+     "all": {
+      "arms": 305,
+      "filled": 117,
+      "gap_rejected": 188,
+      "resolved": 100,
+      "win_rate": 0.38,
+      "net_pnl": 1223.12,
+      "expectancy": 12.23,
+      "avg_win": 119.46,
+      "avg_loss": -53.49,
+      "profit_factor": 1.369
+     },
+     "first_half": {
+      "arms": 152,
+      "filled": 63,
+      "gap_rejected": 89,
+      "resolved": 55,
+      "win_rate": 0.418,
+      "net_pnl": 1038.12,
+      "expectancy": 18.87,
+      "avg_win": 119.86,
+      "avg_loss": -53.71,
+      "profit_factor": 1.604
+     },
+     "second_half": {
+      "arms": 153,
+      "filled": 54,
+      "gap_rejected": 99,
+      "resolved": 45,
+      "win_rate": 0.333,
+      "net_pnl": 185.0,
+      "expectancy": 4.11,
+      "avg_win": 118.83,
+      "avg_loss": -53.25,
+      "profit_factor": 1.116
+     }
+    }
+   }
+  },
+  "unbounded_runner": {
+   "combined": {
+    "arms": 522,
+    "filled": 522,
+    "gap_rejected": 0,
+    "resolved": 473,
+    "win_rate": 0.484,
+    "net_pnl": -543.1,
+    "expectancy": -1.15,
+    "avg_win": 72.51,
+    "avg_loss": -70.28,
+    "profit_factor": 0.968
+   },
+   "by_strategy": {
+    "orb_breakout": {
+     "all": {
+      "arms": 217,
+      "filled": 217,
+      "gap_rejected": 0,
+      "resolved": 200,
+      "win_rate": 0.425,
+      "net_pnl": -2273.75,
+      "expectancy": -11.37,
+      "avg_win": 62.41,
+      "avg_loss": -65.9,
+      "profit_factor": 0.7
+     },
+     "first_half": {
+      "arms": 108,
+      "filled": 108,
+      "gap_rejected": 0,
+      "resolved": 99,
+      "win_rate": 0.434,
+      "net_pnl": -989.99,
+      "expectancy": -10.0,
+      "avg_win": 63.14,
+      "avg_loss": -66.16,
+      "profit_factor": 0.733
+     },
+     "second_half": {
+      "arms": 109,
+      "filled": 109,
+      "gap_rejected": 0,
+      "resolved": 101,
+      "win_rate": 0.416,
+      "net_pnl": -1283.76,
+      "expectancy": -12.71,
+      "avg_win": 61.67,
+      "avg_loss": -65.66,
+      "profit_factor": 0.669
+     }
+    },
+    "orb_reclaim": {
+     "all": {
+      "arms": 305,
+      "filled": 305,
+      "gap_rejected": 0,
+      "resolved": 273,
+      "win_rate": 0.527,
+      "net_pnl": 1730.65,
+      "expectancy": 6.34,
+      "avg_win": 78.47,
+      "avg_loss": -74.18,
+      "profit_factor": 1.181
+     },
+     "first_half": {
+      "arms": 152,
+      "filled": 152,
+      "gap_rejected": 0,
+      "resolved": 136,
+      "win_rate": 0.559,
+      "net_pnl": 1601.89,
+      "expectancy": 11.78,
+      "avg_win": 77.82,
+      "avg_loss": -71.88,
+      "profit_factor": 1.371
+     },
+     "second_half": {
+      "arms": 153,
+      "filled": 153,
+      "gap_rejected": 0,
+      "resolved": 137,
+      "win_rate": 0.496,
+      "net_pnl": 128.76,
+      "expectancy": 0.94,
+      "avg_win": 79.19,
+      "avg_loss": -76.18,
+      "profit_factor": 1.024
+     }
+    }
+   }
+  },
+  "unbounded_static": {
+   "combined": {
+    "arms": 522,
+    "filled": 522,
+    "gap_rejected": 0,
+    "resolved": 482,
+    "win_rate": 0.515,
+    "net_pnl": -475.63,
+    "expectancy": -0.99,
+    "avg_win": 57.6,
+    "avg_loss": -64.18,
+    "profit_factor": 0.968
+   },
+   "by_strategy": {
+    "orb_breakout": {
+     "all": {
+      "arms": 217,
+      "filled": 217,
+      "gap_rejected": 0,
+      "resolved": 212,
+      "win_rate": 0.604,
+      "net_pnl": -1102.5,
+      "expectancy": -5.2,
+      "avg_win": 24.25,
+      "avg_loss": -52.58,
+      "profit_factor": 0.738
+     },
+     "first_half": {
+      "arms": 108,
+      "filled": 108,
+      "gap_rejected": 0,
+      "resolved": 104,
+      "win_rate": 0.625,
+      "net_pnl": -395.0,
+      "expectancy": -3.8,
+      "avg_win": 24.52,
+      "avg_loss": -52.34,
+      "profit_factor": 0.801
+     },
+     "second_half": {
+      "arms": 109,
+      "filled": 109,
+      "gap_rejected": 0,
+      "resolved": 108,
+      "win_rate": 0.583,
+      "net_pnl": -707.5,
+      "expectancy": -6.55,
+      "avg_win": 23.97,
+      "avg_loss": -52.8,
+      "profit_factor": 0.681
+     }
+    },
+    "orb_reclaim": {
+     "all": {
+      "arms": 305,
+      "filled": 305,
+      "gap_rejected": 0,
+      "resolved": 270,
+      "win_rate": 0.444,
+      "net_pnl": 626.87,
+      "expectancy": 2.32,
+      "avg_win": 93.18,
+      "avg_loss": -70.37,
+      "profit_factor": 1.059
+     },
+     "first_half": {
+      "arms": 152,
+      "filled": 152,
+      "gap_rejected": 0,
+      "resolved": 130,
+      "win_rate": 0.454,
+      "net_pnl": 1103.75,
+      "expectancy": 8.49,
+      "avg_win": 100.61,
+      "avg_loss": -68.06,
+      "profit_factor": 1.228
+     },
+     "second_half": {
+      "arms": 153,
+      "filled": 153,
+      "gap_rejected": 0,
+      "resolved": 140,
+      "win_rate": 0.436,
+      "net_pnl": -476.88,
+      "expectancy": -3.41,
+      "avg_win": 85.99,
+      "avg_loss": -72.44,
+      "profit_factor": 0.917
+     }
+    }
+   }
+  }
+ },
+ "MNQ": {
+  "n_arms": 316,
+  "cap2_runner": {
+   "combined": {
+    "arms": 316,
+    "filled": 8,
+    "gap_rejected": 307,
+    "resolved": 8,
+    "win_rate": 0.75,
+    "net_pnl": 226.0,
+    "expectancy": 28.25,
+    "avg_win": 48.83,
+    "avg_loss": -33.5,
+    "profit_factor": 4.373
+   },
+   "by_strategy": {
+    "orb_breakout": {
+     "all": {
+      "arms": 63,
+      "filled": 1,
+      "gap_rejected": 62,
+      "resolved": 1,
+      "win_rate": 0.0,
+      "net_pnl": -25.5,
+      "expectancy": -25.5,
+      "avg_win": null,
+      "avg_loss": -25.5,
+      "profit_factor": null
+     },
+     "first_half": {
+      "arms": 31,
+      "filled": 0,
+      "gap_rejected": 31,
+      "resolved": 0,
+      "win_rate": null,
+      "net_pnl": 0,
+      "expectancy": null,
+      "avg_win": null,
+      "avg_loss": null,
+      "profit_factor": null
+     },
+     "second_half": {
+      "arms": 32,
+      "filled": 1,
+      "gap_rejected": 31,
+      "resolved": 1,
+      "win_rate": 0.0,
+      "net_pnl": -25.5,
+      "expectancy": -25.5,
+      "avg_win": null,
+      "avg_loss": -25.5,
+      "profit_factor": null
+     }
+    },
+    "orb_reclaim": {
+     "all": {
+      "arms": 253,
+      "filled": 7,
+      "gap_rejected": 245,
+      "resolved": 7,
+      "win_rate": 0.857,
+      "net_pnl": 251.5,
+      "expectancy": 35.93,
+      "avg_win": 48.83,
+      "avg_loss": -41.5,
+      "profit_factor": 7.06
+     },
+     "first_half": {
+      "arms": 126,
+      "filled": 2,
+      "gap_rejected": 124,
+      "resolved": 2,
+      "win_rate": 0.5,
+      "net_pnl": -20.25,
+      "expectancy": -10.12,
+      "avg_win": 21.25,
+      "avg_loss": -41.5,
+      "profit_factor": 0.512
+     },
+     "second_half": {
+      "arms": 127,
+      "filled": 5,
+      "gap_rejected": 121,
+      "resolved": 5,
+      "win_rate": 1.0,
+      "net_pnl": 271.75,
+      "expectancy": 54.35,
+      "avg_win": 54.35,
+      "avg_loss": null,
+      "profit_factor": null
+     }
+    }
+   }
+  },
+  "cap2_static": {
+   "combined": {
+    "arms": 316,
+    "filled": 8,
+    "gap_rejected": 307,
+    "resolved": 8,
+    "win_rate": 0.125,
+    "net_pnl": -172.0,
+    "expectancy": -21.5,
+    "avg_win": 99.5,
+    "avg_loss": -38.79,
+    "profit_factor": 0.366
+   },
+   "by_strategy": {
+    "orb_breakout": {
+     "all": {
+      "arms": 63,
+      "filled": 1,
+      "gap_rejected": 62,
+      "resolved": 1,
+      "win_rate": 0.0,
+      "net_pnl": -25.5,
+      "expectancy": -25.5,
+      "avg_win": null,
+      "avg_loss": -25.5,
+      "profit_factor": null
+     },
+     "first_half": {
+      "arms": 31,
+      "filled": 0,
+      "gap_rejected": 31,
+      "resolved": 0,
+      "win_rate": null,
+      "net_pnl": 0,
+      "expectancy": null,
+      "avg_win": null,
+      "avg_loss": null,
+      "profit_factor": null
+     },
+     "second_half": {
+      "arms": 32,
+      "filled": 1,
+      "gap_rejected": 31,
+      "resolved": 1,
+      "win_rate": 0.0,
+      "net_pnl": -25.5,
+      "expectancy": -25.5,
+      "avg_win": null,
+      "avg_loss": -25.5,
+      "profit_factor": null
+     }
+    },
+    "orb_reclaim": {
+     "all": {
+      "arms": 253,
+      "filled": 7,
+      "gap_rejected": 245,
+      "resolved": 7,
+      "win_rate": 0.143,
+      "net_pnl": -146.5,
+      "expectancy": -20.93,
+      "avg_win": 99.5,
+      "avg_loss": -41.0,
+      "profit_factor": 0.404
+     },
+     "first_half": {
+      "arms": 126,
+      "filled": 2,
+      "gap_rejected": 124,
+      "resolved": 2,
+      "win_rate": 0.0,
+      "net_pnl": -82.0,
+      "expectancy": -41.0,
+      "avg_win": null,
+      "avg_loss": -41.0,
+      "profit_factor": null
+     },
+     "second_half": {
+      "arms": 127,
+      "filled": 5,
+      "gap_rejected": 121,
+      "resolved": 5,
+      "win_rate": 0.2,
+      "net_pnl": -64.5,
+      "expectancy": -12.9,
+      "avg_win": 99.5,
+      "avg_loss": -41.0,
+      "profit_factor": 0.607
+     }
+    }
+   }
+  },
+  "cap4_runner": {
+   "combined": {
+    "arms": 316,
+    "filled": 14,
+    "gap_rejected": 301,
+    "resolved": 14,
+    "win_rate": 0.643,
+    "net_pnl": 251.0,
+    "expectancy": 17.93,
+    "avg_win": 46.0,
+    "avg_loss": -32.6,
+    "profit_factor": 2.54
+   },
+   "by_strategy": {
+    "orb_breakout": {
+     "all": {
+      "arms": 63,
+      "filled": 4,
+      "gap_rejected": 59,
+      "resolved": 4,
+      "win_rate": 0.25,
+      "net_pnl": -32.5,
+      "expectancy": -8.12,
+      "avg_win": 47.0,
+      "avg_loss": -26.5,
+      "profit_factor": 0.591
+     },
+     "first_half": {
+      "arms": 31,
+      "filled": 0,
+      "gap_rejected": 31,
+      "resolved": 0,
+      "win_rate": null,
+      "net_pnl": 0,
+      "expectancy": null,
+      "avg_win": null,
+      "avg_loss": null,
+      "profit_factor": null
+     },
+     "second_half": {
+      "arms": 32,
+      "filled": 4,
+      "gap_rejected": 28,
+      "resolved": 4,
+      "win_rate": 0.25,
+      "net_pnl": -32.5,
+      "expectancy": -8.12,
+      "avg_win": 47.0,
+      "avg_loss": -26.5,
+      "profit_factor": 0.591
+     }
+    },
+    "orb_reclaim": {
+     "all": {
+      "arms": 253,
+      "filled": 10,
+      "gap_rejected": 242,
+      "resolved": 10,
+      "win_rate": 0.8,
+      "net_pnl": 283.5,
+      "expectancy": 28.35,
+      "avg_win": 45.88,
+      "avg_loss": -41.75,
+      "profit_factor": 4.395
+     },
+     "first_half": {
+      "arms": 126,
+      "filled": 3,
+      "gap_rejected": 123,
+      "resolved": 3,
+      "win_rate": 0.667,
+      "net_pnl": 20.25,
+      "expectancy": 6.75,
+      "avg_win": 30.88,
+      "avg_loss": -41.5,
+      "profit_factor": 1.488
+     },
+     "second_half": {
+      "arms": 127,
+      "filled": 7,
+      "gap_rejected": 119,
+      "resolved": 7,
+      "win_rate": 0.857,
+      "net_pnl": 263.25,
+      "expectancy": 37.61,
+      "avg_win": 50.88,
+      "avg_loss": -42.0,
+      "profit_factor": 7.268
+     }
+    }
+   }
+  },
+  "cap4_static": {
+   "combined": {
+    "arms": 316,
+    "filled": 14,
+    "gap_rejected": 301,
+    "resolved": 14,
+    "win_rate": 0.214,
+    "net_pnl": -159.0,
+    "expectancy": -11.36,
+    "avg_win": 83.5,
+    "avg_loss": -37.23,
+    "profit_factor": 0.612
+   },
+   "by_strategy": {
+    "orb_breakout": {
+     "all": {
+      "arms": 63,
+      "filled": 4,
+      "gap_rejected": 59,
+      "resolved": 4,
+      "win_rate": 0.25,
+      "net_pnl": -26.5,
+      "expectancy": -6.62,
+      "avg_win": 53.0,
+      "avg_loss": -26.5,
+      "profit_factor": 0.667
+     },
+     "first_half": {
+      "arms": 31,
+      "filled": 0,
+      "gap_rejected": 31,
+      "resolved": 0,
+      "win_rate": null,
+      "net_pnl": 0,
+      "expectancy": null,
+      "avg_win": null,
+      "avg_loss": null,
+      "profit_factor": null
+     },
+     "second_half": {
+      "arms": 32,
+      "filled": 4,
+      "gap_rejected": 28,
+      "resolved": 4,
+      "win_rate": 0.25,
+      "net_pnl": -26.5,
+      "expectancy": -6.62,
+      "avg_win": 53.0,
+      "avg_loss": -26.5,
+      "profit_factor": 0.667
+     }
+    },
+    "orb_reclaim": {
+     "all": {
+      "arms": 253,
+      "filled": 10,
+      "gap_rejected": 242,
+      "resolved": 10,
+      "win_rate": 0.2,
+      "net_pnl": -132.5,
+      "expectancy": -13.25,
+      "avg_win": 98.75,
+      "avg_loss": -41.25,
+      "profit_factor": 0.598
+     },
+     "first_half": {
+      "arms": 126,
+      "filled": 3,
+      "gap_rejected": 123,
+      "resolved": 3,
+      "win_rate": 0.333,
+      "net_pnl": 16.0,
+      "expectancy": 5.33,
+      "avg_win": 98.0,
+      "avg_loss": -41.0,
+      "profit_factor": 1.195
+     },
+     "second_half": {
+      "arms": 127,
+      "filled": 7,
+      "gap_rejected": 119,
+      "resolved": 7,
+      "win_rate": 0.143,
+      "net_pnl": -148.5,
+      "expectancy": -21.21,
+      "avg_win": 99.5,
+      "avg_loss": -41.33,
+      "profit_factor": 0.401
+     }
+    }
+   }
+  },
+  "cap8_runner": {
+   "combined": {
+    "arms": 316,
+    "filled": 20,
+    "gap_rejected": 295,
+    "resolved": 19,
+    "win_rate": 0.526,
+    "net_pnl": 141.75,
+    "expectancy": 7.46,
+    "avg_win": 47.98,
+    "avg_loss": -37.56,
+    "profit_factor": 1.419
+   },
+   "by_strategy": {
+    "orb_breakout": {
+     "all": {
+      "arms": 63,
+      "filled": 4,
+      "gap_rejected": 59,
+      "resolved": 4,
+      "win_rate": 0.25,
+      "net_pnl": -32.5,
+      "expectancy": -8.12,
+      "avg_win": 47.0,
+      "avg_loss": -26.5,
+      "profit_factor": 0.591
+     },
+     "first_half": {
+      "arms": 31,
+      "filled": 0,
+      "gap_rejected": 31,
+      "resolved": 0,
+      "win_rate": null,
+      "net_pnl": 0,
+      "expectancy": null,
+      "avg_win": null,
+      "avg_loss": null,
+      "profit_factor": null
+     },
+     "second_half": {
+      "arms": 32,
+      "filled": 4,
+      "gap_rejected": 28,
+      "resolved": 4,
+      "win_rate": 0.25,
+      "net_pnl": -32.5,
+      "expectancy": -8.12,
+      "avg_win": 47.0,
+      "avg_loss": -26.5,
+      "profit_factor": 0.591
+     }
+    },
+    "orb_reclaim": {
+     "all": {
+      "arms": 253,
+      "filled": 16,
+      "gap_rejected": 236,
+      "resolved": 15,
+      "win_rate": 0.6,
+      "net_pnl": 174.25,
+      "expectancy": 11.62,
+      "avg_win": 48.08,
+      "avg_loss": -43.08,
+      "profit_factor": 1.674
+     },
+     "first_half": {
+      "arms": 126,
+      "filled": 5,
+      "gap_rejected": 121,
+      "resolved": 4,
+      "win_rate": 0.75,
+      "net_pnl": 86.0,
+      "expectancy": 21.5,
+      "avg_win": 42.5,
+      "avg_loss": -41.5,
+      "profit_factor": 3.072
+     },
+     "second_half": {
+      "arms": 127,
+      "filled": 11,
+      "gap_rejected": 115,
+      "resolved": 11,
+      "win_rate": 0.545,
+      "net_pnl": 88.25,
+      "expectancy": 8.02,
+      "avg_win": 50.88,
+      "avg_loss": -43.4,
+      "profit_factor": 1.407
+     }
+    }
+   }
+  },
+  "cap8_static": {
+   "combined": {
+    "arms": 316,
+    "filled": 20,
+    "gap_rejected": 295,
+    "resolved": 19,
+    "win_rate": 0.211,
+    "net_pnl": -238.5,
+    "expectancy": -12.55,
+    "avg_win": 86.5,
+    "avg_loss": -38.97,
+    "profit_factor": 0.592
+   },
+   "by_strategy": {
+    "orb_breakout": {
+     "all": {
+      "arms": 63,
+      "filled": 4,
+      "gap_rejected": 59,
+      "resolved": 4,
+      "win_rate": 0.25,
+      "net_pnl": -26.5,
+      "expectancy": -6.62,
+      "avg_win": 53.0,
+      "avg_loss": -26.5,
+      "profit_factor": 0.667
+     },
+     "first_half": {
+      "arms": 31,
+      "filled": 0,
+      "gap_rejected": 31,
+      "resolved": 0,
+      "win_rate": null,
+      "net_pnl": 0,
+      "expectancy": null,
+      "avg_win": null,
+      "avg_loss": null,
+      "profit_factor": null
+     },
+     "second_half": {
+      "arms": 32,
+      "filled": 4,
+      "gap_rejected": 28,
+      "resolved": 4,
+      "win_rate": 0.25,
+      "net_pnl": -26.5,
+      "expectancy": -6.62,
+      "avg_win": 53.0,
+      "avg_loss": -26.5,
+      "profit_factor": 0.667
+     }
+    },
+    "orb_reclaim": {
+     "all": {
+      "arms": 253,
+      "filled": 16,
+      "gap_rejected": 236,
+      "resolved": 15,
+      "win_rate": 0.2,
+      "net_pnl": -212.0,
+      "expectancy": -14.13,
+      "avg_win": 97.67,
+      "avg_loss": -42.08,
+      "profit_factor": 0.58
+     },
+     "first_half": {
+      "arms": 126,
+      "filled": 5,
+      "gap_rejected": 121,
+      "resolved": 4,
+      "win_rate": 0.5,
+      "net_pnl": 111.5,
+      "expectancy": 27.88,
+      "avg_win": 96.75,
+      "avg_loss": -41.0,
+      "profit_factor": 2.36
+     },
+     "second_half": {
+      "arms": 127,
+      "filled": 11,
+      "gap_rejected": 115,
+      "resolved": 11,
+      "win_rate": 0.091,
+      "net_pnl": -323.5,
+      "expectancy": -29.41,
+      "avg_win": 99.5,
+      "avg_loss": -42.3,
+      "profit_factor": 0.235
+     }
+    }
+   }
+  },
+  "unbounded_runner": {
+   "combined": {
+    "arms": 316,
+    "filled": 315,
+    "gap_rejected": 0,
+    "resolved": 300,
+    "win_rate": 0.567,
+    "net_pnl": 7129.0,
+    "expectancy": 23.76,
+    "avg_win": 94.76,
+    "avg_loss": -69.08,
+    "profit_factor": 1.794
+   },
+   "by_strategy": {
+    "orb_breakout": {
+     "all": {
+      "arms": 63,
+      "filled": 63,
+      "gap_rejected": 0,
+      "resolved": 60,
+      "win_rate": 0.583,
+      "net_pnl": 1043.75,
+      "expectancy": 17.4,
+      "avg_win": 68.38,
+      "avg_loss": -53.98,
+      "profit_factor": 1.773
+     },
+     "first_half": {
+      "arms": 31,
+      "filled": 31,
+      "gap_rejected": 0,
+      "resolved": 30,
+      "win_rate": 0.667,
+      "net_pnl": 799.25,
+      "expectancy": 26.64,
+      "avg_win": 70.69,
+      "avg_loss": -61.45,
+      "profit_factor": 2.301
+     },
+     "second_half": {
+      "arms": 32,
+      "filled": 32,
+      "gap_rejected": 0,
+      "resolved": 30,
+      "win_rate": 0.5,
+      "net_pnl": 244.5,
+      "expectancy": 8.15,
+      "avg_win": 65.3,
+      "avg_loss": -49.0,
+      "profit_factor": 1.333
+     }
+    },
+    "orb_reclaim": {
+     "all": {
+      "arms": 253,
+      "filled": 252,
+      "gap_rejected": 0,
+      "resolved": 240,
+      "win_rate": 0.562,
+      "net_pnl": 6085.25,
+      "expectancy": 25.36,
+      "avg_win": 101.6,
+      "avg_loss": -72.68,
+      "profit_factor": 1.797
+     },
+     "first_half": {
+      "arms": 126,
+      "filled": 126,
+      "gap_rejected": 0,
+      "resolved": 116,
+      "win_rate": 0.578,
+      "net_pnl": 3817.5,
+      "expectancy": 32.91,
+      "avg_win": 111.08,
+      "avg_loss": -73.98,
+      "profit_factor": 2.053
+     },
+     "second_half": {
+      "arms": 127,
+      "filled": 126,
+      "gap_rejected": 0,
+      "resolved": 124,
+      "win_rate": 0.548,
+      "net_pnl": 2267.75,
+      "expectancy": 18.29,
+      "avg_win": 92.26,
+      "avg_loss": -71.54,
+      "profit_factor": 1.566
+     }
+    }
+   }
+  },
+  "unbounded_static": {
+   "combined": {
+    "arms": 316,
+    "filled": 315,
+    "gap_rejected": 0,
+    "resolved": 308,
+    "win_rate": 0.594,
+    "net_pnl": 465.5,
+    "expectancy": 1.51,
+    "avg_win": 45.97,
+    "avg_loss": -63.58,
+    "profit_factor": 1.059
+   },
+   "by_strategy": {
+    "orb_breakout": {
+     "all": {
+      "arms": 63,
+      "filled": 63,
+      "gap_rejected": 0,
+      "resolved": 63,
+      "win_rate": 0.714,
+      "net_pnl": 56.5,
+      "expectancy": 0.9,
+      "avg_win": 21.22,
+      "avg_loss": -49.92,
+      "profit_factor": 1.063
+     },
+     "first_half": {
+      "arms": 31,
+      "filled": 31,
+      "gap_rejected": 0,
+      "resolved": 31,
+      "win_rate": 0.839,
+      "net_pnl": 269.0,
+      "expectancy": 8.68,
+      "avg_win": 20.37,
+      "avg_loss": -52.1,
+      "profit_factor": 2.033
+     },
+     "second_half": {
+      "arms": 32,
+      "filled": 32,
+      "gap_rejected": 0,
+      "resolved": 32,
+      "win_rate": 0.594,
+      "net_pnl": -212.5,
+      "expectancy": -6.64,
+      "avg_win": 22.39,
+      "avg_loss": -49.08,
+      "profit_factor": 0.667
+     }
+    },
+    "orb_reclaim": {
+     "all": {
+      "arms": 253,
+      "filled": 252,
+      "gap_rejected": 0,
+      "resolved": 245,
+      "win_rate": 0.563,
+      "net_pnl": 409.0,
+      "expectancy": 1.67,
+      "avg_win": 54.04,
+      "avg_loss": -65.87,
+      "profit_factor": 1.058
+     },
+     "first_half": {
+      "arms": 126,
+      "filled": 126,
+      "gap_rejected": 0,
+      "resolved": 120,
+      "win_rate": 0.592,
+      "net_pnl": 378.5,
+      "expectancy": 3.15,
+      "avg_win": 52.44,
+      "avg_loss": -68.27,
+      "profit_factor": 1.113
+     },
+     "second_half": {
+      "arms": 127,
+      "filled": 126,
+      "gap_rejected": 0,
+      "resolved": 125,
+      "win_rate": 0.536,
+      "net_pnl": 30.5,
+      "expectancy": 0.24,
+      "avg_win": 55.73,
+      "avg_loss": -63.85,
+      "profit_factor": 1.008
+     }
+    }
+   }
+  }
+ }
+}
