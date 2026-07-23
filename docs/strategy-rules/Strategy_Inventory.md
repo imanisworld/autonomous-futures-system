@@ -41,7 +41,7 @@ Verdict taxonomy:
 | 60M 3-2-2 First Live | ✅ blockers resolved | ❌ | ❌ | Partial — manual study | ❌ not confirmed | ❌ | ⚠️ n=31 MNQ | **WAIT — build detector** |
 | VWAP Hold (MNQ NY) | ❌ entry definition unclear | Partial | ❌ | ❌ incompatible studies | ❌ | ❌ | ⚠️ n=106 | **WAIT — isolated fill test pending** |
 | VWAP Reclaim (MNQ NY) | ❌ | Partial | ❌ | ❌ | ❌ | ❌ | ⚠️ n=29 thin | **WAIT** |
-| VWAP Rejection | ❌ | Partial | ❌ | ❌ | ❌ | ❌ | — | **BROKEN — design conflict with hold** |
+| VWAP Rejection | ❌ | Partial | ❌ | ❌ | ❌ | ❌ | — | **BROKEN — unreachable predicate** |
 | ORB Breakout (MNQ) | ✅ | ✅ | Partial | ✅ | ⚠️ H2 thin | ✅ | ⚠️ n=60 | **WAIT — gated on runner exit** |
 | PDL Reclaim | ✅ | ✅ | Partial | ✅ | ❌ too thin | — | ❌ n=13 | **RESEARCH ONLY — undersample** |
 | PDH Reclaim | ✅ | ✅ | ✅ | ✅ | ❌ both halves neg | ❌ | ✅ n=67 | **RETIRE** |
@@ -148,13 +148,25 @@ Verdict taxonomy:
 ---
 
 ### VWAP Rejection
-**Verdict: BROKEN — design conflict**
+**Verdict: BROKEN — unreachable predicate**
 
-- Materially overlaps with VWAP Hold: same direction, same regime, same entry
-- Only difference: different stop and additional reclaimed flag
-- Scoring suppresses duplicates but setup logic does not prevent co-firing
-- Must resolve overlap before either strategy can have clean rules
-- Next: research resolution — retire one or redesign both as a single strategy
+- Trigger condition requires `state.vwap.reclaimed == True` AND
+  `price_vs_vwap == "below"` on the same bar
+- These cannot occur together under the current logic: `reclaimed` is only
+  `True` on a bar where price has crossed above VWAP, which makes
+  `price_vs_vwap == "above"`, never `"below"` — identically in Pine, live,
+  and replay (see PR #308, `docs/vwap-hold-vs-vwap-rejection-overlap-audit-2026-07-23.md`)
+- Confirmed structurally unfireable, not merely rare: 0 arms across 622
+  days of replay and 0 live occurrences, while the sibling `vwap_reclaim`
+  strategy (same `reclaimed` field, consistent `"above"` requirement) has
+  fired multiple times live in the same window
+- Does NOT overlap or co-fire with VWAP Hold — that risk was raised in an
+  earlier pass of the audit and disproven by the completed reachability
+  table; no state exists where both strategies are eligible
+- Next: a separate strategy decision — retire, or redesign `reclaimed` as
+  a persisted multi-bar flag so the intended "attempted reclaim, then
+  failed back below" pattern becomes expressible. No implementation
+  change made here.
 
 ---
 
