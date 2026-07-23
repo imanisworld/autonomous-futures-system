@@ -93,6 +93,30 @@ def test_next_day_0300_immediately_overwrites_prior_london_range(london_candles)
     assert next_open["london_orb_status"] is not None
 
 
+def test_unfinished_london_orb_does_not_absorb_later_non_london_bar():
+    london_open = datetime(2026, 6, 9, 3, 0, tzinfo=ET)
+    ny_open = datetime(2026, 6, 9, 9, 30, tzinfo=ET)
+    bars = []
+    for bar in _polygon_bars():
+        bar_et = datetime.fromtimestamp(bar["ts"], tz=ET)
+        if bar_et <= london_open:
+            bars.append(bar)
+        elif bar_et == ny_open:
+            bars.append(
+                _bar(ny_open, o=105, h=150, l=50, c=105)
+            )
+            break
+
+    candles = derive_candles(bars, "MNQ", 5)
+    ny_candle = next(
+        candle
+        for candle in candles
+        if datetime.fromisoformat(candle["timestamp"]).astimezone(ET) == ny_open
+    )
+    assert ny_candle["session"] == "new_york"
+    assert (ny_candle["london_orb_high"], ny_candle["london_orb_low"]) == (110, 100)
+
+
 @pytest.mark.parametrize(
     ("hour", "minute", "expected"),
     [

@@ -225,7 +225,11 @@ def derive_candles(
             london_orb_high, london_orb_low = bar["high"], bar["low"]
             london_orb_count = 1
             london_orb_done = london_orb_count >= orb_bars_needed
-        elif london_orb_high is not None and not london_orb_done:
+        elif (
+            london_orb_high is not None
+            and not london_orb_done
+            and session == "london"
+        ):
             london_orb_high = max(london_orb_high, bar["high"])
             london_orb_low = min(london_orb_low, bar["low"])
             london_orb_count += 1
