@@ -105,6 +105,13 @@ Start with base hits — partial exits at sub-targets within the 8AM range — u
 
 Sub-targets: use the 15-minute chart to find internal structure within the 8AM candle range for partial exits.
 
+### Day-only exit
+
+- 3-2-2 is day-only. Never carry a position overnight.
+- If neither the fixed stop nor target has resolved the trade, exit the full
+  position at 3:55 PM ET using the 15:55 five-minute bar decision so the
+  account is flat no later than 4:00 PM ET.
+
 ---
 
 ## 7. PERFORMANCE EVIDENCE STATUS
@@ -176,6 +183,7 @@ represented 37.2% of base-case net profit.
 - Stop = opposite 9AM boundary (fixed, no trail)
 - Target = 8AM outside bar high (calls) or low (puts)
 - Hold until target or stop — no discretionary exits
+- If unresolved, exit at 3:55 PM ET and be flat by 4:00 PM ET
 
 ---
 
@@ -240,3 +248,5 @@ Record for every setup, taken or skipped. NOT entry gates. Do not modify entry, 
 - Testing phase: 1 MNQ contract only
 - Missing Signa weekly direction = skip the trade
 - Do not modify entry/stop/target based on context observations — log only
+- No overnight holds — unresolved positions exit at 3:55 PM ET and must be
+  flat by 4:00 PM ET

@@ -17,10 +17,9 @@
 - Unresolved positions exit at the 15:55 ET bar close with adverse slippage
 - Walk-forward halves split at the exact calendar midpoint of the full signal range
 
-For 4HR Re-Trigger, the 15:55 exit is now the documented day-only rule: exit
-unresolved positions at 3:55 PM ET and be flat by 4:00 PM ET. For Miyagi and
-3-2-2 it remains a replay assumption unless their own rules are separately
-resolved. The research engines are not wired into live execution.
+For all three strategies, the 15:55 exit is now the documented day-only rule:
+exit unresolved positions at 3:55 PM ET and be flat by 4:00 PM ET. The research
+engines are not wired into live execution.
 
 ## Base case
 

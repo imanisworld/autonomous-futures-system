@@ -109,6 +109,7 @@ Verdict taxonomy:
 - Historical TRENDING gate retained 45/63 fills: +$3,067.20, PF 2.71, H1 +$1,077.98, H2 +$1,989.22. It improved trade quality but left 2024 Q3 slightly negative and did not itself drive the H1 recovery.
 - Evidence boundary: ordinary 4HR performance remains the 41-fill IOC result. The 22-fill market rescue and 45-fill combined TRENDING result are research-only counterfactuals and do not change execution policy.
 - Research tranche closed: no more performance slicing or historical filter optimization
+- **Execution blocker:** the existing Phase-1 runtime implementation has not been reconciled to the resolved detector/rules. Do not activate or treat runtime output as canonical.
 - Next: narrow Claude delta audit, then later reconcile the actual Phase-1 runtime implementation to the resolved specification
 
 ---
@@ -124,6 +125,7 @@ Verdict taxonomy:
 - Entry: trigger = midpoint of Candle 3; enter when price hits trigger from correct side
 - Stop: last completed 60-min candle at entry, fixed
 - Target: T1 = Candle 3 high/low; T2 = Candle 2 high/low (2-contract scale only)
+- Exit: day-only; unresolved positions and runners exit at 3:55 PM ET and must be flat by 4:00 PM ET
 - Resolved MNQ scan: 13 valid setups, of which 6 later touched the midpoint and became entries (46.2%)
 - Honest replay at 2 ticks each side: 6 midpoint touches produced only 3 IOC fills; 2 wins / 1 loss, +$59.28 net, PF 1.30
 - Walk-forward: H1 -$115.48; H2 +$174.76. LONG produced zero fills; all three fills were SHORT.
@@ -144,6 +146,7 @@ Verdict taxonomy:
 - Entry: first live break of 9AM opposite boundary, 10:00–11:00 AM; gap-open counts
 - Stop: opposite 9AM boundary, fixed, no cap
 - Target: 8AM outside bar boundary
+- Exit: day-only; unresolved positions exit at 3:55 PM ET and must be flat by 4:00 PM ET
 - Instrument: MNQ only (MES marginal, QQQ unconfirmed, IWM negative)
 - Reconciliation: all old 31 recovered; 2024-08-30 added after removing the undocumented pre-entry `invalidated_first` assumption
 - Historical gap-open entries: zero; both directions are covered by detector tests

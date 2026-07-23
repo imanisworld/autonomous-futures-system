@@ -132,6 +132,16 @@ Drop to 4HR or 1HR charts to find internal highs/lows within the Candle 2 range 
 > T1-first management rule remains until resolved-rule honest replay supplies replacement
 > evidence.
 
+### Day-only exit
+
+- Miyagi is day-only. Never carry a position overnight.
+- If neither the active stop nor target has resolved the position, exit all
+  remaining contracts at 3:55 PM ET using the 15:55 five-minute bar decision
+  so the account is flat no later than 4:00 PM ET.
+- For a two-contract position, the day-only exit applies to any runner still
+  open after the T1 partial.
+- This applies to QQQ options, MNQ, and MES.
+
 ---
 
 ## 9. PERFORMANCE EVIDENCE STATUS
@@ -220,6 +230,8 @@ setups produced entries in the cached MNQ study.
 **STEP 7 — Manage to T1**
 - 1 contract: exit 100% at T1
 - 2 contracts: exit 50% at T1, move remaining stop to breakeven, hold to T2
+- If unresolved, exit every remaining contract at 3:55 PM ET and be flat by
+  4:00 PM ET
 
 ---
 
@@ -285,3 +297,5 @@ Record for every setup, taken or skipped. NOT entry gates. Do not modify entry, 
 - Do NOT modify entry/stop/target based on context observations — log only
 - Missing Signa weekly direction = skip the trade
 - Testing phase: 1 contract only, 100% exit at T1
+- No overnight holds — unresolved positions exit at 3:55 PM ET and must be
+  flat by 4:00 PM ET
