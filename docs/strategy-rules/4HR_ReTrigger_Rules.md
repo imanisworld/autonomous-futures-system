@@ -22,9 +22,19 @@ A reversal setup on 4-hour candles. The 4AM candle must move directionally again
 - Data package: US Stock Markets bundle required ($9.95/mo) for correct pre-market bars
 
 ### Candle Windows (ET)
-- **4AM candle:** 4:00 AM – 8:00 AM ET (the setup candle)
-- **8AM candle:** 8:00 AM – 12:00 PM ET (the trigger candle)
-- **Prior 4PM candle:** previous day 4:00 PM – 8:00 PM ET (the target reference)
+- **4AM candle:** 4:00 AM – 8:00 AM ET (the setup candle) — always evaluated complete; the
+  Daily Decision Tree correctly times this check to run "after 8:00 AM ET," by which point
+  this candle has genuinely closed.
+- **8AM candle:** 8:00 AM – 12:00 PM ET (the trigger candle) — **evaluated using its
+  DEVELOPING state only, through 9:30 AM ET, never its completed 12:00 PM close.** The
+  break (Section 3, Step 2) and the retrace confirmation both use 5-minute bars from 8:00
+  AM up to (not including) 9:30 AM. This is a binding operator ruling (2026-07-23): the
+  strategy is an executable 9:30 AM setup, not a historical/offline classification, and the
+  8AM candle's own 12:00 PM close cannot participate in a decision that must be confirmed
+  before 9:30. An earlier version of the coded detector specification incorrectly required
+  waiting for this candle to fully close — that requirement has been removed.
+- **Prior 4PM candle:** previous day 4:00 PM – 8:00 PM ET (the target reference) — always
+  evaluated complete; well in the past relative to the 4AM candle.
 
 > ⚠️ **WARNING:** Alpaca/IBKR native 4H bars shift by 1 hour in winter (EST). Use 5-minute bars aggregated into fixed ET windows for year-round accuracy.
 
@@ -39,8 +49,8 @@ A reversal setup on 4-hour candles. The 4AM candle must move directionally again
 - Low < prior 4PM candle low
 
 **Step 2 — 8AM candle must be 2UP AND retrace:**
-- 8AM candle high must break ABOVE the 4AM candle high (triggers the 2UP)
-- The first 5-minute bar that CLOSES below the 4AM candle high before 9:30 AM ET confirms the retrace. Intrabar touches do not count.
+- 8AM candle high must break ABOVE the 4AM candle high (triggers the 2UP) — using the developing 8AM candle's state (5-minute bars from 8:00 AM), an intrabar touch is sufficient
+- The first 5-minute bar AFTER that break that CLOSES below the 4AM candle high, before 9:30 AM ET, confirms the retrace. Intrabar touches do not count. A bar closing below the level before any break has occurred is not a retrace and does not qualify.
 
 **Entry trigger level = HIGH of the 4AM candle**
 **Target = HIGH of the prior day's 4PM candle**
@@ -52,8 +62,8 @@ A reversal setup on 4-hour candles. The 4AM candle must move directionally again
 - High > prior 4PM candle high
 
 **Step 2 — 8AM candle must be 2DOWN AND retrace:**
-- 8AM candle low must break BELOW the 4AM candle low (triggers the 2DOWN)
-- The first 5-minute bar that CLOSES above the 4AM candle low before 9:30 AM ET confirms the retrace. Intrabar touches do not count.
+- 8AM candle low must break BELOW the 4AM candle low (triggers the 2DOWN) — using the developing 8AM candle's state (5-minute bars from 8:00 AM), an intrabar touch is sufficient
+- The first 5-minute bar AFTER that break that CLOSES above the 4AM candle low, before 9:30 AM ET, confirms the retrace. Intrabar touches do not count. A bar closing above the level before any break has occurred is not a retrace and does not qualify.
 
 **Entry trigger level = LOW of the 4AM candle**
 **Target = LOW of the prior day's 4PM candle**
