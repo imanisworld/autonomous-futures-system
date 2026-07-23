@@ -94,7 +94,7 @@ A reversal setup on 4-hour candles. The 4AM candle must move directionally again
 - CALLS: Target = High of the prior day's 4PM ET candle (4PM–8PM session)
 - PUTS: Target = Low of the prior day's 4PM ET candle (4PM–8PM session)
 - MNQ/MES Monday: prior candle = Sunday 4:00 PM–8:00 PM ET futures session
-- QQQ Monday: prior candle = Friday 4:00 PM ET close (no Sunday session exists)
+- QQQ Monday: prior candle = Friday 4:00 PM–8:00 PM ET 4-hour bar (same structure as every other prior 4PM reference candle; no Sunday session exists for QQQ)
 - The same reference candle defines both the 4AM classification and the target level.
 
 **Exit the full position when target is reached. Do not hold through target.**
