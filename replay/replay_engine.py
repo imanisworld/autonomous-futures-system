@@ -509,6 +509,20 @@ class ReplayEngine:
             and prev_candle.price_vs_vwap != "above"
             and candle.price_vs_vwap == "above"
         )
+        if candle.session == "london" and candle.london_orb_high is not None:
+            orb_high = candle.london_orb_high
+            orb_low = candle.london_orb_low
+            orb_status = candle.london_orb_status
+        elif candle.session == "london":
+            # Legacy replay candles have no London ORB fields. Fail closed
+            # instead of substituting the persisted NY range during London.
+            orb_high = candle.high
+            orb_low = candle.low
+            orb_status = "undefined"
+        else:
+            orb_high = candle.orb_high
+            orb_low = candle.orb_low
+            orb_status = candle.orb_status
         return MarketState(
             timestamp=_parse_timestamp(candle.timestamp),
             instrument=candle.instrument,
@@ -529,10 +543,10 @@ class ReplayEngine:
                 holding=candle.price_vs_vwap in ("above", "below"),
             ),
             orb=ORBData(
-                high=candle.orb_high,
-                low=candle.orb_low,
+                high=orb_high,
+                low=orb_low,
                 timeframe_minutes=15,
-                status=candle.orb_status,
+                status=orb_status,
             ),
             previous_day=PreviousDayData(
                 high=candle.previous_day_high,
