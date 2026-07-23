@@ -36,8 +36,8 @@ Verdict taxonomy:
 |---|---|---|---|---|---|---|---|---|
 | ORB Reclaim (MES) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ n=305 | **PAPER PROOF** |
 | ORB Reclaim (MNQ) | ✅ | ✅ | Partial | ✅ | ❌ insufficient | ✅ | ⚠️ n=253 thin | **PROMISING BUT UNPROVEN** |
-| 4HR Re-Trigger | ✅ blockers resolved | ❌ | ❌ | Partial — external study | ✅ | Partial | ⚠️ n=32 MNQ | **WAIT — build detector** |
-| 12HR Miyagi | ✅ blockers resolved | ❌ | ❌ | Partial — manual study | ❌ not confirmed | Partial | ⚠️ n=13 MNQ | **WAIT — build detector** |
+| 4HR Re-Trigger | ✅ blockers resolved | ✅ reconciled | ❌ | Partial — external study | ✅ | Partial | ⚠️ n=94 setups | **WAIT — honest fill replay** |
+| 12HR Miyagi | ✅ blockers resolved | ✅ reconciled | ❌ | ❌ old study incompatible | ❌ not confirmed | ❌ under resolved rule | ⚠️ n=13 setups / 6 entries | **WAIT — honest fill replay** |
 | 60M 3-2-2 First Live | ✅ blockers resolved | ❌ | ❌ | Partial — manual study | ❌ not confirmed | ❌ | ⚠️ n=31 MNQ | **WAIT — build detector** |
 | VWAP Hold (MNQ NY) | ❌ entry definition unclear | Partial | ❌ | ❌ incompatible studies | ❌ | ❌ | ⚠️ n=106 | **WAIT — isolated fill test pending** |
 | VWAP Reclaim (MNQ NY) | ❌ | Partial | ❌ | ❌ | ❌ | ❌ | ⚠️ n=29 thin | **WAIT** |
@@ -104,18 +104,20 @@ Verdict taxonomy:
 ---
 
 ### 12HR Miyagi
-**Verdict: WAIT — build detector**
+**Verdict: WAIT — honest fill replay**
 
 - Rules: complete as of 2026-07-23 (blocker resolved)
+- Detector: pure detector built and reconciled 13/13 under the resolved executable rule
 - Timeframe: 12-hour candles, 4AM/4PM ET boundaries
 - Setup: 1-3-1 candle sequence (inside → outside → inside)
-- Direction: confirmed at 9:30 AM only — price location at open vs Candle 3 midpoint
+- Direction: confirmed at 9:30 AM only — open above Candle 3 high = SHORT; below Candle 3 low = LONG
 - Entry: trigger = midpoint of Candle 3; enter when price hits trigger from correct side
 - Stop: last completed 60-min candle at entry, fixed
 - Target: T1 = Candle 3 high/low; T2 = Candle 2 high/low (2-contract scale only)
-- External study results: MNQ 92.3% T1 touch (n=13), MES 75.0% (n=20)
-- Gaps: no coded detector, n=13 MNQ very thin, walk-forward not confirmed, no honest fill P&L
-- Next: build detector → reconcile → honest fill replay
+- Resolved MNQ scan: 13 valid setups, of which 6 later touched the midpoint and became entries
+- Prior performance result (MNQ 12/13 T1) used the superseded direction rule and is not transferable
+- Gaps: n=6 resolved-rule entries is extremely thin, walk-forward not confirmed, no honest fill P&L
+- Next: honest fill replay on the six resolved-rule entries, then walk-forward/slippage only if sample permits
 
 ---
 
@@ -237,11 +239,11 @@ See `ICC_ICT_Research.md` for full breakdown.
 
 ## Build Queue (in order)
 
-1. **4HR Re-Trigger detector** — rules complete, build now
-2. **12HR Miyagi detector** — rules complete, build now
-3. **60M 3-2-2 detector** — rules complete, build now
-4. **Reconcile each detector against manual samples** — before any backtest
-5. **Honest fill replay for all three** — after reconciliation passes
+1. **4HR Re-Trigger detector** — complete and reconciled
+2. **12HR Miyagi detector** — complete and reconciled
+3. **60M 3-2-2 detector** — rules complete, build next
+4. **Reconcile 3-2-2 against manual samples** — before any backtest
+5. **Honest fill replay for 4HR and Miyagi** — reconciliation passed
 6. **Runner exit promotion** — unblocks ORB breakout and VWAP lanes
 7. **VWAP hold isolated fill test** — parallel, external researcher
 8. **VWAP hold entry definition** — Claude Code reads signal_engine.py

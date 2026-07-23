@@ -249,8 +249,11 @@ If any of Bar A, B, C, D do not exist in `bars_12h` → return `None`
 **Step 5 — Check Bar C integrity before 9:30 AM using 5-minute bars**
 
 - Filter `bars_5m` to bars where `ts >= eval_date 4:00 AM ET AND ts < eval_date 9:30 AM ET`
-- For each 5-minute bar in this window: check if high > Bar C high AND low < Bar C low
-- If any single 5-minute bar satisfies both conditions → Bar C became an outside bar
+- Build the developing Bar D range cumulatively across that full window:
+  `live_high = max(high)` and `live_low = min(low)`
+- If `live_high > Bar C high AND live_low < Bar C low` → the developing Bar D became an
+  outside bar relative to Bar C. The two boundary breaks may occur on different 5-minute
+  bars; requiring one bar to cross both sides would incorrectly miss a cumulative outside bar.
 - Return `{signal: False, invalidation: "CANDLE3_BECAME_OUTSIDE_BAR"}`
 
 **Step 6 — Confirm Bar D direction at 9:30 AM using 5-minute bars**
@@ -264,7 +267,7 @@ If any of Bar A, B, C, D do not exist in `bars_12h` → return `None`
 
 **Step 7 — Calculate stop reference using 60-minute bars**
 
-- Filter `bars_60m` to bars where `ts < eval_date 9:30 AM ET`
+- Filter `bars_60m` by completion time: `ts + 60 minutes <= eval_date 9:30 AM ET`
 - Stop reference bar = last bar in that filtered list (most recently completed 60-min bar before 9:30 AM)
 - At 9:30 AM this will be the 8:00–9:00 AM bar
 - Stop for LONG (calls) = low of that bar
