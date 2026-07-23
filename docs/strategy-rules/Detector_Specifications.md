@@ -95,24 +95,38 @@ def detect_4hr_retrigger(
 - Outside bar (high > prior high AND low < prior low) → return `None` (ambiguous)
 - Any other case → return `None`
 
-**Step 4 — Identify the 8AM candle**
+**Step 4/5/6 — Developing 8AM state, break, and retrace (OPERATOR RULING 2026-07-23)**
 
-- The 8AM candle = bar with open timestamp at `eval_date` 8:00 AM ET
-- If this bar does not exist → return `None`
+The 8AM candle (8:00 AM–12:00 PM ET) does not close until noon — well after the 9:30 AM
+decision point this strategy requires. The 8AM classification therefore uses the
+**developing (partial, as-of-9:30) state of that candle**, built from `bars_5m` only, never
+the completed 4H bar. This corrects an earlier version of this spec, which referenced a
+discrete `bars_4h` 8AM entry and an edge case ("8AM bar not yet closed → return `None`")
+that was itself a stale/unresolved artifact — it made the detector historical-only and
+could never produce the executable 9:30 setup the strategy is actually built around.
 
-**Step 5 — Classify the 8AM candle**
-
-- For CALLS: 8AM high must break ABOVE the 4AM high (8AM is 2UP vs 4AM)
-- For PUTS: 8AM low must break BELOW the 4AM low (8AM is 2DOWN vs 4AM)
-- If condition not met → return `None`
-
-**Step 6 — Confirm retrace via 5-minute bars**
-
-- Filter `bars_5m` to bars where `ts >= eval_date 8:00 AM ET AND ts < eval_date 9:30 AM ET`
-- For CALLS: find the first 5-minute bar whose CLOSE is below the 4AM high
-- For PUTS: find the first 5-minute bar whose CLOSE is above the 4AM low
-- Intrabar touches do not count — close only
-- If no such bar exists in the window → return `None`
+- Filter `bars_5m` to bars where `ts >= eval_date 8:00 AM ET AND ts < eval_date 9:30 AM ET`,
+  ordered chronologically. If this filtered list is empty → return `None` (no data to
+  evaluate the developing state at all).
+- Scan the bars **in chronological order**, tracking whether a break has occurred yet:
+  - For CALLS: a break occurs at the first bar whose **HIGH** exceeds the 4AM high
+    (intrabar touch is sufficient — no close required, matching "8AM high must break
+    above"). Only **after** a break bar has been found, continue scanning for the first
+    **subsequent** bar whose **CLOSE** is below the 4AM high — this confirms the retrace.
+  - For PUTS: symmetric — a break occurs at the first bar whose **LOW** is below the 4AM
+    low; the retrace is the first **subsequent** bar whose **CLOSE** is above the 4AM low.
+  - **Ordering matters**: a bar that closes back through the level *before* any break has
+    occurred is not a retrace of anything and must not confirm the pattern. This is why the
+    scan must track break-then-retrace as a chronological sequence, not two independent
+    window-wide checks.
+- If no break ever occurs in the window → return `None` (8AM never reversed — matches the
+  original Step 5 "condition not met").
+- If a break occurs but no qualifying bar closes back through the level afterward, before
+  9:30 → return `None` (matches the original Step 6 "no such bar exists in the window").
+- Intrabar touches never count for the retrace — close only. They ARE sufficient for the
+  break itself (this asymmetry is unchanged from the original spec's wording: "8AM high
+  must break above" describes a touch; "the first 5-minute bar that CLOSES below... do
+  not count" describes the retrace specifically).
 
 **Step 7 — Check 9:30 AM state**
 
@@ -140,7 +154,9 @@ return {
     "stop_reference": stop_price,
     "stop_reference_bar_ts": stop_bar_ts,
     "target": prior_4pm_high if calls else prior_4pm_low,
-    "setup_bar_ts": eight_am_bar_ts,
+    "setup_bar_ts": retrace_bar_ts,   # the bar whose CLOSE confirmed the retrace — the
+                                      # last piece of evidence completing the setup, per
+                                      # the developing-state model (not a bars_4h 8AM entry)
     "entry_window_open": eval_date_9_30_am_et,
     "entry_window_close": eval_date_11_00_am_et,
     "reference_candle_high": prior_4pm_high,
@@ -160,8 +176,15 @@ The detector returns `stop_reference` based on the 9:30 AM anchor. The replay en
 ### Edge cases
 
 - 4AM bar missing → return `None`
-- 8AM bar not yet closed → return `None`
-- Multiple 5-min bars retrace before 9:30 AM → use the FIRST one only
+- No 5-minute bars in the [8:00 AM, 9:30 AM) window → return `None` (no data to evaluate
+  the developing 8AM state at all)
+- No break ever occurs within the window (developing high/low never exceeds the 4AM
+  level) → return `None`
+- A break occurs but no subsequent bar closes back through the level before 9:30 → return
+  `None`
+- A bar closes through the level BEFORE any break has occurred → does not count as a
+  retrace; continue scanning for a genuine break-then-retrace sequence
+- Multiple 5-min bars retrace before 9:30 AM (after a break) → use the FIRST one only
 - Sunday session missing for MNQ Monday → return `None`, do not fall back to Friday
 - 4AM bar is outside bar → return `None`
 

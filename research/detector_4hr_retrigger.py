@@ -12,6 +12,11 @@ The existing `_try_strat_4hr_retrigger` in strategy/signal_engine.py is a
 self-labeled "Phase 1 approximation" using different logic (NY-open ORB-high
 reclaim) — it is NOT the strategy specified here and is deliberately not reused.
 
+The 8AM candle is evaluated using its DEVELOPING state only (5-minute bars from
+8:00 AM through 9:30 AM), never the completed 8:00 AM-12:00 PM 4H bar (binding
+operator ruling, 2026-07-23) -- the strategy is an executable 9:30 AM setup, not
+a historical/offline classification.
+
 Known open items (see the accompanying blocker report, not resolved by this
 module): the QQQ manual-sample count conflicts between
 docs/strategy-rules/4HR_ReTrigger_Rules.md (n=7) and
@@ -128,35 +133,47 @@ def detect_4hr_retrigger(
         return None
     calls = classification == "CALLS"
 
-    # ── Step 4 — 8AM candle ───────────────────────────────────────────────────
-    eight_am = _find_exact(bars_4h, _et_dt(eval_date, 8, 0))
-    if eight_am is None:
-        return None
-
-    # ── Step 5 — classify the 8AM candle ──────────────────────────────────────
-    if calls:
-        if not (eight_am["high"] > four_am["high"]):
-            return None
-    else:
-        if not (eight_am["low"] < four_am["low"]):
-            return None
-
-    # ── Step 6 — confirm retrace via 5-minute bars ────────────────────────────
+    # ── Step 4/5/6 — developing 8AM state, break, and retrace ────────────────
+    # OPERATOR RULING 2026-07-23: the 8AM candle (8:00 AM-12:00 PM) does not close
+    # until noon, well after the 9:30 AM decision point this strategy requires.
+    # This uses only the DEVELOPING state through 9:30, built from bars_5m — never
+    # a completed bars_4h entry (an earlier version of this detector used the
+    # complete bar, which made it historical-only and structurally unable to
+    # produce the executable 9:30 setup the strategy is actually built around).
+    #
+    # Break and retrace are a CHRONOLOGICAL SEQUENCE, not two independent
+    # window-wide checks: a bar closing through the level before any break has
+    # occurred is not a retrace of anything and must not confirm the pattern.
     window_start = _et_dt(eval_date, 8, 0)
     window_end = _et_dt(eval_date, 9, 30)
-    retrace_candidates = sorted(
+    developing_bars = sorted(
         (b for b in bars_5m if _usable_bar(b) and window_start <= b["ts"] < window_end),
         key=lambda b: b["ts"],
     )
-    retrace_confirmed = False
-    for bar in retrace_candidates:
+    if not developing_bars:
+        return None
+
+    has_broken = False
+    retrace_bar = None
+    for bar in developing_bars:
+        if not has_broken:
+            # Break: an intrabar touch is sufficient (no close required) —
+            # matches "8AM high must break above" / "8AM low must break below".
+            if calls and bar["high"] > four_am["high"]:
+                has_broken = True
+            elif not calls and bar["low"] < four_am["low"]:
+                has_broken = True
+            continue
+        # Retrace: only evaluated on bars AFTER the break. Close only — intrabar
+        # touches do not count.
         if calls and bar["close"] < four_am["high"]:
-            retrace_confirmed = True
+            retrace_bar = bar
             break
         if not calls and bar["close"] > four_am["low"]:
-            retrace_confirmed = True
+            retrace_bar = bar
             break
-    if not retrace_confirmed:
+
+    if not has_broken or retrace_bar is None:
         return None
 
     # ── Step 7 — check 9:30 AM state ──────────────────────────────────────────
@@ -192,7 +209,8 @@ def detect_4hr_retrigger(
         "stop_reference": stop_price,
         "stop_reference_bar_ts": stop_bar["ts"],
         "target": target,
-        "setup_bar_ts": eight_am["ts"],
+        "setup_bar_ts": retrace_bar["ts"],  # the bar whose close confirmed the retrace —
+                                            # the last evidence completing the setup
         "entry_window_open": _et_dt(eval_date, 9, 30),
         "entry_window_close": _et_dt(eval_date, 11, 0),
         "reference_candle_high": prior_4pm["high"],
