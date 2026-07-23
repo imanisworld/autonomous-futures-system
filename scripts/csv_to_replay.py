@@ -98,13 +98,21 @@ def derive_orb_status(
     orb_low: float,
     previous_close: float | None = None,
 ) -> str:
-    if close > orb_high:
-        if previous_close is not None and previous_close <= orb_high:
+    # Pine source-of-truth precedence. Boundary equality is intentional:
+    # reclaim starts from the boundary or inside and closes strictly outside;
+    # rejection starts strictly outside and closes on or through the boundary.
+    if previous_close is not None:
+        if previous_close <= orb_high and close > orb_high:
             return "reclaimed_high"
+        if previous_close >= orb_low and close < orb_low:
+            return "reclaimed_low"
+        if previous_close > orb_high and close <= orb_high:
+            return "rejected_high"
+        if previous_close < orb_low and close >= orb_low:
+            return "rejected_low"
+    if close > orb_high:
         return "above"
     if close < orb_low:
-        if previous_close is not None and previous_close >= orb_low:
-            return "reclaimed_low"
         return "below"
     return "inside"
 
