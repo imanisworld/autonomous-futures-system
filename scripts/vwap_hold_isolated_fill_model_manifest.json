@@ -1,0 +1,2801 @@
+{
+ "n": 348,
+ "sha256": "18cbbc8427b8afc462b1145347125ae45bb2b6af97f4ef9f374a10565a96d880",
+ "sha256_matches_pr283_frozen_population": true,
+ "fingerprint_definition": "sha256 over sorted (bar_ts, direction, entry, stop, target) tuples",
+ "source": "logs/retest_baseline_off/MNQ/journal_*.jsonl, decision==TRADE and risk_check.result==APPROVED and setup.strategy==vwap_hold",
+ "regeneration_note": "read-only over persisted historical journal rows; never invokes strategy/signal_engine.py",
+ "proximity_gate_ticks": 0.0,
+ "proximity_gate_state": "DISABLED (production default; field has been off for this population's entire 2024-07-02..2026-06-25 span)",
+ "directions": [
+  "SHORT"
+ ],
+ "first_bar_ts": "2024-07-02T07:00:00+00:00",
+ "last_bar_ts": "2026-06-25T15:15:00+00:00",
+ "rows": [
+  {
+   "bar_ts": "2024-07-02T07:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 19967.92,
+   "stop": 19975.42,
+   "target": 19945.42,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2024-07-02T08:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 19959.58,
+   "stop": 19967.08,
+   "target": 19937.08,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2024-07-02T11:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 19955.96,
+   "stop": 19963.46,
+   "target": 19933.46,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2024-07-02T11:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 19950.77,
+   "stop": 19958.27,
+   "target": 19928.27,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2024-07-02T12:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 19949.52,
+   "stop": 19957.02,
+   "target": 19927.02,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2024-07-12T02:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 20434.6,
+   "stop": 20442.1,
+   "target": 20412.1,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2024-07-16T07:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 20582.83,
+   "stop": 20590.33,
+   "target": 20560.33,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2024-07-16T07:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 20584.98,
+   "stop": 20592.48,
+   "target": 20562.48,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2024-07-17T03:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 20564.7,
+   "stop": 20572.2,
+   "target": 20542.2,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2024-07-17T13:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 20234.17,
+   "stop": 20241.67,
+   "target": 20211.67,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2024-07-18T03:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 20059.07,
+   "stop": 20066.57,
+   "target": 20036.57,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2024-07-18T14:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 20067.26,
+   "stop": 20074.76,
+   "target": 20044.76,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2024-07-19T07:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 19861.75,
+   "stop": 19869.25,
+   "target": 19839.25,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2024-07-23T07:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 19927.17,
+   "stop": 19934.67,
+   "target": 19904.67,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2024-07-24T03:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 19818.52,
+   "stop": 19826.02,
+   "target": 19796.02,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2024-07-25T04:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 19268.32,
+   "stop": 19275.82,
+   "target": 19245.82,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2024-08-02T07:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 18693.75,
+   "stop": 18701.25,
+   "target": 18671.25,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2024-08-02T16:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 18535.9,
+   "stop": 18543.4,
+   "target": 18513.4,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2024-08-08T09:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 17951.32,
+   "stop": 17958.82,
+   "target": 17928.82,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2024-08-16T14:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 19527.19,
+   "stop": 19534.69,
+   "target": 19504.69,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2024-08-20T16:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 19826.0,
+   "stop": 19833.5,
+   "target": 19803.5,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2024-08-21T08:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 19816.06,
+   "stop": 19823.56,
+   "target": 19793.56,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2024-09-03T13:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 19409.92,
+   "stop": 19417.42,
+   "target": 19387.42,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2024-09-04T02:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 18913.97,
+   "stop": 18921.47,
+   "target": 18891.47,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2024-09-16T15:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 19615.28,
+   "stop": 19622.78,
+   "target": 19592.78,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2024-09-18T04:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 19699.17,
+   "stop": 19706.67,
+   "target": 19676.67,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2024-09-20T08:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 20040.11,
+   "stop": 20047.61,
+   "target": 20017.61,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2024-09-20T09:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 20035.94,
+   "stop": 20043.44,
+   "target": 20013.44,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2024-09-20T10:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 20032.13,
+   "stop": 20039.63,
+   "target": 20009.63,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2024-09-25T08:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 20097.13,
+   "stop": 20104.63,
+   "target": 20074.63,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2024-09-27T07:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 20285.47,
+   "stop": 20292.97,
+   "target": 20262.97,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2024-09-30T14:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 20194.7,
+   "stop": 20202.2,
+   "target": 20172.2,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2024-10-02T04:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 19950.97,
+   "stop": 19958.47,
+   "target": 19928.47,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2024-10-03T03:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 19997.01,
+   "stop": 20004.51,
+   "target": 19974.51,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2024-10-03T07:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 19935.17,
+   "stop": 19942.67,
+   "target": 19912.67,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2024-10-03T07:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 19893.97,
+   "stop": 19901.47,
+   "target": 19871.47,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2024-10-03T13:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 19924.29,
+   "stop": 19931.79,
+   "target": 19901.79,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2024-10-07T13:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 20122.81,
+   "stop": 20130.31,
+   "target": 20100.31,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2024-10-08T01:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 19984.49,
+   "stop": 19991.99,
+   "target": 19961.99,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2024-10-11T08:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 20395.0,
+   "stop": 20402.5,
+   "target": 20372.5,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2024-10-11T09:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 20383.68,
+   "stop": 20391.18,
+   "target": 20361.18,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2024-10-11T11:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 20381.75,
+   "stop": 20389.25,
+   "target": 20359.25,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2024-10-11T12:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 20381.52,
+   "stop": 20389.02,
+   "target": 20359.02,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2024-10-14T02:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 20420.0,
+   "stop": 20427.5,
+   "target": 20397.5,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2024-10-15T09:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 20587.61,
+   "stop": 20595.11,
+   "target": 20565.11,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2024-10-16T07:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 20360.92,
+   "stop": 20368.42,
+   "target": 20338.42,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2024-10-16T14:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 20275.47,
+   "stop": 20282.97,
+   "target": 20252.97,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2024-10-16T15:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 20281.11,
+   "stop": 20288.61,
+   "target": 20258.61,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2024-10-17T02:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 20310.94,
+   "stop": 20318.44,
+   "target": 20288.44,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2024-10-18T03:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 20372.02,
+   "stop": 20379.52,
+   "target": 20349.52,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2024-10-21T08:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 20445.54,
+   "stop": 20453.04,
+   "target": 20423.04,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2024-10-21T09:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 20446.1,
+   "stop": 20453.6,
+   "target": 20423.6,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2024-10-21T09:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 20437.29,
+   "stop": 20444.79,
+   "target": 20414.79,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2024-10-22T08:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 20465.03,
+   "stop": 20472.53,
+   "target": 20442.53,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2024-10-22T11:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 20424.67,
+   "stop": 20432.17,
+   "target": 20402.17,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2024-10-23T09:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 20504.69,
+   "stop": 20512.19,
+   "target": 20482.19,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2024-10-23T14:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 20416.44,
+   "stop": 20423.94,
+   "target": 20393.94,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2024-10-28T15:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 20577.25,
+   "stop": 20584.75,
+   "target": 20554.75,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2024-10-28T16:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 20566.46,
+   "stop": 20573.96,
+   "target": 20543.96,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2024-10-29T02:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 20503.45,
+   "stop": 20510.95,
+   "target": 20480.95,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2024-10-30T15:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 20630.62,
+   "stop": 20638.12,
+   "target": 20608.12,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2024-10-31T02:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 20441.58,
+   "stop": 20449.08,
+   "target": 20419.08,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2024-11-04T13:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 20162.96,
+   "stop": 20170.46,
+   "target": 20140.46,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2024-11-04T13:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 20162.06,
+   "stop": 20169.56,
+   "target": 20139.56,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2024-11-11T15:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 21203.57,
+   "stop": 21211.07,
+   "target": 21181.07,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2024-11-11T16:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 21205.72,
+   "stop": 21213.22,
+   "target": 21183.22,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2024-11-12T05:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 21217.87,
+   "stop": 21225.37,
+   "target": 21195.37,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2024-11-12T09:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 21210.88,
+   "stop": 21218.38,
+   "target": 21188.38,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2024-11-13T04:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 21149.12,
+   "stop": 21156.62,
+   "target": 21126.62,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2024-11-14T03:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 21140.82,
+   "stop": 21148.32,
+   "target": 21118.32,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2024-11-14T14:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 21102.46,
+   "stop": 21109.96,
+   "target": 21079.96,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2024-11-14T16:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 21101.46,
+   "stop": 21108.96,
+   "target": 21078.96,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2024-11-15T04:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 20919.36,
+   "stop": 20926.86,
+   "target": 20896.86,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2024-11-15T14:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 20720.17,
+   "stop": 20727.67,
+   "target": 20697.67,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2024-11-18T07:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 20605.01,
+   "stop": 20612.51,
+   "target": 20582.51,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2024-11-18T14:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 20542.67,
+   "stop": 20550.17,
+   "target": 20520.17,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2024-11-19T13:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 20579.99,
+   "stop": 20587.49,
+   "target": 20557.49,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2024-11-26T08:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 20872.22,
+   "stop": 20879.72,
+   "target": 20849.72,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2024-11-27T08:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 20944.65,
+   "stop": 20952.15,
+   "target": 20922.15,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2024-11-27T14:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 20891.58,
+   "stop": 20899.08,
+   "target": 20869.08,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2024-12-03T15:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 21191.4,
+   "stop": 21198.9,
+   "target": 21168.9,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2024-12-06T10:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 21476.35,
+   "stop": 21483.85,
+   "target": 21453.85,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2024-12-09T15:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 21619.85,
+   "stop": 21627.35,
+   "target": 21597.35,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2024-12-10T05:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 21469.61,
+   "stop": 21477.11,
+   "target": 21447.11,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2024-12-11T04:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 21424.48,
+   "stop": 21431.98,
+   "target": 21401.98,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2024-12-19T16:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 21572.74,
+   "stop": 21580.24,
+   "target": 21550.24,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2024-12-20T08:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 21267.08,
+   "stop": 21274.58,
+   "target": 21244.58,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2024-12-26T14:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 21958.56,
+   "stop": 21966.06,
+   "target": 21936.06,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2024-12-27T04:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 21969.57,
+   "stop": 21977.07,
+   "target": 21947.07,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2024-12-27T08:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 21918.58,
+   "stop": 21926.08,
+   "target": 21896.08,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2024-12-30T09:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 21650.27,
+   "stop": 21657.77,
+   "target": 21627.77,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2024-12-31T04:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 21401.45,
+   "stop": 21408.95,
+   "target": 21378.95,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2024-12-31T05:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 21400.94,
+   "stop": 21408.44,
+   "target": 21378.44,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2024-12-31T06:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 21400.72,
+   "stop": 21408.22,
+   "target": 21378.22,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2024-12-31T07:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 21398.93,
+   "stop": 21406.43,
+   "target": 21376.43,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-01-07T07:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 21734.9,
+   "stop": 21742.4,
+   "target": 21712.4,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-01-08T03:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 21401.13,
+   "stop": 21408.63,
+   "target": 21378.63,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-01-09T04:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 21316.76,
+   "stop": 21324.26,
+   "target": 21294.26,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-01-09T07:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 21315.7,
+   "stop": 21323.2,
+   "target": 21293.2,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-01-09T23:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 21284.5,
+   "stop": 21292.0,
+   "target": 21262.0,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-01-09T23:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 21256.24,
+   "stop": 21263.74,
+   "target": 21233.74,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-01-10T06:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 21255.76,
+   "stop": 21263.26,
+   "target": 21233.26,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-01-13T11:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 20773.18,
+   "stop": 20780.68,
+   "target": 20750.68,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-01-13T16:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 20784.44,
+   "stop": 20791.94,
+   "target": 20761.94,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-01-15T04:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 20946.73,
+   "stop": 20954.23,
+   "target": 20924.23,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-01-21T16:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 21618.12,
+   "stop": 21625.62,
+   "target": 21595.62,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-01-23T06:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 21956.33,
+   "stop": 21963.83,
+   "target": 21933.83,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-01-23T08:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 21911.67,
+   "stop": 21919.17,
+   "target": 21889.17,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-01-23T08:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 21894.78,
+   "stop": 21902.28,
+   "target": 21872.28,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-01-26T23:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 21702.58,
+   "stop": 21710.08,
+   "target": 21680.08,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-01-27T08:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 21272.17,
+   "stop": 21279.67,
+   "target": 21249.67,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-02-04T08:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 21385.67,
+   "stop": 21393.17,
+   "target": 21363.17,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-02-11T06:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 21787.0,
+   "stop": 21794.5,
+   "target": 21764.5,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-02-11T09:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 21759.42,
+   "stop": 21766.92,
+   "target": 21736.92,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-02-11T12:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 21753.01,
+   "stop": 21760.51,
+   "target": 21730.51,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-02-12T07:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 21800.73,
+   "stop": 21808.23,
+   "target": 21778.23,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-02-12T10:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 21775.65,
+   "stop": 21783.15,
+   "target": 21753.15,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-02-12T16:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 21666.27,
+   "stop": 21673.77,
+   "target": 21643.77,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-02-13T12:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 21812.62,
+   "stop": 21820.12,
+   "target": 21790.12,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-02-18T15:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 22206.72,
+   "stop": 22214.22,
+   "target": 22184.22,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-02-19T11:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 22234.96,
+   "stop": 22242.46,
+   "target": 22212.46,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-02-19T13:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 22234.89,
+   "stop": 22242.39,
+   "target": 22212.39,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-02-19T14:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 22183.63,
+   "stop": 22191.13,
+   "target": 22161.13,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-02-24T07:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 21763.68,
+   "stop": 21771.18,
+   "target": 21741.18,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-02-25T06:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 21425.23,
+   "stop": 21432.73,
+   "target": 21402.73,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-02-27T15:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 21108.22,
+   "stop": 21115.72,
+   "target": 21085.72,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-02-28T01:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 20640.04,
+   "stop": 20647.54,
+   "target": 20617.54,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-03-04T08:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 20517.84,
+   "stop": 20525.34,
+   "target": 20495.34,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-03-06T14:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 20264.67,
+   "stop": 20272.17,
+   "target": 20242.17,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-03-07T04:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 20187.32,
+   "stop": 20194.82,
+   "target": 20164.82,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-03-11T15:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 19431.63,
+   "stop": 19439.13,
+   "target": 19409.13,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-03-12T07:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 19403.92,
+   "stop": 19411.42,
+   "target": 19381.42,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-03-13T14:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 19660.21,
+   "stop": 19667.71,
+   "target": 19637.71,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-03-18T14:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 19712.63,
+   "stop": 19720.13,
+   "target": 19690.13,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-03-19T06:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 19743.59,
+   "stop": 19751.09,
+   "target": 19721.09,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-03-19T07:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 19709.17,
+   "stop": 19716.67,
+   "target": 19686.67,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-03-19T07:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 19694.11,
+   "stop": 19701.61,
+   "target": 19671.61,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-03-21T03:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 19896.55,
+   "stop": 19904.05,
+   "target": 19874.05,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-03-21T07:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 19870.6,
+   "stop": 19878.1,
+   "target": 19848.1,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-03-21T11:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 19809.93,
+   "stop": 19817.43,
+   "target": 19787.43,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-03-21T12:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 19809.79,
+   "stop": 19817.29,
+   "target": 19787.29,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-03-21T15:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 19719.05,
+   "stop": 19726.55,
+   "target": 19696.55,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-03-26T10:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 20460.01,
+   "stop": 20467.51,
+   "target": 20437.51,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-03-27T07:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 20100.86,
+   "stop": 20108.36,
+   "target": 20078.36,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-03-27T17:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 20078.82,
+   "stop": 20086.32,
+   "target": 20056.32,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-03-27T19:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 20073.5,
+   "stop": 20081.0,
+   "target": 20051.0,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-03-28T05:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 19974.45,
+   "stop": 19981.95,
+   "target": 19951.95,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-03-28T13:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 19887.0,
+   "stop": 19894.5,
+   "target": 19864.5,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-03-31T08:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 19236.64,
+   "stop": 19244.14,
+   "target": 19214.14,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-04-02T22:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 18911.95,
+   "stop": 18919.45,
+   "target": 18889.45,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-04-03T07:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 19055.58,
+   "stop": 19063.08,
+   "target": 19033.08,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-04-07T05:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 16762.22,
+   "stop": 16769.72,
+   "target": 16739.72,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-04-15T02:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 18881.65,
+   "stop": 18889.15,
+   "target": 18859.15,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-04-16T02:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 18713.54,
+   "stop": 18721.04,
+   "target": 18691.04,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-04-17T13:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 18435.75,
+   "stop": 18443.25,
+   "target": 18413.25,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-04-21T01:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 18302.72,
+   "stop": 18310.22,
+   "target": 18280.22,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-05-02T09:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 19918.45,
+   "stop": 19925.95,
+   "target": 19895.95,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-05-05T04:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 20070.83,
+   "stop": 20078.33,
+   "target": 20048.33,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-05-05T07:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 20058.92,
+   "stop": 20066.42,
+   "target": 20036.42,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-05-05T08:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 20056.22,
+   "stop": 20063.72,
+   "target": 20033.72,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-05-05T10:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 20028.17,
+   "stop": 20035.67,
+   "target": 20005.67,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-05-13T08:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 20849.5,
+   "stop": 20857.0,
+   "target": 20827.0,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-05-15T07:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 21318.05,
+   "stop": 21325.55,
+   "target": 21295.55,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-05-15T10:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 21259.22,
+   "stop": 21266.72,
+   "target": 21236.72,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-05-19T00:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 21349.8,
+   "stop": 21357.3,
+   "target": 21327.3,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-05-20T13:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 21403.23,
+   "stop": 21410.73,
+   "target": 21380.73,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-05-20T15:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 21405.93,
+   "stop": 21413.43,
+   "target": 21383.43,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-05-21T02:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 21401.52,
+   "stop": 21409.02,
+   "target": 21379.02,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-05-23T05:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 21176.59,
+   "stop": 21184.09,
+   "target": 21154.09,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-05-23T10:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 21180.83,
+   "stop": 21188.33,
+   "target": 21158.33,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-05-23T15:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 20921.7,
+   "stop": 20929.2,
+   "target": 20899.2,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-05-30T03:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 21340.04,
+   "stop": 21347.54,
+   "target": 21317.54,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-06-02T09:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 21225.67,
+   "stop": 21233.17,
+   "target": 21203.17,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-06-05T06:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 21746.18,
+   "stop": 21753.68,
+   "target": 21723.68,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-06-09T02:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 21751.8,
+   "stop": 21759.3,
+   "target": 21729.3,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-06-17T07:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 22058.83,
+   "stop": 22066.33,
+   "target": 22036.33,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-06-17T09:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 22045.73,
+   "stop": 22053.23,
+   "target": 22023.23,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-06-18T19:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 22007.87,
+   "stop": 22015.37,
+   "target": 21985.37,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-06-19T07:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 21842.21,
+   "stop": 21849.71,
+   "target": 21819.71,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-06-19T13:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 21741.25,
+   "stop": 21748.75,
+   "target": 21718.75,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-06-30T15:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 22825.97,
+   "stop": 22833.47,
+   "target": 22803.47,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-07-01T07:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 22845.17,
+   "stop": 22852.67,
+   "target": 22822.67,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-07-01T11:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 22834.97,
+   "stop": 22842.47,
+   "target": 22812.47,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-07-02T08:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 22730.82,
+   "stop": 22738.32,
+   "target": 22708.32,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-07-04T10:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 22946.69,
+   "stop": 22954.19,
+   "target": 22924.19,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-07-04T16:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 22922.99,
+   "stop": 22930.49,
+   "target": 22900.49,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-07-07T08:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 22933.91,
+   "stop": 22941.41,
+   "target": 22911.41,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-07-08T14:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 22891.9,
+   "stop": 22899.4,
+   "target": 22869.4,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-07-08T14:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 22894.72,
+   "stop": 22902.22,
+   "target": 22872.22,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-07-09T01:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 22890.07,
+   "stop": 22897.57,
+   "target": 22867.57,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-07-09T05:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 22887.53,
+   "stop": 22895.03,
+   "target": 22865.03,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-07-10T15:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 22970.1,
+   "stop": 22977.6,
+   "target": 22947.6,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-07-10T16:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 22975.39,
+   "stop": 22982.89,
+   "target": 22952.89,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-07-11T08:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 22912.28,
+   "stop": 22919.78,
+   "target": 22889.78,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-07-13T22:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 22833.42,
+   "stop": 22840.92,
+   "target": 22810.92,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-07-14T07:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 22822.64,
+   "stop": 22830.14,
+   "target": 22800.14,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-07-16T05:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 23009.43,
+   "stop": 23016.93,
+   "target": 22986.93,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-07-18T16:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 23234.07,
+   "stop": 23241.57,
+   "target": 23211.57,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-07-22T07:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 23323.46,
+   "stop": 23330.96,
+   "target": 23300.96,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-07-22T10:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 23299.94,
+   "stop": 23307.44,
+   "target": 23277.44,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-07-22T16:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 23205.68,
+   "stop": 23213.18,
+   "target": 23183.18,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-07-23T13:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 23214.5,
+   "stop": 23222.0,
+   "target": 23192.0,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-07-25T07:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 23374.22,
+   "stop": 23381.72,
+   "target": 23351.72,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-07-25T09:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 23370.38,
+   "stop": 23377.88,
+   "target": 23347.88,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-07-25T11:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 23372.07,
+   "stop": 23379.57,
+   "target": 23349.57,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-07-25T12:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 23371.89,
+   "stop": 23379.39,
+   "target": 23349.39,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-07-28T14:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 23499.15,
+   "stop": 23506.65,
+   "target": 23476.65,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-07-28T16:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 23493.27,
+   "stop": 23500.77,
+   "target": 23470.77,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-07-30T08:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 23491.69,
+   "stop": 23499.19,
+   "target": 23469.19,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-07-30T14:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 23488.13,
+   "stop": 23495.63,
+   "target": 23465.63,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-07-30T15:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 23496.19,
+   "stop": 23503.69,
+   "target": 23473.69,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-08-01T05:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 23296.83,
+   "stop": 23304.33,
+   "target": 23274.33,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-08-01T14:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 22936.46,
+   "stop": 22943.96,
+   "target": 22913.96,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-08-12T10:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 23651.09,
+   "stop": 23658.59,
+   "target": 23628.59,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-08-15T12:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 23911.08,
+   "stop": 23918.58,
+   "target": 23888.58,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-08-15T13:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 23907.72,
+   "stop": 23915.22,
+   "target": 23885.22,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-08-15T13:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 23865.42,
+   "stop": 23872.92,
+   "target": 23842.92,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-08-15T14:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 23841.37,
+   "stop": 23848.87,
+   "target": 23818.87,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-08-18T08:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 23788.55,
+   "stop": 23796.05,
+   "target": 23766.05,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-08-19T11:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 23771.66,
+   "stop": 23779.16,
+   "target": 23749.16,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-08-19T13:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 23690.83,
+   "stop": 23698.33,
+   "target": 23668.33,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-08-20T15:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 23178.17,
+   "stop": 23185.67,
+   "target": 23155.67,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-08-21T10:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 23320.63,
+   "stop": 23328.13,
+   "target": 23298.13,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-08-21T15:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 23256.23,
+   "stop": 23263.73,
+   "target": 23233.73,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-08-21T19:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 23229.94,
+   "stop": 23237.44,
+   "target": 23207.44,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-08-22T03:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 23216.87,
+   "stop": 23224.37,
+   "target": 23194.37,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-08-25T10:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 23506.76,
+   "stop": 23514.26,
+   "target": 23484.26,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-08-26T06:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 23450.23,
+   "stop": 23457.73,
+   "target": 23427.73,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-08-26T07:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 23433.17,
+   "stop": 23440.67,
+   "target": 23410.67,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-08-27T13:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 23534.17,
+   "stop": 23541.67,
+   "target": 23511.67,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-08-29T08:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 23689.8,
+   "stop": 23697.3,
+   "target": 23667.3,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-08-29T09:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 23671.54,
+   "stop": 23679.04,
+   "target": 23649.04,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-08-29T13:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 23617.33,
+   "stop": 23624.83,
+   "target": 23594.83,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-08-29T19:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 23484.87,
+   "stop": 23492.37,
+   "target": 23462.37,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-09-01T23:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 23475.32,
+   "stop": 23482.82,
+   "target": 23452.82,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-09-02T00:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 23457.14,
+   "stop": 23464.64,
+   "target": 23434.64,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-09-02T04:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 23450.15,
+   "stop": 23457.65,
+   "target": 23427.65,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-09-02T14:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 23193.42,
+   "stop": 23200.92,
+   "target": 23170.92,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-09-16T15:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 24545.46,
+   "stop": 24552.96,
+   "target": 24522.96,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-09-17T02:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 24537.1,
+   "stop": 24544.6,
+   "target": 24514.6,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-09-17T14:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 24483.76,
+   "stop": 24491.26,
+   "target": 24461.26,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-09-19T05:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 24717.01,
+   "stop": 24724.51,
+   "target": 24694.51,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-09-22T08:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 24790.88,
+   "stop": 24798.38,
+   "target": 24768.38,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-09-22T10:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 24787.84,
+   "stop": 24795.34,
+   "target": 24765.34,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-09-23T14:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 24954.75,
+   "stop": 24962.25,
+   "target": 24932.25,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-09-23T15:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 24954.26,
+   "stop": 24961.76,
+   "target": 24931.76,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-09-23T16:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 24952.58,
+   "stop": 24960.08,
+   "target": 24930.08,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-09-23T16:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 24950.6,
+   "stop": 24958.1,
+   "target": 24928.1,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-09-24T13:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 24835.63,
+   "stop": 24843.13,
+   "target": 24813.13,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-09-25T05:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 24766.26,
+   "stop": 24773.76,
+   "target": 24743.76,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-09-25T17:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 24584.34,
+   "stop": 24591.84,
+   "target": 24561.84,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-09-26T11:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 24618.87,
+   "stop": 24626.37,
+   "target": 24596.37,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-09-30T05:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 24828.8,
+   "stop": 24836.3,
+   "target": 24806.3,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-09-30T15:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 24792.15,
+   "stop": 24799.65,
+   "target": 24769.65,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-10-07T08:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 25149.76,
+   "stop": 25157.26,
+   "target": 25127.26,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-10-08T05:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 25065.1,
+   "stop": 25072.6,
+   "target": 25042.6,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-10-09T16:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 25256.21,
+   "stop": 25263.71,
+   "target": 25233.71,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-10-10T12:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 25304.83,
+   "stop": 25312.33,
+   "target": 25282.33,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-10-14T07:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 24669.9,
+   "stop": 24677.4,
+   "target": 24647.4,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-10-15T19:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 24937.67,
+   "stop": 24945.17,
+   "target": 24915.17,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-10-16T03:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 24931.54,
+   "stop": 24939.04,
+   "target": 24909.04,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-10-17T01:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 24774.38,
+   "stop": 24781.88,
+   "target": 24751.88,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-10-21T13:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 25252.01,
+   "stop": 25259.51,
+   "target": 25229.51,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-10-22T03:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 25251.87,
+   "stop": 25259.37,
+   "target": 25229.37,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-10-22T09:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 25275.43,
+   "stop": 25282.93,
+   "target": 25252.93,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-10-30T10:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 26243.58,
+   "stop": 26251.08,
+   "target": 26221.08,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-10-31T14:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 26108.31,
+   "stop": 26115.81,
+   "target": 26085.81,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-10-31T15:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 26122.95,
+   "stop": 26130.45,
+   "target": 26100.45,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-11-04T08:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 25753.5,
+   "stop": 25761.0,
+   "target": 25731.0,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-11-06T08:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 25644.46,
+   "stop": 25651.96,
+   "target": 25621.96,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-11-11T11:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 25630.69,
+   "stop": 25638.19,
+   "target": 25608.19,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-11-12T15:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 25631.22,
+   "stop": 25638.72,
+   "target": 25608.72,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-11-13T10:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 25610.26,
+   "stop": 25617.76,
+   "target": 25587.76,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-11-14T03:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 25124.16,
+   "stop": 25131.66,
+   "target": 25101.66,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-11-17T15:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 25140.99,
+   "stop": 25148.49,
+   "target": 25118.49,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-11-21T04:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 24167.16,
+   "stop": 24174.66,
+   "target": 24144.66,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-11-27T15:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 25299.55,
+   "stop": 25307.05,
+   "target": 25277.05,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-12-04T15:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 25591.06,
+   "stop": 25598.56,
+   "target": 25568.56,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-12-04T20:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 25587.6,
+   "stop": 25595.1,
+   "target": 25565.1,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-12-09T09:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 25688.74,
+   "stop": 25696.24,
+   "target": 25666.24,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-12-10T13:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 25680.59,
+   "stop": 25688.09,
+   "target": 25658.09,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-12-10T16:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 25611.77,
+   "stop": 25619.27,
+   "target": 25589.27,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-12-12T10:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 25866.98,
+   "stop": 25874.48,
+   "target": 25844.48,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-12-12T13:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 25844.56,
+   "stop": 25852.06,
+   "target": 25822.06,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-12-16T00:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 25300.44,
+   "stop": 25307.94,
+   "target": 25277.94,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-12-23T12:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 25699.33,
+   "stop": 25706.83,
+   "target": 25676.83,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-12-23T13:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 25690.78,
+   "stop": 25698.28,
+   "target": 25668.28,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-12-29T02:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 25860.9,
+   "stop": 25868.4,
+   "target": 25838.4,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-12-30T07:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 25723.82,
+   "stop": 25731.32,
+   "target": 25701.32,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-12-30T13:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 25727.02,
+   "stop": 25734.52,
+   "target": 25704.52,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2025-12-30T15:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 25711.62,
+   "stop": 25719.12,
+   "target": 25689.12,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2025-12-31T01:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 25635.04,
+   "stop": 25642.54,
+   "target": 25612.54,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2025-12-31T19:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 25599.16,
+   "stop": 25606.66,
+   "target": 25576.66,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2026-01-07T10:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 25754.9,
+   "stop": 25762.4,
+   "target": 25732.4,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2026-01-08T16:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 25654.94,
+   "stop": 25662.44,
+   "target": 25632.44,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2026-01-09T07:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 25674.94,
+   "stop": 25682.44,
+   "target": 25652.44,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2026-01-14T04:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 25901.63,
+   "stop": 25909.13,
+   "target": 25879.13,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2026-01-19T13:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 25321.05,
+   "stop": 25328.55,
+   "target": 25298.55,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2026-01-19T14:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 25260.75,
+   "stop": 25268.25,
+   "target": 25238.25,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2026-01-20T08:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 25251.54,
+   "stop": 25259.04,
+   "target": 25229.04,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2026-01-21T09:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 25209.72,
+   "stop": 25217.22,
+   "target": 25187.22,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2026-01-30T08:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 25729.32,
+   "stop": 25736.82,
+   "target": 25706.82,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2026-02-04T12:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 25433.2,
+   "stop": 25440.7,
+   "target": 25410.7,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2026-02-09T13:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 25092.61,
+   "stop": 25100.11,
+   "target": 25070.11,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2026-02-11T05:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 25303.15,
+   "stop": 25310.65,
+   "target": 25280.65,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2026-02-11T06:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 25300.93,
+   "stop": 25308.43,
+   "target": 25278.43,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2026-02-11T08:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 25243.33,
+   "stop": 25250.83,
+   "target": 25220.83,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2026-02-16T05:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 24825.58,
+   "stop": 24833.08,
+   "target": 24803.08,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2026-02-16T14:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 24736.08,
+   "stop": 24743.58,
+   "target": 24713.58,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2026-02-24T08:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 24796.44,
+   "stop": 24803.94,
+   "target": 24773.94,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2026-03-03T08:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 24655.17,
+   "stop": 24662.67,
+   "target": 24632.67,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2026-03-03T13:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 24517.48,
+   "stop": 24524.98,
+   "target": 24494.98,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2026-03-05T08:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 25011.84,
+   "stop": 25019.34,
+   "target": 24989.34,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2026-03-06T17:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 24778.49,
+   "stop": 24785.99,
+   "target": 24755.99,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2026-03-11T11:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 24983.24,
+   "stop": 24990.74,
+   "target": 24960.74,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2026-03-13T04:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 24806.01,
+   "stop": 24813.51,
+   "target": 24783.51,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2026-03-17T05:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 24831.51,
+   "stop": 24839.01,
+   "target": 24809.01,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2026-03-17T07:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 24778.4,
+   "stop": 24785.9,
+   "target": 24755.9,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2026-03-18T15:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 24904.77,
+   "stop": 24912.27,
+   "target": 24882.27,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2026-03-19T07:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 24582.53,
+   "stop": 24590.03,
+   "target": 24560.03,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2026-03-19T15:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 24469.04,
+   "stop": 24476.54,
+   "target": 24446.54,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2026-03-20T08:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 24567.74,
+   "stop": 24575.24,
+   "target": 24545.24,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2026-03-20T12:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 24472.64,
+   "stop": 24480.14,
+   "target": 24450.14,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2026-03-23T09:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 23885.38,
+   "stop": 23892.88,
+   "target": 23862.88,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2026-03-27T07:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 23876.6,
+   "stop": 23884.1,
+   "target": 23854.1,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2026-03-27T16:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 23528.77,
+   "stop": 23536.27,
+   "target": 23506.27,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2026-03-30T16:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 23356.75,
+   "stop": 23364.25,
+   "target": 23334.25,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2026-04-05T22:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 24034.75,
+   "stop": 24042.25,
+   "target": 24012.25,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2026-04-07T07:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 24232.42,
+   "stop": 24239.92,
+   "target": 24209.92,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2026-04-09T03:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 25022.47,
+   "stop": 25029.97,
+   "target": 24999.97,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2026-04-20T05:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 26654.05,
+   "stop": 26661.55,
+   "target": 26631.55,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2026-04-20T07:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 26686.19,
+   "stop": 26693.69,
+   "target": 26663.69,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2026-04-28T08:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 27329.53,
+   "stop": 27337.03,
+   "target": 27307.03,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2026-04-28T14:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 27185.8,
+   "stop": 27193.3,
+   "target": 27163.3,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2026-05-12T14:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 29193.12,
+   "stop": 29200.62,
+   "target": 29170.62,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2026-05-20T00:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 28906.51,
+   "stop": 28914.01,
+   "target": 28884.01,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2026-05-20T01:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 28915.22,
+   "stop": 28922.72,
+   "target": 28892.72,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2026-05-26T07:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 29790.67,
+   "stop": 29798.17,
+   "target": 29768.17,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2026-06-01T14:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 30369.09,
+   "stop": 30376.59,
+   "target": 30346.59,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2026-06-04T13:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 30308.5,
+   "stop": 30316.0,
+   "target": 30286.0,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2026-06-04T13:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 30258.96,
+   "stop": 30266.46,
+   "target": 30236.46,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2026-06-05T03:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 30213.92,
+   "stop": 30221.42,
+   "target": 30191.42,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2026-06-05T07:00:00+00:00",
+   "direction": "SHORT",
+   "entry": 30093.92,
+   "stop": 30101.42,
+   "target": 30071.42,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2026-06-10T07:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 28965.23,
+   "stop": 28972.73,
+   "target": 28942.73,
+   "session": "london"
+  },
+  {
+   "bar_ts": "2026-06-17T14:30:00+00:00",
+   "direction": "SHORT",
+   "entry": 30444.71,
+   "stop": 30452.21,
+   "target": 30422.21,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2026-06-23T01:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 30575.02,
+   "stop": 30582.52,
+   "target": 30552.52,
+   "session": "asian"
+  },
+  {
+   "bar_ts": "2026-06-24T13:45:00+00:00",
+   "direction": "SHORT",
+   "entry": 29691.09,
+   "stop": 29698.59,
+   "target": 29668.59,
+   "session": "new_york"
+  },
+  {
+   "bar_ts": "2026-06-25T15:15:00+00:00",
+   "direction": "SHORT",
+   "entry": 29626.58,
+   "stop": 29634.08,
+   "target": 29604.08,
+   "session": "new_york"
+  }
+ ]
+}

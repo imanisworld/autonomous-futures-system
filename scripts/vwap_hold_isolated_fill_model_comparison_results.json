@@ -1,0 +1,39 @@
+{
+ "manifest": {
+  "n": 348,
+  "sha256": "18cbbc8427b8afc462b1145347125ae45bb2b6af97f4ef9f374a10565a96d880",
+  "sha256_matches_pr283_frozen_population": true,
+  "fingerprint_definition": "sha256 over sorted (bar_ts, direction, entry, stop, target) tuples",
+  "source": "logs/retest_baseline_off/MNQ/journal_*.jsonl, decision==TRADE and risk_check.result==APPROVED and setup.strategy==vwap_hold",
+  "regeneration_note": "read-only over persisted historical journal rows; never invokes strategy/signal_engine.py",
+  "proximity_gate_ticks": 0.0,
+  "proximity_gate_state": "DISABLED (production default; field has been off for this population's entire 2024-07-02..2026-06-25 span)",
+  "directions": [
+   "SHORT"
+  ],
+  "first_bar_ts": "2024-07-02T07:00:00+00:00",
+  "last_bar_ts": "2026-06-25T15:15:00+00:00"
+ },
+ "manifest_path": "vwap_hold_isolated_fill_model_manifest.json",
+ "old_ioc": {
+  "n_armed": 348,
+  "filled": 105,
+  "resolved": 105,
+  "net_after_cost": 936.54,
+  "PRIMARY_expectancy_per_armed_signal": 2.6912,
+  "secondary_expectancy_per_fill": 8.92,
+  "win_rate_of_fills": 0.495,
+  "profit_factor": 1.715
+ },
+ "new_market": {
+  "n_armed": 348,
+  "filled": 343,
+  "resolved": 341,
+  "net_after_cost": 3583.08,
+  "PRIMARY_expectancy_per_armed_signal": 10.2962,
+  "secondary_expectancy_per_fill": 10.51,
+  "win_rate_of_fills": 0.501,
+  "profit_factor": 1.52
+ },
+ "note": "PRIMARY_expectancy_per_armed_signal is the decision metric per operator lock #5. secondary_expectancy_per_fill is reported but is NOT the verdict metric. No retire/redesign decision is made here for vwap_hold or vwap_rejection."
+}
