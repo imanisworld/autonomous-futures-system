@@ -114,15 +114,19 @@ reconciliation recovered all 31 and added 2024-08-30 under the executable rule,
 producing 32 resolved entries.
 
 The prior expectancy is therefore historical provenance, not the final
-executable-rule estimate. Honest fill replay must be rerun on all 32 entries
-with the resolved gap-open contract, pessimistic same-bar ordering, slippage,
-and commissions.
+executable-rule estimate. The resolved-rule honest replay is now complete:
+20 of 32 signals filled under the IOC model, producing 17 wins, 3 losses,
+$1,537.70 net P&L, PF 8.00, and $167.24 maximum drawdown at two ticks adverse
+slippage on entry and exit plus $1.24 round-trip commission.
 
 No historical gap-open entries occurred in the cached study window. Gap-open
 behavior remains binding and is covered by detector tests.
 
-> ⚠️ n=32 remains small. The strategy verdict stays WAIT until honest replay and
-> walk-forward/slippage checks complete.
+Both chronological halves, both directions, and all 1–4 tick sensitivity cases
+were positive. However, only 20 signals filled, the gap-open path remains
+unobserved historically, and live/replay parity is not proven.
+
+> ⚠️ The evidence is promising but unproven. It does not authorize execution.
 
 ---
 

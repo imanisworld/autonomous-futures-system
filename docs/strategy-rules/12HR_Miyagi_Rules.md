@@ -145,11 +145,13 @@ Under the resolved 9:30-open rule:
 - MNQ valid setups: 13
 - MNQ midpoint-touch entries: 6 (46.2% of setups)
 - Raw T1 touches after entry by 4:00 PM ET: 5/6 (83.3%)
-- Honest fills, stop/target ordering, slippage, commissions, expectancy, profit factor,
-  and drawdown: pending
+- IOC fills at two ticks adverse slippage each side: 3/13 signals (3/6 touches)
+- Honest-fill result: 2 wins / 1 loss, +$59.28 net, PF 1.30, $197.24 maximum drawdown
+- Walk-forward: H1 -$115.48; H2 +$174.76
+- Direction split: LONG 0 fills; SHORT 3 fills
 
-> ⚠️ Five raw target touches in six entries is descriptive only. The sample is far too
-> small for an edge claim, and raw touch sequencing is not an honest-fill backtest.
+> ⚠️ The honest replay remains far too small for an edge claim. H1 is negative and
+> LONG has no filled observations. The strategy verdict remains WAIT.
 
 Setup fires approximately 1–2 times per month, and fewer than half of the resolved-rule
 setups produced entries in the cached MNQ study.

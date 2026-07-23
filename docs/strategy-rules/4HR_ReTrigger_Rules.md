@@ -265,7 +265,13 @@ Setup fires on ~6–7% of sessions. Expect 1–3 setups per month. This is not a
 
 ## 14. WHAT IS NOT YET VALIDATED
 
-- Fixed 1H stop P&L — study used fixed distance stops, not the fixed-at-entry 1H candle rule. Pending replay test.
+- The resolved fixed-at-entry 1H stop was replayed on the 94 reconciled MNQ signals:
+  41 IOC fills, 23 wins / 18 losses, +$1,960.16 net, PF 2.33, and $411.18 maximum
+  drawdown at two ticks adverse slippage each side plus $1.24 commission.
+- Both chronological halves were positive, but H2 contributed $1,729.70 versus
+  $230.46 in H1. That concentration and live/replay parity remain unvalidated.
+- Five candidate fills were rejected because the actual IOC fill left the fixed
+  stop on the non-protective side.
 - Option P&L after premium, spread, and theta
 - Calls vs puts P&L split
-- Walk-forward stability of 1H flip stop
+- Adequate sample depth by chronological half and direction

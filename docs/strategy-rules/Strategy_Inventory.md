@@ -36,9 +36,9 @@ Verdict taxonomy:
 |---|---|---|---|---|---|---|---|---|
 | ORB Reclaim (MES) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ n=305 | **PAPER PROOF** |
 | ORB Reclaim (MNQ) | ✅ | ✅ | Partial | ✅ | ❌ insufficient | ✅ | ⚠️ n=253 thin | **PROMISING BUT UNPROVEN** |
-| 4HR Re-Trigger | ✅ blockers resolved | ✅ reconciled | ❌ | Partial — external study | ✅ | Partial | ⚠️ n=94 setups | **WAIT — honest fill replay** |
-| 12HR Miyagi | ✅ blockers resolved | ✅ reconciled | ❌ | ❌ old study incompatible | ❌ not confirmed | ❌ under resolved rule | ⚠️ n=13 setups / 6 entries | **WAIT — honest fill replay** |
-| 60M 3-2-2 First Live | ✅ blockers resolved | ✅ reconciled | ❌ | ❌ old estimate incomplete | ❌ not confirmed | ❌ under resolved rule | ⚠️ n=32 MNQ | **WAIT — honest fill replay** |
+| 4HR Re-Trigger | ✅ blockers resolved | ✅ reconciled | Partial — research engine | ✅ IOC-faithful | ✅ both positive | ✅ 1–4 ticks | ⚠️ 94 signals / 41 fills | **PROMISING BUT UNPROVEN** |
+| 12HR Miyagi | ✅ blockers resolved | ✅ reconciled | Partial — research engine | ✅ IOC-faithful | ❌ H1 negative | ✅ 1–4 ticks overall | ❌ 13 signals / 3 fills | **WAIT — inadequate filled sample** |
+| 60M 3-2-2 First Live | ✅ blockers resolved | ✅ reconciled | Partial — research engine | ✅ IOC-faithful | ✅ both positive | ✅ 1–4 ticks | ⚠️ 32 signals / 20 fills | **PROMISING BUT UNPROVEN** |
 | VWAP Hold (MNQ NY) | ❌ entry definition unclear | Partial | ❌ | ❌ incompatible studies | ❌ | ❌ | ⚠️ n=106 | **WAIT — isolated fill test pending** |
 | VWAP Reclaim (MNQ NY) | ❌ | Partial | ❌ | ❌ | ❌ | ❌ | ⚠️ n=29 thin | **WAIT** |
 | VWAP Rejection | ❌ | Partial | ❌ | ❌ | ❌ | ❌ | — | **BROKEN — unreachable predicate** |
@@ -87,24 +87,26 @@ Verdict taxonomy:
 ---
 
 ### 4HR Re-Trigger
-**Verdict: WAIT — build detector**
+**Verdict: PROMISING BUT UNPROVEN**
 
 - Rules: complete as of 2026-07-23 (all blockers resolved)
+- Detector: pure detector built and reconciled 94/94
 - Timeframe: 4-hour candles, fixed ET windows
 - Setup: 4AM = 2D/2U vs prior 4PM candle; 8AM reversal + 5-min close retrace before 9:30 AM
 - Entry: break of 4AM high/low, 9:30–11:00 AM window
 - Stop: last completed 1H candle at entry, fixed
 - Target: prior 4PM candle high/low
-- Monday reference: MNQ/MES = Sunday 4PM-8PM ET; QQQ = Friday 4PM close
+- Monday reference: MNQ/MES = Sunday 4PM–8PM ET; QQQ = Friday 4PM–8PM ET 4-hour bar
 - Retrace confirmation: first 5-min bar CLOSE beyond 4AM level before 9:30 AM
-- External study results: MNQ 84.4% target touch (n=32), QQQ 72.4% (n=29)
-- Gaps: no coded detector, no replay parity proof, no honest fill P&L, walk-forward not confirmed under detector
-- Next: build detector → reconcile against manual samples → honest fill replay
+- Honest replay at 2 ticks each side: 41/94 fills, 23 wins / 18 losses, +$1,960.16 net, PF 2.33, max drawdown $411.18
+- Walk-forward: H1 +$230.46; H2 +$1,729.70. Both directions and all 1–4 tick sensitivity cases remained positive.
+- Caveat: most profit is concentrated in H2; H1 expectancy was only +$4.70 per signal. Five IOC fills were rejected because the actual fill made the fixed stop non-protective.
+- Next: independent replay parity review, then paper-proof consideration only after the H2 concentration and sample depth are accepted
 
 ---
 
 ### 12HR Miyagi
-**Verdict: WAIT — honest fill replay**
+**Verdict: WAIT — inadequate filled sample**
 
 - Rules: complete as of 2026-07-23 (blocker resolved)
 - Detector: pure detector built and reconciled 13/13 under the resolved executable rule
@@ -115,15 +117,17 @@ Verdict taxonomy:
 - Stop: last completed 60-min candle at entry, fixed
 - Target: T1 = Candle 3 high/low; T2 = Candle 2 high/low (2-contract scale only)
 - Resolved MNQ scan: 13 valid setups, of which 6 later touched the midpoint and became entries (46.2%)
-- Raw resolved-rule T1 context: 5/6 entries touched T1 by 4:00 PM ET; honest fills still pending
+- Honest replay at 2 ticks each side: 6 midpoint touches produced only 3 IOC fills; 2 wins / 1 loss, +$59.28 net, PF 1.30
+- Walk-forward: H1 -$115.48; H2 +$174.76. LONG produced zero fills; all three fills were SHORT.
+- The result remained positive at 1–4 ticks overall, but this is not meaningful evidence with only three fills.
 - Prior performance result (MNQ 12/13 T1) used the superseded direction rule and is not transferable
-- Gaps: n=6 resolved-rule entries is extremely thin, walk-forward not confirmed, no honest fill P&L
-- Next: honest fill replay on the six resolved-rule entries, then walk-forward/slippage only if sample permits
+- Gaps: filled sample is extremely thin, H1 is negative, and LONG has no filled observations
+- Next: collect substantially more resolved-rule setups; do not promote from this sample
 
 ---
 
 ### 60M 3-2-2 First Live
-**Verdict: WAIT — honest fill replay**
+**Verdict: PROMISING BUT UNPROVEN**
 
 - Rules: complete as of 2026-07-23 (all blockers resolved)
 - Detector: pure detector built and reconciled 32/32 under the executable rule
@@ -136,8 +140,11 @@ Verdict taxonomy:
 - Reconciliation: all old 31 recovered; 2024-08-30 added after removing the undocumented pre-entry `invalidated_first` assumption
 - Historical gap-open entries: zero; both directions are covered by detector tests
 - Prior +$66.50 expectancy used the incomplete 31-entry set and is not the final executable-rule estimate
-- Gaps: honest fill replay, walk-forward halves, and slippage sensitivity
-- Next: honest fill replay on the resolved 32 entries
+- Honest replay at 2 ticks each side: 20/32 fills, 17 wins / 3 losses, +$1,537.70 net, PF 8.00, max drawdown $167.24
+- Walk-forward: H1 +$1,086.88; H2 +$450.82. LONG +$1,108.36; SHORT +$429.34.
+- Net remained positive at 1–4 ticks adverse slippage. One target was already marketable at IOC arrival and one unresolved trade used the documented 15:55 EOD replay assumption.
+- Gaps: only 20 fills, no observed historical gap-open case, and no live/replay parity proof
+- Next: independent replay parity review, then paper-proof consideration with explicit monitoring of the unobserved gap-open path
 
 ---
 
@@ -231,10 +238,9 @@ See `ICC_ICT_Research.md` for full breakdown.
 | Item | Blocking | Who |
 |---|---|---|
 | VWAP hold isolated fill test (IOC vs market, static vs runner) | VWAP hold verdict | External researcher |
-| 4HR Re-Trigger honest fill replay | Strategy verdict | External researcher + Claude Code (after detector) |
-| Miyagi walk-forward halves + slippage sensitivity | Strategy verdict | External researcher |
-| 3-2-2 walk-forward halves + slippage + calls/puts split | Strategy verdict | External researcher |
-| 4HR 1H stop backtest | Rules validation | External researcher |
+| 4HR replay parity / H2 concentration review | Promotion decision | Research review |
+| Miyagi additional resolved-rule sample | Strategy verdict | Research collection |
+| 3-2-2 replay parity / gap-open observation | Promotion decision | Research review + paper observation |
 | VWAP hold / rejection overlap resolution | Both strategy verdicts | Claude Code |
 | VWAP hold entry definition from signal_engine.py | VWAP rules doc | Claude Code |
 | Runner exit promotion | ORB breakout, VWAP hold/reclaim lanes | Claude Code |
@@ -246,8 +252,8 @@ See `ICC_ICT_Research.md` for full breakdown.
 1. **4HR Re-Trigger detector** — complete and reconciled
 2. **12HR Miyagi detector** — complete and reconciled
 3. **60M 3-2-2 detector** — complete and reconciled
-4. **Honest fill replay for 4HR, Miyagi, and 3-2-2** — reconciliation passed
-5. **Walk-forward and slippage sensitivity** — only on resolved-rule fills
+4. **Honest fill replay for 4HR, Miyagi, and 3-2-2** — complete
+5. **Walk-forward and slippage sensitivity** — complete on resolved-rule signals
 6. **Runner exit promotion** — unblocks ORB breakout and VWAP lanes
 7. **VWAP hold isolated fill test** — parallel, external researcher
 8. **VWAP hold entry definition** — Claude Code reads signal_engine.py
