@@ -44,8 +44,9 @@ class _FakeBroker:
         return self._resolve_fill
 
 
-def _seed_open(log_dir, *, age_min=30, order_ids=None):
+def _seed_open(log_dir, *, age_min=30, order_ids=None, for_date=None):
     j = JournalLogger(log_dir=str(log_dir))
+    for_date = for_date or _NOW.date()
     ts = (_NOW - timedelta(minutes=age_min)).isoformat()
     j._append({
         "ts": ts,
@@ -56,7 +57,7 @@ def _seed_open(log_dir, *, age_min=30, order_ids=None):
         "setup": {"direction": "SHORT", "entry": 30000.0, "stop": 30008.0,
                   "target": 29976.0, "contracts": 1},
         "outcome": None,
-    }, _NOW.date())
+    }, for_date)
     if order_ids is not None:
         j._append({
             "ts": (_NOW - timedelta(minutes=age_min - 1)).isoformat(),
@@ -64,7 +65,7 @@ def _seed_open(log_dir, *, age_min=30, order_ids=None):
             "instrument": "MNQ",
             "session": "new_york",
             "order_ids": order_ids,
-        }, _NOW.date())
+        }, for_date)
     return j
 
 
@@ -288,3 +289,105 @@ def test_resolved_completed_trade_logs_reason_when_discord_not_sent(
     outcome = [e for e in entries if e.get("type") == "OUTCOME"][-1]["outcome"]
     assert outcome["result"] == "WIN"                          # journal outcome unchanged
     assert "Reconciled-trade Discord notification NOT sent (reason=disabled)" in caplog.text
+
+
+# ── prior-day open positions (walk-back) + orphan-open naked alert ────────────
+# The 2026-07-21 MES orphan: position opened Monday, children Day-expired at
+# session close, position sat naked while (a) this sweep couldn't see it after
+# midnight (today-only journal check) and (b) the broker-has-position branch
+# returned silently. These lock in both fixes.
+
+class _OrphanBroker(_FakeBroker):
+    """Broker that holds an open position and reports a child-liveness census."""
+    def __init__(self, census, **kw):
+        super().__init__(authed=True, position=SimpleNamespace(open=True), **kw)
+        self._census = census
+
+    def count_working_children(self):
+        return self._census
+
+
+def test_walkback_finds_prior_day_open_and_clears_into_its_journal(
+    monkeypatch, tmp_path, config
+):
+    """A phantom opened YESTERDAY must still be visible to today's sweep, and
+    the clearing OUTCOME must land in yesterday's journal (else that day's
+    has_open_position never clears)."""
+    _tradovate(monkeypatch)
+    yesterday = _NOW.date() - timedelta(days=1)
+    j = _seed_open(tmp_path, age_min=30, for_date=yesterday)
+    assert j.get_open_position(yesterday) is not None
+
+    res = reconcile_open_position(config, str(tmp_path), now=_NOW,
+                                  broker=_FakeBroker(authed=True, position=None))
+
+    assert res["action"] == "reconciled"
+    assert j.get_open_position(yesterday) is None            # cleared in ITS day
+    assert not j.get_daily_state(yesterday).has_open_position
+
+
+def test_orphan_open_alerts_when_zero_children_working(monkeypatch, tmp_path, config):
+    """Journal open + broker open + zero working children → loud alert, no
+    journal mutation, no order action."""
+    _tradovate(monkeypatch)
+    j = _seed_open(tmp_path, age_min=90, order_ids=_IDS)
+    sent = {}
+
+    def _capture(msg, **kw):
+        sent["msg"] = msg
+        return SystemNotificationResult(sent=True, reason="sent")
+
+    import notifications.system_notifier as system_notifier_module
+    monkeypatch.setattr(system_notifier_module, "notify_system", _capture)
+
+    census = {"working": 0, "checked": 2,
+              "states": {"target": "expired", "stop": "expired"}}
+    res = reconcile_open_position(config, str(tmp_path), now=_NOW,
+                                  broker=_OrphanBroker(census))
+
+    assert res["action"] == "orphan_open_alerted"
+    assert "NAKED" in sent["msg"] and "expired" in sent["msg"]
+    assert j.get_open_position(_NOW.date()) is not None      # journal untouched
+
+
+def test_orphan_alert_repeats_every_sweep(monkeypatch, tmp_path, config):
+    """The alert must NOT be one-shot — an unheeded naked position stays loud."""
+    _tradovate(monkeypatch)
+    _seed_open(tmp_path, age_min=90, order_ids=_IDS)
+    calls = []
+
+    import notifications.system_notifier as system_notifier_module
+    monkeypatch.setattr(
+        system_notifier_module, "notify_system",
+        lambda msg, **kw: (calls.append(msg), SystemNotificationResult(True, "sent"))[1],
+    )
+
+    census = {"working": 0, "checked": 2,
+              "states": {"target": "expired", "stop": "expired"}}
+    for _ in range(3):
+        res = reconcile_open_position(config, str(tmp_path), now=_NOW,
+                                      broker=_OrphanBroker(census))
+        assert res["action"] == "orphan_open_alerted"
+    assert len(calls) == 3
+
+
+def test_broker_open_with_working_children_stays_quiet(monkeypatch, tmp_path, config):
+    _tradovate(monkeypatch)
+    _seed_open(tmp_path, age_min=90, order_ids=_IDS)
+    census = {"working": 2, "checked": 2,
+              "states": {"target": "working", "stop": "working"}}
+    res = reconcile_open_position(config, str(tmp_path), now=_NOW,
+                                  broker=_OrphanBroker(census))
+    assert res["action"] == "broker_has_position"
+
+
+def test_broker_open_with_unknowable_census_never_reads_as_naked(
+    monkeypatch, tmp_path, config
+):
+    """census=None (ids missing / API blip) must NOT alert — uncertainty is
+    never treated as naked."""
+    _tradovate(monkeypatch)
+    _seed_open(tmp_path, age_min=90, order_ids=_IDS)
+    res = reconcile_open_position(config, str(tmp_path), now=_NOW,
+                                  broker=_OrphanBroker(None))
+    assert res["action"] == "broker_has_position"

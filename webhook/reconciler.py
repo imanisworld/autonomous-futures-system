@@ -27,7 +27,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -105,9 +105,18 @@ def reconcile_open_position(
     today = now.date()
     journal = JournalLogger(log_dir=log_dir)
 
-    if not journal.get_daily_state(today).has_open_position:
-        return {"action": "none"}
-    open_pos = journal.get_open_position(today)
+    # Walk back up to 7 days — same as the runner's restart-restore. A position
+    # opened before midnight lives in a PRIOR day's journal; a today-only check
+    # makes it invisible to this sweep from 00:00 onward (the 2026-07-21 MES
+    # orphan was journal-open all of Jul 22 and this sweep never saw it).
+    open_pos = None
+    open_pos_date = today
+    for days_back in range(0, 8):
+        candidate = today - timedelta(days=days_back)
+        if journal.get_daily_state(candidate).has_open_position:
+            open_pos = journal.get_open_position(candidate)
+            open_pos_date = candidate
+            break
     if not open_pos:
         return {"action": "none"}
 
@@ -133,6 +142,47 @@ def reconcile_open_position(
     if not confirmed:
         return {"action": "broker_position_unconfirmed"}
     if pos is not None and getattr(pos, "open", False):
+        # The broker genuinely holds the position — but is it still PROTECTED?
+        # OSO children can die while the position lives (Day-expiry at session
+        # close, observed live MES 2026-07-21: both children expired overnight,
+        # the position sat naked ~36h while both exit levels printed). Journal
+        # open + broker open + zero working children → loud alert EVERY sweep.
+        # Alert-only: exiting the position is an operator decision, never taken
+        # here, and an unknowable census (None) must never read as naked.
+        _ids = open_pos.get("order_ids")
+        broker._last_order_ids = _ids if isinstance(_ids, dict) else None
+        census = None
+        try:
+            census = broker.count_working_children()
+        except Exception as exc:
+            logger.warning("reconcile: working-children census failed: %s", exc)
+        if census is not None and census.get("working", 0) == 0:
+            states = ", ".join(
+                f"{k}={v}" for k, v in (census.get("states") or {}).items()
+            )
+            msg = (
+                f"🚨 ORPHAN OPEN POSITION: {open_pos.get('direction')} "
+                f"{open_pos.get('contracts', 1)}x {open_pos.get('instrument')} "
+                f"(opened {open_pos_date}) is OPEN at the broker with ZERO working "
+                f"protective orders ({states}). The position is NAKED — no stop, no "
+                f"target. NO automatic action taken. Flatten/verify in Tradovate NOW."
+            )
+            logger.error(msg)
+            try:
+                from notifications.system_notifier import notify_system
+                result = notify_system(msg, config=config)
+                if not result.sent:
+                    logger.warning(
+                        "Orphan-position Discord notification NOT sent (reason=%s)",
+                        result.reason,
+                    )
+            except Exception as exc:
+                logger.warning("orphan alert failed: %s", exc)
+            return {
+                "action": "orphan_open_alerted",
+                "instrument": open_pos.get("instrument"),
+                "states": (census.get("states") or {}),
+            }
         return {"action": "broker_has_position"}
 
     # ── Completed-trade guard (2026-07-06 erased-win incident) ────────────────
@@ -172,7 +222,9 @@ def reconcile_open_position(
                 pnl_ticks=fill.pnl_ticks,
                 pnl_dollars=fill.pnl_dollars,
                 contracts=fill.contracts,
-                for_date=today,
+                # The OUTCOME must land in the journal day that holds the TRADE
+                # row, or that day's has_open_position never clears.
+                for_date=open_pos_date,
             )
             msg = (
                 f"Auto-reconcile: completed trade resolved — {fill.result} "
@@ -212,7 +264,7 @@ def reconcile_open_position(
         pnl_ticks=0.0,
         pnl_dollars=0.0,
         contracts=int(open_pos.get("contracts", 1) or 1),
-        for_date=today,
+        for_date=open_pos_date,
     )
     msg = (
         f"Auto-reconciled phantom position: journal showed "
