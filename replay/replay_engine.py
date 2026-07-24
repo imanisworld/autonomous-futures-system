@@ -33,7 +33,7 @@ from context.market_context import (
 )
 from execution.broker_interface import BracketOrder
 from execution.day_only_exit import (
-    MISSING_EOD_PRICE,
+    EOD_BAR_MISSING,
     is_after_eod_close,
     is_exact_eod_bar,
     resolve_paper_eod,
@@ -429,7 +429,7 @@ class ReplayEngine:
                             journal.log_day_only_exit_issue(
                                 instrument=state.instrument,
                                 strategy=decision.setup.strategy,
-                                reason=MISSING_EOD_PRICE,
+                                reason=EOD_BAR_MISSING,
                                 for_date=journal_date,
                             )
                 continue

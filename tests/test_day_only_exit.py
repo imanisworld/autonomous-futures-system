@@ -421,5 +421,5 @@ def test_run_many_missing_eod_stays_explicit_and_open(monkeypatch, config, tmp_p
         for line in (log_dir / "journal_2026-07-13.jsonl").read_text().splitlines()
     ]
     issue = next(row for row in rows if row.get("type") == "DAY_ONLY_EXIT_ISSUE")
-    assert issue["reason"] == "MISSING_EOD_PRICE"
+    assert issue["reason"] == "EOD_BAR_MISSING"
     assert not any(row.get("type") == "OUTCOME" for row in rows)
