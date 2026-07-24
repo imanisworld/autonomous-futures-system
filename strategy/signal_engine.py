@@ -26,6 +26,7 @@ from risk.risk_engine import RiskEngine, TradeSetup, DailyState
 from strategy.gex_gate import evaluate_gex
 from strategy.regime_classifier import classify_regime
 from strategy.signa_gate import evaluate_signa
+from strategy.four_hr_retrigger import advance_4hr_retrigger
 
 
 # Setups eligible for momentum re-anchor: entry rests AT a level, so price leaving
@@ -53,6 +54,7 @@ class SetupDetail:
     target: float
     rr_ratio: float
     strategy: str
+    entry_time: Optional[datetime] = None
     notes: Optional[str] = None
     direction_role: Optional[str] = None
     htf_primary_direction: Optional[str] = None
@@ -121,6 +123,13 @@ class DecisionOutput:
                 "target": self.setup.target,
                 "rr_ratio": self.setup.rr_ratio,
                 "strategy": self.setup.strategy,
+                "entry_time": (
+                    self.setup.entry_time.isoformat()
+                    if hasattr(self.setup.entry_time, "isoformat")
+                    else str(self.setup.entry_time)
+                    if self.setup.entry_time is not None
+                    else None
+                ),
                 "notes": self.setup.notes,
                 "direction_role": self.setup.direction_role,
                 "htf_primary_direction": self.setup.htf_primary_direction,
@@ -163,6 +172,7 @@ def _session_window_decision(rules: list[dict], timestamp: datetime) -> tuple[bo
 
 
 class DecisionEngine:
+    _ET = ZoneInfo("America/New_York")
     WINDOWS = {
         "opening":   {"start": "09:30", "end": "10:45", "allow": "all"},
         "mid_early": {"start": "10:45", "end": "11:30", "allow": "all"},   # opened — STRONG-trend quality gate still applies downstream
@@ -234,6 +244,7 @@ class DecisionEngine:
         Always returns a DecisionOutput — never raises.
         """
         now = datetime.now(timezone.utc)
+        self._advance_4hr_retrigger(state, daily_state)
 
         # ── Pre-flight: daily capacity ────────────────────────────────────────
         total_daily_capacity = (
@@ -763,7 +774,7 @@ class DecisionEngine:
             daily_state.orb_break_long_played = True
         elif state.orb.status == "below":
             daily_state.orb_break_short_played = True
-        elif setup.strategy in ("orb_reclaim", "strat_4hr_retrigger"):
+        elif setup.strategy == "orb_reclaim":
             # Price pulled back to the ORB and is reclaiming — reset so the
             # next clean break above is eligible again.
             daily_state.orb_break_long_played = False
@@ -1356,10 +1367,9 @@ class DecisionEngine:
 
     # ── Setup Generation ──────────────────────────────────────────────────────
 
-    # Strategies that require price to return to the ORB level (status != "above"/"below").
-    # These are allowed even after the initial ORB break trade has been taken because
-    # they only fire on the specific reclaim/rejection transition — never persistently.
-    _ORB_PULLBACK_STRATEGIES: frozenset[str] = frozenset({
+    # Strategies not governed by the one-directional ORB-break replay flag.
+    # The canonical 4HR state machine is structurally independent of ORB.
+    _ORB_CONTINUATION_EXEMPT: frozenset[str] = frozenset({
         "orb_reclaim",
         "orb_rejection",
         "strat_4hr_retrigger",
@@ -1391,7 +1401,7 @@ class DecisionEngine:
 
         When daily_state is provided, continuation strategies are skipped after
         the first ORB break trade in each direction — only pull-back setups
-        (orb_reclaim, orb_rejection, vwap_reclaim, strat_4hr_retrigger) remain
+        (orb_reclaim, orb_rejection, vwap_reclaim) remain
         eligible until price returns to the ORB level.
         """
         del condition  # retained for API symmetry with collect_strategy_candidates
@@ -1424,13 +1434,19 @@ class DecisionEngine:
         transformed setup for the other two rejections (matches the audit
         shape decide() has always produced for a single-candidate rejection).
         """
-        confirmed = self._apply_strat_confirmation(setup, state)
-        if confirmed is None:
-            return None, "STRAT_DIRECTION_CONFLICT", "Strat bar sequence contradicts setup direction."
+        if setup.strategy == "strat_4hr_retrigger":
+            # Entry, completed-1H stop, and prior-4PM target are the canonical
+            # resolved formula.  Generic Pine/advisory and distance transforms
+            # must not rewrite this strategy's identity.
+            confirmed = setup
+        else:
+            confirmed = self._apply_strat_confirmation(setup, state)
+            if confirmed is None:
+                return None, "STRAT_DIRECTION_CONFLICT", "Strat bar sequence contradicts setup direction."
 
-        confirmed = self._apply_advisory_bracket(confirmed, state)
-        confirmed = self._enforce_min_target_distance(confirmed, state.instrument)
-        confirmed = self._maybe_reanchor_entry(confirmed, state)
+            confirmed = self._apply_advisory_bracket(confirmed, state)
+            confirmed = self._enforce_min_target_distance(confirmed, state.instrument)
+            confirmed = self._maybe_reanchor_entry(confirmed, state)
 
         # ── Entry-sanity guard (stale/detached level) ─────────────────────────
         # Every setup anchors its entry to a level (VWAP/ORB/PDH...). After a
@@ -1593,6 +1609,13 @@ class DecisionEngine:
         daily_state: Optional[DailyState] = None,
     ):
         enabled = self.config.enabled_concepts
+        if state.canonical_4hr_only:
+            # The established 5-minute lane is entry authority only.  The
+            # canonical 4HR strategy is the sole setup allowed to originate
+            # directly from it; all legacy 15-minute concepts remain excluded.
+            enabled = [
+                name for name in enabled if name == "strat_4hr_retrigger"
+            ]
         instrument_disabled = set(
             self.config.disabled_concepts_per_instrument.get(state.instrument, [])
         )
@@ -1606,7 +1629,6 @@ class DecisionEngine:
 
         strategies = [
             ("strat_4hr_retrigger", self._try_strat_4hr_retrigger),
-            ("strat_4hr_retrigger", self._try_strat_4hr_retrigger_short),
             ("orb_breakout", self._try_orb_breakout),
             ("orb_reclaim", self._try_orb_reclaim),
             ("orb_rejection", self._try_orb_rejection),
@@ -1627,11 +1649,14 @@ class DecisionEngine:
                 continue
             if name in instrument_disabled:
                 continue
-            if orb_continuation_blocked and name not in self._ORB_PULLBACK_STRATEGIES:
+            if orb_continuation_blocked and name not in self._ORB_CONTINUATION_EXEMPT:
                 continue
             setup = fn(state)
             if setup is not None:
-                yield priority_index, self._enforce_min_target_distance(setup, state.instrument)
+                if setup.strategy == "strat_4hr_retrigger":
+                    yield priority_index, setup
+                else:
+                    yield priority_index, self._enforce_min_target_distance(setup, state.instrument)
 
     def _score_strategy_candidate(
         self,
@@ -2506,126 +2531,50 @@ class DecisionEngine:
             ),
         )
 
-    _ET = ZoneInfo("America/New_York")
-    _4HR_WINDOW_START = _time(9, 30)
-    _4HR_WINDOW_END   = _time(11, 0)
+    @staticmethod
+    def _is_five_minute_state(state: MarketState) -> bool:
+        value = str(getattr(state.ohlc, "timeframe", "") or "").strip().lower()
+        return value in {"5", "5m", "5min", "5minute", "5minutes"}
+
+    def _advance_4hr_retrigger(
+        self, state: MarketState, daily_state: DailyState
+    ) -> None:
+        """Advance the canonical persisted state before ordinary strategy gates."""
+        state.four_hr_retrigger_candidate = None
+        if "strat_4hr_retrigger" not in self.config.enabled_concepts:
+            return
+        if not self._is_five_minute_state(state):
+            return
+        next_state, candidate = advance_4hr_retrigger(
+            bars_5m=state.bar_history_5m,
+            current_bar_ts=state.timestamp,
+            instrument=state.instrument,
+            persisted_state=daily_state.four_hr_retrigger_state,
+        )
+        daily_state.four_hr_retrigger_state = next_state
+        state.four_hr_retrigger_candidate = candidate
 
     def _try_strat_4hr_retrigger(self, state: MarketState) -> Optional[SetupDetail]:
-        """
-        The Strat: 4HR Re-Trigger (Phase 1 approximation).
-
-        Full pattern (1H/4H timeframe):
-        4AM candle: 2DOWN (bearish)
-        8AM candle: 2UP (reclaim)
-        NY open: Price dips below 8AM 2UP candle high, then reclaims it = LONG entry
-
-        Phase 1 proxy: session is new_york, bar is in the first 90 minutes of NY
-        (9:30–11:00 ET — outside that window the pre-market structure is stale),
-        ORB status is reclaimed_high, trend is STRONG UP, VWAP above, volume >= 0.7.
-
-        The time gate and STRONG-trend requirement differentiate this from plain
-        orb_reclaim (which fires any time, any trend strength). Evaluated first
-        in the strategy list so it claims the bar when conditions are met; if it
-        returns None, orb_reclaim acts as the fallback on the same bar.
-
-        This is specifically for MNQ and MES.
-
-        Full proprietary pattern doctrine lives outside the public repo.
-        """
-        if state.instrument not in ("MNQ", "MES"):
+        """Return only the candidate produced by the resolved state machine."""
+        candidate = state.four_hr_retrigger_candidate
+        if not candidate:
             return None
-        if state.session != "new_york":
-            return None
-        # Time gate: pre-market structure only meaningful in early NY session
-        et_time = state.timestamp.astimezone(self._ET).time()
-        if not (self._4HR_WINDOW_START <= et_time <= self._4HR_WINDOW_END):
-            return None
-        if state.orb.status != "reclaimed_high":
-            return None
-        # Require STRONG trend — distinguishes from plain orb_reclaim (any strength)
-        if not (state.trend and state.trend.direction == "UP"
-                and state.trend.strength == "STRONG"):
-            return None
-        if state.vwap.price_vs_vwap != "above":
-            return None
-        # Volume should confirm the retrigger
-        if state.volume.relative and state.volume.relative < 0.7:
-            return None
-
-        tick = self.TICK_SIZE.get(state.instrument, 0.25)
-        max_stop_ticks = self.MAX_ORB_STOP_TICKS.get(state.instrument, 80)
-        # Entry at ORB high (the "trigger" level)
-        entry = state.orb.high + (tick * 1)
-        raw_stop = state.orb.low - (tick * 6)
-        stop = max(raw_stop, entry - (tick * max_stop_ticks))  # cap at 20 pts for MNQ
-        risk = entry - stop
-        if risk <= 0:
-            return None
-        target = entry + (risk * 2.0)
-
-        rr = RiskEngine.calculate_rr("LONG", entry, stop, target)
+        direction = str(candidate["direction"])
+        entry = float(candidate["entry"])
+        stop = float(candidate["stop"])
+        target = float(candidate["target"])
+        rr = RiskEngine.calculate_rr(direction, entry, stop, target)
         return SetupDetail(
-            direction="LONG",
+            direction=direction,
             entry=round(entry, 4),
             stop=round(stop, 4),
             target=round(target, 4),
             rr_ratio=rr,
             strategy="strat_4hr_retrigger",
+            entry_time=candidate["entry_time"],
             notes=(
-                "4HR Re-Trigger proxy: NY open reclaims pre-market high level "
-                "(ORB high) with uptrend and VWAP confirmation. "
-                "Phase 1 approximation — full 4AM/8AM candle check in Phase 2."
-            ),
-        )
-
-    def _try_strat_4hr_retrigger_short(self, state: MarketState) -> Optional[SetupDetail]:
-        """
-        SHORT mirror of the 4HR Re-Trigger.
-
-        Pattern: pre-market established a rejection high, NY open bounces up
-        to reclaim the ORB low level briefly then fails back below it.
-        ORB status = reclaimed_low, trend STRONG DOWN, price below VWAP.
-
-        Same time gate (9:30–11:00 ET), same instrument restriction (MNQ/MES).
-        """
-        if state.instrument not in ("MNQ", "MES"):
-            return None
-        if state.session != "new_york":
-            return None
-        et_time = state.timestamp.astimezone(self._ET).time()
-        if not (self._4HR_WINDOW_START <= et_time <= self._4HR_WINDOW_END):
-            return None
-        if state.orb.status != "reclaimed_low":
-            return None
-        if not (state.trend and state.trend.direction == "DOWN"
-                and state.trend.strength == "STRONG"):
-            return None
-        if state.vwap.price_vs_vwap != "below":
-            return None
-        if state.volume.relative and state.volume.relative < 0.7:
-            return None
-
-        tick = self.TICK_SIZE.get(state.instrument, 0.25)
-        max_stop_ticks = self.MAX_ORB_STOP_TICKS.get(state.instrument, 80)
-        entry = state.orb.low - (tick * 1)
-        raw_stop = state.orb.high + (tick * 6)
-        stop = min(raw_stop, entry + (tick * max_stop_ticks))
-        risk = stop - entry
-        if risk <= 0:
-            return None
-        target = entry - (risk * 2.0)
-
-        rr = RiskEngine.calculate_rr("SHORT", entry, stop, target)
-        return SetupDetail(
-            direction="SHORT",
-            entry=round(entry, 4),
-            stop=round(stop, 4),
-            target=round(target, 4),
-            rr_ratio=rr,
-            strategy="strat_4hr_retrigger",
-            notes=(
-                "4HR Re-Trigger SHORT proxy: NY open rejects pre-market low level "
-                "(ORB low) with downtrend and VWAP confirmation."
+                "Resolved 4HR Re-Trigger: prior-4PM/4AM classification, "
+                "pre-09:30 break-retrigger, dynamic completed-1H fixed stop."
             ),
         )
 

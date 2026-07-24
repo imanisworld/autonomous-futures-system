@@ -45,6 +45,10 @@ def apply_stop_multiplier(
     Returns the multiplier ACTUALLY applied (``1.0`` = no change). No-op when the
     multiplier is unset/1.0, the stop is missing, or risk is non-positive.
     """
+    if getattr(setup, "strategy", None) == "strat_4hr_retrigger":
+        # The resolved rule assigns the last completed 1H boundary at actual
+        # entry and fixes it forever. Generic widening would change the strategy.
+        return 1.0
     mult = (multiplier_map or {}).get(instrument, 1.0)
     if not mult or mult == 1.0 or getattr(setup, "stop", None) is None:
         return 1.0

@@ -8,9 +8,9 @@ This module has no strategy-engine, risk, broker, or execution imports. It takes
 only historical bars and returns a signal dict or None. It does not place, size,
 or authorize a trade — it is research/reconciliation evidence only.
 
-The existing `_try_strat_4hr_retrigger` in strategy/signal_engine.py is a
-self-labeled "Phase 1 approximation" using different logic (NY-open ORB-high
-reclaim) — it is NOT the strategy specified here and is deliberately not reused.
+The former `_try_strat_4hr_retrigger` implementation in
+strategy/signal_engine.py was an NY-open ORB proxy. It has been retired; the
+executable now uses the resolved state machine rather than that approximation.
 
 The 8AM candle is evaluated using its DEVELOPING state only (5-minute bars from
 8:00 AM through 9:30 AM), never the completed 8:00 AM-12:00 PM 4H bar (binding
@@ -163,13 +163,13 @@ def detect_4hr_retrigger(
                 has_broken = True
             elif not calls and bar["low"] < four_am["low"]:
                 has_broken = True
-            continue
-        # Retrace: only evaluated on bars AFTER the break. Close only — intrabar
-        # touches do not count.
-        if calls and bar["close"] < four_am["high"]:
+        # Retrace: evaluated only once a break exists, but the break and close
+        # back through may occur on the SAME 5-minute bar. Close only —
+        # intrabar touches do not count.
+        if has_broken and calls and bar["close"] < four_am["high"]:
             retrace_bar = bar
             break
-        if not calls and bar["close"] > four_am["low"]:
+        if has_broken and not calls and bar["close"] > four_am["low"]:
             retrace_bar = bar
             break
 

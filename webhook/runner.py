@@ -406,6 +406,7 @@ def process_alert(
     cfg = config or load_config()
     five_min_trigger = None
     five_min_trigger_payload = None
+    four_hr_five_min = False
 
     # In paper mode we SIMULATE entry + resolution locally via PaperBroker
     # (next-bar OHLC), regardless of the BROKER env var. BROKER=tradovate is kept
@@ -537,7 +538,15 @@ def process_alert(
             except Exception:
                 logger.debug("vwap_hold early-signal resolution skipped", exc_info=True)
 
-        if not five_min_trigger:
+        if (
+            not five_min_trigger
+            and "strat_4hr_retrigger" in cfg.enabled_concepts
+        ):
+            # Unlike legacy concepts, the resolved 4HR setup is established and
+            # triggered by the authoritative 5-minute stream itself.
+            four_hr_five_min = True
+
+        if not five_min_trigger and not four_hr_five_min:
             return {
                 "timestamp": five_min_trigger_payload.timestamp,
                 "instrument": five_min_trigger_payload.ticker,
@@ -561,7 +570,7 @@ def process_alert(
     # Reject it as a config error and journal it under a distinct category so it
     # is NEVER counted or evaluated as a normal NO_TRADE. The dashboard reads
     # these entries to raise the "LIVE ALERT MISCONFIGURED" banner.
-    tf_mismatch = _check_timeframe(payload, cfg)
+    tf_mismatch = None if four_hr_five_min else _check_timeframe(payload, cfg)
     if tf_mismatch:
         today = for_date or date.today()
         journal = JournalLogger(log_dir=log_dir)
@@ -609,6 +618,15 @@ def process_alert(
         state.timestamp = _trigger_state.timestamp
         state.session = _trigger_state.session
         state.ohlc = _trigger_state.ohlc
+    if four_hr_five_min:
+        state.canonical_4hr_only = True
+        state.bar_history_5m = recent_five_min(
+            state.instrument,
+            log_dir,
+            3000,
+            for_date=for_date,
+            lookback_days=10,
+        )
 
     # ── Rolling bar history (Phase 3): continuous price record + gap detection ──
     # Record EVERY ingested bar (traded or not) so regime can be judged over a
@@ -617,7 +635,7 @@ def process_alert(
     bar_gap = None
     recent_bars: list[dict] = []
     structural_bars: list[dict] = []
-    if not five_min_trigger:
+    if not five_min_trigger and not four_hr_five_min:
         try:
             bar_hist = BarHistory(log_dir=log_dir)
             tf_min = _bar_timeframe_minutes(payload, cfg)
@@ -840,7 +858,7 @@ def process_alert(
     # writes its own evidence/state files, owns hypothetical positions solely
     # through PaperBroker, and never changes this result's decision/risk/broker
     # path. It runs only on authoritative decision bars, never the 5m retest.
-    if not five_min_trigger and state.instrument == "MNQ":
+    if not five_min_trigger and not four_hr_five_min and state.instrument == "MNQ":
         try:
             _strat_events = process_mnq_strat_evidence(
                 state=state,
@@ -867,7 +885,11 @@ def process_alert(
     # claim_bar (its rows must never precede a bar claim) and only on the 15M
     # ingestion path. Read-only for trading; fail-soft — a resolver hiccup must
     # never affect the decision, risk, or execution.
-    if not five_min_trigger and getattr(cfg, "shadow_resolver_enabled", True):
+    if (
+        not five_min_trigger
+        and not four_hr_five_min
+        and getattr(cfg, "shadow_resolver_enabled", True)
+    ):
         try:
             _resolved_shadow = resolve_pending_shadow_outcomes(
                 log_dir=log_dir,
@@ -1362,7 +1384,7 @@ def process_alert(
         )
     else:
         # Every new authoritative 15M decision invalidates the previous arm.
-        if five_min_enabled():
+        if five_min_enabled() and not four_hr_five_min:
             clear_armed_setup(state.instrument, log_dir, for_date)
         decision = DecisionEngine(config=cfg).evaluate(state, daily_state)
 
@@ -1516,7 +1538,7 @@ def process_alert(
     # existing shadow observer, records the normal gate that blocked/allowed the
     # bar, and owns any paper_sim order solely through PaperBroker. It never
     # mutates decision/risk/broker state and never reaches Tradovate.
-    if not five_min_trigger and state.instrument == "MES":
+    if not five_min_trigger and not four_hr_five_min and state.instrument == "MES":
         try:
             _mes_tcb_events = process_mes_trend_consolidation_break_evidence(
                 state=state,
@@ -1622,6 +1644,9 @@ def process_alert(
             except OSError as _exc:
                 logger.warning("5m feed: setup arm skipped: %s", _exc)
         journal_entry = decision.to_dict()
+        journal_entry["strategy_state"] = {
+            "strat_4hr_retrigger": dict(daily_state.four_hr_retrigger_state)
+        }
         journal_entry["context"] = _market_state_context(state)
         if shadow_candidates:
             journal_entry["shadow_candidates"] = shadow_candidates
@@ -1696,6 +1721,9 @@ def process_alert(
         "penalties": confluence.penalties,
     }
     journal_entry = decision.to_dict()
+    journal_entry["strategy_state"] = {
+        "strat_4hr_retrigger": dict(daily_state.four_hr_retrigger_state)
+    }
     journal_entry["context"] = _market_state_context(state)
     if shadow_candidates:
         journal_entry["shadow_candidates"] = shadow_candidates
@@ -1772,7 +1800,7 @@ def process_alert(
         instrument=state.instrument,
         session=state.session,
         notes=decision.setup.notes,
-        entry_time=state.timestamp,
+        entry_time=decision.setup.entry_time or state.timestamp,
         contracts=contracts,
         confluence_grade=confluence.grade,
     )

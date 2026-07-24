@@ -246,10 +246,20 @@ def record_five_min(payload, log_dir: str, for_date=None) -> dict:
 
 
 def recent_five_min(
-    instrument: str, log_dir: str, n: int = 60, for_date=None
+    instrument: str,
+    log_dir: str,
+    n: int = 60,
+    for_date=None,
+    *,
+    lookback_days: int = 3,
 ) -> List[dict]:
     """Most recent ``n`` stored 5M bars for an instrument (oldest→newest)."""
-    return _history(log_dir).recent(_root(instrument), n, for_date=for_date)
+    return _history(log_dir).recent(
+        _root(instrument),
+        n,
+        for_date=for_date,
+        lookback_days=lookback_days,
+    )
 
 
 def five_min_status(log_dir: str, instruments=None, for_date=None) -> dict:
