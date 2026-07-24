@@ -24,6 +24,11 @@ from zoneinfo import ZoneInfo
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from context.trend import classify_trend  # noqa: E402  (after path insert)
+from scripts.pine_market_condition import (  # noqa: E402
+    atr14_series,
+    reconstruct_bar,
+    sma_series,
+)
 
 _ET = ZoneInfo("America/New_York")
 _UTC = timezone.utc
@@ -354,6 +359,10 @@ def convert(
     for row in raw:
         ts, _ = parse_time(row["time"])
         volume_raw = first_value(row, "Volume", "volume", default="1")
+        # Detect a genuinely absent Volume column (empty default, distinct from
+        # a real column value that happens to be "1") -- reconstruct_bar() must
+        # never treat this fabricated volume as Pine-equivalent evidence.
+        volume_synthetic = first_value(row, "Volume", "volume", default="") == ""
         bars.append({
             "ts": ts,
             "open": float(row["open"]),
@@ -363,6 +372,7 @@ def convert(
             # Some TradingView exports omit volume when only indicator values are exported.
             # Use 1 so replay stays deterministic but does not fake volume confirmation.
             "volume": int(float(volume_raw or 1)),
+            "volume_synthetic": volume_synthetic,
             "orb_high_raw": first_value(row, "NY ORB High", "London ORB High", "ORB High", "OR High", "Orb High"),
             "orb_low_raw": first_value(row, "NY ORB Low", "London ORB Low", "ORB Low", "OR Low", "Orb Low"),
             "bt1": first_value(row, "Bar Type 1 Label", "BT1", "Type 1"),
@@ -404,6 +414,17 @@ def convert(
                 return pdh, pdl, pdc
         pb = bars[0]
         return pb["high"], pb["low"], pb["close"]
+
+    # Pine market_condition reconstruction (evidence-only, additive -- see
+    # scripts/pine_market_condition.py). Precomputed as full series, same
+    # pattern as the EMA series in polygon_to_replay.py.
+    all_highs = [b["high"] for b in bars]
+    all_lows = [b["low"] for b in bars]
+    all_closes = [b["close"] for b in bars]
+    all_volumes = [b["volume"] for b in bars]
+    all_volume_synthetic = [b["volume_synthetic"] for b in bars]
+    recon_atr14_s = atr14_series(all_highs, all_lows, all_closes)
+    recon_vol_sma20_s = sma_series(all_volumes, 20)
 
     # Build candle records
     candles: list[dict] = []
@@ -482,6 +503,36 @@ def convert(
             htf_at(one_hour_bars, bar["ts"]),
         )
 
+        recon_ema9 = _opt_float(bar.get("ema9"))
+        recon_ema21 = _opt_float(bar.get("ema21"))
+        recon_ema55 = _opt_float(bar.get("ema55"))
+        recon_atr14 = recon_atr14_s[i]
+        recon_vol_sma20 = recon_vol_sma20_s[i]
+        recon_rel_vol = (
+            bar["volume"] / recon_vol_sma20
+            if recon_vol_sma20 not in (None, 0)
+            else None
+        )
+        # A bar's reconstruction is only Pine-equivalent evidence if every bar
+        # feeding its own 20-bar volume window used real (non-synthetic)
+        # volume -- a clean current bar downstream of a fabricated-volume bar
+        # still has a contaminated rel_vol average.
+        recon_window_start = max(0, i - 19)
+        recon_volume_is_synthetic = any(
+            all_volume_synthetic[recon_window_start:i + 1]
+        )
+        recon_trend, recon_condition, recon_status = reconstruct_bar(
+            close=bar["close"],
+            ema9=recon_ema9,
+            ema21=recon_ema21,
+            ema55=recon_ema55,
+            high=bar["high"],
+            low=bar["low"],
+            atr14=recon_atr14,
+            rel_vol=recon_rel_vol,
+            volume_is_synthetic=recon_volume_is_synthetic,
+        )
+
         candle = {
             "timestamp": dt.isoformat(),
             "instrument": instrument,
@@ -532,6 +583,15 @@ def convert(
             "two_bars_back_high": prev2_bar["high"] if prev2_bar else None,
             "two_bars_back_low": prev2_bar["low"] if prev2_bar else None,
             **htf_context,
+            # Pine-exact market_condition reconstruction — EVIDENCE ONLY,
+            # additive alongside (does not replace) market_condition/
+            # trend_direction/trend_strength/avg_volume above, which the
+            # engine still reads unchanged. See scripts/pine_market_condition.py.
+            "reconstructed_trend_direction": recon_trend,
+            "reconstructed_market_condition": recon_condition,
+            "reconstructed_status": recon_status,
+            "reconstructed_atr14": recon_atr14,
+            "reconstructed_rel_vol": recon_rel_vol,
         }
         candles.append(candle)
 
