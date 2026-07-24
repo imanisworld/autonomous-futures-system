@@ -275,13 +275,13 @@ def test_journal_restart_reconstructs_pending_state(tmp_path):
             "session": "new_york",
             "decision": "NO_TRADE",
             "reason": "pending",
-            "strategy_state": {"strat_4hr_retrigger": armed},
+            "strategy_state": {"strat_4hr_retrigger": {"MNQ": armed}},
         },
         None,
         for_date=TUESDAY,
     )
     restored = JournalLogger(log_dir=str(tmp_path)).get_daily_state(TUESDAY)
-    assert restored.four_hr_retrigger_state == armed
+    assert restored.four_hr_retrigger_state["MNQ"] == armed
 
 
 @pytest.mark.parametrize(
@@ -381,6 +381,36 @@ def test_decision_engine_uses_canonical_formula_in_runtime_and_replay(
     assert runtime.setup.entry == replay.setup.entry == 95
     assert runtime.setup.stop == replay.setup.stop == 87
     assert runtime.setup.target == replay.setup.target == 100
+
+
+def test_cross_instrument_armed_state_is_not_consumed_by_another_instrument(config):
+    """Regression for the shared-DailyState cross-instrument leak: MNQ arms
+    the canonical 4HR re-trigger, then an interleaved MES 5-minute bar
+    (same DailyState, same wall-clock, unrelated price levels) must not
+    trigger against or overwrite MNQ's persisted state. Before instrument-
+    keying, four_hr_retrigger_state was a single unkeyed dict — any other
+    instrument's next 5m bar would advance/resolve/overwrite it."""
+    cfg = replace(
+        config,
+        enabled_concepts=[*config.enabled_concepts, "strat_4hr_retrigger"],
+    )
+    engine = DecisionEngine(cfg)
+    daily = DailyState()
+
+    mnq_state = _market_state(_long_history(trigger_at=None))
+    engine._advance_4hr_retrigger(mnq_state, daily)
+    assert daily.four_hr_retrigger_state["MNQ"]["status"] == "ARMED"
+    mnq_armed_snapshot = deepcopy(daily.four_hr_retrigger_state["MNQ"])
+
+    # An MES 5m bar arrives next on the same DailyState — same bar history
+    # shape, different instrument, unrelated to MNQ's armed boundary.
+    mes_state = replace(mnq_state, instrument="MES")
+    engine._advance_4hr_retrigger(mes_state, daily)
+
+    # MNQ's armed state must be completely untouched by the MES bar.
+    assert daily.four_hr_retrigger_state["MNQ"] == mnq_armed_snapshot
+    # MES gets its own independent slot, not MNQ's armed state.
+    assert "MES" in daily.four_hr_retrigger_state
 
 
 def test_old_orb_reclaim_proxy_cannot_emit_under_4hr_identity(config):

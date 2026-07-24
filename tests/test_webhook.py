@@ -718,7 +718,7 @@ def test_journal_reconstructs_orb_break_flags_from_persisted_context(tmp_path):
     }
     journal._append(base_entry, today)
     state = journal.get_daily_state(today)
-    assert state.orb_break_long_played is True
+    assert state.orb_break_long_played.get("MNQ") is True
 
     reclaim_entry = {
         **base_entry,
@@ -727,7 +727,59 @@ def test_journal_reconstructs_orb_break_flags_from_persisted_context(tmp_path):
     }
     journal._append(reclaim_entry, today)
     state = journal.get_daily_state(today)
-    assert state.orb_break_long_played is False
+    assert state.orb_break_long_played.get("MNQ") is False
+
+
+def test_orb_break_played_state_is_isolated_per_instrument(tmp_path):
+    """Regression: one instrument's ORB break must never block or reset
+    another instrument's ORB continuation setups. Before instrument-keying,
+    orb_break_long_played/orb_break_short_played were single account-wide
+    booleans shared by every instrument's TRADE rows."""
+    from journal.journal_logger import JournalLogger
+
+    today = date(2026, 5, 23)
+    journal = JournalLogger(log_dir=str(tmp_path / "logs"))
+
+    def _trade_entry(instrument: str, orb_status: str, strategy: str = "orb_breakout") -> dict:
+        return {
+            "ts": "2026-05-23T14:30:00+00:00",
+            "instrument": instrument,
+            "session": "new_york",
+            "decision": "TRADE",
+            "reason": "test",
+            "market_condition": "TRENDING",
+            "setup": {
+                "direction": "LONG",
+                "entry": 100.0,
+                "stop": 90.0,
+                "target": 120.0,
+                "rr_ratio": 2.0,
+                "strategy": strategy,
+                "notes": None,
+            },
+            "context": {"orb": {"status": orb_status}},
+            "risk_check": {"result": "APPROVED", "failed_rule": None, "reason": None},
+            "outcome": {"result": "WIN"},
+        }
+
+    # MNQ breaks above its ORB — MNQ's long-break flag should flip.
+    journal._append(_trade_entry("MNQ", "above"), today)
+    state = journal.get_daily_state(today)
+    assert state.orb_break_long_played.get("MNQ") is True
+    # MES has never traded — its flag must not be affected by MNQ's break.
+    assert state.orb_break_long_played.get("MES") is None
+
+    # MES independently breaks above its own ORB.
+    journal._append(_trade_entry("MES", "above"), today)
+    state = journal.get_daily_state(today)
+    assert state.orb_break_long_played.get("MNQ") is True
+    assert state.orb_break_long_played.get("MES") is True
+
+    # MES reclaims (resets MES's flag only) — MNQ's break must stay played.
+    journal._append(_trade_entry("MES", "reclaimed_high", strategy="orb_reclaim"), today)
+    state = journal.get_daily_state(today)
+    assert state.orb_break_long_played.get("MNQ") is True
+    assert state.orb_break_long_played.get("MES") is False
 
 
 # ─── runner: open-position resolution ────────────────────────────────────────

@@ -536,6 +536,9 @@ class JournalLogger:
     def _apply_orb_break_state(entry: dict, daily_state: Optional[DailyState]) -> None:
         if daily_state is None:
             return
+        instrument = entry.get("instrument")
+        if not instrument:
+            return
         setup = entry.get("setup") or {}
         context = entry.get("context") or {}
         orb = context.get("orb") or {}
@@ -543,13 +546,13 @@ class JournalLogger:
         strategy = setup.get("strategy")
 
         if orb_status == "above":
-            daily_state.orb_break_long_played = True
+            daily_state.orb_break_long_played[instrument] = True
         elif orb_status == "below":
-            daily_state.orb_break_short_played = True
+            daily_state.orb_break_short_played[instrument] = True
         elif strategy == "orb_reclaim":
-            daily_state.orb_break_long_played = False
+            daily_state.orb_break_long_played[instrument] = False
         elif strategy == "orb_rejection":
-            daily_state.orb_break_short_played = False
+            daily_state.orb_break_short_played[instrument] = False
 
     def get_open_position(self, for_date: Optional[date] = None) -> Optional[dict]:
         """
