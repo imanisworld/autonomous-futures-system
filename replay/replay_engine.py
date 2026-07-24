@@ -73,6 +73,9 @@ class ReplayEngine:
         # day still have a prior 4h window (like BarHistory's lookback live).
         self._live_dir_bars: dict[str, deque] = {}
         self._research_bars: dict[str, deque] = {}
+        # Canonical 4HR input history.  Kept across run_many day boundaries so
+        # Monday can see Sunday/Friday references exactly as live BarHistory can.
+        self._four_hr_bars: dict[str, deque] = {}
 
     @staticmethod
     def _load_default_htf() -> HTFLookup:
@@ -160,6 +163,22 @@ class ReplayEngine:
                     "volume": candle.volume,
                 }
             )
+            if str(candle.timeframe).strip().lower() in {
+                "5", "5m", "5min", "5minute", "5minutes"
+            }:
+                self._four_hr_bars.setdefault(
+                    candle.instrument, deque(maxlen=5000)
+                ).append(
+                    {
+                        "ts": candle.timestamp,
+                        "open": candle.open,
+                        "high": candle.high,
+                        "low": candle.low,
+                        "close": candle.close,
+                        "volume": candle.volume,
+                        "timeframe": candle.timeframe,
+                    }
+                )
             if idx < skip_to:
                 prev_candle = candle
                 continue
@@ -176,6 +195,9 @@ class ReplayEngine:
                 break
 
             state = self._market_state_from_candle(candle, prev_candle)
+            state.bar_history_5m = list(
+                self._four_hr_bars.get(candle.instrument, ())
+            )
             if getattr(self.config, "htf_direction_source", "payload") == "live":
                 apply_live_direction(
                     state, self._live_dir_bars.get(candle.instrument, ())
@@ -211,6 +233,11 @@ class ReplayEngine:
                 )
                 confluence = _score_setup(state, decision.setup)
                 journal_entry = decision.to_dict()
+                journal_entry["strategy_state"] = {
+                    "strat_4hr_retrigger": dict(
+                        daily_state.four_hr_retrigger_state
+                    )
+                }
                 # Persist the historical candle time (the record's own `ts` is the
                 # wall-clock replay-run time) so downstream analysis — e.g. the MFE
                 # study — can locate the trade's real price window.
@@ -233,7 +260,10 @@ class ReplayEngine:
                     instrument=state.instrument,
                     session=state.session,
                     notes=decision.setup.notes,
-                    entry_time=_parse_timestamp(candle.timestamp),
+                    entry_time=(
+                        decision.setup.entry_time
+                        or _parse_timestamp(candle.timestamp)
+                    ),
                     confluence_grade=confluence.grade,
                 )
                 daily_state.account_balance = broker.get_account_balance()
@@ -362,6 +392,11 @@ class ReplayEngine:
                 continue
 
             journal_entry = decision.to_dict()
+            journal_entry["strategy_state"] = {
+                "strat_4hr_retrigger": dict(
+                    daily_state.four_hr_retrigger_state
+                )
+            }
             # Persist the historical candle time (the record's own `ts` is the
             # wall-clock replay-run time) so shadow candidates can be re-resolved
             # offline — e.g. a runner-exit A/B that needs each setup's real bars.

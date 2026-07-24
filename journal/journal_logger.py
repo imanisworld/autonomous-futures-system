@@ -497,6 +497,11 @@ class JournalLogger:
             session_start_time=session_start_time,
         )
         for entry in entries:
+            strategy_state = entry.get("strategy_state") or {}
+            four_hr_state = strategy_state.get("strat_4hr_retrigger")
+            if isinstance(four_hr_state, dict):
+                daily_state.four_hr_retrigger_state = dict(four_hr_state)
+        for entry in entries:
             decision = entry.get("decision")
             risk_check = entry.get("risk_check") or {}
             if decision == "TRADE" and risk_check.get("result") == "APPROVED":
@@ -517,7 +522,7 @@ class JournalLogger:
             daily_state.orb_break_long_played = True
         elif orb_status == "below":
             daily_state.orb_break_short_played = True
-        elif strategy in ("orb_reclaim", "strat_4hr_retrigger"):
+        elif strategy == "orb_reclaim":
             daily_state.orb_break_long_played = False
         elif strategy == "orb_rejection":
             daily_state.orb_break_short_played = False

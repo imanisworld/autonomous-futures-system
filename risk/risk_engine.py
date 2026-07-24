@@ -82,6 +82,9 @@ class DailyState:
     consecutive_wins: int = 0
     session_start_pnl: Dict[str, float] = field(default_factory=dict)
     session_start_time: Dict[str, datetime] = field(default_factory=dict)
+    # Persisted/reconstructed pending setup state for the canonical executable
+    # 4HR Re-Trigger.  Dict form keeps journal serialization deterministic.
+    four_hr_retrigger_state: dict = field(default_factory=dict)
 
 
 @dataclass

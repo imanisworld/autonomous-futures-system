@@ -111,17 +111,18 @@ could never produce the executable 9:30 setup the strategy is actually built aro
 - Scan the bars **in chronological order**, tracking whether a break has occurred yet:
   - For CALLS: a break occurs at the first bar whose **HIGH** exceeds the 4AM high
     (intrabar touch is sufficient — no close required, matching "8AM high must break
-    above"). Only **after** a break bar has been found, continue scanning for the first
-    **subsequent** bar whose **CLOSE** is below the 4AM high — this confirms the retrace.
+    above"). Once a break has occurred, the first bar whose **CLOSE** is below the 4AM
+    high confirms the retrace. The break and close-back-through may occur on the same bar.
   - For PUTS: symmetric — a break occurs at the first bar whose **LOW** is below the 4AM
-    low; the retrace is the first **subsequent** bar whose **CLOSE** is above the 4AM low.
+    low; once broken, the first bar whose **CLOSE** is above the 4AM low confirms the
+    retrace, including the break bar itself when it closes back through.
   - **Ordering matters**: a bar that closes back through the level *before* any break has
     occurred is not a retrace of anything and must not confirm the pattern. This is why the
     scan must track break-then-retrace as a chronological sequence, not two independent
     window-wide checks.
 - If no break ever occurs in the window → return `None` (8AM never reversed — matches the
   original Step 5 "condition not met").
-- If a break occurs but no qualifying bar closes back through the level afterward, before
+- If a break occurs but no qualifying bar closes back through the level, before
   9:30 → return `None` (matches the original Step 6 "no such bar exists in the window").
 - Intrabar touches never count for the retrace — close only. They ARE sufficient for the
   break itself (this asymmetry is unchanged from the original spec's wording: "8AM high
@@ -180,7 +181,7 @@ The detector returns `stop_reference` based on the 9:30 AM anchor. The replay en
   the developing 8AM state at all)
 - No break ever occurs within the window (developing high/low never exceeds the 4AM
   level) → return `None`
-- A break occurs but no subsequent bar closes back through the level before 9:30 → return
+- A break occurs but no bar closes back through the level before 9:30 → return
   `None`
 - A bar closes through the level BEFORE any break has occurred → does not count as a
   retrace; continue scanning for a genuine break-then-retrace sequence

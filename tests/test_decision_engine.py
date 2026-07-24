@@ -1215,7 +1215,7 @@ class TestStrat4hrRetrigger:
         )
 
     def test_fires_early_ny(self, retrigger_config):
-        """9:45 ET — inside the 9:30–11:00 window → strat_4hr_retrigger."""
+        """The former ORB proxy no longer claims an early-NY reclaim bar."""
         from datetime import timezone
         from zoneinfo import ZoneInfo
         ts = datetime(2026, 5, 23, 13, 45, tzinfo=timezone.utc)  # 09:45 ET
@@ -1223,7 +1223,7 @@ class TestStrat4hrRetrigger:
         engine = DecisionEngine(config=retrigger_config)
         decision = engine.evaluate(state, DailyState())
         assert decision.decision == "TRADE"
-        assert decision.setup.strategy == "strat_4hr_retrigger"
+        assert decision.setup.strategy == "orb_reclaim"
 
     def test_ranked_mode_applies_mnq_orb_reclaim_expectancy(self, retrigger_config):
         """MNQ ranked mode can prefer high-expectancy orb_reclaim on overlap bars."""
@@ -1235,10 +1235,7 @@ class TestStrat4hrRetrigger:
         candidates = engine.collect_strategy_candidates(state, "TRENDING", DailyState())
         decision = engine.evaluate(state, DailyState())
 
-        assert [c.setup.strategy for c in candidates[:2]] == [
-            "orb_reclaim",
-            "strat_4hr_retrigger",
-        ]
+        assert [c.setup.strategy for c in candidates[:2]] == ["orb_reclaim"]
         assert decision.decision == "TRADE"
         assert decision.setup.strategy == "orb_reclaim"
         assert "expectancy_bonus 80.0" in (decision.setup.notes or "")
@@ -1266,14 +1263,14 @@ class TestStrat4hrRetrigger:
         assert decision.setup.strategy == "orb_reclaim"
 
     def test_does_not_fire_for_mes_instrument(self, retrigger_config):
-        """MES is allowed for strat_4hr_retrigger, confirm it fires."""
+        """MES ORB state alone cannot impersonate the resolved 4HR strategy."""
         ts = datetime(2026, 5, 23, 13, 45, tzinfo=timezone.utc)  # 09:45 ET
         state = self._retrigger_state(ts)
         state.instrument = "MES"
         engine = DecisionEngine(config=retrigger_config)
         decision = engine.evaluate(state, DailyState())
         assert decision.decision == "TRADE"
-        assert decision.setup.strategy == "strat_4hr_retrigger"
+        assert decision.setup.strategy == "orb_reclaim"
 
     def test_does_not_fire_for_mgc(self, retrigger_config):
         """MGC is not an equity index — strat_4hr_retrigger must not fire."""

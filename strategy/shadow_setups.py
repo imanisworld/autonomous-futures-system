@@ -176,10 +176,9 @@ STRAT_122_MAX_STOP_TICKS = {
     "ES": 60,
 }
 
-# 4HR re-trigger proxy mirror — see _strat_4hr_retrigger_observed. These mirror the
-# executable engine's constants (signal_engine.py:_4HR_WINDOW_*, MAX_ORB_STOP_TICKS)
-# so the journaled shadow matches what the demoted proxy would have done. Local to
-# the observe-only path: changing them cannot affect executable trading.
+# Historical 4HR ORB-proxy observer. It remains under the distinct *_observed
+# identity for continuity and does not mirror or participate in the canonical
+# executable 4HR strategy. Local to the observe-only path.
 _FOURHR_ET = ZoneInfo("America/New_York")
 _FOURHR_WINDOW_START = _time(9, 30)
 _FOURHR_WINDOW_END = _time(11, 0)
@@ -421,11 +420,9 @@ def _strat_122_pullback(state: MarketState) -> ShadowSetupCandidate | None:
 def _strat_4hr_retrigger_observed(state: MarketState) -> ShadowSetupCandidate | None:
     """Journal the demoted 4HR re-trigger proxy — observe-only, never trades.
 
-    Faithful mirror of signal_engine.py:_try_strat_4hr_retrigger (+ _short). The
-    proxy was removed from executable enabled_concepts: it is a 15M approximation
-    of a doctrine pattern that needs a 5M feed, and its "83.3% WR" was 6 trades
-    (noise). Journaling it here keeps the earn-the-gate evidence trail without
-    letting it place an order. Spec: .private-companion/strategy/
+    This is the retired 15M approximation, retained only as historical
+    observation evidence. It has a distinct strategy ID and can never place an
+    order. Spec: .private-companion/strategy/
     strat_4hr_retrigger_rules_v1.md.
     """
     if state.instrument not in ("MNQ", "MES"):

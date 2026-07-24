@@ -50,7 +50,7 @@ A reversal setup on 4-hour candles. The 4AM candle must move directionally again
 
 **Step 2 — 8AM candle must be 2UP AND retrace:**
 - 8AM candle high must break ABOVE the 4AM candle high (triggers the 2UP) — using the developing 8AM candle's state (5-minute bars from 8:00 AM), an intrabar touch is sufficient
-- The first 5-minute bar AFTER that break that CLOSES below the 4AM candle high, before 9:30 AM ET, confirms the retrace. Intrabar touches do not count. A bar closing below the level before any break has occurred is not a retrace and does not qualify.
+- Once the break has occurred, the first 5-minute bar that CLOSES below the 4AM candle high before 9:30 AM ET confirms the retrace. The break and close-back-through may occur on the same 5-minute bar. Intrabar touches do not count for the retrace. A bar closing below the level before any break has occurred is not a retrace and does not qualify.
 
 **Entry trigger level = HIGH of the 4AM candle**
 **Target = HIGH of the prior day's 4PM candle**
@@ -63,7 +63,7 @@ A reversal setup on 4-hour candles. The 4AM candle must move directionally again
 
 **Step 2 — 8AM candle must be 2DOWN AND retrace:**
 - 8AM candle low must break BELOW the 4AM candle low (triggers the 2DOWN) — using the developing 8AM candle's state (5-minute bars from 8:00 AM), an intrabar touch is sufficient
-- The first 5-minute bar AFTER that break that CLOSES above the 4AM candle low, before 9:30 AM ET, confirms the retrace. Intrabar touches do not count. A bar closing above the level before any break has occurred is not a retrace and does not qualify.
+- Once the break has occurred, the first 5-minute bar that CLOSES above the 4AM candle low before 9:30 AM ET confirms the retrace. The break and close-back-through may occur on the same 5-minute bar. Intrabar touches do not count for the retrace. A bar closing above the level before any break has occurred is not a retrace and does not qualify.
 
 **Entry trigger level = LOW of the 4AM candle**
 **Target = LOW of the prior day's 4PM candle**
@@ -94,7 +94,7 @@ A reversal setup on 4-hour candles. The 4AM candle must move directionally again
 - CALLS: Target = High of the prior day's 4PM ET candle (4PM–8PM session)
 - PUTS: Target = Low of the prior day's 4PM ET candle (4PM–8PM session)
 - MNQ/MES Monday: prior candle = Sunday 4:00 PM–8:00 PM ET futures session
-- QQQ Monday: prior candle = Friday 4:00 PM ET close (no Sunday session exists)
+- QQQ Monday: prior candle = Friday 4:00 PM–8:00 PM ET 4-hour bar (no Sunday session exists)
 - The same reference candle defines both the 4AM classification and the target level.
 
 **Exit the full position when target is reached. Do not hold through target.**
@@ -174,9 +174,9 @@ Run this check every morning before 9:30 AM ET.
 - Trigger not fired by 11:00 AM → Void setup. No entry.
 
 **STEP 5 — Manage the trade**
-- Drop to 1-hour chart immediately after entry
-- Monitor for 1H candle flip (stop condition)
-- Hold until target hit OR 1H flip fires — whichever comes first
+- At actual entry time, assign the opposite boundary of the last completed 1-hour candle
+- Keep that stop fixed for the life of the trade; never trail or ratchet it
+- Hold until the fixed stop or prior-4PM target is hit
 
 ---
 
@@ -243,7 +243,7 @@ Record the following for every setup, taken or skipped. These are NOT entry gate
 - No entries if setup is not confirmed at 9:30 AM (price already through trigger)
 - No trading both MNQ and MES on the same session
 - No holding through target — exit at target
-- No overriding the 1H flip stop — if it fires, exit immediately
+- No overriding or trailing the fixed completed-1H stop assigned at entry
 - No chasing if entry is missed — wait for next valid setup
 - Testing phase: 1 contract only regardless of conviction level
 - Missing Signa weekly direction = skip the trade
@@ -268,4 +268,4 @@ Setup fires on ~6–7% of sessions. Expect 1–3 setups per month. This is not a
 - Fixed 1H stop P&L — study used fixed distance stops, not the fixed-at-entry 1H candle rule. Pending replay test.
 - Option P&L after premium, spread, and theta
 - Calls vs puts P&L split
-- Walk-forward stability of 1H flip stop
+- Walk-forward stability of the fixed completed-1H-at-entry stop

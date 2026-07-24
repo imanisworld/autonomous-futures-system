@@ -236,6 +236,12 @@ class MarketState:
     # Premarket location context (context/location_context.py) — observation
     # only, journal evidence; never consulted by decision/risk/routing.
     location_context: Optional[dict] = None
+    # Canonical 4HR Re-Trigger input/candidate.  The history contains only
+    # already-arrived 5-minute bars; the candidate is populated transiently by
+    # DecisionEngine from the shared live/replay state machine.
+    bar_history_5m: list[dict] = field(default_factory=list)
+    four_hr_retrigger_candidate: Optional[dict] = None
+    canonical_4hr_only: bool = False
     notes: Optional[str] = None
     raw: dict = None  # Original dict for reference
 
