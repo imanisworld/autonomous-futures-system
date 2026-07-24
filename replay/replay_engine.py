@@ -276,10 +276,15 @@ class ReplayEngine:
             # gap between replay files (e.g. one run_many spanning May then
             # July) must not let stale bars outside that window seed a
             # later day. Apply the identical day-count bound at read time.
+            # Lower-bounded at 0: BarHistory.recent only ever walks BACKWARD
+            # from the current bar's own date, so a bar from a LATER replay
+            # file run earlier in the same ReplayEngine instance's lifetime
+            # (e.g. run_many given files out of date order) must not seed an
+            # earlier day either — a negative day-delta is still < 3.
             _wd_current_date = _parse_timestamp(candle.timestamp).date()
             _wd_bars = [
                 b for b in self._window_direction_bars.get(candle.instrument, ())
-                if (_wd_current_date - _parse_timestamp(b["ts"]).date()).days
+                if 0 <= (_wd_current_date - _parse_timestamp(b["ts"]).date()).days
                 < _WINDOW_DIRECTION_LOOKBACK_DAYS
             ]
             state.window_direction = BarHistory.window_direction(_wd_bars)

@@ -306,6 +306,78 @@ def test_replay_window_direction_ignores_bars_older_than_the_live_lookback(
     assert day2_state.window_direction is None
 
 
+def test_replay_window_direction_ignores_future_bars_run_out_of_order(
+    config, tmp_path, monkeypatch
+):
+    """A negative day-delta must not pass the age filter. BarHistory.recent
+    only ever walks BACKWARD from the current bar's own date — it can never
+    read a file for a date after the one it's asked about. If a ReplayEngine
+    instance processes a LATER day first (e.g. run_many given files out of
+    order) and an EARLIER day second, the later day's bars sit in
+    _window_direction_bars with a date after the earlier day's current date:
+    (earlier - later).days is negative, and an unbounded `< 3` check treats
+    every negative number as "recent enough" — exactly backwards. The
+    earlier day's only bar must resolve window_direction to None (too few
+    real bars), not "UP" leaked in from the future day run before it."""
+    from datetime import datetime, timedelta, timezone
+
+    from strategy.signal_engine import DecisionEngine
+
+    base = json.loads(Path("data/replay/sample_day_mnq.jsonl").read_text().splitlines()[0])
+
+    def _candle(close: float, ts: datetime) -> dict:
+        c = dict(base)
+        for key in (
+            "current_bar_type", "previous_bar_type", "two_bars_back_type",
+            "strat_sequence", "strat_trigger", "strat_direction",
+            "previous_bar_high", "previous_bar_low",
+        ):
+            c.pop(key, None)
+        c["timestamp"] = ts.isoformat()
+        c["open"] = close - 2.0
+        c["high"] = close + 1.0
+        c["low"] = close - 3.0
+        c["close"] = close
+        c["market_condition"] = "CHOPPY"
+        c["trend_direction"] = "UP"
+        c["trend_strength"] = "WEAK"
+        c["orb_status"] = "inside"
+        c["timeframe"] = "15"
+        return c
+
+    later_dt = datetime(2026, 7, 2, 14, 30, tzinfo=timezone.utc)
+    later_closes = [19480.0, 19485.0, 19490.0, 19495.0, 19500.0]
+    later_candles = [
+        _candle(close, later_dt + timedelta(minutes=15 * i))
+        for i, close in enumerate(later_closes)
+    ]
+    later_path = tmp_path / "later.jsonl"
+    later_path.write_text("\n".join(json.dumps(c) for c in later_candles) + "\n")
+
+    earlier_dt = datetime(2026, 7, 1, 14, 30, tzinfo=timezone.utc)
+    earlier_path = tmp_path / "earlier.jsonl"
+    earlier_path.write_text(json.dumps(_candle(19505.0, earlier_dt)) + "\n")
+
+    seen_states = []
+    original_evaluate = DecisionEngine.evaluate
+
+    def _spy(self, state, daily_state):
+        seen_states.append(state)
+        return original_evaluate(self, state, daily_state)
+
+    monkeypatch.setattr(DecisionEngine, "evaluate", _spy)
+
+    # Run the LATER day first, then the EARLIER day — out of chronological
+    # order, same ReplayEngine instance (as run_many/run_manifest would do
+    # if given misordered paths).
+    engine = ReplayEngine(config=config, log_dir=str(tmp_path / "logs"))
+    engine.run_many([later_path, earlier_path])
+
+    assert len(seen_states) == 6
+    earlier_state = seen_states[-1]
+    assert earlier_state.window_direction is None
+
+
 def test_replay_window_direction_ignores_interleaved_5m_candles(
     config, tmp_path, monkeypatch
 ):
