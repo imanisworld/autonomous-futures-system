@@ -2126,22 +2126,27 @@ class DecisionEngine:
 
     def _try_vwap_rejection(self, state: MarketState) -> Optional[SetupDetail]:
         """
-        VWAP Rejection: Price attempted to reclaim VWAP from below, failed,
-        and closed back below it. Mirror image of vwap_reclaim.
+        VWAP Rejection: Price reclaimed VWAP, failed to hold, and closed back
+        below it on the VERY NEXT bar. Mirror image of vwap_reclaim.
 
-        Conditions:
-        - vwap.reclaimed was True (price crossed above VWAP this bar)
-          BUT close is below VWAP (failed to hold) — the reclaim was rejected
-        - Downtrend confirms direction
-        - Strat bar type = two_down preferred (bar extended lower after rejection)
+        Causal, one-bar-lookback condition: state.vwap.failed_reclaim is True
+        only on the bar immediately following a genuine VWAP reclaim (the
+        PRIOR bar's own reclaimed status) that then closes back below VWAP
+        THIS bar. Populated upstream — live: Pine sends it directly (Pine
+        tracks its own crossover state across bars, unaffected by whether
+        the backend even evaluates a given bar); replay:
+        replay/replay_engine.py derives it from the candle sequence itself,
+        independent of DecisionEngine/DailyState. A prior version of this
+        check required vwap.reclaimed and price_vs_vwap == "below" on the
+        SAME bar — structurally impossible, since reclaimed can only be True
+        on a bar where price closed above VWAP (see
+        docs/vwap-hold-vs-vwap-rejection-overlap-audit-2026-07-23.md,
+        PR #308) — so this setup could never fire. Fixed here.
 
         This is a high-conviction SHORT: the reclaim attempt is the stop-run,
         and the close back below VWAP is the failed reclaim confirmation.
         """
-        # Price crossed above VWAP this bar (attempted reclaim) but closed below it
-        if not state.vwap.reclaimed:
-            return None
-        if state.vwap.price_vs_vwap != "below":
+        if not (state.vwap and state.vwap.failed_reclaim):
             return None
         if not (state.trend and state.trend.direction == "DOWN"):
             return None

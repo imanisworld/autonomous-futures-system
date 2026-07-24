@@ -366,6 +366,7 @@ def build_market_state(payload: AlertPayload) -> MarketState:
             price_vs_vwap=price_vs_vwap,
             reclaimed=payload.vwap_reclaimed,
             holding=price_vs_vwap in ("above", "below"),
+            failed_reclaim=payload.vwap_failed_reclaim,
         ),
         orb=ORBData(
             high=orb_h,
