@@ -142,8 +142,16 @@ class ReplayEngine:
         stopped_reason: str | None = None
         candles_processed = 0
         skip_to = 0  # index of first bar available after an open position resolves
-        prev_candle: Optional[ReplayCandle] = None
-        prev_prev_candle: Optional[ReplayCandle] = None
+        # Keyed by (instrument, timeframe), not a single global pair: run()
+        # supports allow_mixed_instruments=True, where candles from different
+        # instruments can interleave in one sequence. A global prev_candle/
+        # prev_prev_candle would let one instrument's bars leak into
+        # another's vwap_reclaimed/failed_reclaim derivation (e.g. an MNQ
+        # reclaim immediately preceding an unrelated MES bar in the merged
+        # stream would falsely arm MES's failed_reclaim). Each key's history
+        # only ever sees that instrument+timeframe's own authoritative bars.
+        prev_candle_by_key: dict[tuple[str, str], ReplayCandle] = {}
+        prev_prev_candle_by_key: dict[tuple[str, str], ReplayCandle] = {}
 
         for idx, candle in enumerate(candles):
             candles_processed += 1
@@ -188,9 +196,10 @@ class ReplayEngine:
                         "timeframe": candle.timeframe,
                     }
                 )
+            candle_key = (candle.instrument, candle.timeframe)
             if idx < skip_to:
-                prev_prev_candle = prev_candle
-                prev_candle = candle
+                prev_prev_candle_by_key[candle_key] = prev_candle_by_key.get(candle_key)
+                prev_candle_by_key[candle_key] = candle
                 continue
 
             if daily_state.consecutive_losses >= self.config.max_consecutive_losses:
@@ -204,7 +213,11 @@ class ReplayEngine:
                 stopped_reason = "max_trades_per_day"
                 break
 
-            state = self._market_state_from_candle(candle, prev_candle, prev_prev_candle)
+            state = self._market_state_from_candle(
+                candle,
+                prev_candle_by_key.get(candle_key),
+                prev_prev_candle_by_key.get(candle_key),
+            )
             state.bar_history_5m = list(
                 self._four_hr_bars.get(candle.instrument, ())
             )
@@ -232,8 +245,8 @@ class ReplayEngine:
             decision = decision_engine.evaluate(state, daily_state)
             risk_result_dict = None
 
-            prev_prev_candle = prev_candle
-            prev_candle = candle
+            prev_prev_candle_by_key[candle_key] = prev_candle_by_key.get(candle_key)
+            prev_candle_by_key[candle_key] = candle
 
             if decision.decision == "TRADE" and decision.setup is not None:
                 # Per-instrument stop-width multiplier — shared with webhook.runner

@@ -255,3 +255,65 @@ def test_replay_candle_derivation_is_independent_of_whether_evaluate_runs():
 
     state2 = engine._market_state_from_candle(bar2, prev_candle=bar1, prev_prev_candle=bar0)
     assert state2.vwap.failed_reclaim is True
+
+
+# ─── Regression: mixed-instrument replay must not leak reclaim state ────────
+
+
+def test_mixed_instrument_replay_does_not_leak_reclaim_across_instruments(tmp_path, config):
+    """ReplayEngine.run() supports allow_mixed_instruments=True, where
+    candles from different instruments interleave in one sequence. The
+    per-run prev_candle/prev_prev_candle used to be two global scalars —
+    an MNQ reclaim immediately preceding an unrelated MES bar in the merged
+    stream would have falsely armed MES's failed_reclaim. Fixed by keying
+    the lookback history by (instrument, timeframe): each stream only ever
+    sees its own authoritative bars.
+
+    Sequence: MNQ below -> MNQ above (reclaim) -> MES below.
+    MES must NOT be flagged as a failed reclaim off MNQ's crossover.
+    """
+    import json
+    import dataclasses as _dc
+
+    import strategy.signal_engine as se
+
+    def row(instrument, ts, close, vwap=7449.0):
+        return {
+            "timestamp": ts, "instrument": instrument, "session": "new_york",
+            "open": close, "high": close + 2, "low": close - 2, "close": close,
+            "volume": 1000, "avg_volume": 1000, "vwap": vwap,
+            "orb_high": vwap + 20, "orb_low": vwap - 20,
+            "previous_day_high": vwap + 50, "previous_day_low": vwap - 50,
+            "previous_day_close": vwap, "timeframe": "15m",
+        }
+
+    rows = [
+        row("MNQ", "2026-07-24T14:00:00+00:00", 7444.0),  # below
+        row("MNQ", "2026-07-24T14:15:00+00:00", 7454.0),  # above -> reclaim
+        row("MES", "2026-07-24T14:30:00+00:00", 7444.0),  # below -- must NOT flag
+    ]
+    candle_path = tmp_path / "mixed.jsonl"
+    candle_path.write_text("\n".join(json.dumps(r) for r in rows) + "\n")
+
+    captured = []
+    orig_evaluate = se.DecisionEngine.evaluate
+
+    def instrumented(self, state, daily_state):
+        captured.append((state.instrument, state.vwap.reclaimed, state.vwap.failed_reclaim))
+        return orig_evaluate(self, state, daily_state)
+
+    se.DecisionEngine.evaluate = instrumented
+    try:
+        patched = _dc.replace(
+            config, enabled_concepts=list(config.enabled_concepts) + ["vwap_rejection"]
+        )
+        engine = ReplayEngine(config=patched, log_dir=str(tmp_path / "logs"))
+        engine.run(candle_path, allow_mixed_instruments=True)
+    finally:
+        se.DecisionEngine.evaluate = orig_evaluate
+
+    assert len(captured) == 3
+    mnq_bar1, mnq_bar2, mes_bar1 = captured
+    assert mnq_bar1 == ("MNQ", False, False)
+    assert mnq_bar2 == ("MNQ", True, False)
+    assert mes_bar1 == ("MES", False, False)  # NOT contaminated by MNQ's reclaim
