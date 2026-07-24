@@ -51,6 +51,7 @@ from replay.replay_report import MultiDayReplayReport, ReplayReport
 from risk.risk_engine import DailyState, RiskEngine, TradeSetup
 from strategy.confluence_scorer import score_setup as _score_setup
 from strategy.stop_sizing import apply_stop_multiplier
+from strategy.strat_212_122 import STRAT_122, STRAT_212
 from strategy.shadow_setups import evaluate_shadow_setups, resolve_shadow_candidate
 from strategy.signal_engine import DecisionEngine
 from strategy.strat_classifier import StratContext, classify_from_ohlc
@@ -243,7 +244,8 @@ class ReplayEngine:
                 journal_entry["strategy_state"] = {
                     "strat_4hr_retrigger": dict(
                         daily_state.four_hr_retrigger_state
-                    )
+                    ),
+                    "strat_212_122": dict(daily_state.strat_212_122_state),
                 }
                 # Persist the historical candle time (the record's own `ts` is the
                 # wall-clock replay-run time) so downstream analysis — e.g. the MFE
@@ -299,42 +301,119 @@ class ReplayEngine:
 
                 journal.log_decision(journal_entry, risk_result_dict, for_date=journal_date)
 
-                if risk_result.approved:
+                if risk_result.approved and decision.setup.pre_resolved is not None:
+                    # strat_212/122 same-bar RESOLVED case (see
+                    # strategy/strat_212_122.py): the armed boundary AND
+                    # either the target or the opposite (stop) boundary were
+                    # both reached on the same watched bar, so this already
+                    # resolved (WIN or pessimistic LOSS) before this decision
+                    # was even evaluated. Never submit it as an order —
+                    # replay is always PaperBroker, so this is always the
+                    # evidence-journaling path (see webhook/runner.py for the
+                    # live/Tradovate refusal branch of the same case).
+                    _pre = decision.setup.pre_resolved
                     contracts = trade_setup.contracts
-                    order = BracketOrder(
+                    broker.restore_position(
                         instrument=state.instrument,
                         direction=decision.setup.direction,
                         entry=decision.setup.entry,
                         stop=decision.setup.stop,
                         target=decision.setup.target,
-                        rr_ratio=decision.setup.rr_ratio,
-                        strategy=decision.setup.strategy,
-                        notes=decision.setup.notes,
                         contracts=contracts,
-                        min_rr_ratio=float(getattr(self.config, "min_rr_ratio", 2.0)),
-                        max_dollar_risk=(
-                            (
-                                abs(float(decision.setup.entry) - float(decision.setup.stop))
-                                / EXEC_TICK_SIZE.get(state.instrument, 0.25)
-                                + float(
-                                    (getattr(self.config, "entry_tolerance_ticks_by_root", {}) or {}).get(
-                                        state.instrument, 0
-                                    ) or 0
-                                )
-                            )
-                            * EXEC_TICK_VALUE.get(state.instrument, 1.25)
-                            * contracts
-                        ),
-                        max_stop_ticks=float(
-                            (getattr(self.config, "max_stop_ticks", {}) or {}).get(state.instrument, 0) or 0
-                        ) or None,
-                        max_slippage_ticks=float(
-                            (getattr(self.config, "entry_tolerance_ticks_by_root", {}) or {}).get(state.instrument, 0) or 0
-                        ) or None,
-                        post_fill_validation_required=False,
                     )
-                    entry_fill = broker.execute_bracket(order, market_price=candle.close)
-                    if entry_fill.result == "CANCELLED":
+                    resolved_fill = broker.force_resolve(
+                        _pre["result"], float(_pre["exit_price"])
+                    )
+                    resolved_fill.exit_reason = _pre["exit_reason"]
+                    journal.log_outcome(
+                        instrument=resolved_fill.instrument,
+                        session=state.session,
+                        result=resolved_fill.result,
+                        entry_price=resolved_fill.entry_price,
+                        exit_price=resolved_fill.exit_price,
+                        exit_reason=resolved_fill.exit_reason,
+                        pnl_ticks=resolved_fill.pnl_ticks,
+                        pnl_dollars=resolved_fill.pnl_dollars,
+                        contracts=resolved_fill.contracts,
+                        for_date=journal_date,
+                        strategy=decision.setup.strategy,
+                        execution_audit={
+                            "source": "strat_212_122_same_bar_resolution"
+                        },
+                    )
+                    daily_state.trade_count += 1
+                    daily_state.account_balance = broker.get_account_balance()
+                    daily_state.realized_pnl_dollars += float(
+                        resolved_fill.pnl_dollars or 0.0
+                    )
+                    if resolved_fill.result == "LOSS":
+                        daily_state.consecutive_losses += 1
+                        daily_state.last_loss_at = _parse_timestamp(candle.timestamp)
+                    elif resolved_fill.result in ("WIN", "BREAKEVEN"):
+                        daily_state.consecutive_losses = 0
+                    continue
+
+                if risk_result.approved:
+                    contracts = trade_setup.contracts
+                    # strategy/strat_212_122.py's causal resolver only ever
+                    # hands an "OPEN" (non-pre_resolved) candidate back once
+                    # the watched bar has already shown entry triggering at
+                    # its causal fill price (decision.setup.entry —
+                    # gap-through-at-open or the exact boundary, never the
+                    # naive structural level chased at post-close price).
+                    # The position already exists as of this bar's close:
+                    # restore it directly rather than submitting a fresh
+                    # order through the normal fill-model path, then join
+                    # the SAME future-bar resolution every other strategy
+                    # uses below. Never submitted on a live broker at all —
+                    # see webhook/runner.py's refusal branch for that case
+                    # (replay is always PaperBroker, so this path always
+                    # applies here when it's this pair of strategies).
+                    if decision.setup.strategy in (STRAT_212, STRAT_122):
+                        broker.restore_position(
+                            instrument=state.instrument,
+                            direction=decision.setup.direction,
+                            entry=decision.setup.entry,
+                            stop=decision.setup.stop,
+                            target=decision.setup.target,
+                            contracts=contracts,
+                        )
+                        entry_fill = None
+                    else:
+                        order = BracketOrder(
+                            instrument=state.instrument,
+                            direction=decision.setup.direction,
+                            entry=decision.setup.entry,
+                            stop=decision.setup.stop,
+                            target=decision.setup.target,
+                            rr_ratio=decision.setup.rr_ratio,
+                            strategy=decision.setup.strategy,
+                            notes=decision.setup.notes,
+                            contracts=contracts,
+                            min_rr_ratio=float(getattr(self.config, "min_rr_ratio", 2.0)),
+                            max_dollar_risk=(
+                                (
+                                    abs(float(decision.setup.entry) - float(decision.setup.stop))
+                                    / EXEC_TICK_SIZE.get(state.instrument, 0.25)
+                                    + float(
+                                        (getattr(self.config, "entry_tolerance_ticks_by_root", {}) or {}).get(
+                                            state.instrument, 0
+                                        ) or 0
+                                    )
+                                )
+                                * EXEC_TICK_VALUE.get(state.instrument, 1.25)
+                                * contracts
+                            ),
+                            max_stop_ticks=float(
+                                (getattr(self.config, "max_stop_ticks", {}) or {}).get(state.instrument, 0) or 0
+                            ) or None,
+                            max_slippage_ticks=float(
+                                (getattr(self.config, "entry_tolerance_ticks_by_root", {}) or {}).get(state.instrument, 0) or 0
+                            ) or None,
+                            post_fill_validation_required=False,
+                        )
+                        entry_fill = broker.execute_bracket(order, market_price=candle.close)
+                    if entry_fill is not None and entry_fill.result == "CANCELLED":
                         # IOC-faithful baseline: the entry self-cancelled (market
                         # beyond entry ± tolerance at decision time). Book it the
                         # way live does — CANCELLED/ENTRY_NOT_FILLED outcome, NO
@@ -438,7 +517,8 @@ class ReplayEngine:
             journal_entry["strategy_state"] = {
                 "strat_4hr_retrigger": dict(
                     daily_state.four_hr_retrigger_state
-                )
+                ),
+                "strat_212_122": dict(daily_state.strat_212_122_state),
             }
             # Persist the historical candle time (the record's own `ts` is the
             # wall-clock replay-run time) so shadow candidates can be re-resolved

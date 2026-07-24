@@ -242,6 +242,9 @@ class MarketState:
     bar_history_5m: list[dict] = field(default_factory=list)
     four_hr_retrigger_candidate: Optional[dict] = None
     canonical_4hr_only: bool = False
+    # Canonical Strat 2-1-2 / 1-2-2 candidate, populated transiently by
+    # DecisionEngine from strategy/strat_212_122.py's pure state machine.
+    strat_212_122_candidate: Optional[dict] = None
     notes: Optional[str] = None
     raw: dict = None  # Original dict for reference
 
