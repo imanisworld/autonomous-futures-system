@@ -13,8 +13,9 @@ Derivations from raw OHLCV (no Pine columns available):
   • NY ORB — Pine-faithful: reset at the 09:30 ET session open, accumulate the
     first 15 minutes, persist until the next NY open. Bars before the first
     ORB of the dataset are skipped (csv_to_replay does the same).
-  • Strat bar types — 1/2/3 vs the previous bar's high/low (classify_htf_bar
-    collapsed to the engine's 1/2/3 vocabulary).
+  • Strat bar types — 1/2U/2D/3 vs the previous bar's high/low
+    (classify_htf_bar), directional and uncollapsed — matches live's Pine
+    classify_bar(), which never sends an undirected bare "2".
   • HOD/LOD — running CME-day extremes; PDH/PDL/PDC via detect_day_boundaries.
   • HTF FTFC — 1h/4h/daily resampled from the same bars (bar-close delayed by
     htf_at, no lookahead).
@@ -72,13 +73,6 @@ def ema_series(closes: list[float], period: int) -> list[float | None]:
         ema = ema + k * (closes[i] - ema)
         out[i] = ema
     return out
-
-
-def collapse_bar_type(bt: str | None) -> str | None:
-    """classify_htf_bar vocabulary (1/2U/2D/3) → engine vocabulary (1/2/3)."""
-    if bt in ("2U", "2D"):
-        return "2"
-    return bt
 
 
 def resample(bars: list[dict], minutes: int, label: str) -> list[dict]:
@@ -261,11 +255,22 @@ def derive_candles(
 
         prev_bar = raw[i - 1] if i > 0 else None
         prev2_bar = raw[i - 2] if i > 1 else None
-        cur_type = collapse_bar_type(classify_htf_bar(bar, prev_bar)) if prev_bar else None
-        prev_type = (collapse_bar_type(classify_htf_bar(prev_bar, prev2_bar))
+        # Directional (1/2U/2D/3), NOT collapsed to the engine's undirected
+        # 1/2/3 — matches the daily/four_hour/one_hour bar-type fields below
+        # (never collapsed) and, critically, matches live: Pine's own
+        # classify_bar() sends "two_up"/"two_down" verbatim (never a bare
+        # "2"), which normalize_bar_type() maps 1:1 onto this same "2U"/"2D"
+        # vocabulary. Collapsing here — as this used to do — silently broke
+        # every consumer that reads current_bar_type/previous_bar_type
+        # directly for direction (strat_212/122's arm check, the CHOPPY→
+        # RANGE_BOUND veto in _score_market_condition, vwap_hold's SHORT
+        # gate): a bare "2" can never equal TWO_UP/TWO_DOWN, so those checks
+        # silently never fired against this dataset.
+        cur_type = classify_htf_bar(bar, prev_bar) if prev_bar else None
+        prev_type = (classify_htf_bar(prev_bar, prev2_bar)
                      if prev_bar and prev2_bar else None)
         prev3_bar = raw[i - 3] if i > 2 else None
-        prev2_type = (collapse_bar_type(classify_htf_bar(prev2_bar, prev3_bar))
+        prev2_type = (classify_htf_bar(prev2_bar, prev3_bar)
                       if prev2_bar and prev3_bar else None)
 
         vol_window = [raw[j]["volume"] for j in range(max(0, i - LOOKBACK), i + 1)]
