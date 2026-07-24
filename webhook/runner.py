@@ -94,6 +94,7 @@ from journal.journal_logger import JournalLogger
 from risk.risk_engine import DailyState, RiskEngine, RiskResult, TradeSetup
 from strategy.confluence_scorer import score_setup as _score_setup
 from strategy.stop_sizing import apply_stop_multiplier
+from strategy.strat_212_122 import STRAT_122, STRAT_212
 from strategy.shadow_resolver import resolve_pending_shadow_outcomes
 from strategy.shadow_setups import evaluate_shadow_setups
 from strategy.signal_engine import DecisionEngine
@@ -1929,38 +1930,83 @@ def process_alert(
             logger.warning("CIRCUIT_BREAKER: %s", risk_result.reason)
         return result
 
-    # ── Step 4b: strat_212/122 same-bar armed-and-resolved evidence ──────────
-    # A pre_resolved SetupDetail (strategy/strat_212_122.py's causal RESOLVED
-    # case) never represents a live order — it means the armed boundary AND
-    # either the target or the opposite (stop) boundary were BOTH reached on
-    # the watched bar, so this already resolved (WIN or pessimistic LOSS)
-    # before this decision was even evaluated. No real order — on ANY
-    # broker, including Tradovate — was ever armed ahead of that watched bar
-    # to have captured it; submitting a fresh order now would be trading a
-    # completely different, unrelated setup at whatever price the market
-    # happens to be at after the fact. PaperBroker/replay journal the
-    # already-fixed outcome directly (no broker order, no P&L fabrication —
-    # the exit price is exactly what the watched bar already showed). A real
-    # broker connection has no such evidence to act on at all: refuse to
-    # submit anything.
-    if decision.setup.pre_resolved is not None:
+    # ── Step 4b: strat_212/122 — the watched bar already decided this ────────
+    # strategy/strat_212_122.py's causal resolver only ever hands back a
+    # candidate for strat_212/strat_122 once the watched bar has already
+    # shown what happened to the armed order: it triggered and is still
+    # open (OPEN, priced at its causal fill — gap-through-at-open or the
+    # exact boundary, never the naive structural level), it triggered and
+    # closed same-bar (pre_resolved WIN/LOSS), or it never triggered at all
+    # (no candidate, handled upstream of this point). In every one of these
+    # cases the outcome already exists as of this bar's close — no real
+    # order, on ANY broker including Tradovate, was ever armed ahead of the
+    # watched bar to have captured it causally. Submitting a fresh order now
+    # (at whatever price the market happens to be after the fact) would be a
+    # completely different, unrelated trade — never do that on a live
+    # broker connection; refuse instead. PaperBroker/replay carry the
+    # already-decided outcome forward directly: an OPEN position is
+    # restored at its causal fill and left open for normal future-bar
+    # resolution; a RESOLVED outcome is journaled directly with no broker
+    # order and no P&L fabrication (the exit price is exactly what the
+    # watched bar already showed).
+    if decision.setup.strategy in (STRAT_212, STRAT_122):
         if not isinstance(broker, PaperBroker):
             logger.warning(
-                "strat_212/122 same-bar RESOLVED candidate on a live broker "
-                "connection — no order was ever armed ahead of the watched "
-                "bar for this outcome; refusing to submit a substitute "
-                "order. %s %s pre_resolved=%s",
+                "strat_212/122 candidate already decided by the watched bar "
+                "on a live broker connection — no order was ever armed "
+                "ahead of it; refusing to submit a substitute order. "
+                "%s %s entry=%s pre_resolved=%s",
                 decision.setup.strategy, decision.setup.direction,
-                decision.setup.pre_resolved,
+                decision.setup.entry, decision.setup.pre_resolved,
             )
             result["decision"] = "NO_TRADE"
             result["reason"] = (
-                "strat_212/122 same-bar resolved outcome has no live-broker "
-                "equivalent order to submit."
+                "strat_212/122 candidate has no live-broker equivalent "
+                "order to submit — no order was armed ahead of the watched "
+                "bar that already decided this outcome."
             )
             return result
 
-        _pre = decision.setup.pre_resolved
+        if decision.setup.pre_resolved is not None:
+            _pre = decision.setup.pre_resolved
+            broker.restore_position(
+                instrument=state.instrument,
+                direction=decision.setup.direction,
+                entry=entry_px,
+                stop=stop_px,
+                target=target_px,
+                contracts=contracts,
+            )
+            fill = broker.force_resolve(_pre["result"], float(_pre["exit_price"]))
+            fill.exit_reason = _pre["exit_reason"]
+            journal.log_outcome(
+                instrument=fill.instrument,
+                session=state.session,
+                result=fill.result,
+                entry_price=fill.entry_price,
+                exit_price=fill.exit_price,
+                exit_reason=fill.exit_reason,
+                pnl_ticks=fill.pnl_ticks,
+                pnl_dollars=fill.pnl_dollars,
+                contracts=fill.contracts,
+                for_date=today,
+                strategy=decision.setup.strategy,
+                execution_audit={"source": "strat_212_122_same_bar_resolution"},
+            )
+            daily_state.trade_count += 1
+            daily_state.realized_pnl_dollars += float(fill.pnl_dollars or 0.0)
+            if fill.result == "LOSS":
+                daily_state.consecutive_losses += 1
+                daily_state.last_loss_at = state.timestamp
+            elif fill.result in ("WIN", "BREAKEVEN"):
+                daily_state.consecutive_losses = 0
+            result["decision"] = "RESOLVED_EVIDENCE"
+            result["resolution"] = fill.result
+            return result
+
+        # OPEN: already triggered inside the watched bar at its causal fill
+        # price (decision.setup.entry). Carry it forward as an open
+        # position — never resubmit it as a fresh order at post-close price.
         broker.restore_position(
             instrument=state.instrument,
             direction=decision.setup.direction,
@@ -1969,31 +2015,29 @@ def process_alert(
             target=target_px,
             contracts=contracts,
         )
-        fill = broker.force_resolve(_pre["result"], float(_pre["exit_price"]))
-        fill.exit_reason = _pre["exit_reason"]
-        journal.log_outcome(
-            instrument=fill.instrument,
-            session=state.session,
-            result=fill.result,
-            entry_price=fill.entry_price,
-            exit_price=fill.exit_price,
-            exit_reason=fill.exit_reason,
-            pnl_ticks=fill.pnl_ticks,
-            pnl_dollars=fill.pnl_dollars,
-            contracts=fill.contracts,
+        journal_entry = decision.to_dict()
+        journal_entry["decision"] = "TRADE"
+        journal_entry["strategy_state"] = {
+            "strat_4hr_retrigger": dict(daily_state.four_hr_retrigger_state),
+            "strat_212_122": dict(daily_state.strat_212_122_state),
+        }
+        journal_entry["context"] = _market_state_context(state)
+        journal.log_decision(
+            journal_entry,
+            {"result": "APPROVED"},
             for_date=today,
-            strategy=decision.setup.strategy,
-            execution_audit={"source": "strat_212_122_same_bar_resolution"},
         )
         daily_state.trade_count += 1
-        daily_state.realized_pnl_dollars += float(fill.pnl_dollars or 0.0)
-        if fill.result == "LOSS":
-            daily_state.consecutive_losses += 1
-            daily_state.last_loss_at = state.timestamp
-        elif fill.result in ("WIN", "BREAKEVEN"):
-            daily_state.consecutive_losses = 0
-        result["decision"] = "RESOLVED_EVIDENCE"
-        result["resolution"] = fill.result
+        daily_state.has_open_position = True
+        result["decision"] = "TRADE"
+        result["fill"] = {
+            "status": "OPEN",
+            "instrument": state.instrument,
+            "direction": decision.setup.direction,
+            "entry": entry_px,
+            "stop": stop_px,
+            "target": target_px,
+        }
         return result
 
     # ── Step 5: Execute bracket order ────────────────────────────────────────

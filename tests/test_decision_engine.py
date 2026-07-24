@@ -1091,9 +1091,15 @@ class TestStratWiring:
         state.ohlc.close = round((high + low) / 2, 4)
         return state
 
-    def _watch_bar(self, fresh_market_state, *, close_near_low: bool = False) -> MarketState:
+    def _watch_bar(
+        self, fresh_market_state, *, close_near_low: bool = False, open: float | None = None
+    ) -> MarketState:
         """The bar immediately after arming — resolved against the boundary
-        fixed by the arm bar, using ITS OWN (this bar's) OHLC only."""
+        fixed by the arm bar, using ITS OWN (this bar's) OHLC only. ``open``
+        lets a test pin the bar's open on the non-gapped side of the armed
+        entry so it exercises a clean intrabar touch, not the (separately
+        correct) gap-through-fill/R:R-impact path — that path has its own
+        dedicated coverage in tests/test_strat_212_122.py."""
         state = deepcopy(fresh_market_state)
         state.strat = None
         state.orb.status = "inside"
@@ -1101,6 +1107,8 @@ class TestStratWiring:
         if close_near_low:
             o = state.ohlc
             o.close = round(o.low + (o.high - o.low) * 0.1, 4)
+        if open is not None:
+            state.ohlc.open = open
         return state
 
     def test_strat_212_fires_from_classified_long(self, strat_engine, fresh_market_state):
@@ -1137,7 +1145,12 @@ class TestStratWiring:
         arm_decision = strat_engine.evaluate(arm_bar, daily_state)
         assert arm_decision.decision != "TRADE"
 
-        watch_bar = self._watch_bar(fresh_market_state, close_near_low=True)
+        # Pin open above the SHORT entry (19514.75) so this is a clean
+        # intrabar touch, not a gap-through fill (the fixture's own default
+        # open, 19480, sits far below it and would otherwise register as a
+        # large gap and wreck R:R — real behavior, just not what this test
+        # is checking).
+        watch_bar = self._watch_bar(fresh_market_state, close_near_low=True, open=19520.0)
         decision = strat_engine.evaluate(watch_bar, daily_state)
         assert decision.decision == "TRADE"
         assert decision.setup.strategy == "strat_212"

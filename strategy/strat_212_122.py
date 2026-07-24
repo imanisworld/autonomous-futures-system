@@ -36,7 +36,8 @@ Resolution (phase 2) checks the watched bar's high/low against entry, stop,
 and target together — not just entry-vs-stop:
   - neither boundary reached                       -> no trade (expired)
   - only the invalidation (stop) side reached       -> no trade (invalidated)
-  - entry reached, neither stop nor target reached  -> OPEN (normal setup)
+  - entry reached, neither stop nor target reached  -> OPEN (already-triggered
+                                                        position, causal fill)
   - entry AND target reached, stop not reached      -> WIN, resolved same-bar
   - entry AND stop reached (target irrelevant: if    -> LOSS, resolved same-bar
     target was ALSO reached the ordering among all
@@ -47,6 +48,20 @@ A same-bar resolved outcome (WIN or LOSS) is evidence, not a live order: the
 caller must journal it directly and must never submit it as a broker order —
 see candidate["kind"] == "RESOLVED" and the webhook/runner.py /
 replay/replay_engine.py consumption of this field.
+
+OPEN's entry price is NOT the raw structural trigger price. The trade
+triggered somewhere inside the watched bar — by the time this bar's close is
+being processed, it should already exist, priced at what a genuinely-armed
+order would actually have achieved, not at whatever the market happens to be
+doing after the fact. This mirrors execution/paper_broker.py's own existing
+"stop_market" causal entry primitive (_activate_pending_stop_entry) exactly:
+if the bar's OPEN already gapped through the trigger, the fill is the open
+(worse for the trader, never better); otherwise it fills at the exact
+trigger level, reached intrabar. Stop/target stay at their original
+structural levels regardless of the gap. If the gap-adjusted fill would put
+the bracket on the wrong side of its own stop/target, there is no sane
+position to open — the caller must never chase it; that also resolves to no
+candidate (a gap invalidating the setup, not a trade).
 
 Entry is offset one tick beyond the boundary (the level must be broken, not
 merely touched). Stop is the exact opposite boundary of the reference bar —
@@ -82,6 +97,7 @@ def advance_strat_212_122(
     *,
     current_bar_type: Optional[str],
     previous_bar_type: Optional[str],
+    current_open: float,
     current_high: float,
     current_low: float,
     tick_size: float,
@@ -93,7 +109,9 @@ def advance_strat_212_122(
     ``current_bar_type`` / ``previous_bar_type`` describe the bar CURRENTLY
     being processed (its own type, and the type of the bar immediately
     before it) — the same fields Pine/replay already attach to every bar.
-    ``current_high`` / ``current_low`` are that same bar's own OHLC.
+    ``current_open`` / ``current_high`` / ``current_low`` are that same
+    bar's own OHLC (open is only used when resolving an OPEN outcome's
+    gap-aware fill price — see module docstring).
 
     Returns (next_state, candidate). ``candidate`` is never produced on the
     same bar an arm forms — only on the watch bar that resolves it. See
@@ -101,7 +119,12 @@ def advance_strat_212_122(
     """
     previous = dict(persisted_state or {})
     if previous.get("status") == "ARMED" and previous.get("trading_date") == trading_date:
-        return _resolve(previous, current_high=current_high, current_low=current_low)
+        return _resolve(
+            previous,
+            current_open=current_open,
+            current_high=current_high,
+            current_low=current_low,
+        )
 
     return _maybe_arm(
         current_bar_type=normalize_bar_type(current_bar_type),
@@ -167,7 +190,7 @@ def _maybe_arm(
 
 
 def _resolve(
-    armed: dict, *, current_high: float, current_low: float
+    armed: dict, *, current_open: float, current_high: float, current_low: float
 ) -> tuple[dict, Optional[dict]]:
     direction = armed["direction"]
     pattern = armed["pattern"]
@@ -224,11 +247,33 @@ def _resolve(
         }
         return idle_state, candidate
 
+    # Entry triggered this bar without also reaching stop or target. The
+    # position already exists by this bar's close — price it at what a
+    # genuinely-armed order would actually have achieved (gap-through-at-open
+    # is worse for the trader, never better), exactly matching
+    # execution/paper_broker.py::_activate_pending_stop_entry's own logic.
+    if direction == "LONG":
+        fill_entry = current_open if current_open >= entry_price else entry_price
+        bracket_valid = stop_price < fill_entry < target_price
+    else:
+        fill_entry = current_open if current_open <= entry_price else entry_price
+        bracket_valid = target_price < fill_entry < stop_price
+
+    if not bracket_valid:  # pragma: no cover
+        # Defense in depth, mirroring _activate_pending_stop_entry's own
+        # check exactly. Not reachable under the current construction: the
+        # bar's own high/low already ruled out target_touched/stop_touched
+        # above, and low <= open <= high always holds (enforced upstream —
+        # see replay/candle_loader.py's candle validation), so a gap-bounded
+        # fill can never land beyond either. Kept so this stays correct if
+        # the surrounding checks are ever loosened.
+        return {**idle_state, "status": "GAP_INVALIDATED_BRACKET"}, None
+
     candidate = {
         "kind": "OPEN",
         "pattern": pattern,
         "direction": direction,
-        "entry": entry_price,
+        "entry": fill_entry,
         "stop": stop_price,
         "target": target_price,
     }

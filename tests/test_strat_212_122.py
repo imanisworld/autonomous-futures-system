@@ -48,6 +48,7 @@ def test_212_long_arms_on_the_inside_bar_using_its_own_ohlc():
     state, cand = advance_strat_212_122(
         current_bar_type="inside_bar",
         previous_bar_type="two_up",
+        current_open=97.0,
         current_high=100.0,
         current_low=95.0,
         tick_size=0.25,
@@ -68,6 +69,7 @@ def test_212_short_arms_on_the_inside_bar():
     state, cand = advance_strat_212_122(
         current_bar_type="inside_bar",
         previous_bar_type="two_down",
+        current_open=97.0,
         current_high=100.0,
         current_low=95.0,
         tick_size=0.25,
@@ -85,6 +87,7 @@ def test_122_long_arms_on_the_prior_2d_bar_reversal():
     state, cand = advance_strat_212_122(
         current_bar_type="two_down",
         previous_bar_type="inside_bar",
+        current_open=97.0,
         current_high=100.0,
         current_low=95.0,
         tick_size=0.25,
@@ -102,6 +105,7 @@ def test_122_short_arms_on_the_prior_2u_bar_reversal():
     state, cand = advance_strat_212_122(
         current_bar_type="two_up",
         previous_bar_type="inside_bar",
+        current_open=97.0,
         current_high=100.0,
         current_low=95.0,
         tick_size=0.25,
@@ -128,6 +132,7 @@ def test_no_precursor_stays_idle(current_bar_type, previous_bar_type):
     state, cand = advance_strat_212_122(
         current_bar_type=current_bar_type,
         previous_bar_type=previous_bar_type,
+        current_open=97.0,
         current_high=100.0,
         current_low=95.0,
         tick_size=0.25,
@@ -143,17 +148,17 @@ def test_no_precursor_stays_idle(current_bar_type, previous_bar_type):
 def _arm_212_long(high=100.0, low=95.0):
     state, cand = advance_strat_212_122(
         current_bar_type="inside_bar", previous_bar_type="two_up",
-        current_high=high, current_low=low,
+        current_open=(high + low) / 2, current_high=high, current_low=low,
         tick_size=0.25, trading_date="2026-07-24",
     )
     assert cand is None
     return state
 
 
-def _resolve(armed_state, high, low):
+def _resolve(armed_state, high, low, open=99.0):
     return advance_strat_212_122(
         current_bar_type=None, previous_bar_type=None,  # irrelevant while resolving
-        current_high=high, current_low=low,
+        current_open=open, current_high=high, current_low=low,
         tick_size=0.25, trading_date="2026-07-24",
         persisted_state=armed_state,
     )
@@ -173,9 +178,11 @@ def test_resolve_only_invalidation_side_reached_is_a_no_trade():
     assert next_state["status"] == "IDLE"
 
 
-def test_resolve_entry_only_is_open():
+def test_resolve_entry_only_is_open_with_intrabar_causal_fill():
+    """No gap: open stays below the entry boundary, so the causal fill is
+    the exact structural entry level (touched intrabar), not the open."""
     armed = _arm_212_long()
-    next_state, cand = _resolve(armed, high=100.5, low=99.0)
+    next_state, cand = _resolve(armed, high=100.5, low=99.0, open=99.0)
     assert cand == {
         "kind": "OPEN",
         "pattern": STRAT_212,
@@ -187,12 +194,26 @@ def test_resolve_entry_only_is_open():
     assert next_state["status"] == "IDLE"
 
 
+def test_resolve_entry_gap_through_at_open_fills_at_the_open_not_the_boundary():
+    """The fix this pass adds: when the watched bar's OWN open already
+    gapped through the armed entry boundary, a resting order would have
+    filled at the open, not at the (better, unreachable) structural level —
+    mirrors execution/paper_broker.py::_activate_pending_stop_entry exactly.
+    Stop/target stay at their original structural levels regardless."""
+    armed = _arm_212_long()  # entry=100.25, stop=95.0, target=110.75
+    next_state, cand = _resolve(armed, high=103.5, low=102.0, open=103.0)
+    assert cand["kind"] == "OPEN"
+    assert cand["entry"] == 103.0  # the gapped-through open, not 100.25
+    assert cand["stop"] == 95.0
+    assert cand["target"] == armed["target_price"]
+
+
 def test_resolve_entry_and_target_same_bar_is_a_causal_win():
-    """The exact scenario the two-phase repair fixes: a watched bar whose
+    """The scenario the prior pass's repair fixed: a watched bar whose
     range reaches all the way past target must resolve as a same-bar WIN,
     not be deferred as an ordinary OPEN position waiting on a future bar."""
     armed = _arm_212_long()
-    next_state, cand = _resolve(armed, high=200.0, low=99.0)
+    next_state, cand = _resolve(armed, high=200.0, low=99.0, open=99.0)
     assert cand["kind"] == "RESOLVED"
     assert cand["result"] == "WIN"
     assert cand["exit"] == cand["target"] == armed["target_price"]
@@ -204,7 +225,7 @@ def test_resolve_entry_and_target_same_bar_is_a_causal_win():
 
 def test_resolve_entry_and_stop_same_bar_is_a_loss():
     armed = _arm_212_long()
-    next_state, cand = _resolve(armed, high=101.0, low=93.0)
+    next_state, cand = _resolve(armed, high=101.0, low=93.0, open=97.0)
     assert cand["kind"] == "RESOLVED"
     assert cand["result"] == "LOSS"
     assert cand["exit"] == cand["stop"] == 95.0
@@ -213,7 +234,7 @@ def test_resolve_entry_and_stop_same_bar_is_a_loss():
 
 def test_resolve_entry_stop_and_target_all_reached_is_pessimistic_loss():
     armed = _arm_212_long()
-    next_state, cand = _resolve(armed, high=200.0, low=93.0)
+    next_state, cand = _resolve(armed, high=200.0, low=93.0, open=97.0)
     assert cand["kind"] == "RESOLVED"
     assert cand["result"] == "LOSS"
     assert cand["exit_reason"] == "OUTSIDE_AFTER_TRIGGER"
@@ -222,13 +243,13 @@ def test_resolve_entry_stop_and_target_all_reached_is_pessimistic_loss():
 def test_122_resolve_win_and_loss():
     state, cand = advance_strat_212_122(
         current_bar_type="two_down", previous_bar_type="inside_bar",
-        current_high=100.0, current_low=95.0,
+        current_open=97.0, current_high=100.0, current_low=95.0,
         tick_size=0.25, trading_date="2026-07-24",
     )
-    _, win_cand = _resolve(state, high=200.0, low=99.0)
+    _, win_cand = _resolve(state, high=200.0, low=99.0, open=99.0)
     assert win_cand["result"] == "WIN"
 
-    _, loss_cand = _resolve(state, high=101.0, low=93.0)
+    _, loss_cand = _resolve(state, high=101.0, low=93.0, open=97.0)
     assert loss_cand["result"] == "LOSS"
 
 
@@ -462,6 +483,68 @@ def test_replay_resolves_loss_with_no_open_position_left_behind(config, tmp_path
     assert report.open_trades == 0
 
 
+def test_replay_open_position_gap_fills_and_carries_forward_to_a_later_bar(
+    config, tmp_path
+):
+    """The fix this pass adds: an OPEN candidate is restored directly at its
+    causal (gap-aware) fill price and carried forward through the normal
+    future-bar resolution loop — never resubmitted as a fresh order at
+    whatever price the market is at once the watched bar has closed."""
+    from replay.replay_engine import ReplayEngine
+
+    # A gap-through fill worsens R:R against the structural (arm-time) stop
+    # and target by construction (the target is fixed at arm time, not
+    # recomputed from the actual fill) — that's real, and the normal R:R
+    # gate correctly rejects a bad enough gap on its own. Lower the floor
+    # here to isolate what THIS test actually checks: the causal fill price
+    # carries forward correctly, not the (separately correct) R:R gate.
+    cfg = replace(
+        config,
+        enabled_concepts=[*config.enabled_concepts, "strat_212"],
+        min_rr_ratio=0.5,
+    )
+    path = tmp_path / "day.jsonl"
+    path.write_text(
+        "\n".join(
+            json.dumps(row)
+            for row in (
+                _replay_row(  # bar 1: arms — inside bar, boundary [95, 100]
+                    "2026-01-06T14:25:00Z",
+                    open=97.0, high=100.0, low=95.0, close=97.0,
+                    current_bar_type="inside_bar", previous_bar_type="two_up",
+                ),
+                _replay_row(  # bar 2: watched — gaps up through entry at open
+                    "2026-01-06T14:30:00Z",
+                    open=103.0, high=104.0, low=102.0, close=103.5,
+                    current_bar_type="two_up", previous_bar_type="inside_bar",
+                ),
+                _replay_row(  # bar 3: a later bar resolves it via target
+                    "2026-01-06T14:35:00Z",
+                    open=104.0, high=111.0, low=103.5, close=110.0,
+                    current_bar_type="two_up", previous_bar_type="two_up",
+                ),
+            )
+        )
+        + "\n"
+    )
+    log_dir = tmp_path / "logs"
+    report = ReplayEngine(config=cfg, log_dir=str(log_dir)).run(path)
+
+    rows = [
+        json.loads(line)
+        for line in Path(report.journal_path).read_text().splitlines()
+    ]
+    trade_rows = [r for r in rows if r.get("decision") == "TRADE"]
+    assert len(trade_rows) == 1
+    assert trade_rows[0]["setup"]["entry"] == 103.0  # the gapped open, not 100.25
+
+    outcome = next((row for row in rows if row.get("type") == "OUTCOME"), None)
+    assert outcome is not None
+    assert outcome["outcome"]["result"] == "WIN"
+    assert outcome["outcome"]["entry_price"] == 103.0
+    assert report.open_trades == 0
+
+
 def test_replay_resolves_win_with_no_open_position_left_behind(config, tmp_path):
     from replay.replay_engine import ReplayEngine
 
@@ -585,3 +668,45 @@ def test_live_broker_refuses_to_submit_a_resolved_same_bar_outcome(config, tmp_p
         for line in next((tmp_path / "logs").glob("journal_*.jsonl")).read_text().splitlines()
     ]
     assert not any(row.get("type") == "OUTCOME" for row in rows)
+
+
+def test_live_broker_refuses_to_submit_a_late_order_for_an_already_open_position(
+    config, tmp_path, monkeypatch
+):
+    """The fix this pass adds: an OPEN (already-triggered, not same-bar-
+    resolved) candidate must ALSO be refused on a live broker — no order was
+    armed ahead of the watched bar for it either, so submitting one after
+    the fact would be a completely different, unrelated trade."""
+    from webhook import runner
+
+    fake = _NeverCalledBroker()
+    monkeypatch.setattr(runner, "_make_broker", lambda **kw: fake)
+    log_dir = str(tmp_path / "logs")
+    cfg = _strat_engine_cfg(config)
+
+    arm_result = runner.process_alert(
+        _strat_alert_payload(
+            current_bar_type="inside_bar", previous_bar_type="two_up",
+        ),
+        config=cfg, log_dir=log_dir,
+    )
+    assert arm_result["decision"] in ("NO_TRADE", "WAIT", "DONE_FOR_DAY") or arm_result.get("fill") is None
+
+    # Watched bar: entry (19500.25) touched, neither stop (19495.0) nor
+    # target (~19510.75) reached — an ordinary OPEN, not a same-bar outcome.
+    watch_result = runner.process_alert(
+        _strat_alert_payload(
+            timestamp="2026-01-06T14:30:00+00:00",
+            open=19498.0, high=19501.0, low=19498.0, close=19500.5,
+            current_bar_type="two_up", previous_bar_type="inside_bar",
+        ),
+        config=cfg, log_dir=log_dir,
+    )
+    assert watch_result["decision"] == "NO_TRADE"
+    assert fake.execute_bracket_calls == 0
+
+    rows = [
+        json.loads(line)
+        for line in next((tmp_path / "logs").glob("journal_*.jsonl")).read_text().splitlines()
+    ]
+    assert not any(row.get("decision") == "TRADE" for row in rows)

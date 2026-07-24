@@ -51,6 +51,7 @@ from replay.replay_report import MultiDayReplayReport, ReplayReport
 from risk.risk_engine import DailyState, RiskEngine, TradeSetup
 from strategy.confluence_scorer import score_setup as _score_setup
 from strategy.stop_sizing import apply_stop_multiplier
+from strategy.strat_212_122 import STRAT_122, STRAT_212
 from strategy.shadow_setups import evaluate_shadow_setups, resolve_shadow_candidate
 from strategy.signal_engine import DecisionEngine
 from strategy.strat_classifier import StratContext, classify_from_ohlc
@@ -354,40 +355,65 @@ class ReplayEngine:
 
                 if risk_result.approved:
                     contracts = trade_setup.contracts
-                    order = BracketOrder(
-                        instrument=state.instrument,
-                        direction=decision.setup.direction,
-                        entry=decision.setup.entry,
-                        stop=decision.setup.stop,
-                        target=decision.setup.target,
-                        rr_ratio=decision.setup.rr_ratio,
-                        strategy=decision.setup.strategy,
-                        notes=decision.setup.notes,
-                        contracts=contracts,
-                        min_rr_ratio=float(getattr(self.config, "min_rr_ratio", 2.0)),
-                        max_dollar_risk=(
-                            (
-                                abs(float(decision.setup.entry) - float(decision.setup.stop))
-                                / EXEC_TICK_SIZE.get(state.instrument, 0.25)
-                                + float(
-                                    (getattr(self.config, "entry_tolerance_ticks_by_root", {}) or {}).get(
-                                        state.instrument, 0
-                                    ) or 0
+                    # strategy/strat_212_122.py's causal resolver only ever
+                    # hands an "OPEN" (non-pre_resolved) candidate back once
+                    # the watched bar has already shown entry triggering at
+                    # its causal fill price (decision.setup.entry —
+                    # gap-through-at-open or the exact boundary, never the
+                    # naive structural level chased at post-close price).
+                    # The position already exists as of this bar's close:
+                    # restore it directly rather than submitting a fresh
+                    # order through the normal fill-model path, then join
+                    # the SAME future-bar resolution every other strategy
+                    # uses below. Never submitted on a live broker at all —
+                    # see webhook/runner.py's refusal branch for that case
+                    # (replay is always PaperBroker, so this path always
+                    # applies here when it's this pair of strategies).
+                    if decision.setup.strategy in (STRAT_212, STRAT_122):
+                        broker.restore_position(
+                            instrument=state.instrument,
+                            direction=decision.setup.direction,
+                            entry=decision.setup.entry,
+                            stop=decision.setup.stop,
+                            target=decision.setup.target,
+                            contracts=contracts,
+                        )
+                        entry_fill = None
+                    else:
+                        order = BracketOrder(
+                            instrument=state.instrument,
+                            direction=decision.setup.direction,
+                            entry=decision.setup.entry,
+                            stop=decision.setup.stop,
+                            target=decision.setup.target,
+                            rr_ratio=decision.setup.rr_ratio,
+                            strategy=decision.setup.strategy,
+                            notes=decision.setup.notes,
+                            contracts=contracts,
+                            min_rr_ratio=float(getattr(self.config, "min_rr_ratio", 2.0)),
+                            max_dollar_risk=(
+                                (
+                                    abs(float(decision.setup.entry) - float(decision.setup.stop))
+                                    / EXEC_TICK_SIZE.get(state.instrument, 0.25)
+                                    + float(
+                                        (getattr(self.config, "entry_tolerance_ticks_by_root", {}) or {}).get(
+                                            state.instrument, 0
+                                        ) or 0
+                                    )
                                 )
-                            )
-                            * EXEC_TICK_VALUE.get(state.instrument, 1.25)
-                            * contracts
-                        ),
-                        max_stop_ticks=float(
-                            (getattr(self.config, "max_stop_ticks", {}) or {}).get(state.instrument, 0) or 0
-                        ) or None,
-                        max_slippage_ticks=float(
-                            (getattr(self.config, "entry_tolerance_ticks_by_root", {}) or {}).get(state.instrument, 0) or 0
-                        ) or None,
-                        post_fill_validation_required=False,
-                    )
-                    entry_fill = broker.execute_bracket(order, market_price=candle.close)
-                    if entry_fill.result == "CANCELLED":
+                                * EXEC_TICK_VALUE.get(state.instrument, 1.25)
+                                * contracts
+                            ),
+                            max_stop_ticks=float(
+                                (getattr(self.config, "max_stop_ticks", {}) or {}).get(state.instrument, 0) or 0
+                            ) or None,
+                            max_slippage_ticks=float(
+                                (getattr(self.config, "entry_tolerance_ticks_by_root", {}) or {}).get(state.instrument, 0) or 0
+                            ) or None,
+                            post_fill_validation_required=False,
+                        )
+                        entry_fill = broker.execute_bracket(order, market_price=candle.close)
+                    if entry_fill is not None and entry_fill.result == "CANCELLED":
                         # IOC-faithful baseline: the entry self-cancelled (market
                         # beyond entry ± tolerance at decision time). Book it the
                         # way live does — CANCELLED/ENTRY_NOT_FILLED outcome, NO

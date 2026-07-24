@@ -2519,6 +2519,7 @@ class DecisionEngine:
         next_state, candidate = advance_strat_212_122(
             current_bar_type=strat.current_bar_type if strat else None,
             previous_bar_type=strat.previous_bar_type if strat else None,
+            current_open=state.ohlc.open,
             current_high=state.ohlc.high,
             current_low=state.ohlc.low,
             tick_size=self.TICK_SIZE.get(state.instrument, 0.25),
