@@ -2270,23 +2270,34 @@ class DecisionEngine:
 
         if candidate["kind"] == "RESOLVED":
             entry = float(candidate["entry"])
-            exit_price = float(candidate["exit"])
+            stop = float(candidate["stop"])
             target = float(candidate["target"])
-            rr = RiskEngine.calculate_rr(direction, entry, exit_price, target)
+            exit_price = float(candidate["exit"])
+            result = str(candidate["result"])
+            rr = RiskEngine.calculate_rr(direction, entry, stop, target)
+            if result == "WIN":
+                notes = (
+                    f"{label} ({direction}): watched bar reached both the "
+                    f"armed entry boundary and the target in the same bar — "
+                    f"resolved same-bar as WIN."
+                )
+            else:
+                notes = (
+                    f"{label} ({direction}): armed entry boundary and its "
+                    f"opposite (stop) boundary both crossed on the watched "
+                    f"bar — OHLC cannot establish order, resolved "
+                    f"pessimistically as LOSS."
+                )
             return SetupDetail(
                 direction=direction,
                 entry=round(entry, 4),
-                stop=round(exit_price, 4),
+                stop=round(stop, 4),
                 target=round(target, 4),
                 rr_ratio=rr,
                 strategy=pattern,
-                notes=(
-                    f"{label} ({direction}): armed boundary and its opposite "
-                    f"side both crossed on the watched bar — OHLC cannot "
-                    f"establish order, resolved pessimistically as LOSS."
-                ),
+                notes=notes,
                 pre_resolved={
-                    "result": candidate["result"],
+                    "result": result,
                     "exit_price": exit_price,
                     "exit_reason": candidate["exit_reason"],
                 },
@@ -2487,13 +2498,16 @@ class DecisionEngine:
     ) -> None:
         """Advance the canonical causal 2-1-2/1-2-2 state before ordinary gates.
 
-        Unlike 4HR, this state machine does not need cross-bar memory to
-        decide (the two-bar precursor and boundary are already given fresh
-        every bar) — it is advanced unconditionally each bar purely for
-        audit-trail continuity, matching the #317 pattern's shape. Whether a
-        resulting candidate is ever actually acted on is still gated
-        entirely by the normal enabled_concepts/session/capacity chain in
-        _iter_enabled_setups, exactly like any other strategy.
+        Genuine two-phase armed state machine (mirrors #317's shape and, for
+        this pattern, actually needs the cross-bar memory: phase 1 arms from
+        THIS bar's own type/OHLC when it completes a precursor; phase 2
+        resolves that already-fixed boundary against the NEXT bar's OHLC).
+        Advanced unconditionally each bar so a precursor forming while other
+        gates would otherwise block a trade this bar is still armed and
+        watched on the correct next bar. Whether a resulting candidate is
+        ever actually acted on is gated entirely by the normal
+        enabled_concepts/session/capacity chain in _iter_enabled_setups,
+        exactly like any other strategy.
         """
         state.strat_212_122_candidate = None
         if not (
@@ -2502,12 +2516,9 @@ class DecisionEngine:
         ):
             return
         strat = state.strat
-        raw = state.raw if isinstance(getattr(state, "raw", None), dict) else {}
         next_state, candidate = advance_strat_212_122(
+            current_bar_type=strat.current_bar_type if strat else None,
             previous_bar_type=strat.previous_bar_type if strat else None,
-            two_bars_back_type=strat.two_bars_back_type if strat else None,
-            previous_bar_high=raw.get("previous_bar_high"),
-            previous_bar_low=raw.get("previous_bar_low"),
             current_high=state.ohlc.high,
             current_low=state.ohlc.low,
             tick_size=self.TICK_SIZE.get(state.instrument, 0.25),

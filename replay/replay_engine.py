@@ -301,12 +301,15 @@ class ReplayEngine:
                 journal.log_decision(journal_entry, risk_result_dict, for_date=journal_date)
 
                 if risk_result.approved and decision.setup.pre_resolved is not None:
-                    # strat_212/122 same-bar-both-sides case (see
-                    # strategy/strat_212_122.py): the armed boundary and its
-                    # opposite side were both crossed on the same watched
-                    # bar, so OHLC cannot establish fill order — this already
-                    # resolved pessimistically to LOSS. Never submit it as an
-                    # order; journal the already-fixed outcome directly.
+                    # strat_212/122 same-bar RESOLVED case (see
+                    # strategy/strat_212_122.py): the armed boundary AND
+                    # either the target or the opposite (stop) boundary were
+                    # both reached on the same watched bar, so this already
+                    # resolved (WIN or pessimistic LOSS) before this decision
+                    # was even evaluated. Never submit it as an order —
+                    # replay is always PaperBroker, so this is always the
+                    # evidence-journaling path (see webhook/runner.py for the
+                    # live/Tradovate refusal branch of the same case).
                     _pre = decision.setup.pre_resolved
                     contracts = trade_setup.contracts
                     broker.restore_position(
@@ -334,7 +337,7 @@ class ReplayEngine:
                         for_date=journal_date,
                         strategy=decision.setup.strategy,
                         execution_audit={
-                            "source": "strat_212_122_same_bar_pessimistic_resolution"
+                            "source": "strat_212_122_same_bar_resolution"
                         },
                     )
                     daily_state.trade_count += 1

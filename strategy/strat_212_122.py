@@ -1,38 +1,66 @@
 """Canonical executable state machine for genuine (non-proxy) Strat 2-1-2
 continuation and 1-2-2 reversal patterns.
 
-The module is deliberately pure: callers provide this bar's already-classified
-bar-type context (identically available on live and replay via
-previous_bar_type / two_bars_back_type / previous_bar_high / previous_bar_low
-— see webhook/state_builder.py and replay/candle_loader.py) and receive an
-optional candidate. Live runtime and replay use this same function.
+Genuine two-phase armed state machine, mirroring strategy/four_hr_retrigger.py
+(#317):
 
-Causality: the boundary that prices entry/stop is fixed from the immediately
-PRIOR bar only (already closed before the bar being evaluated began). The bar
-being evaluated is never used to derive its own trigger price — only to test
-whether it crossed a boundary that was already fixed before it began. This is
-why entry uses previous_bar_high/previous_bar_low, never this bar's own
-high/low (that was the proven defect in the pre-canonicalization code).
+  Phase 1 (ARM) — when the bar being processed completes a valid precursor
+  (checked from ITS OWN current_bar_type/previous_bar_type only — no
+  lookahead into the bar that will follow), THAT bar's own high/low become
+  the fixed reference boundary and the state is stored as ARMED. No
+  candidate is produced yet: an armed setup is a level to watch, not a trade.
 
-Both patterns can only be classified once the evaluated bar itself has
-closed (TradingView fires alerts bar-close-only — see the audit trail for
-this repair), so "when do we learn it happened" and "what price would a real
-resting order have achieved" are answered separately: the former is
-necessarily post-close; the latter is proven causal by construction here.
+  Phase 2 (RESOLVE) — on the NEXT bar only (persisted_state.status=="ARMED"
+  from the prior bar's advance), that bar's own high/low are tested against
+  the boundary that was already fixed in phase 1, before this bar began. The
+  watch window is exactly one bar; whatever this bar's OHLC shows produces a
+  final outcome, and the state resets.
 
-Same-bar ambiguity: if the evaluated bar's range crosses BOTH the entry
-boundary and the opposite (stop) boundary, OHLC data cannot establish which
-was touched first. Per ruling, this resolves pessimistically as entry
-triggered then immediately stopped (LOSS) — never silently dropped, and
-never resolved optimistically. The caller must journal this directly (it is
-not a live order to submit) — see candidate["kind"] == "RESOLVED" below.
+This two-phase split is the causal property itself, not a bookkeeping
+nicety: an order price computed from data that predates the bar it is
+resolved against can never be a retroactive fill, regardless of when in the
+pipeline the resolution decision happens to run.
 
-Target is a fixed 2R off the corrected structural stop, applied identically
-to both patterns. This is an explicit VP implementation convention, not
-canonical Strat doctrine — no external Strat source defines a deterministic
-target for either pattern (checked: strat.trading's own 2-1-2 and 1-2-2
-pages, and a third-party comprehensive Strat guide, all confirm no
-established target rule exists for these specific patterns).
+2-1-2 arms on the inside bar (bar N): current_bar_type==inside AND its own
+previous_bar_type is directional (2U/2D) — i.e. a directional bar was
+immediately followed by an inside bar. Direction matches that prior
+directional bar. Boundary = the inside bar's (bar N's) own high/low.
+
+1-2-2 arms on the directional bar (bar N) that immediately follows an inside
+bar: current_bar_type is directional AND its own previous_bar_type==inside.
+Direction is the reversal of bar N's own direction (2D arms a LONG reversal,
+2U arms a SHORT reversal). Boundary = that directional bar's (bar N's) own
+high/low — it is the bar the next bar's reversal breaks through.
+
+Resolution (phase 2) checks the watched bar's high/low against entry, stop,
+and target together — not just entry-vs-stop:
+  - neither boundary reached                       -> no trade (expired)
+  - only the invalidation (stop) side reached       -> no trade (invalidated)
+  - entry reached, neither stop nor target reached  -> OPEN (normal setup)
+  - entry AND target reached, stop not reached      -> WIN, resolved same-bar
+  - entry AND stop reached (target irrelevant: if    -> LOSS, resolved same-bar
+    target was ALSO reached the ordering among all
+    three is unknowable too — pessimistic LOSS
+    covers that case as well)
+
+A same-bar resolved outcome (WIN or LOSS) is evidence, not a live order: the
+caller must journal it directly and must never submit it as a broker order —
+see candidate["kind"] == "RESOLVED" and the webhook/runner.py /
+replay/replay_engine.py consumption of this field.
+
+Entry is offset one tick beyond the boundary (the level must be broken, not
+merely touched). Stop is the exact opposite boundary of the reference bar —
+no additional buffer. An earlier draft of this module added a 4-tick stop
+buffer inherited from the pre-canonicalization proxy code; that buffer was
+never established as canonical for the corrected formula and has been
+removed. Do not reintroduce a stop buffer without a settled rule for it.
+
+Target is a fixed 2R off the corrected stop, applied identically to both
+patterns. This is an explicit VP implementation convention, not canonical
+Strat doctrine — no external Strat source defines a deterministic target for
+either pattern (checked: strat.trading's own 2-1-2 and 1-2-2 pages, and a
+third-party comprehensive Strat guide, all confirm no established target
+rule exists for these specific patterns).
 """
 
 from __future__ import annotations
@@ -44,12 +72,6 @@ from strategy.strat_classifier import INSIDE_BAR, TWO_DOWN, TWO_UP, normalize_ba
 STRAT_212 = "strat_212"
 STRAT_122 = "strat_122"
 
-# "Agreed tick buffer" beyond the reference bar's opposite boundary for the
-# stop — matches the magnitude already used elsewhere in this codebase for an
-# analogous structural stop offset (e.g. the pre-canonicalization proxy code).
-# The anchor bar was the proven defect, not this buffer's magnitude.
-_STOP_BUFFER_TICKS = 4.0
-
 # VP implementation convention — not canonical Strat doctrine. See module
 # docstring: no external Strat source defines a target rule for these
 # patterns. Subject to empirical validation once evidence is regenerated.
@@ -58,83 +80,72 @@ _TARGET_R = 2.0
 
 def advance_strat_212_122(
     *,
+    current_bar_type: Optional[str],
     previous_bar_type: Optional[str],
-    two_bars_back_type: Optional[str],
-    previous_bar_high: Optional[float],
-    previous_bar_low: Optional[float],
     current_high: float,
     current_low: float,
     tick_size: float,
     trading_date: str,
     persisted_state: Optional[dict] = None,
 ) -> tuple[dict, Optional[dict]]:
-    """Advance one bar of causal Strat 2-1-2 / 1-2-2 detection.
+    """Advance one bar of the two-phase armed Strat 2-1-2 / 1-2-2 detector.
 
-    ``persisted_state`` (the prior bar's returned state) is accepted and
-    reconstructed for audit-trail continuity across a process restart,
-    matching the shared state-machine shape used elsewhere in this codebase.
-    It is not required for the trigger decision itself: the two-bar
-    precursor (previous_bar_type / two_bars_back_type) and the boundary
-    (previous_bar_high / previous_bar_low) are already given fresh on every
-    bar by the same upstream classification both live and replay already
-    rely on, so this function recomputes the precursor and boundary from
-    THIS bar's own fields rather than trusting carried-over state that could
-    silently go stale.
+    ``current_bar_type`` / ``previous_bar_type`` describe the bar CURRENTLY
+    being processed (its own type, and the type of the bar immediately
+    before it) — the same fields Pine/replay already attach to every bar.
+    ``current_high`` / ``current_low`` are that same bar's own OHLC.
 
-    Returns (next_state, candidate). ``candidate`` is None when nothing
-    resolves this bar (no precursor, missing boundary data, the watched bar
-    didn't reach either boundary, or it reached only the invalidation side).
-    When present, candidate["kind"] is:
-      - "OPEN": a normal tradeable setup (entry/stop/target) for the
-        standard risk-validation/broker pipeline, exactly like any other
-        strategy's candidate.
-      - "RESOLVED": the entry boundary and the opposite (stop) boundary were
-        BOTH crossed on the same watched bar. The caller must journal this
-        directly (pessimistic LOSS) and must never submit it as a live
-        order — see module docstring.
+    Returns (next_state, candidate). ``candidate`` is never produced on the
+    same bar an arm forms — only on the watch bar that resolves it. See
+    module docstring for the full outcome table.
     """
-    previous_type = normalize_bar_type(previous_bar_type)
-    two_back_type = normalize_bar_type(two_bars_back_type)
+    previous = dict(persisted_state or {})
+    if previous.get("status") == "ARMED" and previous.get("trading_date") == trading_date:
+        return _resolve(previous, current_high=current_high, current_low=current_low)
 
+    return _maybe_arm(
+        current_bar_type=normalize_bar_type(current_bar_type),
+        previous_bar_type=normalize_bar_type(previous_bar_type),
+        current_high=current_high,
+        current_low=current_low,
+        tick_size=tick_size,
+        trading_date=trading_date,
+    )
+
+
+def _maybe_arm(
+    *,
+    current_bar_type: Optional[str],
+    previous_bar_type: Optional[str],
+    current_high: float,
+    current_low: float,
+    tick_size: float,
+    trading_date: str,
+) -> tuple[dict, None]:
     pattern: Optional[str] = None
     direction: Optional[str] = None
-    if previous_type == INSIDE_BAR and two_back_type in (TWO_UP, TWO_DOWN):
+    if current_bar_type == INSIDE_BAR and previous_bar_type in (TWO_UP, TWO_DOWN):
+        # 2-1-2: this bar is the inside bar; direction matches the
+        # directional bar that just preceded it.
         pattern = STRAT_212
-        direction = "LONG" if two_back_type == TWO_UP else "SHORT"
-    elif previous_type in (TWO_UP, TWO_DOWN) and two_back_type == INSIDE_BAR:
+        direction = "LONG" if previous_bar_type == TWO_UP else "SHORT"
+    elif current_bar_type in (TWO_UP, TWO_DOWN) and previous_bar_type == INSIDE_BAR:
+        # 1-2-2: this bar is the directional bar following an inside bar;
+        # the pattern arms a reversal of THIS bar's own direction.
         pattern = STRAT_122
-        direction = "LONG" if previous_type == TWO_DOWN else "SHORT"
+        direction = "LONG" if current_bar_type == TWO_DOWN else "SHORT"
 
     if pattern is None or direction is None:
-        return {"trading_date": trading_date, "status": "NO_PRECURSOR"}, None
+        return {"trading_date": trading_date, "status": "IDLE"}, None
 
-    if previous_bar_high is None or previous_bar_low is None:
-        return (
-            {
-                "trading_date": trading_date,
-                "status": "NO_CANDIDATE_MISSING_BOUNDARY_DATA",
-                "pattern": pattern,
-                "direction": direction,
-            },
-            None,
-        )
-
-    stop_buffer = tick_size * _STOP_BUFFER_TICKS
+    boundary_high = float(current_high)
+    boundary_low = float(current_low)
     if direction == "LONG":
-        boundary_entry = float(previous_bar_high)
-        boundary_stop = float(previous_bar_low)
-        entry_price = boundary_entry + tick_size
-        stop_price = boundary_stop - stop_buffer
-        entry_crossed = current_high >= entry_price
-        stop_crossed = current_low <= stop_price
+        entry_price = boundary_high + tick_size
+        stop_price = boundary_low
     else:
-        boundary_entry = float(previous_bar_low)
-        boundary_stop = float(previous_bar_high)
-        entry_price = boundary_entry - tick_size
-        stop_price = boundary_stop + stop_buffer
-        entry_crossed = current_low <= entry_price
-        stop_crossed = current_high >= stop_price
-
+        entry_price = boundary_low - tick_size
+        stop_price = boundary_high
     risk = abs(entry_price - stop_price)
     target_price = (
         entry_price + (risk * _TARGET_R)
@@ -142,39 +153,76 @@ def advance_strat_212_122(
         else entry_price - (risk * _TARGET_R)
     )
 
-    base_state = {
+    return {
         "trading_date": trading_date,
+        "status": "ARMED",
         "pattern": pattern,
         "direction": direction,
-        "boundary_entry": boundary_entry,
-        "boundary_stop": boundary_stop,
+        "boundary_high": boundary_high,
+        "boundary_low": boundary_low,
         "entry_price": entry_price,
         "stop_price": stop_price,
         "target_price": target_price,
-    }
+    }, None
 
-    if not entry_crossed and not stop_crossed:
-        # One-bar watch window only: the precursor does not carry forward to
-        # a later bar. A real trader re-evaluates fresh next bar; so do we.
-        return {**base_state, "status": "EXPIRED_NOT_TRIGGERED"}, None
 
-    if not entry_crossed and stop_crossed:
-        # The invalidation side broke first (or only) — the pattern never
-        # triggered a position at all. Not a trade, not a loss; no candidate.
-        return {**base_state, "status": "INVALIDATED_BEFORE_TRIGGER"}, None
+def _resolve(
+    armed: dict, *, current_high: float, current_low: float
+) -> tuple[dict, Optional[dict]]:
+    direction = armed["direction"]
+    pattern = armed["pattern"]
+    entry_price = float(armed["entry_price"])
+    stop_price = float(armed["stop_price"])
+    target_price = float(armed["target_price"])
 
-    if entry_crossed and stop_crossed:
+    if direction == "LONG":
+        entry_touched = current_high >= entry_price
+        stop_touched = current_low <= stop_price
+        target_touched = current_high >= target_price
+    else:
+        entry_touched = current_low <= entry_price
+        stop_touched = current_high >= stop_price
+        target_touched = current_low <= target_price
+
+    idle_state = {"trading_date": armed["trading_date"], "status": "IDLE"}
+
+    if not entry_touched:
+        # The invalidation side alone (or neither side) — no position was
+        # ever opened. Not a trade either way; the one-bar watch window is
+        # spent regardless (the precursor does not carry forward further).
+        return idle_state, None
+
+    if stop_touched:
+        # Entry and the opposite (stop) boundary both reached this bar. If
+        # target was ALSO reached, the ordering among all three is
+        # unknowable too — pessimistic LOSS covers that case as well, per
+        # ruling: never resolve optimistically on an ambiguous same-bar path.
         candidate = {
             "kind": "RESOLVED",
             "pattern": pattern,
             "direction": direction,
             "entry": entry_price,
-            "exit": stop_price,
+            "stop": stop_price,
             "target": target_price,
+            "exit": stop_price,
             "result": "LOSS",
             "exit_reason": "OUTSIDE_AFTER_TRIGGER",
         }
-        return {**base_state, "status": "TRIGGERED_OUTSIDE_AFTER_TRIGGER"}, candidate
+        return idle_state, candidate
+
+    if target_touched:
+        candidate = {
+            "kind": "RESOLVED",
+            "pattern": pattern,
+            "direction": direction,
+            "entry": entry_price,
+            "stop": stop_price,
+            "target": target_price,
+            "exit": target_price,
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT_SAME_BAR",
+        }
+        return idle_state, candidate
 
     candidate = {
         "kind": "OPEN",
@@ -184,4 +232,4 @@ def advance_strat_212_122(
         "stop": stop_price,
         "target": target_price,
     }
-    return {**base_state, "status": "TRIGGERED"}, candidate
+    return idle_state, candidate

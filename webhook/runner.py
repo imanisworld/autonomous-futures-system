@@ -1929,16 +1929,37 @@ def process_alert(
             logger.warning("CIRCUIT_BREAKER: %s", risk_result.reason)
         return result
 
-    # ── Step 4b: strat_212/122 same-bar-both-sides pre-resolved evidence ─────
-    # A pre_resolved SetupDetail (strategy/strat_212_122.py's causal
-    # OUTSIDE_AFTER_TRIGGER case) never represents a live order — the armed
-    # boundary and its opposite side were both crossed on the same watched
-    # bar, so OHLC cannot establish fill order and this already resolved
-    # pessimistically to LOSS. A real broker connection (Tradovate) ignores
-    # this and submits the normal order below — only a real fill/no-fill from
-    # the actual exchange is trustworthy there. PaperBroker must never submit
-    # it as an order; journal the already-fixed outcome directly instead.
-    if decision.setup.pre_resolved is not None and isinstance(broker, PaperBroker):
+    # ── Step 4b: strat_212/122 same-bar armed-and-resolved evidence ──────────
+    # A pre_resolved SetupDetail (strategy/strat_212_122.py's causal RESOLVED
+    # case) never represents a live order — it means the armed boundary AND
+    # either the target or the opposite (stop) boundary were BOTH reached on
+    # the watched bar, so this already resolved (WIN or pessimistic LOSS)
+    # before this decision was even evaluated. No real order — on ANY
+    # broker, including Tradovate — was ever armed ahead of that watched bar
+    # to have captured it; submitting a fresh order now would be trading a
+    # completely different, unrelated setup at whatever price the market
+    # happens to be at after the fact. PaperBroker/replay journal the
+    # already-fixed outcome directly (no broker order, no P&L fabrication —
+    # the exit price is exactly what the watched bar already showed). A real
+    # broker connection has no such evidence to act on at all: refuse to
+    # submit anything.
+    if decision.setup.pre_resolved is not None:
+        if not isinstance(broker, PaperBroker):
+            logger.warning(
+                "strat_212/122 same-bar RESOLVED candidate on a live broker "
+                "connection — no order was ever armed ahead of the watched "
+                "bar for this outcome; refusing to submit a substitute "
+                "order. %s %s pre_resolved=%s",
+                decision.setup.strategy, decision.setup.direction,
+                decision.setup.pre_resolved,
+            )
+            result["decision"] = "NO_TRADE"
+            result["reason"] = (
+                "strat_212/122 same-bar resolved outcome has no live-broker "
+                "equivalent order to submit."
+            )
+            return result
+
         _pre = decision.setup.pre_resolved
         broker.restore_position(
             instrument=state.instrument,
@@ -1962,7 +1983,7 @@ def process_alert(
             contracts=fill.contracts,
             for_date=today,
             strategy=decision.setup.strategy,
-            execution_audit={"source": "strat_212_122_same_bar_pessimistic_resolution"},
+            execution_audit={"source": "strat_212_122_same_bar_resolution"},
         )
         daily_state.trade_count += 1
         daily_state.realized_pnl_dollars += float(fill.pnl_dollars or 0.0)
