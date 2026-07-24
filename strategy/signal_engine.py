@@ -27,6 +27,7 @@ from strategy.gex_gate import evaluate_gex
 from strategy.regime_classifier import classify_regime
 from strategy.signa_gate import evaluate_signa
 from strategy.four_hr_retrigger import advance_4hr_retrigger
+from strategy.strat_212_122 import STRAT_122, STRAT_212, advance_strat_212_122
 
 
 # Setups eligible for momentum re-anchor: entry rests AT a level, so price leaving
@@ -67,6 +68,11 @@ class SetupDetail:
     rank_confluence_score: Optional[int] = None
     rank_confluence_grade: Optional[str] = None
     selection_mode: Optional[str] = None
+    # Strat 2-1-2 / 1-2-2 same-bar-both-sides-touched case only: when set, the
+    # caller must journal this pre-computed outcome directly and must NEVER
+    # submit it as a live order (see strategy/strat_212_122.py and the
+    # webhook/runner.py / replay/replay_engine.py consumption of this field).
+    pre_resolved: Optional[dict] = None
 
 
 @dataclass(frozen=True)
@@ -245,6 +251,7 @@ class DecisionEngine:
         """
         now = datetime.now(timezone.utc)
         self._advance_4hr_retrigger(state, daily_state)
+        self._advance_strat_212_122(state, daily_state)
 
         # ── Pre-flight: daily capacity ────────────────────────────────────────
         total_daily_capacity = (
@@ -1434,10 +1441,14 @@ class DecisionEngine:
         transformed setup for the other two rejections (matches the audit
         shape decide() has always produced for a single-candidate rejection).
         """
-        if setup.strategy == "strat_4hr_retrigger":
-            # Entry, completed-1H stop, and prior-4PM target are the canonical
-            # resolved formula.  Generic Pine/advisory and distance transforms
-            # must not rewrite this strategy's identity.
+        if setup.strategy in ("strat_4hr_retrigger", STRAT_212, STRAT_122):
+            # Entry/stop/target are already the canonical resolved formula
+            # (causal boundary anchor for 212/122; completed-1H stop and
+            # prior-4PM target for 4HR). Generic Pine/advisory and distance
+            # transforms must not rewrite these strategies' identity — for a
+            # pre_resolved (same-bar-both-sides) 212/122 candidate this is
+            # doubly required: mutating entry/stop here would desync the
+            # SetupDetail from the already-fixed P&L the caller journals.
             confirmed = setup
         else:
             confirmed = self._apply_strat_confirmation(setup, state)
@@ -1456,7 +1467,12 @@ class DecisionEngine:
         # scratch: SHORT with target 30178.75 ABOVE the 30080.75 fill). Require
         # the bracket to still straddle the current price; otherwise the signal
         # is stale — refuse rather than chase a broken market fill.
-        entry_price = state.ohlc.close if state.ohlc else None
+        # A pre_resolved candidate (strat_212/122 same-bar-both-sides case) is
+        # never filled as a live MARKET order at the current close — it is an
+        # already-fixed, fully-resolved evidence record — so this guard,
+        # built for "is a market fill near current price still sane," does
+        # not apply to it.
+        entry_price = state.ohlc.close if (state.ohlc and confirmed.pre_resolved is None) else None
         if entry_price is not None and not self._entry_bracket_straddles_price(
             confirmed.direction, confirmed.entry, confirmed.stop, confirmed.target, entry_price
         ):
@@ -2235,79 +2251,50 @@ class DecisionEngine:
 
     # ── The Strat Patterns ────────────────────────────────────────────────────
 
-    def _try_strat_212(self, state: MarketState) -> Optional[SetupDetail]:
+    def _strat_212_122_setup(
+        self, state: MarketState, pattern: str, label: str
+    ) -> Optional[SetupDetail]:
+        """Shared consumer for both canonical Strat patterns' candidates.
+
+        Returns only what strategy/strat_212_122.py's causal state machine
+        produced this bar for the requested pattern — no proxy, no fallback.
+        A "RESOLVED" candidate (same-bar both-sides-touched) still returns a
+        SetupDetail, carrying pre_resolved: the caller (webhook/runner.py /
+        replay/replay_engine.py) must journal it directly and must never
+        submit it as a live order.
         """
-        The Strat: 2-1-2 Continuation.
+        candidate = state.strat_212_122_candidate
+        if not candidate or candidate.get("pattern") != pattern:
+            return None
+        direction = str(candidate["direction"])
 
-        Full pattern: 2UP → 1 (inside bar) → 2UP  (bullish continuation)
-                      2DOWN → 1 → 2DOWN             (bearish continuation)
-
-        Uses classified bar sequence from state.strat when available.
-        Falls back to Phase 1 proxy (ORB inside + trend + VWAP) when absent.
-        """
-        tick = self.TICK_SIZE.get(state.instrument, 0.25)
-
-        max_stop_ticks = self.MAX_ORB_STOP_TICKS.get(state.instrument, 80)
-
-        # Use actual classified strat sequence when present
-        strat = state.strat
-        if strat and strat.strat_sequence == "strat_212" and strat.strat_direction:
-            direction = strat.strat_direction
-            if direction == "LONG":
-                entry = state.ohlc.high + tick
-                raw_stop = state.ohlc.low - (tick * 4)
-                stop = max(raw_stop, entry - (tick * max_stop_ticks))
-                risk = entry - stop
-            else:
-                entry = state.ohlc.low - tick
-                raw_stop = state.ohlc.high + (tick * 4)
-                stop = min(raw_stop, entry + (tick * max_stop_ticks))
-                risk = stop - entry
-            if risk <= 0:
-                return None
-            target = entry + (risk * 2.2) if direction == "LONG" else entry - (risk * 2.2)
-            rr = RiskEngine.calculate_rr(direction, entry, stop, target)
+        if candidate["kind"] == "RESOLVED":
+            entry = float(candidate["entry"])
+            exit_price = float(candidate["exit"])
+            target = float(candidate["target"])
+            rr = RiskEngine.calculate_rr(direction, entry, exit_price, target)
             return SetupDetail(
                 direction=direction,
                 entry=round(entry, 4),
-                stop=round(stop, 4),
+                stop=round(exit_price, 4),
                 target=round(target, 4),
                 rr_ratio=rr,
-                strategy="strat_212",
-                notes=f"2-1-2 continuation ({direction}): classified from bar sequence",
+                strategy=pattern,
+                notes=(
+                    f"{label} ({direction}): armed boundary and its opposite "
+                    f"side both crossed on the watched bar — OHLC cannot "
+                    f"establish order, resolved pessimistically as LOSS."
+                ),
+                pre_resolved={
+                    "result": candidate["result"],
+                    "exit_price": exit_price,
+                    "exit_reason": candidate["exit_reason"],
+                },
             )
 
-        # Phase 1 fallback proxy: ORB inside + trend + VWAP
-        if not (state.trend and state.trend.direction in ("UP", "DOWN")):
-            return None
-        if state.trend.strength not in ("STRONG", "MODERATE"):
-            return None
-        if state.orb.status != "inside":
-            return None
-
-        if state.trend.direction == "UP":
-            if state.vwap.price_vs_vwap != "above":
-                return None
-            entry = state.ohlc.high + tick
-            raw_stop = state.ohlc.low - (tick * 4)
-            stop = max(raw_stop, entry - (tick * max_stop_ticks))
-            risk = entry - stop
-            if risk <= 0:
-                return None
-            target = entry + (risk * 2.2)
-            direction = "LONG"
-        else:
-            if state.vwap.price_vs_vwap != "below":
-                return None
-            entry = state.ohlc.low - tick
-            raw_stop = state.ohlc.high + (tick * 4)
-            stop = min(raw_stop, entry + (tick * max_stop_ticks))
-            risk = stop - entry
-            if risk <= 0:
-                return None
-            target = entry - (risk * 2.2)
-            direction = "SHORT"
-
+        entry = float(candidate["entry"])
+        stop = float(candidate["stop"])
+        target = float(candidate["target"])
         rr = RiskEngine.calculate_rr(direction, entry, stop, target)
         return SetupDetail(
             direction=direction,
@@ -2315,97 +2302,38 @@ class DecisionEngine:
             stop=round(stop, 4),
             target=round(target, 4),
             rr_ratio=rr,
-            strategy="strat_212",
+            strategy=pattern,
             notes=(
-                f"2-1-2 continuation proxy ({state.trend.direction}): "
-                f"inside-bar compression in trending market above/below VWAP"
+                f"{label} ({direction}): causal armed-boundary trigger — "
+                f"entry/stop anchored to the prior reference bar, target is "
+                f"a fixed 2R VP convention (not canonical Strat doctrine)."
             ),
         )
 
+    def _try_strat_212(self, state: MarketState) -> Optional[SetupDetail]:
+        """
+        The Strat: 2-1-2 Continuation — canonical sequence only, no proxy.
+
+        Full pattern: 2UP → 1 (inside bar) → 2UP  (bullish continuation)
+                      2DOWN → 1 → 2DOWN             (bearish continuation)
+
+        Entry/stop anchor to the inside bar (the prior reference bar), never
+        to the bar being evaluated — see strategy/strat_212_122.py.
+        """
+        return self._strat_212_122_setup(state, STRAT_212, "2-1-2 continuation")
+
     def _try_strat_122(self, state: MarketState) -> Optional[SetupDetail]:
         """
-        The Strat: 1-2-2 Reversal.
+        The Strat: 1-2-2 Reversal — canonical sequence only, no proxy.
 
         Full pattern: 1 (inside) → 2DOWN → 2UP  (bullish reversal)
                       1 → 2UP → 2DOWN             (bearish reversal)
 
-        Uses classified bar sequence from state.strat when available.
-        Falls back to Phase 1 proxy (ORB rejection + opposing trend) when absent.
+        Entry/stop anchor to the prior directional bar (the reference bar
+        being reversed), never to the bar being evaluated — see
+        strategy/strat_212_122.py.
         """
-        tick = self.TICK_SIZE.get(state.instrument, 0.25)
-
-        # Use actual classified strat sequence when present
-        strat = state.strat
-        if strat and strat.strat_sequence == "strat_122" and strat.strat_direction:
-            direction = strat.strat_direction
-            if direction == "LONG":
-                entry = state.ohlc.high + tick
-                stop = state.ohlc.low - (tick * 4)
-                risk = entry - stop
-            else:
-                entry = state.ohlc.low - tick
-                stop = state.ohlc.high + (tick * 4)
-                risk = stop - entry
-            if risk <= 0:
-                return None
-            target = entry + (risk * 2.0) if direction == "LONG" else entry - (risk * 2.0)
-            rr = RiskEngine.calculate_rr(direction, entry, stop, target)
-            return SetupDetail(
-                direction=direction,
-                entry=round(entry, 4),
-                stop=round(stop, 4),
-                target=round(target, 4),
-                rr_ratio=rr,
-                strategy="strat_122",
-                notes=f"1-2-2 reversal ({direction}): classified from bar sequence",
-            )
-
-        # Phase 1 fallback proxy: ORB rejection + opposing trend
-        # Bullish 1-2-2: ORB high rejected but underlying trend is UP
-        if (state.orb.status == "rejected_high"
-                and state.trend
-                and state.trend.direction == "UP"
-                and state.vwap.price_vs_vwap == "above"):
-            entry = state.orb.high + (tick * 2)
-            stop = state.orb.low - (tick * 4)
-            risk = entry - stop
-            if risk <= 0:
-                return None
-            target = entry + (risk * 2.0)
-            rr = RiskEngine.calculate_rr("LONG", entry, stop, target)
-            return SetupDetail(
-                direction="LONG",
-                entry=round(entry, 4),
-                stop=round(stop, 4),
-                target=round(target, 4),
-                rr_ratio=rr,
-                strategy="strat_122",
-                notes="1-2-2 bullish reversal proxy: ORB high rejected with uptrend context",
-            )
-
-        # Bearish 1-2-2: ORB low rejected but underlying trend is DOWN
-        if (state.orb.status == "rejected_low"
-                and state.trend
-                and state.trend.direction == "DOWN"
-                and state.vwap.price_vs_vwap == "below"):
-            entry = state.orb.low - (tick * 2)
-            stop = state.orb.high + (tick * 4)
-            risk = stop - entry
-            if risk <= 0:
-                return None
-            target = entry - (risk * 2.0)
-            rr = RiskEngine.calculate_rr("SHORT", entry, stop, target)
-            return SetupDetail(
-                direction="SHORT",
-                entry=round(entry, 4),
-                stop=round(stop, 4),
-                target=round(target, 4),
-                rr_ratio=rr,
-                strategy="strat_122",
-                notes="1-2-2 bearish reversal proxy: ORB low rejected with downtrend context",
-            )
-
-        return None
+        return self._strat_212_122_setup(state, STRAT_122, "1-2-2 reversal")
 
     def _try_strat_inside_break(self, state: MarketState) -> Optional[SetupDetail]:
         """
@@ -2553,6 +2481,41 @@ class DecisionEngine:
         )
         daily_state.four_hr_retrigger_state = next_state
         state.four_hr_retrigger_candidate = candidate
+
+    def _advance_strat_212_122(
+        self, state: MarketState, daily_state: DailyState
+    ) -> None:
+        """Advance the canonical causal 2-1-2/1-2-2 state before ordinary gates.
+
+        Unlike 4HR, this state machine does not need cross-bar memory to
+        decide (the two-bar precursor and boundary are already given fresh
+        every bar) — it is advanced unconditionally each bar purely for
+        audit-trail continuity, matching the #317 pattern's shape. Whether a
+        resulting candidate is ever actually acted on is still gated
+        entirely by the normal enabled_concepts/session/capacity chain in
+        _iter_enabled_setups, exactly like any other strategy.
+        """
+        state.strat_212_122_candidate = None
+        if not (
+            "strat_212" in self.config.enabled_concepts
+            or "strat_122" in self.config.enabled_concepts
+        ):
+            return
+        strat = state.strat
+        raw = state.raw if isinstance(getattr(state, "raw", None), dict) else {}
+        next_state, candidate = advance_strat_212_122(
+            previous_bar_type=strat.previous_bar_type if strat else None,
+            two_bars_back_type=strat.two_bars_back_type if strat else None,
+            previous_bar_high=raw.get("previous_bar_high"),
+            previous_bar_low=raw.get("previous_bar_low"),
+            current_high=state.ohlc.high,
+            current_low=state.ohlc.low,
+            tick_size=self.TICK_SIZE.get(state.instrument, 0.25),
+            trading_date=state.timestamp.date().isoformat(),
+            persisted_state=daily_state.strat_212_122_state,
+        )
+        daily_state.strat_212_122_state = next_state
+        state.strat_212_122_candidate = candidate
 
     def _try_strat_4hr_retrigger(self, state: MarketState) -> Optional[SetupDetail]:
         """Return only the candidate produced by the resolved state machine."""

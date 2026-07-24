@@ -1082,14 +1082,29 @@ class TestStratWiring:
         # Clear ORB signals so only strat fires
         state.orb.status = "inside"
         state.market_condition = "TRENDING"
-        # Make the bar consistent with the strat direction. The base fixture is a
-        # bullish bar (close near the high); a SHORT strat anchors its entry to
-        # the bar LOW, so a close near the high is an unrealistic bearish bar and
-        # the entry-sanity guard rightly rejects it. Close near the low for a
-        # SHORT so the bracket straddles the live price as it would in reality.
+        # Causal entry/stop anchor to the prior reference bar (the inside bar
+        # for 212, the prior directional bar for 122) — see
+        # strategy/strat_212_122.py. previous_bar_high/low live in state.raw,
+        # exactly as the live payload / replay corpus already carry them.
         if strat_kwargs.get("strat_direction") == "SHORT":
             o = state.ohlc
+            # Make the bar consistent with the strat direction. The base fixture
+            # is a bullish bar (close near the high); a SHORT strat anchors its
+            # entry to the reference bar's low, so a close near the high is an
+            # unrealistic bearish bar and the entry-sanity guard rightly rejects
+            # it. Close near the low so the bracket straddles the live price.
             o.close = round(o.low + (o.high - o.low) * 0.1, 4)
+            # Chosen so the fixture's fixed bar range (high=19510/low=19475)
+            # crosses only the entry side (low <= entry) and not the far stop
+            # side (high < stop) — a clean trigger, not the same-bar-both-sides
+            # pessimistic-LOSS case (that has its own dedicated coverage in
+            # tests/test_strat_212_122.py).
+            state.raw = {**(state.raw or {}), "previous_bar_high": 19515.0, "previous_bar_low": 19480.0}
+        else:
+            # Chosen so the fixture's fixed bar range (high=19510/low=19475)
+            # crosses only the entry side (high >= entry) and not the far stop
+            # side (low > stop) — a clean trigger, not the both-sides case.
+            state.raw = {**(state.raw or {}), "previous_bar_high": 19485.0, "previous_bar_low": 19470.0}
         return state
 
     def test_strat_212_fires_from_classified_long(self, strat_engine, fresh_market_state):
@@ -1107,7 +1122,9 @@ class TestStratWiring:
         assert decision.decision == "TRADE"
         assert decision.setup.strategy == "strat_212"
         assert decision.setup.direction == "LONG"
-        assert "classified from bar sequence" in decision.setup.notes
+        assert decision.setup.entry == 19485.25
+        assert decision.setup.stop == 19469.0
+        assert "causal armed-boundary trigger" in decision.setup.notes
 
     def test_strat_212_fires_from_classified_short(self, strat_engine, fresh_market_state):
         """strat_212 SHORT setup generated from actual classified bar sequence."""
@@ -1124,6 +1141,8 @@ class TestStratWiring:
         assert decision.decision == "TRADE"
         assert decision.setup.strategy == "strat_212"
         assert decision.setup.direction == "SHORT"
+        assert decision.setup.entry == 19479.75
+        assert decision.setup.stop == 19516.0
 
     def test_strat_122_fires_from_classified_long(self, strat_engine, fresh_market_state):
         """strat_122 LONG reversal setup from classified sequence."""
@@ -1143,6 +1162,8 @@ class TestStratWiring:
         assert decision.decision == "TRADE"
         assert decision.setup.strategy == "strat_122"
         assert decision.setup.direction == "LONG"
+        assert decision.setup.entry == 19485.25
+        assert decision.setup.stop == 19469.0
 
     def test_strat_confirmation_vetoes_opposing_direction(self, engine, fresh_market_state):
         """

@@ -1696,7 +1696,8 @@ def process_alert(
                 logger.warning("5m feed: setup arm skipped: %s", _exc)
         journal_entry = decision.to_dict()
         journal_entry["strategy_state"] = {
-            "strat_4hr_retrigger": dict(daily_state.four_hr_retrigger_state)
+            "strat_4hr_retrigger": dict(daily_state.four_hr_retrigger_state),
+            "strat_212_122": dict(daily_state.strat_212_122_state),
         }
         journal_entry["context"] = _market_state_context(state)
         if shadow_candidates:
@@ -1773,7 +1774,8 @@ def process_alert(
     }
     journal_entry = decision.to_dict()
     journal_entry["strategy_state"] = {
-        "strat_4hr_retrigger": dict(daily_state.four_hr_retrigger_state)
+        "strat_4hr_retrigger": dict(daily_state.four_hr_retrigger_state),
+        "strat_212_122": dict(daily_state.strat_212_122_state),
     }
     journal_entry["context"] = _market_state_context(state)
     if shadow_candidates:
@@ -1925,6 +1927,52 @@ def process_alert(
         )
         if risk_result.failed_rule in {"circuit_breaker", "max_daily_loss", "max_drawdown"}:
             logger.warning("CIRCUIT_BREAKER: %s", risk_result.reason)
+        return result
+
+    # ── Step 4b: strat_212/122 same-bar-both-sides pre-resolved evidence ─────
+    # A pre_resolved SetupDetail (strategy/strat_212_122.py's causal
+    # OUTSIDE_AFTER_TRIGGER case) never represents a live order — the armed
+    # boundary and its opposite side were both crossed on the same watched
+    # bar, so OHLC cannot establish fill order and this already resolved
+    # pessimistically to LOSS. A real broker connection (Tradovate) ignores
+    # this and submits the normal order below — only a real fill/no-fill from
+    # the actual exchange is trustworthy there. PaperBroker must never submit
+    # it as an order; journal the already-fixed outcome directly instead.
+    if decision.setup.pre_resolved is not None and isinstance(broker, PaperBroker):
+        _pre = decision.setup.pre_resolved
+        broker.restore_position(
+            instrument=state.instrument,
+            direction=decision.setup.direction,
+            entry=entry_px,
+            stop=stop_px,
+            target=target_px,
+            contracts=contracts,
+        )
+        fill = broker.force_resolve(_pre["result"], float(_pre["exit_price"]))
+        fill.exit_reason = _pre["exit_reason"]
+        journal.log_outcome(
+            instrument=fill.instrument,
+            session=state.session,
+            result=fill.result,
+            entry_price=fill.entry_price,
+            exit_price=fill.exit_price,
+            exit_reason=fill.exit_reason,
+            pnl_ticks=fill.pnl_ticks,
+            pnl_dollars=fill.pnl_dollars,
+            contracts=fill.contracts,
+            for_date=today,
+            strategy=decision.setup.strategy,
+            execution_audit={"source": "strat_212_122_same_bar_pessimistic_resolution"},
+        )
+        daily_state.trade_count += 1
+        daily_state.realized_pnl_dollars += float(fill.pnl_dollars or 0.0)
+        if fill.result == "LOSS":
+            daily_state.consecutive_losses += 1
+            daily_state.last_loss_at = state.timestamp
+        elif fill.result in ("WIN", "BREAKEVEN"):
+            daily_state.consecutive_losses = 0
+        result["decision"] = "RESOLVED_EVIDENCE"
+        result["resolution"] = fill.result
         return result
 
     # ── Step 5: Execute bracket order ────────────────────────────────────────

@@ -522,6 +522,9 @@ class JournalLogger:
             four_hr_state = strategy_state.get("strat_4hr_retrigger")
             if isinstance(four_hr_state, dict):
                 daily_state.four_hr_retrigger_state = dict(four_hr_state)
+            strat_212_122_state = strategy_state.get("strat_212_122")
+            if isinstance(strat_212_122_state, dict):
+                daily_state.strat_212_122_state = dict(strat_212_122_state)
         for entry in entries:
             decision = entry.get("decision")
             risk_check = entry.get("risk_check") or {}

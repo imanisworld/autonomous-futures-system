@@ -85,6 +85,12 @@ class DailyState:
     # Persisted/reconstructed pending setup state for the canonical executable
     # 4HR Re-Trigger.  Dict form keeps journal serialization deterministic.
     four_hr_retrigger_state: dict = field(default_factory=dict)
+    # Persisted/reconstructed audit-trail state for the canonical executable
+    # Strat 2-1-2 / 1-2-2 detection. Dict form keeps journal serialization
+    # deterministic. Not required for the trigger decision itself (that is
+    # recomputed fresh every bar from already-given lookback fields) — this
+    # exists for restart continuity and per-bar evidence review.
+    strat_212_122_state: dict = field(default_factory=dict)
 
 
 @dataclass

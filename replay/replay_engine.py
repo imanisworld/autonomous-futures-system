@@ -243,7 +243,8 @@ class ReplayEngine:
                 journal_entry["strategy_state"] = {
                     "strat_4hr_retrigger": dict(
                         daily_state.four_hr_retrigger_state
-                    )
+                    ),
+                    "strat_212_122": dict(daily_state.strat_212_122_state),
                 }
                 # Persist the historical candle time (the record's own `ts` is the
                 # wall-clock replay-run time) so downstream analysis — e.g. the MFE
@@ -298,6 +299,55 @@ class ReplayEngine:
                         )
 
                 journal.log_decision(journal_entry, risk_result_dict, for_date=journal_date)
+
+                if risk_result.approved and decision.setup.pre_resolved is not None:
+                    # strat_212/122 same-bar-both-sides case (see
+                    # strategy/strat_212_122.py): the armed boundary and its
+                    # opposite side were both crossed on the same watched
+                    # bar, so OHLC cannot establish fill order — this already
+                    # resolved pessimistically to LOSS. Never submit it as an
+                    # order; journal the already-fixed outcome directly.
+                    _pre = decision.setup.pre_resolved
+                    contracts = trade_setup.contracts
+                    broker.restore_position(
+                        instrument=state.instrument,
+                        direction=decision.setup.direction,
+                        entry=decision.setup.entry,
+                        stop=decision.setup.stop,
+                        target=decision.setup.target,
+                        contracts=contracts,
+                    )
+                    resolved_fill = broker.force_resolve(
+                        _pre["result"], float(_pre["exit_price"])
+                    )
+                    resolved_fill.exit_reason = _pre["exit_reason"]
+                    journal.log_outcome(
+                        instrument=resolved_fill.instrument,
+                        session=state.session,
+                        result=resolved_fill.result,
+                        entry_price=resolved_fill.entry_price,
+                        exit_price=resolved_fill.exit_price,
+                        exit_reason=resolved_fill.exit_reason,
+                        pnl_ticks=resolved_fill.pnl_ticks,
+                        pnl_dollars=resolved_fill.pnl_dollars,
+                        contracts=resolved_fill.contracts,
+                        for_date=journal_date,
+                        strategy=decision.setup.strategy,
+                        execution_audit={
+                            "source": "strat_212_122_same_bar_pessimistic_resolution"
+                        },
+                    )
+                    daily_state.trade_count += 1
+                    daily_state.account_balance = broker.get_account_balance()
+                    daily_state.realized_pnl_dollars += float(
+                        resolved_fill.pnl_dollars or 0.0
+                    )
+                    if resolved_fill.result == "LOSS":
+                        daily_state.consecutive_losses += 1
+                        daily_state.last_loss_at = _parse_timestamp(candle.timestamp)
+                    elif resolved_fill.result in ("WIN", "BREAKEVEN"):
+                        daily_state.consecutive_losses = 0
+                    continue
 
                 if risk_result.approved:
                     contracts = trade_setup.contracts
@@ -438,7 +488,8 @@ class ReplayEngine:
             journal_entry["strategy_state"] = {
                 "strat_4hr_retrigger": dict(
                     daily_state.four_hr_retrigger_state
-                )
+                ),
+                "strat_212_122": dict(daily_state.strat_212_122_state),
             }
             # Persist the historical candle time (the record's own `ts` is the
             # wall-clock replay-run time) so shadow candidates can be re-resolved

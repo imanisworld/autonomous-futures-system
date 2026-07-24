@@ -45,9 +45,13 @@ def apply_stop_multiplier(
     Returns the multiplier ACTUALLY applied (``1.0`` = no change). No-op when the
     multiplier is unset/1.0, the stop is missing, or risk is non-positive.
     """
-    if getattr(setup, "strategy", None) == "strat_4hr_retrigger":
-        # The resolved rule assigns the last completed 1H boundary at actual
-        # entry and fixes it forever. Generic widening would change the strategy.
+    if getattr(setup, "strategy", None) in ("strat_4hr_retrigger", "strat_212", "strat_122"):
+        # The resolved rule assigns a fixed causal boundary at actual entry
+        # (4HR: last completed 1H boundary; 212/122: the prior reference
+        # bar's opposite side) and fixes it forever. Generic widening would
+        # change the strategy — and for a strat_212/122 pre_resolved
+        # (same-bar-both-sides) candidate, would desync setup.stop from the
+        # already-fixed exit price the caller journals as the actual P&L.
         return 1.0
     mult = (multiplier_map or {}).get(instrument, 1.0)
     if not mult or mult == 1.0 or getattr(setup, "stop", None) is None:
