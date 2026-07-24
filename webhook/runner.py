@@ -435,6 +435,7 @@ def process_alert(
                 "setup": None,
                 "failed_gates": [quality_error],
                 "received_timeframe": payload.timeframe,
+                "event_id": getattr(payload, "event_id", None),
             },
             None,
             for_date=today,
@@ -453,6 +454,7 @@ def process_alert(
             "signa_status": None,
             "failed_gates": [quality_error],
             "confidence_score": None,
+            "event_id": getattr(payload, "event_id", None),
         }
 
     # ── Step 0a: 5-minute entry feed ──────────────────────────────────────────
@@ -562,6 +564,7 @@ def process_alert(
                 "signa_status": None,
                 "failed_gates": [],
                 "confidence_score": None,
+                "event_id": getattr(five_min_trigger_payload, "event_id", None),
             }
 
     # ── Step 0b: Timeframe guard (CONFIG_BLOCKED / TIMEFRAME_MISMATCH) ─────────
@@ -585,6 +588,7 @@ def process_alert(
                 "reason": tf_mismatch["reason"],
                 "expected_timeframe": tf_mismatch["expected"],
                 "received_timeframe": tf_mismatch["received"],
+                "event_id": getattr(payload, "event_id", None),
             },
             None,
             for_date=today,
@@ -606,6 +610,7 @@ def process_alert(
             "signa_status": None,
             "failed_gates": [tf_mismatch["reason"]],
             "confidence_score": None,
+            "event_id": getattr(payload, "event_id", None),
         }
 
     _maybe_enrich_payload_with_signa(payload, cfg)
@@ -792,6 +797,7 @@ def process_alert(
         "confidence_score": None,
         "bar_gap": bar_gap,
         "window_direction": state.window_direction,
+        "event_id": getattr(payload, "event_id", None),
     }
     context_observation_written = False
 
@@ -1696,6 +1702,7 @@ def process_alert(
             except OSError as _exc:
                 logger.warning("5m feed: setup arm skipped: %s", _exc)
         journal_entry = decision.to_dict()
+        journal_entry["event_id"] = getattr(payload, "event_id", None)
         journal_entry["strategy_state"] = {
             "strat_4hr_retrigger": dict(daily_state.four_hr_retrigger_state),
             "strat_212_122": dict(daily_state.strat_212_122_state),
@@ -1774,6 +1781,7 @@ def process_alert(
         "penalties": confluence.penalties,
     }
     journal_entry = decision.to_dict()
+    journal_entry["event_id"] = getattr(payload, "event_id", None)
     journal_entry["strategy_state"] = {
         "strat_4hr_retrigger": dict(daily_state.four_hr_retrigger_state),
         "strat_212_122": dict(daily_state.strat_212_122_state),
@@ -2017,6 +2025,7 @@ def process_alert(
         )
         journal_entry = decision.to_dict()
         journal_entry["decision"] = "TRADE"
+        journal_entry["event_id"] = getattr(payload, "event_id", None)
         journal_entry["strategy_state"] = {
             "strat_4hr_retrigger": dict(daily_state.four_hr_retrigger_state),
             "strat_212_122": dict(daily_state.strat_212_122_state),

@@ -646,6 +646,7 @@ async def receive_alert(
 
     # Generate or preserve a correlation id for end-to-end traceability.
     event_id = ensure_event_id(getattr(payload, "event_id", None))
+    payload.event_id = event_id
 
     # Silently ignore non-futures tickers (e.g. stock alerts sharing the same
     # webhook). Exact root + contract-suffix matching — NOT a startswith prefix
