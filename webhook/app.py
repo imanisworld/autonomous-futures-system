@@ -32,6 +32,7 @@ from collections import Counter
 from contextlib import asynccontextmanager, suppress
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -1123,6 +1124,121 @@ async def admin_live_preflight_disarm(
     from execution.live_preflight import disarm
 
     return JSONResponse(content=disarm(reason=reason, notify=_live_preflight_notify))
+
+
+def _day_only_open_position(
+    journal: JournalLogger,
+    today: date,
+) -> tuple[dict | None, date]:
+    """Find the journal-owned open position without accepting caller selectors."""
+    for days_back in range(0, 8):
+        candidate = today - timedelta(days=days_back)
+        position = journal.get_open_position(candidate)
+        if position is not None:
+            return position, candidate
+    return None, today
+
+
+def _run_day_only_exit_fallback(*, now: datetime | None = None) -> dict:
+    """Fail-closed server-side 4PM fallback; called only after endpoint auth."""
+    from execution.day_only_exit import (
+        build_day_only_fill,
+        fallback_is_authorized,
+        positions_agree,
+        strategy_is_day_only,
+    )
+
+    current = now or datetime.now(timezone.utc)
+    if not fallback_is_authorized(current):
+        return {"ok": False, "action": "FAIL_CLOSED", "reason": "BEFORE_FALLBACK_WINDOW"}
+
+    journal = JournalLogger(log_dir=_config.log_dir)
+    position, position_date = _day_only_open_position(
+        journal, current.astimezone(ZoneInfo("America/New_York")).date()
+    )
+    if position is None:
+        return {"ok": True, "action": "NO_ACTION", "reason": "NO_OPEN_POSITION"}
+    if not strategy_is_day_only(position.get("strategy")):
+        return {"ok": True, "action": "NO_ACTION", "reason": "STRATEGY_NOT_DAY_ONLY"}
+
+    if os.getenv("BROKER", "paper").strip().lower() != "tradovate":
+        return {"ok": False, "action": "FAIL_CLOSED", "reason": "BROKER_NOT_TRADOVATE"}
+    if os.getenv("TRADOVATE_ENV", "").strip().lower() != "demo":
+        return {"ok": False, "action": "FAIL_CLOSED", "reason": "TRADOVATE_NOT_DEMO"}
+
+    # Reuse the app's lazy singleton. The scheduler never imports or constructs
+    # a broker and this function never creates an independent auth/session path.
+    broker = _tv_broker()
+    if str(getattr(broker.config, "env", "") or "").strip().lower() != "demo":
+        return {"ok": False, "action": "FAIL_CLOSED", "reason": "BROKER_CONFIG_NOT_DEMO"}
+
+    confirmed, broker_position = broker.get_position_snapshot()
+    if not confirmed:
+        return {"ok": False, "action": "FAIL_CLOSED", "reason": "BROKER_POSITION_UNCONFIRMED"}
+    agrees, reason = positions_agree(position, broker_position)
+    if not agrees:
+        return {"ok": False, "action": "FAIL_CLOSED", "reason": reason}
+
+    flattened = broker.flatten_position()
+    if not flattened.get("flat_confirmed"):
+        return {
+            "ok": False,
+            "action": "FAIL_CLOSED",
+            "reason": "FLATTEN_NOT_CONFIRMED",
+            "broker_error": flattened.get("error"),
+        }
+    actual_exit = flattened.get("close_fill_price")
+    if actual_exit is None:
+        # Never turn a broker-flat state into fictional P&L. A second call sees
+        # journal/broker disagreement and cannot submit another liquidation.
+        return {
+            "ok": False,
+            "action": "FLATTENED_MISSING_FILL_PRICE",
+            "reason": "ACTUAL_FILL_PRICE_UNAVAILABLE",
+        }
+
+    fill = build_day_only_fill(position, float(actual_exit))
+    journal.log_outcome(
+        instrument=fill.instrument,
+        session=position.get("session") or "day_only",
+        result=fill.result,
+        entry_price=fill.entry_price,
+        exit_price=fill.exit_price,
+        exit_reason=fill.exit_reason,
+        pnl_ticks=fill.pnl_ticks,
+        pnl_dollars=fill.pnl_dollars,
+        contracts=fill.contracts,
+        for_date=position_date,
+        paper_order_id=position.get("paper_order_id"),
+        execution_audit={
+            "source": "scheduled_day_only_fallback",
+            "broker_flat_confirmed": True,
+            "close_order_id": flattened.get("close_order_id"),
+        },
+    )
+    return {
+        "ok": True,
+        "action": "DAY_ONLY_FLATTEN",
+        "instrument": fill.instrument,
+        "result": fill.result,
+        "exit_price": fill.exit_price,
+    }
+
+
+@app.post("/internal/day-only-exit")
+async def internal_day_only_exit(
+    x_day_only_exit_secret: str | None = Header(default=None),
+) -> JSONResponse:
+    """Authenticated, selector-free Tradovate-demo day-only fallback."""
+    configured = os.getenv("DAY_ONLY_EXIT_SECRET", "")
+    if not configured:
+        raise HTTPException(status_code=503, detail="DAY_ONLY_EXIT_SECRET is not configured")
+    supplied = x_day_only_exit_secret or ""
+    if not hmac.compare_digest(supplied.encode(), configured.encode()):
+        raise HTTPException(status_code=401, detail="invalid day-only exit secret")
+    async with _alert_lock:
+        result = await asyncio.to_thread(_run_day_only_exit_fallback)
+    return JSONResponse(content=result)
 
 
 @app.post("/admin/test-discord")
