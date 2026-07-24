@@ -521,11 +521,14 @@ def convert(
         recon_volume_is_synthetic = any(
             all_volume_synthetic[recon_window_start:i + 1]
         )
-        recon_trend, recon_condition, recon_status = reconstruct_bar(
+        recon_trend, recon_trend_status, recon_condition, recon_condition_status = reconstruct_bar(
             close=bar["close"],
             ema9=recon_ema9,
             ema21=recon_ema21,
             ema55=recon_ema55,
+            # Pine's own exported EMA columns, when present -- no
+            # initialization/pre-roll question, genuinely Pine-exact.
+            ema_source="pine_native",
             high=bar["high"],
             low=bar["low"],
             atr14=recon_atr14,
@@ -587,9 +590,14 @@ def convert(
             # additive alongside (does not replace) market_condition/
             # trend_direction/trend_strength/avg_volume above, which the
             # engine still reads unchanged. See scripts/pine_market_condition.py.
+            # trend and market_condition carry INDEPENDENT statuses -- ATR is
+            # always self-computed (no proven pre-roll window), so
+            # reconstructed_market_condition_status can never be plain
+            # RECONSTRUCTED even when the trend status is.
             "reconstructed_trend_direction": recon_trend,
+            "reconstructed_trend_status": recon_trend_status,
             "reconstructed_market_condition": recon_condition,
-            "reconstructed_status": recon_status,
+            "reconstructed_market_condition_status": recon_condition_status,
             "reconstructed_atr14": recon_atr14,
             "reconstructed_rel_vol": recon_rel_vol,
         }

@@ -305,11 +305,15 @@ def derive_candles(
             if recon_vol_sma20 not in (None, 0)
             else None
         )
-        recon_trend, recon_condition, recon_status = reconstruct_bar(
+        recon_trend, recon_trend_status, recon_condition, recon_condition_status = reconstruct_bar(
             close=bar["close"],
             ema9=ema9,
             ema21=ema21,
             ema55=ema55,
+            # Polygon has no Pine-exported EMA columns -- ema9/21/55 here are
+            # this pipeline's own SMA-seeded recursive EMA, with no proven
+            # pre-roll/convergence window against Pine's own longer history.
+            ema_source="self_computed",
             high=bar["high"],
             low=bar["low"],
             atr14=recon_atr14,
@@ -375,9 +379,14 @@ def derive_candles(
             # additive alongside (does not replace) market_condition/
             # trend_direction/trend_strength/avg_volume above, which the
             # engine still reads unchanged. See scripts/pine_market_condition.py.
+            # trend and market_condition carry INDEPENDENT statuses -- ATR is
+            # always self-computed (no proven pre-roll window), and here
+            # EMA is also self-computed, so reconstructed_trend_status is
+            # always RECONSTRUCTED_UNVALIDATED_INIT for Polygon-derived rows.
             "reconstructed_trend_direction": recon_trend,
+            "reconstructed_trend_status": recon_trend_status,
             "reconstructed_market_condition": recon_condition,
-            "reconstructed_status": recon_status,
+            "reconstructed_market_condition_status": recon_condition_status,
             "reconstructed_atr14": recon_atr14,
             "reconstructed_rel_vol": recon_rel_vol,
         })

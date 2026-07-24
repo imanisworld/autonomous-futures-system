@@ -11,15 +11,20 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from scripts.csv_to_replay import LOOKBACK, convert
-from scripts.pine_market_condition import RECONSTRUCTED, UNAVAILABLE_SYNTHETIC_VOLUME
+from scripts.pine_market_condition import (
+    RECONSTRUCTED,
+    RECONSTRUCTED_UNVALIDATED_INIT,
+    UNAVAILABLE_SYNTHETIC_VOLUME,
+)
 from scripts.polygon_to_replay import derive_candles
 
 _ET = ZoneInfo("America/New_York")
 
 RECON_FIELDS = (
     "reconstructed_trend_direction",
+    "reconstructed_trend_status",
     "reconstructed_market_condition",
-    "reconstructed_status",
+    "reconstructed_market_condition_status",
     "reconstructed_atr14",
     "reconstructed_rel_vol",
 )
@@ -69,8 +74,12 @@ class TestCsvToReplayReconstructionWiring:
         last = candles[-1]
         for field in RECON_FIELDS:
             assert field in last
-        assert last["reconstructed_status"] == RECONSTRUCTED
+        # CSV path uses Pine's own exported EMA columns -- trend is fully
+        # Pine-exact (RECONSTRUCTED). market_condition depends on ATR, which
+        # is always self-computed -- never plain RECONSTRUCTED.
+        assert last["reconstructed_trend_status"] == RECONSTRUCTED
         assert last["reconstructed_trend_direction"] == "UP"
+        assert last["reconstructed_market_condition_status"] == RECONSTRUCTED_UNVALIDATED_INIT
         assert last["reconstructed_market_condition"] in {"DEAD", "CHOPPY", "TRENDING", "RANGE_BOUND"}
         assert last["reconstructed_atr14"] is not None
         assert last["reconstructed_rel_vol"] is not None
@@ -95,7 +104,7 @@ class TestCsvToReplayReconstructionWiring:
             assert c["market_condition"] in {"TRENDING", "CHOPPY", "CONSOLIDATING", "UNKNOWN"}
             assert c["trend_direction"] == "UP"
 
-    def test_missing_volume_column_marks_all_bars_synthetic_unavailable(self, tmp_path):
+    def test_missing_volume_column_marks_condition_synthetic_unavailable_not_trend(self, tmp_path):
         csv_path = tmp_path / "MNQ_15.csv"
         csv_path.write_text(_mk_csv(25, include_volume=False), encoding="utf-8")
         jsonl_path = convert(csv_path, tmp_path / "out")
@@ -104,10 +113,13 @@ class TestCsvToReplayReconstructionWiring:
         assert len(candles) == 25
 
         for c in candles:
-            assert c["reconstructed_status"] == UNAVAILABLE_SYNTHETIC_VOLUME
+            assert c["reconstructed_market_condition_status"] == UNAVAILABLE_SYNTHETIC_VOLUME
             assert c["reconstructed_market_condition"] is None
-            assert c["reconstructed_trend_direction"] is None
-            # But the EXISTING engine-facing fields must still be populated —
+            # Trend depends only on close/EMA, not volume -- synthetic
+            # volume must not suppress it.
+            assert c["reconstructed_trend_status"] == RECONSTRUCTED
+            assert c["reconstructed_trend_direction"] == "UP"
+            # And the EXISTING engine-facing fields must still be populated —
             # synthetic-volume exclusion is scoped to reconstruction only.
             assert c["trend_direction"] == "UP"
             assert c["avg_volume"] is not None
@@ -132,18 +144,13 @@ class TestCsvToReplayReconstructionWiring:
         candles = [json.loads(l) for l in jsonl_path.read_text().splitlines() if l.strip()]
 
         # Bar 5 itself, and every bar whose own 20-bar trailing window still
-        # includes bar 5 (indices 5..24 here, window width 20), must be
-        # UNAVAILABLE_SYNTHETIC_VOLUME. Bars before index 5 are unaffected by
-        # bar 5 (it isn't in their trailing window) but may still be
-        # UNAVAILABLE_WARMUP if ATR/volume warmup hasn't completed.
+        # includes bar 5 (indices 5..24 here, window width 20), must have
+        # market_condition UNAVAILABLE_SYNTHETIC_VOLUME. Trend is unaffected
+        # (volume-independent) throughout.
         for i, c in enumerate(candles):
             if 5 <= i <= 24:
-                assert c["reconstructed_status"] == UNAVAILABLE_SYNTHETIC_VOLUME, i
-        # A bar clearly past bar 5's window influence and past all warmup
-        # would be needed to see RECONSTRUCTED again — with only 25 bars and
-        # a 20-bar window, bar 5 taints every remaining bar in this fixture,
-        # which itself proves the contamination logic reaches forward
-        # correctly (not just the single synthetic bar).
+                assert c["reconstructed_market_condition_status"] == UNAVAILABLE_SYNTHETIC_VOLUME, i
+            assert c["reconstructed_trend_status"] == RECONSTRUCTED, i
 
 
 class TestPolygonToReplayReconstructionWiring:
@@ -162,15 +169,26 @@ class TestPolygonToReplayReconstructionWiring:
         bars = self._mk_bars(n, start)
         return bars, derive_candles(bars, "MES", 15)
 
-    def test_additive_fields_present_and_reconstructed_after_warmup(self):
+    def test_additive_fields_present_and_unvalidated_init_after_warmup(self):
         _, candles = self._candles()
         assert candles
         last = candles[-1]
         for field in RECON_FIELDS:
             assert field in last
-        assert last["reconstructed_status"] == RECONSTRUCTED
+        # Polygon EMA is always self-computed -- trend can never claim the
+        # plain Pine-exact RECONSTRUCTED tier here.
+        assert last["reconstructed_trend_status"] == RECONSTRUCTED_UNVALIDATED_INIT
         assert last["reconstructed_trend_direction"] == "UP"  # monotonic rise
+        assert last["reconstructed_market_condition_status"] == RECONSTRUCTED_UNVALIDATED_INIT
         assert last["reconstructed_market_condition"] == "TRENDING"
+
+    def test_never_claims_plain_reconstructed_pine_native_tier(self):
+        _, candles = self._candles()
+        # Neither output may claim the plain RECONSTRUCTED status for a
+        # Polygon-derived bar -- EMA and ATR are both self-computed there.
+        for c in candles:
+            assert c["reconstructed_trend_status"] != RECONSTRUCTED
+            assert c["reconstructed_market_condition_status"] != RECONSTRUCTED
 
     def test_existing_fields_untouched(self):
         _, candles = self._candles()
@@ -183,13 +201,18 @@ class TestPolygonToReplayReconstructionWiring:
         _, candles = self._candles()
         # Polygon volume is a direct feed passthrough — reconstruction must
         # never exclude a Polygon-derived bar as synthetic-volume.
-        assert all(c["reconstructed_status"] != UNAVAILABLE_SYNTHETIC_VOLUME for c in candles)
+        assert all(
+            c["reconstructed_market_condition_status"] != UNAVAILABLE_SYNTHETIC_VOLUME
+            for c in candles
+        )
 
     def test_wilder_atr_end_to_end_matches_independent_calculation(self):
         bars, candles = self._candles()
         # Constant high-low=2.0 range, no gaps (close[i] == open[i+1] exactly
-        # by construction) → true range is a constant 2.0 for every bar from
-        # index 1 onward, so Wilder ATR14 converges to exactly 2.0.
+        # by construction) → true range is a constant 2.0 for every bar,
+        # including bar 0 (high-low, no prior close needed), so Wilder
+        # ATR14 converges to exactly 2.0 regardless of the seed-window
+        # boundary.
         expected_atr = 2.0
         for c in candles[-10:]:
             assert c["reconstructed_atr14"] == pytest.approx(expected_atr)

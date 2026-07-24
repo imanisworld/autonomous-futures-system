@@ -10,6 +10,7 @@ import pytest
 
 from scripts.pine_market_condition import (
     RECONSTRUCTED,
+    RECONSTRUCTED_UNVALIDATED_INIT,
     UNAVAILABLE_SYNTHETIC_VOLUME,
     UNAVAILABLE_WARMUP,
     atr14_series,
@@ -69,20 +70,40 @@ def _atr_fixture(n: int = 24) -> tuple[list[float], list[float], list[float]]:
     return highs, lows, closes
 
 
+def _true_range_longhand(high, low, prev_close):
+    """Bar-0 true range uses high-low (Pine ta.tr(true) has no prior close
+    on the very first bar of the series). Written out longhand -- not a
+    call into true_range() -- so this cross-check shares no code with the
+    implementation under test."""
+    if prev_close is None:
+        return high - low
+    a = high - low
+    b = high - prev_close
+    if b < 0:
+        b = -b
+    c = low - prev_close
+    if c < 0:
+        c = -c
+    return max(a, b, c)
+
+
 def _independent_wilder_atr14(highs, lows, closes) -> list[float | None]:
     """Second, independently-written Wilder ATR14 implementation (not a call
-    into atr14_series) used as a cross-check, not a restatement."""
+    into atr14_series) used as a cross-check, not a restatement. Includes
+    bar 0's true range (high-low, no prior close) in the RMA seed, per
+    Pine's actual ta.tr(true)/ta.rma(14) behavior -- an operator review
+    caught an earlier version of this same fixture that silently dropped
+    bar 0 and validated the implementation's off-by-one against itself."""
     n = len(highs)
-    trs = [None] + [
-        max(highs[i] - lows[i], abs(highs[i] - closes[i - 1]), abs(lows[i] - closes[i - 1]))
-        for i in range(1, n)
+    trs = [_true_range_longhand(highs[0], lows[0], None)] + [
+        _true_range_longhand(highs[i], lows[i], closes[i - 1]) for i in range(1, n)
     ]
     out: list[float | None] = [None] * n
-    if n < 15:
+    if n < 14:
         return out
-    atr = sum(trs[1:15]) / 14.0
-    out[14] = atr
-    for i in range(15, n):
+    atr = sum(trs[0:14]) / 14.0
+    out[13] = atr
+    for i in range(14, n):
         atr = (atr * 13.0 + trs[i]) / 14.0
         out[i] = atr
     return out
@@ -93,14 +114,13 @@ def _naive_sma_of_true_range(highs, lows, closes, period: int = 14) -> list[floa
     simple moving average of true range -- used only to prove atr14_series
     does NOT match it."""
     n = len(highs)
-    trs = [None] + [
-        max(highs[i] - lows[i], abs(highs[i] - closes[i - 1]), abs(lows[i] - closes[i - 1]))
-        for i in range(1, n)
+    trs = [_true_range_longhand(highs[0], lows[0], None)] + [
+        _true_range_longhand(highs[i], lows[i], closes[i - 1]) for i in range(1, n)
     ]
     out: list[float | None] = [None] * n
-    for i in range(period, n):
-        window = trs[i - period + 1 : i + 1]
-        out[i] = sum(window) / period
+    for i in range(period - 1, n):
+        window = trs[max(0, i - period + 1) : i + 1]
+        out[i] = sum(window) / len(window)
     return out
 
 
@@ -115,15 +135,30 @@ class TestAtr14Series:
     def test_none_before_warmup_complete(self):
         highs, lows, closes = _atr_fixture(20)
         out = atr14_series(highs, lows, closes)
-        assert out[:14] == [None] * 14
-        assert out[14] is not None
+        # First ATR is available at index 13 (the 14th bar): Pine's TR series
+        # starts at bar 0 (high-low, no prior close), so RMA(14) seeds from
+        # TR[0..13], not TR[1..14].
+        assert out[:13] == [None] * 13
+        assert out[13] is not None
+
+    def test_first_atr_seed_includes_bar_zero_true_range(self):
+        # Regression for the off-by-one: bar 0's true range (high-low, since
+        # there is no prior close) must be part of the seed average.
+        highs, lows, closes = _atr_fixture(20)
+        out = atr14_series(highs, lows, closes)
+        bar0_tr = highs[0] - lows[0]
+        trs_1_to_13 = [
+            _true_range_longhand(highs[i], lows[i], closes[i - 1]) for i in range(1, 14)
+        ]
+        expected_seed = (bar0_tr + sum(trs_1_to_13)) / 14.0
+        assert out[13] == pytest.approx(expected_seed)
 
     def test_matches_independent_wilder_implementation(self):
         highs, lows, closes = _atr_fixture(24)
         expected = _independent_wilder_atr14(highs, lows, closes)
         actual = atr14_series(highs, lows, closes)
         assert len(actual) == len(expected)
-        for i in range(14, 24):
+        for i in range(13, 24):
             assert actual[i] == pytest.approx(expected[i]), f"index {i}"
 
     def test_diverges_from_naive_simple_average_of_true_range(self):
@@ -133,7 +168,7 @@ class TestAtr14Series:
         diverges = any(
             wilder[i] is not None and naive[i] is not None
             and abs(wilder[i] - naive[i]) > 1e-9
-            for i in range(15, 24)
+            for i in range(14, 24)
         )
         assert diverges, "fixture must exercise a case where Wilder != simple-average-of-TR"
 
@@ -217,59 +252,95 @@ class TestReconstructMarketCondition:
 
 
 # ---------------------------------------------------------------------------
-# Requirements 5 & 6: synthetic-volume exclusion + RECONSTRUCTED/UNAVAILABLE
-# labeling, never a partial (trend-without-condition or vice versa) output.
+# Requirements 5 & 6: synthetic-volume exclusion + RECONSTRUCTED/
+# RECONSTRUCTED_UNVALIDATED_INIT/UNAVAILABLE labeling. Trend and
+# market_condition carry INDEPENDENT statuses (operator review: ATR is
+# always self-computed with no proven pre-roll/convergence window, so
+# market_condition can never claim the plain RECONSTRUCTED tier even when
+# trend is Pine-exact) -- each output's own status governs whether THAT
+# output is None, not a single shared status.
 # ---------------------------------------------------------------------------
 
 class TestReconstructBar:
     _FULL_DATA = dict(close=110, ema9=105, ema21=100, ema55=95, high=111, low=108, atr14=3.0, rel_vol=0.9)
 
-    def test_full_data_returns_reconstructed(self):
-        trend, cond, status = reconstruct_bar(**self._FULL_DATA, volume_is_synthetic=False)
-        assert status == RECONSTRUCTED
+    def test_pine_native_ema_source_yields_full_reconstructed_trend(self):
+        trend, trend_status, cond, cond_status = reconstruct_bar(
+            **self._FULL_DATA, ema_source="pine_native", volume_is_synthetic=False
+        )
+        assert trend_status == RECONSTRUCTED
         assert trend == "UP"
+        # market_condition is NEVER plain RECONSTRUCTED -- ATR is always
+        # self-computed in both pipelines, regardless of ema_source.
+        assert cond_status == RECONSTRUCTED_UNVALIDATED_INIT
         assert cond in {"DEAD", "CHOPPY", "TRENDING", "RANGE_BOUND"}
 
-    def test_synthetic_volume_forces_unavailable_even_with_complete_data(self):
-        trend, cond, status = reconstruct_bar(**self._FULL_DATA, volume_is_synthetic=True)
-        assert status == UNAVAILABLE_SYNTHETIC_VOLUME
-        assert trend is None
+    def test_self_computed_ema_source_yields_unvalidated_init_trend(self):
+        trend, trend_status, cond, cond_status = reconstruct_bar(
+            **self._FULL_DATA, ema_source="self_computed", volume_is_synthetic=False
+        )
+        assert trend_status == RECONSTRUCTED_UNVALIDATED_INIT
+        assert trend == "UP"
+        assert cond_status == RECONSTRUCTED_UNVALIDATED_INIT
+
+    def test_synthetic_volume_marks_condition_unavailable_but_not_trend(self):
+        # Synthetic volume taints market_condition (it needs rel_vol) but has
+        # no bearing on trend, which depends only on close/EMA.
+        trend, trend_status, cond, cond_status = reconstruct_bar(
+            **self._FULL_DATA, ema_source="pine_native", volume_is_synthetic=True
+        )
+        assert trend_status == RECONSTRUCTED
+        assert trend == "UP"
+        assert cond_status == UNAVAILABLE_SYNTHETIC_VOLUME
         assert cond is None
 
-    def test_missing_atr_marks_warmup_unavailable(self):
+    def test_missing_atr_marks_only_condition_warmup_unavailable(self):
         data = dict(self._FULL_DATA)
         data["atr14"] = None
-        trend, cond, status = reconstruct_bar(**data, volume_is_synthetic=False)
-        assert status == UNAVAILABLE_WARMUP
-        assert trend is None and cond is None
+        trend, trend_status, cond, cond_status = reconstruct_bar(
+            **data, ema_source="pine_native", volume_is_synthetic=False
+        )
+        assert trend_status == RECONSTRUCTED and trend == "UP"
+        assert cond_status == UNAVAILABLE_WARMUP and cond is None
 
-    def test_missing_rel_vol_marks_warmup_unavailable(self):
+    def test_missing_rel_vol_marks_only_condition_warmup_unavailable(self):
         data = dict(self._FULL_DATA)
         data["rel_vol"] = None
-        trend, cond, status = reconstruct_bar(**data, volume_is_synthetic=False)
-        assert status == UNAVAILABLE_WARMUP
-        assert trend is None and cond is None
+        trend, trend_status, cond, cond_status = reconstruct_bar(
+            **data, ema_source="pine_native", volume_is_synthetic=False
+        )
+        assert trend_status == RECONSTRUCTED and trend == "UP"
+        assert cond_status == UNAVAILABLE_WARMUP and cond is None
 
-    def test_missing_ema_marks_warmup_unavailable(self):
+    def test_missing_ema_marks_both_warmup_unavailable(self):
+        # Trend itself is unavailable (no EMA), so condition -- which needs
+        # trend as an input -- cascades to unavailable too.
         data = dict(self._FULL_DATA)
         data["ema55"] = None
-        trend, cond, status = reconstruct_bar(**data, volume_is_synthetic=False)
-        assert status == UNAVAILABLE_WARMUP
-        assert trend is None and cond is None
+        trend, trend_status, cond, cond_status = reconstruct_bar(
+            **data, ema_source="pine_native", volume_is_synthetic=False
+        )
+        assert trend_status == UNAVAILABLE_WARMUP and trend is None
+        assert cond_status == UNAVAILABLE_WARMUP and cond is None
 
-    def test_never_partial_output_across_a_status_grid(self):
-        # Property check: whenever status != RECONSTRUCTED, BOTH trend and
-        # condition must be None together -- never one populated without the other.
-        for synthetic in (True, False):
-            for atr in (None, 3.0):
-                for rv in (None, 0.9):
-                    for ema in (None, 95):
-                        data = dict(self._FULL_DATA)
-                        data["atr14"] = atr
-                        data["rel_vol"] = rv
-                        data["ema55"] = ema
-                        trend, cond, status = reconstruct_bar(**data, volume_is_synthetic=synthetic)
-                        if status != RECONSTRUCTED:
-                            assert trend is None and cond is None, (synthetic, atr, rv, ema, status)
-                        else:
-                            assert trend is not None and cond is not None
+    def test_each_output_null_iff_its_own_status_is_unavailable(self):
+        # Property check: for every combination, trend is None iff
+        # trend_status is UNAVAILABLE_WARMUP, and cond is None iff
+        # cond_status is one of the UNAVAILABLE_* statuses -- independently.
+        for ema_source in ("pine_native", "self_computed"):
+            for synthetic in (True, False):
+                for atr in (None, 3.0):
+                    for rv in (None, 0.9):
+                        for ema in (None, 95):
+                            data = dict(self._FULL_DATA)
+                            data["atr14"] = atr
+                            data["rel_vol"] = rv
+                            data["ema55"] = ema
+                            trend, trend_status, cond, cond_status = reconstruct_bar(
+                                **data, ema_source=ema_source, volume_is_synthetic=synthetic
+                            )
+                            case = (ema_source, synthetic, atr, rv, ema)
+                            assert (trend is None) == (trend_status == UNAVAILABLE_WARMUP), case
+                            assert (cond is None) == (
+                                cond_status in (UNAVAILABLE_WARMUP, UNAVAILABLE_SYNTHETIC_VOLUME)
+                            ), case
