@@ -85,6 +85,15 @@ class ReplayEngine:
         # Canonical 4HR input history.  Kept across run_many day boundaries so
         # Monday can see Sunday/Friday references exactly as live BarHistory can.
         self._four_hr_bars: dict[str, deque] = {}
+        # window_direction input. Deliberately separate from _research_bars:
+        # that deque is cleared every run() call (shadow-setup history must
+        # never leak across days), but live's BarHistory.recent(..., 6) can
+        # span up to 3 days — the first bar of a new day can still complete
+        # its 6-bar window from the prior day's tail. Kept across run_many/
+        # run_manifest day boundaries like _live_dir_bars/_four_hr_bars above.
+        # maxlen=6 exactly, since window_direction only ever looks at the
+        # last 6 closes.
+        self._window_direction_bars: dict[str, deque] = {}
 
     @staticmethod
     def _load_default_htf() -> HTFLookup:
@@ -181,6 +190,14 @@ class ReplayEngine:
                     "volume": candle.volume,
                 }
             )
+            self._window_direction_bars.setdefault(
+                candle.instrument, deque(maxlen=6)
+            ).append(
+                {
+                    "ts": candle.timestamp,
+                    "close": candle.close,
+                }
+            )
             if str(candle.timeframe).strip().lower() in {
                 "5", "5m", "5min", "5minute", "5minutes"
             }:
@@ -227,14 +244,13 @@ class ReplayEngine:
             # the current bar — a continuous-data directional read that lets
             # DecisionEngine veto a CHOPPY label into RANGE_BOUND even when
             # Pine's own strat/trend fields don't independently confirm it
-            # (see DecisionEngine._has_directional_structure). Replay has no
-            # persisted BarHistory, so it uses _research_bars — the same
-            # per-instrument rolling window already fed every candle for
-            # shadow-setup evaluation below, and already cleared per run()
-            # call for the same "don't let a prior day seed this one" reason
-            # BarHistory.recent's 3-day lookback does not need to honor here.
+            # (see DecisionEngine._has_directional_structure). BarHistory.
+            # recent(..., lookback_days=3) means live's window can span into
+            # the prior day, so this reads _window_direction_bars (persists
+            # across run_many/run_manifest day boundaries) rather than
+            # _research_bars (deliberately cleared every run() call).
             state.window_direction = BarHistory.window_direction(
-                list(self._research_bars.get(candle.instrument, ()))[-6:]
+                list(self._window_direction_bars.get(candle.instrument, ()))
             )
             if getattr(self.config, "htf_direction_source", "payload") == "live":
                 apply_live_direction(
