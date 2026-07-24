@@ -7,6 +7,7 @@ from research.manual_setup_logger import (
     DuplicateRecordError,
     ValidationError,
     evidence_path,
+    is_study_eligible,
     record_resolution,
     record_setup,
     setup_id_for,
@@ -23,6 +24,7 @@ def _setup(**updates):
         "signal_timestamp": SIGNAL_TS,
         "instrument": "MNQ",
         "direction": "LONG",
+        "study_phase": "post_activation",
         "original_bracket": {
             "entry": 23000,
             "stop": 22940,
@@ -498,3 +500,126 @@ def test_module_has_no_execution_or_broker_dependencies():
     assert "tradovate" not in source.lower()
     assert "paper_broker" not in source
     assert "signal_engine" not in source
+
+
+# ─── Fix 1: full matched observer row embedded (2026-07-24 preflight FAIL) ──
+
+
+def _full_observer_row(**updates):
+    """Shaped like a real deployed strategy_context_observations.jsonl row
+    (context/strategy_context_observer.py) -- includes the 8 fields the
+    real-row preflight test found were reachable in the source but absent
+    from the prior joined-context contract."""
+    value = {
+        "kind": "strategy_context_observation",
+        "timestamp": SIGNAL_TS,
+        "instrument": "MNQ",
+        "session": "new_york",
+        "close": 23005.5,
+        "timeframe": "15",
+        "supply_demand_confluence": {"available": True, "zone": "near_demand"},
+        "vwap": {"value": 22995, "price_vs_vwap": "above"},
+        "market_condition": "TRENDING",
+        "structural_regime": {"structural_market_condition": "STRUCTURAL_TREND"},
+        "trend_persistence": {"direction": "UP", "same_direction_closes": 3},
+        "mnq_mes_agreement": {"agrees": True, "pair": "MES"},
+        "overnight_range_location": {"available": True, "location": "inside"},
+        "key_level_confluence": {"available": True, "nearest": {"name": "pdh"}},
+        "impulse_state": {"direction": "UP", "state": "impulse"},
+        "gex": {"gex_flip": 5000.0, "gex_regime": "positive"},
+    }
+    value.update(updates)
+    return value
+
+
+def test_join_embeds_the_full_matched_observer_row_verbatim(tmp_path):
+    """The core Fix 1 regression: every field on the source row -- not a
+    hand-picked subset -- must be reachable from the joined manual setup
+    evidence without an analyst reopening the raw context file."""
+    context_path = tmp_path / "strategy_context_observations.jsonl"
+    observer_row = _full_observer_row()
+    _write_rows(context_path, [observer_row])
+
+    row = record_setup(_setup(context={}), log_dir=tmp_path, context_path=context_path)
+
+    embedded = row["context"]["joined_observer"]["row"]
+    assert embedded == observer_row
+    for field in (
+        "market_condition", "structural_regime", "trend_persistence",
+        "mnq_mes_agreement", "overnight_range_location",
+        "key_level_confluence", "impulse_state", "gex",
+    ):
+        assert field in embedded, f"{field} missing from embedded observer row"
+        assert embedded[field] == observer_row[field]
+    # The convenience zone/vwap snapshots must still work unchanged.
+    assert row["context"]["zone"]["data"]["zone"] == "near_demand"
+    assert row["context"]["vwap"]["data"]["price_vs_vwap"] == "above"
+
+
+def test_embedded_row_hash_matches_row_sha256_provenance(tmp_path):
+    """Hash provenance must still verify correctly after embedding the full
+    row: row_sha256 is computed from, and must equal the hash of, the exact
+    same row object now embedded at joined_observer.row."""
+    import hashlib
+    import json as _json
+
+    context_path = tmp_path / "strategy_context_observations.jsonl"
+    observer_row = _full_observer_row()
+    _write_rows(context_path, [observer_row])
+
+    row = record_setup(_setup(context={}), log_dir=tmp_path, context_path=context_path)
+    joined = row["context"]["joined_observer"]
+
+    recomputed = hashlib.sha256(
+        _json.dumps(joined["row"], separators=(",", ":"), sort_keys=True).encode()
+    ).hexdigest()
+    assert recomputed == joined["row_sha256"]
+    assert len(joined["row_sha256"]) == 64
+
+
+# ─── Fix 2: required, enum-validated study_phase ────────────────────────────
+
+
+def test_study_phase_is_required(tmp_path):
+    payload = _setup()
+    del payload["study_phase"]
+    with pytest.raises(ValidationError, match="study_phase"):
+        record_setup(payload, log_dir=tmp_path)
+
+
+def test_study_phase_invalid_value_rejected(tmp_path):
+    with pytest.raises(ValidationError, match="study_phase"):
+        record_setup(_setup(study_phase="active"), log_dir=tmp_path)
+    with pytest.raises(ValidationError, match="study_phase"):
+        record_setup(_setup(study_phase=""), log_dir=tmp_path)
+    with pytest.raises(ValidationError, match="study_phase"):
+        record_setup(_setup(study_phase=None), log_dir=tmp_path)
+
+
+def test_study_phase_preflight_persists_and_is_excluded_from_study(tmp_path):
+    row = record_setup(_setup(study_phase="preflight"), log_dir=tmp_path)
+    assert row["study_phase"] == "preflight"
+    assert is_study_eligible(row) is False
+
+
+def test_study_phase_post_activation_persists_and_is_study_eligible(tmp_path):
+    row = record_setup(_setup(study_phase="post_activation"), log_dir=tmp_path)
+    assert row["study_phase"] == "post_activation"
+    assert is_study_eligible(row) is True
+
+
+def test_legacy_record_without_study_phase_field_is_not_study_eligible():
+    """A record written before this field existed (e.g. by an older schema
+    version) has no study_phase key at all. Downstream analysis must treat
+    that as excluded, never implicitly eligible -- this is the single
+    source of truth every analysis script should call instead of
+    reimplementing the rule (and getting the fail-open case wrong)."""
+    legacy_record = {
+        "schema_version": "manual_setup.v1",
+        "kind": "manual_setup",
+        "setup_id": "ms_legacy0000000000000000",
+        "strategy": "orb_reclaim",
+        # no "study_phase" key present at all
+    }
+    assert "study_phase" not in legacy_record
+    assert is_study_eligible(legacy_record) is False
