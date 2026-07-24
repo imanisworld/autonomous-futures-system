@@ -28,6 +28,16 @@ CONTEXT_FILENAME = "strategy_context_observations.jsonl"
 INSTRUMENTS = {"MNQ", "MES"}
 DIRECTIONS = {"LONG", "SHORT"}
 DECISIONS = {"TAKEN", "SKIPPED"}
+# Machine-filterable study-phase gate. Required on every new record -- no
+# default, no inferring from free-text notes. "preflight" is for
+# infrastructure/pipeline test records (and anything recorded before the
+# sample-clock gate formally passes); only "post_activation" records are
+# eligible for the manual study sample. A record with no study_phase at all
+# (i.e. every record written before this field existed) is legacy and MUST
+# be treated as excluded/preflight by downstream analysis -- see
+# is_study_eligible() below, which is the single source of truth for that
+# rule rather than leaving each analysis script to reimplement it.
+STUDY_PHASES = {"preflight", "post_activation"}
 SHADOW_RESULTS = {
     "STOP_FIRST",
     "T1_FIRST",
@@ -391,6 +401,18 @@ def join_exact_context(
             "row_sha256": _sha256(row),
             "timestamp": signal_timestamp,
             "match": "exact_instrument_and_timestamp",
+            # The FULL matched observer row, verbatim -- not a hand-picked
+            # field list. The observer schema (context/strategy_context_observer.py)
+            # can grow new fields over time; a fixed list here would silently
+            # omit whatever gets added next, exactly the failure mode this
+            # preflight test caught (market_condition, structural_regime,
+            # trend_persistence, mnq_mes_agreement, overnight_range_location,
+            # key_level_confluence, impulse_state, gex were all present in a
+            # real deployed row and absent from this contract). row_sha256
+            # above is computed from this exact same row, so downstream
+            # analysis can verify the embedded copy is unmodified without
+            # reopening the source file.
+            "row": row,
         },
     }
 
@@ -430,6 +452,11 @@ def _base_record(payload: dict[str, Any], *, context_path: str | Path | None) ->
     provenance = payload.get("provenance")
     if not isinstance(provenance, dict):
         raise ValidationError("provenance must be an object")
+    study_phase = payload.get("study_phase")
+    if study_phase not in STUDY_PHASES:
+        raise ValidationError(
+            f"study_phase is required and must be one of {sorted(STUDY_PHASES)}"
+        )
     supplied_context = _context_from_payload(payload.get("context"), signal_ts)
     joined = (
         join_exact_context(
@@ -459,6 +486,7 @@ def _base_record(payload: dict[str, Any], *, context_path: str | Path | None) ->
         "observation_only": True,
         "gate_authoritative": False,
         "execution_authorized": False,
+        "study_phase": study_phase,
         **canonical_payload,
         "original_bracket": _validate_bracket(
             payload.get("original_bracket"), direction
@@ -510,6 +538,19 @@ def _locked_append(path: Path, record: dict[str, Any], dedupe_key: tuple) -> Non
         finally:
             if fcntl is not None:
                 fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
+def is_study_eligible(record: dict[str, Any]) -> bool:
+    """True only for a manual_setup record explicitly marked post_activation.
+
+    Single source of truth for the study-sample filter, so every downstream
+    analysis script applies the same rule instead of reimplementing it.
+    Fails closed: a record with study_phase == "preflight", any other value,
+    or NO study_phase key at all (every record written before this field
+    existed) is NOT eligible. Missing the field is never silently treated as
+    eligible.
+    """
+    return record.get("study_phase") == "post_activation"
 
 
 def record_setup(
