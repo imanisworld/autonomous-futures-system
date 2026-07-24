@@ -86,6 +86,85 @@ def test_replay_generates_no_trade_for_choppy_day(config, tmp_path):
     assert report.wins == 0
 
 
+def test_replay_populates_window_direction_for_effective_condition_parity(
+    config, tmp_path, monkeypatch
+):
+    """Effective-parity regression, not raw-parity: live (webhook/runner.py)
+    sets state.window_direction from the last 6 recorded bars right after
+    ingesting each bar, and DecisionEngine._has_directional_structure uses it
+    to veto a CHOPPY label into RANGE_BOUND when no other signal (a 3-bar
+    Pine strat run) independently confirms the direction. Before this fix,
+    replay never populated window_direction — a live-only field — so this
+    veto path could never fire in replay even when replay correctly
+    reconstructed Pine's raw CHOPPY label. This proves DecisionEngine
+    actually receives the same effective state in both lanes, not just that
+    the raw market_condition string round-trips."""
+    from dataclasses import replace as dc_replace
+    from datetime import datetime, timedelta
+
+    from strategy.signal_engine import DecisionEngine
+
+    base = json.loads(Path("data/replay/sample_day_mnq.jsonl").read_text().splitlines()[0])
+    base_dt = datetime.fromisoformat(base["timestamp"])
+    # Six bars with closes decisively higher each step (5/5 up, positive net)
+    # — exactly the BarHistory.window_direction "UP" case. No current_bar_type
+    # / previous_bar_high fields are set, so _strat_context_from_candle
+    # returns None: the strat-run confirmation path cannot fire here, so
+    # window_direction is the ONLY thing that can trigger the veto.
+    closes = [19480.0, 19485.0, 19490.0, 19495.0, 19500.0, 19505.0]
+    candles = []
+    for i, close in enumerate(closes):
+        c = dict(base)
+        for key in (
+            "current_bar_type", "previous_bar_type", "two_bars_back_type",
+            "strat_sequence", "strat_trigger", "strat_direction",
+            "previous_bar_high", "previous_bar_low",
+        ):
+            c.pop(key, None)
+        c["timestamp"] = (base_dt + timedelta(minutes=15 * i)).isoformat()
+        c["open"] = close - 2.0
+        c["high"] = close + 1.0
+        c["low"] = close - 3.0
+        c["close"] = close
+        c["market_condition"] = "CHOPPY"
+        c["trend_direction"] = "UP"
+        c["trend_strength"] = "WEAK"
+        c["orb_status"] = "inside"
+        candles.append(json.dumps(c))
+
+    replay_path = tmp_path / "window_direction.jsonl"
+    replay_path.write_text("\n".join(candles) + "\n")
+
+    seen_states = []
+    original_evaluate = DecisionEngine.evaluate
+
+    def _spy(self, state, daily_state):
+        seen_states.append(state)
+        return original_evaluate(self, state, daily_state)
+
+    monkeypatch.setattr(DecisionEngine, "evaluate", _spy)
+
+    ReplayEngine(config=config, log_dir=str(tmp_path / "logs")).run(
+        replay_path, review_date="2026-05-23",
+    )
+
+    assert len(seen_states) == 6
+    last_state = seen_states[-1]
+    assert last_state.strat is None  # confirms only window_direction could veto
+    assert last_state.window_direction == "UP"
+
+    engine = DecisionEngine(config=config)
+    assert engine._has_directional_structure(last_state) is True
+    assert engine._score_market_condition(last_state) == "RANGE_BOUND"
+
+    # Causal proof: strip window_direction back to the pre-fix value (always
+    # None) and confirm the veto no longer fires — isolates this fix's effect
+    # from any other confluence in the fixture.
+    pre_fix_state = dc_replace(last_state, window_direction=None)
+    assert engine._has_directional_structure(pre_fix_state) is False
+    assert engine._score_market_condition(pre_fix_state) == "CHOPPY"
+
+
 def test_one_week_replay_survival_harness(config, tmp_path):
     paths = sorted(Path("data/replay/week").glob("*.jsonl"))
 

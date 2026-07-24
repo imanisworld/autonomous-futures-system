@@ -15,6 +15,7 @@ from typing import Optional
 
 from agent.daily_summary import DailySummaryAgent
 from config.settings import SystemConfig, load_config
+from context.bar_history import BarHistory
 from context.market_context import (
     MarketState,
     GEXContext,
@@ -220,6 +221,20 @@ class ReplayEngine:
             )
             state.bar_history_5m = list(
                 self._four_hr_bars.get(candle.instrument, ())
+            )
+            # Effective-parity: live (webhook/runner.py) sets this from the
+            # last 6 bars of its persisted BarHistory right after recording
+            # the current bar — a continuous-data directional read that lets
+            # DecisionEngine veto a CHOPPY label into RANGE_BOUND even when
+            # Pine's own strat/trend fields don't independently confirm it
+            # (see DecisionEngine._has_directional_structure). Replay has no
+            # persisted BarHistory, so it uses _research_bars — the same
+            # per-instrument rolling window already fed every candle for
+            # shadow-setup evaluation below, and already cleared per run()
+            # call for the same "don't let a prior day seed this one" reason
+            # BarHistory.recent's 3-day lookback does not need to honor here.
+            state.window_direction = BarHistory.window_direction(
+                list(self._research_bars.get(candle.instrument, ()))[-6:]
             )
             if getattr(self.config, "htf_direction_source", "payload") == "live":
                 apply_live_direction(
