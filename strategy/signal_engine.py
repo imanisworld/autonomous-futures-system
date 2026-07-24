@@ -2091,9 +2091,10 @@ class DecisionEngine:
         # deliberately does NOT resolve bare "2" — that token carries no
         # direction (CSV sources that lack a directional column can still
         # emit it) and must never be silently treated as confirming
-        # two_down. Fail closed: ambiguous bar-type evidence blocks the
-        # setup exactly like genuinely-absent evidence would, rather than
-        # guessing a direction.
+        # two_down. Fail closed when Strat context exists but its
+        # directional bar type is ambiguous; preserve the existing
+        # behavior when Strat context is absent entirely (confirmation
+        # skipped by design in that case, not evaluated here at all).
         if state.strat and normalize_bar_type(state.strat.current_bar_type) != TWO_DOWN:
             return None
 
