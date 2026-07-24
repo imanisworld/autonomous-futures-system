@@ -13,6 +13,7 @@ from execution.paper_broker import PaperBroker
 EASTERN = ZoneInfo("America/New_York")
 DAY_ONLY_EXIT_REASON = "DAY_ONLY_FLATTEN"
 EOD_BAR_MISSING = "EOD_BAR_MISSING"
+BROKER_FLAT_FILL_PRICE_MISSING = "BROKER_FLAT_FILL_PRICE_MISSING"
 DAY_ONLY_STRATEGIES = frozenset({"strat_4hr_retrigger"})
 _EOD_BAR_START = time(15, 55)
 _FALLBACK_START = time(16, 0)

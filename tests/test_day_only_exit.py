@@ -120,24 +120,35 @@ def test_stop_and_target_take_precedence_over_eod_flatten():
 
 
 def _journal_open_position(log_dir: Path, *, strategy: str = "strat_4hr_retrigger") -> None:
+    _journal_open_position_on(log_dir, date(2026, 7, 13), strategy=strategy)
+
+
+def _journal_open_position_on(
+    log_dir: Path,
+    for_date: date,
+    *,
+    strategy: str = "strat_4hr_retrigger",
+    entry: float = 100.0,
+    direction: str = "LONG",
+) -> None:
     JournalLogger(str(log_dir)).log_decision(
         {
-            "ts": "2026-07-13T14:00:00Z",
+            "ts": f"{for_date.isoformat()}T14:00:00Z",
             "instrument": "MNQ",
             "session": "new_york",
             "decision": "TRADE",
             "setup": {
                 "instrument": "MNQ",
-                "direction": "LONG",
-                "entry": 100.0,
-                "stop": 95.0,
-                "target": 110.0,
+                "direction": direction,
+                "entry": entry,
+                "stop": 95.0 if direction == "LONG" else 105.0,
+                "target": 110.0 if direction == "LONG" else 90.0,
                 "contracts": 1,
                 "strategy": strategy,
             },
         },
         {"result": "APPROVED"},
-        for_date=date(2026, 7, 13),
+        for_date=for_date,
     )
 
 
@@ -206,6 +217,61 @@ def test_fallback_matching_demo_flattens_once_and_repeat_is_no_action(monkeypatc
     assert rows[-1]["outcome"]["exit_price"] == 102.0
 
 
+def test_fallback_ignores_prior_day_stale_position_same_week(monkeypatch, tmp_path):
+    # Stale row from 3 days earlier (a never-resolved orphan); nothing journaled
+    # for today. A broker position open today merely happens to share
+    # instrument/direction/quantity with the stale row but is a different,
+    # unrelated trade (different entry price) — it must never be flattened
+    # off the strength of the old row.
+    _journal_open_position_on(tmp_path, date(2026, 7, 13), entry=100.0)
+    broker = _FakeBroker(
+        Position("MNQ", "LONG", 250.0, 245.0, 260.0, quantity=1), exit_price=252.0
+    )
+    _configure_fallback(monkeypatch, tmp_path, broker)
+    now = datetime(2026, 7, 16, 20, 2, tzinfo=timezone.utc)  # 2026-07-16, 4:02 PM ET
+
+    result = app_module._run_day_only_exit_fallback(now=now)
+
+    assert result == {"ok": True, "action": "NO_ACTION", "reason": "NO_OPEN_POSITION"}
+    assert broker.flatten_calls == 0
+
+
+def test_fallback_ignores_friday_stale_position_on_monday(monkeypatch, tmp_path):
+    # Friday's unresolved row must not authorize a Monday flatten either —
+    # weekend carry is not a case the automatic fallback may resolve.
+    _journal_open_position_on(tmp_path, date(2026, 7, 10), entry=100.0)  # Friday
+    broker = _FakeBroker(
+        Position("MNQ", "LONG", 250.0, 245.0, 260.0, quantity=1), exit_price=252.0
+    )
+    _configure_fallback(monkeypatch, tmp_path, broker)
+    now = datetime(2026, 7, 13, 20, 2, tzinfo=timezone.utc)  # Monday 2026-07-13, 4:02 PM ET
+
+    result = app_module._run_day_only_exit_fallback(now=now)
+
+    assert result == {"ok": True, "action": "NO_ACTION", "reason": "NO_OPEN_POSITION"}
+    assert broker.flatten_calls == 0
+
+
+def test_fallback_same_day_position_still_flattens_and_repeat_is_idempotent(
+    monkeypatch, tmp_path
+):
+    # Today's own journal row must still resolve normally — the fix narrows
+    # the lookup window, it does not disable the fallback.
+    _journal_open_position_on(tmp_path, date(2026, 7, 13), entry=100.0)
+    broker = _FakeBroker(
+        Position("MNQ", "LONG", 100.0, 95.0, 110.0, quantity=1), exit_price=102.0
+    )
+    _configure_fallback(monkeypatch, tmp_path, broker)
+    now = datetime(2026, 7, 13, 20, 2, tzinfo=timezone.utc)
+
+    first = app_module._run_day_only_exit_fallback(now=now)
+    second = app_module._run_day_only_exit_fallback(now=now)
+
+    assert first["action"] == "DAY_ONLY_FLATTEN"
+    assert second["action"] == "NO_ACTION"
+    assert broker.flatten_calls == 1
+
+
 def test_fallback_guards_fail_closed_without_flatten(monkeypatch, tmp_path):
     cases = [
         (Position("MES", "LONG", 100.0, 95.0, 110.0, quantity=1), "INSTRUMENT_MISMATCH"),
@@ -222,6 +288,42 @@ def test_fallback_guards_fail_closed_without_flatten(monkeypatch, tmp_path):
         )
         assert result["reason"] == expected
         assert broker.flatten_calls == 0
+
+
+class _FakeBrokerMissingFillPrice(_FakeBroker):
+    def flatten_position(self):
+        self.flatten_calls += 1
+        self.position = None
+        return {"flat_confirmed": True, "close_fill_price": None, "close_order_id": "CLOSE-1"}
+
+
+def test_fallback_broker_flat_missing_fill_price_never_fabricates_pnl(monkeypatch, tmp_path):
+    _journal_open_position(tmp_path)
+    broker = _FakeBrokerMissingFillPrice(
+        Position("MNQ", "LONG", 100.0, 95.0, 110.0, quantity=1)
+    )
+    _configure_fallback(monkeypatch, tmp_path, broker)
+    now = datetime(2026, 7, 13, 20, 2, tzinfo=timezone.utc)
+
+    result = app_module._run_day_only_exit_fallback(now=now)
+    assert result == {
+        "ok": False,
+        "action": "FLATTENED_MISSING_FILL_PRICE",
+        "reason": "ACTUAL_FILL_PRICE_UNAVAILABLE",
+    }
+    rows = [
+        json.loads(line)
+        for line in (tmp_path / "journal_2026-07-13.jsonl").read_text().splitlines()
+    ]
+    issue = next(row for row in rows if row.get("type") == "DAY_ONLY_EXIT_ISSUE")
+    assert issue["reason"] == "BROKER_FLAT_FILL_PRICE_MISSING"
+    assert not any(row.get("type") == "OUTCOME" for row in rows)
+
+    # Broker is now flat; a second invocation must not attempt another
+    # liquidation (BROKER_POSITION_MISSING fails closed).
+    second = app_module._run_day_only_exit_fallback(now=now)
+    assert second["reason"] == "BROKER_POSITION_MISSING"
+    assert broker.flatten_calls == 1
 
 
 def test_fallback_rejects_non_allowlisted_and_non_demo(monkeypatch, tmp_path):
@@ -290,6 +392,16 @@ def test_scheduler_is_local_only_dst_aware_and_visible():
     assert "return 1" in script
     assert "America/New_York" in timer
     assert "UTC" not in timer
+    # Deployed code/venv path must match the committed atomic-release
+    # convention (AFS_CURRENT_LINK=/root/autonomous-futures-system), not the
+    # shared-state directory — /root/afs-shared/current is never created by
+    # scripts/atomic_release.sh or scripts/install_timers.sh's equivalents.
+    assert "WorkingDirectory=/root/autonomous-futures-system" in service
+    assert "/root/autonomous-futures-system/.venv/bin/python" in service
+    assert "/root/autonomous-futures-system/scripts/day_only_exit_scheduler.py" in service
+    assert "/root/afs-shared/current" not in service
+    # .env is legitimately shared and release-independent — keep it under
+    # afs-shared, distinct from the release-versioned code/venv path above.
     assert "EnvironmentFile=/root/afs-shared/.env" in service
 
 

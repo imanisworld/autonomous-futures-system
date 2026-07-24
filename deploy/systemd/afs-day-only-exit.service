@@ -4,8 +4,8 @@ After=network.target futures-bot.service
 
 [Service]
 Type=oneshot
-WorkingDirectory=/root/afs-shared/current
+WorkingDirectory=/root/autonomous-futures-system
 EnvironmentFile=/root/afs-shared/.env
-ExecStart=/root/afs-shared/current/.venv/bin/python /root/afs-shared/current/scripts/day_only_exit_scheduler.py
+ExecStart=/root/autonomous-futures-system/.venv/bin/python /root/autonomous-futures-system/scripts/day_only_exit_scheduler.py
 StandardOutput=journal
 StandardError=journal

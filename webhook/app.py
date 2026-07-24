@@ -1130,18 +1130,22 @@ def _day_only_open_position(
     journal: JournalLogger,
     today: date,
 ) -> tuple[dict | None, date]:
-    """Find the journal-owned open position without accepting caller selectors."""
-    for days_back in range(0, 8):
-        candidate = today - timedelta(days=days_back)
-        position = journal.get_open_position(candidate)
-        if position is not None:
-            return position, candidate
-    return None, today
+    """Return only today's journal-owned open position — never a prior day's.
+
+    The automatic fallback may not attribute a stale, unresolved position from
+    an earlier day to today's broker state: a broker position that merely
+    shares instrument/direction/quantity is not proof it is the same trade.
+    A day-only strategy should never legitimately carry a position past its
+    own 4PM flatten, so a prior-day row here is an anomaly for manual
+    reconciliation, not a safe input to an automatic flatten.
+    """
+    return journal.get_open_position(today), today
 
 
 def _run_day_only_exit_fallback(*, now: datetime | None = None) -> dict:
     """Fail-closed server-side 4PM fallback; called only after endpoint auth."""
     from execution.day_only_exit import (
+        BROKER_FLAT_FILL_PRICE_MISSING,
         build_day_only_fill,
         fallback_is_authorized,
         positions_agree,
@@ -1189,8 +1193,16 @@ def _run_day_only_exit_fallback(*, now: datetime | None = None) -> dict:
         }
     actual_exit = flattened.get("close_fill_price")
     if actual_exit is None:
-        # Never turn a broker-flat state into fictional P&L. A second call sees
-        # journal/broker disagreement and cannot submit another liquidation.
+        # Never turn a broker-flat state into fictional P&L. Record the issue
+        # durably so it is visible without inferring a WIN/LOSS. A second call
+        # sees journal/broker disagreement (broker is now flat) and cannot
+        # submit another liquidation.
+        journal.log_day_only_exit_issue(
+            instrument=position.get("instrument") or "",
+            strategy=position.get("strategy") or "",
+            reason=BROKER_FLAT_FILL_PRICE_MISSING,
+            for_date=position_date,
+        )
         return {
             "ok": False,
             "action": "FLATTENED_MISSING_FILL_PRICE",
