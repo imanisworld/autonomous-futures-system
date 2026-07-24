@@ -53,6 +53,11 @@ from scripts.csv_to_replay import (  # noqa: E402
     htf_at,
     vwap_day_range,
 )
+from scripts.pine_market_condition import (  # noqa: E402
+    atr14_series,
+    reconstruct_bar,
+    sma_series,
+)
 from sources.polygon_client import PolygonFuturesClient  # noqa: E402
 
 LOOKBACK = 20          # bars for rolling avg_volume (matches csv_to_replay)
@@ -143,6 +148,16 @@ def derive_candles(
     ema21_s = ema_series(closes_all, 21)
     ema55_s = ema_series(closes_all, 55)
     ema200_s = ema_series(closes_all, 200)
+
+    # Pine market_condition reconstruction (evidence-only, additive — see
+    # scripts/pine_market_condition.py). Polygon volume is a direct feed
+    # passthrough (int(bar["volume"]), no synthetic-default fallback exists
+    # in this converter, unlike csv_to_replay's TradingView-export handling)
+    # so it is never treated as synthetic here.
+    highs_all = [b["high"] for b in raw]
+    lows_all = [b["low"] for b in raw]
+    recon_atr14_s = atr14_series(highs_all, lows_all, closes_all)
+    recon_vol_sma20_s = sma_series([b["volume"] for b in raw], 20)
 
     one_hour_bars = resample(raw, 60, "1h")
     four_hour_bars = resample(raw, 240, "4h")
@@ -283,6 +298,29 @@ def derive_candles(
             htf_at(one_hour_bars, bar["ts"]),
         )
 
+        recon_atr14 = recon_atr14_s[i]
+        recon_vol_sma20 = recon_vol_sma20_s[i]
+        recon_rel_vol = (
+            bar["volume"] / recon_vol_sma20
+            if recon_vol_sma20 not in (None, 0)
+            else None
+        )
+        recon_trend, recon_trend_status, recon_condition, recon_condition_status = reconstruct_bar(
+            close=bar["close"],
+            ema9=ema9,
+            ema21=ema21,
+            ema55=ema55,
+            # Polygon has no Pine-exported EMA columns -- ema9/21/55 here are
+            # this pipeline's own SMA-seeded recursive EMA, with no proven
+            # pre-roll/convergence window against Pine's own longer history.
+            ema_source="self_computed",
+            high=bar["high"],
+            low=bar["low"],
+            atr14=recon_atr14,
+            rel_vol=recon_rel_vol,
+            volume_is_synthetic=False,
+        )
+
         candles.append({
             "timestamp": dt_utc.isoformat(),
             "instrument": instrument,
@@ -337,6 +375,20 @@ def derive_candles(
             "two_bars_back_high": prev2_bar["high"] if prev2_bar else None,
             "two_bars_back_low": prev2_bar["low"] if prev2_bar else None,
             **htf_context,
+            # Pine-exact market_condition reconstruction — EVIDENCE ONLY,
+            # additive alongside (does not replace) market_condition/
+            # trend_direction/trend_strength/avg_volume above, which the
+            # engine still reads unchanged. See scripts/pine_market_condition.py.
+            # trend and market_condition carry INDEPENDENT statuses -- ATR is
+            # always self-computed (no proven pre-roll window), and here
+            # EMA is also self-computed, so reconstructed_trend_status is
+            # always RECONSTRUCTED_UNVALIDATED_INIT for Polygon-derived rows.
+            "reconstructed_trend_direction": recon_trend,
+            "reconstructed_trend_status": recon_trend_status,
+            "reconstructed_market_condition": recon_condition,
+            "reconstructed_market_condition_status": recon_condition_status,
+            "reconstructed_atr14": recon_atr14,
+            "reconstructed_rel_vol": recon_rel_vol,
         })
     return candles
 
