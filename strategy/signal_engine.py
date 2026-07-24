@@ -28,6 +28,7 @@ from strategy.regime_classifier import classify_regime
 from strategy.signa_gate import evaluate_signa
 from strategy.four_hr_retrigger import advance_4hr_retrigger
 from strategy.strat_212_122 import STRAT_122, STRAT_212, advance_strat_212_122
+from strategy.strat_classifier import TWO_DOWN, normalize_bar_type
 
 
 # Setups eligible for momentum re-anchor: entry rests AT a level, so price leaving
@@ -2085,8 +2086,16 @@ class DecisionEngine:
             return None
         if self._vwap_entry_out_of_range(state):
             return None
-        # Strat confirmation: bar must be a two_down (lower high AND lower low)
-        if state.strat and state.strat.current_bar_type not in ("two_down", "2d", "2"):
+        # Strat confirmation: bar must be a two_down (lower high AND lower low).
+        # normalize_bar_type resolves known dialects (2D/2d -> two_down); it
+        # deliberately does NOT resolve bare "2" — that token carries no
+        # direction (CSV sources that lack a directional column can still
+        # emit it) and must never be silently treated as confirming
+        # two_down. Fail closed when Strat context exists but its
+        # directional bar type is ambiguous; preserve the existing
+        # behavior when Strat context is absent entirely (confirmation
+        # skipped by design in that case, not evaluated here at all).
+        if state.strat and normalize_bar_type(state.strat.current_bar_type) != TWO_DOWN:
             return None
 
         # BOS/MSS boost: if raw data is present, require bearish structure break.
