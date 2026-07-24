@@ -1699,6 +1699,7 @@ def process_alert(
         journal_entry["strategy_state"] = {
             "strat_4hr_retrigger": dict(daily_state.four_hr_retrigger_state),
             "strat_212_122": dict(daily_state.strat_212_122_state),
+            "vwap_rejection": dict(daily_state.vwap_reclaim_state),
         }
         journal_entry["context"] = _market_state_context(state)
         if shadow_candidates:
@@ -1777,6 +1778,7 @@ def process_alert(
     journal_entry["strategy_state"] = {
         "strat_4hr_retrigger": dict(daily_state.four_hr_retrigger_state),
         "strat_212_122": dict(daily_state.strat_212_122_state),
+        "vwap_rejection": dict(daily_state.vwap_reclaim_state),
     }
     journal_entry["context"] = _market_state_context(state)
     if shadow_candidates:
@@ -2020,6 +2022,7 @@ def process_alert(
         journal_entry["strategy_state"] = {
             "strat_4hr_retrigger": dict(daily_state.four_hr_retrigger_state),
             "strat_212_122": dict(daily_state.strat_212_122_state),
+            "vwap_rejection": dict(daily_state.vwap_reclaim_state),
         }
         journal_entry["context"] = _market_state_context(state)
         journal.log_decision(
