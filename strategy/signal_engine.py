@@ -28,7 +28,6 @@ from strategy.regime_classifier import classify_regime
 from strategy.signa_gate import evaluate_signa
 from strategy.four_hr_retrigger import advance_4hr_retrigger
 from strategy.strat_212_122 import STRAT_122, STRAT_212, advance_strat_212_122
-from strategy.vwap_rejection import advance_vwap_reclaim_state, vwap_trading_day
 
 
 # Setups eligible for momentum re-anchor: entry rests AT a level, so price leaving
@@ -253,7 +252,6 @@ class DecisionEngine:
         now = datetime.now(timezone.utc)
         self._advance_4hr_retrigger(state, daily_state)
         self._advance_strat_212_122(state, daily_state)
-        self._advance_vwap_rejection(state, daily_state)
 
         # ── Pre-flight: daily capacity ────────────────────────────────────────
         total_daily_capacity = (
@@ -2131,20 +2129,24 @@ class DecisionEngine:
         VWAP Rejection: Price reclaimed VWAP, failed to hold, and closed back
         below it on the VERY NEXT bar. Mirror image of vwap_reclaim.
 
-        Causal, one-bar-lookback condition (see strategy/vwap_rejection.py):
-        state.vwap_failed_reclaim is True only on the bar immediately
-        following a genuine VWAP reclaim (the PRIOR bar's own
-        vwap.reclaimed) that then closes back below VWAP THIS bar. A prior
-        version of this check required vwap.reclaimed and price_vs_vwap ==
-        "below" on the SAME bar — structurally impossible, since reclaimed
-        can only be True on a bar where price closed above VWAP (see
+        Causal, one-bar-lookback condition: state.vwap.failed_reclaim is True
+        only on the bar immediately following a genuine VWAP reclaim (the
+        PRIOR bar's own reclaimed status) that then closes back below VWAP
+        THIS bar. Populated upstream — live: Pine sends it directly (Pine
+        tracks its own crossover state across bars, unaffected by whether
+        the backend even evaluates a given bar); replay:
+        replay/replay_engine.py derives it from the candle sequence itself,
+        independent of DecisionEngine/DailyState. A prior version of this
+        check required vwap.reclaimed and price_vs_vwap == "below" on the
+        SAME bar — structurally impossible, since reclaimed can only be True
+        on a bar where price closed above VWAP (see
         docs/vwap-hold-vs-vwap-rejection-overlap-audit-2026-07-23.md,
         PR #308) — so this setup could never fire. Fixed here.
 
         This is a high-conviction SHORT: the reclaim attempt is the stop-run,
         and the close back below VWAP is the failed reclaim confirmation.
         """
-        if not state.vwap_failed_reclaim:
+        if not (state.vwap and state.vwap.failed_reclaim):
             return None
         if not (state.trend and state.trend.direction == "DOWN"):
             return None
@@ -2531,33 +2533,6 @@ class DecisionEngine:
         )
         daily_state.strat_212_122_state = next_state
         state.strat_212_122_candidate = candidate
-
-    def _advance_vwap_rejection(
-        self, state: MarketState, daily_state: DailyState
-    ) -> None:
-        """Advance the one-bar VWAP-reclaim memory before ordinary gates.
-
-        See strategy/vwap_rejection.py for the causal definition. Advanced
-        unconditionally (like the other two _advance_* detectors) so the
-        memory is always current for the next bar regardless of whether a
-        candidate is acted on this bar. Whether the resulting
-        state.vwap_failed_reclaim flag translates into a trade is gated
-        entirely by the normal enabled_concepts/session/capacity chain in
-        _iter_enabled_setups, exactly like any other strategy.
-        """
-        state.vwap_failed_reclaim = False
-        if "vwap_rejection" not in self.config.enabled_concepts:
-            return
-        if state.vwap is None or state.vwap.price_vs_vwap == "undefined":
-            return
-        next_state, is_failed_reclaim = advance_vwap_reclaim_state(
-            price_vs_vwap=state.vwap.price_vs_vwap,
-            vwap_reclaimed=bool(state.vwap.reclaimed),
-            trading_date=vwap_trading_day(state.timestamp),
-            persisted_state=daily_state.vwap_reclaim_state,
-        )
-        daily_state.vwap_reclaim_state = next_state
-        state.vwap_failed_reclaim = is_failed_reclaim
 
     def _try_strat_4hr_retrigger(self, state: MarketState) -> Optional[SetupDetail]:
         """Return only the candidate produced by the resolved state machine."""

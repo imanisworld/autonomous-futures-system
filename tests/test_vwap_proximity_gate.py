@@ -77,14 +77,13 @@ def test_gate_applies_to_reclaim_and_rejection(config):
     )
     assert eng._try_vwap_reclaim(long_state) is None
     # vwap_rejection (SHORT): prior bar was a genuine reclaim, this bar closed
-    # far below VWAP → gated. vwap_failed_reclaim is the causal flag
-    # DecisionEngine sets from the PRIOR bar's reclaim (see
-    # strategy/vwap_rejection.py) — reclaimed=True on THIS SAME bar is
-    # structurally impossible alongside price_vs_vwap=="below" (reclaimed
-    # requires price above VWAP), so it is never set here.
+    # far below VWAP → gated. failed_reclaim is the causal one-bar-lookback
+    # flag (Pine-sent live, candle-derived in replay) — reclaimed=True on
+    # THIS SAME bar is structurally impossible alongside
+    # price_vs_vwap=="below" (reclaimed requires price above VWAP), so it is
+    # never set here.
     rej_state = replace(
         _short_state(VWAP - 15.0),
-        vwap=VWAPData(value=VWAP, price_vs_vwap="below", reclaimed=False, holding=False),
-        vwap_failed_reclaim=True,
+        vwap=VWAPData(value=VWAP, price_vs_vwap="below", reclaimed=False, holding=False, failed_reclaim=True),
     )
     assert eng._try_vwap_rejection(rej_state) is None

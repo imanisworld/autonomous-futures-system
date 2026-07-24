@@ -525,9 +525,6 @@ class JournalLogger:
             strat_212_122_state = strategy_state.get("strat_212_122")
             if isinstance(strat_212_122_state, dict):
                 daily_state.strat_212_122_state = dict(strat_212_122_state)
-            vwap_reclaim_state = strategy_state.get("vwap_rejection")
-            if isinstance(vwap_reclaim_state, dict):
-                daily_state.vwap_reclaim_state = dict(vwap_reclaim_state)
         for entry in entries:
             decision = entry.get("decision")
             risk_check = entry.get("risk_check") or {}

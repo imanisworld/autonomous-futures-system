@@ -51,6 +51,17 @@ class VWAPData:
     price_vs_vwap: str          # above | below | at
     reclaimed: Optional[bool] = None
     holding: Optional[bool] = None
+    # Causal one-bar-lookback failed-reclaim (rejection) flag: True only on
+    # the bar immediately following a genuine reclaim (the PRIOR bar's own
+    # `reclaimed`) that then closes back below VWAP THIS bar. Populated
+    # upstream, not derivable from this bar alone: live gets it directly from
+    # Pine (which tracks its own crossover state independent of whether the
+    # backend even evaluates a given bar); replay derives it from the candle
+    # sequence itself in replay/replay_engine.py, independent of
+    # DecisionEngine/DailyState. See
+    # docs/vwap-hold-vs-vwap-rejection-overlap-audit-2026-07-23.md (PR #308)
+    # for why the naive same-bar reclaimed+below check is impossible.
+    failed_reclaim: bool = False
 
 
 @dataclass
@@ -245,11 +256,6 @@ class MarketState:
     # Canonical Strat 2-1-2 / 1-2-2 candidate, populated transiently by
     # DecisionEngine from strategy/strat_212_122.py's pure state machine.
     strat_212_122_candidate: Optional[dict] = None
-    # Causal one-bar-lookback VWAP failed-reclaim flag, populated transiently
-    # by DecisionEngine from strategy/vwap_rejection.py's pure state machine.
-    # True only on the bar immediately following a genuine VWAP reclaim that
-    # then closes back below VWAP — see that module's docstring.
-    vwap_failed_reclaim: bool = False
     notes: Optional[str] = None
     raw: dict = None  # Original dict for reference
 

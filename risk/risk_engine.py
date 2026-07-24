@@ -91,10 +91,6 @@ class DailyState:
     # recomputed fresh every bar from already-given lookback fields) — this
     # exists for restart continuity and per-bar evidence review.
     strat_212_122_state: dict = field(default_factory=dict)
-    # Persisted one-bar VWAP-reclaim memory for the causal vwap_rejection
-    # (failed-reclaim) detector — see strategy/vwap_rejection.py. Dict form
-    # keeps journal serialization deterministic.
-    vwap_reclaim_state: dict = field(default_factory=dict)
 
 
 @dataclass

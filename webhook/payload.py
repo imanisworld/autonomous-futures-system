@@ -62,6 +62,19 @@ class AlertPayload(BaseModel):
     # False by default: vwap_reclaim strategy only fires on the actual cross bar.
     vwap_reclaimed: bool = False
 
+    # ── VWAP failed-reclaim (rejection) signal — causal one-bar lookback ─────
+    # Pine tracks its own crossover state and sends this directly: True only
+    # on the bar immediately following a genuine reclaim (Pine's own PRIOR
+    # bar's vwap_reclaimed) that then closes back below VWAP THIS bar. NOT
+    # derivable from a single bar's own fields, and deliberately not computed
+    # backend-side from persisted state — the backend only evaluates bars
+    # that pass its own gates (max-trades/loss-lockout/open-position bars
+    # never reach DecisionEngine), so a backend-side "previous bar" memory
+    # would track the previous EVALUATED bar, not the true immediately
+    # preceding market bar. Pine has no such gap: it advances on every bar
+    # regardless of backend state. Defaults False until Pine sends it.
+    vwap_failed_reclaim: bool = False
+
     # ── Optional context from Pine Script indicator ───────────────────────────
     avg_volume: int = 1
     vwap: Optional[float] = None

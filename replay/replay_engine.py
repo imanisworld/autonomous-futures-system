@@ -143,6 +143,7 @@ class ReplayEngine:
         candles_processed = 0
         skip_to = 0  # index of first bar available after an open position resolves
         prev_candle: Optional[ReplayCandle] = None
+        prev_prev_candle: Optional[ReplayCandle] = None
 
         for idx, candle in enumerate(candles):
             candles_processed += 1
@@ -188,6 +189,7 @@ class ReplayEngine:
                     }
                 )
             if idx < skip_to:
+                prev_prev_candle = prev_candle
                 prev_candle = candle
                 continue
 
@@ -202,7 +204,7 @@ class ReplayEngine:
                 stopped_reason = "max_trades_per_day"
                 break
 
-            state = self._market_state_from_candle(candle, prev_candle)
+            state = self._market_state_from_candle(candle, prev_candle, prev_prev_candle)
             state.bar_history_5m = list(
                 self._four_hr_bars.get(candle.instrument, ())
             )
@@ -230,6 +232,7 @@ class ReplayEngine:
             decision = decision_engine.evaluate(state, daily_state)
             risk_result_dict = None
 
+            prev_prev_candle = prev_candle
             prev_candle = candle
 
             if decision.decision == "TRADE" and decision.setup is not None:
@@ -246,7 +249,6 @@ class ReplayEngine:
                         daily_state.four_hr_retrigger_state
                     ),
                     "strat_212_122": dict(daily_state.strat_212_122_state),
-                    "vwap_rejection": dict(daily_state.vwap_reclaim_state),
                 }
                 # Persist the historical candle time (the record's own `ts` is the
                 # wall-clock replay-run time) so downstream analysis — e.g. the MFE
@@ -520,7 +522,6 @@ class ReplayEngine:
                     daily_state.four_hr_retrigger_state
                 ),
                 "strat_212_122": dict(daily_state.strat_212_122_state),
-                "vwap_rejection": dict(daily_state.vwap_reclaim_state),
             }
             # Persist the historical candle time (the record's own `ts` is the
             # wall-clock replay-run time) so shadow candidates can be re-resolved
@@ -661,6 +662,7 @@ class ReplayEngine:
         self,
         candle: ReplayCandle,
         prev_candle: Optional[ReplayCandle] = None,
+        prev_prev_candle: Optional[ReplayCandle] = None,
     ) -> MarketState:
         strat = self._strat_context_from_candle(candle)
         # True VWAP cross: previous bar was not above, current bar is above
@@ -668,6 +670,26 @@ class ReplayEngine:
             prev_candle is not None
             and prev_candle.price_vs_vwap != "above"
             and candle.price_vs_vwap == "above"
+        )
+        # Failed reclaim (rejection): the PRIOR bar was itself a genuine
+        # reclaim (same crossover test, shifted one bar) and THIS bar closes
+        # back below VWAP. Derived entirely from the candle sequence itself
+        # (prev_candle/prev_prev_candle, threaded unconditionally through
+        # every iteration of the run() loop, including skipped bars) —
+        # deliberately NOT via DailyState/DecisionEngine, since bars that get
+        # blocked before evaluate() runs (max-trades/loss-lockout/open-
+        # position) would otherwise desync a backend-persisted "previous bar"
+        # memory from the true immediately-preceding market bar. Mirrors how
+        # live gets this from Pine directly (Pine advances its own crossover
+        # state on every bar regardless of backend gating).
+        prev_bar_was_reclaimed = (
+            prev_candle is not None
+            and prev_prev_candle is not None
+            and prev_prev_candle.price_vs_vwap != "above"
+            and prev_candle.price_vs_vwap == "above"
+        )
+        vwap_failed_reclaim = (
+            prev_bar_was_reclaimed and candle.price_vs_vwap == "below"
         )
         if candle.session == "london" and candle.london_orb_high is not None:
             orb_high = candle.london_orb_high
@@ -701,6 +723,7 @@ class ReplayEngine:
                 price_vs_vwap=candle.price_vs_vwap,
                 reclaimed=vwap_reclaimed,
                 holding=candle.price_vs_vwap in ("above", "below"),
+                failed_reclaim=vwap_failed_reclaim,
             ),
             orb=ORBData(
                 high=orb_high,
