@@ -413,6 +413,43 @@ def test_cross_instrument_armed_state_is_not_consumed_by_another_instrument(conf
     assert "MES" in daily.four_hr_retrigger_state
 
 
+def test_instrument_disabled_concept_never_advances_persisted_state(config):
+    """disabled_concepts_per_instrument overrides enabled_concepts for one
+    instrument. strat_4hr_retrigger is globally enabled but disabled for
+    MNQ specifically — the persisted state machine must never advance (or
+    arm) for MNQ at all, not just be prevented from producing a trade."""
+    cfg = replace(
+        config,
+        enabled_concepts=[*config.enabled_concepts, "strat_4hr_retrigger"],
+        disabled_concepts_per_instrument={"MNQ": ["strat_4hr_retrigger"]},
+    )
+    engine = DecisionEngine(cfg)
+    daily = DailyState()
+
+    mnq_state = _market_state(_long_history(trigger_at=None))
+    engine._advance_4hr_retrigger(mnq_state, daily)
+
+    assert "MNQ" not in daily.four_hr_retrigger_state
+    assert mnq_state.four_hr_retrigger_candidate is None
+
+
+def test_instrument_disabled_elsewhere_does_not_block_other_instrument(config):
+    """The per-instrument disable for MNQ must not affect MES — MES keeps
+    advancing/arming normally."""
+    cfg = replace(
+        config,
+        enabled_concepts=[*config.enabled_concepts, "strat_4hr_retrigger"],
+        disabled_concepts_per_instrument={"MNQ": ["strat_4hr_retrigger"]},
+    )
+    engine = DecisionEngine(cfg)
+    daily = DailyState()
+
+    mes_state = replace(_market_state(_long_history(trigger_at=None)), instrument="MES")
+    engine._advance_4hr_retrigger(mes_state, daily)
+
+    assert daily.four_hr_retrigger_state["MES"]["status"] == "ARMED"
+
+
 def test_old_orb_reclaim_proxy_cannot_emit_under_4hr_identity(config):
     cfg = replace(
         config,

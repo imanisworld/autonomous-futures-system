@@ -2496,6 +2496,10 @@ class DecisionEngine:
         state.four_hr_retrigger_candidate = None
         if "strat_4hr_retrigger" not in self.config.enabled_concepts:
             return
+        if "strat_4hr_retrigger" in self.config.disabled_concepts_per_instrument.get(
+            state.instrument, []
+        ):
+            return
         if not self._is_five_minute_state(state):
             return
         next_state, candidate = advance_4hr_retrigger(
@@ -2516,18 +2520,25 @@ class DecisionEngine:
         this pattern, actually needs the cross-bar memory: phase 1 arms from
         THIS bar's own type/OHLC when it completes a precursor; phase 2
         resolves that already-fixed boundary against the NEXT bar's OHLC).
-        Advanced unconditionally each bar so a precursor forming while other
-        gates would otherwise block a trade this bar is still armed and
-        watched on the correct next bar. Whether a resulting candidate is
-        ever actually acted on is gated entirely by the normal
-        enabled_concepts/session/capacity chain in _iter_enabled_setups,
-        exactly like any other strategy.
+        Advanced each bar — for any instrument where at least one of
+        strat_212/strat_122 is actually active (globally enabled and not
+        instrument-disabled) — so a precursor forming while other gates would
+        otherwise block a trade this bar is still armed and watched on the
+        correct next bar. Whether a resulting candidate is ever actually
+        acted on is gated entirely by the normal enabled_concepts/
+        disabled_concepts_per_instrument/session/capacity chain in
+        _iter_enabled_setups, exactly like any other strategy. Only skipped
+        entirely when BOTH concepts are unavailable for this instrument —
+        the shared state machine still needs to advance for whichever one
+        of the pair remains active.
         """
         state.strat_212_122_candidate = None
-        if not (
-            "strat_212" in self.config.enabled_concepts
-            or "strat_122" in self.config.enabled_concepts
-        ):
+        instrument_disabled = set(
+            self.config.disabled_concepts_per_instrument.get(state.instrument, [])
+        )
+        active_212 = "strat_212" in self.config.enabled_concepts and "strat_212" not in instrument_disabled
+        active_122 = "strat_122" in self.config.enabled_concepts and "strat_122" not in instrument_disabled
+        if not (active_212 or active_122):
             return
         strat = state.strat
         next_state, candidate = advance_strat_212_122(

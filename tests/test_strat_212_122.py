@@ -428,6 +428,50 @@ def test_cross_instrument_arm_is_not_consumed_by_another_instruments_bar(config)
     assert daily.strat_212_122_state["MES"]["status"] == "IDLE"
 
 
+def test_212_disabled_but_122_active_still_advances_shared_state(config):
+    """disabled_concepts_per_instrument overrides enabled_concepts for one
+    instrument. One shared state machine serves both strat_212 and
+    strat_122 — disabling only strat_212 for MNQ must not stop the machine
+    from advancing, since strat_122 is still active for MNQ."""
+    cfg = replace(
+        config,
+        enabled_concepts=[*config.enabled_concepts, "strat_212", "strat_122"],
+        disabled_concepts_per_instrument={"MNQ": ["strat_212"]},
+    )
+    engine = DecisionEngine(config=cfg)
+    daily = DailyState(trade_count=0, consecutive_losses=0, has_open_position=False)
+
+    arm_bar = _state(
+        strat=StratContext(current_bar_type="inside_bar", previous_bar_type="two_up"),
+        high=100.0, low=95.0,
+    )
+    engine._advance_strat_212_122(arm_bar, daily)
+
+    assert daily.strat_212_122_state["MNQ"]["status"] == "ARMED"
+
+
+def test_both_212_and_122_disabled_for_instrument_blocks_advancement(config):
+    """When BOTH strat_212 and strat_122 are disabled for an instrument, the
+    shared state machine must never advance (or arm) for that instrument at
+    all — not just be prevented from producing a trade."""
+    cfg = replace(
+        config,
+        enabled_concepts=[*config.enabled_concepts, "strat_212", "strat_122"],
+        disabled_concepts_per_instrument={"MNQ": ["strat_212", "strat_122"]},
+    )
+    engine = DecisionEngine(config=cfg)
+    daily = DailyState(trade_count=0, consecutive_losses=0, has_open_position=False)
+
+    arm_bar = _state(
+        strat=StratContext(current_bar_type="inside_bar", previous_bar_type="two_up"),
+        high=100.0, low=95.0,
+    )
+    engine._advance_strat_212_122(arm_bar, daily)
+
+    assert "MNQ" not in daily.strat_212_122_state
+    assert arm_bar.strat_212_122_candidate is None
+
+
 def test_engine_arms_then_resolves_win_across_two_bars(config):
     cfg = replace(config, enabled_concepts=[*config.enabled_concepts, "strat_212"])
     engine = DecisionEngine(config=cfg)
