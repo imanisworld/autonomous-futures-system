@@ -119,6 +119,11 @@ class TradeRecord:
     volume: Optional[int]
     pine_bracket_overridden: bool  # True if Pine advisory bracket was accepted
     pine_bracket_ignored: bool     # True if Pine sent bracket but it was rejected
+    # True when this TRADE row carried no paper_order_id to join against —
+    # no outcome pairing was attempted (fail closed, never FIFO-guessed).
+    # result/pnl_dollars are None in this case regardless of whether the
+    # trade actually resolved; the row is not a reliable resolved/open signal.
+    unjoinable_legacy: bool = False
 
 
 @dataclass
