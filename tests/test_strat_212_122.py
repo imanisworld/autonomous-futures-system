@@ -155,6 +155,16 @@ def _arm_212_long(high=100.0, low=95.0):
     return state
 
 
+def _arm_212_short(high=100.0, low=95.0):
+    state, cand = advance_strat_212_122(
+        current_bar_type="inside_bar", previous_bar_type="two_down",
+        current_open=(high + low) / 2, current_high=high, current_low=low,
+        tick_size=0.25, trading_date="2026-07-24",
+    )
+    assert cand is None
+    return state
+
+
 def _resolve(armed_state, high, low, open=99.0):
     return advance_strat_212_122(
         current_bar_type=None, previous_bar_type=None,  # irrelevant while resolving
@@ -263,6 +273,28 @@ def test_resolve_gap_through_same_bar_loss_uses_causal_fill_not_structural_entry
     assert cand["result"] == "LOSS"
     assert cand["entry"] == 103.0  # gapped fill, not the structural 100.25
     assert cand["exit"] == cand["stop"] == 95.0
+
+
+def test_resolve_gap_beyond_target_fails_closed_not_a_win():
+    """Operator's own example: an extreme same-bar gap can put the causal
+    fill on the far side of target itself. Reporting that as a WIN would be
+    internally contradictory (entry priced worse than the level being
+    called the win) — the correct behavior mirrors
+    execution/paper_broker.py::_activate_pending_stop_entry, which rejects a
+    fill outside its own stop/target bracket. Fails closed instead."""
+    armed = _arm_212_long()  # entry=100.25, stop=95.0, target=110.75
+    next_state, cand = _resolve(armed, high=118.0, low=112.0, open=115.0)
+    assert cand is None
+    assert next_state["status"] == "GAP_INVALIDATED_BRACKET"
+
+
+def test_resolve_gap_beyond_target_short_side_fails_closed_not_a_win():
+    """Symmetric SHORT-side case: the causal fill gaps clean through target
+    on the downside."""
+    armed = _arm_212_short()  # entry=94.75, stop=100.0, target=84.25
+    next_state, cand = _resolve(armed, high=85.0, low=78.0, open=80.0)
+    assert cand is None
+    assert next_state["status"] == "GAP_INVALIDATED_BRACKET"
 
 
 def test_122_resolve_win_and_loss():

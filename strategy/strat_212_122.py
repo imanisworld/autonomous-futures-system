@@ -36,6 +36,8 @@ Resolution (phase 2) checks the watched bar's high/low against entry, stop,
 and target together — not just entry-vs-stop:
   - neither boundary reached                       -> no trade (expired)
   - only the invalidation (stop) side reached       -> no trade (invalidated)
+  - entry reached, causal fill outside the stop/    -> no trade
+    target bracket (an extreme same-bar gap)           (GAP_INVALIDATED_BRACKET)
   - entry reached, neither stop nor target reached  -> OPEN (already-triggered
                                                         position, causal fill)
   - entry AND target reached, stop not reached      -> WIN, resolved same-bar
@@ -62,12 +64,18 @@ gapped through the trigger, the fill is the open (worse for the trader,
 never better); otherwise it fills at the exact trigger level, reached
 intrabar. Stop/target (the levels, and the exit price for a same-bar
 WIN/LOSS) stay at their original structural values regardless of the gap —
-only entry is gap-adjusted. If the gap-adjusted fill would put a still-OPEN
-position on the wrong side of its own stop/target, there is no sane
-position to open — never chase it; that resolves to no candidate. This
-specific check does not apply to WIN/LOSS: an extreme gap that also clears
-target (or stop) on the same bar is a same-bar outcome with a
-better-than-planned fill, not an invalidated bracket.
+only entry is gap-adjusted.
+
+The causal fill is validated against the stop/target bracket IMMEDIATELY
+after it is computed, before branching into LOSS/WIN/OPEN — again mirroring
+_activate_pending_stop_entry, which rejects a fill outside its own
+stop/target bracket rather than ever opening (or booking) a position on the
+wrong side of it. A gap extreme enough to put the causal fill beyond target
+(or, symmetrically, beyond the SHORT-side target) produces an internally
+contradictory "WIN": entry priced worse than the very level being called the
+win. Such a fill fails closed to GAP_INVALIDATED_BRACKET — no candidate —
+rather than being reported as a resolved outcome. This check is unconditional
+across all three outcome kinds, not scoped to OPEN alone.
 
 Entry is offset one tick beyond the boundary (the level must be broken, not
 merely touched). Stop is the exact opposite boundary of the reference bar —
@@ -231,8 +239,20 @@ def _resolve(
     # is the same fact regardless of what happens afterward on this bar.
     if direction == "LONG":
         fill_entry = current_open if current_open >= entry_price else entry_price
+        bracket_valid = stop_price < fill_entry < target_price
     else:
         fill_entry = current_open if current_open <= entry_price else entry_price
+        bracket_valid = target_price < fill_entry < stop_price
+
+    # Validated immediately, before branching into LOSS/WIN/OPEN — mirrors
+    # _activate_pending_stop_entry, which rejects a fill outside its own
+    # stop/target bracket rather than opening (or booking) a position on the
+    # wrong side of it. A gap extreme enough to fill beyond target (or,
+    # symmetrically, beyond target on the SHORT side) would otherwise
+    # produce an internally contradictory "WIN": entry priced worse than the
+    # level being called the win. Fail closed instead — no candidate.
+    if not bracket_valid:
+        return {**idle_state, "status": "GAP_INVALIDATED_BRACKET"}, None
 
     if stop_touched:
         # Entry and the opposite (stop) boundary both reached this bar. If
@@ -266,24 +286,8 @@ def _resolve(
         }
         return idle_state, candidate
 
-    # Still open: this is the one outcome where the fill must actually sit
-    # between stop and target for "still open" to mean anything — a fill
-    # beyond either would already have satisfied stop_touched/target_touched
-    # above (low <= open <= high always holds — see
-    # replay/candle_loader.py's candle validation), so this check is
-    # unreachable under the current construction, not dead weight: it stays
-    # correct if that invariant is ever loosened, and it must NOT gate the
-    # WIN/LOSS branches above (an extreme gap that also clears target is a
-    # same-bar WIN with a better-than-planned fill, not an invalidated
-    # bracket — gating globally would incorrectly reject that case).
-    if direction == "LONG":
-        bracket_valid = stop_price < fill_entry < target_price
-    else:
-        bracket_valid = target_price < fill_entry < stop_price
-
-    if not bracket_valid:  # pragma: no cover
-        return {**idle_state, "status": "GAP_INVALIDATED_BRACKET"}, None
-
+    # Still open: bracket validity was already confirmed unconditionally
+    # above, before the LOSS/WIN checks — this is the only remaining outcome.
     candidate = {
         "kind": "OPEN",
         "pattern": pattern,
