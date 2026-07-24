@@ -778,15 +778,15 @@ class DecisionEngine:
         # When orb_reclaim fires it means price returned to the ORB, which
         # resets the break — clear the flag so a fresh break can be traded again.
         if state.orb.status == "above":
-            daily_state.orb_break_long_played = True
+            daily_state.orb_break_long_played[state.instrument] = True
         elif state.orb.status == "below":
-            daily_state.orb_break_short_played = True
+            daily_state.orb_break_short_played[state.instrument] = True
         elif setup.strategy == "orb_reclaim":
             # Price pulled back to the ORB and is reclaiming — reset so the
             # next clean break above is eligible again.
-            daily_state.orb_break_long_played = False
+            daily_state.orb_break_long_played[state.instrument] = False
         elif setup.strategy == "orb_rejection":
-            daily_state.orb_break_short_played = False
+            daily_state.orb_break_short_played[state.instrument] = False
 
         return DecisionOutput(
             timestamp=now,
@@ -1638,9 +1638,9 @@ class DecisionEngine:
 
         orb_continuation_blocked = False
         if daily_state is not None:
-            if state.orb.status == "above" and daily_state.orb_break_long_played:
+            if state.orb.status == "above" and daily_state.orb_break_long_played.get(state.instrument, False):
                 orb_continuation_blocked = True
-            elif state.orb.status == "below" and daily_state.orb_break_short_played:
+            elif state.orb.status == "below" and daily_state.orb_break_short_played.get(state.instrument, False):
                 orb_continuation_blocked = True
 
         strategies = [
@@ -2493,9 +2493,9 @@ class DecisionEngine:
             bars_5m=state.bar_history_5m,
             current_bar_ts=state.timestamp,
             instrument=state.instrument,
-            persisted_state=daily_state.four_hr_retrigger_state,
+            persisted_state=daily_state.four_hr_retrigger_state.get(state.instrument, {}),
         )
-        daily_state.four_hr_retrigger_state = next_state
+        daily_state.four_hr_retrigger_state[state.instrument] = next_state
         state.four_hr_retrigger_candidate = candidate
 
     def _advance_strat_212_122(
@@ -2529,9 +2529,9 @@ class DecisionEngine:
             current_low=state.ohlc.low,
             tick_size=self.TICK_SIZE.get(state.instrument, 0.25),
             trading_date=state.timestamp.date().isoformat(),
-            persisted_state=daily_state.strat_212_122_state,
+            persisted_state=daily_state.strat_212_122_state.get(state.instrument, {}),
         )
-        daily_state.strat_212_122_state = next_state
+        daily_state.strat_212_122_state[state.instrument] = next_state
         state.strat_212_122_candidate = candidate
 
     def _try_strat_4hr_retrigger(self, state: MarketState) -> Optional[SetupDetail]:

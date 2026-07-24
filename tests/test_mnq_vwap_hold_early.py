@@ -110,8 +110,8 @@ def _daily_state(**overrides) -> DailyState:
         consecutive_losses=0,
         has_open_position=False,
         realized_pnl_dollars=0.0,
-        orb_break_long_played=False,
-        orb_break_short_played=False,
+        orb_break_long_played={},
+        orb_break_short_played={},
     )
     base.update(overrides)
     return DailyState(**base)
@@ -202,14 +202,14 @@ def test_daily_state_is_never_mutated_by_detection(tmp_path):
     cfg = _base_config(tmp_path)
     payload = _five_min_short_payload(orb_status="reclaimed_high")
     state = build_market_state(payload)
-    live_daily = _daily_state(orb_break_long_played=False, orb_break_short_played=False)
+    live_daily = _daily_state(orb_break_long_played={}, orb_break_short_played={})
     snapshot = replace(live_daily)
 
     detect_early_vwap_hold(state, live_daily, cfg)
 
     assert live_daily == snapshot
-    assert live_daily.orb_break_long_played is False
-    assert live_daily.orb_break_short_played is False
+    assert live_daily.orb_break_long_played == {}
+    assert live_daily.orb_break_short_played == {}
 
 
 def test_only_vwap_hold_runs_other_enabled_concepts_are_not_reachable(tmp_path):

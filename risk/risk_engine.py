@@ -71,8 +71,10 @@ class DailyState:
     # ORB break played — prevents re-entry on the same directional ORB break.
     # Cleared automatically when the ORB reclaim/rejection strategy fires
     # (price returned to the ORB, resetting the setup).
-    orb_break_long_played: bool = False
-    orb_break_short_played: bool = False
+    # Keyed by instrument root (e.g. "MNQ", "MES") — one instrument's ORB
+    # break must never gate or clear another instrument's setups.
+    orb_break_long_played: Dict[str, bool] = field(default_factory=dict)
+    orb_break_short_played: Dict[str, bool] = field(default_factory=dict)
     # Per-session trade counts — keyed by session name (asian/london/new_york).
     session_trade_counts: Dict[str, int] = field(default_factory=dict)
     account_balance: Optional[float] = None
@@ -83,14 +85,19 @@ class DailyState:
     session_start_pnl: Dict[str, float] = field(default_factory=dict)
     session_start_time: Dict[str, datetime] = field(default_factory=dict)
     # Persisted/reconstructed pending setup state for the canonical executable
-    # 4HR Re-Trigger.  Dict form keeps journal serialization deterministic.
-    four_hr_retrigger_state: dict = field(default_factory=dict)
+    # 4HR Re-Trigger. Keyed by instrument root — each instrument's armed/
+    # watch state is independent and must not be advanced, resolved, or
+    # invalidated by another instrument's bars. Dict form keeps journal
+    # serialization deterministic.
+    four_hr_retrigger_state: Dict[str, dict] = field(default_factory=dict)
     # Persisted/reconstructed audit-trail state for the canonical executable
-    # Strat 2-1-2 / 1-2-2 detection. Dict form keeps journal serialization
-    # deterministic. Not required for the trigger decision itself (that is
-    # recomputed fresh every bar from already-given lookback fields) — this
-    # exists for restart continuity and per-bar evidence review.
-    strat_212_122_state: dict = field(default_factory=dict)
+    # Strat 2-1-2 / 1-2-2 detection. Keyed by instrument root — same
+    # cross-instrument isolation requirement as four_hr_retrigger_state
+    # above. Dict form keeps journal serialization deterministic. Not
+    # required for the trigger decision itself (that is recomputed fresh
+    # every bar from already-given lookback fields) — this exists for
+    # restart continuity and per-bar evidence review.
+    strat_212_122_state: Dict[str, dict] = field(default_factory=dict)
 
 
 @dataclass

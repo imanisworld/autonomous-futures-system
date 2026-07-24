@@ -351,7 +351,7 @@ def test_engine_stays_idle_and_returns_none_when_disabled(config):
     engine._advance_strat_212_122(arm_bar, daily)
     assert arm_bar.strat_212_122_candidate is None
     assert engine._try_strat_212(arm_bar) is None
-    assert daily.strat_212_122_state == {}
+    assert daily.strat_212_122_state.get("MNQ", {}) == {}
 
 
 def test_engine_arms_then_resolves_open_across_two_bars(config):
@@ -365,7 +365,7 @@ def test_engine_arms_then_resolves_open_across_two_bars(config):
     )
     engine._advance_strat_212_122(arm_bar, daily)
     assert engine._try_strat_212(arm_bar) is None  # never a candidate on the arm bar
-    assert daily.strat_212_122_state["status"] == "ARMED"
+    assert daily.strat_212_122_state["MNQ"]["status"] == "ARMED"
 
     watch_bar = _state(strat=None, high=100.5, low=99.0)
     engine._advance_strat_212_122(watch_bar, daily)
@@ -375,7 +375,57 @@ def test_engine_arms_then_resolves_open_across_two_bars(config):
     assert setup.entry == 100.25
     assert setup.stop == 95.0
     assert setup.pre_resolved is None
-    assert daily.strat_212_122_state["status"] == "IDLE"
+    assert daily.strat_212_122_state["MNQ"]["status"] == "IDLE"
+
+
+def test_cross_instrument_arm_is_not_consumed_by_another_instruments_bar(config):
+    """Regression for the shared-DailyState cross-instrument leak: MNQ arms
+    strat_212, then an interleaved MES bar (own OHLC on a completely
+    different price scale) must not resolve/invalidate/overwrite MNQ's
+    armed state, and MNQ's own true watch bar must still resolve exactly as
+    it would with no other instrument in play. Before instrument-keying,
+    strat_212_122_state was a single unkeyed dict: the MES bar's OHLC
+    (~5900) would be tested against MNQ's boundary (~100) as if it were
+    MNQ's own watch bar, silently consuming or invalidating the MNQ arm."""
+    cfg = replace(config, enabled_concepts=[*config.enabled_concepts, "strat_212"])
+    engine = DecisionEngine(config=cfg)
+    daily = DailyState(trade_count=0, consecutive_losses=0, has_open_position=False)
+
+    mnq_arm_bar = _state(
+        strat=StratContext(current_bar_type="inside_bar", previous_bar_type="two_up"),
+        high=100.0, low=95.0,
+    )
+    engine._advance_strat_212_122(mnq_arm_bar, daily)
+    assert daily.strat_212_122_state["MNQ"]["status"] == "ARMED"
+
+    # An MES bar arrives next — same day, unrelated price scale, no MES
+    # precursor of its own — before MNQ's watch bar.
+    mes_bar = replace(
+        mnq_arm_bar,
+        instrument="MES",
+        strat=None,
+        ohlc=replace(mnq_arm_bar.ohlc, high=5905.0, low=5895.0),
+    )
+    engine._advance_strat_212_122(mes_bar, daily)
+
+    # MNQ's arm must be completely untouched by the MES bar.
+    assert daily.strat_212_122_state["MNQ"]["status"] == "ARMED"
+    assert daily.strat_212_122_state["MNQ"]["boundary_high"] == 100.0
+    assert daily.strat_212_122_state["MNQ"]["boundary_low"] == 95.0
+    # MES gets its own independent (idle) slot, not MNQ's armed state.
+    assert daily.strat_212_122_state["MES"]["status"] == "IDLE"
+
+    # MNQ's real watch bar resolves exactly as it would in isolation.
+    mnq_watch_bar = _state(strat=None, high=100.5, low=99.0)
+    engine._advance_strat_212_122(mnq_watch_bar, daily)
+    setup = engine._try_strat_212(mnq_watch_bar)
+    assert setup is not None
+    assert setup.strategy == "strat_212"
+    assert setup.entry == 100.25
+    assert setup.stop == 95.0
+    assert daily.strat_212_122_state["MNQ"]["status"] == "IDLE"
+    # MES's independent state is still there, untouched by MNQ's resolution.
+    assert daily.strat_212_122_state["MES"]["status"] == "IDLE"
 
 
 def test_engine_arms_then_resolves_win_across_two_bars(config):
@@ -471,23 +521,25 @@ def test_strat_212_122_armed_state_round_trips_through_journal(tmp_path):
             "reason": "test",
             "strategy_state": {
                 "strat_212_122": {
-                    "trading_date": "2026-07-24",
-                    "status": "ARMED",
-                    "pattern": "strat_212",
-                    "direction": "LONG",
-                    "boundary_high": 100.0,
-                    "boundary_low": 95.0,
-                    "entry_price": 100.25,
-                    "stop_price": 95.0,
-                    "target_price": 110.75,
+                    "MNQ": {
+                        "trading_date": "2026-07-24",
+                        "status": "ARMED",
+                        "pattern": "strat_212",
+                        "direction": "LONG",
+                        "boundary_high": 100.0,
+                        "boundary_low": 95.0,
+                        "entry_price": 100.25,
+                        "stop_price": 95.0,
+                        "target_price": 110.75,
+                    }
                 }
             },
         },
         for_date=date(2026, 7, 24),
     )
     reconstructed = journal.get_daily_state(date(2026, 7, 24))
-    assert reconstructed.strat_212_122_state["status"] == "ARMED"
-    assert reconstructed.strat_212_122_state["entry_price"] == 100.25
+    assert reconstructed.strat_212_122_state["MNQ"]["status"] == "ARMED"
+    assert reconstructed.strat_212_122_state["MNQ"]["entry_price"] == 100.25
 
 
 # ─── Replay end-to-end: same-bar resolution journals directly, no order ────
