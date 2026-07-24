@@ -130,6 +130,7 @@ def test_replay_populates_window_direction_for_effective_condition_parity(
         c["trend_direction"] = "UP"
         c["trend_strength"] = "WEAK"
         c["orb_status"] = "inside"
+        c["timeframe"] = "15"  # the primary decision timeframe (config.expected_timeframe_minutes)
         candles.append(json.dumps(c))
 
     replay_path = tmp_path / "window_direction.jsonl"
@@ -200,6 +201,7 @@ def test_replay_window_direction_spans_run_many_day_boundary(config, tmp_path, m
         c["trend_direction"] = "UP"
         c["trend_strength"] = "WEAK"
         c["orb_status"] = "inside"
+        c["timeframe"] = "15"  # the primary decision timeframe (config.expected_timeframe_minutes)
         return c
 
     day1_dt = datetime(2026, 5, 22, 14, 30, tzinfo=timezone.utc)
@@ -235,6 +237,146 @@ def test_replay_window_direction_spans_run_many_day_boundary(config, tmp_path, m
 
     checker = DecisionEngine(config=config)
     assert checker._score_market_condition(day2_state) == "RANGE_BOUND"
+
+
+def test_replay_window_direction_ignores_bars_older_than_the_live_lookback(
+    config, tmp_path, monkeypatch
+):
+    """The cross-day fix above must not become an unbounded-history bug of
+    its own. BarHistory.recent(..., lookback_days=3) walks back at most 3
+    calendar-day FILES from the current bar's own date — live could not use
+    a bar 10 days old to seed window_direction no matter how much history
+    exists. Day 1 supplies the same 5-bar uptrend as the cross-day test, but
+    day 2 is scheduled 10 days later — far outside the 3-day lookback. Only
+    day 2's own single bar should be eligible, which is too few (<4 closes)
+    for BarHistory.window_direction to resolve — it must be None, not "UP"."""
+    from datetime import datetime, timedelta, timezone
+
+    from strategy.signal_engine import DecisionEngine
+
+    base = json.loads(Path("data/replay/sample_day_mnq.jsonl").read_text().splitlines()[0])
+
+    def _candle(close: float, ts: datetime) -> dict:
+        c = dict(base)
+        for key in (
+            "current_bar_type", "previous_bar_type", "two_bars_back_type",
+            "strat_sequence", "strat_trigger", "strat_direction",
+            "previous_bar_high", "previous_bar_low",
+        ):
+            c.pop(key, None)
+        c["timestamp"] = ts.isoformat()
+        c["open"] = close - 2.0
+        c["high"] = close + 1.0
+        c["low"] = close - 3.0
+        c["close"] = close
+        c["market_condition"] = "CHOPPY"
+        c["trend_direction"] = "UP"
+        c["trend_strength"] = "WEAK"
+        c["orb_status"] = "inside"
+        c["timeframe"] = "15"
+        return c
+
+    day1_dt = datetime(2026, 5, 1, 14, 30, tzinfo=timezone.utc)
+    day1_closes = [19480.0, 19485.0, 19490.0, 19495.0, 19500.0]
+    day1_candles = [
+        _candle(close, day1_dt + timedelta(minutes=15 * i))
+        for i, close in enumerate(day1_closes)
+    ]
+    day1_path = tmp_path / "day1.jsonl"
+    day1_path.write_text("\n".join(json.dumps(c) for c in day1_candles) + "\n")
+
+    day2_dt = datetime(2026, 5, 11, 14, 30, tzinfo=timezone.utc)  # 10 days later
+    day2_path = tmp_path / "day2.jsonl"
+    day2_path.write_text(json.dumps(_candle(19505.0, day2_dt)) + "\n")
+
+    seen_states = []
+    original_evaluate = DecisionEngine.evaluate
+
+    def _spy(self, state, daily_state):
+        seen_states.append(state)
+        return original_evaluate(self, state, daily_state)
+
+    monkeypatch.setattr(DecisionEngine, "evaluate", _spy)
+
+    engine = ReplayEngine(config=config, log_dir=str(tmp_path / "logs"))
+    engine.run_many([day1_path, day2_path])
+
+    assert len(seen_states) == 6
+    day2_state = seen_states[-1]
+    assert day2_state.window_direction is None
+
+
+def test_replay_window_direction_ignores_interleaved_5m_candles(
+    config, tmp_path, monkeypatch
+):
+    """webhook/runner.py only records into BarHistory (and hence
+    window_direction) on the authoritative decision timeframe — a
+    5-minute-trigger or canonical-4HR 5-minute-native bar never reaches that
+    block (`if not five_min_trigger and not four_hr_five_min`). A replay
+    stream with 15m and 5m candles interleaved for the same instrument must
+    reproduce that exclusion: the 5m bars carry wildly different closes here
+    (opposite direction, if they leaked in they would break the 15m uptrend
+    read), so a passing window_direction == "UP" on the final 15m bar proves
+    they were never admitted."""
+    from datetime import datetime, timedelta, timezone
+
+    from strategy.signal_engine import DecisionEngine
+
+    base = json.loads(Path("data/replay/sample_day_mnq.jsonl").read_text().splitlines()[0])
+
+    def _candle(close: float, ts: datetime, timeframe: str) -> dict:
+        c = dict(base)
+        for key in (
+            "current_bar_type", "previous_bar_type", "two_bars_back_type",
+            "strat_sequence", "strat_trigger", "strat_direction",
+            "previous_bar_high", "previous_bar_low",
+        ):
+            c.pop(key, None)
+        c["timestamp"] = ts.isoformat()
+        c["open"] = close - 2.0
+        c["high"] = close + 1.0
+        c["low"] = close - 3.0
+        c["close"] = close
+        c["market_condition"] = "CHOPPY"
+        c["trend_direction"] = "UP"
+        c["trend_strength"] = "WEAK"
+        c["orb_status"] = "inside"
+        c["timeframe"] = timeframe
+        return c
+
+    base_dt = datetime(2026, 5, 23, 14, 30, tzinfo=timezone.utc)
+    fifteen_min_closes = [19480.0, 19485.0, 19490.0, 19495.0, 19500.0, 19505.0]
+    candles = []
+    for i, close in enumerate(fifteen_min_closes):
+        ts = base_dt + timedelta(minutes=15 * i)
+        candles.append(_candle(close, ts, "15"))
+        if i < len(fifteen_min_closes) - 1:
+            # Noise: a 5m context bar between each pair of 15m bars, closing
+            # at a wildly different, opposite-direction price. If it leaked
+            # into window_direction's input, the "UP" read below would break.
+            candles.append(_candle(10000.0, ts + timedelta(minutes=10), "5"))
+
+    replay_path = tmp_path / "interleaved.jsonl"
+    replay_path.write_text("\n".join(json.dumps(c) for c in candles) + "\n")
+
+    seen_states = []
+    original_evaluate = DecisionEngine.evaluate
+
+    def _spy(self, state, daily_state):
+        seen_states.append(state)
+        return original_evaluate(self, state, daily_state)
+
+    monkeypatch.setattr(DecisionEngine, "evaluate", _spy)
+
+    ReplayEngine(config=config, log_dir=str(tmp_path / "logs")).run(
+        replay_path, review_date="2026-05-23",
+    )
+
+    # 6 fifteen-min bars + 5 interleaved five-min bars = 11 states.
+    assert len(seen_states) == 11
+    last_state = seen_states[-1]
+    assert last_state.ohlc.timeframe == "15"
+    assert last_state.window_direction == "UP"
 
 
 def test_one_week_replay_survival_harness(config, tmp_path):

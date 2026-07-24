@@ -56,11 +56,18 @@ from strategy.strat_212_122 import STRAT_122, STRAT_212
 from strategy.shadow_setups import evaluate_shadow_setups, resolve_shadow_candidate
 from strategy.signal_engine import DecisionEngine
 from strategy.strat_classifier import StratContext, classify_from_ohlc
+from webhook.runner import normalize_timeframe_minutes
 
 _DEFAULT_HTF_FILES = {
     "1D": "data/htf/CME_MINI_MNQ1!_1D.jsonl",
     "4H": "data/htf/CME_MINI_MNQ1!_240_(1).jsonl",
 }
+
+# Matches BarHistory.recent's own lookback_days default (context/bar_history.py)
+# — the number of calendar-day FILES live walks back from the current bar's
+# own date. Live cannot see anything older than that; replay's persistent
+# _window_direction_bars must not either.
+_WINDOW_DIRECTION_LOOKBACK_DAYS = 3
 
 
 class ReplayEngine:
@@ -190,14 +197,26 @@ class ReplayEngine:
                     "volume": candle.volume,
                 }
             )
-            self._window_direction_bars.setdefault(
-                candle.instrument, deque(maxlen=6)
-            ).append(
-                {
-                    "ts": candle.timestamp,
-                    "close": candle.close,
-                }
-            )
+            # Only bars on the authoritative decision timeframe reach live's
+            # BarHistory.record()/window_direction (webhook/runner.py guards
+            # that block with `if not five_min_trigger and not
+            # four_hr_five_min`) — a 5-minute retest-trigger bar or a
+            # canonical-4HR 5-minute-native bar never does, regardless of
+            # which of those two live-only mechanisms would have excluded
+            # it. Mirror that by only admitting candles whose own timeframe
+            # matches the configured primary decision timeframe, the same
+            # comparison webhook/runner.py's _check_timeframe makes.
+            if normalize_timeframe_minutes(candle.timeframe) == int(
+                getattr(self.config, "expected_timeframe_minutes", 15) or 0
+            ):
+                self._window_direction_bars.setdefault(
+                    candle.instrument, deque(maxlen=6)
+                ).append(
+                    {
+                        "ts": candle.timestamp,
+                        "close": candle.close,
+                    }
+                )
             if str(candle.timeframe).strip().lower() in {
                 "5", "5m", "5min", "5minute", "5minutes"
             }:
@@ -249,9 +268,21 @@ class ReplayEngine:
             # the prior day, so this reads _window_direction_bars (persists
             # across run_many/run_manifest day boundaries) rather than
             # _research_bars (deliberately cleared every run() call).
-            state.window_direction = BarHistory.window_direction(
-                list(self._window_direction_bars.get(candle.instrument, ()))
-            )
+            #
+            # BarHistory.recent walks back at most `lookback_days` calendar-
+            # day FILES from the current bar's own date — it cannot see
+            # anything older than that, no matter how much history exists.
+            # A persistent deque has no such ceiling on its own, so a long
+            # gap between replay files (e.g. one run_many spanning May then
+            # July) must not let stale bars outside that window seed a
+            # later day. Apply the identical day-count bound at read time.
+            _wd_current_date = _parse_timestamp(candle.timestamp).date()
+            _wd_bars = [
+                b for b in self._window_direction_bars.get(candle.instrument, ())
+                if (_wd_current_date - _parse_timestamp(b["ts"]).date()).days
+                < _WINDOW_DIRECTION_LOOKBACK_DAYS
+            ]
+            state.window_direction = BarHistory.window_direction(_wd_bars)
             if getattr(self.config, "htf_direction_source", "payload") == "live":
                 apply_live_direction(
                     state, self._live_dir_bars.get(candle.instrument, ())
