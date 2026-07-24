@@ -240,6 +240,31 @@ def test_resolve_entry_stop_and_target_all_reached_is_pessimistic_loss():
     assert cand["exit_reason"] == "OUTSIDE_AFTER_TRIGGER"
 
 
+def test_resolve_gap_through_same_bar_win_uses_causal_fill_not_structural_entry():
+    """The fix this pass adds: a same-bar WIN must price entry at the
+    watched bar's actual gapped-through fill, not the structural trigger —
+    otherwise P&L is overstated. Operator's own example: armed trigger
+    100.25, watched bar opens 103 and reaches target 110.75."""
+    armed = _arm_212_long()  # entry=100.25, stop=95.0, target=110.75
+    next_state, cand = _resolve(armed, high=115.0, low=102.0, open=103.0)
+    assert cand["kind"] == "RESOLVED"
+    assert cand["result"] == "WIN"
+    assert cand["entry"] == 103.0  # gapped fill, not the structural 100.25
+    assert cand["stop"] == 95.0  # exit-side levels stay structural
+    assert cand["exit"] == cand["target"] == 110.75
+
+
+def test_resolve_gap_through_same_bar_loss_uses_causal_fill_not_structural_entry():
+    """Same fix, LOSS side: entry must reflect the actual gapped-through
+    fill even though the exit (stop) price stays at its structural level."""
+    armed = _arm_212_long()  # entry=100.25, stop=95.0, target=110.75
+    next_state, cand = _resolve(armed, high=104.0, low=90.0, open=103.0)
+    assert cand["kind"] == "RESOLVED"
+    assert cand["result"] == "LOSS"
+    assert cand["entry"] == 103.0  # gapped fill, not the structural 100.25
+    assert cand["exit"] == cand["stop"] == 95.0
+
+
 def test_122_resolve_win_and_loss():
     state, cand = advance_strat_212_122(
         current_bar_type="two_down", previous_bar_type="inside_bar",
