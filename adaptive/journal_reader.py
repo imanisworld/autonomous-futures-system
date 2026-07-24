@@ -130,13 +130,25 @@ class JournalReader:
             return []
 
         raw_entries = self._read_raw(path)
-        # Pass 1: collect approved decision entries and separate outcome entries.
+        # Pass 1: collect approved decision entries, and index standalone
+        # OUTCOME entries by paper_order_id — the stable identity PaperBroker
+        # mints once per position (see execution/paper_broker.py) and that
+        # webhook/runner.py carries onto both the confirmed TRADE row and its
+        # eventual OUTCOME row. Outcomes without an id (e.g. a non-PaperBroker
+        # execution path) are never indexed, so they can never be guessed
+        # onto an unrelated trade.
         decisions: list[dict] = []   # approved TRADE decisions, in order
-        outcome_queue: list[dict] = []  # standalone OUTCOME entries
+        outcomes_by_order_id: dict[str, dict] = {}
 
         for entry in raw_entries:
             if entry.get("type") == "OUTCOME":
-                outcome_queue.append(entry.get("outcome") or {})
+                outcome = entry.get("outcome") or {}
+                order_id = outcome.get("paper_order_id")
+                if order_id:
+                    # First write for a given order id wins; a duplicate
+                    # OUTCOME for the same position must not silently
+                    # overwrite the original resolution.
+                    outcomes_by_order_id.setdefault(order_id, outcome)
                 continue
             if (
                 entry.get("decision") == "TRADE"
@@ -144,27 +156,37 @@ class JournalReader:
             ):
                 decisions.append(entry)
 
-        # Pass 2: pair decisions with outcomes.
-        # Outcomes are consumed FIFO against decisions that lack an inline outcome.
+        # Pass 2: pair each decision with its outcome by exact paper_order_id
+        # match. No FIFO fallback — an unmatched or identity-less TRADE row is
+        # left unresolved/unjoinable rather than paired by position.
         records: list[TradeRecord] = []
-        outcome_iter = iter(outcome_queue)
 
         for entry in decisions:
             inline = entry.get("outcome") or {}
             inline_result = inline.get("result")
+            unjoinable_legacy = False
 
             if inline_result in ("WIN", "LOSS", "BREAKEVEN"):
                 result = inline_result
                 pnl = float(inline.get("pnl_dollars") or 0.0)
             else:
-                # Try to consume the next standalone outcome entry
-                try:
-                    out = next(outcome_iter)
-                    result = out.get("result")
-                    pnl = float(out.get("pnl_dollars") or 0.0) if result else None
-                except StopIteration:
+                order_id = entry.get("paper_order_id")
+                if order_id:
+                    out = outcomes_by_order_id.get(order_id)
+                    if out is not None:
+                        result = out.get("result")
+                        pnl = float(out.get("pnl_dollars") or 0.0) if result else None
+                    else:
+                        # Real identity, no match yet — genuinely still open.
+                        result = None
+                        pnl = None
+                else:
+                    # No stable identity to join on at all (legacy row, or a
+                    # non-PaperBroker execution path that never minted one).
+                    # Explicitly unjoinable — must not be FIFO-guessed.
                     result = None
                     pnl = None
+                    unjoinable_legacy = True
 
             setup = entry.get("setup") or {}
             context = entry.get("context") or {}
@@ -194,6 +216,7 @@ class JournalReader:
                 volume=_opt_int(vol.get("current_bar")),
                 pine_bracket_overridden="Pine bracket override" in notes,
                 pine_bracket_ignored="Pine bracket ignored" in notes,
+                unjoinable_legacy=unjoinable_legacy,
             ))
 
         return records

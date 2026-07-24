@@ -489,6 +489,7 @@ def _approved_entry(
     ts: str = "2026-05-23T14:30:00+00:00",
     outcome: Optional[dict] = None,
     trend_strength: str = "STRONG",
+    paper_order_id: Optional[str] = "PAPER-test",
 ) -> dict:
     return {
         "ts": ts,
@@ -515,10 +516,15 @@ def _approved_entry(
             "volume": {"current_bar": 500, "avg_bar": 400, "relative": 1.25},
         },
         "outcome": outcome,
+        "paper_order_id": paper_order_id,
     }
 
 
-def _outcome_entry(result: str = "WIN", pnl_dollars: float = 100.0) -> dict:
+def _outcome_entry(
+    result: str = "WIN",
+    pnl_dollars: float = 100.0,
+    paper_order_id: Optional[str] = "PAPER-test",
+) -> dict:
     return {
         "ts": "2026-05-23T15:00:00+00:00",
         "type": "OUTCOME",
@@ -532,6 +538,7 @@ def _outcome_entry(result: str = "WIN", pnl_dollars: float = 100.0) -> dict:
             "pnl_ticks": 40 if result == "WIN" else -40,
             "pnl_dollars": pnl_dollars,
             "contracts": 1,
+            "paper_order_id": paper_order_id,
         },
     }
 
