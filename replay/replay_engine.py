@@ -32,6 +32,13 @@ from context.market_context import (
     VolumeData,
 )
 from execution.broker_interface import BracketOrder
+from execution.day_only_exit import (
+    EOD_BAR_MISSING,
+    is_after_eod_close,
+    is_exact_eod_bar,
+    resolve_paper_eod,
+    strategy_is_day_only,
+)
 from execution.paper_broker import NextBarOHLC, PaperBroker
 from execution.post_fill_validation import TICK_SIZE as EXEC_TICK_SIZE, TICK_VALUE as EXEC_TICK_VALUE
 from journal.journal_logger import JournalLogger
@@ -346,13 +353,42 @@ class ReplayEngine:
                         )
                         continue
                     fill = None
+                    day_only_trade = strategy_is_day_only(decision.setup.strategy)
+                    trade_date = _date_from_timestamp(candle.timestamp)
                     for future_idx in range(idx + 1, len(candles)):
                         fc = candles[future_idx]
+                        if day_only_trade and _date_from_timestamp(fc.timestamp) != trade_date:
+                            break
+                        if day_only_trade and is_after_eod_close(fc.timestamp):
+                            # The exact closing bar was absent. Never let a later
+                            # bar stand in as either a day-only exit or a bracket
+                            # resolution after the mandated flat time.
+                            break
                         fill = broker.resolve_position(
                             NextBarOHLC(open=fc.open, high=fc.high, low=fc.low)
                         )
                         if fill is not None:
                             if fill.result != "CANCELLED":
+                                skip_to = future_idx + 1
+                            break
+                        if day_only_trade and is_exact_eod_bar(
+                            fc.timestamp, fc.timeframe
+                        ):
+                            # Stop/target above has precedence on this same bar.
+                            fill = resolve_paper_eod(
+                                broker,
+                                {
+                                    "instrument": state.instrument,
+                                    "direction": decision.setup.direction,
+                                    "entry": entry_fill.entry_price,
+                                    "contracts": contracts,
+                                    "strategy": decision.setup.strategy,
+                                },
+                                timestamp=fc.timestamp,
+                                timeframe=fc.timeframe,
+                                close=fc.close,
+                            )
+                            if fill is not None:
                                 skip_to = future_idx + 1
                             break
                     if fill is None and broker.has_pending_entry():
@@ -389,6 +425,13 @@ class ReplayEngine:
                     else:
                         daily_state.trade_count += 1
                         daily_state.has_open_position = True
+                        if day_only_trade:
+                            journal.log_day_only_exit_issue(
+                                instrument=state.instrument,
+                                strategy=decision.setup.strategy,
+                                reason=EOD_BAR_MISSING,
+                                for_date=journal_date,
+                            )
                 continue
 
             journal_entry = decision.to_dict()

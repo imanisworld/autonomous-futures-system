@@ -104,6 +104,20 @@ Start with base hits — partial exits at sub-targets within the 8AM range — u
 
 Sub-targets: use the 15-minute chart to find internal structure within the 8AM candle range for partial exits.
 
+### Common Day-Only Exit — 4:00 PM ET
+
+This strategy is day-only. Its canonical stop (Section 5) and target (this section) remain
+unchanged and retain authority through the final bar.
+
+- On the 15:55–16:00 ET 5-minute bar, resolve the canonical stop or target first if either
+  is reached. Stop/target resolution has precedence over the day-only exit on that bar.
+- If the position remains unresolved, close it with exit reason `DAY_ONLY_FLATTEN`.
+- For paper and replay, the exit price is the close of that exact 15:55–16:00 ET bar.
+- If that exact bar is missing, record `EOD_BAR_MISSING` as unresolved evidence. Do not
+  estimate or substitute a price, and do not count a `WIN`, `LOSS`, or `BREAKEVEN`.
+- Tradovate demo may still flatten through the broker when the bar is missing. Use the
+  actual broker fill price and exit reason `DAY_ONLY_FLATTEN`.
+
 ---
 
 ## 7. VALIDATED PERFORMANCE

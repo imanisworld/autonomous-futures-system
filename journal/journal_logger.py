@@ -148,6 +148,27 @@ class JournalLogger:
         }
         self._append(entry, for_date)
 
+    def log_day_only_exit_issue(
+        self,
+        *,
+        instrument: str,
+        strategy: str,
+        reason: str,
+        for_date: Optional[date] = None,
+    ) -> None:
+        """Record unresolved day-only evidence without fabricating an OUTCOME."""
+        self._append(
+            {
+                "ts": datetime.now(timezone.utc).isoformat(),
+                "type": "DAY_ONLY_EXIT_ISSUE",
+                "instrument": instrument,
+                "strategy": strategy,
+                "reason": reason,
+                "outcome": None,
+            },
+            for_date,
+        )
+
     def log_order_ids(
         self,
         instrument: str,
@@ -577,6 +598,7 @@ class JournalLogger:
                     context = entry.get("context") or {}
                     last_open = {
                         "instrument": entry.get("instrument"),
+                        "session": entry.get("session"),
                         "direction": setup.get("direction"),
                         "entry": setup.get("entry"),
                         "stop": setup.get("stop"),

@@ -1,0 +1,10 @@
+[Unit]
+Description=Run AFS day-only fallback shortly after 4PM New York time
+
+[Timer]
+OnCalendar=Mon..Fri *-*-* 16:02:00 America/New_York
+Persistent=true
+Unit=afs-day-only-exit.service
+
+[Install]
+WantedBy=timers.target

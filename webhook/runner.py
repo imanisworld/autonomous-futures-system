@@ -1081,6 +1081,57 @@ def process_alert(
                 # open) — leave the position untouched for its own next bar.
                 fill = None
 
+            # Canonical day-only close. Stop/target resolution above always gets
+            # first claim on the same 15:55 ET bar; this fallback runs only when
+            # that resolution returned no fill. It is allowlist-scoped and exact-
+            # bar-only, so unrelated strategies and later bars are untouched.
+            if fill is None and same_instrument:
+                from execution.day_only_exit import (
+                    BROKER_FLAT_FILL_PRICE_MISSING,
+                    build_day_only_fill,
+                    is_exact_eod_bar,
+                    resolve_paper_eod,
+                    strategy_is_day_only,
+                )
+
+                if strategy_is_day_only(_open_pos_strategy) and is_exact_eod_bar(
+                    payload.timestamp, payload.timeframe
+                ):
+                    if _using_tradovate_position:
+                        _flatten = tv.flatten_position()
+                        _actual_exit = _flatten.get("close_fill_price")
+                        if _flatten.get("flat_confirmed") and _actual_exit is not None:
+                            fill = build_day_only_fill(open_pos, float(_actual_exit))
+                        elif _flatten.get("error"):
+                            logger.error(
+                                "DAY_ONLY_FLATTEN not journaled: %s",
+                                _flatten.get("error"),
+                            )
+                        elif _flatten.get("flat_confirmed"):
+                            # Broker is flat but the fill price is unavailable —
+                            # never fabricate an exit price. Record the issue
+                            # durably (visible without inferring a WIN/LOSS);
+                            # a later resolution sees the broker already flat
+                            # and cannot submit another liquidation.
+                            logger.error(
+                                "DAY_ONLY_FLATTEN broker-flat but fill price missing: %s",
+                                open_pos.get("instrument"),
+                            )
+                            journal.log_day_only_exit_issue(
+                                instrument=open_pos.get("instrument") or "",
+                                strategy=_open_pos_strategy or "",
+                                reason=BROKER_FLAT_FILL_PRICE_MISSING,
+                                for_date=open_position_date,
+                            )
+                    else:
+                        fill = resolve_paper_eod(
+                            broker,
+                            open_pos,
+                            timestamp=payload.timestamp,
+                            timeframe=payload.timeframe,
+                            close=payload.close,
+                        )
+
             # ── Trailing-stop SHADOW (log-only — sends NOTHING) ───────────────
             # Increment 2 of the live-trailing build: observe where a runner trail
             # WOULD move the stop this bar, using the SAME math as the sim. Flag-
