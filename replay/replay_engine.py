@@ -15,6 +15,7 @@ from typing import Optional
 
 from agent.daily_summary import DailySummaryAgent
 from config.settings import SystemConfig, load_config
+from context.bar_history import BarHistory
 from context.market_context import (
     MarketState,
     GEXContext,
@@ -55,11 +56,18 @@ from strategy.strat_212_122 import STRAT_122, STRAT_212
 from strategy.shadow_setups import evaluate_shadow_setups, resolve_shadow_candidate
 from strategy.signal_engine import DecisionEngine
 from strategy.strat_classifier import StratContext, classify_from_ohlc
+from webhook.runner import normalize_timeframe_minutes
 
 _DEFAULT_HTF_FILES = {
     "1D": "data/htf/CME_MINI_MNQ1!_1D.jsonl",
     "4H": "data/htf/CME_MINI_MNQ1!_240_(1).jsonl",
 }
+
+# Matches BarHistory.recent's own lookback_days default (context/bar_history.py)
+# — the number of calendar-day FILES live walks back from the current bar's
+# own date. Live cannot see anything older than that; replay's persistent
+# _window_direction_bars must not either.
+_WINDOW_DIRECTION_LOOKBACK_DAYS = 3
 
 
 class ReplayEngine:
@@ -84,6 +92,15 @@ class ReplayEngine:
         # Canonical 4HR input history.  Kept across run_many day boundaries so
         # Monday can see Sunday/Friday references exactly as live BarHistory can.
         self._four_hr_bars: dict[str, deque] = {}
+        # window_direction input. Deliberately separate from _research_bars:
+        # that deque is cleared every run() call (shadow-setup history must
+        # never leak across days), but live's BarHistory.recent(..., 6) can
+        # span up to 3 days — the first bar of a new day can still complete
+        # its 6-bar window from the prior day's tail. Kept across run_many/
+        # run_manifest day boundaries like _live_dir_bars/_four_hr_bars above.
+        # maxlen=6 exactly, since window_direction only ever looks at the
+        # last 6 closes.
+        self._window_direction_bars: dict[str, deque] = {}
 
     @staticmethod
     def _load_default_htf() -> HTFLookup:
@@ -180,6 +197,26 @@ class ReplayEngine:
                     "volume": candle.volume,
                 }
             )
+            # Only bars on the authoritative decision timeframe reach live's
+            # BarHistory.record()/window_direction (webhook/runner.py guards
+            # that block with `if not five_min_trigger and not
+            # four_hr_five_min`) — a 5-minute retest-trigger bar or a
+            # canonical-4HR 5-minute-native bar never does, regardless of
+            # which of those two live-only mechanisms would have excluded
+            # it. Mirror that by only admitting candles whose own timeframe
+            # matches the configured primary decision timeframe, the same
+            # comparison webhook/runner.py's _check_timeframe makes.
+            if normalize_timeframe_minutes(candle.timeframe) == int(
+                getattr(self.config, "expected_timeframe_minutes", 15) or 0
+            ):
+                self._window_direction_bars.setdefault(
+                    candle.instrument, deque(maxlen=6)
+                ).append(
+                    {
+                        "ts": candle.timestamp,
+                        "close": candle.close,
+                    }
+                )
             if str(candle.timeframe).strip().lower() in {
                 "5", "5m", "5min", "5minute", "5minutes"
             }:
@@ -221,6 +258,36 @@ class ReplayEngine:
             state.bar_history_5m = list(
                 self._four_hr_bars.get(candle.instrument, ())
             )
+            # Effective-parity: live (webhook/runner.py) sets this from the
+            # last 6 bars of its persisted BarHistory right after recording
+            # the current bar — a continuous-data directional read that lets
+            # DecisionEngine veto a CHOPPY label into RANGE_BOUND even when
+            # Pine's own strat/trend fields don't independently confirm it
+            # (see DecisionEngine._has_directional_structure). BarHistory.
+            # recent(..., lookback_days=3) means live's window can span into
+            # the prior day, so this reads _window_direction_bars (persists
+            # across run_many/run_manifest day boundaries) rather than
+            # _research_bars (deliberately cleared every run() call).
+            #
+            # BarHistory.recent walks back at most `lookback_days` calendar-
+            # day FILES from the current bar's own date — it cannot see
+            # anything older than that, no matter how much history exists.
+            # A persistent deque has no such ceiling on its own, so a long
+            # gap between replay files (e.g. one run_many spanning May then
+            # July) must not let stale bars outside that window seed a
+            # later day. Apply the identical day-count bound at read time.
+            # Lower-bounded at 0: BarHistory.recent only ever walks BACKWARD
+            # from the current bar's own date, so a bar from a LATER replay
+            # file run earlier in the same ReplayEngine instance's lifetime
+            # (e.g. run_many given files out of date order) must not seed an
+            # earlier day either — a negative day-delta is still < 3.
+            _wd_current_date = _parse_timestamp(candle.timestamp).date()
+            _wd_bars = [
+                b for b in self._window_direction_bars.get(candle.instrument, ())
+                if 0 <= (_wd_current_date - _parse_timestamp(b["ts"]).date()).days
+                < _WINDOW_DIRECTION_LOOKBACK_DAYS
+            ]
+            state.window_direction = BarHistory.window_direction(_wd_bars)
             if getattr(self.config, "htf_direction_source", "payload") == "live":
                 apply_live_direction(
                     state, self._live_dir_bars.get(candle.instrument, ())

@@ -86,6 +86,371 @@ def test_replay_generates_no_trade_for_choppy_day(config, tmp_path):
     assert report.wins == 0
 
 
+def test_replay_populates_window_direction_for_effective_condition_parity(
+    config, tmp_path, monkeypatch
+):
+    """Effective-parity regression, not raw-parity: live (webhook/runner.py)
+    sets state.window_direction from the last 6 recorded bars right after
+    ingesting each bar, and DecisionEngine._has_directional_structure uses it
+    to veto a CHOPPY label into RANGE_BOUND when no other signal (a 3-bar
+    Pine strat run) independently confirms the direction. Before this fix,
+    replay never populated window_direction — a live-only field — so this
+    veto path could never fire in replay even when replay correctly
+    reconstructed Pine's raw CHOPPY label. This proves DecisionEngine
+    actually receives the same effective state in both lanes, not just that
+    the raw market_condition string round-trips."""
+    from dataclasses import replace as dc_replace
+    from datetime import datetime, timedelta
+
+    from strategy.signal_engine import DecisionEngine
+
+    base = json.loads(Path("data/replay/sample_day_mnq.jsonl").read_text().splitlines()[0])
+    base_dt = datetime.fromisoformat(base["timestamp"])
+    # Six bars with closes decisively higher each step (5/5 up, positive net)
+    # — exactly the BarHistory.window_direction "UP" case. No current_bar_type
+    # / previous_bar_high fields are set, so _strat_context_from_candle
+    # returns None: the strat-run confirmation path cannot fire here, so
+    # window_direction is the ONLY thing that can trigger the veto.
+    closes = [19480.0, 19485.0, 19490.0, 19495.0, 19500.0, 19505.0]
+    candles = []
+    for i, close in enumerate(closes):
+        c = dict(base)
+        for key in (
+            "current_bar_type", "previous_bar_type", "two_bars_back_type",
+            "strat_sequence", "strat_trigger", "strat_direction",
+            "previous_bar_high", "previous_bar_low",
+        ):
+            c.pop(key, None)
+        c["timestamp"] = (base_dt + timedelta(minutes=15 * i)).isoformat()
+        c["open"] = close - 2.0
+        c["high"] = close + 1.0
+        c["low"] = close - 3.0
+        c["close"] = close
+        c["market_condition"] = "CHOPPY"
+        c["trend_direction"] = "UP"
+        c["trend_strength"] = "WEAK"
+        c["orb_status"] = "inside"
+        c["timeframe"] = "15"  # the primary decision timeframe (config.expected_timeframe_minutes)
+        candles.append(json.dumps(c))
+
+    replay_path = tmp_path / "window_direction.jsonl"
+    replay_path.write_text("\n".join(candles) + "\n")
+
+    seen_states = []
+    original_evaluate = DecisionEngine.evaluate
+
+    def _spy(self, state, daily_state):
+        seen_states.append(state)
+        return original_evaluate(self, state, daily_state)
+
+    monkeypatch.setattr(DecisionEngine, "evaluate", _spy)
+
+    ReplayEngine(config=config, log_dir=str(tmp_path / "logs")).run(
+        replay_path, review_date="2026-05-23",
+    )
+
+    assert len(seen_states) == 6
+    last_state = seen_states[-1]
+    assert last_state.strat is None  # confirms only window_direction could veto
+    assert last_state.window_direction == "UP"
+
+    engine = DecisionEngine(config=config)
+    assert engine._has_directional_structure(last_state) is True
+    assert engine._score_market_condition(last_state) == "RANGE_BOUND"
+
+    # Causal proof: strip window_direction back to the pre-fix value (always
+    # None) and confirm the veto no longer fires — isolates this fix's effect
+    # from any other confluence in the fixture.
+    pre_fix_state = dc_replace(last_state, window_direction=None)
+    assert engine._has_directional_structure(pre_fix_state) is False
+    assert engine._score_market_condition(pre_fix_state) == "CHOPPY"
+
+
+def test_replay_window_direction_spans_run_many_day_boundary(config, tmp_path, monkeypatch):
+    """Cross-day regression: live's window_direction can span up to 3 days
+    (BarHistory.recent(..., lookback_days=3)), so the FIRST bar of a new
+    trading day can still complete its 6-bar window from the prior day's
+    tail. run_many()/run_manifest() call run() once per file/day, and run()
+    intentionally clears _research_bars every call (shadow-setup history
+    must never leak across days) — window_direction therefore needs its own
+    history that survives across run() calls, separate from _research_bars.
+    Day 1 supplies 5 bars of a decisive uptrend; day 2's only (first) bar
+    completes the 6th step. If window_direction reset per file/day like
+    _research_bars does, day 2's first bar would see only 1 close (itself)
+    and window_direction would be None instead of "UP"."""
+    from datetime import datetime, timedelta, timezone
+
+    from strategy.signal_engine import DecisionEngine
+
+    base = json.loads(Path("data/replay/sample_day_mnq.jsonl").read_text().splitlines()[0])
+
+    def _candle(close: float, ts: datetime) -> dict:
+        c = dict(base)
+        for key in (
+            "current_bar_type", "previous_bar_type", "two_bars_back_type",
+            "strat_sequence", "strat_trigger", "strat_direction",
+            "previous_bar_high", "previous_bar_low",
+        ):
+            c.pop(key, None)
+        c["timestamp"] = ts.isoformat()
+        c["open"] = close - 2.0
+        c["high"] = close + 1.0
+        c["low"] = close - 3.0
+        c["close"] = close
+        c["market_condition"] = "CHOPPY"
+        c["trend_direction"] = "UP"
+        c["trend_strength"] = "WEAK"
+        c["orb_status"] = "inside"
+        c["timeframe"] = "15"  # the primary decision timeframe (config.expected_timeframe_minutes)
+        return c
+
+    day1_dt = datetime(2026, 5, 22, 14, 30, tzinfo=timezone.utc)
+    day1_closes = [19480.0, 19485.0, 19490.0, 19495.0, 19500.0]
+    day1_candles = [
+        _candle(close, day1_dt + timedelta(minutes=15 * i))
+        for i, close in enumerate(day1_closes)
+    ]
+    day1_path = tmp_path / "day1.jsonl"
+    day1_path.write_text("\n".join(json.dumps(c) for c in day1_candles) + "\n")
+
+    day2_dt = datetime(2026, 5, 23, 14, 30, tzinfo=timezone.utc)
+    day2_path = tmp_path / "day2.jsonl"
+    day2_path.write_text(json.dumps(_candle(19505.0, day2_dt)) + "\n")
+
+    seen_states = []
+    original_evaluate = DecisionEngine.evaluate
+
+    def _spy(self, state, daily_state):
+        seen_states.append(state)
+        return original_evaluate(self, state, daily_state)
+
+    monkeypatch.setattr(DecisionEngine, "evaluate", _spy)
+
+    engine = ReplayEngine(config=config, log_dir=str(tmp_path / "logs"))
+    engine.run_many([day1_path, day2_path])
+
+    # 5 states from day1 + 1 (day2's only bar) = 6.
+    assert len(seen_states) == 6
+    day2_state = seen_states[-1]
+    assert day2_state.strat is None
+    assert day2_state.window_direction == "UP"
+
+    checker = DecisionEngine(config=config)
+    assert checker._score_market_condition(day2_state) == "RANGE_BOUND"
+
+
+def test_replay_window_direction_ignores_bars_older_than_the_live_lookback(
+    config, tmp_path, monkeypatch
+):
+    """The cross-day fix above must not become an unbounded-history bug of
+    its own. BarHistory.recent(..., lookback_days=3) walks back at most 3
+    calendar-day FILES from the current bar's own date — live could not use
+    a bar 10 days old to seed window_direction no matter how much history
+    exists. Day 1 supplies the same 5-bar uptrend as the cross-day test, but
+    day 2 is scheduled 10 days later — far outside the 3-day lookback. Only
+    day 2's own single bar should be eligible, which is too few (<4 closes)
+    for BarHistory.window_direction to resolve — it must be None, not "UP"."""
+    from datetime import datetime, timedelta, timezone
+
+    from strategy.signal_engine import DecisionEngine
+
+    base = json.loads(Path("data/replay/sample_day_mnq.jsonl").read_text().splitlines()[0])
+
+    def _candle(close: float, ts: datetime) -> dict:
+        c = dict(base)
+        for key in (
+            "current_bar_type", "previous_bar_type", "two_bars_back_type",
+            "strat_sequence", "strat_trigger", "strat_direction",
+            "previous_bar_high", "previous_bar_low",
+        ):
+            c.pop(key, None)
+        c["timestamp"] = ts.isoformat()
+        c["open"] = close - 2.0
+        c["high"] = close + 1.0
+        c["low"] = close - 3.0
+        c["close"] = close
+        c["market_condition"] = "CHOPPY"
+        c["trend_direction"] = "UP"
+        c["trend_strength"] = "WEAK"
+        c["orb_status"] = "inside"
+        c["timeframe"] = "15"
+        return c
+
+    day1_dt = datetime(2026, 5, 1, 14, 30, tzinfo=timezone.utc)
+    day1_closes = [19480.0, 19485.0, 19490.0, 19495.0, 19500.0]
+    day1_candles = [
+        _candle(close, day1_dt + timedelta(minutes=15 * i))
+        for i, close in enumerate(day1_closes)
+    ]
+    day1_path = tmp_path / "day1.jsonl"
+    day1_path.write_text("\n".join(json.dumps(c) for c in day1_candles) + "\n")
+
+    day2_dt = datetime(2026, 5, 11, 14, 30, tzinfo=timezone.utc)  # 10 days later
+    day2_path = tmp_path / "day2.jsonl"
+    day2_path.write_text(json.dumps(_candle(19505.0, day2_dt)) + "\n")
+
+    seen_states = []
+    original_evaluate = DecisionEngine.evaluate
+
+    def _spy(self, state, daily_state):
+        seen_states.append(state)
+        return original_evaluate(self, state, daily_state)
+
+    monkeypatch.setattr(DecisionEngine, "evaluate", _spy)
+
+    engine = ReplayEngine(config=config, log_dir=str(tmp_path / "logs"))
+    engine.run_many([day1_path, day2_path])
+
+    assert len(seen_states) == 6
+    day2_state = seen_states[-1]
+    assert day2_state.window_direction is None
+
+
+def test_replay_window_direction_ignores_future_bars_run_out_of_order(
+    config, tmp_path, monkeypatch
+):
+    """A negative day-delta must not pass the age filter. BarHistory.recent
+    only ever walks BACKWARD from the current bar's own date — it can never
+    read a file for a date after the one it's asked about. If a ReplayEngine
+    instance processes a LATER day first (e.g. run_many given files out of
+    order) and an EARLIER day second, the later day's bars sit in
+    _window_direction_bars with a date after the earlier day's current date:
+    (earlier - later).days is negative, and an unbounded `< 3` check treats
+    every negative number as "recent enough" — exactly backwards. The
+    earlier day's only bar must resolve window_direction to None (too few
+    real bars), not "UP" leaked in from the future day run before it."""
+    from datetime import datetime, timedelta, timezone
+
+    from strategy.signal_engine import DecisionEngine
+
+    base = json.loads(Path("data/replay/sample_day_mnq.jsonl").read_text().splitlines()[0])
+
+    def _candle(close: float, ts: datetime) -> dict:
+        c = dict(base)
+        for key in (
+            "current_bar_type", "previous_bar_type", "two_bars_back_type",
+            "strat_sequence", "strat_trigger", "strat_direction",
+            "previous_bar_high", "previous_bar_low",
+        ):
+            c.pop(key, None)
+        c["timestamp"] = ts.isoformat()
+        c["open"] = close - 2.0
+        c["high"] = close + 1.0
+        c["low"] = close - 3.0
+        c["close"] = close
+        c["market_condition"] = "CHOPPY"
+        c["trend_direction"] = "UP"
+        c["trend_strength"] = "WEAK"
+        c["orb_status"] = "inside"
+        c["timeframe"] = "15"
+        return c
+
+    later_dt = datetime(2026, 7, 2, 14, 30, tzinfo=timezone.utc)
+    later_closes = [19480.0, 19485.0, 19490.0, 19495.0, 19500.0]
+    later_candles = [
+        _candle(close, later_dt + timedelta(minutes=15 * i))
+        for i, close in enumerate(later_closes)
+    ]
+    later_path = tmp_path / "later.jsonl"
+    later_path.write_text("\n".join(json.dumps(c) for c in later_candles) + "\n")
+
+    earlier_dt = datetime(2026, 7, 1, 14, 30, tzinfo=timezone.utc)
+    earlier_path = tmp_path / "earlier.jsonl"
+    earlier_path.write_text(json.dumps(_candle(19505.0, earlier_dt)) + "\n")
+
+    seen_states = []
+    original_evaluate = DecisionEngine.evaluate
+
+    def _spy(self, state, daily_state):
+        seen_states.append(state)
+        return original_evaluate(self, state, daily_state)
+
+    monkeypatch.setattr(DecisionEngine, "evaluate", _spy)
+
+    # Run the LATER day first, then the EARLIER day — out of chronological
+    # order, same ReplayEngine instance (as run_many/run_manifest would do
+    # if given misordered paths).
+    engine = ReplayEngine(config=config, log_dir=str(tmp_path / "logs"))
+    engine.run_many([later_path, earlier_path])
+
+    assert len(seen_states) == 6
+    earlier_state = seen_states[-1]
+    assert earlier_state.window_direction is None
+
+
+def test_replay_window_direction_ignores_interleaved_5m_candles(
+    config, tmp_path, monkeypatch
+):
+    """webhook/runner.py only records into BarHistory (and hence
+    window_direction) on the authoritative decision timeframe — a
+    5-minute-trigger or canonical-4HR 5-minute-native bar never reaches that
+    block (`if not five_min_trigger and not four_hr_five_min`). A replay
+    stream with 15m and 5m candles interleaved for the same instrument must
+    reproduce that exclusion: the 5m bars carry wildly different closes here
+    (opposite direction, if they leaked in they would break the 15m uptrend
+    read), so a passing window_direction == "UP" on the final 15m bar proves
+    they were never admitted."""
+    from datetime import datetime, timedelta, timezone
+
+    from strategy.signal_engine import DecisionEngine
+
+    base = json.loads(Path("data/replay/sample_day_mnq.jsonl").read_text().splitlines()[0])
+
+    def _candle(close: float, ts: datetime, timeframe: str) -> dict:
+        c = dict(base)
+        for key in (
+            "current_bar_type", "previous_bar_type", "two_bars_back_type",
+            "strat_sequence", "strat_trigger", "strat_direction",
+            "previous_bar_high", "previous_bar_low",
+        ):
+            c.pop(key, None)
+        c["timestamp"] = ts.isoformat()
+        c["open"] = close - 2.0
+        c["high"] = close + 1.0
+        c["low"] = close - 3.0
+        c["close"] = close
+        c["market_condition"] = "CHOPPY"
+        c["trend_direction"] = "UP"
+        c["trend_strength"] = "WEAK"
+        c["orb_status"] = "inside"
+        c["timeframe"] = timeframe
+        return c
+
+    base_dt = datetime(2026, 5, 23, 14, 30, tzinfo=timezone.utc)
+    fifteen_min_closes = [19480.0, 19485.0, 19490.0, 19495.0, 19500.0, 19505.0]
+    candles = []
+    for i, close in enumerate(fifteen_min_closes):
+        ts = base_dt + timedelta(minutes=15 * i)
+        candles.append(_candle(close, ts, "15"))
+        if i < len(fifteen_min_closes) - 1:
+            # Noise: a 5m context bar between each pair of 15m bars, closing
+            # at a wildly different, opposite-direction price. If it leaked
+            # into window_direction's input, the "UP" read below would break.
+            candles.append(_candle(10000.0, ts + timedelta(minutes=10), "5"))
+
+    replay_path = tmp_path / "interleaved.jsonl"
+    replay_path.write_text("\n".join(json.dumps(c) for c in candles) + "\n")
+
+    seen_states = []
+    original_evaluate = DecisionEngine.evaluate
+
+    def _spy(self, state, daily_state):
+        seen_states.append(state)
+        return original_evaluate(self, state, daily_state)
+
+    monkeypatch.setattr(DecisionEngine, "evaluate", _spy)
+
+    ReplayEngine(config=config, log_dir=str(tmp_path / "logs")).run(
+        replay_path, review_date="2026-05-23",
+    )
+
+    # 6 fifteen-min bars + 5 interleaved five-min bars = 11 states.
+    assert len(seen_states) == 11
+    last_state = seen_states[-1]
+    assert last_state.ohlc.timeframe == "15"
+    assert last_state.window_direction == "UP"
+
+
 def test_one_week_replay_survival_harness(config, tmp_path):
     paths = sorted(Path("data/replay/week").glob("*.jsonl"))
 
