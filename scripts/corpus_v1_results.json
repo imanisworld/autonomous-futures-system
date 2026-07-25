@@ -1,0 +1,2042 @@
+{
+  "meta": {
+    "main_sha": "a5434794e471137af83f6e5886b535fb9e3cfcd5",
+    "instruments": [
+      "MNQ",
+      "MES"
+    ],
+    "range": [
+      "2025-07-24",
+      "2026-07-23"
+    ]
+  },
+  "per_instrument": {
+    "MNQ": {
+      "full_period": {
+        "range": [
+          "2025-07-24",
+          "2026-07-23"
+        ],
+        "all": {
+          "attempts": 420,
+          "wins": 203,
+          "losses": 216,
+          "resolved": 419,
+          "open_with_identity": 1,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.4845,
+          "net_pnl": 36830.55,
+          "expectancy": 87.9
+        },
+        "per_strategy": {
+          "orb_breakout": {
+            "attempts": 68,
+            "wins": 37,
+            "losses": 31,
+            "resolved": 68,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.5441,
+            "net_pnl": 3656.5,
+            "expectancy": 53.77
+          },
+          "orb_reclaim": {
+            "attempts": 263,
+            "wins": 122,
+            "losses": 140,
+            "resolved": 262,
+            "open_with_identity": 1,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.4656,
+            "net_pnl": 28026.75,
+            "expectancy": 106.97
+          },
+          "orb_rejection": {
+            "attempts": 16,
+            "wins": 3,
+            "losses": 13,
+            "resolved": 16,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.1875,
+            "net_pnl": 128.0,
+            "expectancy": 8.0
+          },
+          "pdl_reclaim": {
+            "attempts": 15,
+            "wins": 8,
+            "losses": 7,
+            "resolved": 15,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.5333,
+            "net_pnl": 807.3,
+            "expectancy": 53.82
+          },
+          "vwap_reclaim": {
+            "attempts": 50,
+            "wins": 28,
+            "losses": 22,
+            "resolved": 50,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.56,
+            "net_pnl": 3759.0,
+            "expectancy": 75.18
+          },
+          "vwap_rejection": {
+            "attempts": 8,
+            "wins": 5,
+            "losses": 3,
+            "resolved": 8,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.625,
+            "net_pnl": 453.0,
+            "expectancy": 56.62
+          }
+        },
+        "why_no_trade": {
+          "total": 21932,
+          "by_decision": {
+            "NO_TRADE": 21916,
+            "RISK_REJECTED": 16
+          },
+          "by_failed_gate": {
+            "SIGNAL_BAR_VOLUME_TOO_LOW": 7546,
+            "TREND_STRENGTH_BELOW_REQUIRED": 5620,
+            "ENTRY_DETACHED_FROM_PRICE": 3109,
+            "WEAK_BAR_CLOSE": 2021,
+            "EMA_STACK_NOT_ALIGNED": 1097,
+            "MARKET_CONDITION_NOT_TRENDING": 1084,
+            "MARKET_CONDITION_NOT_TRADABLE": 1027,
+            "EMA_STACK_NOT_ALIGNED_SOFT": 1024,
+            "UNSPECIFIED": 982,
+            "STRAT_DIRECTION_CONFLICT": 290,
+            "STRATEGY_NOT_PAPER_ELIGIBLE": 195,
+            "min_confluence_grade": 15,
+            "max_daily_loss": 1
+          },
+          "by_blocked_strategy": {
+            "no_candidate": 18612,
+            "vwap_hold": 1569,
+            "orb_breakout": 854,
+            "pdh_reclaim": 599,
+            "pdl_reclaim": 146,
+            "orb_rejection": 57,
+            "orb_reclaim": 45,
+            "vwap_reclaim": 31,
+            "vwap_rejection": 19
+          }
+        }
+      },
+      "h1": {
+        "range": [
+          "2025-07-24",
+          "2026-01-23"
+        ],
+        "all": {
+          "attempts": 211,
+          "wins": 96,
+          "losses": 114,
+          "resolved": 210,
+          "open_with_identity": 1,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.4571,
+          "net_pnl": 8255.65,
+          "expectancy": 39.31
+        },
+        "per_strategy": {
+          "orb_breakout": {
+            "attempts": 42,
+            "wins": 25,
+            "losses": 17,
+            "resolved": 42,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.5952,
+            "net_pnl": 2095.0,
+            "expectancy": 49.88
+          },
+          "orb_reclaim": {
+            "attempts": 123,
+            "wins": 52,
+            "losses": 70,
+            "resolved": 122,
+            "open_with_identity": 1,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.4262,
+            "net_pnl": 5297.75,
+            "expectancy": 43.42
+          },
+          "orb_rejection": {
+            "attempts": 6,
+            "wins": 1,
+            "losses": 5,
+            "resolved": 6,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.1667,
+            "net_pnl": 4.0,
+            "expectancy": 0.67
+          },
+          "pdl_reclaim": {
+            "attempts": 4,
+            "wins": 1,
+            "losses": 3,
+            "resolved": 4,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.25,
+            "net_pnl": -29.1,
+            "expectancy": -7.27
+          },
+          "vwap_reclaim": {
+            "attempts": 30,
+            "wins": 13,
+            "losses": 17,
+            "resolved": 30,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.4333,
+            "net_pnl": 558.0,
+            "expectancy": 18.6
+          },
+          "vwap_rejection": {
+            "attempts": 6,
+            "wins": 4,
+            "losses": 2,
+            "resolved": 6,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.6667,
+            "net_pnl": 330.0,
+            "expectancy": 55.0
+          }
+        },
+        "why_no_trade": {
+          "total": 10821,
+          "by_decision": {
+            "NO_TRADE": 10809,
+            "RISK_REJECTED": 12
+          },
+          "by_failed_gate": {
+            "SIGNAL_BAR_VOLUME_TOO_LOW": 3796,
+            "TREND_STRENGTH_BELOW_REQUIRED": 2910,
+            "ENTRY_DETACHED_FROM_PRICE": 1460,
+            "WEAK_BAR_CLOSE": 984,
+            "MARKET_CONDITION_NOT_TRENDING": 552,
+            "EMA_STACK_NOT_ALIGNED": 511,
+            "EMA_STACK_NOT_ALIGNED_SOFT": 462,
+            "UNSPECIFIED": 458,
+            "MARKET_CONDITION_NOT_TRADABLE": 422,
+            "STRAT_DIRECTION_CONFLICT": 132,
+            "STRATEGY_NOT_PAPER_ELIGIBLE": 126,
+            "min_confluence_grade": 12
+          },
+          "by_blocked_strategy": {
+            "no_candidate": 9223,
+            "vwap_hold": 733,
+            "orb_breakout": 434,
+            "pdh_reclaim": 305,
+            "pdl_reclaim": 58,
+            "orb_rejection": 27,
+            "orb_reclaim": 18,
+            "vwap_reclaim": 16,
+            "vwap_rejection": 7
+          }
+        }
+      },
+      "h2": {
+        "range": [
+          "2026-01-24",
+          "2026-07-23"
+        ],
+        "all": {
+          "attempts": 209,
+          "wins": 107,
+          "losses": 102,
+          "resolved": 209,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.512,
+          "net_pnl": 28574.9,
+          "expectancy": 136.72
+        },
+        "per_strategy": {
+          "orb_breakout": {
+            "attempts": 26,
+            "wins": 12,
+            "losses": 14,
+            "resolved": 26,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.4615,
+            "net_pnl": 1561.5,
+            "expectancy": 60.06
+          },
+          "orb_reclaim": {
+            "attempts": 140,
+            "wins": 70,
+            "losses": 70,
+            "resolved": 140,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.5,
+            "net_pnl": 22729.0,
+            "expectancy": 162.35
+          },
+          "orb_rejection": {
+            "attempts": 10,
+            "wins": 2,
+            "losses": 8,
+            "resolved": 10,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2,
+            "net_pnl": 124.0,
+            "expectancy": 12.4
+          },
+          "pdl_reclaim": {
+            "attempts": 11,
+            "wins": 7,
+            "losses": 4,
+            "resolved": 11,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.6364,
+            "net_pnl": 836.4,
+            "expectancy": 76.04
+          },
+          "vwap_reclaim": {
+            "attempts": 20,
+            "wins": 15,
+            "losses": 5,
+            "resolved": 20,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.75,
+            "net_pnl": 3201.0,
+            "expectancy": 160.05
+          },
+          "vwap_rejection": {
+            "attempts": 2,
+            "wins": 1,
+            "losses": 1,
+            "resolved": 2,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.5,
+            "net_pnl": 123.0,
+            "expectancy": 61.5
+          }
+        },
+        "why_no_trade": {
+          "total": 11111,
+          "by_decision": {
+            "NO_TRADE": 11107,
+            "RISK_REJECTED": 4
+          },
+          "by_failed_gate": {
+            "SIGNAL_BAR_VOLUME_TOO_LOW": 3750,
+            "TREND_STRENGTH_BELOW_REQUIRED": 2710,
+            "ENTRY_DETACHED_FROM_PRICE": 1649,
+            "WEAK_BAR_CLOSE": 1037,
+            "MARKET_CONDITION_NOT_TRADABLE": 605,
+            "EMA_STACK_NOT_ALIGNED": 586,
+            "EMA_STACK_NOT_ALIGNED_SOFT": 562,
+            "MARKET_CONDITION_NOT_TRENDING": 532,
+            "UNSPECIFIED": 524,
+            "STRAT_DIRECTION_CONFLICT": 158,
+            "STRATEGY_NOT_PAPER_ELIGIBLE": 69,
+            "min_confluence_grade": 3,
+            "max_daily_loss": 1
+          },
+          "by_blocked_strategy": {
+            "no_candidate": 9389,
+            "vwap_hold": 836,
+            "orb_breakout": 420,
+            "pdh_reclaim": 294,
+            "pdl_reclaim": 88,
+            "orb_rejection": 30,
+            "orb_reclaim": 27,
+            "vwap_reclaim": 15,
+            "vwap_rejection": 12
+          }
+        }
+      },
+      "quarterly": {
+        "Q1": {
+          "range": [
+            "2025-07-24",
+            "2025-10-23"
+          ],
+          "all": {
+            "attempts": 120,
+            "wins": 59,
+            "losses": 61,
+            "resolved": 120,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.4917,
+            "net_pnl": 5067.25,
+            "expectancy": 42.23
+          },
+          "per_strategy": {
+            "orb_breakout": {
+              "attempts": 32,
+              "wins": 19,
+              "losses": 13,
+              "resolved": 32,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.5938,
+              "net_pnl": 1369.0,
+              "expectancy": 42.78
+            },
+            "orb_reclaim": {
+              "attempts": 60,
+              "wins": 30,
+              "losses": 30,
+              "resolved": 60,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.5,
+              "net_pnl": 3456.25,
+              "expectancy": 57.6
+            },
+            "orb_rejection": {
+              "attempts": 5,
+              "wins": 1,
+              "losses": 4,
+              "resolved": 5,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.2,
+              "net_pnl": 24.0,
+              "expectancy": 4.8
+            },
+            "pdl_reclaim": {
+              "attempts": 1,
+              "wins": 0,
+              "losses": 1,
+              "resolved": 1,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.0,
+              "net_pnl": -30.0,
+              "expectancy": -30.0
+            },
+            "vwap_reclaim": {
+              "attempts": 19,
+              "wins": 8,
+              "losses": 11,
+              "resolved": 19,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.4211,
+              "net_pnl": 210.5,
+              "expectancy": 11.08
+            },
+            "vwap_rejection": {
+              "attempts": 3,
+              "wins": 1,
+              "losses": 2,
+              "resolved": 3,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.3333,
+              "net_pnl": 37.5,
+              "expectancy": 12.5
+            }
+          },
+          "why_no_trade": {
+            "total": 5401,
+            "by_decision": {
+              "NO_TRADE": 5393,
+              "RISK_REJECTED": 8
+            },
+            "by_failed_gate": {
+              "SIGNAL_BAR_VOLUME_TOO_LOW": 1967,
+              "TREND_STRENGTH_BELOW_REQUIRED": 1452,
+              "ENTRY_DETACHED_FROM_PRICE": 653,
+              "WEAK_BAR_CLOSE": 504,
+              "MARKET_CONDITION_NOT_TRENDING": 269,
+              "EMA_STACK_NOT_ALIGNED": 247,
+              "UNSPECIFIED": 232,
+              "EMA_STACK_NOT_ALIGNED_SOFT": 228,
+              "MARKET_CONDITION_NOT_TRADABLE": 184,
+              "STRATEGY_NOT_PAPER_ELIGIBLE": 83,
+              "STRAT_DIRECTION_CONFLICT": 63,
+              "min_confluence_grade": 8
+            },
+            "by_blocked_strategy": {
+              "no_candidate": 4657,
+              "vwap_hold": 336,
+              "orb_breakout": 214,
+              "pdh_reclaim": 143,
+              "pdl_reclaim": 22,
+              "orb_rejection": 12,
+              "orb_reclaim": 8,
+              "vwap_reclaim": 6,
+              "vwap_rejection": 3
+            }
+          }
+        },
+        "Q2": {
+          "range": [
+            "2025-10-24",
+            "2026-01-23"
+          ],
+          "all": {
+            "attempts": 91,
+            "wins": 37,
+            "losses": 53,
+            "resolved": 90,
+            "open_with_identity": 1,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.4111,
+            "net_pnl": 3188.4,
+            "expectancy": 35.43
+          },
+          "per_strategy": {
+            "orb_breakout": {
+              "attempts": 10,
+              "wins": 6,
+              "losses": 4,
+              "resolved": 10,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.6,
+              "net_pnl": 726.0,
+              "expectancy": 72.6
+            },
+            "orb_reclaim": {
+              "attempts": 63,
+              "wins": 22,
+              "losses": 40,
+              "resolved": 62,
+              "open_with_identity": 1,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.3548,
+              "net_pnl": 1841.5,
+              "expectancy": 29.7
+            },
+            "orb_rejection": {
+              "attempts": 1,
+              "wins": 0,
+              "losses": 1,
+              "resolved": 1,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.0,
+              "net_pnl": -20.0,
+              "expectancy": -20.0
+            },
+            "pdl_reclaim": {
+              "attempts": 3,
+              "wins": 1,
+              "losses": 2,
+              "resolved": 3,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.3333,
+              "net_pnl": 0.9,
+              "expectancy": 0.3
+            },
+            "vwap_reclaim": {
+              "attempts": 11,
+              "wins": 5,
+              "losses": 6,
+              "resolved": 11,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.4545,
+              "net_pnl": 347.5,
+              "expectancy": 31.59
+            },
+            "vwap_rejection": {
+              "attempts": 3,
+              "wins": 3,
+              "losses": 0,
+              "resolved": 3,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 1.0,
+              "net_pnl": 292.5,
+              "expectancy": 97.5
+            }
+          },
+          "why_no_trade": {
+            "total": 5420,
+            "by_decision": {
+              "NO_TRADE": 5416,
+              "RISK_REJECTED": 4
+            },
+            "by_failed_gate": {
+              "SIGNAL_BAR_VOLUME_TOO_LOW": 1829,
+              "TREND_STRENGTH_BELOW_REQUIRED": 1458,
+              "ENTRY_DETACHED_FROM_PRICE": 807,
+              "WEAK_BAR_CLOSE": 480,
+              "MARKET_CONDITION_NOT_TRENDING": 283,
+              "EMA_STACK_NOT_ALIGNED": 264,
+              "MARKET_CONDITION_NOT_TRADABLE": 238,
+              "EMA_STACK_NOT_ALIGNED_SOFT": 234,
+              "UNSPECIFIED": 226,
+              "STRAT_DIRECTION_CONFLICT": 69,
+              "STRATEGY_NOT_PAPER_ELIGIBLE": 43,
+              "min_confluence_grade": 4
+            },
+            "by_blocked_strategy": {
+              "no_candidate": 4566,
+              "vwap_hold": 397,
+              "orb_breakout": 220,
+              "pdh_reclaim": 162,
+              "pdl_reclaim": 36,
+              "orb_rejection": 15,
+              "vwap_reclaim": 10,
+              "orb_reclaim": 10,
+              "vwap_rejection": 4
+            }
+          }
+        },
+        "Q3": {
+          "range": [
+            "2026-01-24",
+            "2026-04-23"
+          ],
+          "all": {
+            "attempts": 105,
+            "wins": 55,
+            "losses": 50,
+            "resolved": 105,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.5238,
+            "net_pnl": 13423.7,
+            "expectancy": 127.84
+          },
+          "per_strategy": {
+            "orb_breakout": {
+              "attempts": 19,
+              "wins": 9,
+              "losses": 10,
+              "resolved": 19,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.4737,
+              "net_pnl": 1204.5,
+              "expectancy": 63.39
+            },
+            "orb_reclaim": {
+              "attempts": 68,
+              "wins": 34,
+              "losses": 34,
+              "resolved": 68,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.5,
+              "net_pnl": 10093.0,
+              "expectancy": 148.43
+            },
+            "orb_rejection": {
+              "attempts": 2,
+              "wins": 0,
+              "losses": 2,
+              "resolved": 2,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.0,
+              "net_pnl": -50.0,
+              "expectancy": -25.0
+            },
+            "pdl_reclaim": {
+              "attempts": 5,
+              "wins": 3,
+              "losses": 2,
+              "resolved": 5,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.6,
+              "net_pnl": 289.2,
+              "expectancy": 57.84
+            },
+            "vwap_reclaim": {
+              "attempts": 11,
+              "wins": 9,
+              "losses": 2,
+              "resolved": 11,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.8182,
+              "net_pnl": 1887.0,
+              "expectancy": 171.55
+            }
+          },
+          "why_no_trade": {
+            "total": 5484,
+            "by_decision": {
+              "NO_TRADE": 5482,
+              "RISK_REJECTED": 2
+            },
+            "by_failed_gate": {
+              "SIGNAL_BAR_VOLUME_TOO_LOW": 1838,
+              "TREND_STRENGTH_BELOW_REQUIRED": 1397,
+              "ENTRY_DETACHED_FROM_PRICE": 774,
+              "WEAK_BAR_CLOSE": 496,
+              "MARKET_CONDITION_NOT_TRADABLE": 299,
+              "EMA_STACK_NOT_ALIGNED": 294,
+              "EMA_STACK_NOT_ALIGNED_SOFT": 265,
+              "UNSPECIFIED": 264,
+              "MARKET_CONDITION_NOT_TRENDING": 253,
+              "STRAT_DIRECTION_CONFLICT": 76,
+              "STRATEGY_NOT_PAPER_ELIGIBLE": 32,
+              "min_confluence_grade": 2
+            },
+            "by_blocked_strategy": {
+              "no_candidate": 4676,
+              "vwap_hold": 385,
+              "orb_breakout": 204,
+              "pdh_reclaim": 141,
+              "pdl_reclaim": 45,
+              "orb_rejection": 14,
+              "orb_reclaim": 9,
+              "vwap_rejection": 6,
+              "vwap_reclaim": 4
+            }
+          }
+        },
+        "Q4": {
+          "range": [
+            "2026-04-24",
+            "2026-07-23"
+          ],
+          "all": {
+            "attempts": 104,
+            "wins": 52,
+            "losses": 52,
+            "resolved": 104,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.5,
+            "net_pnl": 15151.2,
+            "expectancy": 145.68
+          },
+          "per_strategy": {
+            "orb_breakout": {
+              "attempts": 7,
+              "wins": 3,
+              "losses": 4,
+              "resolved": 7,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.4286,
+              "net_pnl": 357.0,
+              "expectancy": 51.0
+            },
+            "orb_reclaim": {
+              "attempts": 72,
+              "wins": 36,
+              "losses": 36,
+              "resolved": 72,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.5,
+              "net_pnl": 12636.0,
+              "expectancy": 175.5
+            },
+            "orb_rejection": {
+              "attempts": 8,
+              "wins": 2,
+              "losses": 6,
+              "resolved": 8,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.25,
+              "net_pnl": 174.0,
+              "expectancy": 21.75
+            },
+            "pdl_reclaim": {
+              "attempts": 6,
+              "wins": 4,
+              "losses": 2,
+              "resolved": 6,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.6667,
+              "net_pnl": 547.2,
+              "expectancy": 91.2
+            },
+            "vwap_reclaim": {
+              "attempts": 9,
+              "wins": 6,
+              "losses": 3,
+              "resolved": 9,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.6667,
+              "net_pnl": 1314.0,
+              "expectancy": 146.0
+            },
+            "vwap_rejection": {
+              "attempts": 2,
+              "wins": 1,
+              "losses": 1,
+              "resolved": 2,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.5,
+              "net_pnl": 123.0,
+              "expectancy": 61.5
+            }
+          },
+          "why_no_trade": {
+            "total": 5627,
+            "by_decision": {
+              "NO_TRADE": 5625,
+              "RISK_REJECTED": 2
+            },
+            "by_failed_gate": {
+              "SIGNAL_BAR_VOLUME_TOO_LOW": 1912,
+              "TREND_STRENGTH_BELOW_REQUIRED": 1313,
+              "ENTRY_DETACHED_FROM_PRICE": 875,
+              "WEAK_BAR_CLOSE": 541,
+              "MARKET_CONDITION_NOT_TRADABLE": 306,
+              "EMA_STACK_NOT_ALIGNED_SOFT": 297,
+              "EMA_STACK_NOT_ALIGNED": 292,
+              "MARKET_CONDITION_NOT_TRENDING": 279,
+              "UNSPECIFIED": 260,
+              "STRAT_DIRECTION_CONFLICT": 82,
+              "STRATEGY_NOT_PAPER_ELIGIBLE": 37,
+              "max_daily_loss": 1,
+              "min_confluence_grade": 1
+            },
+            "by_blocked_strategy": {
+              "no_candidate": 4713,
+              "vwap_hold": 451,
+              "orb_breakout": 216,
+              "pdh_reclaim": 153,
+              "pdl_reclaim": 43,
+              "orb_reclaim": 18,
+              "orb_rejection": 16,
+              "vwap_reclaim": 11,
+              "vwap_rejection": 6
+            }
+          }
+        }
+      }
+    },
+    "MES": {
+      "full_period": {
+        "range": [
+          "2025-07-24",
+          "2026-07-23"
+        ],
+        "all": {
+          "attempts": 327,
+          "wins": 124,
+          "losses": 181,
+          "resolved": 305,
+          "open_with_identity": 22,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.4066,
+          "net_pnl": 16597.5,
+          "expectancy": 54.42
+        },
+        "per_strategy": {
+          "orb_reclaim": {
+            "attempts": 327,
+            "wins": 124,
+            "losses": 181,
+            "resolved": 305,
+            "open_with_identity": 22,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.4066,
+            "net_pnl": 16597.5,
+            "expectancy": 54.42
+          }
+        },
+        "why_no_trade": {
+          "total": 20286,
+          "by_decision": {
+            "NO_TRADE": 20277,
+            "RISK_REJECTED": 9
+          },
+          "by_failed_gate": {
+            "SIGNAL_BAR_VOLUME_TOO_LOW": 9185,
+            "EMA_STACK_NOT_ALIGNED_SOFT": 2924,
+            "WEAK_BAR_CLOSE": 2304,
+            "UNSPECIFIED": 1731,
+            "STRATEGY_NOT_PAPER_ELIGIBLE": 1690,
+            "TREND_STRENGTH_BELOW_REQUIRED": 1336,
+            "MARKET_CONDITION_NOT_TRENDING": 1053,
+            "EMA_STACK_NOT_ALIGNED": 933,
+            "MARKET_CONDITION_NOT_TRADABLE": 854,
+            "ENTRY_DETACHED_FROM_PRICE": 670,
+            "min_confluence_grade": 9,
+            "STRAT_DIRECTION_CONFLICT": 7
+          },
+          "by_blocked_strategy": {
+            "no_candidate": 17917,
+            "vwap_hold": 2353,
+            "orb_reclaim": 16
+          }
+        }
+      },
+      "h1": {
+        "range": [
+          "2025-07-24",
+          "2026-01-23"
+        ],
+        "all": {
+          "attempts": 162,
+          "wins": 59,
+          "losses": 91,
+          "resolved": 150,
+          "open_with_identity": 12,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.3933,
+          "net_pnl": 3804.38,
+          "expectancy": 25.36
+        },
+        "per_strategy": {
+          "orb_reclaim": {
+            "attempts": 162,
+            "wins": 59,
+            "losses": 91,
+            "resolved": 150,
+            "open_with_identity": 12,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.3933,
+            "net_pnl": 3804.38,
+            "expectancy": 25.36
+          }
+        },
+        "why_no_trade": {
+          "total": 9939,
+          "by_decision": {
+            "NO_TRADE": 9934,
+            "RISK_REJECTED": 5
+          },
+          "by_failed_gate": {
+            "SIGNAL_BAR_VOLUME_TOO_LOW": 4471,
+            "EMA_STACK_NOT_ALIGNED_SOFT": 1458,
+            "WEAK_BAR_CLOSE": 1147,
+            "STRATEGY_NOT_PAPER_ELIGIBLE": 965,
+            "UNSPECIFIED": 826,
+            "TREND_STRENGTH_BELOW_REQUIRED": 688,
+            "MARKET_CONDITION_NOT_TRENDING": 513,
+            "EMA_STACK_NOT_ALIGNED": 444,
+            "MARKET_CONDITION_NOT_TRADABLE": 413,
+            "ENTRY_DETACHED_FROM_PRICE": 251,
+            "min_confluence_grade": 5,
+            "STRAT_DIRECTION_CONFLICT": 2
+          },
+          "by_blocked_strategy": {
+            "no_candidate": 8718,
+            "vwap_hold": 1213,
+            "orb_reclaim": 8
+          }
+        }
+      },
+      "h2": {
+        "range": [
+          "2026-01-24",
+          "2026-07-23"
+        ],
+        "all": {
+          "attempts": 165,
+          "wins": 65,
+          "losses": 90,
+          "resolved": 155,
+          "open_with_identity": 10,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.4194,
+          "net_pnl": 12793.12,
+          "expectancy": 82.54
+        },
+        "per_strategy": {
+          "orb_reclaim": {
+            "attempts": 165,
+            "wins": 65,
+            "losses": 90,
+            "resolved": 155,
+            "open_with_identity": 10,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.4194,
+            "net_pnl": 12793.12,
+            "expectancy": 82.54
+          }
+        },
+        "why_no_trade": {
+          "total": 10347,
+          "by_decision": {
+            "NO_TRADE": 10343,
+            "RISK_REJECTED": 4
+          },
+          "by_failed_gate": {
+            "SIGNAL_BAR_VOLUME_TOO_LOW": 4714,
+            "EMA_STACK_NOT_ALIGNED_SOFT": 1466,
+            "WEAK_BAR_CLOSE": 1157,
+            "UNSPECIFIED": 905,
+            "STRATEGY_NOT_PAPER_ELIGIBLE": 725,
+            "TREND_STRENGTH_BELOW_REQUIRED": 648,
+            "MARKET_CONDITION_NOT_TRENDING": 540,
+            "EMA_STACK_NOT_ALIGNED": 489,
+            "MARKET_CONDITION_NOT_TRADABLE": 441,
+            "ENTRY_DETACHED_FROM_PRICE": 419,
+            "STRAT_DIRECTION_CONFLICT": 5,
+            "min_confluence_grade": 4
+          },
+          "by_blocked_strategy": {
+            "no_candidate": 9199,
+            "vwap_hold": 1140,
+            "orb_reclaim": 8
+          }
+        }
+      },
+      "quarterly": {
+        "Q1": {
+          "range": [
+            "2025-07-24",
+            "2025-10-23"
+          ],
+          "all": {
+            "attempts": 77,
+            "wins": 26,
+            "losses": 45,
+            "resolved": 71,
+            "open_with_identity": 6,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.3662,
+            "net_pnl": 512.51,
+            "expectancy": 7.22
+          },
+          "per_strategy": {
+            "orb_reclaim": {
+              "attempts": 77,
+              "wins": 26,
+              "losses": 45,
+              "resolved": 71,
+              "open_with_identity": 6,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.3662,
+              "net_pnl": 512.51,
+              "expectancy": 7.22
+            }
+          },
+          "why_no_trade": {
+            "total": 5026,
+            "by_decision": {
+              "NO_TRADE": 5023,
+              "RISK_REJECTED": 3
+            },
+            "by_failed_gate": {
+              "SIGNAL_BAR_VOLUME_TOO_LOW": 2282,
+              "EMA_STACK_NOT_ALIGNED_SOFT": 745,
+              "WEAK_BAR_CLOSE": 609,
+              "STRATEGY_NOT_PAPER_ELIGIBLE": 491,
+              "UNSPECIFIED": 414,
+              "TREND_STRENGTH_BELOW_REQUIRED": 368,
+              "MARKET_CONDITION_NOT_TRENDING": 233,
+              "EMA_STACK_NOT_ALIGNED": 221,
+              "MARKET_CONDITION_NOT_TRADABLE": 189,
+              "ENTRY_DETACHED_FROM_PRICE": 123,
+              "min_confluence_grade": 3,
+              "STRAT_DIRECTION_CONFLICT": 2
+            },
+            "by_blocked_strategy": {
+              "no_candidate": 4409,
+              "vwap_hold": 612,
+              "orb_reclaim": 5
+            }
+          }
+        },
+        "Q2": {
+          "range": [
+            "2025-10-24",
+            "2026-01-23"
+          ],
+          "all": {
+            "attempts": 85,
+            "wins": 33,
+            "losses": 46,
+            "resolved": 79,
+            "open_with_identity": 6,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.4177,
+            "net_pnl": 3291.87,
+            "expectancy": 41.67
+          },
+          "per_strategy": {
+            "orb_reclaim": {
+              "attempts": 85,
+              "wins": 33,
+              "losses": 46,
+              "resolved": 79,
+              "open_with_identity": 6,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.4177,
+              "net_pnl": 3291.87,
+              "expectancy": 41.67
+            }
+          },
+          "why_no_trade": {
+            "total": 4913,
+            "by_decision": {
+              "NO_TRADE": 4911,
+              "RISK_REJECTED": 2
+            },
+            "by_failed_gate": {
+              "SIGNAL_BAR_VOLUME_TOO_LOW": 2189,
+              "EMA_STACK_NOT_ALIGNED_SOFT": 713,
+              "WEAK_BAR_CLOSE": 538,
+              "STRATEGY_NOT_PAPER_ELIGIBLE": 474,
+              "UNSPECIFIED": 412,
+              "TREND_STRENGTH_BELOW_REQUIRED": 320,
+              "MARKET_CONDITION_NOT_TRENDING": 280,
+              "MARKET_CONDITION_NOT_TRADABLE": 224,
+              "EMA_STACK_NOT_ALIGNED": 223,
+              "ENTRY_DETACHED_FROM_PRICE": 128,
+              "min_confluence_grade": 2
+            },
+            "by_blocked_strategy": {
+              "no_candidate": 4309,
+              "vwap_hold": 601,
+              "orb_reclaim": 3
+            }
+          }
+        },
+        "Q3": {
+          "range": [
+            "2026-01-24",
+            "2026-04-23"
+          ],
+          "all": {
+            "attempts": 81,
+            "wins": 39,
+            "losses": 38,
+            "resolved": 77,
+            "open_with_identity": 4,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.5065,
+            "net_pnl": 10447.5,
+            "expectancy": 135.68
+          },
+          "per_strategy": {
+            "orb_reclaim": {
+              "attempts": 81,
+              "wins": 39,
+              "losses": 38,
+              "resolved": 77,
+              "open_with_identity": 4,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.5065,
+              "net_pnl": 10447.5,
+              "expectancy": 135.68
+            }
+          },
+          "why_no_trade": {
+            "total": 5192,
+            "by_decision": {
+              "NO_TRADE": 5189,
+              "RISK_REJECTED": 3
+            },
+            "by_failed_gate": {
+              "SIGNAL_BAR_VOLUME_TOO_LOW": 2278,
+              "EMA_STACK_NOT_ALIGNED_SOFT": 774,
+              "WEAK_BAR_CLOSE": 585,
+              "UNSPECIFIED": 459,
+              "STRATEGY_NOT_PAPER_ELIGIBLE": 339,
+              "TREND_STRENGTH_BELOW_REQUIRED": 318,
+              "MARKET_CONDITION_NOT_TRADABLE": 274,
+              "EMA_STACK_NOT_ALIGNED": 259,
+              "ENTRY_DETACHED_FROM_PRICE": 251,
+              "MARKET_CONDITION_NOT_TRENDING": 242,
+              "STRAT_DIRECTION_CONFLICT": 3,
+              "min_confluence_grade": 3
+            },
+            "by_blocked_strategy": {
+              "no_candidate": 4599,
+              "vwap_hold": 588,
+              "orb_reclaim": 5
+            }
+          }
+        },
+        "Q4": {
+          "range": [
+            "2026-04-24",
+            "2026-07-23"
+          ],
+          "all": {
+            "attempts": 84,
+            "wins": 26,
+            "losses": 52,
+            "resolved": 78,
+            "open_with_identity": 6,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.3333,
+            "net_pnl": 2345.62,
+            "expectancy": 30.07
+          },
+          "per_strategy": {
+            "orb_reclaim": {
+              "attempts": 84,
+              "wins": 26,
+              "losses": 52,
+              "resolved": 78,
+              "open_with_identity": 6,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.3333,
+              "net_pnl": 2345.62,
+              "expectancy": 30.07
+            }
+          },
+          "why_no_trade": {
+            "total": 5155,
+            "by_decision": {
+              "NO_TRADE": 5154,
+              "RISK_REJECTED": 1
+            },
+            "by_failed_gate": {
+              "SIGNAL_BAR_VOLUME_TOO_LOW": 2436,
+              "EMA_STACK_NOT_ALIGNED_SOFT": 692,
+              "WEAK_BAR_CLOSE": 572,
+              "UNSPECIFIED": 446,
+              "STRATEGY_NOT_PAPER_ELIGIBLE": 386,
+              "TREND_STRENGTH_BELOW_REQUIRED": 330,
+              "MARKET_CONDITION_NOT_TRENDING": 298,
+              "EMA_STACK_NOT_ALIGNED": 230,
+              "ENTRY_DETACHED_FROM_PRICE": 168,
+              "MARKET_CONDITION_NOT_TRADABLE": 167,
+              "STRAT_DIRECTION_CONFLICT": 2,
+              "min_confluence_grade": 1
+            },
+            "by_blocked_strategy": {
+              "no_candidate": 4600,
+              "vwap_hold": 552,
+              "orb_reclaim": 3
+            }
+          }
+        }
+      }
+    }
+  },
+  "combined": {
+    "full_period": {
+      "range": [
+        "2025-07-24",
+        "2026-07-23"
+      ],
+      "all": {
+        "attempts": 747,
+        "wins": 327,
+        "losses": 397,
+        "resolved": 724,
+        "open_with_identity": 23,
+        "unjoinable_legacy": 0,
+        "win_rate": 0.4517,
+        "net_pnl": 53428.05,
+        "expectancy": 73.8
+      },
+      "per_strategy": {
+        "orb_breakout": {
+          "attempts": 68,
+          "wins": 37,
+          "losses": 31,
+          "resolved": 68,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.5441,
+          "net_pnl": 3656.5,
+          "expectancy": 53.77
+        },
+        "orb_reclaim": {
+          "attempts": 590,
+          "wins": 246,
+          "losses": 321,
+          "resolved": 567,
+          "open_with_identity": 23,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.4339,
+          "net_pnl": 44624.25,
+          "expectancy": 78.7
+        },
+        "orb_rejection": {
+          "attempts": 16,
+          "wins": 3,
+          "losses": 13,
+          "resolved": 16,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.1875,
+          "net_pnl": 128.0,
+          "expectancy": 8.0
+        },
+        "pdl_reclaim": {
+          "attempts": 15,
+          "wins": 8,
+          "losses": 7,
+          "resolved": 15,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.5333,
+          "net_pnl": 807.3,
+          "expectancy": 53.82
+        },
+        "vwap_reclaim": {
+          "attempts": 50,
+          "wins": 28,
+          "losses": 22,
+          "resolved": 50,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.56,
+          "net_pnl": 3759.0,
+          "expectancy": 75.18
+        },
+        "vwap_rejection": {
+          "attempts": 8,
+          "wins": 5,
+          "losses": 3,
+          "resolved": 8,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.625,
+          "net_pnl": 453.0,
+          "expectancy": 56.62
+        }
+      },
+      "why_no_trade": {
+        "total": 42218,
+        "by_decision": {
+          "NO_TRADE": 42193,
+          "RISK_REJECTED": 25
+        },
+        "by_failed_gate": {
+          "SIGNAL_BAR_VOLUME_TOO_LOW": 16731,
+          "TREND_STRENGTH_BELOW_REQUIRED": 6956,
+          "WEAK_BAR_CLOSE": 4325,
+          "EMA_STACK_NOT_ALIGNED_SOFT": 3948,
+          "ENTRY_DETACHED_FROM_PRICE": 3779,
+          "UNSPECIFIED": 2713,
+          "MARKET_CONDITION_NOT_TRENDING": 2137,
+          "EMA_STACK_NOT_ALIGNED": 2030,
+          "STRATEGY_NOT_PAPER_ELIGIBLE": 1885,
+          "MARKET_CONDITION_NOT_TRADABLE": 1881,
+          "STRAT_DIRECTION_CONFLICT": 297,
+          "min_confluence_grade": 24,
+          "max_daily_loss": 1
+        },
+        "by_blocked_strategy": {
+          "no_candidate": 36529,
+          "vwap_hold": 3922,
+          "orb_breakout": 854,
+          "pdh_reclaim": 599,
+          "pdl_reclaim": 146,
+          "orb_reclaim": 61,
+          "orb_rejection": 57,
+          "vwap_reclaim": 31,
+          "vwap_rejection": 19
+        }
+      }
+    },
+    "h1": {
+      "range": [
+        "2025-07-24",
+        "2026-01-23"
+      ],
+      "all": {
+        "attempts": 373,
+        "wins": 155,
+        "losses": 205,
+        "resolved": 360,
+        "open_with_identity": 13,
+        "unjoinable_legacy": 0,
+        "win_rate": 0.4306,
+        "net_pnl": 12060.03,
+        "expectancy": 33.5
+      },
+      "per_strategy": {
+        "orb_breakout": {
+          "attempts": 42,
+          "wins": 25,
+          "losses": 17,
+          "resolved": 42,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.5952,
+          "net_pnl": 2095.0,
+          "expectancy": 49.88
+        },
+        "orb_reclaim": {
+          "attempts": 285,
+          "wins": 111,
+          "losses": 161,
+          "resolved": 272,
+          "open_with_identity": 13,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.4081,
+          "net_pnl": 9102.13,
+          "expectancy": 33.46
+        },
+        "orb_rejection": {
+          "attempts": 6,
+          "wins": 1,
+          "losses": 5,
+          "resolved": 6,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.1667,
+          "net_pnl": 4.0,
+          "expectancy": 0.67
+        },
+        "pdl_reclaim": {
+          "attempts": 4,
+          "wins": 1,
+          "losses": 3,
+          "resolved": 4,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.25,
+          "net_pnl": -29.1,
+          "expectancy": -7.27
+        },
+        "vwap_reclaim": {
+          "attempts": 30,
+          "wins": 13,
+          "losses": 17,
+          "resolved": 30,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.4333,
+          "net_pnl": 558.0,
+          "expectancy": 18.6
+        },
+        "vwap_rejection": {
+          "attempts": 6,
+          "wins": 4,
+          "losses": 2,
+          "resolved": 6,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.6667,
+          "net_pnl": 330.0,
+          "expectancy": 55.0
+        }
+      },
+      "why_no_trade": {
+        "total": 20760,
+        "by_decision": {
+          "NO_TRADE": 20743,
+          "RISK_REJECTED": 17
+        },
+        "by_failed_gate": {
+          "SIGNAL_BAR_VOLUME_TOO_LOW": 8267,
+          "TREND_STRENGTH_BELOW_REQUIRED": 3598,
+          "WEAK_BAR_CLOSE": 2131,
+          "EMA_STACK_NOT_ALIGNED_SOFT": 1920,
+          "ENTRY_DETACHED_FROM_PRICE": 1711,
+          "UNSPECIFIED": 1284,
+          "STRATEGY_NOT_PAPER_ELIGIBLE": 1091,
+          "MARKET_CONDITION_NOT_TRENDING": 1065,
+          "EMA_STACK_NOT_ALIGNED": 955,
+          "MARKET_CONDITION_NOT_TRADABLE": 835,
+          "STRAT_DIRECTION_CONFLICT": 134,
+          "min_confluence_grade": 17
+        },
+        "by_blocked_strategy": {
+          "no_candidate": 17941,
+          "vwap_hold": 1946,
+          "orb_breakout": 434,
+          "pdh_reclaim": 305,
+          "pdl_reclaim": 58,
+          "orb_rejection": 27,
+          "orb_reclaim": 26,
+          "vwap_reclaim": 16,
+          "vwap_rejection": 7
+        }
+      }
+    },
+    "h2": {
+      "range": [
+        "2026-01-24",
+        "2026-07-23"
+      ],
+      "all": {
+        "attempts": 374,
+        "wins": 172,
+        "losses": 192,
+        "resolved": 364,
+        "open_with_identity": 10,
+        "unjoinable_legacy": 0,
+        "win_rate": 0.4725,
+        "net_pnl": 41368.02,
+        "expectancy": 113.65
+      },
+      "per_strategy": {
+        "orb_breakout": {
+          "attempts": 26,
+          "wins": 12,
+          "losses": 14,
+          "resolved": 26,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.4615,
+          "net_pnl": 1561.5,
+          "expectancy": 60.06
+        },
+        "orb_reclaim": {
+          "attempts": 305,
+          "wins": 135,
+          "losses": 160,
+          "resolved": 295,
+          "open_with_identity": 10,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.4576,
+          "net_pnl": 35522.12,
+          "expectancy": 120.41
+        },
+        "orb_rejection": {
+          "attempts": 10,
+          "wins": 2,
+          "losses": 8,
+          "resolved": 10,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.2,
+          "net_pnl": 124.0,
+          "expectancy": 12.4
+        },
+        "pdl_reclaim": {
+          "attempts": 11,
+          "wins": 7,
+          "losses": 4,
+          "resolved": 11,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.6364,
+          "net_pnl": 836.4,
+          "expectancy": 76.04
+        },
+        "vwap_reclaim": {
+          "attempts": 20,
+          "wins": 15,
+          "losses": 5,
+          "resolved": 20,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.75,
+          "net_pnl": 3201.0,
+          "expectancy": 160.05
+        },
+        "vwap_rejection": {
+          "attempts": 2,
+          "wins": 1,
+          "losses": 1,
+          "resolved": 2,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.5,
+          "net_pnl": 123.0,
+          "expectancy": 61.5
+        }
+      },
+      "why_no_trade": {
+        "total": 21458,
+        "by_decision": {
+          "NO_TRADE": 21450,
+          "RISK_REJECTED": 8
+        },
+        "by_failed_gate": {
+          "SIGNAL_BAR_VOLUME_TOO_LOW": 8464,
+          "TREND_STRENGTH_BELOW_REQUIRED": 3358,
+          "WEAK_BAR_CLOSE": 2194,
+          "ENTRY_DETACHED_FROM_PRICE": 2068,
+          "EMA_STACK_NOT_ALIGNED_SOFT": 2028,
+          "UNSPECIFIED": 1429,
+          "EMA_STACK_NOT_ALIGNED": 1075,
+          "MARKET_CONDITION_NOT_TRENDING": 1072,
+          "MARKET_CONDITION_NOT_TRADABLE": 1046,
+          "STRATEGY_NOT_PAPER_ELIGIBLE": 794,
+          "STRAT_DIRECTION_CONFLICT": 163,
+          "min_confluence_grade": 7,
+          "max_daily_loss": 1
+        },
+        "by_blocked_strategy": {
+          "no_candidate": 18588,
+          "vwap_hold": 1976,
+          "orb_breakout": 420,
+          "pdh_reclaim": 294,
+          "pdl_reclaim": 88,
+          "orb_reclaim": 35,
+          "orb_rejection": 30,
+          "vwap_reclaim": 15,
+          "vwap_rejection": 12
+        }
+      }
+    },
+    "quarterly": {
+      "Q1": {
+        "range": [
+          "2025-07-24",
+          "2025-10-23"
+        ],
+        "all": {
+          "attempts": 197,
+          "wins": 85,
+          "losses": 106,
+          "resolved": 191,
+          "open_with_identity": 6,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.445,
+          "net_pnl": 5579.76,
+          "expectancy": 29.21
+        },
+        "per_strategy": {
+          "orb_breakout": {
+            "attempts": 32,
+            "wins": 19,
+            "losses": 13,
+            "resolved": 32,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.5938,
+            "net_pnl": 1369.0,
+            "expectancy": 42.78
+          },
+          "orb_reclaim": {
+            "attempts": 137,
+            "wins": 56,
+            "losses": 75,
+            "resolved": 131,
+            "open_with_identity": 6,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.4275,
+            "net_pnl": 3968.76,
+            "expectancy": 30.3
+          },
+          "orb_rejection": {
+            "attempts": 5,
+            "wins": 1,
+            "losses": 4,
+            "resolved": 5,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2,
+            "net_pnl": 24.0,
+            "expectancy": 4.8
+          },
+          "pdl_reclaim": {
+            "attempts": 1,
+            "wins": 0,
+            "losses": 1,
+            "resolved": 1,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.0,
+            "net_pnl": -30.0,
+            "expectancy": -30.0
+          },
+          "vwap_reclaim": {
+            "attempts": 19,
+            "wins": 8,
+            "losses": 11,
+            "resolved": 19,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.4211,
+            "net_pnl": 210.5,
+            "expectancy": 11.08
+          },
+          "vwap_rejection": {
+            "attempts": 3,
+            "wins": 1,
+            "losses": 2,
+            "resolved": 3,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.3333,
+            "net_pnl": 37.5,
+            "expectancy": 12.5
+          }
+        },
+        "why_no_trade": {
+          "total": 10427,
+          "by_decision": {
+            "NO_TRADE": 10416,
+            "RISK_REJECTED": 11
+          },
+          "by_failed_gate": {
+            "SIGNAL_BAR_VOLUME_TOO_LOW": 4249,
+            "TREND_STRENGTH_BELOW_REQUIRED": 1820,
+            "WEAK_BAR_CLOSE": 1113,
+            "EMA_STACK_NOT_ALIGNED_SOFT": 973,
+            "ENTRY_DETACHED_FROM_PRICE": 776,
+            "UNSPECIFIED": 646,
+            "STRATEGY_NOT_PAPER_ELIGIBLE": 574,
+            "MARKET_CONDITION_NOT_TRENDING": 502,
+            "EMA_STACK_NOT_ALIGNED": 468,
+            "MARKET_CONDITION_NOT_TRADABLE": 373,
+            "STRAT_DIRECTION_CONFLICT": 65,
+            "min_confluence_grade": 11
+          },
+          "by_blocked_strategy": {
+            "no_candidate": 9066,
+            "vwap_hold": 948,
+            "orb_breakout": 214,
+            "pdh_reclaim": 143,
+            "pdl_reclaim": 22,
+            "orb_reclaim": 13,
+            "orb_rejection": 12,
+            "vwap_reclaim": 6,
+            "vwap_rejection": 3
+          }
+        }
+      },
+      "Q2": {
+        "range": [
+          "2025-10-24",
+          "2026-01-23"
+        ],
+        "all": {
+          "attempts": 176,
+          "wins": 70,
+          "losses": 99,
+          "resolved": 169,
+          "open_with_identity": 7,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.4142,
+          "net_pnl": 6480.27,
+          "expectancy": 38.34
+        },
+        "per_strategy": {
+          "orb_breakout": {
+            "attempts": 10,
+            "wins": 6,
+            "losses": 4,
+            "resolved": 10,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.6,
+            "net_pnl": 726.0,
+            "expectancy": 72.6
+          },
+          "orb_reclaim": {
+            "attempts": 148,
+            "wins": 55,
+            "losses": 86,
+            "resolved": 141,
+            "open_with_identity": 7,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.3901,
+            "net_pnl": 5133.37,
+            "expectancy": 36.41
+          },
+          "orb_rejection": {
+            "attempts": 1,
+            "wins": 0,
+            "losses": 1,
+            "resolved": 1,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.0,
+            "net_pnl": -20.0,
+            "expectancy": -20.0
+          },
+          "pdl_reclaim": {
+            "attempts": 3,
+            "wins": 1,
+            "losses": 2,
+            "resolved": 3,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.3333,
+            "net_pnl": 0.9,
+            "expectancy": 0.3
+          },
+          "vwap_reclaim": {
+            "attempts": 11,
+            "wins": 5,
+            "losses": 6,
+            "resolved": 11,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.4545,
+            "net_pnl": 347.5,
+            "expectancy": 31.59
+          },
+          "vwap_rejection": {
+            "attempts": 3,
+            "wins": 3,
+            "losses": 0,
+            "resolved": 3,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 1.0,
+            "net_pnl": 292.5,
+            "expectancy": 97.5
+          }
+        },
+        "why_no_trade": {
+          "total": 10333,
+          "by_decision": {
+            "NO_TRADE": 10327,
+            "RISK_REJECTED": 6
+          },
+          "by_failed_gate": {
+            "SIGNAL_BAR_VOLUME_TOO_LOW": 4018,
+            "TREND_STRENGTH_BELOW_REQUIRED": 1778,
+            "WEAK_BAR_CLOSE": 1018,
+            "EMA_STACK_NOT_ALIGNED_SOFT": 947,
+            "ENTRY_DETACHED_FROM_PRICE": 935,
+            "UNSPECIFIED": 638,
+            "MARKET_CONDITION_NOT_TRENDING": 563,
+            "STRATEGY_NOT_PAPER_ELIGIBLE": 517,
+            "EMA_STACK_NOT_ALIGNED": 487,
+            "MARKET_CONDITION_NOT_TRADABLE": 462,
+            "STRAT_DIRECTION_CONFLICT": 69,
+            "min_confluence_grade": 6
+          },
+          "by_blocked_strategy": {
+            "no_candidate": 8875,
+            "vwap_hold": 998,
+            "orb_breakout": 220,
+            "pdh_reclaim": 162,
+            "pdl_reclaim": 36,
+            "orb_rejection": 15,
+            "orb_reclaim": 13,
+            "vwap_reclaim": 10,
+            "vwap_rejection": 4
+          }
+        }
+      },
+      "Q3": {
+        "range": [
+          "2026-01-24",
+          "2026-04-23"
+        ],
+        "all": {
+          "attempts": 186,
+          "wins": 94,
+          "losses": 88,
+          "resolved": 182,
+          "open_with_identity": 4,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.5165,
+          "net_pnl": 23871.2,
+          "expectancy": 131.16
+        },
+        "per_strategy": {
+          "orb_breakout": {
+            "attempts": 19,
+            "wins": 9,
+            "losses": 10,
+            "resolved": 19,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.4737,
+            "net_pnl": 1204.5,
+            "expectancy": 63.39
+          },
+          "orb_reclaim": {
+            "attempts": 149,
+            "wins": 73,
+            "losses": 72,
+            "resolved": 145,
+            "open_with_identity": 4,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.5034,
+            "net_pnl": 20540.5,
+            "expectancy": 141.66
+          },
+          "orb_rejection": {
+            "attempts": 2,
+            "wins": 0,
+            "losses": 2,
+            "resolved": 2,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.0,
+            "net_pnl": -50.0,
+            "expectancy": -25.0
+          },
+          "pdl_reclaim": {
+            "attempts": 5,
+            "wins": 3,
+            "losses": 2,
+            "resolved": 5,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.6,
+            "net_pnl": 289.2,
+            "expectancy": 57.84
+          },
+          "vwap_reclaim": {
+            "attempts": 11,
+            "wins": 9,
+            "losses": 2,
+            "resolved": 11,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.8182,
+            "net_pnl": 1887.0,
+            "expectancy": 171.55
+          }
+        },
+        "why_no_trade": {
+          "total": 10676,
+          "by_decision": {
+            "NO_TRADE": 10671,
+            "RISK_REJECTED": 5
+          },
+          "by_failed_gate": {
+            "SIGNAL_BAR_VOLUME_TOO_LOW": 4116,
+            "TREND_STRENGTH_BELOW_REQUIRED": 1715,
+            "WEAK_BAR_CLOSE": 1081,
+            "EMA_STACK_NOT_ALIGNED_SOFT": 1039,
+            "ENTRY_DETACHED_FROM_PRICE": 1025,
+            "UNSPECIFIED": 723,
+            "MARKET_CONDITION_NOT_TRADABLE": 573,
+            "EMA_STACK_NOT_ALIGNED": 553,
+            "MARKET_CONDITION_NOT_TRENDING": 495,
+            "STRATEGY_NOT_PAPER_ELIGIBLE": 371,
+            "STRAT_DIRECTION_CONFLICT": 79,
+            "min_confluence_grade": 5
+          },
+          "by_blocked_strategy": {
+            "no_candidate": 9275,
+            "vwap_hold": 973,
+            "orb_breakout": 204,
+            "pdh_reclaim": 141,
+            "pdl_reclaim": 45,
+            "orb_rejection": 14,
+            "orb_reclaim": 14,
+            "vwap_rejection": 6,
+            "vwap_reclaim": 4
+          }
+        }
+      },
+      "Q4": {
+        "range": [
+          "2026-04-24",
+          "2026-07-23"
+        ],
+        "all": {
+          "attempts": 188,
+          "wins": 78,
+          "losses": 104,
+          "resolved": 182,
+          "open_with_identity": 6,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.4286,
+          "net_pnl": 17496.82,
+          "expectancy": 96.14
+        },
+        "per_strategy": {
+          "orb_breakout": {
+            "attempts": 7,
+            "wins": 3,
+            "losses": 4,
+            "resolved": 7,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.4286,
+            "net_pnl": 357.0,
+            "expectancy": 51.0
+          },
+          "orb_reclaim": {
+            "attempts": 156,
+            "wins": 62,
+            "losses": 88,
+            "resolved": 150,
+            "open_with_identity": 6,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.4133,
+            "net_pnl": 14981.62,
+            "expectancy": 99.88
+          },
+          "orb_rejection": {
+            "attempts": 8,
+            "wins": 2,
+            "losses": 6,
+            "resolved": 8,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.25,
+            "net_pnl": 174.0,
+            "expectancy": 21.75
+          },
+          "pdl_reclaim": {
+            "attempts": 6,
+            "wins": 4,
+            "losses": 2,
+            "resolved": 6,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.6667,
+            "net_pnl": 547.2,
+            "expectancy": 91.2
+          },
+          "vwap_reclaim": {
+            "attempts": 9,
+            "wins": 6,
+            "losses": 3,
+            "resolved": 9,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.6667,
+            "net_pnl": 1314.0,
+            "expectancy": 146.0
+          },
+          "vwap_rejection": {
+            "attempts": 2,
+            "wins": 1,
+            "losses": 1,
+            "resolved": 2,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.5,
+            "net_pnl": 123.0,
+            "expectancy": 61.5
+          }
+        },
+        "why_no_trade": {
+          "total": 10782,
+          "by_decision": {
+            "NO_TRADE": 10779,
+            "RISK_REJECTED": 3
+          },
+          "by_failed_gate": {
+            "SIGNAL_BAR_VOLUME_TOO_LOW": 4348,
+            "TREND_STRENGTH_BELOW_REQUIRED": 1643,
+            "WEAK_BAR_CLOSE": 1113,
+            "ENTRY_DETACHED_FROM_PRICE": 1043,
+            "EMA_STACK_NOT_ALIGNED_SOFT": 989,
+            "UNSPECIFIED": 706,
+            "MARKET_CONDITION_NOT_TRENDING": 577,
+            "EMA_STACK_NOT_ALIGNED": 522,
+            "MARKET_CONDITION_NOT_TRADABLE": 473,
+            "STRATEGY_NOT_PAPER_ELIGIBLE": 423,
+            "STRAT_DIRECTION_CONFLICT": 84,
+            "min_confluence_grade": 2,
+            "max_daily_loss": 1
+          },
+          "by_blocked_strategy": {
+            "no_candidate": 9313,
+            "vwap_hold": 1003,
+            "orb_breakout": 216,
+            "pdh_reclaim": 153,
+            "pdl_reclaim": 43,
+            "orb_reclaim": 21,
+            "orb_rejection": 16,
+            "vwap_reclaim": 11,
+            "vwap_rejection": 6
+          }
+        }
+      }
+    }
+  },
+  "raw_trade_count": 747,
+  "raw_no_trade_count": 42218
+}
