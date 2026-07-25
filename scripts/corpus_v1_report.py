@@ -3,7 +3,7 @@
 scripts/corpus_v1_report.py
 
 Aggregates the "Corpus v1 clean baseline" replay evidence run (MNQ + MES,
-2025-07-24 -> 2026-07-23, replayed at main@6628946 with the current
+2025-07-24 -> 2026-07-23, replayed at main@a543479 with the current
 production config -- realistic stop-first same-bar fills, commissions +
 slippage included, strategy_status gate applied as-is, no strategy changes).
 See memory/project_corpus_v1_clean_baseline_scope.md for the authorized
@@ -21,18 +21,20 @@ Emits:
 
 Trade pairing reuses adaptive.journal_reader.JournalReader._trades_for_day --
 the same exact-paper_order_id identity join #327 fixed for the live journal
-path, no FIFO fallback -- rather than maintaining an independent parser.
-An earlier version of this script paired approved TRADE decisions against
+path, no FIFO fallback -- rather than maintaining an independent parser. An
+earlier version of this script paired approved TRADE decisions against
 type=OUTCOME rows via a positional per-instrument FIFO queue, reintroducing
-the pre-#327 defect. Applying the identity join here proved the existing
-Corpus v1 journals carry no usable identity at all: replay/replay_engine.py
-never forwards the paper_order_id its own PaperBroker Fill objects already
-carry into journal.log_decision()/log_outcome(), so paper_order_id is None
-on every TRADE and OUTCOME row this run produced. Every trade below is
-therefore reported as unjoinable_legacy -- the honest result of a fail-closed
-join against journals that do not carry the identity, not a bug in this
-script. See memory/project_corpus_v1_clean_baseline_scope.md for the
-authorized scope this reproduces.
+the pre-#327 defect. Applying the identity join here first proved the then-
+current Corpus v1 journals carried no usable identity at all (PR #332 traced
+the root cause to replay/replay_engine.py never forwarding paper_order_id
+into the journal) -- every trade reported unjoinable_legacy, the honest
+result of a fail-closed join against journals that didn't carry the
+identity. PR #332 fixed replay_engine.py itself and this corpus was
+regenerated end to end (fresh replay run, same already-downloaded candle
+data, no new Polygon pull) at main@a543479; every trade below now resolves
+with a real, verified paper_order_id -- 0 unjoinable across both
+instruments. See memory/project_corpus_v1_clean_baseline_scope.md and
+memory/project_replay_identity_propagation_pr332.md for the full trace.
 """
 
 from __future__ import annotations
@@ -223,7 +225,7 @@ def main() -> int:
 
     results = {
         "meta": {
-            "main_sha": "662894654a9edaf2ae66673a34f340966245bc73",
+            "main_sha": "a5434794e471137af83f6e5886b535fb9e3cfcd5",
             "instruments": list(INSTRUMENTS),
             "range": [FULL_START, FULL_END],
         },
