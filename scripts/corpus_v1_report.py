@@ -15,20 +15,38 @@ Expects instrument journals under:
 
 Emits:
     scripts/corpus_v1_results.json     full machine-readable results
-    scripts/corpus_v1_raw_trades.jsonl one line per approved/resolved trade
+    scripts/corpus_v1_raw_trades.jsonl one line per trade (resolved, open, or
+                                        unjoinable_legacy -- see below)
     markdown summary tables on stdout
 
-Trade pairing mirrors run_replay_batch._strategy_breakdown and
-ioc_baseline_622d_analysis._load_trades: approved TRADE decision rows are
-matched FIFO against type=OUTCOME rows within each day.
+Trade pairing reuses adaptive.journal_reader.JournalReader._trades_for_day --
+the same exact-paper_order_id identity join #327 fixed for the live journal
+path, no FIFO fallback -- rather than maintaining an independent parser.
+An earlier version of this script paired approved TRADE decisions against
+type=OUTCOME rows via a positional per-instrument FIFO queue, reintroducing
+the pre-#327 defect. Applying the identity join here proved the existing
+Corpus v1 journals carry no usable identity at all: replay/replay_engine.py
+never forwards the paper_order_id its own PaperBroker Fill objects already
+carry into journal.log_decision()/log_outcome(), so paper_order_id is None
+on every TRADE and OUTCOME row this run produced. Every trade below is
+therefore reported as unjoinable_legacy -- the honest result of a fail-closed
+join against journals that do not carry the identity, not a bug in this
+script. See memory/project_corpus_v1_clean_baseline_scope.md for the
+authorized scope this reproduces.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import sys
 from collections import defaultdict
 from pathlib import Path
+from datetime import date as _date
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from adaptive.journal_reader import JournalReader  # noqa: E402
 
 INSTRUMENTS = ("MNQ", "MES")
 
@@ -56,31 +74,24 @@ def _load_journal_entries(log_dir: Path) -> list[dict]:
     return entries
 
 
-def _load_trades(entries: list[dict]) -> list[dict]:
-    by_date: dict[str, list[dict]] = defaultdict(list)
-    for e in entries:
-        by_date[e["_date"]].append(e)
-
+def _load_trades(log_dir: Path) -> list[dict]:
+    """Approved trades for every day file in log_dir, via JournalReader's
+    exact-paper_order_id identity join (#327) -- no FIFO fallback. A TRADE
+    row with no paper_order_id at all is reported unjoinable_legacy, never
+    guessed onto an unrelated OUTCOME row."""
+    reader = JournalReader(log_dir)
     trades: list[dict] = []
-    for date, day_entries in sorted(by_date.items()):
-        outcome_map: dict[str, list[dict]] = defaultdict(list)
-        for e in day_entries:
-            if e.get("type") == "OUTCOME":
-                outcome_map[e.get("instrument", "")].append(e)
-        for e in day_entries:
-            rc = e.get("risk_check") or {}
-            if e.get("decision") == "TRADE" and rc.get("result") == "APPROVED":
-                instr = e.get("instrument", "")
-                out = outcome_map[instr].pop(0) if outcome_map[instr] else None
-                oc = (out or {}).get("outcome") or {}
-                trades.append({
-                    "date": date,
-                    "instrument": instr,
-                    "strategy": (e.get("setup") or {}).get("strategy", "unknown"),
-                    "result": oc.get("result"),
-                    "exit_reason": oc.get("exit_reason"),
-                    "pnl": float(oc["pnl_dollars"]) if oc.get("pnl_dollars") is not None else None,
-                })
+    for path in sorted(log_dir.glob("journal_*.jsonl")):
+        day = _date.fromisoformat(path.stem.replace("journal_", ""))
+        for record in reader._trades_for_day(day):
+            trades.append({
+                "date": record.date,
+                "instrument": record.instrument,
+                "strategy": record.strategy,
+                "result": record.result,
+                "pnl": record.pnl_dollars,
+                "unjoinable_legacy": record.unjoinable_legacy,
+            })
     return trades
 
 
@@ -111,13 +122,21 @@ def _stats(trades: list[dict]) -> dict:
     wins = sum(1 for t in trades if t["result"] == "WIN")
     losses = sum(1 for t in trades if t["result"] == "LOSS")
     resolved = wins + losses
+    unjoinable = sum(1 for t in trades if t["unjoinable_legacy"])
+    # Genuinely still open: carried a real paper_order_id but no OUTCOME row
+    # has arrived yet. Distinct from unjoinable -- this bucket is expected to
+    # be a handful of trades at most (the run's tail end), never the bulk.
+    open_with_identity = sum(
+        1 for t in trades if not t["unjoinable_legacy"] and t["result"] is None
+    )
     pnl = sum(t["pnl"] or 0.0 for t in trades)
     return {
         "attempts": attempts,
         "wins": wins,
         "losses": losses,
         "resolved": resolved,
-        "open": attempts - resolved,
+        "open_with_identity": open_with_identity,
+        "unjoinable_legacy": unjoinable,
         "win_rate": round(wins / resolved, 4) if resolved else None,
         "net_pnl": round(pnl, 2),
         "expectancy": round(pnl / resolved, 2) if resolved else None,
@@ -196,7 +215,7 @@ def main() -> int:
             print(f"[corpus_v1] MISSING log dir: {log_dir}")
             continue
         entries = _load_journal_entries(log_dir)
-        trades = _load_trades(entries)
+        trades = _load_trades(log_dir)
         no_trade_rows = _load_no_trade(entries)
         all_trades.extend(trades)
         all_no_trade.extend(no_trade_rows)
@@ -224,16 +243,16 @@ def main() -> int:
     print(f"[corpus_v1] wrote {raw_path}")
 
     print("\n=== FULL PERIOD (2025-07-24 -> 2026-07-23) ===")
-    print("| Instrument | Attempts | Resolved | WR | Net P&L | Expectancy |")
-    print("|---|---:|---:|---:|---:|---:|")
+    print("| Instrument | Attempts | Resolved | Unjoinable | WR | Net P&L | Expectancy |")
+    print("|---|---:|---:|---:|---:|---:|---:|")
     for instr in INSTRUMENTS:
         a = per_instrument.get(instr, {}).get("full_period", {}).get("all", {})
         if a:
-            print(f"| {instr} | {a['attempts']} | {a['resolved']} | {_fmt(a['win_rate'])} "
-                  f"| {_fmt(a['net_pnl'], True)} | {_fmt(a['expectancy'], True)} |")
+            print(f"| {instr} | {a['attempts']} | {a['resolved']} | {a['unjoinable_legacy']} "
+                  f"| {_fmt(a['win_rate'])} | {_fmt(a['net_pnl'], True)} | {_fmt(a['expectancy'], True)} |")
     ac = results["combined"]["full_period"]["all"]
-    print(f"| COMBINED | {ac['attempts']} | {ac['resolved']} | {_fmt(ac['win_rate'])} "
-          f"| {_fmt(ac['net_pnl'], True)} | {_fmt(ac['expectancy'], True)} |")
+    print(f"| COMBINED | {ac['attempts']} | {ac['resolved']} | {ac['unjoinable_legacy']} "
+          f"| {_fmt(ac['win_rate'])} | {_fmt(ac['net_pnl'], True)} | {_fmt(ac['expectancy'], True)} |")
 
     print("\n=== H1 vs H2 (combined) ===")
     print("| Half | Attempts | Resolved | WR | Net P&L |")
@@ -253,12 +272,12 @@ def main() -> int:
         print(f"| {label} | {qstart}..{qend} | {a['attempts']} | {a['resolved']} | {_fmt(a['win_rate'])} | {_fmt(a['net_pnl'], True)} |")
 
     print("\n=== Per-strategy (full period, combined) ===")
-    print("| Strategy | Attempts | Resolved | WR | Net P&L | Expectancy |")
-    print("|---|---:|---:|---:|---:|---:|")
+    print("| Strategy | Attempts | Resolved | Unjoinable | WR | Net P&L | Expectancy |")
+    print("|---|---:|---:|---:|---:|---:|---:|")
     per_strat = results["combined"]["full_period"]["per_strategy"]
     for strat, s in sorted(per_strat.items(), key=lambda x: -x[1]["attempts"]):
-        print(f"| {strat} | {s['attempts']} | {s['resolved']} | {_fmt(s['win_rate'])} "
-              f"| {_fmt(s['net_pnl'], True)} | {_fmt(s['expectancy'], True)} |")
+        print(f"| {strat} | {s['attempts']} | {s['resolved']} | {s['unjoinable_legacy']} "
+              f"| {_fmt(s['win_rate'])} | {_fmt(s['net_pnl'], True)} | {_fmt(s['expectancy'], True)} |")
 
     print("\n=== Why-no-trade (full period, combined, top gates) ===")
     wnt = results["combined"]["full_period"]["why_no_trade"]
