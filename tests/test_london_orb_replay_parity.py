@@ -133,6 +133,64 @@ def test_london_transition_states_use_shared_status_helper(
     assert candle["london_orb_status"] == expected
 
 
+def test_missing_exact_london_open_bar_resets_on_fallback_and_ny_unaffected():
+    """M-05: deleting only the exact London open bar must not disturb NY's
+    independent session-transition reset, and London itself must still
+    reset (on the next available in-session bar) rather than never resetting."""
+    london_open_ts = int(datetime(2026, 6, 9, 3, 0, tzinfo=ET).timestamp())
+    bars = [b for b in _polygon_bars() if b["ts"] != london_open_ts]
+
+    candles = derive_candles(bars, "MNQ", 5)
+    by_time = {
+        datetime.fromisoformat(c["timestamp"]).astimezone(ET): c
+        for c in candles
+    }
+
+    fallback = by_time[datetime(2026, 6, 9, 3, 5, tzinfo=ET)]
+    assert fallback["london_orb_high"] == 112
+    assert fallback["london_orb_low"] == 99
+
+    ny_open = by_time[datetime(2026, 6, 9, 9, 30, tzinfo=ET)]
+    assert ny_open["session"] == "new_york"
+    assert ny_open["orb_high"] is not None and ny_open["orb_low"] is not None
+
+
+def test_london_resets_once_before_first_ny_orb_exists():
+    """M-05 regression guard: before the first NY ORB exists, every bar hits
+    the `continue` near the top of derive_candles' loop, before the trend/
+    output code runs. `prev_session` must still advance on those bars — if
+    it were updated only at the tail of the loop body (after `continue`),
+    every London bar would look like a fresh session transition (prev_session
+    stuck at its initial value), resetting the developing London range on
+    EVERY bar instead of accumulating it. This dataset never touches NY until
+    its very last bar, so the multi-bar London range can only survive to the
+    first emitted (NY) candle if the reset fires once, not repeatedly."""
+    # ~5.5h of pre-London filler (asian session only, never new_york or
+    # london) purely to satisfy the EMA55 warmup gate that otherwise skips
+    # candle emission entirely — 60 bars, prices irrelevant to the assertion.
+    filler_start = datetime(2026, 6, 8, 22, 0, tzinfo=ET)
+    bars = [
+        _bar(filler_start + timedelta(minutes=5 * i), o=100, h=101, l=99, c=100)
+        for i in range(60)
+    ]
+    # Same three-bar London range used elsewhere in this file: correctly
+    # accumulated across all three bars, the range is (112, 98) — a single-
+    # bar-reset-per-iteration bug would instead collapse to just the last
+    # bar's own (111.5, 98).
+    bars += [
+        _bar(datetime(2026, 6, 9, 3, 0, tzinfo=ET), o=105, h=110, l=100, c=105),
+        _bar(datetime(2026, 6, 9, 3, 5, tzinfo=ET), o=105, h=112, l=99, c=111),
+        _bar(datetime(2026, 6, 9, 3, 10, tzinfo=ET), o=111, h=111.5, l=98, c=99),
+        _bar(datetime(2026, 6, 9, 9, 30, tzinfo=ET), o=105, h=106, l=104, c=105),
+    ]
+
+    candles = derive_candles(bars, "MNQ", 5)
+
+    assert len(candles) == 1  # only the first NY bar clears the orb_high-is-None gate
+    ny_candle = candles[0]
+    assert (ny_candle["london_orb_high"], ny_candle["london_orb_low"]) == (112, 98)
+
+
 def _sample_candle():
     return ReplayCandleLoader().load_jsonl("data/replay/sample_day_mnq.jsonl")[0]
 

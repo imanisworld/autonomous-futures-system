@@ -10,9 +10,11 @@ trend, ORB status, FTFC) so live/replay definitions stay single-source.
 Derivations from raw OHLCV (no Pine columns available):
   • EMA 9/21/55/200 — standard EMA seeded with SMA; trend via the shared
     context.trend.classify_trend (same as live state_builder).
-  • NY ORB — Pine-faithful: reset at the 09:30 ET session open, accumulate the
-    first 15 minutes, persist until the next NY open. Bars before the first
-    ORB of the dataset are skipped (csv_to_replay does the same).
+  • NY ORB — Pine-faithful: reset on the first bar observed in the new_york
+    session (session-transition, not an exact 09:30 clock match — matches
+    Pine's own `in_ny and not in_ny[1]`), accumulate the first 15 minutes,
+    persist until the next NY session start. Bars before the first ORB of
+    the dataset are skipped (csv_to_replay does the same).
   • Strat bar types — 1/2U/2D/3 vs the previous bar's high/low
     (classify_htf_bar), directional and uncollapsed — matches live's Pine
     classify_bar(), which never sends an undirected bare "2".
@@ -62,8 +64,6 @@ from sources.polygon_client import PolygonFuturesClient  # noqa: E402
 
 LOOKBACK = 20          # bars for rolling avg_volume (matches csv_to_replay)
 ORB_MINUTES = 15       # Pine i_orb_min default
-NY_OPEN_HOUR, NY_OPEN_MINUTE = 9, 30
-LONDON_OPEN_HOUR, LONDON_OPEN_MINUTE = 3, 0
 
 
 def ema_series(closes: list[float], period: int) -> list[float | None]:
@@ -196,11 +196,25 @@ def derive_candles(
     session_bars: list[dict] = []
     prev_vwap_range: tuple[int, int] | None = None
     closes: list[float] = []
+    prev_session: str | None = None
 
     for i, bar in enumerate(raw):
         dt_utc = datetime.fromtimestamp(bar["ts"], tz=timezone.utc)
-        et = dt_utc.astimezone(_ET)
         session = detect_session(dt_utc)
+
+        # Pine-faithful session-transition detection: reset on the FIRST bar
+        # observed inside each session window (matches Pine's
+        # `in_ny and not in_ny[1]`), not an exact 09:30/03:00 clock match. An
+        # exact-clock match has no fallback if that precise bar is missing
+        # from the feed (holiday-shortened session, gap) — the ORB would then
+        # silently never reset for that day, leaking the prior day's frozen
+        # range forward. `prev_session` MUST advance every bar, including
+        # ones that `continue` below before the ORB exists yet — otherwise a
+        # bar that repeatedly can't retain state (e.g. London bars before the
+        # first NY ORB) would look like a fresh transition on every iteration.
+        is_ny_session_start = session == "new_york" and prev_session != "new_york"
+        is_london_session_start = session == "london" and prev_session != "london"
+        prev_session = session
 
         # CME-day extremes (HOD/LOD) reset at the 18:00 ET day boundary.
         day_range = next(((s, e) for (s, e) in day_ranges if s <= i < e), None)
@@ -210,10 +224,9 @@ def derive_candles(
         hod = bar["high"] if hod is None else max(hod, bar["high"])
         lod = bar["low"] if lod is None else min(lod, bar["low"])
 
-        # NY ORB — Pine-faithful: reset at the 09:30 ET bar, accumulate the
-        # opening window, then freeze until the next NY open.
-        is_ny_open_bar = et.hour == NY_OPEN_HOUR and et.minute == NY_OPEN_MINUTE
-        if is_ny_open_bar:
+        # NY ORB — reset on the first bar of the new_york session, accumulate
+        # the opening window, then freeze until the next NY session start.
+        if is_ny_session_start:
             orb_high, orb_low = bar["high"], bar["low"]
             orb_count = 1
             orb_done = orb_count >= orb_bars_needed
@@ -224,13 +237,10 @@ def derive_candles(
             orb_done = orb_count >= orb_bars_needed
 
         # London ORB — independent from NY but governed by the same configured
-        # opening-range duration. Initialize on the 03:00 ET bar itself so the
-        # developing range and its status are immediately available.
-        is_london_open_bar = (
-            et.hour == LONDON_OPEN_HOUR
-            and et.minute == LONDON_OPEN_MINUTE
-        )
-        if is_london_open_bar:
+        # opening-range duration. Initialize on the first bar of the london
+        # session so the developing range and its status are immediately
+        # available.
+        if is_london_session_start:
             london_orb_high, london_orb_low = bar["high"], bar["low"]
             london_orb_count = 1
             london_orb_done = london_orb_count >= orb_bars_needed
