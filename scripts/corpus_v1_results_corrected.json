@@ -8,7 +8,8 @@
     "range": [
       "2025-07-24",
       "2026-07-23"
-    ]
+    ],
+    "correction": "2026-07-25: 23 day-boundary orphans (all orb_reclaim, 22 MES/1 MNQ) carry-forward resolved per operator HOLD verdict on the strategy-validation pass -- see docs/strategy-validation-pass-2026-07-24.md and scripts/corpus_v1_orphan_resolution.py. Pre-correction totals (724 resolved) remain in scripts/corpus_v1_results.json as the historical record of the raw per-day replay run."
   },
   "per_instrument": {
     "MNQ": {
@@ -19,17 +20,17 @@
         ],
         "all": {
           "attempts": 420,
-          "wins": 203,
+          "wins": 204,
           "losses": 216,
-          "resolved": 419,
-          "open_with_identity": 1,
+          "resolved": 420,
+          "open_with_identity": 0,
           "unjoinable_legacy": 0,
-          "win_rate": 0.4845,
-          "gross_win": 64777.55,
+          "win_rate": 0.4857,
+          "gross_win": 64877.55,
           "gross_loss": -27947.0,
-          "profit_factor": 2.318,
-          "net_pnl": 36830.55,
-          "expectancy": 87.9
+          "profit_factor": 2.321,
+          "net_pnl": 36930.55,
+          "expectancy": 87.93
         },
         "per_strategy": {
           "orb_breakout": {
@@ -48,17 +49,17 @@
           },
           "orb_reclaim": {
             "attempts": 263,
-            "wins": 122,
+            "wins": 123,
             "losses": 140,
-            "resolved": 262,
-            "open_with_identity": 1,
+            "resolved": 263,
+            "open_with_identity": 0,
             "unjoinable_legacy": 0,
-            "win_rate": 0.4656,
-            "gross_win": 51047.75,
+            "win_rate": 0.4677,
+            "gross_win": 51147.75,
             "gross_loss": -23021.0,
-            "profit_factor": 2.217,
-            "net_pnl": 28026.75,
-            "expectancy": 106.97
+            "profit_factor": 2.222,
+            "net_pnl": 28126.75,
+            "expectancy": 106.95
           },
           "orb_rejection": {
             "attempts": 16,
@@ -158,17 +159,17 @@
         ],
         "all": {
           "attempts": 211,
-          "wins": 96,
+          "wins": 97,
           "losses": 114,
-          "resolved": 210,
-          "open_with_identity": 1,
+          "resolved": 211,
+          "open_with_identity": 0,
           "unjoinable_legacy": 0,
-          "win_rate": 0.4571,
-          "gross_win": 17985.65,
+          "win_rate": 0.4597,
+          "gross_win": 18085.65,
           "gross_loss": -9730.0,
-          "profit_factor": 1.848,
-          "net_pnl": 8255.65,
-          "expectancy": 39.31
+          "profit_factor": 1.859,
+          "net_pnl": 8355.65,
+          "expectancy": 39.6
         },
         "per_strategy": {
           "orb_breakout": {
@@ -187,17 +188,17 @@
           },
           "orb_reclaim": {
             "attempts": 123,
-            "wins": 52,
+            "wins": 53,
             "losses": 70,
-            "resolved": 122,
-            "open_with_identity": 1,
+            "resolved": 123,
+            "open_with_identity": 0,
             "unjoinable_legacy": 0,
-            "win_rate": 0.4262,
-            "gross_win": 13038.75,
+            "win_rate": 0.4309,
+            "gross_win": 13138.75,
             "gross_loss": -7741.0,
-            "profit_factor": 1.684,
-            "net_pnl": 5297.75,
-            "expectancy": 43.42
+            "profit_factor": 1.697,
+            "net_pnl": 5397.75,
+            "expectancy": 43.88
           },
           "orb_rejection": {
             "attempts": 6,
@@ -574,17 +575,17 @@
           ],
           "all": {
             "attempts": 91,
-            "wins": 37,
+            "wins": 38,
             "losses": 53,
-            "resolved": 90,
-            "open_with_identity": 1,
+            "resolved": 91,
+            "open_with_identity": 0,
             "unjoinable_legacy": 0,
-            "win_rate": 0.4111,
-            "gross_win": 9147.4,
+            "win_rate": 0.4176,
+            "gross_win": 9247.4,
             "gross_loss": -5959.0,
-            "profit_factor": 1.535,
-            "net_pnl": 3188.4,
-            "expectancy": 35.43
+            "profit_factor": 1.552,
+            "net_pnl": 3288.4,
+            "expectancy": 36.14
           },
           "per_strategy": {
             "orb_breakout": {
@@ -603,17 +604,17 @@
             },
             "orb_reclaim": {
               "attempts": 63,
-              "wins": 22,
+              "wins": 23,
               "losses": 40,
-              "resolved": 62,
-              "open_with_identity": 1,
+              "resolved": 63,
+              "open_with_identity": 0,
               "unjoinable_legacy": 0,
-              "win_rate": 0.3548,
-              "gross_win": 7006.5,
+              "win_rate": 0.3651,
+              "gross_win": 7106.5,
               "gross_loss": -5165.0,
-              "profit_factor": 1.357,
-              "net_pnl": 1841.5,
-              "expectancy": 29.7
+              "profit_factor": 1.376,
+              "net_pnl": 1941.5,
+              "expectancy": 30.82
             },
             "orb_rejection": {
               "attempts": 1,
@@ -978,32 +979,32 @@
         ],
         "all": {
           "attempts": 327,
-          "wins": 124,
-          "losses": 181,
-          "resolved": 305,
-          "open_with_identity": 22,
+          "wins": 134,
+          "losses": 193,
+          "resolved": 327,
+          "open_with_identity": 0,
           "unjoinable_legacy": 0,
-          "win_rate": 0.4066,
-          "gross_win": 44502.5,
-          "gross_loss": -27905.0,
-          "profit_factor": 1.595,
-          "net_pnl": 16597.5,
-          "expectancy": 54.42
+          "win_rate": 0.4098,
+          "gross_win": 45699.38,
+          "gross_loss": -28505.0,
+          "profit_factor": 1.603,
+          "net_pnl": 17194.38,
+          "expectancy": 52.58
         },
         "per_strategy": {
           "orb_reclaim": {
             "attempts": 327,
-            "wins": 124,
-            "losses": 181,
-            "resolved": 305,
-            "open_with_identity": 22,
+            "wins": 134,
+            "losses": 193,
+            "resolved": 327,
+            "open_with_identity": 0,
             "unjoinable_legacy": 0,
-            "win_rate": 0.4066,
-            "gross_win": 44502.5,
-            "gross_loss": -27905.0,
-            "profit_factor": 1.595,
-            "net_pnl": 16597.5,
-            "expectancy": 54.42
+            "win_rate": 0.4098,
+            "gross_win": 45699.38,
+            "gross_loss": -28505.0,
+            "profit_factor": 1.603,
+            "net_pnl": 17194.38,
+            "expectancy": 52.58
           }
         },
         "why_no_trade": {
@@ -1040,32 +1041,32 @@
         ],
         "all": {
           "attempts": 162,
-          "wins": 59,
-          "losses": 91,
-          "resolved": 150,
-          "open_with_identity": 12,
+          "wins": 66,
+          "losses": 96,
+          "resolved": 162,
+          "open_with_identity": 0,
           "unjoinable_legacy": 0,
-          "win_rate": 0.3933,
-          "gross_win": 10508.13,
-          "gross_loss": -6703.75,
-          "profit_factor": 1.568,
-          "net_pnl": 3804.38,
-          "expectancy": 25.36
+          "win_rate": 0.4074,
+          "gross_win": 11330.01,
+          "gross_loss": -6960.0,
+          "profit_factor": 1.628,
+          "net_pnl": 4370.01,
+          "expectancy": 26.98
         },
         "per_strategy": {
           "orb_reclaim": {
             "attempts": 162,
-            "wins": 59,
-            "losses": 91,
-            "resolved": 150,
-            "open_with_identity": 12,
+            "wins": 66,
+            "losses": 96,
+            "resolved": 162,
+            "open_with_identity": 0,
             "unjoinable_legacy": 0,
-            "win_rate": 0.3933,
-            "gross_win": 10508.13,
-            "gross_loss": -6703.75,
-            "profit_factor": 1.568,
-            "net_pnl": 3804.38,
-            "expectancy": 25.36
+            "win_rate": 0.4074,
+            "gross_win": 11330.01,
+            "gross_loss": -6960.0,
+            "profit_factor": 1.628,
+            "net_pnl": 4370.01,
+            "expectancy": 26.98
           }
         },
         "why_no_trade": {
@@ -1102,32 +1103,32 @@
         ],
         "all": {
           "attempts": 165,
-          "wins": 65,
-          "losses": 90,
-          "resolved": 155,
-          "open_with_identity": 10,
+          "wins": 68,
+          "losses": 97,
+          "resolved": 165,
+          "open_with_identity": 0,
           "unjoinable_legacy": 0,
-          "win_rate": 0.4194,
-          "gross_win": 33994.37,
-          "gross_loss": -21201.25,
-          "profit_factor": 1.603,
-          "net_pnl": 12793.12,
-          "expectancy": 82.54
+          "win_rate": 0.4121,
+          "gross_win": 34369.37,
+          "gross_loss": -21545.0,
+          "profit_factor": 1.595,
+          "net_pnl": 12824.37,
+          "expectancy": 77.72
         },
         "per_strategy": {
           "orb_reclaim": {
             "attempts": 165,
-            "wins": 65,
-            "losses": 90,
-            "resolved": 155,
-            "open_with_identity": 10,
+            "wins": 68,
+            "losses": 97,
+            "resolved": 165,
+            "open_with_identity": 0,
             "unjoinable_legacy": 0,
-            "win_rate": 0.4194,
-            "gross_win": 33994.37,
-            "gross_loss": -21201.25,
-            "profit_factor": 1.603,
-            "net_pnl": 12793.12,
-            "expectancy": 82.54
+            "win_rate": 0.4121,
+            "gross_win": 34369.37,
+            "gross_loss": -21545.0,
+            "profit_factor": 1.595,
+            "net_pnl": 12824.37,
+            "expectancy": 77.72
           }
         },
         "why_no_trade": {
@@ -1165,32 +1166,32 @@
           ],
           "all": {
             "attempts": 77,
-            "wins": 26,
-            "losses": 45,
-            "resolved": 71,
-            "open_with_identity": 6,
+            "wins": 29,
+            "losses": 48,
+            "resolved": 77,
+            "open_with_identity": 0,
             "unjoinable_legacy": 0,
-            "win_rate": 0.3662,
-            "gross_win": 2983.76,
-            "gross_loss": -2471.25,
-            "profit_factor": 1.207,
-            "net_pnl": 512.51,
-            "expectancy": 7.22
+            "win_rate": 0.3766,
+            "gross_win": 3343.14,
+            "gross_loss": -2625.0,
+            "profit_factor": 1.274,
+            "net_pnl": 718.14,
+            "expectancy": 9.33
           },
           "per_strategy": {
             "orb_reclaim": {
               "attempts": 77,
-              "wins": 26,
-              "losses": 45,
-              "resolved": 71,
-              "open_with_identity": 6,
+              "wins": 29,
+              "losses": 48,
+              "resolved": 77,
+              "open_with_identity": 0,
               "unjoinable_legacy": 0,
-              "win_rate": 0.3662,
-              "gross_win": 2983.76,
-              "gross_loss": -2471.25,
-              "profit_factor": 1.207,
-              "net_pnl": 512.51,
-              "expectancy": 7.22
+              "win_rate": 0.3766,
+              "gross_win": 3343.14,
+              "gross_loss": -2625.0,
+              "profit_factor": 1.274,
+              "net_pnl": 718.14,
+              "expectancy": 9.33
             }
           },
           "why_no_trade": {
@@ -1227,32 +1228,32 @@
           ],
           "all": {
             "attempts": 85,
-            "wins": 33,
-            "losses": 46,
-            "resolved": 79,
-            "open_with_identity": 6,
+            "wins": 37,
+            "losses": 48,
+            "resolved": 85,
+            "open_with_identity": 0,
             "unjoinable_legacy": 0,
-            "win_rate": 0.4177,
-            "gross_win": 7524.37,
-            "gross_loss": -4232.5,
-            "profit_factor": 1.778,
-            "net_pnl": 3291.87,
-            "expectancy": 41.67
+            "win_rate": 0.4353,
+            "gross_win": 7986.87,
+            "gross_loss": -4335.0,
+            "profit_factor": 1.842,
+            "net_pnl": 3651.87,
+            "expectancy": 42.96
           },
           "per_strategy": {
             "orb_reclaim": {
               "attempts": 85,
-              "wins": 33,
-              "losses": 46,
-              "resolved": 79,
-              "open_with_identity": 6,
+              "wins": 37,
+              "losses": 48,
+              "resolved": 85,
+              "open_with_identity": 0,
               "unjoinable_legacy": 0,
-              "win_rate": 0.4177,
-              "gross_win": 7524.37,
-              "gross_loss": -4232.5,
-              "profit_factor": 1.778,
-              "net_pnl": 3291.87,
-              "expectancy": 41.67
+              "win_rate": 0.4353,
+              "gross_win": 7986.87,
+              "gross_loss": -4335.0,
+              "profit_factor": 1.842,
+              "net_pnl": 3651.87,
+              "expectancy": 42.96
             }
           },
           "why_no_trade": {
@@ -1288,32 +1289,32 @@
           ],
           "all": {
             "attempts": 81,
-            "wins": 39,
-            "losses": 38,
-            "resolved": 77,
-            "open_with_identity": 4,
+            "wins": 41,
+            "losses": 40,
+            "resolved": 81,
+            "open_with_identity": 0,
             "unjoinable_legacy": 0,
-            "win_rate": 0.5065,
-            "gross_win": 17221.25,
-            "gross_loss": -6773.75,
-            "profit_factor": 2.542,
-            "net_pnl": 10447.5,
-            "expectancy": 135.68
+            "win_rate": 0.5062,
+            "gross_win": 17471.25,
+            "gross_loss": -6876.25,
+            "profit_factor": 2.541,
+            "net_pnl": 10595.0,
+            "expectancy": 130.8
           },
           "per_strategy": {
             "orb_reclaim": {
               "attempts": 81,
-              "wins": 39,
-              "losses": 38,
-              "resolved": 77,
-              "open_with_identity": 4,
+              "wins": 41,
+              "losses": 40,
+              "resolved": 81,
+              "open_with_identity": 0,
               "unjoinable_legacy": 0,
-              "win_rate": 0.5065,
-              "gross_win": 17221.25,
-              "gross_loss": -6773.75,
-              "profit_factor": 2.542,
-              "net_pnl": 10447.5,
-              "expectancy": 135.68
+              "win_rate": 0.5062,
+              "gross_win": 17471.25,
+              "gross_loss": -6876.25,
+              "profit_factor": 2.541,
+              "net_pnl": 10595.0,
+              "expectancy": 130.8
             }
           },
           "why_no_trade": {
@@ -1350,32 +1351,32 @@
           ],
           "all": {
             "attempts": 84,
-            "wins": 26,
-            "losses": 52,
-            "resolved": 78,
-            "open_with_identity": 6,
+            "wins": 27,
+            "losses": 57,
+            "resolved": 84,
+            "open_with_identity": 0,
             "unjoinable_legacy": 0,
-            "win_rate": 0.3333,
-            "gross_win": 16773.12,
-            "gross_loss": -14427.5,
-            "profit_factor": 1.163,
-            "net_pnl": 2345.62,
-            "expectancy": 30.07
+            "win_rate": 0.3214,
+            "gross_win": 16898.12,
+            "gross_loss": -14668.75,
+            "profit_factor": 1.152,
+            "net_pnl": 2229.37,
+            "expectancy": 26.54
           },
           "per_strategy": {
             "orb_reclaim": {
               "attempts": 84,
-              "wins": 26,
-              "losses": 52,
-              "resolved": 78,
-              "open_with_identity": 6,
+              "wins": 27,
+              "losses": 57,
+              "resolved": 84,
+              "open_with_identity": 0,
               "unjoinable_legacy": 0,
-              "win_rate": 0.3333,
-              "gross_win": 16773.12,
-              "gross_loss": -14427.5,
-              "profit_factor": 1.163,
-              "net_pnl": 2345.62,
-              "expectancy": 30.07
+              "win_rate": 0.3214,
+              "gross_win": 16898.12,
+              "gross_loss": -14668.75,
+              "profit_factor": 1.152,
+              "net_pnl": 2229.37,
+              "expectancy": 26.54
             }
           },
           "why_no_trade": {
@@ -1416,17 +1417,17 @@
       ],
       "all": {
         "attempts": 747,
-        "wins": 327,
-        "losses": 397,
-        "resolved": 724,
-        "open_with_identity": 23,
+        "wins": 338,
+        "losses": 409,
+        "resolved": 747,
+        "open_with_identity": 0,
         "unjoinable_legacy": 0,
-        "win_rate": 0.4517,
-        "gross_win": 109280.05,
-        "gross_loss": -55852.0,
-        "profit_factor": 1.957,
-        "net_pnl": 53428.05,
-        "expectancy": 73.8
+        "win_rate": 0.4525,
+        "gross_win": 110576.93,
+        "gross_loss": -56452.0,
+        "profit_factor": 1.959,
+        "net_pnl": 54124.93,
+        "expectancy": 72.46
       },
       "per_strategy": {
         "orb_breakout": {
@@ -1445,17 +1446,17 @@
         },
         "orb_reclaim": {
           "attempts": 590,
-          "wins": 246,
-          "losses": 321,
-          "resolved": 567,
-          "open_with_identity": 23,
+          "wins": 257,
+          "losses": 333,
+          "resolved": 590,
+          "open_with_identity": 0,
           "unjoinable_legacy": 0,
-          "win_rate": 0.4339,
-          "gross_win": 95550.25,
-          "gross_loss": -50926.0,
-          "profit_factor": 1.876,
-          "net_pnl": 44624.25,
-          "expectancy": 78.7
+          "win_rate": 0.4356,
+          "gross_win": 96847.13,
+          "gross_loss": -51526.0,
+          "profit_factor": 1.88,
+          "net_pnl": 45321.13,
+          "expectancy": 76.82
         },
         "orb_rejection": {
           "attempts": 16,
@@ -1555,17 +1556,17 @@
       ],
       "all": {
         "attempts": 373,
-        "wins": 155,
-        "losses": 205,
-        "resolved": 360,
-        "open_with_identity": 13,
+        "wins": 163,
+        "losses": 210,
+        "resolved": 373,
+        "open_with_identity": 0,
         "unjoinable_legacy": 0,
-        "win_rate": 0.4306,
-        "gross_win": 28493.78,
-        "gross_loss": -16433.75,
-        "profit_factor": 1.734,
-        "net_pnl": 12060.03,
-        "expectancy": 33.5
+        "win_rate": 0.437,
+        "gross_win": 29415.66,
+        "gross_loss": -16690.0,
+        "profit_factor": 1.762,
+        "net_pnl": 12725.66,
+        "expectancy": 34.12
       },
       "per_strategy": {
         "orb_breakout": {
@@ -1584,17 +1585,17 @@
         },
         "orb_reclaim": {
           "attempts": 285,
-          "wins": 111,
-          "losses": 161,
-          "resolved": 272,
-          "open_with_identity": 13,
+          "wins": 119,
+          "losses": 166,
+          "resolved": 285,
+          "open_with_identity": 0,
           "unjoinable_legacy": 0,
-          "win_rate": 0.4081,
-          "gross_win": 23546.88,
-          "gross_loss": -14444.75,
-          "profit_factor": 1.63,
-          "net_pnl": 9102.13,
-          "expectancy": 33.46
+          "win_rate": 0.4175,
+          "gross_win": 24468.76,
+          "gross_loss": -14701.0,
+          "profit_factor": 1.664,
+          "net_pnl": 9767.76,
+          "expectancy": 34.27
         },
         "orb_rejection": {
           "attempts": 6,
@@ -1693,17 +1694,17 @@
       ],
       "all": {
         "attempts": 374,
-        "wins": 172,
-        "losses": 192,
-        "resolved": 364,
-        "open_with_identity": 10,
+        "wins": 175,
+        "losses": 199,
+        "resolved": 374,
+        "open_with_identity": 0,
         "unjoinable_legacy": 0,
-        "win_rate": 0.4725,
-        "gross_win": 80786.27,
-        "gross_loss": -39418.25,
-        "profit_factor": 2.049,
-        "net_pnl": 41368.02,
-        "expectancy": 113.65
+        "win_rate": 0.4679,
+        "gross_win": 81161.27,
+        "gross_loss": -39762.0,
+        "profit_factor": 2.041,
+        "net_pnl": 41399.27,
+        "expectancy": 110.69
       },
       "per_strategy": {
         "orb_breakout": {
@@ -1722,17 +1723,17 @@
         },
         "orb_reclaim": {
           "attempts": 305,
-          "wins": 135,
-          "losses": 160,
-          "resolved": 295,
-          "open_with_identity": 10,
+          "wins": 138,
+          "losses": 167,
+          "resolved": 305,
+          "open_with_identity": 0,
           "unjoinable_legacy": 0,
-          "win_rate": 0.4576,
-          "gross_win": 72003.37,
-          "gross_loss": -36481.25,
-          "profit_factor": 1.974,
-          "net_pnl": 35522.12,
-          "expectancy": 120.41
+          "win_rate": 0.4525,
+          "gross_win": 72378.37,
+          "gross_loss": -36825.0,
+          "profit_factor": 1.965,
+          "net_pnl": 35553.37,
+          "expectancy": 116.57
         },
         "orb_rejection": {
           "attempts": 10,
@@ -1833,17 +1834,17 @@
         ],
         "all": {
           "attempts": 197,
-          "wins": 85,
-          "losses": 106,
-          "resolved": 191,
-          "open_with_identity": 6,
+          "wins": 88,
+          "losses": 109,
+          "resolved": 197,
+          "open_with_identity": 0,
           "unjoinable_legacy": 0,
-          "win_rate": 0.445,
-          "gross_win": 11822.01,
-          "gross_loss": -6242.25,
-          "profit_factor": 1.894,
-          "net_pnl": 5579.76,
-          "expectancy": 29.21
+          "win_rate": 0.4467,
+          "gross_win": 12181.39,
+          "gross_loss": -6396.0,
+          "profit_factor": 1.905,
+          "net_pnl": 5785.39,
+          "expectancy": 29.37
         },
         "per_strategy": {
           "orb_breakout": {
@@ -1862,17 +1863,17 @@
           },
           "orb_reclaim": {
             "attempts": 137,
-            "wins": 56,
-            "losses": 75,
-            "resolved": 131,
-            "open_with_identity": 6,
+            "wins": 59,
+            "losses": 78,
+            "resolved": 137,
+            "open_with_identity": 0,
             "unjoinable_legacy": 0,
-            "win_rate": 0.4275,
-            "gross_win": 9016.01,
-            "gross_loss": -5047.25,
-            "profit_factor": 1.786,
-            "net_pnl": 3968.76,
-            "expectancy": 30.3
+            "win_rate": 0.4307,
+            "gross_win": 9375.39,
+            "gross_loss": -5201.0,
+            "profit_factor": 1.803,
+            "net_pnl": 4174.39,
+            "expectancy": 30.47
           },
           "orb_rejection": {
             "attempts": 5,
@@ -1971,17 +1972,17 @@
         ],
         "all": {
           "attempts": 176,
-          "wins": 70,
-          "losses": 99,
-          "resolved": 169,
-          "open_with_identity": 7,
+          "wins": 75,
+          "losses": 101,
+          "resolved": 176,
+          "open_with_identity": 0,
           "unjoinable_legacy": 0,
-          "win_rate": 0.4142,
-          "gross_win": 16671.77,
-          "gross_loss": -10191.5,
-          "profit_factor": 1.636,
-          "net_pnl": 6480.27,
-          "expectancy": 38.34
+          "win_rate": 0.4261,
+          "gross_win": 17234.27,
+          "gross_loss": -10294.0,
+          "profit_factor": 1.674,
+          "net_pnl": 6940.27,
+          "expectancy": 39.43
         },
         "per_strategy": {
           "orb_breakout": {
@@ -2000,17 +2001,17 @@
           },
           "orb_reclaim": {
             "attempts": 148,
-            "wins": 55,
-            "losses": 86,
-            "resolved": 141,
-            "open_with_identity": 7,
+            "wins": 60,
+            "losses": 88,
+            "resolved": 148,
+            "open_with_identity": 0,
             "unjoinable_legacy": 0,
-            "win_rate": 0.3901,
-            "gross_win": 14530.87,
-            "gross_loss": -9397.5,
-            "profit_factor": 1.546,
-            "net_pnl": 5133.37,
-            "expectancy": 36.41
+            "win_rate": 0.4054,
+            "gross_win": 15093.37,
+            "gross_loss": -9500.0,
+            "profit_factor": 1.589,
+            "net_pnl": 5593.37,
+            "expectancy": 37.79
           },
           "orb_rejection": {
             "attempts": 1,
@@ -2109,17 +2110,17 @@
         ],
         "all": {
           "attempts": 186,
-          "wins": 94,
-          "losses": 88,
-          "resolved": 182,
-          "open_with_identity": 4,
+          "wins": 96,
+          "losses": 90,
+          "resolved": 186,
+          "open_with_identity": 0,
           "unjoinable_legacy": 0,
-          "win_rate": 0.5165,
-          "gross_win": 38661.95,
-          "gross_loss": -14790.75,
-          "profit_factor": 2.614,
-          "net_pnl": 23871.2,
-          "expectancy": 131.16
+          "win_rate": 0.5161,
+          "gross_win": 38911.95,
+          "gross_loss": -14893.25,
+          "profit_factor": 2.613,
+          "net_pnl": 24018.7,
+          "expectancy": 129.13
         },
         "per_strategy": {
           "orb_breakout": {
@@ -2138,17 +2139,17 @@
           },
           "orb_reclaim": {
             "attempts": 149,
-            "wins": 73,
-            "losses": 72,
-            "resolved": 145,
-            "open_with_identity": 4,
+            "wins": 75,
+            "losses": 74,
+            "resolved": 149,
+            "open_with_identity": 0,
             "unjoinable_legacy": 0,
             "win_rate": 0.5034,
-            "gross_win": 33738.25,
-            "gross_loss": -13197.75,
-            "profit_factor": 2.556,
-            "net_pnl": 20540.5,
-            "expectancy": 141.66
+            "gross_win": 33988.25,
+            "gross_loss": -13300.25,
+            "profit_factor": 2.555,
+            "net_pnl": 20688.0,
+            "expectancy": 138.85
           },
           "orb_rejection": {
             "attempts": 2,
@@ -2233,17 +2234,17 @@
         ],
         "all": {
           "attempts": 188,
-          "wins": 78,
-          "losses": 104,
-          "resolved": 182,
-          "open_with_identity": 6,
+          "wins": 79,
+          "losses": 109,
+          "resolved": 188,
+          "open_with_identity": 0,
           "unjoinable_legacy": 0,
-          "win_rate": 0.4286,
-          "gross_win": 42124.32,
-          "gross_loss": -24627.5,
-          "profit_factor": 1.71,
-          "net_pnl": 17496.82,
-          "expectancy": 96.14
+          "win_rate": 0.4202,
+          "gross_win": 42249.32,
+          "gross_loss": -24868.75,
+          "profit_factor": 1.699,
+          "net_pnl": 17380.57,
+          "expectancy": 92.45
         },
         "per_strategy": {
           "orb_breakout": {
@@ -2262,17 +2263,17 @@
           },
           "orb_reclaim": {
             "attempts": 156,
-            "wins": 62,
-            "losses": 88,
-            "resolved": 150,
-            "open_with_identity": 6,
+            "wins": 63,
+            "losses": 93,
+            "resolved": 156,
+            "open_with_identity": 0,
             "unjoinable_legacy": 0,
-            "win_rate": 0.4133,
-            "gross_win": 38265.12,
-            "gross_loss": -23283.5,
-            "profit_factor": 1.643,
-            "net_pnl": 14981.62,
-            "expectancy": 99.88
+            "win_rate": 0.4038,
+            "gross_win": 38390.12,
+            "gross_loss": -23524.75,
+            "profit_factor": 1.632,
+            "net_pnl": 14865.37,
+            "expectancy": 95.29
           },
           "orb_rejection": {
             "attempts": 8,
@@ -2367,6 +2368,5 @@
       }
     }
   },
-  "raw_trade_count": 747,
-  "raw_no_trade_count": 42218
+  "raw_trade_count": 747
 }

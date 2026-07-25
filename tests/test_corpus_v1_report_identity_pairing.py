@@ -109,7 +109,8 @@ def test_identity_join_pairs_correctly_as_a_sanity_baseline(tmp_path):
     assert s == {
         "attempts": 1, "wins": 1, "losses": 0, "resolved": 1,
         "open_with_identity": 0, "unjoinable_legacy": 0,
-        "win_rate": 1.0, "net_pnl": 150.0, "expectancy": 150.0,
+        "win_rate": 1.0, "gross_win": 150.0, "gross_loss": 0,
+        "profit_factor": float("inf"), "net_pnl": 150.0, "expectancy": 150.0,
     }
 
 
