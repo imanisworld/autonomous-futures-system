@@ -161,7 +161,11 @@ class PaperBroker(BrokerInterface):
         )
 
     def execute_bracket(
-        self, order: BracketOrder, market_price: Optional[float] = None
+        self,
+        order: BracketOrder,
+        market_price: Optional[float] = None,
+        *,
+        paper_order_id: Optional[str] = None,
     ) -> Fill:
         """
         Simulate a bracket order fill.
@@ -176,6 +180,14 @@ class PaperBroker(BrokerInterface):
 
         Resolution requires a call to resolve_position() with next-bar data,
         or returns OPEN if no next-bar data is available.
+
+        `paper_order_id`: optional pre-generated id (same "PAPER-..." format
+        this method would otherwise mint itself). Lets a caller that must
+        journal the decision BEFORE the fill exists (replay/replay_engine.py)
+        choose the id up front and get it echoed back on every Fill this call
+        can return — including a same-call self-cancel — so the eventual
+        OUTCOME row can carry the identical id. Omitted by every existing
+        caller (live webhook/runner.py): behavior there is unchanged.
         """
         if self._position is not None or self._pending_stop_entry is not None:
             raise RuntimeError(
@@ -183,7 +195,7 @@ class PaperBroker(BrokerInterface):
                 "Call resolve_position() first."
             )
 
-        paper_order_id = f"PAPER-{uuid4().hex}"
+        paper_order_id = paper_order_id or f"PAPER-{uuid4().hex}"
 
         contracts = max(1, int(order.contracts or 1))
         if self._entry_fill_model == "stop_market":
@@ -217,12 +229,12 @@ class PaperBroker(BrokerInterface):
             if order.direction == "LONG":
                 limit_px = order.entry + tol
                 if market > limit_px:
-                    return self._entry_not_filled(order, contracts)
+                    return self._entry_not_filled(order, contracts, paper_order_id)
                 fill_entry = min(limit_px, market + slip)
             elif order.direction == "SHORT":
                 limit_px = order.entry - tol
                 if market < limit_px:
-                    return self._entry_not_filled(order, contracts)
+                    return self._entry_not_filled(order, contracts, paper_order_id)
                 fill_entry = max(limit_px, market - slip)
             else:
                 fill_entry = market
@@ -293,7 +305,9 @@ class PaperBroker(BrokerInterface):
             execution_audit={"post_fill_validation": post_fill.to_dict()},
         )
 
-    def _entry_not_filled(self, order: BracketOrder, contracts: int) -> Fill:
+    def _entry_not_filled(
+        self, order: BracketOrder, contracts: int, paper_order_id: Optional[str] = None
+    ) -> Fill:
         """The IOC entry self-cancelled: no position, no P&L, booked the way the
         live box books it (CANCELLED / ENTRY_NOT_FILLED) so daily-state
         reconstruction and fill-realism audits treat replay and live the same.
@@ -301,7 +315,13 @@ class PaperBroker(BrokerInterface):
         Unlike live Tradovate, replay knows for certain the bar-close market
         price never reached the limit (that's the caller's own condition for
         reaching this method) — so this is provably the "dead" case, not a
-        resting-then-cancelled one."""
+        resting-then-cancelled one.
+
+        Echoes back whatever paper_order_id execute_bracket() was given (or
+        generated) so a caller that journals this id onto its TRADE decision
+        row before calling execute_bracket() can still join it to this exact
+        CANCELLED outcome — the attempted position never opened, but it's
+        still the same lifecycle, not an unidentified one."""
         return Fill(
             instrument=order.instrument,
             direction=order.direction,
@@ -314,6 +334,7 @@ class PaperBroker(BrokerInterface):
             pnl_dollars=0.0,
             no_fill_reason=classify_no_fill_reason("ENTRY_NOT_FILLED", entry_status="dead"),
             order_type="limit",
+            paper_order_id=paper_order_id,
         )
 
     def _cancel_pending_entry(self, reason: str = "ENTRY_NOT_TRIGGERED") -> Fill:

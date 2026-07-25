@@ -12,6 +12,7 @@ from dataclasses import replace
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Optional
+from uuid import uuid4
 
 from agent.daily_summary import DailySummaryAgent
 from config.settings import SystemConfig, load_config
@@ -324,6 +325,15 @@ class ReplayEngine:
                 )
                 confluence = _score_setup(state, decision.setup)
                 journal_entry = decision.to_dict()
+                # Minted once per decision, before we know whether risk
+                # approves it or the broker ever actually opens a position --
+                # matches the live webhook/runner.py contract (TRADE row and
+                # its eventual OUTCOME row share one PaperBroker-format id, no
+                # FIFO fallback). Harmless on a RISK_REJECTED row: only
+                # decision=="TRADE" rows are ever read for identity pairing
+                # (adaptive/journal_reader.py, scripts/corpus_v1_report.py).
+                _paper_order_id = f"PAPER-{uuid4().hex}"
+                journal_entry["paper_order_id"] = _paper_order_id
                 journal_entry["strategy_state"] = {
                     "strat_4hr_retrigger": dict(
                         daily_state.four_hr_retrigger_state
@@ -403,6 +413,7 @@ class ReplayEngine:
                         stop=decision.setup.stop,
                         target=decision.setup.target,
                         contracts=contracts,
+                        paper_order_id=_paper_order_id,
                     )
                     resolved_fill = broker.force_resolve(
                         _pre["result"], float(_pre["exit_price"])
@@ -420,6 +431,7 @@ class ReplayEngine:
                         contracts=resolved_fill.contracts,
                         for_date=journal_date,
                         strategy=decision.setup.strategy,
+                        paper_order_id=resolved_fill.paper_order_id,
                         execution_audit={
                             "source": "strat_212_122_same_bar_resolution"
                         },
@@ -460,6 +472,7 @@ class ReplayEngine:
                             stop=decision.setup.stop,
                             target=decision.setup.target,
                             contracts=contracts,
+                            paper_order_id=_paper_order_id,
                         )
                         entry_fill = None
                     else:
@@ -495,7 +508,9 @@ class ReplayEngine:
                             ) or None,
                             post_fill_validation_required=False,
                         )
-                        entry_fill = broker.execute_bracket(order, market_price=candle.close)
+                        entry_fill = broker.execute_bracket(
+                            order, market_price=candle.close, paper_order_id=_paper_order_id
+                        )
                     if entry_fill is not None and entry_fill.result == "CANCELLED":
                         # IOC-faithful baseline: the entry self-cancelled (market
                         # beyond entry ± tolerance at decision time). Book it the
@@ -512,6 +527,7 @@ class ReplayEngine:
                             pnl_dollars=0.0,
                             contracts=entry_fill.contracts,
                             for_date=journal_date,
+                            paper_order_id=entry_fill.paper_order_id,
                         )
                         continue
                     fill = None
@@ -567,6 +583,7 @@ class ReplayEngine:
                             pnl_dollars=fill.pnl_dollars,
                             contracts=fill.contracts,
                             for_date=journal_date,
+                            paper_order_id=fill.paper_order_id,
                         )
                         if fill.result == "CANCELLED":
                             continue
