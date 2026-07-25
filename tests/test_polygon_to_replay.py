@@ -104,6 +104,63 @@ class TestDeriveCandles:
         assert c["one_hour_bar_type"] is not None
 
 
+class TestSessionTransitionOrbReset:
+    """M-05: NY ORB reset must fire on session-transition (first bar observed
+    in the new_york session), not an exact 09:30 clock match. An exact-clock
+    match has no fallback if that precise bar is missing from the feed — the
+    ORB would then silently never reset for that day, leaking the prior
+    session's frozen range forward. See tests/test_london_orb_replay_parity.py
+    for the London-side and cross-session-independence coverage."""
+
+    def _warmed_bars(self):
+        # Same warmup as TestDeriveCandles._candles: 260 15m bars from 02:00
+        # ET so EMA55 (the gate for candle emission) is satisfied well before
+        # the first NY open, and the climbing series spans multiple NY opens.
+        start = datetime(2026, 6, 9, 2, 0, tzinfo=_ET)
+        return _mk_bars(260, start)
+
+    def test_missing_exact_ny_open_bar_resets_on_first_available_bar(self):
+        bars = self._warmed_bars()
+        open_ts = int(datetime(2026, 6, 9, 9, 30, tzinfo=_ET).timestamp())
+        fallback_ts = int(datetime(2026, 6, 9, 9, 45, tzinfo=_ET).timestamp())
+        bars = [b for b in bars if b["ts"] != open_ts]
+        fallback_bar = next(b for b in bars if b["ts"] == fallback_ts)
+
+        candles = derive_candles(bars, "MES", 15)
+
+        # The first emitted candle is the fallback bar itself — the ORB must
+        # anchor to ITS high/low, not be skipped or reuse a stale value.
+        assert candles[0]["orb_high"] == fallback_bar["high"]
+        assert candles[0]["orb_low"] == fallback_bar["low"]
+
+    def test_missing_next_day_ny_open_bar_does_not_leak_prior_day_forward(self):
+        bars = self._warmed_bars()
+        day2_open_ts = int(datetime(2026, 6, 10, 9, 30, tzinfo=_ET).timestamp())
+        day2_fallback_ts = int(datetime(2026, 6, 10, 9, 45, tzinfo=_ET).timestamp())
+        bars = [b for b in bars if b["ts"] != day2_open_ts]
+        day2_fallback_bar = next(b for b in bars if b["ts"] == day2_fallback_ts)
+
+        candles = derive_candles(bars, "MES", 15)
+        by_time = {
+            datetime.fromisoformat(c["timestamp"]).astimezone(_ET): c
+            for c in candles
+        }
+        # EMA55 warmup delays emission past day 1's 09:30 open (the ORB itself
+        # still reset correctly then), so the first EMITTED candle is the
+        # earliest available snapshot of day 1's frozen range.
+        day1_candle = candles[0]
+        day2_candle = by_time[datetime(2026, 6, 10, 9, 45, tzinfo=_ET)]
+
+        # Day 2 resets on its own fallback bar...
+        assert day2_candle["orb_high"] == day2_fallback_bar["high"]
+        assert day2_candle["orb_low"] == day2_fallback_bar["low"]
+        # ...and does NOT silently keep reusing day 1's frozen range.
+        assert (day2_candle["orb_high"], day2_candle["orb_low"]) != (
+            day1_candle["orb_high"],
+            day1_candle["orb_low"],
+        )
+
+
 class TestDirectionalBarTypePreserved:
     """Regression for the polygon_to_replay.py defect: current_bar_type/
     previous_bar_type/two_bars_back_type were collapsed to an undirected
