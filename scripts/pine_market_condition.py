@@ -1,17 +1,12 @@
-"""Pine-exact market_condition reconstruction for offline replay evidence.
+"""Pine-exact market_condition reconstruction for offline replay.
 
-MEASUREMENT/COMPARISON ONLY. This module does not feed the live replay
-decision path -- replay/replay_engine.py continues to read
-candle.market_condition/trend_direction/trend_strength exactly as before,
-unchanged, and DecisionEngine's gates are untouched. This module computes
-a SEPARATE, additively-wired set of `reconstructed_*` candle fields (see
-scripts/csv_to_replay.py / scripts/polygon_to_replay.py) reproducing what
-Pine's actual market_condition formula (tradingview/risksentinel_context.pine)
-would have classified each historical bar as, using only the same OHLCV
-already available in replay data -- for COMPARING against the existing
-replay market_condition (itself a measurement artifact:
-derive_market_condition() + a Python trend_str blend, unrelated to Pine's
-real ATR/rel-vol formula), not for replacing it.
+This module is the source of the engine-facing replay ``market_condition``
+written by scripts/csv_to_replay.py and scripts/polygon_to_replay.py.  It
+reproduces Pine's actual formula from
+tradingview/risksentinel_context.pine using only causal OHLCV and EMA inputs.
+The converters may retain their former heuristic under the explicitly named
+``legacy_market_condition`` provenance field, but it must never control replay
+strategy execution.
 
 Reproduces, from tradingview/risksentinel_context.pine, exactly:
 
@@ -27,10 +22,9 @@ Reproduces, from tradingview/risksentinel_context.pine, exactly:
   Pine's own narrower definition, not Python's.
 
   ta.sma(volume, 20) -- exact current-inclusive 20-bar window (bars
-  idx-19..idx, 20 values). The existing (unrelated, untouched) replay
-  avg_volume field uses range(max(0, i-20), i+1), which is 21 bars once
-  warm -- a different, pre-existing measurement artifact this module does
-  not fix or touch, only avoids reproducing.
+  idx-19..idx, 20 values). The separate replay ``avg_volume`` field still
+  uses range(max(0, i-20), i+1), which is 21 bars once warm; that value does
+  not feed canonical market-condition classification.
 
   ta.atr(14) -- true range + Wilder/RMA smoothing. Pine's ta.tr(true)
   substitutes high-low for the very first bar in the whole series (no prior

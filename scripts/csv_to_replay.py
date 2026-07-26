@@ -463,18 +463,21 @@ def convert(
             vwap = compute_vwap(session_bars)
 
         closes.append(bar["close"])
-        # Trend: single source of truth — the SAME scale-free EMA-stack classifier
-        # the live path uses (context.trend.classify_trend). When EMA columns are
-        # present this guarantees replay == live; otherwise fall back to the
-        # rolling-close-slope heuristic.
+        # Trend remains the Python runtime/replay classifier.  Keep the former
+        # market-condition heuristic only for explicit provenance; canonical
+        # engine-facing market_condition is assigned from reconstruct_bar below.
         if bar.get("ema9") and bar.get("ema21") and bar.get("ema55"):
             trend_dir, trend_str = classify_trend(
                 bar["close"], bar["ema9"], bar["ema21"], bar["ema55"]
             )
-            market_cond = "TRENDING" if trend_str in ("STRONG", "MODERATE") else derive_market_condition(closes)
+            legacy_market_cond = (
+                "TRENDING"
+                if trend_str in ("STRONG", "MODERATE")
+                else derive_market_condition(closes)
+            )
         else:
             trend_dir, trend_str = derive_trend(closes)
-            market_cond = derive_market_condition(closes)
+            legacy_market_cond = derive_market_condition(closes)
         prev_bar = bars[i - 1] if i > 0 else None
         prev2_bar = bars[i - 2] if i > 1 else None
         orb_status = derive_orb_status(
@@ -569,7 +572,12 @@ def convert(
             "orb_high": orb_high,
             "orb_low": orb_low,
             "orb_status": orb_status,
-            "market_condition": market_cond,
+            # Engine-facing replay regime: canonical Pine/runtime formula.
+            # None is intentional for unavailable warm-up/synthetic-volume
+            # inputs; never substitute the legacy heuristic into execution.
+            "market_condition": recon_condition,
+            "market_condition_status": recon_condition_status,
+            "legacy_market_condition": legacy_market_cond,
             "trend_direction": trend_dir,
             "trend_strength": trend_str,
             "previous_day_high": pdh,
@@ -586,14 +594,9 @@ def convert(
             "two_bars_back_high": prev2_bar["high"] if prev2_bar else None,
             "two_bars_back_low": prev2_bar["low"] if prev2_bar else None,
             **htf_context,
-            # Pine-exact market_condition reconstruction — EVIDENCE ONLY,
-            # additive alongside (does not replace) market_condition/
-            # trend_direction/trend_strength/avg_volume above, which the
-            # engine still reads unchanged. See scripts/pine_market_condition.py.
-            # trend and market_condition carry INDEPENDENT statuses -- ATR is
-            # always self-computed (no proven pre-roll window), so
-            # reconstructed_market_condition_status can never be plain
-            # RECONSTRUCTED even when the trend status is.
+            # Backward-compatible diagnostic aliases. market_condition above is
+            # now the same canonical value; the old heuristic is preserved only
+            # as legacy_market_condition.
             "reconstructed_trend_direction": recon_trend,
             "reconstructed_trend_status": recon_trend_status,
             "reconstructed_market_condition": recon_condition,
