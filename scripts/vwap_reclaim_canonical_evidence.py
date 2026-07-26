@@ -382,16 +382,26 @@ def main() -> int:
         for s in (PRIMARY_SLIPPAGE_TICKS,) + SENSITIVITY_SLIPPAGE_TICKS
     )
     mnq_primary = primary["by_instrument"]["MNQ"]
+    fail_reasons = []
     if walk_forward is None:
-        verdict = "WAIT — insufficient data for walk-forward (one half has zero resolved trades)"
-    elif not mnq_primary["sample_adequate"]:
-        verdict = f"WAIT — MNQ sample below {SAMPLE_ADEQUATE_MIN}-trade minimum (n={mnq_primary['resolved']})"
+        fail_reasons.append("insufficient data for walk-forward (one half has zero resolved trades)")
     elif not walk_forward:
-        verdict = "WAIT — fails both-halves-positive walk-forward under honest fills"
-    elif not slippage_survives:
-        verdict = "WAIT — fails 1/2/3-tick slippage sensitivity"
-    else:
-        verdict = "PROMISING BUT UNPROVEN — clears walk-forward + slippage, sample still thin"
+        fail_reasons.append(
+            f"fails both-halves-positive walk-forward under honest fills "
+            f"(H1 net={primary['by_half']['H1']['net_after_commission']}, "
+            f"H2 net={primary['by_half']['H2']['net_after_commission']})"
+        )
+    if not mnq_primary["sample_adequate"]:
+        fail_reasons.append(
+            f"MNQ sample below {SAMPLE_ADEQUATE_MIN}-trade minimum (n={mnq_primary['resolved']})"
+        )
+    if not slippage_survives:
+        fail_reasons.append("fails 1/2/3-tick slippage sensitivity (edge does not survive 3-tick adverse)")
+    verdict = (
+        "WAIT — " + "; ".join(fail_reasons)
+        if fail_reasons
+        else "PROMISING BUT UNPROVEN — clears walk-forward + slippage, sample still thin"
+    )
 
     main_sha = _git("rev-parse", "HEAD")
     results = {
