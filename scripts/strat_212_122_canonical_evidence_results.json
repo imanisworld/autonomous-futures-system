@@ -1,0 +1,6497 @@
+{
+  "meta": {
+    "corpus": "data/replay_corpus_v1 (post-#320-fix directional, 313 days/instrument)",
+    "range": [
+      "2025-07-24",
+      "2026-07-23"
+    ],
+    "instruments": [
+      "MNQ",
+      "MES"
+    ],
+    "strategies": [
+      "strat_212",
+      "strat_122"
+    ],
+    "commission_round_trip_usd": 1.48,
+    "note": "PaperBroker/JournalLogger apply no commission model; commission_adjusted blocks subtract COMMISSION_RT per resolved trade at the analysis layer only."
+  },
+  "combined": {
+    "full_period": {
+      "range": [
+        "2025-07-24",
+        "2026-07-23"
+      ],
+      "raw": {
+        "attempts": 338,
+        "resolved": 335,
+        "wins": 93,
+        "losses": 242,
+        "open_with_identity": 3,
+        "unjoinable_legacy": 0,
+        "win_rate": 0.2776,
+        "gross_win": 6721.0,
+        "gross_loss": -6696.5,
+        "net_pnl": 24.5,
+        "profit_factor": 1.004,
+        "expectancy": 0.07
+      },
+      "commission_adjusted": {
+        "attempts": 338,
+        "resolved": 335,
+        "wins": 93,
+        "losses": 242,
+        "open_with_identity": 3,
+        "unjoinable_legacy": 0,
+        "win_rate": 0.2776,
+        "gross_win": 6583.36,
+        "gross_loss": -7054.66,
+        "net_pnl": -471.3,
+        "profit_factor": 0.933,
+        "expectancy": -1.41
+      }
+    },
+    "h1": {
+      "range": [
+        "2025-07-24",
+        "2026-01-23"
+      ],
+      "raw": {
+        "attempts": 286,
+        "resolved": 283,
+        "wins": 73,
+        "losses": 210,
+        "open_with_identity": 3,
+        "unjoinable_legacy": 0,
+        "win_rate": 0.258,
+        "gross_win": 4908.0,
+        "gross_loss": -5251.0,
+        "net_pnl": -343.0,
+        "profit_factor": 0.935,
+        "expectancy": -1.21
+      },
+      "commission_adjusted": {
+        "attempts": 286,
+        "resolved": 283,
+        "wins": 73,
+        "losses": 210,
+        "open_with_identity": 3,
+        "unjoinable_legacy": 0,
+        "win_rate": 0.258,
+        "gross_win": 4799.96,
+        "gross_loss": -5561.8,
+        "net_pnl": -761.84,
+        "profit_factor": 0.863,
+        "expectancy": -2.69
+      }
+    },
+    "h2": {
+      "range": [
+        "2026-01-24",
+        "2026-07-23"
+      ],
+      "raw": {
+        "attempts": 52,
+        "resolved": 52,
+        "wins": 20,
+        "losses": 32,
+        "open_with_identity": 0,
+        "unjoinable_legacy": 0,
+        "win_rate": 0.3846,
+        "gross_win": 1813.0,
+        "gross_loss": -1445.5,
+        "net_pnl": 367.5,
+        "profit_factor": 1.254,
+        "expectancy": 7.07
+      },
+      "commission_adjusted": {
+        "attempts": 52,
+        "resolved": 52,
+        "wins": 20,
+        "losses": 32,
+        "open_with_identity": 0,
+        "unjoinable_legacy": 0,
+        "win_rate": 0.3846,
+        "gross_win": 1783.4,
+        "gross_loss": -1492.86,
+        "net_pnl": 290.54,
+        "profit_factor": 1.195,
+        "expectancy": 5.59
+      }
+    },
+    "quarterly": {
+      "Q1": {
+        "range": [
+          "2025-07-24",
+          "2025-10-23"
+        ],
+        "raw": {
+          "attempts": 156,
+          "resolved": 154,
+          "wins": 43,
+          "losses": 111,
+          "open_with_identity": 2,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.2792,
+          "gross_win": 2920.5,
+          "gross_loss": -2703.0,
+          "net_pnl": 217.5,
+          "profit_factor": 1.08,
+          "expectancy": 1.41
+        },
+        "commission_adjusted": {
+          "attempts": 156,
+          "resolved": 154,
+          "wins": 43,
+          "losses": 111,
+          "open_with_identity": 2,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.2792,
+          "gross_win": 2856.86,
+          "gross_loss": -2867.28,
+          "net_pnl": -10.42,
+          "profit_factor": 0.996,
+          "expectancy": -0.07
+        }
+      },
+      "Q2": {
+        "range": [
+          "2025-10-24",
+          "2026-01-23"
+        ],
+        "raw": {
+          "attempts": 130,
+          "resolved": 129,
+          "wins": 30,
+          "losses": 99,
+          "open_with_identity": 1,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.2326,
+          "gross_win": 1987.5,
+          "gross_loss": -2548.0,
+          "net_pnl": -560.5,
+          "profit_factor": 0.78,
+          "expectancy": -4.34
+        },
+        "commission_adjusted": {
+          "attempts": 130,
+          "resolved": 129,
+          "wins": 30,
+          "losses": 99,
+          "open_with_identity": 1,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.2326,
+          "gross_win": 1943.1,
+          "gross_loss": -2694.52,
+          "net_pnl": -751.42,
+          "profit_factor": 0.721,
+          "expectancy": -5.82
+        }
+      },
+      "Q3": {
+        "range": [
+          "2026-01-24",
+          "2026-04-23"
+        ],
+        "raw": {
+          "attempts": 38,
+          "resolved": 38,
+          "wins": 16,
+          "losses": 22,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.4211,
+          "gross_win": 1347.0,
+          "gross_loss": -888.5,
+          "net_pnl": 458.5,
+          "profit_factor": 1.516,
+          "expectancy": 12.07
+        },
+        "commission_adjusted": {
+          "attempts": 38,
+          "resolved": 38,
+          "wins": 16,
+          "losses": 22,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.4211,
+          "gross_win": 1323.32,
+          "gross_loss": -921.06,
+          "net_pnl": 402.26,
+          "profit_factor": 1.437,
+          "expectancy": 10.59
+        }
+      },
+      "Q4": {
+        "range": [
+          "2026-04-24",
+          "2026-07-23"
+        ],
+        "raw": {
+          "attempts": 14,
+          "resolved": 14,
+          "wins": 4,
+          "losses": 10,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.2857,
+          "gross_win": 466.0,
+          "gross_loss": -557.0,
+          "net_pnl": -91.0,
+          "profit_factor": 0.837,
+          "expectancy": -6.5
+        },
+        "commission_adjusted": {
+          "attempts": 14,
+          "resolved": 14,
+          "wins": 4,
+          "losses": 10,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.2857,
+          "gross_win": 460.08,
+          "gross_loss": -571.8,
+          "net_pnl": -111.72,
+          "profit_factor": 0.805,
+          "expectancy": -7.98
+        }
+      }
+    },
+    "by_direction": {
+      "LONG": {
+        "raw": {
+          "attempts": 210,
+          "resolved": 208,
+          "wins": 58,
+          "losses": 150,
+          "open_with_identity": 2,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.2788,
+          "gross_win": 4090.0,
+          "gross_loss": -4023.0,
+          "net_pnl": 67.0,
+          "profit_factor": 1.017,
+          "expectancy": 0.32
+        },
+        "commission_adjusted": {
+          "attempts": 210,
+          "resolved": 208,
+          "wins": 58,
+          "losses": 150,
+          "open_with_identity": 2,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.2788,
+          "gross_win": 4004.16,
+          "gross_loss": -4245.0,
+          "net_pnl": -240.84,
+          "profit_factor": 0.943,
+          "expectancy": -1.16
+        }
+      },
+      "SHORT": {
+        "raw": {
+          "attempts": 128,
+          "resolved": 127,
+          "wins": 35,
+          "losses": 92,
+          "open_with_identity": 1,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.2756,
+          "gross_win": 2631.0,
+          "gross_loss": -2673.5,
+          "net_pnl": -42.5,
+          "profit_factor": 0.984,
+          "expectancy": -0.33
+        },
+        "commission_adjusted": {
+          "attempts": 128,
+          "resolved": 127,
+          "wins": 35,
+          "losses": 92,
+          "open_with_identity": 1,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.2756,
+          "gross_win": 2579.2,
+          "gross_loss": -2809.66,
+          "net_pnl": -230.46,
+          "profit_factor": 0.918,
+          "expectancy": -1.81
+        }
+      }
+    },
+    "by_session": {
+      "asian": {
+        "raw": {
+          "attempts": 123,
+          "resolved": 123,
+          "wins": 32,
+          "losses": 91,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.2602,
+          "gross_win": 2008.0,
+          "gross_loss": -1850.0,
+          "net_pnl": 158.0,
+          "profit_factor": 1.085,
+          "expectancy": 1.28
+        },
+        "commission_adjusted": {
+          "attempts": 123,
+          "resolved": 123,
+          "wins": 32,
+          "losses": 91,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.2602,
+          "gross_win": 1960.64,
+          "gross_loss": -1984.68,
+          "net_pnl": -24.04,
+          "profit_factor": 0.988,
+          "expectancy": -0.2
+        }
+      },
+      "london": {
+        "raw": {
+          "attempts": 144,
+          "resolved": 144,
+          "wins": 34,
+          "losses": 110,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.2361,
+          "gross_win": 2361.0,
+          "gross_loss": -3059.75,
+          "net_pnl": -698.75,
+          "profit_factor": 0.772,
+          "expectancy": -4.85
+        },
+        "commission_adjusted": {
+          "attempts": 144,
+          "resolved": 144,
+          "wins": 34,
+          "losses": 110,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.2361,
+          "gross_win": 2310.68,
+          "gross_loss": -3222.55,
+          "net_pnl": -911.87,
+          "profit_factor": 0.717,
+          "expectancy": -6.33
+        }
+      },
+      "new_york": {
+        "raw": {
+          "attempts": 71,
+          "resolved": 68,
+          "wins": 27,
+          "losses": 41,
+          "open_with_identity": 3,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.3971,
+          "gross_win": 2352.0,
+          "gross_loss": -1786.75,
+          "net_pnl": 565.25,
+          "profit_factor": 1.316,
+          "expectancy": 8.31
+        },
+        "commission_adjusted": {
+          "attempts": 71,
+          "resolved": 68,
+          "wins": 27,
+          "losses": 41,
+          "open_with_identity": 3,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.3971,
+          "gross_win": 2312.04,
+          "gross_loss": -1847.43,
+          "net_pnl": 464.61,
+          "profit_factor": 1.251,
+          "expectancy": 6.83
+        }
+      }
+    },
+    "by_month_full": {
+      "2025-07": {
+        "raw": {
+          "attempts": 13,
+          "resolved": 13,
+          "wins": 5,
+          "losses": 8,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.3846,
+          "gross_win": 315.5,
+          "gross_loss": -147.0,
+          "net_pnl": 168.5,
+          "profit_factor": 2.146,
+          "expectancy": 12.96
+        },
+        "commission_adjusted": {
+          "attempts": 13,
+          "resolved": 13,
+          "wins": 5,
+          "losses": 8,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.3846,
+          "gross_win": 308.1,
+          "gross_loss": -158.84,
+          "net_pnl": 149.26,
+          "profit_factor": 1.94,
+          "expectancy": 11.48
+        }
+      },
+      "2025-08": {
+        "raw": {
+          "attempts": 45,
+          "resolved": 44,
+          "wins": 12,
+          "losses": 32,
+          "open_with_identity": 1,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.2727,
+          "gross_win": 838.0,
+          "gross_loss": -791.75,
+          "net_pnl": 46.25,
+          "profit_factor": 1.058,
+          "expectancy": 1.05
+        },
+        "commission_adjusted": {
+          "attempts": 45,
+          "resolved": 44,
+          "wins": 12,
+          "losses": 32,
+          "open_with_identity": 1,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.2727,
+          "gross_win": 820.24,
+          "gross_loss": -839.11,
+          "net_pnl": -18.87,
+          "profit_factor": 0.978,
+          "expectancy": -0.43
+        }
+      },
+      "2025-09": {
+        "raw": {
+          "attempts": 59,
+          "resolved": 59,
+          "wins": 17,
+          "losses": 42,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.2881,
+          "gross_win": 1084.0,
+          "gross_loss": -939.5,
+          "net_pnl": 144.5,
+          "profit_factor": 1.154,
+          "expectancy": 2.45
+        },
+        "commission_adjusted": {
+          "attempts": 59,
+          "resolved": 59,
+          "wins": 17,
+          "losses": 42,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.2881,
+          "gross_win": 1058.84,
+          "gross_loss": -1001.66,
+          "net_pnl": 57.18,
+          "profit_factor": 1.057,
+          "expectancy": 0.97
+        }
+      },
+      "2025-10": {
+        "raw": {
+          "attempts": 56,
+          "resolved": 55,
+          "wins": 14,
+          "losses": 41,
+          "open_with_identity": 1,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.2545,
+          "gross_win": 1000.5,
+          "gross_loss": -1078.0,
+          "net_pnl": -77.5,
+          "profit_factor": 0.928,
+          "expectancy": -1.41
+        },
+        "commission_adjusted": {
+          "attempts": 56,
+          "resolved": 55,
+          "wins": 14,
+          "losses": 41,
+          "open_with_identity": 1,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.2545,
+          "gross_win": 979.78,
+          "gross_loss": -1138.68,
+          "net_pnl": -158.9,
+          "profit_factor": 0.86,
+          "expectancy": -2.89
+        }
+      },
+      "2025-11": {
+        "raw": {
+          "attempts": 45,
+          "resolved": 44,
+          "wins": 8,
+          "losses": 36,
+          "open_with_identity": 1,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.1818,
+          "gross_win": 716.0,
+          "gross_loss": -1093.0,
+          "net_pnl": -377.0,
+          "profit_factor": 0.655,
+          "expectancy": -8.57
+        },
+        "commission_adjusted": {
+          "attempts": 45,
+          "resolved": 44,
+          "wins": 8,
+          "losses": 36,
+          "open_with_identity": 1,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.1818,
+          "gross_win": 704.16,
+          "gross_loss": -1146.28,
+          "net_pnl": -442.12,
+          "profit_factor": 0.614,
+          "expectancy": -10.05
+        }
+      },
+      "2025-12": {
+        "raw": {
+          "attempts": 43,
+          "resolved": 43,
+          "wins": 12,
+          "losses": 31,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.2791,
+          "gross_win": 585.0,
+          "gross_loss": -675.0,
+          "net_pnl": -90.0,
+          "profit_factor": 0.867,
+          "expectancy": -2.09
+        },
+        "commission_adjusted": {
+          "attempts": 43,
+          "resolved": 43,
+          "wins": 12,
+          "losses": 31,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.2791,
+          "gross_win": 567.24,
+          "gross_loss": -720.88,
+          "net_pnl": -153.64,
+          "profit_factor": 0.787,
+          "expectancy": -3.57
+        }
+      },
+      "2026-01": {
+        "raw": {
+          "attempts": 25,
+          "resolved": 25,
+          "wins": 5,
+          "losses": 20,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.2,
+          "gross_win": 369.0,
+          "gross_loss": -526.75,
+          "net_pnl": -157.75,
+          "profit_factor": 0.701,
+          "expectancy": -6.31
+        },
+        "commission_adjusted": {
+          "attempts": 25,
+          "resolved": 25,
+          "wins": 5,
+          "losses": 20,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.2,
+          "gross_win": 361.6,
+          "gross_loss": -556.35,
+          "net_pnl": -194.75,
+          "profit_factor": 0.65,
+          "expectancy": -7.79
+        }
+      },
+      "2026-02": {
+        "raw": {
+          "attempts": 8,
+          "resolved": 8,
+          "wins": 2,
+          "losses": 6,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.25,
+          "gross_win": 156.0,
+          "gross_loss": -245.0,
+          "net_pnl": -89.0,
+          "profit_factor": 0.637,
+          "expectancy": -11.12
+        },
+        "commission_adjusted": {
+          "attempts": 8,
+          "resolved": 8,
+          "wins": 2,
+          "losses": 6,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.25,
+          "gross_win": 153.04,
+          "gross_loss": -253.88,
+          "net_pnl": -100.84,
+          "profit_factor": 0.603,
+          "expectancy": -12.6
+        }
+      },
+      "2026-03": {
+        "raw": {
+          "attempts": 12,
+          "resolved": 12,
+          "wins": 7,
+          "losses": 5,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.5833,
+          "gross_win": 634.0,
+          "gross_loss": -215.5,
+          "net_pnl": 418.5,
+          "profit_factor": 2.942,
+          "expectancy": 34.88
+        },
+        "commission_adjusted": {
+          "attempts": 12,
+          "resolved": 12,
+          "wins": 7,
+          "losses": 5,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.5833,
+          "gross_win": 623.64,
+          "gross_loss": -222.9,
+          "net_pnl": 400.74,
+          "profit_factor": 2.798,
+          "expectancy": 33.4
+        }
+      },
+      "2026-04": {
+        "raw": {
+          "attempts": 20,
+          "resolved": 20,
+          "wins": 9,
+          "losses": 11,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.45,
+          "gross_win": 849.0,
+          "gross_loss": -428.0,
+          "net_pnl": 421.0,
+          "profit_factor": 1.984,
+          "expectancy": 21.05
+        },
+        "commission_adjusted": {
+          "attempts": 20,
+          "resolved": 20,
+          "wins": 9,
+          "losses": 11,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.45,
+          "gross_win": 835.68,
+          "gross_loss": -444.28,
+          "net_pnl": 391.4,
+          "profit_factor": 1.881,
+          "expectancy": 19.57
+        }
+      },
+      "2026-05": {
+        "raw": {
+          "attempts": 7,
+          "resolved": 7,
+          "wins": 0,
+          "losses": 7,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.0,
+          "gross_win": 0,
+          "gross_loss": -396.0,
+          "net_pnl": -396.0,
+          "profit_factor": 0.0,
+          "expectancy": -56.57
+        },
+        "commission_adjusted": {
+          "attempts": 7,
+          "resolved": 7,
+          "wins": 0,
+          "losses": 7,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.0,
+          "gross_win": 0,
+          "gross_loss": -406.36,
+          "net_pnl": -406.36,
+          "profit_factor": 0.0,
+          "expectancy": -58.05
+        }
+      },
+      "2026-06": {
+        "raw": {
+          "attempts": 4,
+          "resolved": 4,
+          "wins": 2,
+          "losses": 2,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.5,
+          "gross_win": 174.0,
+          "gross_loss": -114.5,
+          "net_pnl": 59.5,
+          "profit_factor": 1.52,
+          "expectancy": 14.88
+        },
+        "commission_adjusted": {
+          "attempts": 4,
+          "resolved": 4,
+          "wins": 2,
+          "losses": 2,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.5,
+          "gross_win": 171.04,
+          "gross_loss": -117.46,
+          "net_pnl": 53.58,
+          "profit_factor": 1.456,
+          "expectancy": 13.39
+        }
+      },
+      "2026-07": {
+        "raw": {
+          "attempts": 1,
+          "resolved": 1,
+          "wins": 0,
+          "losses": 1,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.0,
+          "gross_win": 0,
+          "gross_loss": -46.5,
+          "net_pnl": -46.5,
+          "profit_factor": 0.0,
+          "expectancy": -46.5
+        },
+        "commission_adjusted": {
+          "attempts": 1,
+          "resolved": 1,
+          "wins": 0,
+          "losses": 1,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.0,
+          "gross_win": 0,
+          "gross_loss": -47.98,
+          "net_pnl": -47.98,
+          "profit_factor": 0.0,
+          "expectancy": -47.98
+        }
+      }
+    },
+    "drawdown_raw": {
+      "max_drawdown": 1069.5,
+      "max_consecutive_losses": 25,
+      "final_equity": 24.5
+    },
+    "drawdown_commission_adjusted": {
+      "max_drawdown": 1452.82,
+      "max_consecutive_losses": 25,
+      "final_equity": -471.3
+    },
+    "concentration_raw": {
+      "net_pnl": 24.5,
+      "ex_top1_winner_net_pnl": -169.5,
+      "ex_top5_winners_net_pnl": -692.0,
+      "top1_share_of_net": 7.9184,
+      "top5_share_of_net": 29.2449
+    },
+    "concentration_commission_adjusted": {
+      "net_pnl": -471.3,
+      "ex_top1_winner_net_pnl": -663.82,
+      "ex_top5_winners_net_pnl": -1180.4,
+      "top1_share_of_net": -0.4085,
+      "top5_share_of_net": -1.5046
+    }
+  },
+  "per_instrument": {
+    "MNQ": {
+      "full_period": {
+        "range": [
+          "2025-07-24",
+          "2026-07-23"
+        ],
+        "raw": {
+          "attempts": 141,
+          "resolved": 141,
+          "wins": 49,
+          "losses": 92,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.3475,
+          "gross_win": 3636.0,
+          "gross_loss": -3311.5,
+          "net_pnl": 324.5,
+          "profit_factor": 1.098,
+          "expectancy": 2.3
+        },
+        "commission_adjusted": {
+          "attempts": 141,
+          "resolved": 141,
+          "wins": 49,
+          "losses": 92,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.3475,
+          "gross_win": 3563.48,
+          "gross_loss": -3447.66,
+          "net_pnl": 115.82,
+          "profit_factor": 1.034,
+          "expectancy": 0.82
+        }
+      },
+      "h1": {
+        "range": [
+          "2025-07-24",
+          "2026-01-23"
+        ],
+        "raw": {
+          "attempts": 89,
+          "resolved": 89,
+          "wins": 29,
+          "losses": 60,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.3258,
+          "gross_win": 1823.0,
+          "gross_loss": -1866.0,
+          "net_pnl": -43.0,
+          "profit_factor": 0.977,
+          "expectancy": -0.48
+        },
+        "commission_adjusted": {
+          "attempts": 89,
+          "resolved": 89,
+          "wins": 29,
+          "losses": 60,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.3258,
+          "gross_win": 1780.08,
+          "gross_loss": -1954.8,
+          "net_pnl": -174.72,
+          "profit_factor": 0.911,
+          "expectancy": -1.96
+        }
+      },
+      "h2": {
+        "range": [
+          "2026-01-24",
+          "2026-07-23"
+        ],
+        "raw": {
+          "attempts": 52,
+          "resolved": 52,
+          "wins": 20,
+          "losses": 32,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.3846,
+          "gross_win": 1813.0,
+          "gross_loss": -1445.5,
+          "net_pnl": 367.5,
+          "profit_factor": 1.254,
+          "expectancy": 7.07
+        },
+        "commission_adjusted": {
+          "attempts": 52,
+          "resolved": 52,
+          "wins": 20,
+          "losses": 32,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.3846,
+          "gross_win": 1783.4,
+          "gross_loss": -1492.86,
+          "net_pnl": 290.54,
+          "profit_factor": 1.195,
+          "expectancy": 5.59
+        }
+      },
+      "quarterly": {
+        "Q1": {
+          "range": [
+            "2025-07-24",
+            "2025-10-23"
+          ],
+          "raw": {
+            "attempts": 48,
+            "resolved": 48,
+            "wins": 16,
+            "losses": 32,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.3333,
+            "gross_win": 1048.0,
+            "gross_loss": -958.0,
+            "net_pnl": 90.0,
+            "profit_factor": 1.094,
+            "expectancy": 1.88
+          },
+          "commission_adjusted": {
+            "attempts": 48,
+            "resolved": 48,
+            "wins": 16,
+            "losses": 32,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.3333,
+            "gross_win": 1024.32,
+            "gross_loss": -1005.36,
+            "net_pnl": 18.96,
+            "profit_factor": 1.019,
+            "expectancy": 0.4
+          }
+        },
+        "Q2": {
+          "range": [
+            "2025-10-24",
+            "2026-01-23"
+          ],
+          "raw": {
+            "attempts": 41,
+            "resolved": 41,
+            "wins": 13,
+            "losses": 28,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.3171,
+            "gross_win": 775.0,
+            "gross_loss": -908.0,
+            "net_pnl": -133.0,
+            "profit_factor": 0.854,
+            "expectancy": -3.24
+          },
+          "commission_adjusted": {
+            "attempts": 41,
+            "resolved": 41,
+            "wins": 13,
+            "losses": 28,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.3171,
+            "gross_win": 755.76,
+            "gross_loss": -949.44,
+            "net_pnl": -193.68,
+            "profit_factor": 0.796,
+            "expectancy": -4.72
+          }
+        },
+        "Q3": {
+          "range": [
+            "2026-01-24",
+            "2026-04-23"
+          ],
+          "raw": {
+            "attempts": 38,
+            "resolved": 38,
+            "wins": 16,
+            "losses": 22,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.4211,
+            "gross_win": 1347.0,
+            "gross_loss": -888.5,
+            "net_pnl": 458.5,
+            "profit_factor": 1.516,
+            "expectancy": 12.07
+          },
+          "commission_adjusted": {
+            "attempts": 38,
+            "resolved": 38,
+            "wins": 16,
+            "losses": 22,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.4211,
+            "gross_win": 1323.32,
+            "gross_loss": -921.06,
+            "net_pnl": 402.26,
+            "profit_factor": 1.437,
+            "expectancy": 10.59
+          }
+        },
+        "Q4": {
+          "range": [
+            "2026-04-24",
+            "2026-07-23"
+          ],
+          "raw": {
+            "attempts": 14,
+            "resolved": 14,
+            "wins": 4,
+            "losses": 10,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2857,
+            "gross_win": 466.0,
+            "gross_loss": -557.0,
+            "net_pnl": -91.0,
+            "profit_factor": 0.837,
+            "expectancy": -6.5
+          },
+          "commission_adjusted": {
+            "attempts": 14,
+            "resolved": 14,
+            "wins": 4,
+            "losses": 10,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2857,
+            "gross_win": 460.08,
+            "gross_loss": -571.8,
+            "net_pnl": -111.72,
+            "profit_factor": 0.805,
+            "expectancy": -7.98
+          }
+        }
+      },
+      "by_direction": {
+        "LONG": {
+          "raw": {
+            "attempts": 102,
+            "resolved": 102,
+            "wins": 34,
+            "losses": 68,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.3333,
+            "gross_win": 2265.0,
+            "gross_loss": -2415.5,
+            "net_pnl": -150.5,
+            "profit_factor": 0.938,
+            "expectancy": -1.48
+          },
+          "commission_adjusted": {
+            "attempts": 102,
+            "resolved": 102,
+            "wins": 34,
+            "losses": 68,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.3333,
+            "gross_win": 2214.68,
+            "gross_loss": -2516.14,
+            "net_pnl": -301.46,
+            "profit_factor": 0.88,
+            "expectancy": -2.96
+          }
+        },
+        "SHORT": {
+          "raw": {
+            "attempts": 39,
+            "resolved": 39,
+            "wins": 15,
+            "losses": 24,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.3846,
+            "gross_win": 1371.0,
+            "gross_loss": -896.0,
+            "net_pnl": 475.0,
+            "profit_factor": 1.53,
+            "expectancy": 12.18
+          },
+          "commission_adjusted": {
+            "attempts": 39,
+            "resolved": 39,
+            "wins": 15,
+            "losses": 24,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.3846,
+            "gross_win": 1348.8,
+            "gross_loss": -931.52,
+            "net_pnl": 417.28,
+            "profit_factor": 1.448,
+            "expectancy": 10.7
+          }
+        }
+      },
+      "by_session": {
+        "asian": {
+          "raw": {
+            "attempts": 59,
+            "resolved": 59,
+            "wins": 21,
+            "losses": 38,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.3559,
+            "gross_win": 1443.0,
+            "gross_loss": -1035.0,
+            "net_pnl": 408.0,
+            "profit_factor": 1.394,
+            "expectancy": 6.92
+          },
+          "commission_adjusted": {
+            "attempts": 59,
+            "resolved": 59,
+            "wins": 21,
+            "losses": 38,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.3559,
+            "gross_win": 1411.92,
+            "gross_loss": -1091.24,
+            "net_pnl": 320.68,
+            "profit_factor": 1.294,
+            "expectancy": 5.44
+          }
+        },
+        "london": {
+          "raw": {
+            "attempts": 60,
+            "resolved": 60,
+            "wins": 17,
+            "losses": 43,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2833,
+            "gross_win": 1166.0,
+            "gross_loss": -1691.0,
+            "net_pnl": -525.0,
+            "profit_factor": 0.69,
+            "expectancy": -8.75
+          },
+          "commission_adjusted": {
+            "attempts": 60,
+            "resolved": 60,
+            "wins": 17,
+            "losses": 43,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2833,
+            "gross_win": 1140.84,
+            "gross_loss": -1754.64,
+            "net_pnl": -613.8,
+            "profit_factor": 0.65,
+            "expectancy": -10.23
+          }
+        },
+        "new_york": {
+          "raw": {
+            "attempts": 22,
+            "resolved": 22,
+            "wins": 11,
+            "losses": 11,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.5,
+            "gross_win": 1027.0,
+            "gross_loss": -585.5,
+            "net_pnl": 441.5,
+            "profit_factor": 1.754,
+            "expectancy": 20.07
+          },
+          "commission_adjusted": {
+            "attempts": 22,
+            "resolved": 22,
+            "wins": 11,
+            "losses": 11,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.5,
+            "gross_win": 1010.72,
+            "gross_loss": -601.78,
+            "net_pnl": 408.94,
+            "profit_factor": 1.68,
+            "expectancy": 18.59
+          }
+        }
+      },
+      "by_month_full": {
+        "2025-07": {
+          "raw": {
+            "attempts": 4,
+            "resolved": 4,
+            "wins": 2,
+            "losses": 2,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.5,
+            "gross_win": 128.0,
+            "gross_loss": -47.0,
+            "net_pnl": 81.0,
+            "profit_factor": 2.723,
+            "expectancy": 20.25
+          },
+          "commission_adjusted": {
+            "attempts": 4,
+            "resolved": 4,
+            "wins": 2,
+            "losses": 2,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.5,
+            "gross_win": 125.04,
+            "gross_loss": -49.96,
+            "net_pnl": 75.08,
+            "profit_factor": 2.503,
+            "expectancy": 18.77
+          }
+        },
+        "2025-08": {
+          "raw": {
+            "attempts": 11,
+            "resolved": 11,
+            "wins": 3,
+            "losses": 8,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2727,
+            "gross_win": 238.0,
+            "gross_loss": -265.5,
+            "net_pnl": -27.5,
+            "profit_factor": 0.896,
+            "expectancy": -2.5
+          },
+          "commission_adjusted": {
+            "attempts": 11,
+            "resolved": 11,
+            "wins": 3,
+            "losses": 8,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2727,
+            "gross_win": 233.56,
+            "gross_loss": -277.34,
+            "net_pnl": -43.78,
+            "profit_factor": 0.842,
+            "expectancy": -3.98
+          }
+        },
+        "2025-09": {
+          "raw": {
+            "attempts": 22,
+            "resolved": 22,
+            "wins": 8,
+            "losses": 14,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.3636,
+            "gross_win": 509.0,
+            "gross_loss": -377.0,
+            "net_pnl": 132.0,
+            "profit_factor": 1.35,
+            "expectancy": 6.0
+          },
+          "commission_adjusted": {
+            "attempts": 22,
+            "resolved": 22,
+            "wins": 8,
+            "losses": 14,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.3636,
+            "gross_win": 497.16,
+            "gross_loss": -397.72,
+            "net_pnl": 99.44,
+            "profit_factor": 1.25,
+            "expectancy": 4.52
+          }
+        },
+        "2025-10": {
+          "raw": {
+            "attempts": 19,
+            "resolved": 19,
+            "wins": 6,
+            "losses": 13,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.3158,
+            "gross_win": 303.0,
+            "gross_loss": -445.5,
+            "net_pnl": -142.5,
+            "profit_factor": 0.68,
+            "expectancy": -7.5
+          },
+          "commission_adjusted": {
+            "attempts": 19,
+            "resolved": 19,
+            "wins": 6,
+            "losses": 13,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.3158,
+            "gross_win": 294.12,
+            "gross_loss": -464.74,
+            "net_pnl": -170.62,
+            "profit_factor": 0.633,
+            "expectancy": -8.98
+          }
+        },
+        "2025-11": {
+          "raw": {
+            "attempts": 8,
+            "resolved": 8,
+            "wins": 1,
+            "losses": 7,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.125,
+            "gross_win": 81.0,
+            "gross_loss": -243.0,
+            "net_pnl": -162.0,
+            "profit_factor": 0.333,
+            "expectancy": -20.25
+          },
+          "commission_adjusted": {
+            "attempts": 8,
+            "resolved": 8,
+            "wins": 1,
+            "losses": 7,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.125,
+            "gross_win": 79.52,
+            "gross_loss": -253.36,
+            "net_pnl": -173.84,
+            "profit_factor": 0.314,
+            "expectancy": -21.73
+          }
+        },
+        "2025-12": {
+          "raw": {
+            "attempts": 16,
+            "resolved": 16,
+            "wins": 6,
+            "losses": 10,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.375,
+            "gross_win": 345.0,
+            "gross_loss": -307.5,
+            "net_pnl": 37.5,
+            "profit_factor": 1.122,
+            "expectancy": 2.34
+          },
+          "commission_adjusted": {
+            "attempts": 16,
+            "resolved": 16,
+            "wins": 6,
+            "losses": 10,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.375,
+            "gross_win": 336.12,
+            "gross_loss": -322.3,
+            "net_pnl": 13.82,
+            "profit_factor": 1.043,
+            "expectancy": 0.86
+          }
+        },
+        "2026-01": {
+          "raw": {
+            "attempts": 9,
+            "resolved": 9,
+            "wins": 3,
+            "losses": 6,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.3333,
+            "gross_win": 219.0,
+            "gross_loss": -180.5,
+            "net_pnl": 38.5,
+            "profit_factor": 1.213,
+            "expectancy": 4.28
+          },
+          "commission_adjusted": {
+            "attempts": 9,
+            "resolved": 9,
+            "wins": 3,
+            "losses": 6,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.3333,
+            "gross_win": 214.56,
+            "gross_loss": -189.38,
+            "net_pnl": 25.18,
+            "profit_factor": 1.133,
+            "expectancy": 2.8
+          }
+        },
+        "2026-02": {
+          "raw": {
+            "attempts": 8,
+            "resolved": 8,
+            "wins": 2,
+            "losses": 6,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.25,
+            "gross_win": 156.0,
+            "gross_loss": -245.0,
+            "net_pnl": -89.0,
+            "profit_factor": 0.637,
+            "expectancy": -11.12
+          },
+          "commission_adjusted": {
+            "attempts": 8,
+            "resolved": 8,
+            "wins": 2,
+            "losses": 6,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.25,
+            "gross_win": 153.04,
+            "gross_loss": -253.88,
+            "net_pnl": -100.84,
+            "profit_factor": 0.603,
+            "expectancy": -12.6
+          }
+        },
+        "2026-03": {
+          "raw": {
+            "attempts": 12,
+            "resolved": 12,
+            "wins": 7,
+            "losses": 5,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.5833,
+            "gross_win": 634.0,
+            "gross_loss": -215.5,
+            "net_pnl": 418.5,
+            "profit_factor": 2.942,
+            "expectancy": 34.88
+          },
+          "commission_adjusted": {
+            "attempts": 12,
+            "resolved": 12,
+            "wins": 7,
+            "losses": 5,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.5833,
+            "gross_win": 623.64,
+            "gross_loss": -222.9,
+            "net_pnl": 400.74,
+            "profit_factor": 2.798,
+            "expectancy": 33.4
+          }
+        },
+        "2026-04": {
+          "raw": {
+            "attempts": 20,
+            "resolved": 20,
+            "wins": 9,
+            "losses": 11,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.45,
+            "gross_win": 849.0,
+            "gross_loss": -428.0,
+            "net_pnl": 421.0,
+            "profit_factor": 1.984,
+            "expectancy": 21.05
+          },
+          "commission_adjusted": {
+            "attempts": 20,
+            "resolved": 20,
+            "wins": 9,
+            "losses": 11,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.45,
+            "gross_win": 835.68,
+            "gross_loss": -444.28,
+            "net_pnl": 391.4,
+            "profit_factor": 1.881,
+            "expectancy": 19.57
+          }
+        },
+        "2026-05": {
+          "raw": {
+            "attempts": 7,
+            "resolved": 7,
+            "wins": 0,
+            "losses": 7,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.0,
+            "gross_win": 0,
+            "gross_loss": -396.0,
+            "net_pnl": -396.0,
+            "profit_factor": 0.0,
+            "expectancy": -56.57
+          },
+          "commission_adjusted": {
+            "attempts": 7,
+            "resolved": 7,
+            "wins": 0,
+            "losses": 7,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.0,
+            "gross_win": 0,
+            "gross_loss": -406.36,
+            "net_pnl": -406.36,
+            "profit_factor": 0.0,
+            "expectancy": -58.05
+          }
+        },
+        "2026-06": {
+          "raw": {
+            "attempts": 4,
+            "resolved": 4,
+            "wins": 2,
+            "losses": 2,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.5,
+            "gross_win": 174.0,
+            "gross_loss": -114.5,
+            "net_pnl": 59.5,
+            "profit_factor": 1.52,
+            "expectancy": 14.88
+          },
+          "commission_adjusted": {
+            "attempts": 4,
+            "resolved": 4,
+            "wins": 2,
+            "losses": 2,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.5,
+            "gross_win": 171.04,
+            "gross_loss": -117.46,
+            "net_pnl": 53.58,
+            "profit_factor": 1.456,
+            "expectancy": 13.39
+          }
+        },
+        "2026-07": {
+          "raw": {
+            "attempts": 1,
+            "resolved": 1,
+            "wins": 0,
+            "losses": 1,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.0,
+            "gross_win": 0,
+            "gross_loss": -46.5,
+            "net_pnl": -46.5,
+            "profit_factor": 0.0,
+            "expectancy": -46.5
+          },
+          "commission_adjusted": {
+            "attempts": 1,
+            "resolved": 1,
+            "wins": 0,
+            "losses": 1,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.0,
+            "gross_win": 0,
+            "gross_loss": -47.98,
+            "net_pnl": -47.98,
+            "profit_factor": 0.0,
+            "expectancy": -47.98
+          }
+        }
+      },
+      "drawdown_raw": {
+        "max_drawdown": 522.5,
+        "max_consecutive_losses": 12,
+        "final_equity": 324.5
+      },
+      "drawdown_commission_adjusted": {
+        "max_drawdown": 602.8,
+        "max_consecutive_losses": 12,
+        "final_equity": 115.82
+      },
+      "concentration_raw": {
+        "net_pnl": 324.5,
+        "ex_top1_winner_net_pnl": 130.5,
+        "ex_top5_winners_net_pnl": -340.5,
+        "top1_share_of_net": 0.5978,
+        "top5_share_of_net": 2.0493
+      },
+      "concentration_commission_adjusted": {
+        "net_pnl": 115.82,
+        "ex_top1_winner_net_pnl": -76.7,
+        "ex_top5_winners_net_pnl": -541.78,
+        "top1_share_of_net": 1.6622,
+        "top5_share_of_net": 5.6778
+      }
+    },
+    "MES": {
+      "full_period": {
+        "range": [
+          "2025-07-24",
+          "2026-07-23"
+        ],
+        "raw": {
+          "attempts": 197,
+          "resolved": 194,
+          "wins": 44,
+          "losses": 150,
+          "open_with_identity": 3,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.2268,
+          "gross_win": 3085.0,
+          "gross_loss": -3385.0,
+          "net_pnl": -300.0,
+          "profit_factor": 0.911,
+          "expectancy": -1.55
+        },
+        "commission_adjusted": {
+          "attempts": 197,
+          "resolved": 194,
+          "wins": 44,
+          "losses": 150,
+          "open_with_identity": 3,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.2268,
+          "gross_win": 3019.88,
+          "gross_loss": -3607.0,
+          "net_pnl": -587.12,
+          "profit_factor": 0.837,
+          "expectancy": -3.03
+        }
+      },
+      "h1": {
+        "range": [
+          "2025-07-24",
+          "2026-01-23"
+        ],
+        "raw": {
+          "attempts": 197,
+          "resolved": 194,
+          "wins": 44,
+          "losses": 150,
+          "open_with_identity": 3,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.2268,
+          "gross_win": 3085.0,
+          "gross_loss": -3385.0,
+          "net_pnl": -300.0,
+          "profit_factor": 0.911,
+          "expectancy": -1.55
+        },
+        "commission_adjusted": {
+          "attempts": 197,
+          "resolved": 194,
+          "wins": 44,
+          "losses": 150,
+          "open_with_identity": 3,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.2268,
+          "gross_win": 3019.88,
+          "gross_loss": -3607.0,
+          "net_pnl": -587.12,
+          "profit_factor": 0.837,
+          "expectancy": -3.03
+        }
+      },
+      "h2": {
+        "range": [
+          "2026-01-24",
+          "2026-07-23"
+        ],
+        "raw": {
+          "attempts": 0,
+          "resolved": 0,
+          "wins": 0,
+          "losses": 0,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": null,
+          "gross_win": 0,
+          "gross_loss": 0,
+          "net_pnl": 0,
+          "profit_factor": null,
+          "expectancy": null
+        },
+        "commission_adjusted": {
+          "attempts": 0,
+          "resolved": 0,
+          "wins": 0,
+          "losses": 0,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": null,
+          "gross_win": 0,
+          "gross_loss": 0,
+          "net_pnl": 0,
+          "profit_factor": null,
+          "expectancy": null
+        }
+      },
+      "quarterly": {
+        "Q1": {
+          "range": [
+            "2025-07-24",
+            "2025-10-23"
+          ],
+          "raw": {
+            "attempts": 108,
+            "resolved": 106,
+            "wins": 27,
+            "losses": 79,
+            "open_with_identity": 2,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2547,
+            "gross_win": 1872.5,
+            "gross_loss": -1745.0,
+            "net_pnl": 127.5,
+            "profit_factor": 1.073,
+            "expectancy": 1.2
+          },
+          "commission_adjusted": {
+            "attempts": 108,
+            "resolved": 106,
+            "wins": 27,
+            "losses": 79,
+            "open_with_identity": 2,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2547,
+            "gross_win": 1832.54,
+            "gross_loss": -1861.92,
+            "net_pnl": -29.38,
+            "profit_factor": 0.984,
+            "expectancy": -0.28
+          }
+        },
+        "Q2": {
+          "range": [
+            "2025-10-24",
+            "2026-01-23"
+          ],
+          "raw": {
+            "attempts": 89,
+            "resolved": 88,
+            "wins": 17,
+            "losses": 71,
+            "open_with_identity": 1,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.1932,
+            "gross_win": 1212.5,
+            "gross_loss": -1640.0,
+            "net_pnl": -427.5,
+            "profit_factor": 0.739,
+            "expectancy": -4.86
+          },
+          "commission_adjusted": {
+            "attempts": 89,
+            "resolved": 88,
+            "wins": 17,
+            "losses": 71,
+            "open_with_identity": 1,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.1932,
+            "gross_win": 1187.34,
+            "gross_loss": -1745.08,
+            "net_pnl": -557.74,
+            "profit_factor": 0.68,
+            "expectancy": -6.34
+          }
+        },
+        "Q3": {
+          "range": [
+            "2026-01-24",
+            "2026-04-23"
+          ],
+          "raw": {
+            "attempts": 0,
+            "resolved": 0,
+            "wins": 0,
+            "losses": 0,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": null,
+            "gross_win": 0,
+            "gross_loss": 0,
+            "net_pnl": 0,
+            "profit_factor": null,
+            "expectancy": null
+          },
+          "commission_adjusted": {
+            "attempts": 0,
+            "resolved": 0,
+            "wins": 0,
+            "losses": 0,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": null,
+            "gross_win": 0,
+            "gross_loss": 0,
+            "net_pnl": 0,
+            "profit_factor": null,
+            "expectancy": null
+          }
+        },
+        "Q4": {
+          "range": [
+            "2026-04-24",
+            "2026-07-23"
+          ],
+          "raw": {
+            "attempts": 0,
+            "resolved": 0,
+            "wins": 0,
+            "losses": 0,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": null,
+            "gross_win": 0,
+            "gross_loss": 0,
+            "net_pnl": 0,
+            "profit_factor": null,
+            "expectancy": null
+          },
+          "commission_adjusted": {
+            "attempts": 0,
+            "resolved": 0,
+            "wins": 0,
+            "losses": 0,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": null,
+            "gross_win": 0,
+            "gross_loss": 0,
+            "net_pnl": 0,
+            "profit_factor": null,
+            "expectancy": null
+          }
+        }
+      },
+      "by_direction": {
+        "LONG": {
+          "raw": {
+            "attempts": 108,
+            "resolved": 106,
+            "wins": 24,
+            "losses": 82,
+            "open_with_identity": 2,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2264,
+            "gross_win": 1825.0,
+            "gross_loss": -1607.5,
+            "net_pnl": 217.5,
+            "profit_factor": 1.135,
+            "expectancy": 2.05
+          },
+          "commission_adjusted": {
+            "attempts": 108,
+            "resolved": 106,
+            "wins": 24,
+            "losses": 82,
+            "open_with_identity": 2,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2264,
+            "gross_win": 1789.48,
+            "gross_loss": -1728.86,
+            "net_pnl": 60.62,
+            "profit_factor": 1.035,
+            "expectancy": 0.57
+          }
+        },
+        "SHORT": {
+          "raw": {
+            "attempts": 89,
+            "resolved": 88,
+            "wins": 20,
+            "losses": 68,
+            "open_with_identity": 1,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2273,
+            "gross_win": 1260.0,
+            "gross_loss": -1777.5,
+            "net_pnl": -517.5,
+            "profit_factor": 0.709,
+            "expectancy": -5.88
+          },
+          "commission_adjusted": {
+            "attempts": 89,
+            "resolved": 88,
+            "wins": 20,
+            "losses": 68,
+            "open_with_identity": 1,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2273,
+            "gross_win": 1230.4,
+            "gross_loss": -1878.14,
+            "net_pnl": -647.74,
+            "profit_factor": 0.655,
+            "expectancy": -7.36
+          }
+        }
+      },
+      "by_session": {
+        "asian": {
+          "raw": {
+            "attempts": 64,
+            "resolved": 64,
+            "wins": 11,
+            "losses": 53,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.1719,
+            "gross_win": 565.0,
+            "gross_loss": -815.0,
+            "net_pnl": -250.0,
+            "profit_factor": 0.693,
+            "expectancy": -3.91
+          },
+          "commission_adjusted": {
+            "attempts": 64,
+            "resolved": 64,
+            "wins": 11,
+            "losses": 53,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.1719,
+            "gross_win": 548.72,
+            "gross_loss": -893.44,
+            "net_pnl": -344.72,
+            "profit_factor": 0.614,
+            "expectancy": -5.39
+          }
+        },
+        "london": {
+          "raw": {
+            "attempts": 84,
+            "resolved": 84,
+            "wins": 17,
+            "losses": 67,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2024,
+            "gross_win": 1195.0,
+            "gross_loss": -1368.75,
+            "net_pnl": -173.75,
+            "profit_factor": 0.873,
+            "expectancy": -2.07
+          },
+          "commission_adjusted": {
+            "attempts": 84,
+            "resolved": 84,
+            "wins": 17,
+            "losses": 67,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2024,
+            "gross_win": 1169.84,
+            "gross_loss": -1467.91,
+            "net_pnl": -298.07,
+            "profit_factor": 0.797,
+            "expectancy": -3.55
+          }
+        },
+        "new_york": {
+          "raw": {
+            "attempts": 49,
+            "resolved": 46,
+            "wins": 16,
+            "losses": 30,
+            "open_with_identity": 3,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.3478,
+            "gross_win": 1325.0,
+            "gross_loss": -1201.25,
+            "net_pnl": 123.75,
+            "profit_factor": 1.103,
+            "expectancy": 2.69
+          },
+          "commission_adjusted": {
+            "attempts": 49,
+            "resolved": 46,
+            "wins": 16,
+            "losses": 30,
+            "open_with_identity": 3,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.3478,
+            "gross_win": 1301.32,
+            "gross_loss": -1245.65,
+            "net_pnl": 55.67,
+            "profit_factor": 1.045,
+            "expectancy": 1.21
+          }
+        }
+      },
+      "by_month_full": {
+        "2025-07": {
+          "raw": {
+            "attempts": 9,
+            "resolved": 9,
+            "wins": 3,
+            "losses": 6,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.3333,
+            "gross_win": 187.5,
+            "gross_loss": -100.0,
+            "net_pnl": 87.5,
+            "profit_factor": 1.875,
+            "expectancy": 9.72
+          },
+          "commission_adjusted": {
+            "attempts": 9,
+            "resolved": 9,
+            "wins": 3,
+            "losses": 6,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.3333,
+            "gross_win": 183.06,
+            "gross_loss": -108.88,
+            "net_pnl": 74.18,
+            "profit_factor": 1.681,
+            "expectancy": 8.24
+          }
+        },
+        "2025-08": {
+          "raw": {
+            "attempts": 34,
+            "resolved": 33,
+            "wins": 9,
+            "losses": 24,
+            "open_with_identity": 1,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2727,
+            "gross_win": 600.0,
+            "gross_loss": -526.25,
+            "net_pnl": 73.75,
+            "profit_factor": 1.14,
+            "expectancy": 2.23
+          },
+          "commission_adjusted": {
+            "attempts": 34,
+            "resolved": 33,
+            "wins": 9,
+            "losses": 24,
+            "open_with_identity": 1,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2727,
+            "gross_win": 586.68,
+            "gross_loss": -561.77,
+            "net_pnl": 24.91,
+            "profit_factor": 1.044,
+            "expectancy": 0.75
+          }
+        },
+        "2025-09": {
+          "raw": {
+            "attempts": 37,
+            "resolved": 37,
+            "wins": 9,
+            "losses": 28,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2432,
+            "gross_win": 575.0,
+            "gross_loss": -562.5,
+            "net_pnl": 12.5,
+            "profit_factor": 1.022,
+            "expectancy": 0.34
+          },
+          "commission_adjusted": {
+            "attempts": 37,
+            "resolved": 37,
+            "wins": 9,
+            "losses": 28,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2432,
+            "gross_win": 561.68,
+            "gross_loss": -603.94,
+            "net_pnl": -42.26,
+            "profit_factor": 0.93,
+            "expectancy": -1.14
+          }
+        },
+        "2025-10": {
+          "raw": {
+            "attempts": 37,
+            "resolved": 36,
+            "wins": 8,
+            "losses": 28,
+            "open_with_identity": 1,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2222,
+            "gross_win": 697.5,
+            "gross_loss": -632.5,
+            "net_pnl": 65.0,
+            "profit_factor": 1.103,
+            "expectancy": 1.81
+          },
+          "commission_adjusted": {
+            "attempts": 37,
+            "resolved": 36,
+            "wins": 8,
+            "losses": 28,
+            "open_with_identity": 1,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2222,
+            "gross_win": 685.66,
+            "gross_loss": -673.94,
+            "net_pnl": 11.72,
+            "profit_factor": 1.017,
+            "expectancy": 0.33
+          }
+        },
+        "2025-11": {
+          "raw": {
+            "attempts": 37,
+            "resolved": 36,
+            "wins": 7,
+            "losses": 29,
+            "open_with_identity": 1,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.1944,
+            "gross_win": 635.0,
+            "gross_loss": -850.0,
+            "net_pnl": -215.0,
+            "profit_factor": 0.747,
+            "expectancy": -5.97
+          },
+          "commission_adjusted": {
+            "attempts": 37,
+            "resolved": 36,
+            "wins": 7,
+            "losses": 29,
+            "open_with_identity": 1,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.1944,
+            "gross_win": 624.64,
+            "gross_loss": -892.92,
+            "net_pnl": -268.28,
+            "profit_factor": 0.7,
+            "expectancy": -7.45
+          }
+        },
+        "2025-12": {
+          "raw": {
+            "attempts": 27,
+            "resolved": 27,
+            "wins": 6,
+            "losses": 21,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2222,
+            "gross_win": 240.0,
+            "gross_loss": -367.5,
+            "net_pnl": -127.5,
+            "profit_factor": 0.653,
+            "expectancy": -4.72
+          },
+          "commission_adjusted": {
+            "attempts": 27,
+            "resolved": 27,
+            "wins": 6,
+            "losses": 21,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2222,
+            "gross_win": 231.12,
+            "gross_loss": -398.58,
+            "net_pnl": -167.46,
+            "profit_factor": 0.58,
+            "expectancy": -6.2
+          }
+        },
+        "2026-01": {
+          "raw": {
+            "attempts": 16,
+            "resolved": 16,
+            "wins": 2,
+            "losses": 14,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.125,
+            "gross_win": 150.0,
+            "gross_loss": -346.25,
+            "net_pnl": -196.25,
+            "profit_factor": 0.433,
+            "expectancy": -12.27
+          },
+          "commission_adjusted": {
+            "attempts": 16,
+            "resolved": 16,
+            "wins": 2,
+            "losses": 14,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.125,
+            "gross_win": 147.04,
+            "gross_loss": -366.97,
+            "net_pnl": -219.93,
+            "profit_factor": 0.401,
+            "expectancy": -13.75
+          }
+        }
+      },
+      "drawdown_raw": {
+        "max_drawdown": 613.75,
+        "max_consecutive_losses": 18,
+        "final_equity": -300.0
+      },
+      "drawdown_commission_adjusted": {
+        "max_drawdown": 863.87,
+        "max_consecutive_losses": 18,
+        "final_equity": -587.12
+      },
+      "concentration_raw": {
+        "net_pnl": -300.0,
+        "ex_top1_winner_net_pnl": -447.5,
+        "ex_top5_winners_net_pnl": -892.5,
+        "top1_share_of_net": -0.4917,
+        "top5_share_of_net": -1.975
+      },
+      "concentration_commission_adjusted": {
+        "net_pnl": -587.12,
+        "ex_top1_winner_net_pnl": -733.14,
+        "ex_top5_winners_net_pnl": -1172.22,
+        "top1_share_of_net": -0.2487,
+        "top5_share_of_net": -0.9966
+      }
+    }
+  },
+  "per_strategy_combined": {
+    "strat_212": {
+      "full_period": {
+        "range": [
+          "2025-07-24",
+          "2026-07-23"
+        ],
+        "raw": {
+          "attempts": 303,
+          "resolved": 300,
+          "wins": 85,
+          "losses": 215,
+          "open_with_identity": 3,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.2833,
+          "gross_win": 6142.5,
+          "gross_loss": -5896.75,
+          "net_pnl": 245.75,
+          "profit_factor": 1.042,
+          "expectancy": 0.82
+        },
+        "commission_adjusted": {
+          "attempts": 303,
+          "resolved": 300,
+          "wins": 85,
+          "losses": 215,
+          "open_with_identity": 3,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.2833,
+          "gross_win": 6016.7,
+          "gross_loss": -6214.95,
+          "net_pnl": -198.25,
+          "profit_factor": 0.968,
+          "expectancy": -0.66
+        }
+      },
+      "h1": {
+        "range": [
+          "2025-07-24",
+          "2026-01-23"
+        ],
+        "raw": {
+          "attempts": 257,
+          "resolved": 254,
+          "wins": 66,
+          "losses": 188,
+          "open_with_identity": 3,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.2598,
+          "gross_win": 4408.5,
+          "gross_loss": -4679.75,
+          "net_pnl": -271.25,
+          "profit_factor": 0.942,
+          "expectancy": -1.07
+        },
+        "commission_adjusted": {
+          "attempts": 257,
+          "resolved": 254,
+          "wins": 66,
+          "losses": 188,
+          "open_with_identity": 3,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.2598,
+          "gross_win": 4310.82,
+          "gross_loss": -4957.99,
+          "net_pnl": -647.17,
+          "profit_factor": 0.869,
+          "expectancy": -2.55
+        }
+      },
+      "h2": {
+        "range": [
+          "2026-01-24",
+          "2026-07-23"
+        ],
+        "raw": {
+          "attempts": 46,
+          "resolved": 46,
+          "wins": 19,
+          "losses": 27,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.413,
+          "gross_win": 1734.0,
+          "gross_loss": -1217.0,
+          "net_pnl": 517.0,
+          "profit_factor": 1.425,
+          "expectancy": 11.24
+        },
+        "commission_adjusted": {
+          "attempts": 46,
+          "resolved": 46,
+          "wins": 19,
+          "losses": 27,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.413,
+          "gross_win": 1705.88,
+          "gross_loss": -1256.96,
+          "net_pnl": 448.92,
+          "profit_factor": 1.357,
+          "expectancy": 9.76
+        }
+      },
+      "quarterly": {
+        "Q1": {
+          "range": [
+            "2025-07-24",
+            "2025-10-23"
+          ],
+          "raw": {
+            "attempts": 138,
+            "resolved": 136,
+            "wins": 39,
+            "losses": 97,
+            "open_with_identity": 2,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2868,
+            "gross_win": 2646.0,
+            "gross_loss": -2328.25,
+            "net_pnl": 317.75,
+            "profit_factor": 1.136,
+            "expectancy": 2.34
+          },
+          "commission_adjusted": {
+            "attempts": 138,
+            "resolved": 136,
+            "wins": 39,
+            "losses": 97,
+            "open_with_identity": 2,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2868,
+            "gross_win": 2588.28,
+            "gross_loss": -2471.81,
+            "net_pnl": 116.47,
+            "profit_factor": 1.047,
+            "expectancy": 0.86
+          }
+        },
+        "Q2": {
+          "range": [
+            "2025-10-24",
+            "2026-01-23"
+          ],
+          "raw": {
+            "attempts": 119,
+            "resolved": 118,
+            "wins": 27,
+            "losses": 91,
+            "open_with_identity": 1,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2288,
+            "gross_win": 1762.5,
+            "gross_loss": -2351.5,
+            "net_pnl": -589.0,
+            "profit_factor": 0.75,
+            "expectancy": -4.99
+          },
+          "commission_adjusted": {
+            "attempts": 119,
+            "resolved": 118,
+            "wins": 27,
+            "losses": 91,
+            "open_with_identity": 1,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2288,
+            "gross_win": 1722.54,
+            "gross_loss": -2486.18,
+            "net_pnl": -763.64,
+            "profit_factor": 0.693,
+            "expectancy": -6.47
+          }
+        },
+        "Q3": {
+          "range": [
+            "2026-01-24",
+            "2026-04-23"
+          ],
+          "raw": {
+            "attempts": 33,
+            "resolved": 33,
+            "wins": 16,
+            "losses": 17,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.4848,
+            "gross_win": 1347.0,
+            "gross_loss": -660.0,
+            "net_pnl": 687.0,
+            "profit_factor": 2.041,
+            "expectancy": 20.82
+          },
+          "commission_adjusted": {
+            "attempts": 33,
+            "resolved": 33,
+            "wins": 16,
+            "losses": 17,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.4848,
+            "gross_win": 1323.32,
+            "gross_loss": -685.16,
+            "net_pnl": 638.16,
+            "profit_factor": 1.931,
+            "expectancy": 19.34
+          }
+        },
+        "Q4": {
+          "range": [
+            "2026-04-24",
+            "2026-07-23"
+          ],
+          "raw": {
+            "attempts": 13,
+            "resolved": 13,
+            "wins": 3,
+            "losses": 10,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2308,
+            "gross_win": 387.0,
+            "gross_loss": -557.0,
+            "net_pnl": -170.0,
+            "profit_factor": 0.695,
+            "expectancy": -13.08
+          },
+          "commission_adjusted": {
+            "attempts": 13,
+            "resolved": 13,
+            "wins": 3,
+            "losses": 10,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2308,
+            "gross_win": 382.56,
+            "gross_loss": -571.8,
+            "net_pnl": -189.24,
+            "profit_factor": 0.669,
+            "expectancy": -14.56
+          }
+        }
+      },
+      "by_direction": {
+        "LONG": {
+          "raw": {
+            "attempts": 184,
+            "resolved": 182,
+            "wins": 52,
+            "losses": 130,
+            "open_with_identity": 2,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2857,
+            "gross_win": 3639.0,
+            "gross_loss": -3471.5,
+            "net_pnl": 167.5,
+            "profit_factor": 1.048,
+            "expectancy": 0.92
+          },
+          "commission_adjusted": {
+            "attempts": 184,
+            "resolved": 182,
+            "wins": 52,
+            "losses": 130,
+            "open_with_identity": 2,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2857,
+            "gross_win": 3562.04,
+            "gross_loss": -3663.9,
+            "net_pnl": -101.86,
+            "profit_factor": 0.972,
+            "expectancy": -0.56
+          }
+        },
+        "SHORT": {
+          "raw": {
+            "attempts": 119,
+            "resolved": 118,
+            "wins": 33,
+            "losses": 85,
+            "open_with_identity": 1,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2797,
+            "gross_win": 2503.5,
+            "gross_loss": -2425.25,
+            "net_pnl": 78.25,
+            "profit_factor": 1.032,
+            "expectancy": 0.66
+          },
+          "commission_adjusted": {
+            "attempts": 119,
+            "resolved": 118,
+            "wins": 33,
+            "losses": 85,
+            "open_with_identity": 1,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2797,
+            "gross_win": 2454.66,
+            "gross_loss": -2551.05,
+            "net_pnl": -96.39,
+            "profit_factor": 0.962,
+            "expectancy": -0.82
+          }
+        }
+      },
+      "by_session": {
+        "asian": {
+          "raw": {
+            "attempts": 111,
+            "resolved": 111,
+            "wins": 31,
+            "losses": 80,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2793,
+            "gross_win": 1940.0,
+            "gross_loss": -1631.75,
+            "net_pnl": 308.25,
+            "profit_factor": 1.189,
+            "expectancy": 2.78
+          },
+          "commission_adjusted": {
+            "attempts": 111,
+            "resolved": 111,
+            "wins": 31,
+            "losses": 80,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2793,
+            "gross_win": 1894.12,
+            "gross_loss": -1750.15,
+            "net_pnl": 143.97,
+            "profit_factor": 1.082,
+            "expectancy": 1.3
+          }
+        },
+        "london": {
+          "raw": {
+            "attempts": 129,
+            "resolved": 129,
+            "wins": 30,
+            "losses": 99,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2326,
+            "gross_win": 2072.0,
+            "gross_loss": -2686.75,
+            "net_pnl": -614.75,
+            "profit_factor": 0.771,
+            "expectancy": -4.77
+          },
+          "commission_adjusted": {
+            "attempts": 129,
+            "resolved": 129,
+            "wins": 30,
+            "losses": 99,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2326,
+            "gross_win": 2027.6,
+            "gross_loss": -2833.27,
+            "net_pnl": -805.67,
+            "profit_factor": 0.716,
+            "expectancy": -6.25
+          }
+        },
+        "new_york": {
+          "raw": {
+            "attempts": 63,
+            "resolved": 60,
+            "wins": 24,
+            "losses": 36,
+            "open_with_identity": 3,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.4,
+            "gross_win": 2130.5,
+            "gross_loss": -1578.25,
+            "net_pnl": 552.25,
+            "profit_factor": 1.35,
+            "expectancy": 9.2
+          },
+          "commission_adjusted": {
+            "attempts": 63,
+            "resolved": 60,
+            "wins": 24,
+            "losses": 36,
+            "open_with_identity": 3,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.4,
+            "gross_win": 2094.98,
+            "gross_loss": -1631.53,
+            "net_pnl": 463.45,
+            "profit_factor": 1.284,
+            "expectancy": 7.72
+          }
+        }
+      },
+      "by_month_full": {
+        "2025-07": {
+          "raw": {
+            "attempts": 11,
+            "resolved": 11,
+            "wins": 5,
+            "losses": 6,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.4545,
+            "gross_win": 315.5,
+            "gross_loss": -118.25,
+            "net_pnl": 197.25,
+            "profit_factor": 2.668,
+            "expectancy": 17.93
+          },
+          "commission_adjusted": {
+            "attempts": 11,
+            "resolved": 11,
+            "wins": 5,
+            "losses": 6,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.4545,
+            "gross_win": 308.1,
+            "gross_loss": -127.13,
+            "net_pnl": 180.97,
+            "profit_factor": 2.424,
+            "expectancy": 16.45
+          }
+        },
+        "2025-08": {
+          "raw": {
+            "attempts": 44,
+            "resolved": 43,
+            "wins": 12,
+            "losses": 31,
+            "open_with_identity": 1,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2791,
+            "gross_win": 838.0,
+            "gross_loss": -740.5,
+            "net_pnl": 97.5,
+            "profit_factor": 1.132,
+            "expectancy": 2.27
+          },
+          "commission_adjusted": {
+            "attempts": 44,
+            "resolved": 43,
+            "wins": 12,
+            "losses": 31,
+            "open_with_identity": 1,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2791,
+            "gross_win": 820.24,
+            "gross_loss": -786.38,
+            "net_pnl": 33.86,
+            "profit_factor": 1.043,
+            "expectancy": 0.79
+          }
+        },
+        "2025-09": {
+          "raw": {
+            "attempts": 51,
+            "resolved": 51,
+            "wins": 15,
+            "losses": 36,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2941,
+            "gross_win": 957.0,
+            "gross_loss": -808.75,
+            "net_pnl": 148.25,
+            "profit_factor": 1.183,
+            "expectancy": 2.91
+          },
+          "commission_adjusted": {
+            "attempts": 51,
+            "resolved": 51,
+            "wins": 15,
+            "losses": 36,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2941,
+            "gross_win": 934.8,
+            "gross_loss": -862.03,
+            "net_pnl": 72.77,
+            "profit_factor": 1.084,
+            "expectancy": 1.43
+          }
+        },
+        "2025-10": {
+          "raw": {
+            "attempts": 47,
+            "resolved": 46,
+            "wins": 10,
+            "losses": 36,
+            "open_with_identity": 1,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2174,
+            "gross_win": 665.5,
+            "gross_loss": -914.0,
+            "net_pnl": -248.5,
+            "profit_factor": 0.728,
+            "expectancy": -5.4
+          },
+          "commission_adjusted": {
+            "attempts": 47,
+            "resolved": 46,
+            "wins": 10,
+            "losses": 36,
+            "open_with_identity": 1,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2174,
+            "gross_win": 650.7,
+            "gross_loss": -967.28,
+            "net_pnl": -316.58,
+            "profit_factor": 0.673,
+            "expectancy": -6.88
+          }
+        },
+        "2025-11": {
+          "raw": {
+            "attempts": 40,
+            "resolved": 39,
+            "wins": 7,
+            "losses": 32,
+            "open_with_identity": 1,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.1795,
+            "gross_win": 678.5,
+            "gross_loss": -1016.75,
+            "net_pnl": -338.25,
+            "profit_factor": 0.667,
+            "expectancy": -8.67
+          },
+          "commission_adjusted": {
+            "attempts": 40,
+            "resolved": 39,
+            "wins": 7,
+            "losses": 32,
+            "open_with_identity": 1,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.1795,
+            "gross_win": 668.14,
+            "gross_loss": -1064.11,
+            "net_pnl": -395.97,
+            "profit_factor": 0.628,
+            "expectancy": -10.15
+          }
+        },
+        "2025-12": {
+          "raw": {
+            "attempts": 39,
+            "resolved": 39,
+            "wins": 12,
+            "losses": 27,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.3077,
+            "gross_win": 585.0,
+            "gross_loss": -554.75,
+            "net_pnl": 30.25,
+            "profit_factor": 1.055,
+            "expectancy": 0.78
+          },
+          "commission_adjusted": {
+            "attempts": 39,
+            "resolved": 39,
+            "wins": 12,
+            "losses": 27,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.3077,
+            "gross_win": 567.24,
+            "gross_loss": -594.71,
+            "net_pnl": -27.47,
+            "profit_factor": 0.954,
+            "expectancy": -0.7
+          }
+        },
+        "2026-01": {
+          "raw": {
+            "attempts": 25,
+            "resolved": 25,
+            "wins": 5,
+            "losses": 20,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2,
+            "gross_win": 369.0,
+            "gross_loss": -526.75,
+            "net_pnl": -157.75,
+            "profit_factor": 0.701,
+            "expectancy": -6.31
+          },
+          "commission_adjusted": {
+            "attempts": 25,
+            "resolved": 25,
+            "wins": 5,
+            "losses": 20,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2,
+            "gross_win": 361.6,
+            "gross_loss": -556.35,
+            "net_pnl": -194.75,
+            "profit_factor": 0.65,
+            "expectancy": -7.79
+          }
+        },
+        "2026-02": {
+          "raw": {
+            "attempts": 7,
+            "resolved": 7,
+            "wins": 2,
+            "losses": 5,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2857,
+            "gross_win": 156.0,
+            "gross_loss": -191.0,
+            "net_pnl": -35.0,
+            "profit_factor": 0.817,
+            "expectancy": -5.0
+          },
+          "commission_adjusted": {
+            "attempts": 7,
+            "resolved": 7,
+            "wins": 2,
+            "losses": 5,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2857,
+            "gross_win": 153.04,
+            "gross_loss": -198.4,
+            "net_pnl": -45.36,
+            "profit_factor": 0.771,
+            "expectancy": -6.48
+          }
+        },
+        "2026-03": {
+          "raw": {
+            "attempts": 10,
+            "resolved": 10,
+            "wins": 7,
+            "losses": 3,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.7,
+            "gross_win": 634.0,
+            "gross_loss": -129.5,
+            "net_pnl": 504.5,
+            "profit_factor": 4.896,
+            "expectancy": 50.45
+          },
+          "commission_adjusted": {
+            "attempts": 10,
+            "resolved": 10,
+            "wins": 7,
+            "losses": 3,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.7,
+            "gross_win": 623.64,
+            "gross_loss": -133.94,
+            "net_pnl": 489.7,
+            "profit_factor": 4.656,
+            "expectancy": 48.97
+          }
+        },
+        "2026-04": {
+          "raw": {
+            "attempts": 18,
+            "resolved": 18,
+            "wins": 9,
+            "losses": 9,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.5,
+            "gross_win": 849.0,
+            "gross_loss": -339.5,
+            "net_pnl": 509.5,
+            "profit_factor": 2.501,
+            "expectancy": 28.31
+          },
+          "commission_adjusted": {
+            "attempts": 18,
+            "resolved": 18,
+            "wins": 9,
+            "losses": 9,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.5,
+            "gross_win": 835.68,
+            "gross_loss": -352.82,
+            "net_pnl": 482.86,
+            "profit_factor": 2.369,
+            "expectancy": 26.83
+          }
+        },
+        "2026-05": {
+          "raw": {
+            "attempts": 7,
+            "resolved": 7,
+            "wins": 0,
+            "losses": 7,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.0,
+            "gross_win": 0,
+            "gross_loss": -396.0,
+            "net_pnl": -396.0,
+            "profit_factor": 0.0,
+            "expectancy": -56.57
+          },
+          "commission_adjusted": {
+            "attempts": 7,
+            "resolved": 7,
+            "wins": 0,
+            "losses": 7,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.0,
+            "gross_win": 0,
+            "gross_loss": -406.36,
+            "net_pnl": -406.36,
+            "profit_factor": 0.0,
+            "expectancy": -58.05
+          }
+        },
+        "2026-06": {
+          "raw": {
+            "attempts": 3,
+            "resolved": 3,
+            "wins": 1,
+            "losses": 2,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.3333,
+            "gross_win": 95.0,
+            "gross_loss": -114.5,
+            "net_pnl": -19.5,
+            "profit_factor": 0.83,
+            "expectancy": -6.5
+          },
+          "commission_adjusted": {
+            "attempts": 3,
+            "resolved": 3,
+            "wins": 1,
+            "losses": 2,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.3333,
+            "gross_win": 93.52,
+            "gross_loss": -117.46,
+            "net_pnl": -23.94,
+            "profit_factor": 0.796,
+            "expectancy": -7.98
+          }
+        },
+        "2026-07": {
+          "raw": {
+            "attempts": 1,
+            "resolved": 1,
+            "wins": 0,
+            "losses": 1,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.0,
+            "gross_win": 0,
+            "gross_loss": -46.5,
+            "net_pnl": -46.5,
+            "profit_factor": 0.0,
+            "expectancy": -46.5
+          },
+          "commission_adjusted": {
+            "attempts": 1,
+            "resolved": 1,
+            "wins": 0,
+            "losses": 1,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.0,
+            "gross_win": 0,
+            "gross_loss": -47.98,
+            "net_pnl": -47.98,
+            "profit_factor": 0.0,
+            "expectancy": -47.98
+          }
+        }
+      },
+      "drawdown_raw": {
+        "max_drawdown": 979.0,
+        "max_consecutive_losses": 20,
+        "final_equity": 245.75
+      },
+      "drawdown_commission_adjusted": {
+        "max_drawdown": 1314.38,
+        "max_consecutive_losses": 20,
+        "final_equity": -198.25
+      },
+      "concentration_raw": {
+        "net_pnl": 245.75,
+        "ex_top1_winner_net_pnl": 51.75,
+        "ex_top5_winners_net_pnl": -470.75,
+        "top1_share_of_net": 0.7894,
+        "top5_share_of_net": 2.9156
+      },
+      "concentration_commission_adjusted": {
+        "net_pnl": -198.25,
+        "ex_top1_winner_net_pnl": -390.77,
+        "ex_top5_winners_net_pnl": -907.35,
+        "top1_share_of_net": -0.9711,
+        "top5_share_of_net": -3.5768
+      }
+    },
+    "strat_122": {
+      "full_period": {
+        "range": [
+          "2025-07-24",
+          "2026-07-23"
+        ],
+        "raw": {
+          "attempts": 35,
+          "resolved": 35,
+          "wins": 8,
+          "losses": 27,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.2286,
+          "gross_win": 578.5,
+          "gross_loss": -799.75,
+          "net_pnl": -221.25,
+          "profit_factor": 0.723,
+          "expectancy": -6.32
+        },
+        "commission_adjusted": {
+          "attempts": 35,
+          "resolved": 35,
+          "wins": 8,
+          "losses": 27,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.2286,
+          "gross_win": 566.66,
+          "gross_loss": -839.71,
+          "net_pnl": -273.05,
+          "profit_factor": 0.675,
+          "expectancy": -7.8
+        }
+      },
+      "h1": {
+        "range": [
+          "2025-07-24",
+          "2026-01-23"
+        ],
+        "raw": {
+          "attempts": 29,
+          "resolved": 29,
+          "wins": 7,
+          "losses": 22,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.2414,
+          "gross_win": 499.5,
+          "gross_loss": -571.25,
+          "net_pnl": -71.75,
+          "profit_factor": 0.874,
+          "expectancy": -2.47
+        },
+        "commission_adjusted": {
+          "attempts": 29,
+          "resolved": 29,
+          "wins": 7,
+          "losses": 22,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.2414,
+          "gross_win": 489.14,
+          "gross_loss": -603.81,
+          "net_pnl": -114.67,
+          "profit_factor": 0.81,
+          "expectancy": -3.95
+        }
+      },
+      "h2": {
+        "range": [
+          "2026-01-24",
+          "2026-07-23"
+        ],
+        "raw": {
+          "attempts": 6,
+          "resolved": 6,
+          "wins": 1,
+          "losses": 5,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.1667,
+          "gross_win": 79.0,
+          "gross_loss": -228.5,
+          "net_pnl": -149.5,
+          "profit_factor": 0.346,
+          "expectancy": -24.92
+        },
+        "commission_adjusted": {
+          "attempts": 6,
+          "resolved": 6,
+          "wins": 1,
+          "losses": 5,
+          "open_with_identity": 0,
+          "unjoinable_legacy": 0,
+          "win_rate": 0.1667,
+          "gross_win": 77.52,
+          "gross_loss": -235.9,
+          "net_pnl": -158.38,
+          "profit_factor": 0.329,
+          "expectancy": -26.4
+        }
+      },
+      "quarterly": {
+        "Q1": {
+          "range": [
+            "2025-07-24",
+            "2025-10-23"
+          ],
+          "raw": {
+            "attempts": 18,
+            "resolved": 18,
+            "wins": 4,
+            "losses": 14,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2222,
+            "gross_win": 274.5,
+            "gross_loss": -374.75,
+            "net_pnl": -100.25,
+            "profit_factor": 0.732,
+            "expectancy": -5.57
+          },
+          "commission_adjusted": {
+            "attempts": 18,
+            "resolved": 18,
+            "wins": 4,
+            "losses": 14,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2222,
+            "gross_win": 268.58,
+            "gross_loss": -395.47,
+            "net_pnl": -126.89,
+            "profit_factor": 0.679,
+            "expectancy": -7.05
+          }
+        },
+        "Q2": {
+          "range": [
+            "2025-10-24",
+            "2026-01-23"
+          ],
+          "raw": {
+            "attempts": 11,
+            "resolved": 11,
+            "wins": 3,
+            "losses": 8,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2727,
+            "gross_win": 225.0,
+            "gross_loss": -196.5,
+            "net_pnl": 28.5,
+            "profit_factor": 1.145,
+            "expectancy": 2.59
+          },
+          "commission_adjusted": {
+            "attempts": 11,
+            "resolved": 11,
+            "wins": 3,
+            "losses": 8,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2727,
+            "gross_win": 220.56,
+            "gross_loss": -208.34,
+            "net_pnl": 12.22,
+            "profit_factor": 1.059,
+            "expectancy": 1.11
+          }
+        },
+        "Q3": {
+          "range": [
+            "2026-01-24",
+            "2026-04-23"
+          ],
+          "raw": {
+            "attempts": 5,
+            "resolved": 5,
+            "wins": 0,
+            "losses": 5,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.0,
+            "gross_win": 0,
+            "gross_loss": -228.5,
+            "net_pnl": -228.5,
+            "profit_factor": 0.0,
+            "expectancy": -45.7
+          },
+          "commission_adjusted": {
+            "attempts": 5,
+            "resolved": 5,
+            "wins": 0,
+            "losses": 5,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.0,
+            "gross_win": 0,
+            "gross_loss": -235.9,
+            "net_pnl": -235.9,
+            "profit_factor": 0.0,
+            "expectancy": -47.18
+          }
+        },
+        "Q4": {
+          "range": [
+            "2026-04-24",
+            "2026-07-23"
+          ],
+          "raw": {
+            "attempts": 1,
+            "resolved": 1,
+            "wins": 1,
+            "losses": 0,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 1.0,
+            "gross_win": 79.0,
+            "gross_loss": 0,
+            "net_pnl": 79.0,
+            "profit_factor": Infinity,
+            "expectancy": 79.0
+          },
+          "commission_adjusted": {
+            "attempts": 1,
+            "resolved": 1,
+            "wins": 1,
+            "losses": 0,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 1.0,
+            "gross_win": 77.52,
+            "gross_loss": 0,
+            "net_pnl": 77.52,
+            "profit_factor": Infinity,
+            "expectancy": 77.52
+          }
+        }
+      },
+      "by_direction": {
+        "LONG": {
+          "raw": {
+            "attempts": 26,
+            "resolved": 26,
+            "wins": 6,
+            "losses": 20,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2308,
+            "gross_win": 451.0,
+            "gross_loss": -551.5,
+            "net_pnl": -100.5,
+            "profit_factor": 0.818,
+            "expectancy": -3.87
+          },
+          "commission_adjusted": {
+            "attempts": 26,
+            "resolved": 26,
+            "wins": 6,
+            "losses": 20,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2308,
+            "gross_win": 442.12,
+            "gross_loss": -581.1,
+            "net_pnl": -138.98,
+            "profit_factor": 0.761,
+            "expectancy": -5.35
+          }
+        },
+        "SHORT": {
+          "raw": {
+            "attempts": 9,
+            "resolved": 9,
+            "wins": 2,
+            "losses": 7,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2222,
+            "gross_win": 127.5,
+            "gross_loss": -248.25,
+            "net_pnl": -120.75,
+            "profit_factor": 0.514,
+            "expectancy": -13.42
+          },
+          "commission_adjusted": {
+            "attempts": 9,
+            "resolved": 9,
+            "wins": 2,
+            "losses": 7,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2222,
+            "gross_win": 124.54,
+            "gross_loss": -258.61,
+            "net_pnl": -134.07,
+            "profit_factor": 0.482,
+            "expectancy": -14.9
+          }
+        }
+      },
+      "by_session": {
+        "asian": {
+          "raw": {
+            "attempts": 12,
+            "resolved": 12,
+            "wins": 1,
+            "losses": 11,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.0833,
+            "gross_win": 68.0,
+            "gross_loss": -218.25,
+            "net_pnl": -150.25,
+            "profit_factor": 0.312,
+            "expectancy": -12.52
+          },
+          "commission_adjusted": {
+            "attempts": 12,
+            "resolved": 12,
+            "wins": 1,
+            "losses": 11,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.0833,
+            "gross_win": 66.52,
+            "gross_loss": -234.53,
+            "net_pnl": -168.01,
+            "profit_factor": 0.284,
+            "expectancy": -14.0
+          }
+        },
+        "london": {
+          "raw": {
+            "attempts": 15,
+            "resolved": 15,
+            "wins": 4,
+            "losses": 11,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2667,
+            "gross_win": 289.0,
+            "gross_loss": -373.0,
+            "net_pnl": -84.0,
+            "profit_factor": 0.775,
+            "expectancy": -5.6
+          },
+          "commission_adjusted": {
+            "attempts": 15,
+            "resolved": 15,
+            "wins": 4,
+            "losses": 11,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2667,
+            "gross_win": 283.08,
+            "gross_loss": -389.28,
+            "net_pnl": -106.2,
+            "profit_factor": 0.727,
+            "expectancy": -7.08
+          }
+        },
+        "new_york": {
+          "raw": {
+            "attempts": 8,
+            "resolved": 8,
+            "wins": 3,
+            "losses": 5,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.375,
+            "gross_win": 221.5,
+            "gross_loss": -208.5,
+            "net_pnl": 13.0,
+            "profit_factor": 1.062,
+            "expectancy": 1.62
+          },
+          "commission_adjusted": {
+            "attempts": 8,
+            "resolved": 8,
+            "wins": 3,
+            "losses": 5,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.375,
+            "gross_win": 217.06,
+            "gross_loss": -215.9,
+            "net_pnl": 1.16,
+            "profit_factor": 1.005,
+            "expectancy": 0.15
+          }
+        }
+      },
+      "by_month_full": {
+        "2025-07": {
+          "raw": {
+            "attempts": 2,
+            "resolved": 2,
+            "wins": 0,
+            "losses": 2,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.0,
+            "gross_win": 0,
+            "gross_loss": -28.75,
+            "net_pnl": -28.75,
+            "profit_factor": 0.0,
+            "expectancy": -14.38
+          },
+          "commission_adjusted": {
+            "attempts": 2,
+            "resolved": 2,
+            "wins": 0,
+            "losses": 2,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.0,
+            "gross_win": 0,
+            "gross_loss": -31.71,
+            "net_pnl": -31.71,
+            "profit_factor": 0.0,
+            "expectancy": -15.86
+          }
+        },
+        "2025-08": {
+          "raw": {
+            "attempts": 1,
+            "resolved": 1,
+            "wins": 0,
+            "losses": 1,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.0,
+            "gross_win": 0,
+            "gross_loss": -51.25,
+            "net_pnl": -51.25,
+            "profit_factor": 0.0,
+            "expectancy": -51.25
+          },
+          "commission_adjusted": {
+            "attempts": 1,
+            "resolved": 1,
+            "wins": 0,
+            "losses": 1,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.0,
+            "gross_win": 0,
+            "gross_loss": -52.73,
+            "net_pnl": -52.73,
+            "profit_factor": 0.0,
+            "expectancy": -52.73
+          }
+        },
+        "2025-09": {
+          "raw": {
+            "attempts": 8,
+            "resolved": 8,
+            "wins": 2,
+            "losses": 6,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.25,
+            "gross_win": 127.0,
+            "gross_loss": -130.75,
+            "net_pnl": -3.75,
+            "profit_factor": 0.971,
+            "expectancy": -0.47
+          },
+          "commission_adjusted": {
+            "attempts": 8,
+            "resolved": 8,
+            "wins": 2,
+            "losses": 6,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.25,
+            "gross_win": 124.04,
+            "gross_loss": -139.63,
+            "net_pnl": -15.59,
+            "profit_factor": 0.888,
+            "expectancy": -1.95
+          }
+        },
+        "2025-10": {
+          "raw": {
+            "attempts": 9,
+            "resolved": 9,
+            "wins": 4,
+            "losses": 5,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.4444,
+            "gross_win": 335.0,
+            "gross_loss": -164.0,
+            "net_pnl": 171.0,
+            "profit_factor": 2.043,
+            "expectancy": 19.0
+          },
+          "commission_adjusted": {
+            "attempts": 9,
+            "resolved": 9,
+            "wins": 4,
+            "losses": 5,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.4444,
+            "gross_win": 329.08,
+            "gross_loss": -171.4,
+            "net_pnl": 157.68,
+            "profit_factor": 1.92,
+            "expectancy": 17.52
+          }
+        },
+        "2025-11": {
+          "raw": {
+            "attempts": 5,
+            "resolved": 5,
+            "wins": 1,
+            "losses": 4,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2,
+            "gross_win": 37.5,
+            "gross_loss": -76.25,
+            "net_pnl": -38.75,
+            "profit_factor": 0.492,
+            "expectancy": -7.75
+          },
+          "commission_adjusted": {
+            "attempts": 5,
+            "resolved": 5,
+            "wins": 1,
+            "losses": 4,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2,
+            "gross_win": 36.02,
+            "gross_loss": -82.17,
+            "net_pnl": -46.15,
+            "profit_factor": 0.438,
+            "expectancy": -9.23
+          }
+        },
+        "2025-12": {
+          "raw": {
+            "attempts": 4,
+            "resolved": 4,
+            "wins": 0,
+            "losses": 4,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.0,
+            "gross_win": 0,
+            "gross_loss": -120.25,
+            "net_pnl": -120.25,
+            "profit_factor": 0.0,
+            "expectancy": -30.06
+          },
+          "commission_adjusted": {
+            "attempts": 4,
+            "resolved": 4,
+            "wins": 0,
+            "losses": 4,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.0,
+            "gross_win": 0,
+            "gross_loss": -126.17,
+            "net_pnl": -126.17,
+            "profit_factor": 0.0,
+            "expectancy": -31.54
+          }
+        },
+        "2026-02": {
+          "raw": {
+            "attempts": 1,
+            "resolved": 1,
+            "wins": 0,
+            "losses": 1,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.0,
+            "gross_win": 0,
+            "gross_loss": -54.0,
+            "net_pnl": -54.0,
+            "profit_factor": 0.0,
+            "expectancy": -54.0
+          },
+          "commission_adjusted": {
+            "attempts": 1,
+            "resolved": 1,
+            "wins": 0,
+            "losses": 1,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.0,
+            "gross_win": 0,
+            "gross_loss": -55.48,
+            "net_pnl": -55.48,
+            "profit_factor": 0.0,
+            "expectancy": -55.48
+          }
+        },
+        "2026-03": {
+          "raw": {
+            "attempts": 2,
+            "resolved": 2,
+            "wins": 0,
+            "losses": 2,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.0,
+            "gross_win": 0,
+            "gross_loss": -86.0,
+            "net_pnl": -86.0,
+            "profit_factor": 0.0,
+            "expectancy": -43.0
+          },
+          "commission_adjusted": {
+            "attempts": 2,
+            "resolved": 2,
+            "wins": 0,
+            "losses": 2,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.0,
+            "gross_win": 0,
+            "gross_loss": -88.96,
+            "net_pnl": -88.96,
+            "profit_factor": 0.0,
+            "expectancy": -44.48
+          }
+        },
+        "2026-04": {
+          "raw": {
+            "attempts": 2,
+            "resolved": 2,
+            "wins": 0,
+            "losses": 2,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.0,
+            "gross_win": 0,
+            "gross_loss": -88.5,
+            "net_pnl": -88.5,
+            "profit_factor": 0.0,
+            "expectancy": -44.25
+          },
+          "commission_adjusted": {
+            "attempts": 2,
+            "resolved": 2,
+            "wins": 0,
+            "losses": 2,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.0,
+            "gross_win": 0,
+            "gross_loss": -91.46,
+            "net_pnl": -91.46,
+            "profit_factor": 0.0,
+            "expectancy": -45.73
+          }
+        },
+        "2026-06": {
+          "raw": {
+            "attempts": 1,
+            "resolved": 1,
+            "wins": 1,
+            "losses": 0,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 1.0,
+            "gross_win": 79.0,
+            "gross_loss": 0,
+            "net_pnl": 79.0,
+            "profit_factor": Infinity,
+            "expectancy": 79.0
+          },
+          "commission_adjusted": {
+            "attempts": 1,
+            "resolved": 1,
+            "wins": 1,
+            "losses": 0,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 1.0,
+            "gross_win": 77.52,
+            "gross_loss": 0,
+            "net_pnl": 77.52,
+            "profit_factor": Infinity,
+            "expectancy": 77.52
+          }
+        }
+      },
+      "drawdown_raw": {
+        "max_drawdown": 388.75,
+        "max_consecutive_losses": 11,
+        "final_equity": -221.25
+      },
+      "drawdown_commission_adjusted": {
+        "max_drawdown": 408.22,
+        "max_consecutive_losses": 11,
+        "final_equity": -273.05
+      },
+      "concentration_raw": {
+        "net_pnl": -221.25,
+        "ex_top1_winner_net_pnl": -318.75,
+        "ex_top5_winners_net_pnl": -635.25,
+        "top1_share_of_net": -0.4407,
+        "top5_share_of_net": -1.8712
+      },
+      "concentration_commission_adjusted": {
+        "net_pnl": -273.05,
+        "ex_top1_winner_net_pnl": -369.07,
+        "ex_top5_winners_net_pnl": -679.65,
+        "top1_share_of_net": -0.3517,
+        "top5_share_of_net": -1.4891
+      }
+    }
+  },
+  "per_instrument_per_strategy": {
+    "MNQ": {
+      "strat_212": {
+        "full_period": {
+          "range": [
+            "2025-07-24",
+            "2026-07-23"
+          ],
+          "raw": {
+            "attempts": 129,
+            "resolved": 129,
+            "wins": 46,
+            "losses": 83,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.3566,
+            "gross_win": 3430.0,
+            "gross_loss": -2925.5,
+            "net_pnl": 504.5,
+            "profit_factor": 1.172,
+            "expectancy": 3.91
+          },
+          "commission_adjusted": {
+            "attempts": 129,
+            "resolved": 129,
+            "wins": 46,
+            "losses": 83,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.3566,
+            "gross_win": 3361.92,
+            "gross_loss": -3048.34,
+            "net_pnl": 313.58,
+            "profit_factor": 1.103,
+            "expectancy": 2.43
+          }
+        },
+        "h1": {
+          "range": [
+            "2025-07-24",
+            "2026-01-23"
+          ],
+          "raw": {
+            "attempts": 83,
+            "resolved": 83,
+            "wins": 27,
+            "losses": 56,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.3253,
+            "gross_win": 1696.0,
+            "gross_loss": -1708.5,
+            "net_pnl": -12.5,
+            "profit_factor": 0.993,
+            "expectancy": -0.15
+          },
+          "commission_adjusted": {
+            "attempts": 83,
+            "resolved": 83,
+            "wins": 27,
+            "losses": 56,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.3253,
+            "gross_win": 1656.04,
+            "gross_loss": -1791.38,
+            "net_pnl": -135.34,
+            "profit_factor": 0.924,
+            "expectancy": -1.63
+          }
+        },
+        "h2": {
+          "range": [
+            "2026-01-24",
+            "2026-07-23"
+          ],
+          "raw": {
+            "attempts": 46,
+            "resolved": 46,
+            "wins": 19,
+            "losses": 27,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.413,
+            "gross_win": 1734.0,
+            "gross_loss": -1217.0,
+            "net_pnl": 517.0,
+            "profit_factor": 1.425,
+            "expectancy": 11.24
+          },
+          "commission_adjusted": {
+            "attempts": 46,
+            "resolved": 46,
+            "wins": 19,
+            "losses": 27,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.413,
+            "gross_win": 1705.88,
+            "gross_loss": -1256.96,
+            "net_pnl": 448.92,
+            "profit_factor": 1.357,
+            "expectancy": 9.76
+          }
+        },
+        "quarterly": {
+          "Q1": {
+            "range": [
+              "2025-07-24",
+              "2025-10-23"
+            ],
+            "raw": {
+              "attempts": 43,
+              "resolved": 43,
+              "wins": 14,
+              "losses": 29,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.3256,
+              "gross_win": 921.0,
+              "gross_loss": -842.0,
+              "net_pnl": 79.0,
+              "profit_factor": 1.094,
+              "expectancy": 1.84
+            },
+            "commission_adjusted": {
+              "attempts": 43,
+              "resolved": 43,
+              "wins": 14,
+              "losses": 29,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.3256,
+              "gross_win": 900.28,
+              "gross_loss": -884.92,
+              "net_pnl": 15.36,
+              "profit_factor": 1.017,
+              "expectancy": 0.36
+            }
+          },
+          "Q2": {
+            "range": [
+              "2025-10-24",
+              "2026-01-23"
+            ],
+            "raw": {
+              "attempts": 40,
+              "resolved": 40,
+              "wins": 13,
+              "losses": 27,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.325,
+              "gross_win": 775.0,
+              "gross_loss": -866.5,
+              "net_pnl": -91.5,
+              "profit_factor": 0.894,
+              "expectancy": -2.29
+            },
+            "commission_adjusted": {
+              "attempts": 40,
+              "resolved": 40,
+              "wins": 13,
+              "losses": 27,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.325,
+              "gross_win": 755.76,
+              "gross_loss": -906.46,
+              "net_pnl": -150.7,
+              "profit_factor": 0.834,
+              "expectancy": -3.77
+            }
+          },
+          "Q3": {
+            "range": [
+              "2026-01-24",
+              "2026-04-23"
+            ],
+            "raw": {
+              "attempts": 33,
+              "resolved": 33,
+              "wins": 16,
+              "losses": 17,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.4848,
+              "gross_win": 1347.0,
+              "gross_loss": -660.0,
+              "net_pnl": 687.0,
+              "profit_factor": 2.041,
+              "expectancy": 20.82
+            },
+            "commission_adjusted": {
+              "attempts": 33,
+              "resolved": 33,
+              "wins": 16,
+              "losses": 17,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.4848,
+              "gross_win": 1323.32,
+              "gross_loss": -685.16,
+              "net_pnl": 638.16,
+              "profit_factor": 1.931,
+              "expectancy": 19.34
+            }
+          },
+          "Q4": {
+            "range": [
+              "2026-04-24",
+              "2026-07-23"
+            ],
+            "raw": {
+              "attempts": 13,
+              "resolved": 13,
+              "wins": 3,
+              "losses": 10,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.2308,
+              "gross_win": 387.0,
+              "gross_loss": -557.0,
+              "net_pnl": -170.0,
+              "profit_factor": 0.695,
+              "expectancy": -13.08
+            },
+            "commission_adjusted": {
+              "attempts": 13,
+              "resolved": 13,
+              "wins": 3,
+              "losses": 10,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.2308,
+              "gross_win": 382.56,
+              "gross_loss": -571.8,
+              "net_pnl": -189.24,
+              "profit_factor": 0.669,
+              "expectancy": -14.56
+            }
+          }
+        },
+        "by_direction": {
+          "LONG": {
+            "raw": {
+              "attempts": 92,
+              "resolved": 92,
+              "wins": 31,
+              "losses": 61,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.337,
+              "gross_win": 2059.0,
+              "gross_loss": -2121.5,
+              "net_pnl": -62.5,
+              "profit_factor": 0.971,
+              "expectancy": -0.68
+            },
+            "commission_adjusted": {
+              "attempts": 92,
+              "resolved": 92,
+              "wins": 31,
+              "losses": 61,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.337,
+              "gross_win": 2013.12,
+              "gross_loss": -2211.78,
+              "net_pnl": -198.66,
+              "profit_factor": 0.91,
+              "expectancy": -2.16
+            }
+          },
+          "SHORT": {
+            "raw": {
+              "attempts": 37,
+              "resolved": 37,
+              "wins": 15,
+              "losses": 22,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.4054,
+              "gross_win": 1371.0,
+              "gross_loss": -804.0,
+              "net_pnl": 567.0,
+              "profit_factor": 1.705,
+              "expectancy": 15.32
+            },
+            "commission_adjusted": {
+              "attempts": 37,
+              "resolved": 37,
+              "wins": 15,
+              "losses": 22,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.4054,
+              "gross_win": 1348.8,
+              "gross_loss": -836.56,
+              "net_pnl": 512.24,
+              "profit_factor": 1.612,
+              "expectancy": 13.84
+            }
+          }
+        },
+        "by_session": {
+          "asian": {
+            "raw": {
+              "attempts": 56,
+              "resolved": 56,
+              "wins": 20,
+              "losses": 36,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.3571,
+              "gross_win": 1375.0,
+              "gross_loss": -978.0,
+              "net_pnl": 397.0,
+              "profit_factor": 1.406,
+              "expectancy": 7.09
+            },
+            "commission_adjusted": {
+              "attempts": 56,
+              "resolved": 56,
+              "wins": 20,
+              "losses": 36,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.3571,
+              "gross_win": 1345.4,
+              "gross_loss": -1031.28,
+              "net_pnl": 314.12,
+              "profit_factor": 1.305,
+              "expectancy": 5.61
+            }
+          },
+          "london": {
+            "raw": {
+              "attempts": 55,
+              "resolved": 55,
+              "wins": 16,
+              "losses": 39,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.2909,
+              "gross_win": 1087.0,
+              "gross_loss": -1495.5,
+              "net_pnl": -408.5,
+              "profit_factor": 0.727,
+              "expectancy": -7.43
+            },
+            "commission_adjusted": {
+              "attempts": 55,
+              "resolved": 55,
+              "wins": 16,
+              "losses": 39,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.2909,
+              "gross_win": 1063.32,
+              "gross_loss": -1553.22,
+              "net_pnl": -489.9,
+              "profit_factor": 0.685,
+              "expectancy": -8.91
+            }
+          },
+          "new_york": {
+            "raw": {
+              "attempts": 18,
+              "resolved": 18,
+              "wins": 10,
+              "losses": 8,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.5556,
+              "gross_win": 968.0,
+              "gross_loss": -452.0,
+              "net_pnl": 516.0,
+              "profit_factor": 2.142,
+              "expectancy": 28.67
+            },
+            "commission_adjusted": {
+              "attempts": 18,
+              "resolved": 18,
+              "wins": 10,
+              "losses": 8,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.5556,
+              "gross_win": 953.2,
+              "gross_loss": -463.84,
+              "net_pnl": 489.36,
+              "profit_factor": 2.055,
+              "expectancy": 27.19
+            }
+          }
+        },
+        "by_month_full": {
+          "2025-07": {
+            "raw": {
+              "attempts": 4,
+              "resolved": 4,
+              "wins": 2,
+              "losses": 2,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.5,
+              "gross_win": 128.0,
+              "gross_loss": -47.0,
+              "net_pnl": 81.0,
+              "profit_factor": 2.723,
+              "expectancy": 20.25
+            },
+            "commission_adjusted": {
+              "attempts": 4,
+              "resolved": 4,
+              "wins": 2,
+              "losses": 2,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.5,
+              "gross_win": 125.04,
+              "gross_loss": -49.96,
+              "net_pnl": 75.08,
+              "profit_factor": 2.503,
+              "expectancy": 18.77
+            }
+          },
+          "2025-08": {
+            "raw": {
+              "attempts": 11,
+              "resolved": 11,
+              "wins": 3,
+              "losses": 8,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.2727,
+              "gross_win": 238.0,
+              "gross_loss": -265.5,
+              "net_pnl": -27.5,
+              "profit_factor": 0.896,
+              "expectancy": -2.5
+            },
+            "commission_adjusted": {
+              "attempts": 11,
+              "resolved": 11,
+              "wins": 3,
+              "losses": 8,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.2727,
+              "gross_win": 233.56,
+              "gross_loss": -277.34,
+              "net_pnl": -43.78,
+              "profit_factor": 0.842,
+              "expectancy": -3.98
+            }
+          },
+          "2025-09": {
+            "raw": {
+              "attempts": 18,
+              "resolved": 18,
+              "wins": 6,
+              "losses": 12,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.3333,
+              "gross_win": 382.0,
+              "gross_loss": -320.0,
+              "net_pnl": 62.0,
+              "profit_factor": 1.194,
+              "expectancy": 3.44
+            },
+            "commission_adjusted": {
+              "attempts": 18,
+              "resolved": 18,
+              "wins": 6,
+              "losses": 12,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.3333,
+              "gross_win": 373.12,
+              "gross_loss": -337.76,
+              "net_pnl": 35.36,
+              "profit_factor": 1.105,
+              "expectancy": 1.96
+            }
+          },
+          "2025-10": {
+            "raw": {
+              "attempts": 18,
+              "resolved": 18,
+              "wins": 6,
+              "losses": 12,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.3333,
+              "gross_win": 303.0,
+              "gross_loss": -386.5,
+              "net_pnl": -83.5,
+              "profit_factor": 0.784,
+              "expectancy": -4.64
+            },
+            "commission_adjusted": {
+              "attempts": 18,
+              "resolved": 18,
+              "wins": 6,
+              "losses": 12,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.3333,
+              "gross_win": 294.12,
+              "gross_loss": -404.26,
+              "net_pnl": -110.14,
+              "profit_factor": 0.728,
+              "expectancy": -6.12
+            }
+          },
+          "2025-11": {
+            "raw": {
+              "attempts": 8,
+              "resolved": 8,
+              "wins": 1,
+              "losses": 7,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.125,
+              "gross_win": 81.0,
+              "gross_loss": -243.0,
+              "net_pnl": -162.0,
+              "profit_factor": 0.333,
+              "expectancy": -20.25
+            },
+            "commission_adjusted": {
+              "attempts": 8,
+              "resolved": 8,
+              "wins": 1,
+              "losses": 7,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.125,
+              "gross_win": 79.52,
+              "gross_loss": -253.36,
+              "net_pnl": -173.84,
+              "profit_factor": 0.314,
+              "expectancy": -21.73
+            }
+          },
+          "2025-12": {
+            "raw": {
+              "attempts": 15,
+              "resolved": 15,
+              "wins": 6,
+              "losses": 9,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.4,
+              "gross_win": 345.0,
+              "gross_loss": -266.0,
+              "net_pnl": 79.0,
+              "profit_factor": 1.297,
+              "expectancy": 5.27
+            },
+            "commission_adjusted": {
+              "attempts": 15,
+              "resolved": 15,
+              "wins": 6,
+              "losses": 9,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.4,
+              "gross_win": 336.12,
+              "gross_loss": -279.32,
+              "net_pnl": 56.8,
+              "profit_factor": 1.203,
+              "expectancy": 3.79
+            }
+          },
+          "2026-01": {
+            "raw": {
+              "attempts": 9,
+              "resolved": 9,
+              "wins": 3,
+              "losses": 6,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.3333,
+              "gross_win": 219.0,
+              "gross_loss": -180.5,
+              "net_pnl": 38.5,
+              "profit_factor": 1.213,
+              "expectancy": 4.28
+            },
+            "commission_adjusted": {
+              "attempts": 9,
+              "resolved": 9,
+              "wins": 3,
+              "losses": 6,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.3333,
+              "gross_win": 214.56,
+              "gross_loss": -189.38,
+              "net_pnl": 25.18,
+              "profit_factor": 1.133,
+              "expectancy": 2.8
+            }
+          },
+          "2026-02": {
+            "raw": {
+              "attempts": 7,
+              "resolved": 7,
+              "wins": 2,
+              "losses": 5,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.2857,
+              "gross_win": 156.0,
+              "gross_loss": -191.0,
+              "net_pnl": -35.0,
+              "profit_factor": 0.817,
+              "expectancy": -5.0
+            },
+            "commission_adjusted": {
+              "attempts": 7,
+              "resolved": 7,
+              "wins": 2,
+              "losses": 5,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.2857,
+              "gross_win": 153.04,
+              "gross_loss": -198.4,
+              "net_pnl": -45.36,
+              "profit_factor": 0.771,
+              "expectancy": -6.48
+            }
+          },
+          "2026-03": {
+            "raw": {
+              "attempts": 10,
+              "resolved": 10,
+              "wins": 7,
+              "losses": 3,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.7,
+              "gross_win": 634.0,
+              "gross_loss": -129.5,
+              "net_pnl": 504.5,
+              "profit_factor": 4.896,
+              "expectancy": 50.45
+            },
+            "commission_adjusted": {
+              "attempts": 10,
+              "resolved": 10,
+              "wins": 7,
+              "losses": 3,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.7,
+              "gross_win": 623.64,
+              "gross_loss": -133.94,
+              "net_pnl": 489.7,
+              "profit_factor": 4.656,
+              "expectancy": 48.97
+            }
+          },
+          "2026-04": {
+            "raw": {
+              "attempts": 18,
+              "resolved": 18,
+              "wins": 9,
+              "losses": 9,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.5,
+              "gross_win": 849.0,
+              "gross_loss": -339.5,
+              "net_pnl": 509.5,
+              "profit_factor": 2.501,
+              "expectancy": 28.31
+            },
+            "commission_adjusted": {
+              "attempts": 18,
+              "resolved": 18,
+              "wins": 9,
+              "losses": 9,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.5,
+              "gross_win": 835.68,
+              "gross_loss": -352.82,
+              "net_pnl": 482.86,
+              "profit_factor": 2.369,
+              "expectancy": 26.83
+            }
+          },
+          "2026-05": {
+            "raw": {
+              "attempts": 7,
+              "resolved": 7,
+              "wins": 0,
+              "losses": 7,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.0,
+              "gross_win": 0,
+              "gross_loss": -396.0,
+              "net_pnl": -396.0,
+              "profit_factor": 0.0,
+              "expectancy": -56.57
+            },
+            "commission_adjusted": {
+              "attempts": 7,
+              "resolved": 7,
+              "wins": 0,
+              "losses": 7,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.0,
+              "gross_win": 0,
+              "gross_loss": -406.36,
+              "net_pnl": -406.36,
+              "profit_factor": 0.0,
+              "expectancy": -58.05
+            }
+          },
+          "2026-06": {
+            "raw": {
+              "attempts": 3,
+              "resolved": 3,
+              "wins": 1,
+              "losses": 2,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.3333,
+              "gross_win": 95.0,
+              "gross_loss": -114.5,
+              "net_pnl": -19.5,
+              "profit_factor": 0.83,
+              "expectancy": -6.5
+            },
+            "commission_adjusted": {
+              "attempts": 3,
+              "resolved": 3,
+              "wins": 1,
+              "losses": 2,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.3333,
+              "gross_win": 93.52,
+              "gross_loss": -117.46,
+              "net_pnl": -23.94,
+              "profit_factor": 0.796,
+              "expectancy": -7.98
+            }
+          },
+          "2026-07": {
+            "raw": {
+              "attempts": 1,
+              "resolved": 1,
+              "wins": 0,
+              "losses": 1,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.0,
+              "gross_win": 0,
+              "gross_loss": -46.5,
+              "net_pnl": -46.5,
+              "profit_factor": 0.0,
+              "expectancy": -46.5
+            },
+            "commission_adjusted": {
+              "attempts": 1,
+              "resolved": 1,
+              "wins": 0,
+              "losses": 1,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.0,
+              "gross_win": 0,
+              "gross_loss": -47.98,
+              "net_pnl": -47.98,
+              "profit_factor": 0.0,
+              "expectancy": -47.98
+            }
+          }
+        },
+        "drawdown_raw": {
+          "max_drawdown": 477.5,
+          "max_consecutive_losses": 11,
+          "final_equity": 504.5
+        },
+        "drawdown_commission_adjusted": {
+          "max_drawdown": 535.94,
+          "max_consecutive_losses": 11,
+          "final_equity": 313.58
+        },
+        "concentration_raw": {
+          "net_pnl": 504.5,
+          "ex_top1_winner_net_pnl": 310.5,
+          "ex_top5_winners_net_pnl": -160.5,
+          "top1_share_of_net": 0.3845,
+          "top5_share_of_net": 1.3181
+        },
+        "concentration_commission_adjusted": {
+          "net_pnl": 313.58,
+          "ex_top1_winner_net_pnl": 121.06,
+          "ex_top5_winners_net_pnl": -344.02,
+          "top1_share_of_net": 0.6139,
+          "top5_share_of_net": 2.0971
+        }
+      },
+      "strat_122": {
+        "full_period": {
+          "range": [
+            "2025-07-24",
+            "2026-07-23"
+          ],
+          "raw": {
+            "attempts": 12,
+            "resolved": 12,
+            "wins": 3,
+            "losses": 9,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.25,
+            "gross_win": 206.0,
+            "gross_loss": -386.0,
+            "net_pnl": -180.0,
+            "profit_factor": 0.534,
+            "expectancy": -15.0
+          },
+          "commission_adjusted": {
+            "attempts": 12,
+            "resolved": 12,
+            "wins": 3,
+            "losses": 9,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.25,
+            "gross_win": 201.56,
+            "gross_loss": -399.32,
+            "net_pnl": -197.76,
+            "profit_factor": 0.505,
+            "expectancy": -16.48
+          }
+        },
+        "h1": {
+          "range": [
+            "2025-07-24",
+            "2026-01-23"
+          ],
+          "raw": {
+            "attempts": 6,
+            "resolved": 6,
+            "wins": 2,
+            "losses": 4,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.3333,
+            "gross_win": 127.0,
+            "gross_loss": -157.5,
+            "net_pnl": -30.5,
+            "profit_factor": 0.806,
+            "expectancy": -5.08
+          },
+          "commission_adjusted": {
+            "attempts": 6,
+            "resolved": 6,
+            "wins": 2,
+            "losses": 4,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.3333,
+            "gross_win": 124.04,
+            "gross_loss": -163.42,
+            "net_pnl": -39.38,
+            "profit_factor": 0.759,
+            "expectancy": -6.56
+          }
+        },
+        "h2": {
+          "range": [
+            "2026-01-24",
+            "2026-07-23"
+          ],
+          "raw": {
+            "attempts": 6,
+            "resolved": 6,
+            "wins": 1,
+            "losses": 5,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.1667,
+            "gross_win": 79.0,
+            "gross_loss": -228.5,
+            "net_pnl": -149.5,
+            "profit_factor": 0.346,
+            "expectancy": -24.92
+          },
+          "commission_adjusted": {
+            "attempts": 6,
+            "resolved": 6,
+            "wins": 1,
+            "losses": 5,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.1667,
+            "gross_win": 77.52,
+            "gross_loss": -235.9,
+            "net_pnl": -158.38,
+            "profit_factor": 0.329,
+            "expectancy": -26.4
+          }
+        },
+        "quarterly": {
+          "Q1": {
+            "range": [
+              "2025-07-24",
+              "2025-10-23"
+            ],
+            "raw": {
+              "attempts": 5,
+              "resolved": 5,
+              "wins": 2,
+              "losses": 3,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.4,
+              "gross_win": 127.0,
+              "gross_loss": -116.0,
+              "net_pnl": 11.0,
+              "profit_factor": 1.095,
+              "expectancy": 2.2
+            },
+            "commission_adjusted": {
+              "attempts": 5,
+              "resolved": 5,
+              "wins": 2,
+              "losses": 3,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.4,
+              "gross_win": 124.04,
+              "gross_loss": -120.44,
+              "net_pnl": 3.6,
+              "profit_factor": 1.03,
+              "expectancy": 0.72
+            }
+          },
+          "Q2": {
+            "range": [
+              "2025-10-24",
+              "2026-01-23"
+            ],
+            "raw": {
+              "attempts": 1,
+              "resolved": 1,
+              "wins": 0,
+              "losses": 1,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.0,
+              "gross_win": 0,
+              "gross_loss": -41.5,
+              "net_pnl": -41.5,
+              "profit_factor": 0.0,
+              "expectancy": -41.5
+            },
+            "commission_adjusted": {
+              "attempts": 1,
+              "resolved": 1,
+              "wins": 0,
+              "losses": 1,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.0,
+              "gross_win": 0,
+              "gross_loss": -42.98,
+              "net_pnl": -42.98,
+              "profit_factor": 0.0,
+              "expectancy": -42.98
+            }
+          },
+          "Q3": {
+            "range": [
+              "2026-01-24",
+              "2026-04-23"
+            ],
+            "raw": {
+              "attempts": 5,
+              "resolved": 5,
+              "wins": 0,
+              "losses": 5,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.0,
+              "gross_win": 0,
+              "gross_loss": -228.5,
+              "net_pnl": -228.5,
+              "profit_factor": 0.0,
+              "expectancy": -45.7
+            },
+            "commission_adjusted": {
+              "attempts": 5,
+              "resolved": 5,
+              "wins": 0,
+              "losses": 5,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.0,
+              "gross_win": 0,
+              "gross_loss": -235.9,
+              "net_pnl": -235.9,
+              "profit_factor": 0.0,
+              "expectancy": -47.18
+            }
+          },
+          "Q4": {
+            "range": [
+              "2026-04-24",
+              "2026-07-23"
+            ],
+            "raw": {
+              "attempts": 1,
+              "resolved": 1,
+              "wins": 1,
+              "losses": 0,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 1.0,
+              "gross_win": 79.0,
+              "gross_loss": 0,
+              "net_pnl": 79.0,
+              "profit_factor": Infinity,
+              "expectancy": 79.0
+            },
+            "commission_adjusted": {
+              "attempts": 1,
+              "resolved": 1,
+              "wins": 1,
+              "losses": 0,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 1.0,
+              "gross_win": 77.52,
+              "gross_loss": 0,
+              "net_pnl": 77.52,
+              "profit_factor": Infinity,
+              "expectancy": 77.52
+            }
+          }
+        },
+        "by_direction": {
+          "LONG": {
+            "raw": {
+              "attempts": 10,
+              "resolved": 10,
+              "wins": 3,
+              "losses": 7,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.3,
+              "gross_win": 206.0,
+              "gross_loss": -294.0,
+              "net_pnl": -88.0,
+              "profit_factor": 0.701,
+              "expectancy": -8.8
+            },
+            "commission_adjusted": {
+              "attempts": 10,
+              "resolved": 10,
+              "wins": 3,
+              "losses": 7,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.3,
+              "gross_win": 201.56,
+              "gross_loss": -304.36,
+              "net_pnl": -102.8,
+              "profit_factor": 0.662,
+              "expectancy": -10.28
+            }
+          },
+          "SHORT": {
+            "raw": {
+              "attempts": 2,
+              "resolved": 2,
+              "wins": 0,
+              "losses": 2,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.0,
+              "gross_win": 0,
+              "gross_loss": -92.0,
+              "net_pnl": -92.0,
+              "profit_factor": 0.0,
+              "expectancy": -46.0
+            },
+            "commission_adjusted": {
+              "attempts": 2,
+              "resolved": 2,
+              "wins": 0,
+              "losses": 2,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.0,
+              "gross_win": 0,
+              "gross_loss": -94.96,
+              "net_pnl": -94.96,
+              "profit_factor": 0.0,
+              "expectancy": -47.48
+            }
+          }
+        },
+        "by_session": {
+          "asian": {
+            "raw": {
+              "attempts": 3,
+              "resolved": 3,
+              "wins": 1,
+              "losses": 2,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.3333,
+              "gross_win": 68.0,
+              "gross_loss": -57.0,
+              "net_pnl": 11.0,
+              "profit_factor": 1.193,
+              "expectancy": 3.67
+            },
+            "commission_adjusted": {
+              "attempts": 3,
+              "resolved": 3,
+              "wins": 1,
+              "losses": 2,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.3333,
+              "gross_win": 66.52,
+              "gross_loss": -59.96,
+              "net_pnl": 6.56,
+              "profit_factor": 1.109,
+              "expectancy": 2.19
+            }
+          },
+          "london": {
+            "raw": {
+              "attempts": 5,
+              "resolved": 5,
+              "wins": 1,
+              "losses": 4,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.2,
+              "gross_win": 79.0,
+              "gross_loss": -195.5,
+              "net_pnl": -116.5,
+              "profit_factor": 0.404,
+              "expectancy": -23.3
+            },
+            "commission_adjusted": {
+              "attempts": 5,
+              "resolved": 5,
+              "wins": 1,
+              "losses": 4,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.2,
+              "gross_win": 77.52,
+              "gross_loss": -201.42,
+              "net_pnl": -123.9,
+              "profit_factor": 0.385,
+              "expectancy": -24.78
+            }
+          },
+          "new_york": {
+            "raw": {
+              "attempts": 4,
+              "resolved": 4,
+              "wins": 1,
+              "losses": 3,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.25,
+              "gross_win": 59.0,
+              "gross_loss": -133.5,
+              "net_pnl": -74.5,
+              "profit_factor": 0.442,
+              "expectancy": -18.62
+            },
+            "commission_adjusted": {
+              "attempts": 4,
+              "resolved": 4,
+              "wins": 1,
+              "losses": 3,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.25,
+              "gross_win": 57.52,
+              "gross_loss": -137.94,
+              "net_pnl": -80.42,
+              "profit_factor": 0.417,
+              "expectancy": -20.1
+            }
+          }
+        },
+        "by_month_full": {
+          "2025-09": {
+            "raw": {
+              "attempts": 4,
+              "resolved": 4,
+              "wins": 2,
+              "losses": 2,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.5,
+              "gross_win": 127.0,
+              "gross_loss": -57.0,
+              "net_pnl": 70.0,
+              "profit_factor": 2.228,
+              "expectancy": 17.5
+            },
+            "commission_adjusted": {
+              "attempts": 4,
+              "resolved": 4,
+              "wins": 2,
+              "losses": 2,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.5,
+              "gross_win": 124.04,
+              "gross_loss": -59.96,
+              "net_pnl": 64.08,
+              "profit_factor": 2.069,
+              "expectancy": 16.02
+            }
+          },
+          "2025-10": {
+            "raw": {
+              "attempts": 1,
+              "resolved": 1,
+              "wins": 0,
+              "losses": 1,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.0,
+              "gross_win": 0,
+              "gross_loss": -59.0,
+              "net_pnl": -59.0,
+              "profit_factor": 0.0,
+              "expectancy": -59.0
+            },
+            "commission_adjusted": {
+              "attempts": 1,
+              "resolved": 1,
+              "wins": 0,
+              "losses": 1,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.0,
+              "gross_win": 0,
+              "gross_loss": -60.48,
+              "net_pnl": -60.48,
+              "profit_factor": 0.0,
+              "expectancy": -60.48
+            }
+          },
+          "2025-12": {
+            "raw": {
+              "attempts": 1,
+              "resolved": 1,
+              "wins": 0,
+              "losses": 1,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.0,
+              "gross_win": 0,
+              "gross_loss": -41.5,
+              "net_pnl": -41.5,
+              "profit_factor": 0.0,
+              "expectancy": -41.5
+            },
+            "commission_adjusted": {
+              "attempts": 1,
+              "resolved": 1,
+              "wins": 0,
+              "losses": 1,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.0,
+              "gross_win": 0,
+              "gross_loss": -42.98,
+              "net_pnl": -42.98,
+              "profit_factor": 0.0,
+              "expectancy": -42.98
+            }
+          },
+          "2026-02": {
+            "raw": {
+              "attempts": 1,
+              "resolved": 1,
+              "wins": 0,
+              "losses": 1,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.0,
+              "gross_win": 0,
+              "gross_loss": -54.0,
+              "net_pnl": -54.0,
+              "profit_factor": 0.0,
+              "expectancy": -54.0
+            },
+            "commission_adjusted": {
+              "attempts": 1,
+              "resolved": 1,
+              "wins": 0,
+              "losses": 1,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.0,
+              "gross_win": 0,
+              "gross_loss": -55.48,
+              "net_pnl": -55.48,
+              "profit_factor": 0.0,
+              "expectancy": -55.48
+            }
+          },
+          "2026-03": {
+            "raw": {
+              "attempts": 2,
+              "resolved": 2,
+              "wins": 0,
+              "losses": 2,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.0,
+              "gross_win": 0,
+              "gross_loss": -86.0,
+              "net_pnl": -86.0,
+              "profit_factor": 0.0,
+              "expectancy": -43.0
+            },
+            "commission_adjusted": {
+              "attempts": 2,
+              "resolved": 2,
+              "wins": 0,
+              "losses": 2,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.0,
+              "gross_win": 0,
+              "gross_loss": -88.96,
+              "net_pnl": -88.96,
+              "profit_factor": 0.0,
+              "expectancy": -44.48
+            }
+          },
+          "2026-04": {
+            "raw": {
+              "attempts": 2,
+              "resolved": 2,
+              "wins": 0,
+              "losses": 2,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.0,
+              "gross_win": 0,
+              "gross_loss": -88.5,
+              "net_pnl": -88.5,
+              "profit_factor": 0.0,
+              "expectancy": -44.25
+            },
+            "commission_adjusted": {
+              "attempts": 2,
+              "resolved": 2,
+              "wins": 0,
+              "losses": 2,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.0,
+              "gross_win": 0,
+              "gross_loss": -91.46,
+              "net_pnl": -91.46,
+              "profit_factor": 0.0,
+              "expectancy": -45.73
+            }
+          },
+          "2026-06": {
+            "raw": {
+              "attempts": 1,
+              "resolved": 1,
+              "wins": 1,
+              "losses": 0,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 1.0,
+              "gross_win": 79.0,
+              "gross_loss": 0,
+              "net_pnl": 79.0,
+              "profit_factor": Infinity,
+              "expectancy": 79.0
+            },
+            "commission_adjusted": {
+              "attempts": 1,
+              "resolved": 1,
+              "wins": 1,
+              "losses": 0,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 1.0,
+              "gross_win": 77.52,
+              "gross_loss": 0,
+              "net_pnl": 77.52,
+              "profit_factor": Infinity,
+              "expectancy": 77.52
+            }
+          }
+        },
+        "drawdown_raw": {
+          "max_drawdown": 329.0,
+          "max_consecutive_losses": 7,
+          "final_equity": -180.0
+        },
+        "drawdown_commission_adjusted": {
+          "max_drawdown": 339.36,
+          "max_consecutive_losses": 7,
+          "final_equity": -197.76
+        },
+        "concentration_raw": {
+          "net_pnl": -180.0,
+          "ex_top1_winner_net_pnl": -259.0,
+          "ex_top5_winners_net_pnl": -329.0,
+          "top1_share_of_net": -0.4389,
+          "top5_share_of_net": -0.8278
+        },
+        "concentration_commission_adjusted": {
+          "net_pnl": -197.76,
+          "ex_top1_winner_net_pnl": -275.28,
+          "ex_top5_winners_net_pnl": -339.36,
+          "top1_share_of_net": -0.392,
+          "top5_share_of_net": -0.716
+        }
+      }
+    },
+    "MES": {
+      "strat_212": {
+        "full_period": {
+          "range": [
+            "2025-07-24",
+            "2026-07-23"
+          ],
+          "raw": {
+            "attempts": 174,
+            "resolved": 171,
+            "wins": 39,
+            "losses": 132,
+            "open_with_identity": 3,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2281,
+            "gross_win": 2712.5,
+            "gross_loss": -2971.25,
+            "net_pnl": -258.75,
+            "profit_factor": 0.913,
+            "expectancy": -1.51
+          },
+          "commission_adjusted": {
+            "attempts": 174,
+            "resolved": 171,
+            "wins": 39,
+            "losses": 132,
+            "open_with_identity": 3,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2281,
+            "gross_win": 2654.78,
+            "gross_loss": -3166.61,
+            "net_pnl": -511.83,
+            "profit_factor": 0.838,
+            "expectancy": -2.99
+          }
+        },
+        "h1": {
+          "range": [
+            "2025-07-24",
+            "2026-01-23"
+          ],
+          "raw": {
+            "attempts": 174,
+            "resolved": 171,
+            "wins": 39,
+            "losses": 132,
+            "open_with_identity": 3,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2281,
+            "gross_win": 2712.5,
+            "gross_loss": -2971.25,
+            "net_pnl": -258.75,
+            "profit_factor": 0.913,
+            "expectancy": -1.51
+          },
+          "commission_adjusted": {
+            "attempts": 174,
+            "resolved": 171,
+            "wins": 39,
+            "losses": 132,
+            "open_with_identity": 3,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2281,
+            "gross_win": 2654.78,
+            "gross_loss": -3166.61,
+            "net_pnl": -511.83,
+            "profit_factor": 0.838,
+            "expectancy": -2.99
+          }
+        },
+        "h2": {
+          "range": [
+            "2026-01-24",
+            "2026-07-23"
+          ],
+          "raw": {
+            "attempts": 0,
+            "resolved": 0,
+            "wins": 0,
+            "losses": 0,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": null,
+            "gross_win": 0,
+            "gross_loss": 0,
+            "net_pnl": 0,
+            "profit_factor": null,
+            "expectancy": null
+          },
+          "commission_adjusted": {
+            "attempts": 0,
+            "resolved": 0,
+            "wins": 0,
+            "losses": 0,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": null,
+            "gross_win": 0,
+            "gross_loss": 0,
+            "net_pnl": 0,
+            "profit_factor": null,
+            "expectancy": null
+          }
+        },
+        "quarterly": {
+          "Q1": {
+            "range": [
+              "2025-07-24",
+              "2025-10-23"
+            ],
+            "raw": {
+              "attempts": 95,
+              "resolved": 93,
+              "wins": 25,
+              "losses": 68,
+              "open_with_identity": 2,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.2688,
+              "gross_win": 1725.0,
+              "gross_loss": -1486.25,
+              "net_pnl": 238.75,
+              "profit_factor": 1.161,
+              "expectancy": 2.57
+            },
+            "commission_adjusted": {
+              "attempts": 95,
+              "resolved": 93,
+              "wins": 25,
+              "losses": 68,
+              "open_with_identity": 2,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.2688,
+              "gross_win": 1688.0,
+              "gross_loss": -1586.89,
+              "net_pnl": 101.11,
+              "profit_factor": 1.064,
+              "expectancy": 1.09
+            }
+          },
+          "Q2": {
+            "range": [
+              "2025-10-24",
+              "2026-01-23"
+            ],
+            "raw": {
+              "attempts": 79,
+              "resolved": 78,
+              "wins": 14,
+              "losses": 64,
+              "open_with_identity": 1,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.1795,
+              "gross_win": 987.5,
+              "gross_loss": -1485.0,
+              "net_pnl": -497.5,
+              "profit_factor": 0.665,
+              "expectancy": -6.38
+            },
+            "commission_adjusted": {
+              "attempts": 79,
+              "resolved": 78,
+              "wins": 14,
+              "losses": 64,
+              "open_with_identity": 1,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.1795,
+              "gross_win": 966.78,
+              "gross_loss": -1579.72,
+              "net_pnl": -612.94,
+              "profit_factor": 0.612,
+              "expectancy": -7.86
+            }
+          },
+          "Q3": {
+            "range": [
+              "2026-01-24",
+              "2026-04-23"
+            ],
+            "raw": {
+              "attempts": 0,
+              "resolved": 0,
+              "wins": 0,
+              "losses": 0,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": null,
+              "gross_win": 0,
+              "gross_loss": 0,
+              "net_pnl": 0,
+              "profit_factor": null,
+              "expectancy": null
+            },
+            "commission_adjusted": {
+              "attempts": 0,
+              "resolved": 0,
+              "wins": 0,
+              "losses": 0,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": null,
+              "gross_win": 0,
+              "gross_loss": 0,
+              "net_pnl": 0,
+              "profit_factor": null,
+              "expectancy": null
+            }
+          },
+          "Q4": {
+            "range": [
+              "2026-04-24",
+              "2026-07-23"
+            ],
+            "raw": {
+              "attempts": 0,
+              "resolved": 0,
+              "wins": 0,
+              "losses": 0,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": null,
+              "gross_win": 0,
+              "gross_loss": 0,
+              "net_pnl": 0,
+              "profit_factor": null,
+              "expectancy": null
+            },
+            "commission_adjusted": {
+              "attempts": 0,
+              "resolved": 0,
+              "wins": 0,
+              "losses": 0,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": null,
+              "gross_win": 0,
+              "gross_loss": 0,
+              "net_pnl": 0,
+              "profit_factor": null,
+              "expectancy": null
+            }
+          }
+        },
+        "by_direction": {
+          "LONG": {
+            "raw": {
+              "attempts": 92,
+              "resolved": 90,
+              "wins": 21,
+              "losses": 69,
+              "open_with_identity": 2,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.2333,
+              "gross_win": 1580.0,
+              "gross_loss": -1350.0,
+              "net_pnl": 230.0,
+              "profit_factor": 1.17,
+              "expectancy": 2.56
+            },
+            "commission_adjusted": {
+              "attempts": 92,
+              "resolved": 90,
+              "wins": 21,
+              "losses": 69,
+              "open_with_identity": 2,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.2333,
+              "gross_win": 1548.92,
+              "gross_loss": -1452.12,
+              "net_pnl": 96.8,
+              "profit_factor": 1.067,
+              "expectancy": 1.08
+            }
+          },
+          "SHORT": {
+            "raw": {
+              "attempts": 82,
+              "resolved": 81,
+              "wins": 18,
+              "losses": 63,
+              "open_with_identity": 1,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.2222,
+              "gross_win": 1132.5,
+              "gross_loss": -1621.25,
+              "net_pnl": -488.75,
+              "profit_factor": 0.699,
+              "expectancy": -6.03
+            },
+            "commission_adjusted": {
+              "attempts": 82,
+              "resolved": 81,
+              "wins": 18,
+              "losses": 63,
+              "open_with_identity": 1,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.2222,
+              "gross_win": 1105.86,
+              "gross_loss": -1714.49,
+              "net_pnl": -608.63,
+              "profit_factor": 0.645,
+              "expectancy": -7.51
+            }
+          }
+        },
+        "by_session": {
+          "asian": {
+            "raw": {
+              "attempts": 55,
+              "resolved": 55,
+              "wins": 11,
+              "losses": 44,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.2,
+              "gross_win": 565.0,
+              "gross_loss": -653.75,
+              "net_pnl": -88.75,
+              "profit_factor": 0.864,
+              "expectancy": -1.61
+            },
+            "commission_adjusted": {
+              "attempts": 55,
+              "resolved": 55,
+              "wins": 11,
+              "losses": 44,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.2,
+              "gross_win": 548.72,
+              "gross_loss": -718.87,
+              "net_pnl": -170.15,
+              "profit_factor": 0.763,
+              "expectancy": -3.09
+            }
+          },
+          "london": {
+            "raw": {
+              "attempts": 74,
+              "resolved": 74,
+              "wins": 14,
+              "losses": 60,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.1892,
+              "gross_win": 985.0,
+              "gross_loss": -1191.25,
+              "net_pnl": -206.25,
+              "profit_factor": 0.827,
+              "expectancy": -2.79
+            },
+            "commission_adjusted": {
+              "attempts": 74,
+              "resolved": 74,
+              "wins": 14,
+              "losses": 60,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.1892,
+              "gross_win": 964.28,
+              "gross_loss": -1280.05,
+              "net_pnl": -315.77,
+              "profit_factor": 0.753,
+              "expectancy": -4.27
+            }
+          },
+          "new_york": {
+            "raw": {
+              "attempts": 45,
+              "resolved": 42,
+              "wins": 14,
+              "losses": 28,
+              "open_with_identity": 3,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.3333,
+              "gross_win": 1162.5,
+              "gross_loss": -1126.25,
+              "net_pnl": 36.25,
+              "profit_factor": 1.032,
+              "expectancy": 0.86
+            },
+            "commission_adjusted": {
+              "attempts": 45,
+              "resolved": 42,
+              "wins": 14,
+              "losses": 28,
+              "open_with_identity": 3,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.3333,
+              "gross_win": 1141.78,
+              "gross_loss": -1167.69,
+              "net_pnl": -25.91,
+              "profit_factor": 0.978,
+              "expectancy": -0.62
+            }
+          }
+        },
+        "by_month_full": {
+          "2025-07": {
+            "raw": {
+              "attempts": 7,
+              "resolved": 7,
+              "wins": 3,
+              "losses": 4,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.4286,
+              "gross_win": 187.5,
+              "gross_loss": -71.25,
+              "net_pnl": 116.25,
+              "profit_factor": 2.632,
+              "expectancy": 16.61
+            },
+            "commission_adjusted": {
+              "attempts": 7,
+              "resolved": 7,
+              "wins": 3,
+              "losses": 4,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.4286,
+              "gross_win": 183.06,
+              "gross_loss": -77.17,
+              "net_pnl": 105.89,
+              "profit_factor": 2.372,
+              "expectancy": 15.13
+            }
+          },
+          "2025-08": {
+            "raw": {
+              "attempts": 33,
+              "resolved": 32,
+              "wins": 9,
+              "losses": 23,
+              "open_with_identity": 1,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.2812,
+              "gross_win": 600.0,
+              "gross_loss": -475.0,
+              "net_pnl": 125.0,
+              "profit_factor": 1.263,
+              "expectancy": 3.91
+            },
+            "commission_adjusted": {
+              "attempts": 33,
+              "resolved": 32,
+              "wins": 9,
+              "losses": 23,
+              "open_with_identity": 1,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.2812,
+              "gross_win": 586.68,
+              "gross_loss": -509.04,
+              "net_pnl": 77.64,
+              "profit_factor": 1.153,
+              "expectancy": 2.43
+            }
+          },
+          "2025-09": {
+            "raw": {
+              "attempts": 33,
+              "resolved": 33,
+              "wins": 9,
+              "losses": 24,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.2727,
+              "gross_win": 575.0,
+              "gross_loss": -488.75,
+              "net_pnl": 86.25,
+              "profit_factor": 1.176,
+              "expectancy": 2.61
+            },
+            "commission_adjusted": {
+              "attempts": 33,
+              "resolved": 33,
+              "wins": 9,
+              "losses": 24,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.2727,
+              "gross_win": 561.68,
+              "gross_loss": -524.27,
+              "net_pnl": 37.41,
+              "profit_factor": 1.071,
+              "expectancy": 1.13
+            }
+          },
+          "2025-10": {
+            "raw": {
+              "attempts": 29,
+              "resolved": 28,
+              "wins": 4,
+              "losses": 24,
+              "open_with_identity": 1,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.1429,
+              "gross_win": 362.5,
+              "gross_loss": -527.5,
+              "net_pnl": -165.0,
+              "profit_factor": 0.687,
+              "expectancy": -5.89
+            },
+            "commission_adjusted": {
+              "attempts": 29,
+              "resolved": 28,
+              "wins": 4,
+              "losses": 24,
+              "open_with_identity": 1,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.1429,
+              "gross_win": 356.58,
+              "gross_loss": -563.02,
+              "net_pnl": -206.44,
+              "profit_factor": 0.633,
+              "expectancy": -7.37
+            }
+          },
+          "2025-11": {
+            "raw": {
+              "attempts": 32,
+              "resolved": 31,
+              "wins": 6,
+              "losses": 25,
+              "open_with_identity": 1,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.1935,
+              "gross_win": 597.5,
+              "gross_loss": -773.75,
+              "net_pnl": -176.25,
+              "profit_factor": 0.772,
+              "expectancy": -5.69
+            },
+            "commission_adjusted": {
+              "attempts": 32,
+              "resolved": 31,
+              "wins": 6,
+              "losses": 25,
+              "open_with_identity": 1,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.1935,
+              "gross_win": 588.62,
+              "gross_loss": -810.75,
+              "net_pnl": -222.13,
+              "profit_factor": 0.726,
+              "expectancy": -7.17
+            }
+          },
+          "2025-12": {
+            "raw": {
+              "attempts": 24,
+              "resolved": 24,
+              "wins": 6,
+              "losses": 18,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.25,
+              "gross_win": 240.0,
+              "gross_loss": -288.75,
+              "net_pnl": -48.75,
+              "profit_factor": 0.831,
+              "expectancy": -2.03
+            },
+            "commission_adjusted": {
+              "attempts": 24,
+              "resolved": 24,
+              "wins": 6,
+              "losses": 18,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.25,
+              "gross_win": 231.12,
+              "gross_loss": -315.39,
+              "net_pnl": -84.27,
+              "profit_factor": 0.733,
+              "expectancy": -3.51
+            }
+          },
+          "2026-01": {
+            "raw": {
+              "attempts": 16,
+              "resolved": 16,
+              "wins": 2,
+              "losses": 14,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.125,
+              "gross_win": 150.0,
+              "gross_loss": -346.25,
+              "net_pnl": -196.25,
+              "profit_factor": 0.433,
+              "expectancy": -12.27
+            },
+            "commission_adjusted": {
+              "attempts": 16,
+              "resolved": 16,
+              "wins": 2,
+              "losses": 14,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.125,
+              "gross_win": 147.04,
+              "gross_loss": -366.97,
+              "net_pnl": -219.93,
+              "profit_factor": 0.401,
+              "expectancy": -13.75
+            }
+          }
+        },
+        "drawdown_raw": {
+          "max_drawdown": 661.25,
+          "max_consecutive_losses": 14,
+          "final_equity": -258.75
+        },
+        "drawdown_commission_adjusted": {
+          "max_drawdown": 850.85,
+          "max_consecutive_losses": 14,
+          "final_equity": -511.83
+        },
+        "concentration_raw": {
+          "net_pnl": -258.75,
+          "ex_top1_winner_net_pnl": -406.25,
+          "ex_top5_winners_net_pnl": -843.75,
+          "top1_share_of_net": -0.57,
+          "top5_share_of_net": -2.2609
+        },
+        "concentration_commission_adjusted": {
+          "net_pnl": -511.83,
+          "ex_top1_winner_net_pnl": -657.85,
+          "ex_top5_winners_net_pnl": -1089.43,
+          "top1_share_of_net": -0.2853,
+          "top5_share_of_net": -1.1285
+        }
+      },
+      "strat_122": {
+        "full_period": {
+          "range": [
+            "2025-07-24",
+            "2026-07-23"
+          ],
+          "raw": {
+            "attempts": 23,
+            "resolved": 23,
+            "wins": 5,
+            "losses": 18,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2174,
+            "gross_win": 372.5,
+            "gross_loss": -413.75,
+            "net_pnl": -41.25,
+            "profit_factor": 0.9,
+            "expectancy": -1.79
+          },
+          "commission_adjusted": {
+            "attempts": 23,
+            "resolved": 23,
+            "wins": 5,
+            "losses": 18,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2174,
+            "gross_win": 365.1,
+            "gross_loss": -440.39,
+            "net_pnl": -75.29,
+            "profit_factor": 0.829,
+            "expectancy": -3.27
+          }
+        },
+        "h1": {
+          "range": [
+            "2025-07-24",
+            "2026-01-23"
+          ],
+          "raw": {
+            "attempts": 23,
+            "resolved": 23,
+            "wins": 5,
+            "losses": 18,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2174,
+            "gross_win": 372.5,
+            "gross_loss": -413.75,
+            "net_pnl": -41.25,
+            "profit_factor": 0.9,
+            "expectancy": -1.79
+          },
+          "commission_adjusted": {
+            "attempts": 23,
+            "resolved": 23,
+            "wins": 5,
+            "losses": 18,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": 0.2174,
+            "gross_win": 365.1,
+            "gross_loss": -440.39,
+            "net_pnl": -75.29,
+            "profit_factor": 0.829,
+            "expectancy": -3.27
+          }
+        },
+        "h2": {
+          "range": [
+            "2026-01-24",
+            "2026-07-23"
+          ],
+          "raw": {
+            "attempts": 0,
+            "resolved": 0,
+            "wins": 0,
+            "losses": 0,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": null,
+            "gross_win": 0,
+            "gross_loss": 0,
+            "net_pnl": 0,
+            "profit_factor": null,
+            "expectancy": null
+          },
+          "commission_adjusted": {
+            "attempts": 0,
+            "resolved": 0,
+            "wins": 0,
+            "losses": 0,
+            "open_with_identity": 0,
+            "unjoinable_legacy": 0,
+            "win_rate": null,
+            "gross_win": 0,
+            "gross_loss": 0,
+            "net_pnl": 0,
+            "profit_factor": null,
+            "expectancy": null
+          }
+        },
+        "quarterly": {
+          "Q1": {
+            "range": [
+              "2025-07-24",
+              "2025-10-23"
+            ],
+            "raw": {
+              "attempts": 13,
+              "resolved": 13,
+              "wins": 2,
+              "losses": 11,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.1538,
+              "gross_win": 147.5,
+              "gross_loss": -258.75,
+              "net_pnl": -111.25,
+              "profit_factor": 0.57,
+              "expectancy": -8.56
+            },
+            "commission_adjusted": {
+              "attempts": 13,
+              "resolved": 13,
+              "wins": 2,
+              "losses": 11,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.1538,
+              "gross_win": 144.54,
+              "gross_loss": -275.03,
+              "net_pnl": -130.49,
+              "profit_factor": 0.526,
+              "expectancy": -10.04
+            }
+          },
+          "Q2": {
+            "range": [
+              "2025-10-24",
+              "2026-01-23"
+            ],
+            "raw": {
+              "attempts": 10,
+              "resolved": 10,
+              "wins": 3,
+              "losses": 7,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.3,
+              "gross_win": 225.0,
+              "gross_loss": -155.0,
+              "net_pnl": 70.0,
+              "profit_factor": 1.452,
+              "expectancy": 7.0
+            },
+            "commission_adjusted": {
+              "attempts": 10,
+              "resolved": 10,
+              "wins": 3,
+              "losses": 7,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.3,
+              "gross_win": 220.56,
+              "gross_loss": -165.36,
+              "net_pnl": 55.2,
+              "profit_factor": 1.334,
+              "expectancy": 5.52
+            }
+          },
+          "Q3": {
+            "range": [
+              "2026-01-24",
+              "2026-04-23"
+            ],
+            "raw": {
+              "attempts": 0,
+              "resolved": 0,
+              "wins": 0,
+              "losses": 0,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": null,
+              "gross_win": 0,
+              "gross_loss": 0,
+              "net_pnl": 0,
+              "profit_factor": null,
+              "expectancy": null
+            },
+            "commission_adjusted": {
+              "attempts": 0,
+              "resolved": 0,
+              "wins": 0,
+              "losses": 0,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": null,
+              "gross_win": 0,
+              "gross_loss": 0,
+              "net_pnl": 0,
+              "profit_factor": null,
+              "expectancy": null
+            }
+          },
+          "Q4": {
+            "range": [
+              "2026-04-24",
+              "2026-07-23"
+            ],
+            "raw": {
+              "attempts": 0,
+              "resolved": 0,
+              "wins": 0,
+              "losses": 0,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": null,
+              "gross_win": 0,
+              "gross_loss": 0,
+              "net_pnl": 0,
+              "profit_factor": null,
+              "expectancy": null
+            },
+            "commission_adjusted": {
+              "attempts": 0,
+              "resolved": 0,
+              "wins": 0,
+              "losses": 0,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": null,
+              "gross_win": 0,
+              "gross_loss": 0,
+              "net_pnl": 0,
+              "profit_factor": null,
+              "expectancy": null
+            }
+          }
+        },
+        "by_direction": {
+          "LONG": {
+            "raw": {
+              "attempts": 16,
+              "resolved": 16,
+              "wins": 3,
+              "losses": 13,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.1875,
+              "gross_win": 245.0,
+              "gross_loss": -257.5,
+              "net_pnl": -12.5,
+              "profit_factor": 0.951,
+              "expectancy": -0.78
+            },
+            "commission_adjusted": {
+              "attempts": 16,
+              "resolved": 16,
+              "wins": 3,
+              "losses": 13,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.1875,
+              "gross_win": 240.56,
+              "gross_loss": -276.74,
+              "net_pnl": -36.18,
+              "profit_factor": 0.869,
+              "expectancy": -2.26
+            }
+          },
+          "SHORT": {
+            "raw": {
+              "attempts": 7,
+              "resolved": 7,
+              "wins": 2,
+              "losses": 5,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.2857,
+              "gross_win": 127.5,
+              "gross_loss": -156.25,
+              "net_pnl": -28.75,
+              "profit_factor": 0.816,
+              "expectancy": -4.11
+            },
+            "commission_adjusted": {
+              "attempts": 7,
+              "resolved": 7,
+              "wins": 2,
+              "losses": 5,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.2857,
+              "gross_win": 124.54,
+              "gross_loss": -163.65,
+              "net_pnl": -39.11,
+              "profit_factor": 0.761,
+              "expectancy": -5.59
+            }
+          }
+        },
+        "by_session": {
+          "asian": {
+            "raw": {
+              "attempts": 9,
+              "resolved": 9,
+              "wins": 0,
+              "losses": 9,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.0,
+              "gross_win": 0,
+              "gross_loss": -161.25,
+              "net_pnl": -161.25,
+              "profit_factor": 0.0,
+              "expectancy": -17.92
+            },
+            "commission_adjusted": {
+              "attempts": 9,
+              "resolved": 9,
+              "wins": 0,
+              "losses": 9,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.0,
+              "gross_win": 0,
+              "gross_loss": -174.57,
+              "net_pnl": -174.57,
+              "profit_factor": 0.0,
+              "expectancy": -19.4
+            }
+          },
+          "london": {
+            "raw": {
+              "attempts": 10,
+              "resolved": 10,
+              "wins": 3,
+              "losses": 7,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.3,
+              "gross_win": 210.0,
+              "gross_loss": -177.5,
+              "net_pnl": 32.5,
+              "profit_factor": 1.183,
+              "expectancy": 3.25
+            },
+            "commission_adjusted": {
+              "attempts": 10,
+              "resolved": 10,
+              "wins": 3,
+              "losses": 7,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.3,
+              "gross_win": 205.56,
+              "gross_loss": -187.86,
+              "net_pnl": 17.7,
+              "profit_factor": 1.094,
+              "expectancy": 1.77
+            }
+          },
+          "new_york": {
+            "raw": {
+              "attempts": 4,
+              "resolved": 4,
+              "wins": 2,
+              "losses": 2,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.5,
+              "gross_win": 162.5,
+              "gross_loss": -75.0,
+              "net_pnl": 87.5,
+              "profit_factor": 2.167,
+              "expectancy": 21.88
+            },
+            "commission_adjusted": {
+              "attempts": 4,
+              "resolved": 4,
+              "wins": 2,
+              "losses": 2,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.5,
+              "gross_win": 159.54,
+              "gross_loss": -77.96,
+              "net_pnl": 81.58,
+              "profit_factor": 2.046,
+              "expectancy": 20.39
+            }
+          }
+        },
+        "by_month_full": {
+          "2025-07": {
+            "raw": {
+              "attempts": 2,
+              "resolved": 2,
+              "wins": 0,
+              "losses": 2,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.0,
+              "gross_win": 0,
+              "gross_loss": -28.75,
+              "net_pnl": -28.75,
+              "profit_factor": 0.0,
+              "expectancy": -14.38
+            },
+            "commission_adjusted": {
+              "attempts": 2,
+              "resolved": 2,
+              "wins": 0,
+              "losses": 2,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.0,
+              "gross_win": 0,
+              "gross_loss": -31.71,
+              "net_pnl": -31.71,
+              "profit_factor": 0.0,
+              "expectancy": -15.86
+            }
+          },
+          "2025-08": {
+            "raw": {
+              "attempts": 1,
+              "resolved": 1,
+              "wins": 0,
+              "losses": 1,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.0,
+              "gross_win": 0,
+              "gross_loss": -51.25,
+              "net_pnl": -51.25,
+              "profit_factor": 0.0,
+              "expectancy": -51.25
+            },
+            "commission_adjusted": {
+              "attempts": 1,
+              "resolved": 1,
+              "wins": 0,
+              "losses": 1,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.0,
+              "gross_win": 0,
+              "gross_loss": -52.73,
+              "net_pnl": -52.73,
+              "profit_factor": 0.0,
+              "expectancy": -52.73
+            }
+          },
+          "2025-09": {
+            "raw": {
+              "attempts": 4,
+              "resolved": 4,
+              "wins": 0,
+              "losses": 4,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.0,
+              "gross_win": 0,
+              "gross_loss": -73.75,
+              "net_pnl": -73.75,
+              "profit_factor": 0.0,
+              "expectancy": -18.44
+            },
+            "commission_adjusted": {
+              "attempts": 4,
+              "resolved": 4,
+              "wins": 0,
+              "losses": 4,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.0,
+              "gross_win": 0,
+              "gross_loss": -79.67,
+              "net_pnl": -79.67,
+              "profit_factor": 0.0,
+              "expectancy": -19.92
+            }
+          },
+          "2025-10": {
+            "raw": {
+              "attempts": 8,
+              "resolved": 8,
+              "wins": 4,
+              "losses": 4,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.5,
+              "gross_win": 335.0,
+              "gross_loss": -105.0,
+              "net_pnl": 230.0,
+              "profit_factor": 3.19,
+              "expectancy": 28.75
+            },
+            "commission_adjusted": {
+              "attempts": 8,
+              "resolved": 8,
+              "wins": 4,
+              "losses": 4,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.5,
+              "gross_win": 329.08,
+              "gross_loss": -110.92,
+              "net_pnl": 218.16,
+              "profit_factor": 2.967,
+              "expectancy": 27.27
+            }
+          },
+          "2025-11": {
+            "raw": {
+              "attempts": 5,
+              "resolved": 5,
+              "wins": 1,
+              "losses": 4,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.2,
+              "gross_win": 37.5,
+              "gross_loss": -76.25,
+              "net_pnl": -38.75,
+              "profit_factor": 0.492,
+              "expectancy": -7.75
+            },
+            "commission_adjusted": {
+              "attempts": 5,
+              "resolved": 5,
+              "wins": 1,
+              "losses": 4,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.2,
+              "gross_win": 36.02,
+              "gross_loss": -82.17,
+              "net_pnl": -46.15,
+              "profit_factor": 0.438,
+              "expectancy": -9.23
+            }
+          },
+          "2025-12": {
+            "raw": {
+              "attempts": 3,
+              "resolved": 3,
+              "wins": 0,
+              "losses": 3,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.0,
+              "gross_win": 0,
+              "gross_loss": -78.75,
+              "net_pnl": -78.75,
+              "profit_factor": 0.0,
+              "expectancy": -26.25
+            },
+            "commission_adjusted": {
+              "attempts": 3,
+              "resolved": 3,
+              "wins": 0,
+              "losses": 3,
+              "open_with_identity": 0,
+              "unjoinable_legacy": 0,
+              "win_rate": 0.0,
+              "gross_win": 0,
+              "gross_loss": -83.19,
+              "net_pnl": -83.19,
+              "profit_factor": 0.0,
+              "expectancy": -27.73
+            }
+          }
+        },
+        "drawdown_raw": {
+          "max_drawdown": 187.5,
+          "max_consecutive_losses": 8,
+          "final_equity": -41.25
+        },
+        "drawdown_commission_adjusted": {
+          "max_drawdown": 199.34,
+          "max_consecutive_losses": 8,
+          "final_equity": -75.29
+        },
+        "concentration_raw": {
+          "net_pnl": -41.25,
+          "ex_top1_winner_net_pnl": -138.75,
+          "ex_top5_winners_net_pnl": -413.75,
+          "top1_share_of_net": -2.3636,
+          "top5_share_of_net": -9.0303
+        },
+        "concentration_commission_adjusted": {
+          "net_pnl": -75.29,
+          "ex_top1_winner_net_pnl": -171.31,
+          "ex_top5_winners_net_pnl": -440.39,
+          "top1_share_of_net": -1.2753,
+          "top5_share_of_net": -4.8492
+        }
+      }
+    }
+  }
+}
