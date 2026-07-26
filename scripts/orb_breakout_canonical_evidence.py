@@ -218,8 +218,9 @@ def _run_isolated(config, log_dir: Path, fresh: bool) -> dict:
     return {"ran": ran, "skipped": skipped, "errors": errors, "files": len(files)}
 
 
-def _parse_logs(logs_root: Path) -> list[dict]:
+def _parse_logs(logs_root: Path) -> tuple[list[dict], dict | None]:
     trades: list[dict] = []
+    halt: dict | None = None
     for path in sorted(logs_root.glob("journal_*.jsonl")):
         day = path.stem.removeprefix("journal_")
         entries = list(_json_lines(path))
@@ -235,6 +236,14 @@ def _parse_logs(logs_root: Path) -> list[dict]:
                 outcomes[order_id] = outcome
 
         for entry in entries:
+            if entry.get("decision") == "RISK_REJECTED":
+                risk_reject = entry.get("risk_check") or {}
+                if risk_reject.get("failed_rule") == "max_drawdown" and halt is None:
+                    halt = {
+                        "first_halt_date": day,
+                        "first_halt_bar_ts": entry.get("bar_ts"),
+                        "reason": risk_reject.get("reason"),
+                    }
             if entry.get("decision") != "TRADE":
                 continue
             risk = entry.get("risk_check") or {}
@@ -275,7 +284,7 @@ def _parse_logs(logs_root: Path) -> list[dict]:
                     ),
                 }
             )
-    return trades
+    return trades, halt
 
 
 def _profit_factor(values: list[float]) -> float | None:
@@ -414,7 +423,7 @@ def main() -> int:
             log_dir = args.logs / tag
             print(f"[run] === {tag} ===")
             _run_isolated(iso_config, log_dir, args.fresh)
-            trades = _parse_logs(log_dir)
+            trades, halt = _parse_logs(log_dir)
             for row in trades:
                 row["half"] = _period_label(row["date"], HALVES)
                 row["quarter"] = _period_label(row["date"], QUARTERS)
@@ -426,6 +435,7 @@ def main() -> int:
                 "by_session": _group(trades, "session", sorted({r["session"] for r in trades}) or ["none"]),
                 "by_half": _group(trades, "half", HALVES.keys()),
                 "by_quarter": _group(trades, "quarter", QUARTERS.keys()),
+                "drawdown_breaker_halt": halt,
                 "trades": trades,
             }
 
@@ -500,6 +510,15 @@ def main() -> int:
             },
             "risk_rules_sha256_before": risk_hash_before,
             "risk_rules_sha256_after": risk_hash_after,
+        },
+        "drawdown_breaker_audit_1tick": {
+            "static": static_1t.get("drawdown_breaker_halt"),
+            "runner": runner_1t.get("drawdown_breaker_halt"),
+            "note": (
+                "isolated account's OWN P&L tripped its OWN 20% breaker if non-null -- this is "
+                "orb_breakout's own honest performance halting itself, not combined-book "
+                "contamination from other strategies (contrast with PR #346's combined-book halt)"
+            ),
         },
         "classification": {
             "static": {"verdict": static_verdict, "reasons": static_reasons},
@@ -717,11 +736,28 @@ def _render_report(results: dict) -> str:
         *_table_rows(static["by_half"]),
         f"Both halves positive: **{rob['h2_positive']['static']} (H2) / overall walk-forward "
         f"{'PASS' if 'fails both-halves-positive' not in ' '.join(results['classification']['static']['reasons']) else 'FAIL'}**",
+        (
+            f"⚠️ **This isolated account's OWN 20% drawdown breaker tripped on its own P&L**: "
+            f"{static['drawdown_breaker_halt']['first_halt_date']} "
+            f"({static['drawdown_breaker_halt']['reason']}). New order admission stopped from "
+            f"that date — H2/Q3/Q4's thin counts are not just \"not enough sample happened to "
+            f"exist,\" they are orb_breakout's own honest performance halting its own isolated "
+            f"account, well before quarter-end."
+            if static.get("drawdown_breaker_halt") else
+            "No drawdown-breaker halt on the isolated account during this run."
+        ),
         "",
         "### Runner",
         *_table_rows(runner["by_half"]),
         f"Both halves positive: **{rob['h2_positive']['runner']} (H2) / overall walk-forward "
         f"{'PASS' if 'fails both-halves-positive' not in ' '.join(results['classification']['runner']['reasons']) else 'FAIL'}**",
+        (
+            f"⚠️ **This isolated account's OWN 20% drawdown breaker tripped on its own P&L**: "
+            f"{runner['drawdown_breaker_halt']['first_halt_date']} "
+            f"({runner['drawdown_breaker_halt']['reason']})."
+            if runner.get("drawdown_breaker_halt") else
+            "No drawdown-breaker halt on the isolated account during this run."
+        ),
         "",
         "## Quarter (1-tick)",
         "",
