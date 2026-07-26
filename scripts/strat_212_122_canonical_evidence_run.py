@@ -2,19 +2,31 @@
 """
 scripts/strat_212_122_canonical_evidence_run.py
 
-STATUS (2026-07-26, operator REJECT verdict): the output of this script is
-SUPERSEDED / PARITY-INVALID, not canonical evidence. A shared audit found
-data/replay_corpus_v1's engine-facing market_condition does not match the
-runtime/Pine formula (33,635/47,066 bars differ; 27,967 replay-TRENDING bars
-would not be TRENDING under Pine) -- the global TRENDING-only gate every
-strategy (including strat_212/strat_122) passes through can therefore admit
-trades the live system would reject. Separately, replay_engine.py silently
-drops any position still OPEN at a daily-candle-file boundary (PR #333;
-fix in progress on claude/replay-engine-cross-day-position-carryforward).
-Do not rerun conclusions from this script's output until BOTH fixes land and
-a corrected corpus is regenerated. See
-memory/project_replay_engine_cross_day_position_carryforward.md. Kept,
-not deleted, for provenance.
+STATUS (2026-07-26, updated after PR #338 merged main@0057bc23): the
+market-condition parity blocker is FIXED and incorporated below -- this
+script now reads data/replay_corpus_v1_market_condition_fixed, the output of
+scripts/rematerialize_market_condition_corpus.py run against
+data/replay_corpus_v1 (offline, no API pull needed --
+reconstructed_market_condition was already present in every row per PR
+#323). Reproduce with:
+    python3 scripts/rematerialize_market_condition_corpus.py \
+        --input data/replay_corpus_v1 \
+        --output data/replay_corpus_v1_market_condition_fixed \
+        --report /tmp/rematerialize_report.json
+
+A SEPARATE shared-engine defect is still OUTSTANDING and NOT yet fixed:
+replay_engine.py silently drops any position still OPEN at a daily-
+candle-file boundary (proven by PR #333; fix dispatched on
+claude/replay-engine-cross-day-position-carryforward, not yet merged as of
+this note). Results from this corrected-corpus run are therefore still not
+fully final -- they may still mishandle any strat_212/strat_122 position
+that legitimately spans a day boundary (neither strategy is in
+execution/day_only_exit.py's DAY_ONLY_STRATEGIES). See
+memory/project_replay_engine_cross_day_position_carryforward.md. The
+original data/replay_corpus_v1-based run (pre-#338, market-condition-tainted)
+is preserved, not deleted, as
+scripts/strat_212_122_canonical_evidence_results_pre_pr338_superseded.json
+and the matching _raw_trades_pre_pr338_superseded.jsonl, for provenance.
 
 Fresh canonical replay evidence for strat_212 (2-1-2) / strat_122 (1-2-2)
 against the SAME post-#320-fix, directional, 313-day Polygon corpus already
@@ -60,7 +72,7 @@ from config.settings import load_config  # noqa: E402
 from replay.replay_engine import ReplayEngine  # noqa: E402
 
 INSTRUMENTS = ("MNQ", "MES")
-CANDLE_BASE = Path("data/replay_corpus_v1")
+CANDLE_BASE = Path("data/replay_corpus_v1_market_condition_fixed")
 LOG_BASE = Path("logs/replay_strat212_122_canonical")
 
 

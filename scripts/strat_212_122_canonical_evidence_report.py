@@ -2,21 +2,29 @@
 """
 scripts/strat_212_122_canonical_evidence_report.py
 
-STATUS (2026-07-26, operator REJECT verdict): the results this script
-produces are SUPERSEDED / PARITY-INVALID, not canonical evidence -- see the
-matching status note in scripts/strat_212_122_canonical_evidence_run.py and
-scripts/strat_212_122_canonical_evidence_results.json's own "meta.status"/
-"meta.status_note" fields for the full explanation (market_condition parity
-mismatch between runtime/Pine and replay, plus the still-open cross-day
-position carry-forward defect). Kept, not deleted, for provenance. Do not
-treat any WAIT/PROMISING/etc. classification derived from this output as
-final until a corrected corpus is regenerated and this is rerun.
+STATUS (2026-07-26, updated after PR #338 merged main@0057bc23): the
+market-condition parity blocker is FIXED and incorporated -- this report now
+aggregates the rerun against data/replay_corpus_v1_market_condition_fixed
+(see scripts/strat_212_122_canonical_evidence_run.py's own status note for
+the exact rematerialization command). The PRE-#338 run (market-condition-
+tainted) is preserved, not deleted, as
+scripts/strat_212_122_canonical_evidence_results_pre_pr338_superseded.json /
+_raw_trades_pre_pr338_superseded.jsonl.
+
+A SEPARATE shared-engine defect remains OUTSTANDING and NOT yet fixed:
+replay_engine.py silently drops any position still OPEN at a daily-
+candle-file boundary (proven by PR #333; fix dispatched, not yet merged as
+of this note -- see memory/project_replay_engine_cross_day_position_carryforward.md).
+This report's `open_with_identity` counts are the visible symptom. Do not
+treat the classification below as fully final until that fix also lands and
+this is rerun once more.
 
 Aggregates the strat_212/strat_122 canonical evidence run produced by
 scripts/strat_212_122_canonical_evidence_run.py (MNQ + MES,
-2025-07-24 -> 2026-07-23, data/replay_corpus_v1 -- the same post-#320-fix
-directional corpus used for the Corpus v1 clean baseline, enabled_concepts
-isolated in-memory to [strat_212, strat_122] only, risk_rules.yaml untouched).
+2025-07-24 -> 2026-07-23, data/replay_corpus_v1_market_condition_fixed --
+the post-#320-fix directional, post-#338 market-condition-parity-corrected
+corpus, enabled_concepts isolated in-memory to [strat_212, strat_122] only,
+risk_rules.yaml untouched).
 
 Trade pairing reuses adaptive.journal_reader.JournalReader._trades_for_day --
 the same exact-paper_order_id identity join (#327/#332), no FIFO fallback --
@@ -245,7 +253,19 @@ def main() -> int:
 
     results: dict = {
         "meta": {
-            "corpus": "data/replay_corpus_v1 (post-#320-fix directional, 313 days/instrument)",
+            "status": "PARTIALLY_CORRECTED -- market-condition parity fixed (PR #338), "
+                       "cross-day position carry-forward STILL OUTSTANDING (PR #333 root "
+                       "cause, fix not yet merged as of this run)",
+            "status_note": "This run reads data/replay_corpus_v1_market_condition_fixed "
+                     "(post-#338, market-condition matches runtime/Pine per "
+                     "scripts/rematerialize_market_condition_corpus.py). It does NOT yet "
+                     "reflect the cross-day-boundary position carry-forward fix -- "
+                     "open_with_identity counts below are that defect's visible symptom. "
+                     "Do not treat this classification as fully final until that fix also "
+                     "lands and this is rerun once more. The pre-#338 run is preserved as "
+                     "strat_212_122_canonical_evidence_results_pre_pr338_superseded.json.",
+            "corpus": "data/replay_corpus_v1_market_condition_fixed (post-#320-fix directional, "
+                      "post-#338 market-condition-parity-corrected, 313 days/instrument)",
             "range": [FULL_START, FULL_END],
             "instruments": list(INSTRUMENTS),
             "strategies": list(STRATEGIES),
