@@ -1,7 +1,32 @@
 #!/usr/bin/env python3
 """ORB Reclaim — isolated honest-fill root-cause audit.
 
-Requested by the operator directly following PR #349 (ORB Breakout). PR
+AMENDMENT (operator HOLD, same day): the first pass of this PR derived its
+London-vs-New-York breakdown by FILTERING a single all-session isolated
+account's trades by session after the fact -- which does not stop a London
+loss from tripping the SAME account's breaker and censoring later New York
+evidence. The operator required a stronger test: four genuinely independent
+session-isolated canonical lanes (MNQ London, MNQ New York, MES London, MES
+New York), each its OWN fresh account with the NORMAL 20% breaker, where a
+bar outside the lane's session is never even evaluated by the strategy (not
+merely excluded from the report) -- see SESSION_LANES / the
+`allowed_sessions=[session]` override below, which makes
+`_enforce_schedule and state.session not in self.config.allowed_sessions`
+(signal_engine.py:294) return NO_TRADE for every off-session bar BEFORE any
+orb_reclaim candidate is ever generated, so an off-session bar can carry
+zero risk/drawdown consequence for that lane's account. The operator also
+ruled the NON-CANONICAL breaker-off diagnostic (see BREAKER below) out of
+the authorized validation path entirely: it is NOT rerun in this amendment,
+its already-produced figures are kept ONLY as explicitly-labeled
+out-of-scope diagnostic provenance, and no classification or
+Strategy_Inventory.md claim may depend on it. The instrument-level
+all-session canonical runs (MNQ/MES, breaker ON) are kept as context, not
+superseded -- the session-isolated lanes are the new authoritative session
+test. The Pine-vs-Python trend_dir gap remains an unresolved, unfixed parity
+blocker -- this amendment does not choose a canonical side.
+
+ORIGINAL SCOPE, requested by the operator directly following PR #349 (ORB
+Breakout). PR
 #346's corrected combined-book run showed orb_reclaim carrying 73.3% of the
 book's total loss (net -$588.28, 86 resolved, 29.1% WR, PF 0.803) -- but
 every one of those 86 resolved trades falls inside H1 only, because the
@@ -123,6 +148,12 @@ COMMISSION_ROUND_TRIP = 1.48
 SLIPPAGE_TICKS = (1.0, 2.0, 3.0, 4.0)
 SAMPLE_ADEQUATE_MIN = 30
 SESSIONS = ("asian", "london", "new_york")
+SESSION_LANES = (
+    ("MNQ", "london"),
+    ("MNQ", "new_york"),
+    ("MES", "london"),
+    ("MES", "new_york"),
+)
 
 HISTORICAL_PR346_COMBINED_BOOK = {
     "label": "MNQ+MES combined-book, ioc_limit, PR #346 (post-#338/#339/#342), full H1, breaker-truncated",
@@ -559,6 +590,53 @@ def main() -> int:
         else:
             breaker_diagnostics[instrument]["breaker_off_diagnostic_overall"] = None
 
+    # ── Session-isolated canonical lanes (operator HOLD amendment) ──────────
+    # Genuinely independent: allowed_sessions=[session] makes the session gate
+    # (signal_engine.py:294) return NO_TRADE for every off-session bar BEFORE
+    # any orb_reclaim candidate is generated -- an off-session bar carries
+    # zero risk/drawdown consequence for this lane's account. This is NOT a
+    # post-hoc filter of the all-session run; it is an independently-run,
+    # independently-breakered account per (instrument, session). Breaker ON
+    # (canonical, matches production) -- no breaker-off variant here, out of
+    # scope per the operator's amendment.
+    session_lane_results: dict[str, dict] = {}
+    for instrument, session in SESSION_LANES:
+        for slip in SLIPPAGE_TICKS:
+            tag = f"{instrument}_{session}_ioc_{slip:.0f}tick"
+            iso_config = dataclasses.replace(
+                base_config,
+                enabled_concepts=["orb_reclaim"],
+                disabled_concepts_per_instrument={},
+                entry_fill_model="ioc_limit",
+                fill_slippage_ticks=float(slip),
+                allowed_sessions=[session],
+            )
+            log_dir = args.logs / tag
+            print(f"[run] === {tag} (session-isolated lane) ===")
+            _run_isolated(instrument, iso_config, log_dir, args.fresh)
+            trades, halt = _parse_logs(log_dir, instrument)
+            for row in trades:
+                row["half"] = _period_label(row["date"], HALVES)
+                row["quarter"] = _period_label(row["date"], QUARTERS)
+            off_session_leak = [r for r in trades if r["session"] != session]
+            if off_session_leak:
+                raise RuntimeError(
+                    f"session isolation leak: {tag} produced trade(s) outside "
+                    f"'{session}': {off_session_leak[:3]!r}"
+                )
+            session_lane_results[tag] = {
+                "instrument": instrument,
+                "session": session,
+                "fill_model": "ioc_limit",
+                "slippage_ticks": slip,
+                "breaker": "canonical_on",
+                "overall": _stats(trades),
+                "by_half": _group(trades, "half", HALVES.keys()),
+                "by_quarter": _group(trades, "quarter", QUARTERS.keys()),
+                "drawdown_breaker_halt": halt,
+                "trades": trades,
+            }
+
     after_config = load_config()
     after_enabled = tuple(after_config.enabled_concepts)
     after_disabled = {k: tuple(v) for k, v in after_config.disabled_concepts_per_instrument.items()}
@@ -582,6 +660,29 @@ def main() -> int:
             "reasons": reasons,
             "walk_forward_both_halves_positive": wf,
             "survives_1_4_tick_slippage": slip_ok,
+        }
+
+    # Session-isolated lane verdicts (1-tick canonical, breaker ON) -- the
+    # authoritative clean London-vs-New-York test.
+    session_lane_verdicts: dict[str, dict] = {}
+    for instrument, session in SESSION_LANES:
+        key = f"{instrument}_{session}"
+        block_1t = session_lane_results[f"{key}_ioc_1tick"]
+        wf = _walk_forward_both_halves_positive(block_1t["by_half"])
+        slip_ok = all(
+            (session_lane_results[f"{key}_ioc_{s:.0f}tick"]["overall"]["profit_factor_after_commission"] or 0) > 1
+            and (session_lane_results[f"{key}_ioc_{s:.0f}tick"]["overall"]["net_after_commission"] or 0) > 0
+            for s in SLIPPAGE_TICKS
+        )
+        verdict, reasons = _classify(block_1t["overall"], wf, slip_ok)
+        session_lane_verdicts[key] = {
+            "instrument": instrument,
+            "session": session,
+            "verdict": verdict,
+            "reasons": reasons,
+            "walk_forward_both_halves_positive": wf,
+            "survives_1_4_tick_slippage": slip_ok,
+            "drawdown_breaker_halt": block_1t["drawdown_breaker_halt"],
         }
 
     # Combined (post-hoc aggregate of the two independent isolated runs) at 1-tick canonical.
@@ -623,7 +724,39 @@ def main() -> int:
             "risk_rules_sha256_after": risk_hash_after,
         },
         "verdicts": verdicts,
-        "breaker_diagnostics": breaker_diagnostics,
+        "session_isolated_lanes": {
+            "note": (
+                "AUTHORITATIVE clean London-vs-New-York test (operator HOLD amendment). Each "
+                "lane is an INDEPENDENT account with allowed_sessions=[session] -- off-session "
+                "bars never generate a candidate (signal_engine.py:294 returns NO_TRADE before "
+                "_try_orb_reclaim is ever called), so one session cannot censor another's "
+                "evidence. Breaker ON (canonical, matches production). Supersedes the earlier "
+                "by-session breakdown of the all-session run below, which was a post-hoc filter "
+                "of a single shared-breaker account and could not rule out cross-session "
+                "censorship."
+            ),
+            "verdicts": session_lane_verdicts,
+            "lanes_1tick": {
+                key: {k: v for k, v in session_lane_results[f"{key}_ioc_1tick"].items() if k != "trades"}
+                for instrument, session in SESSION_LANES
+                for key in [f"{instrument}_{session}"]
+            },
+            "slippage_sweep": {
+                tag: {k: v for k, v in block.items() if k != "trades"}
+                for tag, block in session_lane_results.items()
+            },
+        },
+        "breaker_off_diagnostics_OUT_OF_SCOPE_NOT_FOR_CLASSIFICATION": {
+            "note": (
+                "NON-CANONICAL. Ruled outside the authorized validation path by the operator's "
+                "HOLD amendment. Preserved ONLY as diagnostic provenance (what evidence the "
+                "20% breaker censored) for auditability -- MUST NOT be used to determine "
+                "classification, Master Table fields, or any 'genuinely negative' / 'near-flat' "
+                "style conclusion. Not rerun in this amendment; figures are exactly as first "
+                "produced."
+            ),
+            "data": breaker_diagnostics,
+        },
         "combined_reporting_aggregate_1tick": {
             "overall": combined_overall,
             "by_session": combined_by_session,
@@ -701,7 +834,7 @@ def main() -> int:
     args.out.write_text(json.dumps(results, indent=2, allow_nan=False) + "\n")
 
     with args.raw.open("w", encoding="utf-8") as handle:
-        for tag, block in all_results.items():
+        for tag, block in {**all_results, **session_lane_results}.items():
             for row in sorted(block["trades"], key=lambda r: (r["date"], r["bar_ts"])):
                 out_row = dict(row)
                 out_row["run_tag"] = tag
@@ -712,6 +845,7 @@ def main() -> int:
     args.report.write_text(_render_report(results).rstrip() + "\n")
     print(json.dumps({
         "verdicts": verdicts,
+        "session_isolated_verdicts": session_lane_verdicts,
         "MNQ_overall_1tick": all_results["MNQ_ioc_1tick"]["overall"],
         "MES_overall_1tick": all_results["MES_ioc_1tick"]["overall"],
         "combined_overall_1tick": combined_overall,
@@ -795,7 +929,11 @@ def _render_report(results: dict) -> str:
         "",
         *_table_rows({"COMBINED": combined["overall"]}),
         "",
-        "## By session (1-tick canonical)",
+        "## By session, all-session-account view (1-tick canonical) — CONTEXT ONLY, NOT independently isolated",
+        "",
+        "⚠️ These rows are a post-hoc filter of the single all-session account above — a London loss in this "
+        "same account CAN still consume the breaker budget that would otherwise be available to a later New "
+        "York bar. See the session-isolated lanes section below for the clean, independently-breakered test.",
         "",
         "### MNQ",
         *_table_rows(mnq["by_session"]),
@@ -806,7 +944,28 @@ def _render_report(results: dict) -> str:
         "### Combined",
         *_table_rows(combined["by_session"]),
         "",
-        "## Walk-forward H1/H2 (1-tick canonical)",
+        "## Session-isolated canonical lanes — AUTHORITATIVE London vs New York test (operator HOLD amendment)",
+        "",
+        results["session_isolated_lanes"]["note"],
+        "",
+    ]
+    sil = results["session_isolated_lanes"]
+    for instrument, session in SESSION_LANES:
+        key = f"{instrument}_{session}"
+        v = sil["verdicts"][key]
+        lane = sil["lanes_1tick"][key]
+        lines.append(f"### {instrument} {session}")
+        lines.append(f"**Verdict: {v['verdict']}** — " + "; ".join(v['reasons']))
+        lines += _table_rows({f"{instrument} {session}": lane["overall"]})
+        halt = v["drawdown_breaker_halt"]
+        lines.append(
+            f"Own breaker: {'tripped ' + halt['first_halt_date'] + ' (' + halt['reason'] + ')' if halt else 'did NOT trip'}."
+        )
+        lines.append(f"Both halves positive: **{v['walk_forward_both_halves_positive']}**. "
+                      f"Survives 1-4 tick slippage: **{v['survives_1_4_tick_slippage']}**.")
+        lines.append("")
+    lines += [
+        "## Walk-forward H1/H2, all-session accounts (1-tick canonical)",
         "",
         "### MNQ",
         *_table_rows(mnq["by_half"]),
@@ -816,12 +975,12 @@ def _render_report(results: dict) -> str:
         *_table_rows(mes["by_half"]),
         f"Both halves positive: **{verdicts['MES']['walk_forward_both_halves_positive']}**",
         "",
-        "## Drawdown breaker — isolated accounts",
+        "## Drawdown breaker — all-session isolated accounts (canonical, used for classification)",
         "",
     ]
+    breaker_data = results["breaker_off_diagnostics_OUT_OF_SCOPE_NOT_FOR_CLASSIFICATION"]["data"]
     for instrument in ("MNQ", "MES"):
-        diag = results["breaker_diagnostics"][instrument]
-        halt = diag["canonical_halt"]
+        halt = breaker_data[instrument]["canonical_halt"]
         if halt is None:
             lines.append(f"- **{instrument}**: isolated account's own breaker did NOT trip during this run.")
         else:
@@ -830,14 +989,22 @@ def _render_report(results: dict) -> str:
                 f"{halt['first_halt_date']} ({halt['reason']}). New order admission stopped from that "
                 f"date on the canonical run."
             )
-            off_overall = diag.get("breaker_off_diagnostic_overall")
-            if off_overall:
-                lines.append(
-                    f"  - ⚠️ NON-CANONICAL breaker-off diagnostic (reveals censored evidence only, NOT "
-                    f"used for classification): n={off_overall['resolved']} resolved, "
-                    f"{_fmt_rate(off_overall['win_rate'])} WR, {_fmt_money(off_overall['net_after_commission'])} "
-                    f"net, PF {_fmt_pf(off_overall['profit_factor_after_commission'])}."
-                )
+    lines += [
+        "",
+        "### Breaker-off diagnostic (NON-CANONICAL, OUT OF SCOPE — provenance only, not used for anything above)",
+        "",
+        results["breaker_off_diagnostics_OUT_OF_SCOPE_NOT_FOR_CLASSIFICATION"]["note"],
+        "",
+    ]
+    for instrument in ("MNQ", "MES"):
+        off_overall = breaker_data[instrument].get("breaker_off_diagnostic_overall")
+        if off_overall:
+            lines.append(
+                f"- **{instrument}** (non-canonical, breaker disabled): n={off_overall['resolved']} resolved, "
+                f"{_fmt_rate(off_overall['win_rate'])} WR, {_fmt_money(off_overall['net_after_commission'])} "
+                f"net, PF {_fmt_pf(off_overall['profit_factor_after_commission'])}. Provenance only — not a "
+                f"classification input."
+            )
     lines += [
         "",
         "## Slippage sensitivity 1/2/3/4-tick (overall, canonical)",
@@ -850,6 +1017,18 @@ def _render_report(results: dict) -> str:
         *_table_rows({f"{s:.0f}tick": results["slippage_sweep"][f"MES_ioc_{s:.0f}tick"]["overall"] for s in SLIPPAGE_TICKS}),
         f"Survives 1-4 tick: **{verdicts['MES']['survives_1_4_tick_slippage']}**",
         "",
+        "## Slippage sensitivity 1/2/3/4-tick — session-isolated lanes",
+        "",
+    ]
+    for instrument, session in SESSION_LANES:
+        key = f"{instrument}_{session}"
+        lines.append(f"### {instrument} {session}")
+        lines += _table_rows({
+            f"{s:.0f}tick": sil["slippage_sweep"][f"{key}_ioc_{s:.0f}tick"]["overall"] for s in SLIPPAGE_TICKS
+        })
+        lines.append(f"Survives 1-4 tick: **{sil['verdicts'][key]['survives_1_4_tick_slippage']}**")
+        lines.append("")
+    lines += [
         "## IOC vs market-fill comparison (1-tick, joined by date+bar_ts candidate identity)",
         "",
     ]
@@ -866,15 +1045,17 @@ def _render_report(results: dict) -> str:
         f"MES: **{(mes['overall']['net_after_commission'] or 0) <= 0}** (${mes['overall']['net_after_commission']:,.2f}).",
         f"2. Is MES the dominant problem? Combined net ${combined['overall']['net_after_commission']:,.2f} = "
         f"MNQ ${mnq['overall']['net_after_commission']:,.2f} + MES ${mes['overall']['net_after_commission']:,.2f}.",
-        "3. Is London the dominant problem? See by-session tables above for each instrument and combined.",
-        "4. Is NY materially better? See by-session tables above.",
+        "3. Is London the dominant problem? See the session-isolated canonical lanes above — the authoritative "
+        "answer (all-session by-session tables are context only, see caveat above them).",
+        "4. Is NY materially better? See the session-isolated canonical lanes above.",
         "5. Is the combined-book -$588.28 representative or misleading? See combined reporting aggregate "
         "above vs PR #346's historical comparator — isolated numbers are NOT breaker-truncated to H1-only "
         "the same way (see walk-forward section) unless the isolated account tripped its own breaker (see "
-        "drawdown breaker section).",
+        "drawdown breaker section). Non-canonical breaker-off provenance is preserved below for auditability "
+        "only and does not answer this question on its own.",
         f"6. Does the isolated strategy itself hit max drawdown? MNQ: "
-        f"**{results['breaker_diagnostics']['MNQ']['canonical_halt'] is not None}**. MES: "
-        f"**{results['breaker_diagnostics']['MES']['canonical_halt'] is not None}**. See breaker section.",
+        f"**{breaker_data['MNQ']['canonical_halt'] is not None}**. MES: "
+        f"**{breaker_data['MES']['canonical_halt'] is not None}**. See breaker section.",
         "7. Does H2 recover or remain weak? See walk-forward H1/H2 tables above.",
         f"8. Does the result survive 1-4 tick slippage? MNQ: **{verdicts['MNQ']['survives_1_4_tick_slippage']}**. "
         f"MES: **{verdicts['MES']['survives_1_4_tick_slippage']}**.",

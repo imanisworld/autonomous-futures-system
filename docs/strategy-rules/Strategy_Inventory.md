@@ -34,8 +34,8 @@ Verdict taxonomy:
 
 | Strategy | Rules | Detector | Replay parity | Honest fills | Walk-forward | Slippage | Sample | Verdict |
 |---|---|---|---|---|---|---|---|---|
-| ORB Reclaim (MES) | ✅ | ✅ | ⚠️ trend-gate replay/live population gap, see profile | ✅ isolated ioc_limit (2026-07-26) | ❌ breaker-truncated; breaker-off diagnostic near-flat (H1 -$174.74/H2 +$3.12) | ❌ fails 1-4 tick (2026-07-26) | ✅ n=75 canonical / n=181 breaker-off diagnostic (2026-07-26) | **WAIT — see 2026-07-26 audit, downgraded from PAPER PROOF** |
-| ORB Reclaim (MNQ) | ✅ | ✅ | ⚠️ trend-gate replay/live population gap, see profile | ✅ isolated ioc_limit (2026-07-26) | ❌ both halves negative even breaker-off (2026-07-26) | ❌ fails 1-4 tick (2026-07-26) | ⚠️ n=21 canonical thin / n=107 breaker-off diagnostic (2026-07-26) | **WAIT** |
+| ORB Reclaim (MES) | ✅ | ✅ | ⚠️ trend-gate replay/live population gap, see profile | ✅ isolated ioc_limit (2026-07-26) | ⚠️ mixed by session-isolated lane: London ❌ (own breaker), **NY ✅ both halves positive** | ❌ NY fails 3-4 tick (2026-07-26) | ✅ n=75 all-session canonical / n=79 NY session-isolated (2026-07-26) | **WAIT — see 2026-07-26 audit (amended), downgraded from PAPER PROOF** |
+| ORB Reclaim (MNQ) | ✅ | ✅ | ⚠️ trend-gate replay/live population gap, see profile | ✅ isolated ioc_limit (2026-07-26) | ❌ both session-isolated lanes negative | ❌ fails 1-4 tick (2026-07-26) | ⚠️ n=21 all-session canonical thin / n=75 London / n=6 NY session-isolated (2026-07-26) | **WAIT** |
 | 4HR Re-Trigger | ✅ blockers resolved | ❌ | ❌ | Partial — external study | ✅ | Partial | ⚠️ n=32 MNQ | **WAIT — build detector** |
 | 12HR Miyagi | ✅ blockers resolved | ✅ | Partial — standalone research module | ✅ | ✅ both halves (H2 thin) | ✅ 1-4 tick | ⚠️ n=15 MNQ / n=19 MES thin | **PROMISING BUT UNPROVEN** |
 | 60M 3-2-2 First Live | ✅ blockers resolved | ✅ | Partial — standalone research module | ✅ IOC-faithful | ✅ both halves | ✅ 1-4 tick | ⚠️ n=34 MNQ thin | **PROMISING BUT UNPROVEN** |
@@ -62,36 +62,46 @@ Verdict taxonomy:
 ---
 
 ### ORB Reclaim — MES
-**Verdict: WAIT — downgraded from PAPER PROOF, 2026-07-26 isolated honest-fill audit**
+**Verdict: WAIT — downgraded from PAPER PROOF, 2026-07-26 isolated honest-fill audit (amended)**
 
 - Entry: price reclaims ORB high (LONG only — no SHORT branch exists in Python or Pine)
 - Stop: `max(orb_low - 4t, entry - 40t)`; Target: `entry + 2.5x risk`
-- **2026-07-26 AUDIT NOTE (supersedes the figures below)**: the previous "+$9.87/trade NY,
-  VALIDATED, n=305" claim traces to `docs/mes-mnq-mechanical-research-2026-07-09.md`
-  (MES orb_reclaim NY: n=105, exp $9.87, classified VALIDATED under both ioc_limit_static
-  and ioc_limit_runner) — a study run **2026-07-09, predating PR #338 (market_condition
-  parity fix), #339/#342 (replay engine cross-day carry-forward fixes), and #346 (corrected
+- **AUDIT NOTE (supersedes the figures below)**: the previous "+$9.87/trade NY, VALIDATED,
+  n=305" claim traces to `docs/mes-mnq-mechanical-research-2026-07-09.md` (MES orb_reclaim
+  NY: n=105, exp $9.87, classified VALIDATED under both ioc_limit_static and
+  ioc_limit_runner) — a study run **2026-07-09, predating PR #338 (market_condition parity
+  fix), #339/#342 (replay engine cross-day carry-forward fixes), and #346 (corrected
   corpus)**. It is the basis risk_rules.yaml itself cites for promoting MES orb_reclaim to
   "the ONLY strategy with validated positive expectancy under honest fills" and disabling
   every other MES strategy.
-- A fresh **isolated single-strategy replay** under the POST-correction engine/corpus
-  (`scripts/orb_reclaim_isolated_root_cause_audit.py`, own fresh account, no combined-book
-  contamination) finds a materially different picture:
-  - **Canonical (20% breaker ON, matches production)**: n=75 resolved, 29.3% WR, PF 0.831,
-    net **-$441.00**. Breaker trips 2025-12-11, before H2 — walk-forward untestable at this
-    setting.
-  - **Breaker-off diagnostic (NON-CANONICAL, run solely to see what the breaker censored)**:
-    n=181 resolved, 34.3% WR, PF 0.973, net **-$171.62** — near flat, not the "+$9.87/trade"
-    claim. By half: H1 -$174.74 (94 resolved), H2 **+$3.12** (87 resolved, essentially
-    breakeven). Session: New York alone is actually positive (n=29, PF 1.06, net +$67.08 on
-    the canonical run) — London is the dominant loss driver (n=43, PF 0.644, net -$483.64).
-  - Fails 1-4 tick slippage sensitivity on the canonical config.
+- **All-session isolated account** (own fresh account, no combined-book contamination),
+  canonical 20% breaker ON: n=75 resolved, 29.3% WR, PF 0.831, net **-$441.00**; breaker
+  trips 2025-12-11, before H2 — walk-forward untestable at the all-session level.
+- **Session-isolated canonical lanes** (each an INDEPENDENT account with
+  `allowed_sessions=[session]`, so an off-session bar never generates a candidate and one
+  session cannot censor another's evidence — the authoritative session-level test):
+  - **London**: n=40 resolved, 25.0% WR, PF 0.705, net -$365.45; own breaker trips
+    2025-12-03, all-H1 — negative on its own account, not cross-session contamination.
+  - **New York**: n=79 resolved, 38.0% WR, PF 1.041, net **+$131.83** — own breaker never
+    trips, **both halves independently positive** (H1 +$95.34/n=42, H2 +$36.49/n=37). The
+    single most promising cell found across this whole audit. Slippage sweep: 1-tick
+    +$131.83 → 2-tick +$89.33 → **3-tick -$5.67 (flips negative)** → 4-tick -$146.92 — fails
+    the 1-4 tick bar, but the edge is thin-positive rather than decisively broken at
+    realistic (1-2 tick) slippage.
+  - London is confirmed the dominant loss driver, consistent with the all-session view; New
+    York is where whatever edge MES orb_reclaim has actually lives.
 - **Parity note (material, not fixed)**: Python's `_try_orb_reclaim` has no trend-direction
   gate; Pine's own alert-generation cascade requires `trend_dir=="UP"`. Replay's candidate
-  population is therefore a strict superset of what live could ever produce.
+  population is therefore a strict superset of what live could ever produce. Left
+  unresolved and unfixed — no canonical side chosen.
+- A non-canonical breaker-off diagnostic was also produced (all-session account, breaker
+  disabled) but is **out of the authorized validation path** — preserved only as
+  auditability provenance in `orb_reclaim_isolated_root_cause_audit_results.json`, not used
+  for this classification or any claim here.
 - Live: still an active `paper_sim` lane as of this writing — this audit is evidence-only,
   no runtime/deployment change made. The operator should treat the "PAPER PROOF" status as
-  stale pending review of this finding.
+  stale pending review of this finding, and specifically weigh the New York-only result
+  before any broader disable/keep decision.
 - Full detail: `docs/orb-reclaim-isolated-root-cause-audit-2026-07-26.md`.
 
 ---
@@ -100,18 +110,22 @@ Verdict taxonomy:
 **Verdict: WAIT**
 
 - Same definition as MES (LONG only)
-- **2026-07-26 isolated audit**: canonical (breaker ON) n=21 resolved, 23.8% WR, PF 0.546,
-  net **-$337.33** — breaker trips 2025-09-29 (earlier than the shared-book's 2025-09-08,
-  since there are no other strategies' wins to offset it).
-- Breaker-off diagnostic (NON-CANONICAL): n=107 resolved, 29.9% WR, PF 0.772, net
-  **-$826.86** — **both halves negative** (H1 -$694.78 n=61, H2 -$132.08 n=46). Unlike MES,
-  removing the breaker censorship does NOT reveal a hidden positive picture for MNQ — it
-  confirms the strategy is genuinely negative across the full period.
-- London is the dominant loss driver (n=18, PF 0.70, net -$172.89); NY too thin to read
-  (n=3).
+- **All-session isolated account**, canonical breaker ON: n=21 resolved, 23.8% WR, PF
+  0.546, net **-$337.33** — breaker trips 2025-09-29 (earlier than the shared book's
+  2025-09-08, since there are no other strategies' wins to offset it in isolation).
+- **Session-isolated canonical lanes** (independent accounts, one session cannot censor
+  another — the authoritative test):
+  - **London**: n=75 resolved (own breaker never trips — a materially larger, cleaner
+    sample than the all-session account's censored n=21), 32.0% WR, PF 0.859, net
+    **-$341.50**, **both halves independently negative** (H1 -$201.14/n=43, H2
+    -$140.36/n=32).
+  - **New York**: thin (n=6 resolved of 33 attempts) — own account's breaker trips
+    2025-11-10 on its own losses (0% WR, PF 0.0, net -$321.88, all H1). Too thin to read on
+    its own, but not a positive signal either.
 - Fails 1-4 tick slippage sensitivity.
-- Next: none recommended — evidence is decisive enough that further tuning passes are not
-  warranted without new data or a rule-level reason (same standing as VWAP Reclaim).
+- Next: none recommended — evidence is decisive enough (particularly London's clean,
+  un-censored, both-halves-negative n=75) that further tuning passes are not warranted
+  without new data or a rule-level reason (same standing as VWAP Reclaim).
 - Full detail: `docs/orb-reclaim-isolated-root-cause-audit-2026-07-26.md`.
 
 ---
