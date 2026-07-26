@@ -435,6 +435,7 @@ def process_alert(
                 "setup": None,
                 "failed_gates": [quality_error],
                 "received_timeframe": payload.timeframe,
+                "timeframe_minutes": _bar_timeframe_minutes(payload, cfg),
                 "event_id": getattr(payload, "event_id", None),
             },
             None,
@@ -588,6 +589,7 @@ def process_alert(
                 "reason": tf_mismatch["reason"],
                 "expected_timeframe": tf_mismatch["expected"],
                 "received_timeframe": tf_mismatch["received"],
+                "timeframe_minutes": _bar_timeframe_minutes(payload, cfg),
                 "event_id": getattr(payload, "event_id", None),
             },
             None,
@@ -856,7 +858,24 @@ def process_alert(
         result["shadow_candidates"] = shadow_candidates
 
     bar_ts = state.timestamp.isoformat()
-    if not journal.claim_bar(instrument=state.instrument, bar_ts=bar_ts, for_date=today):
+    # The bar whose OWN timestamp/timeframe state.timestamp actually reflects:
+    # the 5m retest-trigger payload when one fired (state.timestamp was
+    # overridden to it above), otherwise the alert `payload` itself -- which
+    # is the raw 5m bar in the four_hr_five_min case (payload is never
+    # reassigned on that path) and the ordinary alert otherwise. Never the
+    # possibly-reassigned `payload` when a retest trigger fired, since that
+    # would wrongly tag a 5-minute bar's claim as the original armed 15m
+    # timeframe.
+    _claim_timeframe_source = (
+        five_min_trigger_payload if (five_min_trigger and five_min_trigger_payload) else payload
+    )
+    bar_timeframe_minutes = _bar_timeframe_minutes(_claim_timeframe_source, cfg)
+    if not journal.claim_bar(
+        instrument=state.instrument,
+        bar_ts=bar_ts,
+        for_date=today,
+        timeframe_minutes=bar_timeframe_minutes,
+    ):
         result["decision"] = "BLOCKED_DUPLICATE_BAR"
         result["failed_gates"] = [f"Duplicate bar already processed: {state.instrument} {bar_ts}"]
         return result
@@ -1703,6 +1722,7 @@ def process_alert(
                 logger.warning("5m feed: setup arm skipped: %s", _exc)
         journal_entry = decision.to_dict()
         journal_entry["event_id"] = getattr(payload, "event_id", None)
+        journal_entry["timeframe_minutes"] = bar_timeframe_minutes
         journal_entry["strategy_state"] = {
             "strat_4hr_retrigger": dict(daily_state.four_hr_retrigger_state),
             "strat_212_122": dict(daily_state.strat_212_122_state),
@@ -1782,6 +1802,7 @@ def process_alert(
     }
     journal_entry = decision.to_dict()
     journal_entry["event_id"] = getattr(payload, "event_id", None)
+    journal_entry["timeframe_minutes"] = bar_timeframe_minutes
     journal_entry["strategy_state"] = {
         "strat_4hr_retrigger": dict(daily_state.four_hr_retrigger_state),
         "strat_212_122": dict(daily_state.strat_212_122_state),
@@ -2026,6 +2047,7 @@ def process_alert(
         journal_entry = decision.to_dict()
         journal_entry["decision"] = "TRADE"
         journal_entry["event_id"] = getattr(payload, "event_id", None)
+        journal_entry["timeframe_minutes"] = bar_timeframe_minutes
         journal_entry["strategy_state"] = {
             "strat_4hr_retrigger": dict(daily_state.four_hr_retrigger_state),
             "strat_212_122": dict(daily_state.strat_212_122_state),
