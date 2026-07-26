@@ -7,6 +7,7 @@ decision, risk, paper broker, journal, and review path.
 
 from __future__ import annotations
 
+import logging
 from collections import deque
 from dataclasses import replace
 from datetime import date, datetime, timezone
@@ -59,6 +60,8 @@ from strategy.signal_engine import DecisionEngine
 from strategy.strat_classifier import StratContext, classify_from_ohlc
 from webhook.runner import normalize_timeframe_minutes
 
+logger = logging.getLogger(__name__)
+
 _DEFAULT_HTF_FILES = {
     "1D": "data/htf/CME_MINI_MNQ1!_1D.jsonl",
     "4H": "data/htf/CME_MINI_MNQ1!_240_(1).jsonl",
@@ -102,6 +105,31 @@ class ReplayEngine:
         # maxlen=6 exactly, since window_direction only ever looks at the
         # last 6 closes.
         self._window_direction_bars: dict[str, deque] = {}
+        # Positions still open when a day's candle file ran out ("day-
+        # boundary orphans" -- PR #333/commit f9eb7a2's root-cause writeup:
+        # run() builds a brand-new PaperBroker per call with no memory of the
+        # prior call's still-open position, so it silently vanished with no
+        # OUTCOME row ever written). Keyed by instrument (mirrors
+        # _live_dir_bars et al. above) and restored+resolved bar-by-bar
+        # against the NEXT run() call's candles -- whatever chronological
+        # date that call turns out to be (a weekend/holiday gap just means
+        # waiting longer in this dict; no calendar logic needed) -- via the
+        # exact same PaperBroker.resolve_position() call the mid-day loop
+        # uses below. Persists across run_many/run_manifest AND any caller's
+        # own manual per-day run() loop (several evidence scripts never call
+        # run_many/run_manifest at all), since it lives on self like every
+        # other cross-day field above. DAY_ONLY_STRATEGIES members are
+        # deliberately never added here -- see run() -- because a day-only
+        # strategy still being open at file-end means its own flatten logic
+        # failed, a different bug from the general case this dict handles.
+        self._carried_positions: dict[str, dict] = {}
+        # Count of carried-forward positions resolved DURING a run_many/
+        # run_manifest batch (or a bare sequence of run() calls) -- used to
+        # correct _aggregate_reports' open_trades tally, which otherwise
+        # double-counts: the day a position opened already reported it
+        # "open" (review.eod() cannot see the future), and it must not still
+        # be flagged after a later day resolves it.
+        self._carried_resolutions_count: int = 0
 
     @staticmethod
     def _load_default_htf() -> HTFLookup:
@@ -160,6 +188,96 @@ class ReplayEngine:
         stopped_reason: str | None = None
         candles_processed = 0
         skip_to = 0  # index of first bar available after an open position resolves
+
+        # Cross-day carry-forward (day-boundary orphans): a position still
+        # open when a PRIOR run() call's candle file ran out is restored here
+        # and resolved causally against THIS call's candles, bar by bar,
+        # before any new decision is evaluated -- see self._carried_positions
+        # in __init__ for the full root-cause writeup. Only ever one entry
+        # can realistically exist (PaperBroker/daily_state.has_open_position
+        # both model a single global open position, not one per instrument),
+        # but the dict is keyed by instrument for clarity and to mirror
+        # _live_dir_bars/_four_hr_bars/_window_direction_bars above.
+        _carried_instrument = next(
+            (
+                instr
+                for instr in {c.instrument for c in candles}
+                if instr in self._carried_positions
+            ),
+            None,
+        )
+        _carried = (
+            self._carried_positions.pop(_carried_instrument)
+            if _carried_instrument is not None
+            else None
+        )
+        if _carried is not None:
+            daily_state.has_open_position = True
+            broker.restore_position(
+                instrument=_carried["instrument"],
+                direction=_carried["direction"],
+                entry=_carried["entry"],
+                stop=_carried["stop"],
+                target=_carried["target"],
+                contracts=_carried["contracts"],
+                paper_order_id=_carried["paper_order_id"],
+                runner_max_favorable=_carried.get("runner_max_favorable"),
+            )
+            _carry_resolved = False
+            for _future_idx, _fc in enumerate(candles):
+                _carry_fill = broker.resolve_position(
+                    NextBarOHLC(open=_fc.open, high=_fc.high, low=_fc.low)
+                )
+                if _carry_fill is not None:
+                    # Journaled onto the ORIGINAL day's file (for_date=the
+                    # trade's own journal_date, not today's run_date) so
+                    # JournalReader._trades_for_day -- which only ever reads
+                    # one day's file at a time -- finds this OUTCOME row
+                    # alongside the TRADE row it belongs to, joined by the
+                    # SAME paper_order_id already minted on that row (#327/
+                    # #332's exact-identity join).
+                    journal.log_outcome(
+                        instrument=_carry_fill.instrument,
+                        session=_carried.get("session") or "",
+                        result=_carry_fill.result,
+                        entry_price=_carry_fill.entry_price,
+                        exit_price=_carry_fill.exit_price,
+                        exit_reason=_carry_fill.exit_reason,
+                        pnl_ticks=_carry_fill.pnl_ticks,
+                        pnl_dollars=_carry_fill.pnl_dollars,
+                        contracts=_carry_fill.contracts,
+                        for_date=_carried["journal_date"],
+                        strategy=_carried.get("strategy"),
+                        paper_order_id=_carry_fill.paper_order_id,
+                        execution_audit={
+                            "source": "cross_day_carry_forward_resolution",
+                            "opened_on": _carried["journal_date"].isoformat(),
+                            "resolved_on": journal_date.isoformat(),
+                        },
+                    )
+                    daily_state.has_open_position = False
+                    self._carried_resolutions_count += 1
+                    skip_to = _future_idx + 1
+                    _carry_resolved = True
+                    break
+            if not _carry_resolved:
+                # Still open after every candle THIS call was given -- keep
+                # waiting for the next chronological run() call, whatever
+                # date that turns out to be. Re-capture current position/
+                # runner state: breakeven-at-1R or the runner trail may have
+                # moved during this scan.
+                _carry_pos = broker.get_position()
+                self._carried_positions[_carried["instrument"]] = {
+                    **_carried,
+                    "direction": _carry_pos.direction,
+                    "entry": _carry_pos.entry_price,
+                    "stop": _carry_pos.stop,
+                    "target": _carry_pos.target,
+                    "contracts": _carry_pos.quantity,
+                    "runner_max_favorable": broker.get_runner_max_favorable(),
+                }
+                skip_to = len(candles)
+
         # Keyed by (instrument, timeframe), not a single global pair: run()
         # supports allow_mixed_instruments=True, where candles from different
         # instruments can interleave in one sequence. A global prev_candle/
@@ -605,12 +723,54 @@ class ReplayEngine:
                         daily_state.trade_count += 1
                         daily_state.has_open_position = True
                         if day_only_trade:
+                            # Day-only strategies (DAY_ONLY_STRATEGIES) are
+                            # designed to always flatten before their file
+                            # ends -- still being open here means the
+                            # day-only-flatten logic itself failed, a
+                            # DIFFERENT bug from the general day-boundary
+                            # carry-forward below. Fail visibly via the
+                            # existing EOD_BAR_MISSING journal signal --
+                            # never silently carry it forward as if it were
+                            # a legitimate open position, and never silently
+                            # drop it either.
                             journal.log_day_only_exit_issue(
                                 instrument=state.instrument,
                                 strategy=decision.setup.strategy,
                                 reason=EOD_BAR_MISSING,
                                 for_date=journal_date,
                             )
+                            logger.error(
+                                "day-only strategy %s (%s) still open at "
+                                "%s file end -- day-only-flatten logic "
+                                "failed; NOT carried forward across the day "
+                                "boundary (see EOD_BAR_MISSING journal entry)",
+                                decision.setup.strategy,
+                                state.instrument,
+                                journal_date,
+                            )
+                        else:
+                            # Genuinely open, no day-only rule requires this
+                            # strategy to flatten before file end (e.g.
+                            # orb_reclaim -- PR #333/f9eb7a2's root-cause
+                            # writeup). Carry it forward instead of letting
+                            # it vanish when `broker` goes out of scope --
+                            # restored+resolved bar-by-bar against the next
+                            # chronological run() call's candles, at the top
+                            # of this method.
+                            _open_pos = broker.get_position()
+                            self._carried_positions[state.instrument] = {
+                                "instrument": state.instrument,
+                                "direction": _open_pos.direction,
+                                "entry": _open_pos.entry_price,
+                                "stop": _open_pos.stop,
+                                "target": _open_pos.target,
+                                "contracts": _open_pos.quantity,
+                                "paper_order_id": _paper_order_id,
+                                "runner_max_favorable": broker.get_runner_max_favorable(),
+                                "session": state.session,
+                                "strategy": decision.setup.strategy,
+                                "journal_date": journal_date,
+                            }
                 continue
 
             journal_entry = decision.to_dict()
@@ -683,19 +843,35 @@ class ReplayEngine:
     ) -> MultiDayReplayReport:
         reports: list[ReplayReport] = []
         previous_balance = self._rolling_balance
+        # Each run_many() call is meant to be a self-contained multi-day
+        # window (hence resetting the balance above already) -- carry-
+        # forward state gets the same treatment so a leftover open position
+        # from some earlier, unrelated call on this engine instance is never
+        # mistaken for one that belongs to THIS batch's own day 1.
+        previous_carried_positions = self._carried_positions
+        previous_carried_resolutions_count = self._carried_resolutions_count
         self._rolling_balance = self.config.position_sizing.starting_balance
+        self._carried_positions = {}
+        self._carried_resolutions_count = 0
         try:
             for path in candle_paths:
                 reports.append(self.run(path, allow_mixed_instruments=allow_mixed_instruments))
+            resolved_during_batch = self._carried_resolutions_count
         finally:
             self._rolling_balance = previous_balance
-        return self._aggregate_reports(reports, candle_paths)
+            self._carried_positions = previous_carried_positions
+            self._carried_resolutions_count = previous_carried_resolutions_count
+        return self._aggregate_reports(reports, candle_paths, carried_resolutions=resolved_during_batch)
 
     def run_manifest(self, manifest_path: str | Path) -> MultiDayReplayReport:
         manifest = ReplayManifest.load(manifest_path)
         reports: list[ReplayReport] = []
         previous_balance = self._rolling_balance
+        previous_carried_positions = self._carried_positions
+        previous_carried_resolutions_count = self._carried_resolutions_count
         self._rolling_balance = self.config.position_sizing.starting_balance
+        self._carried_positions = {}
+        self._carried_resolutions_count = 0
         try:
             for entry in manifest.entries:
                 reports.append(
@@ -704,17 +880,33 @@ class ReplayEngine:
                         allow_mixed_instruments=entry.allow_mixed_instruments,
                     )
                 )
+            resolved_during_batch = self._carried_resolutions_count
         finally:
             self._rolling_balance = previous_balance
-        return self._aggregate_reports(reports, manifest.paths)
+            self._carried_positions = previous_carried_positions
+            self._carried_resolutions_count = previous_carried_resolutions_count
+        return self._aggregate_reports(reports, manifest.paths, carried_resolutions=resolved_during_batch)
 
     def _aggregate_reports(
         self,
         reports: list[ReplayReport],
         candle_paths: list[str | Path],
+        *,
+        carried_resolutions: int = 0,
     ) -> MultiDayReplayReport:
         failure_reasons: list[str] = []
-        open_trades = sum(report.open_trades for report in reports)
+        # Each day's own report.open_trades is a snapshot taken when that
+        # day's file ended (review.eod() cannot see the future) -- if the
+        # position later resolved via cross-day carry-forward on a
+        # subsequent day within this same batch, that snapshot is now stale.
+        # Subtract however many carry-forward resolutions actually happened
+        # during this batch so a position that DID resolve is not still
+        # flagged, while one that's genuinely still open at the very end (no
+        # more data supplied) correctly keeps contributing to this sum --
+        # exactly the corpus-tail "open_with_identity" case, not a bug.
+        open_trades = sum(report.open_trades for report in reports) - carried_resolutions
+        if open_trades < 0:
+            open_trades = 0  # defensive; should not happen
         if open_trades:
             failure_reasons.append("open_trades_after_replay")
 

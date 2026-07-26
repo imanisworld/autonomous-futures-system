@@ -879,3 +879,283 @@ def test_candle_loader_preserves_enriched_fields(tmp_path):
     assert loaded.icc_indication_type == "demand"
     assert loaded.demand_top == 19510
     assert loaded.demand_bottom == 19490
+
+
+# ---------------------------------------------------------------------------
+# Cross-day position carry-forward (day-boundary orphans).
+#
+# Root cause (PR #333 / commit f9eb7a2's writeup, scripts/corpus_v1_orphan_
+# resolution.py): ReplayEngine.run() builds a brand-new PaperBroker on every
+# call, with no memory of the previous call's still-open position. A
+# strategy with no DAY_ONLY_STRATEGIES rule (e.g. orb_reclaim) can still be
+# legitimately open when a day's candle file runs out; the local `broker`
+# then goes out of scope and the position — and its eventual WIN/LOSS — is
+# silently lost. No OUTCOME row is ever written. PR #333 proved the fix
+# mechanism (restore_position + resolve_position against real subsequent-day
+# candles) via a one-off analysis script; this suite covers the engine fix
+# itself, which must apply to ANY caller of run() (run_many/run_manifest, or
+# an evidence script's own manual per-day loop).
+# ---------------------------------------------------------------------------
+
+def _orb_reclaim_trigger_candle(timestamp: str) -> dict:
+    """The exact base candle from data/replay/sample_day_mnq.jsonl's bar 0 —
+    already proven by test_replay_engine_runs_sample_day to fire an approved
+    orb_reclaim LONG: orb_high=19498.0, orb_low=19462.0, tick=0.25,
+    MAX_ORB_STOP_TICKS[MNQ]=80 -> entry=19498.5, stop=19478.5,
+    target=19548.5 (2.5R), per strategy/signal_engine.py::_try_orb_reclaim."""
+    base = json.loads(Path("data/replay/sample_day_mnq.jsonl").read_text().splitlines()[0])
+    base["timestamp"] = timestamp
+    return base
+
+
+def _flat_follow_up_candle(
+    timestamp: str, *, high: float, low: float, close: float | None = None
+) -> dict:
+    """A quiet follow-up candle carrying the same base MNQ/new_york fields as
+    the trigger (so it still parses as valid data) but with overwritten OHLC
+    and a market_condition/orb_status that cannot fire a brand-new decision
+    on its own — isolates assertions to the carried-forward resolution."""
+    base = json.loads(Path("data/replay/sample_day_mnq.jsonl").read_text().splitlines()[0])
+    base["timestamp"] = timestamp
+    base["open"] = high
+    base["high"] = high
+    base["low"] = low
+    base["close"] = close if close is not None else high
+    base["market_condition"] = "CHOPPY"
+    base["orb_status"] = "inside"
+    return base
+
+
+ORB_RECLAIM_ENTRY = 19498.5
+ORB_RECLAIM_STOP = 19478.5
+ORB_RECLAIM_TARGET = 19548.5
+
+
+def _read_journal_rows(path: Path) -> list[dict]:
+    """A day whose only candle(s) are entirely consumed by cross-day
+    carry-forward resolution (see run()'s pre-scan) never gets an
+    independent decision journaled for it — the resolving bar's OUTCOME is
+    written onto the ORIGINAL day's file, not this one — so JournalLogger
+    never lazily creates this day's file at all (journal/journal_logger.py
+    only opens it on first append). That's pre-existing behavior (a
+    same-day resolving bar during the normal mid-day loop is treated
+    identically), not something this fix changes, so read helpers here
+    treat a missing file the same as an empty one."""
+    if not path.exists():
+        return []
+    return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+
+
+def test_position_open_at_day_boundary_carries_forward_and_resolves(config, tmp_path):
+    """THE FIX: day 1 is a single candle — the orb_reclaim trigger bar — with
+    no subsequent bar in the same file to resolve it
+    (`for future_idx in range(idx + 1, len(candles))` is empty when
+    len(candles) == 1), so the position is still open when day 1's file runs
+    out. Day 2 (three calendar days later — 2026-05-25 — proving no
+    day-adjacency assumption is baked in) supplies a bar whose high (19600)
+    clears the target (19548.5). The engine must restore the exact position
+    into day 2's broker and resolve it causally against day 2's own candles,
+    writing a real OUTCOME row into DAY 1's journal file (not day 2's) with
+    the SAME paper_order_id already on the TRADE row, so JournalReader's
+    exact-identity join (#327/#332) still pairs them across the file
+    boundary. Before the fix, this scenario loses the position entirely (see
+    the old defect-reproduction assertions in git history of this file /
+    PR #333's writeup) — no OUTCOME row, no PnL, and a false-flagged
+    open_trades_after_replay even though day 2 supplied data that resolves
+    it."""
+    day1 = tmp_path / "day1.jsonl"
+    day1.write_text(json.dumps(_orb_reclaim_trigger_candle("2026-05-22T14:30:00+00:00")) + "\n")
+
+    day2 = tmp_path / "day2.jsonl"
+    day2.write_text(
+        json.dumps(
+            _flat_follow_up_candle("2026-05-25T14:30:00+00:00", high=19600.0, low=19490.0)
+        )
+        + "\n"
+    )
+
+    engine = ReplayEngine(config=config, log_dir=str(tmp_path / "logs"))
+    report = engine.run_many([day1, day2])
+
+    day1_journal = tmp_path / "logs" / "journal_2026-05-22.jsonl"
+    rows = [json.loads(line) for line in day1_journal.read_text().splitlines() if line.strip()]
+    trade_rows = [r for r in rows if r.get("decision") == "TRADE"]
+    outcome_rows = [r for r in rows if r.get("type") == "OUTCOME"]
+    assert len(trade_rows) == 1
+    assert len(outcome_rows) == 1
+
+    trade_order_id = trade_rows[0].get("paper_order_id")
+    outcome = outcome_rows[0]["outcome"]
+    assert trade_order_id  # real identity minted on the TRADE row
+    assert outcome["paper_order_id"] == trade_order_id
+    assert outcome["result"] == "WIN"
+    assert outcome["entry_price"] == ORB_RECLAIM_ENTRY
+    assert outcome["exit_price"] == ORB_RECLAIM_TARGET
+    assert outcome["pnl_dollars"] > 0
+
+    # day 2's own journal must NOT gain a duplicate/foreign trade or outcome
+    # row for this position — it belongs to day 1's file. (day 2's file may
+    # not even exist: its only candle was entirely consumed resolving the
+    # carried position, so nothing was ever independently journaled for it —
+    # see _read_journal_rows.)
+    day2_rows = _read_journal_rows(tmp_path / "logs" / "journal_2026-05-25.jsonl")
+    assert not any(r.get("type") == "OUTCOME" for r in day2_rows)
+    assert not any(r.get("decision") == "TRADE" for r in day2_rows)
+
+    # No more false positives: the position resolved, so the aggregate must
+    # not flag it as still open.
+    assert report.open_trades == 0
+    assert report.survival_passed is True
+    assert "open_trades_after_replay" not in report.failure_reasons
+
+
+def test_position_open_at_day_boundary_resolves_after_multiple_days(config, tmp_path):
+    """The carry-forward must not assume same-file-format/adjacency and must
+    keep waiting across MULTIPLE subsequent run() calls, not just one. Day 2
+    and day 3 both supply bars that stay inside [stop, target] — the position
+    remains open after each — and only day 4 finally clears the target."""
+    day1 = tmp_path / "day1.jsonl"
+    day1.write_text(json.dumps(_orb_reclaim_trigger_candle("2026-05-22T14:30:00+00:00")) + "\n")
+
+    day2 = tmp_path / "day2.jsonl"
+    day2.write_text(
+        json.dumps(
+            _flat_follow_up_candle("2026-05-23T14:30:00+00:00", high=19510.0, low=19490.0)
+        )
+        + "\n"
+    )
+    day3 = tmp_path / "day3.jsonl"
+    day3.write_text(
+        json.dumps(
+            _flat_follow_up_candle("2026-05-24T14:30:00+00:00", high=19515.0, low=19485.0)
+        )
+        + "\n"
+    )
+    day4 = tmp_path / "day4.jsonl"
+    day4.write_text(
+        json.dumps(
+            _flat_follow_up_candle("2026-05-25T14:30:00+00:00", high=19600.0, low=19490.0)
+        )
+        + "\n"
+    )
+
+    engine = ReplayEngine(config=config, log_dir=str(tmp_path / "logs"))
+    report = engine.run_many([day1, day2, day3, day4])
+
+    day1_journal = tmp_path / "logs" / "journal_2026-05-22.jsonl"
+    rows = [json.loads(line) for line in day1_journal.read_text().splitlines() if line.strip()]
+    outcome_rows = [r for r in rows if r.get("type") == "OUTCOME"]
+    assert len(outcome_rows) == 1
+    assert outcome_rows[0]["outcome"]["result"] == "WIN"
+    assert outcome_rows[0]["outcome"]["exit_price"] == ORB_RECLAIM_TARGET
+
+    # Days 2 and 3 must show no outcome at all (still waiting) and no new
+    # decision of their own (their own files may not even exist — see
+    # _read_journal_rows).
+    for day in ("2026-05-23", "2026-05-24"):
+        day_rows = _read_journal_rows(tmp_path / "logs" / f"journal_{day}.jsonl")
+        assert not any(r.get("type") == "OUTCOME" for r in day_rows)
+        assert not any(r.get("decision") == "TRADE" for r in day_rows)
+
+    assert report.open_trades == 0
+    assert report.survival_passed is True
+
+
+def test_position_still_open_at_true_corpus_tail_is_still_flagged(config, tmp_path):
+    """The carry-forward mechanism must not paper over a position that is
+    GENUINELY still open when the caller has no more data to supply — this
+    is the same case Corpus v1 itself still has a few of after PR #333's
+    manual fix ("open_with_identity" trades near the tail of a corpus's date
+    range). Day 2's only bar stays inside [stop, target] (never resolves),
+    and there is no day 3 — the aggregate must still flag
+    open_trades_after_replay, and no OUTCOME row must ever be fabricated."""
+    day1 = tmp_path / "day1.jsonl"
+    day1.write_text(json.dumps(_orb_reclaim_trigger_candle("2026-05-22T14:30:00+00:00")) + "\n")
+
+    day2 = tmp_path / "day2.jsonl"
+    day2.write_text(
+        json.dumps(
+            _flat_follow_up_candle("2026-05-23T14:30:00+00:00", high=19510.0, low=19490.0)
+        )
+        + "\n"
+    )
+
+    engine = ReplayEngine(config=config, log_dir=str(tmp_path / "logs"))
+    report = engine.run_many([day1, day2])
+
+    day1_journal = tmp_path / "logs" / "journal_2026-05-22.jsonl"
+    rows = [json.loads(line) for line in day1_journal.read_text().splitlines() if line.strip()]
+    assert not any(r.get("type") == "OUTCOME" for r in rows)
+
+    assert report.open_trades == 1
+    assert report.survival_passed is False
+    assert "open_trades_after_replay" in report.failure_reasons
+
+
+def test_position_open_at_day_boundary_carries_forward_across_bare_run_calls(config, tmp_path):
+    """Several evidence scripts (scripts/run_replay_batch.py,
+    scripts/strat_212_122_canonical_evidence_run.py) construct ONE
+    ReplayEngine and call .run(file, review_date=...) directly in their own
+    per-day loop — never touching run_many/run_manifest. The carry-forward
+    state must live at a level shared by every caller (inside run() itself),
+    not bolted onto run_many/run_manifest only."""
+    day1 = tmp_path / "day1.jsonl"
+    day1.write_text(json.dumps(_orb_reclaim_trigger_candle("2026-05-22T14:30:00+00:00")) + "\n")
+
+    day2 = tmp_path / "day2.jsonl"
+    day2.write_text(
+        json.dumps(
+            _flat_follow_up_candle("2026-05-25T14:30:00+00:00", high=19600.0, low=19490.0)
+        )
+        + "\n"
+    )
+
+    engine = ReplayEngine(config=config, log_dir=str(tmp_path / "logs"))
+    engine.run(day1, review_date="2026-05-22")
+    engine.run(day2, review_date="2026-05-25")
+
+    day1_journal = tmp_path / "logs" / "journal_2026-05-22.jsonl"
+    rows = [json.loads(line) for line in day1_journal.read_text().splitlines() if line.strip()]
+    outcome_rows = [r for r in rows if r.get("type") == "OUTCOME"]
+    assert len(outcome_rows) == 1
+    assert outcome_rows[0]["outcome"]["result"] == "WIN"
+
+
+def test_day_only_strategy_open_at_file_end_is_never_carried_forward(monkeypatch, config, tmp_path):
+    """DAY_ONLY_STRATEGIES members (currently only strat_4hr_retrigger) are
+    designed to always flatten before their file ends
+    (execution/day_only_exit.py). If one is still open at file-end anyway —
+    the EOD_BAR_MISSING case already covered by
+    test_run_many_missing_eod_stays_explicit_and_open in
+    tests/test_day_only_exit.py — that indicates the day-only-flatten logic
+    itself failed, a DIFFERENT bug from the general cross-day carry-forward
+    this suite covers. It must never be silently carried forward as if it
+    were a legitimate open position: no OUTCOME row must ever appear for it,
+    and the engine's internal carry-forward state must stay empty."""
+    from tests.test_day_only_exit import _install_replay_fakes, _replay_row
+
+    _install_replay_fakes(monkeypatch)
+    day1 = tmp_path / "day1.jsonl"
+    day1.write_text(
+        json.dumps(_replay_row("2026-07-13T19:50:00Z"))
+        + "\n"
+        + json.dumps(_replay_row("2026-07-13T20:00:00Z", close=111.0))
+        + "\n"
+    )
+    day2 = tmp_path / "day2.jsonl"
+    day2.write_text(json.dumps(_replay_row("2026-07-14T14:30:00Z")) + "\n")
+
+    engine = ReplayEngine(config=config, log_dir=str(tmp_path / "logs"))
+    report = engine.run_many([day1, day2])
+
+    assert report.open_trades == 1
+    assert report.survival_passed is False
+    assert "open_trades_after_replay" in report.failure_reasons
+    # Never silently carried forward: no OUTCOME row anywhere, and the
+    # engine's own carry-forward bookkeeping must never have accepted it.
+    assert engine._carried_positions == {}
+    day1_rows = [
+        json.loads(line)
+        for line in (tmp_path / "logs" / "journal_2026-07-13.jsonl").read_text().splitlines()
+    ]
+    assert not any(row.get("type") == "OUTCOME" for row in day1_rows)
