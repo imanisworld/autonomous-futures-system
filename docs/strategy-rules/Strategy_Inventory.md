@@ -42,7 +42,7 @@ Verdict taxonomy:
 | VWAP Hold (MNQ NY) | ❌ entry definition unclear (stale — see 2026-07-26 audit note in profile below) | Partial | ❌ (stale — see profile) | ✅ ioc_close, production-matching (2026-07-26) | ✅ both halves, all 3 exits, NY-only ioc_close (2026-07-26) | ✅ 1-3 tick, NY-only ioc_close (2026-07-26) | ⚠️ n=107 armed / **~55 filled, NY-only** (canonical — session-filtered from the 348-arm blended pop, which is provenance-context only) — thin, clears the 30-min literal bar but not comfortably | **PROMISING BUT UNPROVEN** |
 | VWAP Reclaim (MNQ NY) | ✅ cleanest of the 3 VWAP predicates | Partial | ✅ isolated, confirmed no leaks (2026-07-26) | ✅ ioc_limit (2026-07-26) | ❌ H2 negative (2026-07-26) | ❌ fails 3-tick (2026-07-26) | ⚠️ n=70 combined / n=21 MNQ thin (2026-07-26) | **WAIT** |
 | VWAP Rejection | ❌ | Partial | ❌ | ❌ | ❌ | ❌ | — | **BROKEN — unreachable predicate** |
-| ORB Breakout (MNQ) | ✅ | ✅ | Partial | ✅ | ⚠️ H2 thin | ✅ | ⚠️ n=60 | **WAIT — gated on runner exit** |
+| ORB Breakout (MNQ) | ✅ | ✅ | ⚠️ Pine stop offset stale, see profile | ✅ isolated ioc_limit both exits (2026-07-26) | ❌ H2 washout both exits (2026-07-26) | ❌ fails 1-4 tick both exits (2026-07-26) | ⚠️ n=25 thin, own breaker halted 2026-03-16 (2026-07-26) | **WAIT** |
 | PDL Reclaim | ✅ | ✅ | Partial | ✅ | ❌ too thin | — | ❌ n=13 | **RESEARCH ONLY — undersample** |
 | PDH Reclaim | ✅ | ✅ | ✅ | ✅ | ❌ both halves neg | ❌ | ✅ n=67 | **RETIRE** |
 | ICC (all variants) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | — | **RESEARCH ONLY** |
@@ -399,12 +399,78 @@ Verdict taxonomy:
 ---
 
 ### ORB Breakout — MNQ
-**Verdict: WAIT — gated on runner exit**
+**Verdict: WAIT** (2026-07-26 canonical evidence — "gated on runner exit" wording retired,
+see note)
 
-- +$17.40/trade with market entry + runner (n=60)
-- Fails walk-forward under static exit
-- Runner exit promotion is prerequisite — do not build proof lane until runner is live
-- Next: runner exit promotion → then ORB breakout proof lane
+> **Canonical evidence note (2026-07-26,
+> `orb-breakout-canonical-evidence-2026-07-26.md`)**: the "+$17.40/trade with
+> market entry + runner (n=60)" figure this row used to cite traces exactly
+> to `docs/orb-breakout-entry-study-2026-07-11.md:27` — but that study used
+> `entry_fill_model="market"` (not honest IOC), predates the #338/#339/#342
+> replay-engine corrections, and its own provenance note
+> (`scripts/ORB_BREAKOUT_ENTRY_STUDY_EVIDENCE_NOTE.md`) says its inputs are
+> gitignored/unreproducible from a clean checkout. A later market-fill pass
+> (`strategy-validation-pass-2026-07-24.md`) found this same cited edge is
+> carried almost entirely by LONG+london (SHORT and NY separately near-
+> breakeven-or-negative) — a concentration finding the old one-line summary
+> never surfaced. The only post-correction figure before this pass (PR #346)
+> was combined-book: the account-level 20% breaker, tripped mostly by OTHER
+> strategies' losses, left only n=3 resolved and zero H2 data for this
+> strategy specifically.
+>
+> This pass runs `orb_breakout` **isolated** (own fresh account, `MNQ` only
+> — it's disabled for MES in production, "never the validated cell in the
+> #236/#237/#238 evidence chain", no rule support or evidence reason to test
+> it here), `entry_fill_model=ioc_limit`, canonical `orb_stop_ticks=48`
+> asserted, **both static and runner exit on the identical candidate
+> population**, 1/2/3/4-tick slippage sensitivity. `risk_rules.yaml` verified
+> byte-identical before/after.
+>
+> **Result: BOTH exit modes are WAIT, decisively.** Combined MNQ, 1-tick:
+> 106 attempts, only 25 filled (23.6% fill rate — IOC rarely fills this
+> setup), n=25 resolved either way. **Static**: 28.0% WR, net −$343.50, PF
+> 0.463. **Runner**: 32.0% WR, net −$372.75, PF 0.381 — runner is *worse*
+> than static here (PF delta −0.082), not better; it does not "pass where
+> static fails." Both fail every 1-4 tick slippage tier (never PF>1). H2 is
+> a complete washout for both (0% WR, PF 0.0, only 5 resolved). SHORT
+> direction is disastrous (WR 12.5%, PF 0.158, 100% of net P&L from a single
+> winning trade). Top-5 winner concentration is 74-78% on n=25 — thin and
+> concentrated. **The isolated account's OWN P&L tripped its OWN 20%
+> drawdown breaker on 2026-03-16 for both exit modes** — this is
+> `orb_breakout`'s own honest performance halting itself well before
+> quarter-end, not a data-sparsity artifact; Q3/Q4 being near-empty is a
+> real consequence of the strategy losing badly on its own, not an
+> insufficient-sample technicality.
+>
+> **Material parity finding (reported, NOT fixed in this lane)**: Pine
+> (`tradingview/risksentinel_context.pine:419,427`) hardcodes the ORB stop
+> offset at a legacy 8 ticks; the Python backend
+> (`strategy/signal_engine.py:1899`) reads `risk_rules.yaml`'s deliberately
+> widened `orb_stop_ticks: {MNQ: 48}` instead. The backend's Pine-bracket
+> -override path (`_apply_advisory_bracket`, `:1036-1112`) has no minimum
+> -stop-distance floor — only structural checks — so a live orb_breakout
+> alert with a complete Pine bracket would silently replace the wider,
+> risk-validated stop with the stale narrower one. Confirmed this does NOT
+> affect replay (replay never populates `state.raw`, verified by sampling
+> the corpus) — live-path-only risk, flagged for the operator, not touched
+> here. Also: `orb_stop_ticks=48` itself was tuned under a 622-day sweep
+> that **assumed fills** (risk_rules.yaml's own comment: "Replay = fills
+> assumed → live-shadow before trusting") — this pass is the first honest
+> -fill test of that exact stop width, for both exit modes, and it fails.
+
+- LONG only reaches marginal profitability territory (still net negative,
+  PF 0.64 static/0.53 runner); SHORT is the primary drag
+- Fill rate is a separate, compounding problem: only 23.6% of attempts fill
+  at all under honest IOC — most of the "candidate" population never
+  becomes a real trade
+- Runner exit does not rescue this strategy — it is measurably worse than
+  static on identical candidates, contradicting the old row's framing that
+  runner promotion was the blocker
+- Next: no further work authorized under the evidence-phase standing
+  directive; if evidence continues to be sought, the open question is
+  whether `orb_stop_ticks` itself (48 ticks, tuned under fills-assumed
+  replay) is miscalibrated for honest IOC fills — not scoped or started by
+  this pass
 
 ---
 
@@ -461,7 +527,7 @@ See `ICC_ICT_Research.md` for full breakdown.
 | 4HR 1H stop backtest | Rules validation | External researcher |
 | VWAP rejection Pine deployment sequencing (send `vwap_failed_reclaim`; fix stale `signal_strategy` branch at `.pine:443`) | VWAP rejection live eligibility | Operator decision (flagged in PR #321, still open) |
 | ~~VWAP reclaim per-strategy walk-forward split~~ — **done 2026-07-26**, isolated honest-fill run (not the old market-fill journals — see profile above for why): WAIT confirmed on 3 independent grounds (H2 negative, MNQ n=21 thin, fails 3-tick slippage); see `vwap-reclaim-canonical-evidence-2026-07-26.md` | — | — |
-| Runner exit promotion | ORB breakout, VWAP hold/reclaim lanes | Claude Code |
+| Runner exit promotion — **ORB breakout resolved 2026-07-26: runner tested directly under honest fills (isolated, both exit modes), found WORSE than static (PF 0.381 vs 0.463), not a blocker that was gating a real edge. VWAP hold's exit-mode question remains separately open.** | VWAP hold lane only now | Operator decision (VWAP hold) |
 
 ---
 
@@ -473,7 +539,11 @@ See `ICC_ICT_Research.md` for full breakdown.
 3. ~~60M 3-2-2 detector~~ — done, PR #340 (2026-07-26)
 4. **Reconcile each detector against manual samples** — before any backtest
 5. **Honest fill replay for all three** — after reconciliation passes (3-2-2 done, PR #340)
-6. **Runner exit promotion** — unblocks ORB breakout and VWAP lanes
+6. ~~Runner exit promotion~~ — **ORB breakout: resolved 2026-07-26**, runner
+   tested directly (isolated, honest fills, both exit modes on identical
+   candidates) and found worse than static, not a gate that was hiding a
+   real edge — strategy is WAIT on its own honest merits, not on runner's
+   status. VWAP hold's own exit-mode question remains open separately.
 7. ~~VWAP hold isolated fill test~~ — done, PR #307 + evidence-package
    addendum (2026-07-23); open item is now the IOC open-vs-close reference
    price decision (operator), not a test to run
