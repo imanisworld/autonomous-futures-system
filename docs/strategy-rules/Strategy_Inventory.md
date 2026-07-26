@@ -171,35 +171,87 @@ Verdict taxonomy:
 ### VWAP Hold — MNQ NY
 **Verdict: WAIT — isolated fill test pending**
 
+> **Audit note (2026-07-26, `VWAP_FAMILY_SOURCE_OF_TRUTH_AUDIT_2026-07-26.md`)**:
+> the isolated fill test below is no longer "pending" — it ran (PR #307,
+> `4458eff`, merged 2026-07-23) and was followed by a second, more complete
+> evidence-package pass in the same doc. Its own conclusion was **HOLD, not
+> approve**: market+runner is the strongest cell ($10.30/armed signal, PF
+> 1.52, both walk-forward halves positive, n=348), but the IOC leg's
+> marketability reference price (arrival-bar open) does not match what
+> every production/replay call site actually uses (close) — an
+> unresolved discrepancy, not a defect in the test's population. The entry
+> definition below is also not actually unclear in code — see
+> `strategy/signal_engine.py:2074-2134` (`_try_vwap_hold`), fully specified:
+> entry = VWAP − 2 ticks, stop = VWAP + 28 ticks (7pt MNQ), target = 3.0R,
+> gated on trend DOWN + (if Strat context present) `two_down` bar type +
+> optional BOS/MSS structure confirmation. Verdict left unchanged here per
+> the audit's standing instruction not to upgrade a classification on the
+> strength of old or partially-resolved evidence; see the full audit doc for
+> the open IOC-reference-price question that is the actual remaining
+> blocker.
+
 - Short-only by design
-- NY session only
-- Positive result (+$22.72/trade) came from study with different sample, granularity, and exit model vs negative result — not a clean comparison
-- Isolated fill test spec written and ready: same 348 signals, NY only, IOC vs market entry, static and runner exits separately
-- Entry definition unclear — needs `signal_engine.py` review
-- Next: run isolated fill test → if positive under both exit models, define entry rules → build detector
+- NY session only in practice today — not because `_try_vwap_hold` itself
+  checks session, but because `risk_rules.yaml`'s global `allowed_sessions:
+  [new_york]` applies to every strategy, and the only live-eligible path
+  (the `MNQ_VWAP_HOLD_PROOF_MODE` proof-lane exception,
+  `context/mnq_vwap_hold_proof.py`) is itself hard-scoped to
+  MNQ+vwap_hold+new_york
+- Positive result (+$22.72/trade) came from study with different sample, granularity, and exit model vs negative result — not a clean comparison under the *pre-PR #307* studies; PR #307/#308's five-locked-preconditions methodology (same sha256-fingerprinted 348-arm population, both fill legs) resolves this specific concern for the comparisons it covers — see audit note above
+- Isolated fill test: **done** (PR #307, `docs/vwap-hold-isolated-fill-model-comparison-2026-07-23.md`) — same 348 signals, IOC vs market entry, static and runner exits, plus a follow-on evidence-package pass adding cost-tier sweep, chronological split, and the open IOC reference-price question
+- Entry definition: specified in code, not unclear — `strategy/signal_engine.py:2074-2134`
+- Next: resolve the IOC-open-vs-close marketability reference question (operator decision — see audit doc §7/§11), then re-read the existing matrix for a walk-forward verdict; no new test run should be required
 
 ---
 
 ### VWAP Rejection
 **Verdict: BROKEN — unreachable predicate**
 
-- Trigger condition requires `state.vwap.reclaimed == True` AND
-  `price_vs_vwap == "below"` on the same bar
-- These cannot occur together under the current logic: `reclaimed` is only
+> **Audit note (2026-07-26, `VWAP_FAMILY_SOURCE_OF_TRUTH_AUDIT_2026-07-26.md`)**:
+> the same-bar-contradiction predicate described below was **fixed on
+> `main` by PR #321** (`face9d2`, merged 2026-07-24), which replaced it with
+> a causal one-bar-lookback `state.vwap.failed_reclaim` field
+> (`strategy/signal_engine.py:2158`). It is **no longer structurally
+> unreachable in replay**: `scripts/validation_vwap_rejection.json` records
+> 8 resolved arms (62.5% WR, PF 4.432, net $453, all MNQ) from the Corpus v1
+> replay run (`docs/corpus-v1-clean-baseline-report-2026-07-25.md`,
+> `main@a5434794e`). It remains **unreachable live**: Pine
+> (`tradingview/risksentinel_context.pine`) has never sent the required
+> `vwap_failed_reclaim` payload field (confirmed via full-history
+> `git log -S` search, zero commits ever), so `AlertPayload.vwap_failed_reclaim`
+> defaults `False` and the live predicate can never evaluate true. PR #321's
+> own merged description states this sequencing was deliberate and flags an
+> unresolved operator decision (deploy the corrected Pine script — not yet
+> done, no later PR addresses it). n=8 is far too thin to support any
+> upgrade even if the live gap were closed. Verdict left unchanged here —
+> "BROKEN" overstates the predicate's current mechanical state (it works,
+> in replay) but the strategy has no live-eligible path today for an
+> unrelated (Pine-side) reason, so no upgrade is credited either; see the
+> full audit doc §9 for the reasoning and §11 for the exact pending
+> decision.
+
+- Trigger condition **used to require** `state.vwap.reclaimed == True` AND
+  `price_vs_vwap == "below"` on the same bar (pre-PR #321)
+- These cannot occur together under that old logic: `reclaimed` is only
   `True` on a bar where price has crossed above VWAP, which makes
   `price_vs_vwap == "above"`, never `"below"` — identically in Pine, live,
-  and replay (see PR #308, `docs/vwap-hold-vs-vwap-rejection-overlap-audit-2026-07-23.md`)
-- Confirmed structurally unfireable, not merely rare: 0 arms across 622
-  days of replay and 0 live occurrences, while the sibling `vwap_reclaim`
-  strategy (same `reclaimed` field, consistent `"above"` requirement) has
-  fired multiple times live in the same window
+  and replay (see PR #308, `docs/vwap-hold-vs-vwap-rejection-overlap-audit-2026-07-23.md`).
+  **Pine's own advisory `signal_strategy` labeling logic still has this
+  exact bug, unfixed** (`tradingview/risksentinel_context.pine:443`,
+  `vwap_reclaimed and close < vwap_val`) — cosmetic today only because the
+  backend never accepts Pine's advisory bracket when the backend's own
+  strategy doesn't independently agree.
+- Was confirmed structurally unfireable pre-#321: 0 arms across 622 days of
+  the old replay corpus and 0 live occurrences. Post-#321, replay produces
+  8 arms (see audit note above); live remains 0 because Pine was never
+  updated.
 - Does NOT overlap or co-fire with VWAP Hold — that risk was raised in an
   earlier pass of the audit and disproven by the completed reachability
   table; no state exists where both strategies are eligible
-- Next: a separate strategy decision — retire, or redesign `reclaimed` as
-  a persisted multi-bar flag so the intended "attempted reclaim, then
-  failed back below" pattern becomes expressible. No implementation
-  change made here.
+- Next: the pending decision is now Pine deployment sequencing (operator
+  call, flagged explicitly in PR #321, still open) — not a retire-vs-redesign
+  question, since the redesign PR #321 asked for already merged. No
+  implementation change made here.
 
 ---
 
@@ -257,13 +309,13 @@ See `ICC_ICT_Research.md` for full breakdown.
 
 | Item | Blocking | Who |
 |---|---|---|
-| VWAP hold isolated fill test (IOC vs market, static vs runner) | VWAP hold verdict | External researcher |
+| VWAP hold IOC reference-price resolution (open vs close — PR #307 evidence-package addendum) | VWAP hold verdict | Operator decision (audit: `VWAP_FAMILY_SOURCE_OF_TRUTH_AUDIT_2026-07-26.md` §7/§11) |
 | 4HR Re-Trigger honest fill replay | Strategy verdict | External researcher + Claude Code (after detector) |
 | Miyagi walk-forward halves + slippage sensitivity | Strategy verdict | External researcher |
 | 3-2-2 sample-size expansion (blocked pending new 5m MNQ data past 2026-06-26) | Strategy verdict | Claude Code |
 | 4HR 1H stop backtest | Rules validation | External researcher |
-| VWAP hold / rejection overlap resolution | Both strategy verdicts | Claude Code |
-| VWAP hold entry definition from signal_engine.py | VWAP rules doc | Claude Code |
+| VWAP rejection Pine deployment sequencing (send `vwap_failed_reclaim`; fix stale `signal_strategy` branch at `.pine:443`) | VWAP rejection live eligibility | Operator decision (flagged in PR #321, still open) |
+| VWAP reclaim per-strategy walk-forward split of existing Corpus v1 journals (`scripts/strategy_validation_report.py --strategy vwap_reclaim`) | VWAP reclaim verdict | Claude Code |
 | Runner exit promotion | ORB breakout, VWAP hold/reclaim lanes | Claude Code |
 
 ---
@@ -277,8 +329,12 @@ See `ICC_ICT_Research.md` for full breakdown.
 4. **Reconcile each detector against manual samples** — before any backtest
 5. **Honest fill replay for all three** — after reconciliation passes (3-2-2 done, PR #340)
 6. **Runner exit promotion** — unblocks ORB breakout and VWAP lanes
-7. **VWAP hold isolated fill test** — parallel, external researcher
-8. **VWAP hold entry definition** — Claude Code reads signal_engine.py
+7. ~~VWAP hold isolated fill test~~ — done, PR #307 + evidence-package
+   addendum (2026-07-23); open item is now the IOC open-vs-close reference
+   price decision (operator), not a test to run
+8. ~~VWAP hold entry definition~~ — done, fully specified at
+   `strategy/signal_engine.py:2074-2134`; see
+   `VWAP_FAMILY_SOURCE_OF_TRUTH_AUDIT_2026-07-26.md`
 9. **FVG parameter definition** — after above queue clears
 
 ---
