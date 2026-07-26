@@ -34,8 +34,8 @@ Verdict taxonomy:
 
 | Strategy | Rules | Detector | Replay parity | Honest fills | Walk-forward | Slippage | Sample | Verdict |
 |---|---|---|---|---|---|---|---|---|
-| ORB Reclaim (MES) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ n=305 | **PAPER PROOF** |
-| ORB Reclaim (MNQ) | ✅ | ✅ | Partial | ✅ | ❌ insufficient | ✅ | ⚠️ n=253 thin | **PROMISING BUT UNPROVEN** |
+| ORB Reclaim (MES) | ✅ | ✅ | ⚠️ trend-gate replay/live population gap, see profile | ✅ isolated ioc_limit (2026-07-26) | ❌ breaker-truncated; breaker-off diagnostic near-flat (H1 -$174.74/H2 +$3.12) | ❌ fails 1-4 tick (2026-07-26) | ✅ n=75 canonical / n=181 breaker-off diagnostic (2026-07-26) | **WAIT — see 2026-07-26 audit, downgraded from PAPER PROOF** |
+| ORB Reclaim (MNQ) | ✅ | ✅ | ⚠️ trend-gate replay/live population gap, see profile | ✅ isolated ioc_limit (2026-07-26) | ❌ both halves negative even breaker-off (2026-07-26) | ❌ fails 1-4 tick (2026-07-26) | ⚠️ n=21 canonical thin / n=107 breaker-off diagnostic (2026-07-26) | **WAIT** |
 | 4HR Re-Trigger | ✅ blockers resolved | ❌ | ❌ | Partial — external study | ✅ | Partial | ⚠️ n=32 MNQ | **WAIT — build detector** |
 | 12HR Miyagi | ✅ blockers resolved | ✅ | Partial — standalone research module | ✅ | ✅ both halves (H2 thin) | ✅ 1-4 tick | ⚠️ n=15 MNQ / n=19 MES thin | **PROMISING BUT UNPROVEN** |
 | 60M 3-2-2 First Live | ✅ blockers resolved | ✅ | Partial — standalone research module | ✅ IOC-faithful | ✅ both halves | ✅ 1-4 tick | ⚠️ n=34 MNQ thin | **PROMISING BUT UNPROVEN** |
@@ -62,27 +62,57 @@ Verdict taxonomy:
 ---
 
 ### ORB Reclaim — MES
-**Verdict: PAPER PROOF**
+**Verdict: WAIT — downgraded from PAPER PROOF, 2026-07-26 isolated honest-fill audit**
 
-- Entry: price reclaims ORB high (long) or ORB low (short) after a failed break
-- Stop: structural stop below/above ORB level
-- Target: runner exit (1.0R activation, 0.5R trail)
-- Session: New York strongest, all sessions positive
-- Fill model: IOC-faithful
-- Results: +$9.87/trade NY, both walk-forward halves positive
-- Live: active paper_sim lane
-- Next: accumulate live paper evidence
+- Entry: price reclaims ORB high (LONG only — no SHORT branch exists in Python or Pine)
+- Stop: `max(orb_low - 4t, entry - 40t)`; Target: `entry + 2.5x risk`
+- **2026-07-26 AUDIT NOTE (supersedes the figures below)**: the previous "+$9.87/trade NY,
+  VALIDATED, n=305" claim traces to `docs/mes-mnq-mechanical-research-2026-07-09.md`
+  (MES orb_reclaim NY: n=105, exp $9.87, classified VALIDATED under both ioc_limit_static
+  and ioc_limit_runner) — a study run **2026-07-09, predating PR #338 (market_condition
+  parity fix), #339/#342 (replay engine cross-day carry-forward fixes), and #346 (corrected
+  corpus)**. It is the basis risk_rules.yaml itself cites for promoting MES orb_reclaim to
+  "the ONLY strategy with validated positive expectancy under honest fills" and disabling
+  every other MES strategy.
+- A fresh **isolated single-strategy replay** under the POST-correction engine/corpus
+  (`scripts/orb_reclaim_isolated_root_cause_audit.py`, own fresh account, no combined-book
+  contamination) finds a materially different picture:
+  - **Canonical (20% breaker ON, matches production)**: n=75 resolved, 29.3% WR, PF 0.831,
+    net **-$441.00**. Breaker trips 2025-12-11, before H2 — walk-forward untestable at this
+    setting.
+  - **Breaker-off diagnostic (NON-CANONICAL, run solely to see what the breaker censored)**:
+    n=181 resolved, 34.3% WR, PF 0.973, net **-$171.62** — near flat, not the "+$9.87/trade"
+    claim. By half: H1 -$174.74 (94 resolved), H2 **+$3.12** (87 resolved, essentially
+    breakeven). Session: New York alone is actually positive (n=29, PF 1.06, net +$67.08 on
+    the canonical run) — London is the dominant loss driver (n=43, PF 0.644, net -$483.64).
+  - Fails 1-4 tick slippage sensitivity on the canonical config.
+- **Parity note (material, not fixed)**: Python's `_try_orb_reclaim` has no trend-direction
+  gate; Pine's own alert-generation cascade requires `trend_dir=="UP"`. Replay's candidate
+  population is therefore a strict superset of what live could ever produce.
+- Live: still an active `paper_sim` lane as of this writing — this audit is evidence-only,
+  no runtime/deployment change made. The operator should treat the "PAPER PROOF" status as
+  stale pending review of this finding.
+- Full detail: `docs/orb-reclaim-isolated-root-cause-audit-2026-07-26.md`.
 
 ---
 
 ### ORB Reclaim — MNQ
-**Verdict: PROMISING BUT UNPROVEN**
+**Verdict: WAIT**
 
-- Same definition as MES
-- Results inconsistent across sessions under honest fills
-- NY positive but thin; London negative
-- Not yet walk-forward proven under IOC-faithful fills
-- Next: dedicated MNQ NY-only honest fill test
+- Same definition as MES (LONG only)
+- **2026-07-26 isolated audit**: canonical (breaker ON) n=21 resolved, 23.8% WR, PF 0.546,
+  net **-$337.33** — breaker trips 2025-09-29 (earlier than the shared-book's 2025-09-08,
+  since there are no other strategies' wins to offset it).
+- Breaker-off diagnostic (NON-CANONICAL): n=107 resolved, 29.9% WR, PF 0.772, net
+  **-$826.86** — **both halves negative** (H1 -$694.78 n=61, H2 -$132.08 n=46). Unlike MES,
+  removing the breaker censorship does NOT reveal a hidden positive picture for MNQ — it
+  confirms the strategy is genuinely negative across the full period.
+- London is the dominant loss driver (n=18, PF 0.70, net -$172.89); NY too thin to read
+  (n=3).
+- Fails 1-4 tick slippage sensitivity.
+- Next: none recommended — evidence is decisive enough that further tuning passes are not
+  warranted without new data or a rule-level reason (same standing as VWAP Reclaim).
+- Full detail: `docs/orb-reclaim-isolated-root-cause-audit-2026-07-26.md`.
 
 ---
 
