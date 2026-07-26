@@ -1,944 +1,2807 @@
 {
  "operator_decision": "VWAP Hold IOC reference price: choose close as canonical (matches production/replay call sites webhook/runner.py, execution/mnq_strat_evidence.py, replay/replay_engine.py). Do not change runtime. Re-score the existing locked 348-arm Hold study using arrival-bar close; same population, same exits, same costs; no rule changes.",
- "population": {
-  "n": 348,
+ "amendment_note": "The strategy is 'VWAP Hold \u2014 MNQ NY' (Strategy_Inventory.md name; risk_rules.yaml allowed_sessions:[new_york] gates every strategy live). The blended 348-arm population is only 30.7% New York (107/348) \u2014 the remaining 69.3% (london+asian) could never have been live-eligible under current config. blended_348 below is kept as robustness/provenance context only. ny_only is the canonical, live-relevant evidence for the 'VWAP Hold \u2014 MNQ NY' classification. non_ny_context is supplementary only.",
+ "population_fingerprint": {
+  "blended_n": 348,
   "sha256": "18cbbc8427b8afc462b1145347125ae45bb2b6af97f4ef9f374a10565a96d880",
   "matches_pr283_pr307_frozen_manifest": true,
-  "filled_ioc_close": 146,
-  "fill_rate_ioc_close": 0.4195
+  "session_breakdown": {
+   "london": 145,
+   "asian": 96,
+   "new_york": 107
+  },
+  "ny_only_n": 107,
+  "ny_only_share_of_blended": 0.3075,
+  "non_ny_n": 241,
+  "partition_integrity_check": "PASS \u2014 ny_only + non_ny_context exactly reconstruct blended_348, no overlap, no loss"
  },
- "cells": {
-  "static": {
-   "1_tick": {
-    "cost_ticks_rt": 1,
-    "cost_per_trade": 1.74,
-    "armed": 348,
-    "filled": 146,
-    "fill_rate": 0.42,
-    "resolved": 146,
-    "wins": 69,
-    "losses": 77,
-    "win_rate": 0.473,
-    "gross_pnl": 1287.96,
-    "commissions_fees_total": 181.04,
-    "slippage_cost_total": 73.0,
-    "net_pnl": 1033.92,
-    "net_expectancy_per_armed_signal": 2.971,
-    "net_expectancy_per_fill": 7.08,
-    "profit_factor": 1.773,
-    "avg_win": 34.38,
-    "avg_loss": -17.38,
-    "max_drawdown": 161.96,
-    "first_half_expectancy_per_fill": 11.93,
-    "second_half_expectancy_per_fill": 2.24,
-    "positive_both_halves": true,
-    "max_drawdown_vs_expectancy_per_fill_ratio": 22.88,
-    "max_drawdown_vs_net_pnl_pct": 0.1566,
-    "top_1": {
-     "n": 1,
-     "trades": [
-      {
-       "bar_ts": "2024-07-02T12:45:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 128.72
-      }
-     ],
-     "contribution": 128.72,
-     "share_of_net_pnl": 0.1245
+ "blended_348": {
+  "population": {
+   "n": 348,
+   "filled_ioc_close": 146,
+   "fill_rate_ioc_close": 0.4195
+  },
+  "cells": {
+   "static": {
+    "1_tick": {
+     "cost_ticks_rt": 1,
+     "cost_per_trade": 1.74,
+     "armed": 348,
+     "filled": 146,
+     "fill_rate": 0.42,
+     "resolved": 146,
+     "wins": 69,
+     "losses": 77,
+     "win_rate": 0.473,
+     "gross_pnl": 1287.96,
+     "commissions_fees_total": 181.04,
+     "slippage_cost_total": 73.0,
+     "net_pnl": 1033.92,
+     "net_expectancy_per_armed_signal": 2.971,
+     "net_expectancy_per_fill": 7.08,
+     "profit_factor": 1.773,
+     "avg_win": 34.38,
+     "avg_loss": -17.38,
+     "max_drawdown": 161.96,
+     "first_half_expectancy_per_fill": 11.93,
+     "second_half_expectancy_per_fill": 2.24,
+     "positive_both_halves": true,
+     "max_drawdown_vs_expectancy_per_fill_ratio": 22.88,
+     "max_drawdown_vs_net_pnl_pct": 0.1566,
+     "top_1": {
+      "n": 1,
+      "trades": [
+       {
+        "bar_ts": "2024-07-02T12:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 128.72
+       }
+      ],
+      "contribution": 128.72,
+      "share_of_net_pnl": 0.1245
+     },
+     "top_3": {
+      "n": 3,
+      "trades": [
+       {
+        "bar_ts": "2024-07-02T12:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 128.72
+       },
+       {
+        "bar_ts": "2024-07-02T11:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 126.22
+       },
+       {
+        "bar_ts": "2024-07-02T11:00:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 115.84
+       }
+      ],
+      "contribution": 370.78,
+      "share_of_net_pnl": 0.3586
+     },
+     "top_5": {
+      "n": 5,
+      "trades": [
+       {
+        "bar_ts": "2024-07-02T12:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 128.72
+       },
+       {
+        "bar_ts": "2024-07-02T11:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 126.22
+       },
+       {
+        "bar_ts": "2024-07-02T11:00:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 115.84
+       },
+       {
+        "bar_ts": "2024-07-02T08:15:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 108.6
+       },
+       {
+        "bar_ts": "2024-07-02T07:00:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 91.92
+       }
+      ],
+      "contribution": 571.3,
+      "share_of_net_pnl": 0.5526
+     }
     },
-    "top_3": {
-     "n": 3,
-     "trades": [
-      {
-       "bar_ts": "2024-07-02T12:45:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 128.72
-      },
-      {
-       "bar_ts": "2024-07-02T11:45:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 126.22
-      },
-      {
-       "bar_ts": "2024-07-02T11:00:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 115.84
-      }
-     ],
-     "contribution": 370.78,
-     "share_of_net_pnl": 0.3586
+    "2_tick": {
+     "cost_ticks_rt": 2,
+     "cost_per_trade": 2.24,
+     "armed": 348,
+     "filled": 146,
+     "fill_rate": 0.42,
+     "resolved": 146,
+     "wins": 67,
+     "losses": 79,
+     "win_rate": 0.459,
+     "gross_pnl": 1287.96,
+     "commissions_fees_total": 181.04,
+     "slippage_cost_total": 146.0,
+     "net_pnl": 960.92,
+     "net_expectancy_per_armed_signal": 2.7613,
+     "net_expectancy_per_fill": 6.58,
+     "profit_factor": 1.698,
+     "avg_win": 34.9,
+     "avg_loss": -17.43,
+     "max_drawdown": 169.42,
+     "first_half_expectancy_per_fill": 11.43,
+     "second_half_expectancy_per_fill": 1.74,
+     "positive_both_halves": true,
+     "max_drawdown_vs_expectancy_per_fill_ratio": 25.75,
+     "max_drawdown_vs_net_pnl_pct": 0.1763,
+     "top_1": {
+      "n": 1,
+      "trades": [
+       {
+        "bar_ts": "2024-07-02T12:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 128.22
+       }
+      ],
+      "contribution": 128.22,
+      "share_of_net_pnl": 0.1334
+     },
+     "top_3": {
+      "n": 3,
+      "trades": [
+       {
+        "bar_ts": "2024-07-02T12:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 128.22
+       },
+       {
+        "bar_ts": "2024-07-02T11:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 125.72
+       },
+       {
+        "bar_ts": "2024-07-02T11:00:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 115.34
+       }
+      ],
+      "contribution": 369.28,
+      "share_of_net_pnl": 0.3843
+     },
+     "top_5": {
+      "n": 5,
+      "trades": [
+       {
+        "bar_ts": "2024-07-02T12:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 128.22
+       },
+       {
+        "bar_ts": "2024-07-02T11:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 125.72
+       },
+       {
+        "bar_ts": "2024-07-02T11:00:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 115.34
+       },
+       {
+        "bar_ts": "2024-07-02T08:15:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 108.1
+       },
+       {
+        "bar_ts": "2024-07-02T07:00:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 91.42
+       }
+      ],
+      "contribution": 568.8,
+      "share_of_net_pnl": 0.5919
+     }
     },
-    "top_5": {
-     "n": 5,
-     "trades": [
-      {
-       "bar_ts": "2024-07-02T12:45:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 128.72
-      },
-      {
-       "bar_ts": "2024-07-02T11:45:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 126.22
-      },
-      {
-       "bar_ts": "2024-07-02T11:00:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 115.84
-      },
-      {
-       "bar_ts": "2024-07-02T08:15:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 108.6
-      },
-      {
-       "bar_ts": "2024-07-02T07:00:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 91.92
-      }
-     ],
-     "contribution": 571.3,
-     "share_of_net_pnl": 0.5526
+    "3_tick": {
+     "cost_ticks_rt": 3,
+     "cost_per_trade": 2.74,
+     "armed": 348,
+     "filled": 146,
+     "fill_rate": 0.42,
+     "resolved": 146,
+     "wins": 67,
+     "losses": 79,
+     "win_rate": 0.459,
+     "gross_pnl": 1287.96,
+     "commissions_fees_total": 181.04,
+     "slippage_cost_total": 219.0,
+     "net_pnl": 887.92,
+     "net_expectancy_per_armed_signal": 2.5515,
+     "net_expectancy_per_fill": 6.08,
+     "profit_factor": 1.627,
+     "avg_win": 34.4,
+     "avg_loss": -17.93,
+     "max_drawdown": 179.92,
+     "first_half_expectancy_per_fill": 10.93,
+     "second_half_expectancy_per_fill": 1.24,
+     "positive_both_halves": true,
+     "max_drawdown_vs_expectancy_per_fill_ratio": 29.59,
+     "max_drawdown_vs_net_pnl_pct": 0.2026,
+     "top_1": {
+      "n": 1,
+      "trades": [
+       {
+        "bar_ts": "2024-07-02T12:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 127.72
+       }
+      ],
+      "contribution": 127.72,
+      "share_of_net_pnl": 0.1438
+     },
+     "top_3": {
+      "n": 3,
+      "trades": [
+       {
+        "bar_ts": "2024-07-02T12:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 127.72
+       },
+       {
+        "bar_ts": "2024-07-02T11:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 125.22
+       },
+       {
+        "bar_ts": "2024-07-02T11:00:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 114.84
+       }
+      ],
+      "contribution": 367.78,
+      "share_of_net_pnl": 0.4142
+     },
+     "top_5": {
+      "n": 5,
+      "trades": [
+       {
+        "bar_ts": "2024-07-02T12:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 127.72
+       },
+       {
+        "bar_ts": "2024-07-02T11:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 125.22
+       },
+       {
+        "bar_ts": "2024-07-02T11:00:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 114.84
+       },
+       {
+        "bar_ts": "2024-07-02T08:15:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 107.6
+       },
+       {
+        "bar_ts": "2024-07-02T07:00:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 90.92
+       }
+      ],
+      "contribution": 566.3,
+      "share_of_net_pnl": 0.6378
+     }
     }
    },
-   "2_tick": {
-    "cost_ticks_rt": 2,
-    "cost_per_trade": 2.24,
-    "armed": 348,
-    "filled": 146,
-    "fill_rate": 0.42,
-    "resolved": 146,
-    "wins": 67,
-    "losses": 79,
-    "win_rate": 0.459,
-    "gross_pnl": 1287.96,
-    "commissions_fees_total": 181.04,
-    "slippage_cost_total": 146.0,
-    "net_pnl": 960.92,
-    "net_expectancy_per_armed_signal": 2.7613,
-    "net_expectancy_per_fill": 6.58,
-    "profit_factor": 1.698,
-    "avg_win": 34.9,
-    "avg_loss": -17.43,
-    "max_drawdown": 169.42,
-    "first_half_expectancy_per_fill": 11.43,
-    "second_half_expectancy_per_fill": 1.74,
-    "positive_both_halves": true,
-    "max_drawdown_vs_expectancy_per_fill_ratio": 25.75,
-    "max_drawdown_vs_net_pnl_pct": 0.1763,
-    "top_1": {
-     "n": 1,
-     "trades": [
-      {
-       "bar_ts": "2024-07-02T12:45:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 128.22
-      }
-     ],
-     "contribution": 128.22,
-     "share_of_net_pnl": 0.1334
+   "runner": {
+    "1_tick": {
+     "cost_ticks_rt": 1,
+     "cost_per_trade": 1.74,
+     "armed": 348,
+     "filled": 146,
+     "fill_rate": 0.42,
+     "resolved": 146,
+     "wins": 77,
+     "losses": 69,
+     "win_rate": 0.527,
+     "gross_pnl": 1774.65,
+     "commissions_fees_total": 181.04,
+     "slippage_cost_total": 73.0,
+     "net_pnl": 1520.61,
+     "net_expectancy_per_armed_signal": 4.3696,
+     "net_expectancy_per_fill": 10.42,
+     "profit_factor": 2.235,
+     "avg_win": 35.74,
+     "avg_loss": -17.85,
+     "max_drawdown": 181.28,
+     "first_half_expectancy_per_fill": 18.54,
+     "second_half_expectancy_per_fill": 2.29,
+     "positive_both_halves": true,
+     "max_drawdown_vs_expectancy_per_fill_ratio": 17.4,
+     "max_drawdown_vs_net_pnl_pct": 0.1192,
+     "top_1": {
+      "n": 1,
+      "trades": [
+       {
+        "bar_ts": "2025-03-27T19:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 173.51
+       }
+      ],
+      "contribution": 173.51,
+      "share_of_net_pnl": 0.1141
+     },
+     "top_3": {
+      "n": 3,
+      "trades": [
+       {
+        "bar_ts": "2025-03-27T19:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 173.51
+       },
+       {
+        "bar_ts": "2024-09-03T13:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 156.84
+       },
+       {
+        "bar_ts": "2025-02-27T15:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 130.29
+       }
+      ],
+      "contribution": 460.64,
+      "share_of_net_pnl": 0.3029
+     },
+     "top_5": {
+      "n": 5,
+      "trades": [
+       {
+        "bar_ts": "2025-03-27T19:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 173.51
+       },
+       {
+        "bar_ts": "2024-09-03T13:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 156.84
+       },
+       {
+        "bar_ts": "2025-02-27T15:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 130.29
+       },
+       {
+        "bar_ts": "2024-07-02T12:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 128.72
+       },
+       {
+        "bar_ts": "2024-07-02T11:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 126.22
+       }
+      ],
+      "contribution": 715.58,
+      "share_of_net_pnl": 0.4706
+     }
     },
-    "top_3": {
-     "n": 3,
-     "trades": [
-      {
-       "bar_ts": "2024-07-02T12:45:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 128.22
-      },
-      {
-       "bar_ts": "2024-07-02T11:45:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 125.72
-      },
-      {
-       "bar_ts": "2024-07-02T11:00:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 115.34
-      }
-     ],
-     "contribution": 369.28,
-     "share_of_net_pnl": 0.3843
+    "2_tick": {
+     "cost_ticks_rt": 2,
+     "cost_per_trade": 2.24,
+     "armed": 348,
+     "filled": 146,
+     "fill_rate": 0.42,
+     "resolved": 146,
+     "wins": 75,
+     "losses": 71,
+     "win_rate": 0.514,
+     "gross_pnl": 1774.65,
+     "commissions_fees_total": 181.04,
+     "slippage_cost_total": 146.0,
+     "net_pnl": 1447.61,
+     "net_expectancy_per_armed_signal": 4.1598,
+     "net_expectancy_per_fill": 9.92,
+     "profit_factor": 2.143,
+     "avg_win": 36.19,
+     "avg_loss": -17.84,
+     "max_drawdown": 187.78,
+     "first_half_expectancy_per_fill": 18.04,
+     "second_half_expectancy_per_fill": 1.79,
+     "positive_both_halves": true,
+     "max_drawdown_vs_expectancy_per_fill_ratio": 18.93,
+     "max_drawdown_vs_net_pnl_pct": 0.1297,
+     "top_1": {
+      "n": 1,
+      "trades": [
+       {
+        "bar_ts": "2025-03-27T19:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 173.01
+       }
+      ],
+      "contribution": 173.01,
+      "share_of_net_pnl": 0.1195
+     },
+     "top_3": {
+      "n": 3,
+      "trades": [
+       {
+        "bar_ts": "2025-03-27T19:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 173.01
+       },
+       {
+        "bar_ts": "2024-09-03T13:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 156.34
+       },
+       {
+        "bar_ts": "2025-02-27T15:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 129.79
+       }
+      ],
+      "contribution": 459.14,
+      "share_of_net_pnl": 0.3172
+     },
+     "top_5": {
+      "n": 5,
+      "trades": [
+       {
+        "bar_ts": "2025-03-27T19:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 173.01
+       },
+       {
+        "bar_ts": "2024-09-03T13:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 156.34
+       },
+       {
+        "bar_ts": "2025-02-27T15:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 129.79
+       },
+       {
+        "bar_ts": "2024-07-02T12:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 128.22
+       },
+       {
+        "bar_ts": "2024-07-02T11:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 125.72
+       }
+      ],
+      "contribution": 713.08,
+      "share_of_net_pnl": 0.4926
+     }
     },
-    "top_5": {
-     "n": 5,
-     "trades": [
-      {
-       "bar_ts": "2024-07-02T12:45:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 128.22
-      },
-      {
-       "bar_ts": "2024-07-02T11:45:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 125.72
-      },
-      {
-       "bar_ts": "2024-07-02T11:00:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 115.34
-      },
-      {
-       "bar_ts": "2024-07-02T08:15:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 108.1
-      },
-      {
-       "bar_ts": "2024-07-02T07:00:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 91.42
-      }
-     ],
-     "contribution": 568.8,
-     "share_of_net_pnl": 0.5919
+    "3_tick": {
+     "cost_ticks_rt": 3,
+     "cost_per_trade": 2.74,
+     "armed": 348,
+     "filled": 146,
+     "fill_rate": 0.42,
+     "resolved": 146,
+     "wins": 75,
+     "losses": 71,
+     "win_rate": 0.514,
+     "gross_pnl": 1774.65,
+     "commissions_fees_total": 181.04,
+     "slippage_cost_total": 219.0,
+     "net_pnl": 1374.61,
+     "net_expectancy_per_armed_signal": 3.95,
+     "net_expectancy_per_fill": 9.42,
+     "profit_factor": 2.056,
+     "avg_win": 35.69,
+     "avg_loss": -18.34,
+     "max_drawdown": 194.28,
+     "first_half_expectancy_per_fill": 17.54,
+     "second_half_expectancy_per_fill": 1.29,
+     "positive_both_halves": true,
+     "max_drawdown_vs_expectancy_per_fill_ratio": 20.62,
+     "max_drawdown_vs_net_pnl_pct": 0.1413,
+     "top_1": {
+      "n": 1,
+      "trades": [
+       {
+        "bar_ts": "2025-03-27T19:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 172.51
+       }
+      ],
+      "contribution": 172.51,
+      "share_of_net_pnl": 0.1255
+     },
+     "top_3": {
+      "n": 3,
+      "trades": [
+       {
+        "bar_ts": "2025-03-27T19:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 172.51
+       },
+       {
+        "bar_ts": "2024-09-03T13:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 155.84
+       },
+       {
+        "bar_ts": "2025-02-27T15:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 129.29
+       }
+      ],
+      "contribution": 457.64,
+      "share_of_net_pnl": 0.3329
+     },
+     "top_5": {
+      "n": 5,
+      "trades": [
+       {
+        "bar_ts": "2025-03-27T19:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 172.51
+       },
+       {
+        "bar_ts": "2024-09-03T13:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 155.84
+       },
+       {
+        "bar_ts": "2025-02-27T15:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 129.29
+       },
+       {
+        "bar_ts": "2024-07-02T12:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 127.72
+       },
+       {
+        "bar_ts": "2024-07-02T11:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 125.22
+       }
+      ],
+      "contribution": 710.58,
+      "share_of_net_pnl": 0.5169
+     }
     }
    },
-   "3_tick": {
-    "cost_ticks_rt": 3,
-    "cost_per_trade": 2.74,
-    "armed": 348,
-    "filled": 146,
-    "fill_rate": 0.42,
-    "resolved": 146,
-    "wins": 67,
-    "losses": 79,
-    "win_rate": 0.459,
-    "gross_pnl": 1287.96,
-    "commissions_fees_total": 181.04,
-    "slippage_cost_total": 219.0,
-    "net_pnl": 887.92,
-    "net_expectancy_per_armed_signal": 2.5515,
-    "net_expectancy_per_fill": 6.08,
-    "profit_factor": 1.627,
-    "avg_win": 34.4,
-    "avg_loss": -17.93,
-    "max_drawdown": 179.92,
-    "first_half_expectancy_per_fill": 10.93,
-    "second_half_expectancy_per_fill": 1.24,
-    "positive_both_halves": true,
-    "max_drawdown_vs_expectancy_per_fill_ratio": 29.59,
-    "max_drawdown_vs_net_pnl_pct": 0.2026,
-    "top_1": {
-     "n": 1,
-     "trades": [
-      {
-       "bar_ts": "2024-07-02T12:45:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 127.72
-      }
-     ],
-     "contribution": 127.72,
-     "share_of_net_pnl": 0.1438
+   "partial_2ct_approx": {
+    "1_tick": {
+     "cost_ticks_rt": 1,
+     "cost_per_trade": 1.74,
+     "armed": 348,
+     "filled": 146,
+     "fill_rate": 0.42,
+     "resolved": 146,
+     "wins": 72,
+     "losses": 74,
+     "win_rate": 0.493,
+     "gross_pnl": 3062.61,
+     "commissions_fees_total": 181.04,
+     "slippage_cost_total": 73.0,
+     "net_pnl": 2808.57,
+     "net_expectancy_per_armed_signal": 8.0706,
+     "net_expectancy_per_fill": 19.24,
+     "profit_factor": 2.188,
+     "avg_win": 71.84,
+     "avg_loss": -31.95,
+     "max_drawdown": 320.62,
+     "first_half_expectancy_per_fill": 32.2,
+     "second_half_expectancy_per_fill": 6.27,
+     "positive_both_halves": true,
+     "max_drawdown_vs_expectancy_per_fill_ratio": 16.66,
+     "max_drawdown_vs_net_pnl_pct": 0.1142,
+     "top_1": {
+      "n": 1,
+      "trades": [
+       {
+        "bar_ts": "2024-07-02T12:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 259.18
+       }
+      ],
+      "contribution": 259.18,
+      "share_of_net_pnl": 0.0923
+     },
+     "top_3": {
+      "n": 3,
+      "trades": [
+       {
+        "bar_ts": "2024-07-02T12:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 259.18
+       },
+       {
+        "bar_ts": "2024-07-02T11:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 254.18
+       },
+       {
+        "bar_ts": "2024-07-02T11:00:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 233.42
+       }
+      ],
+      "contribution": 746.78,
+      "share_of_net_pnl": 0.2659
+     },
+     "top_5": {
+      "n": 5,
+      "trades": [
+       {
+        "bar_ts": "2024-07-02T12:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 259.18
+       },
+       {
+        "bar_ts": "2024-07-02T11:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 254.18
+       },
+       {
+        "bar_ts": "2024-07-02T11:00:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 233.42
+       },
+       {
+        "bar_ts": "2024-07-02T08:15:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 218.94
+       },
+       {
+        "bar_ts": "2024-09-03T13:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 210.0
+       }
+      ],
+      "contribution": 1175.72,
+      "share_of_net_pnl": 0.4186
+     }
     },
-    "top_3": {
-     "n": 3,
-     "trades": [
-      {
-       "bar_ts": "2024-07-02T12:45:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 127.72
-      },
-      {
-       "bar_ts": "2024-07-02T11:45:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 125.22
-      },
-      {
-       "bar_ts": "2024-07-02T11:00:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 114.84
-      }
-     ],
-     "contribution": 367.78,
-     "share_of_net_pnl": 0.4142
+    "2_tick": {
+     "cost_ticks_rt": 2,
+     "cost_per_trade": 2.24,
+     "armed": 348,
+     "filled": 146,
+     "fill_rate": 0.42,
+     "resolved": 146,
+     "wins": 72,
+     "losses": 74,
+     "win_rate": 0.493,
+     "gross_pnl": 3062.61,
+     "commissions_fees_total": 181.04,
+     "slippage_cost_total": 146.0,
+     "net_pnl": 2735.57,
+     "net_expectancy_per_armed_signal": 7.8608,
+     "net_expectancy_per_fill": 18.74,
+     "profit_factor": 2.139,
+     "avg_win": 71.34,
+     "avg_loss": -32.45,
+     "max_drawdown": 327.12,
+     "first_half_expectancy_per_fill": 31.7,
+     "second_half_expectancy_per_fill": 5.77,
+     "positive_both_halves": true,
+     "max_drawdown_vs_expectancy_per_fill_ratio": 17.46,
+     "max_drawdown_vs_net_pnl_pct": 0.1196,
+     "top_1": {
+      "n": 1,
+      "trades": [
+       {
+        "bar_ts": "2024-07-02T12:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 258.68
+       }
+      ],
+      "contribution": 258.68,
+      "share_of_net_pnl": 0.0946
+     },
+     "top_3": {
+      "n": 3,
+      "trades": [
+       {
+        "bar_ts": "2024-07-02T12:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 258.68
+       },
+       {
+        "bar_ts": "2024-07-02T11:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 253.68
+       },
+       {
+        "bar_ts": "2024-07-02T11:00:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 232.92
+       }
+      ],
+      "contribution": 745.28,
+      "share_of_net_pnl": 0.2724
+     },
+     "top_5": {
+      "n": 5,
+      "trades": [
+       {
+        "bar_ts": "2024-07-02T12:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 258.68
+       },
+       {
+        "bar_ts": "2024-07-02T11:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 253.68
+       },
+       {
+        "bar_ts": "2024-07-02T11:00:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 232.92
+       },
+       {
+        "bar_ts": "2024-07-02T08:15:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 218.44
+       },
+       {
+        "bar_ts": "2024-09-03T13:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 209.5
+       }
+      ],
+      "contribution": 1173.22,
+      "share_of_net_pnl": 0.4289
+     }
     },
-    "top_5": {
-     "n": 5,
-     "trades": [
-      {
-       "bar_ts": "2024-07-02T12:45:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 127.72
-      },
-      {
-       "bar_ts": "2024-07-02T11:45:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 125.22
-      },
-      {
-       "bar_ts": "2024-07-02T11:00:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 114.84
-      },
-      {
-       "bar_ts": "2024-07-02T08:15:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 107.6
-      },
-      {
-       "bar_ts": "2024-07-02T07:00:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 90.92
-      }
-     ],
-     "contribution": 566.3,
-     "share_of_net_pnl": 0.6378
+    "3_tick": {
+     "cost_ticks_rt": 3,
+     "cost_per_trade": 2.74,
+     "armed": 348,
+     "filled": 146,
+     "fill_rate": 0.42,
+     "resolved": 146,
+     "wins": 72,
+     "losses": 74,
+     "win_rate": 0.493,
+     "gross_pnl": 3062.61,
+     "commissions_fees_total": 181.04,
+     "slippage_cost_total": 219.0,
+     "net_pnl": 2662.57,
+     "net_expectancy_per_armed_signal": 7.6511,
+     "net_expectancy_per_fill": 18.24,
+     "profit_factor": 2.092,
+     "avg_win": 70.84,
+     "avg_loss": -32.95,
+     "max_drawdown": 333.62,
+     "first_half_expectancy_per_fill": 31.2,
+     "second_half_expectancy_per_fill": 5.27,
+     "positive_both_halves": true,
+     "max_drawdown_vs_expectancy_per_fill_ratio": 18.29,
+     "max_drawdown_vs_net_pnl_pct": 0.1253,
+     "top_1": {
+      "n": 1,
+      "trades": [
+       {
+        "bar_ts": "2024-07-02T12:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 258.18
+       }
+      ],
+      "contribution": 258.18,
+      "share_of_net_pnl": 0.097
+     },
+     "top_3": {
+      "n": 3,
+      "trades": [
+       {
+        "bar_ts": "2024-07-02T12:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 258.18
+       },
+       {
+        "bar_ts": "2024-07-02T11:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 253.18
+       },
+       {
+        "bar_ts": "2024-07-02T11:00:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 232.42
+       }
+      ],
+      "contribution": 743.78,
+      "share_of_net_pnl": 0.2793
+     },
+     "top_5": {
+      "n": 5,
+      "trades": [
+       {
+        "bar_ts": "2024-07-02T12:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 258.18
+       },
+       {
+        "bar_ts": "2024-07-02T11:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 253.18
+       },
+       {
+        "bar_ts": "2024-07-02T11:00:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 232.42
+       },
+       {
+        "bar_ts": "2024-07-02T08:15:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 217.94
+       },
+       {
+        "bar_ts": "2024-09-03T13:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 209.0
+       }
+      ],
+      "contribution": 1170.72,
+      "share_of_net_pnl": 0.4397
+     }
     }
    }
   },
-  "runner": {
-   "1_tick": {
-    "cost_ticks_rt": 1,
-    "cost_per_trade": 1.74,
-    "armed": 348,
-    "filled": 146,
-    "fill_rate": 0.42,
-    "resolved": 146,
-    "wins": 77,
-    "losses": 69,
-    "win_rate": 0.527,
-    "gross_pnl": 1774.65,
-    "commissions_fees_total": 181.04,
-    "slippage_cost_total": 73.0,
-    "net_pnl": 1520.61,
-    "net_expectancy_per_armed_signal": 4.3696,
-    "net_expectancy_per_fill": 10.42,
-    "profit_factor": 2.235,
-    "avg_win": 35.74,
-    "avg_loss": -17.85,
-    "max_drawdown": 181.28,
-    "first_half_expectancy_per_fill": 18.54,
-    "second_half_expectancy_per_fill": 2.29,
-    "positive_both_halves": true,
-    "max_drawdown_vs_expectancy_per_fill_ratio": 17.4,
-    "max_drawdown_vs_net_pnl_pct": 0.1192,
-    "top_1": {
-     "n": 1,
-     "trades": [
-      {
-       "bar_ts": "2025-03-27T19:30:00+00:00",
-       "direction": "SHORT",
-       "session": "new_york",
-       "pnl_net": 173.51
-      }
-     ],
-     "contribution": 173.51,
-     "share_of_net_pnl": 0.1141
-    },
-    "top_3": {
-     "n": 3,
-     "trades": [
-      {
-       "bar_ts": "2025-03-27T19:30:00+00:00",
-       "direction": "SHORT",
-       "session": "new_york",
-       "pnl_net": 173.51
-      },
-      {
-       "bar_ts": "2024-09-03T13:30:00+00:00",
-       "direction": "SHORT",
-       "session": "new_york",
-       "pnl_net": 156.84
-      },
-      {
-       "bar_ts": "2025-02-27T15:30:00+00:00",
-       "direction": "SHORT",
-       "session": "new_york",
-       "pnl_net": 130.29
-      }
-     ],
-     "contribution": 460.64,
-     "share_of_net_pnl": 0.3029
-    },
-    "top_5": {
-     "n": 5,
-     "trades": [
-      {
-       "bar_ts": "2025-03-27T19:30:00+00:00",
-       "direction": "SHORT",
-       "session": "new_york",
-       "pnl_net": 173.51
-      },
-      {
-       "bar_ts": "2024-09-03T13:30:00+00:00",
-       "direction": "SHORT",
-       "session": "new_york",
-       "pnl_net": 156.84
-      },
-      {
-       "bar_ts": "2025-02-27T15:30:00+00:00",
-       "direction": "SHORT",
-       "session": "new_york",
-       "pnl_net": 130.29
-      },
-      {
-       "bar_ts": "2024-07-02T12:45:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 128.72
-      },
-      {
-       "bar_ts": "2024-07-02T11:45:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 126.22
-      }
-     ],
-     "contribution": 715.58,
-     "share_of_net_pnl": 0.4706
-    }
-   },
-   "2_tick": {
-    "cost_ticks_rt": 2,
-    "cost_per_trade": 2.24,
-    "armed": 348,
-    "filled": 146,
-    "fill_rate": 0.42,
-    "resolved": 146,
-    "wins": 75,
-    "losses": 71,
-    "win_rate": 0.514,
-    "gross_pnl": 1774.65,
-    "commissions_fees_total": 181.04,
-    "slippage_cost_total": 146.0,
-    "net_pnl": 1447.61,
-    "net_expectancy_per_armed_signal": 4.1598,
-    "net_expectancy_per_fill": 9.92,
-    "profit_factor": 2.143,
-    "avg_win": 36.19,
-    "avg_loss": -17.84,
-    "max_drawdown": 187.78,
-    "first_half_expectancy_per_fill": 18.04,
-    "second_half_expectancy_per_fill": 1.79,
-    "positive_both_halves": true,
-    "max_drawdown_vs_expectancy_per_fill_ratio": 18.93,
-    "max_drawdown_vs_net_pnl_pct": 0.1297,
-    "top_1": {
-     "n": 1,
-     "trades": [
-      {
-       "bar_ts": "2025-03-27T19:30:00+00:00",
-       "direction": "SHORT",
-       "session": "new_york",
-       "pnl_net": 173.01
-      }
-     ],
-     "contribution": 173.01,
-     "share_of_net_pnl": 0.1195
-    },
-    "top_3": {
-     "n": 3,
-     "trades": [
-      {
-       "bar_ts": "2025-03-27T19:30:00+00:00",
-       "direction": "SHORT",
-       "session": "new_york",
-       "pnl_net": 173.01
-      },
-      {
-       "bar_ts": "2024-09-03T13:30:00+00:00",
-       "direction": "SHORT",
-       "session": "new_york",
-       "pnl_net": 156.34
-      },
-      {
-       "bar_ts": "2025-02-27T15:30:00+00:00",
-       "direction": "SHORT",
-       "session": "new_york",
-       "pnl_net": 129.79
-      }
-     ],
-     "contribution": 459.14,
-     "share_of_net_pnl": 0.3172
-    },
-    "top_5": {
-     "n": 5,
-     "trades": [
-      {
-       "bar_ts": "2025-03-27T19:30:00+00:00",
-       "direction": "SHORT",
-       "session": "new_york",
-       "pnl_net": 173.01
-      },
-      {
-       "bar_ts": "2024-09-03T13:30:00+00:00",
-       "direction": "SHORT",
-       "session": "new_york",
-       "pnl_net": 156.34
-      },
-      {
-       "bar_ts": "2025-02-27T15:30:00+00:00",
-       "direction": "SHORT",
-       "session": "new_york",
-       "pnl_net": 129.79
-      },
-      {
-       "bar_ts": "2024-07-02T12:45:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 128.22
-      },
-      {
-       "bar_ts": "2024-07-02T11:45:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 125.72
-      }
-     ],
-     "contribution": 713.08,
-     "share_of_net_pnl": 0.4926
-    }
-   },
-   "3_tick": {
-    "cost_ticks_rt": 3,
-    "cost_per_trade": 2.74,
-    "armed": 348,
-    "filled": 146,
-    "fill_rate": 0.42,
-    "resolved": 146,
-    "wins": 75,
-    "losses": 71,
-    "win_rate": 0.514,
-    "gross_pnl": 1774.65,
-    "commissions_fees_total": 181.04,
-    "slippage_cost_total": 219.0,
-    "net_pnl": 1374.61,
-    "net_expectancy_per_armed_signal": 3.95,
-    "net_expectancy_per_fill": 9.42,
-    "profit_factor": 2.056,
-    "avg_win": 35.69,
-    "avg_loss": -18.34,
-    "max_drawdown": 194.28,
-    "first_half_expectancy_per_fill": 17.54,
-    "second_half_expectancy_per_fill": 1.29,
-    "positive_both_halves": true,
-    "max_drawdown_vs_expectancy_per_fill_ratio": 20.62,
-    "max_drawdown_vs_net_pnl_pct": 0.1413,
-    "top_1": {
-     "n": 1,
-     "trades": [
-      {
-       "bar_ts": "2025-03-27T19:30:00+00:00",
-       "direction": "SHORT",
-       "session": "new_york",
-       "pnl_net": 172.51
-      }
-     ],
-     "contribution": 172.51,
-     "share_of_net_pnl": 0.1255
-    },
-    "top_3": {
-     "n": 3,
-     "trades": [
-      {
-       "bar_ts": "2025-03-27T19:30:00+00:00",
-       "direction": "SHORT",
-       "session": "new_york",
-       "pnl_net": 172.51
-      },
-      {
-       "bar_ts": "2024-09-03T13:30:00+00:00",
-       "direction": "SHORT",
-       "session": "new_york",
-       "pnl_net": 155.84
-      },
-      {
-       "bar_ts": "2025-02-27T15:30:00+00:00",
-       "direction": "SHORT",
-       "session": "new_york",
-       "pnl_net": 129.29
-      }
-     ],
-     "contribution": 457.64,
-     "share_of_net_pnl": 0.3329
-    },
-    "top_5": {
-     "n": 5,
-     "trades": [
-      {
-       "bar_ts": "2025-03-27T19:30:00+00:00",
-       "direction": "SHORT",
-       "session": "new_york",
-       "pnl_net": 172.51
-      },
-      {
-       "bar_ts": "2024-09-03T13:30:00+00:00",
-       "direction": "SHORT",
-       "session": "new_york",
-       "pnl_net": 155.84
-      },
-      {
-       "bar_ts": "2025-02-27T15:30:00+00:00",
-       "direction": "SHORT",
-       "session": "new_york",
-       "pnl_net": 129.29
-      },
-      {
-       "bar_ts": "2024-07-02T12:45:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 127.72
-      },
-      {
-       "bar_ts": "2024-07-02T11:45:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 125.22
-      }
-     ],
-     "contribution": 710.58,
-     "share_of_net_pnl": 0.5169
-    }
-   }
+  "cross_check_against_committed_evidence_package_json": {
+   "source": "scripts/vwap_hold_evidence_package_results.json (untouched, read-only)",
+   "fields_checked_per_cell": [
+    "armed",
+    "filled",
+    "resolved",
+    "net_pnl",
+    "net_expectancy_per_armed_signal",
+    "net_expectancy_per_fill",
+    "profit_factor",
+    "win_rate",
+    "max_drawdown",
+    "positive_both_halves"
+   ],
+   "mismatches": [],
+   "verdict": "EXACT MATCH on every field, every cell"
+  }
+ },
+ "ny_only": {
+  "population": {
+   "n": 107,
+   "filled_ioc_close": 55,
+   "fill_rate_ioc_close": 0.514
   },
-  "partial_2ct_approx": {
-   "1_tick": {
-    "cost_ticks_rt": 1,
-    "cost_per_trade": 1.74,
-    "armed": 348,
-    "filled": 146,
-    "fill_rate": 0.42,
-    "resolved": 146,
-    "wins": 72,
-    "losses": 74,
-    "win_rate": 0.493,
-    "gross_pnl": 3062.61,
-    "commissions_fees_total": 181.04,
-    "slippage_cost_total": 73.0,
-    "net_pnl": 2808.57,
-    "net_expectancy_per_armed_signal": 8.0706,
-    "net_expectancy_per_fill": 19.24,
-    "profit_factor": 2.188,
-    "avg_win": 71.84,
-    "avg_loss": -31.95,
-    "max_drawdown": 320.62,
-    "first_half_expectancy_per_fill": 32.2,
-    "second_half_expectancy_per_fill": 6.27,
-    "positive_both_halves": true,
-    "max_drawdown_vs_expectancy_per_fill_ratio": 16.66,
-    "max_drawdown_vs_net_pnl_pct": 0.1142,
-    "top_1": {
-     "n": 1,
-     "trades": [
-      {
-       "bar_ts": "2024-07-02T12:45:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 259.18
-      }
-     ],
-     "contribution": 259.18,
-     "share_of_net_pnl": 0.0923
+  "cells": {
+   "static": {
+    "1_tick": {
+     "cost_ticks_rt": 1,
+     "cost_per_trade": 1.74,
+     "armed": 107,
+     "filled": 55,
+     "fill_rate": 0.514,
+     "resolved": 55,
+     "wins": 31,
+     "losses": 24,
+     "win_rate": 0.564,
+     "gross_pnl": 582.0,
+     "commissions_fees_total": 68.2,
+     "slippage_cost_total": 27.5,
+     "net_pnl": 486.3,
+     "net_expectancy_per_armed_signal": 4.5449,
+     "net_expectancy_per_fill": 8.84,
+     "profit_factor": 2.296,
+     "avg_win": 27.8,
+     "avg_loss": -15.64,
+     "max_drawdown": 93.46,
+     "first_half_expectancy_per_fill": 6.96,
+     "second_half_expectancy_per_fill": 10.66,
+     "positive_both_halves": true,
+     "max_drawdown_vs_expectancy_per_fill_ratio": 10.57,
+     "max_drawdown_vs_net_pnl_pct": 0.1922,
+     "top_1": {
+      "n": 1,
+      "trades": [
+       {
+        "bar_ts": "2024-08-02T16:00:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 59.96
+       }
+      ],
+      "contribution": 59.96,
+      "share_of_net_pnl": 0.1233
+     },
+     "top_3": {
+      "n": 3,
+      "trades": [
+       {
+        "bar_ts": "2024-08-02T16:00:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 59.96
+       },
+       {
+        "bar_ts": "2024-09-03T13:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 51.42
+       },
+       {
+        "bar_ts": "2025-09-24T13:45:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 47.5
+       }
+      ],
+      "contribution": 158.88,
+      "share_of_net_pnl": 0.3267
+     },
+     "top_5": {
+      "n": 5,
+      "trades": [
+       {
+        "bar_ts": "2024-08-02T16:00:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 59.96
+       },
+       {
+        "bar_ts": "2024-09-03T13:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 51.42
+       },
+       {
+        "bar_ts": "2025-09-24T13:45:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 47.5
+       },
+       {
+        "bar_ts": "2025-08-20T15:45:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 44.92
+       },
+       {
+        "bar_ts": "2025-08-19T13:45:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 44.6
+       }
+      ],
+      "contribution": 248.4,
+      "share_of_net_pnl": 0.5108
+     }
     },
-    "top_3": {
-     "n": 3,
-     "trades": [
-      {
-       "bar_ts": "2024-07-02T12:45:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 259.18
-      },
-      {
-       "bar_ts": "2024-07-02T11:45:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 254.18
-      },
-      {
-       "bar_ts": "2024-07-02T11:00:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 233.42
-      }
-     ],
-     "contribution": 746.78,
-     "share_of_net_pnl": 0.2659
+    "2_tick": {
+     "cost_ticks_rt": 2,
+     "cost_per_trade": 2.24,
+     "armed": 107,
+     "filled": 55,
+     "fill_rate": 0.514,
+     "resolved": 55,
+     "wins": 30,
+     "losses": 25,
+     "win_rate": 0.545,
+     "gross_pnl": 582.0,
+     "commissions_fees_total": 68.2,
+     "slippage_cost_total": 55.0,
+     "net_pnl": 458.8,
+     "net_expectancy_per_armed_signal": 4.2879,
+     "net_expectancy_per_fill": 8.34,
+     "profit_factor": 2.184,
+     "avg_win": 28.21,
+     "avg_loss": -15.5,
+     "max_drawdown": 95.96,
+     "first_half_expectancy_per_fill": 6.46,
+     "second_half_expectancy_per_fill": 10.16,
+     "positive_both_halves": true,
+     "max_drawdown_vs_expectancy_per_fill_ratio": 11.51,
+     "max_drawdown_vs_net_pnl_pct": 0.2092,
+     "top_1": {
+      "n": 1,
+      "trades": [
+       {
+        "bar_ts": "2024-08-02T16:00:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 59.46
+       }
+      ],
+      "contribution": 59.46,
+      "share_of_net_pnl": 0.1296
+     },
+     "top_3": {
+      "n": 3,
+      "trades": [
+       {
+        "bar_ts": "2024-08-02T16:00:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 59.46
+       },
+       {
+        "bar_ts": "2024-09-03T13:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 50.92
+       },
+       {
+        "bar_ts": "2025-09-24T13:45:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 47.0
+       }
+      ],
+      "contribution": 157.38,
+      "share_of_net_pnl": 0.343
+     },
+     "top_5": {
+      "n": 5,
+      "trades": [
+       {
+        "bar_ts": "2024-08-02T16:00:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 59.46
+       },
+       {
+        "bar_ts": "2024-09-03T13:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 50.92
+       },
+       {
+        "bar_ts": "2025-09-24T13:45:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 47.0
+       },
+       {
+        "bar_ts": "2025-08-20T15:45:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 44.42
+       },
+       {
+        "bar_ts": "2025-08-19T13:45:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 44.1
+       }
+      ],
+      "contribution": 245.9,
+      "share_of_net_pnl": 0.536
+     }
     },
-    "top_5": {
-     "n": 5,
-     "trades": [
-      {
-       "bar_ts": "2024-07-02T12:45:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 259.18
-      },
-      {
-       "bar_ts": "2024-07-02T11:45:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 254.18
-      },
-      {
-       "bar_ts": "2024-07-02T11:00:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 233.42
-      },
-      {
-       "bar_ts": "2024-07-02T08:15:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 218.94
-      },
-      {
-       "bar_ts": "2024-09-03T13:30:00+00:00",
-       "direction": "SHORT",
-       "session": "new_york",
-       "pnl_net": 210.0
-      }
-     ],
-     "contribution": 1175.72,
-     "share_of_net_pnl": 0.4186
+    "3_tick": {
+     "cost_ticks_rt": 3,
+     "cost_per_trade": 2.74,
+     "armed": 107,
+     "filled": 55,
+     "fill_rate": 0.514,
+     "resolved": 55,
+     "wins": 30,
+     "losses": 25,
+     "win_rate": 0.545,
+     "gross_pnl": 582.0,
+     "commissions_fees_total": 68.2,
+     "slippage_cost_total": 82.5,
+     "net_pnl": 431.3,
+     "net_expectancy_per_armed_signal": 4.0308,
+     "net_expectancy_per_fill": 7.84,
+     "profit_factor": 2.078,
+     "avg_win": 27.71,
+     "avg_loss": -16.0,
+     "max_drawdown": 98.46,
+     "first_half_expectancy_per_fill": 5.96,
+     "second_half_expectancy_per_fill": 9.66,
+     "positive_both_halves": true,
+     "max_drawdown_vs_expectancy_per_fill_ratio": 12.56,
+     "max_drawdown_vs_net_pnl_pct": 0.2283,
+     "top_1": {
+      "n": 1,
+      "trades": [
+       {
+        "bar_ts": "2024-08-02T16:00:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 58.96
+       }
+      ],
+      "contribution": 58.96,
+      "share_of_net_pnl": 0.1367
+     },
+     "top_3": {
+      "n": 3,
+      "trades": [
+       {
+        "bar_ts": "2024-08-02T16:00:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 58.96
+       },
+       {
+        "bar_ts": "2024-09-03T13:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 50.42
+       },
+       {
+        "bar_ts": "2025-09-24T13:45:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 46.5
+       }
+      ],
+      "contribution": 155.88,
+      "share_of_net_pnl": 0.3614
+     },
+     "top_5": {
+      "n": 5,
+      "trades": [
+       {
+        "bar_ts": "2024-08-02T16:00:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 58.96
+       },
+       {
+        "bar_ts": "2024-09-03T13:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 50.42
+       },
+       {
+        "bar_ts": "2025-09-24T13:45:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 46.5
+       },
+       {
+        "bar_ts": "2025-08-20T15:45:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 43.92
+       },
+       {
+        "bar_ts": "2025-08-19T13:45:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 43.6
+       }
+      ],
+      "contribution": 243.4,
+      "share_of_net_pnl": 0.5643
+     }
     }
    },
-   "2_tick": {
-    "cost_ticks_rt": 2,
-    "cost_per_trade": 2.24,
-    "armed": 348,
-    "filled": 146,
-    "fill_rate": 0.42,
-    "resolved": 146,
-    "wins": 72,
-    "losses": 74,
-    "win_rate": 0.493,
-    "gross_pnl": 3062.61,
-    "commissions_fees_total": 181.04,
-    "slippage_cost_total": 146.0,
-    "net_pnl": 2735.57,
-    "net_expectancy_per_armed_signal": 7.8608,
-    "net_expectancy_per_fill": 18.74,
-    "profit_factor": 2.139,
-    "avg_win": 71.34,
-    "avg_loss": -32.45,
-    "max_drawdown": 327.12,
-    "first_half_expectancy_per_fill": 31.7,
-    "second_half_expectancy_per_fill": 5.77,
-    "positive_both_halves": true,
-    "max_drawdown_vs_expectancy_per_fill_ratio": 17.46,
-    "max_drawdown_vs_net_pnl_pct": 0.1196,
-    "top_1": {
-     "n": 1,
-     "trades": [
-      {
-       "bar_ts": "2024-07-02T12:45:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 258.68
-      }
-     ],
-     "contribution": 258.68,
-     "share_of_net_pnl": 0.0946
+   "runner": {
+    "1_tick": {
+     "cost_ticks_rt": 1,
+     "cost_per_trade": 1.74,
+     "armed": 107,
+     "filled": 55,
+     "fill_rate": 0.514,
+     "resolved": 55,
+     "wins": 32,
+     "losses": 23,
+     "win_rate": 0.582,
+     "gross_pnl": 951.97,
+     "commissions_fees_total": 68.2,
+     "slippage_cost_total": 27.5,
+     "net_pnl": 856.27,
+     "net_expectancy_per_armed_signal": 8.0025,
+     "net_expectancy_per_fill": 15.57,
+     "profit_factor": 3.365,
+     "avg_win": 38.07,
+     "avg_loss": -15.74,
+     "max_drawdown": 93.46,
+     "first_half_expectancy_per_fill": 21.11,
+     "second_half_expectancy_per_fill": 10.22,
+     "positive_both_halves": true,
+     "max_drawdown_vs_expectancy_per_fill_ratio": 6.0,
+     "max_drawdown_vs_net_pnl_pct": 0.1091,
+     "top_1": {
+      "n": 1,
+      "trades": [
+       {
+        "bar_ts": "2025-03-27T19:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 173.51
+       }
+      ],
+      "contribution": 173.51,
+      "share_of_net_pnl": 0.2026
+     },
+     "top_3": {
+      "n": 3,
+      "trades": [
+       {
+        "bar_ts": "2025-03-27T19:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 173.51
+       },
+       {
+        "bar_ts": "2024-09-03T13:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 156.84
+       },
+       {
+        "bar_ts": "2025-02-27T15:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 130.29
+       }
+      ],
+      "contribution": 460.64,
+      "share_of_net_pnl": 0.538
+     },
+     "top_5": {
+      "n": 5,
+      "trades": [
+       {
+        "bar_ts": "2025-03-27T19:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 173.51
+       },
+       {
+        "bar_ts": "2024-09-03T13:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 156.84
+       },
+       {
+        "bar_ts": "2025-02-27T15:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 130.29
+       },
+       {
+        "bar_ts": "2024-11-27T14:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 72.18
+       },
+       {
+        "bar_ts": "2024-08-02T16:00:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 59.96
+       }
+      ],
+      "contribution": 592.78,
+      "share_of_net_pnl": 0.6923
+     }
     },
-    "top_3": {
-     "n": 3,
-     "trades": [
-      {
-       "bar_ts": "2024-07-02T12:45:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 258.68
-      },
-      {
-       "bar_ts": "2024-07-02T11:45:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 253.68
-      },
-      {
-       "bar_ts": "2024-07-02T11:00:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 232.92
-      }
-     ],
-     "contribution": 745.28,
-     "share_of_net_pnl": 0.2724
+    "2_tick": {
+     "cost_ticks_rt": 2,
+     "cost_per_trade": 2.24,
+     "armed": 107,
+     "filled": 55,
+     "fill_rate": 0.514,
+     "resolved": 55,
+     "wins": 31,
+     "losses": 24,
+     "win_rate": 0.564,
+     "gross_pnl": 951.97,
+     "commissions_fees_total": 68.2,
+     "slippage_cost_total": 55.0,
+     "net_pnl": 828.77,
+     "net_expectancy_per_armed_signal": 7.7455,
+     "net_expectancy_per_fill": 15.07,
+     "profit_factor": 3.218,
+     "avg_win": 38.79,
+     "avg_loss": -15.57,
+     "max_drawdown": 95.96,
+     "first_half_expectancy_per_fill": 20.61,
+     "second_half_expectancy_per_fill": 9.72,
+     "positive_both_halves": true,
+     "max_drawdown_vs_expectancy_per_fill_ratio": 6.37,
+     "max_drawdown_vs_net_pnl_pct": 0.1158,
+     "top_1": {
+      "n": 1,
+      "trades": [
+       {
+        "bar_ts": "2025-03-27T19:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 173.01
+       }
+      ],
+      "contribution": 173.01,
+      "share_of_net_pnl": 0.2088
+     },
+     "top_3": {
+      "n": 3,
+      "trades": [
+       {
+        "bar_ts": "2025-03-27T19:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 173.01
+       },
+       {
+        "bar_ts": "2024-09-03T13:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 156.34
+       },
+       {
+        "bar_ts": "2025-02-27T15:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 129.79
+       }
+      ],
+      "contribution": 459.14,
+      "share_of_net_pnl": 0.554
+     },
+     "top_5": {
+      "n": 5,
+      "trades": [
+       {
+        "bar_ts": "2025-03-27T19:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 173.01
+       },
+       {
+        "bar_ts": "2024-09-03T13:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 156.34
+       },
+       {
+        "bar_ts": "2025-02-27T15:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 129.79
+       },
+       {
+        "bar_ts": "2024-11-27T14:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 71.68
+       },
+       {
+        "bar_ts": "2024-08-02T16:00:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 59.46
+       }
+      ],
+      "contribution": 590.28,
+      "share_of_net_pnl": 0.7122
+     }
     },
-    "top_5": {
-     "n": 5,
-     "trades": [
-      {
-       "bar_ts": "2024-07-02T12:45:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 258.68
-      },
-      {
-       "bar_ts": "2024-07-02T11:45:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 253.68
-      },
-      {
-       "bar_ts": "2024-07-02T11:00:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 232.92
-      },
-      {
-       "bar_ts": "2024-07-02T08:15:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 218.44
-      },
-      {
-       "bar_ts": "2024-09-03T13:30:00+00:00",
-       "direction": "SHORT",
-       "session": "new_york",
-       "pnl_net": 209.5
-      }
-     ],
-     "contribution": 1173.22,
-     "share_of_net_pnl": 0.4289
+    "3_tick": {
+     "cost_ticks_rt": 3,
+     "cost_per_trade": 2.74,
+     "armed": 107,
+     "filled": 55,
+     "fill_rate": 0.514,
+     "resolved": 55,
+     "wins": 31,
+     "losses": 24,
+     "win_rate": 0.564,
+     "gross_pnl": 951.97,
+     "commissions_fees_total": 68.2,
+     "slippage_cost_total": 82.5,
+     "net_pnl": 801.27,
+     "net_expectancy_per_armed_signal": 7.4885,
+     "net_expectancy_per_fill": 14.57,
+     "profit_factor": 3.078,
+     "avg_win": 38.29,
+     "avg_loss": -16.07,
+     "max_drawdown": 98.46,
+     "first_half_expectancy_per_fill": 20.11,
+     "second_half_expectancy_per_fill": 9.22,
+     "positive_both_halves": true,
+     "max_drawdown_vs_expectancy_per_fill_ratio": 6.76,
+     "max_drawdown_vs_net_pnl_pct": 0.1229,
+     "top_1": {
+      "n": 1,
+      "trades": [
+       {
+        "bar_ts": "2025-03-27T19:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 172.51
+       }
+      ],
+      "contribution": 172.51,
+      "share_of_net_pnl": 0.2153
+     },
+     "top_3": {
+      "n": 3,
+      "trades": [
+       {
+        "bar_ts": "2025-03-27T19:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 172.51
+       },
+       {
+        "bar_ts": "2024-09-03T13:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 155.84
+       },
+       {
+        "bar_ts": "2025-02-27T15:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 129.29
+       }
+      ],
+      "contribution": 457.64,
+      "share_of_net_pnl": 0.5711
+     },
+     "top_5": {
+      "n": 5,
+      "trades": [
+       {
+        "bar_ts": "2025-03-27T19:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 172.51
+       },
+       {
+        "bar_ts": "2024-09-03T13:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 155.84
+       },
+       {
+        "bar_ts": "2025-02-27T15:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 129.29
+       },
+       {
+        "bar_ts": "2024-11-27T14:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 71.18
+       },
+       {
+        "bar_ts": "2024-08-02T16:00:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 58.96
+       }
+      ],
+      "contribution": 587.78,
+      "share_of_net_pnl": 0.7336
+     }
     }
    },
-   "3_tick": {
-    "cost_ticks_rt": 3,
-    "cost_per_trade": 2.74,
-    "armed": 348,
-    "filled": 146,
-    "fill_rate": 0.42,
-    "resolved": 146,
-    "wins": 72,
-    "losses": 74,
-    "win_rate": 0.493,
-    "gross_pnl": 3062.61,
-    "commissions_fees_total": 181.04,
-    "slippage_cost_total": 219.0,
-    "net_pnl": 2662.57,
-    "net_expectancy_per_armed_signal": 7.6511,
-    "net_expectancy_per_fill": 18.24,
-    "profit_factor": 2.092,
-    "avg_win": 70.84,
-    "avg_loss": -32.95,
-    "max_drawdown": 333.62,
-    "first_half_expectancy_per_fill": 31.2,
-    "second_half_expectancy_per_fill": 5.27,
-    "positive_both_halves": true,
-    "max_drawdown_vs_expectancy_per_fill_ratio": 18.29,
-    "max_drawdown_vs_net_pnl_pct": 0.1253,
-    "top_1": {
-     "n": 1,
-     "trades": [
-      {
-       "bar_ts": "2024-07-02T12:45:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 258.18
-      }
-     ],
-     "contribution": 258.18,
-     "share_of_net_pnl": 0.097
+   "partial_2ct_approx": {
+    "1_tick": {
+     "cost_ticks_rt": 1,
+     "cost_per_trade": 1.74,
+     "armed": 107,
+     "filled": 55,
+     "fill_rate": 0.514,
+     "resolved": 55,
+     "wins": 32,
+     "losses": 23,
+     "win_rate": 0.582,
+     "gross_pnl": 1533.97,
+     "commissions_fees_total": 68.2,
+     "slippage_cost_total": 27.5,
+     "net_pnl": 1438.27,
+     "net_expectancy_per_armed_signal": 13.4418,
+     "net_expectancy_per_fill": 26.15,
+     "profit_factor": 3.103,
+     "avg_win": 66.32,
+     "avg_loss": -29.74,
+     "max_drawdown": 178.22,
+     "first_half_expectancy_per_fill": 29.81,
+     "second_half_expectancy_per_fill": 22.62,
+     "positive_both_halves": true,
+     "max_drawdown_vs_expectancy_per_fill_ratio": 6.82,
+     "max_drawdown_vs_net_pnl_pct": 0.1239,
+     "top_1": {
+      "n": 1,
+      "trades": [
+       {
+        "bar_ts": "2024-09-03T13:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 210.0
+       }
+      ],
+      "contribution": 210.0,
+      "share_of_net_pnl": 0.146
+     },
+     "top_3": {
+      "n": 3,
+      "trades": [
+       {
+        "bar_ts": "2024-09-03T13:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 210.0
+       },
+       {
+        "bar_ts": "2025-03-27T19:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 209.01
+       },
+       {
+        "bar_ts": "2025-02-27T15:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 167.35
+       }
+      ],
+      "contribution": 586.36,
+      "share_of_net_pnl": 0.4077
+     },
+     "top_5": {
+      "n": 5,
+      "trades": [
+       {
+        "bar_ts": "2024-09-03T13:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 210.0
+       },
+       {
+        "bar_ts": "2025-03-27T19:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 209.01
+       },
+       {
+        "bar_ts": "2025-02-27T15:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 167.35
+       },
+       {
+        "bar_ts": "2024-08-02T16:00:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 121.66
+       },
+       {
+        "bar_ts": "2024-11-27T14:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 104.02
+       }
+      ],
+      "contribution": 812.04,
+      "share_of_net_pnl": 0.5646
+     }
     },
-    "top_3": {
-     "n": 3,
-     "trades": [
-      {
-       "bar_ts": "2024-07-02T12:45:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 258.18
-      },
-      {
-       "bar_ts": "2024-07-02T11:45:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 253.18
-      },
-      {
-       "bar_ts": "2024-07-02T11:00:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 232.42
-      }
-     ],
-     "contribution": 743.78,
-     "share_of_net_pnl": 0.2793
+    "2_tick": {
+     "cost_ticks_rt": 2,
+     "cost_per_trade": 2.24,
+     "armed": 107,
+     "filled": 55,
+     "fill_rate": 0.514,
+     "resolved": 55,
+     "wins": 32,
+     "losses": 23,
+     "win_rate": 0.582,
+     "gross_pnl": 1533.97,
+     "commissions_fees_total": 68.2,
+     "slippage_cost_total": 55.0,
+     "net_pnl": 1410.77,
+     "net_expectancy_per_armed_signal": 13.1848,
+     "net_expectancy_per_fill": 25.65,
+     "profit_factor": 3.028,
+     "avg_win": 65.82,
+     "avg_loss": -30.24,
+     "max_drawdown": 180.72,
+     "first_half_expectancy_per_fill": 29.31,
+     "second_half_expectancy_per_fill": 22.12,
+     "positive_both_halves": true,
+     "max_drawdown_vs_expectancy_per_fill_ratio": 7.05,
+     "max_drawdown_vs_net_pnl_pct": 0.1281,
+     "top_1": {
+      "n": 1,
+      "trades": [
+       {
+        "bar_ts": "2024-09-03T13:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 209.5
+       }
+      ],
+      "contribution": 209.5,
+      "share_of_net_pnl": 0.1485
+     },
+     "top_3": {
+      "n": 3,
+      "trades": [
+       {
+        "bar_ts": "2024-09-03T13:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 209.5
+       },
+       {
+        "bar_ts": "2025-03-27T19:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 208.51
+       },
+       {
+        "bar_ts": "2025-02-27T15:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 166.85
+       }
+      ],
+      "contribution": 584.86,
+      "share_of_net_pnl": 0.4146
+     },
+     "top_5": {
+      "n": 5,
+      "trades": [
+       {
+        "bar_ts": "2024-09-03T13:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 209.5
+       },
+       {
+        "bar_ts": "2025-03-27T19:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 208.51
+       },
+       {
+        "bar_ts": "2025-02-27T15:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 166.85
+       },
+       {
+        "bar_ts": "2024-08-02T16:00:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 121.16
+       },
+       {
+        "bar_ts": "2024-11-27T14:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 103.52
+       }
+      ],
+      "contribution": 809.54,
+      "share_of_net_pnl": 0.5738
+     }
     },
-    "top_5": {
-     "n": 5,
-     "trades": [
-      {
-       "bar_ts": "2024-07-02T12:45:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 258.18
-      },
-      {
-       "bar_ts": "2024-07-02T11:45:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 253.18
-      },
-      {
-       "bar_ts": "2024-07-02T11:00:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 232.42
-      },
-      {
-       "bar_ts": "2024-07-02T08:15:00+00:00",
-       "direction": "SHORT",
-       "session": "london",
-       "pnl_net": 217.94
-      },
-      {
-       "bar_ts": "2024-09-03T13:30:00+00:00",
-       "direction": "SHORT",
-       "session": "new_york",
-       "pnl_net": 209.0
-      }
-     ],
-     "contribution": 1170.72,
-     "share_of_net_pnl": 0.4397
+    "3_tick": {
+     "cost_ticks_rt": 3,
+     "cost_per_trade": 2.74,
+     "armed": 107,
+     "filled": 55,
+     "fill_rate": 0.514,
+     "resolved": 55,
+     "wins": 32,
+     "losses": 23,
+     "win_rate": 0.582,
+     "gross_pnl": 1533.97,
+     "commissions_fees_total": 68.2,
+     "slippage_cost_total": 82.5,
+     "net_pnl": 1383.27,
+     "net_expectancy_per_armed_signal": 12.9278,
+     "net_expectancy_per_fill": 25.15,
+     "profit_factor": 2.956,
+     "avg_win": 65.32,
+     "avg_loss": -30.74,
+     "max_drawdown": 183.22,
+     "first_half_expectancy_per_fill": 28.81,
+     "second_half_expectancy_per_fill": 21.62,
+     "positive_both_halves": true,
+     "max_drawdown_vs_expectancy_per_fill_ratio": 7.29,
+     "max_drawdown_vs_net_pnl_pct": 0.1325,
+     "top_1": {
+      "n": 1,
+      "trades": [
+       {
+        "bar_ts": "2024-09-03T13:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 209.0
+       }
+      ],
+      "contribution": 209.0,
+      "share_of_net_pnl": 0.1511
+     },
+     "top_3": {
+      "n": 3,
+      "trades": [
+       {
+        "bar_ts": "2024-09-03T13:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 209.0
+       },
+       {
+        "bar_ts": "2025-03-27T19:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 208.01
+       },
+       {
+        "bar_ts": "2025-02-27T15:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 166.35
+       }
+      ],
+      "contribution": 583.36,
+      "share_of_net_pnl": 0.4217
+     },
+     "top_5": {
+      "n": 5,
+      "trades": [
+       {
+        "bar_ts": "2024-09-03T13:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 209.0
+       },
+       {
+        "bar_ts": "2025-03-27T19:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 208.01
+       },
+       {
+        "bar_ts": "2025-02-27T15:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 166.35
+       },
+       {
+        "bar_ts": "2024-08-02T16:00:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 120.66
+       },
+       {
+        "bar_ts": "2024-11-27T14:30:00+00:00",
+        "direction": "SHORT",
+        "session": "new_york",
+        "pnl_net": 103.02
+       }
+      ],
+      "contribution": 807.04,
+      "share_of_net_pnl": 0.5834
+     }
     }
    }
   }
  },
- "cross_check_against_committed_evidence_package_json": {
-  "source": "scripts/vwap_hold_evidence_package_results.json (untouched, read-only)",
-  "fields_checked_per_cell": [
-   "armed",
-   "filled",
-   "resolved",
-   "net_pnl",
-   "net_expectancy_per_armed_signal",
-   "net_expectancy_per_fill",
-   "profit_factor",
-   "win_rate",
-   "max_drawdown",
-   "positive_both_halves"
-  ],
-  "mismatches": [],
-  "verdict": "EXACT MATCH on every field, every cell"
+ "non_ny_context": {
+  "population": {
+   "n": 241,
+   "filled_ioc_close": 91,
+   "fill_rate_ioc_close": 0.3776
+  },
+  "cells": {
+   "static": {
+    "1_tick": {
+     "cost_ticks_rt": 1,
+     "cost_per_trade": 1.74,
+     "armed": 241,
+     "filled": 91,
+     "fill_rate": 0.378,
+     "resolved": 91,
+     "wins": 38,
+     "losses": 53,
+     "win_rate": 0.418,
+     "gross_pnl": 705.96,
+     "commissions_fees_total": 112.84,
+     "slippage_cost_total": 45.5,
+     "net_pnl": 547.62,
+     "net_expectancy_per_armed_signal": 2.2723,
+     "net_expectancy_per_fill": 6.02,
+     "profit_factor": 1.569,
+     "avg_win": 39.75,
+     "avg_loss": -18.16,
+     "max_drawdown": 307.62,
+     "first_half_expectancy_per_fill": 15.71,
+     "second_half_expectancy_per_fill": -3.47,
+     "positive_both_halves": false,
+     "max_drawdown_vs_expectancy_per_fill_ratio": 51.1,
+     "max_drawdown_vs_net_pnl_pct": 0.5617,
+     "top_1": {
+      "n": 1,
+      "trades": [
+       {
+        "bar_ts": "2024-07-02T12:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 128.72
+       }
+      ],
+      "contribution": 128.72,
+      "share_of_net_pnl": 0.2351
+     },
+     "top_3": {
+      "n": 3,
+      "trades": [
+       {
+        "bar_ts": "2024-07-02T12:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 128.72
+       },
+       {
+        "bar_ts": "2024-07-02T11:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 126.22
+       },
+       {
+        "bar_ts": "2024-07-02T11:00:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 115.84
+       }
+      ],
+      "contribution": 370.78,
+      "share_of_net_pnl": 0.6771
+     },
+     "top_5": {
+      "n": 5,
+      "trades": [
+       {
+        "bar_ts": "2024-07-02T12:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 128.72
+       },
+       {
+        "bar_ts": "2024-07-02T11:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 126.22
+       },
+       {
+        "bar_ts": "2024-07-02T11:00:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 115.84
+       },
+       {
+        "bar_ts": "2024-07-02T08:15:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 108.6
+       },
+       {
+        "bar_ts": "2024-07-02T07:00:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 91.92
+       }
+      ],
+      "contribution": 571.3,
+      "share_of_net_pnl": 1.0432
+     }
+    },
+    "2_tick": {
+     "cost_ticks_rt": 2,
+     "cost_per_trade": 2.24,
+     "armed": 241,
+     "filled": 91,
+     "fill_rate": 0.378,
+     "resolved": 91,
+     "wins": 37,
+     "losses": 54,
+     "win_rate": 0.407,
+     "gross_pnl": 705.96,
+     "commissions_fees_total": 112.84,
+     "slippage_cost_total": 91.0,
+     "net_pnl": 502.12,
+     "net_expectancy_per_armed_signal": 2.0835,
+     "net_expectancy_per_fill": 5.52,
+     "profit_factor": 1.507,
+     "avg_win": 40.32,
+     "avg_loss": -18.33,
+     "max_drawdown": 321.12,
+     "first_half_expectancy_per_fill": 15.21,
+     "second_half_expectancy_per_fill": -3.97,
+     "positive_both_halves": false,
+     "max_drawdown_vs_expectancy_per_fill_ratio": 58.17,
+     "max_drawdown_vs_net_pnl_pct": 0.6395,
+     "top_1": {
+      "n": 1,
+      "trades": [
+       {
+        "bar_ts": "2024-07-02T12:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 128.22
+       }
+      ],
+      "contribution": 128.22,
+      "share_of_net_pnl": 0.2554
+     },
+     "top_3": {
+      "n": 3,
+      "trades": [
+       {
+        "bar_ts": "2024-07-02T12:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 128.22
+       },
+       {
+        "bar_ts": "2024-07-02T11:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 125.72
+       },
+       {
+        "bar_ts": "2024-07-02T11:00:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 115.34
+       }
+      ],
+      "contribution": 369.28,
+      "share_of_net_pnl": 0.7354
+     },
+     "top_5": {
+      "n": 5,
+      "trades": [
+       {
+        "bar_ts": "2024-07-02T12:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 128.22
+       },
+       {
+        "bar_ts": "2024-07-02T11:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 125.72
+       },
+       {
+        "bar_ts": "2024-07-02T11:00:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 115.34
+       },
+       {
+        "bar_ts": "2024-07-02T08:15:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 108.1
+       },
+       {
+        "bar_ts": "2024-07-02T07:00:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 91.42
+       }
+      ],
+      "contribution": 568.8,
+      "share_of_net_pnl": 1.1328
+     }
+    },
+    "3_tick": {
+     "cost_ticks_rt": 3,
+     "cost_per_trade": 2.74,
+     "armed": 241,
+     "filled": 91,
+     "fill_rate": 0.378,
+     "resolved": 91,
+     "wins": 37,
+     "losses": 54,
+     "win_rate": 0.407,
+     "gross_pnl": 705.96,
+     "commissions_fees_total": 112.84,
+     "slippage_cost_total": 136.5,
+     "net_pnl": 456.62,
+     "net_expectancy_per_armed_signal": 1.8947,
+     "net_expectancy_per_fill": 5.02,
+     "profit_factor": 1.449,
+     "avg_win": 39.82,
+     "avg_loss": -18.83,
+     "max_drawdown": 342.78,
+     "first_half_expectancy_per_fill": 14.71,
+     "second_half_expectancy_per_fill": -4.47,
+     "positive_both_halves": false,
+     "max_drawdown_vs_expectancy_per_fill_ratio": 68.28,
+     "max_drawdown_vs_net_pnl_pct": 0.7507,
+     "top_1": {
+      "n": 1,
+      "trades": [
+       {
+        "bar_ts": "2024-07-02T12:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 127.72
+       }
+      ],
+      "contribution": 127.72,
+      "share_of_net_pnl": 0.2797
+     },
+     "top_3": {
+      "n": 3,
+      "trades": [
+       {
+        "bar_ts": "2024-07-02T12:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 127.72
+       },
+       {
+        "bar_ts": "2024-07-02T11:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 125.22
+       },
+       {
+        "bar_ts": "2024-07-02T11:00:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 114.84
+       }
+      ],
+      "contribution": 367.78,
+      "share_of_net_pnl": 0.8054
+     },
+     "top_5": {
+      "n": 5,
+      "trades": [
+       {
+        "bar_ts": "2024-07-02T12:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 127.72
+       },
+       {
+        "bar_ts": "2024-07-02T11:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 125.22
+       },
+       {
+        "bar_ts": "2024-07-02T11:00:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 114.84
+       },
+       {
+        "bar_ts": "2024-07-02T08:15:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 107.6
+       },
+       {
+        "bar_ts": "2024-07-02T07:00:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 90.92
+       }
+      ],
+      "contribution": 566.3,
+      "share_of_net_pnl": 1.2402
+     }
+    }
+   },
+   "runner": {
+    "1_tick": {
+     "cost_ticks_rt": 1,
+     "cost_per_trade": 1.74,
+     "armed": 241,
+     "filled": 91,
+     "fill_rate": 0.378,
+     "resolved": 91,
+     "wins": 45,
+     "losses": 46,
+     "win_rate": 0.495,
+     "gross_pnl": 822.68,
+     "commissions_fees_total": 112.84,
+     "slippage_cost_total": 45.5,
+     "net_pnl": 664.34,
+     "net_expectancy_per_armed_signal": 2.7566,
+     "net_expectancy_per_fill": 7.3,
+     "profit_factor": 1.764,
+     "avg_win": 34.09,
+     "avg_loss": -18.9,
+     "max_drawdown": 261.77,
+     "first_half_expectancy_per_fill": 16.67,
+     "second_half_expectancy_per_fill": -1.87,
+     "positive_both_halves": false,
+     "max_drawdown_vs_expectancy_per_fill_ratio": 35.86,
+     "max_drawdown_vs_net_pnl_pct": 0.394,
+     "top_1": {
+      "n": 1,
+      "trades": [
+       {
+        "bar_ts": "2024-07-02T12:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 128.72
+       }
+      ],
+      "contribution": 128.72,
+      "share_of_net_pnl": 0.1938
+     },
+     "top_3": {
+      "n": 3,
+      "trades": [
+       {
+        "bar_ts": "2024-07-02T12:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 128.72
+       },
+       {
+        "bar_ts": "2024-07-02T11:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 126.22
+       },
+       {
+        "bar_ts": "2024-07-02T11:00:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 115.84
+       }
+      ],
+      "contribution": 370.78,
+      "share_of_net_pnl": 0.5581
+     },
+     "top_5": {
+      "n": 5,
+      "trades": [
+       {
+        "bar_ts": "2024-07-02T12:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 128.72
+       },
+       {
+        "bar_ts": "2024-07-02T11:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 126.22
+       },
+       {
+        "bar_ts": "2024-07-02T11:00:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 115.84
+       },
+       {
+        "bar_ts": "2024-07-02T08:15:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 108.6
+       },
+       {
+        "bar_ts": "2024-07-02T07:00:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 91.92
+       }
+      ],
+      "contribution": 571.3,
+      "share_of_net_pnl": 0.86
+     }
+    },
+    "2_tick": {
+     "cost_ticks_rt": 2,
+     "cost_per_trade": 2.24,
+     "armed": 241,
+     "filled": 91,
+     "fill_rate": 0.378,
+     "resolved": 91,
+     "wins": 44,
+     "losses": 47,
+     "win_rate": 0.484,
+     "gross_pnl": 822.68,
+     "commissions_fees_total": 112.84,
+     "slippage_cost_total": 91.0,
+     "net_pnl": 618.84,
+     "net_expectancy_per_armed_signal": 2.5678,
+     "net_expectancy_per_fill": 6.8,
+     "profit_factor": 1.693,
+     "avg_win": 34.36,
+     "avg_loss": -19.0,
+     "max_drawdown": 284.93,
+     "first_half_expectancy_per_fill": 16.17,
+     "second_half_expectancy_per_fill": -2.37,
+     "positive_both_halves": false,
+     "max_drawdown_vs_expectancy_per_fill_ratio": 41.9,
+     "max_drawdown_vs_net_pnl_pct": 0.4604,
+     "top_1": {
+      "n": 1,
+      "trades": [
+       {
+        "bar_ts": "2024-07-02T12:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 128.22
+       }
+      ],
+      "contribution": 128.22,
+      "share_of_net_pnl": 0.2072
+     },
+     "top_3": {
+      "n": 3,
+      "trades": [
+       {
+        "bar_ts": "2024-07-02T12:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 128.22
+       },
+       {
+        "bar_ts": "2024-07-02T11:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 125.72
+       },
+       {
+        "bar_ts": "2024-07-02T11:00:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 115.34
+       }
+      ],
+      "contribution": 369.28,
+      "share_of_net_pnl": 0.5967
+     },
+     "top_5": {
+      "n": 5,
+      "trades": [
+       {
+        "bar_ts": "2024-07-02T12:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 128.22
+       },
+       {
+        "bar_ts": "2024-07-02T11:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 125.72
+       },
+       {
+        "bar_ts": "2024-07-02T11:00:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 115.34
+       },
+       {
+        "bar_ts": "2024-07-02T08:15:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 108.1
+       },
+       {
+        "bar_ts": "2024-07-02T07:00:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 91.42
+       }
+      ],
+      "contribution": 568.8,
+      "share_of_net_pnl": 0.9191
+     }
+    },
+    "3_tick": {
+     "cost_ticks_rt": 3,
+     "cost_per_trade": 2.74,
+     "armed": 241,
+     "filled": 91,
+     "fill_rate": 0.378,
+     "resolved": 91,
+     "wins": 44,
+     "losses": 47,
+     "win_rate": 0.484,
+     "gross_pnl": 822.68,
+     "commissions_fees_total": 112.84,
+     "slippage_cost_total": 136.5,
+     "net_pnl": 573.34,
+     "net_expectancy_per_armed_signal": 2.379,
+     "net_expectancy_per_fill": 6.3,
+     "profit_factor": 1.626,
+     "avg_win": 33.86,
+     "avg_loss": -19.5,
+     "max_drawdown": 308.93,
+     "first_half_expectancy_per_fill": 15.67,
+     "second_half_expectancy_per_fill": -2.87,
+     "positive_both_halves": false,
+     "max_drawdown_vs_expectancy_per_fill_ratio": 49.04,
+     "max_drawdown_vs_net_pnl_pct": 0.5388,
+     "top_1": {
+      "n": 1,
+      "trades": [
+       {
+        "bar_ts": "2024-07-02T12:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 127.72
+       }
+      ],
+      "contribution": 127.72,
+      "share_of_net_pnl": 0.2228
+     },
+     "top_3": {
+      "n": 3,
+      "trades": [
+       {
+        "bar_ts": "2024-07-02T12:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 127.72
+       },
+       {
+        "bar_ts": "2024-07-02T11:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 125.22
+       },
+       {
+        "bar_ts": "2024-07-02T11:00:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 114.84
+       }
+      ],
+      "contribution": 367.78,
+      "share_of_net_pnl": 0.6415
+     },
+     "top_5": {
+      "n": 5,
+      "trades": [
+       {
+        "bar_ts": "2024-07-02T12:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 127.72
+       },
+       {
+        "bar_ts": "2024-07-02T11:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 125.22
+       },
+       {
+        "bar_ts": "2024-07-02T11:00:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 114.84
+       },
+       {
+        "bar_ts": "2024-07-02T08:15:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 107.6
+       },
+       {
+        "bar_ts": "2024-07-02T07:00:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 90.92
+       }
+      ],
+      "contribution": 566.3,
+      "share_of_net_pnl": 0.9877
+     }
+    }
+   },
+   "partial_2ct_approx": {
+    "1_tick": {
+     "cost_ticks_rt": 1,
+     "cost_per_trade": 1.74,
+     "armed": 241,
+     "filled": 91,
+     "fill_rate": 0.378,
+     "resolved": 91,
+     "wins": 40,
+     "losses": 51,
+     "win_rate": 0.44,
+     "gross_pnl": 1528.64,
+     "commissions_fees_total": 112.84,
+     "slippage_cost_total": 45.5,
+     "net_pnl": 1370.3,
+     "net_expectancy_per_armed_signal": 5.6859,
+     "net_expectancy_per_fill": 15.06,
+     "profit_factor": 1.816,
+     "avg_win": 76.26,
+     "avg_loss": -32.94,
+     "max_drawdown": 521.91,
+     "first_half_expectancy_per_fill": 34.13,
+     "second_half_expectancy_per_fill": -3.6,
+     "positive_both_halves": false,
+     "max_drawdown_vs_expectancy_per_fill_ratio": 34.66,
+     "max_drawdown_vs_net_pnl_pct": 0.3809,
+     "top_1": {
+      "n": 1,
+      "trades": [
+       {
+        "bar_ts": "2024-07-02T12:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 259.18
+       }
+      ],
+      "contribution": 259.18,
+      "share_of_net_pnl": 0.1891
+     },
+     "top_3": {
+      "n": 3,
+      "trades": [
+       {
+        "bar_ts": "2024-07-02T12:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 259.18
+       },
+       {
+        "bar_ts": "2024-07-02T11:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 254.18
+       },
+       {
+        "bar_ts": "2024-07-02T11:00:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 233.42
+       }
+      ],
+      "contribution": 746.78,
+      "share_of_net_pnl": 0.545
+     },
+     "top_5": {
+      "n": 5,
+      "trades": [
+       {
+        "bar_ts": "2024-07-02T12:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 259.18
+       },
+       {
+        "bar_ts": "2024-07-02T11:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 254.18
+       },
+       {
+        "bar_ts": "2024-07-02T11:00:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 233.42
+       },
+       {
+        "bar_ts": "2024-07-02T08:15:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 218.94
+       },
+       {
+        "bar_ts": "2024-07-02T07:00:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 185.58
+       }
+      ],
+      "contribution": 1151.3,
+      "share_of_net_pnl": 0.8402
+     }
+    },
+    "2_tick": {
+     "cost_ticks_rt": 2,
+     "cost_per_trade": 2.24,
+     "armed": 241,
+     "filled": 91,
+     "fill_rate": 0.378,
+     "resolved": 91,
+     "wins": 40,
+     "losses": 51,
+     "win_rate": 0.44,
+     "gross_pnl": 1528.64,
+     "commissions_fees_total": 112.84,
+     "slippage_cost_total": 91.0,
+     "net_pnl": 1324.8,
+     "net_expectancy_per_armed_signal": 5.4971,
+     "net_expectancy_per_fill": 14.56,
+     "profit_factor": 1.777,
+     "avg_win": 75.76,
+     "avg_loss": -33.44,
+     "max_drawdown": 535.41,
+     "first_half_expectancy_per_fill": 33.63,
+     "second_half_expectancy_per_fill": -4.1,
+     "positive_both_halves": false,
+     "max_drawdown_vs_expectancy_per_fill_ratio": 36.77,
+     "max_drawdown_vs_net_pnl_pct": 0.4041,
+     "top_1": {
+      "n": 1,
+      "trades": [
+       {
+        "bar_ts": "2024-07-02T12:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 258.68
+       }
+      ],
+      "contribution": 258.68,
+      "share_of_net_pnl": 0.1953
+     },
+     "top_3": {
+      "n": 3,
+      "trades": [
+       {
+        "bar_ts": "2024-07-02T12:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 258.68
+       },
+       {
+        "bar_ts": "2024-07-02T11:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 253.68
+       },
+       {
+        "bar_ts": "2024-07-02T11:00:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 232.92
+       }
+      ],
+      "contribution": 745.28,
+      "share_of_net_pnl": 0.5626
+     },
+     "top_5": {
+      "n": 5,
+      "trades": [
+       {
+        "bar_ts": "2024-07-02T12:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 258.68
+       },
+       {
+        "bar_ts": "2024-07-02T11:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 253.68
+       },
+       {
+        "bar_ts": "2024-07-02T11:00:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 232.92
+       },
+       {
+        "bar_ts": "2024-07-02T08:15:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 218.44
+       },
+       {
+        "bar_ts": "2024-07-02T07:00:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 185.08
+       }
+      ],
+      "contribution": 1148.8,
+      "share_of_net_pnl": 0.8671
+     }
+    },
+    "3_tick": {
+     "cost_ticks_rt": 3,
+     "cost_per_trade": 2.74,
+     "armed": 241,
+     "filled": 91,
+     "fill_rate": 0.378,
+     "resolved": 91,
+     "wins": 40,
+     "losses": 51,
+     "win_rate": 0.44,
+     "gross_pnl": 1528.64,
+     "commissions_fees_total": 112.84,
+     "slippage_cost_total": 136.5,
+     "net_pnl": 1279.3,
+     "net_expectancy_per_armed_signal": 5.3083,
+     "net_expectancy_per_fill": 14.06,
+     "profit_factor": 1.739,
+     "avg_win": 75.26,
+     "avg_loss": -33.94,
+     "max_drawdown": 548.91,
+     "first_half_expectancy_per_fill": 33.13,
+     "second_half_expectancy_per_fill": -4.6,
+     "positive_both_halves": false,
+     "max_drawdown_vs_expectancy_per_fill_ratio": 39.04,
+     "max_drawdown_vs_net_pnl_pct": 0.4291,
+     "top_1": {
+      "n": 1,
+      "trades": [
+       {
+        "bar_ts": "2024-07-02T12:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 258.18
+       }
+      ],
+      "contribution": 258.18,
+      "share_of_net_pnl": 0.2018
+     },
+     "top_3": {
+      "n": 3,
+      "trades": [
+       {
+        "bar_ts": "2024-07-02T12:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 258.18
+       },
+       {
+        "bar_ts": "2024-07-02T11:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 253.18
+       },
+       {
+        "bar_ts": "2024-07-02T11:00:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 232.42
+       }
+      ],
+      "contribution": 743.78,
+      "share_of_net_pnl": 0.5814
+     },
+     "top_5": {
+      "n": 5,
+      "trades": [
+       {
+        "bar_ts": "2024-07-02T12:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 258.18
+       },
+       {
+        "bar_ts": "2024-07-02T11:45:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 253.18
+       },
+       {
+        "bar_ts": "2024-07-02T11:00:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 232.42
+       },
+       {
+        "bar_ts": "2024-07-02T08:15:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 217.94
+       },
+       {
+        "bar_ts": "2024-07-02T07:00:00+00:00",
+        "direction": "SHORT",
+        "session": "london",
+        "pnl_net": 184.58
+       }
+      ],
+      "contribution": 1146.3,
+      "share_of_net_pnl": 0.896
+     }
+    }
+   }
+  }
  }
 }
