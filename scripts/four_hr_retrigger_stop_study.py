@@ -10,21 +10,24 @@ config, or orders; no changes to strategy/detector/stop logic, replay
 formulas, runtime configuration, risk rules, broker code, deployment, or
 enablement.
 
-Scope: `docs/strategy-rules/4HR_AUDIT_HANDOFF.md` Section 5 ("Batch 1"),
-narrowed by operator authorization (2026-07-26) to the ONE stop currently
-executable: `strategy/four_hr_retrigger.py::advance_4hr_retrigger` fixes the
-stop once, at entry, to the most recently completed 1H candle's low/high
+Scope: `docs/strategy-rules/4HR_AUDIT_HANDOFF.md` Section 5 ("Batch 1"), per
+operator authorization (2026-07-26). This tests the fixed-at-entry
+completed-1H-candle stop implemented by
+`strategy/four_hr_retrigger.py::advance_4hr_retrigger`
 (`_completed_one_hour_stop`) — the state machine returns `previous` unchanged
 for the rest of the day once `status == "TRIGGERED"`
-(strategy/four_hr_retrigger.py:169-170), so it never advances or ratchets
-that stop again. There is no ratchet implementation anywhere in the
-codebase (`grep -rn "ratchet\\|RATCHET" --include="*.py" .` matches only
-`stocks_advisory/` files, unrelated). The rules doc's own PASS/FAIL gate
-(4HR_AUDIT_HANDOFF.md Section 3) is the ratcheting variant, which does not
-exist to test. This script therefore evidences what the canonical strategy
-ACTUALLY executes today (the fixed-at-entry stop) and says so explicitly in
-its own classification output — it does not build ratchet logic to satisfy
-the doc's original gate (that would be a stop-logic change, out of scope).
+(strategy/four_hr_retrigger.py:169-170), so it never advances/trails that
+stop again. This IS the documented, canonical rule:
+`docs/strategy-rules/4HR_ReTrigger_Rules.md` (the controlling doc) states it
+three times — §5 ("The stop is FIXED at entry. It does not trail as new
+candles complete."), §9 Step 5 ("Keep that stop fixed for the life of the
+trade; never trail or ratchet it"), §12 Hard Rules ("No overriding or
+trailing the fixed completed-1H stop assigned at entry"). An earlier note in
+`4HR_AUDIT_HANDOFF.md` Section 3 (written 2026-07-23, before the rules doc
+was finalized by PR #317/#318) claimed the documented rule was a ratcheting
+1H flip instead — that claim was stale and has been retired in place in
+that file (2026-07-26 correction). There is no ratcheting stop anywhere in
+this codebase, none should be built, and this study does not attempt one.
 
 Cost assumptions (explicit, matching established system conventions, not a
 new one-off number per the F4 finding in 4HR_AUDIT_HANDOFF.md):
@@ -346,17 +349,21 @@ def _classify_one(instrument: str, report: dict[str, Any], baseline_key: str) ->
             "sensitivity point (1/2/3 ticks) -- a single in-sample offline study, "
             "not forward/live evidence, so it cannot be VALIDATED from this alone"
         )
-    elif (second["net_pnl"] or 0) <= 0 or slip_nets[-1] <= 0:
-        verdict = "BROKEN"
+    elif (first["net_pnl"] or 0) > 0 and ((second["net_pnl"] or 0) <= 0 or slip_nets[-1] <= 0):
+        verdict = "OVERFIT"
         reason = (
-            "fails walk-forward and/or slippage-sensitivity: "
-            f"H1=${first['net_pnl']} H2=${second['net_pnl']}, "
-            f"net P&L at 1/2/3-tick slippage = {slip_nets} -- "
-            "degrades to non-positive under conditions the documented rule must survive"
+            f"a real in-sample edge exists (first half net P&L=${first['net_pnl']}) but "
+            f"does not generalize: second half=${second['net_pnl']}, "
+            f"net P&L at 1/2/3-tick slippage = {slip_nets} -- the edge is fit to the "
+            "earlier period/zero-added-cost assumptions, not a broken detector or "
+            "implementation, but it fails the evidence gate for promotion"
         )
     else:
-        verdict = "PROMISING BUT UNPROVEN"
-        reason = "positive overall but not uniformly robust across every check -- see halves/slippage/direction detail"
+        verdict = "BROKEN"
+        reason = (
+            f"no genuine edge even in the more favorable half: H1=${first['net_pnl']} "
+            f"H2=${second['net_pnl']}, net P&L at 1/2/3-tick slippage = {slip_nets}"
+        )
     return {
         "instrument": instrument,
         "verdict": verdict,
@@ -391,16 +398,17 @@ def classify(report_by_instrument: dict[str, Any]) -> dict[str, Any]:
             "only shows up split by instrument, half, and slippage."
         ),
         "note": (
-            "This evaluates the stop strategy/four_hr_retrigger.py actually "
-            "executes today (fixed-at-entry completed-1H-candle stop). The "
-            "documented ratcheting 1H-flip stop (4HR_AUDIT_HANDOFF.md Section 3, "
-            "the doc's own PASS/FAIL gate for 'the documented strategy') has no "
-            "implementation anywhere in this codebase and was NOT built or "
-            "tested here -- building it would be a stop-logic change, out of "
-            "this study's authorized scope. A ratcheting stop can only ever be "
-            "as-or-more favorable than a fixed one (it moves in the trade's "
-            "favor and never against it), so this result is not evidence "
-            "against the documented rule -- it is simply silent on it."
+            "This evaluates the fixed-at-entry completed-1H-candle stop "
+            "strategy/four_hr_retrigger.py executes today. This IS the "
+            "documented, canonical rule -- docs/strategy-rules/4HR_ReTrigger_Rules.md "
+            "(the controlling doc) states three times that the stop is fixed at "
+            "entry and never trails/ratchets (Sections 5, 9, 12). An earlier note "
+            "in 4HR_AUDIT_HANDOFF.md Section 3 claiming a ratcheting stop was the "
+            "documented pass/fail gate was written before that doc was finalized "
+            "and has been retired as stale (2026-07-26 correction). No ratcheting "
+            "stop exists anywhere in this codebase, none was built or tested here, "
+            "and none should be -- that would be a stop-logic change, out of scope. "
+            "This study therefore tests the actual documented strategy directly."
         ),
         "options_p&l": "OUT OF SCOPE, separately blocked on missing historical QQQ options-chain data -- not attempted",
     }
@@ -426,7 +434,7 @@ def main() -> int:
             "sensitivity_slippage_ticks": list(SENSITIVITY_SLIPPAGE_TICKS),
             "pessimistic_both_hit": True,
             "entry_fill_model": "market",
-            "stop_definition": "fixed_at_entry_completed_1h_candle (canonical executable stop; NOT the documented ratcheting variant, which is unimplemented)",
+            "stop_definition": "fixed_at_entry_completed_1h_candle (the canonical, documented rule per 4HR_ReTrigger_Rules.md Sections 5/9/12 -- never trailed/ratcheted)",
             "resolution": "5m bars, strictly-prior closed bars only, no lookahead",
             "day_only_exit": "execution.day_only_exit (PR #318), 15:55-16:00 ET exact bar, stop/target take precedence, missing EOD bar fails closed (excluded)",
         },

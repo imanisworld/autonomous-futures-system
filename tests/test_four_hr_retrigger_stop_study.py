@@ -199,14 +199,20 @@ def test_classify_one_promising_when_robust_across_halves_and_slippage():
     assert result["verdict"] == "PROMISING BUT UNPROVEN"
 
 
-def test_classify_one_broken_when_second_half_negative():
+def test_classify_one_overfit_when_first_half_edge_does_not_survive_second_half():
     report = _fake_report(resolved=75, net=166.5, h1_net=801.49, h2_net=-634.99, slip_nets=[166.5, 31.5, -103.5])
     result = _classify_one("MES", report, "slippage_1_tick")
-    assert result["verdict"] == "BROKEN"
+    assert result["verdict"] == "OVERFIT"
 
 
-def test_classify_one_broken_when_slippage_flips_sign_even_if_halves_positive():
+def test_classify_one_overfit_when_slippage_flips_sign_even_if_halves_positive():
     report = _fake_report(resolved=30, net=100, h1_net=60, h2_net=40, slip_nets=[100, 20, -10])
+    result = _classify_one("MES", report, "slippage_1_tick")
+    assert result["verdict"] == "OVERFIT"
+
+
+def test_classify_one_broken_when_no_edge_even_in_the_better_half():
+    report = _fake_report(resolved=30, net=-50, h1_net=-20, h2_net=-30, slip_nets=[-50, -60, -70])
     result = _classify_one("MES", report, "slippage_1_tick")
     assert result["verdict"] == "BROKEN"
 
@@ -216,5 +222,5 @@ def test_classify_never_blends_a_single_verdict_across_instruments():
     bad = _fake_report(resolved=75, net=166.5, h1_net=801.49, h2_net=-634.99, slip_nets=[166.5, 31.5, -103.5])
     result = classify({"MNQ": good, "MES": bad})
     assert result["per_instrument"]["MNQ"]["verdict"] == "PROMISING BUT UNPROVEN"
-    assert result["per_instrument"]["MES"]["verdict"] == "BROKEN"
+    assert result["per_instrument"]["MES"]["verdict"] == "OVERFIT"
     assert "warning" in result

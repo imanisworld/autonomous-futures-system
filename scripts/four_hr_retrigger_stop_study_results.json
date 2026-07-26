@@ -9,7 +9,7 @@
     ],
     "pessimistic_both_hit": true,
     "entry_fill_model": "market",
-    "stop_definition": "fixed_at_entry_completed_1h_candle (canonical executable stop; NOT the documented ratcheting variant, which is unimplemented)",
+    "stop_definition": "fixed_at_entry_completed_1h_candle (the canonical, documented rule per 4HR_ReTrigger_Rules.md Sections 5/9/12 -- never trailed/ratcheted)",
     "resolution": "5m bars, strictly-prior closed bars only, no lookahead",
     "day_only_exit": "execution.day_only_exit (PR #318), 15:55-16:00 ET exact bar, stop/target take precedence, missing EOD bar fails closed (excluded)"
   },
@@ -2982,8 +2982,8 @@
       },
       "MES": {
         "instrument": "MES",
-        "verdict": "BROKEN",
-        "reason": "fails walk-forward and/or slippage-sensitivity: H1=$801.49 H2=$-634.99, net P&L at 1/2/3-tick slippage = [166.5, 31.5, -103.5] -- degrades to non-positive under conditions the documented rule must survive",
+        "verdict": "OVERFIT",
+        "reason": "a real in-sample edge exists (first half net P&L=$801.49) but does not generalize: second half=$-634.99, net P&L at 1/2/3-tick slippage = [166.5, 31.5, -103.5] -- the edge is fit to the earlier period/zero-added-cost assumptions, not a broken detector or implementation, but it fails the evidence gate for promotion",
         "resolved_trades": 75,
         "net_pnl_baseline": 166.5,
         "net_pnl_by_slippage_tick": {
@@ -3000,7 +3000,7 @@
     "combined_resolved_trades": 155,
     "combined_net_pnl_baseline": 3236.1,
     "warning": "Per-instrument verdicts are NOT uniform -- do not report a single blended verdict or a single blended net P&L number as if it applied to both instruments equally. See feedback_walk_forward_before_shipping: a full-period/combined aggregate can flip sign or hide fragility that only shows up split by instrument, half, and slippage.",
-    "note": "This evaluates the stop strategy/four_hr_retrigger.py actually executes today (fixed-at-entry completed-1H-candle stop). The documented ratcheting 1H-flip stop (4HR_AUDIT_HANDOFF.md Section 3, the doc's own PASS/FAIL gate for 'the documented strategy') has no implementation anywhere in this codebase and was NOT built or tested here -- building it would be a stop-logic change, out of this study's authorized scope. A ratcheting stop can only ever be as-or-more favorable than a fixed one (it moves in the trade's favor and never against it), so this result is not evidence against the documented rule -- it is simply silent on it.",
+    "note": "This evaluates the fixed-at-entry completed-1H-candle stop strategy/four_hr_retrigger.py executes today. This IS the documented, canonical rule -- docs/strategy-rules/4HR_ReTrigger_Rules.md (the controlling doc) states three times that the stop is fixed at entry and never trails/ratchets (Sections 5, 9, 12). An earlier note in 4HR_AUDIT_HANDOFF.md Section 3 claiming a ratcheting stop was the documented pass/fail gate was written before that doc was finalized and has been retired as stale (2026-07-26 correction). No ratcheting stop exists anywhere in this codebase, none was built or tested here, and none should be -- that would be a stop-logic change, out of scope. This study therefore tests the actual documented strategy directly.",
     "options_p&l": "OUT OF SCOPE, separately blocked on missing historical QQQ options-chain data -- not attempted"
   }
 }
