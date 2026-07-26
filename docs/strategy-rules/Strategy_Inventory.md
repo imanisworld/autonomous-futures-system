@@ -38,7 +38,7 @@ Verdict taxonomy:
 | ORB Reclaim (MNQ) | ✅ | ✅ | Partial | ✅ | ❌ insufficient | ✅ | ⚠️ n=253 thin | **PROMISING BUT UNPROVEN** |
 | 4HR Re-Trigger | ✅ blockers resolved | ❌ | ❌ | Partial — external study | ✅ | Partial | ⚠️ n=32 MNQ | **WAIT — build detector** |
 | 12HR Miyagi | ✅ blockers resolved | ❌ | ❌ | Partial — manual study | ❌ not confirmed | Partial | ⚠️ n=13 MNQ | **WAIT — build detector** |
-| 60M 3-2-2 First Live | ✅ blockers resolved | ❌ | ❌ | Partial — manual study | ❌ not confirmed | ❌ | ⚠️ n=31 MNQ | **WAIT — build detector** |
+| 60M 3-2-2 First Live | ✅ blockers resolved | ✅ | Partial — standalone research module | ✅ IOC-faithful | ✅ both halves | ✅ 1-4 tick | ⚠️ n=34 MNQ thin | **PROMISING BUT UNPROVEN** |
 | VWAP Hold (MNQ NY) | ❌ entry definition unclear | Partial | ❌ | ❌ incompatible studies | ❌ | ❌ | ⚠️ n=106 | **WAIT — isolated fill test pending** |
 | VWAP Reclaim (MNQ NY) | ❌ | Partial | ❌ | ❌ | ❌ | ❌ | ⚠️ n=29 thin | **WAIT** |
 | VWAP Rejection | ❌ | Partial | ❌ | ❌ | ❌ | ❌ | — | **BROKEN — unreachable predicate** |
@@ -120,7 +120,7 @@ Verdict taxonomy:
 ---
 
 ### 60M 3-2-2 First Live
-**Verdict: WAIT — build detector**
+**Verdict: PROMISING BUT UNPROVEN** (PR #340, 2026-07-26)
 
 - Rules: complete as of 2026-07-23 (all blockers resolved)
 - Timeframe: 60-minute candles
@@ -129,9 +129,17 @@ Verdict taxonomy:
 - Stop: opposite 9AM boundary, fixed, no cap
 - Target: 8AM outside bar boundary
 - Instrument: MNQ only (MES marginal, QQQ unconfirmed, IWM negative)
-- External study results: MNQ +$66.50 expectancy (n=31)
-- Gaps: no coded detector, walk-forward halves not confirmed, slippage sensitivity unknown
-- Next: build detector → reconcile → honest fill replay
+- Detector + honest-fill replay built (`research/detector_322_first_live.py`,
+  `research/replay_322_honest_fill.py`), current `EOD_BAR_MISSING`/`DAY_ONLY_FLATTEN`
+  contract applied — corrected canonical baseline: 34 candidates, 21 fills, 20 resolved
+  (1 `EOD_BAR_MISSING`), 18W-2L, net $1,595.70, PF 10.36. Positive both halves/directions,
+  6/8 quarters, all 3 years; survives 1-4 tick slippage (PF stays >9.9). See
+  [`60M_322_EXPANDED_EVIDENCE_2026-07-26.md`](60M_322_EXPANDED_EVIDENCE_2026-07-26.md).
+- Gaps: sample still thin (n=34) — top-5 winners = 54% of net P&L (concentration flag),
+  LONG side 11-for-11 undefeated (small-sample-luck flag). OOS expansion blocked by data
+  coverage — no 5-minute MNQ bar cache exists past 2026-06-26 in this environment.
+- Next: preserve baseline, collect new 5-minute MNQ data prospectively, do not tune rules
+  while waiting.
 
 ---
 
@@ -227,7 +235,7 @@ See `ICC_ICT_Research.md` for full breakdown.
 | VWAP hold isolated fill test (IOC vs market, static vs runner) | VWAP hold verdict | External researcher |
 | 4HR Re-Trigger honest fill replay | Strategy verdict | External researcher + Claude Code (after detector) |
 | Miyagi walk-forward halves + slippage sensitivity | Strategy verdict | External researcher |
-| 3-2-2 walk-forward halves + slippage + calls/puts split | Strategy verdict | External researcher |
+| 3-2-2 sample-size expansion (blocked pending new 5m MNQ data past 2026-06-26) | Strategy verdict | Claude Code |
 | 4HR 1H stop backtest | Rules validation | External researcher |
 | VWAP hold / rejection overlap resolution | Both strategy verdicts | Claude Code |
 | VWAP hold entry definition from signal_engine.py | VWAP rules doc | Claude Code |
@@ -239,9 +247,9 @@ See `ICC_ICT_Research.md` for full breakdown.
 
 1. **4HR Re-Trigger detector** — rules complete, build now
 2. **12HR Miyagi detector** — rules complete, build now
-3. **60M 3-2-2 detector** — rules complete, build now
+3. ~~60M 3-2-2 detector~~ — done, PR #340 (2026-07-26)
 4. **Reconcile each detector against manual samples** — before any backtest
-5. **Honest fill replay for all three** — after reconciliation passes
+5. **Honest fill replay for all three** — after reconciliation passes (3-2-2 done, PR #340)
 6. **Runner exit promotion** — unblocks ORB breakout and VWAP lanes
 7. **VWAP hold isolated fill test** — parallel, external researcher
 8. **VWAP hold entry definition** — Claude Code reads signal_engine.py
