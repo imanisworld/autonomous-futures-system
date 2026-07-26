@@ -34,8 +34,8 @@ Verdict taxonomy:
 
 | Strategy | Rules | Detector | Replay parity | Honest fills | Walk-forward | Slippage | Sample | Verdict |
 |---|---|---|---|---|---|---|---|---|
-| ORB Reclaim (MES) | ✅ | ✅ | ⚠️ trend-gate replay/live population gap, see profile | ✅ isolated ioc_limit (2026-07-26) | ⚠️ mixed by session-isolated lane: London ❌ (own breaker), **NY ✅ both halves positive** | ❌ NY fails 3-4 tick (2026-07-26) | ✅ n=75 all-session canonical / n=79 NY session-isolated (2026-07-26) | **WAIT — see 2026-07-26 audit (amended), downgraded from PAPER PROOF** |
-| ORB Reclaim (MNQ) | ✅ | ✅ | ⚠️ trend-gate replay/live population gap, see profile | ✅ isolated ioc_limit (2026-07-26) | ❌ both session-isolated lanes negative | ❌ fails 1-4 tick (2026-07-26) | ⚠️ n=21 all-session canonical thin / n=75 London / n=6 NY session-isolated (2026-07-26) | **WAIT** |
+| ORB Reclaim (MES) | ✅ | ✅ | ⚠️ trend-gate replay/live population gap, see profile | ✅ isolated ioc_limit (2026-07-26) | ⚠️ mixed by session-isolated lane: London ❌ (own breaker), **NY ✅ both halves positive** | ❌ NY dies at 3-tick (2026-07-26) | ✅ n=75 all-session canonical / n=79 NY session-isolated (2026-07-26) | **Overall WAIT** — MES NY = **PROMISING BUT UNPROVEN**, MES London = **reject as currently defined** (operator, 2026-07-26) |
+| ORB Reclaim (MNQ) | ✅ | ✅ | ⚠️ trend-gate replay/live population gap, see profile | ✅ isolated ioc_limit (2026-07-26) | ❌ both session-isolated lanes negative | ❌ fails 1-4 tick (2026-07-26) | ⚠️ n=21 all-session canonical thin / n=75 London / n=6 NY session-isolated (2026-07-26) | **WAIT** — MNQ London = **reject as currently defined** (operator, 2026-07-26) |
 | 4HR Re-Trigger | ✅ blockers resolved | ❌ | ❌ | Partial — external study | ✅ | Partial | ⚠️ n=32 MNQ | **WAIT — build detector** |
 | 12HR Miyagi | ✅ blockers resolved | ✅ | Partial — standalone research module | ✅ | ✅ both halves (H2 thin) | ✅ 1-4 tick | ⚠️ n=15 MNQ / n=19 MES thin | **PROMISING BUT UNPROVEN** |
 | 60M 3-2-2 First Live | ✅ blockers resolved | ✅ | Partial — standalone research module | ✅ IOC-faithful | ✅ both halves | ✅ 1-4 tick | ⚠️ n=34 MNQ thin | **PROMISING BUT UNPROVEN** |
@@ -62,7 +62,18 @@ Verdict taxonomy:
 ---
 
 ### ORB Reclaim — MES
-**Verdict: WAIT — downgraded from PAPER PROOF, 2026-07-26 isolated honest-fill audit (amended)**
+**Overall verdict: WAIT — downgraded from PAPER PROOF, 2026-07-26 isolated honest-fill audit (amended)**
+
+**Operator classification (2026-07-26, final read on this evidence, PR #352)**:
+- **MES New York: PROMISING BUT UNPROVEN.** 79 fills, +$131.83, PF 1.041, both halves
+  positive, own breaker never tripped — a real, own-account, walk-forward-clean signal, but
+  too fragile to promote: PF 1.041→1.028→0.998 across 1/2/3-tick slippage, i.e. it dies at
+  3-tick. Not sample-inadequate, not walk-forward-failed — fragile to slippage specifically.
+- **MES London: reject as currently defined.** -$365.45, PF 0.705, own dedicated account,
+  own breaker trip — bad on its own terms, not combined-book or cross-session artifact.
+- **Overall MES orb_reclaim remains WAIT** — the New York sub-cell does not clear the bar
+  alone (only PROMISING BUT UNPROVEN, not VALIDATED) and London drags the instrument-level
+  blend negative; the two sessions are NOT to be netted together for a verdict.
 
 - Entry: price reclaims ORB high (LONG only — no SHORT branch exists in Python or Pine)
 - Stop: `max(orb_low - 4t, entry - 40t)`; Target: `entry + 2.5x risk`
@@ -108,6 +119,11 @@ Verdict taxonomy:
 
 ### ORB Reclaim — MNQ
 **Verdict: WAIT**
+
+**Operator classification (2026-07-26, PR #352)**: **MNQ London: reject as currently
+defined** (-$341.50, PF 0.859, both halves independently negative, own dedicated account —
+no credible pocket here the way MES has New York). MNQ New York is too thin (n=6) to
+classify either way. Overall MNQ orb_reclaim remains WAIT.
 
 - Same definition as MES (LONG only)
 - **All-session isolated account**, canonical breaker ON: n=21 resolved, 23.8% WR, PF
