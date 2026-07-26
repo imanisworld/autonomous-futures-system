@@ -225,6 +225,19 @@ class ReplayEngine:
             )
             _carry_resolved = False
             for _future_idx, _fc in enumerate(candles):
+                if _fc.instrument != _carried["instrument"]:
+                    # allow_mixed_instruments=True can interleave a different
+                    # instrument's candles into this same call. resolve_
+                    # position() only ever checks price levels -- it has no
+                    # instrument awareness -- so an unrelated instrument's
+                    # OHLC crossing this bracket's stop/target by numeric
+                    # coincidence must never be allowed to resolve it. Its
+                    # own bars are still correctly blocked from opening a
+                    # NEW position of their own by daily_state.
+                    # has_open_position staying True for this whole call
+                    # (set above); they are simply not a candidate to
+                    # resolve THIS carried bracket.
+                    continue
                 _carry_fill = broker.resolve_position(
                     NextBarOHLC(open=_fc.open, high=_fc.high, low=_fc.low)
                 )
@@ -255,7 +268,39 @@ class ReplayEngine:
                             "resolved_on": journal_date.isoformat(),
                         },
                     )
+                    # Mirror the engine's own NORMAL same-day resolve path
+                    # (main per-candle loop below, `if fill is not None:`)
+                    # so a carried position's resolution has the same risk
+                    # effects on the RESOLUTION day's daily_state that it
+                    # would have had if it had resolved same-day --
+                    # RiskEngine gates new entries on exactly these fields
+                    # (realized_pnl_dollars, account_balance/drawdown,
+                    # consecutive_losses), so leaving them untouched would
+                    # let a later candidate today be evaluated against a
+                    # stale, pre-loss daily state.
+                    #
+                    # Deliberately NOT touched, unlike the normal path:
+                    #   - session_trade_counts: the carried entry's session
+                    #     belongs to the day it OPENED (_carried["session"]),
+                    #     not today -- attributing it to today's session
+                    #     budget would be wrong.
+                    #   - trade_count: the entry itself was already counted
+                    #     against the PRIOR day's DailyState (long gone by
+                    #     the time this call runs). Incrementing TODAY's
+                    #     trade_count would falsely consume today's own
+                    #     max_trades_per_day/bonus capacity for a trade that
+                    #     isn't really "today's" entry (see the trade_count
+                    #     capacity check near the top of this loop).
+                    daily_state.realized_pnl_dollars += float(
+                        _carry_fill.pnl_dollars or 0.0
+                    )
+                    if _carry_fill.result == "LOSS":
+                        daily_state.consecutive_losses += 1
+                        daily_state.last_loss_at = _parse_timestamp(_fc.timestamp)
+                    elif _carry_fill.result in ("WIN", "BREAKEVEN"):
+                        daily_state.consecutive_losses = 0
                     daily_state.has_open_position = False
+                    daily_state.account_balance = broker.get_account_balance()
                     self._carried_resolutions_count += 1
                     skip_to = _future_idx + 1
                     _carry_resolved = True
@@ -277,6 +322,24 @@ class ReplayEngine:
                     "runner_max_favorable": broker.get_runner_max_favorable(),
                 }
                 skip_to = len(candles)
+        elif self._carried_positions:
+            # A carried position exists for an instrument that is entirely
+            # ABSENT from this call's candles (e.g. this call's file is
+            # MES-only while the carried position is MNQ) -- the pre-scan
+            # above found no overlap, so _carried_instrument/_carried are
+            # both None and the block above never ran. PaperBroker/
+            # daily_state model exactly ONE global open position, not one
+            # per instrument (see _carried_positions' docstring in
+            # __init__): that invariant must still hold even though this
+            # call has nothing to resolve it against. Block every decision
+            # this call could otherwise make via the exact same
+            # has_open_position=True gate DecisionEngine/RiskEngine already
+            # use for a same-call carried position (the `if _carried is not
+            # None` branch above), and leave self._carried_positions
+            # completely untouched for a later call -- whatever
+            # chronological date that turns out to be -- to pick up when
+            # that instrument's own candles reappear.
+            daily_state.has_open_position = True
 
         # Keyed by (instrument, timeframe), not a single global pair: run()
         # supports allow_mixed_instruments=True, where candles from different
