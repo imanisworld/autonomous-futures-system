@@ -1,0 +1,6 @@
+{
+  "label": "Group 2: newly added out-of-sample historical evidence",
+  "candidate_count": 0,
+  "note": "OOS EXPANSION BLOCKED BY DATA COVERAGE",
+  "reason": "replay_corpus_v1/MNQ extends 2025-07-24..2026-07-23 (15-minute, full-day bars only). replay_polygon_5m/MNQ (the only 5-minute MNQ cache on this machine) stops at 2026-06-26, identical to replay_polygon/MNQ's 15-minute cache. No 5-minute-granularity MNQ cache exists anywhere in this environment for 2026-06-27..2026-07-23. The 60M 3-2-2 honest-fill replay requires 5-minute bars to recover the causal entry crossing in the 10:00-11:00 ET window and to resolve exits including the exact 15:55-16:00 ET day-only-flatten bar; substituting 15-minute bars would require guessing intra-15-minute path and was explicitly ruled out as inventing optimistic fills / lookahead. No pre-2024-07-01 5-minute MNQ cache exists either. Group 2 is therefore empty by data availability, not by any property of the strategy."
+}
