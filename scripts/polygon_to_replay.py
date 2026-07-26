@@ -149,8 +149,7 @@ def derive_candles(
     ema55_s = ema_series(closes_all, 55)
     ema200_s = ema_series(closes_all, 200)
 
-    # Pine market_condition reconstruction (evidence-only, additive — see
-    # scripts/pine_market_condition.py). Polygon volume is a direct feed
+    # Canonical Pine/runtime market_condition reconstruction. Polygon volume is a direct feed
     # passthrough (int(bar["volume"]), no synthetic-default fallback exists
     # in this converter, unlike csv_to_replay's TradingView-export handling)
     # so it is never treated as synthetic here.
@@ -273,8 +272,11 @@ def derive_candles(
         ema55, ema200 = ema55_s[i], ema200_s[i]
         if ema9 and ema21 and ema55:
             trend_dir, trend_str = classify_trend(bar["close"], ema9, ema21, ema55)
-            market_cond = ("TRENDING" if trend_str in ("STRONG", "MODERATE")
-                           else derive_market_condition(closes))
+            legacy_market_cond = (
+                "TRENDING"
+                if trend_str in ("STRONG", "MODERATE")
+                else derive_market_condition(closes)
+            )
         else:
             continue  # EMA warmup not complete — skip rather than guess trend
 
@@ -366,7 +368,10 @@ def derive_candles(
                 if london_orb_high is not None and london_orb_low is not None
                 else None
             ),
-            "market_condition": market_cond,
+            # Engine-facing replay regime: canonical Pine/runtime formula.
+            "market_condition": recon_condition,
+            "market_condition_status": recon_condition_status,
+            "legacy_market_condition": legacy_market_cond,
             "trend_direction": trend_dir,
             "trend_strength": trend_str,
             "previous_day_high": pdh,
@@ -385,14 +390,9 @@ def derive_candles(
             "two_bars_back_high": prev2_bar["high"] if prev2_bar else None,
             "two_bars_back_low": prev2_bar["low"] if prev2_bar else None,
             **htf_context,
-            # Pine-exact market_condition reconstruction — EVIDENCE ONLY,
-            # additive alongside (does not replace) market_condition/
-            # trend_direction/trend_strength/avg_volume above, which the
-            # engine still reads unchanged. See scripts/pine_market_condition.py.
-            # trend and market_condition carry INDEPENDENT statuses -- ATR is
-            # always self-computed (no proven pre-roll window), and here
-            # EMA is also self-computed, so reconstructed_trend_status is
-            # always RECONSTRUCTED_UNVALIDATED_INIT for Polygon-derived rows.
+            # Backward-compatible diagnostic aliases. market_condition above is
+            # now the same canonical value; the old heuristic is preserved only
+            # as legacy_market_condition.
             "reconstructed_trend_direction": recon_trend,
             "reconstructed_trend_status": recon_trend_status,
             "reconstructed_market_condition": recon_condition,

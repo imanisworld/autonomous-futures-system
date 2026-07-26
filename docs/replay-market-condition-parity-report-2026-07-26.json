@@ -1,0 +1,26 @@
+{
+  "source": "data/replay_corpus_v1",
+  "output": "/private/tmp/replay_corpus_v1_market_condition_parity",
+  "files": 626,
+  "bars_compared": 47066,
+  "comparable_bars": 47066,
+  "initialization_or_missing_data_exclusions": 0,
+  "mismatch_count_before": 33635,
+  "mismatch_count_after": 0,
+  "trending_removed": 27967,
+  "trending_added": 0,
+  "label_distribution_before": {
+    "CHOPPY": 1994,
+    "CONSOLIDATING": 3928,
+    "TRENDING": 41144
+  },
+  "label_distribution_after": {
+    "CHOPPY": 7567,
+    "DEAD": 7791,
+    "RANGE_BOUND": 18531,
+    "TRENDING": 13177
+  },
+  "condition_status_distribution": {
+    "RECONSTRUCTED_UNVALIDATED_INIT": 47066
+  }
+}

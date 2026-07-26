@@ -1,7 +1,7 @@
-"""Converter-level integration tests: reconstructed_* fields are wired
-additively into scripts/csv_to_replay.py and scripts/polygon_to_replay.py
-without disturbing the existing market_condition/trend_direction/
-trend_strength/avg_volume fields the live replay decision path still reads.
+"""Converter-level integration tests for engine-facing Pine regime parity.
+
+The canonical reconstruction must populate ``market_condition``.  The former
+heuristic is provenance-only under ``legacy_market_condition``.
 """
 from __future__ import annotations
 
@@ -17,6 +17,10 @@ from scripts.pine_market_condition import (
     UNAVAILABLE_SYNTHETIC_VOLUME,
 )
 from scripts.polygon_to_replay import derive_candles
+from replay.candle_loader import ReplayCandleLoader
+from replay.replay_engine import ReplayEngine
+from config.settings import load_config
+from strategy.signal_engine import DecisionEngine
 
 _ET = ZoneInfo("America/New_York")
 
@@ -84,25 +88,33 @@ class TestCsvToReplayReconstructionWiring:
         assert last["reconstructed_atr14"] is not None
         assert last["reconstructed_rel_vol"] is not None
 
-    def test_existing_fields_untouched_by_new_wiring(self, tmp_path):
+    def test_engine_facing_condition_matches_canonical_reconstruction(self, tmp_path):
         csv_path = tmp_path / "MNQ_15.csv"
         csv_path.write_text(_mk_csv(25), encoding="utf-8")
         jsonl_path = convert(csv_path, tmp_path / "out")
         import json
         candles = [json.loads(l) for l in jsonl_path.read_text().splitlines() if l.strip()]
 
-        # The existing avg_volume window is the pre-existing (unrelated,
-        # untouched) range(max(0, i-LOOKBACK), i+1) computation -- 21 bars
-        # once warm. Recompute it independently here and confirm the
-        # engine-facing field still matches it exactly (i.e. the new,
-        # correct 20-bar reconstruction did NOT get wired into the old field).
+        # avg_volume remains a separate 21-bar legacy context value. It must
+        # not affect the exact SMA20 used by canonical market_condition.
         volumes = [500] * 25
         for i, c in enumerate(candles):
             window = volumes[max(0, i - LOOKBACK):i + 1]
             expected_avg_vol = max(1, int(sum(window) / len(window)))
             assert c["avg_volume"] == expected_avg_vol
-            assert c["market_condition"] in {"TRENDING", "CHOPPY", "CONSOLIDATING", "UNKNOWN"}
+            assert c["market_condition"] == c["reconstructed_market_condition"]
+            assert c["market_condition_status"] == c["reconstructed_market_condition_status"]
+            assert c["legacy_market_condition"] in {
+                "TRENDING", "CHOPPY", "CONSOLIDATING", "UNKNOWN"
+            }
             assert c["trend_direction"] == "UP"
+
+        # ATR14 is available at index 13, but exact SMA20 volume is not
+        # available until index 19. Unavailable bars must not execute under
+        # their still-present legacy heuristic.
+        assert all(c["market_condition"] is None for c in candles[:19])
+        assert all(c["legacy_market_condition"] is not None for c in candles[:19])
+        assert candles[19]["market_condition"] is not None
 
     def test_missing_volume_column_marks_condition_synthetic_unavailable_not_trend(self, tmp_path):
         csv_path = tmp_path / "MNQ_15.csv"
@@ -119,8 +131,10 @@ class TestCsvToReplayReconstructionWiring:
             # volume must not suppress it.
             assert c["reconstructed_trend_status"] == RECONSTRUCTED
             assert c["reconstructed_trend_direction"] == "UP"
-            # And the EXISTING engine-facing fields must still be populated —
-            # synthetic-volume exclusion is scoped to reconstruction only.
+            # Missing real volume fails closed for engine-facing regime;
+            # the legacy diagnostic remains available but cannot execute.
+            assert c["market_condition"] is None
+            assert c["legacy_market_condition"] is not None
             assert c["trend_direction"] == "UP"
             assert c["avg_volume"] is not None
 
@@ -190,12 +204,46 @@ class TestPolygonToReplayReconstructionWiring:
             assert c["reconstructed_trend_status"] != RECONSTRUCTED
             assert c["reconstructed_market_condition_status"] != RECONSTRUCTED
 
-    def test_existing_fields_untouched(self):
+    def test_engine_facing_condition_uses_canonical_reconstruction(self):
         _, candles = self._candles()
         for c in candles:
             assert c["trend_direction"] == "UP"
-            assert c["market_condition"] == "TRENDING"
+            assert c["market_condition"] == c["reconstructed_market_condition"]
+            assert c["market_condition_status"] == c["reconstructed_market_condition_status"]
+            assert c["legacy_market_condition"] == "TRENDING"
             assert c["avg_volume"] == 100  # constant volume, old 21-bar window == 100 either way
+
+    @pytest.mark.parametrize(
+        ("last_volume", "canonical"),
+        [(1, "DEAD"), (50, "CHOPPY"), (70, "RANGE_BOUND")],
+    )
+    def test_legacy_trending_cannot_leak_into_engine_condition(
+        self, last_volume, canonical
+    ):
+        start = datetime(2026, 6, 9, 2, 0, tzinfo=_ET)
+        bars = self._mk_bars(260, start)
+        bars[-1]["volume"] = last_volume
+
+        last = derive_candles(bars, "MES", 15)[-1]
+
+        assert last["legacy_market_condition"] == "TRENDING"
+        assert last["reconstructed_market_condition"] == canonical
+        assert last["market_condition"] == canonical
+
+    def test_replay_engine_consumes_canonical_not_legacy_condition(self, tmp_path):
+        start = datetime(2026, 6, 9, 2, 0, tzinfo=_ET)
+        bars = self._mk_bars(260, start)
+        bars[-1]["volume"] = 1
+        raw = derive_candles(bars, "MES", 15)[-1]
+        assert raw["legacy_market_condition"] == "TRENDING"
+        assert raw["market_condition"] == "DEAD"
+
+        candle = ReplayCandleLoader._parse(raw)
+        engine = ReplayEngine(config=load_config(), log_dir=str(tmp_path))
+        state = engine._market_state_from_candle(candle)
+
+        assert state.market_condition == "DEAD"
+        assert DecisionEngine(config=engine.config)._score_market_condition(state) == "DEAD"
 
     def test_never_marked_synthetic_volume_real_polygon_feed(self):
         _, candles = self._candles()
