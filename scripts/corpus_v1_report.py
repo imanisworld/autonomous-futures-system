@@ -132,6 +132,14 @@ def _stats(trades: list[dict]) -> dict:
         1 for t in trades if not t["unjoinable_legacy"] and t["result"] is None
     )
     pnl = sum(t["pnl"] or 0.0 for t in trades)
+    gross_win = sum(t["pnl"] or 0.0 for t in trades if t["result"] == "WIN")
+    gross_loss = sum(t["pnl"] or 0.0 for t in trades if t["result"] == "LOSS")  # negative
+    if gross_loss < 0:
+        profit_factor = round(gross_win / abs(gross_loss), 3)
+    elif gross_win > 0:
+        profit_factor = float("inf")
+    else:
+        profit_factor = None
     return {
         "attempts": attempts,
         "wins": wins,
@@ -140,6 +148,9 @@ def _stats(trades: list[dict]) -> dict:
         "open_with_identity": open_with_identity,
         "unjoinable_legacy": unjoinable,
         "win_rate": round(wins / resolved, 4) if resolved else None,
+        "gross_win": round(gross_win, 2),
+        "gross_loss": round(gross_loss, 2),
+        "profit_factor": profit_factor,
         "net_pnl": round(pnl, 2),
         "expectancy": round(pnl / resolved, 2) if resolved else None,
     }
