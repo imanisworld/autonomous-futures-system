@@ -2,6 +2,16 @@
 """
 scripts/strat_212_122_canonical_evidence_report.py
 
+STATUS (2026-07-26, operator REJECT verdict): the results this script
+produces are SUPERSEDED / PARITY-INVALID, not canonical evidence -- see the
+matching status note in scripts/strat_212_122_canonical_evidence_run.py and
+scripts/strat_212_122_canonical_evidence_results.json's own "meta.status"/
+"meta.status_note" fields for the full explanation (market_condition parity
+mismatch between runtime/Pine and replay, plus the still-open cross-day
+position carry-forward defect). Kept, not deleted, for provenance. Do not
+treat any WAIT/PROMISING/etc. classification derived from this output as
+final until a corrected corpus is regenerated and this is rerun.
+
 Aggregates the strat_212/strat_122 canonical evidence run produced by
 scripts/strat_212_122_canonical_evidence_run.py (MNQ + MES,
 2025-07-24 -> 2026-07-23, data/replay_corpus_v1 -- the same post-#320-fix

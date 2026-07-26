@@ -1,5 +1,7 @@
 {
   "meta": {
+    "status": "SUPERSEDED_PARITY_INVALID -- see status_note",
+    "status_note": "2026-07-26 operator REJECT verdict: this corpus's engine-facing market_condition does not match the runtime/Pine formula (a Codex-confirmed shared audit found 33,635/47,066 bars differ, 27,967 replay-TRENDING bars would not be TRENDING under the runtime/Pine formula). strat_212/strat_122 candidates pass through the same global TRENDING-only gate every other strategy uses, so these results may admit trades the live/Pine-faithful system would have rejected as NO_TRADE. Separately, replay_engine.py also silently drops any position still OPEN at a daily-candle-file boundary (proven by PR #333; fix in progress on claude/replay-engine-cross-day-position-carryforward) -- this corpus's 3 MES strat_212 unresolved-at-tail trades are a visible symptom of that. DO NOT treat the numbers below as canonical. Do not delete -- preserved as-is for provenance. Rerun required from a corrected replay corpus after BOTH fixes land: (1) market-condition parity fix (Codex lane), (2) cross-day position carry-forward fix. See memory/project_replay_engine_cross_day_position_carryforward.md and memory/project_strat_212_122_canonical_evidence_lane_b.md (operator-side) for full trace.",
     "corpus": "data/replay_corpus_v1 (post-#320-fix directional, 313 days/instrument)",
     "range": [
       "2025-07-24",

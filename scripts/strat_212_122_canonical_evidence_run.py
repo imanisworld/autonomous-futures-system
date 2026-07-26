@@ -2,6 +2,20 @@
 """
 scripts/strat_212_122_canonical_evidence_run.py
 
+STATUS (2026-07-26, operator REJECT verdict): the output of this script is
+SUPERSEDED / PARITY-INVALID, not canonical evidence. A shared audit found
+data/replay_corpus_v1's engine-facing market_condition does not match the
+runtime/Pine formula (33,635/47,066 bars differ; 27,967 replay-TRENDING bars
+would not be TRENDING under Pine) -- the global TRENDING-only gate every
+strategy (including strat_212/strat_122) passes through can therefore admit
+trades the live system would reject. Separately, replay_engine.py silently
+drops any position still OPEN at a daily-candle-file boundary (PR #333;
+fix in progress on claude/replay-engine-cross-day-position-carryforward).
+Do not rerun conclusions from this script's output until BOTH fixes land and
+a corrected corpus is regenerated. See
+memory/project_replay_engine_cross_day_position_carryforward.md. Kept,
+not deleted, for provenance.
+
 Fresh canonical replay evidence for strat_212 (2-1-2) / strat_122 (1-2-2)
 against the SAME post-#320-fix, directional, 313-day Polygon corpus already
 used for the Corpus v1 clean baseline (data/replay_corpus_v1/{MNQ,MES},
