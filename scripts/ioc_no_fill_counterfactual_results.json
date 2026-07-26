@@ -1,0 +1,333 @@
+{
+  "meta": {
+    "main_sha": "bc03eaf015626b439333cec77f6afb3fc6762fbd",
+    "source_results_sha": "69ec77fd33834a437fec77a51249fa1d66030a16",
+    "source_raw": "scripts/corrected_ioc_corpus_raw_trades.jsonl",
+    "source_raw_sha256": "b8b37c04b979575ed2aa250fab12ea73c351737bd3a847ebb153618319b6cd72",
+    "corpus": "/Users/djb.a.e/MAINVSCODE/autonomous-futures-system/data/replay_corpus_v1_market_condition_fixed",
+    "corpus_files": 626,
+    "corpus_tree_sha256": "4ab5812659910235e8a26e7417f851e0a403855ff75183322e99b0b36970d3d4",
+    "logs": "/private/tmp/corrected_ioc_corpus_logs",
+    "entry_model": "decision_close_market_plus_1_tick_adverse",
+    "commission_round_trip": 1.48,
+    "bootstrap_samples": 20000,
+    "bootstrap_seed": 338342,
+    "breaker_primary": "on; exact cohort selected by PR #346 frozen run",
+    "breaker_off_diagnostic_run": false
+  },
+  "verdict": "MIXED / NEAR BREAKEVEN AFTER COSTS \u2014 WAIT",
+  "decision_implication": "There is no proof of recoverable edge and no basis to change IOC.",
+  "overall": {
+    "attempts": 68,
+    "resolved": 68,
+    "open": 0,
+    "wins": 45,
+    "losses": 23,
+    "breakeven": 0,
+    "win_rate": 0.661765,
+    "net_before_commission": 219.1,
+    "commission": 100.64,
+    "net_after_commission": 118.46,
+    "expectancy_after_commission": 1.7421,
+    "expectancy_95pct_bootstrap_ci": [
+      -13.1024,
+      16.2606
+    ],
+    "profit_factor_after_commission": 1.069114,
+    "max_drawdown_after_commission": 633.11,
+    "largest_win_after_commission": 96.02,
+    "largest_loss_after_commission": -138.98
+  },
+  "breakdowns": {
+    "strategy": {
+      "orb_breakout": {
+        "attempts": 17,
+        "resolved": 17,
+        "open": 0,
+        "wins": 12,
+        "losses": 5,
+        "breakeven": 0,
+        "win_rate": 0.705882,
+        "net_before_commission": -198.0,
+        "commission": 25.16,
+        "net_after_commission": -223.16,
+        "expectancy_after_commission": -13.1271,
+        "expectancy_95pct_bootstrap_ci": [
+          -31.9212,
+          3.6965
+        ],
+        "profit_factor_after_commission": 0.349198,
+        "max_drawdown_after_commission": 242.7,
+        "largest_win_after_commission": 26.02,
+        "largest_loss_after_commission": -81.48
+      },
+      "orb_reclaim": {
+        "attempts": 45,
+        "resolved": 45,
+        "open": 0,
+        "wins": 29,
+        "losses": 16,
+        "breakeven": 0,
+        "win_rate": 0.644444,
+        "net_before_commission": 416.62,
+        "commission": 66.6,
+        "net_after_commission": 350.02,
+        "expectancy_after_commission": 7.7782,
+        "expectancy_95pct_bootstrap_ci": [
+          -12.9829,
+          28.1727
+        ],
+        "profit_factor_after_commission": 1.267665,
+        "max_drawdown_after_commission": 487.07,
+        "largest_win_after_commission": 96.02,
+        "largest_loss_after_commission": -138.98
+      },
+      "orb_rejection": {
+        "attempts": 1,
+        "resolved": 1,
+        "open": 0,
+        "wins": 0,
+        "losses": 1,
+        "breakeven": 0,
+        "win_rate": 0.0,
+        "net_before_commission": -26.0,
+        "commission": 1.48,
+        "net_after_commission": -27.48,
+        "expectancy_after_commission": -27.48,
+        "expectancy_95pct_bootstrap_ci": [
+          -27.48,
+          -27.48
+        ],
+        "profit_factor_after_commission": 0.0,
+        "max_drawdown_after_commission": 27.48,
+        "largest_win_after_commission": null,
+        "largest_loss_after_commission": -27.48
+      },
+      "vwap_reclaim": {
+        "attempts": 5,
+        "resolved": 5,
+        "open": 0,
+        "wins": 4,
+        "losses": 1,
+        "breakeven": 0,
+        "win_rate": 0.8,
+        "net_before_commission": 26.48,
+        "commission": 7.4,
+        "net_after_commission": 19.08,
+        "expectancy_after_commission": 3.816,
+        "expectancy_95pct_bootstrap_ci": [
+          -17.248,
+          19.64
+        ],
+        "profit_factor_after_commission": 1.53118,
+        "max_drawdown_after_commission": 35.92,
+        "largest_win_after_commission": 25.56,
+        "largest_loss_after_commission": -35.92
+      }
+    },
+    "instrument": {
+      "MES": {
+        "attempts": 29,
+        "resolved": 29,
+        "open": 0,
+        "wins": 18,
+        "losses": 11,
+        "breakeven": 0,
+        "win_rate": 0.62069,
+        "net_before_commission": 153.12,
+        "commission": 42.92,
+        "net_after_commission": 110.2,
+        "expectancy_after_commission": 3.8,
+        "expectancy_95pct_bootstrap_ci": [
+          -23.959,
+          30.6317
+        ],
+        "profit_factor_after_commission": 1.114341,
+        "max_drawdown_after_commission": 487.07,
+        "largest_win_after_commission": 96.02,
+        "largest_loss_after_commission": -138.98
+      },
+      "MNQ": {
+        "attempts": 39,
+        "resolved": 39,
+        "open": 0,
+        "wins": 27,
+        "losses": 12,
+        "breakeven": 0,
+        "win_rate": 0.692308,
+        "net_before_commission": 65.98,
+        "commission": 57.72,
+        "net_after_commission": 8.26,
+        "expectancy_after_commission": 0.2118,
+        "expectancy_95pct_bootstrap_ci": [
+          -14.7733,
+          15.0697
+        ],
+        "profit_factor_after_commission": 1.01101,
+        "max_drawdown_after_commission": 281.34,
+        "largest_win_after_commission": 71.52,
+        "largest_loss_after_commission": -90.48
+      }
+    },
+    "session": {
+      "asian": {
+        "attempts": 4,
+        "resolved": 4,
+        "open": 0,
+        "wins": 4,
+        "losses": 0,
+        "breakeven": 0,
+        "win_rate": 1.0,
+        "net_before_commission": 60.38,
+        "commission": 5.92,
+        "net_after_commission": 54.46,
+        "expectancy_after_commission": 13.615,
+        "expectancy_95pct_bootstrap_ci": [
+          5.2,
+          22.03
+        ],
+        "profit_factor_after_commission": "Infinity",
+        "max_drawdown_after_commission": 0.0,
+        "largest_win_after_commission": 25.02,
+        "largest_loss_after_commission": null
+      },
+      "london": {
+        "attempts": 25,
+        "resolved": 25,
+        "open": 0,
+        "wins": 16,
+        "losses": 9,
+        "breakeven": 0,
+        "win_rate": 0.64,
+        "net_before_commission": 181.18,
+        "commission": 37.0,
+        "net_after_commission": 144.18,
+        "expectancy_after_commission": 5.7672,
+        "expectancy_95pct_bootstrap_ci": [
+          -17.2028,
+          28.462
+        ],
+        "profit_factor_after_commission": 1.256088,
+        "max_drawdown_after_commission": 183.41,
+        "largest_win_after_commission": 96.02,
+        "largest_loss_after_commission": -83.98
+      },
+      "new_york": {
+        "attempts": 39,
+        "resolved": 39,
+        "open": 0,
+        "wins": 25,
+        "losses": 14,
+        "breakeven": 0,
+        "win_rate": 0.641026,
+        "net_before_commission": -22.46,
+        "commission": 57.72,
+        "net_after_commission": -80.18,
+        "expectancy_after_commission": -2.0559,
+        "expectancy_95pct_bootstrap_ci": [
+          -23.0377,
+          18.5038
+        ],
+        "profit_factor_after_commission": 0.930337,
+        "max_drawdown_after_commission": 633.18,
+        "largest_win_after_commission": 93.52,
+        "largest_loss_after_commission": -138.98
+      }
+    },
+    "direction": {
+      "LONG": {
+        "attempts": 61,
+        "resolved": 61,
+        "open": 0,
+        "wins": 40,
+        "losses": 21,
+        "breakeven": 0,
+        "win_rate": 0.655738,
+        "net_before_commission": 261.1,
+        "commission": 90.28,
+        "net_after_commission": 170.82,
+        "expectancy_after_commission": 2.8003,
+        "expectancy_95pct_bootstrap_ci": [
+          -13.2866,
+          18.5146
+        ],
+        "profit_factor_after_commission": 1.105443,
+        "max_drawdown_after_commission": 547.21,
+        "largest_win_after_commission": 96.02,
+        "largest_loss_after_commission": -138.98
+      },
+      "SHORT": {
+        "attempts": 7,
+        "resolved": 7,
+        "open": 0,
+        "wins": 5,
+        "losses": 2,
+        "breakeven": 0,
+        "win_rate": 0.714286,
+        "net_before_commission": -42.0,
+        "commission": 10.36,
+        "net_after_commission": -52.36,
+        "expectancy_after_commission": -7.48,
+        "expectancy_95pct_bootstrap_ci": [
+          -29.7657,
+          10.1629
+        ],
+        "profit_factor_after_commission": 0.442742,
+        "max_drawdown_after_commission": 90.42,
+        "largest_win_after_commission": 18.52,
+        "largest_loss_after_commission": -66.48
+      }
+    }
+  },
+  "selection_diagnostic": {
+    "realized_ioc_fills": {
+      "attempts": 97,
+      "resolved": 97,
+      "open": 0,
+      "wins": 26,
+      "losses": 71,
+      "breakeven": 0,
+      "win_rate": 0.268041,
+      "net_before_commission": -658.72,
+      "commission": 143.56,
+      "net_after_commission": -802.28,
+      "expectancy_after_commission": -8.2709,
+      "expectancy_95pct_bootstrap_ci": [
+        -20.8426,
+        4.6278
+      ],
+      "profit_factor_after_commission": 0.752958,
+      "max_drawdown_after_commission": 1073.61,
+      "largest_win_after_commission": 123.52,
+      "largest_loss_after_commission": -72.73
+    },
+    "mechanical_union_noncausal": {
+      "attempts": 165,
+      "resolved": 165,
+      "open": 0,
+      "wins": 71,
+      "losses": 94,
+      "breakeven": 0,
+      "win_rate": 0.430303,
+      "net_before_commission": -439.62,
+      "commission": 244.2,
+      "net_after_commission": -683.82,
+      "expectancy_after_commission": -4.1444,
+      "expectancy_95pct_bootstrap_ci": [
+        -13.7759,
+        5.5775
+      ],
+      "profit_factor_after_commission": 0.862176,
+      "max_drawdown_after_commission": 1355.83,
+      "largest_win_after_commission": 123.52,
+      "largest_loss_after_commission": -138.98
+    }
+  },
+  "audit": {
+    "cohort_count": 68,
+    "unique_identity_count": 68,
+    "decision_candles_found": 68,
+    "valid_brackets": 68,
+    "pessimistic_both_hit_count": 1
+  }
+}
