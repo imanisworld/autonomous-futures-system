@@ -2,9 +2,10 @@
 """
 scripts/strat_212_122_canonical_evidence_run.py
 
-STATUS (2026-07-26, updated after PR #338 merged main@0057bc23): the
-market-condition parity blocker is FIXED and incorporated below -- this
-script now reads data/replay_corpus_v1_market_condition_fixed, the output of
+STATUS (2026-07-26, updated after PR #339 merged main@4684947): BOTH
+shared-engine blockers are now fixed and incorporated. Market-condition
+parity (PR #338, merged main@0057bc23) -- this script reads
+data/replay_corpus_v1_market_condition_fixed, the output of
 scripts/rematerialize_market_condition_corpus.py run against
 data/replay_corpus_v1 (offline, no API pull needed --
 reconstructed_market_condition was already present in every row per PR
@@ -14,19 +15,26 @@ reconstructed_market_condition was already present in every row per PR
         --output data/replay_corpus_v1_market_condition_fixed \
         --report /tmp/rematerialize_report.json
 
-A SEPARATE shared-engine defect is still OUTSTANDING and NOT yet fixed:
-replay_engine.py silently drops any position still OPEN at a daily-
-candle-file boundary (proven by PR #333; fix dispatched on
-claude/replay-engine-cross-day-position-carryforward, not yet merged as of
-this note). Results from this corrected-corpus run are therefore still not
-fully final -- they may still mishandle any strat_212/strat_122 position
-that legitimately spans a day boundary (neither strategy is in
-execution/day_only_exit.py's DAY_ONLY_STRATEGIES). See
-memory/project_replay_engine_cross_day_position_carryforward.md. The
-original data/replay_corpus_v1-based run (pre-#338, market-condition-tainted)
-is preserved, not deleted, as
-scripts/strat_212_122_canonical_evidence_results_pre_pr338_superseded.json
-and the matching _raw_trades_pre_pr338_superseded.jsonl, for provenance.
+Cross-day position carry-forward (PR #339, merged main@4684947) -- the
+engine (replay/replay_engine.py) now restores+resolves any position still
+OPEN at a daily-candle-file boundary against the next chronological day's
+candles via self._carried_positions, with correct cross-day risk-state
+propagation (realized P&L / account balance / consecutive-loss state) and
+instrument isolation under mixed-instrument runs. Root cause was PR #333;
+see memory/project_replay_engine_cross_day_position_carryforward.md for the
+full history including two additional holes found on first review and fixed
+before merge. This script's manual per-day `.run()` loop (not
+run_many/run_manifest) is exactly the call pattern the carry-forward fix was
+required to support at the engine-instance level.
+
+This is the FINAL, non-provisional canonical evidence run for
+strat_212/strat_122. Prior runs preserved, not deleted, for provenance:
+pre-#338 (market-condition-tainted) as
+scripts/strat_212_122_canonical_evidence_results_pre_pr338_superseded.json /
+_raw_trades_pre_pr338_superseded.jsonl; post-#338/pre-#339
+(PARTIALLY_CORRECTED) as
+scripts/strat_212_122_canonical_evidence_results_pre_pr339_partially_corrected.json
+/ _raw_trades_pre_pr339_partially_corrected.jsonl.
 
 Fresh canonical replay evidence for strat_212 (2-1-2) / strat_122 (1-2-2)
 against the SAME post-#320-fix, directional, 313-day Polygon corpus already

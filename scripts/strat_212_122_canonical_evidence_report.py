@@ -2,22 +2,22 @@
 """
 scripts/strat_212_122_canonical_evidence_report.py
 
-STATUS (2026-07-26, updated after PR #338 merged main@0057bc23): the
-market-condition parity blocker is FIXED and incorporated -- this report now
-aggregates the rerun against data/replay_corpus_v1_market_condition_fixed
-(see scripts/strat_212_122_canonical_evidence_run.py's own status note for
-the exact rematerialization command). The PRE-#338 run (market-condition-
-tainted) is preserved, not deleted, as
-scripts/strat_212_122_canonical_evidence_results_pre_pr338_superseded.json /
-_raw_trades_pre_pr338_superseded.jsonl.
+STATUS (2026-07-26, updated after PR #339 merged main@4684947): BOTH shared-
+engine blockers are now fixed and incorporated. PR #338 (market-condition
+parity, merged main@0057bc23) and PR #339 (cross-day position carry-forward,
+merged main@4684947) both land in this run's corpus/engine. This is the
+FINAL, non-provisional rerun of the strat_212/strat_122 canonical evidence --
+`open_with_identity` counts below (if any) should now reflect only genuine
+corpus-tail positions (no more day-file candles left to resolve against),
+not day-boundary orphans -- verify this explicitly rather than assuming it.
 
-A SEPARATE shared-engine defect remains OUTSTANDING and NOT yet fixed:
-replay_engine.py silently drops any position still OPEN at a daily-
-candle-file boundary (proven by PR #333; fix dispatched, not yet merged as
-of this note -- see memory/project_replay_engine_cross_day_position_carryforward.md).
-This report's `open_with_identity` counts are the visible symptom. Do not
-treat the classification below as fully final until that fix also lands and
-this is rerun once more.
+Prior superseded runs preserved, not deleted, for provenance:
+- Pre-#338 (market-condition-tainted):
+  scripts/strat_212_122_canonical_evidence_results_pre_pr338_superseded.json
+  / _raw_trades_pre_pr338_superseded.jsonl
+- Post-#338, pre-#339 (cross-day carry-forward still broken), PARTIALLY_CORRECTED:
+  scripts/strat_212_122_canonical_evidence_results_pre_pr339_partially_corrected.json
+  / _raw_trades_pre_pr339_partially_corrected.jsonl
 
 Aggregates the strat_212/strat_122 canonical evidence run produced by
 scripts/strat_212_122_canonical_evidence_run.py (MNQ + MES,
@@ -253,17 +253,19 @@ def main() -> int:
 
     results: dict = {
         "meta": {
-            "status": "PARTIALLY_CORRECTED -- market-condition parity fixed (PR #338), "
-                       "cross-day position carry-forward STILL OUTSTANDING (PR #333 root "
-                       "cause, fix not yet merged as of this run)",
+            "status": "FINAL -- both shared-engine blockers fixed and incorporated: "
+                       "market-condition parity (PR #338, main@0057bc23) and cross-day "
+                       "position carry-forward (PR #339, main@4684947)",
             "status_note": "This run reads data/replay_corpus_v1_market_condition_fixed "
                      "(post-#338, market-condition matches runtime/Pine per "
-                     "scripts/rematerialize_market_condition_corpus.py). It does NOT yet "
-                     "reflect the cross-day-boundary position carry-forward fix -- "
-                     "open_with_identity counts below are that defect's visible symptom. "
-                     "Do not treat this classification as fully final until that fix also "
-                     "lands and this is rerun once more. The pre-#338 run is preserved as "
-                     "strat_212_122_canonical_evidence_results_pre_pr338_superseded.json.",
+                     "scripts/rematerialize_market_condition_corpus.py) against the "
+                     "post-#339 replay engine (self._carried_positions resolves any "
+                     "position still open at a daily-candle-file boundary against the "
+                     "next chronological day's candles, with correct cross-day risk-state "
+                     "propagation and instrument isolation). Prior runs preserved: pre-#338 "
+                     "as strat_212_122_canonical_evidence_results_pre_pr338_superseded.json, "
+                     "post-#338/pre-#339 as "
+                     "strat_212_122_canonical_evidence_results_pre_pr339_partially_corrected.json.",
             "corpus": "data/replay_corpus_v1_market_condition_fixed (post-#320-fix directional, "
                       "post-#338 market-condition-parity-corrected, 313 days/instrument)",
             "range": [FULL_START, FULL_END],
