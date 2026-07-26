@@ -1,6 +1,9 @@
 # 60M 3-2-2 FIRST LIVE STRATEGY
 **Complete Trading Rules — MNQ Futures Only**
-*Validated: MNQ 31 strict entries | +$66.50 expectancy | Opposite 9AM boundary stop*
+*Status: PROMISING BUT UNPROVEN — MNQ 34 candidates / 20 resolved / net $1,595.70 / PF 10.36
+(coded detector + honest-fill replay, PR #340, 2026-07-26) | Opposite 9AM boundary stop.
+Supersedes the earlier manual-study figure (n=31, +$66.50/trade, labeled VALIDATED) — see
+§7.*
 
 ---
 
@@ -120,16 +123,35 @@ unchanged and retain authority through the final bar.
 
 ---
 
-## 7. VALIDATED PERFORMANCE
+## 7. EVIDENCE STATUS
 
-| Instrument | n | Expectancy | Stop Rule | Status |
-|---|---|---|---|---|
-| MNQ | 31 | +$66.50/trade | Opp. 9AM boundary | VALIDATED |
-| MES | marginal | +$7.08/trade | — | DO NOT TRADE |
-| QQQ | thin | Unconfirmed | — | DO NOT TRADE |
-| IWM | negative | −$0.20/share | — | REJECTED |
+**Classification: PROMISING BUT UNPROVEN** — not VALIDATED. See
+[`60M_322_EXPANDED_EVIDENCE_2026-07-26.md`](60M_322_EXPANDED_EVIDENCE_2026-07-26.md) for
+the full study (PR #340, 2026-07-26): coded detector (`research/detector_322_first_live.py`)
++ IOC-faithful honest-fill replay, current `EOD_BAR_MISSING`/`DAY_ONLY_FLATTEN` exit
+contract applied.
 
-> ⚠️ n=31 is encouraging but not large. Trade 1 MNQ contract throughout the testing phase.
+| Instrument | Candidates | Fills | Resolved | W-L | Net | PF | Status |
+|---|---|---|---|---|---|---|---|
+| MNQ | 34 | 21 | 20 (1 `EOD_BAR_MISSING`) | 18W-2L | $1,595.70 | 10.36 | PROMISING BUT UNPROVEN |
+| MES | marginal | — | — | — | +$7.08/trade (legacy manual study) | — | DO NOT TRADE |
+| QQQ | thin | — | — | — | Unconfirmed (legacy manual study) | — | DO NOT TRADE |
+| IWM | negative | — | — | — | −$0.20/share (legacy manual study) | — | REJECTED |
+
+Positive both halves and both directions, 6/8 quarters, all 3 years; survives 1-4 tick
+adverse slippage (PF stays >9.9). Zero gap-opens in the sample.
+
+> ⚠️ Sample still thin (n=34). Top-5 winners = 54% of net P&L (concentration flag). LONG
+> side is 11-for-11 undefeated (small-sample-luck flag). **OOS expansion is blocked by data
+> coverage** — no 5-minute MNQ bar cache exists past 2026-06-26 in this environment; do not
+> substitute 15-minute data to manufacture a larger sample. Trade 1 MNQ contract throughout
+> the testing phase. Preserve this baseline and collect new 5-minute data prospectively — do
+> not tune these rules while waiting.
+>
+> The MNQ n=31/+$66.50/VALIDATED figure previously shown here predates the coded detector
+> and the current day-only exit contract; it is provenance-only, not current evidence.
+> MES/QQQ/IWM figures above are unchanged legacy manual-study numbers — this study was MNQ
+> only, per its own scope.
 
 ---
 
