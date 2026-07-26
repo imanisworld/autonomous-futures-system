@@ -879,3 +879,484 @@ def test_candle_loader_preserves_enriched_fields(tmp_path):
     assert loaded.icc_indication_type == "demand"
     assert loaded.demand_top == 19510
     assert loaded.demand_bottom == 19490
+
+
+# ---------------------------------------------------------------------------
+# Cross-day position carry-forward (day-boundary orphans).
+#
+# Root cause (PR #333 / commit f9eb7a2's writeup, scripts/corpus_v1_orphan_
+# resolution.py): ReplayEngine.run() builds a brand-new PaperBroker on every
+# call, with no memory of the previous call's still-open position. A
+# strategy with no DAY_ONLY_STRATEGIES rule (e.g. orb_reclaim) can still be
+# legitimately open when a day's candle file runs out; the local `broker`
+# then goes out of scope and the position — and its eventual WIN/LOSS — is
+# silently lost. No OUTCOME row is ever written. PR #333 proved the fix
+# mechanism (restore_position + resolve_position against real subsequent-day
+# candles) via a one-off analysis script; this suite covers the engine fix
+# itself, which must apply to ANY caller of run() (run_many/run_manifest, or
+# an evidence script's own manual per-day loop).
+# ---------------------------------------------------------------------------
+
+def _orb_reclaim_trigger_candle(timestamp: str) -> dict:
+    """The exact base candle from data/replay/sample_day_mnq.jsonl's bar 0 —
+    already proven by test_replay_engine_runs_sample_day to fire an approved
+    orb_reclaim LONG: orb_high=19498.0, orb_low=19462.0, tick=0.25,
+    MAX_ORB_STOP_TICKS[MNQ]=80 -> entry=19498.5, stop=19478.5,
+    target=19548.5 (2.5R), per strategy/signal_engine.py::_try_orb_reclaim."""
+    base = json.loads(Path("data/replay/sample_day_mnq.jsonl").read_text().splitlines()[0])
+    base["timestamp"] = timestamp
+    return base
+
+
+def _flat_follow_up_candle(
+    timestamp: str, *, high: float, low: float, close: float | None = None
+) -> dict:
+    """A quiet follow-up candle carrying the same base MNQ/new_york fields as
+    the trigger (so it still parses as valid data) but with overwritten OHLC
+    and a market_condition/orb_status that cannot fire a brand-new decision
+    on its own — isolates assertions to the carried-forward resolution."""
+    base = json.loads(Path("data/replay/sample_day_mnq.jsonl").read_text().splitlines()[0])
+    base["timestamp"] = timestamp
+    base["open"] = high
+    base["high"] = high
+    base["low"] = low
+    base["close"] = close if close is not None else high
+    base["market_condition"] = "CHOPPY"
+    base["orb_status"] = "inside"
+    return base
+
+
+ORB_RECLAIM_ENTRY = 19498.5
+ORB_RECLAIM_STOP = 19478.5
+ORB_RECLAIM_TARGET = 19548.5
+
+
+def _read_journal_rows(path: Path) -> list[dict]:
+    """A day whose only candle(s) are entirely consumed by cross-day
+    carry-forward resolution (see run()'s pre-scan) never gets an
+    independent decision journaled for it — the resolving bar's OUTCOME is
+    written onto the ORIGINAL day's file, not this one — so JournalLogger
+    never lazily creates this day's file at all (journal/journal_logger.py
+    only opens it on first append). That's pre-existing behavior (a
+    same-day resolving bar during the normal mid-day loop is treated
+    identically), not something this fix changes, so read helpers here
+    treat a missing file the same as an empty one."""
+    if not path.exists():
+        return []
+    return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+
+
+def test_position_open_at_day_boundary_carries_forward_and_resolves(config, tmp_path):
+    """THE FIX: day 1 is a single candle — the orb_reclaim trigger bar — with
+    no subsequent bar in the same file to resolve it
+    (`for future_idx in range(idx + 1, len(candles))` is empty when
+    len(candles) == 1), so the position is still open when day 1's file runs
+    out. Day 2 (three calendar days later — 2026-05-25 — proving no
+    day-adjacency assumption is baked in) supplies a bar whose high (19600)
+    clears the target (19548.5). The engine must restore the exact position
+    into day 2's broker and resolve it causally against day 2's own candles,
+    writing a real OUTCOME row into DAY 1's journal file (not day 2's) with
+    the SAME paper_order_id already on the TRADE row, so JournalReader's
+    exact-identity join (#327/#332) still pairs them across the file
+    boundary. Before the fix, this scenario loses the position entirely (see
+    the old defect-reproduction assertions in git history of this file /
+    PR #333's writeup) — no OUTCOME row, no PnL, and a false-flagged
+    open_trades_after_replay even though day 2 supplied data that resolves
+    it."""
+    day1 = tmp_path / "day1.jsonl"
+    day1.write_text(json.dumps(_orb_reclaim_trigger_candle("2026-05-22T14:30:00+00:00")) + "\n")
+
+    day2 = tmp_path / "day2.jsonl"
+    day2.write_text(
+        json.dumps(
+            _flat_follow_up_candle("2026-05-25T14:30:00+00:00", high=19600.0, low=19490.0)
+        )
+        + "\n"
+    )
+
+    engine = ReplayEngine(config=config, log_dir=str(tmp_path / "logs"))
+    report = engine.run_many([day1, day2])
+
+    day1_journal = tmp_path / "logs" / "journal_2026-05-22.jsonl"
+    rows = [json.loads(line) for line in day1_journal.read_text().splitlines() if line.strip()]
+    trade_rows = [r for r in rows if r.get("decision") == "TRADE"]
+    outcome_rows = [r for r in rows if r.get("type") == "OUTCOME"]
+    assert len(trade_rows) == 1
+    assert len(outcome_rows) == 1
+
+    trade_order_id = trade_rows[0].get("paper_order_id")
+    outcome = outcome_rows[0]["outcome"]
+    assert trade_order_id  # real identity minted on the TRADE row
+    assert outcome["paper_order_id"] == trade_order_id
+    assert outcome["result"] == "WIN"
+    assert outcome["entry_price"] == ORB_RECLAIM_ENTRY
+    assert outcome["exit_price"] == ORB_RECLAIM_TARGET
+    assert outcome["pnl_dollars"] > 0
+
+    # day 2's own journal must NOT gain a duplicate/foreign trade or outcome
+    # row for this position — it belongs to day 1's file. (day 2's file may
+    # not even exist: its only candle was entirely consumed resolving the
+    # carried position, so nothing was ever independently journaled for it —
+    # see _read_journal_rows.)
+    day2_rows = _read_journal_rows(tmp_path / "logs" / "journal_2026-05-25.jsonl")
+    assert not any(r.get("type") == "OUTCOME" for r in day2_rows)
+    assert not any(r.get("decision") == "TRADE" for r in day2_rows)
+
+    # No more false positives: the position resolved, so the aggregate must
+    # not flag it as still open.
+    assert report.open_trades == 0
+    assert report.survival_passed is True
+    assert "open_trades_after_replay" not in report.failure_reasons
+
+
+def test_position_open_at_day_boundary_resolves_after_multiple_days(config, tmp_path):
+    """The carry-forward must not assume same-file-format/adjacency and must
+    keep waiting across MULTIPLE subsequent run() calls, not just one. Day 2
+    and day 3 both supply bars that stay inside [stop, target] — the position
+    remains open after each — and only day 4 finally clears the target."""
+    day1 = tmp_path / "day1.jsonl"
+    day1.write_text(json.dumps(_orb_reclaim_trigger_candle("2026-05-22T14:30:00+00:00")) + "\n")
+
+    day2 = tmp_path / "day2.jsonl"
+    day2.write_text(
+        json.dumps(
+            _flat_follow_up_candle("2026-05-23T14:30:00+00:00", high=19510.0, low=19490.0)
+        )
+        + "\n"
+    )
+    day3 = tmp_path / "day3.jsonl"
+    day3.write_text(
+        json.dumps(
+            _flat_follow_up_candle("2026-05-24T14:30:00+00:00", high=19515.0, low=19485.0)
+        )
+        + "\n"
+    )
+    day4 = tmp_path / "day4.jsonl"
+    day4.write_text(
+        json.dumps(
+            _flat_follow_up_candle("2026-05-25T14:30:00+00:00", high=19600.0, low=19490.0)
+        )
+        + "\n"
+    )
+
+    engine = ReplayEngine(config=config, log_dir=str(tmp_path / "logs"))
+    report = engine.run_many([day1, day2, day3, day4])
+
+    day1_journal = tmp_path / "logs" / "journal_2026-05-22.jsonl"
+    rows = [json.loads(line) for line in day1_journal.read_text().splitlines() if line.strip()]
+    outcome_rows = [r for r in rows if r.get("type") == "OUTCOME"]
+    assert len(outcome_rows) == 1
+    assert outcome_rows[0]["outcome"]["result"] == "WIN"
+    assert outcome_rows[0]["outcome"]["exit_price"] == ORB_RECLAIM_TARGET
+
+    # Days 2 and 3 must show no outcome at all (still waiting) and no new
+    # decision of their own (their own files may not even exist — see
+    # _read_journal_rows).
+    for day in ("2026-05-23", "2026-05-24"):
+        day_rows = _read_journal_rows(tmp_path / "logs" / f"journal_{day}.jsonl")
+        assert not any(r.get("type") == "OUTCOME" for r in day_rows)
+        assert not any(r.get("decision") == "TRADE" for r in day_rows)
+
+    assert report.open_trades == 0
+    assert report.survival_passed is True
+
+
+def test_position_still_open_at_true_corpus_tail_is_still_flagged(config, tmp_path):
+    """The carry-forward mechanism must not paper over a position that is
+    GENUINELY still open when the caller has no more data to supply — this
+    is the same case Corpus v1 itself still has a few of after PR #333's
+    manual fix ("open_with_identity" trades near the tail of a corpus's date
+    range). Day 2's only bar stays inside [stop, target] (never resolves),
+    and there is no day 3 — the aggregate must still flag
+    open_trades_after_replay, and no OUTCOME row must ever be fabricated."""
+    day1 = tmp_path / "day1.jsonl"
+    day1.write_text(json.dumps(_orb_reclaim_trigger_candle("2026-05-22T14:30:00+00:00")) + "\n")
+
+    day2 = tmp_path / "day2.jsonl"
+    day2.write_text(
+        json.dumps(
+            _flat_follow_up_candle("2026-05-23T14:30:00+00:00", high=19510.0, low=19490.0)
+        )
+        + "\n"
+    )
+
+    engine = ReplayEngine(config=config, log_dir=str(tmp_path / "logs"))
+    report = engine.run_many([day1, day2])
+
+    day1_journal = tmp_path / "logs" / "journal_2026-05-22.jsonl"
+    rows = [json.loads(line) for line in day1_journal.read_text().splitlines() if line.strip()]
+    assert not any(r.get("type") == "OUTCOME" for r in rows)
+
+    assert report.open_trades == 1
+    assert report.survival_passed is False
+    assert "open_trades_after_replay" in report.failure_reasons
+
+
+def test_position_open_at_day_boundary_carries_forward_across_bare_run_calls(config, tmp_path):
+    """Several evidence scripts (scripts/run_replay_batch.py,
+    scripts/strat_212_122_canonical_evidence_run.py) construct ONE
+    ReplayEngine and call .run(file, review_date=...) directly in their own
+    per-day loop — never touching run_many/run_manifest. The carry-forward
+    state must live at a level shared by every caller (inside run() itself),
+    not bolted onto run_many/run_manifest only."""
+    day1 = tmp_path / "day1.jsonl"
+    day1.write_text(json.dumps(_orb_reclaim_trigger_candle("2026-05-22T14:30:00+00:00")) + "\n")
+
+    day2 = tmp_path / "day2.jsonl"
+    day2.write_text(
+        json.dumps(
+            _flat_follow_up_candle("2026-05-25T14:30:00+00:00", high=19600.0, low=19490.0)
+        )
+        + "\n"
+    )
+
+    engine = ReplayEngine(config=config, log_dir=str(tmp_path / "logs"))
+    engine.run(day1, review_date="2026-05-22")
+    engine.run(day2, review_date="2026-05-25")
+
+    day1_journal = tmp_path / "logs" / "journal_2026-05-22.jsonl"
+    rows = [json.loads(line) for line in day1_journal.read_text().splitlines() if line.strip()]
+    outcome_rows = [r for r in rows if r.get("type") == "OUTCOME"]
+    assert len(outcome_rows) == 1
+    assert outcome_rows[0]["outcome"]["result"] == "WIN"
+
+
+def test_day_only_strategy_open_at_file_end_is_never_carried_forward(monkeypatch, config, tmp_path):
+    """DAY_ONLY_STRATEGIES members (currently only strat_4hr_retrigger) are
+    designed to always flatten before their file ends
+    (execution/day_only_exit.py). If one is still open at file-end anyway —
+    the EOD_BAR_MISSING case already covered by
+    test_run_many_missing_eod_stays_explicit_and_open in
+    tests/test_day_only_exit.py — that indicates the day-only-flatten logic
+    itself failed, a DIFFERENT bug from the general cross-day carry-forward
+    this suite covers. It must never be silently carried forward as if it
+    were a legitimate open position: no OUTCOME row must ever appear for it,
+    and the engine's internal carry-forward state must stay empty."""
+    from tests.test_day_only_exit import _install_replay_fakes, _replay_row
+
+    _install_replay_fakes(monkeypatch)
+    day1 = tmp_path / "day1.jsonl"
+    day1.write_text(
+        json.dumps(_replay_row("2026-07-13T19:50:00Z"))
+        + "\n"
+        + json.dumps(_replay_row("2026-07-13T20:00:00Z", close=111.0))
+        + "\n"
+    )
+    day2 = tmp_path / "day2.jsonl"
+    day2.write_text(json.dumps(_replay_row("2026-07-14T14:30:00Z")) + "\n")
+
+    engine = ReplayEngine(config=config, log_dir=str(tmp_path / "logs"))
+    report = engine.run_many([day1, day2])
+
+    assert report.open_trades == 1
+    assert report.survival_passed is False
+    assert "open_trades_after_replay" in report.failure_reasons
+    # Never silently carried forward: no OUTCOME row anywhere, and the
+    # engine's own carry-forward bookkeeping must never have accepted it.
+    assert engine._carried_positions == {}
+    day1_rows = [
+        json.loads(line)
+        for line in (tmp_path / "logs" / "journal_2026-07-13.jsonl").read_text().splitlines()
+    ]
+    assert not any(row.get("type") == "OUTCOME" for row in day1_rows)
+
+
+# ---------------------------------------------------------------------------
+# PR #339 operator-review follow-up: two concrete holes in the carry-resolve
+# block above.
+#
+# Hole 1 — a carried position's resolution only ever cleared
+# daily_state.has_open_position, never updated realized_pnl_dollars,
+# account_balance, or consecutive_losses/last_loss_at the way the engine's
+# own NORMAL same-day resolve path does (see run(), main per-candle loop,
+# `if fill is not None:` block). A carried LOSS resolving the next morning
+# left the new day's risk state exactly as if the loss had never happened,
+# letting a later same-day candidate get evaluated against stale (pre-loss)
+# risk state — a real live/replay risk-state divergence.
+#
+# Hole 2 — mixed-instrument candles (`allow_mixed_instruments=True`) break
+# the engine's single-global-open-position invariant two ways: (2a) the
+# carry-resolve loop fed EVERY candle in the call into resolve_position() for
+# the carried bracket regardless of instrument, so an unrelated instrument's
+# OHLC could falsely resolve it; (2b) if the carried instrument's candles are
+# entirely absent from a call, the pre-scan found nothing, and the whole
+# carry block — including the `daily_state.has_open_position = True` gate —
+# was skipped, letting a DIFFERENT instrument open a new position while a
+# position was still genuinely open elsewhere.
+# ---------------------------------------------------------------------------
+
+def _mes_orb_reclaim_trigger_candle(timestamp: str) -> dict:
+    """Same structural trigger as _orb_reclaim_trigger_candle (identical
+    price-action/ORB/market_condition fields — everything the orb_reclaim
+    strategy actually looks at), but for MES instead of MNQ, so it is capable
+    of producing its own approved TRADE decision when nothing blocks it."""
+    base = _orb_reclaim_trigger_candle(timestamp)
+    base["instrument"] = "MES"
+    return base
+
+
+def _mes_flat_candle(
+    timestamp: str, *, high: float, low: float, close: float | None = None
+) -> dict:
+    """MES analogue of _flat_follow_up_candle: same non-signal shape, but
+    instrument=MES and with OHLC free to be chosen so it numerically crosses
+    an MNQ carried bracket's stop/target — while never being valid MNQ data
+    itself (Hole 2a's exact failure mode)."""
+    base = _flat_follow_up_candle(timestamp, high=high, low=low, close=close)
+    base["instrument"] = "MES"
+    return base
+
+
+def test_carried_loss_updates_daily_risk_state_for_later_same_day_candidate(
+    config, tmp_path
+):
+    """Hole 1: day 2 opens with the carried MNQ position stopping out (a real
+    LOSS), then immediately offers the exact same orb_reclaim trigger bar
+    again. With max_consecutive_losses tightened to 1 for this test, a
+    correctly-updated daily_state must register that carried LOSS as a real
+    consecutive loss for TODAY and lock out any further evaluation this same
+    day (run()'s own top-of-loop check, mirroring
+    DecisionEngine._check_consecutive_losses, breaks with
+    stopped_reason="max_consecutive_losses" before ever evaluating the
+    retrigger bar).
+
+    Before the fix, the carried resolution touched only has_open_position —
+    consecutive_losses stayed 0 — so the retrigger bar sails through
+    DecisionEngine/RiskEngine untouched and gets approved as a fresh TRADE,
+    proving the later candidate WAS evaluated against stale (pre-loss) daily
+    state."""
+    import dataclasses
+
+    tight_config = dataclasses.replace(config, max_consecutive_losses=1)
+
+    day1 = tmp_path / "day1.jsonl"
+    day1.write_text(json.dumps(_orb_reclaim_trigger_candle("2026-05-22T14:30:00+00:00")) + "\n")
+
+    day2 = tmp_path / "day2.jsonl"
+    day2.write_text(
+        json.dumps(
+            _flat_follow_up_candle("2026-05-23T14:30:00+00:00", high=19490.0, low=19470.0)
+        )
+        + "\n"
+        + json.dumps(_orb_reclaim_trigger_candle("2026-05-23T14:45:00+00:00"))
+        + "\n"
+    )
+
+    # run_many() only returns an aggregate report, so drive day 1 and day 2
+    # directly on one engine (mirrors run_many's own internal loop) to
+    # capture day 2's own per-day report and inspect its stopped_reason.
+    engine = ReplayEngine(config=tight_config, log_dir=str(tmp_path / "logs"))
+    engine.run(day1, review_date="2026-05-22")
+    report2 = engine.run(day2, review_date="2026-05-23")
+
+    # THE FIX: the carried LOSS must lock the engine out for the rest of day
+    # 2, exactly as a normal same-day loss would.
+    assert report2.stopped_reason == "max_consecutive_losses"
+
+    day1_journal = tmp_path / "logs" / "journal_2026-05-22.jsonl"
+    rows = [json.loads(line) for line in day1_journal.read_text().splitlines() if line.strip()]
+    outcome_rows = [r for r in rows if r.get("type") == "OUTCOME"]
+    assert len(outcome_rows) == 1
+    assert outcome_rows[0]["outcome"]["result"] == "LOSS"
+
+    day2_rows = _read_journal_rows(tmp_path / "logs" / "journal_2026-05-23.jsonl")
+    # The retrigger bar must NEVER have been approved as a fresh TRADE — the
+    # carried loss must have locked the day out before it was ever evaluated.
+    assert not any(r.get("decision") == "TRADE" for r in day2_rows)
+
+
+def test_carried_resolution_mixed_instrument_candle_never_resolves_wrong_bracket(
+    config, tmp_path
+):
+    """Hole 2a: day 2 interleaves an MES candle (index 0) whose OHLC crosses
+    the carried MNQ bracket's stop level (19478.5) with a REAL MNQ candle
+    (index 1) that crosses the carried bracket's TARGET (19548.5) instead.
+    Only the true MNQ candle may ever resolve the MNQ bracket. Before the
+    fix, resolve_position() is fed every candle regardless of instrument, so
+    the MES candle is reached first and falsely resolves the MNQ bracket as
+    a LOSS via the MES bar's unrelated price action — the real MNQ candle is
+    never even examined (the loop `break`s on the first non-None fill)."""
+    day1 = tmp_path / "day1.jsonl"
+    day1.write_text(json.dumps(_orb_reclaim_trigger_candle("2026-05-22T14:30:00+00:00")) + "\n")
+
+    day2 = tmp_path / "day2.jsonl"
+    day2.write_text(
+        json.dumps(
+            _mes_flat_candle("2026-05-23T14:30:00+00:00", high=19490.0, low=19470.0)
+        )
+        + "\n"
+        + json.dumps(
+            _flat_follow_up_candle("2026-05-23T14:45:00+00:00", high=19600.0, low=19490.0)
+        )
+        + "\n"
+    )
+
+    engine = ReplayEngine(config=config, log_dir=str(tmp_path / "logs"))
+    report = engine.run_many([day1, day2], allow_mixed_instruments=True)
+
+    day1_journal = tmp_path / "logs" / "journal_2026-05-22.jsonl"
+    rows = [json.loads(line) for line in day1_journal.read_text().splitlines() if line.strip()]
+    outcome_rows = [r for r in rows if r.get("type") == "OUTCOME"]
+    assert len(outcome_rows) == 1
+    # THE FIX: resolved WIN by the real MNQ candle's target hit, never LOSS
+    # by the MES candle's coincidentally-overlapping stop level.
+    assert outcome_rows[0]["outcome"]["result"] == "WIN"
+    assert outcome_rows[0]["outcome"]["exit_price"] == ORB_RECLAIM_TARGET
+    assert outcome_rows[0]["instrument"] == "MNQ"
+
+    assert report.open_trades == 0
+    assert report.survival_passed is True
+
+
+def test_carried_position_absent_instrument_blocks_new_entry_and_later_resolves(
+    config, tmp_path
+):
+    """Hole 2b: day 2's file is entirely MES (the carried instrument, MNQ, is
+    completely absent from it). The single-global-open-position invariant
+    must still hold: no NEW MES position may open while MNQ remains carried
+    and unresolved, and self._carried_positions must be left untouched for a
+    later call to pick up. Day 3 finally supplies a real MNQ candle that
+    resolves the carried position normally, proving the fix does not
+    permanently wedge the engine.
+
+    Before the fix, the pre-scan finds no instrument overlap between day 2's
+    candles and self._carried_positions, so `_carried` is None, the entire
+    carry block (including `daily_state.has_open_position = True`) is
+    skipped, and day 2's own MES orb_reclaim trigger is free to approve and
+    open a brand new position — even though MNQ is still open."""
+    day1 = tmp_path / "day1.jsonl"
+    day1.write_text(json.dumps(_orb_reclaim_trigger_candle("2026-05-22T14:30:00+00:00")) + "\n")
+
+    day2 = tmp_path / "day2.jsonl"
+    day2.write_text(json.dumps(_mes_orb_reclaim_trigger_candle("2026-05-23T14:30:00+00:00")) + "\n")
+
+    day3 = tmp_path / "day3.jsonl"
+    day3.write_text(
+        json.dumps(
+            _flat_follow_up_candle("2026-05-24T14:30:00+00:00", high=19600.0, low=19490.0)
+        )
+        + "\n"
+    )
+
+    engine = ReplayEngine(config=config, log_dir=str(tmp_path / "logs"))
+    engine.run(day1, review_date="2026-05-22")
+
+    # THE FIX: MNQ must still be carried untouched, and day 2 must not have
+    # approved a brand new MES trade.
+    assert "MNQ" in engine._carried_positions
+    report2 = engine.run(day2, review_date="2026-05-23")
+
+    day2_rows = _read_journal_rows(tmp_path / "logs" / "journal_2026-05-23.jsonl")
+    assert not any(r.get("decision") == "TRADE" for r in day2_rows)
+    assert "MNQ" in engine._carried_positions
+    assert report2.open_trades == 0
+
+    # No permanent wedge: a real MNQ candle in a LATER call still resolves
+    # the carried position correctly.
+    engine.run(day3, review_date="2026-05-24")
+    assert engine._carried_positions == {}
+    day1_journal = tmp_path / "logs" / "journal_2026-05-22.jsonl"
+    rows = [json.loads(line) for line in day1_journal.read_text().splitlines() if line.strip()]
+    outcome_rows = [r for r in rows if r.get("type") == "OUTCOME"]
+    assert len(outcome_rows) == 1
+    assert outcome_rows[0]["outcome"]["result"] == "WIN"
