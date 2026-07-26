@@ -125,6 +125,9 @@ def _stats(trades: list[dict], commission_rt: float = 0.0) -> dict:
     else:
         pf = None
 
+    win_nets = [net(t) for t in wins]
+    loss_nets = [net(t) for t in losses]
+
     return {
         "attempts": len(trades),
         "resolved": len(resolved),
@@ -138,6 +141,10 @@ def _stats(trades: list[dict], commission_rt: float = 0.0) -> dict:
         "net_pnl": round(pnl, 2),
         "profit_factor": pf,
         "expectancy": round(pnl / len(resolved), 2) if resolved else None,
+        "avg_win": round(sum(win_nets) / len(win_nets), 2) if win_nets else None,
+        "avg_loss": round(sum(loss_nets) / len(loss_nets), 2) if loss_nets else None,
+        "largest_win": round(max(win_nets), 2) if win_nets else None,
+        "largest_loss": round(min(loss_nets), 2) if loss_nets else None,
     }
 
 
@@ -172,14 +179,18 @@ def _concentration(trades: list[dict], commission_rt: float = 0.0) -> dict:
     nets = sorted(((t["pnl"] or 0.0) - commission_rt for t in resolved), reverse=True)
     total = sum(nets)
     ex_top1 = round(total - (nets[0] if nets else 0.0), 2)
+    ex_top3 = round(total - sum(nets[:3]), 2)
     ex_top5 = round(total - sum(nets[:5]), 2)
     top1_share = round(nets[0] / total, 4) if nets and total else None
+    top3_share = round(sum(nets[:3]) / total, 4) if nets and total else None
     top5_share = round(sum(nets[:5]) / total, 4) if nets and total else None
     return {
         "net_pnl": round(total, 2),
         "ex_top1_winner_net_pnl": ex_top1,
+        "ex_top3_winners_net_pnl": ex_top3,
         "ex_top5_winners_net_pnl": ex_top5,
         "top1_share_of_net": top1_share,
+        "top3_share_of_net": top3_share,
         "top5_share_of_net": top5_share,
     }
 
@@ -255,7 +266,12 @@ def main() -> int:
         "meta": {
             "status": "FINAL -- both shared-engine blockers fixed and incorporated: "
                        "market-condition parity (PR #338, main@0057bc23) and cross-day "
-                       "position carry-forward (PR #339, main@4684947)",
+                       "position carry-forward (PR #339, main@4684947). Evidence-"
+                       "completeness pass complete: see "
+                       "strat_212_122_slippage_sensitivity_results.json (1/2/3-tick "
+                       "adverse-slippage sweep) and "
+                       "strat_212_122_evidence_completeness_classification.md (per-cell "
+                       "VALIDATED/PROMISING BUT UNPROVEN/BROKEN/OVERFIT/WAIT verdicts).",
             "status_note": "This run reads data/replay_corpus_v1_market_condition_fixed "
                      "(post-#338, market-condition matches runtime/Pine per "
                      "scripts/rematerialize_market_condition_corpus.py) against the "
@@ -265,7 +281,11 @@ def main() -> int:
                      "propagation and instrument isolation). Prior runs preserved: pre-#338 "
                      "as strat_212_122_canonical_evidence_results_pre_pr338_superseded.json, "
                      "post-#338/pre-#339 as "
-                     "strat_212_122_canonical_evidence_results_pre_pr339_partially_corrected.json.",
+                     "strat_212_122_canonical_evidence_results_pre_pr339_partially_corrected.json. "
+                     "avg_win/avg_loss/largest_win/largest_loss and top-3 winner concentration "
+                     "added to _stats()/_concentration() in this evidence-completeness pass "
+                     "(additive only -- all pre-existing fields/values unchanged, verified by "
+                     "diff against the prior committed results.json).",
             "corpus": "data/replay_corpus_v1_market_condition_fixed (post-#320-fix directional, "
                       "post-#338 market-condition-parity-corrected, 313 days/instrument)",
             "range": [FULL_START, FULL_END],
@@ -316,6 +336,26 @@ def main() -> int:
                   f"| {_fmt(r['net_pnl'], True)} | {_fmt(c['net_pnl'], True)} "
                   f"| {_fmt(r['profit_factor'])} | {_fmt(c['profit_factor'])} |")
 
+    print("\n=== Per-cell (instrument x strategy) trade magnitude, full period, raw ===")
+    print("| Instrument | Strategy | Avg Win | Avg Loss | Largest Win | Largest Loss |")
+    print("|---|---|---:|---:|---:|---:|")
+    for instr in INSTRUMENTS:
+        for strat in STRATEGIES:
+            r = results["per_instrument_per_strategy"][instr][strat]["full_period"]["raw"]
+            print(f"| {instr} | {strat} | {_fmt(r['avg_win'], True)} | {_fmt(r['avg_loss'], True)} "
+                  f"| {_fmt(r['largest_win'], True)} | {_fmt(r['largest_loss'], True)} |")
+
+    print("\n=== Per-cell (instrument x strategy) winner concentration, full period, raw ===")
+    print("| Instrument | Strategy | Net P&L | Top-1 share | Top-3 share | Top-5 share | Ex-top-3 net |")
+    print("|---|---|---:|---:|---:|---:|---:|")
+    for instr in INSTRUMENTS:
+        for strat in STRATEGIES:
+            sub = [t for t in per_instrument[instr] if t["strategy"] == strat]
+            conc = _concentration(sub, 0.0)
+            print(f"| {instr} | {strat} | {_fmt(conc['net_pnl'], True)} | {_fmt(conc['top1_share_of_net'])} "
+                  f"| {_fmt(conc['top3_share_of_net'])} | {_fmt(conc['top5_share_of_net'])} "
+                  f"| {_fmt(conc['ex_top3_winners_net_pnl'], True)} |")
+
     print("\n=== Per-strategy combined (both instruments), full period ===")
     for strat in STRATEGIES:
         b = results["per_strategy_combined"][strat]["full_period"]
@@ -362,8 +402,10 @@ def main() -> int:
         print(f"  raw:           max_dd=${block['drawdown_raw']['max_drawdown']:,.2f} "
               f"max_consec_losses={block['drawdown_raw']['max_consecutive_losses']} "
               f"ex_top1=${block['concentration_raw']['ex_top1_winner_net_pnl']:,.2f} "
+              f"ex_top3=${block['concentration_raw']['ex_top3_winners_net_pnl']:,.2f} "
               f"ex_top5=${block['concentration_raw']['ex_top5_winners_net_pnl']:,.2f} "
-              f"top1_share={_fmt(block['concentration_raw']['top1_share_of_net'])}")
+              f"top1_share={_fmt(block['concentration_raw']['top1_share_of_net'])} "
+              f"top3_share={_fmt(block['concentration_raw']['top3_share_of_net'])}")
         print(f"  comm-adjusted: max_dd=${block['drawdown_commission_adjusted']['max_drawdown']:,.2f} "
               f"max_consec_losses={block['drawdown_commission_adjusted']['max_consecutive_losses']} "
               f"ex_top1=${block['concentration_commission_adjusted']['ex_top1_winner_net_pnl']:,.2f} "
