@@ -40,7 +40,7 @@ Verdict taxonomy:
 | 12HR Miyagi | ✅ blockers resolved | ✅ | Partial — standalone research module | ✅ | ✅ both halves (H2 thin) | ✅ 1-4 tick | ⚠️ n=15 MNQ / n=19 MES thin | **PROMISING BUT UNPROVEN** |
 | 60M 3-2-2 First Live | ✅ blockers resolved | ✅ | Partial — standalone research module | ✅ IOC-faithful | ✅ both halves | ✅ 1-4 tick | ⚠️ n=34 MNQ thin | **PROMISING BUT UNPROVEN** |
 | VWAP Hold (MNQ NY) | ❌ entry definition unclear (stale — see 2026-07-26 audit note in profile below) | Partial | ❌ (stale — see profile) | ✅ ioc_close, production-matching (2026-07-26) | ✅ both halves, all 3 exits, NY-only ioc_close (2026-07-26) | ✅ 1-3 tick, NY-only ioc_close (2026-07-26) | ⚠️ n=107 armed / **~55 filled, NY-only** (canonical — session-filtered from the 348-arm blended pop, which is provenance-context only) — thin, clears the 30-min literal bar but not comfortably | **PROMISING BUT UNPROVEN** |
-| VWAP Reclaim (MNQ NY) | ❌ | Partial | ❌ | ❌ | ❌ | ❌ | ⚠️ n=29 thin | **WAIT** |
+| VWAP Reclaim (MNQ NY) | ✅ cleanest of the 3 VWAP predicates | Partial | ✅ isolated, confirmed no leaks (2026-07-26) | ✅ ioc_limit (2026-07-26) | ❌ H2 negative (2026-07-26) | ❌ fails 3-tick (2026-07-26) | ⚠️ n=70 combined / n=21 MNQ thin (2026-07-26) | **WAIT** |
 | VWAP Rejection | ❌ | Partial | ❌ | ❌ | ❌ | ❌ | — | **BROKEN — unreachable predicate** |
 | ORB Breakout (MNQ) | ✅ | ✅ | Partial | ✅ | ⚠️ H2 thin | ✅ | ⚠️ n=60 | **WAIT — gated on runner exit** |
 | PDL Reclaim | ✅ | ✅ | Partial | ✅ | ❌ too thin | — | ❌ n=13 | **RESEARCH ONLY — undersample** |
@@ -273,6 +273,80 @@ Verdict taxonomy:
 
 ---
 
+### VWAP Reclaim — MNQ NY (+MES diagnostic)
+**Verdict: WAIT**
+
+> **Canonical evidence note (2026-07-26,
+> `vwap-reclaim-canonical-evidence-2026-07-26.md`)**: the audit doc's own
+> next-step (`VWAP_FAMILY_SOURCE_OF_TRUTH_AUDIT_2026-07-26.md:594-596`) —
+> "run a per-strategy walk-forward split of the existing Corpus v1
+> `vwap_reclaim` journals" — was superseded by a cleaner method once PR #346
+> established the corrected-posture bar for system-level evidence: the
+> *existing* Corpus v1 journals are market-fill (not `ioc_limit`), so
+> walk-forward-splitting them would not answer the question under the
+> posture that now governs. Filtering **#346's own** corrected-posture
+> combined-book run to `strategy=="vwap_reclaim"` isn't valid either — it
+> yields only 10 attempts / 5 resolved because the account-level 20%
+> drawdown breaker halted the *whole book* on 2025-09-08 (MNQ) /
+> 2025-12-11 (MES), well before `vwap_reclaim` itself would necessarily
+> have stopped trading. That is combined-book contamination, not
+> `vwap_reclaim`'s own performance.
+>
+> This pass instead runs `vwap_reclaim` **isolated** (`enabled_concepts`
+> patched to `["vwap_reclaim"]` only, own fresh account, so its own 20%
+> breaker — it never actually trips — reflects only its own P&L) across
+> the same corrected corpus, `entry_fill_model=ioc_limit`, canonical IOC
+> tolerances (MES=16/MNQ=32 ticks), full 2025-07-24→2026-07-23 range, 1/2/3
+> -tick slippage sensitivity. `risk_rules.yaml` verified byte-identical
+> before/after. **MES was included for evidence purposes only** (production
+> disable rationale for MES — a "40% WR" `risk_rules.yaml` comment — was
+> already flagged by the audit doc as unsourced/unreproducible; this run
+> neither confirms nor refutes that old comment, it is independent, newer,
+> honest-fill evidence on a different corpus/timeframe). **No enablement,
+> no runtime/config/Pine change of any kind.**
+>
+> **Result: combined (MNQ+MES) 136 attempts, 70 fills (51.5%), 70 resolved,
+> 0 open, 37.1% WR, net after commission +$160.71, PF 1.074** — thin
+> positive at 1-tick, but fails on three independent grounds: (1) **H2 is
+> negative** (H1 +$243.10 / H2 −$82.39) — fails both-halves-positive
+> walk-forward; (2) **MNQ alone is both thin and negative** (n=21, net
+> −$66.32, PF 0.802) — the entire positive edge is carried by MES, which is
+> not what the Master Table row tracks and is not currently live-eligible;
+> (3) **fails 3-tick slippage** (PF drops 1.074 → 1.009 → 0.985 net
+> negative across 1/2/3-tick). Quarter breakdown is volatile (Q2/Q3 strongly
+> positive, Q1/Q4 strongly negative) — consistent with a thin, not-yet-
+> robust sample rather than a stable edge.
+>
+> Historical n=29 (2026-07-09, MNQ NY) and n=50 (Corpus v1, 2026-07-25,
+> market-fill) figures are kept as provenance/context only — neither is
+> walk-forward split, both use a different fill model than this pass, and
+> n=50 is additionally superseded as combined-book evidence by PR #346.
+> Neither should be read as contradicting or confirming this result; they
+> are not comparable studies.
+
+- Predicate has the cleanest live/replay/Pine formula agreement of the
+  three VWAP strategies (confirmed by the 2026-07-26 audit,
+  independently reconfirmed here — zero isolation-leak trades of any
+  other strategy appeared in this run's journals)
+- LONG only (`state.vwap.reclaimed and state.vwap.holding and
+  price_vs_vwap=="above"` + trend UP); entry = VWAP + 2 ticks, stop = VWAP
+  − 28 ticks (7pt MNQ), target = entry + 3.0R
+- **Sample now walk-forward split for the first time** (previously: two
+  dated point-in-time figures, neither split) — the split is what moved
+  this from "thin but unexamined" to "thin and examined, fails on 3
+  independent grounds," not a change in verdict (WAIT unchanged)
+- MES's production disable rationale remains unsourced/unreproducible
+  (unchanged from the 2026-07-26 audit) — this pass's MES evidence
+  (n=49, net +$227.03, PF 1.124, carrying the entire combined-book
+  positive result) does not resolve that gap, it is simply new,
+  independent information; no enablement decision follows from it
+- Next: no further work authorized under the evidence-phase standing
+  directive; if evidence continues to be sought, more sample (both
+  instruments) and resolution of why MNQ underperforms MES here would be
+  the open questions — not scoped or started by this pass
+
+---
+
 ### VWAP Rejection
 **Verdict: BROKEN — unreachable predicate**
 
@@ -386,7 +460,7 @@ See `ICC_ICT_Research.md` for full breakdown.
 | 3-2-2 sample-size expansion (blocked pending new 5m MNQ data past 2026-06-26) | Strategy verdict | Claude Code |
 | 4HR 1H stop backtest | Rules validation | External researcher |
 | VWAP rejection Pine deployment sequencing (send `vwap_failed_reclaim`; fix stale `signal_strategy` branch at `.pine:443`) | VWAP rejection live eligibility | Operator decision (flagged in PR #321, still open) |
-| VWAP reclaim per-strategy walk-forward split of existing Corpus v1 journals (`scripts/strategy_validation_report.py --strategy vwap_reclaim`) | VWAP reclaim verdict | Claude Code |
+| ~~VWAP reclaim per-strategy walk-forward split~~ — **done 2026-07-26**, isolated honest-fill run (not the old market-fill journals — see profile above for why): WAIT confirmed on 3 independent grounds (H2 negative, MNQ n=21 thin, fails 3-tick slippage); see `vwap-reclaim-canonical-evidence-2026-07-26.md` | — | — |
 | Runner exit promotion | ORB breakout, VWAP hold/reclaim lanes | Claude Code |
 
 ---
