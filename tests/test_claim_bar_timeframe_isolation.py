@@ -95,6 +95,96 @@ def test_claim_bar_without_timeframe_param_preserves_old_behavior(tmp_path):
     assert second is False
 
 
+# ─── The hole found on operator review: unscoped decision rows ───────────────
+#
+# claim_bar()'s scan matches ANY non-OUTCOME row with the same instrument+ts,
+# not just BAR_CLAIM rows -- it also matches ordinary log_decision() rows.
+# DecisionOutput.to_dict() (strategy/signal_engine.py) never carried a
+# timeframe field, so a ordinary decision row logged right after a
+# timeframe-tagged BAR_CLAIM would itself be untagged -- and claim_bar()
+# correctly treats an untagged EXISTING entry as a match (its own backward-
+# compatibility rule). A later, different-timeframe claim attempt would see
+# that untagged decision row and be wrongly blocked, recreating the exact
+# collision the BAR_CLAIM tagging alone was supposed to prevent. Fixed by
+# tagging every journal_entry dict webhook/runner.py logs (decision.to_dict()
+# results, plus the two early-rejection rows) with the same
+# timeframe_minutes computed for claim_bar() itself.
+
+def test_claim_bar_blocked_by_untagged_decision_row_recreates_the_hole(tmp_path):
+    """Proves the hole existed: an untagged decision row logged between two
+    claim_bar() calls still collides across timeframes. This models what
+    log_decision() used to write before webhook/runner.py tagged every
+    journal_entry with timeframe_minutes."""
+    journal = JournalLogger(log_dir=str(tmp_path))
+    assert journal.claim_bar(
+        instrument="MNQ", bar_ts=_TS, for_date=_DAY, timeframe_minutes=5
+    ) is True
+    # An UNTAGGED decision row for the same instrument/ts (what a caller that
+    # forgot to set timeframe_minutes on journal_entry would still write).
+    journal.log_decision(
+        {"ts": _TS, "instrument": "MNQ", "session": "new_york",
+         "decision": "NO_TRADE", "reason": "test"},
+        None, for_date=_DAY,
+    )
+    blocked = journal.claim_bar(
+        instrument="MNQ", bar_ts=_TS, for_date=_DAY, timeframe_minutes=15
+    )
+    assert blocked is False  # the hole: an untagged row still collides
+
+
+def test_claim_bar_tagged_decision_row_does_not_recreate_the_hole(tmp_path):
+    """The fix: once the intervening decision row is ALSO tagged with the
+    bar's own timeframe_minutes (what webhook/runner.py now does for every
+    journal_entry it logs), a different-timeframe claim is no longer blocked
+    by it. Requirement: claim MNQ/T as 5m -> log its (tagged) decision row ->
+    attempt MNQ/T as 15m -> must succeed."""
+    journal = JournalLogger(log_dir=str(tmp_path))
+    assert journal.claim_bar(
+        instrument="MNQ", bar_ts=_TS, for_date=_DAY, timeframe_minutes=5
+    ) is True
+    journal.log_decision(
+        {"ts": _TS, "instrument": "MNQ", "session": "new_york",
+         "decision": "NO_TRADE", "reason": "test", "timeframe_minutes": 5},
+        None, for_date=_DAY,
+    )
+    assert journal.claim_bar(
+        instrument="MNQ", bar_ts=_TS, for_date=_DAY, timeframe_minutes=15
+    ) is True
+
+
+def test_claim_bar_tagged_decision_row_reverse_order_15m_then_5m(tmp_path):
+    """Same proof, reverse order: claim MNQ/T as 15m -> log its (tagged)
+    decision row -> attempt MNQ/T as 5m -> must succeed."""
+    journal = JournalLogger(log_dir=str(tmp_path))
+    assert journal.claim_bar(
+        instrument="MNQ", bar_ts=_TS, for_date=_DAY, timeframe_minutes=15
+    ) is True
+    journal.log_decision(
+        {"ts": _TS, "instrument": "MNQ", "session": "new_york",
+         "decision": "NO_TRADE", "reason": "test", "timeframe_minutes": 15},
+        None, for_date=_DAY,
+    )
+    assert journal.claim_bar(
+        instrument="MNQ", bar_ts=_TS, for_date=_DAY, timeframe_minutes=5
+    ) is True
+
+
+def test_claim_bar_legacy_decision_row_with_no_timeframe_field_still_blocks(tmp_path):
+    """A truly legacy journal (containing only an old, unscoped decision row
+    from before this fix existed) must still block -- same-timeframe-unknown
+    entries stay conservative, exactly as before this whole fix."""
+    journal = JournalLogger(log_dir=str(tmp_path))
+    journal.log_decision(
+        {"ts": _TS, "instrument": "MNQ", "session": "new_york",
+         "decision": "NO_TRADE", "reason": "legacy, no timeframe_minutes field"},
+        None, for_date=_DAY,
+    )
+    blocked_same = journal.claim_bar(
+        instrument="MNQ", bar_ts=_TS, for_date=_DAY, timeframe_minutes=15
+    )
+    assert blocked_same is False
+
+
 # ─── Integration level: process_alert() end-to-end ────────────────────────────
 
 def test_5m_4hr_native_bar_does_not_suppress_15m_decision_bar(config, tmp_path, monkeypatch):

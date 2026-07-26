@@ -435,6 +435,7 @@ def process_alert(
                 "setup": None,
                 "failed_gates": [quality_error],
                 "received_timeframe": payload.timeframe,
+                "timeframe_minutes": _bar_timeframe_minutes(payload, cfg),
                 "event_id": getattr(payload, "event_id", None),
             },
             None,
@@ -588,6 +589,7 @@ def process_alert(
                 "reason": tf_mismatch["reason"],
                 "expected_timeframe": tf_mismatch["expected"],
                 "received_timeframe": tf_mismatch["received"],
+                "timeframe_minutes": _bar_timeframe_minutes(payload, cfg),
                 "event_id": getattr(payload, "event_id", None),
             },
             None,
@@ -1720,6 +1722,7 @@ def process_alert(
                 logger.warning("5m feed: setup arm skipped: %s", _exc)
         journal_entry = decision.to_dict()
         journal_entry["event_id"] = getattr(payload, "event_id", None)
+        journal_entry["timeframe_minutes"] = bar_timeframe_minutes
         journal_entry["strategy_state"] = {
             "strat_4hr_retrigger": dict(daily_state.four_hr_retrigger_state),
             "strat_212_122": dict(daily_state.strat_212_122_state),
@@ -1799,6 +1802,7 @@ def process_alert(
     }
     journal_entry = decision.to_dict()
     journal_entry["event_id"] = getattr(payload, "event_id", None)
+    journal_entry["timeframe_minutes"] = bar_timeframe_minutes
     journal_entry["strategy_state"] = {
         "strat_4hr_retrigger": dict(daily_state.four_hr_retrigger_state),
         "strat_212_122": dict(daily_state.strat_212_122_state),
@@ -2043,6 +2047,7 @@ def process_alert(
         journal_entry = decision.to_dict()
         journal_entry["decision"] = "TRADE"
         journal_entry["event_id"] = getattr(payload, "event_id", None)
+        journal_entry["timeframe_minutes"] = bar_timeframe_minutes
         journal_entry["strategy_state"] = {
             "strat_4hr_retrigger": dict(daily_state.four_hr_retrigger_state),
             "strat_212_122": dict(daily_state.strat_212_122_state),
