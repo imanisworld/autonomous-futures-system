@@ -109,10 +109,19 @@ def test_process_alert_rejects_5m_when_feed_disabled(monkeypatch, tmp_path):
     assert recent_five_min("MES1!", str(tmp_path / "logs"), 10) == []
 
 
-def test_process_alert_stores_5m_as_context_when_enabled(monkeypatch, tmp_path):
+def test_process_alert_stores_5m_as_context_when_enabled(monkeypatch, tmp_path, config):
     monkeypatch.setenv("FIVE_MIN_FEED_ENABLED", "true")
     log_dir = str(tmp_path / "logs")
-    result = process_alert(_payload("5m"), log_dir=log_dir)
+    # Explicit config without strat_4hr_retrigger: once that concept is
+    # enabled, a bare 5m alert is legitimately routed into the real decision
+    # pipeline instead of short-circuiting to FIVE_MIN_CONTEXT (4HR is
+    # 5-minute-native by design — see webhook/runner.py's
+    # `"strat_4hr_retrigger" in cfg.enabled_concepts` branch). This test is
+    # about the FIVE_MIN_FEED_ENABLED context-capture mechanism in isolation,
+    # not 4HR routing, so it must not depend on the ambient real
+    # risk_rules.yaml's enabled_concepts (which does include 4HR as of PR
+    # #334's forward-demo activation).
+    result = process_alert(_payload("5m"), config=config, log_dir=log_dir)
     # acknowledged as context, NOT a trade and NOT a config error
     assert result["decision"] == "FIVE_MIN_CONTEXT"
     assert result["fill"] is None

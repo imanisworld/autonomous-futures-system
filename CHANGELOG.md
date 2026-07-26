@@ -8,6 +8,29 @@ Types: `Added`, `Changed`, `Fixed`, `Removed`, `Security`, `Rulebook`
 
 ---
 
+## [1.7.0] 2026-07-26
+
+Config-only entry — does not attempt to backfill the ~7 weeks of unlogged
+changes between this entry and 1.6.0 (2026-06-04); scoped strictly to this
+change. `risk_rules.yaml` bumped to its own internal `1.1.0` (first bump
+since the file's `1.0.0` inception).
+
+### Rulebook
+- **`strat_4hr_retrigger` enabled for MNQ forward demo observation.** Added to
+  `strategy.enabled_concepts` (global) and to
+  `disabled_concepts_per_instrument.MES` (keeps MES excluded). Follows Batch-1
+  evidence (PR #334): MNQ = PROMISING BUT UNPROVEN (positive both chronological
+  halves, stable across 1/2/3-tick slippage) → forward demo observation. MES =
+  OVERFIT (in-sample edge does not survive walk-forward or slippage stress) →
+  no promotion. Retired the stale "SHADOW-ONLY / 15M-proxy, no faithful 5M
+  implementation" comment next to `enabled_concepts` — it predated the
+  canonical 5m-native detector (PR #317) and day-only 4PM exit (PR #318) and
+  no longer reflected the current posture. No detector, strategy, runtime,
+  broker, fill-model, sizing, session, or risk-limit logic changed.
+  See `docs/4hr-retrigger-batch1-evidence-2026-07-26.md`.
+
+---
+
 ## [1.6.0] 2026-06-04
 
 Live paper pipeline closed end-to-end for the first time: a TradingView 15m

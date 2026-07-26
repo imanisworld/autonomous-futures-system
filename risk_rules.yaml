@@ -7,7 +7,7 @@
 # incrementing the version and updating CHANGELOG.md.
 # ============================================================
 
-version: "1.0.0"
+version: "1.1.0"
 
 # ─── Trading Mode ────────────────────────────────────────────
 trading_mode:
@@ -377,14 +377,15 @@ strategy:
     # ── The Strat patterns ───────────────────────────────────
     # Phase 1: approximated from single-bar market_state flags
     # Phase 2: full multi-bar Strat classification available
-    # SHADOW-ONLY — strat_4hr_retrigger: the live engine fires a 15M PROXY
-    # (ORB-reclaim + STRONG-UP + VWAP-above + vol≥0.7), NOT the doctrine pattern
-    # (04:00 ET 1H 2-down → 08:00 ET 1H 2-up reclaim → NY-open dip-then-5M-reclaim).
-    # Faithful entry needs a 5M feed the live 15M-only pipeline cannot supply, and
-    # the "83.3% WR" was 6 trades (n=6 = noise). Doctrine "no proof, no run" ⇒ demote
-    # from executable. strategy/shadow_setups.py journals strat_4hr_retrigger_observed
-    # so the proxy keeps earning evidence; promote only on validated edge + a 5M feed.
-    # Rules spec: .private-companion/strategy/strat_4hr_retrigger_rules_v1.md
+    - strat_4hr_retrigger     # Canonical 5m-native detector (PR #317), day-only 4PM
+      # exit (PR #318). Batch-1 evidence (PR #334, 2026-07-26): MNQ = PROMISING BUT
+      # UNPROVEN (positive both chronological halves, stable across 1/2/3-tick
+      # slippage) -> forward demo observation. MES = OVERFIT (in-sample edge does
+      # not survive walk-forward or slippage stress) -> excluded below via
+      # disabled_concepts_per_instrument.MES, no promotion. Superseded the prior
+      # 15M-proxy/SHADOW-ONLY posture, which predated the real 5M canonical
+      # detector and is no longer accurate. See
+      # docs/4hr-retrigger-batch1-evidence-2026-07-26.md for the full evidence.
     # SHADOW-ONLY — strat_122: no reproducible resolved trades in the verified
     # 77-day journals; wide versions were negative on MES/MNQ Polygon studies.
     # strategy/shadow_setups.py still journals normal structural candidates and
@@ -431,6 +432,13 @@ strategy:
       - orb_rejection  # never the validated cell in the #236/#237/#238 evidence chain
       - vwap_rejection # never the validated cell in the #236/#237/#238 evidence chain
       - pdh_reclaim    # loses in 8/8 honest walk-forward half-period cells (ioc-faithful-baseline-622d)
+      # 2026-07-26 (PR #334 Batch-1 evidence): strat_4hr_retrigger newly enabled
+      # above in enabled_concepts for MNQ forward demo observation. MES is
+      # OVERFIT under the canonical fixed-at-entry stop -- a real in-sample edge
+      # (H1 net +$801.49) does not survive walk-forward (H2 net -$634.99) or
+      # 1-3 tick slippage sensitivity (flips to -$103.50). Excluded here, no
+      # promotion. See docs/4hr-retrigger-batch1-evidence-2026-07-26.md.
+      - strat_4hr_retrigger
 
   # Per-instrument INITIAL stop-width multiplier (machinery present; values
   # DEFERRED). The 622-day replay showed a blanket MNQ 2.5x lifts vwap setups
