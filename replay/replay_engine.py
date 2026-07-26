@@ -716,6 +716,24 @@ class ReplayEngine:
                     trade_date = _date_from_timestamp(candle.timestamp)
                     for future_idx in range(idx + 1, len(candles)):
                         fc = candles[future_idx]
+                        if fc.instrument != state.instrument:
+                            # allow_mixed_instruments=True can interleave a
+                            # different instrument's candles into this same
+                            # call. resolve_position() only ever checks price
+                            # levels -- it has no instrument awareness -- so
+                            # an unrelated instrument's OHLC crossing this
+                            # bracket's stop/target by numeric coincidence
+                            # must never be allowed to resolve it (mirrors the
+                            # cross-day carry-forward loop's own instrument
+                            # filter above). The day-only date-rollover/
+                            # EOD-close/EOD-exact-bar checks below are
+                            # likewise instrument-blind on their own: a
+                            # different instrument's candle crossing midnight
+                            # or its own EOD boundary must never trigger this
+                            # position's day-only break/flatten logic, and
+                            # its close price must never be used to flatten
+                            # a position that isn't its own.
+                            continue
                         if day_only_trade and _date_from_timestamp(fc.timestamp) != trade_date:
                             break
                         if day_only_trade and is_after_eod_close(fc.timestamp):
