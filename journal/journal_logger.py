@@ -289,12 +289,24 @@ class JournalLogger:
         instrument: str,
         bar_ts: str,
         for_date: Optional[date] = None,
+        timeframe_minutes: Optional[int] = None,
     ) -> bool:
         """Atomically claim one instrument/bar timestamp before gate evaluation.
 
         Returns False if this journal already has a claim or decision for the
         same instrument + bar timestamp. This prevents duplicate webhook workers
         from both passing daily/open-position gates for the same TradingView bar.
+
+        timeframe_minutes: when provided, bar identity is
+        (instrument, bar_ts, timeframe_minutes) instead of just
+        (instrument, bar_ts). A 5-minute bar and a 15-minute bar can share the
+        same wall-clock timestamp (e.g. every 15-minute boundary) without being
+        the same bar -- a 5-minute-native strategy's bar must never suppress
+        the authoritative 15-minute decision bar, or vice versa. An existing
+        entry with no recorded timeframe (older rows, or a caller that omitted
+        this parameter) is still treated as a match for backward compatibility
+        -- this only carves out a DIFFERENT, explicitly-recorded timeframe as
+        non-colliding, it never makes matching looser than before.
         """
         path = self._journal_path(for_date)
         with self._locked():
@@ -314,6 +326,10 @@ class JournalLogger:
                             continue
                         if entry.get("type") == "OUTCOME":
                             continue
+                        if timeframe_minutes is not None:
+                            existing_tf = entry.get("timeframe_minutes")
+                            if existing_tf is not None and existing_tf != timeframe_minutes:
+                                continue
                         return False
             entry = {
                 "ts": bar_ts,
@@ -321,6 +337,8 @@ class JournalLogger:
                 "instrument": instrument,
                 "claimed_at": datetime.now(timezone.utc).isoformat(),
             }
+            if timeframe_minutes is not None:
+                entry["timeframe_minutes"] = timeframe_minutes
             with open(path, "a") as f:
                 f.write(json.dumps(entry) + "\n")
             return True
