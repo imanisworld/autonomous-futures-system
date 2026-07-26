@@ -37,7 +37,7 @@ Verdict taxonomy:
 | ORB Reclaim (MES) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ n=305 | **PAPER PROOF** |
 | ORB Reclaim (MNQ) | ✅ | ✅ | Partial | ✅ | ❌ insufficient | ✅ | ⚠️ n=253 thin | **PROMISING BUT UNPROVEN** |
 | 4HR Re-Trigger | ✅ blockers resolved | ❌ | ❌ | Partial — external study | ✅ | Partial | ⚠️ n=32 MNQ | **WAIT — build detector** |
-| 12HR Miyagi | ✅ blockers resolved | ❌ | ❌ | Partial — manual study | ❌ not confirmed | Partial | ⚠️ n=13 MNQ | **WAIT — build detector** |
+| 12HR Miyagi | ✅ blockers resolved | ✅ | Partial — standalone research module | ✅ | ✅ both halves (H2 thin) | ✅ 1-4 tick | ⚠️ n=15 MNQ / n=19 MES thin | **PROMISING BUT UNPROVEN** |
 | 60M 3-2-2 First Live | ✅ blockers resolved | ✅ | Partial — standalone research module | ✅ IOC-faithful | ✅ both halves | ✅ 1-4 tick | ⚠️ n=34 MNQ thin | **PROMISING BUT UNPROVEN** |
 | VWAP Hold (MNQ NY) | ❌ entry definition unclear | Partial | ❌ | ❌ incompatible studies | ❌ | ❌ | ⚠️ n=106 | **WAIT — isolated fill test pending** |
 | VWAP Reclaim (MNQ NY) | ❌ | Partial | ❌ | ❌ | ❌ | ❌ | ⚠️ n=29 thin | **WAIT** |
@@ -104,7 +104,7 @@ Verdict taxonomy:
 ---
 
 ### 12HR Miyagi
-**Verdict: WAIT — build detector**
+**Verdict: PROMISING BUT UNPROVEN** (2026-07-26 canonical evidence study)
 
 - Rules: complete as of 2026-07-23 (blocker resolved)
 - Timeframe: 12-hour candles, 4AM/4PM ET boundaries
@@ -112,10 +112,35 @@ Verdict taxonomy:
 - Direction: confirmed at 9:30 AM only — price location at open vs Candle 3 midpoint
 - Entry: trigger = midpoint of Candle 3; enter when price hits trigger from correct side
 - Stop: last completed 60-min candle at entry, fixed
-- Target: T1 = Candle 3 high/low; T2 = Candle 2 high/low (2-contract scale only)
-- External study results: MNQ 92.3% T1 touch (n=13), MES 75.0% (n=20)
-- Gaps: no coded detector, n=13 MNQ very thin, walk-forward not confirmed, no honest fill P&L
-- Next: build detector → reconcile → honest fill replay
+- Target: T1 = Candle 3 high/low (single-contract, T1-only, per hard rule);
+  T2 = Candle 2 high/low (recorded, not used for exit — 2-contract scale only,
+  not the current validated mode)
+- External study results (provenance context only, not reproduced or targeted):
+  MNQ 92.3% T1 touch (n=13), MES 75.0% (n=20)
+- Detector + honest-fill replay built (`research/detector_12hr_miyagi.py`,
+  `research/bars_12hr_miyagi_loader.py`, `research/replay_12hr_miyagi_honest_fill.py`).
+  Canonical study 2024-07-02..2026-06-26: MNQ 15 candidates / 8 resolved fills /
+  7W-1L / net $516.33 / PF 2.81; MES 19 candidates / 10 resolved fills / 8W-2L /
+  net $198.85 / PF 1.98. Both positive both halves (MNQ H2 is a single trade —
+  not a meaningful check), both survive 1-4 tick slippage, 0 `EOD_BAR_MISSING`.
+  MES SHORT direction is net slightly negative on its own (-$5.56, PF 0.97) —
+  MES's aggregate result is carried entirely by LONG. Both instruments were net
+  negative in 2024 and net positive only in 2025-2026. Detector reconciled via
+  16 synthetic branch-coverage fixtures + 5 hand-verified real dates (21/21
+  passed) — no dated manual-sample ground truth exists for this strategy, so
+  synthetic coverage carries more of the correctness burden than the 3-2-2
+  precedent's own gate could rely on. Step-5 pre-market granularity-ambiguity
+  count: 0/0 (MNQ/MES) — see
+  `docs/strategy-rules/12HR_MIYAGI_CANONICAL_EVIDENCE_2026-07-26.md` §1 for the
+  underlying data-coverage correction (the original brief's "5m cache is
+  RTH-only" premise was wrong for all but the first day of coverage).
+- Gaps: samples (8/10 resolved fills) are thinner than the already-thin 3-2-2
+  precedent's 20; MNQ LONG and MES's whole positive result rest on very small
+  same-direction slices; over half of all detected candidates never fill at all
+  (`TRIGGER_NOT_HIT`).
+- Next: none authorized under the standing evidence-phase directive
+  (no new strategies/gates/runtime changes until collector evidence suffices,
+  deadline 2026-09-30). Remains disabled/unbuilt in runtime.
 
 ---
 
@@ -246,7 +271,8 @@ See `ICC_ICT_Research.md` for full breakdown.
 ## Build Queue (in order)
 
 1. **4HR Re-Trigger detector** — rules complete, build now
-2. **12HR Miyagi detector** — rules complete, build now
+2. ~~12HR Miyagi detector~~ — done, PROMISING BUT UNPROVEN (2026-07-26, see
+   `12HR_MIYAGI_CANONICAL_EVIDENCE_2026-07-26.md`)
 3. ~~60M 3-2-2 detector~~ — done, PR #340 (2026-07-26)
 4. **Reconcile each detector against manual samples** — before any backtest
 5. **Honest fill replay for all three** — after reconciliation passes (3-2-2 done, PR #340)
