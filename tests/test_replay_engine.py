@@ -1360,3 +1360,138 @@ def test_carried_position_absent_instrument_blocks_new_entry_and_later_resolves(
     outcome_rows = [r for r in rows if r.get("type") == "OUTCOME"]
     assert len(outcome_rows) == 1
     assert outcome_rows[0]["outcome"]["result"] == "WIN"
+
+
+# ---------------------------------------------------------------------------
+# Follow-up to PR #339 (operator-review holes above were all in the CARRY-
+# FORWARD resolve loop — a position restored from a PRIOR day's file). This
+# covers the IDENTICAL defect class in the engine's DIFFERENT, NORMAL
+# same-day resolve loop: a position opened by a decision made earlier in the
+# SAME run() call, resolved against `for future_idx in range(idx + 1,
+# len(candles))` a few lines below where decision.setup is submitted.
+#
+# `fc = candles[future_idx]` there was never checked against the instrument
+# that actually opened the position (`state.instrument`) before being fed
+# into broker.resolve_position() or the day-only
+# is_after_eod_close/is_exact_eod_bar checks — allow_mixed_instruments=True
+# can interleave a different instrument's candle right after the trigger bar,
+# and (a) resolve_position() has no instrument awareness of its own (same
+# Hole 2a failure mode as the carry path), and (b) day-only correctness
+# additionally depends on only ever considering the position's OWN
+# instrument's timestamps/close price for date-rollover, EOD-close, and
+# EOD-exact-bar decisions.
+# ---------------------------------------------------------------------------
+
+
+def test_same_day_mixed_instrument_candle_never_resolves_wrong_bracket(config, tmp_path):
+    """Hole 2a's twin in the normal (non-carried) same-day resolve loop: a
+    SINGLE run() call, no carry-forward at all. Candle 0 is the orb_reclaim
+    MNQ trigger (opens the LONG bracket entry=19498.5/stop=19478.5/
+    target=19548.5). Candle 1 interleaves an MES bar (same OHLC used by
+    test_carried_resolution_mixed_instrument_candle_never_resolves_wrong_bracket)
+    whose low (19470.0) numerically crosses the MNQ bracket's STOP level.
+    Candle 2 is a REAL MNQ bar whose high (19600.0) crosses the bracket's
+    TARGET instead.
+
+    Before the fix, `fc = candles[future_idx]` is fed into
+    broker.resolve_position() with no instrument check: the MES candle
+    (future_idx=1) is reached first and falsely resolves the MNQ bracket as a
+    LOSS via its own unrelated price action — the loop `break`s on the first
+    non-None fill, so the real MNQ candle (future_idx=2) is never even
+    examined. After the fix, the MES candle is skipped entirely (its
+    instrument does not match the position's own) and the real MNQ candle
+    correctly resolves the bracket as a WIN."""
+    day1 = tmp_path / "day1.jsonl"
+    day1.write_text(
+        json.dumps(_orb_reclaim_trigger_candle("2026-05-22T14:30:00+00:00"))
+        + "\n"
+        + json.dumps(
+            _mes_flat_candle("2026-05-22T14:45:00+00:00", high=19490.0, low=19470.0)
+        )
+        + "\n"
+        + json.dumps(
+            _flat_follow_up_candle("2026-05-22T15:00:00+00:00", high=19600.0, low=19490.0)
+        )
+        + "\n"
+    )
+
+    engine = ReplayEngine(config=config, log_dir=str(tmp_path / "logs"))
+    report = engine.run(day1, review_date="2026-05-22", allow_mixed_instruments=True)
+
+    day1_journal = tmp_path / "logs" / "journal_2026-05-22.jsonl"
+    rows = [json.loads(line) for line in day1_journal.read_text().splitlines() if line.strip()]
+    outcome_rows = [r for r in rows if r.get("type") == "OUTCOME"]
+    assert len(outcome_rows) == 1
+    # THE FIX: resolved WIN by the real MNQ candle's target hit, never LOSS
+    # by the MES candle's coincidentally-overlapping stop level.
+    assert outcome_rows[0]["outcome"]["result"] == "WIN"
+    assert outcome_rows[0]["outcome"]["exit_price"] == ORB_RECLAIM_TARGET
+    assert outcome_rows[0]["instrument"] == "MNQ"
+
+    assert report.approved_trades == 1
+    assert report.wins == 1
+    assert report.losses == 0
+    assert report.open_trades == 0
+
+
+def test_same_day_mixed_instrument_day_only_boundary_uses_own_instrument_only(
+    monkeypatch, config, tmp_path
+):
+    """Day-only sub-case: a DAY_ONLY_STRATEGIES member (strat_4hr_retrigger)
+    opens on an MNQ candle at 15:50 ET. An interleaved MES candle sits at the
+    exact same wall-clock instant as MNQ's own EOD-close boundary (15:55 ET —
+    is_exact_eod_bar's window), immediately ahead of MNQ's own real 15:55 ET
+    bar in the candle sequence (both share the same timestamp; MES is listed
+    first). MNQ's own file has a real bar remaining at that same boundary —
+    this isolates the day-only checks' instrument-blindness from the
+    date-rollover `break` case (which cannot manifest here without violating
+    ReplayCandleLoader's global chronological-sort requirement).
+
+    Before the fix, `fc = candles[future_idx]` reaches the MES candle first:
+    is_after_eod_close/date-rollover both pass (same day, still exactly at
+    15:55 ET, not after), broker.resolve_position() doesn't hit stop/target
+    (both candles' OHLC stay inside [95, 110]), and
+    is_exact_eod_bar(fc.timestamp, fc.timeframe) is TRUE for the MES bar too
+    -- so resolve_paper_eod() flattens the MNQ position using the MES bar's
+    own foreign close price (99.0, LONG entry=100.0 -> LOSS) purely because
+    it happened to arrive first. The real MNQ 15:55 ET bar (close=105.0,
+    WIN) is never examined. After the fix, the MES candle is skipped
+    (instrument mismatch) and the real MNQ candle correctly performs the
+    EOD flatten with its own close price."""
+    from tests.test_day_only_exit import _install_replay_fakes, _replay_row
+
+    _install_replay_fakes(monkeypatch)
+
+    mes_row = _replay_row("2026-07-13T19:55:00Z", close=99.0)
+    mes_row["instrument"] = "MES"
+
+    day1 = tmp_path / "day1.jsonl"
+    day1.write_text(
+        json.dumps(_replay_row("2026-07-13T19:50:00Z", close=100.0))
+        + "\n"
+        + json.dumps(mes_row)
+        + "\n"
+        + json.dumps(_replay_row("2026-07-13T19:55:00Z", close=105.0))
+        + "\n"
+    )
+
+    engine = ReplayEngine(config=config, log_dir=str(tmp_path / "logs"))
+    report = engine.run(day1, allow_mixed_instruments=True)
+
+    rows = [
+        json.loads(line)
+        for line in Path(report.journal_path).read_text().splitlines()
+        if line.strip()
+    ]
+    outcome_rows = [r for r in rows if r.get("type") == "OUTCOME"]
+    assert len(outcome_rows) == 1
+    # THE FIX: the real MNQ 15:55 ET bar's own close (105.0, WIN) resolves
+    # this position -- never the interleaved MES bar's foreign close (99.0,
+    # which would falsely classify as LOSS).
+    assert outcome_rows[0]["outcome"]["result"] == "WIN"
+    assert outcome_rows[0]["outcome"]["exit_price"] == 105.0
+    assert outcome_rows[0]["instrument"] == "MNQ"
+
+    assert report.wins == 1
+    assert report.losses == 0
+    assert report.open_trades == 0
