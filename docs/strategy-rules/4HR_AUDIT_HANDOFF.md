@@ -1,5 +1,19 @@
 # 4HR Re-Trigger — Audit Handoff / Continuation Note
 
+**CORRECTION (2026-07-26, operator-flagged): Section 3's ratcheting-stop claim below is
+STALE.** This file was written 2026-07-23, before `4HR_ReTrigger_Rules.md` was finalized/
+canonicalized by PR #317/#318. The current, controlling text of `4HR_ReTrigger_Rules.md`
+states the opposite in three places: §5 ("The stop is FIXED at entry. It does not trail
+as new candles complete."), §9 Step 5 ("Keep that stop fixed for the life of the trade;
+never trail or ratchet it"), and §12 Hard Rules ("No overriding or trailing the fixed
+completed-1H stop assigned at entry"). **`4HR_ReTrigger_Rules.md` is controlling.** The
+documented, canonical 4HR stop is fixed-at-entry, non-trailing — there is no ratcheting
+variant in the documented rule, and none should be built or tested. Section 3's
+"ratcheting is the documented rule / pass-fail gate" claim and the Section 5 stop-variant
+list below are retired by this note, kept in place for history only — do not act on them.
+See `docs/4hr-retrigger-batch1-evidence-2026-07-26.md` for the Batch-1 evidence run this
+correction applies to.
+
 **Purpose:** Resume the 4HR Re-Trigger stop audit (Batch 1) in a fresh session or
 environment without re-deriving context. Written 2026-07-23 from a read-only
 reconnaissance pass. **No audit has been run. No execution code has been changed.**
@@ -81,11 +95,15 @@ From `4HR_ReTrigger_Rules.md` §5:
   to each newly completed 1H candle. A live/open candle never counts.
 - Trade stays valid until a 1H flip fires, even on a deep pullback before target.
 
-**Critical correction to the original Batch-1 plan:** the documented 4HR stop **is** the
+~~**Critical correction to the original Batch-1 plan:** the documented 4HR stop **is** the
 ratcheting 1H flip. A "literal" (fixed-at-entry) 1H flip is a diagnostic variant, NOT the
 documented rule. So the PASS/FAIL gate for "does the documented strategy hold" is the
-**ratcheting** result. (Contrast: `12HR_Miyagi_Rules.md` §6 is deliberately **literal**
-and explicitly rejects ratchet — the two strategies use opposite stop philosophies.)
+**ratcheting** result.~~ **RETIRED 2026-07-26 — this was wrong.** `4HR_ReTrigger_Rules.md`
+(the controlling doc, finalized after this file was written) is explicit and repeated:
+the stop is fixed at entry and never trails/ratchets (§5, §9 Step 5, §12 Hard Rules). The
+fixed-at-entry stop **is** the documented rule; there is no ratcheting variant to test.
+(Contrast: `12HR_Miyagi_Rules.md` §6 is also literal/non-ratcheting — the two strategies
+share the same stop philosophy, they are not opposites as this file originally claimed.)
 
 ---
 
@@ -113,10 +131,15 @@ writes to journals/config/orders. Isolated file scope: `research/` + `scripts/` 
 original entry list to reconcile — see B1 below). Do not change entries, filters, targets,
 setup detection, or sample dates during the stop test.
 
-**Stop variants to compare (same entries, same costs):**
+~~**Stop variants to compare (same entries, same costs):**
 1. Fixed-distance stop (baseline — what produced the reported edge)
 2. Literal 1H flip (fixed at entry — diagnostic)
-3. **Ratcheting 1H flip (the DOCUMENTED rule — this is the pass/fail gate)**
+3. **Ratcheting 1H flip (the DOCUMENTED rule — this is the pass/fail gate)**~~
+**RETIRED 2026-07-26** — there are only two variants worth comparing: the fixed-distance
+baseline (what produced the original reported edge, kept for context/contrast only) and
+the fixed-at-entry completed-1H-candle stop (`4HR_ReTrigger_Rules.md` §5/§9/§12 — this
+**is** the documented rule and the pass/fail gate). There is no ratcheting variant to
+build or test.
 
 **Resolution/fills:** 5-min bars; strictly-prior closed bars only (no lookahead);
 `pessimistic_both_hit=True` (stop-first on same-bar); adverse entry slippage; state the
@@ -126,10 +149,11 @@ exact commission + slippage explicitly (do NOT silently inherit a script default
 profit factor; avg win / avg loss; max drawdown; MAE/MFE; **first vs second chronological
 half**; **long vs short**; sensitivity at **1-, 2-, and 3-tick** slippage.
 
-**Verdict rule:** the documented 4HR strategy is validated only if the **ratcheting 1H flip**
-variant holds positive expectancy with both chronological halves surviving. Otherwise it is
-"PROMISING BUT UNPROVEN," not validated. Stop after producing evidence — no doc rewrite, no
-implementation.
+**Verdict rule (corrected 2026-07-26):** the documented 4HR strategy is validated only if
+the **fixed-at-entry completed-1H-candle stop** (the actual documented rule — see the
+correction note at the top of this file) holds positive expectancy with both chronological
+halves surviving. Otherwise it is "PROMISING BUT UNPROVEN" or worse, not validated. Stop
+after producing evidence — no doc rewrite beyond this correction, no implementation.
 
 ---
 
