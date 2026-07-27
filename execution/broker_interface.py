@@ -44,6 +44,10 @@ class BracketOrder:
     max_slippage_ticks: Optional[float] = None
     execution_model: str = "anchored_structure"
     post_fill_validation_required: bool = False
+    # Deterministic client order identity (Tradovate clOrdId), derived from the
+    # originating signal/event identity by the caller. Optional — brokers that
+    # support it use it for submit idempotency; PaperBroker/replay ignore it.
+    client_order_id: Optional[str] = None
 
 
 @dataclass

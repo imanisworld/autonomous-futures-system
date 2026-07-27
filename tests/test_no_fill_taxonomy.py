@@ -47,6 +47,11 @@ def test_case_insensitive():
     assert classify_no_fill_reason("tradovate_rejected") == NO_FILL_BROKER_REJECTED
 
 
-def test_all_reasons_tuple_is_exactly_the_eight_requested_buckets():
-    assert len(ALL_REASONS) == 8
+def test_all_reasons_tuple_is_exactly_the_requested_buckets():
+    # 8 original coarse buckets (PR #167) + 8 explicit execution-provider
+    # failure buckets (NoQuote / NotEnoughLiquidity / ExecutionProvider-
+    # Unavailable / RiskCheckTimeout / SessionClosed / LiquidationOnly /
+    # max-position / max-order-qty), added with the Tradovate reliability
+    # pass. Fail-closed classification only — no behavior change.
+    assert len(ALL_REASONS) == 16
     assert NO_FILL_UNKNOWN in ALL_REASONS
