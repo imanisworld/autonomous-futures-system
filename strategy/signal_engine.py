@@ -27,6 +27,7 @@ from strategy.gex_gate import evaluate_gex
 from strategy.regime_classifier import classify_regime
 from strategy.signa_gate import evaluate_signa
 from strategy.four_hr_retrigger import advance_4hr_retrigger
+from strategy.strat_322_first_live import advance_strat_322_first_live
 from strategy.strat_212_122 import STRAT_122, STRAT_212, advance_strat_212_122
 from strategy.strat_classifier import TWO_DOWN, normalize_bar_type
 
@@ -252,6 +253,7 @@ class DecisionEngine:
         """
         now = datetime.now(timezone.utc)
         self._advance_4hr_retrigger(state, daily_state)
+        self._advance_strat_322_first_live(state, daily_state)
         self._advance_strat_212_122(state, daily_state)
 
         # ── Pre-flight: daily capacity ────────────────────────────────────────
@@ -1381,6 +1383,17 @@ class DecisionEngine:
         "orb_reclaim",
         "orb_rejection",
         "strat_4hr_retrigger",
+        "strat_322_first_live",
+    })
+
+    # Strategies established and triggered directly by the authoritative
+    # 5-minute stream (state.canonical_4hr_only), rather than the legacy
+    # 15-minute concept path. Both share the same bar_history_5m feed
+    # (webhook/runner.py's four_hr_five_min gate) and the same restriction:
+    # on a canonical-5m decision bar, ONLY these may originate a setup.
+    _FIVE_MINUTE_NATIVE_STRATEGIES: frozenset[str] = frozenset({
+        "strat_4hr_retrigger",
+        "strat_322_first_live",
     })
 
     def _find_setup(
@@ -1442,7 +1455,9 @@ class DecisionEngine:
         transformed setup for the other two rejections (matches the audit
         shape decide() has always produced for a single-candidate rejection).
         """
-        if setup.strategy in ("strat_4hr_retrigger", STRAT_212, STRAT_122):
+        if setup.strategy in (
+            "strat_4hr_retrigger", "strat_322_first_live", STRAT_212, STRAT_122,
+        ):
             # Entry/stop/target are already the canonical resolved formula
             # (causal boundary anchor for 212/122; completed-1H stop and
             # prior-4PM target for 4HR). Generic Pine/advisory and distance
@@ -1627,11 +1642,12 @@ class DecisionEngine:
     ):
         enabled = self.config.enabled_concepts
         if state.canonical_4hr_only:
-            # The established 5-minute lane is entry authority only.  The
-            # canonical 4HR strategy is the sole setup allowed to originate
-            # directly from it; all legacy 15-minute concepts remain excluded.
+            # The established 5-minute lane is entry authority only.  Only
+            # the 5-minute-native strategies may originate directly from it;
+            # all legacy 15-minute concepts remain excluded.
             enabled = [
-                name for name in enabled if name == "strat_4hr_retrigger"
+                name for name in enabled
+                if name in self._FIVE_MINUTE_NATIVE_STRATEGIES
             ]
         instrument_disabled = set(
             self.config.disabled_concepts_per_instrument.get(state.instrument, [])
@@ -1646,6 +1662,7 @@ class DecisionEngine:
 
         strategies = [
             ("strat_4hr_retrigger", self._try_strat_4hr_retrigger),
+            ("strat_322_first_live", self._try_strat_322_first_live),
             ("orb_breakout", self._try_orb_breakout),
             ("orb_reclaim", self._try_orb_reclaim),
             ("orb_rejection", self._try_orb_rejection),
@@ -1670,7 +1687,7 @@ class DecisionEngine:
                 continue
             setup = fn(state)
             if setup is not None:
-                if setup.strategy == "strat_4hr_retrigger":
+                if setup.strategy in self._FIVE_MINUTE_NATIVE_STRATEGIES:
                     yield priority_index, setup
                 else:
                     yield priority_index, self._enforce_min_target_distance(setup, state.instrument)
@@ -2511,6 +2528,30 @@ class DecisionEngine:
         daily_state.four_hr_retrigger_state[state.instrument] = next_state
         state.four_hr_retrigger_candidate = candidate
 
+    def _advance_strat_322_first_live(
+        self, state: MarketState, daily_state: DailyState
+    ) -> None:
+        """Advance the canonical persisted 3-2-2 First Live state (MNQ only)."""
+        state.strat_322_first_live_candidate = None
+        if "strat_322_first_live" not in self.config.enabled_concepts:
+            return
+        if "strat_322_first_live" in self.config.disabled_concepts_per_instrument.get(
+            state.instrument, []
+        ):
+            return
+        if not self._is_five_minute_state(state):
+            return
+        next_state, candidate = advance_strat_322_first_live(
+            bars_5m=state.bar_history_5m,
+            current_bar_ts=state.timestamp,
+            instrument=state.instrument,
+            persisted_state=daily_state.strat_322_first_live_state.get(
+                state.instrument, {}
+            ),
+        )
+        daily_state.strat_322_first_live_state[state.instrument] = next_state
+        state.strat_322_first_live_candidate = candidate
+
     def _advance_strat_212_122(
         self, state: MarketState, daily_state: DailyState
     ) -> None:
@@ -2575,6 +2616,32 @@ class DecisionEngine:
             notes=(
                 "Resolved 4HR Re-Trigger: prior-4PM/4AM classification, "
                 "pre-09:30 break-retrigger, dynamic completed-1H fixed stop."
+            ),
+        )
+
+    def _try_strat_322_first_live(self, state: MarketState) -> Optional[SetupDetail]:
+        """Return only the candidate produced by the resolved 3-2-2 state machine."""
+        candidate = state.strat_322_first_live_candidate
+        if not candidate:
+            return None
+        direction = str(candidate["direction"])
+        entry = float(candidate["entry"])
+        stop = float(candidate["stop"])
+        target = float(candidate["target"])
+        rr = RiskEngine.calculate_rr(direction, entry, stop, target)
+        return SetupDetail(
+            direction=direction,
+            entry=round(entry, 4),
+            stop=round(stop, 4),
+            target=round(target, 4),
+            rr_ratio=rr,
+            strategy="strat_322_first_live",
+            entry_time=candidate["entry_time"],
+            notes=(
+                "Resolved MNQ 60M 3-2-2 First Live: 8AM outside bar / 9AM "
+                "directional / 10-11AM opposite-boundary break, opposite "
+                "9AM boundary stop, 8AM boundary target."
+                + (" Gap-open entry." if candidate.get("gap_open") else "")
             ),
         )
 

@@ -253,6 +253,13 @@ class MarketState:
     bar_history_5m: list[dict] = field(default_factory=list)
     four_hr_retrigger_candidate: Optional[dict] = None
     canonical_4hr_only: bool = False
+    # Canonical MNQ 60M 3-2-2 First Live candidate, populated transiently by
+    # DecisionEngine from strategy/strat_322_first_live.py's pure state
+    # machine. Shares the same 5-minute bar_history_5m feed as the 4HR
+    # Re-Trigger lane above (canonical_4hr_only is set whenever EITHER
+    # 5m-native strategy is enabled — see signal_engine.py's
+    # _FIVE_MINUTE_NATIVE_STRATEGIES).
+    strat_322_first_live_candidate: Optional[dict] = None
     # Canonical Strat 2-1-2 / 1-2-2 candidate, populated transiently by
     # DecisionEngine from strategy/strat_212_122.py's pure state machine.
     strat_212_122_candidate: Optional[dict] = None

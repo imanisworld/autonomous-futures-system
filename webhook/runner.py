@@ -542,12 +542,14 @@ def process_alert(
             except Exception:
                 logger.debug("vwap_hold early-signal resolution skipped", exc_info=True)
 
-        if (
-            not five_min_trigger
-            and "strat_4hr_retrigger" in cfg.enabled_concepts
+        if not five_min_trigger and (
+            "strat_4hr_retrigger" in cfg.enabled_concepts
+            or "strat_322_first_live" in cfg.enabled_concepts
         ):
-            # Unlike legacy concepts, the resolved 4HR setup is established and
-            # triggered by the authoritative 5-minute stream itself.
+            # Unlike legacy concepts, the resolved 4HR Re-Trigger and 3-2-2
+            # First Live setups are established and triggered by the
+            # authoritative 5-minute stream itself (see signal_engine.py's
+            # _FIVE_MINUTE_NATIVE_STRATEGIES).
             four_hr_five_min = True
 
         if not five_min_trigger and not four_hr_five_min:

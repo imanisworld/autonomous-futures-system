@@ -98,6 +98,11 @@ class DailyState:
     # every bar from already-given lookback fields) — this exists for
     # restart continuity and per-bar evidence review.
     strat_212_122_state: Dict[str, dict] = field(default_factory=dict)
+    # Persisted/reconstructed state for the canonical executable MNQ 60M
+    # 3-2-2 First Live pattern. Same cross-instrument isolation contract as
+    # four_hr_retrigger_state (keyed by instrument root, dict form for
+    # deterministic journal serialization).
+    strat_322_first_live_state: Dict[str, dict] = field(default_factory=dict)
 
 
 @dataclass
