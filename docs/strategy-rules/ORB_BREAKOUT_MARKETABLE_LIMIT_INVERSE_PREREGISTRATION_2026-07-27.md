@@ -1,12 +1,20 @@
-# ORB Breakout marketable-limit inverse — preregistration
+# ORB Breakout marketable-limit inverse — corrected preregistration
 
-Frozen: 2026-07-27, before this isolated candidate's P&L was run.
+Frozen: 2026-07-27, before the corrected fixed-one-contract candidate's P&L
+was run.
 
 Status at freeze: **NEW CANDIDATE — UNTESTED**
 
 This is one research-only directional counterfactual. It must not contact the
 deployed box, modify #359, modify ORB Reclaim #360, change Lane B, alter
 runtime/configuration, or create a rescue variant after results.
+
+This corrected preregistration supersedes only the internally contradictory
+sizing language at SHA
+`b2c586af8e2b624e93fe0bf18fbab4be15f2003d`. The stopped run under that SHA
+produced no accepted economic result. All frozen attempt, signal, inversion,
+execution, bracket, cost, slippage, session, duplicate, roll, breaker, and
+decision rules below remain unchanged.
 
 ## Frozen source
 
@@ -103,8 +111,8 @@ Only directional exposure changes.
 For each approved original order:
 
 1. Preserve date, signal bar, instrument, strategy, session, planned entry,
-   contracts, notes, qualification, execution mode, and all original absolute
-   price distances.
+   notes, qualification, execution mode, and all original absolute price
+   distances.
 2. Flip LONG to SHORT and SHORT to LONG.
 3. Let `S = abs(planned_entry - original_stop)`.
 4. Let `T = abs(original_target - planned_entry)`.
@@ -113,11 +121,28 @@ For each approved original order:
 6. Inverse SHORT: `stop = planned_entry + S`,
    `target = planned_entry - T`.
 
-The fixed population must contain one contract on every captured source
-order. The run aborts if #358 produces any ORB Breakout source attempt with a
-different size. The chronological inverse uses the same frozen sizing engine
-with a one-contract hard invariant; it aborts rather than silently changing
-size.
+## Corrected fixed sizing contract
+
+- Every fixed-population inverse order is exactly **one MNQ contract**.
+- Every chronological system-path inverse ORB Breakout order is exactly
+  **one MNQ contract**.
+- The dynamic account-sizing engine remains active so its recommendation can
+  be recorded diagnostically, but that recommendation is ignored for ORB
+  Breakout order quantity in this candidate.
+- A recommendation above or below one contract does not abort, suppress, add,
+  or resize an ORB Breakout order.
+- Immediately before PaperBroker execution, the ORB Breakout order quantity is
+  set to exactly one. Only then is its direction and bracket mirrored.
+- P&L and account state evolve from the actual one-contract fills and outcomes.
+- The normal 20% maximum-drawdown breaker and existing position/account gates
+  remain unchanged and may suppress later attempts.
+- This quantity rule applies only inside this isolated research pass. It does
+  not change #358, runtime, configuration, or any other strategy.
+
+The 111 committed source attempts all carry one contract. Any source attempt
+with a different captured quantity is an identity mismatch and aborts the
+fixed-population reconciliation. That source check is distinct from the
+chronological inverse engine's diagnostic sizing recommendation.
 
 If the exact mirror violates bracket geometry or cannot be passed through the
 same marketable-limit fill model, the study stops without promotion evidence.
@@ -195,11 +220,14 @@ Re-run the full frozen marketable-limit engine chronologically, leaving every
 non-ORB-Breakout strategy in its original direction. Mirror only approved
 `orb_breakout` orders immediately before PaperBroker execution.
 
-Inverted fills and outcomes update the normal account and 20% maximum-
-drawdown breaker. Existing-position and ordinary account gates remain active.
-The resulting ORB Breakout attempt set may therefore differ. Report stable
-attempts retained, removed, and added versus the 111-attempt source set, plus
-breaker dates and reasons.
+For each approved ORB Breakout order, record the dynamic engine's recommended
+quantity, force the submitted quantity to exactly one, and then apply the
+frozen inversion transform. Inverted one-contract fills and outcomes update
+the normal account and 20% maximum-drawdown breaker. Existing-position and
+ordinary account gates remain active. The resulting ORB Breakout attempt set
+may therefore differ. Report stable attempts retained, removed, and added
+versus the 111-attempt source set, dynamic sizing recommendations, plus breaker
+dates and reasons.
 
 This is a selective ORB Breakout intervention, not a system-wide inversion.
 
@@ -233,16 +261,22 @@ Final decision must be exactly one of:
 `PROMOTE TO PAPER-BUILD CANDIDATE`, `KEEP RESEARCHING`, `REJECT`.
 
 Promotion requires positive baseline results, positive H1/H2, evidence not
-dependent on one instrument/session/inverse direction, reasonable slippage
-survival, no catastrophic recent decay, acceptable drawdown, no severe winner
+dependent on one session/inverse direction, reasonable slippage survival, no
+catastrophic recent decay, acceptable drawdown, no severe winner
 concentration, causal execution, and no material fixed/system-path
 contradiction.
 
 The source population already contains only MNQ. Therefore this pass cannot
 claim cross-instrument validation even if profitable.
 
-If the candidate fails, reject it. Do not tune marketability ticks, stops,
-targets, filters, sessions, breaker rules, or any rescue variant.
+Decision mapping is frozen:
+
+- positive and robust: `PROMOTE TO PAPER-BUILD CANDIDATE`;
+- mixed or weak: classification `WAIT`, final decision `KEEP RESEARCHING`;
+- negative: final decision `REJECT`, closing the ORB Breakout inversion arc.
+
+Do not tune marketability ticks, stops, targets, filters, sessions, breaker
+rules, sizing, or any rescue variant.
 
 Only a promoted candidate may receive a minimal paper-build plan. No
 implementation is authorized here.
