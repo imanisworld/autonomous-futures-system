@@ -336,6 +336,7 @@ strategy_permission_gate:
     strat_outside_continuation: PAPER_ELIGIBLE
     strat_4hr_retrigger: PAPER_ELIGIBLE
     strat_4hr_retrigger_observed: PAPER_ELIGIBLE
+    strat_322_first_live: PAPER_ELIGIBLE
     continuation_pullback: PAPER_ELIGIBLE
     ema_pullback_trend: PAPER_ELIGIBLE
     gap_fill: PAPER_ELIGIBLE
@@ -386,7 +387,27 @@ strategy:
       # 15M-proxy/SHADOW-ONLY posture, which predated the real 5M canonical
       # detector and is no longer accurate. See
       # docs/4hr-retrigger-batch1-evidence-2026-07-26.md for the full evidence.
-    # SHADOW-ONLY — strat_122: no reproducible resolved trades in the verified
+    - strat_322_first_live    # MNQ-only, day-only (4PM ET flatten). Canonical 5m-native
+      # state machine (strategy/strat_322_first_live.py), wired 2026-07-27 from
+      # docs/strategy-rules/60M_322_FirstLive_Rules.md + the honest-fill replay's
+      # 5-minute entry-recovery fidelity (research/replay_322_honest_fill.py) --
+      # NOT research/detector_322_first_live.py's completed-60m-bar shortcut, which
+      # is lookahead-unsafe for live use. Evidence (PR #340/#341, 2026-07-26): 34
+      # candidates, 21 fills, 20 resolved, 18W-2L, net $1,595.70, PF 10.36, positive
+      # both halves/directions, survives 1-4 tick slippage -- PROMISING BUT UNPROVEN,
+      # n=34 thin. First runtime wiring for this strategy; MES excluded via
+      # disabled_concepts_per_instrument (rules doc: MNQ only, do not trade this
+      # setup on any other instrument). See docs/strategy-rules/60M_322_FirstLive_Rules.md.
+    - strat_122               # MES only (MNQ excluded via disabled_concepts_per_instrument).
+      # Canonical causal two-phase state machine (strategy/strat_212_122.py, PR
+      # #317/#337) -- the SAME code path replay and live both call; NOT the older
+      # naive shadow-only pattern the "SHADOW-ONLY — strat_122" comment immediately
+      # below refers to (that comment predates the causal build). PR #337 evidence
+      # (main@8e14795): MES122 PROMISING BUT UNPROVEN. strat_212 stays excluded
+      # (MES212 BROKEN, MNQ212/MNQ122 WAIT per the same PR) -- this is a deliberate
+      # partial re-enable, not a reversal of strat_212's status.
+    # SHADOW-ONLY (stale label — see strat_122 above, re-enabled 2026-07-27 via the
+    # causal state machine): no reproducible resolved trades in the verified
     # 77-day journals; wide versions were negative on MES/MNQ Polygon studies.
     # strategy/shadow_setups.py still journals normal structural candidates and
     # stop-aware wide-bar pullbacks so it can earn its way back with evidence.
@@ -439,6 +460,20 @@ strategy:
       # 1-3 tick slippage sensitivity (flips to -$103.50). Excluded here, no
       # promotion. See docs/4hr-retrigger-batch1-evidence-2026-07-26.md.
       - strat_4hr_retrigger
+      # strat_322_first_live is MNQ-only per its own hardcoded instrument guard
+      # (strategy/strat_322_first_live.py's _SUPPORTED set) and would already
+      # no-op for MES; listed explicitly for the same defense-in-depth reason
+      # every other MES-inapplicable strategy above is listed rather than
+      # relying solely on the code-level guard.
+      - strat_322_first_live
+    MNQ:
+      # 2026-07-27: strat_122 re-enabled ABOVE in enabled_concepts for MES only
+      # (PR #337 evidence: MES122 PROMISING BUT UNPROVEN). The SAME PR's MNQ122
+      # cell was WAIT (insufficient/negative evidence) -- explicitly excluded
+      # here so enabling the MES cell cannot silently also activate the
+      # unevidenced MNQ cell. strat_212 needs no entry here: it was never added
+      # to enabled_concepts above, so it cannot fire for any instrument.
+      - strat_122
 
   # Per-instrument INITIAL stop-width multiplier (machinery present; values
   # DEFERRED). The 622-day replay showed a blanket MNQ 2.5x lifts vwap setups

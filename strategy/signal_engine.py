@@ -27,6 +27,7 @@ from strategy.gex_gate import evaluate_gex
 from strategy.regime_classifier import classify_regime
 from strategy.signa_gate import evaluate_signa
 from strategy.four_hr_retrigger import advance_4hr_retrigger
+from strategy.strat_322_first_live import advance_strat_322_first_live
 from strategy.strat_212_122 import STRAT_122, STRAT_212, advance_strat_212_122
 from strategy.strat_classifier import TWO_DOWN, normalize_bar_type
 
@@ -252,6 +253,7 @@ class DecisionEngine:
         """
         now = datetime.now(timezone.utc)
         self._advance_4hr_retrigger(state, daily_state)
+        self._advance_strat_322_first_live(state, daily_state)
         self._advance_strat_212_122(state, daily_state)
 
         # ── Pre-flight: daily capacity ────────────────────────────────────────
@@ -360,7 +362,17 @@ class DecisionEngine:
         # state). RANGE_BOUND passes the non_tradable_states check above but is
         # out-of-distribution for every setup — block it here so a live Pine
         # RANGE_BOUND label can't admit a false-breakout the backtest never saw.
-        if self.config.require_trending_condition and condition != "TRENDING":
+        # _TRENDING_GATE_EXEMPT (2026-07-27): that 555-day replay predates
+        # strat_322_first_live and never gated it — see the exemption set's
+        # own comment above for the verification. The exemption only ever
+        # bypasses this gate when the bar's SOLE candidate is exempt; a
+        # non-exempt 5m-native strategy (strat_4hr_retrigger) sharing the
+        # same bar keeps today's exact gated behavior, unchanged.
+        if (
+            self.config.require_trending_condition
+            and condition != "TRENDING"
+            and not self._trending_gate_exempt_candidate(state)
+        ):
             blocked_candidate_audit = self._collect_blocked_candidate_audit(
                 state=state,
                 condition=condition,
@@ -1381,7 +1393,33 @@ class DecisionEngine:
         "orb_reclaim",
         "orb_rejection",
         "strat_4hr_retrigger",
+        "strat_322_first_live",
     })
+
+    # Strategies established and triggered directly by the authoritative
+    # 5-minute stream (state.canonical_4hr_only), rather than the legacy
+    # 15-minute concept path. Both share the same bar_history_5m feed
+    # (webhook/runner.py's four_hr_five_min gate) and the same restriction:
+    # on a canonical-5m decision bar, ONLY these may originate a setup.
+    _FIVE_MINUTE_NATIVE_STRATEGIES: frozenset[str] = frozenset({
+        "strat_4hr_retrigger",
+        "strat_322_first_live",
+    })
+
+    # TRENDING-gate exemption (2026-07-27, operator-directed contract audit):
+    # the system-wide require_trending_condition gate's own justification
+    # (see the gate itself, below) is calibrated against a 555-day replay
+    # that predates strat_322_first_live's existence — it is a global
+    # default, not a rule this strategy's own contract ever specified.
+    # Verified zero market_condition/TRENDING/trend_direction/trend_strength
+    # references anywhere in the rules doc, the causal detector, or the
+    # honest-fill replay that produced the canonical evidence (PR #340/#341):
+    # `grep -n "market_condition\|TRENDING\|trend_direction\|trend_strength"
+    # research/detector_322_first_live.py research/replay_322_honest_fill.py
+    # research/reconcile_322_first_live.py` — zero matches. Exempting only
+    # this strategy so forward demo tests the SAME strategy that produced the
+    # evidence, not a TRENDING-filtered subset of it.
+    _TRENDING_GATE_EXEMPT: frozenset[str] = frozenset({"strat_322_first_live"})
 
     def _find_setup(
         self,
@@ -1442,7 +1480,9 @@ class DecisionEngine:
         transformed setup for the other two rejections (matches the audit
         shape decide() has always produced for a single-candidate rejection).
         """
-        if setup.strategy in ("strat_4hr_retrigger", STRAT_212, STRAT_122):
+        if setup.strategy in (
+            "strat_4hr_retrigger", "strat_322_first_live", STRAT_212, STRAT_122,
+        ):
             # Entry/stop/target are already the canonical resolved formula
             # (causal boundary anchor for 212/122; completed-1H stop and
             # prior-4PM target for 4HR). Generic Pine/advisory and distance
@@ -1627,11 +1667,12 @@ class DecisionEngine:
     ):
         enabled = self.config.enabled_concepts
         if state.canonical_4hr_only:
-            # The established 5-minute lane is entry authority only.  The
-            # canonical 4HR strategy is the sole setup allowed to originate
-            # directly from it; all legacy 15-minute concepts remain excluded.
+            # The established 5-minute lane is entry authority only.  Only
+            # the 5-minute-native strategies may originate directly from it;
+            # all legacy 15-minute concepts remain excluded.
             enabled = [
-                name for name in enabled if name == "strat_4hr_retrigger"
+                name for name in enabled
+                if name in self._FIVE_MINUTE_NATIVE_STRATEGIES
             ]
         instrument_disabled = set(
             self.config.disabled_concepts_per_instrument.get(state.instrument, [])
@@ -1646,6 +1687,7 @@ class DecisionEngine:
 
         strategies = [
             ("strat_4hr_retrigger", self._try_strat_4hr_retrigger),
+            ("strat_322_first_live", self._try_strat_322_first_live),
             ("orb_breakout", self._try_orb_breakout),
             ("orb_reclaim", self._try_orb_reclaim),
             ("orb_rejection", self._try_orb_rejection),
@@ -1670,7 +1712,7 @@ class DecisionEngine:
                 continue
             setup = fn(state)
             if setup is not None:
-                if setup.strategy == "strat_4hr_retrigger":
+                if setup.strategy in self._FIVE_MINUTE_NATIVE_STRATEGIES:
                     yield priority_index, setup
                 else:
                     yield priority_index, self._enforce_min_target_distance(setup, state.instrument)
@@ -2489,6 +2531,22 @@ class DecisionEngine:
         value = str(getattr(state.ohlc, "timeframe", "") or "").strip().lower()
         return value in {"5", "5m", "5min", "5minute", "5minutes"}
 
+    def _trending_gate_exempt_candidate(self, state: MarketState) -> bool:
+        """True iff the TRENDING gate should be bypassed for this bar.
+
+        Bypasses ONLY when the bar's SOLE viable candidate belongs to
+        _TRENDING_GATE_EXEMPT. A non-exempt 5-minute-native strategy
+        (strat_4hr_retrigger) having a candidate on the exact same bar keeps
+        today's gated behavior — this can never change what strat_4hr_
+        retrigger does, only add a path for the exempt strategy when it
+        would otherwise be the sole candidate blocked.
+        """
+        if not state.canonical_4hr_only:
+            return False
+        has_exempt = state.strat_322_first_live_candidate is not None
+        has_non_exempt = state.four_hr_retrigger_candidate is not None
+        return has_exempt and not has_non_exempt
+
     def _advance_4hr_retrigger(
         self, state: MarketState, daily_state: DailyState
     ) -> None:
@@ -2510,6 +2568,30 @@ class DecisionEngine:
         )
         daily_state.four_hr_retrigger_state[state.instrument] = next_state
         state.four_hr_retrigger_candidate = candidate
+
+    def _advance_strat_322_first_live(
+        self, state: MarketState, daily_state: DailyState
+    ) -> None:
+        """Advance the canonical persisted 3-2-2 First Live state (MNQ only)."""
+        state.strat_322_first_live_candidate = None
+        if "strat_322_first_live" not in self.config.enabled_concepts:
+            return
+        if "strat_322_first_live" in self.config.disabled_concepts_per_instrument.get(
+            state.instrument, []
+        ):
+            return
+        if not self._is_five_minute_state(state):
+            return
+        next_state, candidate = advance_strat_322_first_live(
+            bars_5m=state.bar_history_5m,
+            current_bar_ts=state.timestamp,
+            instrument=state.instrument,
+            persisted_state=daily_state.strat_322_first_live_state.get(
+                state.instrument, {}
+            ),
+        )
+        daily_state.strat_322_first_live_state[state.instrument] = next_state
+        state.strat_322_first_live_candidate = candidate
 
     def _advance_strat_212_122(
         self, state: MarketState, daily_state: DailyState
@@ -2575,6 +2657,32 @@ class DecisionEngine:
             notes=(
                 "Resolved 4HR Re-Trigger: prior-4PM/4AM classification, "
                 "pre-09:30 break-retrigger, dynamic completed-1H fixed stop."
+            ),
+        )
+
+    def _try_strat_322_first_live(self, state: MarketState) -> Optional[SetupDetail]:
+        """Return only the candidate produced by the resolved 3-2-2 state machine."""
+        candidate = state.strat_322_first_live_candidate
+        if not candidate:
+            return None
+        direction = str(candidate["direction"])
+        entry = float(candidate["entry"])
+        stop = float(candidate["stop"])
+        target = float(candidate["target"])
+        rr = RiskEngine.calculate_rr(direction, entry, stop, target)
+        return SetupDetail(
+            direction=direction,
+            entry=round(entry, 4),
+            stop=round(stop, 4),
+            target=round(target, 4),
+            rr_ratio=rr,
+            strategy="strat_322_first_live",
+            entry_time=candidate["entry_time"],
+            notes=(
+                "Resolved MNQ 60M 3-2-2 First Live: 8AM outside bar / 9AM "
+                "directional / 10-11AM opposite-boundary break, opposite "
+                "9AM boundary stop, 8AM boundary target."
+                + (" Gap-open entry." if candidate.get("gap_open") else "")
             ),
         )
 

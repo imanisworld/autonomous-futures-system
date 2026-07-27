@@ -165,6 +165,18 @@ Verdict taxonomy:
   coverage — no 5-minute MNQ bar cache exists past 2026-06-26 in this environment.
 - Next: preserve baseline, collect new 5-minute MNQ data prospectively, do not tune rules
   while waiting.
+- **Runtime wiring (2026-07-27, demo-readiness pass):** first live/replay-shared
+  implementation, `strategy/strat_322_first_live.py` — a pure causal state machine
+  (mirrors `strategy/four_hr_retrigger.py`'s contract) wired into `signal_engine.py`'s
+  canonical 5m-native path. Setup detection (7/8/9AM) evaluates once at the exact 10:00
+  boundary from fully-closed 60m bars; entry recovery uses the honest-fill replay's
+  5-minute crossing detection (`research/replay_322_honest_fill.py`'s fidelity — NOT
+  `research/detector_322_first_live.py`'s completed-60m-bar shortcut, which is
+  lookahead-unsafe for live use). Day-only exit (4PM ET) applied via the shared
+  `execution/day_only_exit.py` contract. Enabled in `risk_rules.yaml` (MNQ only, MES
+  explicitly excluded, `PAPER_ELIGIBLE`) for demo forward-evidence collection this week.
+  Classification unchanged — still PROMISING BUT UNPROVEN pending forward evidence; the
+  wiring does not itself constitute new evidence.
 
 ---
 
