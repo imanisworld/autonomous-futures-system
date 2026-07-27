@@ -30,6 +30,7 @@ from execution.broker_interface import BracketOrder  # noqa: E402
 from execution.paper_broker import NextBarOHLC, PaperBroker  # noqa: E402
 from replay.candle_loader import ReplayCandleLoader  # noqa: E402
 from replay.replay_engine import ReplayEngine  # noqa: E402
+from risk.risk_engine import RiskEngine  # noqa: E402
 from scripts.corrected_ioc_corpus_evidence import (  # noqa: E402
     COMMISSION_ROUND_TRIP,
     HALVES,
@@ -43,7 +44,7 @@ from scripts.execution_mode_corpus_comparison import MARKETABLE_TICKS  # noqa: E
 
 
 BASE_SHA = "74b14071822be46de46be3c2db0eff7c95b8fced"
-PREREGISTRATION_SHA = "b2c586af8e2b624e93fe0bf18fbab4be15f2003d"
+PREREGISTRATION_SHA = "eda2c3344304fe2f9daf74da6505acdf1256fad4"
 CORPUS_SHA256 = "4ab5812659910235e8a26e7417f851e0a403855ff75183322e99b0b36970d3d4"
 SOURCE_RAW_SHA256 = "800c6a33212710a172bc4ff8bcca7a1f7ecc3e4ce437624d1bc0ecd05c79ba23"
 SOURCE_IDENTITY_SHA256 = "4e357bfc9e4a23c28fbbdf67e7f5cf99cbc40bb065e2e39684b29705b1192970"
@@ -172,16 +173,49 @@ def _load_bars(corpus: Path) -> tuple[dict[str, list], dict[str, dict[str, int]]
     return all_bars, indexes
 
 
+def _force_one_contract_for_orb(
+    setup,
+    daily_state,
+    diagnostics: list[dict] | None,
+) -> None:
+    if setup.strategy != STRATEGY:
+        return
+    recommended = int(setup.contracts or 1)
+    setup.contracts = 1
+    if diagnostics is not None:
+        diagnostics.append(
+            {
+                "instrument": setup.instrument,
+                "session": setup.session,
+                "direction": setup.direction,
+                "account_balance": round(float(daily_state.account_balance), 2),
+                "recommended_contracts": recommended,
+                "submitted_contracts": 1,
+            }
+        )
+
+
 @contextmanager
-def _broker_patch(*, invert_orb: bool, captures: dict[str, dict] | None = None):
-    original = PaperBroker.execute_bracket
+def _research_patch(
+    *,
+    invert_orb: bool,
+    captures: dict[str, dict] | None = None,
+    sizing_diagnostics: list[dict] | None = None,
+):
+    original_execute = PaperBroker.execute_bracket
+    original_validate = RiskEngine.validate
+
+    def patched_validate(self, setup, daily_state):
+        _force_one_contract_for_orb(setup, daily_state, sizing_diagnostics)
+        return original_validate(self, setup, daily_state)
 
     def patched(self, order, market_price=None, *, paper_order_id=None):
         submitted = replace(order)
         if order.strategy == STRATEGY:
             if int(order.contracts or 1) != 1:
                 raise RuntimeError(
-                    f"one-contract invariant failed for {paper_order_id}: {order.contracts}"
+                    f"fixed-one-contract execution invariant failed for "
+                    f"{paper_order_id}: {order.contracts}"
                 )
             if captures is not None:
                 captures[str(paper_order_id)] = {
@@ -191,18 +225,20 @@ def _broker_patch(*, invert_orb: bool, captures: dict[str, dict] | None = None):
                 }
             if invert_orb:
                 submitted = _mirror(order)
-        return original(
+        return original_execute(
             self,
             submitted,
             market_price=market_price,
             paper_order_id=paper_order_id,
         )
 
+    RiskEngine.validate = patched_validate
     PaperBroker.execute_bracket = patched
     try:
         yield
     finally:
-        PaperBroker.execute_bracket = original
+        PaperBroker.execute_bracket = original_execute
+        RiskEngine.validate = original_validate
 
 
 def _run_system(
@@ -212,8 +248,13 @@ def _run_system(
     *,
     invert_orb: bool,
     captures: dict[str, dict] | None = None,
+    sizing_diagnostics: list[dict] | None = None,
 ) -> None:
-    with _broker_patch(invert_orb=invert_orb, captures=captures):
+    with _research_patch(
+        invert_orb=invert_orb,
+        captures=captures,
+        sizing_diagnostics=sizing_diagnostics,
+    ):
         for instrument in INSTRUMENTS:
             files = sorted((corpus / instrument).glob("*.jsonl"))
             if len(files) != 313:
@@ -516,6 +557,22 @@ def _concentration(rows: list[dict]) -> dict:
     return output
 
 
+def _sizing_summary(rows: list[dict]) -> dict:
+    recommendations = Counter(int(row["recommended_contracts"]) for row in rows)
+    non_one = [row for row in rows if int(row["recommended_contracts"]) != 1]
+    return {
+        "evaluations": len(rows),
+        "recommendation_counts": {
+            str(key): value for key, value in sorted(recommendations.items())
+        },
+        "non_one_recommendations": len(non_one),
+        "all_submitted_exactly_one": all(
+            int(row["submitted_contracts"]) == 1 for row in rows
+        ),
+        "first_non_one_recommendation": non_one[0] if non_one else None,
+    }
+
+
 def _robustness(rows: list[dict]) -> dict:
     resolved = [row for row in rows if row["resolved"]]
     latest = resolved[-max(1, math.ceil(len(resolved) * 0.25)) :] if resolved else []
@@ -615,6 +672,7 @@ def run(args) -> dict:
 
     baseline_config = _marketable_config(base, slippage_ticks=1)
     captures: dict[str, dict] = {}
+    original_sizing_diagnostics: list[dict] = []
     original_logs = args.logs / "original_baseline"
     _run_system(
         baseline_config,
@@ -622,6 +680,7 @@ def run(args) -> dict:
         original_logs,
         invert_orb=False,
         captures=captures,
+        sizing_diagnostics=original_sizing_diagnostics,
     )
     original_all, original_halts, original_risks = _parse_system(
         original_logs, inverted_orb=False
@@ -659,6 +718,7 @@ def run(args) -> dict:
     system_by_tier = {}
     system_rows_by_tier = {}
     system_halts_by_tier = {}
+    system_sizing_by_tier = {}
     for ticks in TOTAL_SLIPPAGE_TIERS:
         config = _marketable_config(base, slippage_ticks=ticks)
         fixed_rows = _fixed_inverse(
@@ -668,11 +728,13 @@ def run(args) -> dict:
         fixed_by_tier[ticks] = _robustness(fixed_rows)
 
         inverse_logs = args.logs / f"system_inverse_{ticks}t"
+        sizing_diagnostics: list[dict] = []
         _run_system(
             config,
             args.corpus,
             inverse_logs,
             invert_orb=True,
+            sizing_diagnostics=sizing_diagnostics,
         )
         system_all, halts, _risks = _parse_system(
             inverse_logs, inverted_orb=True
@@ -681,6 +743,7 @@ def run(args) -> dict:
         system_rows_by_tier[ticks] = system_orb
         system_by_tier[ticks] = _robustness(system_orb)
         system_halts_by_tier[ticks] = halts
+        system_sizing_by_tier[ticks] = _sizing_summary(sizing_diagnostics)
 
     fixed_baseline = fixed_rows_by_tier[1]
     system_baseline = system_rows_by_tier[1]
@@ -727,6 +790,9 @@ def run(args) -> dict:
             "manifest": source_manifest,
         },
         "original_baseline_reconciliation": reconciliation,
+        "original_sizing_diagnostics": _sizing_summary(
+            original_sizing_diagnostics
+        ),
         "original_orb_breakout": _robustness(original_orb),
         "fixed_population_inverse": fixed_by_tier[1],
         "system_path_inverse": system_by_tier[1],
@@ -762,6 +828,7 @@ def run(args) -> dict:
                 _metrics(system_baseline)["net"] - _metrics(fixed_baseline)["net"], 2
             ),
             "original_risk_rejections": dict(original_risks.most_common()),
+            "dynamic_sizing_diagnostics_by_tier": system_sizing_by_tier,
         },
         "causality_fill_realism": causality,
         "same_bar_ambiguities_fixed_baseline": sum(

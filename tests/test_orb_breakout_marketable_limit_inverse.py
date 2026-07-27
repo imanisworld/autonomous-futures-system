@@ -1,7 +1,10 @@
+from types import SimpleNamespace
+
 from execution.broker_interface import BracketOrder
 from execution.paper_broker import PaperBroker
 from research.orb_breakout_marketable_limit_inverse import (
     _attribution,
+    _force_one_contract_for_orb,
     _identity_payload,
     _mirror,
 )
@@ -82,6 +85,52 @@ def test_frozen_marketable_limit_is_bounded_and_fail_closed():
     cancelled = broker.execute_bracket(inverse, market_price=97.75)
     assert cancelled.result == "CANCELLED"
     assert cancelled.exit_reason == "ENTRY_NOT_FILLED"
+
+
+def test_dynamic_sizing_recommendation_is_diagnostic_only():
+    setup = SimpleNamespace(
+        strategy="orb_breakout",
+        contracts=2,
+        instrument="MNQ",
+        session="london",
+        direction="LONG",
+    )
+    daily_state = SimpleNamespace(account_balance=6200.0)
+    diagnostics = []
+
+    _force_one_contract_for_orb(setup, daily_state, diagnostics)
+
+    assert setup.contracts == 1
+    assert diagnostics == [
+        {
+            "instrument": "MNQ",
+            "session": "london",
+            "direction": "LONG",
+            "account_balance": 6200.0,
+            "recommended_contracts": 2,
+            "submitted_contracts": 1,
+        }
+    ]
+
+
+def test_fixed_quantity_override_does_not_touch_other_strategies():
+    setup = SimpleNamespace(
+        strategy="orb_reclaim",
+        contracts=2,
+        instrument="MNQ",
+        session="london",
+        direction="LONG",
+    )
+    diagnostics = []
+
+    _force_one_contract_for_orb(
+        setup,
+        SimpleNamespace(account_balance=6200.0),
+        diagnostics,
+    )
+
+    assert setup.contracts == 2
+    assert diagnostics == []
 
 
 def test_identity_payload_is_order_independent_and_session_sensitive():
