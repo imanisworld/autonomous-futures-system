@@ -2082,6 +2082,24 @@ def process_alert(
         result["decision"] = "LIVE_TRADING_BLOCKED"
         return result
 
+    # Deterministic client order identity: the same logical signal (same
+    # instrument/strategy/direction/decision-bar) always maps to the same id,
+    # so a retry or recovery path can never create a second parent order at
+    # the broker (TradovateBroker refuses a registered clOrdId; ambiguous
+    # submissions must reconcile first). Derived, not random — restarts and
+    # duplicate webhook deliveries produce the identical identity.
+    import hashlib as _hashlib
+    _signal_identity = "|".join(
+        str(part)
+        for part in (
+            state.instrument,
+            decision.setup.strategy,
+            decision.setup.direction,
+            getattr(state, "timestamp", ""),
+        )
+    )
+    _client_order_id = "AFS-" + _hashlib.sha1(_signal_identity.encode()).hexdigest()[:24]
+
     order = BracketOrder(
         instrument=state.instrument,
         direction=decision.setup.direction,
@@ -2092,6 +2110,7 @@ def process_alert(
         strategy=decision.setup.strategy,
         notes=decision.setup.notes,
         contracts=contracts,
+        client_order_id=_client_order_id,
         force_market_entry=bool(_active_mnq_proof_decision and _active_mnq_proof_decision.force_market_entry),
         force_runner_exit=bool(_active_mnq_proof_decision and _active_mnq_proof_decision.force_runner_exit),
         min_rr_ratio=float(getattr(cfg, "min_rr_ratio", 2.0)),

@@ -36,7 +36,7 @@ from execution.broker_interface import (
     Fill,
     Position,
 )
-from execution.no_fill_taxonomy import classify_no_fill_reason
+from execution.no_fill_taxonomy import classify_no_fill_reason, classify_provider_failure
 from execution.post_fill_validation import validate_post_fill
 
 logger = logging.getLogger(__name__)
@@ -174,6 +174,57 @@ def _entry_slippage_tolerance_ticks(instrument: str = "") -> float:
         return 0.0
 
 
+# ─── Entry execution modes (demo/paper only beyond "legacy") ─────────────────
+#
+# TRADOVATE_ENTRY_EXECUTION_MODE selects how the OSO PARENT (entry leg) is
+# expressed. Default is "legacy": the exact pre-existing behavior — Market
+# entry, or an IOC-capped Limit when ENTRY_SLIPPAGE_TOLERANCE_TICKS[_ROOT]>0
+# — byte-for-byte unchanged. All other modes are explicit opt-in and are
+# HARD-BLOCKED when TRADOVATE_ENV=live (demo/paper experimentation only).
+# Strategy signals are never altered by mode selection.
+
+ENTRY_EXECUTION_MODES = (
+    "legacy",
+    "ioc_limit",
+    "market",
+    "marketable_limit",
+    "stop_market",
+    "stop_limit",
+)
+_STOP_ENTRY_MODES = ("stop_market", "stop_limit")
+
+
+def _entry_execution_mode() -> str:
+    """The configured entry execution mode. Unrecognized values are returned
+    verbatim so execute_bracket can fail closed on them (never silently
+    falling back to a different order type)."""
+    return os.getenv("TRADOVATE_ENTRY_EXECUTION_MODE", "legacy").strip().lower() or "legacy"
+
+
+def _per_instrument_ticks_env(prefix: str, root: str, default: float) -> float:
+    """PER-INSTRUMENT tick count from env: <PREFIX>_<ROOT> then <PREFIX>."""
+    raw = os.getenv(f"{prefix}_{root}") if root else None
+    if raw is None:
+        raw = os.getenv(prefix)
+    if raw is None:
+        return float(default)
+    try:
+        return max(0.0, float(raw))
+    except ValueError:
+        return float(default)
+
+
+def _stop_entry_confirm_seconds() -> float:
+    """Bounded confirmation window for Stop/StopLimit parents. A stop entry
+    that has not filled by the end of this window is CANCELLED (fail closed)
+    — this architecture never leaves a parent resting outside the window the
+    signal was placed in."""
+    try:
+        return max(2.0, float(os.getenv("STOP_ENTRY_CONFIRM_SECONDS", "20")))
+    except ValueError:
+        return 20.0
+
+
 def _parse_api_key_id(value: str | None) -> int:
     raw = (value or "0").strip().strip("\"'")
     if not raw:
@@ -197,7 +248,10 @@ class TradovateConfig:
     secret: str = ""            # API key secret UUID
     app_id: str = "RiskSentinel"
     app_version: str = "1.0"
-    token_refresh_buffer: int = 300  # seconds before expiry to refresh
+    # Renew the shared token this many seconds before expiry. ~15 minutes per
+    # Tradovate guidance (renew well before the 90-minute token lapses); the
+    # reliability supervisor's 60s heartbeat drives the actual renewal call.
+    token_refresh_buffer: int = 900
 
     @classmethod
     def from_env(cls) -> "TradovateConfig":
@@ -223,7 +277,7 @@ class _Token:
     access_token: str
     expires_at: float  # unix timestamp
 
-    def is_valid(self, buffer: int = 300) -> bool:
+    def is_valid(self, buffer: int = 900) -> bool:
         return time.time() < (self.expires_at - buffer)
 
 
@@ -628,19 +682,79 @@ class TradovateBroker(BrokerInterface):
         except Exception as exc:
             logger.warning("Could not resolve Tradovate account ID: %s", exc)
 
-    def _get(self, path: str, **kwargs) -> dict:
+    # ── Rate-limit handling (HTTP 429) ────────────────────────────────────────
+    # Centralized, bounded, and derived from Tradovate's OWN response signals
+    # (Retry-After header, and the p-time field Tradovate uses for penalty
+    # waits) — no hardcoded internet-sourced request quotas. Order-CREATING
+    # paths are NEVER retried here: after an ambiguous submission failure the
+    # caller must reconcile by order/client identity, not blindly re-fire.
+    _RATE_LIMIT_MAX_ATTEMPTS = 3       # 1 original + 2 retries, non-order paths
+    _RATE_LIMIT_MAX_SLEEP = 30.0       # cap any server-requested wait
+    _RATE_LIMIT_BASE_SLEEP = 1.5       # exponential fallback: 1.5s, 3.0s
+    _ORDER_CREATE_PREFIX = "/order/place"
+
+    @classmethod
+    def _rate_limit_sleep_seconds(cls, resp, attempt: int) -> float:
+        """Server-requested wait (Retry-After header or JSON p-time), else
+        bounded exponential backoff. Never below 0.5s, never above the cap."""
+        wait = None
+        try:
+            retry_after = resp.headers.get("Retry-After") if resp is not None else None
+            if retry_after is not None:
+                wait = float(retry_after)
+        except (TypeError, ValueError):
+            wait = None
+        if wait is None and resp is not None:
+            try:
+                body = resp.json()
+                p_time = body.get("p-time") if isinstance(body, dict) else None
+                if p_time is not None:
+                    wait = float(p_time)
+            except Exception:
+                pass
+        if wait is None:
+            wait = cls._RATE_LIMIT_BASE_SLEEP * (2 ** attempt)
+        return min(max(0.5, float(wait)), cls._RATE_LIMIT_MAX_SLEEP)
+
+    def _send(self, method: str, path: str, *, json_body: Optional[dict] = None, **kwargs) -> dict:
         if not self._authenticate():
             raise RuntimeError("Tradovate not authenticated")
-        resp = self._session.get(f"{self.config.base_url}{path}", timeout=10, **kwargs)
+        is_order_create = path.startswith(self._ORDER_CREATE_PREFIX)
+        attempts = 1 if is_order_create else self._RATE_LIMIT_MAX_ATTEMPTS
+        url = f"{self.config.base_url}{path}"
+        for attempt in range(attempts):
+            if method == "GET":
+                resp = self._session.get(url, timeout=10, **kwargs)
+            else:
+                resp = self._session.post(url, json=json_body, timeout=10, **kwargs)
+            if resp.status_code == 429 and attempt + 1 < attempts:
+                sleep_s = self._rate_limit_sleep_seconds(resp, attempt)
+                logger.warning(
+                    "Tradovate 429 on %s %s — backing off %.1fs (attempt %d/%d)",
+                    method, path, sleep_s, attempt + 1, attempts,
+                )
+                time.sleep(sleep_s)
+                continue
+            resp.raise_for_status()
+            return resp.json()
+        # Only reachable for a 429 on the final attempt of a non-order path.
         resp.raise_for_status()
         return resp.json()
 
+    def _get(self, path: str, **kwargs) -> dict:
+        return self._send("GET", path, **kwargs)
+
     def _post(self, path: str, body: dict, **kwargs) -> dict:
-        if not self._authenticate():
-            raise RuntimeError("Tradovate not authenticated")
-        resp = self._session.post(f"{self.config.base_url}{path}", json=body, timeout=10, **kwargs)
-        resp.raise_for_status()
-        return resp.json()
+        # Compliance guard: every automated order CREATION must carry
+        # isAutomated=true. Fail closed here so no submission path — present
+        # or future — can omit it and still reach the exchange.
+        if path.startswith(self._ORDER_CREATE_PREFIX) and body.get("isAutomated") is not True:
+            raise ValueError(
+                f"Tradovate order-creation payload for {path} is missing "
+                "isAutomated=true — refusing to submit an automated order "
+                "without the compliance flag"
+            )
+        return self._send("POST", path, json_body=body, **kwargs)
 
     # ── Contract resolution ───────────────────────────────────────────────────
 
@@ -699,6 +813,22 @@ class TradovateBroker(BrokerInterface):
 
     # ── BrokerInterface implementation ────────────────────────────────────────
 
+    # Client-order-identity registry (submit idempotency). Keyed by the
+    # deterministic clOrdId the caller derives from the signal identity.
+    # Values: the Tradovate orderId on confirmed submission, or "AMBIGUOUS"
+    # when the submission outcome is unknown (exception mid-POST / silent
+    # no-orderId response). A registered identity is NEVER submitted again:
+    # confirmed → duplicate refused; ambiguous → refused until reconciliation
+    # (the reconciler/supervisor owns orphan resolution). Process-local by
+    # design — a restart clears it, and the reconciler remains the tail net.
+    _client_order_lock = threading.Lock()
+    _client_order_registry: dict[str, str] = {}
+
+    @classmethod
+    def _reset_client_order_registry(cls) -> None:
+        with cls._client_order_lock:
+            cls._client_order_registry.clear()
+
     @property
     def is_live(self) -> bool:
         return self.config.env == "live"
@@ -725,6 +855,24 @@ class TradovateBroker(BrokerInterface):
             if not tradovate_order_ready():
                 logger.error("BLOCKED Tradovate order: reliability supervisor is not ready")
                 return self._cancelled_fill(order, "BROKER_NOT_READY")
+
+            # ── Entry execution mode (demo/paper only beyond "legacy") ────────
+            exec_mode = _entry_execution_mode()
+            if exec_mode not in ENTRY_EXECUTION_MODES:
+                logger.error(
+                    "BLOCKED Tradovate order: unknown TRADOVATE_ENTRY_EXECUTION_MODE=%r "
+                    "(valid: %s) — failing closed, never guessing an order type",
+                    exec_mode, "/".join(ENTRY_EXECUTION_MODES),
+                )
+                return self._cancelled_fill(order, "EXECUTION_MODE_INVALID")
+            if exec_mode != "legacy" and self.config.env == "live":
+                # Hard block regardless of LIVE_TRADING_ENABLED: the non-legacy
+                # modes are demo/paper experimentation only.
+                logger.error(
+                    "BLOCKED real-money order: TRADOVATE_ENTRY_EXECUTION_MODE=%s is "
+                    "demo/paper only (TRADOVATE_ENV=live)", exec_mode,
+                )
+                return self._cancelled_fill(order, "EXECUTION_MODE_NOT_ALLOWED_LIVE")
 
             if not self._authenticate():
                 return self._cancelled_fill(order, "TRADOVATE_AUTH_FAILED")
@@ -758,29 +906,92 @@ class TradovateBroker(BrokerInterface):
             # unfilled, sidestepping the IOC-limit no-fill bottleneck this proof
             # mode exists to test.
             runner_live = _runner_live_enabled() or getattr(order, "force_runner_exit", False)
+            tick = _TICK_SIZE.get(root, 0.25)
             entry_leg = {"orderType": "Market"}
-            tol_ticks = 0.0 if getattr(order, "force_market_entry", False) else _entry_slippage_tolerance_ticks(root)
-            if tol_ticks > 0:
-                tick = _TICK_SIZE.get(root, 0.25)
-                offset = tol_ticks * tick
-                raw_limit = float(order.entry) + (offset if order.direction == "LONG" else -offset)
-                rr_cap = _rr_preserving_entry_cap(order, root)
-                rr_limited = not runner_live
-                if rr_limited:
-                    raw_limit = min(raw_limit, rr_cap) if order.direction == "LONG" else max(raw_limit, rr_cap)
-                limit_px = _round_to_tick(raw_limit, root)
-                # timeInForce=IOC: Tradovate self-cancels an unfilled limit entry
-                # immediately, so no resting parent can fill on a LATER bar outside
-                # the signal context. The post-placeOSO poll below classifies the
-                # result and is the fallback if IOC is ignored. (If a future Tradovate
-                # rejects the OSO for carrying IOC, the placeOSO-REJECTED path fails
-                # SAFE — no trade — and dropping this one field leaves poll-and-cancel
-                # still enforcing no-fill safety.)
+            limit_px = None
+
+            def _capped_aggressive_limit(offset_ticks: float) -> float:
+                """Bounded aggressive limit: plan entry pushed through by
+                offset_ticks (LONG up / SHORT down), still capped by the
+                minimum-R:R-preserving price unless runner_live. Tick-rounded."""
+                offset = offset_ticks * tick
+                raw = float(order.entry) + (offset if order.direction == "LONG" else -offset)
+                if not runner_live:
+                    rr_cap = _rr_preserving_entry_cap(order, root)
+                    raw = min(raw, rr_cap) if order.direction == "LONG" else max(raw, rr_cap)
+                return _round_to_tick(raw, root)
+
+            if exec_mode in ("legacy", "ioc_limit"):
+                tol_ticks = 0.0 if getattr(order, "force_market_entry", False) else _entry_slippage_tolerance_ticks(root)
+                if exec_mode == "ioc_limit" and tol_ticks <= 0:
+                    # Explicit ioc_limit selection with no tolerance configured
+                    # would silently degrade to a Market entry — refuse instead.
+                    logger.error(
+                        "BLOCKED Tradovate order: TRADOVATE_ENTRY_EXECUTION_MODE=ioc_limit "
+                        "but ENTRY_SLIPPAGE_TOLERANCE_TICKS resolves to 0 for %s", root,
+                    )
+                    return self._cancelled_fill(order, "EXECUTION_MODE_MISCONFIGURED")
+                if tol_ticks > 0:
+                    rr_limited = not runner_live
+                    rr_cap = _rr_preserving_entry_cap(order, root)
+                    limit_px = _capped_aggressive_limit(tol_ticks)
+                    # timeInForce=IOC: Tradovate self-cancels an unfilled limit entry
+                    # immediately, so no resting parent can fill on a LATER bar outside
+                    # the signal context. The post-placeOSO poll below classifies the
+                    # result and is the fallback if IOC is ignored. (If a future Tradovate
+                    # rejects the OSO for carrying IOC, the placeOSO-REJECTED path fails
+                    # SAFE — no trade — and dropping this one field leaves poll-and-cancel
+                    # still enforcing no-fill safety.)
+                    entry_leg = {"orderType": "Limit", "price": limit_px, "timeInForce": "IOC"}
+                    logger.info(
+                        "Limit entry (#2) %s %s: plan=%s cap=%s (tol=%g ticks rr_floor=%s rr_cap=%s)",
+                        root, order.direction, order.entry, limit_px, tol_ticks,
+                        getattr(order, "min_rr_ratio", 2.0), rr_cap if rr_limited else "runner_live",
+                    )
+            elif exec_mode == "market":
+                entry_leg = {"orderType": "Market"}
+            elif exec_mode == "marketable_limit":
+                mk_ticks = _per_instrument_ticks_env("MARKETABLE_LIMIT_TICKS", root, 8.0)
+                if mk_ticks <= 0:
+                    logger.error(
+                        "BLOCKED Tradovate order: marketable_limit with "
+                        "MARKETABLE_LIMIT_TICKS<=0 for %s", root,
+                    )
+                    return self._cancelled_fill(order, "EXECUTION_MODE_MISCONFIGURED")
+                limit_px = _capped_aggressive_limit(mk_ticks)
+                # IOC keeps the fail-closed contract: fill immediately at/inside
+                # the bounded aggressive cap, or self-cancel — a stale parent is
+                # never left resting (poll-and-cancel below is the backstop).
                 entry_leg = {"orderType": "Limit", "price": limit_px, "timeInForce": "IOC"}
                 logger.info(
-                    "Limit entry (#2) %s %s: plan=%s cap=%s (tol=%g ticks rr_floor=%s rr_cap=%s)",
-                    root, order.direction, order.entry, limit_px, tol_ticks,
-                    getattr(order, "min_rr_ratio", 2.0), rr_cap if rr_limited else "runner_live",
+                    "Marketable-limit entry %s %s: plan=%s cap=%s (%g ticks through, R:R cap kept)",
+                    root, order.direction, order.entry, limit_px, mk_ticks,
+                )
+            elif exec_mode in _STOP_ENTRY_MODES:
+                trigger_px = _round_to_tick(float(order.entry), root)
+                if exec_mode == "stop_market":
+                    # Native Stop parent: triggers at the intended level, fills
+                    # as a market order. Explicit opt-in only.
+                    entry_leg = {"orderType": "Stop", "stopPrice": trigger_px}
+                else:
+                    allowance = _per_instrument_ticks_env("STOP_LIMIT_ALLOWANCE_TICKS", root, 4.0)
+                    if allowance <= 0:
+                        logger.error(
+                            "BLOCKED Tradovate order: stop_limit with "
+                            "STOP_LIMIT_ALLOWANCE_TICKS<=0 for %s", root,
+                        )
+                        return self._cancelled_fill(order, "EXECUTION_MODE_MISCONFIGURED")
+                    limit_px = _capped_aggressive_limit(allowance)
+                    entry_leg = {
+                        "orderType": "StopLimit",
+                        "stopPrice": trigger_px,
+                        "price": limit_px,
+                    }
+                logger.info(
+                    "%s entry %s %s: trigger=%s%s (confirm window %.0fs, fail-closed)",
+                    entry_leg["orderType"], root, order.direction, trigger_px,
+                    f" limit={limit_px}" if limit_px is not None else "",
+                    _stop_entry_confirm_seconds(),
                 )
 
             # Place protective children via OSO. Tradovate's official schema
@@ -825,7 +1036,44 @@ class TradovateBroker(BrokerInterface):
                     "timeInForce": "GTC",
                 }
 
-            result = self._post("/order/placeOSO", body)
+            # ── Submit idempotency: one parent order per logical signal ───────
+            client_id = (str(getattr(order, "client_order_id", "") or "").strip() or None)
+            if client_id:
+                client_id = client_id[:64]
+                with self._client_order_lock:
+                    prior = self._client_order_registry.get(client_id)
+                if prior == "AMBIGUOUS":
+                    logger.error(
+                        "BLOCKED duplicate submission: clOrdId=%s has an UNRECONCILED "
+                        "ambiguous prior submission — reconcile by order/client id "
+                        "before any retry", client_id,
+                    )
+                    return self._cancelled_fill(
+                        order, "SUBMIT_AMBIGUOUS_UNRECONCILED",
+                        order_type=entry_leg.get("orderType"),
+                    )
+                if prior:
+                    logger.error(
+                        "BLOCKED duplicate submission: clOrdId=%s already created "
+                        "order %s — the same logical signal never fires twice",
+                        client_id, prior,
+                    )
+                    return self._cancelled_fill(
+                        order, "DUPLICATE_CLIENT_ORDER_ID",
+                        order_type=entry_leg.get("orderType"),
+                    )
+                body["clOrdId"] = client_id
+
+            try:
+                result = self._post("/order/placeOSO", body)
+            except Exception:
+                if client_id:
+                    # The submission outcome is UNKNOWN (timeout / transport
+                    # failure after send). Poison this identity so recovery
+                    # paths cannot blindly re-fire the same signal.
+                    with self._client_order_lock:
+                        self._client_order_registry[client_id] = "AMBIGUOUS"
+                raise
             # Detect API-level rejection — Tradovate returns errorText/failureReason on bad payloads
             error_text = result.get("errorText") or result.get("failureReason") or result.get("errorCode")
             if error_text:
@@ -833,8 +1081,12 @@ class TradovateBroker(BrokerInterface):
                     "Tradovate placeOSO REJECTED: %s | instrument=%s dir=%s body=%s",
                     error_text, order.instrument, order.direction, body,
                 )
+                # An explicit rejection created nothing server-side — the
+                # identity may be retried by a future signal cycle.
+                provider_bucket = classify_provider_failure(str(error_text))
                 return self._cancelled_fill(
                     order, "TRADOVATE_REJECTED", order_type=entry_leg.get("orderType"),
+                    no_fill_reason_override=provider_bucket,
                 )
             order_id = result.get("orderId") or (result.get("orderStatus", {}) or {}).get("orderId")
             if not order_id:
@@ -842,9 +1094,15 @@ class TradovateBroker(BrokerInterface):
                     "Tradovate placeOSO returned no orderId — possible silent rejection: %s",
                     result,
                 )
+                if client_id:
+                    with self._client_order_lock:
+                        self._client_order_registry[client_id] = "AMBIGUOUS"
                 return self._cancelled_fill(
                     order, "TRADOVATE_NO_ORDER_ID", order_type=entry_leg.get("orderType"),
                 )
+            if client_id:
+                with self._client_order_lock:
+                    self._client_order_registry[client_id] = str(order_id)
             # OSO child IDs follow bracket order. runner_live has one child:
             # oso1 = Stop. Static has oso1 = target and oso2 = Stop.
             target_id = None if runner_live else result.get("oso1Id")
@@ -854,19 +1112,32 @@ class TradovateBroker(BrokerInterface):
                 order_id, target_id, stop_id, order.instrument, order.direction,
             )
 
-            # Limit-entry no-fill guard (#2): a capped Limit entry can rest unfilled
-            # when price has already run past the cap. Before opening a position,
-            # confirm the entry actually filled — otherwise CANCEL the OSO so it can
-            # never fill on a later bar OUTSIDE the original signal context, and
-            # report NO_FILL WITHOUT journaling a position. (Market entries skip this
-            # — they fill immediately by definition.)
-            if entry_leg.get("orderType") == "Limit":
-                status = self._entry_status(order_id)
+            # Entry no-fill guard (#2): a capped Limit entry can rest unfilled
+            # when price has already run past the cap, and a Stop/StopLimit
+            # parent (explicit demo/paper modes) legitimately rests until its
+            # trigger — but NEVER outside a bounded window. Before opening a
+            # position, confirm the entry actually filled — otherwise CANCEL
+            # the OSO so it can never fill on a later bar OUTSIDE the original
+            # signal context, and report NO_FILL WITHOUT journaling a position.
+            # (Market entries skip this — they fill immediately by definition.)
+            guarded_types = ("Limit", "Stop", "StopLimit")
+            entry_px_desc = limit_px if limit_px is not None else entry_leg.get("stopPrice")
+            if entry_leg.get("orderType") in guarded_types:
+                if entry_leg.get("orderType") in ("Stop", "StopLimit"):
+                    # Bounded stop-entry confirmation: poll across the window,
+                    # then fail closed. delay=1.0s → retries = window seconds.
+                    status = self._entry_status(
+                        order_id,
+                        retries=max(2, int(_stop_entry_confirm_seconds())),
+                        delay=1.0,
+                    )
+                else:
+                    status = self._entry_status(order_id)
                 if status == "dead":
                     # IOC-cancelled / rejected → no fill; bracket children never armed.
                     logger.warning(
-                        "Limit entry (#2) NOT filled (status=dead) — no position opened. %s %s cap=%s",
-                        root, order.direction, limit_px,
+                        "%s entry NOT filled (status=dead) — no position opened. %s %s cap=%s",
+                        entry_leg.get("orderType"), root, order.direction, entry_px_desc,
                     )
                     self._last_position = None
                     self._last_order_ids = None
@@ -875,13 +1146,14 @@ class TradovateBroker(BrokerInterface):
                         entry_status="dead", order_type=entry_leg.get("orderType"),
                     )
                 if status == "working":
-                    # Resting limit (IOC ignored) → cancel the OSO now so it can't
-                    # fill late. Safe: an unfilled entry means the children are
-                    # inactive, so there is NO naked position to protect.
+                    # Resting parent (IOC ignored, or stop never triggered in
+                    # its window) → cancel the OSO now so it can't fill late.
+                    # Safe: an unfilled entry means the children are inactive,
+                    # so there is NO naked position to protect.
                     n = self._cancel_oso(order_id, target_id, stop_id)
                     logger.warning(
-                        "Limit entry (#2) resting unfilled — OSO cancelled (n=%d), no position. %s %s cap=%s",
-                        n, root, order.direction, limit_px,
+                        "%s entry resting unfilled — OSO cancelled (n=%d), no position. %s %s cap=%s",
+                        entry_leg.get("orderType"), n, root, order.direction, entry_px_desc,
                     )
                     self._last_position = None
                     self._last_order_ids = None
@@ -974,6 +1246,25 @@ class TradovateBroker(BrokerInterface):
                 "" if runner_live else "+target",
                 order.instrument,
             )
+
+            # ── Partial-fill protection ───────────────────────────────────────
+            # Multi-contract entries can partially fill. The journaled position
+            # quantity must equal the ACTUAL filled quantity or resolve math and
+            # protective sizing silently diverge. Only checked for qty > 1 (the
+            # production cap is 1 contract — no added API traffic there); an
+            # unreadable fill count keeps the submitted qty and says so.
+            if qty > 1:
+                filled_qty = self._entry_filled_qty(order_id)
+                if filled_qty is not None and 0 < filled_qty < qty:
+                    logger.error(
+                        "PARTIAL ENTRY FILL: %s %s filled %d of %d — position "
+                        "sized to the ACTUAL filled quantity; OSO children track "
+                        "the parent's filled quantity server-side, verified live above",
+                        order.instrument, order.direction, filled_qty, qty,
+                    )
+                    qty = filled_qty
+                    if self._last_position is not None:
+                        self._last_position.quantity = filled_qty
             execution_audit = None
             if getattr(order, "post_fill_validation_required", False):
                 if actual_entry is None:
@@ -1632,6 +1923,29 @@ class TradovateBroker(BrokerInterface):
             return None
         return any(f.get("orderId") == order_id for f in fills)
 
+    def _entry_filled_qty(self, order_id) -> Optional[int]:
+        """Total filled quantity for exactly this order id, or None when the
+        fill list is unreadable. None means UNCERTAIN — callers keep the
+        submitted quantity rather than guessing (mirrors _entry_order_filled's
+        uncertainty contract)."""
+        if order_id is None:
+            return None
+        for attempt in range(3):
+            try:
+                fills = self._get(f"/fill/list?accountId={self._account_id}")
+                if isinstance(fills, list):
+                    qty = sum(
+                        abs(int(f.get("qty") or 0))
+                        for f in fills
+                        if f.get("orderId") == order_id
+                    )
+                    return qty
+            except Exception:
+                pass
+            if attempt < 2:
+                time.sleep(0.3)
+        return None
+
     def _entry_fill_price(self, order_id, instrument: str) -> Optional[float]:
         """Quantity-weighted actual entry fill, scoped to the exact order id."""
         for attempt in range(6):
@@ -2121,6 +2435,7 @@ class TradovateBroker(BrokerInterface):
         *,
         entry_status: Optional[str] = None,
         order_type: Optional[str] = None,
+        no_fill_reason_override: Optional[str] = None,
     ) -> Fill:
         return Fill(
             instrument=order.instrument,
@@ -2132,6 +2447,9 @@ class TradovateBroker(BrokerInterface):
             result="CANCELLED",
             pnl_ticks=None,
             pnl_dollars=None,
-            no_fill_reason=classify_no_fill_reason(reason, entry_status=entry_status),
+            no_fill_reason=(
+                no_fill_reason_override
+                or classify_no_fill_reason(reason, entry_status=entry_status)
+            ),
             order_type=order_type,
         )
