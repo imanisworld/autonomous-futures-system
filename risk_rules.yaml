@@ -337,6 +337,7 @@ strategy_permission_gate:
     strat_4hr_retrigger: PAPER_ELIGIBLE
     strat_4hr_retrigger_observed: PAPER_ELIGIBLE
     strat_322_first_live: PAPER_ELIGIBLE
+    strat_12hr_miyagi: PAPER_ELIGIBLE
     continuation_pullback: PAPER_ELIGIBLE
     ema_pullback_trend: PAPER_ELIGIBLE
     gap_fill: PAPER_ELIGIBLE
@@ -398,6 +399,35 @@ strategy:
       # n=34 thin. First runtime wiring for this strategy; MES excluded via
       # disabled_concepts_per_instrument (rules doc: MNQ only, do not trade this
       # setup on any other instrument). See docs/strategy-rules/60M_322_FirstLive_Rules.md.
+    - strat_12hr_miyagi       # MNQ + MES, day-only (4PM ET flatten). Canonical 5m-native
+      # state machine (strategy/strat_12hr_miyagi.py), wired 2026-07-27 from
+      # docs/strategy-rules/12HR_Miyagi_Rules.md. First runtime wiring for this
+      # strategy. HEADLINE FINDING: the evidence's own stop-reference formula
+      # (research/detector_12hr_miyagi.py Step 7) has a CONFIRMED lookahead
+      # defect -- it filters 60m bars by ts<9:30, but a bar labeled "09:00"
+      # covers [09:00,10:00) and is not closed until 10:00, so the filter does
+      # not exclude it. Empirically verified on real data: 4/8 MNQ and 7/10 MES
+      # triggered signals show the offline detector using a stop level that
+      # depends on price action which had not occurred yet at the 9:30
+      # decision point. This runtime instead computes the stop CAUSALLY, at
+      # the actual moment of entry (matching the rules doc's own literal text
+      # -- "at the moment of entry... before your entry time" -- and reusing
+      # strategy/four_hr_retrigger.py's _completed_one_hour_stop verbatim).
+      # CONSEQUENCE: live stop values, R:R, and dollar outcomes will
+      # SYSTEMATICALLY DIFFER from the evidenced canonical figures (coded-
+      # detector study, PR #343, docs/strategy-rules/
+      # 12HR_MIYAGI_CANONICAL_EVIDENCE_2026-07-26.md: MNQ 15 candidates/8
+      # fills/7W-1L/net $516.33/PF 2.81; MES 19 candidates/10 fills/8W-2L/
+      # net $198.85/PF 1.98 -- NOT the rules doc's own stale n=13/n=20/
+      # $102.35/$25.78 table, which the evidence doc itself labels a
+      # "non-reproducible manual study" predating the coded detector) on
+      # roughly half of trades -- those numbers describe the
+      # lookahead-affected offline detector, not what this build will
+      # produce. Direction/trigger/target setup
+      # detection verified byte-identical to the research detector across
+      # all 34 real historical signals (0 mismatches); only the stop
+      # reference legitimately and necessarily differs. See
+      # strategy/strat_12hr_miyagi.py's module docstring for full detail.
     - strat_122               # MES only (MNQ excluded via disabled_concepts_per_instrument).
       # Canonical causal two-phase state machine (strategy/strat_212_122.py, PR
       # #317/#337) -- the SAME code path replay and live both call; NOT the older

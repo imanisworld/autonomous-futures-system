@@ -260,6 +260,11 @@ class MarketState:
     # 5m-native strategy is enabled — see signal_engine.py's
     # _FIVE_MINUTE_NATIVE_STRATEGIES).
     strat_322_first_live_candidate: Optional[dict] = None
+    # Canonical 12HR Miyagi 1-3-1 reversal candidate, populated transiently
+    # by DecisionEngine from strategy/strat_12hr_miyagi.py's pure state
+    # machine. Shares the same 5-minute bar_history_5m feed as the other
+    # 5-minute-native strategies above.
+    strat_12hr_miyagi_candidate: Optional[dict] = None
     # Canonical Strat 2-1-2 / 1-2-2 candidate, populated transiently by
     # DecisionEngine from strategy/strat_212_122.py's pure state machine.
     strat_212_122_candidate: Optional[dict] = None

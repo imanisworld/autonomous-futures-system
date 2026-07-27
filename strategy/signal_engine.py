@@ -28,6 +28,7 @@ from strategy.regime_classifier import classify_regime
 from strategy.signa_gate import evaluate_signa
 from strategy.four_hr_retrigger import advance_4hr_retrigger
 from strategy.strat_322_first_live import advance_strat_322_first_live
+from strategy.strat_12hr_miyagi import advance_strat_12hr_miyagi
 from strategy.strat_212_122 import STRAT_122, STRAT_212, advance_strat_212_122
 from strategy.strat_classifier import TWO_DOWN, normalize_bar_type
 
@@ -254,6 +255,7 @@ class DecisionEngine:
         now = datetime.now(timezone.utc)
         self._advance_4hr_retrigger(state, daily_state)
         self._advance_strat_322_first_live(state, daily_state)
+        self._advance_strat_12hr_miyagi(state, daily_state)
         self._advance_strat_212_122(state, daily_state)
 
         # ── Pre-flight: daily capacity ────────────────────────────────────────
@@ -1394,32 +1396,47 @@ class DecisionEngine:
         "orb_rejection",
         "strat_4hr_retrigger",
         "strat_322_first_live",
+        "strat_12hr_miyagi",
     })
 
     # Strategies established and triggered directly by the authoritative
     # 5-minute stream (state.canonical_4hr_only), rather than the legacy
-    # 15-minute concept path. Both share the same bar_history_5m feed
+    # 15-minute concept path. All three share the same bar_history_5m feed
     # (webhook/runner.py's four_hr_five_min gate) and the same restriction:
     # on a canonical-5m decision bar, ONLY these may originate a setup.
-    _FIVE_MINUTE_NATIVE_STRATEGIES: frozenset[str] = frozenset({
-        "strat_4hr_retrigger",
-        "strat_322_first_live",
-    })
+    # Maps strategy name -> the MarketState attribute holding its transient
+    # candidate, so collision-safety logic (_trending_gate_exempt_candidate)
+    # generalizes without hardcoding per-strategy fields.
+    _FIVE_MINUTE_NATIVE_CANDIDATE_ATTRS: dict[str, str] = {
+        "strat_4hr_retrigger": "four_hr_retrigger_candidate",
+        "strat_322_first_live": "strat_322_first_live_candidate",
+        "strat_12hr_miyagi": "strat_12hr_miyagi_candidate",
+    }
+    _FIVE_MINUTE_NATIVE_STRATEGIES: frozenset[str] = frozenset(
+        _FIVE_MINUTE_NATIVE_CANDIDATE_ATTRS
+    )
 
-    # TRENDING-gate exemption (2026-07-27, operator-directed contract audit):
-    # the system-wide require_trending_condition gate's own justification
-    # (see the gate itself, below) is calibrated against a 555-day replay
-    # that predates strat_322_first_live's existence — it is a global
-    # default, not a rule this strategy's own contract ever specified.
-    # Verified zero market_condition/TRENDING/trend_direction/trend_strength
-    # references anywhere in the rules doc, the causal detector, or the
-    # honest-fill replay that produced the canonical evidence (PR #340/#341):
+    # TRENDING-gate exemption (2026-07-27, operator-directed contract audit,
+    # applied to strat_322_first_live; extended to strat_12hr_miyagi under
+    # the same audit — both verified zero market_condition/TRENDING/
+    # trend_direction/trend_strength references anywhere in their rules
+    # docs, causal detectors, or honest-fill replays):
     # `grep -n "market_condition\|TRENDING\|trend_direction\|trend_strength"
     # research/detector_322_first_live.py research/replay_322_honest_fill.py
-    # research/reconcile_322_first_live.py` — zero matches. Exempting only
-    # this strategy so forward demo tests the SAME strategy that produced the
-    # evidence, not a TRENDING-filtered subset of it.
-    _TRENDING_GATE_EXEMPT: frozenset[str] = frozenset({"strat_322_first_live"})
+    # research/reconcile_322_first_live.py research/detector_12hr_miyagi.py
+    # research/replay_12hr_miyagi_honest_fill.py
+    # research/reconcile_12hr_miyagi.py` — zero matches for either strategy.
+    # The system-wide require_trending_condition gate's own justification
+    # (see the gate itself, below) is calibrated against a 555-day replay
+    # that predates both strategies' existence — a global default, not a
+    # rule either strategy's own contract ever specified. Exempting only
+    # these strategies so forward demo tests the SAME strategies that
+    # produced their evidence, not a TRENDING-filtered subset of them.
+    # strat_4hr_retrigger is deliberately NOT in this set — untouched,
+    # out of scope, still fully gated as before.
+    _TRENDING_GATE_EXEMPT: frozenset[str] = frozenset(
+        {"strat_322_first_live", "strat_12hr_miyagi"}
+    )
 
     def _find_setup(
         self,
@@ -1481,7 +1498,8 @@ class DecisionEngine:
         shape decide() has always produced for a single-candidate rejection).
         """
         if setup.strategy in (
-            "strat_4hr_retrigger", "strat_322_first_live", STRAT_212, STRAT_122,
+            "strat_4hr_retrigger", "strat_322_first_live", "strat_12hr_miyagi",
+            STRAT_212, STRAT_122,
         ):
             # Entry/stop/target are already the canonical resolved formula
             # (causal boundary anchor for 212/122; completed-1H stop and
@@ -1688,6 +1706,7 @@ class DecisionEngine:
         strategies = [
             ("strat_4hr_retrigger", self._try_strat_4hr_retrigger),
             ("strat_322_first_live", self._try_strat_322_first_live),
+            ("strat_12hr_miyagi", self._try_strat_12hr_miyagi),
             ("orb_breakout", self._try_orb_breakout),
             ("orb_reclaim", self._try_orb_reclaim),
             ("orb_rejection", self._try_orb_rejection),
@@ -2534,18 +2553,25 @@ class DecisionEngine:
     def _trending_gate_exempt_candidate(self, state: MarketState) -> bool:
         """True iff the TRENDING gate should be bypassed for this bar.
 
-        Bypasses ONLY when the bar's SOLE viable candidate belongs to
-        _TRENDING_GATE_EXEMPT. A non-exempt 5-minute-native strategy
-        (strat_4hr_retrigger) having a candidate on the exact same bar keeps
-        today's gated behavior — this can never change what strat_4hr_
-        retrigger does, only add a path for the exempt strategy when it
-        would otherwise be the sole candidate blocked.
+        Bypasses ONLY when the bar's SOLE viable 5-minute-native candidate
+        (across ALL of _FIVE_MINUTE_NATIVE_CANDIDATE_ATTRS, not just the
+        exempt ones) belongs to _TRENDING_GATE_EXEMPT. A non-exempt
+        5-minute-native strategy (strat_4hr_retrigger) having a candidate
+        on the exact same bar keeps today's gated behavior — this can never
+        change what strat_4hr_retrigger does, only add a path for an exempt
+        strategy when it would otherwise be the sole candidate blocked.
+        Generalizes cleanly as more 5-minute-native strategies are added:
+        any TWO OR MORE simultaneous candidates (exempt or not) always
+        disable the exemption.
         """
         if not state.canonical_4hr_only:
             return False
-        has_exempt = state.strat_322_first_live_candidate is not None
-        has_non_exempt = state.four_hr_retrigger_candidate is not None
-        return has_exempt and not has_non_exempt
+        present = [
+            name
+            for name, attr in self._FIVE_MINUTE_NATIVE_CANDIDATE_ATTRS.items()
+            if getattr(state, attr, None) is not None
+        ]
+        return len(present) == 1 and present[0] in self._TRENDING_GATE_EXEMPT
 
     def _advance_4hr_retrigger(
         self, state: MarketState, daily_state: DailyState
@@ -2592,6 +2618,30 @@ class DecisionEngine:
         )
         daily_state.strat_322_first_live_state[state.instrument] = next_state
         state.strat_322_first_live_candidate = candidate
+
+    def _advance_strat_12hr_miyagi(
+        self, state: MarketState, daily_state: DailyState
+    ) -> None:
+        """Advance the canonical persisted 12HR Miyagi state (MNQ/MES)."""
+        state.strat_12hr_miyagi_candidate = None
+        if "strat_12hr_miyagi" not in self.config.enabled_concepts:
+            return
+        if "strat_12hr_miyagi" in self.config.disabled_concepts_per_instrument.get(
+            state.instrument, []
+        ):
+            return
+        if not self._is_five_minute_state(state):
+            return
+        next_state, candidate = advance_strat_12hr_miyagi(
+            bars_5m=state.bar_history_5m,
+            current_bar_ts=state.timestamp,
+            instrument=state.instrument,
+            persisted_state=daily_state.strat_12hr_miyagi_state.get(
+                state.instrument, {}
+            ),
+        )
+        daily_state.strat_12hr_miyagi_state[state.instrument] = next_state
+        state.strat_12hr_miyagi_candidate = candidate
 
     def _advance_strat_212_122(
         self, state: MarketState, daily_state: DailyState
@@ -2683,6 +2733,33 @@ class DecisionEngine:
                 "directional / 10-11AM opposite-boundary break, opposite "
                 "9AM boundary stop, 8AM boundary target."
                 + (" Gap-open entry." if candidate.get("gap_open") else "")
+            ),
+        )
+
+    def _try_strat_12hr_miyagi(self, state: MarketState) -> Optional[SetupDetail]:
+        """Return only the candidate produced by the resolved Miyagi state machine."""
+        candidate = state.strat_12hr_miyagi_candidate
+        if not candidate:
+            return None
+        direction = str(candidate["direction"])
+        entry = float(candidate["entry"])
+        stop = float(candidate["stop"])
+        target = float(candidate["target"])
+        rr = RiskEngine.calculate_rr(direction, entry, stop, target)
+        return SetupDetail(
+            direction=direction,
+            entry=round(entry, 4),
+            stop=round(stop, 4),
+            target=round(target, 4),
+            rr_ratio=rr,
+            strategy="strat_12hr_miyagi",
+            entry_time=candidate["entry_time"],
+            notes=(
+                "Resolved 12HR Miyagi: 1-3-1 pattern, 9:30 AM direction "
+                "confirmation, Candle-3-midpoint trigger, causal "
+                "last-completed-1H stop at actual entry time (NOT the "
+                "evidence's 9:30-snapshot stop — see module docstring), "
+                "Candle-3-boundary T1 target."
             ),
         )
 

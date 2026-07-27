@@ -103,6 +103,10 @@ class DailyState:
     # four_hr_retrigger_state (keyed by instrument root, dict form for
     # deterministic journal serialization).
     strat_322_first_live_state: Dict[str, dict] = field(default_factory=dict)
+    # Persisted/reconstructed state for the canonical executable 12HR
+    # Miyagi 1-3-1 reversal pattern. Same cross-instrument isolation
+    # contract as the other 5-minute-native strategy states above.
+    strat_12hr_miyagi_state: Dict[str, dict] = field(default_factory=dict)
 
 
 @dataclass
