@@ -1,0 +1,37 @@
+{
+  "study": "ORB Breakout marketable-limit inverse",
+  "status": "ABORTED_ON_PREREGISTERED_IDENTITY_INVARIANT",
+  "classification": "UNSAFE",
+  "final_decision": "REJECT",
+  "base_sha": "74b14071822be46de46be3c2db0eff7c95b8fced",
+  "preregistration_sha": "b2c586af8e2b624e93fe0bf18fbab4be15f2003d",
+  "corpus_tree_sha256": "4ab5812659910235e8a26e7417f851e0a403855ff75183322e99b0b36970d3d4",
+  "source_attempt_identity_sha256": "4e357bfc9e4a23c28fbbdf67e7f5cf99cbc40bb065e2e39684b29705b1192970",
+  "source_attempts": 111,
+  "blocker": {
+    "code": "ONE_CONTRACT_INVARIANT_FAILED_ON_CHRONOLOGICAL_PATH",
+    "date": "2025-10-15",
+    "bar_ts": "2025-10-15T09:15:00+00:00",
+    "instrument": "MNQ",
+    "session": "london",
+    "strategy": "orb_breakout",
+    "original_direction": "LONG",
+    "inverse_direction": "SHORT",
+    "planned_entry": 24924.0,
+    "original_stop": 24911.5,
+    "original_target": 24951.5,
+    "source_contracts": 1,
+    "chronological_inverse_recommended_contracts": 2,
+    "explanation": "Prior inverted outcomes changed account balance enough to enter the frozen 2-contract sizing tier. Continuing would violate the preregistered one-contract candidate; imposing a hard cap would change frozen #358 sizing."
+  },
+  "accepted_results": {
+    "fixed_population": null,
+    "system_path": null,
+    "robustness": null,
+    "cost_sensitivity": null
+  },
+  "rerun_performed_after_blocker": false,
+  "runtime_modified": false,
+  "deployment_modified": false,
+  "box_accessed": false
+}
