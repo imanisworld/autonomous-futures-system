@@ -50,7 +50,7 @@ The canonical identity digest is constructed by:
 5. hashing the UTF-8 byte stream with SHA-256.
 
 Frozen attempt-identity digest:
-`e60289df82101c30abc5251850a15d6e6829aba41c1ca839bf62e58727a5286f`.
+`4e357bfc9e4a23c28fbbdf67e7f5cf99cbc40bb065e2e39684b29705b1192970`.
 
 Any missing, extra, conflicting, or duplicate stable identity aborts the
 study.
