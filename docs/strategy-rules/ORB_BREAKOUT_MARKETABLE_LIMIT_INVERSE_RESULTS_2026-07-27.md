@@ -1,81 +1,103 @@
-# ORB Breakout marketable-limit inverse — stopped research pass
+# ORB Breakout marketable-limit inverse — specification audit
 
-## VERDICT
+## SPECIFICATION VERDICT
 
-**UNSAFE**
+**INVALID / NEEDS RE-PREREGISTRATION**
 
-## FINAL DECISION
+The controlling preregistration is internally contradictory about
+chronological sizing. The stopped run therefore cannot support an economic
+classification.
 
-**REJECT**
-
-The preregistered pass stopped on a candidate-identity invariant before
-producing acceptable fixed-population or chronological-system-path promotion
-evidence.
-
-Continuing would require changing sizing, so no rerun, rescue pass, or
-alternative candidate was tested.
+This is **not** an `UNSAFE` result and **not** a `REJECT`. No accepted evidence
+currently shows whether the ORB Breakout inverse won or lost.
 
 ## PREREGISTRATION SHA
 
 `b2c586af8e2b624e93fe0bf18fbab4be15f2003d`
 
-The first preregistration commit was followed by a pre-results metadata
-correction to the session-restored attempt digest. The SHA above is the final
-controlling freeze. No candidate P&L had been run before it.
+The inspection in this report is limited to the text frozen at that exact SHA.
+No later interpretation is used to select between conflicting clauses.
 
-## SOURCE CORPUS / ATTEMPT IDENTITY
+## PREREGISTRATION SIZING TEXT
 
-- Base: exact #358 commit
-  `74b14071822be46de46be3c2db0eff7c95b8fced`.
-- Corpus: 626 files, 2025-07-24 through 2026-07-23.
-- Corpus SHA-256:
-  `4ab5812659910235e8a26e7417f851e0a403855ff75183322e99b0b36970d3d4`.
-- Source: committed #358 marketable-limit raw artifact.
-- Exact ORB Breakout fixed population: 111 approved attempts.
-- Stable identity digest:
-  `4e357bfc9e4a23c28fbbdf67e7f5cf99cbc40bb065e2e39684b29705b1192970`.
-- Instruments: MNQ 111, MES 0.
-- Original directions: LONG 88, SHORT 23.
-- Sessions: London 71, New York 34, Asian 6.
+The controlling document says all of the following:
 
-## EXACT INVERTED RULE
+> Preserve the exact source attempt's planned entry, stop distance, target
+> distance, contracts, strategy tag, instrument, session, marketable-limit
+> offset, cost model, and same-bar resolution policy.
 
-The frozen rule changed only directional exposure:
+It separately says:
 
-- LONG became SHORT and SHORT became LONG.
-- Planned entry stayed fixed.
-- Absolute planned-entry-to-stop and planned-entry-to-target distances stayed
-  fixed and were mirrored around entry.
-- The source ORB Breakout detector, completed-bar signal, trend/VWAP/volume/
-  GEX qualification, ranking, permissions, sessions, thresholds, 2.2R target,
-  48-tick MNQ ORB stop offset, and once-per-direction/day behavior stayed
-  frozen.
-- Entry used #358's eight-tick marketable IOC: fill immediately at/inside the
-  directional limit or cancel.
-- Baseline used one adverse tick at entry and stop, clean target fills, $1.48
-  commission, next-bar-or-later resolution, and stop-first handling for
-  ambiguous stop/target bars.
-- Candidate sizing was exactly one contract.
+> The fixed population must contain one contract on every captured source
+> order. The run aborts if #358 produces any ORB Breakout source attempt with a
+> different size.
 
-## CAUSALITY / FILL REALISM
+It then specifies the chronological pass as:
 
-The pre-run audit and 23 synthetic/broker tests passed:
+> The chronological inverse uses the same frozen sizing engine with a
+> one-contract hard invariant; it aborts rather than silently changing size.
 
-- the signal bar completes before order construction;
-- the completed close is the contemporaneous market observation, not future
-  data;
-- the IOC limit is bounded and fail-closed;
-- resolution begins strictly on the next same-instrument bar;
-- ambiguous later-bar stop/target straddles resolve at the stop;
-- stop exits receive adverse slippage and targets fill as resting limits;
-- mirrored bracket geometry remains valid;
-- stable identity hashing and original-versus-inverse attribution reconcile.
+The chronological replay section also requires the full frozen
+marketable-limit engine, normal account updates, the 20% breaker, and existing
+position/account gates.
 
-No causal shortcut caused the stop.
+## PRECISE SIZING ANSWERS
 
-## STOP CONDITION
+### 1. Did the preregistration freeze exactly one contract for every trade?
 
-The chronological inverse reached this stable source attempt:
+**It clearly required one contract for the fixed source population, and it
+named a one-contract hard invariant for the chronological inverse.**
+
+However, it did not unambiguously define how that invariant must interact with
+the inherited dynamic sizing engine when the inverse account path reaches a
+different sizing tier.
+
+### 2. Did it instead freeze #358's dynamic account-based sizing?
+
+**It also required the chronological inverse to use the same frozen sizing
+engine and preserve contracts.**
+
+On the inverse path that engine recommended two contracts on 2025-10-15 after
+prior inverse P&L changed account state. The text does not explicitly say that
+this recommendation is diagnostic only or that submitted quantity must remain
+one despite it.
+
+### 3. Is the preregistration internally contradictory?
+
+**Yes.**
+
+It simultaneously requires:
+
+1. a one-contract chronological candidate;
+2. the inherited dynamic sizing engine and account path;
+3. preservation of contracts; and
+4. abort rather than silently changing size.
+
+The document never resolves whether “one-contract hard invariant” means
+“force every chronological order to quantity one” or “abort when the inherited
+sizing engine recommends anything other than one.” Those interpretations
+produce different experiments.
+
+Selecting either interpretation after observing the two-contract recommendation
+would be a post-freeze specification choice.
+
+## WHETHER THE PRIOR ABORT WAS VALID
+
+The abort was **mechanically consistent with one explicit preregistration
+clause**: abort rather than silently changing size.
+
+It was **not a valid economic rejection**. The event exposed a contradictory
+experiment specification; it did not establish that the inverse strategy was
+unsafe or unprofitable.
+
+Accordingly:
+
+- the abort event remains diagnostic evidence;
+- the prior `UNSAFE` classification is withdrawn;
+- the prior `REJECT` decision is withdrawn; and
+- no partial fixed-population or chronological P&L is accepted.
+
+## OBSERVED DIAGNOSTIC EVENT
 
 | Field | Value |
 |---|---|
@@ -88,99 +110,40 @@ The chronological inverse reached this stable source attempt:
 | Planned entry | 24924.0 |
 | Original stop / target | 24911.5 / 24951.5 |
 | Source #358 size | 1 contract |
-| Chronological inverse recommendation | **2 contracts** |
+| Chronological inverse recommendation | 2 contracts |
 
-Under the exact #358 dynamic sizing rules, prior inverted path outcomes had
-changed the account balance enough to enter the 2-contract tier. The same
-source attempt was one contract on the original path.
+This event establishes the point at which the two sizing interpretations
+diverge. It does not establish economic performance.
 
-This creates an unavoidable choice:
+## RESULTS STATUS
 
-1. continue at two contracts, violating the preregistered one-contract
-   candidate; or
-2. impose a one-contract hard cap, changing the frozen #358 sizing/path.
+- Fixed-population inverse: **NOT ACCEPTED**
+- Chronological system-path inverse: **NOT ACCEPTED**
+- Gross/net P&L: **NOT CLASSIFIED**
+- Expectancy, PF, and win rate: **NOT CLASSIFIED**
+- Temporal, direction, session, and yearly robustness: **NOT CLASSIFIED**
+- Slippage sensitivity: **NOT CLASSIFIED**
+- Concentration, drawdown, losing streak, and recovery: **NOT CLASSIFIED**
+- Final economic verdict: **NONE**
 
-Both are prohibited. The preregistration explicitly required an abort rather
-than silently choosing either.
+Per the decision rule for an internally contradictory preregistration, the
+experiment was not resumed and no interpretation was selected.
 
-## FIXED-POPULATION RESULT
+## WHAT A FUTURE PREREGISTRATION MUST RESOLVE
 
-**NOT ACCEPTED — study stopped.**
+A new pass, if separately authorized, must state one sizing contract without
+ambiguity. For a fixed-one-contract candidate it would need to say explicitly
+that:
 
-The fixed-population computation was not published or used after the
-chronological sizing invariant failed. Publishing only the breaker-independent
-side would omit the required system-path gate and could misleadingly promote a
-candidate that is not the same strategy in chronological operation.
+- every source and chronological inverse order is exactly one contract;
+- account P&L and breaker state may evolve and suppress later attempts;
+- the inherited sizing engine's quantity recommendation is recorded only as a
+  diagnostic;
+- that recommendation cannot increase or reduce submitted quantity; and
+- enforcing quantity one is the candidate definition, not a rescue cap.
 
-## SYSTEM-PATH RESULT
+This report does not create that candidate or authorize a rerun.
 
-**NOT ACCEPTED — aborted on 2025-10-15 before full-corpus completion.**
-
-Partial path output is invalid and is not reported.
-
-## ORIGINAL VS INVERSE
-
-No P&L comparison is accepted. The source and inverse cease to share the
-frozen sizing identity before the chronological pass completes.
-
-## TEMPORAL STABILITY
-
-Not calculated from an accepted complete result.
-
-## INSTRUMENT / SESSION
-
-The source itself is already single-instrument:
-
-- MNQ: 111 attempts.
-- MES: zero.
-- London: 71; New York: 34; Asian: 6.
-
-It could not satisfy the cross-instrument promotion requirement even if the
-aborted P&L had been positive.
-
-## LONG / SHORT
-
-Source original directions were 88 LONG and 23 SHORT, implying 88 inverse
-SHORT and 23 inverse LONG. Outcome metrics are not accepted from the aborted
-pass.
-
-## COST SENSITIVITY
-
-Not run beyond the baseline stop condition. No slippage tier was altered to
-rescue the candidate.
-
-## CONCENTRATION
-
-Not calculated from an accepted complete result.
-
-## DRAWDOWN / LOSING STREAK
-
-Not calculated from an accepted complete result.
-
-## BREAKER / PATH EFFECTS
-
-The decisive path effect occurred before breaker comparison: inverted prior
-outcomes changed account state enough to change the ORB Breakout contract
-count from one to two.
-
-That is a material strategy/path change, not a bookkeeping difference. A
-future study would have to preregister either:
-
-- a genuinely fixed one-contract replay for both original and inverse paths;
-  or
-- the frozen dynamic-sizing system with varying contracts.
-
-Neither is authorized as a rescue pass here.
-
-## DECISION BASIS
-
-The prompt required the study to stop if exact inversion could not be
-expressed without changing another strategy component. The one-contract and
-unchanged-sizing requirements become mutually incompatible on the observed
-chronological inverse path.
-
-Classification is therefore **UNSAFE** and the final decision is **REJECT**.
-There is no paper implementation plan.
-
-No runtime code, #359, #360, Lane B, deployed box, broker, configuration, or
+No strategy parameter, eight-tick marketable limit, bracket, filter, session,
+breaker rule, runtime code, #359, #360, deployed box, broker, configuration, or
 deployment was changed.
