@@ -1,0 +1,584 @@
+{
+  "raw_population": {
+    "first_cross": {
+      "candidate_count": 885,
+      "filled_count": 440,
+      "resolved_performance": {
+        "n": 440,
+        "wins": 142,
+        "losses": 298,
+        "win_rate": 0.3227,
+        "net_pnl": -1431.34,
+        "pf": 0.9131,
+        "expectancy_per_fill": -3.25,
+        "max_drawdown": 3482.97
+      }
+    },
+    "v4_original": {
+      "candidate_count": 243,
+      "filled_count": 116,
+      "resolved_performance": {
+        "n": 116,
+        "wins": 40,
+        "losses": 76,
+        "win_rate": 0.3448,
+        "net_pnl": -13.31,
+        "pf": 0.9969,
+        "expectancy_per_fill": -0.11,
+        "max_drawdown": 920.46
+      }
+    },
+    "v4_r": {
+      "candidate_count": 239,
+      "filled_count": 114,
+      "resolved_performance": {
+        "n": 114,
+        "wins": 40,
+        "losses": 74,
+        "win_rate": 0.3509,
+        "net_pnl": 67.78,
+        "pf": 1.0161,
+        "expectancy_per_fill": 0.59,
+        "max_drawdown": 958.12
+      }
+    }
+  },
+  "first_cross": {
+    "label": "first_cross (today's deployed behavior, shared account)",
+    "raw_candidate_count": 885,
+    "reached_risk_layer_count": 268,
+    "filled_count": 38,
+    "gate_classification_breakdown": {
+      "REACHED_RISK_APPROVED": 75,
+      "MARKET_CONDITION_NOT_TRENDING": 370,
+      "MARKET_CONDITION_NOT_TRADABLE": 115,
+      "ENTRY_DETACHED_FROM_PRICE": 39,
+      "EMA_STACK_NOT_ALIGNED": 20,
+      "OTHER_RISK_REJECTED:max_drawdown": 193,
+      "OTHER_SIGNAL_BLOCKED:[]": 42,
+      "OTHER_SIGNAL_BLOCKED:['WEAK_BAR_CLOSE']": 3,
+      "SIGNAL_BAR_VOLUME_TOO_LOW": 2,
+      "SKIPPED_POSITION_ALREADY_OPEN": 26
+    },
+    "filled_population_performance": {
+      "overall": {
+        "n": 38,
+        "wins": 12,
+        "losses": 26,
+        "win_rate": 0.3158,
+        "net_pnl": -213.74,
+        "pf": 0.8582,
+        "expectancy_per_fill": -5.62,
+        "max_drawdown": 414.7
+      },
+      "by_half": {
+        "H1": {
+          "n": 38,
+          "wins": 12,
+          "losses": 26,
+          "win_rate": 0.3158,
+          "net_pnl": -213.74,
+          "pf": 0.8582,
+          "expectancy_per_fill": -5.62,
+          "max_drawdown": 414.7
+        },
+        "H2": {
+          "n": 0,
+          "wins": 0,
+          "losses": 0,
+          "win_rate": null,
+          "net_pnl": 0.0,
+          "pf": null,
+          "expectancy_per_fill": null,
+          "max_drawdown": 0.0
+        }
+      },
+      "by_instrument": {
+        "MNQ": {
+          "n": 3,
+          "wins": 0,
+          "losses": 3,
+          "win_rate": 0.0,
+          "net_pnl": -164.44,
+          "pf": 0.0,
+          "expectancy_per_fill": -54.81,
+          "max_drawdown": 164.44
+        },
+        "MES": {
+          "n": 35,
+          "wins": 12,
+          "losses": 23,
+          "win_rate": 0.3429,
+          "net_pnl": -49.3,
+          "pf": 0.9633,
+          "expectancy_per_fill": -1.41,
+          "max_drawdown": 323.88
+        }
+      },
+      "by_month": {
+        "2025-07": {
+          "n": 2,
+          "wins": 1,
+          "losses": 1,
+          "win_rate": 0.5,
+          "net_pnl": 63.29,
+          "pf": 2.2003,
+          "expectancy_per_fill": 31.64,
+          "max_drawdown": 52.73
+        },
+        "2025-08": {
+          "n": 5,
+          "wins": 1,
+          "losses": 4,
+          "win_rate": 0.2,
+          "net_pnl": -125.9,
+          "pf": 0.4601,
+          "expectancy_per_fill": -25.18,
+          "max_drawdown": 176.69
+        },
+        "2025-09": {
+          "n": 10,
+          "wins": 3,
+          "losses": 7,
+          "win_rate": 0.3,
+          "net_pnl": -112.55,
+          "pf": 0.7356,
+          "expectancy_per_fill": -11.26,
+          "max_drawdown": 292.65
+        },
+        "2025-10": {
+          "n": 11,
+          "wins": 4,
+          "losses": 7,
+          "win_rate": 0.3636,
+          "net_pnl": 59.97,
+          "pf": 1.1503,
+          "expectancy_per_fill": 5.45,
+          "max_drawdown": 204.67
+        },
+        "2025-11": {
+          "n": 5,
+          "wins": 3,
+          "losses": 2,
+          "win_rate": 0.6,
+          "net_pnl": 155.1,
+          "pf": 2.0849,
+          "expectancy_per_fill": 31.02,
+          "max_drawdown": 72.73
+        },
+        "2025-12": {
+          "n": 5,
+          "wins": 0,
+          "losses": 5,
+          "win_rate": 0.0,
+          "net_pnl": -253.65,
+          "pf": 0.0,
+          "expectancy_per_fill": -50.73,
+          "max_drawdown": 253.65
+        }
+      },
+      "top_month": {
+        "month": "2025-11",
+        "net_pnl": 155.1,
+        "share_of_total_net": -0.7256
+      }
+    }
+  },
+  "v4_original": {
+    "label": "v4_original (NY + true_reclaim, isolated account)",
+    "raw_candidate_count": 243,
+    "reached_risk_layer_count": 61,
+    "filled_count": 30,
+    "gate_classification_breakdown": {
+      "MARKET_CONDITION_NOT_TRENDING": 107,
+      "MARKET_CONDITION_NOT_TRADABLE": 38,
+      "REACHED_RISK_APPROVED": 61,
+      "ENTRY_DETACHED_FROM_PRICE": 9,
+      "EMA_STACK_NOT_ALIGNED": 14,
+      "OTHER_SIGNAL_BLOCKED:[]:WAIT": 3,
+      "SKIPPED_POSITION_ALREADY_OPEN": 11
+    },
+    "filled_population_performance": {
+      "overall": {
+        "n": 30,
+        "wins": 14,
+        "losses": 16,
+        "win_rate": 0.4667,
+        "net_pnl": 399.6,
+        "pf": 1.3306,
+        "expectancy_per_fill": 13.32,
+        "max_drawdown": 602.11
+      },
+      "by_half": {
+        "H1": {
+          "n": 15,
+          "wins": 9,
+          "losses": 6,
+          "win_rate": 0.6,
+          "net_pnl": 729.55,
+          "pf": 2.9671,
+          "expectancy_per_fill": 48.64,
+          "max_drawdown": 122.71
+        },
+        "H2": {
+          "n": 15,
+          "wins": 5,
+          "losses": 10,
+          "win_rate": 0.3333,
+          "net_pnl": -329.95,
+          "pf": 0.6062,
+          "expectancy_per_fill": -22.0,
+          "max_drawdown": 602.11
+        }
+      },
+      "by_instrument": {
+        "MNQ": {
+          "n": 7,
+          "wins": 3,
+          "losses": 4,
+          "win_rate": 0.4286,
+          "net_pnl": 78.64,
+          "pf": 1.4014,
+          "expectancy_per_fill": 11.23,
+          "max_drawdown": 153.94
+        },
+        "MES": {
+          "n": 23,
+          "wins": 11,
+          "losses": 12,
+          "win_rate": 0.4783,
+          "net_pnl": 320.96,
+          "pf": 1.3169,
+          "expectancy_per_fill": 13.95,
+          "max_drawdown": 560.13
+        }
+      },
+      "by_month": {
+        "2025-07": {
+          "n": 1,
+          "wins": 1,
+          "losses": 0,
+          "win_rate": 1.0,
+          "net_pnl": 112.27,
+          "pf": Infinity,
+          "expectancy_per_fill": 112.27,
+          "max_drawdown": 0.0
+        },
+        "2025-08": {
+          "n": 1,
+          "wins": 1,
+          "losses": 0,
+          "win_rate": 1.0,
+          "net_pnl": 107.27,
+          "pf": Infinity,
+          "expectancy_per_fill": 107.27,
+          "max_drawdown": 0.0
+        },
+        "2025-09": {
+          "n": 2,
+          "wins": 1,
+          "losses": 1,
+          "win_rate": 0.5,
+          "net_pnl": 52.04,
+          "pf": 1.728,
+          "expectancy_per_fill": 26.02,
+          "max_drawdown": 71.48
+        },
+        "2025-10": {
+          "n": 7,
+          "wins": 3,
+          "losses": 4,
+          "win_rate": 0.4286,
+          "net_pnl": 89.39,
+          "pf": 1.3613,
+          "expectancy_per_fill": 12.77,
+          "max_drawdown": 122.71
+        },
+        "2025-11": {
+          "n": 2,
+          "wins": 1,
+          "losses": 1,
+          "win_rate": 0.5,
+          "net_pnl": 51.54,
+          "pf": 1.9915,
+          "expectancy_per_fill": 25.77,
+          "max_drawdown": 51.98
+        },
+        "2025-12": {
+          "n": 2,
+          "wins": 2,
+          "losses": 0,
+          "win_rate": 1.0,
+          "net_pnl": 317.04,
+          "pf": Infinity,
+          "expectancy_per_fill": 158.52,
+          "max_drawdown": 0.0
+        },
+        "2026-02": {
+          "n": 1,
+          "wins": 0,
+          "losses": 1,
+          "win_rate": 0.0,
+          "net_pnl": -133.98,
+          "pf": 0.0,
+          "expectancy_per_fill": -133.98,
+          "max_drawdown": 133.98
+        },
+        "2026-03": {
+          "n": 3,
+          "wins": 0,
+          "losses": 3,
+          "win_rate": 0.0,
+          "net_pnl": -284.94,
+          "pf": 0.0,
+          "expectancy_per_fill": -94.98,
+          "max_drawdown": 284.94
+        },
+        "2026-04": {
+          "n": 4,
+          "wins": 1,
+          "losses": 3,
+          "win_rate": 0.25,
+          "net_pnl": -75.92,
+          "pf": 0.5856,
+          "expectancy_per_fill": -18.98,
+          "max_drawdown": 183.19
+        },
+        "2026-05": {
+          "n": 1,
+          "wins": 0,
+          "losses": 1,
+          "win_rate": 0.0,
+          "net_pnl": -56.48,
+          "pf": 0.0,
+          "expectancy_per_fill": -56.48,
+          "max_drawdown": 56.48
+        },
+        "2026-06": {
+          "n": 1,
+          "wins": 1,
+          "losses": 0,
+          "win_rate": 1.0,
+          "net_pnl": 111.02,
+          "pf": Infinity,
+          "expectancy_per_fill": 111.02,
+          "max_drawdown": 0.0
+        },
+        "2026-07": {
+          "n": 5,
+          "wins": 3,
+          "losses": 2,
+          "win_rate": 0.6,
+          "net_pnl": 110.35,
+          "pf": 1.6158,
+          "expectancy_per_fill": 22.07,
+          "max_drawdown": 179.21
+        }
+      },
+      "top_month": {
+        "month": "2025-12",
+        "net_pnl": 317.04,
+        "share_of_total_net": 0.7934
+      }
+    }
+  },
+  "v4_r": {
+    "label": "v4_r (NY + prior_rejected_high, isolated account, PREREGISTERED)",
+    "raw_candidate_count": 239,
+    "reached_risk_layer_count": 61,
+    "filled_count": 31,
+    "gate_classification_breakdown": {
+      "MARKET_CONDITION_NOT_TRENDING": 103,
+      "MARKET_CONDITION_NOT_TRADABLE": 38,
+      "REACHED_RISK_APPROVED": 61,
+      "ENTRY_DETACHED_FROM_PRICE": 9,
+      "EMA_STACK_NOT_ALIGNED": 14,
+      "OTHER_SIGNAL_BLOCKED:[]:WAIT": 3,
+      "SKIPPED_POSITION_ALREADY_OPEN": 11
+    },
+    "filled_population_performance": {
+      "overall": {
+        "n": 31,
+        "wins": 15,
+        "losses": 16,
+        "win_rate": 0.4839,
+        "net_pnl": 449.37,
+        "pf": 1.3379,
+        "expectancy_per_fill": 14.5,
+        "max_drawdown": 723.36
+      },
+      "by_half": {
+        "H1": {
+          "n": 16,
+          "wins": 10,
+          "losses": 6,
+          "win_rate": 0.625,
+          "net_pnl": 900.57,
+          "pf": 3.4282,
+          "expectancy_per_fill": 56.29,
+          "max_drawdown": 122.71
+        },
+        "H2": {
+          "n": 15,
+          "wins": 5,
+          "losses": 10,
+          "win_rate": 0.3333,
+          "net_pnl": -451.2,
+          "pf": 0.5295,
+          "expectancy_per_fill": -30.08,
+          "max_drawdown": 723.36
+        }
+      },
+      "by_instrument": {
+        "MNQ": {
+          "n": 7,
+          "wins": 3,
+          "losses": 4,
+          "win_rate": 0.4286,
+          "net_pnl": 78.64,
+          "pf": 1.4014,
+          "expectancy_per_fill": 11.23,
+          "max_drawdown": 153.94
+        },
+        "MES": {
+          "n": 24,
+          "wins": 12,
+          "losses": 12,
+          "win_rate": 0.5,
+          "net_pnl": 370.73,
+          "pf": 1.3269,
+          "expectancy_per_fill": 15.45,
+          "max_drawdown": 681.38
+        }
+      },
+      "by_month": {
+        "2025-07": {
+          "n": 1,
+          "wins": 1,
+          "losses": 0,
+          "win_rate": 1.0,
+          "net_pnl": 112.27,
+          "pf": Infinity,
+          "expectancy_per_fill": 112.27,
+          "max_drawdown": 0.0
+        },
+        "2025-08": {
+          "n": 1,
+          "wins": 1,
+          "losses": 0,
+          "win_rate": 1.0,
+          "net_pnl": 107.27,
+          "pf": Infinity,
+          "expectancy_per_fill": 107.27,
+          "max_drawdown": 0.0
+        },
+        "2025-09": {
+          "n": 3,
+          "wins": 2,
+          "losses": 1,
+          "win_rate": 0.6667,
+          "net_pnl": 118.06,
+          "pf": 2.6517,
+          "expectancy_per_fill": 39.35,
+          "max_drawdown": 71.48
+        },
+        "2025-10": {
+          "n": 7,
+          "wins": 3,
+          "losses": 4,
+          "win_rate": 0.4286,
+          "net_pnl": 89.39,
+          "pf": 1.3613,
+          "expectancy_per_fill": 12.77,
+          "max_drawdown": 122.71
+        },
+        "2025-11": {
+          "n": 2,
+          "wins": 1,
+          "losses": 1,
+          "win_rate": 0.5,
+          "net_pnl": 156.54,
+          "pf": 4.0115,
+          "expectancy_per_fill": 78.27,
+          "max_drawdown": 51.98
+        },
+        "2025-12": {
+          "n": 2,
+          "wins": 2,
+          "losses": 0,
+          "win_rate": 1.0,
+          "net_pnl": 317.04,
+          "pf": Infinity,
+          "expectancy_per_fill": 158.52,
+          "max_drawdown": 0.0
+        },
+        "2026-02": {
+          "n": 1,
+          "wins": 0,
+          "losses": 1,
+          "win_rate": 0.0,
+          "net_pnl": -133.98,
+          "pf": 0.0,
+          "expectancy_per_fill": -133.98,
+          "max_drawdown": 133.98
+        },
+        "2026-03": {
+          "n": 3,
+          "wins": 0,
+          "losses": 3,
+          "win_rate": 0.0,
+          "net_pnl": -284.94,
+          "pf": 0.0,
+          "expectancy_per_fill": -94.98,
+          "max_drawdown": 284.94
+        },
+        "2026-04": {
+          "n": 4,
+          "wins": 1,
+          "losses": 3,
+          "win_rate": 0.25,
+          "net_pnl": -197.17,
+          "pf": 0.3524,
+          "expectancy_per_fill": -49.29,
+          "max_drawdown": 304.44
+        },
+        "2026-05": {
+          "n": 1,
+          "wins": 0,
+          "losses": 1,
+          "win_rate": 0.0,
+          "net_pnl": -56.48,
+          "pf": 0.0,
+          "expectancy_per_fill": -56.48,
+          "max_drawdown": 56.48
+        },
+        "2026-06": {
+          "n": 1,
+          "wins": 1,
+          "losses": 0,
+          "win_rate": 1.0,
+          "net_pnl": 111.02,
+          "pf": Infinity,
+          "expectancy_per_fill": 111.02,
+          "max_drawdown": 0.0
+        },
+        "2026-07": {
+          "n": 5,
+          "wins": 3,
+          "losses": 2,
+          "win_rate": 0.6,
+          "net_pnl": 110.35,
+          "pf": 1.6158,
+          "expectancy_per_fill": 22.07,
+          "max_drawdown": 179.21
+        }
+      },
+      "top_month": {
+        "month": "2025-12",
+        "net_pnl": 317.04,
+        "share_of_total_net": 0.7055
+      }
+    }
+  },
+  "note_raw_pnl_uses_own_fill_sim": "raw_population's resolved_performance uses scripts/orb_reclaim_v4r_detector.py's own independent fill/exit simulation (ioc_limit single-bar-close + pessimistic stop/target walk-forward, no risk/quality gates applied at all) -- NOT the real engine. first_cross/v4_original/v4_r's filled_population_performance uses the REAL ReplayEngine->DecisionEngine->RiskEngine->PaperBroker outcome. The two were cross-checked on overlapping trades during this study and matched closely (same entry/exit logic, independently implemented)."
+}
