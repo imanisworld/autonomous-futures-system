@@ -1,8 +1,8 @@
 {
   "study": "ORB Breakout marketable-limit inverse",
   "status": "COMPLETE",
-  "classification": "VALIDATED",
-  "final_decision": "PROMOTE TO PAPER-BUILD CANDIDATE",
+  "classification": "PROMISING BUT UNPROVEN",
+  "final_decision": "APPROVED FOR PAPER BUILD",
   "preregistration_sha": "eda2c3344304fe2f9daf74da6505acdf1256fad4",
   "harness_sha": "7876ec002669347269b7dac125af23a600bc37c2",
   "instrument": "MNQ",

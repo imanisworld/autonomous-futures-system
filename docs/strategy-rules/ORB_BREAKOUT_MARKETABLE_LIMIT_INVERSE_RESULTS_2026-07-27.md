@@ -2,11 +2,11 @@
 
 ## VERDICT
 
-**VALIDATED**
+**PROMISING BUT UNPROVEN**
 
 ## FINAL DECISION
 
-**PROMOTE TO PAPER-BUILD CANDIDATE**
+**APPROVED FOR PAPER BUILD**
 
 This verdict applies only to the isolated MNQ paper-build candidate defined at
 preregistration SHA
@@ -240,9 +240,12 @@ and dominance of fill-selection improvement are explicit limitations. They
 are appropriate paper-observation risks, but they do not make the completed
 preregistered result mixed or negative.
 
-Classification: **VALIDATED**.
+The research hypothesis passed, but replay/runtime parity and forward behavior
+have not yet been demonstrated.
 
-Final decision: **PROMOTE TO PAPER-BUILD CANDIDATE**.
+System-level classification: **PROMISING BUT UNPROVEN**.
+
+Final decision: **APPROVED FOR PAPER BUILD**.
 
 ## MINIMUM PAPER-BUILD BOUNDARY
 
