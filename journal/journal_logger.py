@@ -636,6 +636,9 @@ class JournalLogger:
                         "mnq_orb_breakout_proof_audit": entry.get(
                             "mnq_orb_breakout_proof_audit"
                         ),
+                        "mnq_orb_breakout_inverse_audit": entry.get(
+                            "mnq_orb_breakout_inverse_audit"
+                        ),
                         "mnq_vwap_hold_proof_audit": entry.get(
                             "mnq_vwap_hold_proof_audit"
                         ),

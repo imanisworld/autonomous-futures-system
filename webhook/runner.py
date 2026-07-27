@@ -48,6 +48,11 @@ from context.mnq_orb_breakout_proof import (
     is_mnq_orb_breakout_candidate,
     record_campaign_attempt as record_orb_breakout_campaign_attempt,
 )
+from context.mnq_orb_breakout_inverse_paper import (
+    MARKETABLE_TICKS as ORB_INVERSE_MARKETABLE_TICKS,
+    evaluate as evaluate_mnq_orb_breakout_inverse,
+    mirror_order as mirror_mnq_orb_breakout_order,
+)
 from context.mnq_entry_refresh import (
     entry_refresh_instruments,
     entry_refresh_max_detachment_r,
@@ -995,7 +1000,18 @@ def process_alert(
             _open_pos_strategy = open_pos.get("strategy") or (open_pos.get("setup") or {}).get("strategy")
             _reclaim_proof_audit = open_pos.get("mnq_orb_reclaim_proof_audit")
             _breakout_proof_audit = open_pos.get("mnq_orb_breakout_proof_audit")
+            _breakout_inverse_audit = open_pos.get(
+                "mnq_orb_breakout_inverse_audit"
+            )
             _vwap_hold_proof_audit = open_pos.get("mnq_vwap_hold_proof_audit")
+            _inverse_paper_position = bool(
+                isinstance(_breakout_inverse_audit, dict)
+                and _breakout_inverse_audit.get("paper_mode") == "paper_sim"
+                and _breakout_inverse_audit.get("force_paper_broker") is True
+                and is_mnq_orb_breakout_candidate(
+                    open_pos.get("instrument"), _open_pos_strategy
+                )
+            )
             _proof_paper_position = bool(
                 (
                     isinstance(_reclaim_proof_audit, dict)
@@ -1020,7 +1036,10 @@ def process_alert(
             # lifecycle. Global BROKER=tradovate must never pull it into the
             # Tradovate resolver on a later bar.
             _using_tradovate_position = (
-                not simulate and broker_type == "tradovate" and not _proof_paper_position
+                not simulate
+                and broker_type == "tradovate"
+                and not _proof_paper_position
+                and not _inverse_paper_position
             )
             # Only resolve a position against bars of its OWN instrument. An MNQ
             # position must never be resolved against a MES bar's OHLC (different
@@ -1060,7 +1079,19 @@ def process_alert(
                 _paper_balance = journal.get_account_balance(
                     cfg.position_sizing.starting_balance, today
                 )
-                if _proof_paper_position:
+                if _inverse_paper_position:
+                    broker = PaperBroker(
+                        starting_balance=_paper_balance,
+                        slippage_ticks=1.0,
+                        pessimistic_both_hit=True,
+                        breakeven_at_1r=False,
+                        runner_mode=False,
+                        entry_fill_model="ioc_limit",
+                        entry_tolerance_ticks_by_root={
+                            "MNQ": ORB_INVERSE_MARKETABLE_TICKS
+                        },
+                    )
+                elif _proof_paper_position:
                     broker = PaperBroker(
                         starting_balance=_paper_balance,
                         slippage_ticks=float(getattr(cfg, "fill_slippage_ticks", 0.0) or 0.0),
@@ -1488,6 +1519,8 @@ def process_alert(
     mnq_proof_audit = None
     mnq_breakout_proof_decision = None
     mnq_breakout_proof_audit = None
+    mnq_breakout_inverse_decision = None
+    mnq_breakout_inverse_audit = None
     mnq_vwap_hold_proof_decision = None
     mnq_vwap_hold_proof_audit = None
     if (
@@ -1531,33 +1564,45 @@ def process_alert(
         and decision.setup is not None
         and is_mnq_orb_breakout_candidate(state.instrument, decision.setup.strategy)
     ):
-        mnq_breakout_proof_decision = evaluate_mnq_orb_breakout_proof(
-            cfg=cfg,
-            log_dir=log_dir,
-            orb_high=getattr(state.orb, "high", None) if state.orb else None,
-            orb_low=getattr(state.orb, "low", None) if state.orb else None,
-            direction=decision.setup.direction,
-            for_date=for_date,
-        )
-        mnq_breakout_proof_audit = {
-            **mnq_breakout_proof_decision.to_audit_dict(),
-            "would_be_setup": {
-                "direction": decision.setup.direction,
-                "entry": decision.setup.entry,
-                "stop": decision.setup.stop,
-                "target": decision.setup.target,
-                "rr_ratio": decision.setup.rr_ratio,
-            },
-        }
-        if mnq_breakout_proof_decision.suppress:
-            import dataclasses as _dataclasses
-            decision = _dataclasses.replace(
-                decision,
-                decision="NO_TRADE",
-                setup=None,
-                reason=mnq_breakout_proof_decision.reason,
-                failed_gates=list(decision.failed_gates or []) + ["MNQ_ORB_BREAKOUT_PROOF_DUPLICATE"],
+        if not five_min_trigger and bar_timeframe_minutes == 15:
+            mnq_breakout_inverse_decision = evaluate_mnq_orb_breakout_inverse(cfg)
+            mnq_breakout_inverse_audit = mnq_breakout_inverse_decision.audit(
+                source_direction=decision.setup.direction,
+                entry=decision.setup.entry,
+                stop=decision.setup.stop,
+                target=decision.setup.target,
             )
+        if (
+            mnq_breakout_inverse_decision is None
+            or not mnq_breakout_inverse_decision.apply_override
+        ):
+            mnq_breakout_proof_decision = evaluate_mnq_orb_breakout_proof(
+                cfg=cfg,
+                log_dir=log_dir,
+                orb_high=getattr(state.orb, "high", None) if state.orb else None,
+                orb_low=getattr(state.orb, "low", None) if state.orb else None,
+                direction=decision.setup.direction,
+                for_date=for_date,
+            )
+            mnq_breakout_proof_audit = {
+                **mnq_breakout_proof_decision.to_audit_dict(),
+                "would_be_setup": {
+                    "direction": decision.setup.direction,
+                    "entry": decision.setup.entry,
+                    "stop": decision.setup.stop,
+                    "target": decision.setup.target,
+                    "rr_ratio": decision.setup.rr_ratio,
+                },
+            }
+            if mnq_breakout_proof_decision.suppress:
+                import dataclasses as _dataclasses
+                decision = _dataclasses.replace(
+                    decision,
+                    decision="NO_TRADE",
+                    setup=None,
+                    reason=mnq_breakout_proof_decision.reason,
+                    failed_gates=list(decision.failed_gates or []) + ["MNQ_ORB_BREAKOUT_PROOF_DUPLICATE"],
+                )
     elif (
         decision.decision == "TRADE"
         and decision.setup is not None
@@ -1782,10 +1827,18 @@ def process_alert(
     # (matches the validated backtest); the runner, when on, drops it anyway.
     # 1.0 / unset instrument = no change. Mutates the SetupDetail in place so the
     # journal records the actual stop used.
-    _mult = apply_stop_multiplier(
-        decision.setup,
-        state.instrument,
-        getattr(cfg, "stop_multiplier_per_instrument", {}) or {},
+    _inverse_candidate_active = bool(
+        mnq_breakout_inverse_decision is not None
+        and mnq_breakout_inverse_decision.apply_override
+    )
+    _mult = (
+        1.0
+        if _inverse_candidate_active
+        else apply_stop_multiplier(
+            decision.setup,
+            state.instrument,
+            getattr(cfg, "stop_multiplier_per_instrument", {}) or {},
+        )
     )
     if _mult != 1.0:
         logger.info(
@@ -1817,6 +1870,8 @@ def process_alert(
         journal_entry["mnq_orb_reclaim_proof_audit"] = mnq_proof_audit
     if mnq_breakout_proof_audit is not None:
         journal_entry["mnq_orb_breakout_proof_audit"] = mnq_breakout_proof_audit
+    if mnq_breakout_inverse_audit is not None:
+        journal_entry["mnq_orb_breakout_inverse_audit"] = mnq_breakout_inverse_audit
     if mnq_vwap_hold_proof_audit is not None:
         journal_entry["mnq_vwap_hold_proof_audit"] = mnq_vwap_hold_proof_audit
     journal_entry["confluence"] = result["confluence"]
@@ -1832,13 +1887,33 @@ def process_alert(
     journal_balance = journal.get_account_balance(
         cfg.position_sizing.starting_balance, today
     )
-    broker = (
-        _paper_broker(journal_balance, cfg)
-        if simulate
-        else _make_broker(starting_balance=journal_balance, cfg=cfg)
+    _inverse_paper_active = (
+        mnq_breakout_inverse_decision is not None
+        and mnq_breakout_inverse_decision.apply_override
     )
+    if _inverse_paper_active:
+        # Construct the isolated paper adapter directly. Do not even
+        # instantiate the configured external broker before replacing it.
+        broker = PaperBroker(
+            starting_balance=journal_balance,
+            slippage_ticks=1.0,
+            pessimistic_both_hit=True,
+            breakeven_at_1r=False,
+            runner_mode=False,
+            entry_fill_model="ioc_limit",
+            entry_tolerance_ticks_by_root={
+                "MNQ": ORB_INVERSE_MARKETABLE_TICKS
+            },
+        )
+    else:
+        broker = (
+            _paper_broker(journal_balance, cfg)
+            if simulate
+            else _make_broker(starting_balance=journal_balance, cfg=cfg)
+        )
     if (
-        _active_mnq_proof_decision is not None
+        not _inverse_paper_active
+        and _active_mnq_proof_decision is not None
         and _active_mnq_proof_decision.apply_override
         and _active_mnq_proof_decision.force_paper_broker
     ):
@@ -1862,7 +1937,17 @@ def process_alert(
         cfg.position_sizing.starting_balance, today
     )
     risk_engine = RiskEngine(config=cfg)
-    contracts = risk_engine.recommended_contracts(state.instrument, account_balance)
+    recommended_contracts = risk_engine.recommended_contracts(
+        state.instrument, account_balance
+    )
+    contracts = recommended_contracts
+    if (
+        mnq_breakout_inverse_decision is not None
+        and mnq_breakout_inverse_decision.apply_override
+    ):
+        contracts = 1
+        mnq_breakout_inverse_audit["recommended_contracts"] = recommended_contracts
+        mnq_breakout_inverse_audit["submitted_contracts"] = contracts
     if decision.setup.direction_role == "COUNTERTREND_SCALP":
         contracts = 1
     # Tick-align entry/stop/target to valid broker prices.
@@ -2091,12 +2176,20 @@ def process_alert(
     # submissions must reconcile first). Derived, not random — restarts and
     # duplicate webhook deliveries produce the identical identity.
     import hashlib as _hashlib
+    _execution_direction = (
+        mnq_breakout_inverse_audit["submitted_setup"]["direction"]
+        if (
+            mnq_breakout_inverse_decision is not None
+            and mnq_breakout_inverse_decision.apply_override
+        )
+        else decision.setup.direction
+    )
     _signal_identity = "|".join(
         str(part)
         for part in (
             state.instrument,
             decision.setup.strategy,
-            decision.setup.direction,
+            _execution_direction,
             getattr(state, "timestamp", ""),
         )
     )
@@ -2134,6 +2227,11 @@ def process_alert(
         # parity/replay studies.
         post_fill_validation_required=not isinstance(broker, PaperBroker),
     )
+    if (
+        mnq_breakout_inverse_decision is not None
+        and mnq_breakout_inverse_decision.apply_override
+    ):
+        order = mirror_mnq_orb_breakout_order(order)
 
     # ── Schedule-mode execution gate (Phase 3 safety chokepoint) ──────────────
     # In "current" this always allows (no behavior change). always_on_shadow
@@ -2267,10 +2365,24 @@ def process_alert(
         )
         else None
     )
+    _inverse_ioc_market_px = (
+        state.ohlc.close
+        if (
+            state.ohlc is not None
+            and mnq_breakout_inverse_decision is not None
+            and mnq_breakout_inverse_decision.apply_override
+        )
+        else None
+    )
+    _paper_market_px = (
+        _inverse_ioc_market_px
+        if _inverse_ioc_market_px is not None
+        else _proof_market_px
+    )
     _submit_ts = datetime.now(timezone.utc)
     fill = (
-        broker.execute_bracket(order, market_price=_proof_market_px)
-        if _proof_market_px is not None
+        broker.execute_bracket(order, market_price=_paper_market_px)
+        if _paper_market_px is not None
         else broker.execute_bracket(order)
     )
     _cancel_ts = datetime.now(timezone.utc)
@@ -2358,10 +2470,10 @@ def process_alert(
         result["fill"] = {
             "status": fill.result,
             "instrument": state.instrument,
-            "direction": decision.setup.direction,
-            "entry": decision.setup.entry,
-            "stop": decision.setup.stop,
-            "target": decision.setup.target,
+            "direction": order.direction,
+            "entry": order.entry,
+            "stop": order.stop,
+            "target": order.target,
         }
         return result
 
@@ -2423,10 +2535,10 @@ def process_alert(
         result["fill"] = {
             "status": "ORDER_CONFIRMATION_MISSING",
             "instrument": state.instrument,
-            "direction": decision.setup.direction,
-            "entry": decision.setup.entry,
-            "stop": decision.setup.stop,
-            "target": decision.setup.target,
+            "direction": order.direction,
+            "entry": order.entry,
+            "stop": order.stop,
+            "target": order.target,
         }
         return result
 
@@ -2437,6 +2549,19 @@ def process_alert(
     # the authoritative decision="TRADE" row — the ONLY row any reader treats as an
     # open, counted position — carrying the same full payload as the TRADE_INTENT row.
     journal_entry["decision"] = "TRADE"
+    if (
+        mnq_breakout_inverse_decision is not None
+        and mnq_breakout_inverse_decision.apply_override
+        and isinstance(journal_entry.get("setup"), dict)
+    ):
+        journal_entry["setup"] = {
+            **journal_entry["setup"],
+            "direction": order.direction,
+            "entry": order.entry,
+            "stop": order.stop,
+            "target": order.target,
+            "contracts": order.contracts,
+        }
     # Proof-lane market entry: the paper fill was at the LIVE price, not the
     # anchored plan. Position reconstruction (get_open_position -> restore_
     # position) and P&L both resolve from THIS row's setup.entry, so the
@@ -2485,14 +2610,14 @@ def process_alert(
     result["fill"] = {
         "status": "OPEN",
         "instrument": state.instrument,
-        "direction": decision.setup.direction,
+        "direction": order.direction,
         "entry": (
-            _proof_fill_entry if _proof_fill_entry is not None else decision.setup.entry
+            _proof_fill_entry if _proof_fill_entry is not None else order.entry
         ),
-        "stop": decision.setup.stop,
-        "target": decision.setup.target,
-        "rr_ratio": decision.setup.rr_ratio,
-        "strategy": decision.setup.strategy,
+        "stop": order.stop,
+        "target": order.target,
+        "rr_ratio": order.rr_ratio,
+        "strategy": order.strategy,
         "contracts": order.contracts,
         "paper_order_id": _paper_order_id,
         "execution_audit": getattr(fill, "execution_audit", None),
