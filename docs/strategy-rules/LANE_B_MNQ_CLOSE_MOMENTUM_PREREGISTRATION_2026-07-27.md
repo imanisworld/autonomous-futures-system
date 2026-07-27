@@ -6,6 +6,11 @@
 and Market Intraday Momentum,” *Journal of Financial Economics* 142, 377–403,
 DOI `10.1016/j.jfineco.2021.04.029`.
 
+Primary-source links: [publisher-version PDF](https://pure.eur.nl/ws/portalfiles/portal/58145484/1_s2.0_S0304405X21001598_main.pdf)
+and [Erasmus University record](https://repub.eur.nl/pub/131621). The separate
+figures checked against the source were found in
+[Quantitativo’s ES/NQ adaptation](https://www.quantitativo.com/p/intraday-momentum-for-es-and-nq).
+
 ## Source verification
 
 | Claim | Primary source | Verified? | Exact definition |
@@ -77,4 +82,3 @@ commission and adverse slippage; positive H1 and H2; multi-period and
 directional stability; no month or top-winner dependence; positive untouched
 holdout; and meaningful sample size. Historical evidence alone cannot produce
 `VALIDATED`.
-
