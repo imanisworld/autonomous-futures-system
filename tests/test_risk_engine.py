@@ -360,6 +360,97 @@ class TestRRRatio:
         assert result.failed_rule != "rr_below_minimum"
 
 
+class TestRRRatioExemption:
+    """Second enforcement point of min_rr_ratio (2026-07-27 parity audit):
+    strat_322_first_live and strat_12hr_miyagi are exempt here (RiskEngine.
+    _MIN_RR_GATE_EXEMPT), independently of strategy/signal_engine.py's own
+    separate exemption of the identical rule -- strat_322_first_live's
+    canonical evidence does not clear a 2.0 floor (21/21 fills below 2R),
+    so a global 2.0 requirement makes its evidence unreproducible through
+    the risk layer. Calls _check_rr_ratio directly (not validate()) so this
+    locks the second enforcement point itself, not just end-to-end behavior
+    that could pass for an unrelated reason. strat_12hr_miyagi is exempt
+    here too (pre-scoped, matching its own separately-evidenced 18/18
+    below-2R finding) but has no runtime wiring in this codebase -- see
+    RiskEngine._MIN_RR_GATE_EXEMPT's own comment for why."""
+
+    def test_322_first_live_below_minimum_exempt_at_risk_layer(self, config, clean_daily_state):
+        engine = RiskEngine(config=config)
+        setup = TradeSetup(
+            direction="SHORT", entry=28928.75, stop=29000.0, target=28900.0,
+            rr_ratio=0.014,  # real MNQ 2026-06-11 3-2-2 fill's R:R
+            strategy="strat_322_first_live",
+            instrument="MNQ", session="new_york",
+        )
+        assert engine._check_rr_ratio(setup, clean_daily_state) is None
+
+    def test_miyagi_below_minimum_exempt_at_risk_layer_pre_scoped(self, config, clean_daily_state):
+        """strat_12hr_miyagi has no runtime wiring in this codebase (see
+        RiskEngine._MIN_RR_GATE_EXEMPT's own comment) — this only locks
+        that the exemption SET membership is correct/forward-scoped, not
+        that the strategy is deployable."""
+        engine = RiskEngine(config=config)
+        setup = TradeSetup(
+            direction="SHORT", entry=25276.875, stop=25465.5, target=25208.5,
+            rr_ratio=0.36,  # real MNQ 2026-02-11 Miyagi fill's R:R
+            strategy="strat_12hr_miyagi",
+            instrument="MNQ", session="new_york",
+        )
+        assert engine._check_rr_ratio(setup, clean_daily_state) is None
+
+    def test_non_exempt_strategy_below_minimum_still_rejected_at_risk_layer(
+        self, config, clean_daily_state
+    ):
+        """Negative control: the SAME low R:R that's exempt for 3-2-2 above
+        must still fail rr_below_minimum for any other strategy — the
+        exemption must never widen beyond the named strategies."""
+        engine = RiskEngine(config=config)
+        setup = TradeSetup(
+            direction="SHORT", entry=28928.75, stop=29000.0, target=28900.0,
+            rr_ratio=0.014,
+            strategy="strat_4hr_retrigger",
+            instrument="MNQ", session="new_york",
+        )
+        result = engine._check_rr_ratio(setup, clean_daily_state)
+        assert result is not None
+        assert result.failed_rule == "rr_below_minimum"
+
+    def test_exemption_set_is_exactly_the_two_evidenced_strategies(self):
+        assert RiskEngine._MIN_RR_GATE_EXEMPT == frozenset(
+            {"strat_322_first_live", "strat_12hr_miyagi"}
+        )
+
+    def test_confluence_gate_still_rejects_weak_322_despite_rr_exemption(
+        self, config, clean_daily_state
+    ):
+        """Gate 6 audit (2026-07-27, min_confluence_grade): PRESERVED, not
+        exempted -- 9/10 real historical strat_322_first_live MNQ candidates
+        already clear the B floor (only 2025-09-05 scores WEAK). This is the
+        boundary check the audit's own decision hinges on: the min_rr_ratio
+        exemption above must be scoped to _check_rr_ratio only and must NOT
+        leak into an unrelated risk control. A strat_322_first_live setup
+        that is exempt on R:R (real 2026-06-11 fill shape) but carries the
+        real 2025-09-05 WEAK confluence grade must still be rejected by the
+        full validate() path -- proving the two checks are independent."""
+        cfg = replace(config, min_confluence_grade="B")
+        engine = RiskEngine(config=cfg)
+        setup = TradeSetup(
+            direction="SHORT", entry=28928.75, stop=29000.0, target=28900.0,
+            rr_ratio=0.014,  # real MNQ 2026-06-11 3-2-2 fill's R:R -- exempt
+            strategy="strat_322_first_live",
+            instrument="MNQ", session="new_york",
+            confluence_grade="WEAK",  # real MNQ 2025-09-05 3-2-2 candidate's grade
+        )
+
+        # The exemption itself is genuinely in effect for this setup.
+        assert engine._check_rr_ratio(setup, clean_daily_state) is None
+
+        # But the unrelated, preserved confluence gate still fires.
+        result = engine.validate(setup, clean_daily_state)
+        assert result.rejected
+        assert result.failed_rule == "min_confluence_grade"
+
+
 class TestDirectionCheck:
 
     def test_invalid_direction_rejected(self, config, clean_daily_state):

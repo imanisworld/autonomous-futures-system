@@ -468,7 +468,16 @@ class DecisionEngine:
             )
 
         # ── Quality gate: trend strength ─────────────────────────────────────
-        if self.config.require_strong_trend.get(state.instrument, False):
+        # _STRONG_TREND_GATE_EXEMPT (2026-07-27, operator-directed follow-up
+        # audit — see that set's own comment above for the full proof): a
+        # SEPARATE exemption from the TRENDING gate's, checked only when
+        # this bar's sole 5-minute-native candidate belongs to it.
+        # risk_rules.yaml's require_strong_trend is unchanged and stays
+        # authoritative for every other strategy.
+        if (
+            self.config.require_strong_trend.get(state.instrument, False)
+            and not self._strong_trend_gate_exempt_candidate(state)
+        ):
             if not (state.trend and state.trend.strength == "STRONG") \
                     and not self._admit_moderate(state):
                 actual = state.trend.strength if state.trend else "none"
@@ -540,7 +549,15 @@ class DecisionEngine:
                     ema_aligned = close > ema9 > ema21 > ema55
                 else:
                     ema_aligned = close < ema9 < ema21 < ema55
-                if not ema_aligned and not self._admit_moderate(state):
+                # _EMA_STACK_GATE_EXEMPT (2026-07-27, operator-directed
+                # audit — see that set's own comment above for the full
+                # proof): bypassed only when this bar's sole 5-minute-
+                # native candidate belongs to it.
+                if (
+                    not ema_aligned
+                    and not self._admit_moderate(state)
+                    and not self._ema_stack_gate_exempt_candidate(state)
+                ):
                     return DecisionOutput(
                         timestamp=now,
                         instrument=state.instrument,
@@ -1406,6 +1423,24 @@ class DecisionEngine:
         "strat_322_first_live",
     })
 
+    # Maps strategy name -> the MarketState attribute holding its transient
+    # candidate, so the collision-safety logic below (_sole_five_minute_
+    # native_candidate) generalizes without hardcoding per-strategy
+    # comparisons. Deliberately scoped to strategies actually wired into
+    # this codebase today (both fields exist on MarketState) -- NOT a
+    # 12HR-Miyagi-candidate entry, since that strategy's own module/
+    # MarketState field/DecisionEngine wiring do not exist here (see
+    # 12HR_MIYAGI_CAUSAL_STOP_EVIDENCE_2026-07-27.md: found structurally
+    # incompatible with the account's max_stop_ticks risk cap, HOLD/no
+    # merge). _sole_five_minute_native_candidate can therefore never
+    # resolve to "strat_12hr_miyagi" today -- its membership in the
+    # exempt sets below is inert until/unless a future, separately-
+    # evidenced Miyagi variant is wired in.
+    _FIVE_MINUTE_NATIVE_CANDIDATE_ATTRS: dict[str, str] = {
+        "strat_4hr_retrigger": "four_hr_retrigger_candidate",
+        "strat_322_first_live": "strat_322_first_live_candidate",
+    }
+
     # TRENDING-gate exemption (2026-07-27, operator-directed contract audit):
     # the system-wide require_trending_condition gate's own justification
     # (see the gate itself, below) is calibrated against a 555-day replay
@@ -1419,7 +1454,90 @@ class DecisionEngine:
     # research/reconcile_322_first_live.py` — zero matches. Exempting only
     # this strategy so forward demo tests the SAME strategy that produced the
     # evidence, not a TRENDING-filtered subset of it.
-    _TRENDING_GATE_EXEMPT: frozenset[str] = frozenset({"strat_322_first_live"})
+    #
+    # "strat_12hr_miyagi" is listed here too (2026-07-27 follow-up audit,
+    # same zero-reference proof independently re-verified against that
+    # strategy's own rules doc/detector/honest-fill replay/runtime file) --
+    # pre-scoped for when/if a future evidenced Miyagi variant is wired in,
+    # per _FIVE_MINUTE_NATIVE_CANDIDATE_ATTRS's own comment above. Inert
+    # today: no candidate can ever resolve to that name in this codebase.
+    _TRENDING_GATE_EXEMPT: frozenset[str] = frozenset(
+        {"strat_322_first_live", "strat_12hr_miyagi"}
+    )
+
+    # STRONG-trend-gate exemption (2026-07-27, operator-directed follow-up
+    # audit): a SEPARATE global gate from require_trending_condition above —
+    # quality_gates.require_strong_trend (risk_rules.yaml) rejects any
+    # candidate whose state.trend.strength != STRONG (unless _admit_moderate
+    # rescues a MODERATE bar). It had no strategy-aware exemption at all
+    # before this change. Same audit standard as the TRENDING exemption,
+    # extended to also grep strategy/strat_322_first_live.py itself (not
+    # just the research detector/replay): zero trend_strength/trend_
+    # direction/market_condition/TRENDING/EMA references. Measured directly,
+    # off real 5-minute/#338-corrected market data, at every real historical
+    # fill's actual trigger bar: strat_322_first_live — 3 of 8 fills were
+    # STRONG (2 WEAK wins unrescuable by _admit_moderate); a companion,
+    # separately-evidenced strat_12hr_miyagi study (0 of 5 fills STRONG,
+    # see the evidence doc referenced above) produced the identical
+    # conclusion and is pre-scoped here for the same forward-compatibility
+    # reason as _TRENDING_GATE_EXEMPT -- currently inert for that name.
+    # strat_4hr_retrigger, ORB, VWAP, strat_212/strat_122, and any future
+    # 5-minute-native strategy remain deliberately un-exempted -- no
+    # independent audit proof exists for them. risk_rules.yaml is
+    # untouched -- no global MNQ/MES quality-gate change, only these two
+    # strategies' own candidates bypass it, and only when they are the
+    # bar's SOLE 5-minute-native candidate (collisions fail closed,
+    # unchanged -- see _sole_five_minute_native_candidate below).
+    _STRONG_TREND_GATE_EXEMPT: frozenset[str] = frozenset(
+        {"strat_322_first_live", "strat_12hr_miyagi"}
+    )
+
+    # EMA-stack-alignment-gate exemption (2026-07-27, operator-directed
+    # third-pass audit): a THIRD separate global gate — the pre-setup
+    # "close > ema9 > ema21 > ema55" (or reverse) quality check just below
+    # (require_strong_trend's own sibling, same _admit_moderate rescue, no
+    # prior strategy-aware exemption at all). Same audit standard as the
+    # other two, most one-sided result of the three: strat_322_first_live
+    # 3/8 real fills EMA-aligned; the companion Miyagi study found 0/5 --
+    # same conclusion, pre-scoped here, currently inert for that name (see
+    # _FIVE_MINUTE_NATIVE_CANDIDATE_ATTRS's own comment above for why).
+    # risk_rules.yaml untouched; no global EMA-alignment weakening; bypass
+    # only applies when the exempt strategy is the bar's SOLE 5-minute-
+    # native candidate (collisions fail closed, unchanged).
+    _EMA_STACK_GATE_EXEMPT: frozenset[str] = frozenset(
+        {"strat_322_first_live", "strat_12hr_miyagi"}
+    )
+
+    # min_rr_ratio-gate exemption (2026-07-27, operator-directed
+    # fourth-pass audit): a FOURTH parity defect, structurally different
+    # from the other three -- risk_rules.yaml's single global
+    # `min_rr_ratio: 2.0` (no per-instrument dict) is enforced in
+    # _evaluate_candidate/_confirm_setup below, on an already-selected
+    # `confirmed` SetupDetail, not as an inline evaluate() bar-level gate.
+    # No sole-candidate/collision ambiguity applies here -- by this point
+    # ranked/first-match selection has already resolved which single
+    # candidate is being confirmed, so this only checks confirmed.strategy
+    # directly. Same audit standard, most one-sided result of the four:
+    # neither rules doc mentions R:R at all, and computing R:R directly
+    # from entry/stop/target on every filled trade in strat_322_first_
+    # live's canonical evidence shows 21/21 fills below 2.0 -- 100% of its
+    # entire evidenced track record, including every winning trade behind
+    # its reported profit factor. The companion Miyagi study found the
+    # identical result (18/18 fills below 2.0) before being separately
+    # found structurally incompatible with max_stop_ticks and put on HOLD
+    # -- "strat_12hr_miyagi" is pre-scoped here for the same forward-
+    # compatibility reason as the other three sets, currently inert.
+    # risk_rules.yaml's `min_rr_ratio: 2.0` is UNCHANGED and remains
+    # authoritative for every other strategy. This is a candidate-quality
+    # filter, not the account-loss/position-size/max-stop/daily-loss
+    # safety machinery, none of which this touches. A second, independent
+    # enforcement of the identical rule exists in risk/risk_engine.py::
+    # _check_rr_ratio -- fixed there too (its own separate constant, not
+    # imported from here: this module already imports RiskEngine, so
+    # importing back would risk a circular dependency).
+    _MIN_RR_GATE_EXEMPT: frozenset[str] = frozenset(
+        {"strat_322_first_live", "strat_12hr_miyagi"}
+    )
 
     def _find_setup(
         self,
@@ -1545,7 +1663,16 @@ class DecisionEngine:
                 return confirmed, "ENTRY_DETACHED_FROM_PRICE", reason
 
         # ── R:R validation ────────────────────────────────────────────────────
-        if confirmed.rr_ratio < self.config.min_rr_ratio:
+        # _MIN_RR_GATE_EXEMPT (2026-07-27, operator-directed fourth-pass
+        # audit — see that set's own comment above for the full proof):
+        # bypassed only for strat_322_first_live's own confirmed candidate
+        # (strat_12hr_miyagi pre-scoped but inert, see comment above).
+        # risk_rules.yaml's min_rr_ratio is unchanged and stays
+        # authoritative for every other strategy.
+        if (
+            confirmed.strategy not in self._MIN_RR_GATE_EXEMPT
+            and confirmed.rr_ratio < self.config.min_rr_ratio
+        ):
             reason = (
                 f"Setup found ({confirmed.strategy}) but R:R {confirmed.rr_ratio:.2f} "
                 f"is below minimum {self.config.min_rr_ratio:.2f}."
@@ -2531,21 +2658,69 @@ class DecisionEngine:
         value = str(getattr(state.ohlc, "timeframe", "") or "").strip().lower()
         return value in {"5", "5m", "5min", "5minute", "5minutes"}
 
+    def _sole_five_minute_native_candidate(self, state: MarketState) -> Optional[str]:
+        """Name of the bar's SOLE viable 5-minute-native candidate (across
+        ALL of _FIVE_MINUTE_NATIVE_CANDIDATE_ATTRS, not just any one
+        exemption's members), or None if zero or TWO-OR-MORE are present.
+
+        Shared collision-detection primitive for every 5-minute-native gate
+        exemption (TRENDING, STRONG-trend, EMA-stack, and any future one) —
+        a bar with two or more simultaneous candidates (exempt or not) is
+        always ambiguous and every caller must fail closed on None. Callers
+        still each hold their OWN exempt-strategy set and their own state.
+        canonical_4hr_only precondition; this only answers "which single
+        strategy, if any, is on this bar" — never which gates it bypasses.
+        """
+        present = [
+            name
+            for name, attr in self._FIVE_MINUTE_NATIVE_CANDIDATE_ATTRS.items()
+            if getattr(state, attr, None) is not None
+        ]
+        return present[0] if len(present) == 1 else None
+
     def _trending_gate_exempt_candidate(self, state: MarketState) -> bool:
         """True iff the TRENDING gate should be bypassed for this bar.
 
-        Bypasses ONLY when the bar's SOLE viable candidate belongs to
-        _TRENDING_GATE_EXEMPT. A non-exempt 5-minute-native strategy
-        (strat_4hr_retrigger) having a candidate on the exact same bar keeps
-        today's gated behavior — this can never change what strat_4hr_
-        retrigger does, only add a path for the exempt strategy when it
-        would otherwise be the sole candidate blocked.
+        Bypasses ONLY when the bar's SOLE viable 5-minute-native candidate
+        belongs to _TRENDING_GATE_EXEMPT. A non-exempt 5-minute-native
+        strategy (strat_4hr_retrigger) having a candidate on the exact same
+        bar keeps today's gated behavior — this can never change what
+        strat_4hr_retrigger does, only add a path for an exempt strategy
+        when it would otherwise be the sole candidate blocked. Generalizes
+        cleanly as more 5-minute-native strategies are added: any TWO OR
+        MORE simultaneous candidates (exempt or not) always disable the
+        exemption.
         """
         if not state.canonical_4hr_only:
             return False
-        has_exempt = state.strat_322_first_live_candidate is not None
-        has_non_exempt = state.four_hr_retrigger_candidate is not None
-        return has_exempt and not has_non_exempt
+        sole = self._sole_five_minute_native_candidate(state)
+        return sole is not None and sole in self._TRENDING_GATE_EXEMPT
+
+    def _strong_trend_gate_exempt_candidate(self, state: MarketState) -> bool:
+        """True iff the STRONG-trend quality gate should be bypassed for
+        this bar. Same sole-candidate/collision-fail-closed mechanics as
+        _trending_gate_exempt_candidate, but checked against the
+        DELIBERATELY SEPARATE _STRONG_TREND_GATE_EXEMPT set — the two gates
+        test unrelated things (market_condition vs state.trend.strength)
+        and must be able to diverge independently in the future.
+        """
+        if not state.canonical_4hr_only:
+            return False
+        sole = self._sole_five_minute_native_candidate(state)
+        return sole is not None and sole in self._STRONG_TREND_GATE_EXEMPT
+
+    def _ema_stack_gate_exempt_candidate(self, state: MarketState) -> bool:
+        """True iff the EMA-stack-alignment quality gate should be bypassed
+        for this bar. Same sole-candidate/collision-fail-closed mechanics as
+        the other two exemptions, checked against the DELIBERATELY SEPARATE
+        _EMA_STACK_GATE_EXEMPT set — three gates test three unrelated
+        things (market_condition, state.trend.strength, EMA-stack geometry)
+        and each must be able to diverge independently in the future.
+        """
+        if not state.canonical_4hr_only:
+            return False
+        sole = self._sole_five_minute_native_candidate(state)
+        return sole is not None and sole in self._EMA_STACK_GATE_EXEMPT
 
     def _advance_4hr_retrigger(
         self, state: MarketState, daily_state: DailyState

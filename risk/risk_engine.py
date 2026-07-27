@@ -148,6 +148,44 @@ class RiskEngine:
     All checks are independent and can be unit-tested in isolation.
     """
 
+    # min_rr_ratio-gate exemption (2026-07-27, operator-directed audit,
+    # second enforcement point): strategy/signal_engine.py enforces
+    # risk_rules.yaml's global `min_rr_ratio: 2.0` once already (its own
+    # separately-defined _MIN_RR_GATE_EXEMPT, same strategies) --
+    # _check_rr_ratio below is a SECOND, independent enforcement of the
+    # identical rule, reached even after the signal layer lets a candidate
+    # through. A deliberately SEPARATE constant here, not imported from
+    # signal_engine.py: that module already imports RiskEngine from this
+    # one, so importing back would risk a circular dependency, and a new
+    # shared module for a two-item exemption is unneeded scope.
+    #
+    # Same proof as the signal-layer exemption (not re-derived, directly
+    # applicable -- this is the exact same rule): strat_322_first_live's
+    # rules doc/detector/honest-fill replay/runtime file never mentions R:R
+    # at all, and computing R:R from entry/stop/target on every filled
+    # trade in its canonical evidence shows 21/21 fills below 2.0 -- 100%
+    # of its entire evidenced track record, including every winning trade
+    # behind its reported profit factor. A companion, separately-evidenced
+    # strat_12hr_miyagi study found the identical result (18/18 fills below
+    # 2.0) before being independently found structurally incompatible with
+    # max_stop_ticks (see docs/strategy-rules/
+    # 12HR_MIYAGI_CAUSAL_STOP_EVIDENCE_2026-07-27.md — HOLD, not merged/
+    # deployed) -- "strat_12hr_miyagi" is pre-scoped here for forward
+    # compatibility only, exactly like the signal-layer set; it is inert
+    # today since that strategy has no runtime wiring in this codebase.
+    #
+    # SCOPE: this exemption ends at min_rr_ratio. Every other RiskEngine
+    # check (bracket validity, stop geometry, max stop, position sizing,
+    # contract limits, daily loss, drawdown, open-position controls, and
+    # every actual account-protection rule) is untouched and still applies
+    # to these strategies exactly as before -- in particular, max_stop_
+    # ticks is the exact control that correctly kept Miyagi off this
+    # exemption; it must never be added here or anywhere else for either
+    # strategy without new, separate evidence.
+    _MIN_RR_GATE_EXEMPT: frozenset[str] = frozenset(
+        {"strat_322_first_live", "strat_12hr_miyagi"}
+    )
+
     def __init__(self, config: Optional[SystemConfig] = None,
                  schedule_mode: Optional[str] = None):
         self.config = config or load_config()
@@ -984,6 +1022,8 @@ class RiskEngine:
         setups the runner is designed to ride.
         """
         if getattr(self.config, "runner_mode", False):
+            return None
+        if setup.strategy in self._MIN_RR_GATE_EXEMPT:
             return None
         if setup.rr_ratio < self.config.min_rr_ratio:
             return RiskResult(

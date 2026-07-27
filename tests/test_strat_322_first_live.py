@@ -390,6 +390,33 @@ def test_trending_gate_exempt_for_strat_322_alone(config):
     assert out.setup.entry == 104.0
 
 
+def test_signal_layer_min_rr_exempt_for_strat_322_alone(config):
+    """Contract audit (2026-07-27, PR review — parity-corrections branch):
+    the canonical evidence for this strategy (60M_322_EXPANDED_EVIDENCE_
+    2026-07-26.md, 34 candidates / 21 fills / PF10.36) does not clear a 2.0
+    R:R floor -- 21/21 fills are below 2R (evidenced structurally, not by
+    accident: the bracket is 8AM-high/low derived, not R:R-target derived).
+    A global min_rr_ratio=2.0 would silently exclude the entire evidenced
+    fill population at signal-confirmation time, before the trade ever
+    reaches RiskEngine. This locks the first (signal-layer) of the two
+    min_rr_ratio enforcement points: a sub-2R strat_322_first_live setup
+    must still confirm as a TRADE, using the real 2026-06-15 fixture
+    (entry=104, stop=90, target=115 -> rr=11/14=0.786)."""
+    cfg = _enabled_cfg(config, min_rr_ratio=2.0)
+    bars = _long_day_bars(include_10am=False)
+    bars.append(_bar(10, 5, 100, 105, 99, 104.5))
+    state = _market_state(bars)
+    daily = DailyState()
+    daily.strat_322_first_live_state["MNQ"] = _armed_322_state()
+    out = DecisionEngine(cfg).evaluate(state, daily)
+    assert out.decision == "TRADE"
+    assert out.setup.strategy == "strat_322_first_live"
+    assert out.setup.rr_ratio < cfg.min_rr_ratio  # exemption is genuinely exercised
+    assert out.setup.entry == 104.0
+    assert out.setup.stop == 90.0
+    assert out.setup.target == 115.0
+
+
 def test_trending_gate_exempt_helper_never_bypasses_on_collision(config):
     """Unit-level collision safety for _trending_gate_exempt_candidate: when
     BOTH 5-minute-native strategies have a candidate on the identical bar,

@@ -159,6 +159,66 @@ class ReplayEngine:
         # replay file/day seed the next day's impulse or consolidation.
         self._research_bars.clear()
         self._reset_run_outputs(run_date)
+        # Replay/live parity fix (2026-07-27, confirmed defect, isolated
+        # canonical-evidence audit): webhook/runner.py:545-558/632-634 sets
+        # state.canonical_4hr_only=True whenever strat_4hr_retrigger or
+        # strat_322_first_live is enabled AND the inbound payload is the
+        # dedicated 5-minute-native request (not a normal 15m payload) --
+        # this replay loop never set the flag at all, so
+        # _trending_gate_exempt_candidate() (strategy/signal_engine.py)
+        # could never return True in replay, no matter how correct the
+        # 5-minute data or the resolved candidate was. Confirmed via an
+        # isolated single-strategy 5-minute-native evidence replay: a real
+        # historical strat_322_first_live-class candidate reproduced its
+        # own canonical trigger/target exactly and was then blocked by
+        # MARKET_CONDITION_NOT_TRENDING solely because this flag was never
+        # set in replay.
+        #
+        # FIRST ATTEMPT AT THIS FIX WAS WRONG, caught by the full test
+        # suite (a multi-concept full-day fixture mixing a legacy concept
+        # with a 5-minute-native strategy in one config): setting this flag
+        # once per run() call from self.config.enabled_concepts alone made
+        # it TRUE for the entire day whenever ANY 5m-native strategy shared
+        # a config with legacy concepts -- exactly the deployed combined-
+        # book config -- which then silently excluded every legacy concept
+        # from EVERY bar via _iter_enabled_setups's own
+        # `if state.canonical_4hr_only: enabled = 5-minute-native only`
+        # restriction (strategy/signal_engine.py). Live never has this
+        # failure mode because four_hr_five_min is a property of ONE
+        # inbound webhook REQUEST (a dedicated 5-minute-native payload
+        # type, distinct from a normal 15m payload), not of the static
+        # config -- a single live process serves both request types on
+        # different calls. Replay's per-candle analog of "which request
+        # type is this" is the candle's OWN timeframe tag, already used
+        # identically at the _four_hr_bars population immediately below --
+        # so the flag must be evaluated PER CANDLE against candle.
+        # timeframe, never hoisted to a per-run constant.
+        #
+        # SECOND CORRECTION, also caught by the full suite: candle.
+        # timeframe alone is still not enough. A small synthetic test
+        # fixture (predating canonical_4hr_only/the 5m-native strategies
+        # entirely) has its candles tagged "5m" while asserting a LEGACY
+        # concept reaches TRADE -- a stale/incidental tag from before
+        # anything ever read candle.timeframe for gating, not a real
+        # combined 15m+5m live-style stream (no corpus in this repo has
+        # ever mixed timeframes in one file; ReplayCandleLoader's own
+        # duplicate-timestamp check would reject same-timestamp 15m+5m rows
+        # anyway). Rather than edit that pre-existing test fixture as a
+        # side effect of this defect fix, gate on self.config.expected_
+        # timeframe_minutes == 5 as well -- the run's OWN declaration of
+        # which cadence is authoritative/primary for this call, set
+        # explicitly by isolated 5-minute-native evidence runs (this fix's
+        # whole reason for being) and left at its production default (15)
+        # by every other corpus/config in this repo. This is the faithful
+        # replay analog of "which of live's two request types is this,"
+        # not an arbitrary extra condition.
+        _five_minute_native_strategy_names = {
+            "strat_4hr_retrigger", "strat_322_first_live"
+        }
+        five_minute_native_enabled = (
+            int(getattr(self.config, "expected_timeframe_minutes", 15) or 0) == 5
+            and not set(self.config.enabled_concepts).isdisjoint(_five_minute_native_strategy_names)
+        )
         journal = JournalLogger(log_dir=str(self.log_dir))
         journal_date = _date_to_date(run_date)
         decision_engine = DecisionEngine(config=self.config)
@@ -399,9 +459,10 @@ class ReplayEngine:
                         "close": candle.close,
                     }
                 )
-            if str(candle.timeframe).strip().lower() in {
+            is_5m_candle = str(candle.timeframe).strip().lower() in {
                 "5", "5m", "5min", "5minute", "5minutes"
-            }:
+            }
+            if is_5m_candle:
                 self._four_hr_bars.setdefault(
                     candle.instrument, deque(maxlen=5000)
                 ).append(
@@ -440,6 +501,7 @@ class ReplayEngine:
             state.bar_history_5m = list(
                 self._four_hr_bars.get(candle.instrument, ())
             )
+            state.canonical_4hr_only = is_5m_candle and five_minute_native_enabled
             # Effective-parity: live (webhook/runner.py) sets this from the
             # last 6 bars of its persisted BarHistory right after recording
             # the current bar — a continuous-data directional read that lets
