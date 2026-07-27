@@ -362,7 +362,17 @@ class DecisionEngine:
         # state). RANGE_BOUND passes the non_tradable_states check above but is
         # out-of-distribution for every setup — block it here so a live Pine
         # RANGE_BOUND label can't admit a false-breakout the backtest never saw.
-        if self.config.require_trending_condition and condition != "TRENDING":
+        # _TRENDING_GATE_EXEMPT (2026-07-27): that 555-day replay predates
+        # strat_322_first_live and never gated it — see the exemption set's
+        # own comment above for the verification. The exemption only ever
+        # bypasses this gate when the bar's SOLE candidate is exempt; a
+        # non-exempt 5m-native strategy (strat_4hr_retrigger) sharing the
+        # same bar keeps today's exact gated behavior, unchanged.
+        if (
+            self.config.require_trending_condition
+            and condition != "TRENDING"
+            and not self._trending_gate_exempt_candidate(state)
+        ):
             blocked_candidate_audit = self._collect_blocked_candidate_audit(
                 state=state,
                 condition=condition,
@@ -1395,6 +1405,21 @@ class DecisionEngine:
         "strat_4hr_retrigger",
         "strat_322_first_live",
     })
+
+    # TRENDING-gate exemption (2026-07-27, operator-directed contract audit):
+    # the system-wide require_trending_condition gate's own justification
+    # (see the gate itself, below) is calibrated against a 555-day replay
+    # that predates strat_322_first_live's existence — it is a global
+    # default, not a rule this strategy's own contract ever specified.
+    # Verified zero market_condition/TRENDING/trend_direction/trend_strength
+    # references anywhere in the rules doc, the causal detector, or the
+    # honest-fill replay that produced the canonical evidence (PR #340/#341):
+    # `grep -n "market_condition\|TRENDING\|trend_direction\|trend_strength"
+    # research/detector_322_first_live.py research/replay_322_honest_fill.py
+    # research/reconcile_322_first_live.py` — zero matches. Exempting only
+    # this strategy so forward demo tests the SAME strategy that produced the
+    # evidence, not a TRENDING-filtered subset of it.
+    _TRENDING_GATE_EXEMPT: frozenset[str] = frozenset({"strat_322_first_live"})
 
     def _find_setup(
         self,
@@ -2505,6 +2530,22 @@ class DecisionEngine:
     def _is_five_minute_state(state: MarketState) -> bool:
         value = str(getattr(state.ohlc, "timeframe", "") or "").strip().lower()
         return value in {"5", "5m", "5min", "5minute", "5minutes"}
+
+    def _trending_gate_exempt_candidate(self, state: MarketState) -> bool:
+        """True iff the TRENDING gate should be bypassed for this bar.
+
+        Bypasses ONLY when the bar's SOLE viable candidate belongs to
+        _TRENDING_GATE_EXEMPT. A non-exempt 5-minute-native strategy
+        (strat_4hr_retrigger) having a candidate on the exact same bar keeps
+        today's gated behavior — this can never change what strat_4hr_
+        retrigger does, only add a path for the exempt strategy when it
+        would otherwise be the sole candidate blocked.
+        """
+        if not state.canonical_4hr_only:
+            return False
+        has_exempt = state.strat_322_first_live_candidate is not None
+        has_non_exempt = state.four_hr_retrigger_candidate is not None
+        return has_exempt and not has_non_exempt
 
     def _advance_4hr_retrigger(
         self, state: MarketState, daily_state: DailyState

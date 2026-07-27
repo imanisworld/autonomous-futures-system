@@ -355,6 +355,147 @@ def test_mes_never_produces_a_candidate_even_when_enabled(config):
     assert out.decision != "TRADE" or out.setup.strategy != "strat_322_first_live"
 
 
+def _armed_322_state(day: date = DAY) -> dict:
+    return {
+        "trading_date": day.isoformat(), "status": "ARMED", "direction": "LONG",
+        "trigger": 104.0, "stop": 90.0, "target": 115.0,
+        "eight_am_high": 115.0, "eight_am_low": 95.0, "nine_am_range_points": 14.0,
+        "setup_bar_ts": _dt(9, 0, day).isoformat(),
+        "expires_at": _dt(11, 0, day).isoformat(), "invalidation": None,
+    }
+
+
+def test_trending_gate_exempt_for_strat_322_alone(config):
+    """Contract audit (2026-07-27, PR #359 review): the canonical rules doc,
+    causal detector, and honest-fill replay that produced the evidence
+    ($1,595.70/PF10.36) have ZERO market_condition/TRENDING dependency —
+    verified via `grep -n "market_condition\\|TRENDING\\|trend_direction\\|
+    trend_strength" research/detector_322_first_live.py research/
+    replay_322_honest_fill.py research/reconcile_322_first_live.py` (zero
+    matches). The system-wide TRENDING gate's own justification comment
+    cites a 555-day replay that predates this strategy's existence — a
+    global default, not part of this strategy's contract. This locks the
+    exemption: a non-TRENDING bar whose SOLE candidate is strat_322_first_live
+    must produce a TRADE, not a block."""
+    cfg = _enabled_cfg(config, require_trending_condition=True)
+    bars = _long_day_bars(include_10am=False)
+    bars.append(_bar(10, 5, 100, 105, 99, 104.5))
+    state = _market_state(bars)
+    state.market_condition = "RANGE_BOUND"  # NOT trending
+    daily = DailyState()
+    daily.strat_322_first_live_state["MNQ"] = _armed_322_state()
+    out = DecisionEngine(cfg).evaluate(state, daily)
+    assert out.decision == "TRADE"
+    assert out.setup.strategy == "strat_322_first_live"
+    assert out.setup.entry == 104.0
+
+
+def test_trending_gate_exempt_helper_never_bypasses_on_collision(config):
+    """Unit-level collision safety for _trending_gate_exempt_candidate: when
+    BOTH 5-minute-native strategies have a candidate on the identical bar,
+    the helper must return False — the exemption can never apply, so
+    strat_4hr_retrigger's own gated behavior is provably untouched. Tested
+    directly against the helper (rather than through the full advance()
+    pipeline) so the assertion is precise about the exact inputs that flip
+    the decision, independent of how each state machine happens to persist."""
+    engine = DecisionEngine(config=_enabled_cfg(config))
+    bars = _long_day_bars(include_10am=False)
+    bars.append(_bar(10, 5, 100, 105, 99, 104.5))
+    state = _market_state(bars)
+
+    state.strat_322_first_live_candidate = None
+    state.four_hr_retrigger_candidate = None
+    assert engine._trending_gate_exempt_candidate(state) is False  # neither
+
+    state.strat_322_first_live_candidate = {"direction": "LONG"}
+    state.four_hr_retrigger_candidate = None
+    assert engine._trending_gate_exempt_candidate(state) is True  # 322 alone
+
+    state.four_hr_retrigger_candidate = {"direction": "LONG"}
+    assert engine._trending_gate_exempt_candidate(state) is False  # both -> exempt OFF
+
+    state.strat_322_first_live_candidate = None
+    assert engine._trending_gate_exempt_candidate(state) is False  # 4HR alone
+
+    state.canonical_4hr_only = False
+    state.strat_322_first_live_candidate = {"direction": "LONG"}
+    state.four_hr_retrigger_candidate = None
+    assert engine._trending_gate_exempt_candidate(state) is False  # legacy path
+
+
+def test_trending_gate_still_blocks_four_hr_retrigger_alone(config):
+    """Explicit regression lock: strat_4hr_retrigger's own TRENDING-gated
+    behavior (unrelated to this PR, already live in production) must be
+    byte-identical to before this change when it is the only candidate."""
+    cfg = _enabled_cfg(
+        config,
+        enabled_concepts=["strat_4hr_retrigger"],
+        require_trending_condition=True,
+    )
+    bars = _long_day_bars(include_10am=False)
+    bars.append(_bar(10, 5, 100, 105, 99, 104.5))
+    state = _market_state(bars)
+    state.market_condition = "RANGE_BOUND"
+    state.four_hr_retrigger_candidate = {
+        "direction": "LONG", "entry": 100.0, "stop": 95.0, "target": 110.0,
+        "entry_time": state.timestamp,
+    }
+    daily = DailyState()
+    daily.four_hr_retrigger_state["MNQ"] = {"status": "TRIGGERED"}
+    out = DecisionEngine(cfg).evaluate(state, daily)
+    assert out.decision == "NO_TRADE"
+    assert "MARKET_CONDITION_NOT_TRENDING" in out.failed_gates
+
+
+def test_trending_gate_exemption_does_not_leak_to_legacy_15m_path(config):
+    """The exemption is scoped to canonical_4hr_only bars only — a normal
+    15m-path bar (any other strategy) must be completely unaffected."""
+    cfg = _enabled_cfg(
+        config,
+        enabled_concepts=["orb_reclaim"],
+        require_trending_condition=True,
+    )
+    bars = _long_day_bars(include_10am=False)
+    state = _market_state(bars)
+    state.canonical_4hr_only = False
+    state.market_condition = "RANGE_BOUND"
+    state.ohlc.timeframe = "15m"
+    daily = DailyState()
+    out = DecisionEngine(cfg).evaluate(state, daily)
+    assert out.decision == "NO_TRADE"
+    assert "MARKET_CONDITION_NOT_TRENDING" in out.failed_gates
+
+
+def test_blocked_candidate_audit_still_visible_when_exemption_does_not_apply(config):
+    """Observability requirement: whenever the exemption legitimately does
+    NOT apply (forced off here via canonical_4hr_only=False, the same
+    condition the collision case produces), a genuinely-blocked
+    strat_322_first_live candidate must still surface in
+    blocked_candidate_audit with full strategy/direction/entry/stop/target/
+    blocking_gate detail, surviving to_dict() — the pre-existing generic
+    mechanism (_collect_blocked_candidate_audit, untouched by this fix)
+    still does its job for this strategy exactly like every other."""
+    cfg = _enabled_cfg(config, require_trending_condition=True)
+    bars = _long_day_bars(include_10am=False)
+    bars.append(_bar(10, 5, 100, 105, 99, 104.5))
+    state = _market_state(bars)
+    state.market_condition = "RANGE_BOUND"
+    state.canonical_4hr_only = False  # forces _trending_gate_exempt_candidate() False
+    daily = DailyState()
+    daily.strat_322_first_live_state["MNQ"] = _armed_322_state()
+    out = DecisionEngine(cfg).evaluate(state, daily)
+    assert out.decision == "NO_TRADE"
+    assert "MARKET_CONDITION_NOT_TRENDING" in out.failed_gates
+    rows = out.blocked_candidate_audit["candidates"]
+    row = next(r for r in rows if r["strategy"] == "strat_322_first_live")
+    assert row["blocking_gate"] == "MARKET_CONDITION_NOT_TRENDING"
+    assert row["direction"] == "LONG"
+    assert row["entry"] == 104.0
+    assert row["stop"] == 90.0
+    assert row["target"] == 115.0
+    assert "blocked_candidate_audit" in out.to_dict()
+
+
 def test_cross_instrument_state_does_not_leak(config):
     """MNQ arming a setup must not be visible to MES's state slot (same
     DailyState instance, same cross-instrument isolation contract as
