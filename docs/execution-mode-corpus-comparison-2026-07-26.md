@@ -1,8 +1,8 @@
 # Execution-mode corpus comparison (implemented modes, PR #357)
 
-**Verdict: NO IMPLEMENTED EXECUTION MODE RESCUES THE FROZEN SYSTEM ON THIS CORPUS**
+**Verdict: NO CURRENTLY MODELED/IMPLEMENTED EXECUTION MODE MAKES THE FROZEN SYSTEM PROFITABLE ON THIS CORPUS**
 
-Pinned code: `417a0891d82280e8de3ec34f5793a5bdbaa9a6b8` (PR #357 merged)
+Pinned code: `b86eec690b7917f067d2daabcc9477584da451f0` (PR #357 merged)
 Corpus: `4ab5812659910235e8a26e7417f851e0a403855ff75183322e99b0b36970d3d4` (626 files — byte-identical to PR #346's corpus)
 Range: 2025-07-24 → 2026-07-23
 
@@ -48,6 +48,11 @@ Range: 2025-07-24 → 2026-07-23
 
 ## Limitations
 
+- This verdict is scoped to the MODELED modes: it does NOT claim
+  execution is irrelevant. stop_limit has no replay model yet, and
+  marketable_limit materially changes the loss profile (smallest loss,
+  lowest drawdown, and the only never-halting instrument lane) even
+  though it does not produce positive expectancy.
 - Replay-scale dollars; historical evidence, not live-fill proof.
 - The marketable_limit arm uses PR #357's default 8-tick caps — note
   these are TIGHTER than the canonical IOC caps (MES 16t / MNQ 32t);

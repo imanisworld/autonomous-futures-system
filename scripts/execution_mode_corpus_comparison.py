@@ -250,7 +250,10 @@ def main() -> int:
     verdict = (
         f"BEST ARM {best_arm.upper()} IS POSITIVE — CANDIDATE FOR OPERATOR REVIEW"
         if best_positive
-        else "NO IMPLEMENTED EXECUTION MODE RESCUES THE FROZEN SYSTEM ON THIS CORPUS"
+        else (
+            "NO CURRENTLY MODELED/IMPLEMENTED EXECUTION MODE MAKES THE FROZEN "
+            "SYSTEM PROFITABLE ON THIS CORPUS"
+        )
     )
 
     payload = {
@@ -362,6 +365,11 @@ def main() -> int:
         "",
         "## Limitations",
         "",
+        "- This verdict is scoped to the MODELED modes: it does NOT claim",
+        "  execution is irrelevant. stop_limit has no replay model yet, and",
+        "  marketable_limit materially changes the loss profile (smallest loss,",
+        "  lowest drawdown, and the only never-halting instrument lane) even",
+        "  though it does not produce positive expectancy.",
         "- Replay-scale dollars; historical evidence, not live-fill proof.",
         "- The marketable_limit arm uses PR #357's default 8-tick caps — note",
         "  these are TIGHTER than the canonical IOC caps (MES 16t / MNQ 32t);",

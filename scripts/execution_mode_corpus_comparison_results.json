@@ -1,6 +1,6 @@
 {
   "meta": {
-    "main_sha": "417a0891d82280e8de3ec34f5793a5bdbaa9a6b8",
+    "main_sha": "b86eec690b7917f067d2daabcc9477584da451f0",
     "range": [
       "2025-07-24",
       "2026-07-23"
@@ -18,7 +18,7 @@
       "stop_limit": "NOT MODELED \u2014 PaperBroker has no StopLimit entry model; adding one is a simulator change for a separate reviewed PR"
     }
   },
-  "verdict": "NO IMPLEMENTED EXECUTION MODE RESCUES THE FROZEN SYSTEM ON THIS CORPUS",
+  "verdict": "NO CURRENTLY MODELED/IMPLEMENTED EXECUTION MODE MAKES THE FROZEN SYSTEM PROFITABLE ON THIS CORPUS",
   "pr346_reference": {
     "label": "PR #346 corrected IOC pass (main@e8f2fe23)",
     "attempts": 165,
