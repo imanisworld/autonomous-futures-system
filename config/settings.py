@@ -461,6 +461,11 @@ class SystemConfig:
     # 2026-07-11.md for the evidence this is based on.
     mnq_orb_breakout_proof_mode: str = "observe_only"
 
+    # ── MNQ ORB Breakout inverse paper candidate (2026-07-27) ─────────────
+    # Paper-only implementation of the preregistered fixed-one-contract
+    # inverse + eight-tick marketable IOC candidate. No demo/live mode exists.
+    mnq_orb_breakout_inverse_mode: str = "observe_only"
+
     # ── MNQ vwap_hold proof mode (strategy-restoration candidate #3,
     # 2026-07-14) ─────────────────────────────────────────────────────────
     # Same tri-state contract, scoped to MNQ + vwap_hold + new_york session
@@ -760,6 +765,9 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         mnq_orb_breakout_proof_mode=str(
             os.getenv("MNQ_ORB_BREAKOUT_PROOF_MODE", "observe_only") or "observe_only"
         ).strip().lower(),
+        mnq_orb_breakout_inverse_mode=str(
+            os.getenv("MNQ_ORB_BREAKOUT_INVERSE_MODE", "observe_only") or "observe_only"
+        ).strip().lower(),
         mnq_vwap_hold_proof_mode=str(
             os.getenv("MNQ_VWAP_HOLD_PROOF_MODE", "observe_only") or "observe_only"
         ).strip().lower(),
@@ -1045,6 +1053,22 @@ def _validate_config(config: SystemConfig) -> None:
             "MNQ_ORB_BREAKOUT_PROOF_MODE must be one of "
             f"{sorted(_valid_mnq_proof_modes)} (got {config.mnq_orb_breakout_proof_mode!r}); "
             "'live' is never a valid value for this proof mode."
+        )
+    _valid_inverse_modes = {"observe_only", "paper_sim"}
+    if config.mnq_orb_breakout_inverse_mode not in _valid_inverse_modes:
+        raise ConfigError(
+            "MNQ_ORB_BREAKOUT_INVERSE_MODE must be one of "
+            f"{sorted(_valid_inverse_modes)} "
+            f"(got {config.mnq_orb_breakout_inverse_mode!r}); "
+            "this candidate is paper-only."
+        )
+    if (
+        config.mnq_orb_breakout_inverse_mode != "observe_only"
+        and config.mnq_orb_breakout_proof_mode != "observe_only"
+    ):
+        raise ConfigError(
+            "MNQ_ORB_BREAKOUT_INVERSE_MODE and MNQ_ORB_BREAKOUT_PROOF_MODE "
+            "cannot both be active; their execution semantics conflict."
         )
     if config.mnq_vwap_hold_proof_mode not in _valid_mnq_proof_modes:
         raise ConfigError(
