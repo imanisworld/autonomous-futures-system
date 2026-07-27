@@ -18,10 +18,13 @@ material. See `docs/vp-futures-strategy-snapshot.md` for the higher-level compil
   The reported edge used **fixed-distance** stops; the documented fixed completed-1H stop P&L
   is **not yet validated** (see `4HR_ReTrigger_Rules.md` §14).
 - **Miyagi:** MNQ +$102.35 / MES +$25.78 expectancy at T1 exit, literal stop (n=13/20).
-- **3-2-2:** MNQ net $1,595.70, PF 10.36, 18W-2L honest-fill (n=34 candidates, 20 resolved).
-  PROMISING BUT UNPROVEN — positive both halves, survives 1-4 tick slippage, sample-size
-  expansion blocked by data coverage (see `Strategy_Inventory.md`). MES marginal, QQQ
-  unconfirmed, IWM rejected.
+- **3-2-2:** BROKEN FOR CURRENT SYSTEM RISK CONSTRAINTS (parity validation, 2026-07-27).
+  The honest-fill figure below (MNQ net $1,595.70, PF 10.36, 18W-2L, n=34 candidates,
+  20 resolved) never exercised any real runtime risk gate; run through the actual
+  wired-in engine, 0/34 reach a fill — `max_stop_ticks` and `min_confluence_grade`
+  eliminate the entire population, even with every proven parity defect removed.
+  See `Strategy_Inventory.md` and `60M_322_PARITY_VALIDATION_BROKEN_2026-07-27.md`.
+  MES marginal, QQQ unconfirmed, IWM rejected.
 
 > Target-touch rates are not P&L. Options profitability (premium/spread/theta) and
 > walk-forward stability remain open items per each doc's "not yet validated" section.

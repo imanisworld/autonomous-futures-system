@@ -1,0 +1,516 @@
+{
+  "label": "main_baseline",
+  "config": {
+    "enabled_concepts": [
+      "strat_322_first_live"
+    ],
+    "expected_timeframe_minutes": 5,
+    "entry_tolerance_ticks_by_root": {
+      "MNQ": 32.0,
+      "MES": 16.0
+    },
+    "entry_fill_model": "ioc_limit",
+    "require_trending_condition": true,
+    "require_strong_trend": {
+      "MNQ": true,
+      "MES": true,
+      "MGC": false,
+      "MCL": false
+    },
+    "min_rr_ratio": 2.0,
+    "min_confluence_grade": "B",
+    "max_stop_ticks": {
+      "MNQ": 120,
+      "MES": 60,
+      "NQ": 60,
+      "ES": 60,
+      "MGC": 0,
+      "MCL": 0
+    }
+  },
+  "candidate_count": 34,
+  "summary": {
+    "OTHER_SIGNAL_BLOCKED:['ENTRY_DETACHED_FROM_PRICE']": 5,
+    "PARITY_GATE_BLOCKED": 28,
+    "OTHER_SIGNAL_BLOCKED:['MARKET_CONDITION_NOT_TRADABLE']": 1
+  },
+  "trades": [
+    {
+      "date": "2024-08-02",
+      "known_direction": "SHORT",
+      "research_result": "CANCELLED",
+      "research_net": 0.0,
+      "pure_state_machine_status": "TRIGGERED",
+      "pure_state_machine_direction": "SHORT",
+      "classification": "OTHER_SIGNAL_BLOCKED:['ENTRY_DETACHED_FROM_PRICE']",
+      "bar_ts": "2024-08-02T14:05:00+00:00",
+      "gates_observed": [
+        "ENTRY_DETACHED_FROM_PRICE"
+      ],
+      "reason": "Entry 18541.8 detached from price 18476.2 (stop 18761.2 / target 18508 no longer straddle the live price) \u2014 stale level after a feed gap; not chasing a market fill."
+    },
+    {
+      "date": "2024-08-14",
+      "known_direction": "SHORT",
+      "research_result": "CANCELLED",
+      "research_net": 0.0,
+      "pure_state_machine_status": "TRIGGERED",
+      "pure_state_machine_direction": "SHORT",
+      "classification": "OTHER_SIGNAL_BLOCKED:['ENTRY_DETACHED_FROM_PRICE']",
+      "bar_ts": "2024-08-14T14:10:00+00:00",
+      "gates_observed": [
+        "ENTRY_DETACHED_FROM_PRICE"
+      ],
+      "reason": "Entry 19011 detached from price 18985.5 (stop 19175 / target 19004.2 no longer straddle the live price) \u2014 stale level after a feed gap; not chasing a market fill."
+    },
+    {
+      "date": "2024-08-22",
+      "known_direction": "SHORT",
+      "research_result": "CANCELLED",
+      "research_net": 0.0,
+      "pure_state_machine_status": "TRIGGERED",
+      "pure_state_machine_direction": "SHORT",
+      "classification": "PARITY_GATE_BLOCKED",
+      "bar_ts": "2024-08-22T14:05:00+00:00",
+      "gates_observed": [
+        "MARKET_CONDITION_NOT_TRENDING"
+      ],
+      "reason": "Market condition is RANGE_BOUND, not TRENDING. Only TRENDING conditions are traded."
+    },
+    {
+      "date": "2024-08-30",
+      "known_direction": "SHORT",
+      "research_result": "CANCELLED",
+      "research_net": 0.0,
+      "pure_state_machine_status": "TRIGGERED",
+      "pure_state_machine_direction": "SHORT",
+      "classification": "PARITY_GATE_BLOCKED",
+      "bar_ts": "2024-08-30T14:55:00+00:00",
+      "gates_observed": [
+        "MARKET_CONDITION_NOT_TRENDING"
+      ],
+      "reason": "Market condition is RANGE_BOUND, not TRENDING. Only TRENDING conditions are traded."
+    },
+    {
+      "date": "2024-09-06",
+      "known_direction": "SHORT",
+      "research_result": "WIN",
+      "research_net": 58.76,
+      "pure_state_machine_status": "TRIGGERED",
+      "pure_state_machine_direction": "SHORT",
+      "classification": "PARITY_GATE_BLOCKED",
+      "bar_ts": "2024-09-06T14:00:00+00:00",
+      "gates_observed": [
+        "MARKET_CONDITION_NOT_TRENDING"
+      ],
+      "reason": "Market condition is RANGE_BOUND, not TRENDING. Only TRENDING conditions are traded."
+    },
+    {
+      "date": "2024-09-11",
+      "known_direction": "SHORT",
+      "research_result": "WIN",
+      "research_net": 135.26,
+      "pure_state_machine_status": "TRIGGERED",
+      "pure_state_machine_direction": "SHORT",
+      "classification": "PARITY_GATE_BLOCKED",
+      "bar_ts": "2024-09-11T14:00:00+00:00",
+      "gates_observed": [
+        "MARKET_CONDITION_NOT_TRENDING"
+      ],
+      "reason": "Market condition is RANGE_BOUND, not TRENDING. Only TRENDING conditions are traded."
+    },
+    {
+      "date": "2024-09-12",
+      "known_direction": "LONG",
+      "research_result": "CANCELLED",
+      "research_net": 0.0,
+      "pure_state_machine_status": "TRIGGERED",
+      "pure_state_machine_direction": "LONG",
+      "classification": "PARITY_GATE_BLOCKED",
+      "bar_ts": "2024-09-12T14:10:00+00:00",
+      "gates_observed": [
+        "MARKET_CONDITION_NOT_TRENDING"
+      ],
+      "reason": "Market condition is RANGE_BOUND, not TRENDING. Only TRENDING conditions are traded."
+    },
+    {
+      "date": "2024-10-10",
+      "known_direction": "LONG",
+      "research_result": "WIN",
+      "research_net": 169.76,
+      "pure_state_machine_status": "TRIGGERED",
+      "pure_state_machine_direction": "LONG",
+      "classification": "PARITY_GATE_BLOCKED",
+      "bar_ts": "2024-10-10T14:05:00+00:00",
+      "gates_observed": [
+        "MARKET_CONDITION_NOT_TRENDING"
+      ],
+      "reason": "Market condition is RANGE_BOUND, not TRENDING. Only TRENDING conditions are traded."
+    },
+    {
+      "date": "2024-10-11",
+      "known_direction": "LONG",
+      "research_result": "WIN",
+      "research_net": 106.26,
+      "pure_state_machine_status": "TRIGGERED",
+      "pure_state_machine_direction": "LONG",
+      "classification": "PARITY_GATE_BLOCKED",
+      "bar_ts": "2024-10-11T14:00:00+00:00",
+      "gates_observed": [
+        "MARKET_CONDITION_NOT_TRENDING"
+      ],
+      "reason": "Market condition is RANGE_BOUND, not TRENDING. Only TRENDING conditions are traded."
+    },
+    {
+      "date": "2024-11-26",
+      "known_direction": "SHORT",
+      "research_result": "WIN",
+      "research_net": 5.76,
+      "pure_state_machine_status": "TRIGGERED",
+      "pure_state_machine_direction": "SHORT",
+      "classification": "PARITY_GATE_BLOCKED",
+      "bar_ts": "2024-11-26T15:15:00+00:00",
+      "gates_observed": [
+        "MARKET_CONDITION_NOT_TRENDING"
+      ],
+      "reason": "Market condition is RANGE_BOUND, not TRENDING. Only TRENDING conditions are traded."
+    },
+    {
+      "date": "2024-12-23",
+      "known_direction": "SHORT",
+      "research_result": "CANCELLED",
+      "research_net": 0.0,
+      "pure_state_machine_status": "TRIGGERED",
+      "pure_state_machine_direction": "SHORT",
+      "classification": "OTHER_SIGNAL_BLOCKED:['ENTRY_DETACHED_FROM_PRICE']",
+      "bar_ts": "2024-12-23T15:05:00+00:00",
+      "gates_observed": [
+        "ENTRY_DETACHED_FROM_PRICE"
+      ],
+      "reason": "Entry 21552.5 detached from price 21514.8 (stop 21675.5 / target 21543.8 no longer straddle the live price) \u2014 stale level after a feed gap; not chasing a market fill."
+    },
+    {
+      "date": "2025-01-20",
+      "known_direction": "SHORT",
+      "research_result": "UNRESOLVED",
+      "research_net": null,
+      "pure_state_machine_status": "TRIGGERED",
+      "pure_state_machine_direction": "SHORT",
+      "classification": "PARITY_GATE_BLOCKED",
+      "bar_ts": "2025-01-20T15:40:00+00:00",
+      "gates_observed": [
+        "MARKET_CONDITION_NOT_TRENDING"
+      ],
+      "reason": "Market condition is RANGE_BOUND, not TRENDING. Only TRENDING conditions are traded."
+    },
+    {
+      "date": "2025-02-07",
+      "known_direction": "SHORT",
+      "research_result": "CANCELLED",
+      "research_net": 0.0,
+      "pure_state_machine_status": "TRIGGERED",
+      "pure_state_machine_direction": "SHORT",
+      "classification": "PARITY_GATE_BLOCKED",
+      "bar_ts": "2025-02-07T15:00:00+00:00",
+      "gates_observed": [
+        "MARKET_CONDITION_NOT_TRENDING"
+      ],
+      "reason": "Market condition is RANGE_BOUND, not TRENDING. Only TRENDING conditions are traded."
+    },
+    {
+      "date": "2025-02-12",
+      "known_direction": "LONG",
+      "research_result": "CANCELLED",
+      "research_net": 0.0,
+      "pure_state_machine_status": "TRIGGERED",
+      "pure_state_machine_direction": "LONG",
+      "classification": "PARITY_GATE_BLOCKED",
+      "bar_ts": "2025-02-12T15:20:00+00:00",
+      "gates_observed": [
+        "MARKET_CONDITION_NOT_TRENDING"
+      ],
+      "reason": "Market condition is RANGE_BOUND, not TRENDING. Only TRENDING conditions are traded."
+    },
+    {
+      "date": "2025-02-26",
+      "known_direction": "LONG",
+      "research_result": "WIN",
+      "research_net": 55.76,
+      "pure_state_machine_status": "TRIGGERED",
+      "pure_state_machine_direction": "LONG",
+      "classification": "PARITY_GATE_BLOCKED",
+      "bar_ts": "2025-02-26T15:00:00+00:00",
+      "gates_observed": [
+        "MARKET_CONDITION_NOT_TRENDING"
+      ],
+      "reason": "Market condition is RANGE_BOUND, not TRENDING. Only TRENDING conditions are traded."
+    },
+    {
+      "date": "2025-03-17",
+      "known_direction": "SHORT",
+      "research_result": "WIN",
+      "research_net": 152.76,
+      "pure_state_machine_status": "TRIGGERED",
+      "pure_state_machine_direction": "SHORT",
+      "classification": "PARITY_GATE_BLOCKED",
+      "bar_ts": "2025-03-17T14:35:00+00:00",
+      "gates_observed": [
+        "MARKET_CONDITION_NOT_TRENDING"
+      ],
+      "reason": "Market condition is RANGE_BOUND, not TRENDING. Only TRENDING conditions are traded."
+    },
+    {
+      "date": "2025-03-21",
+      "known_direction": "LONG",
+      "research_result": "WIN",
+      "research_net": 137.26,
+      "pure_state_machine_status": "TRIGGERED",
+      "pure_state_machine_direction": "LONG",
+      "classification": "PARITY_GATE_BLOCKED",
+      "bar_ts": "2025-03-21T14:20:00+00:00",
+      "gates_observed": [
+        "MARKET_CONDITION_NOT_TRENDING"
+      ],
+      "reason": "Market condition is RANGE_BOUND, not TRENDING. Only TRENDING conditions are traded."
+    },
+    {
+      "date": "2025-05-01",
+      "known_direction": "LONG",
+      "research_result": "WIN",
+      "research_net": 68.76,
+      "pure_state_machine_status": "TRIGGERED",
+      "pure_state_machine_direction": "LONG",
+      "classification": "PARITY_GATE_BLOCKED",
+      "bar_ts": "2025-05-01T14:25:00+00:00",
+      "gates_observed": [
+        "MARKET_CONDITION_NOT_TRENDING"
+      ],
+      "reason": "Market condition is RANGE_BOUND, not TRENDING. Only TRENDING conditions are traded."
+    },
+    {
+      "date": "2025-06-04",
+      "known_direction": "SHORT",
+      "research_result": "WIN",
+      "research_net": 75.26,
+      "pure_state_machine_status": "TRIGGERED",
+      "pure_state_machine_direction": "SHORT",
+      "classification": "PARITY_GATE_BLOCKED",
+      "bar_ts": "2025-06-04T14:00:00+00:00",
+      "gates_observed": [
+        "MARKET_CONDITION_NOT_TRENDING"
+      ],
+      "reason": "Market condition is RANGE_BOUND, not TRENDING. Only TRENDING conditions are traded."
+    },
+    {
+      "date": "2025-06-05",
+      "known_direction": "LONG",
+      "research_result": "WIN",
+      "research_net": 131.76,
+      "pure_state_machine_status": "TRIGGERED",
+      "pure_state_machine_direction": "LONG",
+      "classification": "PARITY_GATE_BLOCKED",
+      "bar_ts": "2025-06-05T14:40:00+00:00",
+      "gates_observed": [
+        "MARKET_CONDITION_NOT_TRENDING"
+      ],
+      "reason": "Market condition is RANGE_BOUND, not TRENDING. Only TRENDING conditions are traded."
+    },
+    {
+      "date": "2025-06-26",
+      "known_direction": "LONG",
+      "research_result": "WIN",
+      "research_net": 38.76,
+      "pure_state_machine_status": "TRIGGERED",
+      "pure_state_machine_direction": "LONG",
+      "classification": "PARITY_GATE_BLOCKED",
+      "bar_ts": "2025-06-26T14:00:00+00:00",
+      "gates_observed": [
+        "MARKET_CONDITION_NOT_TRENDING"
+      ],
+      "reason": "Market condition is RANGE_BOUND, not TRENDING. Only TRENDING conditions are traded."
+    },
+    {
+      "date": "2025-06-27",
+      "known_direction": "LONG",
+      "research_result": "CANCELLED",
+      "research_net": 0.0,
+      "pure_state_machine_status": "TRIGGERED",
+      "pure_state_machine_direction": "LONG",
+      "classification": "OTHER_SIGNAL_BLOCKED:['ENTRY_DETACHED_FROM_PRICE']",
+      "bar_ts": "2025-06-27T14:00:00+00:00",
+      "gates_observed": [
+        "ENTRY_DETACHED_FROM_PRICE"
+      ],
+      "reason": "Entry 22770.2 detached from price 22793.8 (stop 22682 / target 22787.5 no longer straddle the live price) \u2014 stale level after a feed gap; not chasing a market fill."
+    },
+    {
+      "date": "2025-08-11",
+      "known_direction": "LONG",
+      "research_result": "WIN",
+      "research_net": 56.76,
+      "pure_state_machine_status": "TRIGGERED",
+      "pure_state_machine_direction": "LONG",
+      "classification": "PARITY_GATE_BLOCKED",
+      "bar_ts": "2025-08-11T14:00:00+00:00",
+      "gates_observed": [
+        "MARKET_CONDITION_NOT_TRENDING"
+      ],
+      "reason": "Market condition is RANGE_BOUND, not TRENDING. Only TRENDING conditions are traded."
+    },
+    {
+      "date": "2025-08-27",
+      "known_direction": "LONG",
+      "research_result": "CANCELLED",
+      "research_net": 0.0,
+      "pure_state_machine_status": "TRIGGERED",
+      "pure_state_machine_direction": "LONG",
+      "classification": "PARITY_GATE_BLOCKED",
+      "bar_ts": "2025-08-27T14:15:00+00:00",
+      "gates_observed": [
+        "MARKET_CONDITION_NOT_TRENDING"
+      ],
+      "reason": "Market condition is RANGE_BOUND, not TRENDING. Only TRENDING conditions are traded."
+    },
+    {
+      "date": "2025-09-05",
+      "known_direction": "SHORT",
+      "research_result": "WIN",
+      "research_net": 221.26,
+      "pure_state_machine_status": "TRIGGERED",
+      "pure_state_machine_direction": "SHORT",
+      "classification": "PARITY_GATE_BLOCKED",
+      "bar_ts": "2025-09-05T14:00:00+00:00",
+      "gates_observed": [
+        "MARKET_CONDITION_NOT_TRENDING"
+      ],
+      "reason": "Market condition is RANGE_BOUND, not TRENDING. Only TRENDING conditions are traded."
+    },
+    {
+      "date": "2025-09-18",
+      "known_direction": "LONG",
+      "research_result": "CANCELLED",
+      "research_net": 0.0,
+      "pure_state_machine_status": "TRIGGERED",
+      "pure_state_machine_direction": "LONG",
+      "classification": "PARITY_GATE_BLOCKED",
+      "bar_ts": "2025-09-18T14:00:00+00:00",
+      "gates_observed": [
+        "MARKET_CONDITION_NOT_TRENDING"
+      ],
+      "reason": "Market condition is RANGE_BOUND, not TRENDING. Only TRENDING conditions are traded."
+    },
+    {
+      "date": "2025-09-30",
+      "known_direction": "LONG",
+      "research_result": "WIN",
+      "research_net": 29.26,
+      "pure_state_machine_status": "TRIGGERED",
+      "pure_state_machine_direction": "LONG",
+      "classification": "PARITY_GATE_BLOCKED",
+      "bar_ts": "2025-09-30T14:45:00+00:00",
+      "gates_observed": [
+        "MARKET_CONDITION_NOT_TRENDING"
+      ],
+      "reason": "Market condition is RANGE_BOUND, not TRENDING. Only TRENDING conditions are traded."
+    },
+    {
+      "date": "2025-10-10",
+      "known_direction": "SHORT",
+      "research_result": "CANCELLED",
+      "research_net": 0.0,
+      "pure_state_machine_status": "TRIGGERED",
+      "pure_state_machine_direction": "SHORT",
+      "classification": "PARITY_GATE_BLOCKED",
+      "bar_ts": "2025-10-10T14:55:00+00:00",
+      "gates_observed": [
+        "MARKET_CONDITION_NOT_TRENDING"
+      ],
+      "reason": "Market condition is RANGE_BOUND, not TRENDING. Only TRENDING conditions are traded."
+    },
+    {
+      "date": "2025-10-16",
+      "known_direction": "SHORT",
+      "research_result": "LOSS",
+      "research_net": -167.24,
+      "pure_state_machine_status": "TRIGGERED",
+      "pure_state_machine_direction": "SHORT",
+      "classification": "PARITY_GATE_BLOCKED",
+      "bar_ts": "2025-10-16T14:10:00+00:00",
+      "gates_observed": [
+        "MARKET_CONDITION_NOT_TRENDING"
+      ],
+      "reason": "Market condition is RANGE_BOUND, not TRENDING. Only TRENDING conditions are traded."
+    },
+    {
+      "date": "2026-03-06",
+      "known_direction": "LONG",
+      "research_result": "CANCELLED",
+      "research_net": 0.0,
+      "pure_state_machine_status": "TRIGGERED",
+      "pure_state_machine_direction": "LONG",
+      "classification": "OTHER_SIGNAL_BLOCKED:['MARKET_CONDITION_NOT_TRADABLE']",
+      "bar_ts": "2026-03-06T15:00:00+00:00",
+      "gates_observed": [
+        "MARKET_CONDITION_NOT_TRADABLE"
+      ],
+      "reason": "Market condition is DEAD. Avoiding dead/choppy markets."
+    },
+    {
+      "date": "2026-04-01",
+      "known_direction": "LONG",
+      "research_result": "WIN",
+      "research_net": 133.26,
+      "pure_state_machine_status": "TRIGGERED",
+      "pure_state_machine_direction": "LONG",
+      "classification": "PARITY_GATE_BLOCKED",
+      "bar_ts": "2026-04-01T14:20:00+00:00",
+      "gates_observed": [
+        "WEAK_BAR_CLOSE",
+        "RR_BELOW_MINIMUM"
+      ],
+      "reason": "Setup found (strat_322_first_live) but R:R 0.32 is below minimum 2.00."
+    },
+    {
+      "date": "2026-05-12",
+      "known_direction": "SHORT",
+      "research_result": "LOSS",
+      "research_net": -3.24,
+      "pure_state_machine_status": "TRIGGERED",
+      "pure_state_machine_direction": "SHORT",
+      "classification": "OTHER_SIGNAL_BLOCKED:['ENTRY_DETACHED_FROM_PRICE']",
+      "bar_ts": "2026-05-12T14:00:00+00:00",
+      "gates_observed": [
+        "ENTRY_DETACHED_FROM_PRICE"
+      ],
+      "reason": "Entry 29113.5 detached from price 29110.8 (stop 29295.8 / target 29113.2 no longer straddle the live price) \u2014 stale level after a feed gap; not chasing a market fill."
+    },
+    {
+      "date": "2026-05-13",
+      "known_direction": "LONG",
+      "research_result": "WIN",
+      "research_net": 180.76,
+      "pure_state_machine_status": "TRIGGERED",
+      "pure_state_machine_direction": "LONG",
+      "classification": "PARITY_GATE_BLOCKED",
+      "bar_ts": "2026-05-13T14:50:00+00:00",
+      "gates_observed": [
+        "MARKET_CONDITION_NOT_TRENDING"
+      ],
+      "reason": "Market condition is RANGE_BOUND, not TRENDING. Only TRENDING conditions are traded."
+    },
+    {
+      "date": "2026-06-11",
+      "known_direction": "SHORT",
+      "research_result": "WIN",
+      "research_net": 8.76,
+      "pure_state_machine_status": "TRIGGERED",
+      "pure_state_machine_direction": "SHORT",
+      "classification": "PARITY_GATE_BLOCKED",
+      "bar_ts": "2026-06-11T14:55:00+00:00",
+      "gates_observed": [
+        "RR_BELOW_MINIMUM"
+      ],
+      "reason": "Setup found (strat_322_first_live) but R:R 0.01 is below minimum 2.00."
+    }
+  ]
+}

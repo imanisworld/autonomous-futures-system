@@ -38,7 +38,7 @@ Verdict taxonomy:
 | ORB Reclaim (MNQ) | ✅ | ✅ | Partial | ✅ | ❌ insufficient | ✅ | ⚠️ n=253 thin | **PROMISING BUT UNPROVEN** |
 | 4HR Re-Trigger | ✅ blockers resolved | ❌ | ❌ | Partial — external study | ✅ | Partial | ⚠️ n=32 MNQ | **WAIT — build detector** |
 | 12HR Miyagi | ✅ blockers resolved | ✅ | Partial — standalone research module | ✅ | ✅ both halves (H2 thin) | ✅ 1-4 tick | ⚠️ n=15 MNQ / n=19 MES thin | **PROMISING BUT UNPROVEN** |
-| 60M 3-2-2 First Live | ✅ blockers resolved | ✅ | Partial — standalone research module | ✅ IOC-faithful | ✅ both halves | ✅ 1-4 tick | ⚠️ n=34 MNQ thin | **PROMISING BUT UNPROVEN** |
+| 60M 3-2-2 First Live | ✅ blockers resolved | ✅ | ✅ full-engine parity validated (2026-07-27) | ✅ IOC-faithful | n/a — 0 executable fills | n/a | n=34 MNQ, 0 fill | **BROKEN FOR CURRENT SYSTEM RISK CONSTRAINTS** |
 | VWAP Hold (MNQ NY) | ❌ entry definition unclear (stale — see 2026-07-26 audit note in profile below) | Partial | ❌ (stale — see profile) | ✅ ioc_close, production-matching (2026-07-26) | ✅ both halves, all 3 exits, NY-only ioc_close (2026-07-26) | ✅ 1-3 tick, NY-only ioc_close (2026-07-26) | ⚠️ n=107 armed / **~55 filled, NY-only** (canonical — session-filtered from the 348-arm blended pop, which is provenance-context only) — thin, clears the 30-min literal bar but not comfortably | **PROMISING BUT UNPROVEN** |
 | VWAP Reclaim (MNQ NY) | ✅ cleanest of the 3 VWAP predicates | Partial | ✅ isolated, confirmed no leaks (2026-07-26) | ✅ ioc_limit (2026-07-26) | ❌ H2 negative (2026-07-26) | ❌ fails 3-tick (2026-07-26) | ⚠️ n=70 combined / n=21 MNQ thin (2026-07-26) | **WAIT** |
 | VWAP Rejection | ❌ | Partial | ❌ | ❌ | ❌ | ❌ | — | **BROKEN — unreachable predicate** |
@@ -145,7 +145,9 @@ Verdict taxonomy:
 ---
 
 ### 60M 3-2-2 First Live
-**Verdict: PROMISING BUT UNPROVEN** (PR #340, 2026-07-26)
+**Verdict: BROKEN FOR CURRENT SYSTEM RISK CONSTRAINTS** (parity validation,
+2026-07-27 — supersedes the PR #340/#341 PROMISING BUT UNPROVEN verdict
+below, which is preserved here as provenance only, not current evidence)
 
 - Rules: complete as of 2026-07-23 (all blockers resolved)
 - Timeframe: 60-minute candles
@@ -177,6 +179,29 @@ Verdict taxonomy:
   explicitly excluded, `PAPER_ELIGIBLE`) for demo forward-evidence collection this week.
   Classification unchanged — still PROMISING BUT UNPROVEN pending forward evidence; the
   wiring does not itself constitute new evidence.
+- **Parity validation (2026-07-27):** the above 34-candidate/21-fill/PF 10.36
+  baseline was produced entirely by `research/replay_322_honest_fill.py`, a
+  standalone function with zero dependency on any real runtime gate
+  (market_condition, trend, EMA, R:R, confluence, stop-cap, entry-sanity,
+  target-distance). Running the same 34 candidates through the actual
+  wired-in `ReplayEngine -> DecisionEngine -> RiskEngine -> PaperBroker`
+  path — including a hypothetical pass with every proven parity defect
+  removed — produces **0 fills**: `max_stop_ticks` alone eliminates 27/34
+  (structurally wide 8AM-derived stops, 325-924 ticks vs. the 120-tick MNQ
+  cap), `min_confluence_grade` eliminates the rest of what reaches the risk
+  layer. This is a structural incompatibility with the account's own,
+  independently-validated risk architecture, not a parity gap — same
+  classification as 12HR Miyagi. The above PF 10.36 figure is **not valid
+  evidence for the deployable strategy**. Two additional real parity
+  defects were found and confirmed (`ENTRY_DETACHED_FROM_PRICE`,
+  `target_too_close`, both zero-basis in this strategy's own rules) but are
+  deliberately left unfixed — correcting them changes zero fills to zero
+  fills, since the legitimate stop-cap/confluence controls still eliminate
+  the entire population. Full methodology, per-trade tables, and
+  reproduction commands:
+  [`60M_322_PARITY_VALIDATION_BROKEN_2026-07-27.md`](60M_322_PARITY_VALIDATION_BROKEN_2026-07-27.md).
+  Runtime wiring is unchanged/untouched by this research — with the
+  legitimate risk gates intact on `main`, it is already fail-closed.
 
 ---
 
