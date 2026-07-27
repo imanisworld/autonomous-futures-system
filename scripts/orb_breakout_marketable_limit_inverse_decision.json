@@ -1,0 +1,48 @@
+{
+  "study": "ORB Breakout marketable-limit inverse",
+  "status": "COMPLETE",
+  "classification": "VALIDATED",
+  "final_decision": "PROMOTE TO PAPER-BUILD CANDIDATE",
+  "preregistration_sha": "eda2c3344304fe2f9daf74da6505acdf1256fad4",
+  "harness_sha": "7876ec002669347269b7dac125af23a600bc37c2",
+  "instrument": "MNQ",
+  "contracts_per_trade": 1,
+  "dynamic_sizing_diagnostic_only": true,
+  "fixed_population": {
+    "attempts": 111,
+    "fills": 111,
+    "resolved": 111,
+    "net": 745.72,
+    "expectancy": 6.7182,
+    "profit_factor": 2.392152,
+    "win_rate": 0.621622,
+    "max_drawdown": 73.86,
+    "longest_losing_streak": 5
+  },
+  "system_path": {
+    "attempts": 108,
+    "fills": 108,
+    "resolved": 108,
+    "net": 664.66,
+    "expectancy": 6.1543,
+    "profit_factor": 2.25129,
+    "win_rate": 0.62037,
+    "max_drawdown": 73.86,
+    "longest_losing_streak": 5
+  },
+  "path_effect": {
+    "retained": 108,
+    "removed": 3,
+    "added": 0,
+    "system_minus_fixed_net": -81.06
+  },
+  "limitations": [
+    "MNQ only",
+    "latest system quarter is weak but positive",
+    "equity curve ends in an unrecovered 42-day drawdown",
+    "most improvement is caused by inverse-side IOC fill selection"
+  ],
+  "runtime_modified": false,
+  "deployment_modified": false,
+  "box_accessed": false
+}
