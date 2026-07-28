@@ -69,27 +69,43 @@ wild).
    ```
    A later date does not override this order by itself — a fresh standalone
    research re-run does not outrank an older full-pipeline closure.
-6. **Report, before anything else in this gate's output**:
-   - `LATEST EVIDENCE FOUND`: what it is
-   - `PR / REFERENCE`: number and title
-   - `PR STATE`: open / merged / closed-unmerged, plus date — state matters,
-     do not present an open, unreviewed PR's content as if it were already
-     settled `main` state; report both what the evidence says and whether
-     `main` has actually absorbed it yet
-   - `DATE`
-   - `METHODOLOGY`: one line
-   - `VERDICT` as that source states it
-   - Whether this **supersedes** `Strategy_Inventory.md`'s current label,
-     and whether that inventory update has actually merged to `main` or is
-     itself still sitting in the same unmerged PR (check `main` directly —
-     do not assume a PR's stated intent to update the inventory means it
-     already has)
+6. **Report three separate states, every time — never collapse them into
+   one "is it real" judgment**:
+   - **EVIDENCE VERDICT** — what the latest completed, highest-precedence
+     study actually proves (`LATEST EVIDENCE FOUND`, `PR / REFERENCE`,
+     `PR STATE` [open/merged/closed-unmerged + date], `METHODOLOGY` in one
+     line, `VERDICT` as that source states it).
+   - **CANONICAL STATUS** — what `docs/strategy-rules/Strategy_Inventory.md`
+     currently says **on `main`**, checked directly (via
+     `get_file_contents` at `refs/heads/main` or equivalent, not a possibly-
+     stale local checkout). State plainly if this is stale relative to the
+     evidence verdict, and whether a reconciliation PR already exists and
+     what state it's in.
+   - **DEPLOYMENT/RUNTIME STATUS** — what is actually wired and enabled
+     right now (`risk_rules.yaml` `enabled_concepts` / per-instrument
+     disables, whether the runtime-enabling PR is merged), independent of
+     both of the above. "Wired but fail-closed" (enabled in config, but the
+     evidence verdict shows it can never fill) is a distinct, valid answer
+     — do not round it up to "active" or down to "disabled."
+
+   These three can legitimately disagree (evidence says BROKEN, canonical
+   inventory still says PROMISING BUT UNPROVEN, runtime is wired-but-fail-
+   closed, all at once) — report the disagreement, do not resolve it by
+   picking one and presenting it as the others too.
 7. **If a newer study already closes the requested proof gap: STOP.** Report
-   that result instead of proposing another pipeline run. The only
-   legitimate next step at that point is (a) getting the existing PR
-   reviewed/merged, and/or (b) flagging the stale inventory label via
-   `/daily-reconciliation`'s STRATEGY SOURCE OF TRUTH section — not new
-   analysis.
+   that result instead of proposing another pipeline run. Do **not**
+   default to "get the evidence PR reviewed/merged" as boilerplate — an
+   evidence-closure PR's own disposition section may explicitly recommend
+   against merging a related PR (e.g. a parity-fix PR whose changes turn
+   out to have zero operational payoff once the evidence is in — read that
+   disposition and follow it, do not infer "more merging is always the safe
+   next step"). If a narrower, purpose-built reconciliation PR already
+   exists for the canonical-status gap (docs-only, updating
+   `Strategy_Inventory.md`/README to match the evidence verdict without
+   touching runtime), name and prefer that one specifically over any
+   broader PR in the evidence chain. Cross-reference `/daily-reconciliation`
+   if the reconciliation gap itself needs tracking, but do not treat "file
+   a reconciliation task" as equivalent to "merge whatever PR was found."
 
 ## Precedent (cite, do not re-litigate)
 
@@ -265,19 +281,32 @@ strategy name and formula match.
 STRATEGY:
 INSTRUMENT(S):
 
-EVIDENCE DISCOVERY (Step 0 — always reported first):
-  LATEST EVIDENCE FOUND:
-  PR / REFERENCE:
-  PR STATE:               open / merged / closed-unmerged (+ date)
-  METHODOLOGY:
-  VERDICT (as that source states it):
-  SUPERSEDES CURRENT INVENTORY LABEL?  yes/no — and has `main` actually
-                                        absorbed it, or is the inventory
-                                        update itself still unmerged?
+EVIDENCE DISCOVERY (Step 0 — always reported first, three separate states):
+  EVIDENCE VERDICT:
+    latest evidence found:     <what it is>
+    PR / reference:            <number, title>
+    PR state:                  open / merged / closed-unmerged (+ date)
+    methodology:                <one line>
+    verdict (as that source states it):
+  CANONICAL STATUS (Strategy_Inventory.md on `main`, checked directly):
+    current label on main:
+    stale relative to evidence verdict?  yes/no
+    reconciliation PR already open for this gap?  <number, or "none found">
+  DEPLOYMENT/RUNTIME STATUS (risk_rules.yaml, checked directly):
+    enabled_concepts / per-instrument state:
+    runtime-enabling PR, merged?
+    characterization:          active / wired-but-fail-closed / disabled / shadow-only
+
   IF NEWER EVIDENCE ALREADY CLOSES THIS GATE'S QUESTION: STOP HERE — report
-  that result below instead of proposing a new pipeline run.
+  that result below instead of proposing a new pipeline run. Do not default
+  to "get the evidence PR merged" — read that PR's own disposition section;
+  it may name a narrower reconciliation PR to prefer instead, or recommend
+  against merging a related PR entirely.
 
 VERDICT: VALIDATED / PROMISING BUT UNPROVEN / BROKEN / OVERFIT / UNSAFE / WAIT
+  (this is the EVIDENCE VERDICT above — restated as this gate's own
+  classification; it may differ from CANONICAL STATUS, which is a
+  reconciliation gap, not a disagreement in this gate's judgment)
 
 EVIDENCE PROVENANCE SUMMARY:
   RESEARCH RESULT:        <what exists, source files>
@@ -348,14 +377,27 @@ Safety gates:
 Safe next step:
 If Step 0 finds no prior full-pipeline closure, the safe next step is
 building/running one (`ReplayEngine` through `PaperBroker` with the
-configured fill model), not citing more research-only numbers. If Step 0
-finds an existing closure, the safe next step is getting that PR reviewed
-and merged (and flagging the stale inventory label via
-`/daily-reconciliation` if `main` hasn't absorbed it yet) — not re-running
-the closure. If `PROMISING BUT UNPROVEN`, the safe next step is accumulating
-PAPER FORWARD EVIDENCE and re-checking against
-`/futures-forward-measurement-gate` — never promoting on RUNTIME PARITY
-alone. If `BROKEN`, `OVERFIT`, or `UNSAFE`, name the exact stage and count
-where the population died or the defect was found, and name the PR it came
-from; do not generalize to "the strategy doesn't work" without pointing at
-the specific pipeline stage and its source.
+configured fill model), not citing more research-only numbers.
+
+If Step 0 finds an existing closure, do not default to "get that PR
+reviewed and merged" as a blanket instruction — the closure PR's own
+disposition section is the source of truth for what should happen next, and
+it can point in different directions for different PRs in the same evidence
+chain: a broader parity-fix PR may be explicitly marked HOLD/DO NOT MERGE
+because the evidence shows it has no operational payoff for this strategy,
+while a narrower, purpose-built docs-only reconciliation PR (updating only
+`Strategy_Inventory.md`/README to match the evidence verdict, touching no
+runtime/risk/broker code) may already exist and simply need review. Name
+each PR found and what should happen to it individually — never collapse
+"the evidence chain" into one merge/no-merge decision.
+
+If `PROMISING BUT UNPROVEN`, the safe next step is accumulating PAPER
+FORWARD EVIDENCE and re-checking against `/futures-forward-measurement-gate`
+— never promoting on RUNTIME PARITY alone. If `BROKEN`, `OVERFIT`, or
+`UNSAFE`, name the exact stage and count where the population died or the
+defect was found, and name the PR it came from; do not generalize to "the
+strategy doesn't work" without pointing at the specific pipeline stage and
+its source. In every case, report EVIDENCE VERDICT, CANONICAL STATUS, and
+DEPLOYMENT/RUNTIME STATUS as three separate lines even when they agree —
+collapsing them is how a stale inventory label or a wired-but-fail-closed
+runtime state goes unnoticed.
