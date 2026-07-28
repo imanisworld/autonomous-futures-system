@@ -157,12 +157,18 @@ def _entry_slippage_tolerance_ticks(instrument: str = "") -> float:
 
     Looks up ENTRY_SLIPPAGE_TOLERANCE_TICKS_<ROOT> (e.g. _MES, _MNQ) first, then
     falls back to the global ENTRY_SLIPPAGE_TOLERANCE_TICKS. Per-instrument is
-    REQUIRED because the right cap differs by contract — e.g. MES 4 ticks (1.0 pt)
-    vs MNQ 16 ticks (4.0 pt); a single global value forces a bad compromise.
+    REQUIRED because the right cap differs by contract — the deployed box runs
+    MES 16 ticks (4.0 pt) and MNQ 32 ticks (8.0 pt); a single global value forces
+    a bad compromise.
 
     0 (default) keeps the legacy Market entry. >0 sends a capped Limit entry so a
     fast breakout can't fill 26–52 ticks past plan (2026-06-18 loss analysis). The
     resting-unfilled hazard is handled by the IOC + no-fill guard in execute_bracket.
+
+    NOTE this 0 fallback is NOT the same as the replay/paper one in
+    config/settings.py::_entry_tolerance_map(), which falls back to MES=16/MNQ=32.
+    The two only disagree when the env is genuinely unset; the deployed box sets
+    both roots explicitly, so live and replay resolve identically there.
     """
     root = (instrument or "").replace("1!", "").upper()
     raw = os.getenv(f"ENTRY_SLIPPAGE_TOLERANCE_TICKS_{root}") if root else None

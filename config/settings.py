@@ -216,7 +216,10 @@ class SystemConfig:
     entry_fill_model: str = "market"  # market | ioc_limit | stop_market
     # Per-root tolerance ticks for ioc_limit — read from the SAME env names the
     # live broker uses (ENTRY_SLIPPAGE_TOLERANCE_TICKS_<ROOT>, then the global);
-    # unset roots fall back to the live box's known values (MES=16, MNQ=32).
+    # unset roots fall back to the live box's values (MES=16, MNQ=32). NOTE the
+    # fallbacks differ by path: this replay/paper one is 16/32, the Tradovate
+    # broker's is 0 (Market). That divergence is inert on the deployed box, which
+    # sets both roots explicitly — see _entry_tolerance_map() for the detail.
     entry_tolerance_ticks_by_root: dict = field(default_factory=dict)
     # Quality gate (#1): when True, only a TRENDING market condition may trade —
     # RANGE_BOUND / CHOPPY / DEAD all reject (MARKET_CONDITION_NOT_TRENDING). The
@@ -271,8 +274,8 @@ class SystemConfig:
     # Execution (#2) — entry-slippage cap (Limit-vs-Market entry) is PER-INSTRUMENT
     # and read by the live Tradovate broker straight from the environment, NOT from
     # this config (the broker only has TradovateConfig). Set it via env:
-    #   ENTRY_SLIPPAGE_TOLERANCE_TICKS_MES=4   (1.0 pt)
-    #   ENTRY_SLIPPAGE_TOLERANCE_TICKS_MNQ=16  (4.0 pt)
+    #   ENTRY_SLIPPAGE_TOLERANCE_TICKS_MES=16  (4.0 pt)   <- deployed box value
+    #   ENTRY_SLIPPAGE_TOLERANCE_TICKS_MNQ=32  (8.0 pt)   <- deployed box value
     #   ENTRY_SLIPPAGE_TOLERANCE_TICKS=<n>     (global fallback; 0 = Market, default)
     # No SystemConfig field so config can never silently disagree with live behavior.
     # Per-instrument strategy exclusions — overrides enabled_concepts for that instrument
@@ -520,8 +523,17 @@ def _entry_tolerance_map() -> dict:
 
     Reads the SAME env names the live broker's `_entry_slippage_tolerance_ticks`
     uses, so a replay configured like the box behaves like the box. Roots with
-    no env value fall back to the live box's known settings (MES=16, MNQ=32);
-    a global ENTRY_SLIPPAGE_TOLERANCE_TICKS overrides those fallbacks.
+    no env value fall back to the live box's settings (MES=16, MNQ=32); a global
+    ENTRY_SLIPPAGE_TOLERANCE_TICKS overrides those fallbacks.
+
+    THE TWO FALLBACKS DIFFER, deliberately — this replay/paper path falls back to
+    MES=16/MNQ=32, while `_entry_slippage_tolerance_ticks` falls back to 0 (legacy
+    Market entry). They only disagree when the env is genuinely unset, which the
+    deployed box is not: it sets ENTRY_SLIPPAGE_TOLERANCE_TICKS_MES=16 and _MNQ=32
+    explicitly (pinned to matching EXPECTED_PROOF_* values for the drift guard).
+    So on the box both paths resolve to the same 16/32, and the canonical evidence
+    lanes that assert 16/32 (#346, #347, #349) match deployed entry mechanics
+    exactly. Verified against the box 2026-07-27.
     """
     defaults = {"MES": 16.0, "MNQ": 32.0}
     global_raw = os.getenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS")
