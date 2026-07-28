@@ -1329,7 +1329,9 @@ def test_fastapi_status_today_endpoint():
     assert resp.status_code == 200
     data = resp.json()
     assert data["live_trading_enabled"] is False
-    assert data["max_trades_per_day"] == 9999  # trade-count throttle RIPPED 2026-06-17 (algo, not a person)
+    # isolated MNQ orb_breakout lane (risk_rules 1.2.0) caps this at 3; the
+    # 2026-06-17 throttle-removal decision itself is unchanged.
+    assert data["max_trades_per_day"] == 3
     assert "latest_entries" in data
     assert "top_no_trade_reasons" in data
     assert "diagnostics" in data
@@ -2228,7 +2230,10 @@ def test_fastapi_strategy_status_endpoint():
 
     assert resp.status_code == 200
     data = resp.json()
-    assert "orb_reclaim" in data["enabled_concepts"]
+    # Isolated MNQ orb_breakout lane (risk_rules 1.2.0): orb_breakout is the
+    # only enabled concept. The endpoint contract under test is that it
+    # surfaces the live enabled_concepts list, whatever it currently holds.
+    assert "orb_breakout" in data["enabled_concepts"]
     assert data["strat_confirmation_only"] is True
     assert "decision_counts" in data
     assert "approved_strategy_counts" in data
@@ -2272,7 +2277,8 @@ def test_fastapi_review_endpoint_returns_morning_preflight(monkeypatch, tmp_path
     data = resp.json()
     assert data["mode"] == "morning"
     assert data["preflight"]["paper_only"] is True
-    assert data["preflight"]["max_trades_per_day"] == 9999  # trade-count throttle RIPPED 2026-06-17 (algo, not a person)
+    # isolated MNQ orb_breakout lane (risk_rules 1.2.0) caps this at 3.
+    assert data["preflight"]["max_trades_per_day"] == 3
 
 
 def test_fastapi_review_endpoint_rejects_invalid_mode(monkeypatch, tmp_path):

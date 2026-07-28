@@ -65,6 +65,57 @@ def reset_tradovate_shared_auth():
     reset_reliability_snapshot()
 
 
+# ─── Permissive runtime config (pre-isolated-lane universe) ───────────────────
+# The shipped risk_rules.yaml is narrowed to the isolated MNQ orb_breakout
+# inverse forward-paper lane (risk_rules 1.2.0): MNQ only, orb_breakout the
+# only enabled concept and the only PAPER_ELIGIBLE strategy, 3 trades/day.
+#
+# Runtime tests that exercise GENERAL engine behavior (execution safety,
+# order-recheck, replay, resolution, observers) need MES and/or non-ORB
+# strategies as fixtures. They must NOT depend on the shipped production
+# config happening to be permissive — that coupling is exactly what this
+# helper removes. Such tests call load_permissive_config() to construct the
+# broad universe explicitly and locally, so narrowing the shipped config can
+# never silently change what they assert.
+#
+# This is a TEST FIXTURE ONLY. It never affects the shipped configuration.
+
+_PERMISSIVE_ENABLED_CONCEPTS = [
+    "orb_breakout", "orb_reclaim", "orb_rejection",
+    "vwap_reclaim", "vwap_rejection", "vwap_hold",
+    "pdh_reclaim", "pdl_reclaim",
+    "strat_4hr_retrigger", "strat_322_first_live", "strat_122",
+]
+
+# Mirrors the pre-1.2.0 shipped permission map: everything PAPER_ELIGIBLE
+# except the two evidence-based demotions, which are preserved.
+_PERMISSIVE_STRATEGY_STATUS = {
+    name: ("SHADOW_ONLY" if name in ("vwap_hold", "pdh_reclaim") else "PAPER_ELIGIBLE")
+    for name in _PERMISSIVE_ENABLED_CONCEPTS
+}
+
+
+def load_permissive_config(**overrides):
+    """Config with the pre-isolated-lane universe (MES+MNQ, all concepts).
+
+    For runtime tests that need instruments/strategies the isolated shipped
+    config disables. Extra keyword arguments are applied as dataclass
+    overrides, so callers can layer their own per-test settings on top.
+    """
+    import dataclasses
+    from config.settings import load_config
+
+    return dataclasses.replace(
+        load_config(),
+        allowed_instruments=["MES", "MNQ"],
+        required_instruments=["MES", "MNQ"],
+        enabled_concepts=list(_PERMISSIVE_ENABLED_CONCEPTS),
+        strategy_status=dict(_PERMISSIVE_STRATEGY_STATUS),
+        max_trades_per_day=9999,
+        **overrides,
+    )
+
+
 # ─── Config Fixture ────────────────────────────────────────────────────────────
 
 @pytest.fixture

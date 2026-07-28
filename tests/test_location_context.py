@@ -26,6 +26,8 @@ from context.location_context import (
 )
 
 
+from tests.conftest import load_permissive_config
+
 def make_bars(ohlc_list, start="2026-05-22T00:00:00+00:00", step_min=15):
     t0 = datetime.fromisoformat(start)
     return [
@@ -254,7 +256,9 @@ def test_runner_journals_location_context_beside_candidates(tmp_path):
     sys.path.insert(0, "tests")
     from test_e2e_scenarios import _base_payload
 
-    cfg = dataclasses.replace(load_config(), max_staleness_seconds=10 ** 9)
+    # Explicit permissive universe: general runtime behavior proof, not an
+    # assertion about the shipped isolated-lane config.
+    cfg = load_permissive_config(max_staleness_seconds=10 ** 9)
     payload = _base_payload(timestamp="2026-05-23T14:30:00+00:00")
     fd = date(2026, 5, 23)
     result = process_alert(payload, config=cfg, log_dir=str(tmp_path), for_date=fd)
@@ -292,7 +296,9 @@ def test_collector_failure_never_affects_decision(tmp_path, monkeypatch):
         raise RuntimeError("synthetic collector failure")
 
     monkeypatch.setattr(lc, "build_location_context", _boom)
-    cfg = dataclasses.replace(load_config(), max_staleness_seconds=10 ** 9)
+    # Explicit permissive universe: general runtime behavior proof, not an
+    # assertion about the shipped isolated-lane config.
+    cfg = load_permissive_config(max_staleness_seconds=10 ** 9)
     payload = _base_payload(timestamp="2026-05-23T14:30:00+00:00")
     result = runner_mod.process_alert(
         payload, config=cfg, log_dir=str(tmp_path), for_date=date(2026, 5, 23))

@@ -19,7 +19,10 @@ from webhook.runner import process_alert
 
 def _cfg():
     # Relax staleness so fixed-timestamp bars aren't rejected by the quality gate.
-    return replace(load_config(), max_staleness_seconds=10_000_000)
+    # Explicit permissive universe: this module tests bar-history/trend behavior
+    # generally, not the shipped isolated-lane config.
+    from tests.conftest import load_permissive_config
+    return load_permissive_config(max_staleness_seconds=10_000_000)
 
 
 def _seed_downtrend(log_dir, base):
