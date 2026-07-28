@@ -86,7 +86,7 @@ def _run_with_fake_broker(monkeypatch, tmp_path, *, list_orders_impl, config_ove
     """Drive process_alert() with paper_mode=False so _make_broker's non-paper
     branch is taken, monkeypatched to return our fake broker instead of a real
     TradovateBroker (no network/auth needed to prove the gate's wiring)."""
-    from config.settings import load_config
+    from tests.conftest import load_permissive_config
     from webhook import runner as runner_module
 
     fake_broker = _FakeLiveBroker()
@@ -95,8 +95,9 @@ def _run_with_fake_broker(monkeypatch, tmp_path, *, list_orders_impl, config_ove
         "execution.live_preflight._list_orders", list_orders_impl
     )
 
-    cfg = dataclasses.replace(
-        load_config(),
+    # Explicit permissive universe: this test exercises the live-broker
+    # order-recheck gate, not the shipped isolated-lane config.
+    cfg = load_permissive_config(
         max_staleness_seconds=10**9,
         paper_mode=False,
         **(config_overrides or {}),
@@ -161,7 +162,7 @@ def test_paper_broker_path_does_not_call_tradovate_order_list_logic(monkeypatch,
     """The default paper-mode path must never touch execution.live_preflight's
     order-list logic at all — PaperBroker structurally can't have this
     conflict and has no order book to read."""
-    from config.settings import load_config
+    from tests.conftest import load_permissive_config
     from webhook.runner import process_alert
 
     def _trip_wire(broker):
@@ -171,7 +172,7 @@ def test_paper_broker_path_does_not_call_tradovate_order_list_logic(monkeypatch,
 
     monkeypatch.setattr("execution.live_preflight._list_orders", _trip_wire)
 
-    cfg = dataclasses.replace(load_config(), max_staleness_seconds=10**9)
+    cfg = load_permissive_config(max_staleness_seconds=10**9)
     payload = _base_payload(timestamp="2026-05-23T14:30:00+00:00")
     fd = date(2026, 5, 23)
 

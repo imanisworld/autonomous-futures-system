@@ -20,8 +20,10 @@ _DAY = date(2026, 5, 23)
 
 def _cfg(range_on: bool):
     # Relax staleness so the fixed-timestamp fixture bar isn't rejected.
-    return replace(
-        load_config(),
+    # Explicit permissive universe: this module tests the range-collection
+    # observer generally, not the shipped isolated-lane config.
+    from tests.conftest import load_permissive_config
+    return load_permissive_config(
         max_staleness_seconds=10_000_000,
         range_observe_enabled=range_on,
     )

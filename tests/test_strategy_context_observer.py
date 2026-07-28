@@ -14,6 +14,8 @@ from risk.risk_engine import DailyState
 from strategy.signal_engine import DecisionOutput, SetupDetail
 
 
+from tests.conftest import load_permissive_config
+
 def _bars(up=True):
     closes = (
         [100.0, 101.0, 102.0, 103.0, 104.0]
@@ -104,7 +106,9 @@ def test_runner_writes_context_observation_without_changing_trade(tmp_path):
 
     payload = _base_payload(timestamp="2026-05-23T14:30:00+00:00")
     payload.ticker = "MNQ"
-    cfg = replace(load_config(), max_staleness_seconds=10 ** 9)
+    # Explicit permissive universe: general runtime behavior proof, not an
+    # assertion about the shipped isolated-lane config.
+    cfg = load_permissive_config(max_staleness_seconds=10 ** 9)
     result = process_alert(
         payload,
         config=cfg,
@@ -131,7 +135,9 @@ def test_accepted_bar_at_daily_capacity_still_writes_one_context_row(
     sys.path.insert(0, "tests")
     from test_e2e_scenarios import _base_payload
 
-    cfg = replace(load_config(), max_staleness_seconds=10 ** 9)
+    # Explicit permissive universe: general runtime behavior proof, not an
+    # assertion about the shipped isolated-lane config.
+    cfg = load_permissive_config(max_staleness_seconds=10 ** 9)
     monkeypatch.setattr(
         JournalLogger,
         "get_daily_state",
@@ -167,7 +173,9 @@ def test_accepted_bar_with_open_position_still_writes_one_context_row(
     sys.path.insert(0, "tests")
     from test_e2e_scenarios import _base_payload
 
-    cfg = replace(load_config(), max_staleness_seconds=10 ** 9)
+    # Explicit permissive universe: general runtime behavior proof, not an
+    # assertion about the shipped isolated-lane config.
+    cfg = load_permissive_config(max_staleness_seconds=10 ** 9)
     monkeypatch.setattr(
         JournalLogger,
         "get_daily_state",
