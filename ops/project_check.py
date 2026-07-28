@@ -274,20 +274,51 @@ def archive_tags(cwd: str | None = None) -> dict[str, str]:
     return result
 
 
+def branches_checked_out_in_worktrees(cwd: str | None = None) -> dict[str, str]:
+    """Map local branch name -> worktree path, for every worktree with a branch checked out."""
+    result: dict[str, str] = {}
+    for wt in worktree_list(cwd=cwd):
+        branch = (wt.get("branch") or "").replace("refs/heads/", "")
+        if branch:
+            result[branch] = wt.get("path")
+    return result
+
+
 def evidence_preservation_report(default: str, remote_default: str, cwd: str | None = None) -> list[dict[str, Any]]:
     """Best-effort local proxy for BLOCKER-worthy unpreserved research branches.
 
     True "closed-unmerged" status lives on GitHub, not in git, so this can only
-    flag local branches that look abandoned (upstream deleted, not merged into
-    default) and check whether an archive/* tag already protects their tip.
-    Always label this as a proxy — GitHub PR state must be cross-checked before
-    treating anything here as a final BLOCKER/OK call.
+    flag local branches that look abandoned and check whether an archive/* tag
+    already protects their tip. Always label this as a proxy — GitHub PR state
+    must be cross-checked before treating anything here as a final BLOCKER/OK
+    call.
+
+    Deliberately does NOT treat `git branch --no-merged` / ancestry-based
+    "unique commit count" as decisive proof of unmerged content: a
+    squash-merged PR produces a branch whose individual commits are never
+    ancestors of `default`, so ancestry alone falsely flags fully-preserved,
+    fully-landed branches as unmerged forever. The decisive signal for "is
+    there content here that doesn't already exist on default" is a file-level
+    diff (`git diff --name-only default...branch`) — if that's empty, the
+    branch's tree state is already subsumed by default regardless of what its
+    commit history looks like. Ancestry-only unique commits with zero file
+    diff are reported as "LIKELY SQUASH-MERGED", not BLOCKER — real evidence
+    preservation risk requires an actual content difference.
+
+    A branch currently checked out in any worktree is always classified
+    ACTIVE WIP regardless of the above — it's live local work, not an
+    abandoned branch, no matter what its merge/content status looks like.
     """
     tags = archive_tags(cwd=cwd)
     tag_shas = set(tags.values())
     not_merged = set(_git_lines(["branch", "--no-merged", remote_default], cwd=cwd))
-    not_merged = {b.strip().lstrip("* ").strip() for b in not_merged}
+    # git prefixes the current branch with "* " and a branch checked out in
+    # ANOTHER worktree with "+ " — strip both, not just "*", or a
+    # worktree-checked-out branch's name comes through mangled (e.g.
+    # "+feature/x") and silently fails every later lookup for it.
+    not_merged = {b.strip().lstrip("*+ ").strip() for b in not_merged}
     gone_remote = set(local_branches_with_deleted_remote(cwd=cwd))
+    checked_out = branches_checked_out_in_worktrees(cwd=cwd)
     findings = []
     for branch in sorted(not_merged):
         if branch == default or not branch:
@@ -296,22 +327,45 @@ def evidence_preservation_report(default: str, remote_default: str, cwd: str | N
         if not sha:
             continue
         unique_commit_count = len(_git_lines(["log", f"{remote_default}..{branch}", "--oneline"], cwd=cwd))
-        unique_files = _git_lines(["diff", "--name-only", f"{remote_default}...{branch}"], cwd=cwd)
+        # Direct tip-to-tip diff (two refs, not three-dot merge-base diff):
+        # three-dot deliberately ignores anything default did after the fork
+        # point, which is exactly wrong here — a squash-merge lands the
+        # branch's content back onto default's current tip, and only a
+        # direct comparison against that current tip can see it landed.
+        unique_files = _git_lines(["diff", "--name-only", remote_default, branch], cwd=cwd)
         has_archive_tag = sha in tag_shas
-        has_unique_evidence = unique_commit_count > 0 or len(unique_files) > 0
+        has_unique_content = len(unique_files) > 0
         remote_deleted = branch in gone_remote
-        if has_unique_evidence and not has_archive_tag:
-            classification = "BLOCKER — unique evidence, no archive tag" if remote_deleted else "REVIEW — unmerged with unique evidence (remote still present, likely active WIP)"
-        elif has_unique_evidence and has_archive_tag:
-            classification = "OK — unique evidence, preserved by archive tag"
+        worktree_path = checked_out.get(branch)
+
+        if worktree_path:
+            classification = f"ACTIVE WIP — checked out in worktree {worktree_path}"
+        elif has_unique_content and has_archive_tag:
+            classification = "OK — unique content, preserved by archive tag"
+        elif has_unique_content and remote_deleted:
+            classification = "BLOCKER — unique content, no archive tag"
+        elif has_unique_content:
+            classification = "REVIEW — unmerged with unique content (remote still present, likely active WIP)"
+        elif unique_commit_count > 0:
+            classification = (
+                "LIKELY SQUASH-MERGED — file content matches default despite "
+                "unmerged ancestry; confirm via PR state (merged squash commit) "
+                "before archiving or treating as unpreserved"
+            )
         else:
-            classification = "OK — no unique evidence vs default branch"
+            classification = "OK — no unique commits or content vs default branch"
+
         findings.append(
             {
                 "branch": branch,
                 "tip_sha": sha,
                 "remote_upstream_deleted": remote_deleted,
+                "checked_out_in_worktree": worktree_path,
                 "unique_commit_count": unique_commit_count,
+                "unique_commit_count_note": (
+                    "ancestry-based only — unreliable under squash-merge, "
+                    "see unique_file_count for the decisive signal"
+                ),
                 "unique_file_count": len(unique_files),
                 "unique_files_sample": unique_files[:10],
                 "archive_tag": next((t for t, s in tags.items() if s == sha), None),

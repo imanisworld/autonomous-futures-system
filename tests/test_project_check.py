@@ -231,6 +231,56 @@ def test_evidence_preservation_ignores_branch_identical_to_default(repo: Path):
     assert "empty-branch" not in by_branch
 
 
+def test_evidence_preservation_does_not_flag_squash_merged_branch(repo_with_remote):
+    # Simulate a squash-merge: the branch's commit is never an ancestor of
+    # main, but main's tip already contains byte-identical file content
+    # (as a real GitHub squash-merge would produce). git ancestry alone
+    # (`branch --no-merged`) would call this "unmerged" forever; the content
+    # diff must be the decisive signal, not the ancestry-based commit count.
+    work, bare = repo_with_remote
+    _run(["checkout", "-b", "feature/squashed"], cwd=work)
+    _commit_file(work, "squashed.py", "x = 1\n", "feature work")
+    _run(["push", "-u", "origin", "feature/squashed"], cwd=work)
+    _run(["checkout", "main"], cwd=work)
+    _commit_file(work, "squashed.py", "x = 1\n", "squash-merge feature/squashed (simulated)")
+    _run(["push", "origin", "main"], cwd=work)
+    _run(["push", "origin", "--delete", "feature/squashed"], cwd=work)
+    _run(["fetch", "--prune", "origin"], cwd=work)
+
+    findings = evidence_preservation_report("main", "main", cwd=str(work))
+    by_branch = {f["branch"]: f for f in findings}
+    assert "feature/squashed" in by_branch
+    finding = by_branch["feature/squashed"]
+    assert finding["unique_commit_count"] > 0  # ancestry still looks unmerged
+    assert finding["unique_file_count"] == 0  # but content is fully subsumed
+    assert "SQUASH-MERGED" in finding["classification"]
+    assert "BLOCKER" not in finding["classification"]
+
+
+def test_evidence_preservation_worktree_override_beats_blocker(repo_with_remote, tmp_path):
+    # A branch actively checked out in a worktree is live local work, full
+    # stop — regardless of unique content, deleted remote, or missing tag.
+    work, bare = repo_with_remote
+    _run(["checkout", "-b", "feature/active"], cwd=work)
+    _commit_file(work, "active.py", "x = 1\n", "feature work")
+    _run(["push", "-u", "origin", "feature/active"], cwd=work)
+    _run(["checkout", "main"], cwd=work)
+    _run(["push", "origin", "--delete", "feature/active"], cwd=work)
+    _run(["fetch", "--prune", "origin"], cwd=work)
+
+    other_worktree = tmp_path / "other-worktree"
+    _run(["worktree", "add", str(other_worktree), "feature/active"], cwd=work)
+    try:
+        findings = evidence_preservation_report("main", "main", cwd=str(work))
+        by_branch = {f["branch"]: f for f in findings}
+        finding = by_branch["feature/active"]
+        assert finding["checked_out_in_worktree"] == str(other_worktree)
+        assert finding["classification"].startswith("ACTIVE WIP")
+        assert "BLOCKER" not in finding["classification"]
+    finally:
+        _run(["worktree", "remove", "--force", str(other_worktree)], cwd=work)
+
+
 def test_archive_tags_dereferences_annotated_tags(repo: Path):
     tip = _run(["rev-parse", "HEAD"], cwd=repo).stdout
     _run(["tag", "-a", "archive/foo-2026-01-01", "-m", "archived", tip], cwd=repo)

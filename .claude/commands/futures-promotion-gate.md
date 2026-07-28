@@ -28,6 +28,25 @@ A candidate set that only ever ran through a standalone research module
 (`research/*.py` calling its own bespoke detector + a hand-rolled fill
 simulator) has not demonstrated this — no matter how clean its numbers look.
 
+## Observation identity (stamp every report, before anything else)
+
+This gate combines facts from at least two sources taken at different
+moments: the local checkout (strategy files, `risk_rules.yaml`) and live
+GitHub queries (Step 0's PR search, `Strategy_Inventory.md` on `main`).
+Capture and print, at the top of every report:
+
+- `repo_head`: local checkout's exact HEAD SHA
+- `origin_main_sha`: `origin/<default>`'s SHA, fetched or read live for this
+  run — not a possibly-stale local remote-tracking ref
+- `generated_at`: this run's timestamp
+
+Never blend a fact read from the local checkout with a fact read live from
+GitHub without labeling which source (and which SHA) each came from — e.g.
+"Strategy_Inventory.md says X" must specify whether that's the local
+checkout's copy or `main`'s current copy fetched live; they can disagree,
+and conflating them is exactly how a stale local read gets reported as
+current fact.
+
 ## Step 0 — evidence discovery pass (required, before any new analysis or recommending any replay)
 
 Do this before touching `research/*.py`, before proposing a `ReplayEngine`
@@ -188,6 +207,32 @@ If a strategy reaches **zero executable fills** at any stage, say so plainly
 as the headline finding — do not bury it under partial-population statistics
 computed on the candidates that did survive.
 
+### Per-lane execution context (required, not inferred from the instrument name)
+
+Every evidence figure must be pinned to its exact lane's execution
+configuration — never assume one instrument means one tolerance. Report,
+per lane:
+
+- **`entry_model`**: the exact fill model used (`ioc_limit`, `market`, the
+  lane's own bespoke model, etc.) — read from the actual code/config the
+  study used, not assumed from the strategy's general description
+- **Effective tolerance**: the actual entry-slippage/marketability tolerance
+  in ticks that applied, and where it comes from — this varies by lane, not
+  just by instrument. Confirmed example in this repo: PR #364's paper-only
+  inverted ORB breakout MNQ lane hardcodes its own `MARKETABLE_TICKS = 8.0`
+  constant in `context/mnq_orb_breakout_inverse_paper.py`, entirely separate
+  from the env-configurable `ENTRY_SLIPPAGE_TOLERANCE_TICKS_MNQ` used
+  elsewhere (`config/settings.py` documents a default of 16 ticks for that
+  env var — and even that "default" isn't universal: the VWAP Reclaim
+  isolated evidence run explicitly chose 32 ticks as its own canonical
+  tolerance for that study). None of "8", "16", or "32" is *the* MNQ
+  tolerance — each belongs to a specific lane/study and must be reported as
+  such, sourced to its actual location.
+- Do not merge or average evidence across two lanes on the same instrument
+  that use different `entry_model`/tolerance configurations, even if they
+  share a strategy name or instrument — treat them as distinct evidence
+  populations until proven identical in configuration.
+
 ## Evidence classification (apply to every number cited)
 
 Every metric in this report must be tagged with exactly one of:
@@ -207,6 +252,15 @@ Every metric in this report must be tagged with exactly one of:
 A number's classification does not change no matter how favorable it looks —
 do not upgrade a RESEARCH RESULT to RUNTIME PARITY by assumption because the
 strategy name and formula match.
+
+**PAPER FORWARD EVIDENCE of "0 trades" is not automatically "none — WAIT."**
+A strategy that has been wired and enabled for a period but produced zero
+paper trades needs the same no-trade liveness classification
+`/daily-reconciliation` requires: `NO TRADE — HEALTHY` (feed fresh, detector
+evaluated, legitimately no qualifying setup or a working gate correctly
+rejected every candidate) vs. `NO TRADE — SYSTEM FAILURE` (feed stale,
+detector never ran, or liveness can't be confirmed at all). Report which one
+applies before treating "0 paper trades" as a neutral "not enough data yet."
 
 ## Required checks (reuse, do not reimplement)
 
@@ -278,8 +332,19 @@ strategy name and formula match.
 ## Required output format
 
 ```
+OBSERVATION IDENTITY
+  repo_head:
+  origin_main_sha:      (live-fetched, not a stale local ref)
+  generated_at:
+
 STRATEGY:
 INSTRUMENT(S):
+LANE(S):                <name each lane evaluated — never assume one per instrument>
+
+PER-LANE EXECUTION CONTEXT (repeat per lane):
+  lane:
+  entry_model:
+  effective tolerance (ticks):     <value + exact source: env var / hardcoded constant / study-chosen>
 
 EVIDENCE DISCOVERY (Step 0 — always reported first, three separate states):
   EVIDENCE VERDICT:
@@ -373,6 +438,13 @@ Safety gates:
   that study's finding, not default to `WAIT` because "no new analysis was
   done in this run" — citing existing evidence correctly is this gate doing
   its job, not a shortcut.
+- A report missing `OBSERVATION IDENTITY` (repo_head, live origin_main_sha,
+  generated_at) or `PER-LANE EXECUTION CONTEXT` (entry_model + effective
+  tolerance, sourced) is incomplete — do not treat its other findings as
+  trustworthy without them.
+- "0 paper trades" may not be reported as bare `PAPER FORWARD EVIDENCE:
+  none` without a `NO TRADE — HEALTHY` / `NO TRADE — SYSTEM FAILURE`
+  classification backing it.
 
 Safe next step:
 If Step 0 finds no prior full-pipeline closure, the safe next step is

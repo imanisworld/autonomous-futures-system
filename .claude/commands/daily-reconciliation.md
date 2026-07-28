@@ -12,6 +12,28 @@ their inputs look stale.
 Core rule: report drift, do not fix it. This command never edits docs,
 config, or code, and never deletes/merges/tags anything.
 
+## Step 0 — observation identity (stamp every report, before anything else)
+
+This report combines facts from at least two different sources — the local
+checkout (`ops/project_check.py daily`) and live GitHub queries (step 2) —
+taken at different moments. Never let those blend into an undated,
+un-sourced blob. At the top of every report, capture and print:
+
+- `repo_head`: local checkout's exact HEAD SHA (`git rev-parse HEAD`)
+- `origin_main_sha`: `origin/<default>`'s SHA **fetched live** for this run
+  (`git fetch origin <default> --quiet` then `git rev-parse origin/<default>`,
+  or read live from GitHub directly) — not a possibly-stale local
+  remote-tracking ref
+- `generated_at`: this run's timestamp
+
+If `repo_head` is not an ancestor of `origin_main_sha` (or vice versa in a
+way that's unexpected), or if a fact from step 2 (a live GitHub query) is
+about to be reported next to a fact from step 1 (the local checkout) without
+noting they may reflect different points in time, say so explicitly. A
+report that silently mixes "what my local checkout looked like" with "what
+GitHub says right now" as if they were one consistent snapshot is describing
+a repository state that never actually existed.
+
 ## Step 1 — mechanical git/branch/worktree/evidence-preservation pass
 
 Run:
@@ -26,16 +48,32 @@ This covers, read-only and without any fetch/mutation by default:
 - branches whose configured upstream was deleted (`[gone]`)
 - local-only branches (no upstream configured)
 - `archive/*` tags present, dereferenced to their commit
-- for every local branch not merged into default: unique commit/file count
-  vs default, whether an `archive/*` tag already protects its exact tip, and
-  a proxy classification (`BLOCKER` when the branch looks abandoned with no
-  archive tag, `REVIEW` when it looks like active WIP, `OK` otherwise)
+- for every local branch not merged into default: unique commit count
+  (ancestry-based, `git branch --no-merged`) AND unique file count (a direct
+  content diff against default's current tip), whether an `archive/*` tag
+  already protects the branch's exact tip, and whether it's currently
+  checked out in any worktree — combined into one of:
+  - `ACTIVE WIP` — checked out in a worktree right now, full stop, regardless
+    of everything else
+  - `BLOCKER` — real content difference (unique files, not just unique
+    commits), no archive tag, remote deleted
+  - `REVIEW` — real content difference, remote still present (likely
+    in-progress work, not yet ready to judge)
+  - `LIKELY SQUASH-MERGED` — unique commits exist (ancestry looks unmerged)
+    but the file-level diff against default's current tip is empty; this is
+    the expected signature of a squash-merged PR, not evidence of anything
+    lost. Confirm via GitHub PR state in step 2, but do not treat this as a
+    BLOCKER — `git branch --no-merged` alone is unreliable proof of
+    "unmerged" once squash-merges are in play, which is exactly why this
+    tool checks content, not just ancestry
+  - `OK` — no unique commits or content vs default
 
 Treat any `BLOCKER` line in its output as a same-day flag, not something to
-resolve yourself — report it, do not delete or tag anything. The script's
-"unmerged + remote deleted" proxy is a substitute for GitHub PR state, not a
-replacement for it — cross-check step 2 before trusting a BLOCKER or clearing
-one.
+resolve yourself — report it, do not delete or tag anything. `LIKELY
+SQUASH-MERGED` is informational, not a same-day flag — it exists so a clean
+squash-merge doesn't get misread as lost evidence. Either way, cross-check
+step 2 before treating any classification here as final; GitHub PR state,
+not local git state, is the actual source of truth for "was this merged."
 
 Pass `--fetch` only if you want `origin/<default>` refreshed first (the only
 network call this tool makes); omit it to stay purely local.
@@ -51,10 +89,15 @@ Report:
   in step 1's evidence-preservation output, and if so with what
   classification
 
-Cross-reference: a branch step 1 flagged `BLOCKER` whose PR you confirm here
-was merged (not closed-unmerged) is a false positive — squash-merges often
-leave the branch looking "not merged" in git ancestry even though its content
-landed. Downgrade it explicitly and say why, do not silently drop it.
+Cross-reference: step 1 already separates real content-level `BLOCKER`s from
+ancestry-only `LIKELY SQUASH-MERGED` branches, so a squash-merge false
+positive should be rare by the time it reaches this step. If one still slips
+through — e.g. a `BLOCKER` whose PR you confirm here was actually merged —
+downgrade it explicitly and say why (cite the merged PR), do not silently
+drop it. The reverse matters too: a `LIKELY SQUASH-MERGED` branch whose PR
+you confirm here is still **open** is not actually squash-merged yet — its
+empty content-diff is coincidental (or the PR reintroduces identical code),
+not proof of landing; do not wave it through as "OK" without checking.
 
 ## Step 3 — EVIDENCE PRESERVATION (finalize using step 1 + step 2)
 
@@ -87,6 +130,34 @@ Do not present `risk_rules.yaml`'s committed state as proof of what is
 currently deployed — that is exactly the gap `/futures-deployment-safety-audit`
 exists to catch (main can diverge from the deployed SHA between merge and
 deploy).
+
+### Step 4a — no-trade liveness
+
+`0 trades today` for a given strategy/instrument is not by itself evidence of
+anything — it is equally consistent with "market didn't set up" and "the
+service has been silently dead since last night." **`0 trades` alone can
+never produce a PASS/healthy verdict on its own.** Before reporting any
+strategy as quiet today, require:
+
+- **fresh feeds**: journal/status evidence that market data was actually
+  arriving during the session window (not just that the process is running)
+- **expected detector evaluation**: evidence the strategy's detector logic
+  actually ran against today's bars (a candidate-count-of-zero from the
+  detector is different from the detector never being invoked at all)
+- an explicit `WHY_NO_TRADE` reason, not silence — see `/futures-why-no-trade`
+  for the single-incident deep-dive version of this same question
+
+Classify each quiet strategy as exactly one of:
+- **`NO TRADE — HEALTHY`**: feed was fresh, detector evaluated, no
+  qualifying setup formed (or one formed and a named, working gate correctly
+  rejected it)
+- **`NO TRADE — SYSTEM FAILURE`**: feed was stale/absent, the detector did
+  not run, an error suppressed output, or evidence for "it actually
+  evaluated" cannot be produced at all
+
+An inability to verify either fresh feeds or detector evaluation is itself
+`NO TRADE — SYSTEM FAILURE` (or, if genuinely unknown, `NO TRADE —
+UNVERIFIED`) — never default it to healthy for lack of contrary evidence.
 
 ## Step 5 — STRATEGY SOURCE OF TRUTH
 
@@ -143,7 +214,10 @@ taken if asked.
 ## Required output format
 
 ```
-GENERATED AT:
+OBSERVATION IDENTITY
+  repo_head:
+  origin_main_sha:      (live-fetched, not a stale local ref)
+  generated_at:
 
 GITHUB
   opened today:
@@ -160,9 +234,16 @@ BRANCHES / WORKTREES
   unexpected remote branches:
 
 EVIDENCE PRESERVATION
-  BLOCKERS (unique evidence, no archive tag):
-  REVIEW (looks like active WIP):
+  ACTIVE WIP (checked out in a worktree):
+  BLOCKERS (unique content, no archive tag):
+  REVIEW (unique content, remote still present):
+  LIKELY SQUASH-MERGED (ancestry-unmerged, content matches default):
   OK:
+
+NO-TRADE LIVENESS (per strategy/instrument with 0 trades today)
+  NO TRADE — HEALTHY:
+  NO TRADE — SYSTEM FAILURE:
+  NO TRADE — UNVERIFIED:
 
 DEPLOYED STATE
   deployed SHA: UNVERIFIABLE FROM THIS CHECKOUT / <value, with audit citation>
@@ -190,6 +271,12 @@ Safety gates:
   it.
 - A strategy-doc disagreement (table vs. profile vs. `risk_rules.yaml`) is
   reported as drift, not silently resolved in either direction.
+- `0 trades` for any strategy/instrument today caps that line at `NO TRADE —
+  UNVERIFIED` until fresh-feed and detector-evaluation evidence is actually
+  produced — it may never default to `HEALTHY`.
+- A report missing `OBSERVATION IDENTITY` (repo_head, live origin_main_sha,
+  generated_at) is incomplete — do not present its other findings as
+  trustworthy without it.
 
 Safe next step:
 If evidence-preservation BLOCKERs exist, the safe next step is naming the
