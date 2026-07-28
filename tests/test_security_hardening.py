@@ -220,3 +220,45 @@ def test_site_gate_wrong_then_right_code(monkeypatch):
     assert client.cookies.get("vp_access")
     # Cookie now carries through → access granted.
     assert client.get("/status/public").status_code == 200
+
+
+def test_sensitive_scope_gates_system_snapshot_when_unauthenticated(monkeypatch):
+    # /status/system-snapshot leaks the same category of content (risk_rules.yaml
+    # config, per-lane entry-tolerance, repo/deployed identity, trade-chain state)
+    # as the other rows in _SENSITIVE_PATHS -- must be gated under "sensitive" scope
+    # exactly like its siblings, not left publicly reachable.
+    monkeypatch.setenv("SITE_ACCESS_CODE", "letmein")
+    monkeypatch.setenv("SITE_GATE_SCOPE", "sensitive")
+    client, _ = _client(monkeypatch)
+    assert client.get("/status/system-snapshot").status_code == 401
+
+
+def test_sensitive_scope_allows_system_snapshot_when_authenticated(monkeypatch):
+    monkeypatch.setenv("SITE_ACCESS_CODE", "letmein")
+    monkeypatch.setenv("SITE_GATE_SCOPE", "sensitive")
+    client, _ = _client(monkeypatch)
+
+    good = client.post("/gate", data={"code": "letmein", "next": "/status/system-snapshot"}, follow_redirects=False)
+    assert good.status_code == 302
+    assert client.cookies.get("vp_access")
+
+    resp = client.get("/status/system-snapshot")
+    assert resp.status_code == 200
+    assert "schema_version" in resp.json()
+
+
+def test_full_scope_still_gates_system_snapshot_unauthenticated(monkeypatch):
+    # Default scope stays "full" -- confirms no regression to existing coverage.
+    monkeypatch.setenv("SITE_ACCESS_CODE", "letmein")
+    monkeypatch.delenv("SITE_GATE_SCOPE", raising=False)
+    client, _ = _client(monkeypatch)
+    assert client.get("/status/system-snapshot").status_code == 401
+
+
+def test_system_snapshot_public_when_gate_disabled(monkeypatch):
+    # No SITE_ACCESS_CODE set -> gate disabled entirely, default-public dev posture.
+    monkeypatch.delenv("SITE_ACCESS_CODE", raising=False)
+    client, _ = _client(monkeypatch)
+    resp = client.get("/status/system-snapshot")
+    assert resp.status_code == 200
+    assert "schema_version" in resp.json()

@@ -157,6 +157,10 @@ _SENSITIVE_PATHS = {
     # Admin-style dry-run tool: never places an order, but resolves live
     # contract/quote/account state the same as the other sensitive reads above.
     "/status/test-bracket",
+    # Derived System Status & Evidence Snapshot: leaks the same category of
+    # content (risk_rules.yaml config, per-lane entry-tolerance, repo/deployed
+    # identity, trade-chain/blocker state) as the other rows above.
+    "/status/system-snapshot",
 }
 
 
