@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 import subprocess
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -20,6 +20,7 @@ import pytest
 from ops.system_status_snapshot import (
     ALLOWED_CLASSIFICATIONS,
     UNKNOWN,
+    _runtime_state_for,
     active_env_gated_flags,
     build_env_gated_lanes,
     build_feed_liveness,
@@ -28,7 +29,11 @@ from ops.system_status_snapshot import (
     build_system_status_snapshot,
     build_trade_chain_health,
     classify_no_trade_liveness,
+    last_reopen,
+    market_open,
     parse_strategy_inventory,
+    permission_status_lookup,
+    resolve_effective_contracts,
     validate_snapshot_schema,
     write_snapshot_atomic,
 )
@@ -45,6 +50,7 @@ _INVENTORY_MD = """\
 | ORB Reclaim (MNQ) | ✅ | ✅ | Partial | ✅ | ❌ insufficient | ✅ | ⚠️ n=253 thin | **PROMISING BUT UNPROVEN** |
 | PDH Reclaim | ✅ | ✅ | ✅ | ✅ | ❌ both halves neg | ❌ | ✅ n=67 | **RETIRE** |
 | 4HR Re-Trigger (MES) | ✅ | ✅ | ✅ | ✅ | ❌ H2 erases H1 | ❌ | ⚠️ n=75 | **OVERFIT — excluded from runtime** |
+| 12HR Miyagi | ✅ | ✅ | ✅ | n/a | n/a | n/a | ⚠️ n=8/10 | **BROKEN FOR CURRENT SYSTEM RISK CONSTRAINTS** |
 
 ## Detailed Strategy Profiles
 ### ORB Reclaim — MES
@@ -68,6 +74,13 @@ def test_parse_strategy_inventory_extracts_rows_and_last_updated():
     assert "prose that must not be parsed as a table row" not in parsed["rows"]
 
 
+def _find(evidence: list[dict], strategy: str, instrument: str | None = None) -> dict:
+    for row in evidence:
+        if row["strategy"] == strategy and (instrument is None or row["instrument"] == instrument):
+            return row
+    raise AssertionError(f"no evidence row for strategy={strategy!r} instrument={instrument!r}")
+
+
 def test_build_strategy_evidence_maps_verdict_and_preserves_raw():
     evidence = build_strategy_evidence(
         _INVENTORY_MD,
@@ -75,10 +88,66 @@ def test_build_strategy_evidence_maps_verdict_and_preserves_raw():
         instruments=["MES", "MNQ"],
         disabled_concepts_per_instrument={},
     )
-    by_instrument = {row["instrument"]: row for row in evidence}
-    assert by_instrument["MES"]["classification"] == "PROMISING BUT UNPROVEN"
-    assert by_instrument["MES"]["classification_raw"] == "PAPER PROOF"
-    assert by_instrument["MES"]["classification"] in ALLOWED_CLASSIFICATIONS
+    row = _find(evidence, "orb_reclaim", "MES")
+    assert row["classification"] == "PROMISING BUT UNPROVEN"
+    assert row["classification_raw"] == "PAPER PROOF"
+    assert row["classification"] in ALLOWED_CLASSIFICATIONS
+
+
+def test_build_strategy_evidence_is_inventory_driven_independent_of_enabled_concepts():
+    """Every Strategy_Inventory.md row must appear regardless of what's
+    currently enabled -- the registry answers "what is tracked", not "what is
+    live right now". enabled_concepts here deliberately names NONE of the
+    inventory rows."""
+    evidence = build_strategy_evidence(
+        _INVENTORY_MD,
+        enabled_concepts=[],
+        instruments=[],
+        disabled_concepts_per_instrument={},
+    )
+    row_names = {row["inventory_row_matched"] for row in evidence}
+    assert {"ORB Reclaim (MES)", "ORB Reclaim (MNQ)", "PDH Reclaim", "4HR Re-Trigger (MES)"} <= row_names
+
+
+def test_build_strategy_evidence_untracked_inventory_row_gets_eligible_none():
+    """A row with no runtime-concept mapping at all (research-only, not yet
+    wired -- e.g. Miyagi) is neither eligible=True nor eligible=False; it must
+    be None, since "excluded" would wrongly imply a decision was made."""
+    evidence = build_strategy_evidence(
+        _INVENTORY_MD, enabled_concepts=[], instruments=[], disabled_concepts_per_instrument={},
+    )
+    row = _find(evidence, "12HR Miyagi")
+    assert row["eligible"] is None
+    assert row["classification"] == "BROKEN"
+    assert row["instrument"] is None  # not encoded in this row's own name
+
+
+def test_build_strategy_evidence_retired_row_normalizes_to_broken():
+    evidence = build_strategy_evidence(
+        _INVENTORY_MD, enabled_concepts=["pdh_reclaim"], instruments=["MES"], disabled_concepts_per_instrument={},
+    )
+    row = _find(evidence, "pdh_reclaim", "MES")
+    assert row["classification"] == "BROKEN"  # RETIRE normalizes to BROKEN
+    assert row["classification_raw"] == "RETIRE"
+
+
+def test_build_strategy_evidence_shared_row_reports_both_instruments_independently():
+    """PDH Reclaim is ONE inventory row shared by both pdh_reclaim/MES and
+    pdh_reclaim/MNQ -- both must appear, with per-instrument eligibility, not
+    collapse to a single row that silently drops one instrument."""
+    evidence = build_strategy_evidence(
+        _INVENTORY_MD,
+        enabled_concepts=["pdh_reclaim"],
+        instruments=["MES", "MNQ"],
+        disabled_concepts_per_instrument={"MES": ["pdh_reclaim"]},
+    )
+    mes_row = _find(evidence, "pdh_reclaim", "MES")
+    mnq_row = _find(evidence, "pdh_reclaim", "MNQ")
+    assert mes_row["inventory_row_matched"] == mnq_row["inventory_row_matched"] == "PDH Reclaim"
+    assert mes_row["eligible"] is False
+    assert mes_row["exclusion_reason"] == "disabled_concepts_per_instrument"
+    assert mnq_row["eligible"] is True
+    assert mnq_row["exclusion_reason"] is None
 
 
 def test_build_strategy_evidence_unknown_when_no_inventory_row_mapped():
@@ -90,9 +159,10 @@ def test_build_strategy_evidence_unknown_when_no_inventory_row_mapped():
         instruments=["MES"],
         disabled_concepts_per_instrument={},
     )
-    assert evidence[0]["classification"] == UNKNOWN
-    assert evidence[0]["classification_raw"] == UNKNOWN
-    assert evidence[0]["current_blocker"]
+    row = _find(evidence, "orb_rejection", "MES")
+    assert row["classification"] == UNKNOWN
+    assert row["classification_raw"] == UNKNOWN
+    assert row["current_blocker"]
 
 
 def test_build_strategy_evidence_unknown_when_inventory_missing_entirely():
@@ -102,7 +172,8 @@ def test_build_strategy_evidence_unknown_when_inventory_missing_entirely():
         instruments=["MES"],
         disabled_concepts_per_instrument={},
     )
-    assert evidence[0]["classification"] == UNKNOWN
+    row = _find(evidence, "orb_reclaim", "MES")
+    assert row["classification"] == UNKNOWN
 
 
 def test_build_strategy_evidence_disabled_per_instrument_stays_visible_but_ineligible():
@@ -115,14 +186,14 @@ def test_build_strategy_evidence_disabled_per_instrument_stays_visible_but_ineli
         instruments=["MES", "MNQ"],
         disabled_concepts_per_instrument={"MNQ": ["orb_reclaim"]},
     )
-    by_instrument = {row["instrument"]: row for row in evidence}
-    assert {row["instrument"] for row in evidence} == {"MES", "MNQ"}
-    assert by_instrument["MES"]["eligible"] is True
-    assert by_instrument["MES"]["exclusion_reason"] is None
-    assert by_instrument["MNQ"]["eligible"] is False
-    assert by_instrument["MNQ"]["exclusion_reason"] == "disabled_concepts_per_instrument"
+    mes_row = _find(evidence, "orb_reclaim", "MES")
+    mnq_row = _find(evidence, "orb_reclaim", "MNQ")
+    assert mes_row["eligible"] is True
+    assert mes_row["exclusion_reason"] is None
+    assert mnq_row["eligible"] is False
+    assert mnq_row["exclusion_reason"] == "disabled_concepts_per_instrument"
     # still classified even though excluded -- exclusion must not blank the evidence
-    assert by_instrument["MNQ"]["classification"] == "PROMISING BUT UNPROVEN"
+    assert mnq_row["classification"] == "PROMISING BUT UNPROVEN"
 
 
 def test_build_strategy_evidence_excluded_overfit_strategy_stays_visible():
@@ -132,7 +203,7 @@ def test_build_strategy_evidence_excluded_overfit_strategy_stays_visible():
         instruments=["MES"],
         disabled_concepts_per_instrument={"MES": ["strat_4hr_retrigger"]},
     )
-    row = evidence[0]
+    row = _find(evidence, "strat_4hr_retrigger", "MES")
     assert row["eligible"] is False
     assert row["classification"] == "OVERFIT"
 
@@ -145,9 +216,19 @@ def test_build_strategy_evidence_includes_active_env_gated_lane():
         disabled_concepts_per_instrument={},
         env_gated_active=[("MNQ_ORB_BREAKOUT_INVERSE_MODE", "MNQ", "paper_sim")],
     )
-    assert len(evidence) == 1
-    assert evidence[0]["strategy"] == "MNQ_ORB_BREAKOUT_INVERSE_MODE"
-    assert evidence[0]["eligible"] is True
+    row = _find(evidence, "MNQ_ORB_BREAKOUT_INVERSE_MODE", "MNQ")
+    assert row["eligible"] is True
+
+
+def test_top_level_source_of_truth_conflict_is_not_evaluated_not_false():
+    """Only ONE canonical classification source is read here
+    (Strategy_Inventory.md) -- the top-level rollup must say NOT_EVALUATED,
+    never a `False` that would falsely claim a second source was compared and
+    found to agree."""
+    from ops.system_status_snapshot import build_strategy_evidence as _bse
+    evidence = _bse(_INVENTORY_MD, enabled_concepts=["orb_reclaim"], instruments=["MES"], disabled_concepts_per_instrument={})
+    assert all(row["source_of_truth_conflict"] == "NOT_EVALUATED" for row in evidence)
+    assert all(row["pending_reconciliation"] == "NOT_EVALUATED" for row in evidence)
 
 
 # ── evidence-epoch extraction (must be the lane's own epoch, never the doc date) ─
@@ -171,56 +252,158 @@ def test_evidence_epoch_unknown_when_heading_does_not_match_table_row_name():
     assert epoch is None
 
 
-def test_runtime_lane_evidence_epoch_is_unknown_not_the_document_last_updated_date():
-    """Regression guard for the exact bug: evidence_epoch must never silently
-    become Strategy_Inventory.md's document-level 'Last updated' date."""
-    lanes = build_runtime_lanes(
+_ALWAYS_ELIGIBLE = lambda concept: "PAPER_ELIGIBLE"  # noqa: E731 -- test-local stand-in permission lookup
+
+
+def _lanes(**overrides):
+    kwargs = dict(
         enabled_concepts=["orb_reclaim"],
         instruments=["MES"],
         disabled_concepts_per_instrument={},
-        entry_fill_model="legacy",
+        execution_mode="legacy",
         entry_tolerance_ticks_by_root={"MES": 16.0},
         schedule_mode="current",
-        contracts_by_instrument=None,
+        contracts_lookup=lambda instrument: 1,
         repo_commit="deadbeef",
         evidence_epoch_lookup=lambda concept, instrument: UNKNOWN,
+        permission_status_lookup_fn=_ALWAYS_ELIGIBLE,
     )
+    kwargs.update(overrides)
+    return build_runtime_lanes(**kwargs)
+
+
+def test_runtime_lane_evidence_epoch_is_unknown_not_the_document_last_updated_date():
+    """Regression guard for the exact bug: evidence_epoch must never silently
+    become Strategy_Inventory.md's document-level 'Last updated' date."""
+    lanes = _lanes()
     assert lanes[0]["evidence_epoch"] == UNKNOWN
     assert lanes[0]["evidence_epoch"] != "2026-07-23"  # the doc's Last-updated date
 
 
 def test_runtime_lane_evidence_epoch_uses_provided_lookup():
-    lanes = build_runtime_lanes(
-        enabled_concepts=["orb_reclaim"],
-        instruments=["MES"],
-        disabled_concepts_per_instrument={},
-        entry_fill_model="legacy",
-        entry_tolerance_ticks_by_root={"MES": 16.0},
-        schedule_mode="current",
-        contracts_by_instrument=None,
-        repo_commit="deadbeef",
-        evidence_epoch_lookup=lambda concept, instrument: "2026-07-27T04:19:13Z",
-    )
+    lanes = _lanes(evidence_epoch_lookup=lambda concept, instrument: "2026-07-27T04:19:13Z")
     assert lanes[0]["evidence_epoch"] == "2026-07-27T04:19:13Z"
 
 
 # ── per-lane execution context (not a global instrument default) ────────────
 
 def test_runtime_lane_reports_shared_tradovate_broker_context():
-    lanes = build_runtime_lanes(
-        enabled_concepts=["orb_breakout"],
-        instruments=["MNQ"],
-        disabled_concepts_per_instrument={},
-        entry_fill_model="legacy",
+    lanes = _lanes(
+        enabled_concepts=["orb_breakout"], instruments=["MNQ"],
         entry_tolerance_ticks_by_root={"MNQ": 32.0},
-        schedule_mode="current",
-        contracts_by_instrument=None,
-        repo_commit="deadbeef",
-        evidence_epoch_lookup=lambda c, i: UNKNOWN,
     )
     assert lanes[0]["broker"] == "tradovate"
-    assert lanes[0]["entry_model"] == "legacy"
+    assert lanes[0]["execution_mode"] == "legacy"
     assert lanes[0]["entry_tolerance_ticks"] == 32.0
+
+
+def test_effective_entry_model_legacy_with_positive_tolerance_is_ioc_limit():
+    """execution/tradovate_broker.py's real behavior: "legacy" with the box's
+    actual positive tolerance builds a Limit-IOC entry, not a generic order."""
+    lanes = _lanes(entry_tolerance_ticks_by_root={"MES": 16.0})
+    assert lanes[0]["execution_mode"] == "legacy"
+    assert lanes[0]["effective_entry_model"] == "ioc_limit"
+
+
+def test_effective_entry_model_legacy_with_zero_tolerance_is_market():
+    lanes = _lanes(entry_tolerance_ticks_by_root={"MES": 0.0})
+    assert lanes[0]["effective_entry_model"] == "market"
+
+
+def test_effective_entry_model_non_legacy_mode_passes_through():
+    lanes = _lanes(execution_mode="marketable_limit", entry_tolerance_ticks_by_root={"MES": 8.0})
+    assert lanes[0]["effective_entry_model"] == "marketable_limit"
+
+
+# ── strategy_permission_gate incorporated into runtime eligibility ──────────
+
+def test_shadow_only_permission_status_yields_shadow_only_runtime_state():
+    """A concept enabled in risk_rules.enabled_concepts (and not per-instrument
+    excluded) but held at SHADOW_ONLY by strategy_permission_gate must NOT be
+    reported paper_forward -- the real DecisionEngine never lets it place an
+    order. This is the operator's exact vwap_hold/pdh_reclaim scenario."""
+    lanes = _lanes(permission_status_lookup_fn=lambda concept: "SHADOW_ONLY")
+    assert lanes[0]["permission_status"] == "SHADOW_ONLY"
+    assert lanes[0]["runtime_state"] == "shadow_only"
+
+
+def test_paper_eligible_permission_status_yields_paper_forward():
+    lanes = _lanes(permission_status_lookup_fn=lambda concept: "PAPER_ELIGIBLE")
+    assert lanes[0]["runtime_state"] == "paper_forward"
+
+
+def test_permission_status_lookup_gate_disabled_behaves_as_pre_gate():
+    status = permission_status_lookup(
+        "vwap_hold", gate_enabled=False, strategy_status={"vwap_hold": "SHADOW_ONLY"}, default_status="SHADOW_ONLY",
+    )
+    assert status == "GATE_DISABLED"
+    assert _runtime_state_for(status, "current") == "paper_forward"
+
+
+def test_permission_status_lookup_uses_explicit_entry_over_default():
+    status = permission_status_lookup(
+        "vwap_hold", gate_enabled=True, strategy_status={"vwap_hold": "SHADOW_ONLY"}, default_status="PAPER_ELIGIBLE",
+    )
+    assert status == "SHADOW_ONLY"
+
+
+def test_permission_status_lookup_falls_back_to_default_for_unlisted_concept():
+    status = permission_status_lookup(
+        "some_new_concept", gate_enabled=True, strategy_status={}, default_status="SHADOW_ONLY",
+    )
+    assert status == "SHADOW_ONLY"
+
+
+# ── effective contract count (sourced, never a silent default) ──────────────
+
+def test_resolve_effective_contracts_unknown_when_dynamic_sizing_and_no_balance():
+    result = resolve_effective_contracts(
+        "MES", position_sizing_enabled=True, sizing_rules=[], current_balance=None,
+        max_contracts_per_instrument={}, max_contracts_hard_cap=None,
+    )
+    assert result == UNKNOWN
+
+
+def test_resolve_effective_contracts_resolves_tier_from_balance():
+    sizing_rules = [
+        {"min_balance": 0, "max_balance": 2000, "instrument": "MES", "max_contracts": 1},
+        {"min_balance": 2000, "max_balance": 4000, "instrument": "MES", "max_contracts": 2},
+        {"min_balance": 4000, "max_balance": None, "instrument": "MES", "max_contracts": 3},
+    ]
+    assert resolve_effective_contracts(
+        "MES", position_sizing_enabled=True, sizing_rules=sizing_rules, current_balance=2500,
+        max_contracts_per_instrument={}, max_contracts_hard_cap=None,
+    ) == 2
+    assert resolve_effective_contracts(
+        "MES", position_sizing_enabled=True, sizing_rules=sizing_rules, current_balance=50000,
+        max_contracts_per_instrument={}, max_contracts_hard_cap=None,
+    ) == 3
+
+
+def test_resolve_effective_contracts_capped_by_hard_cap():
+    sizing_rules = [{"min_balance": 0, "max_balance": None, "instrument": "MNQ", "max_contracts": 6}]
+    result = resolve_effective_contracts(
+        "MNQ", position_sizing_enabled=True, sizing_rules=sizing_rules, current_balance=50000,
+        max_contracts_per_instrument={}, max_contracts_hard_cap=2,
+    )
+    assert result == 2
+
+
+def test_resolve_effective_contracts_static_when_sizing_disabled():
+    result = resolve_effective_contracts(
+        "MES", position_sizing_enabled=False, sizing_rules=[], current_balance=None,
+        max_contracts_per_instrument={"MES": 1}, max_contracts_hard_cap=None,
+    )
+    assert result == 1
+
+
+def test_resolve_effective_contracts_unknown_when_static_and_no_cap_configured():
+    """Regression guard for the exact bug: never silently default to 1."""
+    result = resolve_effective_contracts(
+        "MES", position_sizing_enabled=False, sizing_rules=[], current_balance=None,
+        max_contracts_per_instrument={}, max_contracts_hard_cap=None,
+    )
+    assert result == UNKNOWN
 
 
 def test_active_env_gated_flags_excludes_observe_only():
@@ -243,7 +426,7 @@ def test_env_gated_lane_resolves_verified_execution_context_distinct_from_tradov
     assert len(lanes) == 1
     lane = lanes[0]
     assert lane["broker"] == "PaperBroker"
-    assert lane["entry_model"] == "marketable_ioc"
+    assert lane["effective_entry_model"] == "marketable_ioc"
     assert lane["entry_tolerance_ticks"] == 8.0
     assert lane["contracts"] == 1
 
@@ -254,7 +437,7 @@ def test_env_gated_lane_without_verified_source_stays_unknown_not_borrowed():
     lanes = build_env_gated_lanes({"MNQ_ORB_RECLAIM_PROOF_MODE": "paper_sim"})
     assert len(lanes) == 1
     lane = lanes[0]
-    assert lane["entry_model"] == UNKNOWN
+    assert lane["effective_entry_model"] == UNKNOWN
     assert lane["entry_tolerance_ticks"] == UNKNOWN
     assert lane["contracts"] == UNKNOWN
 
@@ -475,6 +658,43 @@ def test_feed_liveness_real_bar_history_fresh_15m_cannot_mask_stale_5m(tmp_path)
     assert liveness["5m"]["last_bar_ts"] == "2026-07-27T00:00:00+00:00"
     assert liveness["15m"]["stale"] is False
     assert liveness["15m"]["last_bar_ts"] == "2026-07-27T04:59:00+00:00"
+
+
+# ── market-hours awareness (reuses ops.feed_gap_alarm, not a second calendar) ─
+
+def test_feed_liveness_market_closed_never_reports_stale():
+    """The exact scenario: 0 trades + a very old/missing bar during a CME
+    Globex closure (Saturday here) must NOT read as a system failure."""
+    assert market_open(datetime(2026, 8, 1, 12, 0, tzinfo=timezone.utc)) is False  # Saturday
+    liveness = build_feed_liveness(
+        _FakeBarHistory([]), "MNQ", for_date=date(2026, 8, 1),
+        now=datetime(2026, 8, 1, 12, 0, tzinfo=timezone.utc), required_minutes=(5, 15),
+    )
+    assert liveness["5m"]["stale"] is False
+    assert liveness["15m"]["stale"] is False
+    assert liveness["5m"]["market_open"] is False
+
+
+def test_feed_liveness_market_open_reports_market_open_true():
+    bars = [{"ts": "2026-07-27T04:58:00+00:00", "timeframe": "5"}]
+    liveness = build_feed_liveness(
+        _FakeBarHistory(bars), "MNQ", for_date=date(2026, 7, 27),
+        now=datetime(2026, 7, 27, 5, 0, tzinfo=timezone.utc), required_minutes=(5,),
+    )
+    assert liveness["5m"]["market_open"] is True
+    assert liveness["5m"]["stale"] is False
+
+
+def test_feed_liveness_reopen_grace_no_false_alarm_right_after_reopen():
+    """No bars yet, but `now` is shortly after the CME reopen (22:00Z Sunday)
+    -- baseline is max(last_bar, last_reopen), so this must not be stale."""
+    reopen_time = last_reopen(datetime(2026, 7, 27, 0, 0, tzinfo=timezone.utc))
+    just_after_reopen = reopen_time + timedelta(minutes=2)
+    liveness = build_feed_liveness(
+        _FakeBarHistory([]), "MNQ", for_date=date(2026, 7, 26),
+        now=just_after_reopen, required_minutes=(5,),
+    )
+    assert liveness["5m"]["stale"] is False
 
 
 # ── atomic write / schema validation ────────────────────────────────────────

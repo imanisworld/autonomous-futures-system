@@ -27,6 +27,7 @@ from typing import Any
 
 from context.five_min_feed import normalize_minutes
 from journal.journal_logger import JournalLogger
+from ops.feed_gap_alarm import last_reopen, market_open
 from ops.live_box_guard import PROOF_CRITICAL_RUNTIME_OVERRIDES, live_box_drift_report
 
 SCHEMA_VERSION = "1.0.0"
@@ -290,6 +291,24 @@ def _normalize_verdict(verdict_raw: str) -> str:
     return UNKNOWN
 
 
+_ROW_INSTRUMENT_RE_MES = re.compile(r"\bMES\b")
+_ROW_INSTRUMENT_RE_MNQ = re.compile(r"\bMNQ\b")
+
+
+def _infer_instrument_from_row_name(row_name: str) -> str | None:
+    """Best-effort instrument from a Strategy_Inventory.md row's own label
+    (e.g. "ORB Reclaim (MES)" -> MES). None when the row applies broadly / the
+    instrument isn't encoded in the name (e.g. "PDH Reclaim") -- never a
+    guess when both or neither instrument token appears."""
+    has_mes = bool(_ROW_INSTRUMENT_RE_MES.search(row_name))
+    has_mnq = bool(_ROW_INSTRUMENT_RE_MNQ.search(row_name))
+    if has_mes and not has_mnq:
+        return "MES"
+    if has_mnq and not has_mes:
+        return "MNQ"
+    return None
+
+
 def build_strategy_evidence(
     inventory_markdown: str | None,
     *,
@@ -298,25 +317,48 @@ def build_strategy_evidence(
     disabled_concepts_per_instrument: dict[str, list[str]],
     env_gated_active: list[tuple[str, str, str]] | None = None,
 ) -> list[dict[str, Any]]:
-    """Evidence-classification row per TRACKED (strategy concept, instrument)
-    pair -- every enabled concept x instrument, whether or not it is currently
-    eligible to fire. A per-instrument exclusion (e.g. MES strat_4hr_retrigger,
-    OVERFIT) must stay VISIBLE with `eligible: False` and its exclusion
-    reason, not disappear from the registry -- an excluded strategy is exactly
-    the kind of state this snapshot exists to surface. `env_gated_active` adds
-    rows for active (name, instrument, value) proof-mode lanes that live
-    outside risk_rules.yaml entirely.
+    """Evidence-classification row per TRACKED strategy -- inventory-driven,
+    not runtime-driven: every row in Strategy_Inventory.md's master table
+    gets a row here (Miyagi, V4-R, RETIRE'd strategies, future WAIT rows,
+    everything) whether or not it is currently wired to any runtime concept,
+    because "what is the evidence classification for each tracked strategy"
+    is a question about the EVIDENCE registry, not about what happens to be
+    enabled in risk_rules.yaml right now. `eligible` cross-references
+    risk_rules.yaml/env separately:
+      - True/False when the row maps to a tracked runtime concept
+        (CONCEPT_TO_INVENTORY_ROW / ENV_CONCEPT_TO_INVENTORY_ROW)
+      - None when no runtime concept tracks this row at all (research-only /
+        not yet wired) -- None, not False, since "not eligible" would wrongly
+        imply a decision was made to exclude it.
+    `pending_reconciliation`/`source_of_truth_conflict`/`conflicting_sources`
+    default to "NOT_EVALUATED": this function reads exactly ONE canonical
+    source (Strategy_Inventory.md). `False` would falsely claim a comparison
+    against a second source (e.g. a promotion-gate audit) happened and found
+    no conflict -- no such comparison is wired yet.
     """
     parsed = (
         parse_strategy_inventory(inventory_markdown) if inventory_markdown
         else {"last_updated": None, "rows": {}, "sections": {}}
     )
     rows = parsed["rows"]
-    sections = parsed["sections"]
     evidence_date = parsed["last_updated"]
 
-    def _row(strategy: str, instrument: str, row_name: str | None, *, eligible: bool, exclusion_reason: str | None) -> dict[str, Any]:
-        verdict_raw = rows.get(row_name) if row_name else None
+    # row_name -> [(concept_or_env_name, instrument), ...] -- a LIST because
+    # some inventory rows are shared across both instruments (e.g. "PDH
+    # Reclaim" maps from both pdh_reclaim/MES and pdh_reclaim/MNQ); collapsing
+    # to a single pair would silently drop one instrument's eligibility.
+    reverse_map: dict[str, list[tuple[str, str]]] = {}
+    for concept, instrument_map in CONCEPT_TO_INVENTORY_ROW.items():
+        for instrument, row_name in instrument_map.items():
+            reverse_map.setdefault(row_name, []).append((concept, instrument))
+    for name, instrument_map in ENV_CONCEPT_TO_INVENTORY_ROW.items():
+        for instrument, row_name in instrument_map.items():
+            reverse_map.setdefault(row_name, []).append((name, instrument))
+
+    env_gated_active = env_gated_active or []
+    active_env_pairs = {(name, instrument) for name, instrument, _value in env_gated_active}
+
+    def _row(strategy: str, instrument: str | None, row_name: str | None, verdict_raw: str | None, *, eligible: bool | None, exclusion_reason: str | None) -> dict[str, Any]:
         return {
             "strategy": strategy,
             "instrument": instrument,
@@ -348,81 +390,221 @@ def build_strategy_evidence(
                 "no Strategy_Inventory.md row mapped for this strategy/instrument"
             ),
             "notes": UNKNOWN if not verdict_raw else "",
-            "pending_reconciliation": False,
-            "source_of_truth_conflict": False,
+            "pending_reconciliation": "NOT_EVALUATED",
+            "source_of_truth_conflict": "NOT_EVALUATED",
             "conflicting_sources": [],
         }
 
     out: list[dict[str, Any]] = []
+    emitted_row_names: set[str] = set()
+
+    for row_name, verdict_raw in rows.items():
+        mappings = reverse_map.get(row_name) or []
+        if mappings:
+            for concept_or_name, instrument in mappings:
+                if concept_or_name in ENV_CONCEPT_TO_INVENTORY_ROW:
+                    eligible = (concept_or_name, instrument) in active_env_pairs
+                    exclusion_reason = None if eligible else "env flag not currently active (unset or observe_only)"
+                else:
+                    excluded = concept_or_name in (disabled_concepts_per_instrument.get(instrument) or [])
+                    not_enabled = concept_or_name not in enabled_concepts
+                    eligible = not excluded and not not_enabled
+                    exclusion_reason = (
+                        "disabled_concepts_per_instrument" if excluded else
+                        "not in risk_rules.enabled_concepts" if not_enabled else None
+                    )
+                out.append(_row(concept_or_name, instrument, row_name, verdict_raw, eligible=eligible, exclusion_reason=exclusion_reason))
+        else:
+            strategy_label = row_name
+            instrument = _infer_instrument_from_row_name(row_name)
+            eligible = None  # not tracked by any runtime concept -- research-only or not yet wired
+            exclusion_reason = "no runtime concept in this module tracks this Strategy_Inventory.md row"
+            out.append(_row(strategy_label, instrument, row_name, verdict_raw, eligible=eligible, exclusion_reason=exclusion_reason))
+        emitted_row_names.add(row_name)
+
+    # Tracked concepts/env-lanes that are ENABLED/ACTIVE but have no row at
+    # all yet -- the original UNKNOWN-evidence-gap detection, preserved for
+    # rows the inventory-driven pass above never emitted.
     for concept in enabled_concepts:
         row_map = CONCEPT_TO_INVENTORY_ROW.get(concept, {})
         for instrument in instruments:
+            row_name = row_map.get(instrument)
+            if row_name and row_name in emitted_row_names:
+                continue
             excluded = concept in (disabled_concepts_per_instrument.get(instrument) or [])
             out.append(
                 _row(
-                    concept, instrument, row_map.get(instrument),
+                    concept, instrument, row_name, None,
                     eligible=not excluded,
                     exclusion_reason="disabled_concepts_per_instrument" if excluded else None,
                 )
             )
 
-    for name, instrument, value in (env_gated_active or []):
+    for name, instrument, _value in env_gated_active:
         row_map = ENV_CONCEPT_TO_INVENTORY_ROW.get(name, {})
-        out.append(
-            _row(name, instrument, row_map.get(instrument), eligible=True, exclusion_reason=None)
-        )
+        row_name = row_map.get(instrument)
+        if row_name and row_name in emitted_row_names:
+            continue
+        out.append(_row(name, instrument, row_name, None, eligible=True, exclusion_reason=None))
 
     return out
 
 
 # ── Runtime lanes ────────────────────────────────────────────────────────────
 
+def _effective_entry_model(execution_mode: str, tolerance_ticks: Any) -> str:
+    """execution/tradovate_broker.py's actual entry-leg construction: "legacy"
+    is NOT self-describing. Its `exec_mode in ("legacy", "ioc_limit")` branch
+    builds a Limit-IOC entry when `tol_ticks > 0` and a plain Market entry
+    otherwise (execute_bracket, the `_capped_aggressive_limit`/`tol_ticks > 0`
+    check) -- so "legacy" with the box's real positive tolerance (MES 16 /
+    MNQ 32 ticks) IS an IOC-limit entry, not a generic "legacy" order type.
+    Every other configured mode (market/marketable_limit/stop_market/
+    stop_limit, and an explicit "ioc_limit" selection) is already
+    self-describing and passes through unchanged."""
+    if execution_mode not in ("legacy", "ioc_limit"):
+        return execution_mode if execution_mode else UNKNOWN
+    if execution_mode == "ioc_limit":
+        return "ioc_limit"
+    try:
+        tol = float(tolerance_ticks)
+    except (TypeError, ValueError):
+        return UNKNOWN
+    return "ioc_limit" if tol > 0 else "market"
+
+
+# strategy_permission_gate.strategy_status value -> runtime_state. This gate
+# (risk_rules.yaml strategy_permission_gate, enforced in DecisionEngine's
+# final TRADE return, strategy/signal_engine.py) is SEPARATE from and sits
+# DOWNSTREAM of enabled_concepts/disabled_concepts_per_instrument -- a
+# concept can be enabled+not-instrument-excluded and still never place a real
+# order because this gate holds it at SHADOW_ONLY. Reported here so
+# runtime_state can never claim "paper_forward" for a lane the real
+# DecisionEngine would actually block.
+_PERMISSION_STATUS_TO_RUNTIME_STATE = {
+    "PAPER_ELIGIBLE": "paper_forward",
+    "SHADOW_ONLY": "shadow_only",
+    "RESEARCH_ONLY": "research_only",
+    "DISABLED": "disabled_by_permission_gate",
+}
+
+
+def permission_status_lookup(
+    concept: str, *, gate_enabled: bool, strategy_status: dict[str, str], default_status: str
+) -> str:
+    if not gate_enabled:
+        return "GATE_DISABLED"  # every concept behaves as pre-gate PAPER_ELIGIBLE (config/settings.py's own contract)
+    return strategy_status.get(concept, default_status)
+
+
+def _runtime_state_for(permission_status: str, schedule_mode: str) -> str:
+    if permission_status == "GATE_DISABLED":
+        return "paper_forward" if schedule_mode == "current" else schedule_mode
+    return _PERMISSION_STATUS_TO_RUNTIME_STATE.get(permission_status, UNKNOWN)
+
+
+def resolve_effective_contracts(
+    instrument: str,
+    *,
+    position_sizing_enabled: bool,
+    sizing_rules: list[dict[str, Any]],
+    current_balance: float | None,
+    max_contracts_per_instrument: dict[str, int],
+    max_contracts_hard_cap: int | None,
+) -> int | str:
+    """The lane's actual contract count, never a silent default.
+
+    When dynamic position_sizing is enabled (risk_rules.yaml position_sizing,
+    the box's current posture), contract count is balance-dependent -- NOT a
+    fixed lane property -- so this requires a real reconstructed balance
+    (JournalLogger.get_account_balance) to resolve a tier; no balance ->
+    UNKNOWN, never a guessed "1". When sizing is disabled, the static
+    position_rules.max_contracts_per_instrument ceiling applies directly.
+    Either path is additionally capped by max_contracts_per_instrument and
+    MAX_CONTRACTS_HARD_CAP when those are set, mirroring config/settings.py's
+    own precedence.
+    """
+    if position_sizing_enabled:
+        if current_balance is None:
+            return UNKNOWN
+        tier_contracts = None
+        for rule in sizing_rules:
+            if str(rule.get("instrument", "")).upper() != instrument:
+                continue
+            min_balance = float(rule.get("min_balance", 0) or 0)
+            max_balance_raw = rule.get("max_balance")
+            max_balance = float(max_balance_raw) if max_balance_raw is not None else None
+            if current_balance >= min_balance and (max_balance is None or current_balance < max_balance):
+                tier_contracts = rule.get("max_contracts")
+                break
+        if tier_contracts is None:
+            return UNKNOWN
+        caps = [int(tier_contracts)]
+    else:
+        static = max_contracts_per_instrument.get(instrument)
+        if static is None:
+            return UNKNOWN
+        caps = [int(static)]
+    if instrument in max_contracts_per_instrument:
+        caps.append(int(max_contracts_per_instrument[instrument]))
+    if max_contracts_hard_cap is not None:
+        caps.append(int(max_contracts_hard_cap))
+    return min(caps)
+
+
 def build_runtime_lanes(
     *,
     enabled_concepts: list[str],
     instruments: list[str],
     disabled_concepts_per_instrument: dict[str, list[str]],
-    entry_fill_model: str,
+    execution_mode: str,
     entry_tolerance_ticks_by_root: dict[str, float],
     schedule_mode: str,
-    contracts_by_instrument: dict[str, int] | None,
+    contracts_lookup,
     repo_commit: str | None,
     evidence_epoch_lookup,
+    permission_status_lookup_fn,
 ) -> list[dict[str, Any]]:
-    """Only ELIGIBLE lanes (enabled and not per-instrument-excluded) -- these
-    actually route orders. `evidence_epoch_lookup(concept, instrument)` must
-    return the lane's OWN forward-evidence epoch or UNKNOWN; it must never be
-    the Strategy_Inventory.md document's "Last updated" date, which describes
-    when the doc was edited, not when this lane's evidence window opened.
+    """Only lanes that are enabled and not per-instrument-excluded -- these
+    are the candidates that COULD route an order; `runtime_state` further
+    reflects whether strategy_permission_gate actually lets them (see
+    _runtime_state_for). `evidence_epoch_lookup(concept, instrument)` must
+    return the lane's OWN forward-evidence epoch or UNKNOWN -- never the
+    Strategy_Inventory.md document's "Last updated" date.
 
-    entry_fill_model/entry_tolerance_ticks_by_root are genuinely GLOBAL here,
-    not a per-lane approximation: every concept below routes through the SAME
-    Tradovate broker instance, which reads TRADOVATE_ENTRY_EXECUTION_MODE and
-    ENTRY_SLIPPAGE_TOLERANCE_TICKS_<ROOT> once per instrument regardless of
-    which strategy generated the signal (execution/tradovate_broker.py has no
-    per-strategy override) -- sharing them across concepts on the same
-    instrument is not an approximation, it is what the broker actually does.
-    Lanes that do NOT share this path (env-gated PaperBroker-only proof/paper
-    lanes) are reported separately by build_env_gated_lanes with their own,
-    independently-resolved execution context.
+    `execution_mode`/`entry_tolerance_ticks_by_root` are genuinely GLOBAL
+    here, not a per-lane approximation: every concept below routes through
+    the SAME Tradovate broker instance, which reads
+    TRADOVATE_ENTRY_EXECUTION_MODE and ENTRY_SLIPPAGE_TOLERANCE_TICKS_<ROOT>
+    once per instrument regardless of which strategy generated the signal
+    (execution/tradovate_broker.py has no per-strategy override) -- sharing
+    them across concepts on the same instrument is not an approximation, it
+    is what the broker actually does. `effective_entry_model` (see
+    _effective_entry_model) resolves what "legacy" actually constructs at the
+    given tolerance, since "legacy" alone is ambiguous between Market and
+    Limit-IOC. Lanes that do NOT share this path (env-gated PaperBroker-only
+    proof/paper lanes) are reported separately by build_env_gated_lanes with
+    their own, independently-resolved execution context.
     """
-    contracts_by_instrument = contracts_by_instrument or {}
     lanes: list[dict[str, Any]] = []
     for concept in enabled_concepts:
         for instrument in instruments:
             if concept in (disabled_concepts_per_instrument.get(instrument) or []):
                 continue
             tolerance = entry_tolerance_ticks_by_root.get(instrument)
+            permission_status = permission_status_lookup_fn(concept)
             lanes.append(
                 {
                     "strategy": concept,
                     "instrument": instrument,
-                    "runtime_state": "paper_forward" if schedule_mode == "current" else schedule_mode,
+                    "runtime_state": _runtime_state_for(permission_status, schedule_mode),
+                    "permission_status": permission_status,
                     "gate_source": "risk_rules.strategy.enabled_concepts",
                     "broker": "tradovate",
-                    "entry_model": entry_fill_model if entry_fill_model else UNKNOWN,
+                    "execution_mode": execution_mode if execution_mode else UNKNOWN,
+                    "effective_entry_model": _effective_entry_model(execution_mode, tolerance),
                     "entry_tolerance_ticks": tolerance if tolerance is not None else UNKNOWN,
-                    "contracts": contracts_by_instrument.get(instrument, 1),
+                    "contracts": contracts_lookup(instrument),
                     "schedule_mode": schedule_mode,
                     "evidence_epoch": evidence_epoch_lookup(concept, instrument),
                     "current_runtime_sha": repo_commit or UNKNOWN,
@@ -495,9 +677,11 @@ def build_env_gated_lanes(env: dict[str, str], *, evidence_epoch_lookup=None) ->
                 "strategy": name,
                 "instrument": instrument,
                 "runtime_state": "env_gated_active",
+                "permission_status": "NOT_APPLICABLE",  # risk_rules.strategy_permission_gate governs enabled_concepts lanes only
                 "gate_source": f"env:{name}",
                 "broker": broker,
-                "entry_model": entry_model,
+                "execution_mode": value,
+                "effective_entry_model": entry_model,
                 "entry_tolerance_ticks": tolerance,
                 "contracts": contracts,
                 "schedule_mode": UNKNOWN,
@@ -559,12 +743,24 @@ def build_feed_liveness(
     A fresh 15m bar must not be able to paper over a stale 5m feed, or vice
     versa.
 
+    Market-hours aware: reuses ops.feed_gap_alarm.market_open/last_reopen (the
+    existing, already-deployed CME Globex calendar) rather than a second
+    calendar. When the market is closed at `now`, every timeframe is reported
+    NOT stale regardless of bar age -- a quiet weekend/maintenance feed is not
+    a system failure. When open, staleness is measured from
+    max(last_bar_ts, last_reopen(now)), exactly like feed_gap_alarm's own
+    baseline -- so a fresh reopen with no bars yet is not immediately flagged
+    stale either.
+
     `bar_history` is a context.bar_history.BarHistory instance (or any object
     exposing `.recent(instrument, n, for_date=..., lookback_days=...)` --
     injected so this stays testable without real files). Timeframes this
     instrument's bar file has never recorded at all (bucket is empty) are
-    reported stale, not silently skipped.
+    reported stale (when the market is open), not silently skipped.
     """
+    market_is_open = market_open(now)
+    reopen_baseline = last_reopen(now)
+
     try:
         bars = bar_history.recent(instrument, _FEED_LOOKBACK_BARS, for_date=for_date, lookback_days=3)
     except Exception:
@@ -578,21 +774,23 @@ def build_feed_liveness(
         tf_bars = buckets.get(minutes) or []
         bar = tf_bars[-1] if tf_bars else None
         ts_raw = (bar or {}).get("ts")
-        age_minutes = None
+        bar_dt = None
         if ts_raw:
             try:
-                parsed = datetime.fromisoformat(str(ts_raw).replace("Z", "+00:00"))
-                if parsed.tzinfo is None:
-                    parsed = parsed.replace(tzinfo=timezone.utc)
-                age_minutes = (now - parsed).total_seconds() / 60.0
+                bar_dt = datetime.fromisoformat(str(ts_raw).replace("Z", "+00:00"))
+                if bar_dt.tzinfo is None:
+                    bar_dt = bar_dt.replace(tzinfo=timezone.utc)
             except ValueError:
-                age_minutes = None
-        stale = age_minutes is None or age_minutes > staleness_ceiling
+                bar_dt = None
+        baseline = max(bar_dt, reopen_baseline) if bar_dt else reopen_baseline
+        age_minutes = (now - baseline).total_seconds() / 60.0
+        stale = market_is_open and age_minutes > staleness_ceiling
         out[label] = {
             "minutes": minutes,
             "bars_seen_this_timeframe": len(tf_bars),
             "last_bar_ts": ts_raw,
-            "staleness_minutes": round(age_minutes, 1) if age_minutes is not None else None,
+            "market_open": market_is_open,
+            "staleness_minutes": round(age_minutes, 1),
             "staleness_ceiling_minutes": staleness_ceiling,
             "stale": stale,
         }
@@ -911,12 +1109,79 @@ def build_system_status_snapshot(
         entry_tolerance_ticks_by_root[root_symbol] = value if value is not None else tolerance_defaults.get(root_symbol, UNKNOWN)
 
     # Runtime lanes trade on the real Tradovate demo broker, not the internal
-    # PaperBroker/replay simulator -- so the effective entry model here is the
-    # LIVE broker's TRADOVATE_ENTRY_EXECUTION_MODE (execution/tradovate_broker.py
-    # `_entry_execution_mode`, default "legacy"), not ENTRY_FILL_MODEL (which
-    # only governs the offline replay/paper simulator and is irrelevant to a
-    # deployed demo lane).
-    entry_fill_model = (env.get("TRADOVATE_ENTRY_EXECUTION_MODE") or "legacy").strip().lower() or "legacy"
+    # PaperBroker/replay simulator -- so the configured execution mode here is
+    # the LIVE broker's TRADOVATE_ENTRY_EXECUTION_MODE (execution/tradovate_
+    # broker.py `_entry_execution_mode`, default "legacy"), not ENTRY_FILL_MODEL
+    # (which only governs the offline replay/paper simulator and is irrelevant
+    # to a deployed demo lane). "legacy" alone is not the EFFECTIVE entry
+    # model -- see _effective_entry_model, applied per lane below.
+    execution_mode = (env.get("TRADOVATE_ENTRY_EXECUTION_MODE") or "legacy").strip().lower() or "legacy"
+
+    strategy_permission_gate_cfg = rules.get("strategy_permission_gate") or {}
+    permission_gate_enabled = bool(strategy_permission_gate_cfg.get("enabled", False))
+    permission_strategy_status = {
+        str(k): str(v).strip().upper()
+        for k, v in (strategy_permission_gate_cfg.get("strategy_status") or {}).items()
+    }
+    permission_default_status = str(
+        strategy_permission_gate_cfg.get("default_status", "SHADOW_ONLY")
+    ).strip().upper()
+
+    def _permission_status(concept: str) -> str:
+        return permission_status_lookup(
+            concept,
+            gate_enabled=permission_gate_enabled,
+            strategy_status=permission_strategy_status,
+            default_status=permission_default_status,
+        )
+
+    # ── position sizing / effective contract count ──────────────────────
+    journal = JournalLogger(log_dir=str(log_path))
+    position_rules_cfg = rules.get("position_rules") or {}
+    max_contracts_per_instrument = {
+        str(k).upper(): int(v) for k, v in (position_rules_cfg.get("max_contracts_per_instrument") or {}).items()
+        if isinstance(v, (int, float))
+    }
+    sizing_cfg = rules.get("position_sizing") or {}
+    position_sizing_enabled = bool(sizing_cfg.get("position_sizing_enabled", False))
+    sizing_rules = list(sizing_cfg.get("sizing_rules") or [])
+
+    starting_balance_raw = env.get("STARTING_BALANCE") or sizing_cfg.get("starting_balance")
+    try:
+        starting_balance = float(starting_balance_raw) if starting_balance_raw is not None else None
+    except (TypeError, ValueError):
+        starting_balance = None
+
+    max_contracts_hard_cap_raw = env.get("MAX_CONTRACTS_HARD_CAP")
+    if max_contracts_hard_cap_raw and max_contracts_hard_cap_raw.strip().isdigit():
+        max_contracts_hard_cap = int(max_contracts_hard_cap_raw)
+    else:
+        raw_yaml_cap = position_rules_cfg.get("max_contracts_hard_cap")
+        max_contracts_hard_cap = int(raw_yaml_cap) if isinstance(raw_yaml_cap, (int, float)) else None
+
+    current_balance = None
+    if position_sizing_enabled:
+        if starting_balance is None:
+            mark_unknown("runtime_lanes[*].contracts (starting_balance unresolvable)")
+        else:
+            try:
+                current_balance = journal.get_account_balance(starting_balance, through_date=the_date)
+            except Exception:
+                current_balance = None
+                mark_unknown("runtime_lanes[*].contracts (balance reconstruction failed)")
+
+    def _contracts_lookup(instrument: str) -> int | str:
+        result = resolve_effective_contracts(
+            instrument,
+            position_sizing_enabled=position_sizing_enabled,
+            sizing_rules=sizing_rules,
+            current_balance=current_balance,
+            max_contracts_per_instrument=max_contracts_per_instrument,
+            max_contracts_hard_cap=max_contracts_hard_cap,
+        )
+        if result == UNKNOWN:
+            mark_unknown(f"runtime_lanes[*/{instrument}].contracts")
+        return result
 
     inventory_path = root / "docs" / "strategy-rules" / "Strategy_Inventory.md"
     inventory_markdown = inventory_path.read_text(encoding="utf-8") if inventory_path.exists() else None
@@ -960,17 +1225,17 @@ def build_system_status_snapshot(
         enabled_concepts=enabled_concepts,
         instruments=instruments,
         disabled_concepts_per_instrument=disabled_per_instrument,
-        entry_fill_model=entry_fill_model,
+        execution_mode=execution_mode,
         entry_tolerance_ticks_by_root=entry_tolerance_ticks_by_root,
         schedule_mode=schedule_mode,
-        contracts_by_instrument=None,
+        contracts_lookup=_contracts_lookup,
         repo_commit=drift.get("commit"),
         evidence_epoch_lookup=_concept_evidence_epoch,
+        permission_status_lookup_fn=_permission_status,
     )
     runtime_lanes += build_env_gated_lanes(env, evidence_epoch_lookup=_env_evidence_epoch)
 
     # ── trade chain + liveness ───────────────────────────────────────────
-    journal = JournalLogger(log_dir=str(log_path))
     entries = journal.read_day(the_date)
     journal_file = log_path / f"journal_{the_date.isoformat()}.jsonl"
 
@@ -1037,7 +1302,18 @@ def build_system_status_snapshot(
         now=now,
     )
 
-    source_of_truth_conflict = any(row.get("source_of_truth_conflict") for row in strategy_evidence)
+    # Tri-state, not boolean: this generator reads exactly ONE canonical
+    # classification source (Strategy_Inventory.md) today. "NOT_EVALUATED"
+    # means no second source was compared -- it must never collapse to a
+    # falsy `False` that would misreport "compared and found no conflict."
+    # Only an explicit "CONFLICT" row (a future promotion-gate/reconciliation
+    # writer) promotes this to "CONFLICT".
+    if any(row.get("source_of_truth_conflict") == "CONFLICT" for row in strategy_evidence):
+        source_of_truth_conflict = "CONFLICT"
+    elif strategy_evidence:
+        source_of_truth_conflict = "NOT_EVALUATED"
+    else:
+        source_of_truth_conflict = UNKNOWN
 
     generator_sha = _sha256_file(Path(__file__))
 
