@@ -25,6 +25,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from context.five_min_feed import normalize_minutes
 from journal.journal_logger import JournalLogger
 from ops.live_box_guard import PROOF_CRITICAL_RUNTIME_OVERRIDES, live_box_drift_report
 
@@ -51,15 +52,22 @@ _VERDICT_MAP = {
     "WAIT": "WAIT",
     "RESEARCH ONLY": "WAIT",
     "BROKEN": "BROKEN",
+    "BROKEN FOR CURRENT SYSTEM RISK CONSTRAINTS": "BROKEN",
     "RETIRE": "BROKEN",
+    "OVERFIT": "OVERFIT",
 }
 
 # risk_rules.yaml `strategy.enabled_concepts` key -> Strategy_Inventory.md
 # master-table row label, per instrument. Hand-maintained on purpose: a
 # concept/instrument absent here reports evidence classification UNKNOWN
 # instead of guessing a match. Verified against the doc on 2026-07-27 --
-# orb_rejection and strat_122 have NO row in Strategy_Inventory.md today, so
-# they are deliberately omitted (falls through to UNKNOWN + a blocker).
+# orb_rejection has NO row in Strategy_Inventory.md today, so it is
+# deliberately omitted (falls through to UNKNOWN + a blocker). strat_122 and
+# the split 4HR Re-Trigger (MNQ)/(MES) rows are pending in PR #369 (open,
+# unmerged as of this writing) -- mapped here ahead of that merge using #369's
+# exact row text, so this resolves automatically once #369 lands instead of
+# needing a second follow-up PR; until then these correctly report UNKNOWN
+# (no matching row exists on main yet).
 CONCEPT_TO_INVENTORY_ROW: dict[str, dict[str, str]] = {
     "orb_reclaim": {"MES": "ORB Reclaim (MES)", "MNQ": "ORB Reclaim (MNQ)"},
     "orb_breakout": {"MNQ": "ORB Breakout (MNQ)"},
@@ -68,9 +76,72 @@ CONCEPT_TO_INVENTORY_ROW: dict[str, dict[str, str]] = {
     "vwap_rejection": {"MES": "VWAP Rejection", "MNQ": "VWAP Rejection"},
     "pdh_reclaim": {"MES": "PDH Reclaim", "MNQ": "PDH Reclaim"},
     "pdl_reclaim": {"MES": "PDL Reclaim", "MNQ": "PDL Reclaim"},
-    "strat_4hr_retrigger": {"MES": "4HR Re-Trigger", "MNQ": "4HR Re-Trigger"},
+    "strat_4hr_retrigger": {"MNQ": "4HR Re-Trigger (MNQ)", "MES": "4HR Re-Trigger (MES)"},
     "strat_322_first_live": {"MNQ": "60M 3-2-2 First Live"},
+    "strat_122": {"MES": "MES 1-2-2 (`strat_122`)"},  # pending #369
 }
+
+# Env-gated proof-mode lanes (not in risk_rules.enabled_concepts) -> their
+# Strategy_Inventory.md row, keyed by the *_MODE env var name. Same
+# UNKNOWN-first contract as CONCEPT_TO_INVENTORY_ROW above.
+ENV_CONCEPT_TO_INVENTORY_ROW: dict[str, dict[str, str]] = {
+    "MNQ_ORB_BREAKOUT_INVERSE_MODE": {"MNQ": "ORB Breakout — inverted (MNQ, paper-only lane)"},  # pending #369
+}
+
+# Execution context for env-gated lanes that is provable directly from the
+# lane's OWN source module (hardcoded constants, not env-configurable) rather
+# than the shared Tradovate broker's global env config. Only lanes verified
+# against their actual implementation belong here -- everything else stays
+# UNKNOWN in build_env_gated_lanes rather than guessing it mirrors the
+# Tradovate path (most proof/observe lanes do NOT: they force PaperBroker).
+ENV_LANE_EXECUTION_CONTEXT: dict[str, dict[str, Any]] = {
+    "MNQ_ORB_BREAKOUT_INVERSE_MODE": {
+        "active_value": "paper_sim",
+        "broker": "PaperBroker",
+        "entry_model": "marketable_ioc",
+        "entry_tolerance_ticks": {"MNQ": 8.0},
+        "contracts": {"MNQ": 1},
+        "source": "context/mnq_orb_breakout_inverse_paper.py (MARKETABLE_TICKS, CONTRACTS)",
+    },
+}
+
+# Per-concept required decision timeframe (minutes), used for the feed-
+# liveness check. Deliberately conservative: only concepts with an explicit,
+# sourced timeframe claim override the system-wide default
+# (config.expected_timeframe_minutes / PRIMARY_DECISION_TF, default 15).
+# strat_4hr_retrigger is confirmed 5m-native per risk_rules.yaml's own comment
+# ("Canonical 5m-native detector (PR #317/#334)"), not a 4-hour bar despite
+# the name.
+REQUIRED_DECISION_MINUTES_BY_CONCEPT: dict[str, tuple[int, ...]] = {
+    "strat_4hr_retrigger": (5,),
+}
+
+
+def _default_decision_minutes(rules: dict[str, Any], env: dict[str, str]) -> int:
+    """Mirror config.settings.load_config's expected_timeframe_minutes
+    resolution (env override, then risk_rules.yaml, then 15)."""
+    raw = env.get("PRIMARY_DECISION_TF") or env.get("EXPECTED_TIMEFRAME_MINUTES")
+    if raw:
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            pass
+    data_quality = rules.get("data_quality") or {}
+    try:
+        return int(data_quality.get("expected_timeframe_minutes", 15))
+    except (TypeError, ValueError):
+        return 15
+
+
+def _required_decision_minutes(active_concepts: set, default_minutes: int) -> tuple[int, ...]:
+    """Union of each active concept's required decision timeframe(s) for this
+    instrument -- e.g. an instrument running both a 15m-default concept and
+    strat_4hr_retrigger (5m-native) is checked on BOTH 5m and 15m, not just
+    one blanket timeframe for every instrument."""
+    minutes: set = set()
+    for concept in active_concepts:
+        minutes.update(REQUIRED_DECISION_MINUTES_BY_CONCEPT.get(concept, (default_minutes,)))
+    return tuple(sorted(minutes)) or (default_minutes,)
 
 # Legitimate NO_TRADE reasons -- absence of a valid setup, market/session
 # state, or a risk/limit boundary. Matched as a case-insensitive substring so
@@ -97,17 +168,16 @@ _SYSTEM_FAILURE_NO_TRADE_PATTERNS = (
     "feed_gap", "feed gap", "malformed",
 )
 
-# Timeframes a lane's feed liveness is checked against. Minutes-per-bar plus
-# the staleness ceiling before a bar is considered gapped/stale (session-aware
-# thresholds live in ops/feed_gap_alarm.py; this reuses the same 31-minute
-# floor for the 15m tier and scales proportionally for the others).
-_LIVENESS_TIMEFRAMES = {
-    "5m": (5, 11),
-    "15m": (15, 31),
-    "30m": (30, 61),
-    "1h": (60, 91),
-    "4h": (240, 271),
-}
+# Staleness ceiling (minutes) per bar interval before that interval is
+# considered gapped/stale. Keyed by MINUTES, not a display label, because
+# context.bar_history stores a mixed-timeframe stream per instrument/day (see
+# BarHistory._path_for -- one file holds every timeframe) and the only way to
+# tell them apart is each record's own `timeframe` field (parsed via
+# context.five_min_feed.normalize_minutes). Session-aware thresholds live in
+# ops/feed_gap_alarm.py; this reuses its 31-minute floor for the 15m tier and
+# scales proportionally for the others.
+_LIVENESS_STALENESS_CEILING_BY_MINUTES = {5: 11, 15: 31, 30: 61, 60: 91, 240: 271}
+_MINUTES_TO_LABEL = {5: "5m", 15: "15m", 30: "30m", 60: "1h", 240: "4h"}
 
 
 def _sha256_text(text: str) -> str:
@@ -175,7 +245,35 @@ def parse_strategy_inventory(markdown_text: str) -> dict[str, Any]:
         if name and verdict_raw:
             rows[name] = verdict_raw
 
-    return {"last_updated": last_updated, "rows": rows}
+    sections: dict[str, str] = {}
+    heading_re = re.compile(r"^### (.+?)\s*$", re.MULTILINE)
+    headings = list(heading_re.finditer(markdown_text))
+    for i, heading in enumerate(headings):
+        section_name = heading.group(1).strip()
+        start = heading.end()
+        end = headings[i + 1].start() if i + 1 < len(headings) else len(markdown_text)
+        sections[section_name] = markdown_text[start:end]
+
+    return {"last_updated": last_updated, "rows": rows, "sections": sections}
+
+
+_EVIDENCE_EPOCH_RE = re.compile(r"[Ff]orward evidence epoch:\s*([0-9TZ:.+-]+)")
+
+
+def _extract_evidence_epoch(sections: dict[str, str], row_name: str | None) -> str | None:
+    """A per-lane forward-evidence epoch is only provable when the doc's own
+    prose profile for this exact row states one explicitly (e.g. "Forward
+    evidence epoch: 2026-07-27T04:19:13Z") -- the document's top-level "Last
+    updated" date is a DIFFERENT concept (when the doc was last edited, not
+    when this lane's forward evidence window opened) and must never be
+    substituted here. No match -> caller reports UNKNOWN, never a guess."""
+    if not row_name:
+        return None
+    section_text = sections.get(row_name)
+    if not section_text:
+        return None
+    match = _EVIDENCE_EPOCH_RE.search(section_text)
+    return match.group(1) if match else None
 
 
 def _normalize_verdict(verdict_raw: str) -> str:
@@ -198,58 +296,82 @@ def build_strategy_evidence(
     enabled_concepts: list[str],
     instruments: list[str],
     disabled_concepts_per_instrument: dict[str, list[str]],
+    env_gated_active: list[tuple[str, str, str]] | None = None,
 ) -> list[dict[str, Any]]:
-    """Evidence-classification row per (strategy concept, instrument) that is
-    actually eligible to fire (enabled and not per-instrument-disabled)."""
+    """Evidence-classification row per TRACKED (strategy concept, instrument)
+    pair -- every enabled concept x instrument, whether or not it is currently
+    eligible to fire. A per-instrument exclusion (e.g. MES strat_4hr_retrigger,
+    OVERFIT) must stay VISIBLE with `eligible: False` and its exclusion
+    reason, not disappear from the registry -- an excluded strategy is exactly
+    the kind of state this snapshot exists to surface. `env_gated_active` adds
+    rows for active (name, instrument, value) proof-mode lanes that live
+    outside risk_rules.yaml entirely.
+    """
     parsed = (
-        parse_strategy_inventory(inventory_markdown) if inventory_markdown else {"last_updated": None, "rows": {}}
+        parse_strategy_inventory(inventory_markdown) if inventory_markdown
+        else {"last_updated": None, "rows": {}, "sections": {}}
     )
     rows = parsed["rows"]
+    sections = parsed["sections"]
     evidence_date = parsed["last_updated"]
+
+    def _row(strategy: str, instrument: str, row_name: str | None, *, eligible: bool, exclusion_reason: str | None) -> dict[str, Any]:
+        verdict_raw = rows.get(row_name) if row_name else None
+        return {
+            "strategy": strategy,
+            "instrument": instrument,
+            "eligible": eligible,
+            "exclusion_reason": exclusion_reason,
+            "classification": _normalize_verdict(verdict_raw) if verdict_raw else UNKNOWN,
+            "classification_raw": verdict_raw or UNKNOWN,
+            "classification_source": (
+                "docs/strategy-rules/Strategy_Inventory.md" if verdict_raw else UNKNOWN
+            ),
+            "inventory_row_matched": row_name,
+            "evidence_date": evidence_date if verdict_raw else None,
+            "research_status": UNKNOWN,
+            "runtime_parity_status": UNKNOWN,
+            "paper_forward_status": UNKNOWN,
+            "latest_valid_evidence_ref": (
+                f"docs/strategy-rules/Strategy_Inventory.md#{row_name}" if row_name else None
+            ),
+            "evidence_sha": None,
+            "candidate_count": None,
+            "executable_candidate_count": None,
+            "fill_count": None,
+            "net_pnl": None,
+            "profit_factor": None,
+            "h1_h2_status": None,
+            "max_drawdown": None,
+            "current_blocker": (
+                None if row_name and verdict_raw else
+                "no Strategy_Inventory.md row mapped for this strategy/instrument"
+            ),
+            "notes": UNKNOWN if not verdict_raw else "",
+            "pending_reconciliation": False,
+            "source_of_truth_conflict": False,
+            "conflicting_sources": [],
+        }
 
     out: list[dict[str, Any]] = []
     for concept in enabled_concepts:
         row_map = CONCEPT_TO_INVENTORY_ROW.get(concept, {})
         for instrument in instruments:
-            if concept in (disabled_concepts_per_instrument.get(instrument) or []):
-                continue
-            row_name = row_map.get(instrument)
-            verdict_raw = rows.get(row_name) if row_name else None
-            entry: dict[str, Any] = {
-                "strategy": concept,
-                "instrument": instrument,
-                "classification": _normalize_verdict(verdict_raw) if verdict_raw else UNKNOWN,
-                "classification_raw": verdict_raw or UNKNOWN,
-                "classification_source": (
-                    "docs/strategy-rules/Strategy_Inventory.md"
-                    if verdict_raw else UNKNOWN
-                ),
-                "inventory_row_matched": row_name,
-                "evidence_date": evidence_date if verdict_raw else None,
-                "research_status": UNKNOWN,
-                "runtime_parity_status": UNKNOWN,
-                "paper_forward_status": UNKNOWN,
-                "latest_valid_evidence_ref": (
-                    f"docs/strategy-rules/Strategy_Inventory.md#{row_name}" if row_name else None
-                ),
-                "evidence_sha": None,
-                "candidate_count": None,
-                "executable_candidate_count": None,
-                "fill_count": None,
-                "net_pnl": None,
-                "profit_factor": None,
-                "h1_h2_status": None,
-                "max_drawdown": None,
-                "current_blocker": (
-                    None if row_name and verdict_raw else
-                    "no Strategy_Inventory.md row mapped for this strategy/instrument"
-                ),
-                "notes": UNKNOWN if not verdict_raw else "",
-                "pending_reconciliation": False,
-                "source_of_truth_conflict": False,
-                "conflicting_sources": [],
-            }
-            out.append(entry)
+            excluded = concept in (disabled_concepts_per_instrument.get(instrument) or [])
+            out.append(
+                _row(
+                    concept, instrument, row_map.get(instrument),
+                    eligible=not excluded,
+                    exclusion_reason="disabled_concepts_per_instrument" if excluded else None,
+                )
+            )
+
+    for name, instrument, value in (env_gated_active or []):
+        row_map = ENV_CONCEPT_TO_INVENTORY_ROW.get(name, {})
+        out.append(
+            _row(name, instrument, row_map.get(instrument), eligible=True, exclusion_reason=None)
+        )
+
     return out
 
 
@@ -265,8 +387,25 @@ def build_runtime_lanes(
     schedule_mode: str,
     contracts_by_instrument: dict[str, int] | None,
     repo_commit: str | None,
-    evidence_epoch: str | None,
+    evidence_epoch_lookup,
 ) -> list[dict[str, Any]]:
+    """Only ELIGIBLE lanes (enabled and not per-instrument-excluded) -- these
+    actually route orders. `evidence_epoch_lookup(concept, instrument)` must
+    return the lane's OWN forward-evidence epoch or UNKNOWN; it must never be
+    the Strategy_Inventory.md document's "Last updated" date, which describes
+    when the doc was edited, not when this lane's evidence window opened.
+
+    entry_fill_model/entry_tolerance_ticks_by_root are genuinely GLOBAL here,
+    not a per-lane approximation: every concept below routes through the SAME
+    Tradovate broker instance, which reads TRADOVATE_ENTRY_EXECUTION_MODE and
+    ENTRY_SLIPPAGE_TOLERANCE_TICKS_<ROOT> once per instrument regardless of
+    which strategy generated the signal (execution/tradovate_broker.py has no
+    per-strategy override) -- sharing them across concepts on the same
+    instrument is not an approximation, it is what the broker actually does.
+    Lanes that do NOT share this path (env-gated PaperBroker-only proof/paper
+    lanes) are reported separately by build_env_gated_lanes with their own,
+    independently-resolved execution context.
+    """
     contracts_by_instrument = contracts_by_instrument or {}
     lanes: list[dict[str, Any]] = []
     for concept in enabled_concepts:
@@ -280,11 +419,12 @@ def build_runtime_lanes(
                     "instrument": instrument,
                     "runtime_state": "paper_forward" if schedule_mode == "current" else schedule_mode,
                     "gate_source": "risk_rules.strategy.enabled_concepts",
+                    "broker": "tradovate",
                     "entry_model": entry_fill_model if entry_fill_model else UNKNOWN,
                     "entry_tolerance_ticks": tolerance if tolerance is not None else UNKNOWN,
                     "contracts": contracts_by_instrument.get(instrument, 1),
                     "schedule_mode": schedule_mode,
-                    "evidence_epoch": evidence_epoch,
+                    "evidence_epoch": evidence_epoch_lookup(concept, instrument),
                     "current_runtime_sha": repo_commit or UNKNOWN,
                     "expected_evidence_sha": UNKNOWN,
                     "drift_status": UNKNOWN,
@@ -293,34 +433,79 @@ def build_runtime_lanes(
     return lanes
 
 
-def build_env_gated_lanes(env: dict[str, str]) -> list[dict[str, Any]]:
-    """Runtime lanes gated by a PROOF_CRITICAL_RUNTIME_OVERRIDES *_MODE env
-    flag rather than risk_rules.yaml enabled_concepts (e.g. proof-mode evidence
-    trackers under execution/). Only reports flags that are currently active
-    (truthy) -- an unset/false flag is not a runtime lane."""
-    lanes: list[dict[str, Any]] = []
+# *_MODE values that do NOT actually route an order. "off"/"legacy"/""/"0"/
+# "false" mean the flag is unset; "observe_only" is the proof-mode contract's
+# own audit-only value (context/mnq_orb_breakout_inverse_paper.py and its
+# siblings: "observe_only cannot create" a position) -- real per module, not
+# a guess, but still not a trading lane. Anything else (paper_sim,
+# tradovate_demo, ...) is treated as active.
+_ENV_MODE_INERT_VALUES = {"", "0", "false", "off", "legacy", "observe_only"}
+
+
+def active_env_gated_flags(env: dict[str, str]) -> list[tuple[str, str, str]]:
+    """(env_name, instrument, value) for every PROOF_CRITICAL_RUNTIME_OVERRIDES
+    *_MODE flag currently set to a value that actually routes an order."""
+    out: list[tuple[str, str, str]] = []
     for name in PROOF_CRITICAL_RUNTIME_OVERRIDES:
         if not name.endswith("_MODE"):
             continue
-        value = env.get(name)
-        if not value or value.strip().lower() in ("", "0", "false", "off", "legacy"):
+        raw = env.get(name)
+        value = (raw or "").strip().lower()
+        if value in _ENV_MODE_INERT_VALUES:
             continue
         instrument = "MNQ" if name.startswith("MNQ_") else "MES" if name.startswith("MES_") else UNKNOWN
+        out.append((name, instrument, value))
+    return out
+
+
+def build_env_gated_lanes(env: dict[str, str], *, evidence_epoch_lookup=None) -> list[dict[str, Any]]:
+    """Runtime lanes gated by a PROOF_CRITICAL_RUNTIME_OVERRIDES *_MODE env
+    flag rather than risk_rules.yaml enabled_concepts (e.g. proof-mode evidence
+    trackers under execution/, or the frozen inverse-ORB paper lane). Only
+    lanes actually routing an order are included (see
+    _ENV_MODE_INERT_VALUES) -- an `observe_only` flag is audit-only, not a
+    runtime lane. Execution context (broker/entry_model/tolerance/contracts)
+    is resolved from ENV_LANE_EXECUTION_CONTEXT when the lane's OWN source
+    module documents it; otherwise it stays UNKNOWN rather than inheriting the
+    unrelated global Tradovate config -- most of these lanes force PaperBroker
+    and do NOT share the Tradovate path at all.
+    """
+    evidence_epoch_lookup = evidence_epoch_lookup or (lambda name, instrument: UNKNOWN)
+    lanes: list[dict[str, Any]] = []
+    for name, instrument, value in active_env_gated_flags(env):
+        verified = ENV_LANE_EXECUTION_CONTEXT.get(name)
+        if verified and value == verified.get("active_value"):
+            broker = verified["broker"]
+            entry_model = verified["entry_model"]
+            tolerance = verified["entry_tolerance_ticks"].get(instrument, UNKNOWN)
+            contracts = verified["contracts"].get(instrument, UNKNOWN)
+            source_note = f"execution context verified from {verified['source']}"
+        else:
+            broker = UNKNOWN
+            entry_model = UNKNOWN
+            tolerance = UNKNOWN
+            contracts = UNKNOWN
+            source_note = (
+                f"env-gated proof-mode flag {name}={value!r}; no verified execution-context "
+                "source for this lane in ENV_LANE_EXECUTION_CONTEXT (most proof/observe lanes "
+                "force PaperBroker with their own per-order overrides, not the global Tradovate config)"
+            )
         lanes.append(
             {
                 "strategy": name,
                 "instrument": instrument,
                 "runtime_state": "env_gated_active",
                 "gate_source": f"env:{name}",
-                "entry_model": UNKNOWN,
-                "entry_tolerance_ticks": UNKNOWN,
-                "contracts": UNKNOWN,
+                "broker": broker,
+                "entry_model": entry_model,
+                "entry_tolerance_ticks": tolerance,
+                "contracts": contracts,
                 "schedule_mode": UNKNOWN,
-                "evidence_epoch": None,
+                "evidence_epoch": evidence_epoch_lookup(name, instrument),
                 "current_runtime_sha": UNKNOWN,
                 "expected_evidence_sha": UNKNOWN,
                 "drift_status": UNKNOWN,
-                "notes": f"env-gated proof-mode flag {name}={value!r}; no Strategy_Inventory.md row mapping exists for env-gated lanes",
+                "notes": source_note,
             }
         )
     return lanes
@@ -341,25 +526,57 @@ def _classify_no_trade_reason(reason: str | None) -> tuple[str | None, bool | No
     return reason, None  # unrecognized reason text -- neither confirmed healthy nor confirmed a failure
 
 
+_FEED_LOOKBACK_BARS = 2000  # generous: several days of 5m bars for one instrument, mixed-timeframe
+
+
+def _bucket_bars_by_minutes(bars: list[dict]) -> dict[int, list[dict]]:
+    """Split a mixed-timeframe bar stream by each record's own `timeframe`
+    field (context.bar_history stores every timeframe in one per-instrument-
+    per-day file -- see BarHistory._path_for). Bars with an unparseable or
+    missing `timeframe` are dropped rather than guessed into a bucket, since a
+    5m bar silently counted as 15m (or vice versa) is exactly the failure mode
+    this function exists to prevent."""
+    buckets: dict[int, list[dict]] = {}
+    for bar in bars:
+        minutes = normalize_minutes(bar.get("timeframe"))
+        if minutes is None:
+            continue
+        buckets.setdefault(minutes, []).append(bar)
+    return buckets
+
+
 def build_feed_liveness(
     bar_history: Any,
     instrument: str,
     *,
     for_date: date,
     now: datetime,
-    required_timeframes: tuple[str, ...] = ("5m", "15m"),
+    required_minutes: tuple[int, ...] = (5, 15),
 ) -> dict[str, Any]:
     """Per-instrument feed liveness across the timeframes this lane actually
-    needs. `bar_history` is a context.bar_history.BarHistory instance (or any
-    object exposing `.last_bar(instrument, timeframe_minutes=..., for_date=...)`
-    -- injected so this stays testable without real files)."""
+    needs, each checked against the bars ACTUALLY LABELED that timeframe --
+    never a blanket "last bar received, whatever timeframe it happened to be."
+    A fresh 15m bar must not be able to paper over a stale 5m feed, or vice
+    versa.
+
+    `bar_history` is a context.bar_history.BarHistory instance (or any object
+    exposing `.recent(instrument, n, for_date=..., lookback_days=...)` --
+    injected so this stays testable without real files). Timeframes this
+    instrument's bar file has never recorded at all (bucket is empty) are
+    reported stale, not silently skipped.
+    """
+    try:
+        bars = bar_history.recent(instrument, _FEED_LOOKBACK_BARS, for_date=for_date, lookback_days=3)
+    except Exception:
+        bars = []
+    buckets = _bucket_bars_by_minutes(bars)
+
     out: dict[str, Any] = {}
-    for tf_name in required_timeframes:
-        minutes, staleness_ceiling = _LIVENESS_TIMEFRAMES[tf_name]
-        try:
-            bar = bar_history.last_bar(instrument, for_date=for_date)
-        except Exception:
-            bar = None
+    for minutes in required_minutes:
+        staleness_ceiling = _LIVENESS_STALENESS_CEILING_BY_MINUTES.get(minutes, minutes * 2 + 1)
+        label = _MINUTES_TO_LABEL.get(minutes, f"{minutes}m")
+        tf_bars = buckets.get(minutes) or []
+        bar = tf_bars[-1] if tf_bars else None
         ts_raw = (bar or {}).get("ts")
         age_minutes = None
         if ts_raw:
@@ -371,7 +588,9 @@ def build_feed_liveness(
             except ValueError:
                 age_minutes = None
         stale = age_minutes is None or age_minutes > staleness_ceiling
-        out[tf_name] = {
+        out[label] = {
+            "minutes": minutes,
+            "bars_seen_this_timeframe": len(tf_bars),
             "last_bar_ts": ts_raw,
             "staleness_minutes": round(age_minutes, 1) if age_minutes is not None else None,
             "staleness_ceiling_minutes": staleness_ceiling,
@@ -704,17 +923,38 @@ def build_system_status_snapshot(
     if inventory_markdown is None:
         mark_unknown("strategy_evidence")
 
+    parsed_inventory = (
+        parse_strategy_inventory(inventory_markdown) if inventory_markdown
+        else {"last_updated": None, "rows": {}, "sections": {}}
+    )
+    env_gated_active = active_env_gated_flags(env)
+
+    def _concept_evidence_epoch(concept: str, instrument: str) -> str:
+        row_name = CONCEPT_TO_INVENTORY_ROW.get(concept, {}).get(instrument)
+        epoch = _extract_evidence_epoch(parsed_inventory["sections"], row_name)
+        if epoch is None:
+            mark_unknown(f"runtime_lanes[{concept}/{instrument}].evidence_epoch")
+            return UNKNOWN
+        return epoch
+
+    def _env_evidence_epoch(name: str, instrument: str) -> str:
+        row_name = ENV_CONCEPT_TO_INVENTORY_ROW.get(name, {}).get(instrument)
+        epoch = _extract_evidence_epoch(parsed_inventory["sections"], row_name)
+        if epoch is None:
+            mark_unknown(f"runtime_lanes[{name}/{instrument}].evidence_epoch")
+            return UNKNOWN
+        return epoch
+
     strategy_evidence = build_strategy_evidence(
         inventory_markdown,
         enabled_concepts=enabled_concepts,
         instruments=instruments,
         disabled_concepts_per_instrument=disabled_per_instrument,
+        env_gated_active=env_gated_active,
     )
     for row in strategy_evidence:
         if row["classification"] == UNKNOWN:
             mark_unknown(f"strategy_evidence[{row['strategy']}/{row['instrument']}].classification")
-
-    parsed_inventory = parse_strategy_inventory(inventory_markdown) if inventory_markdown else {"last_updated": None}
 
     runtime_lanes = build_runtime_lanes(
         enabled_concepts=enabled_concepts,
@@ -725,22 +965,32 @@ def build_system_status_snapshot(
         schedule_mode=schedule_mode,
         contracts_by_instrument=None,
         repo_commit=drift.get("commit"),
-        evidence_epoch=parsed_inventory.get("last_updated"),
+        evidence_epoch_lookup=_concept_evidence_epoch,
     )
-    runtime_lanes += build_env_gated_lanes(env)
+    runtime_lanes += build_env_gated_lanes(env, evidence_epoch_lookup=_env_evidence_epoch)
 
     # ── trade chain + liveness ───────────────────────────────────────────
     journal = JournalLogger(log_dir=str(log_path))
     entries = journal.read_day(the_date)
     journal_file = log_path / f"journal_{the_date.isoformat()}.jsonl"
 
+    default_decision_minutes = _default_decision_minutes(rules, env)
+    active_concepts_by_instrument: dict[str, set] = {}
+    for lane in runtime_lanes:
+        instr = lane.get("instrument")
+        if instr in instruments:
+            active_concepts_by_instrument.setdefault(instr, set()).add(lane["strategy"])
+
     feed_liveness_by_instrument: dict[str, Any] = {}
     try:
         from context.bar_history import BarHistory
         bar_history = BarHistory(log_dir=str(log_path))
         for instrument in instruments:
+            required_minutes = _required_decision_minutes(
+                active_concepts_by_instrument.get(instrument, set()), default_decision_minutes
+            )
             feed_liveness_by_instrument[instrument] = build_feed_liveness(
-                bar_history, instrument, for_date=the_date, now=now
+                bar_history, instrument, for_date=the_date, now=now, required_minutes=required_minutes
             )
     except Exception:
         mark_unknown("trade_chain.liveness.feed")
