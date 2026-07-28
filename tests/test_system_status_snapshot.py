@@ -19,7 +19,12 @@ import pytest
 
 from ops.system_status_snapshot import (
     ALLOWED_CLASSIFICATIONS,
+    CONTRACTS_BASIS_JOURNAL,
+    CONTRACTS_BASIS_STATIC,
+    REQUIRED_DECISION_MINUTES_BY_CONCEPT,
     UNKNOWN,
+    _effective_entry_model,
+    _required_decision_minutes,
     _runtime_state_for,
     active_env_gated_flags,
     build_env_gated_lanes,
@@ -33,7 +38,9 @@ from ops.system_status_snapshot import (
     market_open,
     parse_strategy_inventory,
     permission_status_lookup,
+    resolve_broker,
     resolve_effective_contracts,
+    resolve_execution_mode_and_tolerance,
     validate_snapshot_schema,
     write_snapshot_atomic,
 )
@@ -260,10 +267,12 @@ def _lanes(**overrides):
         enabled_concepts=["orb_reclaim"],
         instruments=["MES"],
         disabled_concepts_per_instrument={},
+        broker="tradovate",
         execution_mode="legacy",
         entry_tolerance_ticks_by_root={"MES": 16.0},
         schedule_mode="current",
         contracts_lookup=lambda instrument: 1,
+        contracts_basis=CONTRACTS_BASIS_STATIC,
         repo_commit="deadbeef",
         evidence_epoch_lookup=lambda concept, instrument: UNKNOWN,
         permission_status_lookup_fn=_ALWAYS_ELIGIBLE,
@@ -313,6 +322,89 @@ def test_effective_entry_model_legacy_with_zero_tolerance_is_market():
 def test_effective_entry_model_non_legacy_mode_passes_through():
     lanes = _lanes(execution_mode="marketable_limit", entry_tolerance_ticks_by_root={"MES": 8.0})
     assert lanes[0]["effective_entry_model"] == "marketable_limit"
+
+
+def test_effective_entry_model_paperbroker_passes_through_unambiguously():
+    """PaperBroker has no "legacy" mode at all -- its entry_fill_model values
+    are already explicit, so the legacy-ambiguity resolution must not apply."""
+    assert _effective_entry_model("legacy", 16.0, "paperbroker") == "legacy"
+    assert _effective_entry_model("market", 0.0, "paperbroker") == "market"
+
+
+# ── broker resolution (BLOCKER: must follow the real BROKER env path) ───────
+
+def test_resolve_broker_defaults_to_paperbroker():
+    """webhook/runner.py::_make_broker's real default is "paper" -> PaperBroker,
+    not Tradovate -- the snapshot must never assume Tradovate."""
+    assert resolve_broker({}) == "paperbroker"
+    assert resolve_broker({"BROKER": "paper"}) == "paperbroker"
+
+
+def test_resolve_broker_tradovate_only_on_exact_env_value():
+    assert resolve_broker({"BROKER": "tradovate"}) == "tradovate"
+    assert resolve_broker({"BROKER": "Tradovate"}) == "tradovate"  # case-insensitive, matches os.getenv(...).strip().lower()
+
+
+def test_resolve_execution_mode_and_tolerance_tradovate_unset_tolerance_defaults_to_zero():
+    """execution/tradovate_broker.py::_entry_slippage_tolerance_ticks's REAL
+    unset-default is 0.0 (Market entry) -- not the PaperBroker-style 16/32
+    fallback. Regression guard for the exact bug."""
+    mode, tolerance = resolve_execution_mode_and_tolerance({}, ["MES", "MNQ"], broker="tradovate")
+    assert mode == "legacy"
+    assert tolerance == {"MES": 0.0, "MNQ": 0.0}
+
+
+def test_resolve_execution_mode_and_tolerance_paperbroker_unset_tolerance_uses_box_defaults():
+    """config/settings.py::_entry_tolerance_map's fallback (MES=16/MNQ=32)
+    applies to the OFFLINE PaperBroker path, not Tradovate."""
+    mode, tolerance = resolve_execution_mode_and_tolerance({}, ["MES", "MNQ"], broker="paperbroker")
+    assert mode == "market"
+    assert tolerance == {"MES": 16.0, "MNQ": 32.0}
+
+
+def test_resolve_execution_mode_and_tolerance_respects_explicit_env_tolerance_either_broker():
+    mode, tolerance = resolve_execution_mode_and_tolerance(
+        {"ENTRY_SLIPPAGE_TOLERANCE_TICKS_MES": "4"}, ["MES"], broker="tradovate",
+    )
+    assert tolerance == {"MES": 4.0}
+
+
+def test_resolve_execution_mode_and_tolerance_reads_correct_mode_env_per_broker():
+    tradovate_mode, _ = resolve_execution_mode_and_tolerance(
+        {"TRADOVATE_ENTRY_EXECUTION_MODE": "ioc_limit", "ENTRY_FILL_MODEL": "stop_market"}, ["MES"], broker="tradovate",
+    )
+    paperbroker_mode, _ = resolve_execution_mode_and_tolerance(
+        {"TRADOVATE_ENTRY_EXECUTION_MODE": "ioc_limit", "ENTRY_FILL_MODEL": "stop_market"}, ["MES"], broker="paperbroker",
+    )
+    assert tradovate_mode == "ioc_limit"       # TRADOVATE_ENTRY_EXECUTION_MODE governs the Tradovate path
+    assert paperbroker_mode == "stop_market"   # ENTRY_FILL_MODEL governs the PaperBroker path -- different env var entirely
+
+
+def test_build_system_status_snapshot_broker_paper_env_reports_paperbroker_not_tradovate(tmp_path):
+    """Required regression case: BROKER=paper (or unset) must never report
+    "tradovate" for an ordinary risk_rules lane."""
+    repo = _build_repo(tmp_path)
+    snapshot = build_system_status_snapshot(repo_root=repo, log_dir="logs", env={"BROKER": "paper"})
+    lane = next(lane for lane in snapshot["runtime_lanes"] if lane["gate_source"].startswith("risk_rules"))
+    assert lane["broker"] == "paperbroker"
+    assert lane["execution_mode"] == "market"  # ENTRY_FILL_MODEL default, not TRADOVATE_ENTRY_EXECUTION_MODE's "legacy"
+
+
+def test_build_system_status_snapshot_broker_tradovate_env_reports_tradovate(tmp_path):
+    repo = _build_repo(tmp_path)
+    snapshot = build_system_status_snapshot(repo_root=repo, log_dir="logs", env={"BROKER": "tradovate"})
+    lane = next(lane for lane in snapshot["runtime_lanes"] if lane["gate_source"].startswith("risk_rules"))
+    assert lane["broker"] == "tradovate"
+    assert lane["execution_mode"] == "legacy"
+
+
+# ── contracts provenance ─────────────────────────────────────────────────────
+
+def test_runtime_lane_reports_contracts_basis():
+    lanes = _lanes(contracts_basis=CONTRACTS_BASIS_JOURNAL)
+    assert lanes[0]["contracts_basis"] == CONTRACTS_BASIS_JOURNAL
+    lanes = _lanes(contracts_basis=CONTRACTS_BASIS_STATIC)
+    assert lanes[0]["contracts_basis"] == CONTRACTS_BASIS_STATIC
 
 
 # ── strategy_permission_gate incorporated into runtime eligibility ──────────
@@ -559,6 +651,40 @@ def test_traded_diagnosis_when_a_trade_decision_exists():
     assert result["diagnosis"] == "TRADED"
 
 
+# ── market-closed must not read as a system failure (BLOCKER) ───────────────
+
+_MARKET_CLOSED_FEED = {"5m": {"last_bar_ts": None, "stale": False, "market_open": False}}
+_MARKET_OPEN_FEED = {"5m": {"last_bar_ts": "t", "stale": False, "market_open": True}}
+
+
+def test_market_closed_zero_decisions_is_not_system_failure():
+    """Required regression case: Saturday + zero decisions must NOT report
+    NO_TRADE_SYSTEM_FAILURE -- build_feed_liveness already proved the feed
+    isn't stale on a closed market; this proves the DIAGNOSIS layer honors
+    that instead of independently re-deciding "no evaluation = fault"."""
+    result = classify_no_trade_liveness(instrument="MNQ", entries=[], feed_liveness=_MARKET_CLOSED_FEED)
+    assert result["diagnosis"] == "MARKET_CLOSED"
+    assert result["diagnosis"] != "NO_TRADE_SYSTEM_FAILURE"
+    assert result["expected_evaluation"] is False
+
+
+def test_market_open_zero_decisions_is_still_system_failure():
+    """The market-closed carve-out must not swallow a REAL failure -- zero
+    decisions while the market is open (per feed_liveness) stays a fault."""
+    result = classify_no_trade_liveness(instrument="MNQ", entries=[], feed_liveness=_MARKET_OPEN_FEED)
+    assert result["diagnosis"] == "NO_TRADE_SYSTEM_FAILURE"
+    assert result["expected_evaluation"] is True
+
+
+def test_market_open_unknown_defaults_to_expecting_evaluation():
+    """When feed_liveness carries no market_open signal at all (e.g. an older
+    caller), absence of proof of closure must not manufacture a MARKET_CLOSED
+    verdict -- stay conservative and keep the existing failure behavior."""
+    result = classify_no_trade_liveness(instrument="MNQ", entries=[], feed_liveness=_HEALTHY_FEED)
+    assert result["market_open"] is None
+    assert result["diagnosis"] == "NO_TRADE_SYSTEM_FAILURE"
+
+
 class _FakeBarHistory:
     """Mirrors context.bar_history.BarHistory's real read interface -- a flat,
     mixed-timeframe bar list per instrument/day, exactly like the real
@@ -628,6 +754,36 @@ def test_feed_liveness_fresh_15m_bar_cannot_mask_stale_5m_feed():
     )
     assert liveness["5m"]["stale"] is True
     assert liveness["15m"]["stale"] is False
+
+
+# ── required-timeframe resolution (BLOCKER: strat_322_first_live is 5m-native) ─
+
+def test_strat_322_first_live_requires_5m_per_risk_rules_yaml_comment():
+    """risk_rules.yaml documents strat_322_first_live with the SAME "Canonical
+    5m-native ... 5-minute entry-recovery fidelity" wording as
+    strat_4hr_retrigger -- both must require 5m, not the 15m system default."""
+    assert REQUIRED_DECISION_MINUTES_BY_CONCEPT["strat_322_first_live"] == (5,)
+    assert _required_decision_minutes({"strat_322_first_live"}, 15) == (5,)
+
+
+def test_strat_322_first_live_stale_5m_fresh_15m_reports_unhealthy():
+    """Required regression case: an instrument running strat_322_first_live
+    (5m-native) must be judged unhealthy off its OWN required 5m feed even
+    when the system-default 15m feed is perfectly fresh -- proving the
+    required-timeframe fix actually changes the no-trade diagnosis, not just
+    the raw liveness dict."""
+    bars = [
+        {"ts": "2026-07-27T00:00:00+00:00", "timeframe": "5"},   # 5m: stale
+        {"ts": "2026-07-27T04:59:00+00:00", "timeframe": "15"},  # 15m: fresh
+    ]
+    now = datetime(2026, 7, 27, 5, 0, tzinfo=timezone.utc)
+    required = _required_decision_minutes({"strat_322_first_live"}, 15)
+    liveness = build_feed_liveness(_FakeBarHistory(bars), "MNQ", for_date=date(2026, 7, 27), now=now, required_minutes=required)
+
+    result = classify_no_trade_liveness(instrument="MNQ", entries=[], feed_liveness=liveness)
+    assert "15m" not in liveness  # only the concept's own required timeframe(s) are checked
+    assert liveness["5m"]["stale"] is True
+    assert result["diagnosis"] == "NO_TRADE_SYSTEM_FAILURE"
 
 
 def test_feed_liveness_real_bar_history_fresh_15m_cannot_mask_stale_5m(tmp_path):

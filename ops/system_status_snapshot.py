@@ -112,9 +112,13 @@ ENV_LANE_EXECUTION_CONTEXT: dict[str, dict[str, Any]] = {
 # (config.expected_timeframe_minutes / PRIMARY_DECISION_TF, default 15).
 # strat_4hr_retrigger is confirmed 5m-native per risk_rules.yaml's own comment
 # ("Canonical 5m-native detector (PR #317/#334)"), not a 4-hour bar despite
-# the name.
+# the name. strat_322_first_live carries the SAME "Canonical 5m-native ...
+# 5-minute entry-recovery fidelity" wording in the same file -- both verified
+# against the identical risk_rules.yaml comment style, not guessed. Do not
+# add another concept here without an equally explicit source citation.
 REQUIRED_DECISION_MINUTES_BY_CONCEPT: dict[str, tuple[int, ...]] = {
     "strat_4hr_retrigger": (5,),
+    "strat_322_first_live": (5,),
 }
 
 
@@ -452,17 +456,27 @@ def build_strategy_evidence(
 
 # ── Runtime lanes ────────────────────────────────────────────────────────────
 
-def _effective_entry_model(execution_mode: str, tolerance_ticks: Any) -> str:
-    """execution/tradovate_broker.py's actual entry-leg construction: "legacy"
-    is NOT self-describing. Its `exec_mode in ("legacy", "ioc_limit")` branch
-    builds a Limit-IOC entry when `tol_ticks > 0` and a plain Market entry
-    otherwise (execute_bracket, the `_capped_aggressive_limit`/`tol_ticks > 0`
-    check) -- so "legacy" with the box's real positive tolerance (MES 16 /
-    MNQ 32 ticks) IS an IOC-limit entry, not a generic "legacy" order type.
-    Every other configured mode (market/marketable_limit/stop_market/
-    stop_limit, and an explicit "ioc_limit" selection) is already
-    self-describing and passes through unchanged."""
-    if execution_mode not in ("legacy", "ioc_limit"):
+# webhook/runner.py::_make_broker's REAL selection: BROKER env, default
+# "paper" -- "tradovate" (case-insensitive) selects TradovateBroker, anything
+# else selects PaperBroker. A snapshot that hardcodes "tradovate" for every
+# ordinary lane can misreport the effective broker whenever BROKER is unset
+# or anything other than "tradovate".
+def resolve_broker(env: dict[str, str]) -> str:
+    return "tradovate" if (env.get("BROKER") or "paper").strip().lower() == "tradovate" else "paperbroker"
+
+
+def _effective_entry_model(execution_mode: str, tolerance_ticks: Any, broker: str) -> str:
+    """Only the Tradovate broker's "legacy" mode is ambiguous. Confirmed in
+    execution/tradovate_broker.py::execute_bracket: `exec_mode in ("legacy",
+    "ioc_limit")` builds a Limit-IOC entry when `tol_ticks > 0` and a plain
+    Market entry otherwise -- so "legacy" with a positive tolerance IS an
+    IOC-limit entry, not a generic "legacy" order type. Every other
+    configured mode (market/marketable_limit/stop_market/stop_limit, and an
+    explicit "ioc_limit" selection) is already self-describing and passes
+    through unchanged. PaperBroker has no "legacy" mode at all -- its
+    entry_fill_model values (market/ioc_limit/stop_market, config/settings.py)
+    are already explicit, so this function is a no-op passthrough for it."""
+    if broker != "tradovate" or execution_mode not in ("legacy", "ioc_limit"):
         return execution_mode if execution_mode else UNKNOWN
     if execution_mode == "ioc_limit":
         return "ioc_limit"
@@ -471,6 +485,47 @@ def _effective_entry_model(execution_mode: str, tolerance_ticks: Any) -> str:
     except (TypeError, ValueError):
         return UNKNOWN
     return "ioc_limit" if tol > 0 else "market"
+
+
+def resolve_execution_mode_and_tolerance(
+    env: dict[str, str], instruments: list[str], *, broker: str
+) -> tuple[str, dict[str, float | str]]:
+    """Resolve the execution-mode string and per-instrument tolerance the
+    SAME way the actually-selected broker resolves them -- not a single
+    blended fallback for both.
+
+    execution/tradovate_broker.py::_entry_slippage_tolerance_ticks defaults an
+    UNSET per-instrument tolerance to 0.0 (plain Market entry) -- this is the
+    live path's real fallback. config/settings.py::_entry_tolerance_map (the
+    OFFLINE replay/PaperBroker path) instead defaults unset roots to the
+    box's known MES=16/MNQ=32. These are different functions, for different
+    brokers, with different defaults -- using the PaperBroker-style 16/32
+    fallback to describe a Tradovate lane is only "inert" on this box because
+    MES/MNQ tolerance happens to be set explicitly; the snapshot's own
+    contract is reproducible from config, not lucky on the current box.
+    """
+    tolerance_global = env.get("ENTRY_SLIPPAGE_TOLERANCE_TICKS")
+    paperbroker_defaults = {"MES": 16.0, "MNQ": 32.0}  # config/settings.py::_entry_tolerance_map
+    tolerance_by_root: dict[str, float | str] = {}
+    for root_symbol in instruments:
+        raw = env.get(f"ENTRY_SLIPPAGE_TOLERANCE_TICKS_{root_symbol}") or tolerance_global
+        try:
+            value = float(raw) if raw not in (None, "") else None
+        except (TypeError, ValueError):
+            value = None
+        if value is not None:
+            tolerance_by_root[root_symbol] = value
+        elif broker == "tradovate":
+            tolerance_by_root[root_symbol] = 0.0  # execution/tradovate_broker.py's real unset-default
+        else:
+            tolerance_by_root[root_symbol] = paperbroker_defaults.get(root_symbol, UNKNOWN)
+
+    if broker == "tradovate":
+        execution_mode = (env.get("TRADOVATE_ENTRY_EXECUTION_MODE") or "legacy").strip().lower() or "legacy"
+    else:
+        execution_mode = (env.get("ENTRY_FILL_MODEL") or "market").strip().lower() or "market"
+
+    return execution_mode, tolerance_by_root
 
 
 # strategy_permission_gate.strategy_status value -> runtime_state. This gate
@@ -552,15 +607,28 @@ def resolve_effective_contracts(
     return min(caps)
 
 
+# webhook/runner.py's real precedence (confirmed at the account_balance
+# assignment ahead of RiskEngine.recommended_contracts): the broker's OWN
+# live balance read wins when available; the journal reconstruction is only
+# the FALLBACK for when the broker doesn't provide one. This generator has no
+# live broker connection, so its contracts value can only ever be the
+# fallback path -- `contracts_basis` says so explicitly rather than implying
+# parity with the broker-authoritative number.
+CONTRACTS_BASIS_JOURNAL = "journal_reconstructed_balance"
+CONTRACTS_BASIS_STATIC = "static_config"
+
+
 def build_runtime_lanes(
     *,
     enabled_concepts: list[str],
     instruments: list[str],
     disabled_concepts_per_instrument: dict[str, list[str]],
+    broker: str,
     execution_mode: str,
     entry_tolerance_ticks_by_root: dict[str, float],
     schedule_mode: str,
     contracts_lookup,
+    contracts_basis: str,
     repo_commit: str | None,
     evidence_epoch_lookup,
     permission_status_lookup_fn,
@@ -572,19 +640,16 @@ def build_runtime_lanes(
     return the lane's OWN forward-evidence epoch or UNKNOWN -- never the
     Strategy_Inventory.md document's "Last updated" date.
 
-    `execution_mode`/`entry_tolerance_ticks_by_root` are genuinely GLOBAL
-    here, not a per-lane approximation: every concept below routes through
-    the SAME Tradovate broker instance, which reads
-    TRADOVATE_ENTRY_EXECUTION_MODE and ENTRY_SLIPPAGE_TOLERANCE_TICKS_<ROOT>
-    once per instrument regardless of which strategy generated the signal
-    (execution/tradovate_broker.py has no per-strategy override) -- sharing
-    them across concepts on the same instrument is not an approximation, it
-    is what the broker actually does. `effective_entry_model` (see
-    _effective_entry_model) resolves what "legacy" actually constructs at the
-    given tolerance, since "legacy" alone is ambiguous between Market and
-    Limit-IOC. Lanes that do NOT share this path (env-gated PaperBroker-only
-    proof/paper lanes) are reported separately by build_env_gated_lanes with
-    their own, independently-resolved execution context.
+    `broker`/`execution_mode`/`entry_tolerance_ticks_by_root` are genuinely
+    GLOBAL here, not a per-lane approximation: every concept below routes
+    through the SAME broker instance (webhook/runner.py::_make_broker,
+    resolve_broker) regardless of which strategy generated the signal -- no
+    per-strategy override exists. `effective_entry_model` (see
+    _effective_entry_model) resolves what an ambiguous mode actually
+    constructs given the resolved broker and tolerance. Lanes that do NOT
+    share this path (env-gated PaperBroker-only proof/paper lanes) are
+    reported separately by build_env_gated_lanes with their own,
+    independently-resolved execution context.
     """
     lanes: list[dict[str, Any]] = []
     for concept in enabled_concepts:
@@ -600,11 +665,12 @@ def build_runtime_lanes(
                     "runtime_state": _runtime_state_for(permission_status, schedule_mode),
                     "permission_status": permission_status,
                     "gate_source": "risk_rules.strategy.enabled_concepts",
-                    "broker": "tradovate",
+                    "broker": broker,
                     "execution_mode": execution_mode if execution_mode else UNKNOWN,
-                    "effective_entry_model": _effective_entry_model(execution_mode, tolerance),
+                    "effective_entry_model": _effective_entry_model(execution_mode, tolerance, broker),
                     "entry_tolerance_ticks": tolerance if tolerance is not None else UNKNOWN,
                     "contracts": contracts_lookup(instrument),
+                    "contracts_basis": contracts_basis,
                     "schedule_mode": schedule_mode,
                     "evidence_epoch": evidence_epoch_lookup(concept, instrument),
                     "current_runtime_sha": repo_commit or UNKNOWN,
@@ -809,11 +875,24 @@ def classify_no_trade_liveness(
     ran. This checks (a) at least one strategy-evaluation decision exists for
     the day, (b) the feed was not stale/gapped, and (c) any NO_TRADE reason is
     legitimate (no setup / chop / session / risk / limits), not a system fault
-    (missing data / detector exception / stale bars / never evaluated)."""
+    (missing data / detector exception / stale bars / never evaluated).
+
+    Market-hours aware: `feed_liveness` entries each carry `market_open`
+    (build_feed_liveness, sourced from ops.feed_gap_alarm.market_open) --
+    zero decisions during a closed market (weekend/maintenance) is EXPECTED,
+    not a fault, and must resolve to MARKET_CLOSED rather than
+    NO_TRADE_SYSTEM_FAILURE. This is safe to check only in the
+    not-strategy-evaluated branch: build_feed_liveness already forces
+    `stale=False` unconditionally while the market is closed, so a non-empty
+    `stale_timeframes` here can only happen while the market was open.
+    """
     instrument_entries = [e for e in entries if e.get("instrument") == instrument]
     decisions = [e for e in instrument_entries if e.get("decision")]
     traded = any(e.get("decision") == "TRADE" for e in decisions)
     stale_timeframes = [tf for tf, data in feed_liveness.items() if data.get("stale")]
+    market_is_open = next(
+        (data.get("market_open") for data in feed_liveness.values() if "market_open" in data), None
+    )
 
     if traded:
         return {
@@ -822,6 +901,7 @@ def classify_no_trade_liveness(
             "reason_legitimate": None,
             "strategy_evaluated": True,
             "stale_timeframes": stale_timeframes,
+            "market_open": market_is_open,
             "summary": f"{instrument}: at least one TRADE decision recorded today.",
         }
 
@@ -837,8 +917,12 @@ def classify_no_trade_liveness(
         )
         summary = f"{instrument}: feed stale on {', '.join(stale_timeframes)} ({stale_detail})."
     elif not strategy_evaluated:
-        diagnosis = "NO_TRADE_SYSTEM_FAILURE"
-        summary = f"{instrument}: no strategy-evaluation decision recorded today despite a live feed."
+        if market_is_open is False:
+            diagnosis = "MARKET_CLOSED"
+            summary = f"{instrument}: market closed (CME Globex hours) -- no evaluation expected."
+        else:
+            diagnosis = "NO_TRADE_SYSTEM_FAILURE"
+            summary = f"{instrument}: no strategy-evaluation decision recorded today despite a live feed."
     elif legitimate is False:
         diagnosis = "NO_TRADE_SYSTEM_FAILURE"
         summary = f"{instrument}: NO_TRADE reason {reason!r} indicates a system fault, not a market condition."
@@ -855,6 +939,8 @@ def classify_no_trade_liveness(
         "reason_legitimate": legitimate,
         "strategy_evaluated": strategy_evaluated,
         "stale_timeframes": stale_timeframes,
+        "market_open": market_is_open,
+        "expected_evaluation": market_is_open is not False,
         "summary": summary,
     }
 
@@ -1097,25 +1183,20 @@ def build_system_status_snapshot(
     instruments = list((rules.get("instruments") or {}).get("allowed") or [])
     schedule_mode = str(env.get("SCHEDULE_MODE") or (rules.get("schedule") or {}).get("mode") or "current").strip().lower()
 
-    tolerance_defaults = {"MES": 16.0, "MNQ": 32.0}
-    tolerance_global = env.get("ENTRY_SLIPPAGE_TOLERANCE_TICKS")
-    entry_tolerance_ticks_by_root: dict[str, float] = {}
-    for root_symbol in instruments:
-        raw = env.get(f"ENTRY_SLIPPAGE_TOLERANCE_TICKS_{root_symbol}") or tolerance_global
-        try:
-            value = float(raw) if raw not in (None, "") else None
-        except (TypeError, ValueError):
-            value = None
-        entry_tolerance_ticks_by_root[root_symbol] = value if value is not None else tolerance_defaults.get(root_symbol, UNKNOWN)
-
-    # Runtime lanes trade on the real Tradovate demo broker, not the internal
-    # PaperBroker/replay simulator -- so the configured execution mode here is
-    # the LIVE broker's TRADOVATE_ENTRY_EXECUTION_MODE (execution/tradovate_
-    # broker.py `_entry_execution_mode`, default "legacy"), not ENTRY_FILL_MODEL
-    # (which only governs the offline replay/paper simulator and is irrelevant
-    # to a deployed demo lane). "legacy" alone is not the EFFECTIVE entry
-    # model -- see _effective_entry_model, applied per lane below.
-    execution_mode = (env.get("TRADOVATE_ENTRY_EXECUTION_MODE") or "legacy").strip().lower() or "legacy"
+    # Runtime lanes route through whichever broker webhook/runner.py::
+    # _make_broker actually selects (BROKER env, default "paper" ->
+    # PaperBroker; "tradovate" -> TradovateBroker) -- resolve that FIRST, then
+    # use that broker's own execution-mode/tolerance resolution, since the two
+    # brokers default an unset tolerance differently (Tradovate -> 0.0/Market;
+    # PaperBroker -> the box's known MES=16/MNQ=32) and read the mode from
+    # different env vars entirely (TRADOVATE_ENTRY_EXECUTION_MODE vs
+    # ENTRY_FILL_MODEL). Never assume Tradovate just because that's the box's
+    # usual posture -- the snapshot's UNKNOWN-first contract has to be
+    # reproducible from config, not lucky on the current box.
+    broker = resolve_broker(env)
+    execution_mode, entry_tolerance_ticks_by_root = resolve_execution_mode_and_tolerance(
+        env, instruments, broker=broker
+    )
 
     strategy_permission_gate_cfg = rules.get("strategy_permission_gate") or {}
     permission_gate_enabled = bool(strategy_permission_gate_cfg.get("enabled", False))
@@ -1183,6 +1264,14 @@ def build_system_status_snapshot(
             mark_unknown(f"runtime_lanes[*/{instrument}].contracts")
         return result
 
+    # webhook/runner.py prefers the broker's OWN live balance read and only
+    # falls back to the journal reconstruction when the broker doesn't
+    # provide one (confirmed at the account_balance assignment ahead of
+    # RiskEngine.recommended_contracts). This generator has no live broker
+    # connection, so its contracts value can only ever be the journal
+    # fallback -- label it as such rather than implying broker parity.
+    contracts_basis = CONTRACTS_BASIS_JOURNAL if position_sizing_enabled else CONTRACTS_BASIS_STATIC
+
     inventory_path = root / "docs" / "strategy-rules" / "Strategy_Inventory.md"
     inventory_markdown = inventory_path.read_text(encoding="utf-8") if inventory_path.exists() else None
     if inventory_markdown is None:
@@ -1225,10 +1314,12 @@ def build_system_status_snapshot(
         enabled_concepts=enabled_concepts,
         instruments=instruments,
         disabled_concepts_per_instrument=disabled_per_instrument,
+        broker=broker,
         execution_mode=execution_mode,
         entry_tolerance_ticks_by_root=entry_tolerance_ticks_by_root,
         schedule_mode=schedule_mode,
         contracts_lookup=_contracts_lookup,
+        contracts_basis=contracts_basis,
         repo_commit=drift.get("commit"),
         evidence_epoch_lookup=_concept_evidence_epoch,
         permission_status_lookup_fn=_permission_status,
