@@ -535,8 +535,19 @@ def test_env_gated_lane_without_verified_source_stays_unknown_not_borrowed():
 
 
 # ── trade chain accounting ───────────────────────────────────────────────────
+#
+# The real journal (webhook/runner.py's confirmed-execution model,
+# 2026-07-10) writes TWO rows for a signal that gets broker-confirmed: a
+# decision="TRADE_INTENT" row BEFORE broker submission (always -- this is the
+# one attempt signal), and a SEPARATE decision="TRADE" row ONLY after the
+# broker confirms an OPEN position (the fill). A no-fill/reject never gets a
+# TRADE row at all -- only TRADE_INTENT + a CANCELLED OUTCOME.
 
-def _approved_trade(instrument: str, ts: str) -> dict:
+def _trade_intent(instrument: str, ts: str) -> dict:
+    return {"ts": ts, "decision": "TRADE_INTENT", "instrument": instrument, "risk_check": {"result": "APPROVED"}, "outcome": None}
+
+
+def _confirmed_trade(instrument: str, ts: str) -> dict:
     return {"ts": ts, "decision": "TRADE", "instrument": instrument, "risk_check": {"result": "APPROVED"}, "outcome": None}
 
 
@@ -544,9 +555,11 @@ def _outcome(instrument: str, ts: str, result: str, *, no_fill_reason: str | Non
     return {"ts": ts, "type": "OUTCOME", "instrument": instrument, "outcome": {"result": result, "no_fill_reason": no_fill_reason}}
 
 
-def test_trade_chain_accounting_win_reconciles_pass():
+def test_trade_chain_intent_trade_win_counts_attempt_fill_resolved():
+    """Required regression: TRADE_INTENT + TRADE + WIN -> attempts 1, fills 1, resolved 1."""
     entries = [
-        _approved_trade("MES", "2026-07-27T14:00:00+00:00"),
+        _trade_intent("MES", "2026-07-27T13:59:00+00:00"),
+        _confirmed_trade("MES", "2026-07-27T14:00:00+00:00"),
         _outcome("MES", "2026-07-27T14:05:00+00:00", "WIN"),
     ]
     result = build_trade_chain_health(entries, instruments=["MES"], broker_open_positions={"MES": False})
@@ -558,11 +571,41 @@ def test_trade_chain_accounting_win_reconciles_pass():
     assert result["accounting"]["fills_equation_holds"] is True
 
 
+def test_trade_chain_intent_then_cancelled_no_fill_is_attempt_without_fill():
+    """Required regression: TRADE_INTENT + CANCELLED no-fill -> attempts 1, fills 0, known_no_fills 1.
+    No TRADE row is ever written for a no-fill -- only counting decision=="TRADE"
+    rows as attempts (the old, wrong behavior) would silently report 0 attempts here."""
+    entries = [_trade_intent("MES", "2026-07-27T14:00:00+00:00"),
+               _outcome("MES", "2026-07-27T14:01:00+00:00", "CANCELLED", no_fill_reason="NO_FILL_PRICE_MOVED_AWAY")]
+    result = build_trade_chain_health(entries, instruments=["MES"], broker_open_positions={"MES": False})
+    counts = result["counts"]
+    assert counts["attempts"] == 1
+    assert counts["fills"] == 0
+    assert counts["known_no_fills"] == 1
+    assert result["accounting"]["attempts_equation_holds"] is True
+
+
+def test_trade_chain_intent_confirmed_open_broker_confirms_is_fill_and_legitimately_open():
+    """Required regression: TRADE_INTENT + confirmed TRADE, broker says open ->
+    attempts 1, fills 1, legitimately_open 1 (no OUTCOME yet -- still open)."""
+    entries = [
+        _trade_intent("MES", "2026-07-27T13:59:00+00:00"),
+        _confirmed_trade("MES", "2026-07-27T14:00:00+00:00"),
+    ]
+    result = build_trade_chain_health(entries, instruments=["MES"], broker_open_positions={"MES": True})
+    counts = result["counts"]
+    assert counts["attempts"] == 1
+    assert counts["fills"] == 1
+    assert counts["legitimately_open"] == 1
+    assert counts["resolved"] == 0
+    assert result["accounting"]["fills_equation_holds"] is True
+
+
 def test_trade_chain_known_no_fill_and_broker_reject_bucketed_separately():
     entries = [
-        _approved_trade("MES", "2026-07-27T14:00:00+00:00"),
+        _trade_intent("MES", "2026-07-27T13:59:00+00:00"),
         _outcome("MES", "2026-07-27T14:01:00+00:00", "CANCELLED", no_fill_reason="NO_FILL_PRICE_MOVED_AWAY"),
-        _approved_trade("MNQ", "2026-07-27T14:10:00+00:00"),
+        _trade_intent("MNQ", "2026-07-27T14:09:00+00:00"),
         _outcome("MNQ", "2026-07-27T14:11:00+00:00", "CANCELLED", no_fill_reason="NO_FILL_BROKER_REJECTED"),
     ]
     result = build_trade_chain_health(entries, instruments=["MES", "MNQ"], broker_open_positions={"MES": False, "MNQ": False})
@@ -570,12 +613,13 @@ def test_trade_chain_known_no_fill_and_broker_reject_bucketed_separately():
     assert counts["known_no_fills"] == 1
     assert counts["rejects"] == 1
     assert counts["attempts"] == 2
+    assert counts["fills"] == 0
     assert result["accounting"]["attempts_equation_holds"] is True
 
 
 def test_trade_chain_orphan_open_position_fails_broker_journal_parity():
     """Journal shows an open position the broker denies holding -> FAIL, not PASS."""
-    entries = [_approved_trade("MES", "2026-07-27T14:00:00+00:00")]
+    entries = [_trade_intent("MES", "2026-07-27T13:59:00+00:00"), _confirmed_trade("MES", "2026-07-27T14:00:00+00:00")]
     result = build_trade_chain_health(entries, instruments=["MES"], broker_open_positions={"MES": False})
     assert result["counts"]["orphan_count"] == 1
     assert result["broker_journal_parity"] == "FAIL"
@@ -585,10 +629,36 @@ def test_trade_chain_orphan_open_position_fails_broker_journal_parity():
 
 def test_trade_chain_missing_broker_read_is_missing_outcome_not_orphan():
     """No broker read available (None) must not be misclassified as an orphan."""
-    entries = [_approved_trade("MES", "2026-07-27T14:00:00+00:00")]
+    entries = [_trade_intent("MES", "2026-07-27T13:59:00+00:00"), _confirmed_trade("MES", "2026-07-27T14:00:00+00:00")]
     result = build_trade_chain_health(entries, instruments=["MES"], broker_open_positions={})
     assert result["counts"]["orphan_count"] == 0
     assert result["counts"]["missing_outcome_count"] == 1
+    # An unresolved fill explained by missing_outcome_count (not orphaned,
+    # not resolved, not confirmed-open) is a real, principled explanation --
+    # not a silent accounting failure.
+    assert result["accounting"]["fills_equation_holds"] is True
+
+
+def test_trade_chain_journal_flat_no_broker_read_reports_unknown_not_pass():
+    """Required regression: journal flat + no broker read -> flat_state_parity
+    UNKNOWN, stale_order_count NOT_EVALUATED. This is the generator's actual
+    live call pattern (broker_open_positions=None always) -- a flat journal
+    must not read as a PROVEN flat/broker match when no broker was ever read."""
+    result = build_trade_chain_health([], instruments=["MES"], broker_open_positions=None)
+    assert result["flat_state_parity"] == "UNKNOWN"
+    assert result["counts"]["stale_order_count"] == "NOT_EVALUATED"
+
+
+def test_trade_chain_stale_order_count_always_not_evaluated():
+    """This function never receives an order-book read -- must never report a
+    numeric 0 that would falsely imply staleness was checked and found clean."""
+    entries = [
+        _trade_intent("MES", "2026-07-27T13:59:00+00:00"),
+        _confirmed_trade("MES", "2026-07-27T14:00:00+00:00"),
+        _outcome("MES", "2026-07-27T14:05:00+00:00", "WIN"),
+    ]
+    result = build_trade_chain_health(entries, instruments=["MES"], broker_open_positions={"MES": True})
+    assert result["counts"]["stale_order_count"] == "NOT_EVALUATED"
 
 
 def test_trade_chain_duplicate_order_id_flagged():

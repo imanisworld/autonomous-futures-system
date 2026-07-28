@@ -958,14 +958,21 @@ def build_trade_chain_health(
         attempts = fills + cancellations + rejects + known_no_fills
         fills = resolved + legitimately_open
 
-    An OUTCOME's `result` is the fill/no-fill signal: WIN/LOSS/BREAKEVEN are
-    resolved fills, CANCELLED is either a cancellation (never attempted) or a
-    known no-fill (IOC/limit expired unfilled) depending on
-    `no_fill_reason` -- broker-rejected attempts are also folded into
-    known_no_fills unless a distinct reject reason is present, since this
-    journal format does not carry a separate REJECTED result value (see
-    execution/no_fill_taxonomy.py; NO_FILL_BROKER_REJECTED is the reject
-    signal within CANCELLED outcomes).
+    Lifecycle (webhook/runner.py's confirmed-execution model, 2026-07-10):
+    every risk-approved candidate is journaled as decision="TRADE_INTENT"
+    BEFORE broker submission -- this is the one canonical attempt signal,
+    written whether the broker fills it, rejects it, or the IOC/limit
+    expires unfilled. decision="TRADE" is written ONLY after the broker
+    confirms an OPEN position, as a SECOND, separate row for the same
+    signal -- that row IS the fill, counted immediately rather than waiting
+    for a later OUTCOME to resolve it (do not also count it as a second
+    attempt). A standalone OUTCOME then either resolves an existing fill
+    (WIN/LOSS/BREAKEVEN -- does not create a new fill) or, for a
+    TRADE_INTENT that never became a TRADE, reports the no-fill/reject
+    signal (CANCELLED, bucketed into known_no_fills/rejects/cancellations
+    by `no_fill_reason` -- broker-rejected attempts are folded in via
+    NO_FILL_BROKER_REJECTED, since this journal format has no separate
+    REJECTED result value; see execution/no_fill_taxonomy.py).
     """
     feed_liveness_by_instrument = feed_liveness_by_instrument or {}
     broker_open_positions = broker_open_positions or {}
@@ -978,7 +985,6 @@ def build_trade_chain_health(
     resolved = 0
     orphan_count = 0
     missing_outcome_count = 0
-    stale_order_count = 0
     duplicate_order_identity_count = 0
     last_complete_trade_chain_at = None
     last_anomaly_at = None
@@ -990,27 +996,32 @@ def build_trade_chain_health(
     for entry in entries:
         decision = entry.get("decision")
         risk_check = entry.get("risk_check") or {}
-        approved = decision == "TRADE" and risk_check.get("result") == "APPROVED"
+        risk_approved = risk_check.get("result") == "APPROVED"
+        instrument = entry.get("instrument")
         inline_outcome = entry.get("outcome") or {}
 
-        if approved:
+        if decision == "TRADE_INTENT" and risk_approved:
             attempts += 1
-            instrument = entry.get("instrument")
-            # Current journal writes always follow an approved TRADE with a
+
+        if decision == "TRADE" and risk_approved:
+            # Broker-confirmed fill. The TRADE_INTENT row for this same
+            # signal already counted the attempt above -- do not double it.
+            fills += 1
+            # Current journal writes always follow a confirmed TRADE with a
             # standalone OUTCOME entry (JournalLogger.log_outcome) -- an
             # inline `outcome` on the TRADE row itself is a legacy format not
             # produced by any live write path today, so it is intentionally
             # not double-counted here; only the standalone OUTCOME branch
-            # below advances fills/resolved/etc.
+            # below advances resolved/etc.
             if not inline_outcome.get("result"):
                 open_trade_by_instrument[instrument] = entry
 
         if entry.get("type") == "OUTCOME":
             outcome = entry.get("outcome") or {}
             result = outcome.get("result")
-            instrument = entry.get("instrument")
             if result in ("WIN", "LOSS", "BREAKEVEN"):
-                fills += 1
+                # Resolves the fill the TRADE row already counted -- does
+                # not create a new one.
                 resolved += 1
                 last_complete_trade_chain_at = entry.get("ts") or last_complete_trade_chain_at
             elif result == "CANCELLED":
@@ -1044,18 +1055,26 @@ def build_trade_chain_health(
             missing_outcome_count += 1
         else:
             legitimately_open += 1
-    fills_accounted = resolved + legitimately_open
-    if legitimately_open == 0 and missing_outcome_count == 0:
-        fills_accounted = resolved
 
-    attempts_eq_sum = attempts == (fills + cancellations + rejects + known_no_fills) or (
-        # trades still open (no OUTCOME yet) are attempts without a fill/no-fill
-        # signal yet -- valid only when every unresolved trade is legitimately
-        # open or missing (never silently dropped).
-        attempts - (fills + cancellations + rejects + known_no_fills)
-        == legitimately_open + missing_outcome_count
+    # Every TRADE_INTENT resolves synchronously within the same request to
+    # either a TRADE row or a CANCELLED outcome (execute_bracket blocks on
+    # the broker call) -- this should hold exactly; a mismatch is a genuine
+    # anomaly (e.g. a crash mid-lifecycle), not a normal still-open case.
+    attempts_eq_sum = attempts == (fills + cancellations + rejects + known_no_fills)
+    fills_eq_sum = fills == (resolved + legitimately_open) or (
+        # A fill not yet resolved and not confirmed open by the broker is
+        # either orphaned (broker denies holding it) or of unknown status
+        # (no broker read available -- this generator's own repo-only
+        # snapshot always passes broker_open_positions=None) -- both are
+        # real, surfaced anomalies/unknowns elsewhere in this result, never
+        # silently dropped from the fill count.
+        fills - (resolved + legitimately_open) == orphan_count + missing_outcome_count
     )
-    fills_eq_sum = fills == (resolved + legitimately_open) or fills == resolved
+
+    # This function never receives an order-book read (no parameter carries
+    # one) -- reporting a numeric 0 would falsely imply staleness was
+    # checked and found clean. UNKNOWN-first: say so explicitly instead.
+    stale_order_count = "NOT_EVALUATED"
 
     broker_journal_parity = (
         "FAIL" if orphan_count > 0 else
@@ -1064,6 +1083,10 @@ def build_trade_chain_health(
     )
     flat_state_parity = (
         "FAIL" if orphan_count > 0 else
+        # broker_open_positions is always empty from this generator's own
+        # call site (repo-only, no live broker read) -- a flat journal with
+        # no broker read is UNKNOWN parity, not a proven PASS.
+        UNKNOWN if not broker_open_positions else
         "PASS" if not open_trade_by_instrument else
         "WARN" if legitimately_open else
         UNKNOWN
@@ -1083,7 +1106,7 @@ def build_trade_chain_health(
 
     if not attempts_eq_sum or not fills_eq_sum or orphan_count > 0 or duplicate_order_identity_count > 0:
         overall_state = "FAIL"
-    elif liveness_failure or stale_order_count > 0 or missing_outcome_count > 0:
+    elif liveness_failure or missing_outcome_count > 0:
         overall_state = "WARN"
     elif broker_journal_parity == UNKNOWN and not entries:
         overall_state = "UNKNOWN"
@@ -1105,7 +1128,7 @@ def build_trade_chain_health(
             "duplicate_order_identity_count": duplicate_order_identity_count,
         },
         "accounting": {
-            "formula": "attempts = fills + cancellations + rejects + known_no_fills (+ still-open); fills = resolved + legitimately_open",
+            "formula": "attempts = fills + cancellations + rejects + known_no_fills; fills = resolved + legitimately_open (+ orphan/missing when broker state is unavailable)",
             "attempts_equation_holds": attempts_eq_sum,
             "fills_equation_holds": fills_eq_sum,
         },
