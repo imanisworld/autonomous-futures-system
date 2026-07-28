@@ -16,9 +16,12 @@ trading_mode:
   sim_fill_at_entry: true           # Paper broker fills at entry price
 
 # ─── Allowed Universe ────────────────────────────────────────
+# MES disabled 2026-07-28: isolated MNQ ORB Breakout inverse forward-paper
+# lane (see strategy_permission_gate below). Restore MES to `allowed`/
+# `required` when this isolated lane concludes.
 instruments:
   allowed:
-    - MES   # Micro E-mini S&P 500
+    # - MES   # Micro E-mini S&P 500 — disabled for isolated MNQ orb_breakout lane
     - MNQ   # Micro E-mini NASDAQ-100 — same quality gates, separate conservative sizing
     # - ES    # E-mini S&P 500 — disabled (full-size, not paper-appropriate yet)
     # - NQ    # E-mini NASDAQ-100 — disabled (full-size)
@@ -27,7 +30,6 @@ instruments:
   # Instruments that MUST stay in `allowed`. If one goes missing (e.g. a stale
   # in-memory config drops MNQ) the dashboard shows a loud CONFIG ERROR.
   required:
-    - MES
     - MNQ
 
 sessions:
@@ -74,7 +76,11 @@ daily_limits:
   # expectancy PER TRADE rose, so the extra trades are GOOD, not junk. Survival floor
   # (max_daily_loss + max_drawdown_percent) KEPT — those are risk control, not fear.
   # To restore the human throttles, revert this block (values preserved in git).
-  max_trades_per_day: 9999          # was 3 — unlimited (validator requires >=1)
+  # 2026-07-28: capped at 3 for the isolated MNQ orb_breakout inverse
+  # forward-paper lane specifically (see strategy_permission_gate below) —
+  # NOT a reversal of the 2026-06-17 throttle-removal decision above. Restore
+  # to 9999 when this isolated lane concludes.
+  max_trades_per_day: 3             # was 9999 (unlimited) for the isolated lane; originally 3
   max_consecutive_losses: 9999     # was 4 — tilt halt off (validator requires >=1)
   max_daily_loss: 150              # KEPT — survival floor (10% of $1,500)
   daily_profit_protect_threshold: 0 # off (was already 0)
@@ -307,17 +313,28 @@ execution_safety:
 # floor, it does not silently re-approve or re-deny anything not explicitly
 # reviewed. All journaling, shadow candidates, and research/observation paths
 # are unaffected either way; this only gates the final TRADE decision.
+# 2026-07-28: temporarily narrowed to isolate the already-merged MNQ ORB
+# Breakout inverse forward-paper lane (MNQ_ORB_BREAKOUT_INVERSE_MODE=
+# paper_sim, MNQ_ORB_BREAKOUT_PROOF_MODE=observe_only — set via environment,
+# unchanged here). Every entry below except orb_breakout is commented out for
+# this isolated lane ONLY — it is NOT a re-classification of any of these
+# strategies, which fall back to default_status (SHADOW_ONLY) while
+# commented out. To restore normal multi-strategy operation, uncomment every
+# line below back to PAPER_ELIGIBLE. vwap_hold and pdh_reclaim are left
+# UNCOMMENTED at SHADOW_ONLY below because that demotion is a real,
+# evidence-based classification independent of this isolated lane (see their
+# own comments) — not something to "restore" when the lane concludes.
 strategy_permission_gate:
   enabled: true
   default_status: SHADOW_ONLY
   strategy_status:
     orb_breakout: PAPER_ELIGIBLE
-    orb_reclaim: PAPER_ELIGIBLE
-    orb_rejection: PAPER_ELIGIBLE
-    orb_false_break_fade: PAPER_ELIGIBLE
+    # orb_reclaim: PAPER_ELIGIBLE
+    # orb_rejection: PAPER_ELIGIBLE
+    # orb_false_break_fade: PAPER_ELIGIBLE
     vwap_hold: SHADOW_ONLY
-    vwap_reclaim: PAPER_ELIGIBLE
-    vwap_rejection: PAPER_ELIGIBLE
+    # vwap_reclaim: PAPER_ELIGIBLE
+    # vwap_rejection: PAPER_ELIGIBLE
     # pdh_reclaim demoted PAPER_ELIGIBLE -> SHADOW_ONLY 2026-07-16 (operator-approved):
     # tranche 1 REJECTED it (-$4.65/trade MNQ, negative both instruments, docs/
     # strategy-matrix-tranche1-2026-07-14.md) yet it produced a real Tradovate-demo
@@ -327,23 +344,23 @@ strategy_permission_gate:
     # same pattern as vwap_hold. MES unaffected either way (already skipped
     # upstream via disabled_concepts_per_instrument since 2026-07-09).
     pdh_reclaim: SHADOW_ONLY
-    pdl_reclaim: PAPER_ELIGIBLE
-    strat_212: PAPER_ELIGIBLE
-    strat_122: PAPER_ELIGIBLE
-    strat_122_observed: PAPER_ELIGIBLE
-    strat_122_pullback: PAPER_ELIGIBLE
-    strat_inside_break: PAPER_ELIGIBLE
-    strat_outside_continuation: PAPER_ELIGIBLE
-    strat_4hr_retrigger: PAPER_ELIGIBLE
-    strat_4hr_retrigger_observed: PAPER_ELIGIBLE
-    strat_322_first_live: PAPER_ELIGIBLE
-    continuation_pullback: PAPER_ELIGIBLE
-    ema_pullback_trend: PAPER_ELIGIBLE
-    gap_fill: PAPER_ELIGIBLE
-    ovn_high_sweep_reclaim: PAPER_ELIGIBLE
-    ovn_low_sweep_reclaim: PAPER_ELIGIBLE
-    impulse_first_pullback_observed: PAPER_ELIGIBLE
-    trend_consolidation_break_observed: PAPER_ELIGIBLE
+    # pdl_reclaim: PAPER_ELIGIBLE
+    # strat_212: PAPER_ELIGIBLE
+    # strat_122: PAPER_ELIGIBLE
+    # strat_122_observed: PAPER_ELIGIBLE
+    # strat_122_pullback: PAPER_ELIGIBLE
+    # strat_inside_break: PAPER_ELIGIBLE
+    # strat_outside_continuation: PAPER_ELIGIBLE
+    # strat_4hr_retrigger: PAPER_ELIGIBLE
+    # strat_4hr_retrigger_observed: PAPER_ELIGIBLE
+    # strat_322_first_live: PAPER_ELIGIBLE
+    # continuation_pullback: PAPER_ELIGIBLE
+    # ema_pullback_trend: PAPER_ELIGIBLE
+    # gap_fill: PAPER_ELIGIBLE
+    # ovn_high_sweep_reclaim: PAPER_ELIGIBLE
+    # ovn_low_sweep_reclaim: PAPER_ELIGIBLE
+    # impulse_first_pullback_observed: PAPER_ELIGIBLE
+    # trend_consolidation_break_observed: PAPER_ELIGIBLE
 
 # ─── Paper Fill Realism ──────────────────────────────────────
 # Applied by PaperBroker in live paper mode AND in replay, so the simulated
