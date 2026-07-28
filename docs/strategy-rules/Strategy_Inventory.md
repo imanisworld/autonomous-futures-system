@@ -1,12 +1,19 @@
 # STRATEGY INVENTORY
 **Autonomous Futures System — Master Reference**
-*Last updated: 2026-07-27 — reconciliation pass incorporating #366 (Miyagi), #367 (3-2-2),
-#368 (ORB Reclaim V4-R) evidence closures and the already-merged #334/#335 (4HR),
-#337/#359 (MES 1-2-2), #364 (inverted ORB Breakout) decisions. #365/#366/#367/#368 are
-evidence-only PRs, still OPEN/unmerged as of this date — the verdicts below reflect the
-operator's settled classification of the underlying evidence, not a claim that those PRs
-have merged. See `memory/project_futures_control_thread_sot.md` for the live control-room
-index this reconciliation is sourced from.
+*Last updated: 2026-07-28 — queue-reset pass correcting MES 1-2-2 (`strat_122`) per PR #373's
+executable-parity audit: WAIT, not PROMISING BUT UNPROVEN (only 16/33 of #337's canonical
+candidates are executable under the real production concept list — 21% preempted by
+shadow-only `vwap_hold`, proven a legitimate consequence of intentional design, not a defect;
+30% blocked by `orb_reclaim`'s cross-day carried-forward position). Original 2026-07-27
+reconciliation pass below incorporates #366 (Miyagi), #367 (3-2-2), #368 (ORB Reclaim V4-R)
+evidence closures and the already-merged #334/#335 (4HR), #337/#359 (MES 1-2-2), #364
+(inverted ORB Breakout) decisions. #360/#365/#366/#367/#368/#373 are evidence-only PRs, still
+OPEN/unmerged as of this date — the verdicts below reflect the operator's settled
+classification of the underlying evidence, not a claim that those PRs have merged. See
+`memory/project_futures_control_thread_sot.md` for the live control-room index this
+reconciliation is sourced from, and `docs/strategy-rules/STRATEGY_QUEUE_RESET_2026-07-28.md`
+for the full consolidated queue (causal/executable status, runtime posture, forward-evidence
+status, duplicate/superseded flags, and smallest-next-action for every tracked strategy).
 
 ---
 
@@ -47,7 +54,7 @@ Verdict taxonomy:
 | 12HR Miyagi | ✅ blockers resolved | ✅ | ✅ causal-stop fixed (2026-07-27, was lookahead-affected) | n/a — fails before fill | n/a — insufficient survivors | n/a | ⚠️ MNQ 0/8, MES 2/10 pass `max_stop_ticks` | **BROKEN FOR CURRENT SYSTEM RISK CONSTRAINTS (2026-07-27)** |
 | 60M 3-2-2 First Live | ✅ blockers resolved | ✅ | ✅ full-engine parity validated (2026-07-27) | ✅ IOC-faithful | n/a — 0 executable fills | n/a | n=34 MNQ, 0 fill | **BROKEN FOR CURRENT SYSTEM RISK CONSTRAINTS** |
 | ORB Breakout — inverted (MNQ, paper-only lane) | ✅ | ✅ | ✅ | ✅ IOC | ✅ all sub-periods/sessions/directions positive | ✅ survives +4-tick stress | ✅ n=111 | **PROMISING BUT UNPROVEN — paper-forward active (#364)** |
-| MES 1-2-2 (`strat_122`) | ✅ | ✅ | ✅ (#337, post-#338/#339 corrected) | ✅ commission-adjusted | ⚠️ H1 flips to −$17.04 after commission (raw +$17.00); H2 solidly positive +$199.19 both ways | ✅ PF 1.65→1.59→1.56 (1/2/3-tick, comm-adj) | ⚠️ n=33 thin | **PROMISING BUT UNPROVEN — paper-forward active (#359)** |
+| MES 1-2-2 (`strat_122`) | ✅ | ✅ | ✅ (#337, post-#338/#339 corrected) | ✅ commission-adjusted | ⚠️ H1 flips to −$17.04 after commission (raw +$17.00); H2 solidly positive +$199.19 both ways | ✅ PF 1.65→1.59→1.56 (1/2/3-tick, comm-adj) | ⚠️ n=33 thin, but only 16/33 executable under real production config (#373) | **WAIT (2026-07-28)** — executable-only population n=16, WR 31.2%, net +$120.00; see #373 |
 | VWAP Hold (MNQ NY) | ❌ entry definition unclear (stale — see 2026-07-26 audit note in profile below) | Partial | ❌ (stale — see profile) | ✅ ioc_close, production-matching (2026-07-26) | ✅ both halves, all 3 exits, NY-only ioc_close (2026-07-26) | ✅ 1-3 tick, NY-only ioc_close (2026-07-26) | ⚠️ n=107 armed / **~55 filled, NY-only** (canonical — session-filtered from the 348-arm blended pop, which is provenance-context only) — thin, clears the 30-min literal bar but not comfortably | **PROMISING BUT UNPROVEN** |
 | VWAP Reclaim (MNQ NY) | ✅ cleanest of the 3 VWAP predicates | Partial | ✅ isolated, confirmed no leaks (2026-07-26) | ✅ ioc_limit (2026-07-26) | ❌ H2 negative (2026-07-26) | ❌ fails 3-tick (2026-07-26) | ⚠️ n=70 combined / n=21 MNQ thin (2026-07-26) | **WAIT** |
 | VWAP Rejection | ❌ | Partial | ❌ | ❌ | ❌ | ❌ | — | **BROKEN — unreachable predicate** |
@@ -617,8 +624,38 @@ see note)
 ---
 
 ### MES 1-2-2 (`strat_122`)
-**Verdict: PROMISING BUT UNPROVEN — paper-forward active** (#337 canonical evidence,
-#359 enablement, both merged 2026-07-26)
+**Verdict: WAIT (2026-07-28)** — supersedes the 2026-07-27 PROMISING BUT UNPROVEN verdict
+below, preserved as provenance only (#337/#359 remain merged; runtime wiring is unchanged
+and still collecting real forward evidence — this is a re-classification of the evidence,
+not a runtime action)
+
+> **Executable-parity audit (2026-07-28, PR #373,
+> `mes-122-executable-parity-audit-2026-07-28.md`)**: #337's canonical run used an isolated
+> 2-strategy config (`enabled_concepts=["strat_212","strat_122"]`, `disabled_concepts_per_instrument`
+> cleared), not the real production concept list where `strat_122` competes with `orb_reclaim`
+> and shadow-only `vwap_hold`. Rerunning the identical 313-day corpus under the real,
+> unmodified production config: only **16/33 (48.5%)** of #337's candidates survive as
+> executable (verified field-identical to the isolated run — real parity, not superficial
+> matching). **7/33 (21%)** are preempted — 6 by `vwap_hold` (globally SHADOW_ONLY; it wins
+> the bar's candidate-selection slot on its own confluence/R:R merits and then itself
+> produces no trade — a pure opportunity loss, not a substitution), 1 by `orb_reclaim`.
+> These 7 were the STRONGEST performers in #337's population (71.4% WR, +$432.50).
+> **10/33 (30%)** never reach evaluation at all — an `orb_reclaim` position carried forward
+> from the prior day (PR #339 cross-day carry-forward) blocks all decision evaluation while
+> it resolves; legitimate, correct engine behavior #337's 2-strategy isolation never had a
+> chance to collide with. Executable-only population: n=16, WR 31.2%, net **+$120.00** over
+> ~14 months — too thin and economically marginal to sustain "promising."
+>
+> **Follow-up policy audit (2026-07-28, same PR)**: confirmed the shadow-only preemption is
+> proven intentional design, not an undocumented interaction or defect — traced the exact
+> call order in `strategy/signal_engine.py::DecisionEngine.evaluate()` (candidate selection
+> commits a winner using only its own gates, never permission status; the permission check
+> runs afterward, in a separate block, against the already-fixed winner, with no fallback)
+> and confirmed via two independent commit messages 8 days apart (PR #126 scoped
+> `strategy_fallback_enabled` to three reject codes excluding permission denial; PR #228's
+> own message says it checks "the winning setup's strategy"). The 7 preemptions are a
+> legitimate production exclusion, not something to fix. No code/ranking/fallback/permission
+> change was made or proposed.
 
 - Two-phase arm/resolve state machine (`strategy/strat_212_122.py::advance_strat_212_122`,
   PR #319), MES only — the paired `strat_212` (2-1-2) cell was negative both instruments
@@ -630,14 +667,21 @@ see note)
   H1 flips sign on commission alone (raw +$17.00 → comm-adj −$17.04, thin), H2 solidly
   positive both ways (+$231.75 raw / +$199.19 comm-adj). Slippage sensitivity (raw PF):
   1.78 → 1.70 → 1.67 at 1/2/3-tick — stable in sign, mild downward trend worth watching.
+  **This population is no longer the correct basis for evidence classification** — see the
+  executable-parity audit above; retained here as provenance for the raw detector/signal
+  quality, not as the live-executable population.
 - **Concentration flag**: top-5 winners = 121.3% of net P&L — removing 5 trades out of 33
   flips the cell to a net loser. Real robustness risk on a thin sample, not disqualifying
-  on its own.
+  on its own. **Worth noting the executable-only population (n=16) has a different, smaller
+  set of winners** — this concentration figure has not been recomputed for it.
 - **Enablement (#359, merged 2026-07-26)**: re-enabled MES-only via the canonical causal
   state machine, alongside the (now-BROKEN, see above) 3-2-2 demo-readiness pass. No
-  detector/runtime logic changed beyond enablement. Collecting forward paper evidence.
-- Next: leave alone, accumulate forward paper evidence; no rule/detector work authorized
-  under the standing evidence-phase directive.
+  detector/runtime logic changed beyond enablement. Still collecting real forward paper
+  evidence under the actual production config — unaffected by the audit above (no runtime
+  change was made).
+- Next: leave alone, accumulate forward paper evidence under the real config (the
+  executable population is the correct one to grow). No re-run, refinement, or rule change
+  authorized under the standing evidence-phase directive.
 
 ---
 
