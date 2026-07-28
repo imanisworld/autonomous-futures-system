@@ -115,20 +115,22 @@ def test_pin_matches_and_balance_positive_order_proceeds(monkeypatch):
 # ── fail-closed: mismatch never reaches the broker ─────────────────────────
 
 def test_pin_mismatch_blocks_before_any_broker_call(monkeypatch, caplog):
-    b = _broker(monkeypatch, expected_account_id="1354122", resolved_account_id=999)
+    # 222222 is an arbitrary synthetic id for this test fixture only -- NOT a
+    # real, confirmed Tradovate account number (demo or otherwise).
+    b = _broker(monkeypatch, expected_account_id="222222", resolved_account_id=999)
     cap = _capture_post(monkeypatch, b)
     with caplog.at_level(logging.ERROR):
         fill = b.execute_bracket(_order())
     assert cap["calls"] == 0, "order must never reach Tradovate when the account is unpinned-mismatched"
     assert fill.result == "CANCELLED"
     assert fill.exit_reason == "ACCOUNT_MISMATCH"
-    assert any("account_id=999" in r.message and "1354122" in r.message for r in caplog.records)
+    assert any("account_id=999" in r.message and "222222" in r.message for r in caplog.records)
 
 
 # ── fail-closed: unresolved account never reaches the broker ───────────────
 
 def test_unresolved_account_blocks_before_any_broker_call(monkeypatch):
-    b = _broker(monkeypatch, expected_account_id="1354122", resolved_account_id=None)
+    b = _broker(monkeypatch, expected_account_id="222222", resolved_account_id=None)
     monkeypatch.setattr(b, "_resolve_account_id", lambda: None)  # stays None
     cap = _capture_post(monkeypatch, b)
     fill = b.execute_bracket(_order())
@@ -155,6 +157,66 @@ def test_balance_lookup_failure_is_fail_soft_not_blocking(monkeypatch):
     # block trading — only a confirmed non-positive balance does.
     b = _broker(monkeypatch, expected_account_id="999", resolved_account_id=999)
     monkeypatch.setattr(b, "get_account_balance", lambda: None)
+    cap = _capture_post(monkeypatch, b)
+    b.execute_bracket(_order())
+    assert cap["calls"] >= 1
+
+
+# ── full /account/list resolution ──────────────────────────────────────────
+#
+# Every test above sets b._account_id directly, which exercises
+# _verify_account_for_order's comparison logic but NEVER exercises
+# _resolve_account_id's own parsing of a real, multi-account /account/list
+# response. These tests wire the raw HTTP layer instead (matching the
+# _Resp pattern in test_tradovate_keepalive.py) and call the real resolution
+# path, proving the guard checks the RESOLVED account against the
+# expectation -- it does not scan the full list hunting for a match, so an
+# expected account that exists but isn't first still fails closed. 111111
+# and 222222 are arbitrary synthetic ids for this fixture only -- NOT real,
+# confirmed Tradovate account numbers (demo or otherwise).
+
+class _FakeAccountListResp:
+    def __init__(self, payload):
+        self._payload = payload
+
+    def raise_for_status(self):
+        return None
+
+    def json(self):
+        return self._payload
+
+
+_TWO_ACCOUNTS = [
+    {"id": 111111, "name": "acct-a"},
+    {"id": 222222, "name": "acct-b"},
+]
+
+
+def test_resolve_picks_accounts_0_documenting_the_pre_fix_behavior(monkeypatch):
+    # The expected account (222222) is genuinely present in the response --
+    # just second, not first. This documents the exact pre-existing defect:
+    # resolution always took accounts[0] regardless of which one was intended.
+    b = _broker(monkeypatch, expected_account_id="222222", resolved_account_id=None)
+    monkeypatch.setattr(b._session, "get", lambda url, **k: _FakeAccountListResp(_TWO_ACCOUNTS))
+    b._resolve_account_id()
+    assert b._account_id == 111111
+
+
+def test_guard_blocks_when_expected_account_exists_but_is_not_first(monkeypatch, caplog):
+    b = _broker(monkeypatch, expected_account_id="222222", resolved_account_id=None)
+    monkeypatch.setattr(b._session, "get", lambda url, **k: _FakeAccountListResp(_TWO_ACCOUNTS))
+    cap = _capture_post(monkeypatch, b)
+    with caplog.at_level(logging.ERROR):
+        fill = b.execute_bracket(_order())
+    assert cap["calls"] == 0, "must fail closed even though the expected account exists elsewhere in the list"
+    assert fill.exit_reason == "ACCOUNT_MISMATCH"
+    assert any("account_id=111111" in r.message and "222222" in r.message for r in caplog.records)
+
+
+def test_guard_proceeds_when_expected_account_is_first_in_a_multi_account_list(monkeypatch):
+    b = _broker(monkeypatch, expected_account_id="111111", resolved_account_id=None)
+    monkeypatch.setattr(b._session, "get", lambda url, **k: _FakeAccountListResp(_TWO_ACCOUNTS))
+    monkeypatch.setattr(b, "get_account_balance", lambda: 500.0)
     cap = _capture_post(monkeypatch, b)
     b.execute_bracket(_order())
     assert cap["calls"] >= 1
