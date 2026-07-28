@@ -298,12 +298,16 @@ def evidence_preservation_report(default: str, remote_default: str, cwd: str | N
     squash-merged PR produces a branch whose individual commits are never
     ancestors of `default`, so ancestry alone falsely flags fully-preserved,
     fully-landed branches as unmerged forever. The decisive signal for "is
-    there content here that doesn't already exist on default" is a file-level
-    diff (`git diff --name-only default...branch`) — if that's empty, the
-    branch's tree state is already subsumed by default regardless of what its
-    commit history looks like. Ancestry-only unique commits with zero file
-    diff are reported as "LIKELY SQUASH-MERGED", not BLOCKER — real evidence
-    preservation risk requires an actual content difference.
+    there content here that doesn't already exist on default" is a direct,
+    two-ref file-level diff (`git diff --name-only default branch` — NOT the
+    three-dot `default...branch` form, which diffs against the merge-base
+    and would silently ignore anything `default` did after the branch's fork
+    point, defeating the whole point of this check) — if that's empty, the
+    branch's tree state is already subsumed by default's current tip
+    regardless of what its commit history looks like. Ancestry-only unique
+    commits with zero file diff are reported as "LIKELY SQUASH-MERGED", not
+    BLOCKER — real evidence preservation risk requires an actual content
+    difference.
 
     A branch currently checked out in any worktree is always classified
     ACTIVE WIP regardless of the above — it's live local work, not an
