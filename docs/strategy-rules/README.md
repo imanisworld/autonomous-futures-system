@@ -13,7 +13,7 @@ material. See `docs/vp-futures-strategy-snapshot.md` for the higher-level compil
 | `60M_322_FirstLive_Rules.md` | 60M 3-2-2 First Live (3-bar reversal, 60M) | MNQ only | Fixed opposite-9AM-boundary structural stop |
 
 ## Validation status (as documented; see `Strategy_Inventory.md` for the current,
-reconciled verdict as of 2026-07-27 — this section keeps the original external/manual
+reconciled verdict as of 2026-07-28 — this section keeps the original external/manual
 study figures as provenance only)
 
 - **4HR:** MNQ 84.4% / MES 78.6% target *touch* over 479 sessions (Jul 2024–Jun 2026),
