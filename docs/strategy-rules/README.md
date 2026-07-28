@@ -17,11 +17,16 @@ reconciled verdict as of 2026-07-27 — this section keeps the original external
 study figures as provenance only)
 
 - **4HR:** MNQ 84.4% / MES 78.6% target *touch* over 479 sessions (Jul 2024–Jun 2026),
-  target-touch only, not P&L. The fixed completed-1H stop P&L question this section used
-  to flag as unvalidated was resolved 2026-07-26 (#334): **MNQ PROMISING BUT UNPROVEN**,
-  n=80, net +$3,069.60, PF 1.774, both walk-forward halves positive, stable 1-3 tick —
-  now collecting **paper-forward evidence** (#335). **MES: OVERFIT**, H2 erases H1's edge
-  and flips negative at 3-tick slippage — excluded from runtime.
+  target-touch only, not P&L. #334's standalone-function evidence (MNQ n=80,
+  net +$3,069.60, PF 1.774, both halves positive) does not survive contact with the real
+  runtime: a full-engine executable-parity audit (2026-07-28, chosen as the reference
+  strategy to prove the executable system end-to-end) found the known candidates collapse
+  to **MNQ 1/81 real fills**, unchanged even by a hypothetical ceiling pass that removes
+  every candidate parity-defect gate. Current verdict: **MNQ BROKEN FOR CURRENT EXECUTABLE
+  FORM** — no parity patch justified. **MES: BROKEN/WAIT** — the same hypothetical pass
+  rescues 7→12/76 fills (PF 1.854) but H2 is net-negative, failing this project's own
+  frozen H2 bar. Runtime (#335) stays deployed/untouched, already fail-closed. See
+  `4HR_RETRIGGER_EXECUTABLE_PARITY_AUDIT_2026-07-28.md`.
 - **Miyagi:** MNQ +$102.35 / MES +$25.78 expectancy at T1 exit (n=13/20) is a
   non-reproducible external manual study, kept as provenance only. Current verdict:
   **BROKEN FOR CURRENT SYSTEM RISK CONSTRAINTS** (2026-07-27) — causally-corrected stop

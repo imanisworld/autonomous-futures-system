@@ -42,8 +42,8 @@ Verdict taxonomy:
 |---|---|---|---|---|---|---|---|---|
 | ORB Reclaim — current/first_cross (MNQ+MES, deployed rule) | ✅ | ✅ | ✅ isolated, own account (2026-07-27) | ✅ ioc_limit | ❌ own drawdown breaker halts H2 entirely | n/a — halted | ⚠️ n=38 (MNQ −$164.44 / MES −$49.30) | **BROKEN — negative evidence (2026-07-27)** |
 | ORB Reclaim V4-R candidate (NY + `prior_rejected_high`, not deployed) | ✅ preregistered before running (2026-07-27) | ✅ | ✅ isolated, own account | ✅ ioc_limit | ❌ H2 −$451.20 vs H1 +$900.57 | n/a — not tested this pass | ⚠️ n=31 | **WAIT (2026-07-27)** — PF 1.338/+$449.37 but fails frozen H2 + month-concentration (70.6%) criteria |
-| 4HR Re-Trigger (MNQ) | ✅ | ✅ (#334) | ✅ matches production `advance_4hr_retrigger` (#317/#334) | ✅ 5m honest, day-only-exit (#334) | ✅ +$1,794.80 / +$1,274.80 both halves | ✅ stable 1-3 tick ($3,069.60→$2,958.60) | ✅ n=80 | **PROMISING BUT UNPROVEN — paper-forward active (#335)** |
-| 4HR Re-Trigger (MES) | ✅ | ✅ (#334) | ✅ | ✅ | ❌ H2 −$634.99 erases H1 | ❌ flips negative at 3-tick | ⚠️ n=75 | **OVERFIT — excluded from runtime (#334/#335)** |
+| 4HR Re-Trigger (MNQ) | ✅ | ✅ (#334) | ✅ full-engine executable-parity validated (2026-07-28) | ❌ #334's standalone-function evidence collapses to 1/81 through the real engine, incl. hypothetical ceiling pass | n/a — 1 real fill, not testable | n/a | ⚠️ n=81 known, 1 fill | **BROKEN FOR CURRENT EXECUTABLE FORM (2026-07-28)** — runtime stays deployed/untouched (#335), already fail-closed |
+| 4HR Re-Trigger (MES) | ✅ | ✅ (#334) | ✅ full-engine executable-parity validated (2026-07-28) | ⚠️ ceiling pass rescues 7→12/76 fills, PF 1.854 | ❌ H2 −$273.75 vs H1 +$655.00 | n/a — not tested this pass | ⚠️ n=76 known, 12 fill (ceiling) | **BROKEN / WAIT (2026-07-28)** — already excluded from runtime (#334/#335) |
 | 12HR Miyagi | ✅ blockers resolved | ✅ | ✅ causal-stop fixed (2026-07-27, was lookahead-affected) | n/a — fails before fill | n/a — insufficient survivors | n/a | ⚠️ MNQ 0/8, MES 2/10 pass `max_stop_ticks` | **BROKEN FOR CURRENT SYSTEM RISK CONSTRAINTS (2026-07-27)** |
 | 60M 3-2-2 First Live | ✅ blockers resolved | ✅ | ✅ full-engine parity validated (2026-07-27) | ✅ IOC-faithful | n/a — 0 executable fills | n/a | n=34 MNQ, 0 fill | **BROKEN FOR CURRENT SYSTEM RISK CONSTRAINTS** |
 | ORB Breakout — inverted (MNQ, paper-only lane) | ✅ | ✅ | ✅ | ✅ IOC | ✅ all sub-periods/sessions/directions positive | ✅ survives +4-tick stress | ✅ n=111 | **PROMISING BUT UNPROVEN — paper-forward active (#364)** |
@@ -138,8 +138,10 @@ Verdict taxonomy:
 ---
 
 ### 4HR Re-Trigger
-**Verdict: MNQ PROMISING BUT UNPROVEN (paper-forward active) / MES OVERFIT (excluded)**
-(#334 Batch-1 evidence, #335 enablement, both merged 2026-07-26)
+**Verdict: MNQ BROKEN FOR CURRENT EXECUTABLE FORM / MES BROKEN-WAIT** (executable-parity
+audit, 2026-07-28 — chosen as the "reference strategy" specifically to prove the executable
+system trades the paper-forward-active lane the way #334's evidence claims; see
+`4HR_RETRIGGER_EXECUTABLE_PARITY_AUDIT_2026-07-28.md`)
 
 - Rules: complete as of 2026-07-23 (all blockers resolved); detector built and reconciled
   (`strategy/four_hr_retrigger.py::advance_4hr_retrigger`, PR #317)
@@ -160,14 +162,33 @@ Verdict taxonomy:
   (H1 +$1,794.80 PF 2.21 / H2 +$1,274.80 PF 1.513), stable across 1/2/3-tick slippage
   ($3,069.60→$3,014.10→$2,958.60). **MES**: n=75 resolved, net +$166.50, PF 1.072 at
   baseline — but H2 is −$634.99 (erasing all of H1's +$801.49) and net P&L flips negative
-  by 3-tick slippage (+$166.50→+$31.50→−$103.50). Classified **OVERFIT, not BROKEN** — the
-  entry/stop logic executes exactly as documented, the edge itself doesn't generalize.
+  by 3-tick slippage (+$166.50→+$31.50→−$103.50). This #334 evidence was produced by a
+  standalone research function with no dependency on any real runtime gate — see below for
+  what happens when the same known candidates run through the actual wired-in pipeline.
 - **Enablement (#335, merged 2026-07-26)**: config-only change — `strat_4hr_retrigger`
   added to global `enabled_concepts`, MES kept excluded via
-  `disabled_concepts_per_instrument`. No detector/strategy/runtime/risk code touched.
-  MNQ now collecting **paper-forward evidence** from this epoch. MES stays disabled.
-- Next: leave alone, accumulate forward paper evidence for MNQ; no rule/detector work
-  authorized under the standing evidence-phase directive.
+  `disabled_concepts_per_instrument`. No detector/strategy/runtime/risk code touched. Runtime
+  wiring stays deployed/untouched by the audit below — already fail-closed.
+- **Executable-parity audit (2026-07-28, chosen as the reference strategy to prove the
+  system end-to-end)**: 157/157 known #334 candidates run through the real
+  `ReplayEngine -> DecisionEngine -> RiskEngine -> PaperBroker` path. Baseline: **MNQ
+  collapses n=80 -> 1/81 fills (1.2%)**; MES 7/76. A hypothetical ceiling pass (exempt
+  `MARKET_CONDITION_NOT_TRENDING`/`RR_BELOW_MINIMUM`/`EMA_STACK_NOT_ALIGNED`, mirroring
+  PR #365's tested exemption machinery, zero committed code changes) rescues **zero
+  additional MNQ candidates** (still 1/81 — the real blockers, `TREND_STRENGTH_BELOW_REQUIRED`
+  and `stop_too_wide`, are legitimate and sit downstream of the exempted gates) and 5
+  additional MES candidates (7→12/76, PF 1.854, but H2 net −$273.75 vs H1 +$655.00, fails
+  the frozen H2-negative bar). **Verdict: MNQ BROKEN for current executable form (no parity
+  patch justified — nothing rescues it); MES BROKEN/WAIT (population returns but economics
+  don't clear the bar).** Full methodology/results:
+  `4HR_RETRIGGER_EXECUTABLE_PARITY_AUDIT_2026-07-28.md`.
+- Separately flagged (not fixed): one MES candidate (2025-05-26, Memorial Day early-close)
+  reached risk-approval but never filled — `EOD_BAR_MISSING`, a shared
+  `day_only_exit.py` session-calendar gap, not a 4HR-specific defect and not the basis for
+  either verdict above.
+- Next: leave alone. MNQ 4HR stays paper-forward deployed exactly as-is (#335) — already
+  fail-closed, unaffected by this audit. No rule/detector/runtime work authorized; the
+  standing evidence-phase directive and this audit's own findings both say the same thing.
 
 ---
 
@@ -688,10 +709,11 @@ See `ICC_ICT_Research.md` for full breakdown.
 | ~~VWAP hold IOC reference-price resolution~~ — **done 2026-07-26**, operator chose `close` as canonical; see `VWAP_HOLD_IOC_CLOSE_RESCORING_2026-07-26.md` | — | — |
 | VWAP hold exit-mode resolution (static vs runner vs partial_2ct_approx — separate from the IOC question above, still open) | VWAP hold canonical baseline | Operator decision |
 | VWAP hold NY-only sample expansion — canonical live-relevant sample is only ~55 filled trades (n=107 armed); runner exit's winner concentration (71.2% top-5, 2-tick) is a real robustness flag on this thin sample | VWAP hold upgrade past PROMISING BUT UNPROVEN | Claude Code (accumulate passively; no rule/detector change needed) |
-| ~~4HR Re-Trigger honest fill replay~~ — **done (#334, 2026-07-26)**, MNQ PROMISING BUT UNPROVEN (paper-forward active #335), MES OVERFIT (excluded) | — | — |
+| ~~4HR Re-Trigger honest fill replay~~ — **superseded 2026-07-28**: full-engine executable-parity audit (chosen as the reference strategy) found #334's evidence collapses to MNQ 1/81 fill through the real runtime, unchanged even by a hypothetical ceiling pass removing every candidate parity-defect gate; MES rescues 7→12/76 but fails H2. Verdict **BROKEN (MNQ) / BROKEN-WAIT (MES)** — no further work authorized, no parity patch justified. See `4HR_RETRIGGER_EXECUTABLE_PARITY_AUDIT_2026-07-28.md`. | — | — |
 | ~~Miyagi walk-forward halves + slippage sensitivity~~ — **superseded 2026-07-27**: causal-stop closure found the strategy fails before it can walk-forward/slippage-test at all (MNQ 0/8, MES 2/10 pass `max_stop_ticks`); see profile above (#366). Verdict BROKEN — no further work authorized. | — | — |
 | ~~3-2-2 sample-size expansion~~ — **superseded 2026-07-27**: full-engine parity validation found 0/34 candidates ever reach fill under real runtime gates, including a hypothetical ceiling pass with every proven parity defect removed; sample expansion cannot change that. Verdict BROKEN — no further work authorized (#367). | — | — |
-| ~~4HR 1H stop backtest~~ — **done (#334, 2026-07-26)**, same study as the honest-fill replay row above | — | — |
+| ~~4HR 1H stop backtest~~ — **done (#334, 2026-07-26)**, same study as the honest-fill replay row above; superseded by the 2026-07-28 executable-parity closure — see row above | — | — |
+| 4HR/day-only-exit session-calendar gap: `EOD_BAR_MISSING` on known early-close holiday sessions (e.g. 2025-05-26 Memorial Day) — `execution/day_only_exit.py` assumes a normal full-length session, so the expected EOD bar never arrives and the day-only flatten never triggers. Flagged during the 2026-07-28 4HR closure, deliberately not fixed there (shared infra, not 4HR-specific, doesn't change either verdict). | Any strategy whose candidate triggers on a CME/CBOT early-close date | Not scoped/started — flagged only |
 | ORB Reclaim: `MARKET_CONDITION_NOT_TRENDING` parity question (dominant blocker, 370/885 raw V4-R candidates, not audited for parity in the 2026-07-27 study since V4-R already clears its own frozen criteria without touching it) | ORB Reclaim upgrade path, if pursued | Not scoped/started — flagged only |
 | Strategy status/queue reset (identify remaining unresolved-validation vs. already-forward-collecting strategies, choose next untouched research question) | What research comes after this reconciliation pass | Operator decision — **explicitly NOT another ORB Reclaim V5/V6** (2026-07-27 instruction, overfit-risk concern) |
 | VWAP rejection Pine deployment sequencing (send `vwap_failed_reclaim`; fix stale `signal_strategy` branch at `.pine:443`) | VWAP rejection live eligibility | Operator decision (flagged in PR #321, still open) |
@@ -702,8 +724,10 @@ See `ICC_ICT_Research.md` for full breakdown.
 
 ## Build Queue (in order)
 
-1. ~~4HR Re-Trigger detector~~ — done, PROMISING BUT UNPROVEN MNQ / OVERFIT MES (#334,
-   2026-07-26), MNQ paper-forward active (#335)
+1. ~~4HR Re-Trigger detector~~ — done (#334, 2026-07-26); verdict since superseded to
+   **BROKEN FOR CURRENT EXECUTABLE FORM (MNQ) / BROKEN-WAIT (MES)** by the 2026-07-28
+   full-engine executable-parity closure, see profile above. Runtime (#335) stays deployed
+   untouched, already fail-closed.
 2. ~~12HR Miyagi detector~~ — done; verdict since superseded to **BROKEN FOR CURRENT
    SYSTEM RISK CONSTRAINTS** by the 2026-07-27 causal-stop closure (#366), see profile above
 3. ~~60M 3-2-2 detector~~ — done, PR #340 (2026-07-26); verdict since superseded to
