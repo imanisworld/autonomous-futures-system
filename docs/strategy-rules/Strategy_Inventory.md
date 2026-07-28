@@ -1,6 +1,12 @@
 # STRATEGY INVENTORY
 **Autonomous Futures System — Master Reference**
-*Last updated: 2026-07-23*
+*Last updated: 2026-07-27 — reconciliation pass incorporating #366 (Miyagi), #367 (3-2-2),
+#368 (ORB Reclaim V4-R) evidence closures and the already-merged #334/#335 (4HR),
+#337/#359 (MES 1-2-2), #364 (inverted ORB Breakout) decisions. #365/#366/#367/#368 are
+evidence-only PRs, still OPEN/unmerged as of this date — the verdicts below reflect the
+operator's settled classification of the underlying evidence, not a claim that those PRs
+have merged. See `memory/project_futures_control_thread_sot.md` for the live control-room
+index this reconciliation is sourced from.
 
 ---
 
@@ -34,11 +40,14 @@ Verdict taxonomy:
 
 | Strategy | Rules | Detector | Replay parity | Honest fills | Walk-forward | Slippage | Sample | Verdict |
 |---|---|---|---|---|---|---|---|---|
-| ORB Reclaim (MES) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ n=305 | **PAPER PROOF** |
-| ORB Reclaim (MNQ) | ✅ | ✅ | Partial | ✅ | ❌ insufficient | ✅ | ⚠️ n=253 thin | **PROMISING BUT UNPROVEN** |
-| 4HR Re-Trigger | ✅ blockers resolved | ❌ | ❌ | Partial — external study | ✅ | Partial | ⚠️ n=32 MNQ | **WAIT — build detector** |
-| 12HR Miyagi | ✅ blockers resolved | ✅ | Partial — standalone research module | ✅ | ✅ both halves (H2 thin) | ✅ 1-4 tick | ⚠️ n=15 MNQ / n=19 MES thin | **PROMISING BUT UNPROVEN** |
-| 60M 3-2-2 First Live | ✅ blockers resolved | ✅ | Partial — standalone research module | ✅ IOC-faithful | ✅ both halves | ✅ 1-4 tick | ⚠️ n=34 MNQ thin | **PROMISING BUT UNPROVEN** |
+| ORB Reclaim — current/first_cross (MNQ+MES, deployed rule) | ✅ | ✅ | ✅ isolated, own account (2026-07-27) | ✅ ioc_limit | ❌ own drawdown breaker halts H2 entirely | n/a — halted | ⚠️ n=38 (MNQ −$164.44 / MES −$49.30) | **BROKEN — negative evidence (2026-07-27)** |
+| ORB Reclaim V4-R candidate (NY + `prior_rejected_high`, not deployed) | ✅ preregistered before running (2026-07-27) | ✅ | ✅ isolated, own account | ✅ ioc_limit | ❌ H2 −$451.20 vs H1 +$900.57 | n/a — not tested this pass | ⚠️ n=31 | **WAIT (2026-07-27)** — PF 1.338/+$449.37 but fails frozen H2 + month-concentration (70.6%) criteria |
+| 4HR Re-Trigger (MNQ) | ✅ | ✅ (#334) | ✅ matches production `advance_4hr_retrigger` (#317/#334) | ✅ 5m honest, day-only-exit (#334) | ✅ +$1,794.80 / +$1,274.80 both halves | ✅ stable 1-3 tick ($3,069.60→$2,958.60) | ✅ n=80 | **PROMISING BUT UNPROVEN — paper-forward active (#335)** |
+| 4HR Re-Trigger (MES) | ✅ | ✅ (#334) | ✅ | ✅ | ❌ H2 −$634.99 erases H1 | ❌ flips negative at 3-tick | ⚠️ n=75 | **OVERFIT — excluded from runtime (#334/#335)** |
+| 12HR Miyagi | ✅ blockers resolved | ✅ | ✅ causal-stop fixed (2026-07-27, was lookahead-affected) | n/a — fails before fill | n/a — insufficient survivors | n/a | ⚠️ MNQ 0/8, MES 2/10 pass `max_stop_ticks` | **BROKEN FOR CURRENT SYSTEM RISK CONSTRAINTS (2026-07-27)** |
+| 60M 3-2-2 First Live | ✅ blockers resolved | ✅ | ✅ full-engine parity validated (2026-07-27) | ✅ IOC-faithful | n/a — 0 executable fills | n/a | n=34 MNQ, 0 fill | **BROKEN FOR CURRENT SYSTEM RISK CONSTRAINTS** |
+| ORB Breakout — inverted (MNQ, paper-only lane) | ✅ | ✅ | ✅ | ✅ IOC | ✅ all sub-periods/sessions/directions positive | ✅ survives +4-tick stress | ✅ n=111 | **PROMISING BUT UNPROVEN — paper-forward active (#364)** |
+| MES 1-2-2 (`strat_122`) | ✅ | ✅ | ✅ (#337, post-#338/#339 corrected) | ✅ commission-adjusted | ⚠️ H1 flips to −$17.04 after commission (raw +$17.00); H2 solidly positive +$199.19 both ways | ✅ PF 1.65→1.59→1.56 (1/2/3-tick, comm-adj) | ⚠️ n=33 thin | **PROMISING BUT UNPROVEN — paper-forward active (#359)** |
 | VWAP Hold (MNQ NY) | ❌ entry definition unclear (stale — see 2026-07-26 audit note in profile below) | Partial | ❌ (stale — see profile) | ✅ ioc_close, production-matching (2026-07-26) | ✅ both halves, all 3 exits, NY-only ioc_close (2026-07-26) | ✅ 1-3 tick, NY-only ioc_close (2026-07-26) | ⚠️ n=107 armed / **~55 filled, NY-only** (canonical — session-filtered from the 348-arm blended pop, which is provenance-context only) — thin, clears the 30-min literal bar but not comfortably | **PROMISING BUT UNPROVEN** |
 | VWAP Reclaim (MNQ NY) | ✅ cleanest of the 3 VWAP predicates | Partial | ✅ isolated, confirmed no leaks (2026-07-26) | ✅ ioc_limit (2026-07-26) | ❌ H2 negative (2026-07-26) | ❌ fails 3-tick (2026-07-26) | ⚠️ n=70 combined / n=21 MNQ thin (2026-07-26) | **WAIT** |
 | VWAP Rejection | ❌ | Partial | ❌ | ❌ | ❌ | ❌ | — | **BROKEN — unreachable predicate** |
@@ -61,50 +70,128 @@ Verdict taxonomy:
 
 ---
 
-### ORB Reclaim — MES
-**Verdict: PAPER PROOF**
+### ORB Reclaim — current/first_cross (deployed rule)
+**Verdict: BROKEN — negative evidence (2026-07-27)**
 
-- Entry: price reclaims ORB high (long) or ORB low (short) after a failed break
-- Stop: structural stop below/above ORB level
-- Target: runner exit (1.0R activation, 0.5R trail)
-- Session: New York strongest, all sessions positive
-- Fill model: IOC-faithful
-- Results: +$9.87/trade NY, both walk-forward halves positive
-- Live: active paper_sim lane
-- Next: accumulate live paper evidence
+> **Superseded note**: the PAPER PROOF (MES, n=305) / PROMISING BUT UNPROVEN (MNQ,
+> n=253) figures this row used to carry predate #338 (market-condition parity fix), #346
+> (corrected IOC corpus), and #356 (causal-5m-trigger study, which REJECTed the
+> faster-entry rescue hypothesis and closed the execution-mode lane — see
+> `docs/strategy-rules/ORB_RECLAIM_V4R_PREREGISTRATION_2026-07-27.md` §0 for full
+> terminology/provenance reconciliation). They are not valid evidence for the currently
+> deployed rule and are retained only as history.
+
+- Entry: price reclaims ORB high (long) or ORB low (short) — `reclaimed_high`/`reclaimed_low`,
+  any 15m close-cross above/below the ORB level (the *implemented* trigger; does not
+  require a prior rejection, which is the *documented* pattern — see the V4-R row below)
+- Stop: structural stop below/above ORB level; Target: runner exit (1.0R activation, 0.5R trail)
+- **Isolated, own-account, causal audit (PR #368, `orb_reclaim_v4r_runtime_audit.py`,
+  2026-07-27)**: full 313-day range, `ioc_limit`, real `ReplayEngine → DecisionEngine →
+  RiskEngine → PaperBroker` path. n=38 resolved (MNQ+MES combined), net **−$213.74**, PF
+  **0.858**, WR 31.6%. By instrument: MNQ −$164.44, MES −$49.30 — negative on both. The
+  account's own `max_drawdown` breaker trips mid-H1 (193 subsequent rejections) and stays
+  tripped for the rest of the corpus — **H2 shows 0 fills**, not merely a negative H2; this
+  is the strategy's own honest performance halting itself, not a data-sparsity artifact.
+- Live box state: legacy ORB reclaim lane is `observe_only` as of the #364 deploy
+  (`dea4e8c`, 2026-07-27) — no longer the "active paper_sim lane" the old row claimed.
+- Next: none authorized under the standing evidence-phase directive. Do not iterate a V5/V6
+  variant of this same corpus (operator instruction, 2026-07-27, overfit-risk concern) — see
+  the queue-reset note in `memory/project_futures_control_thread_sot.md`.
 
 ---
 
-### ORB Reclaim — MNQ
-**Verdict: PROMISING BUT UNPROVEN**
+### ORB Reclaim — V4-R candidate (documented-pattern rework, not deployed)
+**Verdict: WAIT (2026-07-27)**
 
-- Same definition as MES
-- Results inconsistent across sessions under honest fills
-- NY positive but thin; London negative
-- Not yet walk-forward proven under IOC-faithful fills
-- Next: dedicated MNQ NY-only honest fill test
+- Rule-anatomy finding (PR #360 Pass 1, `claude/orb-reclaim-strategy-rework`, not merged):
+  the implemented `reclaimed_high`/`reclaimed_low` trigger ≠ the documented pattern
+  (rejected first, pulled back, then reclaims). **V4-R** = NY session + `prior_rejected_high`
+  (an earlier bar independently completed the proven `rejected_high` transition — the actual
+  causal encoding of the documented pattern, as distinct from Pass 1's looser `true_reclaim`
+  flag, "closed above at any earlier point," which is ~98% overlapping with `prior_rejected_high`
+  in practice — a property of the ORB-status state machine, not a detection bug).
+- **Preregistered study (PR #368, `ORB_RECLAIM_V4R_PREREGISTRATION_2026-07-27.md`, frozen
+  before any code ran)**: full 313-day range, `ioc_limit`, isolated own-account per-variant
+  audit (in-process monkeypatch on `_try_orb_reclaim`, gated by a precomputed causal
+  eligibility set — corrects an account-sharing contamination flaw found and fixed mid-study).
+- **Result**: n=31 resolved, net **+$449.37**, PF **1.338**, expectancy +$14.50, WR 48.4% —
+  clears positive-net/PF>1.2/positive-expectancy, but **fails 2 of the frozen pass criteria**:
+  H2 is negative (−$451.20 vs H1's +$900.57), and a single month (2025-12) carries 70.6% of
+  total net P&L. Both gates were set before the study ran specifically to catch a
+  strong-net-but-fragile result — they did their job. V4-original (Pass 1's literal
+  `true_reclaim` definition) is nearly identical: n=30, net +$399.60, PF 1.331.
+- Raw (no-gate) population shows no edge for any variant (PF 0.91-1.02) — the account's
+  real risk/quality gates are doing genuine filtering work to produce the better numbers
+  above, not just adding friction. `max_stop_ticks`/`min_confluence_grade`/`target_too_close`
+  never fired once for this strategy — not material to its bracket geometry.
+  `MARKET_CONDITION_NOT_TRENDING` is the dominant blocker (370/885 raw candidates) — not
+  audited for parity this pass (V4-R already clears its edge without touching it), flagged
+  as a candidate question for a future pass.
+- Full methodology, per-trade tables, reproduction commands:
+  [`ORB_RECLAIM_V4R_STUDY_RESULTS_2026-07-27.md`](ORB_RECLAIM_V4R_STUDY_RESULTS_2026-07-27.md).
+- Next: not promoted, not rejected outright. **Operator instruction (2026-07-27): do not
+  start a V5/V6 immediately** — iterating another cut of the same corpus increases overfit
+  risk. A future pass would need either a longer corpus (to test whether the 2026-02→05
+  drawdown stretch was a regime event or structural) or genuine rule refinement — neither
+  designed or authorized here.
 
 ---
 
 ### 4HR Re-Trigger
-**Verdict: WAIT — build detector**
+**Verdict: MNQ PROMISING BUT UNPROVEN (paper-forward active) / MES OVERFIT (excluded)**
+(#334 Batch-1 evidence, #335 enablement, both merged 2026-07-26)
 
-- Rules: complete as of 2026-07-23 (all blockers resolved)
+- Rules: complete as of 2026-07-23 (all blockers resolved); detector built and reconciled
+  (`strategy/four_hr_retrigger.py::advance_4hr_retrigger`, PR #317)
 - Timeframe: 4-hour candles, fixed ET windows
 - Setup: 4AM = 2D/2U vs prior 4PM candle; 8AM reversal + 5-min close retrace before 9:30 AM
 - Entry: break of 4AM high/low, 9:30–11:00 AM window
-- Stop: last completed 1H candle at entry, fixed
+- Stop: last completed 1H candle at entry, fixed and never trailed (confirmed against the
+  code — no ratcheting stop exists anywhere in this codebase)
 - Target: prior 4PM candle high/low
 - Monday reference: MNQ/MES = Sunday 4PM-8PM ET; QQQ = Friday 4PM close
 - Retrace confirmation: first 5-min bar CLOSE beyond 4AM level before 9:30 AM
-- External study results: MNQ 84.4% target touch (n=32), QQQ 72.4% (n=29)
-- Gaps: no coded detector, no replay parity proof, no honest fill P&L, walk-forward not confirmed under detector
-- Next: build detector → reconcile against manual samples → honest fill replay
+- External study results (provenance context only): MNQ 84.4% target touch (n=32), QQQ
+  72.4% (n=29)
+- **Batch-1 honest-fill evidence (#334, `docs/4hr-retrigger-batch1-evidence-2026-07-26.md`)**:
+  2-year Polygon 5m corpus (2024-07-02→2026-06-26), `execution/day_only_exit.py` +
+  `execution/paper_broker.py`, 1-tick baseline slippage, fail-closed on missing EOD bars.
+  **MNQ**: n=80 resolved, net **+$3,069.60**, PF **1.774**, WR 61.2%, both halves positive
+  (H1 +$1,794.80 PF 2.21 / H2 +$1,274.80 PF 1.513), stable across 1/2/3-tick slippage
+  ($3,069.60→$3,014.10→$2,958.60). **MES**: n=75 resolved, net +$166.50, PF 1.072 at
+  baseline — but H2 is −$634.99 (erasing all of H1's +$801.49) and net P&L flips negative
+  by 3-tick slippage (+$166.50→+$31.50→−$103.50). Classified **OVERFIT, not BROKEN** — the
+  entry/stop logic executes exactly as documented, the edge itself doesn't generalize.
+- **Enablement (#335, merged 2026-07-26)**: config-only change — `strat_4hr_retrigger`
+  added to global `enabled_concepts`, MES kept excluded via
+  `disabled_concepts_per_instrument`. No detector/strategy/runtime/risk code touched.
+  MNQ now collecting **paper-forward evidence** from this epoch. MES stays disabled.
+- Next: leave alone, accumulate forward paper evidence for MNQ; no rule/detector work
+  authorized under the standing evidence-phase directive.
 
 ---
 
 ### 12HR Miyagi
-**Verdict: PROMISING BUT UNPROVEN** (2026-07-26 canonical evidence study)
+**Verdict: BROKEN FOR CURRENT SYSTEM RISK CONSTRAINTS** (causal-stop evidence closure,
+2026-07-27 — supersedes the 2026-07-26 PROMISING BUT UNPROVEN verdict below, preserved as
+provenance only)
+
+> **Causal-stop closure (2026-07-27, PR #366,
+> `12HR_MIYAGI_CAUSAL_STOP_EVIDENCE_2026-07-27.md`)**: the 2026-07-26 canonical study below
+> used `_completed_one_hour_stop`, a formula with a confirmed lookahead defect — 4/8 MNQ and
+> 7/10 MES of its own triggered signals referenced a stop-reference bar not yet closed at the
+> decision point. Rerunning all 34 real historical trigger events with the stop computed
+> **causally** (only bars closed strictly before the decision timestamp) against the
+> account's existing `max_stop_ticks` cap (MNQ 120 / MES 60 ticks, unchanged, confirmed a
+> legitimate control): **MNQ 0/8 (0%)** and **MES 2/10 (20%)** of causal-stop distances fit
+> inside the cap. This is a structural incompatibility between the strategy's own
+> stop-reference formula and the account's independently-validated risk architecture, not a
+> parity gap — same class of finding as 3-2-2 below. **The PF 2.81/1.98 figures immediately
+> below are not valid evidence for the deployable strategy** — 8/8 MNQ and 8/10 MES of those
+> same trigger events would never reach a fill under the causally-corrected stop.
+> `max_stop_ticks` is preserved unchanged; this is a strategy-side defect, not a control to
+> loosen. PR #362 (the demo-readiness build this evidence gates) closed 2026-07-27 without
+> merge.
 
 - Rules: complete as of 2026-07-23 (blocker resolved)
 - Timeframe: 12-hour candles, 4AM/4PM ET boundaries
@@ -138,14 +225,15 @@ Verdict taxonomy:
   precedent's 20; MNQ LONG and MES's whole positive result rest on very small
   same-direction slices; over half of all detected candidates never fill at all
   (`TRIGGER_NOT_HIT`).
-- Next: none authorized under the standing evidence-phase directive
-  (no new strategies/gates/runtime changes until collector evidence suffices,
-  deadline 2026-09-30). Remains disabled/unbuilt in runtime.
+- Next: closed by the causal-stop finding above — no rescue variant authorized inside this
+  strategy's current definition. Never wired to `main` (PR #362 closed without merge).
 
 ---
 
 ### 60M 3-2-2 First Live
-**Verdict: PROMISING BUT UNPROVEN** (PR #340, 2026-07-26)
+**Verdict: BROKEN FOR CURRENT SYSTEM RISK CONSTRAINTS** (parity validation, 2026-07-27 —
+supersedes the PR #340/#341 PROMISING BUT UNPROVEN verdict below, preserved as provenance
+only, not current evidence)
 
 - Rules: complete as of 2026-07-23 (all blockers resolved)
 - Timeframe: 60-minute candles
@@ -177,6 +265,23 @@ Verdict taxonomy:
   explicitly excluded, `PAPER_ELIGIBLE`) for demo forward-evidence collection this week.
   Classification unchanged — still PROMISING BUT UNPROVEN pending forward evidence; the
   wiring does not itself constitute new evidence.
+- **Parity validation (2026-07-27,
+  [`60M_322_PARITY_VALIDATION_BROKEN_2026-07-27.md`](60M_322_PARITY_VALIDATION_BROKEN_2026-07-27.md),
+  PR #367):** the PF 10.36 baseline above was produced entirely by
+  `research/replay_322_honest_fill.py`, a standalone function with zero dependency on any
+  real runtime gate. Running the same 34 candidates through the actual wired-in
+  `ReplayEngine → DecisionEngine → RiskEngine → PaperBroker` path — including a hypothetical
+  pass with every proven parity defect removed — produces **0 fills**: `max_stop_ticks`
+  alone eliminates 27/34 (structurally wide 8AM-derived stops, 325-924 ticks vs. the
+  120-tick MNQ cap), `min_confluence_grade` eliminates the rest of what reaches the risk
+  layer. This is a structural incompatibility with the account's own, independently-validated
+  risk architecture, not a parity gap — same classification as 12HR Miyagi above. **The PF
+  10.36 figure is not valid evidence for the deployable strategy.** Two additional real
+  parity defects were found and confirmed (`ENTRY_DETACHED_FROM_PRICE`, `target_too_close`,
+  both zero-basis in this strategy's own rules) but deliberately left unfixed — correcting
+  them changes zero fills to zero fills, since the legitimate stop-cap/confluence controls
+  still eliminate the entire population. Runtime wiring is unchanged/untouched by this
+  research — with the legitimate risk gates intact on `main`, it is already fail-closed.
 
 ---
 
@@ -486,6 +591,56 @@ see note)
 
 ---
 
+### ORB Breakout — inverted (MNQ, paper-only lane)
+**Verdict: PROMISING BUT UNPROVEN — paper-forward active** (#364, deployed `dea4e8c`,
+2026-07-27)
+
+- Distinct from — not a fix to — ORB Breakout (MNQ) above. Same source signal (detector,
+  ranking, permissions, confluence, `RiskEngine`) but immediately before `PaperBroker`
+  execution: direction is mirrored (LONG↔SHORT), planned entry unchanged, stop/target
+  distances mirrored around entry. One contract, static exits only (no runner, no
+  breakeven), `ioc_limit`, 8-tick MNQ cap, 1 adverse tick.
+- Research preregistration `eda2c3344304fe2f9daf74da6505acdf1256fad4`: fixed one-contract
+  population **111 trades, net +$745.72, PF 2.392**; chronological (causal) path 108
+  trades, net +$664.66, PF 2.251. All sub-periods, sessions, and directions positive;
+  survives up to +4-tick adverse-slippage stress.
+- **Caveat**: most of the improvement over the non-inverted lane comes from the inverse
+  side's IOC fill selection — execution parity matters heavily here, more than for most
+  other strategies in this doc.
+- Runtime: `MNQ_ORB_BREAKOUT_INVERSE_MODE=paper_sim`; the legacy non-inverted proof lane
+  is forced `observe_only` while this lane is active (config validation fails closed if
+  both are active). Forward evidence epoch: 2026-07-27T04:19:13Z — only events at/after
+  this timestamp count as forward evidence.
+- Next: leave alone, accumulate forward paper evidence. Untouched by the
+  Miyagi/3-2-2/ORB-Reclaim parity work above.
+
+---
+
+### MES 1-2-2 (`strat_122`)
+**Verdict: PROMISING BUT UNPROVEN — paper-forward active** (#337 canonical evidence,
+#359 enablement, both merged 2026-07-26)
+
+- Two-phase arm/resolve state machine (`strategy/strat_212_122.py::advance_strat_212_122`,
+  PR #319), MES only — the paired `strat_212` (2-1-2) cell was negative both instruments
+  and stays disabled (MNQ +$354.02 comm-adj thin/PF 1.12, MES -$1,075.50 PF 0.80).
+- **Canonical evidence (#337, post-#338 market-condition-parity + post-#339 cross-day
+  carry-forward corrected, real `ReplayEngine → DecisionEngine → RiskEngine → PaperBroker`,
+  `data/replay_corpus_v1_market_condition_fixed`)**: n=33 resolved, WR 33.3%, net (raw)
+  +$428.75 / PF 1.78, net (comm-adjusted, $1.48/RT) **+$379.91 / PF 1.65**. Walk-forward:
+  H1 flips sign on commission alone (raw +$17.00 → comm-adj −$17.04, thin), H2 solidly
+  positive both ways (+$231.75 raw / +$199.19 comm-adj). Slippage sensitivity (raw PF):
+  1.78 → 1.70 → 1.67 at 1/2/3-tick — stable in sign, mild downward trend worth watching.
+- **Concentration flag**: top-5 winners = 121.3% of net P&L — removing 5 trades out of 33
+  flips the cell to a net loser. Real robustness risk on a thin sample, not disqualifying
+  on its own.
+- **Enablement (#359, merged 2026-07-26)**: re-enabled MES-only via the canonical causal
+  state machine, alongside the (now-BROKEN, see above) 3-2-2 demo-readiness pass. No
+  detector/runtime logic changed beyond enablement. Collecting forward paper evidence.
+- Next: leave alone, accumulate forward paper evidence; no rule/detector work authorized
+  under the standing evidence-phase directive.
+
+---
+
 ### PDL Reclaim
 **Verdict: RESEARCH ONLY — undersample**
 
@@ -533,10 +688,12 @@ See `ICC_ICT_Research.md` for full breakdown.
 | ~~VWAP hold IOC reference-price resolution~~ — **done 2026-07-26**, operator chose `close` as canonical; see `VWAP_HOLD_IOC_CLOSE_RESCORING_2026-07-26.md` | — | — |
 | VWAP hold exit-mode resolution (static vs runner vs partial_2ct_approx — separate from the IOC question above, still open) | VWAP hold canonical baseline | Operator decision |
 | VWAP hold NY-only sample expansion — canonical live-relevant sample is only ~55 filled trades (n=107 armed); runner exit's winner concentration (71.2% top-5, 2-tick) is a real robustness flag on this thin sample | VWAP hold upgrade past PROMISING BUT UNPROVEN | Claude Code (accumulate passively; no rule/detector change needed) |
-| 4HR Re-Trigger honest fill replay | Strategy verdict | External researcher + Claude Code (after detector) |
-| Miyagi walk-forward halves + slippage sensitivity | Strategy verdict | External researcher |
-| 3-2-2 sample-size expansion (blocked pending new 5m MNQ data past 2026-06-26) | Strategy verdict | Claude Code |
-| 4HR 1H stop backtest | Rules validation | External researcher |
+| ~~4HR Re-Trigger honest fill replay~~ — **done (#334, 2026-07-26)**, MNQ PROMISING BUT UNPROVEN (paper-forward active #335), MES OVERFIT (excluded) | — | — |
+| ~~Miyagi walk-forward halves + slippage sensitivity~~ — **superseded 2026-07-27**: causal-stop closure found the strategy fails before it can walk-forward/slippage-test at all (MNQ 0/8, MES 2/10 pass `max_stop_ticks`); see profile above (#366). Verdict BROKEN — no further work authorized. | — | — |
+| ~~3-2-2 sample-size expansion~~ — **superseded 2026-07-27**: full-engine parity validation found 0/34 candidates ever reach fill under real runtime gates, including a hypothetical ceiling pass with every proven parity defect removed; sample expansion cannot change that. Verdict BROKEN — no further work authorized (#367). | — | — |
+| ~~4HR 1H stop backtest~~ — **done (#334, 2026-07-26)**, same study as the honest-fill replay row above | — | — |
+| ORB Reclaim: `MARKET_CONDITION_NOT_TRENDING` parity question (dominant blocker, 370/885 raw V4-R candidates, not audited for parity in the 2026-07-27 study since V4-R already clears its own frozen criteria without touching it) | ORB Reclaim upgrade path, if pursued | Not scoped/started — flagged only |
+| Strategy status/queue reset (identify remaining unresolved-validation vs. already-forward-collecting strategies, choose next untouched research question) | What research comes after this reconciliation pass | Operator decision — **explicitly NOT another ORB Reclaim V5/V6** (2026-07-27 instruction, overfit-risk concern) |
 | VWAP rejection Pine deployment sequencing (send `vwap_failed_reclaim`; fix stale `signal_strategy` branch at `.pine:443`) | VWAP rejection live eligibility | Operator decision (flagged in PR #321, still open) |
 | ~~VWAP reclaim per-strategy walk-forward split~~ — **done 2026-07-26**, isolated honest-fill run (not the old market-fill journals — see profile above for why): WAIT confirmed on 3 independent grounds (H2 negative, MNQ n=21 thin, fails 3-tick slippage); see `vwap-reclaim-canonical-evidence-2026-07-26.md` | — | — |
 | Runner exit promotion — **ORB breakout resolved 2026-07-26: runner tested directly under honest fills (isolated, both exit modes), found WORSE than static (PF 0.381 vs 0.463), not a blocker that was gating a real edge. VWAP hold's exit-mode question remains separately open.** | VWAP hold lane only now | Operator decision (VWAP hold) |
@@ -545,12 +702,16 @@ See `ICC_ICT_Research.md` for full breakdown.
 
 ## Build Queue (in order)
 
-1. **4HR Re-Trigger detector** — rules complete, build now
-2. ~~12HR Miyagi detector~~ — done, PROMISING BUT UNPROVEN (2026-07-26, see
-   `12HR_MIYAGI_CANONICAL_EVIDENCE_2026-07-26.md`)
-3. ~~60M 3-2-2 detector~~ — done, PR #340 (2026-07-26)
-4. **Reconcile each detector against manual samples** — before any backtest
-5. **Honest fill replay for all three** — after reconciliation passes (3-2-2 done, PR #340)
+1. ~~4HR Re-Trigger detector~~ — done, PROMISING BUT UNPROVEN MNQ / OVERFIT MES (#334,
+   2026-07-26), MNQ paper-forward active (#335)
+2. ~~12HR Miyagi detector~~ — done; verdict since superseded to **BROKEN FOR CURRENT
+   SYSTEM RISK CONSTRAINTS** by the 2026-07-27 causal-stop closure (#366), see profile above
+3. ~~60M 3-2-2 detector~~ — done, PR #340 (2026-07-26); verdict since superseded to
+   **BROKEN FOR CURRENT SYSTEM RISK CONSTRAINTS** by the 2026-07-27 parity validation
+   (#367), see profile above
+4. ~~Reconcile each detector against manual samples~~ — done for all three
+5. ~~Honest fill replay for all three~~ — done for all three; two of three (Miyagi,
+   3-2-2) subsequently found to have zero executable population under real runtime gates
 6. ~~Runner exit promotion~~ — **ORB breakout: resolved 2026-07-26**, runner
    tested directly (isolated, honest fills, both exit modes on identical
    candidates) and found worse than static, not a gate that was hiding a
