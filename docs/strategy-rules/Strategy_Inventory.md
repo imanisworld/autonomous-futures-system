@@ -1,19 +1,26 @@
 # STRATEGY INVENTORY
 **Autonomous Futures System — Master Reference**
-*Last updated: 2026-07-28 — queue-reset pass correcting MES 1-2-2 (`strat_122`) per PR #373's
-executable-parity audit: WAIT, not PROMISING BUT UNPROVEN (only 16/33 of #337's canonical
-candidates are executable under the real production concept list — 21% preempted by
-shadow-only `vwap_hold`, proven a legitimate consequence of intentional design, not a defect;
-30% blocked by `orb_reclaim`'s cross-day carried-forward position). Original 2026-07-27
-reconciliation pass below incorporates #366 (Miyagi), #367 (3-2-2), #368 (ORB Reclaim V4-R)
-evidence closures and the already-merged #334/#335 (4HR), #337/#359 (MES 1-2-2), #364
-(inverted ORB Breakout) decisions. #360/#365/#366/#367/#368/#373 are evidence-only PRs, still
-OPEN/unmerged as of this date — the verdicts below reflect the operator's settled
-classification of the underlying evidence, not a claim that those PRs have merged. See
-`memory/project_futures_control_thread_sot.md` for the live control-room index this
-reconciliation is sourced from, and `docs/strategy-rules/STRATEGY_QUEUE_RESET_2026-07-28.md`
-for the full consolidated queue (causal/executable status, runtime posture, forward-evidence
-status, duplicate/superseded flags, and smallest-next-action for every tracked strategy).
+*Last updated: 2026-07-28 (second revision) — merges PR #372's binding 4HR Re-Trigger
+executable-parity result (MNQ **BROKEN FOR CURRENT EXECUTABLE FORM** — 1/81 real fills
+through the actual engine, was PROMISING BUT UNPROVEN; MES **BROKEN/WAIT**, was OVERFIT;
+both supersede #334/#335's standalone-function evidence, runtime wiring unchanged) and
+corrects MES 1-2-2 (`strat_122`) per PR #373's executable-parity audit: **WAIT**, not
+PROMISING BUT UNPROVEN (only 16/33 of #337's canonical candidates are executable under the
+real production concept list — 21% preempted by shadow-only `vwap_hold`, proven a
+legitimate consequence of intentional design, not a defect; 30% blocked by `orb_reclaim`'s
+cross-day carried-forward position). Also corrects a factual error in the ORB Reclaim
+current/first_cross profile (previously claimed the lane is forced `observe_only` by #364 —
+false; that mutual-exclusivity is between two ORB *Breakout* mechanisms, unrelated to ORB
+Reclaim — see the corrected profile below). Original 2026-07-27 reconciliation pass below
+incorporates #366 (Miyagi), #367 (3-2-2), #368 (ORB Reclaim V4-R) evidence closures and the
+already-merged #337/#359 (MES 1-2-2), #364 (inverted ORB Breakout) decisions. #360/#365/
+#366/#367/#368/#372/#373 are evidence-only PRs, still OPEN/unmerged as of this date — the
+verdicts below reflect the operator's settled classification of the underlying evidence, not
+a claim that those PRs have merged. See `memory/project_futures_control_thread_sot.md` for
+the live control-room index this reconciliation is sourced from, and
+`docs/strategy-rules/STRATEGY_QUEUE_RESET_2026-07-28.md` for the full consolidated queue
+(causal/executable status, runtime posture, forward-evidence status, duplicate/superseded
+flags, and smallest-next-action for every tracked strategy).
 
 ---
 
@@ -99,8 +106,23 @@ Verdict taxonomy:
   account's own `max_drawdown` breaker trips mid-H1 (193 subsequent rejections) and stays
   tripped for the rest of the corpus — **H2 shows 0 fills**, not merely a negative H2; this
   is the strategy's own honest performance halting itself, not a data-sparsity artifact.
-- Live box state: legacy ORB reclaim lane is `observe_only` as of the #364 deploy
-  (`dea4e8c`, 2026-07-27) — no longer the "active paper_sim lane" the old row claimed.
+- **Runtime posture correction (2026-07-28)**: the prior version of this row claimed the
+  legacy ORB reclaim lane went `observe_only` as of the #364 deploy — **false, verified
+  against `config/settings.py` directly**. The `observe_only`/`paper_sim` mutual-exclusivity
+  forced by #364 (`config/settings.py` validation, ~line 1065) is between
+  `MNQ_ORB_BREAKOUT_INVERSE_MODE` and `MNQ_ORB_BREAKOUT_PROOF_MODE` — both ORB **Breakout**
+  mechanisms, unrelated to ORB Reclaim. ORB Reclaim's own env-gated layer,
+  `MNQ_ORB_RECLAIM_PROOF_MODE` (default `observe_only`), is a separate, additive, MNQ-only
+  research-observation lane whose own code (`context/mnq_orb_reclaim_proof.py`) states its
+  `observe_only` mode means "the EXISTING orb_reclaim decision ... proceeds completely
+  unaffected" — it does not gate the base strategy. The base strategy's actual ability to
+  submit orders is governed only by `enabled_concepts` (includes `orb_reclaim`, both
+  instruments) and `strategy_status.orb_reclaim = PAPER_ELIGIBLE` — both still yes on this
+  repo's `risk_rules.yaml`. **The base strategy can currently submit real paper orders**;
+  the BROKEN verdict above has not been reflected in a config change (operator decision,
+  not evidence work — flagged, not actioned, in
+  `docs/strategy-rules/STRATEGY_QUEUE_RESET_2026-07-28.md`). Live-box env var overrides
+  were not independently checked this pass.
 - Next: none authorized under the standing evidence-phase directive. Do not iterate a V5/V6
   variant of this same corpus (operator instruction, 2026-07-27, overfit-risk concern) — see
   the queue-reset note in `memory/project_futures_control_thread_sot.md`.
