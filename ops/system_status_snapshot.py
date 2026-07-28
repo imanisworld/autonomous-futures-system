@@ -1007,6 +1007,29 @@ def build_trade_chain_health(
     "strat_212_122_same_bar_resolution" (the one call site that produces
     this) -- counted as `causal_paper_same_bar_resolution`, excluded from
     fills/resolved so it cannot manufacture a fill the broker never saw.
+
+    A CANCELLED outcome is NOT always proof of a same-bar broker no-fill
+    either. Two out-of-band closers write result="CANCELLED" against a
+    position that is already open and already counted: the background
+    reconciler's phantom-clear (webhook/reconciler.py, session="reconcile",
+    fires when it finds journal-open/broker-flat and the entry order never
+    filled) and the manual admin close-all (webhook/app.py, session=
+    "manual"). Both are detected by instrument correlation exactly like
+    causal_paper_resolved above -- if the instrument is still tracked open
+    (in `open_trade_by_instrument` or `open_causal_paper_by_instrument`)
+    when a CANCELLED outcome arrives, the BLOCKED_OPEN_POSITION gate proves
+    no fresh execute_bracket attempt could have produced it this bar, so it
+    cannot be a new order attempt. Folded into `orphan_count` (with
+    `last_anomaly_summary`) instead of `broker_order_attempts`/
+    `cancellations`, so a real desync or manual close is surfaced as the
+    anomaly it is rather than fabricating a second attempt and silently
+    erasing the drift signal (the instrument would otherwise be popped from
+    `open_trade_by_instrument` before the post-loop orphan check ever saw
+    it). The reconciler's OTHER outcome -- a completed trade resolved out of
+    band (session="reconcile", result WIN/LOSS/BREAKEVEN, the exit filled
+    between bar resolves and the sweep won the race) -- is a real fill and
+    is correctly folded into `resolved` by the same instrument-correlation
+    logic; no special-casing needed there.
     """
     feed_liveness_by_instrument = feed_liveness_by_instrument or {}
     broker_open_positions = broker_open_positions or {}
@@ -1078,6 +1101,26 @@ def build_trade_chain_health(
             is_same_bar_resolution = (
                 execution_audit.get("source") == "strat_212_122_same_bar_resolution"
             )
+            # A CANCELLED result against an instrument this function already
+            # tracks as open (broker-confirmed TRADE or causal_paper_opened)
+            # is NOT a same-bar broker no-fill. The BLOCKED_OPEN_POSITION gate
+            # refuses a fresh decision/execute_bracket attempt while a
+            # position is open, so the only way a CANCELLED outcome can land
+            # against an already-open instrument is an out-of-band closer:
+            # the background reconciler's phantom-clear
+            # (webhook/reconciler.py, session="reconcile") or a manual admin
+            # close (webhook/app.py's close-all, session="manual"). That
+            # position's order attempt (and fill) were already counted when
+            # its TRADE row was written -- counting this CANCELLED too would
+            # fabricate a second attempt that was never submitted and bury a
+            # real desync/manual-close as a routine IOC no-fill (silently
+            # dropping it from orphan_count/broker_journal_parity, since the
+            # instrument is popped from open_trade_by_instrument below before
+            # the post-loop orphan check ever sees it).
+            _closes_tracked_open = result == "CANCELLED" and (
+                instrument in open_trade_by_instrument
+                or instrument in open_causal_paper_by_instrument
+            )
             if result in ("WIN", "LOSS", "BREAKEVEN"):
                 if is_same_bar_resolution:
                     # No order was ever armed for this candidate -- the
@@ -1092,13 +1135,27 @@ def build_trade_chain_health(
                     last_complete_trade_chain_at = entry.get("ts") or last_complete_trade_chain_at
                 else:
                     # Resolves the fill the TRADE row already counted --
-                    # does not create a new one.
+                    # does not create a new one. Also reached by the
+                    # reconciler's completed-trade resolution (session=
+                    # "reconcile") when the exit filled between bar resolves
+                    # and this sweep won the race -- same real fill, just
+                    # attributed later; correctly folded into `resolved` via
+                    # this same instrument correlation.
                     resolved += 1
                     last_complete_trade_chain_at = entry.get("ts") or last_complete_trade_chain_at
+            elif _closes_tracked_open:
+                orphan_count += 1
+                last_anomaly_at = entry.get("ts") or last_anomaly_at
+                last_anomaly_summary = (
+                    f"{instrument}: outcome closed an already-open position "
+                    f"out-of-band (session={entry.get('session')!r}) -- not "
+                    "counted as a new broker order attempt"
+                )
             elif result == "CANCELLED":
-                # A CANCELLED outcome only ever follows an order that
-                # actually reached the broker (execute_bracket) -- proof of
-                # an order attempt, distinct from the approved intent.
+                # A CANCELLED outcome not closing a tracked-open instrument
+                # only ever follows an order that actually reached the
+                # broker this bar (execute_bracket) -- proof of an order
+                # attempt, distinct from the approved intent.
                 broker_order_attempts += 1
                 no_fill_reason = outcome.get("no_fill_reason")
                 if no_fill_reason == "NO_FILL_BROKER_REJECTED":

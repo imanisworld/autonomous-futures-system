@@ -568,6 +568,46 @@ def _outcome(instrument: str, ts: str, result: str, *, no_fill_reason: str | Non
     return {"ts": ts, "type": "OUTCOME", "instrument": instrument, "outcome": {"result": result, "no_fill_reason": no_fill_reason}}
 
 
+def _reconciler_phantom_clear(instrument: str, ts: str) -> dict:
+    """webhook/reconciler.py's phantom-clear: journal shows an instrument
+    open, the broker is authenticated + definitively flat, and the entry
+    order never filled. Written on a 20-min timer, NOT in response to a
+    fresh execute_bracket this bar -- session="reconcile", no
+    no_fill_reason, no strategy."""
+    return {
+        "ts": ts, "type": "OUTCOME", "instrument": instrument, "session": "reconcile",
+        "outcome": {
+            "result": "CANCELLED",
+            "exit_reason": "auto-reconcile: journal showed open but broker is flat (phantom cleared)",
+            "no_fill_reason": None, "strategy": None,
+        },
+    }
+
+
+def _reconciler_resolved_outcome(instrument: str, ts: str, result: str) -> dict:
+    """webhook/reconciler.py's OTHER outcome: the entry order's fills prove
+    the trade completed (exit filled between bar resolves, this sweep won
+    the race) -- a REAL fill resolved through the broker's order-id-scoped
+    resolver, just attributed later. session="reconcile", result WIN/LOSS/
+    BREAKEVEN, never CANCELLED."""
+    return {
+        "ts": ts, "type": "OUTCOME", "instrument": instrument, "session": "reconcile",
+        "outcome": {"result": result, "no_fill_reason": None},
+    }
+
+
+def _manual_close_all_outcome(instrument: str, ts: str) -> dict:
+    """webhook/app.py's manual admin close-all endpoint: flattens the live
+    broker position (or no-ops in paper mode) and clears the journal's
+    open-position flag with result="CANCELLED", session="manual",
+    exit_reason="MANUAL_CLOSE_ALL" -- an operator action, not a same-bar
+    broker no-fill."""
+    return {
+        "ts": ts, "type": "OUTCOME", "instrument": instrument, "session": "manual",
+        "outcome": {"result": "CANCELLED", "exit_reason": "MANUAL_CLOSE_ALL", "no_fill_reason": None},
+    }
+
+
 def _causal_resolution_outcome(instrument: str, ts: str, result: str) -> dict:
     """strat_212/122's OTHER paper-only path: the watched bar already decided
     the outcome causally -- no order was ever armed. journal.log_outcome is
@@ -723,6 +763,187 @@ def test_trade_chain_strat_122_causal_open_then_win_resolves_as_causal_not_broke
     assert counts["resolved"] == 0
     assert counts["causal_paper_opened"] == 1
     assert counts["causal_paper_resolved"] == 1
+    assert result["accounting"]["order_attempts_equation_holds"] is True
+    assert result["accounting"]["fills_equation_holds"] is True
+    assert result["overall_state"] != "FAIL"
+
+
+def test_trade_chain_reconciler_phantom_clear_does_not_double_count_broker_attempt():
+    """Round-8 regression: webhook/reconciler.py phantom-clears a journal-open,
+    broker-flat position 20+ minutes later with a CANCELLED OUTCOME. That
+    CANCELLED must NOT be treated as a fresh same-bar broker no-fill (the
+    order attempt + fill were already counted by the TRADE row) -- it must
+    surface as the orphan/desync anomaly it actually is, not a fabricated
+    second attempt bucketed as a routine cancellation."""
+    entries = [
+        _trade_intent("MES", "2026-07-28T13:59:00+00:00"),
+        _confirmed_trade("MES", "2026-07-28T14:00:00+00:00"),
+        _reconciler_phantom_clear("MES", "2026-07-28T14:35:00+00:00"),
+    ]
+    result = build_trade_chain_health(entries, instruments=["MES"], broker_open_positions={"MES": False})
+    counts = result["counts"]
+    assert counts["broker_order_attempts"] == 1  # NOT 2 -- no fabricated second attempt
+    assert counts["broker_fills"] == 1
+    assert counts["cancellations"] == 0  # NOT a routine same-bar no-fill
+    assert counts["resolved"] == 0
+    assert counts["orphan_count"] == 1
+    assert result["accounting"]["order_attempts_equation_holds"] is True
+    assert result["accounting"]["fills_equation_holds"] is True
+    assert result["broker_journal_parity"] == "FAIL"
+    assert "reconcile" in (result["last_anomaly_summary"] or "")
+
+
+def test_trade_chain_manual_close_all_does_not_double_count_broker_attempt():
+    """webhook/app.py's manual close-all admin endpoint writes the same
+    CANCELLED-against-an-already-open-instrument shape (session="manual")
+    as the reconciler's phantom-clear -- must get the identical, non-
+    double-counting treatment even though it is a deliberate operator
+    action rather than a detected desync."""
+    entries = [
+        _trade_intent("MNQ", "2026-07-28T13:59:00+00:00"),
+        _confirmed_trade("MNQ", "2026-07-28T14:00:00+00:00"),
+        _manual_close_all_outcome("MNQ", "2026-07-28T14:10:00+00:00"),
+    ]
+    result = build_trade_chain_health(entries, instruments=["MNQ"], broker_open_positions={"MNQ": False})
+    counts = result["counts"]
+    assert counts["broker_order_attempts"] == 1
+    assert counts["broker_fills"] == 1
+    assert counts["cancellations"] == 0
+    assert counts["orphan_count"] == 1
+    assert result["accounting"]["order_attempts_equation_holds"] is True
+    assert result["accounting"]["fills_equation_holds"] is True
+    assert "manual" in (result["last_anomaly_summary"] or "")
+
+
+def test_trade_chain_reconciler_resolved_completed_trade_counts_as_resolved():
+    """The reconciler's OTHER outcome -- the entry's fills prove the trade
+    completed and this sweep won the race against the next bar resolve --
+    is a REAL fill (session="reconcile", result WIN/LOSS/BREAKEVEN, never
+    CANCELLED) and must fold into `resolved` exactly like an in-band close,
+    with no orphan and no double count."""
+    entries = [
+        _trade_intent("MES", "2026-07-28T13:59:00+00:00"),
+        _confirmed_trade("MES", "2026-07-28T14:00:00+00:00"),
+        _reconciler_resolved_outcome("MES", "2026-07-28T14:35:00+00:00", "WIN"),
+    ]
+    result = build_trade_chain_health(entries, instruments=["MES"], broker_open_positions={"MES": False})
+    counts = result["counts"]
+    assert counts["broker_order_attempts"] == 1
+    assert counts["broker_fills"] == 1
+    assert counts["resolved"] == 1
+    assert counts["orphan_count"] == 0
+    assert result["accounting"]["order_attempts_equation_holds"] is True
+    assert result["accounting"]["fills_equation_holds"] is True
+    assert result["overall_state"] != "FAIL"
+
+
+def test_trade_chain_reconciler_phantom_clear_of_causal_paper_open_does_not_fabricate_attempt():
+    """Edge case: if the reconciler ever phantom-clears a causal_paper_opened
+    (strat_212/122) position, it must not fabricate a broker_order_attempt
+    that never existed even once -- causal_paper_opened never goes through
+    execute_bracket at all. The CANCELLED close is still surfaced as an
+    anomaly, not silently absorbed."""
+    entries = [
+        _trade_intent("MES", "2026-07-28T13:59:00+00:00"),
+        _causal_open_trade("MES", "2026-07-28T14:00:00+00:00"),
+        _reconciler_phantom_clear("MES", "2026-07-28T14:35:00+00:00"),
+    ]
+    result = build_trade_chain_health(entries, instruments=["MES"], broker_open_positions={"MES": False})
+    counts = result["counts"]
+    assert counts["causal_paper_opened"] == 1
+    assert counts["broker_order_attempts"] == 0
+    assert counts["cancellations"] == 0
+    assert counts["causal_paper_resolved"] == 0
+    assert counts["orphan_count"] == 1
+    assert result["accounting"]["order_attempts_equation_holds"] is True
+    assert result["accounting"]["fills_equation_holds"] is True
+
+
+def test_trade_chain_multiple_instruments_overlapping_provenance_stay_independent():
+    """Two instruments open concurrently through different provenances --
+    MES via a real broker fill later reconciler-phantom-cleared, MNQ via a
+    causal_paper_opened restore later resolved normally -- must be tracked
+    and bucketed completely independently, with no cross-instrument leakage."""
+    entries = [
+        _trade_intent("MES", "2026-07-28T13:59:00+00:00"),
+        _confirmed_trade("MES", "2026-07-28T14:00:00+00:00"),
+        _trade_intent("MNQ", "2026-07-28T14:04:00+00:00"),
+        _causal_open_trade("MNQ", "2026-07-28T14:05:00+00:00", strategy="strat_212"),
+        _reconciler_phantom_clear("MES", "2026-07-28T14:35:00+00:00"),
+        _outcome("MNQ", "2026-07-28T15:00:00+00:00", "LOSS"),
+    ]
+    result = build_trade_chain_health(entries, instruments=["MES", "MNQ"], broker_open_positions={"MES": False, "MNQ": False})
+    counts = result["counts"]
+    assert counts["broker_order_attempts"] == 1  # MES only, not doubled
+    assert counts["broker_fills"] == 1
+    assert counts["orphan_count"] == 1  # MES phantom-clear
+    assert counts["causal_paper_opened"] == 1  # MNQ
+    assert counts["causal_paper_resolved"] == 1  # MNQ's later LOSS
+    assert counts["resolved"] == 0  # MNQ's close must not leak into broker `resolved`
+    assert result["accounting"]["order_attempts_equation_holds"] is True
+    assert result["accounting"]["fills_equation_holds"] is True
+
+
+def test_trade_chain_outcome_with_no_matching_open_trade_does_not_crash():
+    """Conflicting-record defense: an OUTCOME for an instrument this function
+    never saw opened (a gap in the journal window, or a truly conflicting
+    record) must not crash and must not be misread as closing a tracked
+    position it was never tracking."""
+    entries = [_outcome("MES", "2026-07-28T14:05:00+00:00", "WIN")]
+    result = build_trade_chain_health(entries, instruments=["MES"], broker_open_positions={"MES": False})
+    counts = result["counts"]
+    assert counts["orphan_count"] == 0
+    assert counts["causal_paper_resolved"] == 0
+    assert counts["resolved"] == 1
+    assert counts["broker_order_attempts"] == 0
+
+
+def test_trade_chain_non_causal_strategy_trade_unaffected_by_out_of_band_fix():
+    """Existing unrelated-strategy behavior must remain unchanged: a normal
+    (non strat_212/122) confirmed trade resolved in-band, same-bar, by the
+    ordinary broker fill path is untouched by the out-of-band-close fix."""
+    entries = [
+        _trade_intent("MES", "2026-07-28T13:59:00+00:00"),
+        {
+            "ts": "2026-07-28T14:00:00+00:00", "decision": "TRADE", "instrument": "MES",
+            "risk_check": {"result": "APPROVED"}, "outcome": None,
+            "setup": {"strategy": "orb_reclaim"},
+        },
+        _outcome("MES", "2026-07-28T14:15:00+00:00", "WIN"),
+    ]
+    result = build_trade_chain_health(entries, instruments=["MES"], broker_open_positions={"MES": False})
+    counts = result["counts"]
+    assert counts["broker_order_attempts"] == 1
+    assert counts["broker_fills"] == 1
+    assert counts["resolved"] == 1
+    assert counts["orphan_count"] == 0
+    assert counts["causal_paper_opened"] == 0
+    assert result["overall_state"] != "FAIL"
+
+
+def test_trade_chain_force_close_stale_position_counts_as_resolved():
+    """webhook/runner.py's stale-position safety net (paper mode only, fires
+    when resolve_position returns no fill AND the position is price-
+    mismatched or >8h old) writes a WIN/LOSS/BREAKEVEN OUTCOME with
+    exit_reason="FORCE_CLOSE_..." and no strategy/execution_audit fields.
+    Distinct provenance from a normal stop/target hit, but must fold into
+    `resolved` via the same instrument correlation -- not double-counted,
+    not misread as a causal resolution."""
+    entries = [
+        _trade_intent("MES", "2026-07-28T13:59:00+00:00"),
+        _confirmed_trade("MES", "2026-07-28T14:00:00+00:00"),
+        {
+            "ts": "2026-07-28T22:00:00+00:00", "type": "OUTCOME", "instrument": "MES",
+            "outcome": {"result": "LOSS", "exit_reason": "FORCE_CLOSE_SESSION_TIMEOUT", "no_fill_reason": None},
+        },
+    ]
+    result = build_trade_chain_health(entries, instruments=["MES"], broker_open_positions={"MES": False})
+    counts = result["counts"]
+    assert counts["broker_order_attempts"] == 1
+    assert counts["broker_fills"] == 1
+    assert counts["resolved"] == 1
+    assert counts["orphan_count"] == 0
+    assert counts["causal_paper_resolved"] == 0
     assert result["accounting"]["order_attempts_equation_holds"] is True
     assert result["accounting"]["fills_equation_holds"] is True
     assert result["overall_state"] != "FAIL"
