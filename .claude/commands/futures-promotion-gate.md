@@ -47,6 +47,16 @@ checkout's copy or `main`'s current copy fetched live; they can disagree,
 and conflating them is exactly how a stale local read gets reported as
 current fact.
 
+**`main` can move mid-session — re-fetch at report time, don't reuse an
+earlier read.** A long-running session that read `config/settings.py` or
+`Strategy_Inventory.md` from `main` once, early on, cannot treat that read
+as still current later in the same session: other work can merge to `main`
+in the interim (confirmed happening in practice — PR #370 corrected a
+tolerance-comment value on `main` mid-session, after an earlier read in that
+same session had already cited the old value as current). Every distinct
+report this gate produces re-reads `main` fresh; it does not amortize one
+fetch across an entire session.
+
 ## Step 0 — evidence discovery pass (required, before any new analysis or recommending any replay)
 
 Do this before touching `research/*.py`, before proposing a `ReplayEngine`
@@ -222,12 +232,24 @@ per lane:
   inverted ORB breakout MNQ lane hardcodes its own `MARKETABLE_TICKS = 8.0`
   constant in `context/mnq_orb_breakout_inverse_paper.py`, entirely separate
   from the env-configurable `ENTRY_SLIPPAGE_TOLERANCE_TICKS_MNQ` used
-  elsewhere (`config/settings.py` documents a default of 16 ticks for that
-  env var — and even that "default" isn't universal: the VWAP Reclaim
-  isolated evidence run explicitly chose 32 ticks as its own canonical
-  tolerance for that study). None of "8", "16", or "32" is *the* MNQ
-  tolerance — each belongs to a specific lane/study and must be reported as
-  such, sourced to its actual location.
+  elsewhere. As of PR #370 (merged 2026-07-28, comment-only, no logic/config
+  change), `config/settings.py`'s documented deployed-box values are
+  `ENTRY_SLIPPAGE_TOLERANCE_TICKS_MES=16` / `ENTRY_SLIPPAGE_TOLERANCE_TICKS_MNQ=32`
+  — the VWAP Reclaim isolated evidence run's "32 ticks" already matches this
+  deployed value, it is not a special one-off deviation from some other
+  default. **PR #370 also documents that the replay/paper fallback
+  (`config/settings.py::_entry_tolerance_map`, used when the env var is
+  unset) and the live Tradovate broker's own fallback
+  (`execution/tradovate_broker.py::_entry_slippage_tolerance_ticks`, 0 →
+  legacy Market entry when unset) are two independently-coded paths that
+  only happen to agree because the deployed box sets both env vars
+  explicitly** — a config drift here (env var unset on some future box)
+  would make them diverge silently. None of "8" (inverted-ORB lane, always
+  hardcoded), "16" (MES env default), or "32" (MNQ env default) is *the*
+  MNQ tolerance in isolation — each belongs to a specific lane/path and must
+  be reported as such, sourced to its actual current location, re-checked
+  live rather than assumed from an earlier read this session (`main` can
+  and does move mid-session — see the Observation Identity note above).
 - Do not merge or average evidence across two lanes on the same instrument
   that use different `entry_model`/tolerance configurations, even if they
   share a strategy name or instrument — treat them as distinct evidence
