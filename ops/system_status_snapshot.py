@@ -955,57 +955,77 @@ def build_trade_chain_health(
     """Reconcile the day's journal into the trade-chain accounting the
     operator specified:
 
-        order_attempts = fills + cancellations + rejects + known_no_fills
-        fills = resolved + legitimately_open
+        broker_order_attempts = broker_fills + cancellations + rejects + known_no_fills
+        broker_fills = resolved + legitimately_open
 
     Lifecycle (webhook/runner.py's confirmed-execution model, 2026-07-10):
     every risk-approved candidate is journaled as decision="TRADE_INTENT"
-    BEFORE broker submission -- counted as `approved_intents`, NOT as an
-    order attempt. A TRADE_INTENT does not always reach the broker: the
-    schedule-mode execution gate (SHADOW_NO_ORDER) and the working-order
+    BEFORE broker submission -- counted as `approved_intents`, NOT as a
+    broker order attempt. A TRADE_INTENT does not always reach the broker:
+    the schedule-mode execution gate (SHADOW_NO_ORDER) and the working-order
     recheck (ORDER_SUPPRESSED) can both suppress it afterward, and
     strat_212/strat_122 on a non-PaperBroker connection refuses to submit a
     substitute order for a candidate the watched bar already decided --
     none of these write a TRADE row or an OUTCOME row to THIS journal
     stream (they land only in adaptive/opportunity_tracker.py's separate
     OpportunityStore, which this function does not read). So an
-    `approved_intents` count higher than `order_attempts` is normal, not an
-    anomaly -- intent-to-attempt parity is reported as NOT_EVALUATED rather
-    than asserted, and never fails accounting.
+    `approved_intents` count higher than `broker_order_attempts +
+    causal_paper_opened + causal_paper_same_bar_resolution` is normal, not
+    an anomaly -- intent-to-attempt parity is reported as NOT_EVALUATED
+    rather than asserted, and never fails accounting.
 
-    decision="TRADE" is written ONLY after the broker confirms an OPEN
-    position, as a SECOND, separate row for the same signal -- that row IS
-    the fill (and IS the proof an order attempt happened), counted
-    immediately rather than waiting for a later OUTCOME to resolve it. A
-    standalone OUTCOME then either resolves an existing fill (WIN/LOSS/
-    BREAKEVEN -- does not create a new fill) or, for a TRADE_INTENT that
-    reached the broker but never became a TRADE, reports the no-fill/reject
-    signal (CANCELLED, bucketed into known_no_fills/rejects/cancellations
-    by `no_fill_reason` -- broker-rejected attempts are folded in via
-    NO_FILL_BROKER_REJECTED, since this journal format has no separate
-    REJECTED result value; see execution/no_fill_taxonomy.py).
+    decision="TRADE" does NOT always mean the broker was ever contacted.
+    strat_212/strat_122 ALWAYS terminate inside their own dedicated branch
+    (the `if decision.setup.strategy in (STRAT_212, STRAT_122):` block)
+    before Step 5's execute_bracket is ever reached -- they never fall
+    through to a real broker submission. Their OPEN case calls
+    broker.restore_position() (a paper-only position injection) and writes
+    decision="TRADE" directly; this is detected via the journaled
+    `setup.strategy` field (DecisionOutput.to_dict() persists it) and
+    counted as `causal_paper_opened`, NOT as a broker fill or attempt. For
+    every other strategy, decision="TRADE" IS written only after the broker
+    confirms an OPEN position -- that row IS the proof an order attempt
+    happened and IS the fill, counted immediately (`broker_order_attempts`
+    + `broker_fills`) rather than waiting for a later OUTCOME.
 
-    strat_212/strat_122's OTHER paper-only path is a third case: the
-    watched bar already decided the outcome causally (no order was ever
-    armed to capture it), so the candidate is journaled straight to a
-    WIN/LOSS/BREAKEVEN OUTCOME with no TRADE row at all
-    (execution_audit.source == "strat_212_122_same_bar_resolution", set at
-    the one call site that produces this). This is real evidence, not a
-    broker execution -- counted separately as `causal_paper_resolution`,
-    excluded from both `fills` and `resolved` so it cannot manufacture a
-    fill the broker never confirmed.
+    A standalone OUTCOME then resolves an existing position (WIN/LOSS/
+    BREAKEVEN -- never creates a new fill): `resolved` if it closes a
+    broker-confirmed fill, `causal_paper_resolved` if it closes a
+    causal_paper_opened position (tracked by instrument, since the closing
+    OUTCOME carries no distinguishing marker of its own). Or, for a
+    TRADE_INTENT that reached the broker but never became a TRADE, it
+    reports the no-fill/reject signal (CANCELLED, bucketed into
+    known_no_fills/rejects/cancellations by `no_fill_reason` -- broker-
+    rejected attempts folded in via NO_FILL_BROKER_REJECTED, since this
+    journal format has no separate REJECTED result value; see
+    execution/no_fill_taxonomy.py).
+
+    strat_212/strat_122's OTHER paper-only path is a fourth case: the
+    watched bar already decided the outcome causally within the same bar
+    (no order was ever armed, no TRADE row at all), journaled straight to a
+    WIN/LOSS/BREAKEVEN OUTCOME with execution_audit.source ==
+    "strat_212_122_same_bar_resolution" (the one call site that produces
+    this) -- counted as `causal_paper_same_bar_resolution`, excluded from
+    fills/resolved so it cannot manufacture a fill the broker never saw.
     """
     feed_liveness_by_instrument = feed_liveness_by_instrument or {}
     broker_open_positions = broker_open_positions or {}
 
+    # strategy/strat_212_122.py's STRAT_212/STRAT_122 -- hardcoded rather
+    # than imported to avoid coupling this ops/monitoring module to the
+    # strategy package; these two values are stable identifiers, not logic.
+    _CAUSAL_ONLY_STRATEGIES = ("strat_212", "strat_122")
+
     approved_intents = 0
-    order_attempts = 0
-    fills = 0
+    broker_order_attempts = 0
+    broker_fills = 0
     cancellations = 0
     rejects = 0
     known_no_fills = 0
     resolved = 0
-    causal_paper_resolution = 0
+    causal_paper_opened = 0
+    causal_paper_resolved = 0
+    causal_paper_same_bar_resolution = 0
     orphan_count = 0
     missing_outcome_count = 0
     duplicate_order_identity_count = 0
@@ -1015,6 +1035,7 @@ def build_trade_chain_health(
 
     seen_order_ids: set = set()
     open_trade_by_instrument: dict[str, dict] = {}
+    open_causal_paper_by_instrument: dict[str, dict] = {}
 
     for entry in entries:
         decision = entry.get("decision")
@@ -1022,37 +1043,53 @@ def build_trade_chain_health(
         risk_approved = risk_check.get("result") == "APPROVED"
         instrument = entry.get("instrument")
         inline_outcome = entry.get("outcome") or {}
+        setup = entry.get("setup") or {}
+        is_causal_only_strategy = setup.get("strategy") in _CAUSAL_ONLY_STRATEGIES
 
         if decision == "TRADE_INTENT" and risk_approved:
             approved_intents += 1
 
         if decision == "TRADE" and risk_approved:
-            # Broker-confirmed fill -- proof this signal reached the broker
-            # and was accepted. Counts as both a fill and an order attempt.
-            order_attempts += 1
-            fills += 1
-            # Current journal writes always follow a confirmed TRADE with a
-            # standalone OUTCOME entry (JournalLogger.log_outcome) -- an
-            # inline `outcome` on the TRADE row itself is a legacy format not
-            # produced by any live write path today, so it is intentionally
-            # not double-counted here; only the standalone OUTCOME branch
-            # below advances resolved/etc.
-            if not inline_outcome.get("result"):
-                open_trade_by_instrument[instrument] = entry
+            if is_causal_only_strategy:
+                # strat_212/strat_122 never reach execute_bracket -- this is
+                # broker.restore_position (paper-only), not a broker order.
+                causal_paper_opened += 1
+                if not inline_outcome.get("result"):
+                    open_causal_paper_by_instrument[instrument] = entry
+            else:
+                # Broker-confirmed fill -- proof this signal reached the
+                # broker and was accepted. Counts as both a fill and an
+                # order attempt.
+                broker_order_attempts += 1
+                broker_fills += 1
+                # Current journal writes always follow a confirmed TRADE
+                # with a standalone OUTCOME entry (JournalLogger.log_outcome)
+                # -- an inline `outcome` on the TRADE row itself is a legacy
+                # format not produced by any live write path today, so it is
+                # intentionally not double-counted here; only the standalone
+                # OUTCOME branch below advances resolved/etc.
+                if not inline_outcome.get("result"):
+                    open_trade_by_instrument[instrument] = entry
 
         if entry.get("type") == "OUTCOME":
             outcome = entry.get("outcome") or {}
             result = outcome.get("result")
             execution_audit = outcome.get("execution_audit") or {}
-            is_causal_resolution = (
+            is_same_bar_resolution = (
                 execution_audit.get("source") == "strat_212_122_same_bar_resolution"
             )
             if result in ("WIN", "LOSS", "BREAKEVEN"):
-                if is_causal_resolution:
+                if is_same_bar_resolution:
                     # No order was ever armed for this candidate -- the
                     # watched bar had already decided it. Real evidence,
                     # not a broker fill; must not inflate fills/resolved.
-                    causal_paper_resolution += 1
+                    causal_paper_same_bar_resolution += 1
+                elif instrument in open_causal_paper_by_instrument:
+                    # Resolves a causal_paper_opened position, not a broker
+                    # fill -- the closing OUTCOME carries no marker of its
+                    # own, so this is tracked by instrument correlation.
+                    causal_paper_resolved += 1
+                    last_complete_trade_chain_at = entry.get("ts") or last_complete_trade_chain_at
                 else:
                     # Resolves the fill the TRADE row already counted --
                     # does not create a new one.
@@ -1062,7 +1099,7 @@ def build_trade_chain_health(
                 # A CANCELLED outcome only ever follows an order that
                 # actually reached the broker (execute_bracket) -- proof of
                 # an order attempt, distinct from the approved intent.
-                order_attempts += 1
+                broker_order_attempts += 1
                 no_fill_reason = outcome.get("no_fill_reason")
                 if no_fill_reason == "NO_FILL_BROKER_REJECTED":
                     rejects += 1
@@ -1071,6 +1108,7 @@ def build_trade_chain_health(
                 else:
                     cancellations += 1
             open_trade_by_instrument.pop(instrument, None)
+            open_causal_paper_by_instrument.pop(instrument, None)
 
         if entry.get("type") == "ORDER_IDS":
             order_ids = entry.get("order_ids") or {}
@@ -1094,27 +1132,32 @@ def build_trade_chain_health(
         else:
             legitimately_open += 1
 
-    # order_attempts is derived purely from proven broker-reaching evidence
-    # (a TRADE row or a CANCELLED outcome) -- true by construction, kept as
-    # an explicit check for defensiveness rather than asserted silently.
-    order_attempts_eq_sum = order_attempts == (fills + cancellations + rejects + known_no_fills)
-    fills_eq_sum = fills == (resolved + legitimately_open) or (
+    # broker_order_attempts is derived purely from proven broker-reaching
+    # evidence (a TRADE row or a CANCELLED outcome) -- true by construction,
+    # kept as an explicit check for defensiveness rather than asserted
+    # silently.
+    order_attempts_eq_sum = broker_order_attempts == (broker_fills + cancellations + rejects + known_no_fills)
+    fills_eq_sum = broker_fills == (resolved + legitimately_open) or (
         # A fill not yet resolved and not confirmed open by the broker is
         # either orphaned (broker denies holding it) or of unknown status
         # (no broker read available -- this generator's own repo-only
         # snapshot always passes broker_open_positions=None) -- both are
         # real, surfaced anomalies/unknowns elsewhere in this result, never
         # silently dropped from the fill count.
-        fills - (resolved + legitimately_open) == orphan_count + missing_outcome_count
+        broker_fills - (resolved + legitimately_open) == orphan_count + missing_outcome_count
     )
 
-    # approved_intents can legitimately exceed order_attempts + causal
-    # resolutions (schedule-gate suppression, working-order-recheck
-    # suppression, strat_212/122's non-PaperBroker refusal) -- none of
-    # those write to THIS journal stream (see docstring), so this gap can
-    # never be proven closed from `entries` alone. Report it honestly
-    # rather than asserting a parity this function cannot verify.
-    _unaccounted_intents = approved_intents - order_attempts - causal_paper_resolution
+    # approved_intents can legitimately exceed broker_order_attempts +
+    # causal_paper_opened + causal_paper_same_bar_resolution (schedule-gate
+    # suppression, working-order-recheck suppression, strat_212/122's
+    # non-PaperBroker refusal) -- none of those write to THIS journal
+    # stream (see docstring), so this gap can never be proven closed from
+    # `entries` alone. Report it honestly rather than asserting a parity
+    # this function cannot verify.
+    _unaccounted_intents = (
+        approved_intents - broker_order_attempts
+        - causal_paper_opened - causal_paper_same_bar_resolution
+    )
     intent_to_attempt_parity = (
         "RECONCILED" if _unaccounted_intents <= 0 else "NOT_EVALUATED"
     )
@@ -1164,13 +1207,15 @@ def build_trade_chain_health(
     return {
         "counts": {
             "approved_intents": approved_intents,
-            "order_attempts": order_attempts,
-            "fills": fills,
+            "broker_order_attempts": broker_order_attempts,
+            "broker_fills": broker_fills,
             "cancellations": cancellations,
             "rejects": rejects,
             "known_no_fills": known_no_fills,
             "resolved": resolved,
-            "causal_paper_resolution": causal_paper_resolution,
+            "causal_paper_opened": causal_paper_opened,
+            "causal_paper_resolved": causal_paper_resolved,
+            "causal_paper_same_bar_resolution": causal_paper_same_bar_resolution,
             "legitimately_open": legitimately_open,
             "orphan_count": orphan_count,
             "missing_outcome_count": missing_outcome_count,
@@ -1178,17 +1223,18 @@ def build_trade_chain_health(
             "duplicate_order_identity_count": duplicate_order_identity_count,
         },
         "accounting": {
-            "formula": "order_attempts = fills + cancellations + rejects + known_no_fills; fills = resolved + legitimately_open (+ orphan/missing when broker state is unavailable)",
+            "formula": "broker_order_attempts = broker_fills + cancellations + rejects + known_no_fills; broker_fills = resolved + legitimately_open (+ orphan/missing when broker state is unavailable)",
             "order_attempts_equation_holds": order_attempts_eq_sum,
             "fills_equation_holds": fills_eq_sum,
             "intent_to_attempt_parity": intent_to_attempt_parity,
             "intent_to_attempt_parity_note": (
-                "approved_intents may legitimately exceed order_attempts + "
-                "causal_paper_resolution -- schedule-gate suppression, "
-                "working-order-recheck suppression, and strat_212/122's "
-                "non-PaperBroker refusal never reach this journal stream "
-                "(see adaptive/opportunity_tracker.py's separate "
-                "OpportunityStore); never treated as an accounting failure."
+                "approved_intents may legitimately exceed broker_order_attempts "
+                "+ causal_paper_opened + causal_paper_same_bar_resolution -- "
+                "schedule-gate suppression, working-order-recheck suppression, "
+                "and strat_212/122's non-PaperBroker refusal never reach this "
+                "journal stream (see adaptive/opportunity_tracker.py's "
+                "separate OpportunityStore); never treated as an accounting "
+                "failure."
             ),
         },
         "broker_journal_parity": broker_journal_parity,

@@ -551,6 +551,19 @@ def _confirmed_trade(instrument: str, ts: str) -> dict:
     return {"ts": ts, "decision": "TRADE", "instrument": instrument, "risk_check": {"result": "APPROVED"}, "outcome": None}
 
 
+def _causal_open_trade(instrument: str, ts: str, strategy: str = "strat_122") -> dict:
+    """strat_212/122's OPEN case: triggered inside the already-completed
+    watched bar. webhook/runner.py calls broker.restore_position() (paper-
+    only injection) and writes decision="TRADE" directly, BEFORE Step 5's
+    execute_bracket is ever reached -- never a real broker order. Detected
+    via setup.strategy, which DecisionOutput.to_dict() persists."""
+    return {
+        "ts": ts, "decision": "TRADE", "instrument": instrument,
+        "risk_check": {"result": "APPROVED"}, "outcome": None,
+        "setup": {"strategy": strategy},
+    }
+
+
 def _outcome(instrument: str, ts: str, result: str, *, no_fill_reason: str | None = None) -> dict:
     return {"ts": ts, "type": "OUTCOME", "instrument": instrument, "outcome": {"result": result, "no_fill_reason": no_fill_reason}}
 
@@ -567,7 +580,7 @@ def _causal_resolution_outcome(instrument: str, ts: str, result: str) -> dict:
 
 
 def test_trade_chain_intent_trade_win_counts_attempt_fill_resolved():
-    """TRADE_INTENT + TRADE + WIN -> approved_intents 1, order_attempts 1, fills 1, resolved 1."""
+    """TRADE_INTENT + TRADE + WIN -> approved_intents 1, broker_order_attempts 1, broker_fills 1, resolved 1."""
     entries = [
         _trade_intent("MES", "2026-07-27T13:59:00+00:00"),
         _confirmed_trade("MES", "2026-07-27T14:00:00+00:00"),
@@ -576,8 +589,8 @@ def test_trade_chain_intent_trade_win_counts_attempt_fill_resolved():
     result = build_trade_chain_health(entries, instruments=["MES"], broker_open_positions={"MES": False})
     counts = result["counts"]
     assert counts["approved_intents"] == 1
-    assert counts["order_attempts"] == 1
-    assert counts["fills"] == 1
+    assert counts["broker_order_attempts"] == 1
+    assert counts["broker_fills"] == 1
     assert counts["resolved"] == 1
     assert result["accounting"]["order_attempts_equation_holds"] is True
     assert result["accounting"]["fills_equation_holds"] is True
@@ -586,21 +599,21 @@ def test_trade_chain_intent_trade_win_counts_attempt_fill_resolved():
 
 def test_trade_chain_intent_then_cancelled_no_fill_is_attempt_without_fill():
     """Required regression: TRADE_INTENT + CANCELLED broker no-fill ->
-    approved_intents 1, order_attempts 1, known_no_fills 1."""
+    approved_intents 1, broker_order_attempts 1, known_no_fills 1."""
     entries = [_trade_intent("MES", "2026-07-27T14:00:00+00:00"),
                _outcome("MES", "2026-07-27T14:01:00+00:00", "CANCELLED", no_fill_reason="NO_FILL_PRICE_MOVED_AWAY")]
     result = build_trade_chain_health(entries, instruments=["MES"], broker_open_positions={"MES": False})
     counts = result["counts"]
     assert counts["approved_intents"] == 1
-    assert counts["order_attempts"] == 1
-    assert counts["fills"] == 0
+    assert counts["broker_order_attempts"] == 1
+    assert counts["broker_fills"] == 0
     assert counts["known_no_fills"] == 1
     assert result["accounting"]["order_attempts_equation_holds"] is True
 
 
 def test_trade_chain_intent_confirmed_open_broker_confirms_is_fill_and_legitimately_open():
     """Required regression: TRADE_INTENT + broker-confirmed TRADE ->
-    approved_intents 1, order_attempts 1, fills 1, legitimately_open 1 (no OUTCOME yet -- still open)."""
+    approved_intents 1, broker_order_attempts 1, broker_fills 1, legitimately_open 1 (no OUTCOME yet -- still open)."""
     entries = [
         _trade_intent("MES", "2026-07-27T13:59:00+00:00"),
         _confirmed_trade("MES", "2026-07-27T14:00:00+00:00"),
@@ -608,8 +621,8 @@ def test_trade_chain_intent_confirmed_open_broker_confirms_is_fill_and_legitimat
     result = build_trade_chain_health(entries, instruments=["MES"], broker_open_positions={"MES": True})
     counts = result["counts"]
     assert counts["approved_intents"] == 1
-    assert counts["order_attempts"] == 1
-    assert counts["fills"] == 1
+    assert counts["broker_order_attempts"] == 1
+    assert counts["broker_fills"] == 1
     assert counts["legitimately_open"] == 1
     assert counts["resolved"] == 0
     assert result["accounting"]["fills_equation_holds"] is True
@@ -627,14 +640,14 @@ def test_trade_chain_known_no_fill_and_broker_reject_bucketed_separately():
     assert counts["known_no_fills"] == 1
     assert counts["rejects"] == 1
     assert counts["approved_intents"] == 2
-    assert counts["order_attempts"] == 2
-    assert counts["fills"] == 0
+    assert counts["broker_order_attempts"] == 2
+    assert counts["broker_fills"] == 0
     assert result["accounting"]["order_attempts_equation_holds"] is True
 
 
 def test_trade_chain_schedule_suppression_is_intent_not_order_attempt():
     """Required regression: TRADE_INTENT + schedule/order suppression ->
-    approved_intents 1, order_attempts 0, no accounting FAIL. The
+    approved_intents 1, broker_order_attempts 0, no accounting FAIL. The
     schedule-gate (SHADOW_NO_ORDER) and working-order-recheck (ORDER_SUPPRESSED)
     paths both write ONLY the TRADE_INTENT row to this journal stream -- the
     suppression itself lands in adaptive/opportunity_tracker.py's separate
@@ -643,7 +656,7 @@ def test_trade_chain_schedule_suppression_is_intent_not_order_attempt():
     result = build_trade_chain_health(entries, instruments=["MES"], broker_open_positions={"MES": False})
     counts = result["counts"]
     assert counts["approved_intents"] == 1
-    assert counts["order_attempts"] == 0
+    assert counts["broker_order_attempts"] == 0
     assert result["accounting"]["order_attempts_equation_holds"] is True  # 0 == 0
     assert result["accounting"]["intent_to_attempt_parity"] == "NOT_EVALUATED"
     assert result["overall_state"] != "FAIL"
@@ -651,8 +664,8 @@ def test_trade_chain_schedule_suppression_is_intent_not_order_attempt():
 
 def test_trade_chain_strat_122_causal_resolution_is_not_a_fake_broker_attempt():
     """Required regression: TRADE_INTENT + strat_122 pre-resolved WIN ->
-    causal resolution represented explicitly (causal_paper_resolution), no
-    fake fill/resolved count, no accounting FAIL. The watched bar already
+    causal resolution represented explicitly (causal_paper_same_bar_resolution),
+    no fake fill/resolved count, no accounting FAIL. The watched bar already
     decided this outcome -- no order was ever armed to capture it causally."""
     entries = [
         _trade_intent("MES", "2026-07-27T13:59:00+00:00"),
@@ -661,10 +674,55 @@ def test_trade_chain_strat_122_causal_resolution_is_not_a_fake_broker_attempt():
     result = build_trade_chain_health(entries, instruments=["MES"], broker_open_positions={"MES": False})
     counts = result["counts"]
     assert counts["approved_intents"] == 1
-    assert counts["order_attempts"] == 0
-    assert counts["fills"] == 0
+    assert counts["broker_order_attempts"] == 0
+    assert counts["broker_fills"] == 0
     assert counts["resolved"] == 0
-    assert counts["causal_paper_resolution"] == 1
+    assert counts["causal_paper_same_bar_resolution"] == 1
+    assert result["accounting"]["order_attempts_equation_holds"] is True
+    assert result["accounting"]["fills_equation_holds"] is True
+    assert result["overall_state"] != "FAIL"
+
+
+def test_trade_chain_strat_122_causal_open_is_not_a_fake_broker_fill():
+    """Required regression: TRADE_INTENT + strat_122 causal OPEN TRADE ->
+    approved_intents 1, broker_order_attempts 0, causal_paper_opened 1, no
+    FAIL. broker.restore_position() (webhook/runner.py's strat_212/122 OPEN
+    branch) is a paper-only injection, written BEFORE Step 5's
+    execute_bracket -- never proof a real broker order was attempted."""
+    entries = [
+        _trade_intent("MES", "2026-07-27T13:59:00+00:00"),
+        _causal_open_trade("MES", "2026-07-27T14:00:00+00:00"),
+    ]
+    result = build_trade_chain_health(entries, instruments=["MES"], broker_open_positions={"MES": False})
+    counts = result["counts"]
+    assert counts["approved_intents"] == 1
+    assert counts["broker_order_attempts"] == 0
+    assert counts["broker_fills"] == 0
+    assert counts["causal_paper_opened"] == 1
+    assert result["accounting"]["order_attempts_equation_holds"] is True
+    assert result["accounting"]["fills_equation_holds"] is True
+    assert result["overall_state"] != "FAIL"
+
+
+def test_trade_chain_strat_122_causal_open_then_win_resolves_as_causal_not_broker():
+    """Required regression: TRADE_INTENT + strat_122 causal OPEN + later WIN ->
+    broker_order_attempts 0, broker_fills 0, causal_paper_opened 1,
+    causal_paper_resolved 1, no FAIL. The later close of a causal-opened
+    position must resolve the causal position, not quietly become a broker
+    resolution (the closing OUTCOME itself carries no distinguishing marker
+    -- must be tracked by instrument correlation, not result value alone)."""
+    entries = [
+        _trade_intent("MES", "2026-07-27T13:59:00+00:00"),
+        _causal_open_trade("MES", "2026-07-27T14:00:00+00:00"),
+        _outcome("MES", "2026-07-27T15:00:00+00:00", "WIN"),
+    ]
+    result = build_trade_chain_health(entries, instruments=["MES"], broker_open_positions={"MES": False})
+    counts = result["counts"]
+    assert counts["broker_order_attempts"] == 0
+    assert counts["broker_fills"] == 0
+    assert counts["resolved"] == 0
+    assert counts["causal_paper_opened"] == 1
+    assert counts["causal_paper_resolved"] == 1
     assert result["accounting"]["order_attempts_equation_holds"] is True
     assert result["accounting"]["fills_equation_holds"] is True
     assert result["overall_state"] != "FAIL"
@@ -732,7 +790,7 @@ def test_trade_chain_zero_activity_alone_does_not_imply_pass():
         [], instruments=["MES"], feed_liveness_by_instrument={"MES": stale_feed},
     )
     assert result["counts"]["approved_intents"] == 0
-    assert result["counts"]["order_attempts"] == 0
+    assert result["counts"]["broker_order_attempts"] == 0
     assert result["liveness"]["MES"]["diagnosis"] == "NO_TRADE_SYSTEM_FAILURE"
     assert result["overall_state"] != "PASS"
 
