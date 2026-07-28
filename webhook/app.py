@@ -61,6 +61,7 @@ from ops.live_box_guard import live_box_drift_report
 from ops.fill_realism import build_fill_realism_status
 from ops.automation_evidence import automation_evidence_status
 from ops.evidence_readiness import build_evidence_readiness
+from ops.system_status_snapshot import build_system_status_snapshot
 from ops.proof_30_mnq import DEFAULT_LIMIT as PROOF_30_MNQ_LIMIT
 from ops.proof_30_mnq import build_report as build_mnq_proof_report
 from ops.proof_30_mnq import parse_proof_ts
@@ -938,6 +939,22 @@ async def status_evidence_readiness(
 ) -> dict:
     """Return unified read-only research evidence readiness."""
     return build_evidence_readiness(_config.log_dir, days=days, config=_config)
+
+
+@app.get("/status/system-snapshot")
+async def status_system_snapshot() -> dict:
+    """Return the derived System Status & Evidence Snapshot (ops.system_status_snapshot).
+
+    Composes runtime drift, per-lane execution config, strategy evidence
+    classification, and trade-chain/liveness health from existing read-only
+    sources into one artifact -- see that module's docstring. Read-only: this
+    route cannot enable/disable a strategy, change risk rules or sizing,
+    submit/cancel an order, or alter an evidence classification. The
+    change-scope test-coverage field is NOT_APPLICABLE here (no diff base to
+    compare against over HTTP) -- use `scripts/system_status_snapshot.py` for
+    that check against a specific ref.
+    """
+    return build_system_status_snapshot(log_dir=_config.log_dir)
 
 
 @app.get("/status/history")
