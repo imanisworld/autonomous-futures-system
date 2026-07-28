@@ -1,0 +1,486 @@
+{
+  "known_candidate_count": 33,
+  "reproduction_mismatches": 0,
+  "extra_candidates_in_isolated_rerun_not_in_337": [],
+  "preemption_hits_under_production_config": 7,
+  "production_config": {
+    "enabled_concepts": [
+      "orb_breakout",
+      "orb_reclaim",
+      "orb_rejection",
+      "vwap_reclaim",
+      "vwap_rejection",
+      "vwap_hold",
+      "pdh_reclaim",
+      "pdl_reclaim",
+      "strat_4hr_retrigger",
+      "strat_322_first_live",
+      "strat_122"
+    ],
+    "disabled_concepts_per_instrument": {
+      "MES": [
+        "vwap_reclaim",
+        "pdl_reclaim",
+        "orb_breakout",
+        "orb_rejection",
+        "vwap_rejection",
+        "pdh_reclaim",
+        "strat_4hr_retrigger",
+        "strat_322_first_live"
+      ],
+      "MNQ": [
+        "strat_122"
+      ]
+    }
+  },
+  "rows": [
+    {
+      "date": "2025-07-25",
+      "known_direction": "LONG",
+      "known_result": "LOSS",
+      "known_pnl": -13.75,
+      "bar_ts": "2025-07-25T03:00:00+00:00",
+      "reproduction_direction_match": true,
+      "production": {
+        "classification": "NO_ENGINE_DECISION_AT_BAR"
+      }
+    },
+    {
+      "date": "2025-07-29",
+      "known_direction": "LONG",
+      "known_result": "LOSS",
+      "known_pnl": -15.0,
+      "bar_ts": "2025-07-29T09:00:00+00:00",
+      "reproduction_direction_match": true,
+      "production": {
+        "classification": "NO_ENGINE_DECISION_AT_BAR"
+      }
+    },
+    {
+      "date": "2025-09-04",
+      "known_direction": "LONG",
+      "known_result": "LOSS",
+      "known_pnl": -31.25,
+      "bar_ts": "2025-09-04T12:00:00+00:00",
+      "reproduction_direction_match": true,
+      "production": {
+        "classification": "NO_ENGINE_DECISION_AT_BAR"
+      }
+    },
+    {
+      "date": "2025-09-05",
+      "known_direction": "LONG",
+      "known_result": "LOSS",
+      "known_pnl": -20.0,
+      "bar_ts": "2025-09-05T08:15:00+00:00",
+      "reproduction_direction_match": true,
+      "production": {
+        "classification": "TRADE",
+        "layer": "filled",
+        "decision": "TRADE",
+        "direction": "LONG"
+      }
+    },
+    {
+      "date": "2025-09-16",
+      "known_direction": "LONG",
+      "known_result": "LOSS",
+      "known_pnl": -7.5,
+      "bar_ts": "2025-09-16T05:00:00+00:00",
+      "reproduction_direction_match": true,
+      "production": {
+        "classification": "NO_ENGINE_DECISION_AT_BAR"
+      }
+    },
+    {
+      "date": "2025-10-01",
+      "known_direction": "SHORT",
+      "known_result": "LOSS",
+      "known_pnl": -33.75,
+      "bar_ts": "2025-10-01T07:45:00+00:00",
+      "reproduction_direction_match": true,
+      "production": {
+        "classification": "PREEMPTED_BY_OTHER_STRATEGY",
+        "winning_setup_strategy": "vwap_hold",
+        "decision": "NO_TRADE",
+        "failed_gates": [
+          "WEAK_BAR_CLOSE",
+          "STRATEGY_NOT_PAPER_ELIGIBLE"
+        ]
+      }
+    },
+    {
+      "date": "2025-10-01",
+      "known_direction": "LONG",
+      "known_result": "WIN",
+      "known_pnl": 72.5,
+      "bar_ts": "2025-10-01T13:30:00+00:00",
+      "reproduction_direction_match": true,
+      "production": {
+        "classification": "TRADE",
+        "layer": "filled",
+        "decision": "TRADE",
+        "direction": "LONG"
+      }
+    },
+    {
+      "date": "2025-10-06",
+      "known_direction": "LONG",
+      "known_result": "LOSS",
+      "known_pnl": -23.75,
+      "bar_ts": "2025-10-06T17:15:00+00:00",
+      "reproduction_direction_match": true,
+      "production": {
+        "classification": "NO_ENGINE_DECISION_AT_BAR"
+      }
+    },
+    {
+      "date": "2025-10-08",
+      "known_direction": "LONG",
+      "known_result": "LOSS",
+      "known_pnl": -21.25,
+      "bar_ts": "2025-10-08T09:30:00+00:00",
+      "reproduction_direction_match": true,
+      "production": {
+        "classification": "TRADE",
+        "layer": "filled",
+        "decision": "TRADE",
+        "direction": "LONG"
+      }
+    },
+    {
+      "date": "2025-10-16",
+      "known_direction": "LONG",
+      "known_result": "WIN",
+      "known_pnl": 75.0,
+      "bar_ts": "2025-10-16T07:45:00+00:00",
+      "reproduction_direction_match": true,
+      "production": {
+        "classification": "TRADE",
+        "layer": "filled",
+        "decision": "TRADE",
+        "direction": "LONG"
+      }
+    },
+    {
+      "date": "2025-10-24",
+      "known_direction": "LONG",
+      "known_result": "WIN",
+      "known_pnl": 97.5,
+      "bar_ts": "2025-10-24T12:30:00+00:00",
+      "reproduction_direction_match": true,
+      "production": {
+        "classification": "PREEMPTED_BY_OTHER_STRATEGY",
+        "winning_setup_strategy": "orb_reclaim",
+        "decision": "NO_TRADE",
+        "failed_gates": [
+          "ENTRY_DETACHED_FROM_PRICE"
+        ]
+      }
+    },
+    {
+      "date": "2025-10-30",
+      "known_direction": "SHORT",
+      "known_result": "WIN",
+      "known_pnl": 90.0,
+      "bar_ts": "2025-10-30T15:30:00+00:00",
+      "reproduction_direction_match": true,
+      "production": {
+        "classification": "PREEMPTED_BY_OTHER_STRATEGY",
+        "winning_setup_strategy": "vwap_hold",
+        "decision": "NO_TRADE",
+        "failed_gates": [
+          "STRATEGY_NOT_PAPER_ELIGIBLE"
+        ]
+      }
+    },
+    {
+      "date": "2025-11-13",
+      "known_direction": "LONG",
+      "known_result": "LOSS",
+      "known_pnl": -23.75,
+      "bar_ts": "2025-11-13T07:15:00+00:00",
+      "reproduction_direction_match": true,
+      "production": {
+        "classification": "TRADE",
+        "layer": "filled",
+        "decision": "TRADE",
+        "direction": "LONG"
+      }
+    },
+    {
+      "date": "2025-11-27",
+      "known_direction": "LONG",
+      "known_result": "LOSS",
+      "known_pnl": -18.75,
+      "bar_ts": "2025-11-27T14:15:00+00:00",
+      "reproduction_direction_match": true,
+      "production": {
+        "classification": "TRADE",
+        "layer": "filled",
+        "decision": "TRADE",
+        "direction": "LONG"
+      }
+    },
+    {
+      "date": "2025-12-01",
+      "known_direction": "SHORT",
+      "known_result": "LOSS",
+      "known_pnl": -37.5,
+      "bar_ts": "2025-12-01T14:15:00+00:00",
+      "reproduction_direction_match": true,
+      "production": {
+        "classification": "TRADE",
+        "layer": "filled",
+        "decision": "TRADE",
+        "direction": "SHORT"
+      }
+    },
+    {
+      "date": "2025-12-05",
+      "known_direction": "LONG",
+      "known_result": "LOSS",
+      "known_pnl": -15.0,
+      "bar_ts": "2025-12-05T05:00:00+00:00",
+      "reproduction_direction_match": true,
+      "production": {
+        "classification": "TRADE",
+        "layer": "filled",
+        "decision": "TRADE",
+        "direction": "LONG"
+      }
+    },
+    {
+      "date": "2025-12-17",
+      "known_direction": "LONG",
+      "known_result": "LOSS",
+      "known_pnl": -26.25,
+      "bar_ts": "2025-12-17T07:45:00+00:00",
+      "reproduction_direction_match": true,
+      "production": {
+        "classification": "TRADE",
+        "layer": "filled",
+        "decision": "TRADE",
+        "direction": "LONG"
+      }
+    },
+    {
+      "date": "2026-02-16",
+      "known_direction": "LONG",
+      "known_result": "LOSS",
+      "known_pnl": -20.0,
+      "bar_ts": "2026-02-16T12:15:00+00:00",
+      "reproduction_direction_match": true,
+      "production": {
+        "classification": "NO_ENGINE_DECISION_AT_BAR"
+      }
+    },
+    {
+      "date": "2026-02-20",
+      "known_direction": "SHORT",
+      "known_result": "WIN",
+      "known_pnl": 80.0,
+      "bar_ts": "2026-02-20T13:30:00+00:00",
+      "reproduction_direction_match": true,
+      "production": {
+        "classification": "PREEMPTED_BY_OTHER_STRATEGY",
+        "winning_setup_strategy": "vwap_hold",
+        "decision": "NO_TRADE",
+        "failed_gates": [
+          "ENTRY_DETACHED_FROM_PRICE"
+        ]
+      }
+    },
+    {
+      "date": "2026-03-13",
+      "known_direction": "SHORT",
+      "known_result": "WIN",
+      "known_pnl": 150.0,
+      "bar_ts": "2026-03-13T16:45:00+00:00",
+      "reproduction_direction_match": true,
+      "production": {
+        "classification": "PREEMPTED_BY_OTHER_STRATEGY",
+        "winning_setup_strategy": "vwap_hold",
+        "decision": "NO_TRADE",
+        "failed_gates": [
+          "ENTRY_DETACHED_FROM_PRICE"
+        ]
+      }
+    },
+    {
+      "date": "2026-03-16",
+      "known_direction": "LONG",
+      "known_result": "LOSS",
+      "known_pnl": -32.5,
+      "bar_ts": "2026-03-16T13:30:00+00:00",
+      "reproduction_direction_match": true,
+      "production": {
+        "classification": "NO_ENGINE_DECISION_AT_BAR"
+      }
+    },
+    {
+      "date": "2026-03-17",
+      "known_direction": "LONG",
+      "known_result": "WIN",
+      "known_pnl": 90.0,
+      "bar_ts": "2026-03-17T12:00:00+00:00",
+      "reproduction_direction_match": true,
+      "production": {
+        "classification": "TRADE",
+        "layer": "filled",
+        "decision": "TRADE",
+        "direction": "LONG"
+      }
+    },
+    {
+      "date": "2026-03-18",
+      "known_direction": "LONG",
+      "known_result": "LOSS",
+      "known_pnl": -25.0,
+      "bar_ts": "2026-03-18T08:45:00+00:00",
+      "reproduction_direction_match": true,
+      "production": {
+        "classification": "NO_ENGINE_DECISION_AT_BAR"
+      }
+    },
+    {
+      "date": "2026-03-26",
+      "known_direction": "SHORT",
+      "known_result": "WIN",
+      "known_pnl": 75.0,
+      "bar_ts": "2026-03-26T11:15:00+00:00",
+      "reproduction_direction_match": true,
+      "production": {
+        "classification": "PREEMPTED_BY_OTHER_STRATEGY",
+        "winning_setup_strategy": "vwap_hold",
+        "decision": "NO_TRADE",
+        "failed_gates": [
+          "ENTRY_DETACHED_FROM_PRICE"
+        ]
+      }
+    },
+    {
+      "date": "2026-03-30",
+      "known_direction": "LONG",
+      "known_result": "LOSS",
+      "known_pnl": -52.5,
+      "bar_ts": "2026-03-30T12:15:00+00:00",
+      "reproduction_direction_match": true,
+      "production": {
+        "classification": "TRADE",
+        "layer": "filled",
+        "decision": "TRADE",
+        "direction": "LONG"
+      }
+    },
+    {
+      "date": "2026-04-06",
+      "known_direction": "LONG",
+      "known_result": "WIN",
+      "known_pnl": 92.5,
+      "bar_ts": "2026-04-06T02:00:00+00:00",
+      "reproduction_direction_match": true,
+      "production": {
+        "classification": "TRADE",
+        "layer": "filled",
+        "decision": "TRADE",
+        "direction": "LONG"
+      }
+    },
+    {
+      "date": "2026-04-09",
+      "known_direction": "SHORT",
+      "known_result": "LOSS",
+      "known_pnl": -16.25,
+      "bar_ts": "2026-04-09T05:00:00+00:00",
+      "reproduction_direction_match": true,
+      "production": {
+        "classification": "TRADE",
+        "layer": "filled",
+        "decision": "TRADE",
+        "direction": "SHORT"
+      }
+    },
+    {
+      "date": "2026-04-15",
+      "known_direction": "LONG",
+      "known_result": "LOSS",
+      "known_pnl": -37.5,
+      "bar_ts": "2026-04-15T16:15:00+00:00",
+      "reproduction_direction_match": true,
+      "production": {
+        "classification": "NO_ENGINE_DECISION_AT_BAR"
+      }
+    },
+    {
+      "date": "2026-04-24",
+      "known_direction": "SHORT",
+      "known_result": "LOSS",
+      "known_pnl": -26.25,
+      "bar_ts": "2026-04-24T10:00:00+00:00",
+      "reproduction_direction_match": true,
+      "production": {
+        "classification": "PREEMPTED_BY_OTHER_STRATEGY",
+        "winning_setup_strategy": "vwap_hold",
+        "decision": "NO_TRADE",
+        "failed_gates": [
+          "WEAK_BAR_CLOSE",
+          "STRATEGY_NOT_PAPER_ELIGIBLE"
+        ]
+      }
+    },
+    {
+      "date": "2026-05-05",
+      "known_direction": "LONG",
+      "known_result": "WIN",
+      "known_pnl": 82.5,
+      "bar_ts": "2026-05-05T15:00:00+00:00",
+      "reproduction_direction_match": true,
+      "production": {
+        "classification": "NO_ENGINE_DECISION_AT_BAR"
+      }
+    },
+    {
+      "date": "2026-05-29",
+      "known_direction": "LONG",
+      "known_result": "WIN",
+      "known_pnl": 75.0,
+      "bar_ts": "2026-05-29T09:00:00+00:00",
+      "reproduction_direction_match": true,
+      "production": {
+        "classification": "TRADE",
+        "layer": "filled",
+        "decision": "TRADE",
+        "direction": "LONG"
+      }
+    },
+    {
+      "date": "2026-06-03",
+      "known_direction": "SHORT",
+      "known_result": "LOSS",
+      "known_pnl": -21.25,
+      "bar_ts": "2026-06-03T13:30:00+00:00",
+      "reproduction_direction_match": true,
+      "production": {
+        "classification": "TRADE",
+        "layer": "filled",
+        "decision": "TRADE",
+        "direction": "SHORT"
+      }
+    },
+    {
+      "date": "2026-06-19",
+      "known_direction": "LONG",
+      "known_result": "LOSS",
+      "known_pnl": -32.5,
+      "bar_ts": "2026-06-19T14:15:00+00:00",
+      "reproduction_direction_match": true,
+      "production": {
+        "classification": "TRADE",
+        "layer": "filled",
+        "decision": "TRADE",
+        "direction": "LONG"
+      }
+    }
+  ]
+}
