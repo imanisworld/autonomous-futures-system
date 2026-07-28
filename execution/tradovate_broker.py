@@ -243,6 +243,18 @@ def _parse_api_key_id(value: str | None) -> int:
     )
 
 
+def _parse_expected_account_id(value: str | None) -> Optional[int]:
+    raw = (value or "").strip().strip("\"'")
+    if not raw:
+        return None
+    if raw.lstrip("-").isdigit():
+        return int(raw)
+    raise ValueError(
+        "TRADOVATE_EXPECTED_ACCOUNT_ID must be the numeric account id only "
+        f"(example: 1354122), got {raw!r}"
+    )
+
+
 # ─── Config ───────────────────────────────────────────────────────────────────
 
 @dataclass
@@ -258,6 +270,12 @@ class TradovateConfig:
     # Tradovate guidance (renew well before the 90-minute token lapses); the
     # reliability supervisor's 60s heartbeat drives the actual renewal call.
     token_refresh_buffer: int = 900
+    # Optional pin: the Tradovate account id this deployment expects to trade.
+    # account/list can return more than one account under the same login (e.g.
+    # multiple demo sub-accounts), and nothing before this pin verified WHICH
+    # one _resolve_account_id's accounts[0] picked. Unset (None) = no pin, the
+    # legacy accounts[0] behavior is unchanged and this is visibility-only.
+    expected_account_id: Optional[int] = None
 
     @classmethod
     def from_env(cls) -> "TradovateConfig":
@@ -267,6 +285,9 @@ class TradovateConfig:
             password=os.getenv("TRADOVATE_PASSWORD", "").strip(),
             cid=_parse_api_key_id(os.getenv("TRADOVATE_API_KEY_ID", "0")),
             secret=os.getenv("TRADOVATE_API_KEY_SECRET", "").strip(),
+            expected_account_id=_parse_expected_account_id(
+                os.getenv("TRADOVATE_EXPECTED_ACCOUNT_ID", "")
+            ),
         )
 
     @property
@@ -683,10 +704,68 @@ class TradovateBroker(BrokerInterface):
             resp.raise_for_status()
             accounts = resp.json()
             if accounts:
+                # NOTE: accounts[0] — account/list can return more than one
+                # account (e.g. multiple demo sub-accounts) under one login;
+                # this has always picked whichever one Tradovate lists first,
+                # with no check against which account the operator intends to
+                # trade. TRADOVATE_EXPECTED_ACCOUNT_ID (checked in
+                # _verify_account_for_order, called before every order) is the
+                # fail-closed guard against that ambiguity; this method's
+                # legacy resolution behavior is unchanged so read-only status
+                # endpoints keep showing the real resolved account.
                 self._account_id = accounts[0].get("id")
                 logger.info("Tradovate account ID: %s", self._account_id)
+                expected = self.config.expected_account_id
+                if expected is not None and self._account_id != expected:
+                    logger.error(
+                        "Tradovate account MISMATCH: resolved account_id=%s does not "
+                        "match TRADOVATE_EXPECTED_ACCOUNT_ID=%s (env=%s, %d account(s) "
+                        "visible to this login) -- order submission fails closed until "
+                        "this is corrected.",
+                        self._account_id, expected, self.config.env, len(accounts),
+                    )
         except Exception as exc:
             logger.warning("Could not resolve Tradovate account ID: %s", exc)
+
+    def _verify_account_for_order(self) -> Optional[str]:
+        """Fail-closed account-routing guard — logs the exact (env, account_id,
+        expected) once per order attempt, and blocks submission if a pin is
+        configured and doesn't match. Called from execute_bracket before ANY
+        contract lookup or order body is built.
+
+        Returns None to proceed, or a _cancelled_fill reason string to block.
+        Enforcement only activates once TRADOVATE_EXPECTED_ACCOUNT_ID is set —
+        unset means no pin exists yet and this call is visibility-only (still
+        logs, never blocks), so it is safe to deploy before that env var is
+        configured on the box.
+        """
+        if self._account_id is None:
+            self._resolve_account_id()
+        expected = self.config.expected_account_id
+        logger.info(
+            "Order account check: env=%s account_id=%s expected=%s",
+            self.config.env, self._account_id,
+            expected if expected is not None else "unset",
+        )
+        if self._account_id is None:
+            logger.error("BLOCKED order: Tradovate account ID could not be resolved.")
+            return "ACCOUNT_UNRESOLVED"
+        if expected is None:
+            return None
+        if self._account_id != expected:
+            logger.error(
+                "BLOCKED order: account_id=%s does not match "
+                "TRADOVATE_EXPECTED_ACCOUNT_ID=%s", self._account_id, expected,
+            )
+            return "ACCOUNT_MISMATCH"
+        balance = self.get_account_balance()
+        if balance is not None and balance <= 0:
+            logger.error(
+                "BLOCKED order: account_id=%s has zero/negative buying power "
+                "(balance=%s)", self._account_id, balance,
+            )
+            return "ACCOUNT_ZERO_BUYING_POWER"
+        return None
 
     # ── Rate-limit handling (HTTP 429) ────────────────────────────────────────
     # Centralized, bounded, and derived from Tradovate's OWN response signals
@@ -882,6 +961,10 @@ class TradovateBroker(BrokerInterface):
 
             if not self._authenticate():
                 return self._cancelled_fill(order, "TRADOVATE_AUTH_FAILED")
+
+            account_block_reason = self._verify_account_for_order()
+            if account_block_reason:
+                return self._cancelled_fill(order, account_block_reason)
 
             contract_id = self._find_contract_id(order.instrument)
             root = order.instrument.replace("1!", "").upper()

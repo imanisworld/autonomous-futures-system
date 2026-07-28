@@ -118,6 +118,11 @@ _BROKER_REASON_MAP = {
     # requires reconciliation first, never a blind re-fire).
     "DUPLICATE_CLIENT_ORDER_ID": NO_FILL_DUPLICATE_CANCEL,
     "SUBMIT_AMBIGUOUS_UNRECONCILED": NO_FILL_DUPLICATE_CANCEL,
+    # Account-routing guard refusals (fail-closed before any submission) — see
+    # TradovateBroker._verify_account_for_order.
+    "ACCOUNT_UNRESOLVED": NO_FILL_SESSION_OR_RISK_CANCEL,
+    "ACCOUNT_MISMATCH": NO_FILL_SESSION_OR_RISK_CANCEL,
+    "ACCOUNT_ZERO_BUYING_POWER": NO_FILL_SESSION_OR_RISK_CANCEL,
 }
 
 
