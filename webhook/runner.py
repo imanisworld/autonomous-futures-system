@@ -857,7 +857,7 @@ def process_alert(
     # surfaced on `result` + journal for offline study. Fail-soft.
     try:
         shadow_candidates = [
-            c.to_dict() for c in evaluate_shadow_setups(state, recent_bars)
+            c.to_dict() for c in evaluate_shadow_setups(state, recent_bars, cfg)
         ]
     except Exception:
         shadow_candidates = []

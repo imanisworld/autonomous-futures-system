@@ -164,6 +164,12 @@ RISK_MATRIX = {
     "ema_pullback_trend": ("B", 0.75),
     "impulse_first_pullback_observed": ("B", 0.5),
     "trend_consolidation_break_observed": ("B", 0.5),
+    # Canonical MNQ VWAP observers (strategy/canonical_observers.py). These
+    # REUSE DecisionEngine._try_vwap_hold/_try_vwap_rejection rather than
+    # approximating them; the tier/multiplier here is observe-only metadata
+    # and never reaches an executable sizing path.
+    "vwap_hold_observed": ("B", 0.5),
+    "vwap_rejection_observed": ("B", 0.5),
 }
 
 # Mirrors the hard RiskEngine backstop for the instruments currently traded.
@@ -188,8 +194,14 @@ _FOURHR_MAX_STOP_TICKS = {"MNQ": 80, "MES": 40}
 def evaluate_shadow_setups(
     state: MarketState,
     recent_bars: list[dict] | None = None,
+    config=None,
 ) -> list[ShadowSetupCandidate]:
-    """Return all shadow-only setup candidates visible on this bar."""
+    """Return all shadow-only setup candidates visible on this bar.
+
+    `config` is optional and only used by the canonical MNQ VWAP observers
+    (which reuse the executable DecisionEngine setup builders). Every existing
+    caller works unchanged when it is omitted.
+    """
     candidates = [
         _missing_strat_family(state),
         _strat_122_pullback(state),
@@ -201,7 +213,15 @@ def evaluate_shadow_setups(
         _impulse_first_pullback(state, recent_bars or []),
         _trend_consolidation_break(state, recent_bars or []),
     ]
-    return [candidate for candidate in candidates if candidate is not None]
+    resolved = [candidate for candidate in candidates if candidate is not None]
+
+    # Canonical MNQ VWAP observers — observe-only, fail-soft by contract (the
+    # callee swallows its own exceptions and returns []). Appended AFTER the
+    # hand-written detectors so an observer defect cannot displace them.
+    from strategy.canonical_observers import evaluate_canonical_observers
+
+    resolved.extend(evaluate_canonical_observers(state, config))
+    return resolved
 
 
 def _bar_num(bar: dict, key: str) -> float:
