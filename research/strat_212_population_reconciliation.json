@@ -1,0 +1,33 @@
+{
+  "instrument": "MES",
+  "strategy": "strat_212",
+  "artifact_total": 225,
+  "journal_total": 222,
+  "reconciled": 222,
+  "fully_reconciled": false,
+  "journal_days": 313,
+  "trade_rows_with_order_id": 222,
+  "discrepant_dates": {
+    "2026-07-03": {
+      "artifact": 1,
+      "journal": 0,
+      "risk_rejected_reasons": [
+        "Account drawdown 21.2% exceeds max 20.0% from peak $1,500.00."
+      ]
+    },
+    "2026-07-05": {
+      "artifact": 1,
+      "journal": 0,
+      "risk_rejected_reasons": [
+        "Account drawdown 21.2% exceeds max 20.0% from peak $1,500.00."
+      ]
+    },
+    "2026-07-07": {
+      "artifact": 1,
+      "journal": 0,
+      "risk_rejected_reasons": [
+        "Account drawdown 21.2% exceeds max 20.0% from peak $1,500.00."
+      ]
+    }
+  }
+}
