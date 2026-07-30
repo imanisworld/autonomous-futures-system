@@ -124,7 +124,9 @@ def test_valid_call_context_returns_valid():
     assert result.confirmed is True
     assert result.reason_code == "context_confirmed"
     assert result.warnings == []
-    assert result.context_score == 5.0
+    # Signa is not a scoring component: SPY + QQQ + HTF + GEX = 4.
+    assert result.context_score == 4.0
+    assert result.context_score_max == 4.0
 
 
 # --- 2. valid PUT context passes --------------------------------------------------------
@@ -197,10 +199,11 @@ def test_gex_unavailable_drops_component_from_both_sides_of_context_score():
     without_gex = evaluate_market_context(
         _valid_call_inputs(gex_regime=None, price_above_gex_flip=None)
     )
-    assert with_gex.context_score == 5.0
-    assert with_gex.context_score_max == 5.0
-    assert without_gex.context_score == 4.0
-    assert without_gex.context_score_max == 4.0
+    # Signa is deliberately not a scoring component, so the maxima are 4 and 3.
+    assert with_gex.context_score == 4.0
+    assert with_gex.context_score_max == 4.0
+    assert without_gex.context_score == 3.0
+    assert without_gex.context_score_max == 3.0
 
 
 def test_gex_unavailable_skips_gamma_wall_targeting():
@@ -229,8 +232,7 @@ def test_gamma_wall_targeting_still_enforced_when_gex_is_present():
     assert result.reason_code == "gamma_resistance_too_close"
 
 
-def test_signa_conflict_still_rejects_without_gex():
-    """Removing the GEX dependency must not weaken the Signa gate."""
+def test_signa_opposition_is_recorded_not_enforced():
     result = evaluate_market_context(
         _valid_call_inputs(
             gex_regime=None,
@@ -239,18 +241,21 @@ def test_signa_conflict_still_rejects_without_gex():
             signa_grade="A",
         )
     )
-    assert result.status == "INVALID"
-    assert result.reason_code == "signa_conflict"
+    assert result.status != "INVALID"
+    assert any("SIGNA_OPPOSES" in w for w in result.warnings)
 
 
-def test_missing_signa_still_fails_closed_without_gex():
+def test_system_owned_context_still_fails_closed_without_signa_or_gex():
+    """Guard against over-correction: dropping Signa/GEX authority must not
+    disarm the system's own required context."""
     result = evaluate_market_context(
         _valid_call_inputs(
-            gex_regime=None, price_above_gex_flip=None, signa_direction=None
+            gex_regime=None, price_above_gex_flip=None,
+            signa_direction=None, spy_trend=None,
         )
     )
     assert result.status == "INVALID"
-    assert result.reason_code == "missing_signa_context"
+    assert result.reason_code == "missing_spy_qqq_context"
 
 
 def test_missing_spy_qqq_still_fails_closed_without_gex():
@@ -294,10 +299,14 @@ def test_no_neutral_regime_or_flip_is_fabricated_when_gex_is_absent():
 # --- 6. missing Signa fails closed -------------------------------------------------------
 
 
-def test_missing_signa_context_fails_closed_to_invalid():
-    result = evaluate_market_context(_valid_call_inputs(signa_direction=None))
-    assert result.status == "INVALID"
-    assert result.reason_code == "missing_signa_context"
+def test_missing_signa_is_an_observation_not_an_invalidation():
+    """Signa is external observation. Failing closed on it would make a vendor
+    authoritative over the system's own read."""
+    result = evaluate_market_context(
+        _valid_call_inputs(signa_direction=None, signa_grade=None, signa_score=None)
+    )
+    assert result.status != "INVALID"
+    assert any("SIGNA_UNAVAILABLE" in w for w in result.warnings)
 
 
 # --- 7. missing HTF alignment fails closed -----------------------------------------------
@@ -375,12 +384,13 @@ def test_put_rejected_on_bullish_market_conflict():
 # --- extra: Signa conflict (strong vs. weak grade) ----------------------------------------
 
 
-def test_call_rejected_on_strong_bearish_signa_conflict():
+def test_strong_bearish_signa_does_not_invalidate_a_call():
+    """Signa cannot veto. It is recorded as an opposing observation."""
     result = evaluate_market_context(
         _valid_call_inputs(signa_direction="bearish", signa_grade="A", signa_score=70.0)
     )
-    assert result.status == "INVALID"
-    assert result.reason_code == "signa_conflict"
+    assert result.status != "INVALID"
+    assert any("SIGNA_OPPOSES" in w for w in result.warnings)
 
 
 def test_call_allows_weak_bearish_signa_without_hard_rejecting():

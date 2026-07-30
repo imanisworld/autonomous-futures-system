@@ -78,16 +78,21 @@ def test_valid_call_packet_target_above_entry_is_pending():
     assert packet.rejection_reason is None
 
 
-def test_signa_score_below_minimum_is_rejected():
+def test_low_signa_score_does_not_reject_the_packet():
+    """Signa is an observation; it cannot invalidate packet construction."""
     packet = build_packet(_valid_raw_input(signa_score=25))
-    assert packet.status == "REJECTED"
-    assert "score" in packet.rejection_reason
+    assert packet.status != "REJECTED"
 
 
-def test_grade_c_is_rejected():
+def test_grade_c_does_not_reject_the_packet():
     packet = build_packet(_valid_raw_input(signa_grade="C"))
-    assert packet.status == "REJECTED"
-    assert "grade" in packet.rejection_reason.lower()
+    assert packet.status != "REJECTED"
+
+
+def test_a_plus_grade_is_preserved_not_truncated():
+    packet = build_packet(_valid_raw_input(signa_grade="A+"))
+    assert packet.signa_grade == "A+"
+    assert packet.status != "REJECTED"
 
 
 def test_expiry_too_close_is_rejected():
@@ -229,13 +234,16 @@ def test_invalid_direction_is_rejected():
 # --- floor validation --------------------------------------------------------
 
 
-def test_signa_score_negative_is_rejected():
-    packet = build_packet(_valid_raw_input(signa_score=-1))
-    assert packet.status == "REJECTED"
+def test_out_of_range_signa_scores_do_not_reject():
+    """Range policing was a vendor-opinion gate. The vendor ships several
+    differently-scaled numeric fields; the system does not adjudicate them."""
+    for score in (-1, 101):
+        assert build_packet(_valid_raw_input(signa_score=score)).status != "REJECTED"
 
 
-def test_signa_score_above_100_is_rejected():
-    packet = build_packet(_valid_raw_input(signa_score=101))
+def test_non_numeric_signa_score_is_still_rejected():
+    """Data integrity survives: a non-number is malformed input, not an opinion."""
+    packet = build_packet(_valid_raw_input(signa_score="not-a-number"))
     assert packet.status == "REJECTED"
 
 

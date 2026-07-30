@@ -117,26 +117,34 @@ def evaluate_packet(
         )
 
     # 7. Signa minimum.
-    if packet.signa_score < cfg.risk_min_signa_score:
-        return _rejected(
-            "signa_score_min",
-            f"signa_score {packet.signa_score} below risk minimum {cfg.risk_min_signa_score}",
-        )
-    if packet.signa_grade not in cfg.risk_allowed_grades:
-        return _rejected(
-            "signa_grade_not_allowed",
-            f"signa_grade '{packet.signa_grade}' not in allowed grades {cfg.risk_allowed_grades}",
-        )
-    if packet.direction == "CALL" and packet.signa_bias != "BULLISH":
-        return _rejected(
-            "signa_bias_mismatch",
-            f"signa_bias '{packet.signa_bias}' does not align with CALL (requires BULLISH)",
-        )
-    if packet.direction == "PUT" and packet.signa_bias != "BEARISH":
-        return _rejected(
-            "signa_bias_mismatch",
-            f"signa_bias '{packet.signa_bias}' does not align with PUT (requires BEARISH)",
-        )
+    # 7. Signa — OBSERVATION ONLY, never a rejection.
+    #
+    # These were three hard rejections (score minimum, allowed grades, bias
+    # alignment). They made a third-party vendor authoritative over the system's
+    # own risk decision, and they were applied to a `signa_score` whose
+    # provenance is ambiguous: the vendor returns engine.score, engine.confidence,
+    # signa.conviction, and data.confidence, and the old parser collapsed them.
+    # The vendor also returns two disagreeing grades per response, so "grade not
+    # in allowed" was rejecting on an arbitrary pick.
+    if packet.signa_score is None and not packet.signa_grade:
+        warnings.append("SIGNA_UNAVAILABLE: no Signa observation on this packet")
+    else:
+        if packet.signa_score is not None and packet.signa_score < cfg.risk_min_signa_score:
+            warnings.append(
+                f"SIGNA_LOW_SCORE: signa_score {packet.signa_score} below "
+                f"observational reference {cfg.risk_min_signa_score}"
+            )
+        if packet.signa_grade and packet.signa_grade not in cfg.risk_allowed_grades:
+            warnings.append(
+                f"SIGNA_GRADE_OUTSIDE_REFERENCE: '{packet.signa_grade}' not in "
+                f"{cfg.risk_allowed_grades}"
+            )
+        expected_bias = "BULLISH" if packet.direction == "CALL" else "BEARISH"
+        if packet.signa_bias and packet.signa_bias != expected_bias:
+            warnings.append(
+                f"SIGNA_BIAS_OPPOSES: signa_bias '{packet.signa_bias}' does not "
+                f"align with {packet.direction} — observation only"
+            )
 
     # 8. GEX regime handling. OPTIONAL by default — see risk_reject_empty_gex_regime.
     # An absent regime is a missing enrichment, not a blocking data gap: the packet

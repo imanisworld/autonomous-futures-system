@@ -27,13 +27,26 @@ MIN_CONTRACTS_FLOOR = 1
 MAX_CONTRACTS_CEILING = 2
 
 
+def _coerce_optional_number(value):
+    """Numbers pass through; None stays None; anything else is returned as-is so
+    `_validate` can report it as malformed instead of raising here."""
+    if value is None or isinstance(value, (int, float)):
+        return value
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return value
+
+
 def build_packet(raw_input: dict) -> OptionTradePacket:
     ticker = raw_input["ticker"]
     direction = raw_input["direction"]
     entry_price = float(raw_input["entry_price"])
-    signa_score = int(raw_input["signa_score"])
-    signa_grade = raw_input["signa_grade"]
-    signa_bias = raw_input["signa_bias"]
+    # Signa is an optional observation: absent is fine, and a malformed value is
+    # surfaced by _validate rather than exploding here.
+    signa_score = _coerce_optional_number(raw_input.get("signa_score"))
+    signa_grade = raw_input.get("signa_grade")
+    signa_bias = raw_input.get("signa_bias")
     gex_regime = raw_input.get("gex_regime", "")
     gex_wall_above = raw_input.get("gex_wall_above")
     gex_wall_below = raw_input.get("gex_wall_below")
@@ -127,19 +140,15 @@ def _validate(
     if direction not in ALLOWED_DIRECTIONS:
         return f"direction '{direction}' is invalid; must be CALL or PUT"
 
-    if not (0 <= signa_score <= MAX_SIGNA_SCORE):
-        return f"signa_score {signa_score} outside allowed range 0-{MAX_SIGNA_SCORE}"
-
-    if signa_score < MIN_SIGNA_SCORE:
-        return f"signa_score {signa_score} below minimum {MIN_SIGNA_SCORE}"
-
-    if signa_grade not in ALLOWED_GRADES:
-        return f"signa_grade '{signa_grade}' not allowed (require A or B)"
-
-    if direction == "CALL" and signa_bias != "BULLISH":
-        return f"signa_bias '{signa_bias}' does not align with CALL (requires BULLISH)"
-    if direction == "PUT" and signa_bias != "BEARISH":
-        return f"signa_bias '{signa_bias}' does not align with PUT (requires BEARISH)"
+    # Signa is an OBSERVATION. It cannot invalidate a packet.
+    #
+    # Removed: a score-range check, a minimum-score rejection, an allowed-grade
+    # rejection, and a bias-alignment rejection. Those made packet construction
+    # itself depend on a vendor's opinion. The only Signa check that survives is
+    # structural — a score must be a number if one is supplied at all — because
+    # that is about data integrity, not about the vendor's verdict.
+    if signa_score is not None and not isinstance(signa_score, (int, float)):
+        return f"signa_score {signa_score!r} must be numeric when supplied"
 
     if entry_price <= 0:
         return f"entry_price {entry_price} must be > 0"

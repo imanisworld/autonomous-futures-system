@@ -119,24 +119,36 @@ def test_put_target_above_entry_rejects():
     assert result.failed_rule == "target_direction_mismatch"
 
 
-def test_low_signa_score_rejects():
+# Signa is an OBSERVATION and holds no veto. These three used to be hard
+# rejections, which made a third-party vendor authoritative over the system's
+# own risk decision.
+
+
+def test_low_signa_score_warns_but_does_not_reject():
     result = evaluate_packet(_packet(signa_score=10), _config(risk_min_signa_score=30))
-    assert result.status == "REJECTED"
-    assert result.failed_rule == "signa_score_min"
+    assert result.approved is True
+    assert result.failed_rule is None
+    assert any("SIGNA_LOW_SCORE" in w for w in result.warnings)
 
 
-def test_grade_c_rejects():
+def test_grade_c_warns_but_does_not_reject():
     result = evaluate_packet(_packet(signa_grade="C"), _config())
-    assert result.status == "REJECTED"
-    assert result.failed_rule == "signa_grade_not_allowed"
+    assert result.approved is True
+    assert any("SIGNA_GRADE_OUTSIDE_REFERENCE" in w for w in result.warnings)
 
 
-def test_signa_bias_mismatch_rejects():
+def test_signa_bias_opposition_warns_but_does_not_reject():
     result = evaluate_packet(
         _packet(direction="CALL", signa_bias="BEARISH"), _config()
     )
-    assert result.status == "REJECTED"
-    assert result.failed_rule == "signa_bias_mismatch"
+    assert result.approved is True
+    assert any("SIGNA_BIAS_OPPOSES" in w for w in result.warnings)
+
+
+def test_absent_signa_warns_but_does_not_reject():
+    result = evaluate_packet(_packet(signa_score=None, signa_grade=""), _config())
+    assert result.approved is True
+    assert any("SIGNA_UNAVAILABLE" in w for w in result.warnings)
 
 
 def test_empty_gex_regime_approves_with_warning_by_default():
@@ -157,13 +169,23 @@ def test_empty_gex_regime_rejects_only_when_explicitly_opted_in():
     assert result.failed_rule == "gex_regime_missing"
 
 
-def test_signa_gate_still_rejects_when_gex_is_absent():
-    """Dropping the GEX requirement must not weaken the Signa gate."""
+def test_neither_signa_nor_gex_can_reject():
+    """Both are external observations. With both absent or adverse, the
+    system-owned rules must still be the only thing that decides."""
     result = evaluate_packet(
-        _packet(gex_regime="", signa_grade="D"), _config()
+        _packet(gex_regime="", signa_grade="D", signa_score=1), _config()
     )
+    assert result.approved is True
+    assert result.failed_rule is None
+
+
+def test_system_owned_rules_still_reject():
+    """Guard against over-correction: removing Signa/GEX authority must not
+    disarm the real risk gates."""
+    result = evaluate_packet(_packet(max_premium=99.0), _config(risk_max_premium=3.0))
     assert result.approved is False
-    assert result.failed_rule == "signa_grade_not_allowed"
+    assert result.failed_rule is not None
+    assert "signa" not in result.failed_rule.lower()
 
 
 def test_unknown_gex_regime_approves_with_warning():

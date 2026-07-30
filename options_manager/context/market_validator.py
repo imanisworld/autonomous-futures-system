@@ -66,16 +66,6 @@ def evaluate_market_context(inputs: MarketContextInputs) -> MarketContextResult:
             "spy_trend, qqq_trend, spy_above_flip, and qqq_above_flip are all required",
         )
 
-    if (
-        inputs.signa_direction is None
-        or inputs.signa_grade is None
-        or inputs.signa_score is None
-    ):
-        return _invalid(
-            "missing_signa_context",
-            "signa_direction, signa_grade, and signa_score are all required",
-        )
-
     if inputs.higher_timeframe_alignment is None:
         return _invalid(
             "missing_htf_alignment", "higher_timeframe_alignment is required"
@@ -145,19 +135,24 @@ def evaluate_market_context(inputs: MarketContextInputs) -> MarketContextResult:
             f"both SPY and QQQ trend {opposing_trend}, opposing a {direction} setup",
         )
 
-    opposing_signa = "bearish" if direction == "CALL" else "bullish"
-    if inputs.signa_direction == opposing_signa:
-        if inputs.signa_grade in _WEAK_SIGNA_GRADES:
+    # Signa is an external OBSERVATION and holds no veto. It used to be able to
+    # return INVALID/signa_conflict and INVALID/missing_signa_context, which made
+    # a third-party vendor's opinion authoritative over the system's own read.
+    # Both are now recorded and nothing more.
+    signa_available = inputs.signa_direction is not None or inputs.signa_grade is not None
+    if not signa_available:
+        warnings.append("SIGNA_UNAVAILABLE: no Signa observation supplied")
+    else:
+        opposing_signa = "bearish" if direction == "CALL" else "bullish"
+        if inputs.signa_direction == opposing_signa:
             warnings.append(
-                f"signa_direction is {inputs.signa_direction} but grade "
-                f"{inputs.signa_grade!r} is weak — not treated as a hard conflict"
+                f"SIGNA_OPPOSES: signa_direction {inputs.signa_direction!r} "
+                f"(grade {inputs.signa_grade!r}) opposes {direction} — observation only"
             )
-        else:
-            return _invalid(
-                "signa_conflict",
-                f"signa_direction {inputs.signa_direction!r} (grade "
-                f"{inputs.signa_grade!r}) conflicts with {direction}",
-            )
+        elif inputs.signa_direction in {"neutral", None}:
+            warnings.append("SIGNA_NOT_ACTIONABLE: signa_direction is neutral/absent")
+        if inputs.signa_grade in _WEAK_SIGNA_GRADES:
+            warnings.append(f"SIGNA_WEAK_GRADE: grade {inputs.signa_grade!r}")
 
     spy_aligned = inputs.spy_trend == aligned_trend
     qqq_aligned = inputs.qqq_trend == aligned_trend
@@ -190,21 +185,23 @@ def evaluate_market_context(inputs: MarketContextInputs) -> MarketContextResult:
     if inputs.higher_timeframe_alignment == "mixed":
         warnings.append("higher_timeframe_alignment is mixed, not fully aligned")
 
-    aligned_signa = "bullish" if direction == "CALL" else "bearish"
+    # Signa is deliberately ABSENT from the score. Including it would let an
+    # external observation move a system-owned output, and would make the score
+    # differ depending on whether a vendor happened to answer.
+    #
     # The GEX component drops out of BOTH numerator and denominator when GEX is
     # unavailable — an absent component must never score as either aligned or
     # opposed. `context_score_max` carries the denominator so a caller cannot
-    # misread 4/4 as 4/5.
+    # misread 3/3 as 3/4.
     context_score = (
         (1.0 if spy_aligned else 0.0)
         + (1.0 if qqq_aligned else 0.0)
         + (1.0 if inputs.higher_timeframe_alignment == "aligned" else 0.0)
-        + (1.0 if inputs.signa_direction == aligned_signa else 0.0)
     )
-    context_score_max = 4.0
+    context_score_max = 3.0
     if gex_available:
         context_score += 1.0 if gex_aligned else 0.0
-        context_score_max = 5.0
+        context_score_max = 4.0
 
     if warnings:
         return MarketContextResult(
