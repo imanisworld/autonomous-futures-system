@@ -1,0 +1,20 @@
+{
+  "cached": false,
+  "change": -11.39996,
+  "changePercent": -1.53875,
+  "close": 729.46002,
+  "degraded": false,
+  "high": 742.66998,
+  "low": 729.099976,
+  "meta": {
+    "api_version": "v1",
+    "generated_at": "2026-07-30T01:39:16.001Z",
+    "request_id": "<redacted-request-id>"
+  },
+  "ok": true,
+  "open": 739.96997,
+  "price": 729.46002,
+  "symbol": "SPY",
+  "timestamp": "2026-07-29T13:30:00.000Z",
+  "volume": 69069318
+}

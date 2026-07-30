@@ -1,0 +1,74 @@
+{
+  "_fixture_note": "strikes truncated to 8 for fixture size",
+  "asOf": "2026-07-30T01:39:19.924Z",
+  "expiry": "2026-07-30",
+  "levels": {
+    "callWall": 738,
+    "flipLevel": 732,
+    "gammaFlipLevel": 732,
+    "maxGammaStrike": 720,
+    "putWall": 720,
+    "regimeAboveFlip": true
+  },
+  "meta": {
+    "api_version": "v1",
+    "filters": {
+      "expiry_days": 14
+    },
+    "generated_at": "2026-07-30T01:39:19.924Z",
+    "source": "Signa Gamma Exposure"
+  },
+  "ok": true,
+  "strikes": [
+    {
+      "expiry": "2026-07-30",
+      "netGex": -219,
+      "strike": 560
+    },
+    {
+      "expiry": "2026-07-30",
+      "netGex": -363,
+      "strike": 565
+    },
+    {
+      "expiry": "2026-07-30",
+      "netGex": -1125,
+      "strike": 570
+    },
+    {
+      "expiry": "2026-07-30",
+      "netGex": -5,
+      "strike": 590
+    },
+    {
+      "expiry": "2026-07-30",
+      "netGex": -547,
+      "strike": 595
+    },
+    {
+      "expiry": "2026-07-30",
+      "netGex": -2492,
+      "strike": 600
+    },
+    {
+      "expiry": "2026-07-30",
+      "netGex": -2580,
+      "strike": 605
+    },
+    {
+      "expiry": "2026-07-30",
+      "netGex": -1280,
+      "strike": 610
+    }
+  ],
+  "symbol": "SPY",
+  "underlying": {
+    "change": -8.589990000000057,
+    "changePct": -1.1594619922719887,
+    "isExtended": true,
+    "isMarketOpen": false,
+    "price": 732.27,
+    "regularClose": 729.46002,
+    "timestamp": 1785369540
+  }
+}

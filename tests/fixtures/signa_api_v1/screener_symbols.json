@@ -1,0 +1,153 @@
+{
+  "data_unavailable": [],
+  "meta": {
+    "conflicts": 1,
+    "count": 5,
+    "generated_at": "2026-07-30T01:39:21.894Z"
+  },
+  "ok": true,
+  "partial": false,
+  "results": [
+    {
+      "bias": "bullish",
+      "change24h": -0.55574694,
+      "confidence": 95,
+      "conflictNote": "Consistency note: Technical bias and Signa action are aligned. If other surfaces disagree, check their timeframe and timestamp.",
+      "crossSurfaceConflict": null,
+      "dataSource": "Signa Signal Engine \u00b7 live quote + 1D candles",
+      "lastUpdated": "2026-07-30T01:39:21.387Z",
+      "nightlyConsensus": null,
+      "price": 338.19,
+      "rsi": 67,
+      "score": 48,
+      "signaAction": "BUY",
+      "signaConviction": 71,
+      "signaGrade": "B+",
+      "signaRiskRating": "MODERATE",
+      "stage": 2,
+      "symbol": "AAPL",
+      "tier": "B",
+      "timeframe": "Daily (1D) \u00b7 20\u201360 trading days",
+      "triggers": [
+        "RSI Bullish Momentum",
+        "MACD Bullish",
+        "Bullish Trend"
+      ]
+    },
+    {
+      "bias": "bearish",
+      "change24h": -2.037041,
+      "confidence": 40,
+      "conflictNote": "Consistency note: Technical bias and Signa action are aligned. If other surfaces disagree, check their timeframe and timestamp.",
+      "crossSurfaceConflict": "\u26a0\ufe0f Live technical analysis shows bearish bias, but the nightly agent consensus (1 models, score 69) is bullish. This often happens when intraday momentum diverges from the broader trend. The nightly consensus reflects analysis from multiple AI models across longer timeframes.",
+      "dataSource": "Signa Signal Engine \u00b7 live quote + 1D candles",
+      "lastUpdated": "2026-07-30T01:39:21.387Z",
+      "nightlyConsensus": {
+        "direction": "BULLISH",
+        "modelCount": 1,
+        "score": 69
+      },
+      "price": 661.72998,
+      "rsi": 32,
+      "score": 30,
+      "signaAction": "HOLD",
+      "signaConviction": 49,
+      "signaGrade": "C",
+      "signaRiskRating": "ELEVATED",
+      "stage": 3,
+      "symbol": "QQQ",
+      "tier": "B",
+      "timeframe": "Daily (1D) \u00b7 20\u201360 trading days",
+      "triggers": [
+        "RSI Low",
+        "MACD Bearish"
+      ]
+    },
+    {
+      "bias": "bearish",
+      "change24h": -3.55312,
+      "confidence": 40,
+      "conflictNote": "Consistency note: Technical bias and Signa action are aligned. If other surfaces disagree, check their timeframe and timestamp.",
+      "crossSurfaceConflict": null,
+      "dataSource": "Signa Signal Engine \u00b7 live quote + 1D candles",
+      "lastUpdated": "2026-07-30T01:39:21.388Z",
+      "nightlyConsensus": null,
+      "price": 190.0099945,
+      "rsi": 38,
+      "score": 30,
+      "signaAction": "HOLD",
+      "signaConviction": 57,
+      "signaGrade": "C",
+      "signaRiskRating": "MODERATE",
+      "stage": 1,
+      "symbol": "NVDA",
+      "tier": "B",
+      "timeframe": "Daily (1D) \u00b7 20\u201360 trading days",
+      "triggers": [
+        "RSI Low",
+        "MACD Bearish"
+      ]
+    },
+    {
+      "bias": "bearish",
+      "change24h": -2.96643,
+      "confidence": 60,
+      "conflictNote": "Consistency note: Technical bias and Signa action are aligned. If other surfaces disagree, check their timeframe and timestamp.",
+      "crossSurfaceConflict": null,
+      "dataSource": "Signa Signal Engine \u00b7 live quote + 1D candles",
+      "lastUpdated": "2026-07-30T01:39:21.388Z",
+      "nightlyConsensus": {
+        "direction": "BEARISH",
+        "modelCount": 5,
+        "score": 41
+      },
+      "price": 298.32001,
+      "rsi": 25,
+      "score": 30,
+      "signaAction": "AVOID",
+      "signaConviction": 57,
+      "signaGrade": "C",
+      "signaRiskRating": "MODERATE",
+      "stage": 4,
+      "symbol": "TSLA",
+      "tier": "B",
+      "timeframe": "Daily (1D) \u00b7 20\u201360 trading days",
+      "triggers": [
+        "RSI Bounce Setup",
+        "MACD Bearish",
+        "Bearish Trend"
+      ]
+    },
+    {
+      "bias": "neutral",
+      "change24h": -1.53875,
+      "confidence": 35,
+      "conflictNote": "Consistency note: Technical bias and Signa action are aligned. If other surfaces disagree, check their timeframe and timestamp.",
+      "crossSurfaceConflict": null,
+      "dataSource": "Signa Signal Engine \u00b7 live quote + 1D candles",
+      "lastUpdated": "2026-07-30T01:39:21.387Z",
+      "nightlyConsensus": {
+        "direction": "BULLISH",
+        "modelCount": 4,
+        "score": 81
+      },
+      "price": 729.46002,
+      "rsi": 39,
+      "score": 28,
+      "signaAction": "HOLD",
+      "signaConviction": 47,
+      "signaGrade": "C",
+      "signaRiskRating": "MODERATE",
+      "stage": 3,
+      "symbol": "SPY",
+      "tier": "C",
+      "timeframe": "Daily (1D) \u00b7 20\u201360 trading days",
+      "triggers": [
+        "RSI Low",
+        "MACD Bearish",
+        "Bullish Trend"
+      ]
+    }
+  ],
+  "skipped": []
+}

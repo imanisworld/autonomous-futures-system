@@ -1,0 +1,87 @@
+{
+  "meta": {
+    "count": 5,
+    "generated_at": "2026-07-30T01:39:21.176Z"
+  },
+  "ok": true,
+  "results": [
+    {
+      "bias": "bullish",
+      "change24h": -0.55574694,
+      "confidence": 95,
+      "price": 338.19,
+      "rsi": 66.7846523231705,
+      "score": 47.5,
+      "stage": 2,
+      "symbol": "AAPL",
+      "tier": "WATCH",
+      "triggers": [
+        "RSI Bullish Momentum",
+        "MACD Bullish",
+        "Bullish Trend"
+      ]
+    },
+    {
+      "bias": "bearish",
+      "change24h": -2.037041,
+      "confidence": 40,
+      "price": 661.72998,
+      "rsi": 32.404551094036705,
+      "score": 30,
+      "stage": 3,
+      "symbol": "QQQ",
+      "tier": "WATCH",
+      "triggers": [
+        "RSI Low",
+        "MACD Bearish"
+      ]
+    },
+    {
+      "bias": "bearish",
+      "change24h": -3.55312,
+      "confidence": 40,
+      "price": 190.0099945,
+      "rsi": 37.956135866184916,
+      "score": 30,
+      "stage": 1,
+      "symbol": "NVDA",
+      "tier": "WATCH",
+      "triggers": [
+        "RSI Low",
+        "MACD Bearish"
+      ]
+    },
+    {
+      "bias": "bearish",
+      "change24h": -2.96643,
+      "confidence": 60,
+      "price": 298.32001,
+      "rsi": 25.417348459492388,
+      "score": 30,
+      "stage": 4,
+      "symbol": "TSLA",
+      "tier": "WATCH",
+      "triggers": [
+        "RSI Bounce Setup",
+        "MACD Bearish",
+        "Bearish Trend"
+      ]
+    },
+    {
+      "bias": "neutral",
+      "change24h": -1.53875,
+      "confidence": 35,
+      "price": 729.46002,
+      "rsi": 38.63167406501657,
+      "score": 27.5,
+      "stage": 3,
+      "symbol": "SPY",
+      "tier": "NEUTRAL",
+      "triggers": [
+        "RSI Low",
+        "MACD Bearish",
+        "Bullish Trend"
+      ]
+    }
+  ]
+}

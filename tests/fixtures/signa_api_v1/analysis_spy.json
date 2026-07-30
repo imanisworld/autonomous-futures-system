@@ -1,0 +1,123 @@
+{
+  "actionCard": {
+    "bias": "neutral",
+    "confidence": 35,
+    "recommendedAction": "WAIT",
+    "riskFactors": [],
+    "riskScore": 6,
+    "stage": 3,
+    "stageDescription": "Topping / Distribution",
+    "strength": 0.5,
+    "timeHorizon": "position",
+    "triggers": [
+      {
+        "description": "RSI at 38.6 - below 40",
+        "firedAt": "2026-07-30T01:36:34.757Z",
+        "name": "RSI Low",
+        "type": "technical",
+        "weight": 0.1
+      },
+      {
+        "description": "MACD below signal line with negative histogram",
+        "firedAt": "2026-07-30T01:36:34.757Z",
+        "name": "MACD Bearish",
+        "type": "technical",
+        "weight": 0.2
+      },
+      {
+        "description": "All EMAs aligned bullish (20>50>200)",
+        "firedAt": "2026-07-30T01:36:34.757Z",
+        "name": "Bullish Trend",
+        "type": "technical",
+        "weight": 0.15
+      }
+    ]
+  },
+  "bias": {
+    "confidence": 35,
+    "direction": "WAIT"
+  },
+  "cached": true,
+  "meta": {
+    "api_version": "v1",
+    "engine_version": "2.0",
+    "generated_at": "2026-07-30T01:36:34.821Z"
+  },
+  "ok": true,
+  "opportunities": [],
+  "overallScore": 27.5,
+  "patterns": [
+    {
+      "confidence": 0.81,
+      "description": "Two distinct swing highs at similar price levels with a meaningful drop between them",
+      "formationBars": 40,
+      "name": "Double Top",
+      "status": "forming",
+      "targetPrice": 716.58002,
+      "type": "bearish"
+    }
+  ],
+  "sentiment": {
+    "bearish": 52.71,
+    "bullish": 47.29,
+    "daysOfHistory": 61
+  },
+  "signa": {
+    "action": "HOLD",
+    "alphaEvent": false,
+    "componentScores": {
+      "flowScore": 45,
+      "regimeClass": "bull",
+      "volumeGrade": "C",
+      "weinsteinStageStrength": 47
+    },
+    "conviction": 47,
+    "grade": "C",
+    "riskRating": "MODERATE",
+    "triggers": []
+  },
+  "symbol": "SPY",
+  "technicals": {
+    "adx": 21.18,
+    "atr": 8.5385,
+    "bollingerBands": {
+      "lower": 733.3185713780025,
+      "middle": 745.7855067000002,
+      "upper": 758.2524420219978,
+      "width": 3.343303191064185
+    },
+    "change24h": -1.53875,
+    "ema20": 742.8167771946252,
+    "ema200": 699.52280022,
+    "ema50": 738.6235911440912,
+    "macd": {
+      "bullish": false,
+      "histogram": -3.290876507062893,
+      "signal": 1.7846508099288656,
+      "value": -1.5062256971340275
+    },
+    "obv": 434437982,
+    "pivotPoints": {
+      "pivot": 733.7433,
+      "r1": 738.3867,
+      "r2": 747.3133,
+      "r3": 751.9567,
+      "s1": 724.8167,
+      "s2": 720.1733,
+      "s3": 711.2467
+    },
+    "price": 729.46002,
+    "rsi": 38.63167406501657,
+    "sma20": 745.7855067000002,
+    "sma200": 699.52280022,
+    "sma50": 744.6632029799998,
+    "stochastic": {
+      "d": 50,
+      "k": 50
+    },
+    "trendStrength": 0.557,
+    "volatilityRegime": null,
+    "weinsteinStage": 3
+  },
+  "tier": "NEUTRAL"
+}

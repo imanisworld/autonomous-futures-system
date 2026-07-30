@@ -1,0 +1,31 @@
+{
+  "adjustedEBITDA": null,
+  "adjustedFCF": null,
+  "bearishPoints": [],
+  "bullishPoints": [],
+  "cached": true,
+  "companyName": "SPY",
+  "dataSource": "fiscal_ai",
+  "eps": {
+    "actual": null,
+    "estimate": null,
+    "result": null,
+    "surprisePct": null
+  },
+  "exchange": "NASDAQ",
+  "fetchedAt": "2026-07-30T01:36:35.588Z",
+  "kpiDeltas": [],
+  "minutesSinceReport": null,
+  "period": "Unknown",
+  "reportDate": "",
+  "revenue": {
+    "actual": null,
+    "estimate": null,
+    "result": null,
+    "surprisePct": null
+  },
+  "segmentDeltas": [],
+  "signal": "IN_LINE",
+  "signalScore": 0,
+  "symbol": "SPY"
+}

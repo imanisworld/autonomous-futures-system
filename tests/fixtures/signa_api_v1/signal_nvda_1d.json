@@ -1,0 +1,121 @@
+{
+  "cached": true,
+  "confidence_pillars": {
+    "bollinger-band": {
+      "confidence": 0.58,
+      "score": 1,
+      "signal": "BUY",
+      "weight": 1
+    }
+  },
+  "crossSurfaceConflict": "\u26a0\ufe0f Live technical analysis shows bearish bias, but the nightly agent consensus (1 models, score 69) is bullish. This often happens when intraday momentum diverges from the broader trend. The nightly consensus reflects analysis from multiple AI models across longer timeframes.",
+  "data": {
+    "adx": 14.5,
+    "atr": 7.5277,
+    "bbands": null,
+    "bias": "bearish",
+    "change24h": -3.55312,
+    "confidence": 40,
+    "direction": "WAIT",
+    "ema20": 202.86628883932173,
+    "ema200": 192.9908499999999,
+    "ema50": 203.9050463519828,
+    "entry": 190.0099945,
+    "macdBullish": false,
+    "macdHist": -2.844763163441701,
+    "opportunities": [],
+    "overallScore": 30,
+    "patterns": [
+      "Double Top"
+    ],
+    "pivotPoints": {
+      "pivot": 192.3647,
+      "r1": 194.7193,
+      "r2": 199.4287,
+      "r3": 201.7833,
+      "s1": 187.6553,
+      "s2": 185.3007,
+      "s3": 180.5913
+    },
+    "price": 190.0099945,
+    "riskFactors": [
+      "High volatility",
+      "Price below SMA 200"
+    ],
+    "riskScore": 6,
+    "rr": 2,
+    "rsi": 37.956135866184916,
+    "stage": 1,
+    "stageDescription": "Basing / Accumulation",
+    "stop": 201.3015,
+    "target": 167.4269,
+    "tier": "WATCH",
+    "timeHorizon": "position",
+    "trendStrength": 0.283,
+    "triggers": [
+      {
+        "description": "RSI at 38.0 - below 40",
+        "name": "RSI Low",
+        "weight": 0.1
+      },
+      {
+        "description": "MACD below signal line with negative histogram",
+        "name": "MACD Bearish",
+        "weight": 0.2
+      }
+    ]
+  },
+  "engine": {
+    "confidence": 38,
+    "conflictDetected": false,
+    "direction": "BULLISH",
+    "grade": "A",
+    "modelCount": 1,
+    "note": "Nightly pipeline consensus from 30+ independent models. Updated once per trading day. Use this field to match the in-app Action Card.",
+    "reasons": [
+      "Strong consensus: 100% bullish",
+      "Price at lower Bollinger Band: %B 0.00"
+    ],
+    "runAt": "2026-07-29T21:03:52.794+00:00",
+    "score": 69
+  },
+  "engine_coverage": {
+    "engine_data_available": true,
+    "in_universe": true,
+    "note": "Nightly pipeline data available. engine field is populated."
+  },
+  "engine_version": "v3.1",
+  "meta": {
+    "api_version": "v1",
+    "engine_version": "v3.1",
+    "generated_at": "2026-07-30T01:37:52.065Z",
+    "signal_sources": {
+      "data": "Live single-pass technical analysis (real-time)",
+      "engine": "Nightly 30+ model pipeline consensus (matches in-app Action Card)"
+    }
+  },
+  "ok": true,
+  "options_flow": {
+    "options_flow_count": 50,
+    "options_flow_latest_at": "2026-07-29T19:58:10.909274+00:00",
+    "options_flow_premium": 19123735,
+    "options_flow_sentiment": "BULLISH"
+  },
+  "signa": {
+    "action": "HOLD",
+    "alphaEvent": false,
+    "conviction": 57,
+    "flowScore": 67,
+    "grade": "C",
+    "regimeClass": "ranging",
+    "riskRating": "MODERATE",
+    "stageStrength": 55,
+    "triggers": [],
+    "volumeGrade": "C"
+  },
+  "signal_timestamp": "2026-07-29T21:03:52.794+00:00",
+  "symbol": "NVDA",
+  "timeframe": "1d",
+  "timeframe_input": "1d",
+  "trade_plan": null
+}

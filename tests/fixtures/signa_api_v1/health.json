@@ -1,0 +1,26 @@
+{
+  "meta": {
+    "api_version": "v1",
+    "checked_at": "2026-07-30T01:39:15.274Z",
+    "engine_version": "2.0"
+  },
+  "ok": true,
+  "providers": [
+    {
+      "healthy": true,
+      "name": "Twelvedata",
+      "priority": 1
+    },
+    {
+      "healthy": true,
+      "name": "Polygon.io",
+      "priority": 2
+    },
+    {
+      "healthy": true,
+      "name": "CoinGecko",
+      "priority": 3
+    }
+  ],
+  "status": "healthy"
+}
