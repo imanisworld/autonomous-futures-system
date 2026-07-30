@@ -1,0 +1,144 @@
+{
+  "cached": false,
+  "confidence_pillars": {
+    "faber-taa": {
+      "confidence": 0.78,
+      "score": 1,
+      "signal": "BUY",
+      "weight": 1
+    },
+    "halloween-seasonal-combo": {
+      "confidence": 0.73,
+      "score": -1,
+      "signal": "AVOID",
+      "weight": 1
+    },
+    "options-flow-sweep": {
+      "confidence": 0.55,
+      "score": 1,
+      "signal": "BUY",
+      "weight": 1
+    },
+    "turn-of-month": {
+      "confidence": 0.7,
+      "score": 1,
+      "signal": "BUY",
+      "weight": 1
+    }
+  },
+  "crossSurfaceConflict": null,
+  "data": {
+    "adx": 25.66,
+    "atr": 5.0789,
+    "bbands": null,
+    "bias": "neutral",
+    "change24h": -1.49961,
+    "confidence": 35,
+    "direction": "WAIT",
+    "ema20": 745.1879883755112,
+    "ema200": 715.79320649,
+    "ema50": 745.1602125997729,
+    "entry": 729.75,
+    "macdBullish": false,
+    "macdHist": -2.4487049941585295,
+    "opportunities": [],
+    "overallScore": 17.5,
+    "patterns": [],
+    "pivotPoints": {
+      "pivot": 739.4397,
+      "r1": 741.5895,
+      "r2": 744.3189,
+      "r3": 746.4687,
+      "s1": 736.7102,
+      "s2": 734.5605,
+      "s3": 731.831
+    },
+    "price": 729.75,
+    "riskFactors": [],
+    "riskScore": 6,
+    "rr": 2,
+    "rsi": 40.32446431745143,
+    "stage": 3,
+    "stageDescription": "Topping / Distribution",
+    "stop": 737.3683,
+    "target": 714.5133,
+    "tier": "NEUTRAL",
+    "timeHorizon": "position",
+    "trendStrength": 0.595,
+    "triggers": [
+      {
+        "description": "MACD below signal line with negative histogram",
+        "name": "MACD Bearish",
+        "weight": 0.2
+      },
+      {
+        "description": "All EMAs aligned bullish (20>50>200)",
+        "name": "Bullish Trend",
+        "weight": 0.15
+      }
+    ]
+  },
+  "engine": {
+    "confidence": 31,
+    "conflictDetected": false,
+    "direction": "BULLISH",
+    "grade": "B",
+    "modelCount": 4,
+    "note": "Nightly pipeline consensus from 30+ independent models. Updated once per trading day. Use this field to match the in-app Action Card.",
+    "reasons": [
+      "Strong consensus: 50% bullish",
+      "Options flow: $0.6M put closing at $695 exp 2026-08-21. Vol/OI: 2.0x.",
+      "Turn-of-Month window active (day 30). Historical edge: ~70% of monthly gains occur in this 7-day window. Salary/pension ",
+      "Halloween seasonal: weak season (Jul, May\u2013Oct). Excess returns essentially zero or negative globally. Rotate to defensiv",
+      "Faber TAA (US Equity): price 729.46 > 10-month SMA 702.70. Hold asset."
+    ],
+    "runAt": "2026-07-30T00:25:26.257+00:00",
+    "score": 81
+  },
+  "engine_coverage": {
+    "engine_data_available": true,
+    "in_universe": true,
+    "note": "Nightly pipeline data available. engine field is populated."
+  },
+  "engine_version": "v3.1",
+  "meta": {
+    "api_version": "v1",
+    "engine_version": "v3.1",
+    "generated_at": "2026-07-30T00:55:59.659Z",
+    "signal_sources": {
+      "data": "Live single-pass technical analysis (real-time)",
+      "engine": "Nightly 30+ model pipeline consensus (matches in-app Action Card)"
+    }
+  },
+  "ok": true,
+  "options_flow": {
+    "options_flow_count": 50,
+    "options_flow_latest_at": "2026-07-29T20:15:01.95859+00:00",
+    "options_flow_premium": 12744054,
+    "options_flow_sentiment": "BEARISH"
+  },
+  "signa": {
+    "action": "HOLD",
+    "alphaEvent": false,
+    "conviction": 52,
+    "flowScore": 66,
+    "grade": "C",
+    "regimeClass": "bull",
+    "riskRating": "MINIMAL",
+    "stageStrength": 44,
+    "triggers": [
+      {
+        "description": "Bollinger Bands compressed to 2.7% width \u2014 potential breakout setup",
+        "name": "Signa Volatility Compression",
+        "strength": 11,
+        "type": "proprietary"
+      }
+    ],
+    "volumeGrade": "C"
+  },
+  "signal_timestamp": "2026-07-30T00:25:26.257+00:00",
+  "symbol": "SPY",
+  "timeframe": "4h",
+  "timeframe_input": "4h",
+  "trade_plan": null
+}

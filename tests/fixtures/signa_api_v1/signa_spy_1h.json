@@ -1,0 +1,146 @@
+{
+  "cached": false,
+  "confidence_pillars": {
+    "faber-taa": {
+      "confidence": 0.78,
+      "score": 1,
+      "signal": "BUY",
+      "weight": 1
+    },
+    "halloween-seasonal-combo": {
+      "confidence": 0.73,
+      "score": -1,
+      "signal": "AVOID",
+      "weight": 1
+    },
+    "options-flow-sweep": {
+      "confidence": 0.55,
+      "score": 1,
+      "signal": "BUY",
+      "weight": 1
+    },
+    "turn-of-month": {
+      "confidence": 0.7,
+      "score": 1,
+      "signal": "BUY",
+      "weight": 1
+    }
+  },
+  "crossSurfaceConflict": "\u26a0\ufe0f Live technical analysis shows bearish bias, but the nightly agent consensus (4 models, score 81) is bullish. This often happens when intraday momentum diverges from the broader trend. The nightly consensus reflects analysis from multiple AI models across longer timeframes.",
+  "data": {
+    "adx": 33.32,
+    "atr": 2.9081,
+    "bbands": null,
+    "bias": "bearish",
+    "change24h": -1.49961,
+    "confidence": 65,
+    "direction": "WAIT",
+    "ema20": 741.6949415857068,
+    "ema200": 745.635035865,
+    "ema50": 744.3803004849156,
+    "entry": 729.75,
+    "macdBullish": false,
+    "macdHist": -1.8432079144305666,
+    "opportunities": [],
+    "overallScore": 32.49999999999999,
+    "patterns": [],
+    "pivotPoints": {
+      "pivot": 744.205,
+      "r1": 744.9,
+      "r2": 746.215,
+      "r3": 746.91,
+      "s1": 742.89,
+      "s2": 742.195,
+      "s3": 740.88
+    },
+    "price": 729.75,
+    "riskFactors": [
+      "Price below SMA 200"
+    ],
+    "riskScore": 5,
+    "rr": 2,
+    "rsi": 52.3679730910019,
+    "stage": 1,
+    "stageDescription": "Basing / Accumulation",
+    "stop": 734.1122,
+    "target": 721.0257,
+    "tier": "WATCH",
+    "timeHorizon": "position",
+    "trendStrength": 0.643,
+    "triggers": [
+      {
+        "description": "MACD below signal line with negative histogram",
+        "name": "MACD Bearish",
+        "weight": 0.2
+      },
+      {
+        "description": "All EMAs aligned bearish (20<50<200)",
+        "name": "Bearish Trend",
+        "weight": 0.15
+      }
+    ]
+  },
+  "engine": {
+    "confidence": 31,
+    "conflictDetected": false,
+    "direction": "BULLISH",
+    "grade": "B",
+    "modelCount": 4,
+    "note": "Nightly pipeline consensus from 30+ independent models. Updated once per trading day. Use this field to match the in-app Action Card.",
+    "reasons": [
+      "Strong consensus: 50% bullish",
+      "Options flow: $0.6M put closing at $695 exp 2026-08-21. Vol/OI: 2.0x.",
+      "Turn-of-Month window active (day 30). Historical edge: ~70% of monthly gains occur in this 7-day window. Salary/pension ",
+      "Halloween seasonal: weak season (Jul, May\u2013Oct). Excess returns essentially zero or negative globally. Rotate to defensiv",
+      "Faber TAA (US Equity): price 729.46 > 10-month SMA 702.70. Hold asset."
+    ],
+    "runAt": "2026-07-30T00:25:26.257+00:00",
+    "score": 81
+  },
+  "engine_coverage": {
+    "engine_data_available": true,
+    "in_universe": true,
+    "note": "Nightly pipeline data available. engine field is populated."
+  },
+  "engine_version": "v3.1",
+  "meta": {
+    "api_version": "v1",
+    "engine_version": "v3.1",
+    "generated_at": "2026-07-30T00:55:59.994Z",
+    "signal_sources": {
+      "data": "Live single-pass technical analysis (real-time)",
+      "engine": "Nightly 30+ model pipeline consensus (matches in-app Action Card)"
+    }
+  },
+  "ok": true,
+  "options_flow": {
+    "options_flow_count": 50,
+    "options_flow_latest_at": "2026-07-29T20:15:01.95859+00:00",
+    "options_flow_premium": 12744054,
+    "options_flow_sentiment": "BEARISH"
+  },
+  "signa": {
+    "action": "HOLD",
+    "alphaEvent": false,
+    "conviction": 48,
+    "flowScore": 58,
+    "grade": "C",
+    "regimeClass": "bear",
+    "riskRating": "MODERATE",
+    "stageStrength": 50,
+    "triggers": [
+      {
+        "description": "Bollinger Bands compressed to 2.4% width \u2014 potential breakout setup",
+        "name": "Signa Volatility Compression",
+        "strength": 21,
+        "type": "proprietary"
+      }
+    ],
+    "volumeGrade": "D"
+  },
+  "signal_timestamp": "2026-07-30T00:25:26.257+00:00",
+  "symbol": "SPY",
+  "timeframe": "1h",
+  "timeframe_input": "1h",
+  "trade_plan": null
+}

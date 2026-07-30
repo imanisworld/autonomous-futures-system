@@ -57,9 +57,13 @@ def test_signa_client_uses_bearer_auth_and_signal_endpoint():
     assert signal.ok is True
     assert signal.grade == "B"
     assert signal.daily_direction == "DOWN"
+    # `tf`, NOT `timeframe`. Verified live 2026-07-29: the server silently
+    # ignores `timeframe` (and `interval`/`resolution`/`symbol`) and falls back
+    # to 1d, so the old param name meant every call returned daily data
+    # regardless of what was requested.
     assert seen == {
         "path": "/api/v1/signal",
-        "query": {"sym": "QQQ", "timeframe": "1d"},
+        "query": {"sym": "QQQ", "tf": "1d"},
         "authorization": "Bearer test-key",
     }
 

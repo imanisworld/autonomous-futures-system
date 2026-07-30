@@ -21,6 +21,42 @@ from .storage import ScanStorage
 GOOD_GRADES = {"A+", "A", "B"}
 
 
+def _observation_score(signa_score: float | None) -> int:
+    """Display/journal score derived from a Signa observation.
+
+    Returns 0 when Signa is absent. This value is a label on a record, never an
+    input to a gate — `_hard_gates` deliberately does not read it.
+    """
+    if signa_score is None:
+        return 0
+    return int(signa_score / 10)
+
+
+def _signa_observations(inputs: "RHOptionsInput") -> list[str]:
+    """Non-blocking notes about the Signa/GEX observations attached to a setup.
+
+    Every string here is metadata. None of them may ever be promoted into
+    `_hard_gates`: the system verdict must be identical whether Signa is
+    strong, weak, neutral, conflicting, or entirely absent.
+    """
+    notes: list[str] = []
+    if inputs.signa_score is None and inputs.signa_grade is None:
+        notes.append("signa_unavailable")
+    else:
+        if inputs.signa_grade:
+            notes.append(f"signa_grade_observed:{inputs.signa_grade}")
+        if inputs.signa_score is not None:
+            notes.append(f"signa_score_observed:{inputs.signa_score:g}")
+        daily = (inputs.signa_daily_direction or "").upper()
+        if daily in {"NEUTRAL", "WAIT", ""}:
+            notes.append("signa_direction_not_actionable")
+        elif _directions_conflict(inputs.signa_daily_direction, inputs.signa_weekly_direction):
+            notes.append("signa_direction_conflict")
+    if not inputs.gex_regime:
+        notes.append("gex_unavailable")
+    return notes
+
+
 def sample_rh_options_payload() -> dict[str, Any]:
     return {
         "ticker": "SPY",
@@ -31,8 +67,8 @@ def sample_rh_options_payload() -> dict[str, Any]:
         "signa_daily_direction": "BULLISH",
         "signa_weekly_direction": "BULLISH",
         "gex_regime": "LOW_PINNING",
-        "gex_support_wall": 495.0,
-        "gex_resistance_wall": 510.0,
+        "support_pivot": 495.0,
+        "resistance_pivot": 510.0,
         "current_price": 500.0,
         "premium": 2.20,
         "expiry_date": "2026-07-07",
@@ -73,13 +109,17 @@ class RHOptionsInput:
     ticker: str
     direction: str
     contract_type: str
-    signa_score: float
-    signa_grade: str
-    signa_daily_direction: str
+    # --- observations: optional, never decisive ---
+    signa_score: float | None
+    signa_grade: str | None          # RAW — "A+" preserved verbatim
+    signa_daily_direction: str | None
     signa_weekly_direction: str | None
-    gex_regime: str
-    gex_support_wall: float | None
-    gex_resistance_wall: float | None
+    gex_regime: str | None           # kept for compatibility; optional
+    # Ordinary price pivots. NOT gamma walls — renamed from gex_*_wall, which
+    # laundered chart/Signa levels into options vocabulary.
+    support_pivot: float | None
+    resistance_pivot: float | None
+    # --- system-owned inputs ---
     current_price: float
     premium: float
     expiry_date: str
@@ -118,14 +158,13 @@ class RHAdvisoryBroker:
 
 
 def _parse_rh_inputs(body: dict[str, Any]) -> RHOptionsInput:
+    # System-owned inputs only. Signa and GEX are OPTIONAL observations: an
+    # evaluation must be possible, and must reach the same verdict, with neither
+    # of them supplied.
     required = (
         "ticker",
         "direction",
         "contract_type",
-        "signa_score",
-        "signa_grade",
-        "signa_daily_direction",
-        "gex_regime",
         "current_price",
         "premium",
         "expiry_date",
@@ -141,13 +180,16 @@ def _parse_rh_inputs(body: dict[str, Any]) -> RHOptionsInput:
             ticker=str(body["ticker"]).upper().strip(),
             direction=_normalize_direction(body["direction"]),
             contract_type=str(body["contract_type"]).upper().strip(),
-            signa_score=float(body["signa_score"]),
-            signa_grade=str(body["signa_grade"]).upper().strip(),
-            signa_daily_direction=_normalize_signal_direction(body["signa_daily_direction"]),
+            # Observations. Absent is a first-class, fully supported state —
+            # never substituted with a favorable default.
+            signa_score=_optional_float(body.get("signa_score")),
+            # Grade is preserved verbatim: "A+" must not be truncated to "A".
+            signa_grade=(str(body["signa_grade"]).upper().strip() if body.get("signa_grade") else None),
+            signa_daily_direction=_normalize_signal_direction(body.get("signa_daily_direction")),
             signa_weekly_direction=_normalize_signal_direction(body.get("signa_weekly_direction")),
-            gex_regime=str(body["gex_regime"]).upper().strip(),
-            gex_support_wall=_optional_float(body.get("gex_support_wall")),
-            gex_resistance_wall=_optional_float(body.get("gex_resistance_wall")),
+            gex_regime=(str(body["gex_regime"]).upper().strip() if body.get("gex_regime") else None),
+            support_pivot=_optional_float(body.get("support_pivot")),
+            resistance_pivot=_optional_float(body.get("resistance_pivot")),
             current_price=float(body["current_price"]),
             premium=float(body["premium"]),
             expiry_date=str(body["expiry_date"]).strip(),
@@ -210,18 +252,21 @@ def parse_messy_rh_options_text(text: str, *, now: datetime | None = None) -> di
     if weekly:
         extracted["signa_weekly_direction"] = _normalize_signal_direction(weekly)
 
-    if re.search(r"\bGEX\s+LOW\s+PINNING\b|\bLOW\s+PINNING\b", upper):
-        extracted["gex_regime"] = "LOW_PINNING"
-    else:
-        regime = _match_group(r"\bGEX\s+([A-Z_ ]+?)(?:\s+SUPPORT|\s+RESISTANCE|\s+PRICE|$)", upper)
-        if regime:
-            extracted["gex_regime"] = regime.strip().replace(" ", "_")
+    # A GEX regime is only ever taken from text that explicitly says "GEX ...".
+    # It is NEVER inferred from support/resistance wording, price location, or
+    # direction — see the removed LOW_PINNING inference below.
+    regime = _match_group(r"\bGEX\s+([A-Z_ ]+?)(?:\s+SUPPORT|\s+RESISTANCE|\s+PRICE|$)", upper)
+    if regime:
+        extracted["gex_regime"] = regime.strip().replace(" ", "_")
 
     for source_key, target_key in (
-        ("SUPPORT", "gex_support_wall"),
-        ("SUPPORT WALL", "gex_support_wall"),
-        ("RESISTANCE", "gex_resistance_wall"),
-        ("RESISTANCE WALL", "gex_resistance_wall"),
+        # Ordinary support/resistance stays ordinary support/resistance. These
+        # are price pivots read off a chart or a Signa response — calling them
+        # gamma walls would launder unvalidated levels into options vocabulary.
+        ("SUPPORT", "support_pivot"),
+        ("SUPPORT WALL", "support_pivot"),
+        ("RESISTANCE", "resistance_pivot"),
+        ("RESISTANCE WALL", "resistance_pivot"),
         ("PRICE", "current_price"),
         ("SPOT", "current_price"),
         ("PREMIUM", "premium"),
@@ -252,30 +297,30 @@ def parse_messy_rh_options_text(text: str, *, now: datetime | None = None) -> di
         if spot:
             extracted["current_price"] = float(spot)
 
-    # "Target 1: $600" → resistance wall for longs (first numbered target = nearest resistance)
-    if "gex_resistance_wall" not in extracted:
+    # "Target 1: $600" → a price target, recorded as a price target. It used to
+    # be written into resistance_pivot, which renamed an ordinary target as a
+    # gamma wall and then fed it to wall-based ranking.
+    if "resistance_pivot" not in extracted:
         t1 = _match_group(r"\bTARGET\s+1\s*[:.]?\s*(\d+(?:\.\d+)?)\b", upper)
         if t1 is None:
             t1 = _match_group(r"\bTARGET\s*[:.]?\s*(\d+(?:\.\d+)?)\b", upper)
         if t1 is not None:
             direction_now = extracted.get("direction", "LONG")
             if direction_now == "LONG":
-                extracted["gex_resistance_wall"] = float(t1)
+                extracted["resistance_pivot"] = float(t1)
             else:
-                extracted.setdefault("gex_support_wall", float(t1))
+                extracted.setdefault("support_pivot", float(t1))
 
     # Infer contract_type from direction when not stated
     if "contract_type" not in extracted and "direction" in extracted:
         extracted["contract_type"] = "CALL" if extracted["direction"] == "LONG" else "PUT"
 
-    # Infer LOW_PINNING when GEX says "near support" + bullish (price held = low gamma / pinning zone)
-    if "gex_regime" not in extracted:
-        near_support = bool(re.search(r"\bNEAR\s+SUPPORT\b", upper))
-        bullish = extracted.get("direction") == "LONG"
-        near_resistance = bool(re.search(r"\bNEAR\s+RESISTANCE\b", upper))
-        bearish = extracted.get("direction") == "SHORT"
-        if (near_support and bullish) or (near_resistance and bearish):
-            extracted["gex_regime"] = "LOW_PINNING"
+    # REMOVED: an inference that wrote gex_regime="LOW_PINNING" whenever the
+    # text said "near support" and the direction was long. That fabricated a
+    # dealer-gamma regime out of a support/resistance phrase, and the approval
+    # gate below then REQUIRED that same fabricated value — inventing the input
+    # it was about to check. A GEX regime now comes only from an explicit
+    # "GEX ..." statement, or it stays absent.
 
     expiry = _match_group(r"\b(?:EXPIRY|EXP|EXPIRATION)\s+(\d{4}-\d{2}-\d{2}|\d{1,2}/\d{1,2}(?:/\d{2,4})?)\b", upper)
     if expiry is None:
@@ -332,6 +377,8 @@ def evaluate_rh_options(
     timestamp = now or datetime.now(timezone.utc)
     failed_gates = _hard_gates(inputs, timestamp)
     warnings = [] if failed_gates else _soft_warnings(inputs)
+    # Observations ride alongside the verdict; they never alter it.
+    signa_observations = _signa_observations(inputs)
     decision = "NO_TRADE" if failed_gates else "WATCH" if warnings else "TRADE"
     risk_result = _risk_check(inputs)
     order_ticket = _build_order_ticket(inputs) if decision != "NO_TRADE" else None
@@ -343,7 +390,7 @@ def evaluate_rh_options(
         synthetic = ScoreResult(
             ticker=inputs.ticker,
             direction=inputs.direction,
-            score=int(inputs.signa_score / 10),
+            score=_observation_score(inputs.signa_score),
             pattern=f"{inputs.contract_type}_{inputs.direction}",
             components={},
             raw=raw,
@@ -369,7 +416,8 @@ def evaluate_rh_options(
         "decision": decision,
         "failed_gates": failed_gates,
         "warnings": warnings,
-        "score": int(inputs.signa_score / 10),
+        "signa_observations": signa_observations,
+        "score": _observation_score(inputs.signa_score),
         "risk_result": risk_result,
         "order_ticket": order_ticket,
         "broker_preview": broker_preview,
@@ -383,22 +431,22 @@ def rank_option_contracts(
     *,
     direction: str,
     current_price: float,
-    gex_resistance_wall: float | None = None,
-    gex_support_wall: float | None = None,
+    resistance_pivot: float | None = None,
+    support_pivot: float | None = None,
     max_premium_per_contract: float = 250.0,
 ) -> list[dict[str, Any]]:
     """Rank option contracts by R:R using the GEX wall as the price target.
 
     Gain estimate (per contract):
-      - With delta (from a live quote): delta × (gex_target − current_price) × 100
+      - With delta (from a live quote): delta × (pivot_target − current_price) × 100
         This accounts for remaining time value and is accurate for pre-expiry exits.
-      - Without delta: max(0, gex_target − strike) × 100  (intrinsic only; conservative)
+      - Without delta: max(0, pivot_target − strike) × 100  (intrinsic only; conservative)
     R:R = (estimated_gain − premium × 100) / (premium × 0.50 × 100)
     Filtered by: volume ≥ 100, OI ≥ 500, premium ≤ cap, dte > 2, positive price move to target.
     Sorted by R:R desc, then open_interest desc as a liquidity tiebreaker.
     """
     direction = _normalize_direction(direction)
-    gex_target = gex_resistance_wall if direction == "LONG" else gex_support_wall
+    pivot_target = resistance_pivot if direction == "LONG" else support_pivot
 
     scored = []
     for raw in candidates:
@@ -425,8 +473,8 @@ def rank_option_contracts(
         # time value remaining and is accurate for exits well before expiry.
         # Without delta, fall back to intrinsic value (conservative; accurate only at expiry).
         delta = _optional_float(raw.get("delta"))
-        if gex_target is not None:
-            price_move = (gex_target - current_price) if direction == "LONG" else (current_price - gex_target)
+        if pivot_target is not None:
+            price_move = (pivot_target - current_price) if direction == "LONG" else (current_price - pivot_target)
         else:
             price_move = current_price * 0.20  # 20% fallback
 
@@ -437,9 +485,9 @@ def rank_option_contracts(
             estimated_gain = abs(delta) * price_move
         else:
             if direction == "LONG":
-                estimated_gain = max(0.0, (gex_target or current_price * 1.20) - strike)
+                estimated_gain = max(0.0, (pivot_target or current_price * 1.20) - strike)
             else:
-                estimated_gain = max(0.0, strike - (gex_target or current_price * 0.80))
+                estimated_gain = max(0.0, strike - (pivot_target or current_price * 0.80))
 
         dollar_gain = (estimated_gain - premium) * 100
         dollar_risk = premium * 0.50 * 100
@@ -752,15 +800,27 @@ def _trade_style_and_target(inputs: RHOptionsInput) -> tuple[str, float, float]:
 
 
 def _hard_gates(inputs: RHOptionsInput, now: datetime) -> list[str]:
+    """System-owned gates ONLY: expiry, event risk, premium cap, liquidity.
+
+    Signa and GEX are deliberately absent. They are external observations and
+    hold no veto — this function must return the same result whether Signa is
+    strong, weak, neutral, conflicting, or missing entirely, and whether GEX is
+    present or absent. Observations are reported by `_signa_observations()` and
+    `_soft_warnings()`.
+
+    Removed from here, and why:
+      - `signa_score < 70`            Signa cannot reject a setup. It was also
+                                      a third, conflicting threshold (30/30/70)
+                                      applied to a field whose provenance is
+                                      ambiguous (engine.score vs conviction).
+      - `signa_grade not in GOOD_GRADES`   same; and the vendor ships two
+                                      disagreeing grades per response.
+      - `direction_conflict`          keyed on weekly_direction, which the API
+                                      does not return — it could never fire.
+      - `gex_regime != "LOW_PINNING"` required a value this module fabricated
+                                      a few lines earlier. Circular.
+    """
     failures = []
-    if inputs.signa_score < 70:
-        failures.append("signa_score_too_low")
-    if inputs.signa_grade not in GOOD_GRADES:
-        failures.append("signa_grade_below_b")
-    if _directions_conflict(inputs.signa_daily_direction, inputs.signa_weekly_direction):
-        failures.append("direction_conflict")
-    if inputs.gex_regime != "LOW_PINNING":
-        failures.append("gex_regime_not_low_pinning")
     if inputs.dte < 0:
         failures.append("expiry_too_close")
     if inputs.earnings_date and _date_within_days(_parse_date(inputs.earnings_date), now.date(), days=5):
@@ -778,16 +838,16 @@ def _soft_warnings(inputs: RHOptionsInput) -> list[str]:
     warnings = []
     if (
         inputs.direction == "LONG"
-        and inputs.gex_support_wall is not None
-        and not _within_percent(inputs.current_price, inputs.gex_support_wall, percent=0.02)
+        and inputs.support_pivot is not None
+        and not _within_percent(inputs.current_price, inputs.support_pivot, percent=0.02)
     ):
-        warnings.append("price_not_near_support_wall")
+        warnings.append("price_not_near_support_pivot")
     if (
         inputs.direction == "SHORT"
-        and inputs.gex_resistance_wall is not None
-        and not _within_percent(inputs.current_price, inputs.gex_resistance_wall, percent=0.02)
+        and inputs.resistance_pivot is not None
+        and not _within_percent(inputs.current_price, inputs.resistance_pivot, percent=0.02)
     ):
-        warnings.append("price_not_near_resistance_wall")
+        warnings.append("price_not_near_resistance_pivot")
     if inputs.option_volume is None and inputs.open_interest is None:
         warnings.append("no_liquidity_data_provided")
     if inputs.nine_ma is not None and inputs.nine_ma > 0:
@@ -837,12 +897,12 @@ def _risk_check(inputs: RHOptionsInput) -> dict[str, Any]:
 
 def _build_order_ticket(inputs: RHOptionsInput) -> dict[str, Any]:
     trade_style, target_mult, stop_mult = _trade_style_and_target(inputs)
-    invalidation = inputs.gex_support_wall if inputs.direction == "LONG" else inputs.gex_resistance_wall
+    invalidation = inputs.support_pivot if inputs.direction == "LONG" else inputs.resistance_pivot
     notes = []
-    if inputs.gex_support_wall is not None:
-        notes.append(f"GEX support wall: {inputs.gex_support_wall:g}")
-    if inputs.gex_resistance_wall is not None:
-        notes.append(f"GEX resistance wall: {inputs.gex_resistance_wall:g}")
+    if inputs.support_pivot is not None:
+        notes.append(f"Support pivot: {inputs.support_pivot:g}")
+    if inputs.resistance_pivot is not None:
+        notes.append(f"Resistance pivot: {inputs.resistance_pivot:g}")
     notes.append(
         "Bullish setup: support wall is the floor; scale toward resistance walls."
         if inputs.direction == "LONG"
@@ -991,14 +1051,13 @@ def _normalize_date_string(value: str, reference: datetime) -> str:
 
 
 def _missing_rh_fields(body: dict[str, Any]) -> list[str]:
+    # System-owned inputs only. Signa and GEX are OPTIONAL observations: an
+    # evaluation must be possible, and must reach the same verdict, with neither
+    # of them supplied.
     required = (
         "ticker",
         "direction",
         "contract_type",
-        "signa_score",
-        "signa_grade",
-        "signa_daily_direction",
-        "gex_regime",
         "current_price",
         "premium",
         "expiry_date",
