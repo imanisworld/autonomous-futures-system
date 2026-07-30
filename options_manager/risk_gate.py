@@ -138,7 +138,10 @@ def evaluate_packet(
             f"signa_bias '{packet.signa_bias}' does not align with PUT (requires BEARISH)",
         )
 
-    # 8. GEX regime handling.
+    # 8. GEX regime handling. OPTIONAL by default — see risk_reject_empty_gex_regime.
+    # An absent regime is a missing enrichment, not a blocking data gap: the packet
+    # still carries Signa, direction, and contract-quality evidence. Rejecting here
+    # would make a vendor GEX feed a hard dependency of the whole lane.
     regime = (packet.gex_regime or "").strip()
     if not regime:
         if cfg.risk_reject_empty_gex_regime:
@@ -146,7 +149,10 @@ def evaluate_packet(
                 "gex_regime_missing",
                 "gex_regime is empty/missing; insufficient data to assess",
             )
-        warnings.append("gex_regime is empty/missing; proceeding without GEX context")
+        warnings.append(
+            "GEX_UNAVAILABLE: gex_regime is empty/missing; approved on Signa "
+            "context only, no gamma-wall targeting"
+        )
     elif regime not in KNOWN_GEX_REGIMES:
         # Covers both the literal "UNKNOWN" value and any unrecognized,
         # provider-specific label — treated identically, per design: GEX

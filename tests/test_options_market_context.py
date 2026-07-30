@@ -161,13 +161,134 @@ def test_missing_spy_qqq_context_fails_closed_to_invalid():
     assert result.reason_code == "missing_spy_qqq_context"
 
 
-# --- 5. missing GEX fails closed ---------------------------------------------------------
+# --- 5. missing GEX degrades to CAUTION, never INVALID -----------------------------------
 
 
-def test_missing_gex_context_fails_closed_to_invalid():
+def test_missing_gex_regime_degrades_to_caution_not_invalid():
+    """GEX is optional enrichment, not a gate input. Rejecting on it would
+    make an unsubscribed vendor feed a hard dependency of the lane."""
     result = evaluate_market_context(_valid_call_inputs(gex_regime=None))
+    assert result.status == "CAUTION"
+    assert result.confirmed is True
+    assert result.gex_available is False
+    assert any("GEX_UNAVAILABLE" in w for w in result.warnings)
+
+
+def test_missing_price_above_gex_flip_also_degrades_to_caution():
+    result = evaluate_market_context(_valid_call_inputs(price_above_gex_flip=None))
+    assert result.status == "CAUTION"
+    assert result.gex_available is False
+    assert any("GEX_UNAVAILABLE" in w for w in result.warnings)
+
+
+def test_half_supplied_gex_block_is_treated_as_unavailable():
+    """A regime with no flip side is unusable; the validator must not infer
+    the missing half."""
+    result = evaluate_market_context(
+        _valid_call_inputs(gex_regime="positive", price_above_gex_flip=None)
+    )
+    assert result.gex_available is False
+    assert any("GEX_UNAVAILABLE" in w for w in result.warnings)
+
+
+def test_gex_unavailable_drops_component_from_both_sides_of_context_score():
+    """The absent component must score as neither aligned nor opposed."""
+    with_gex = evaluate_market_context(_valid_call_inputs())
+    without_gex = evaluate_market_context(
+        _valid_call_inputs(gex_regime=None, price_above_gex_flip=None)
+    )
+    assert with_gex.context_score == 5.0
+    assert with_gex.context_score_max == 5.0
+    assert without_gex.context_score == 4.0
+    assert without_gex.context_score_max == 4.0
+
+
+def test_gex_unavailable_skips_gamma_wall_targeting():
+    """min_distance_to_gamma_level cannot be enforced without walls, and the
+    validator must say so rather than silently drop the threshold."""
+    result = evaluate_market_context(
+        _valid_call_inputs(
+            gex_regime=None,
+            price_above_gex_flip=None,
+            distance_to_gamma_resistance=0.01,
+            min_distance_to_gamma_level=5.0,
+        )
+    )
+    # Would have been INVALID/gamma_resistance_too_close with GEX present.
+    assert result.status == "CAUTION"
+    assert any("gamma-distance inputs ignored" in w for w in result.warnings)
+
+
+def test_gamma_wall_targeting_still_enforced_when_gex_is_present():
+    result = evaluate_market_context(
+        _valid_call_inputs(
+            distance_to_gamma_resistance=0.01, min_distance_to_gamma_level=5.0
+        )
+    )
     assert result.status == "INVALID"
-    assert result.reason_code == "missing_gex_context"
+    assert result.reason_code == "gamma_resistance_too_close"
+
+
+def test_signa_conflict_still_rejects_without_gex():
+    """Removing the GEX dependency must not weaken the Signa gate."""
+    result = evaluate_market_context(
+        _valid_call_inputs(
+            gex_regime=None,
+            price_above_gex_flip=None,
+            signa_direction="bearish",
+            signa_grade="A",
+        )
+    )
+    assert result.status == "INVALID"
+    assert result.reason_code == "signa_conflict"
+
+
+def test_missing_signa_still_fails_closed_without_gex():
+    result = evaluate_market_context(
+        _valid_call_inputs(
+            gex_regime=None, price_above_gex_flip=None, signa_direction=None
+        )
+    )
+    assert result.status == "INVALID"
+    assert result.reason_code == "missing_signa_context"
+
+
+def test_missing_spy_qqq_still_fails_closed_without_gex():
+    result = evaluate_market_context(
+        _valid_call_inputs(gex_regime=None, price_above_gex_flip=None, spy_trend=None)
+    )
+    assert result.status == "INVALID"
+    assert result.reason_code == "missing_spy_qqq_context"
+
+
+def test_missing_htf_still_fails_closed_without_gex():
+    result = evaluate_market_context(
+        _valid_call_inputs(
+            gex_regime=None,
+            price_above_gex_flip=None,
+            higher_timeframe_alignment=None,
+        )
+    )
+    assert result.status == "INVALID"
+    assert result.reason_code == "missing_htf_alignment"
+
+
+def test_gex_less_context_never_reports_valid():
+    """Honest Signa-only operation tops out at CAUTION: the system runs
+    without GEX, but never claims full confirmation while it is missing."""
+    result = evaluate_market_context(
+        _valid_call_inputs(gex_regime=None, price_above_gex_flip=None)
+    )
+    assert result.status != "VALID"
+
+
+def test_no_neutral_regime_or_flip_is_fabricated_when_gex_is_absent():
+    result = evaluate_market_context(
+        _valid_call_inputs(gex_regime=None, price_above_gex_flip=None)
+    )
+    assert result.gex_available is False
+    # No warning may claim a side of a flip that was never supplied.
+    assert not any("preferred side of the GEX flip" in w for w in result.warnings)
 
 
 # --- 6. missing Signa fails closed -------------------------------------------------------

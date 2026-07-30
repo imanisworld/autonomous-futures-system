@@ -164,11 +164,37 @@ def test_scan_packet_with_no_candidates_is_valid():
 # --- 2. missing market context fields fail --------------------------------------------------------------
 
 
-def test_missing_gex_regime_fails():
+def test_missing_gex_regime_warns_but_does_not_block():
+    """GEX is optional enrichment. A blank regime must NOT invalidate the
+    packet — that would make a GEX subscription a hard dependency of the
+    whole morning scan."""
     packet = MorningScanPacket(market_context=_clean_market_context(gex_regime=""), candidates=())
     result = evaluate_morning_scan_packet(packet)
-    assert not result.valid
-    assert any("gex_regime" in r for r in result.market_context_blocking_reasons)
+    assert result.valid
+    assert result.market_context_blocking_reasons == ()
+    assert any("GEX_UNAVAILABLE" in w for w in result.market_context_warnings)
+
+
+def test_gex_unavailable_warning_rides_along_on_every_candidate():
+    packet = MorningScanPacket(
+        market_context=_clean_market_context(gex_regime=""),
+        candidates=(_clean_candidate(ticker="ORCL"), _clean_candidate(ticker="AMD")),
+    )
+    result = evaluate_morning_scan_packet(packet)
+    assert result.valid
+    for candidate_result in result.candidate_results:
+        assert candidate_result.valid
+        assert any("GEX_UNAVAILABLE" in w for w in candidate_result.warnings)
+        assert not any("missing market context" in r for r in candidate_result.blocking_reasons)
+
+
+def test_supplied_gex_regime_produces_no_gex_warning():
+    packet = MorningScanPacket(
+        market_context=_clean_market_context(gex_regime="positive"), candidates=()
+    )
+    result = evaluate_morning_scan_packet(packet)
+    assert result.valid
+    assert result.market_context_warnings == ()
 
 
 def test_missing_spy_qqq_context_fails():
@@ -182,8 +208,10 @@ def test_missing_spy_qqq_context_fails():
 
 
 def test_missing_market_context_propagates_into_every_candidate():
+    # Uses a genuinely required field (spy_trend); GEX is optional and is
+    # covered separately by the GEX_UNAVAILABLE tests above.
     packet = MorningScanPacket(
-        market_context=_clean_market_context(gex_regime=""),
+        market_context=_clean_market_context(spy_trend=""),
         candidates=(_clean_candidate(ticker="ORCL"), _clean_candidate(ticker="AMD")),
     )
     result = evaluate_morning_scan_packet(packet)
