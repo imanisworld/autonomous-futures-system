@@ -613,6 +613,32 @@ python -c "from risk.risk_engine import RiskEngine; r = RiskEngine(); print('Ris
 python -c "from execution.paper_broker import PaperBroker; b = PaperBroker(); print('PaperBroker OK, is_live:', b.is_live)"
 ```
 
+### Repo/Process Safety Routines
+
+Three read-only, manually-invoked routines cover the repeat-failure classes
+seen so far (branch/worktree collisions, standalone-evidence promotion
+without real-path proof, and silent trade-chain/reconciliation drift). Each
+composes the existing `ops/` audit machinery instead of re-deriving it —
+see `ops/project_check.py` for what each one reads and never touches.
+
+```bash
+# 1. Session Safety + Runtime Snapshot — run once at the start of a session
+python -m ops.project_check session-start
+
+# 1b. Precommit/prepush drift guard — read-only, fails closed on drift
+python -m ops.project_check precommit
+
+# 2. Strategy Promotion Proof Gate — real executable-path evidence only
+python -m ops.project_check promotion --strategy <name> [--instrument MNQ]
+
+# 3. Daily Reconciliation + Trade Chain Integrity
+python -m ops.project_check daily
+```
+
+Add `--json` to any of these for the raw report instead of the compact
+summary. None of them commit, push, deploy, cancel an order, flatten a
+position, or change `risk_rules.yaml`/config.
+
 ---
 
 ## 8. Log Locations
