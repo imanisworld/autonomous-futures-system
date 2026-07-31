@@ -139,7 +139,16 @@ def test_signa_bias_mismatch_rejects():
     assert result.failed_rule == "signa_bias_mismatch"
 
 
-def test_empty_gex_regime_rejects_by_default():
+def test_empty_gex_regime_approves_with_warning_by_default():
+    """GEX is optional enrichment. The default must not block, or the lane
+    cannot run without a GEX subscription."""
+    result = evaluate_packet(_packet(gex_regime=""), _config())
+    assert result.approved is True
+    assert result.status == "APPROVED"
+    assert any("GEX_UNAVAILABLE" in w for w in result.warnings)
+
+
+def test_empty_gex_regime_rejects_only_when_explicitly_opted_in():
     result = evaluate_packet(
         _packet(gex_regime=""), _config(risk_reject_empty_gex_regime=True)
     )
@@ -148,13 +157,13 @@ def test_empty_gex_regime_rejects_by_default():
     assert result.failed_rule == "gex_regime_missing"
 
 
-def test_empty_gex_regime_approves_with_warning_when_not_rejecting():
+def test_signa_gate_still_rejects_when_gex_is_absent():
+    """Dropping the GEX requirement must not weaken the Signa gate."""
     result = evaluate_packet(
-        _packet(gex_regime=""), _config(risk_reject_empty_gex_regime=False)
+        _packet(gex_regime="", signa_grade="D"), _config()
     )
-    assert result.approved is True
-    assert result.status == "APPROVED"
-    assert any("gex_regime" in w for w in result.warnings)
+    assert result.approved is False
+    assert result.failed_rule == "signa_grade_not_allowed"
 
 
 def test_unknown_gex_regime_approves_with_warning():

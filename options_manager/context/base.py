@@ -37,7 +37,14 @@ class MarketContextInputs:
     `ticker`, and `underlying_price` are always required; every other
     field defaults to None (not yet resolved) and must fail closed to
     INVALID, exactly like omitting it entirely — a context validator must
-    never assume favorable context by default."""
+    never assume favorable context by default.
+
+    The GEX block (`gex_regime`, `price_above_gex_flip`, and the two
+    `distance_to_gamma_*` fields) is the single exception: it is optional
+    enrichment. Absent GEX degrades to a GEX_UNAVAILABLE warning rather
+    than INVALID, because the system must operate honestly on Signa +
+    SPY/QQQ + HTF context alone. Failing closed on GEX would make an
+    unsubscribed vendor feed a hard dependency."""
 
     direction: Literal["CALL", "PUT"]
     ticker: Optional[str]
@@ -46,6 +53,9 @@ class MarketContextInputs:
     qqq_trend: Optional[Trend] = None
     spy_above_flip: Optional[bool] = None
     qqq_above_flip: Optional[bool] = None
+    # GEX is the one OPTIONAL context block. Both fields absent => the
+    # validator emits GEX_UNAVAILABLE and drops gamma-wall targeting; it does
+    # NOT reject, and it does NOT substitute a neutral regime or a fake flip.
     gex_regime: Optional[GexRegime] = None
     price_above_gex_flip: Optional[bool] = None
     signa_direction: Optional[SignaDirection] = None
@@ -72,6 +82,14 @@ class MarketContextResult:
     reason: str = ""
     warnings: list[str] = field(default_factory=list)
     context_score: Optional[float] = None
+    # False when the caller supplied no GEX context. GEX is an OPTIONAL
+    # enrichment, not a requirement: absent GEX degrades the context to a
+    # warning (see GEX_UNAVAILABLE in market_validator) instead of rejecting.
+    # Never infer a regime or a flip side to fill the gap.
+    gex_available: bool = True
+    # Denominator for `context_score`. Drops when a component is unavailable,
+    # so a 4/4 score is not silently read as 4/5.
+    context_score_max: Optional[float] = None
 
 
 def _invalid(reason_code: str, reason: str) -> MarketContextResult:

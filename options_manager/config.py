@@ -33,7 +33,10 @@ class OptionsManagerConfig:
     risk_min_signa_score: int = 30
     risk_allowed_grades: tuple[str, ...] = ("A", "B")
     risk_allowed_account_tags: tuple[str, ...] = ("agentic_micro_account",)
-    risk_reject_empty_gex_regime: bool = True
+    # GEX is optional enrichment, not a required feed. Default is warn-and-proceed
+    # so the lane does not depend on a vendor GEX subscription. Set the env var to
+    # true only if a GEX source is present AND has earned the gate on evidence.
+    risk_reject_empty_gex_regime: bool = False
     risk_warn_unknown_gex_regime: bool = True
 
     # Phase 3 — contract quality / market data gate. Independent of
@@ -160,7 +163,7 @@ class OptionsManagerConfig:
             ),
             risk_reject_empty_gex_regime=_as_bool(
                 os.getenv("OPTIONS_MANAGER_RISK_REJECT_EMPTY_GEX_REGIME"),
-                default=True,
+                default=False,
             ),
             risk_warn_unknown_gex_regime=_as_bool(
                 os.getenv("OPTIONS_MANAGER_RISK_WARN_UNKNOWN_GEX_REGIME"),
