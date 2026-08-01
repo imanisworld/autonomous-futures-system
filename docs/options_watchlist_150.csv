@@ -1,0 +1,151 @@
+Ticker,Sector,Notes
+AAPL,Technology,Mega cap - deep options liquidity
+MSFT,Technology,Mega cap - deep options liquidity
+NVDA,Technology,Mega cap - high IV - earnings sensitive
+GOOGL,Technology,Mega cap - deep options liquidity
+GOOG,Technology,Mega cap - deep options liquidity
+AMZN,Technology,Mega cap - deep options liquidity
+META,Technology,Mega cap - high volume options
+AVGO,Technology,Semis - high price - watch spreads
+ORCL,Technology,Large cap - active options flow
+CRM,Technology,Software - earnings volatility
+ADBE,Technology,Software - moderate liquidity
+NOW,Technology,Software - momentum name
+PANW,Technology,Cybersecurity - earnings sensitive
+CRWD,Technology,Cybersecurity - high IV
+NET,Technology,Cloud infra - thinner OI, check spreads
+DDOG,Technology,Cloud infra - momentum name
+SNOW,Technology,Cloud infra - high IV, momentum
+ZS,Technology,Cybersecurity - moderate liquidity
+SHOP,Technology,E-commerce platform
+SQ,Financials,Fintech - high beta
+PYPL,Financials,Fintech - momentum name
+INTC,Technology,Semis - high volume, lower price
+AMD,Technology,Semis - high volume, earnings sensitive
+QCOM,Technology,Semis - decent liquidity
+TXN,Technology,Semis - stable, lower IV
+MU,Technology,Semis - high beta, cyclical
+IBM,Technology,Large cap - lower IV
+CSCO,Technology,Networking - stable
+UBER,Technology,High volume, event-driven
+ABNB,Technology,Travel/tech - moderate liquidity
+DASH,Technology,Delivery - moderate liquidity
+SPOT,Technology,Media - moderate liquidity
+NFLX,Communication Services,High price - watch contract cost
+DIS,Communication Services,Large cap - active options
+T,Communication Services,Telecom - lower IV
+VZ,Communication Services,Telecom - lower IV
+TMUS,Communication Services,Telecom - moderate liquidity
+CMCSA,Communication Services,Media - stable
+V,Financials,Payments - high price, deep liquidity
+MA,Financials,Payments - high price, deep liquidity
+AXP,Financials,Payments/credit - active options
+JPM,Financials,Mega bank - deep liquidity
+BAC,Financials,Bank - high volume, lower price
+WFC,Financials,Bank - high volume
+C,Financials,Bank - high volume, lower price
+GS,Financials,Investment bank - high price
+MS,Financials,Investment bank - active options
+SCHW,Financials,Brokerage - moderate liquidity
+BLK,Financials,Asset mgmt - high price
+SOFI,Financials,Fintech - high volume, lower price, retail favorite
+COIN,Financials,Crypto-linked - very high IV
+XOM,Energy,Integrated oil - deep liquidity
+CVX,Energy,Integrated oil - deep liquidity
+COP,Energy,E&P - active options
+OXY,Energy,E&P - high beta
+SLB,Energy,Oilfield services - moderate liquidity
+CAT,Industrials,Heavy machinery - deep OI, expensive contracts
+DE,Industrials,Heavy machinery - moderate liquidity
+GE,Industrials,Diversified industrial - deep liquidity
+HON,Industrials,Diversified industrial - moderate liquidity
+UNP,Industrials,Rail - decent liquidity
+UPS,Industrials,Logistics - moderate liquidity
+FDX,Industrials,Logistics - moderate liquidity
+BA,Industrials,Aerospace - high IV, event-driven
+LMT,Industrials,Defense - lower IV
+RTX,Industrials,Defense - moderate liquidity
+ETN,Industrials,Electrical equip - thinner OI, check spreads
+HUBB,Industrials,Electrical equip - THIN, verify liquidity before entry
+ODFL,Industrials,Trucking - THIN, verify liquidity before entry
+TDY,Industrials,Instruments - THIN, low volume
+JNJ,Healthcare,Large cap - lower IV
+UNH,Healthcare,Managed care - high price, active options
+LLY,Healthcare,Pharma - very high price, expensive contracts
+ABBV,Healthcare,Pharma - moderate liquidity
+MRK,Healthcare,Pharma - moderate liquidity
+PFE,Healthcare,Pharma - lower price, high volume
+TMO,Healthcare,Life sciences - high price
+ABT,Healthcare,Med devices - moderate liquidity
+DHR,Healthcare,Life sciences - moderate liquidity
+ISRG,Healthcare,Med devices - high price
+AMGN,Healthcare,Biotech - moderate liquidity
+GILD,Healthcare,Biotech - moderate liquidity
+DVA,Healthcare,Dialysis - THIN, verify liquidity before entry
+KO,Consumer Staples,Large cap - lower IV, stable
+PEP,Consumer Staples,Large cap - lower IV, stable
+PG,Consumer Staples,Large cap - lower IV, stable
+COST,Consumer Staples,High price - watch contract cost
+WMT,Consumer Staples,Large cap - active options
+MDLZ,Consumer Staples,Moderate liquidity
+PM,Consumer Staples,Tobacco - lower IV
+MO,Consumer Staples,Tobacco - lower IV
+HD,Consumer Discretionary,Large cap - active options
+LOW,Consumer Discretionary,Large cap - active options
+NKE,Consumer Discretionary,Moderate liquidity, event-driven
+SBUX,Consumer Discretionary,Moderate liquidity
+MCD,Consumer Discretionary,Large cap - active options
+TGT,Consumer Discretionary,Moderate liquidity
+TJX,Consumer Discretionary,Moderate liquidity
+BKNG,Consumer Discretionary,Very high price - expensive contracts
+MAR,Consumer Discretionary,Moderate liquidity
+CMG,Consumer Discretionary,High price, high IV
+LULU,Consumer Discretionary,High IV, event-driven
+TSLA,Consumer Discretionary,Very high volume - deep options liquidity
+F,Consumer Discretionary,Low price - high volume
+GM,Consumer Discretionary,Low price - active options
+RIVN,Consumer Discretionary,High IV, speculative
+LIN,Materials,High price - watch contract cost
+APD,Materials,Moderate liquidity
+FCX,Materials,Copper/miner - cyclical, check stage before entry
+NEM,Materials,Gold miner - moderate liquidity
+NUE,Materials,Steel - moderate liquidity
+DOW,Materials,Chemicals - lower IV
+NEE,Utilities,Large cap - lower IV
+DUK,Utilities,Large cap - lower IV
+SO,Utilities,Large cap - lower IV
+D,Utilities,Moderate liquidity
+AEP,Utilities,Moderate liquidity
+PLD,Real Estate,REIT - moderate liquidity
+AMT,Real Estate,REIT - moderate liquidity
+EQIX,Real Estate,REIT - high price
+SPG,Real Estate,REIT - moderate liquidity
+O,Real Estate,REIT - lower IV, income name
+SPY,ETF,Index - deepest options liquidity in market
+QQQ,ETF,Nasdaq 100 - deepest tech-heavy liquidity
+IWM,ETF,Russell 2000 - deep liquidity
+DIA,ETF,Dow - deep liquidity
+XLK,ETF,Tech sector - deep liquidity
+XLF,ETF,Financials sector - deep liquidity
+XLE,ETF,Energy sector - deep liquidity
+XLI,ETF,Industrials sector - deep liquidity
+XLV,ETF,Healthcare sector - deep liquidity
+XLY,ETF,Consumer discretionary sector - deep liquidity
+XLP,ETF,Consumer staples sector - deep liquidity
+XLU,ETF,Utilities sector - deep liquidity
+XLB,ETF,Materials sector - deep liquidity
+XLRE,ETF,Real estate sector - moderate liquidity
+SMH,ETF,Semiconductors - deep liquidity
+GLD,ETF,Gold - deep liquidity
+TLT,ETF,Long bonds - deep liquidity
+VIX,Index,Volatility index - not directly optionable, reference only
+IREN,Technology,High beta, low price - momentum/retail favorite
+MSTR,Financials,Crypto-linked - very high IV
+MARA,Financials,Crypto-linked - very high IV
+RIOT,Financials,Crypto-linked - very high IV
+PLTR,Technology,High IV, retail favorite
+HIMS,Healthcare,High IV, retail favorite
+TE,Industrials,Verify liquidity - lower cap
+APLD,Technology,High IV, speculative, thinner OI
+JD,Consumer Discretionary,China ADR - moderate liquidity
+SE,Consumer Discretionary,High IV, momentum name

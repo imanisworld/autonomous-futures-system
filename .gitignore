@@ -70,3 +70,6 @@ journal/*.jsonl
 # Release-deploy artifacts on the box (afs-deploy.sh --release)
 .deploy-bak/
 release_manifest.json
+
+# Equity setup corpus v1 (research; large, reproducible from the manifest)
+data/equity_corpus_v1/

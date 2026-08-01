@@ -1,0 +1,1133 @@
+{
+  "universe_version": "equity_corpus_v1",
+  "frozen": true,
+  "source_file": "docs/options_watchlist_150.csv",
+  "source_file_sha256": "2770c80b9d6b745b481245b457957e45275ad3590d6aa5cdfc6f7ca4761f1d4d",
+  "source_file_rows": 150,
+  "total_entries": 156,
+  "setup_candidates": 155,
+  "cohort_counts": {
+    "single_name": 132,
+    "etf": 17,
+    "index": 1,
+    "leveraged_inverse": 6
+  },
+  "pooling_rules": {
+    "never_pool": [
+      [
+        "leveraged_inverse",
+        "single_name"
+      ],
+      [
+        "leveraged_inverse",
+        "etf"
+      ]
+    ],
+    "excluded_from_all_trade_statistics": [
+      "VIX"
+    ],
+    "report_levels": [
+      "per_ticker",
+      "per_cohort",
+      "pooled"
+    ],
+    "pooled_alone_forbidden": true
+  },
+  "exclusions": {
+    "XLC": "deliberately excluded from v1; adding it requires a versioned universe revision"
+  },
+  "entries": [
+    {
+      "ticker": "DIA",
+      "sector": "ETF",
+      "cohort": "etf",
+      "role": "setup_candidate",
+      "notes": "Dow - deep liquidity"
+    },
+    {
+      "ticker": "GLD",
+      "sector": "ETF",
+      "cohort": "etf",
+      "role": "setup_candidate",
+      "notes": "Gold - deep liquidity"
+    },
+    {
+      "ticker": "IWM",
+      "sector": "ETF",
+      "cohort": "etf",
+      "role": "setup_candidate",
+      "notes": "Russell 2000 - deep liquidity"
+    },
+    {
+      "ticker": "QQQ",
+      "sector": "ETF",
+      "cohort": "etf",
+      "role": "setup_candidate",
+      "notes": "Nasdaq 100 - deepest tech-heavy liquidity"
+    },
+    {
+      "ticker": "SMH",
+      "sector": "ETF",
+      "cohort": "etf",
+      "role": "setup_candidate",
+      "notes": "Semiconductors - deep liquidity"
+    },
+    {
+      "ticker": "SPY",
+      "sector": "ETF",
+      "cohort": "etf",
+      "role": "setup_candidate",
+      "notes": "Index - deepest options liquidity in market"
+    },
+    {
+      "ticker": "TLT",
+      "sector": "ETF",
+      "cohort": "etf",
+      "role": "setup_candidate",
+      "notes": "Long bonds - deep liquidity"
+    },
+    {
+      "ticker": "XLB",
+      "sector": "ETF",
+      "cohort": "etf",
+      "role": "setup_candidate",
+      "notes": "Materials sector - deep liquidity"
+    },
+    {
+      "ticker": "XLE",
+      "sector": "ETF",
+      "cohort": "etf",
+      "role": "setup_candidate",
+      "notes": "Energy sector - deep liquidity"
+    },
+    {
+      "ticker": "XLF",
+      "sector": "ETF",
+      "cohort": "etf",
+      "role": "setup_candidate",
+      "notes": "Financials sector - deep liquidity"
+    },
+    {
+      "ticker": "XLI",
+      "sector": "ETF",
+      "cohort": "etf",
+      "role": "setup_candidate",
+      "notes": "Industrials sector - deep liquidity"
+    },
+    {
+      "ticker": "XLK",
+      "sector": "ETF",
+      "cohort": "etf",
+      "role": "setup_candidate",
+      "notes": "Tech sector - deep liquidity"
+    },
+    {
+      "ticker": "XLP",
+      "sector": "ETF",
+      "cohort": "etf",
+      "role": "setup_candidate",
+      "notes": "Consumer staples sector - deep liquidity"
+    },
+    {
+      "ticker": "XLRE",
+      "sector": "ETF",
+      "cohort": "etf",
+      "role": "setup_candidate",
+      "notes": "Real estate sector - moderate liquidity"
+    },
+    {
+      "ticker": "XLU",
+      "sector": "ETF",
+      "cohort": "etf",
+      "role": "setup_candidate",
+      "notes": "Utilities sector - deep liquidity"
+    },
+    {
+      "ticker": "XLV",
+      "sector": "ETF",
+      "cohort": "etf",
+      "role": "setup_candidate",
+      "notes": "Healthcare sector - deep liquidity"
+    },
+    {
+      "ticker": "XLY",
+      "sector": "ETF",
+      "cohort": "etf",
+      "role": "setup_candidate",
+      "notes": "Consumer discretionary sector - deep liquidity"
+    },
+    {
+      "ticker": "VIX",
+      "sector": "Index",
+      "cohort": "index",
+      "role": "regime_input_only",
+      "notes": "Volatility index - not directly optionable"
+    },
+    {
+      "ticker": "SOXL",
+      "sector": "Leveraged/Inverse ETF",
+      "cohort": "leveraged_inverse",
+      "role": "setup_candidate_stress_cohort",
+      "notes": "3x long semiconductors"
+    },
+    {
+      "ticker": "SOXS",
+      "sector": "Leveraged/Inverse ETF",
+      "cohort": "leveraged_inverse",
+      "role": "setup_candidate_stress_cohort",
+      "notes": "3x short semiconductors"
+    },
+    {
+      "ticker": "SPXL",
+      "sector": "Leveraged/Inverse ETF",
+      "cohort": "leveraged_inverse",
+      "role": "setup_candidate_stress_cohort",
+      "notes": "3x long S&P 500"
+    },
+    {
+      "ticker": "SPXS",
+      "sector": "Leveraged/Inverse ETF",
+      "cohort": "leveraged_inverse",
+      "role": "setup_candidate_stress_cohort",
+      "notes": "3x short S&P 500"
+    },
+    {
+      "ticker": "SQQQ",
+      "sector": "Leveraged/Inverse ETF",
+      "cohort": "leveraged_inverse",
+      "role": "setup_candidate_stress_cohort",
+      "notes": "3x short Nasdaq 100"
+    },
+    {
+      "ticker": "TQQQ",
+      "sector": "Leveraged/Inverse ETF",
+      "cohort": "leveraged_inverse",
+      "role": "setup_candidate_stress_cohort",
+      "notes": "3x long Nasdaq 100"
+    },
+    {
+      "ticker": "AAPL",
+      "sector": "Technology",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Mega cap - deep options liquidity"
+    },
+    {
+      "ticker": "ABBV",
+      "sector": "Healthcare",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Pharma - moderate liquidity"
+    },
+    {
+      "ticker": "ABNB",
+      "sector": "Technology",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Travel/tech - moderate liquidity"
+    },
+    {
+      "ticker": "ABT",
+      "sector": "Healthcare",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Med devices - moderate liquidity"
+    },
+    {
+      "ticker": "ADBE",
+      "sector": "Technology",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Software - moderate liquidity"
+    },
+    {
+      "ticker": "AEP",
+      "sector": "Utilities",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Moderate liquidity"
+    },
+    {
+      "ticker": "AMD",
+      "sector": "Technology",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Semis - high volume"
+    },
+    {
+      "ticker": "AMGN",
+      "sector": "Healthcare",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Biotech - moderate liquidity"
+    },
+    {
+      "ticker": "AMT",
+      "sector": "Real Estate",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "REIT - moderate liquidity"
+    },
+    {
+      "ticker": "AMZN",
+      "sector": "Technology",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Mega cap - deep options liquidity"
+    },
+    {
+      "ticker": "APD",
+      "sector": "Materials",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Moderate liquidity"
+    },
+    {
+      "ticker": "APLD",
+      "sector": "Technology",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "High IV"
+    },
+    {
+      "ticker": "AVGO",
+      "sector": "Technology",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Semis - high price - watch spreads"
+    },
+    {
+      "ticker": "AXP",
+      "sector": "Financials",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Payments/credit - active options"
+    },
+    {
+      "ticker": "BA",
+      "sector": "Industrials",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Aerospace - high IV"
+    },
+    {
+      "ticker": "BAC",
+      "sector": "Financials",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Bank - high volume"
+    },
+    {
+      "ticker": "BKNG",
+      "sector": "Consumer Discretionary",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Very high price - expensive contracts"
+    },
+    {
+      "ticker": "BLK",
+      "sector": "Financials",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Asset mgmt - high price"
+    },
+    {
+      "ticker": "C",
+      "sector": "Financials",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Bank - high volume"
+    },
+    {
+      "ticker": "CAT",
+      "sector": "Industrials",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Heavy machinery - deep OI"
+    },
+    {
+      "ticker": "CMCSA",
+      "sector": "Communication Services",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Media - stable"
+    },
+    {
+      "ticker": "CMG",
+      "sector": "Consumer Discretionary",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "High price"
+    },
+    {
+      "ticker": "COIN",
+      "sector": "Financials",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Crypto-linked - very high IV"
+    },
+    {
+      "ticker": "COP",
+      "sector": "Energy",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "E&P - active options"
+    },
+    {
+      "ticker": "COST",
+      "sector": "Consumer Staples",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "High price - watch contract cost"
+    },
+    {
+      "ticker": "CRM",
+      "sector": "Technology",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Software - earnings volatility"
+    },
+    {
+      "ticker": "CRWD",
+      "sector": "Technology",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Cybersecurity - high IV"
+    },
+    {
+      "ticker": "CSCO",
+      "sector": "Technology",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Networking - stable"
+    },
+    {
+      "ticker": "CVX",
+      "sector": "Energy",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Integrated oil - deep liquidity"
+    },
+    {
+      "ticker": "D",
+      "sector": "Utilities",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Moderate liquidity"
+    },
+    {
+      "ticker": "DASH",
+      "sector": "Technology",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Delivery - moderate liquidity"
+    },
+    {
+      "ticker": "DDOG",
+      "sector": "Technology",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Cloud infra - momentum name"
+    },
+    {
+      "ticker": "DE",
+      "sector": "Industrials",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Heavy machinery - moderate liquidity"
+    },
+    {
+      "ticker": "DHR",
+      "sector": "Healthcare",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Life sciences - moderate liquidity"
+    },
+    {
+      "ticker": "DIS",
+      "sector": "Communication Services",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Large cap - active options"
+    },
+    {
+      "ticker": "DOW",
+      "sector": "Materials",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Chemicals - lower IV"
+    },
+    {
+      "ticker": "DUK",
+      "sector": "Utilities",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Large cap - lower IV"
+    },
+    {
+      "ticker": "DVA",
+      "sector": "Healthcare",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Dialysis - THIN"
+    },
+    {
+      "ticker": "EQIX",
+      "sector": "Real Estate",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "REIT - high price"
+    },
+    {
+      "ticker": "ETN",
+      "sector": "Industrials",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Electrical equip - thinner OI"
+    },
+    {
+      "ticker": "F",
+      "sector": "Consumer Discretionary",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Low price - high volume"
+    },
+    {
+      "ticker": "FCX",
+      "sector": "Materials",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Copper/miner - cyclical"
+    },
+    {
+      "ticker": "FDX",
+      "sector": "Industrials",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Logistics - moderate liquidity"
+    },
+    {
+      "ticker": "GE",
+      "sector": "Industrials",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Diversified industrial - deep liquidity"
+    },
+    {
+      "ticker": "GILD",
+      "sector": "Healthcare",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Biotech - moderate liquidity"
+    },
+    {
+      "ticker": "GM",
+      "sector": "Consumer Discretionary",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Low price - active options"
+    },
+    {
+      "ticker": "GOOG",
+      "sector": "Technology",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Mega cap - deep options liquidity"
+    },
+    {
+      "ticker": "GOOGL",
+      "sector": "Technology",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Mega cap - deep options liquidity"
+    },
+    {
+      "ticker": "GS",
+      "sector": "Financials",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Investment bank - high price"
+    },
+    {
+      "ticker": "HD",
+      "sector": "Consumer Discretionary",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Large cap - active options"
+    },
+    {
+      "ticker": "HIMS",
+      "sector": "Healthcare",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "High IV"
+    },
+    {
+      "ticker": "HON",
+      "sector": "Industrials",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Diversified industrial - moderate liquidity"
+    },
+    {
+      "ticker": "HUBB",
+      "sector": "Industrials",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Electrical equip - THIN"
+    },
+    {
+      "ticker": "IBM",
+      "sector": "Technology",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Large cap - lower IV"
+    },
+    {
+      "ticker": "INTC",
+      "sector": "Technology",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Semis - high volume"
+    },
+    {
+      "ticker": "IREN",
+      "sector": "Technology",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "High beta"
+    },
+    {
+      "ticker": "ISRG",
+      "sector": "Healthcare",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Med devices - high price"
+    },
+    {
+      "ticker": "JD",
+      "sector": "Consumer Discretionary",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "China ADR - moderate liquidity"
+    },
+    {
+      "ticker": "JNJ",
+      "sector": "Healthcare",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Large cap - lower IV"
+    },
+    {
+      "ticker": "JPM",
+      "sector": "Financials",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Mega bank - deep liquidity"
+    },
+    {
+      "ticker": "KO",
+      "sector": "Consumer Staples",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Large cap - lower IV"
+    },
+    {
+      "ticker": "LIN",
+      "sector": "Materials",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "High price - watch contract cost"
+    },
+    {
+      "ticker": "LLY",
+      "sector": "Healthcare",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Pharma - very high price"
+    },
+    {
+      "ticker": "LMT",
+      "sector": "Industrials",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Defense - lower IV"
+    },
+    {
+      "ticker": "LOW",
+      "sector": "Consumer Discretionary",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Large cap - active options"
+    },
+    {
+      "ticker": "LULU",
+      "sector": "Consumer Discretionary",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "High IV"
+    },
+    {
+      "ticker": "MA",
+      "sector": "Financials",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Payments - high price"
+    },
+    {
+      "ticker": "MAR",
+      "sector": "Consumer Discretionary",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Moderate liquidity"
+    },
+    {
+      "ticker": "MARA",
+      "sector": "Financials",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Crypto-linked - very high IV"
+    },
+    {
+      "ticker": "MCD",
+      "sector": "Consumer Discretionary",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Large cap - active options"
+    },
+    {
+      "ticker": "MDLZ",
+      "sector": "Consumer Staples",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Moderate liquidity"
+    },
+    {
+      "ticker": "META",
+      "sector": "Technology",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Mega cap - high volume options"
+    },
+    {
+      "ticker": "MO",
+      "sector": "Consumer Staples",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Tobacco - lower IV"
+    },
+    {
+      "ticker": "MRK",
+      "sector": "Healthcare",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Pharma - moderate liquidity"
+    },
+    {
+      "ticker": "MS",
+      "sector": "Financials",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Investment bank - active options"
+    },
+    {
+      "ticker": "MSFT",
+      "sector": "Technology",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Mega cap - deep options liquidity"
+    },
+    {
+      "ticker": "MSTR",
+      "sector": "Financials",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Crypto-linked - very high IV"
+    },
+    {
+      "ticker": "MU",
+      "sector": "Technology",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Semis - high beta"
+    },
+    {
+      "ticker": "NEE",
+      "sector": "Utilities",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Large cap - lower IV"
+    },
+    {
+      "ticker": "NEM",
+      "sector": "Materials",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Gold miner - moderate liquidity"
+    },
+    {
+      "ticker": "NET",
+      "sector": "Technology",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Cloud infra - thinner OI"
+    },
+    {
+      "ticker": "NFLX",
+      "sector": "Communication Services",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "High price - watch contract cost"
+    },
+    {
+      "ticker": "NKE",
+      "sector": "Consumer Discretionary",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Moderate liquidity"
+    },
+    {
+      "ticker": "NOW",
+      "sector": "Technology",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Software - momentum name"
+    },
+    {
+      "ticker": "NUE",
+      "sector": "Materials",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Steel - moderate liquidity"
+    },
+    {
+      "ticker": "NVDA",
+      "sector": "Technology",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Mega cap - high IV - earnings sensitive"
+    },
+    {
+      "ticker": "O",
+      "sector": "Real Estate",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "REIT - lower IV"
+    },
+    {
+      "ticker": "ODFL",
+      "sector": "Industrials",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Trucking - THIN"
+    },
+    {
+      "ticker": "ORCL",
+      "sector": "Technology",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Large cap - active options flow"
+    },
+    {
+      "ticker": "OXY",
+      "sector": "Energy",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "E&P - high beta"
+    },
+    {
+      "ticker": "PANW",
+      "sector": "Technology",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Cybersecurity - earnings sensitive"
+    },
+    {
+      "ticker": "PEP",
+      "sector": "Consumer Staples",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Large cap - lower IV"
+    },
+    {
+      "ticker": "PFE",
+      "sector": "Healthcare",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Pharma - lower price"
+    },
+    {
+      "ticker": "PG",
+      "sector": "Consumer Staples",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Large cap - lower IV"
+    },
+    {
+      "ticker": "PLD",
+      "sector": "Real Estate",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "REIT - moderate liquidity"
+    },
+    {
+      "ticker": "PLTR",
+      "sector": "Technology",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "High IV"
+    },
+    {
+      "ticker": "PM",
+      "sector": "Consumer Staples",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Tobacco - lower IV"
+    },
+    {
+      "ticker": "PYPL",
+      "sector": "Financials",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Fintech - momentum name"
+    },
+    {
+      "ticker": "QCOM",
+      "sector": "Technology",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Semis - decent liquidity"
+    },
+    {
+      "ticker": "RIOT",
+      "sector": "Financials",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Crypto-linked - very high IV"
+    },
+    {
+      "ticker": "RIVN",
+      "sector": "Consumer Discretionary",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "High IV"
+    },
+    {
+      "ticker": "RTX",
+      "sector": "Industrials",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Defense - moderate liquidity"
+    },
+    {
+      "ticker": "SBUX",
+      "sector": "Consumer Discretionary",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Moderate liquidity"
+    },
+    {
+      "ticker": "SCHW",
+      "sector": "Financials",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Brokerage - moderate liquidity"
+    },
+    {
+      "ticker": "SE",
+      "sector": "Consumer Discretionary",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "High IV"
+    },
+    {
+      "ticker": "SHOP",
+      "sector": "Technology",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "E-commerce platform"
+    },
+    {
+      "ticker": "SLB",
+      "sector": "Energy",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Oilfield services - moderate liquidity"
+    },
+    {
+      "ticker": "SNOW",
+      "sector": "Technology",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Cloud infra - high IV"
+    },
+    {
+      "ticker": "SO",
+      "sector": "Utilities",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Large cap - lower IV"
+    },
+    {
+      "ticker": "SOFI",
+      "sector": "Financials",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Fintech - high volume"
+    },
+    {
+      "ticker": "SPG",
+      "sector": "Real Estate",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "REIT - moderate liquidity"
+    },
+    {
+      "ticker": "SPOT",
+      "sector": "Technology",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Media - moderate liquidity"
+    },
+    {
+      "ticker": "SQ",
+      "sector": "Financials",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Fintech - high beta"
+    },
+    {
+      "ticker": "T",
+      "sector": "Communication Services",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Telecom - lower IV"
+    },
+    {
+      "ticker": "TDY",
+      "sector": "Industrials",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Instruments - THIN"
+    },
+    {
+      "ticker": "TE",
+      "sector": "Industrials",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Verify liquidity - lower cap"
+    },
+    {
+      "ticker": "TGT",
+      "sector": "Consumer Discretionary",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Moderate liquidity"
+    },
+    {
+      "ticker": "TJX",
+      "sector": "Consumer Discretionary",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Moderate liquidity"
+    },
+    {
+      "ticker": "TMO",
+      "sector": "Healthcare",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Life sciences - high price"
+    },
+    {
+      "ticker": "TMUS",
+      "sector": "Communication Services",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Telecom - moderate liquidity"
+    },
+    {
+      "ticker": "TSLA",
+      "sector": "Consumer Discretionary",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Very high volume - deep options liquidity"
+    },
+    {
+      "ticker": "TXN",
+      "sector": "Technology",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Semis - stable"
+    },
+    {
+      "ticker": "UBER",
+      "sector": "Technology",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "High volume"
+    },
+    {
+      "ticker": "UNH",
+      "sector": "Healthcare",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Managed care - high price"
+    },
+    {
+      "ticker": "UNP",
+      "sector": "Industrials",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Rail - decent liquidity"
+    },
+    {
+      "ticker": "UPS",
+      "sector": "Industrials",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Logistics - moderate liquidity"
+    },
+    {
+      "ticker": "V",
+      "sector": "Financials",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Payments - high price"
+    },
+    {
+      "ticker": "VZ",
+      "sector": "Communication Services",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Telecom - lower IV"
+    },
+    {
+      "ticker": "WFC",
+      "sector": "Financials",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Bank - high volume"
+    },
+    {
+      "ticker": "WMT",
+      "sector": "Consumer Staples",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Large cap - active options"
+    },
+    {
+      "ticker": "XOM",
+      "sector": "Energy",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Integrated oil - deep liquidity"
+    },
+    {
+      "ticker": "ZS",
+      "sector": "Technology",
+      "cohort": "single_name",
+      "role": "setup_candidate",
+      "notes": "Cybersecurity - moderate liquidity"
+    }
+  ]
+}
