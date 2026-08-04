@@ -648,3 +648,49 @@ If the system is generating trades that seem wrong:
 3. Run `pytest tests/test_risk_engine.py -v` — all rules must pass
 4. Review the market state file used — confirm it accurately represents conditions
 5. Add a test case that covers the unexpected scenario before changing any logic
+
+---
+
+## 11. Session/Promotion/Reconciliation Ops Routines
+
+`ops/project_check.py` is a manually-invoked, read-only CLI with four
+subcommands. It never commits, pushes, pulls, resets, rebases, checks out,
+deletes a branch/worktree, drops a stash, creates/deletes a tag, cancels an
+order, flattens a position, or edits a journal/config file. There is no cron
+job, timer, or daemon behind it — run it by hand when you want the check.
+
+```bash
+# Start of a work session: repo/branch/worktree state + a local runtime
+# config snapshot. Also records session state for `precommit` to compare
+# against later.
+python -m ops.project_check session-start
+
+# Before committing/pushing: fail-closed drift check against the
+# session-start snapshot. Exits non-zero on any problem.
+python -m ops.project_check precommit
+
+# Strategy promotion proof-gate audit: cross-checks an EXISTING evidence
+# artifact (scripts/*_canonical_evidence*.json or similar) for
+# accounting-identity consistency, and against risk_rules.yaml /
+# Strategy_Inventory.md. Does not itself run ReplayEngine, DecisionEngine,
+# RiskEngine, or PaperBroker.
+python -m ops.project_check promotion --strategy orb_breakout
+
+# Daily reconciliation: PR/branch/worktree hygiene, evidence preservation
+# (docs/BRANCH_ARCHIVE_INDEX.md), deployed-state drift (reuses
+# ops.live_box_guard), Strategy_Inventory.md vs. risk_rules.yaml drift, and
+# journal trade-chain integrity (reuses ops.proof_30_mnq and
+# ops.reconciler_outcome_audit).
+python -m ops.project_check daily
+
+# Every subcommand also accepts --json for machine-readable output.
+```
+
+`daily` scopes its trade-chain check to "since the last checkpoint" by
+default (`logs/.project_check_daily_checkpoint.json`, gitignored); pass
+`--since-date YYYY-MM-DD` to override, or `--dry-run` to check without
+advancing the checkpoint. `promotion` and `daily`'s deployed-state section
+report `UNKNOWN`/`error` for anything this local checkout can't verify (e.g.
+expected live SHA pins) rather than guessing — that is expected when run off
+the deployed box, not itself an incident. See `ops/project_check.py`'s module
+docstring for the full read/fail-closed contract of each subcommand.
