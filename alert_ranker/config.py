@@ -79,6 +79,9 @@ class ScannerConfig:
     interval_minutes: int
     sqlite_path: Path
     timezone: str = "America/New_York"
+    public_account_id: str = ""
+    public_token_validity_minutes: int = 1440
+    public_stale_quote_seconds: float = 900.0
     alert_threshold: int = 7
     duplicate_window_minutes: int = 30
     signa_api_enabled: bool = False
@@ -104,7 +107,7 @@ class ScannerConfig:
         if provider == "tastytrade":
             return self.tastytrade_configured
         if provider == "public":
-            return self.public_api_key_configured
+            return self.public_api_key_configured and bool(self.public_account_id)
         if provider == "alpaca":
             return self.alpaca_api_key_configured and self.alpaca_secret_key_configured
         return False
@@ -118,8 +121,13 @@ def load_config(environ: Iterable[tuple[str, str]] | None = None) -> ScannerConf
         tastytrade_username=env.get("TASTYTRADE_USERNAME", ""),
         tastytrade_password=env.get("TASTYTRADE_PASSWORD", ""),
         tastytrade_base_url=env.get("TASTYTRADE_BASE_URL", "https://api.tastyworks.com"),
-        public_api_key_configured=bool(env.get("PUBLIC_API_KEY", "").strip()),
+        public_api_key_configured=bool(
+            env.get("PUBLIC_API_SECRET_KEY", "").strip() or env.get("PUBLIC_API_KEY", "").strip()
+        ),
         public_base_url=env.get("PUBLIC_BASE_URL", "https://api.public.com").strip().rstrip("/"),
+        public_account_id=env.get("PUBLIC_ACCOUNT_ID", "").strip(),
+        public_token_validity_minutes=_as_int(env.get("PUBLIC_TOKEN_VALIDITY_MINUTES"), 1440),
+        public_stale_quote_seconds=_as_float(env.get("PUBLIC_STALE_QUOTE_SECONDS"), 900.0),
         alpaca_api_key_configured=bool(env.get("ALPACA_API_KEY", "").strip()),
         alpaca_secret_key_configured=bool(env.get("ALPACA_SECRET_KEY", "").strip()),
         alpaca_paper=_as_bool(env.get("ALPACA_PAPER"), True),

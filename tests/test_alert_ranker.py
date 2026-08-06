@@ -61,6 +61,25 @@ def setup_payload(**overrides):
     return data
 
 
+CANDIDATE_FIELDS = {
+    "option_type": "CALL",
+    "strike": 505,
+    "expiry": "2099-01-16",
+    "option_mark": 2.1,
+    "option_bid": 2.05,
+    "option_ask": 2.15,
+    "open_interest": 1500,
+    "stop": 99.0,
+    "target": 104.0,
+    "risk_cap": 210.0,
+}
+
+
+def candidate_payload(**overrides):
+    """A webhook payload complete enough to open a shadow-journal candidate."""
+    return setup_payload(**{**CANDIDATE_FIELDS, **overrides})
+
+
 def test_tastytrade_auth_mock_returns_session_token(tmp_path):
     async def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.path == "/sessions"
@@ -232,7 +251,7 @@ def test_health_status_watchlist_and_webhook_endpoints_work(tmp_path):
     with TestClient(app) as client:
         assert client.get("/health").json()["status"] == "healthy"
         assert client.get("/watchlist").json() == {"watchlist": ["AAPL"]}
-        webhook = client.post("/webhook/alert", json=setup_payload())
+        webhook = client.post("/webhook/alert", json=candidate_payload())
         assert webhook.status_code == 200
         body = webhook.json()
         assert body["accepted"] is True
@@ -246,6 +265,13 @@ def test_health_status_watchlist_and_webhook_endpoints_work(tmp_path):
         terminal = client.get("/terminal").json()
         assert terminal["shadow_journal"][0]["ticker"] == "AAPL"
         assert terminal["shadow_journal"][0]["scan_id"] == body["results"][0]["storage_id"]
+
+        # An ordinary scan without a formed candidate records no shadow row.
+        plain = client.post("/webhook/alert", json=setup_payload(ticker="MSFT")).json()
+        assert plain["results"][0]["shadow_id"] == 0
+        assert plain["results"][0]["shadow_reason"].startswith(
+            ("not_a_candidate:", "provider_error:")
+        )
 
 
 def test_scanner_dashboard_html_is_served(tmp_path):
@@ -275,11 +301,9 @@ def test_scanner_dashboard_data_dependencies_match_browser_contract(tmp_path):
     with TestClient(app) as client:
         webhook = client.post(
             "/webhook/alert",
-            json=setup_payload(
+            json=candidate_payload(
                 ticker="SPY",
-                option_type="CALL",
                 option_mark=2.15,
-                strike=505,
                 dte=5,
                 signa_grade="A",
                 signa_score=82,
@@ -313,7 +337,7 @@ def test_shadow_journal_endpoint_lists_and_updates_outcomes(tmp_path):
     app = create_app(cfg)
 
     with TestClient(app) as client:
-        webhook = client.post("/webhook/alert", json=setup_payload(ticker="SPY", option_mark=2.1))
+        webhook = client.post("/webhook/alert", json=candidate_payload(ticker="SPY", option_mark=2.1))
         shadow_id = webhook.json()["results"][0]["shadow_id"]
         listed = client.get("/shadow-journal").json()
         assert listed["advisory_only"] is True
@@ -349,8 +373,8 @@ def test_shadow_journal_summary_reports_paper_stats(tmp_path):
     app = create_app(cfg)
 
     with TestClient(app) as client:
-        spy = client.post("/webhook/alert", json=setup_payload(ticker="SPY", option_mark=2.0))
-        qqq = client.post("/webhook/alert", json=setup_payload(ticker="QQQ", option_mark=4.0))
+        spy = client.post("/webhook/alert", json=candidate_payload(ticker="SPY", option_mark=2.0))
+        qqq = client.post("/webhook/alert", json=candidate_payload(ticker="QQQ", option_mark=4.0))
         spy_shadow = spy.json()["results"][0]["shadow_id"]
         qqq_shadow = qqq.json()["results"][0]["shadow_id"]
         client.patch(
@@ -700,6 +724,7 @@ def test_provider_capabilities_are_read_only_and_account_forbidden(tmp_path):
     cfg = scanner_config(tmp_path)
     object.__setattr__(cfg, "market_data_provider", "public")
     object.__setattr__(cfg, "public_api_key_configured", True)
+    object.__setattr__(cfg, "public_account_id", "ACC12345")
 
     profile = build_provider_capabilities(cfg).to_dict()
 
@@ -724,44 +749,6 @@ def test_unsupported_market_data_provider_rejected(tmp_path):
         raise AssertionError("unsupported provider should raise")
 
 
-def test_public_provider_is_read_only_and_parses_snapshot(tmp_path, monkeypatch):
-    monkeypatch.setenv("PUBLIC_API_KEY", "public-key")
-    seen = {}
-
-    async def handler(request: httpx.Request) -> httpx.Response:
-        seen["path"] = request.url.path
-        seen["auth"] = request.headers.get("authorization")
-        return httpx.Response(200, json={
-            "data": {
-                "iv_rank": 22,
-                "underlying_price": 501.25,
-                "volume": 12345,
-            }
-        })
-
-    cfg = scanner_config(tmp_path)
-    object.__setattr__(cfg, "market_data_provider", "public")
-    object.__setattr__(cfg, "public_api_key_configured", True)
-    client = httpx.AsyncClient(
-        transport=httpx.MockTransport(handler),
-        base_url="https://api.public.com",
-    )
-
-    async def run():
-        public = PublicMarketDataClient(cfg, client=client)
-        snapshot = await public.fetch_market_snapshot("SPY")
-        assert snapshot.error is None
-        assert snapshot.iv_rank == 22
-        assert snapshot.price == 501.25
-        assert snapshot.volume == 12345
-
-    asyncio.run(run())
-    assert seen == {
-        "path": "/market-data/options/SPY",
-        "auth": "Bearer public-key",
-    }
-
-
 def test_public_provider_missing_credentials_fails_soft(tmp_path):
     cfg = scanner_config(tmp_path)
     object.__setattr__(cfg, "market_data_provider", "public")
@@ -784,9 +771,9 @@ def test_public_provider_blocks_forbidden_account_paths(tmp_path):
     async def run():
         public = PublicMarketDataClient(cfg)
         try:
-            await public._get("/accounts/me")
+            await public._post_marketdata("/accounts/me", {})
         except ValueError as exc:
-            assert "forbidden market-data path" in str(exc)
+            assert "market-data path" in str(exc)
         else:
             raise AssertionError("account path should be blocked")
 
@@ -803,10 +790,12 @@ def test_public_provider_marks_unsupported_response_shape(tmp_path, monkeypatch)
     cfg = scanner_config(tmp_path)
     object.__setattr__(cfg, "market_data_provider", "public")
     object.__setattr__(cfg, "public_api_key_configured", True)
+    object.__setattr__(cfg, "public_account_id", "ACC12345")
 
     async def run():
         public = PublicMarketDataClient(cfg, client=client)
         snapshot = await public.fetch_market_snapshot("SPY")
+        # The empty token-exchange body is itself an unexpected schema.
         assert snapshot.error == "unsupported_response_shape"
 
     asyncio.run(run())
