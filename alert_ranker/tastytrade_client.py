@@ -22,6 +22,10 @@ class MarketSnapshot:
     volume: float | None = None
     raw: dict[str, Any] = field(default_factory=dict)
     error: str | None = None
+    bid: float | None = None
+    ask: float | None = None
+    quote_timestamp: str | None = None
+    stale: bool = False
 
 
 class TastytradeClient:

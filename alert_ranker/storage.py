@@ -55,6 +55,7 @@ class ShadowJournalSummary:
     win_rate_percent: float | None
     total_pnl_dollars: float
     average_pnl_percent: float | None
+    rejected: int = 0
 
 
 class ScanStorage:
@@ -368,18 +369,34 @@ class ScanStorage:
         *,
         ticker: str | None = None,
     ) -> ShadowJournalSummary:
-        setups = self.latest_shadow_setups(limit=10_000, ticker=ticker)
-        status_counts = {status: 0 for status in ("OPEN", "WIN", "LOSS", "BREAKEVEN", "CANCELLED", "EXPIRED")}
+        # Aggregate in SQL: the journal can hold thousands of rows and this is
+        # polled by the dashboard, so it must never materialise every row's
+        # JSON blobs in memory (that was the scanner's largest allocation).
+        where = "WHERE ticker = ?" if ticker else ""
+        params: tuple[Any, ...] = (ticker.upper(),) if ticker else ()
+        status_counts: dict[str, int] = {}
         pnl_dollars = 0.0
         pnl_percent_values = []
-        for setup in setups:
-            status_counts[setup.status] = status_counts.get(setup.status, 0) + 1
-            dollars = _first_number(setup.outcome, ("pnl_dollars",))
-            percent = _first_number(setup.outcome, ("pnl_percent",))
-            if dollars is not None:
-                pnl_dollars += dollars
-            if percent is not None:
-                pnl_percent_values.append(percent)
+        with self._connect() as conn:
+            for row in conn.execute(
+                f"SELECT status, COUNT(*) AS n FROM options_shadow_journal {where} GROUP BY status",
+                params,
+            ):
+                status_counts[row["status"]] = int(row["n"])
+            resolved_where = (
+                f"{where} AND status != 'OPEN'" if where else "WHERE status != 'OPEN'"
+            )
+            for row in conn.execute(
+                f"SELECT outcome_json FROM options_shadow_journal {resolved_where}",
+                params,
+            ):
+                outcome = json.loads(row["outcome_json"] or "{}")
+                dollars = _first_number(outcome, ("pnl_dollars",))
+                percent = _first_number(outcome, ("pnl_percent",))
+                if dollars is not None:
+                    pnl_dollars += dollars
+                if percent is not None:
+                    pnl_percent_values.append(percent)
 
         wins = status_counts.get("WIN", 0)
         losses = status_counts.get("LOSS", 0)
@@ -393,7 +410,7 @@ class ScanStorage:
             else None
         )
         return ShadowJournalSummary(
-            total=len(setups),
+            total=sum(status_counts.values()),
             open=status_counts.get("OPEN", 0),
             closed=closed,
             wins=wins,
@@ -404,7 +421,84 @@ class ScanStorage:
             win_rate_percent=win_rate,
             total_pnl_dollars=round(pnl_dollars, 2),
             average_pnl_percent=average_percent,
+            rejected=status_counts.get("REJECTED", 0),
         )
+
+    def find_open_duplicate(self, ticker: str, contract_key: str) -> int | None:
+        if not contract_key:
+            return None
+        needle = json.dumps({"contract_key": contract_key}, sort_keys=True)[1:-1]
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT id FROM options_shadow_journal
+                WHERE ticker = ? AND status = 'OPEN' AND selected_contract_json LIKE ?
+                ORDER BY id DESC LIMIT 1
+                """,
+                (ticker.upper(), f"%{needle}%"),
+            ).fetchone()
+        return int(row["id"]) if row else None
+
+    def open_setups_after(self, after_id: int, limit: int = 500) -> list[StoredShadowSetup]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT id, timestamp, scan_id, ticker, direction, score, pattern, status,
+                       setup_inputs_json, provider_snapshot_json, selected_contract_json, outcome_json
+                FROM options_shadow_journal
+                WHERE status = 'OPEN' AND id > ?
+                ORDER BY id ASC LIMIT ?
+                """,
+                (after_id, limit),
+            ).fetchall()
+        return [
+            StoredShadowSetup(
+                id=row["id"],
+                timestamp=row["timestamp"],
+                scan_id=row["scan_id"],
+                ticker=row["ticker"],
+                direction=row["direction"],
+                score=row["score"],
+                pattern=row["pattern"],
+                status=row["status"],
+                setup_inputs=json.loads(row["setup_inputs_json"] or "{}"),
+                provider_snapshot=json.loads(row["provider_snapshot_json"] or "{}"),
+                selected_contract=json.loads(row["selected_contract_json"] or "{}"),
+                outcome=json.loads(row["outcome_json"] or "{}"),
+            )
+            for row in rows
+        ]
+
+    def reconcile_open_non_candidates(self, classify, now: datetime | None = None) -> int:
+        """Reclassify legacy OPEN rows that never met candidate requirements.
+
+        Non-destructive: the row and its recorded inputs are preserved verbatim;
+        only status flips to REJECTED and the reconciliation note is appended to
+        the outcome. Idempotent — already-reconciled rows are no longer OPEN.
+        """
+        stamp = (now or datetime.now(timezone.utc)).astimezone(timezone.utc).isoformat()
+        reconciled = 0
+        last_id = 0
+        while True:
+            batch = self.open_setups_after(last_id)
+            if not batch:
+                break
+            for setup in batch:
+                last_id = setup.id
+                classification = classify({**setup.setup_inputs, "direction": setup.direction})
+                if classification.is_open_eligible:
+                    continue
+                self.update_shadow_outcome(
+                    setup.id,
+                    status="REJECTED",
+                    outcome={
+                        "closed_reason": "reconciled_non_candidate",
+                        "reconciled_at": stamp,
+                        "missing_fields": list(classification.missing),
+                    },
+                )
+                reconciled += 1
+        return reconciled
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.path)

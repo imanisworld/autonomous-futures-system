@@ -39,11 +39,12 @@ from .rh_options import (
     sample_rh_options_payload,
     sample_rh_options_text,
 )
+from .lifecycle import classify_candidate
 from .scanner import OptionsScanner
 from .storage import ScanStorage
 
 
-SHADOW_OUTCOME_STATUSES = {"OPEN", "WIN", "LOSS", "BREAKEVEN", "CANCELLED", "EXPIRED"}
+SHADOW_OUTCOME_STATUSES = {"OPEN", "WIN", "LOSS", "BREAKEVEN", "CANCELLED", "EXPIRED", "REJECTED"}
 
 def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | None = None) -> FastAPI:
     cfg = config or load_config()
@@ -57,6 +58,12 @@ def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | No
         async with create_market_data_client(cfg) as market_data, DiscordAlerter(cfg, storage) as discord:
             scanner = scanner or OptionsScanner(cfg, market_data, storage, discord)
             app.state.scanner = scanner
+            # Restart recovery / legacy-backlog reconciliation: OPEN rows that
+            # never met candidate requirements are reclassified REJECTED
+            # (append-only outcome note, row data preserved). Idempotent.
+            app.state.last_reconciled_count = storage.reconcile_open_non_candidates(
+                classify_candidate
+            )
             scheduler = AsyncIOScheduler(timezone=cfg.timezone)
             scheduler.add_job(
                 scanner.scan_watchlist,
@@ -64,6 +71,15 @@ def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | No
                 minutes=cfg.interval_minutes,
                 kwargs={"source": "scheduled"},
                 id="options-watchlist-scan",
+                replace_existing=True,
+                max_instances=1,
+                coalesce=True,
+            )
+            scheduler.add_job(
+                scanner.resolve_open_candidates,
+                "interval",
+                minutes=cfg.interval_minutes,
+                id="options-resolve-open-candidates",
                 replace_existing=True,
                 max_instances=1,
                 coalesce=True,
@@ -103,8 +119,10 @@ def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | No
             if getattr(app.state, "scanner", None) is not None
             else None,
         ).to_dict()
+        market_data_error = provider_profile.get("last_error")
+        degraded = not cfg.market_data_configured or bool(market_data_error)
         return {
-            "status": "healthy",
+            "status": "degraded" if degraded else "healthy",
             "service": "options-scanner",
             "advisory_only": True,
             "port": cfg.port,
@@ -112,6 +130,7 @@ def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | No
             "scheduler_running": bool(app_state["scheduler"] and app_state["scheduler"].running),
             "market_data_provider": cfg.market_data_provider,
             "market_data_configured": cfg.market_data_configured,
+            "market_data_error": market_data_error,
             "provider_profile": provider_profile,
             "tastytrade_configured": cfg.tastytrade_configured,
         }
@@ -162,6 +181,11 @@ def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | No
             "ticker": ticker.upper() if ticker else None,
             "summary": get_scanner().storage.shadow_summary(ticker=ticker).__dict__,
         }
+
+    @app.post("/shadow-journal/reconcile")
+    async def reconcile_shadow_journal() -> dict[str, Any]:
+        count = get_scanner().storage.reconcile_open_non_candidates(classify_candidate)
+        return {"advisory_only": True, "reconciled": count}
 
     @app.get("/shadow-journal/{shadow_id}")
     async def get_shadow_setup(shadow_id: int) -> dict[str, Any]:
@@ -218,6 +242,7 @@ def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | No
                     "alert_suppression_reason": outcome.alert_suppression_reason,
                     "storage_id": outcome.storage_id,
                     "shadow_id": outcome.shadow_id,
+                    "shadow_reason": outcome.shadow_reason,
                 }
                 for outcome in outcomes
             ],
