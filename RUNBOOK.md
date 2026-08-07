@@ -296,6 +296,26 @@ Neither side is sufficient alone for an exception case:
   each other. A repo note without an operator ruling is an unresolved
   incident; an operator ruling without a repo note is unauditable.
 
+### Repo/Process Safety Routines (`ops.project_check`)
+
+Three manually-invoked, read-only routines close repeat failure classes
+(branch/worktree confusion, promoting a strategy on standalone research
+instead of the real executable path, and repo/journal/deployed-state drift)
+without adding scheduled automation:
+
+```
+python -m ops.project_check session-start   # start of a work session: git/worktree/PR state + active-lane snapshot
+python -m ops.project_check precommit       # before commit/push: fails closed if branch/worktree moved since session-start
+python -m ops.project_check promotion --strategy <name> [--instrument MNQ]  # traces a strategy through the real journal-recorded pipeline
+python -m ops.project_check daily           # PR/branch hygiene, evidence preservation, strategy source-of-truth, trade-chain integrity
+```
+
+None of the four commit, push, pull, reset, rebase, checkout, delete a
+branch/worktree, drop a stash, create/delete a tag, cancel an order, flatten
+a position, or touch risk/strategy/broker code — see the module docstrings
+in `ops/project_check*.py` for exactly what each reuses and what it reports
+`UNKNOWN` for instead of guessing.
+
 ### Runner shadow proof
 
 Before enabling live trailing, set `RUNNER_SHADOW_ENABLED=true` and leave
