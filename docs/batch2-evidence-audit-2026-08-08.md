@@ -80,6 +80,30 @@ noise process beats the p95 more often than not. The threshold that would actual
 error is the band's 99.767th percentile. **The band was never measured that far into its own
 tail, so the correct threshold is not merely unmet; it is unmeasured.**
 
+### A usable threshold already exists, unnoticed, in the null-baseline evidence
+
+`/Users/djb.a.e/MAINVSCODE/afs-evidence/null_baseline/null_analysis.json` records **500 null
+seeds** and their full PF distribution — including `null_pf.max = 2.5515`.
+
+That maximum **is** an empirical best-of-500 statistic. It is exactly the multiplicity-aware
+quantity the corpus has been missing, and it has been sitting in the evidence directory the
+whole time. It was simply never used as the threshold; the p95 was.
+
+| Question being asked | Correct bar on this corpus |
+|---|---|
+| Is this one **pre-registered** test's PF meaningful? | PF ≥ **1.94** (recorded p95) |
+| Is the **best of a ~500-variant search** meaningful? | PF ≥ **2.55** (recorded max of 500) |
+
+Read against 2.55, the archive is unambiguous: MES 2-1-2 close-confirmed (1.385), unified 2R
+(1.401), ORB Reclaim V4-R (1.338), and the MES 4HR ceiling rescue (1.854) are all far below it.
+The only figure that clears 2.55 is MNQ 4HR uncapped at 4.78, already classified
+OVERFIT + INCOMPATIBLE at n = 12.
+
+**Caveat, stated precisely:** with 500 samples the observed max estimates roughly the 99.8th
+percentile, whereas FWER 5% at N = 500 requires the 99.99th. So **2.55 is a floor on the
+correct threshold, not the threshold itself.** Using it is strictly better than using 1.94;
+using it as if it were exact would understate the bar.
+
 Trials are of course correlated. Bailey & López de Prado's Appendix A.3 Eq. (9) handles that:
 
     N̂ = ρ̄ + (1 − ρ̄)·M
@@ -160,10 +184,13 @@ unrecoverable and Q1 stays permanently un-closable.
 
 ### Remaining blockers
 
-- **BLOCKED BY DATA — M is unrecorded.** The corrections are implemented; the input is not.
+- **BLOCKED BY DATA — M is unrecorded** for everything except the null-baseline study itself
+  (500 seeds). The corrections are implemented; the input is not.
 - **BLOCKED BY DATA — DSR/PSR need a return series.** The repo reports profit factor.
   Bridging requires exporting per-trade R (the raw-trades JSONL already carries per-trade P&L,
   so this is small work, not new evidence).
+- **NOT blocked:** adopting PF 2.55 as the interim best-of-search floor. That number already
+  exists and needs no new computation.
 
 ---
 
