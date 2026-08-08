@@ -15,14 +15,20 @@ configuration, deployment, or merge-state change. Batch 3 not started.
 |---|---:|
 | Families in the ledger | 25 |
 | Families whose reported result was selected from a compared set | 22 |
-| **Proven floor on total M** | **256** |
-| Defensible bounded upper on total M | 438 |
+| M floor **including** unresolved slippage-selection ambiguity | 256 |
+| **Selection M — proven floor (robustness excluded)** | **244** |
+| Robustness variants recorded, never multiplied into M | 10 |
+| Defensible bounded upper on Selection M | 426 |
 | Families with no upper bound at all | 4 |
 
-The floor of 256 **excludes** four families that are unbounded above
-(`shadow_gate_choke_sweep_622d`, `missed_move_gate_sweep_622d`,
-`orb_reclaim_v4r_and_counterfactuals`, `miyagi_12hr`). The true M is larger than any number
-in this document.
+Both floors are retained per the operator ruling; neither replaces the other. The floor
+**excludes** four families that are unbounded above (`shadow_gate_choke_sweep_622d`,
+`missed_move_gate_sweep_622d`, `orb_reclaim_v4r_and_counterfactuals`, `miyagi_12hr`). The true
+M is larger than any number in this document.
+
+> **Correction to the previous pass.** I earlier estimated the robustness-excluded floor at
+> ~240. That was wrong: it silently adjusted `mes_strat_212` too, which on inspection resolves
+> to class C and keeps all 8. The computed figure is **244**.
 
 ---
 
@@ -37,10 +43,10 @@ itself the proof that a best-of-22 selection occurred.
 
 The same trap appears twice more and was caught both times:
 
-| Artifact | Number that looks like M | What it actually is | Real M |
+| Artifact | Number that looks like M | What it actually is | Real selection M |
 |---|---:|---|---:|
 | `orb_breakout_entry_study_results.json` | `n_arms` = 522 / 316 | `len(arms)` — detected setups (`orb_breakout_entry_study.py:189`) | 16 |
-| `four_hr_retrigger_stop_study_results.json` | 81 / 76 candidates detected | resolved trades | 6 |
+| `four_hr_retrigger_stop_study_results.json` | 81 / 76 candidates detected | resolved trades | 2 |
 | shadow lane | 41,750 candidates | journaled observations | 22–132 |
 
 **Rule this ledger enforces:** a number is only M if changing it would have changed *which
@@ -69,41 +75,109 @@ cell. The verdict was right for a slightly wrong reason and is now right for the
 
 ---
 
+## Slippage-tier resolution (operator ruling 2026-08-08)
+
+All three named families resolve to **A — pre-specified robustness**. None reaches B. Two
+further families carrying the same axis were *not* named in the ruling and are recorded as
+**C — conservative higher M retained**.
+
+**The decisive test in every case was the criterion, not the tier count.** Each of the three
+scores its tiers with a *conjunction* — "survives at **every** slippage" — collapsed to a
+single boolean. A conjunction makes best-tier selection structurally impossible: you cannot
+pick a winner from a test that requires all of them to pass.
+
+### `four_hr_retrigger_stop_study` → **A** (most explicit)
+
+The script names the axes itself. `four_hr_retrigger_stop_study.py:77-78`:
+
+```python
+BASELINE_SLIPPAGE_TICKS = 1.0
+SENSITIVITY_SLIPPAGE_TICKS = (1.0, 2.0, 3.0)
+```
+
+Docstring lines 34–36: *"slippage: PaperBroker adverse market-order slippage. Baseline = 1.0
+… Sensitivity reported at 1/2/3 ticks."* The pass rule at line 348 requires *"positive net P&L
+in both chronological halves **and at every slippage** tier"*, and line 382 reports from a fixed
+`baseline_key`. Pre-specified, conjunctive, fixed reporting tier.
+**Selection M 6 → 2** (instruments MNQ/MES, which *did* compete — PR #335 enabled MNQ for
+forward demo and excluded MES). Robustness variants: 3.
+
+### `vwap_reclaim_canonical` → **A**
+
+Criterion is `slippage_1_2_3_tick_all_survive` — one boolean — and the verdict reads *"fails
+1/2/3-tick slippage sensitivity (edge does not survive 3-tick adverse)"*. Headline metrics
+carry the tier in the field name (`walk_forward_both_halves_positive_1tick`) at the config
+default of 1.0, which is canonical rather than chosen.
+
+The decisive tell: **attempts (136) and fills (70) are identical across all three tiers.** The
+tiers move cost only; they are not distinct specifications. The family issues one verdict for
+the strategy, with the MNQ/MES split appearing as a *reason inside* it (*"MNQ sample below
+30-trade minimum (n=21)"*), not as competing per-instrument promotions.
+**Selection M 3 → 1.** Robustness variants: 3.
+
+### `orb_breakout_canonical` → **A** for slippage; the exit-mode axis stays in Selection M
+
+`orb_breakout_canonical_evidence.py:99` hardcodes `SLIPPAGE_TICKS = (1.0, 2.0, 3.0, 4.0)`, and
+line 45 records the provenance explicitly: *"operator asked for 1-4 this time, vs 1-3 for the
+VWAP Reclaim lane … only `fill_slippage_ticks`"* — specified before the run. Scored by
+`robustness_answers.survives_1_4_tick_slippage`, one boolean per exit mode; both returned false.
+
+The **exit-mode axis stays in Selection M**. `static` and `runner` each carry their own verdict,
+and the artifact records `static_fails_runner_passes` — an explicit selection rule. Had runner
+passed while static failed, runner would have been the promoted result.
+**Selection M 8 → 2.** Robustness variants: 4.
+
+### Not named in the ruling, resolved **C**
+
+- **`mes_strat_212`** — also carries slip1/2/3, but unlike the three above its tiers are baked
+  into *run directory names* (`close_confirmed_mixed_target_slip{1,2,3}`,
+  `unified_2r_slip{1,2,3}`): each tier was materialised as its own preserved run rather than as
+  a sensitivity column inside one run, and no all-tiers-must-pass criterion is recorded.
+  **All 8 stay in Selection M.**
+- **`strat_212_122_canonical`** — a separate 3-tier sensitivity artifact exists, but no
+  conjunction criterion is recorded anywhere, so it cannot be shown that no tier competed.
+  **M unchanged.**
+
+**Zero families resolved to B.** No slippage axis in this repo was found to have competed for
+selection — which is a genuinely good result about how these studies were run, and the reason
+the ruling matters more for future work than for the existing ledger.
+
 ## The ledger
 
-`class` follows the task's taxonomy. `selected?` = was the reported result chosen after
-comparing alternatives.
+**Frozen schema** (`research/trial_ledger.py`), one row per family:
+`selection_m` (min/max) · `robustness_variants` · `observation_count` · `m_status` ·
+`family_definition`. Plus `robustness_class` recording the A/B/C resolution.
 
-| Family | Class | M min | M max | Confidence | Selected? |
-|---|---|---:|---:|---|---|
-| `shadow_lane_null_test` | VARIANT_SEARCH | 22 | 132 | LOWER_BOUND | yes |
-| `shadow_tranche2` | VARIANT_SEARCH | 20 | 20 | KNOWN | yes |
-| `shadow_gate_choke_sweep_622d` | VARIANT_SEARCH | 1 | *unbounded* | **UNRECOVERABLE** | yes |
-| `mes_strat_212` | VARIANT_SEARCH | 8 | 11 | LOWER_BOUND | yes |
-| `strat_212_122_canonical` | VARIANT_SEARCH | 4 | 15 | LOWER_BOUND | yes |
-| `mnq_4hr_matrix` | VARIANT_SEARCH | 24 | 25 | KNOWN | yes |
-| `orb_breakout_canonical` | VARIANT_SEARCH | 8 | 8 | KNOWN | yes |
-| `orb_breakout_entry_study` | VARIANT_SEARCH | 16 | 16 | KNOWN | yes |
-| `orb_reclaim_v4r_and_counterfactuals` | VARIANT_SEARCH | 4 | *unbounded* | LOWER_BOUND | yes |
-| `vwap_hold` | VARIANT_SEARCH | 12 | 36 | LOWER_BOUND | yes |
-| `vwap_reclaim_canonical` | VARIANT_SEARCH | 3 | 3 | KNOWN | yes |
-| `execution_mode_corpus_comparison` | VARIANT_SEARCH | 4 | 4 | KNOWN | yes |
-| `ioc_baseline_622d` | VARIANT_SEARCH | 8 | 8 | KNOWN | yes |
-| **`corrected_ioc_corpus_pr346`** | **CONFIRMATORY** | **1** | **1** | **KNOWN** | **no** |
-| `entry_detached_sweep_622d` | VARIANT_SEARCH | 3 | 36 | LOWER_BOUND | yes |
-| `stop_rule_sweep` | VARIANT_SEARCH | 14 | 14 | KNOWN | yes |
-| `strategy_matrix_tranche1` | VARIANT_SEARCH | 60 | 60 | KNOWN | yes |
-| `four_hr_retrigger_stop_study` | VARIANT_SEARCH | 6 | 6 | KNOWN | yes |
-| `mnq_entry_refresh_study` | VARIANT_SEARCH | 20 | 20 | KNOWN | yes |
-| `structural_level_5m_study` | VARIANT_SEARCH | 10 | 10 | KNOWN | yes |
-| `mnq_5m_impulse_pullback_continuation` | VARIANT_SEARCH | 3 | 3 | KNOWN | yes |
-| `missed_move_gate_sweep_622d` | VARIANT_SEARCH | 2 | *unbounded* | **UNRECOVERABLE** | yes |
-| `miyagi_12hr` | VARIANT_SEARCH | 4 | *unbounded* | LOWER_BOUND | yes |
-| **`prereg_context_permission_layer`** | **PRE_REGISTERED** | **22** | **22** | **KNOWN** | **no** |
-| `null_baseline_500_seeds` | DIAGNOSTIC | 0 | 0 | KNOWN | no |
+| Family | Class | sel M | sel M max | Robust | m_status | Selected? |
+|---|---|---:|---:|---:|---|---|
+| `shadow_lane_null_test` | VARIANT_SEARCH | 22 | 132 | – | LOWER_BOUND | yes |
+| `shadow_tranche2` | VARIANT_SEARCH | 20 | 20 | – | KNOWN | yes |
+| `shadow_gate_choke_sweep_622d` | VARIANT_SEARCH | 1 | *unbounded* | – | **UNRECOVERABLE** | yes |
+| `mes_strat_212` | VARIANT_SEARCH | 8 | 11 | – *(C)* | LOWER_BOUND | yes |
+| `strat_212_122_canonical` | VARIANT_SEARCH | 4 | 15 | – *(C)* | LOWER_BOUND | yes |
+| `mnq_4hr_matrix` | VARIANT_SEARCH | 24 | 25 | – | KNOWN | yes |
+| `orb_breakout_canonical` | VARIANT_SEARCH | **2** | 2 | **4** *(A)* | KNOWN | yes |
+| `orb_breakout_entry_study` | VARIANT_SEARCH | 16 | 16 | – | KNOWN | yes |
+| `orb_reclaim_v4r_and_counterfactuals` | VARIANT_SEARCH | 4 | *unbounded* | – | LOWER_BOUND | yes |
+| `vwap_hold` | VARIANT_SEARCH | 12 | 36 | – | LOWER_BOUND | yes |
+| `vwap_reclaim_canonical` | VARIANT_SEARCH | **1** | 1 | **3** *(A)* | KNOWN | no |
+| `execution_mode_corpus_comparison` | VARIANT_SEARCH | 4 | 4 | – | KNOWN | yes |
+| `ioc_baseline_622d` | VARIANT_SEARCH | 8 | 8 | – | KNOWN | yes |
+| **`corrected_ioc_corpus_pr346`** | **CONFIRMATORY** | **1** | **1** | – | **KNOWN** | **no** |
+| `entry_detached_sweep_622d` | VARIANT_SEARCH | 3 | 36 | – | LOWER_BOUND | yes |
+| `stop_rule_sweep` | VARIANT_SEARCH | 14 | 14 | – | KNOWN | yes |
+| `strategy_matrix_tranche1` | VARIANT_SEARCH | 60 | 60 | – | KNOWN | yes |
+| `four_hr_retrigger_stop_study` | VARIANT_SEARCH | **2** | 2 | **3** *(A)* | KNOWN | yes |
+| `mnq_entry_refresh_study` | VARIANT_SEARCH | 20 | 20 | – | KNOWN | yes |
+| `structural_level_5m_study` | VARIANT_SEARCH | 10 | 10 | – | KNOWN | yes |
+| `mnq_5m_impulse_pullback_continuation` | VARIANT_SEARCH | 3 | 3 | – | KNOWN | yes |
+| `missed_move_gate_sweep_622d` | VARIANT_SEARCH | 2 | *unbounded* | – | **UNRECOVERABLE** | yes |
+| `miyagi_12hr` | VARIANT_SEARCH | 4 | *unbounded* | – | LOWER_BOUND | yes |
+| **`prereg_context_permission_layer`** | **PRE_REGISTERED** | **22** | **22** | – | **KNOWN** | **no** |
+| `null_baseline_500_seeds` | DIAGNOSTIC | 0 | 0 | – | KNOWN | no |
 
-Full family definitions, evidence references, and per-family notes are in
-`research/trial_ledger.py`.
+Full family definitions, evidence references, robustness resolutions, and per-family notes are
+in `research/trial_ledger.py`.
 
 ### The two families that are not variant searches
 
@@ -176,13 +250,13 @@ the candidate grid.
 ## What the floor implies for promotion
 
 From `research/trial_ledger.py`, using the DSR implied-independent-trials formula
-(`N̂ = ρ̄ + (1 − ρ̄)·M`) against a proven floor of M = 256:
+(`N̂ = ρ̄ + (1 − ρ̄)·M`) against the proven **Selection M** floor of 244:
 
 | Correlation assumption | N̂ | P(a null run beats the recorded p95) | Single-run quantile needed for FWER 5% |
 |---|---:|---:|---:|
-| ρ̄ = 0.0 (independent) | 256.0 | 100.00% | 99.979966% |
-| ρ̄ = 0.5 (moderately correlated) | 128.5 | 99.86% | 99.960091% |
-| ρ̄ = 0.9 (highly correlated) | 26.5 | 74.32% | 99.806628% |
+| ρ̄ = 0.0 (independent) | 244.0 | 100.00% | 99.978980% |
+| ρ̄ = 0.5 (moderately correlated) | 122.5 | 99.81% | 99.958137% |
+| ρ̄ = 0.9 (highly correlated) | 25.3 | 72.68% | 99.797465% |
 
 **Under every correlation assumption, the required quantile is past both the recorded p95
 (1.94) and the observed max of 500 null seeds (2.55).** Even treating the entire corpus as
@@ -259,16 +333,21 @@ never that M was unknowable — it was that nobody had added it up.
 2. **A trial ledger entry is a precondition for a study, not a write-up afterwards.** Both
    UNRECOVERABLE families became unrecoverable by discarding the field and keeping the winner.
 3. **Interim promotion floor: PF ≥ 2.55**, the observed max of 500 null seeds — itself a floor,
-   since 500 samples reach only ~the 99.8th percentile while FWER 5% at M = 256 needs
-   ~99.98%.
+   since 500 samples reach only ~the 99.8th percentile while FWER 5% at Selection M = 244
+   needs ~99.979%.
 4. **Pre-registration is the only route to a small M.** The prereg family holds M = 22 against
-   a corpus floor of 256 purely because it was fixed in advance. That is a ~12× reduction in
+   a corpus floor of 244 purely because it was fixed in advance. That is a ~11× reduction in
    the required threshold, available for free, before any data is examined.
-5. **Robustness tiers are not hypotheses.** Slippage sweeps (`vwap_reclaim` ×3,
-   `four_hr_retrigger` ×3, `orb_breakout_canonical` ×4) are sensitivity checks on one claim.
-   They are counted here for completeness and flagged as the least defensible inflation in the
-   ledger. An operator ruling on whether to count them would move the floor from 256 to
-   roughly 240 — a real but not decisive difference, and it does not change any conclusion above.
+5. **Robustness tiers are not hypotheses — resolved.** All three named slippage axes are
+   class A (pre-specified, conjunctive criteria, no tier ever selected), so they leave
+   Selection M and live in `robustness_variants`. Floor 256 → **244**. Two further families
+   carrying the same axis (`mes_strat_212`, `strat_212_122_canonical`) are class C and keep the
+   conservative count. **Zero families are class B** — no slippage axis in this repo competed
+   for selection.
+6. **Record the criterion, not just the tiers.** What made the three resolvable was that each
+   scored its tiers with a conjunction ("survives at *every* slippage") reduced to one boolean.
+   That single design choice is the difference between a robustness check and a hidden search,
+   and it is the cheapest thing a future study can do to stay out of Selection M.
 
 ---
 
