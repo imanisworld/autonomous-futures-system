@@ -648,3 +648,77 @@ If the system is generating trades that seem wrong:
 3. Run `pytest tests/test_risk_engine.py -v` — all rules must pass
 4. Review the market state file used — confirm it accurately represents conditions
 5. Add a test case that covers the unexpected scenario before changing any logic
+
+---
+
+## 11. Operator Routines (`ops/project_check.py`)
+
+Three manually-invoked, read-only routines cover the repeat failure modes
+this project has actually hit: branch/worktree collisions and stale-state
+commits, strategies promoted on standalone research the real executable
+path never confirmed, and drift between what the repo/docs claim and what
+the journal/broker actually show. No cron, no daemon, no scheduled service
+— run these yourself, when you want them.
+
+Each subcommand is a thin wrapper around existing, already-trusted modules
+(`ops/live_box_guard.py`, `ops/release_manifest.py`, `ops/proof_30_mnq.py`,
+`ops/reconciler_outcome_audit.py`, `ops/strategy_intent_audit.py`) plus new
+git/GitHub/journal-pairing logic where nothing reusable existed yet
+(`ops/session_safety.py`, `ops/promotion_gate.py`, `ops/trade_chain_audit.py`,
+`ops/daily_reconciliation.py`).
+
+```bash
+# 1. Session start — repo/worktree/runtime snapshot. Writes only its own
+#    local, gitignored baseline at .project_check/session_start.json.
+python3 -m ops.project_check session-start
+python3 -m ops.project_check session-start --json
+
+# 2. Precommit / prepush — read-only drift check vs. the session-start
+#    baseline. Never commits, pushes, pulls, resets, rebases, checks out,
+#    deletes a branch/worktree, drops a stash, or touches a tag.
+python3 -m ops.project_check precommit
+
+# 3. Strategy promotion proof gate — checks a strategy's evidence JSON
+#    (produced by the strategy's own canonical-evidence script, same
+#    convention as scripts/orb_breakout_canonical_evidence.py etc.) for
+#    completeness, the two accounting identities, and the "no rescue
+#    variant / no silently exempted risk controls / state zero fills"
+#    rules. Never enables a strategy, edits config, or merges/deploys.
+python3 -m ops.project_check promotion --strategy orb_breakout_inverse --evidence path/to/evidence.json
+
+# 4. Daily reconciliation + trade chain integrity — one daily read-only
+#    pass: PR/branch/worktree hygiene, evidence-tag preservation, deployed
+#    state, Strategy_Inventory.md vs. risk_rules.yaml drift, and the full
+#    signal -> decision -> risk -> order -> fill -> protection -> exit ->
+#    outcome trace with the attempts/fills accounting identities.
+python3 -m ops.project_check daily --log-dir logs
+python3 -m ops.project_check daily --log-dir logs --status-url http://127.0.0.1:8000/status/today
+```
+
+**What each routine fails closed on:** precommit fails closed whenever the
+branch or worktree differs from the session-start baseline, the branch is
+also checked out in another worktree, unexpected files changed, or a
+required git read itself failed (ambiguous state). The promotion gate
+blocks on an accounting-identity violation, a missing required evidence
+section, an attestation admitting a rescue/tuning variant or an exempted
+risk control, or `VALIDATED` claimed with zero fills. Daily's trade-chain
+pass reports `FAIL` on any orphaned attempt (no order and no outcome
+logged), a stale unresolved order, a duplicate order identity, or a
+bracket-incomplete (naked-position-risk) fill; it always reports the
+accounting identity even when it holds.
+
+**What each routine reads:** git (read-only subcommands only), `gh pr list`
+(best-effort, degrades to "unavailable" — never blocks on it), `risk_rules.yaml`,
+`docs/BRANCH_ARCHIVE_INDEX.md`, `docs/strategy-rules/Strategy_Inventory.md`,
+`logs/journal_*.jsonl`, and — only if `--status-url` is passed — one read of
+that status endpoint for broker/journal position-count parity. Nothing here
+ever fetches, pulls, SSHes, or reaches a broker directly.
+
+**Known limitations:** origin/main SHA reflects the last local fetch, not
+live remote state (this module never fetches). The closed-unmerged-branch
+and Strategy_Inventory.md-vs-risk_rules.yaml checks are name-matching
+heuristics — flag leads for a human, not settled findings. Broker/journal
+parity is `UNKNOWN` unless `--status-url` is given. The promotion gate does
+not itself run ReplayEngine/DecisionEngine/RiskEngine/PaperBroker — it
+audits the evidence artifact your own canonical-evidence run already
+produces.

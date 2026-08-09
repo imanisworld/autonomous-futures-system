@@ -70,3 +70,6 @@ journal/*.jsonl
 # Release-deploy artifacts on the box (afs-deploy.sh --release)
 .deploy-bak/
 release_manifest.json
+
+# ops/project_check.py session-start baseline (local, per-session state)
+.project_check/
