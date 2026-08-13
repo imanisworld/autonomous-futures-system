@@ -1,0 +1,25 @@
+{
+  "campaign_id": "forward_ab_2026_08_v1",
+  "evidence_schema_version": "1.0.0",
+  "instrument": "MNQ",
+  "populations": [
+    {"strategy": "vwap_hold", "variant": "control", "source_timeframe": "15m", "entry_policy": "canonical_resting_entry", "exit_policy": "runner_1R_0.5R"},
+    {"strategy": "vwap_hold", "variant": "modified", "source_timeframe": "5m", "entry_policy": "confirmed_5m_close", "exit_policy": "runner_1R_0.5R"},
+    {"strategy": "orb_reclaim", "variant": "control", "source_timeframe": "15m", "entry_policy": "current_disposition", "exit_policy": "none"},
+    {"strategy": "orb_reclaim", "variant": "modified", "source_timeframe": "15m", "entry_policy": "translate_lte_1R", "exit_policy": "runner_1R_0.5R"},
+    {"strategy": "vwap_rejection", "variant": "observer", "source_timeframe": "15m", "entry_policy": "canonical_resting_entry", "exit_policy": "fixed_bracket"}
+  ],
+  "costs": {
+    "slippage_ticks_round_turn": 1.0,
+    "commission_dollars_round_turn": 1.48,
+    "mnq_tick_size": 0.25,
+    "mnq_tick_value_dollars": 0.50,
+    "pessimistic_same_bar": true
+  },
+  "review_gate": {
+    "minimum_trading_days": 20,
+    "minimum_resolved_outcomes_per_variant": 30,
+    "automatic_promotion": false,
+    "insufficient_sample_classification": "WAIT / PROMISING BUT UNPROVEN"
+  }
+}

@@ -81,6 +81,14 @@ from execution.vwap_hold_early_shadow import (
     open_shadow_position as open_vwap_hold_early_shadow_position,
     resolve_shadow_position as resolve_vwap_hold_early_shadow_position,
 )
+from execution.forward_evidence_campaign import (
+    append_record as append_forward_campaign_record,
+    campaign_enabled as forward_campaign_enabled,
+    candidate_record as forward_candidate_record,
+    outcome_record as forward_outcome_record,
+    record_canonical_candidates,
+    resolve_canonical_positions,
+)
 from context.five_min_feed import (
     arm_fifteen_min_setup,
     clear_armed_setup,
@@ -513,7 +521,29 @@ def process_alert(
                         vwap_hold_early_audit.get("signal_detected")
                         and vwap_hold_early_mode(cfg) == "shadow"
                     ):
-                        open_vwap_hold_early_shadow_position(
+                        _vhe_campaign_record = None
+                        if forward_campaign_enabled():
+                            _vhe_campaign_record = forward_candidate_record(
+                                strategy="vwap_hold",
+                                variant="modified",
+                                direction=vwap_hold_early_audit["direction"],
+                                signal_timestamp=_vhe_state.timestamp.isoformat(),
+                                source_timeframe="5m",
+                                session=_vhe_state.session,
+                                regime=vwap_hold_early_audit.get("regime"),
+                                market_condition=vwap_hold_early_audit.get("market_condition"),
+                                original_entry=vwap_hold_early_audit["entry"],
+                                original_stop=vwap_hold_early_audit["stop"],
+                                original_target=vwap_hold_early_audit["target"],
+                                modified_entry=vwap_hold_early_audit["entry"],
+                                modified_stop=vwap_hold_early_audit["stop"],
+                                modified_target=vwap_hold_early_audit["target"],
+                                entry_policy="confirmed_5m_close",
+                                exit_policy="runner_1R_0.5R",
+                                fillable_state="FILLED",
+                                hypothetical_fill_price=vwap_hold_early_audit["entry"],
+                            )
+                        _vhe_opened = open_vwap_hold_early_shadow_position(
                             log_dir,
                             direction=vwap_hold_early_audit["direction"],
                             entry=vwap_hold_early_audit["entry"],
@@ -521,7 +551,10 @@ def process_alert(
                             target=vwap_hold_early_audit["target"],
                             entry_ts=_vhe_state.timestamp.isoformat(),
                             rr_ratio=vwap_hold_early_audit.get("rr_ratio"),
+                            campaign_record=_vhe_campaign_record,
                         )
+                        if _vhe_opened and _vhe_campaign_record is not None:
+                            append_forward_campaign_record(log_dir, _vhe_campaign_record)
             except Exception:
                 logger.debug("vwap_hold early-signal detection skipped", exc_info=True)
 
@@ -537,12 +570,22 @@ def process_alert(
                         b for b in recent_five_min("MNQ", log_dir, 500, for_date=for_date)
                         if str(b.get("ts") or "") > _vhe_entry_ts
                     ]
-                    _vhe_outcome = resolve_vwap_hold_early_shadow_position(_vhe_position, _vhe_bars)
+                    _vhe_outcome = resolve_vwap_hold_early_shadow_position(
+                        _vhe_position,
+                        _vhe_bars,
+                        activation_r=float(os.getenv("RUNNER_ACTIVATION_R", "1.0") or 1.0),
+                        trail_r=float(os.getenv("RUNNER_TRAIL_R", "0.5") or 0.5),
+                    )
                     if _vhe_outcome is not None:
                         append_vwap_hold_early_shadow_evidence(
                             log_dir,
                             {"kind": "resolution", "position": _vhe_position, **_vhe_outcome},
                         )
+                        if _vhe_position.get("campaign_record"):
+                            append_forward_campaign_record(
+                                log_dir,
+                                forward_outcome_record(_vhe_position, _vhe_outcome),
+                            )
                         close_vwap_hold_early_shadow_position(log_dir)
             except Exception:
                 logger.debug("vwap_hold early-signal resolution skipped", exc_info=True)
@@ -857,7 +900,7 @@ def process_alert(
     # surfaced on `result` + journal for offline study. Fail-soft.
     try:
         shadow_candidates = [
-            c.to_dict() for c in evaluate_shadow_setups(state, recent_bars)
+            c.to_dict() for c in evaluate_shadow_setups(state, recent_bars, cfg)
         ]
     except Exception:
         shadow_candidates = []
@@ -886,6 +929,31 @@ def process_alert(
         result["decision"] = "BLOCKED_DUPLICATE_BAR"
         result["failed_gates"] = [f"Duplicate bar already processed: {state.instrument} {bar_ts}"]
         return result
+
+    # Forward A/B campaign: resolve prior canonical VWAP candidates, then arm
+    # only this bar's new canonical observers. This is an isolated evidence
+    # state file; it cannot affect the active decision, risk, or broker path.
+    if forward_campaign_enabled() and state.instrument == "MNQ" and not five_min_trigger:
+        try:
+            _fab_bars = BarHistory(log_dir=log_dir).recent("MNQ", 500, for_date=today)
+            _fab_resolved = resolve_canonical_positions(
+                log_dir,
+                instrument="MNQ",
+                bars=_fab_bars,
+                current_bar_ts=bar_ts,
+                activation_r=float(os.getenv("RUNNER_ACTIVATION_R", "1.0") or 1.0),
+                trail_r=float(os.getenv("RUNNER_TRAIL_R", "0.5") or 0.5),
+            )
+            _fab_created = record_canonical_candidates(log_dir, state, shadow_candidates)
+            if _fab_resolved or _fab_created:
+                result["forward_campaign"] = {
+                    "campaign_id": "forward_ab_2026_08_v1",
+                    "canonical_candidates": len(_fab_created),
+                    "canonical_outcomes": len(_fab_resolved),
+                    "observation_only": True,
+                }
+        except Exception:  # noqa: BLE001 — campaign evidence must fail soft
+            logger.warning("forward evidence campaign canonical lane skipped", exc_info=True)
 
     # Four independent MNQ Strat evidence lanes. Additive only: this service
     # writes its own evidence/state files, owns hypothetical positions solely
@@ -981,6 +1049,11 @@ def process_alert(
                             "opened_at": _er_pos.get("opened_at"),
                             **_er_outcome,
                         })
+                        if _er_pos.get("campaign_record"):
+                            append_forward_campaign_record(
+                                log_dir,
+                                forward_outcome_record(_er_pos, _er_outcome),
+                            )
                         close_shadow_position(log_dir, _er_root, _er_strategy)
                 except Exception:  # noqa: BLE001 — shadow lane must never break ingestion
                     logger.debug("entry-refresh shadow resolution skipped", exc_info=True)
@@ -1730,8 +1803,57 @@ def process_alert(
                     "strategy": _er_candidate.get("strategy"),
                     **_er_decision.to_audit_dict(),
                 }
+                _er_control_campaign_record = None
+                _er_modified_campaign_record = None
+                if forward_campaign_enabled() and _er_root == "MNQ":
+                    _er_control_campaign_record = forward_candidate_record(
+                        strategy="orb_reclaim",
+                        variant="control",
+                        direction=_er_decision.direction,
+                        signal_timestamp=bar_ts,
+                        source_timeframe=f"{bar_timeframe_minutes}m",
+                        session=state.session,
+                        regime=decision.regime,
+                        market_condition=decision.market_condition,
+                        original_entry=_er_decision.original_entry,
+                        original_stop=_er_decision.original_stop,
+                        original_target=_er_decision.original_target,
+                        entry_policy="current_disposition",
+                        exit_policy="none",
+                        failed_gates=list(decision.failed_gates or []),
+                        reject_reason=decision.reason,
+                        fillable_state="REJECTED",
+                        terminal_state="REJECTED",
+                    )
+                    append_forward_campaign_record(log_dir, _er_control_campaign_record)
+                    _er_modified_campaign_record = forward_candidate_record(
+                        strategy="orb_reclaim",
+                        variant="modified",
+                        direction=_er_decision.direction,
+                        signal_timestamp=bar_ts,
+                        source_timeframe=f"{bar_timeframe_minutes}m",
+                        session=state.session,
+                        regime=decision.regime,
+                        market_condition=decision.market_condition,
+                        original_entry=_er_decision.original_entry,
+                        original_stop=_er_decision.original_stop,
+                        original_target=_er_decision.original_target,
+                        modified_entry=_er_decision.refreshed_entry,
+                        modified_stop=_er_decision.refreshed_stop,
+                        modified_target=_er_decision.refreshed_target,
+                        entry_policy="translate_lte_1R",
+                        exit_policy="runner_1R_0.5R",
+                        detachment_ticks=_er_decision.detachment_ticks,
+                        detachment_r=_er_decision.detachment_r,
+                        failed_gates=[] if _er_decision.outcome == "REFRESHED" else [_er_decision.outcome],
+                        reject_reason=None if _er_decision.outcome == "REFRESHED" else _er_decision.reason,
+                        fillable_state="FILLED" if _er_decision.outcome == "REFRESHED" else "REJECTED",
+                        hypothetical_fill_price=_er_decision.refreshed_entry,
+                        terminal_state="OPEN" if _er_decision.outcome == "REFRESHED" else "REJECTED",
+                        event_id=_er_control_campaign_record["event_id"],
+                    )
                 if _er_mode == "shadow" and _er_decision.outcome == "REFRESHED":
-                    open_shadow_position(
+                    _er_opened = open_shadow_position(
                         log_dir,
                         instrument=_er_root,
                         strategy=_er_candidate.get("strategy"),
@@ -1743,7 +1865,12 @@ def process_alert(
                         refresh_policy="translate",
                         detachment_ticks=_er_decision.detachment_ticks,
                         detachment_r=_er_decision.detachment_r,
+                        campaign_record=_er_modified_campaign_record,
                     )
+                    if _er_opened and _er_modified_campaign_record is not None:
+                        append_forward_campaign_record(log_dir, _er_modified_campaign_record)
+                elif _er_modified_campaign_record is not None:
+                    append_forward_campaign_record(log_dir, _er_modified_campaign_record)
             except Exception:  # noqa: BLE001 — entry-refresh audit must never break decisions
                 logger.debug("entry-refresh decision skipped", exc_info=True)
                 entry_refresh_audit = None
