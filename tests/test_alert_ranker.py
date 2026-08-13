@@ -244,6 +244,30 @@ def test_options_scanner_served_app_is_disabled_in_production(monkeypatch):
     importlib.reload(ar_app)
 
 
+def test_options_scanner_on_flag_matches_preflight_and_run_binds_localhost(
+    monkeypatch, tmp_path
+):
+    import alert_ranker.app as ar_app
+
+    monkeypatch.setenv("OPTIONS_SCANNER_ENABLED", "on")
+    assert ar_app.options_scanner_enabled() is True
+    called = {}
+    monkeypatch.setattr(ar_app, "load_config", lambda: scanner_config(tmp_path))
+    monkeypatch.setattr(
+        ar_app.uvicorn,
+        "run",
+        lambda target, **kwargs: called.update({"target": target, **kwargs}),
+    )
+
+    ar_app.run()
+
+    assert called == {
+        "target": "alert_ranker.app:app",
+        "host": "127.0.0.1",
+        "port": 8010,
+    }
+
+
 def test_health_status_watchlist_and_webhook_endpoints_work(tmp_path):
     cfg = scanner_config(tmp_path)
     app = create_app(cfg)

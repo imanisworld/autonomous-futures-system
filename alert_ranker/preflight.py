@@ -7,12 +7,11 @@ Public market-data client.
 
 from __future__ import annotations
 
-import json
 import os
 from collections.abc import Iterable, Mapping
 from typing import Any
 
-from .config import load_config
+from .config import _as_bool, load_config
 from .market_data import (
     PUBLIC_ALLOWED_PREFIXES,
     PUBLIC_AUTH_TOKEN_PATH,
@@ -21,7 +20,6 @@ from .market_data import (
 )
 
 
-_TRUE_VALUES = {"1", "true", "yes", "on"}
 _EXPECTED_AUTH_PATH = "/userapiauthservice/personal/access-tokens"
 _EXPECTED_MARKETDATA_PREFIX = "/userapigateway/marketdata"
 _MARKETDATA_ENDPOINTS = ("quotes", "option-expirations", "option-chain")
@@ -90,7 +88,7 @@ def build_preflight_report(
         env = dict(environ)
         config = load_config(environ=env.items())
 
-    scanner_enabled = env.get("OPTIONS_SCANNER_ENABLED", "false").strip().lower() in _TRUE_VALUES
+    scanner_enabled = _as_bool(env.get("OPTIONS_SCANNER_ENABLED"), False)
     canonical_secret = _configured(env.get("PUBLIC_API_SECRET_KEY"))
     legacy_secret = _configured(env.get("PUBLIC_API_KEY"))
     account_pin = _configured(config.public_account_id)
@@ -131,9 +129,30 @@ def build_preflight_report(
     }
 
 
+def _print_safe_summary(report: Mapping[str, Any]) -> None:
+    """Print fixed status tokens only; never serialize environment-derived data."""
+    ready = report.get("ready_for_local_advisory_start") is True
+    print(f"OPTIONS SCANNER PREFLIGHT: {'OK' if ready else 'BLOCKED'}")
+    missing = set(report.get("missing_configuration") or [])
+    for requirement in (
+        "OPTIONS_SCANNER_ENABLED=true",
+        "OPTIONS_MARKET_DATA_PROVIDER=public",
+        "PUBLIC_API_SECRET_KEY",
+        "PUBLIC_ACCOUNT_ID",
+    ):
+        print(f"{'MISSING' if requirement in missing else 'OK'} {requirement}")
+    boundary_ok = (report.get("boundary") or {}).get("ok") is True
+    print("network_called: false")
+    print(
+        "trading_account_order_paths: "
+        + ("blocked" if boundary_ok else "boundary check failed")
+    )
+    print("reachable_path_families: auth_token, account_scoped_market_data")
+
+
 def main() -> int:
     report = build_preflight_report()
-    print(json.dumps(report, indent=2, sort_keys=True))
+    _print_safe_summary(report)
     return 0 if report["ready_for_local_advisory_start"] else 2
 
 

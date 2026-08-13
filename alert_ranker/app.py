@@ -22,7 +22,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 
-from .config import ScannerConfig, load_config
+from .config import ScannerConfig, _as_bool, load_config
 from .discord import DiscordAlerter
 from .market_data import build_provider_capabilities, create_market_data_client
 from .rh_client import RHClient
@@ -1374,7 +1374,7 @@ def _render_rh_options_terminal(sample_payload: dict[str, Any], sample_text: str
 
 def options_scanner_enabled() -> bool:
     """The scanner only runs when explicitly opted in (test environments)."""
-    return os.getenv("OPTIONS_SCANNER_ENABLED", "false").strip().lower() in {"true", "1", "yes"}
+    return _as_bool(os.getenv("OPTIONS_SCANNER_ENABLED"), False)
 
 
 def _disabled_app() -> FastAPI:
@@ -1406,4 +1406,4 @@ def run() -> None:
             "test environment to run it."
         )
     cfg = load_config()
-    uvicorn.run("alert_ranker.app:app", host="0.0.0.0", port=cfg.port)
+    uvicorn.run("alert_ranker.app:app", host="127.0.0.1", port=cfg.port)

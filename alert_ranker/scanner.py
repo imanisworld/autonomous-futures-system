@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import math
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Any
@@ -28,6 +29,40 @@ class ScanOutcome:
     storage_id: int
     shadow_id: int
     shadow_reason: str = ""
+
+
+_BULLISH_SIGNAL_LABELS = frozenset({"BULLISH", "UP", "LONG", "BUY", "POSITIVE"})
+_BEARISH_SIGNAL_LABELS = frozenset({"BEARISH", "DOWN", "SHORT", "SELL", "NEGATIVE"})
+_SIGNAL_MULTIPLIERS = {"K": 1_000.0, "M": 1_000_000.0, "B": 1_000_000_000.0}
+
+
+def signal_direction(value: Any) -> str | None:
+    """Map explicit labels or a signed signal value to LONG/SHORT.
+
+    Zero, non-finite values, and unrecognized text are ambiguous and return
+    ``None`` so callers fail safe instead of defaulting to either direction.
+    """
+    if value is None or isinstance(value, bool):
+        return None
+    text = str(value).strip().upper()
+    if text in _BULLISH_SIGNAL_LABELS:
+        return "LONG"
+    if text in _BEARISH_SIGNAL_LABELS:
+        return "SHORT"
+    normalized = text.replace(",", "").replace("$", "")
+    if normalized.endswith("%"):
+        normalized = normalized[:-1]
+    multiplier = 1.0
+    if normalized[-1:] in _SIGNAL_MULTIPLIERS:
+        multiplier = _SIGNAL_MULTIPLIERS[normalized[-1]]
+        normalized = normalized[:-1]
+    try:
+        number = float(normalized) * multiplier
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(number) or number == 0:
+        return None
+    return "LONG" if number > 0 else "SHORT"
 
 
 class OptionsScanner:
@@ -173,10 +208,11 @@ class OptionsScanner:
 
         score = normalized.get("signa_score")
         grade = normalized.get("signa_grade")
-        direction_raw = normalized.get("signa_daily_direction") or ""
+        direction_raw = normalized.get("signa_daily_direction")
         price_raw = normalized.get("price")
+        direction = signal_direction(direction_raw)
 
-        if not score or not grade or not direction_raw or not price_raw:
+        if not score or not grade or direction is None or not price_raw:
             return
         try:
             score_f = float(score)
@@ -188,8 +224,6 @@ class OptionsScanner:
             return
         if str(grade).upper() not in ("A+", "A", "B"):
             return
-
-        direction = "LONG" if str(direction_raw).upper() in ("BULLISH", "UP", "LONG") else "SHORT"
 
         # Earnings guard — suppress alert if earnings within 5 days
         earnings_note: str | None = None
