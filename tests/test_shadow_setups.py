@@ -64,9 +64,6 @@ def test_resolve_shadow_loss_after_fill():
 def test_resolve_shadow_both_hit_is_pessimistic_loss():
     cand = _candidate("LONG", entry=100.0, stop=90.0, target=120.0)
     # bar 1 fills entry; bar 2 straddles BOTH stop and target → worst case = LOSS.
-    # Resolution starts on the bar AFTER the fill (mirrors PaperBroker, which
-    # resolves from the next bar — the fill bar's range is not re-used, since
-    # pre-entry excursion would otherwise be counted as a stop-out).
     bars = [(101.0, 99.0), (125.0, 88.0)]
     out = resolve_shadow_candidate(cand, bars, instrument="MNQ")
     assert out.result == "LOSS"
@@ -75,6 +72,21 @@ def test_resolve_shadow_both_hit_is_pessimistic_loss():
         cand, bars, instrument="MNQ", pessimistic_both_hit=False
     )
     assert optimistic.result == "WIN"
+
+
+def test_resolve_shadow_resting_fill_bar_both_hit_is_loss_for_long_and_short():
+    long = resolve_shadow_candidate(
+        _candidate("LONG", entry=100.0, stop=90.0, target=120.0),
+        [(125.0, 88.0)], instrument="MNQ",
+    )
+    short = resolve_shadow_candidate(
+        _candidate("SHORT", entry=100.0, stop=110.0, target=80.0),
+        [(112.0, 78.0)], instrument="MNQ",
+    )
+    assert long.result == "LOSS"
+    assert short.result == "LOSS"
+    assert long.bars_to_fill == short.bars_to_fill == 1
+    assert long.bars_to_exit == short.bars_to_exit == 1
 
 
 def test_resolve_shadow_open_when_unresolved_by_window_end():
