@@ -36,6 +36,30 @@ def test_run_git_rejects_mutating_subcommands_even_if_spelled_out(repo: Path) ->
             gitutil.run_git([banned], cwd=repo)
 
 
+@pytest.mark.parametrize(
+    "args",
+    (
+        ["worktree", "remove", "other"],
+        ["worktree", "prune"],
+        ["stash", "drop"],
+        ["tag", "-d", "archive/example"],
+        ["branch", "-D", "example"],
+    ),
+)
+def test_run_git_rejects_mutating_shapes_inside_mixed_command_families(
+    repo: Path,
+    args: list[str],
+) -> None:
+    with pytest.raises(ValueError):
+        gitutil.run_git(args, cwd=repo)
+
+
+def test_run_git_accepts_only_exact_worktree_list_shape(repo: Path) -> None:
+    out, error = gitutil.run_git(["worktree", "list", "--porcelain"], cwd=repo)
+    assert error is None
+    assert out is not None and f"worktree {repo}" in out
+
+
 def test_repo_root_and_branch(repo: Path) -> None:
     assert gitutil.repo_root(repo) == repo.resolve()
     assert gitutil.current_branch(repo) == "main"

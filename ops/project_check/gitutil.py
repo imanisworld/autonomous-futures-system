@@ -21,26 +21,56 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-_ALLOWED_GIT_SUBCOMMANDS = {
-    "rev-parse",
-    "status",
-    "branch",
-    "worktree",
-    "stash",
-    "tag",
-    "log",
-    "for-each-ref",
-    "rev-list",
-    "merge-base",
-}
 DEFAULT_TIMEOUT_S = 6.0
 
 
-def run_git(args: list[str], *, cwd: Path, timeout: float = DEFAULT_TIMEOUT_S) -> tuple[str | None, str | None]:
-    """Run a read-only git subcommand. Returns (stdout, error) -- never raises
-    on a git-level failure (nonzero exit, timeout, missing binary)."""
-    if not args or args[0] not in _ALLOWED_GIT_SUBCOMMANDS:
-        raise ValueError(f"git subcommand not in read-only allowlist: {args[:1]!r}")
+@dataclass(frozen=True)
+class GitCommandResult:
+    returncode: int
+    stdout: str = ""
+    stderr: str = ""
+
+
+def _is_read_only_git_command(args: list[str]) -> bool:
+    """Accept only command shapes used by this package's read-only calls.
+
+    Several Git command families mix inspection and mutation. In particular,
+    allowing the top-level ``worktree``, ``branch``, ``stash``, or ``tag``
+    name would also admit remove/prune/delete operations. Keep those families
+    pinned to their exact inspection forms.
+    """
+    if not args:
+        return False
+    command = args[0]
+    if command in {"rev-parse", "status", "for-each-ref", "rev-list", "merge-base"}:
+        return True
+    if command == "ls-remote":
+        return args == ["ls-remote", "--heads", "origin", "refs/heads/main"]
+    if command == "worktree":
+        return args == ["worktree", "list", "--porcelain"]
+    if command == "stash":
+        return args == ["stash", "list"]
+    if command == "tag":
+        return args == ["tag", "-l", "archive/*"]
+    if command == "branch":
+        return (
+            len(args) == 3
+            and args[1] == "-r"
+            and args[2].startswith("--format=")
+        ) or (
+            len(args) == 5
+            and args[1:3] == ["-r", "--merged"]
+            and args[4].startswith("--format=")
+        )
+    return False
+
+
+def run_git_result(
+    args: list[str], *, cwd: Path, timeout: float = DEFAULT_TIMEOUT_S
+) -> GitCommandResult:
+    """Run one exact read-only Git command and retain its return code."""
+    if not _is_read_only_git_command(args):
+        raise ValueError(f"git command shape not in read-only allowlist: {args!r}")
     try:
         result = subprocess.run(
             ["git", *args],
@@ -51,9 +81,20 @@ def run_git(args: list[str], *, cwd: Path, timeout: float = DEFAULT_TIMEOUT_S) -
             timeout=timeout,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
-        return None, str(exc)
+        return GitCommandResult(-1, stderr=str(exc))
+    return GitCommandResult(
+        result.returncode,
+        stdout=result.stdout,
+        stderr=(result.stderr or "").strip(),
+    )
+
+
+def run_git(args: list[str], *, cwd: Path, timeout: float = DEFAULT_TIMEOUT_S) -> tuple[str | None, str | None]:
+    """Run a read-only git subcommand. Returns (stdout, error) -- never raises
+    on a git-level failure (nonzero exit, timeout, missing binary)."""
+    result = run_git_result(args, cwd=cwd, timeout=timeout)
     if result.returncode != 0:
-        return None, (result.stderr or "").strip() or f"git {' '.join(args)} exited {result.returncode}"
+        return None, result.stderr or f"git {' '.join(args)} exited {result.returncode}"
     return result.stdout, None
 
 

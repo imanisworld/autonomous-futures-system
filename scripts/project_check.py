@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-"""Read-only CLI for the three project-check routines.
+"""Read-only CLI for the project-check routines.
 
+  preflight      Strictly read-only ownership/base check before research or
+                 promotion. Makes no bookkeeping writes and never fetches.
   session-start  Repo/worktree/branch/PR/runtime snapshot; writes a small
                  session-state cache under .git/ so `precommit` can compare
                  against it later. Otherwise read-only.
@@ -25,6 +27,7 @@ delete a branch/worktree, drop a stash, create/delete a tag, cancel an
 order, flatten a position, or edit docs/config.
 
 Usage:
+  python3 scripts/project_check.py preflight --purpose research|promotion [--json]
   python3 scripts/project_check.py session-start [--json]
   python3 scripts/project_check.py precommit [--json]
   python3 scripts/project_check.py promotion --strategy <name> [--evidence-file path.json] [--json]
@@ -42,12 +45,28 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from ops.project_check.daily import build_daily_report
+from ops.project_check.preflight import build_ownership_preflight_report
 from ops.project_check.promotion import build_promotion_report
 from ops.project_check.session import build_precommit_report, build_session_start_report
 
 
 def _print_json(payload: dict) -> None:
     print(json.dumps(payload, indent=2, sort_keys=True, default=str))
+
+
+def _cmd_preflight(args: argparse.Namespace) -> int:
+    report = build_ownership_preflight_report(args.purpose, cwd=args.cwd)
+    if args.json:
+        _print_json(report)
+        return 0 if report.get("ok") else 2
+    verdict = "PASS" if report.get("ok") else "FAIL_CLOSED"
+    print(f"OWNERSHIP PREFLIGHT — {args.purpose.upper()} — {verdict}")
+    if report.get("blockers"):
+        for blocker in report["blockers"]:
+            print(f"  - {blocker}")
+    else:
+        print("  branch/worktree ownership, remote main, and ancestry verified")
+    return 0 if report.get("ok") else 2
 
 
 def _cmd_session_start(args: argparse.Namespace) -> int:
@@ -186,6 +205,15 @@ def _cmd_daily(args: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
+
+    p_preflight = sub.add_parser(
+        "preflight",
+        help="Read-only ownership/base check before research or promotion",
+    )
+    p_preflight.add_argument("--purpose", choices=("research", "promotion"), required=True)
+    p_preflight.add_argument("--cwd", default=None)
+    p_preflight.add_argument("--json", action="store_true")
+    p_preflight.set_defaults(func=_cmd_preflight)
 
     p_session = sub.add_parser("session-start", help="Repo/worktree/branch/PR/runtime snapshot")
     p_session.add_argument("--cwd", default=None)
