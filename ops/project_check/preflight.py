@@ -164,6 +164,15 @@ def build_ownership_preflight_report(
                 "current worktree already has staged evidence: "
                 + ", ".join(sorted(status["staged"]))
             )
+        # An unstaged edit to an ALREADY-TRACKED file is the most dangerous of
+        # the three: the file exists at a committed path, so the run looks
+        # provenanced while the code that generates the evidence is not. It must
+        # fail closed exactly like staged and untracked.
+        if status["dirty_tracked"]:
+            blockers.append(
+                "current worktree already has dirty tracked evidence: "
+                + ", ".join(sorted(status["dirty_tracked"]))
+            )
         if status["untracked"]:
             blockers.append(
                 "current worktree already has untracked evidence: "

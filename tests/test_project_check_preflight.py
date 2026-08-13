@@ -87,6 +87,45 @@ def test_staged_and_untracked_evidence_fail_closed(
 
 
 @pytest.mark.parametrize("purpose", ("research", "promotion"))
+def test_unstaged_tracked_modification_fails_closed(
+    repo_with_origin: tuple[Path, Path],
+    purpose: str,
+) -> None:
+    """An unstaged edit to a TRACKED file must fail closed.
+
+    This is the most dangerous of the three dirty states: the file already
+    exists at a committed path, so remote/main/worktree checks all pass and the
+    run looks provenanced while the evidence-generating code is uncommitted.
+    Reporting it without blocking would let `preflight --purpose research`
+    return ok=true over unprovenanced code, defeating the no-proof-no-run rule.
+    """
+    repo, _remote = repo_with_origin
+    (repo / "tracked.txt").write_text("locally modified, never staged\n", encoding="utf-8")
+
+    # Precondition, asserted via gitutil (which classifies correctly) rather
+    # than via the report under test: this is dirty_tracked ONLY.
+    from ops.project_check import gitutil
+
+    status = gitutil.status_porcelain(repo)
+    assert status["dirty_tracked"] == ["tracked.txt"]
+    assert status["staged"] == []
+    assert status["untracked"] == []
+
+    report = build_ownership_preflight_report(purpose, cwd=repo)
+
+    assert report["ok"] is False
+    assert any("dirty tracked evidence" in item for item in report["blockers"])
+    assert any("tracked.txt" in item for item in report["blockers"])
+    assert report["current_worktree_evidence"]["dirty_tracked"] == ["tracked.txt"]
+    # The other two states are genuinely absent, so this proves dirty_tracked
+    # blocks on its own rather than riding on a staged/untracked blocker.
+    assert report["current_worktree_evidence"]["staged"] == []
+    assert report["current_worktree_evidence"]["untracked"] == []
+    assert not any("staged evidence" in item for item in report["blockers"])
+    assert not any("untracked evidence" in item for item in report["blockers"])
+
+
+@pytest.mark.parametrize("purpose", ("research", "promotion"))
 def test_duplicate_branch_ownership_fails_closed(
     repo_with_origin: tuple[Path, Path],
     tmp_path: Path,
