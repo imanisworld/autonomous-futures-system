@@ -4,6 +4,10 @@ These watchers are deliberately outside ``DecisionEngine.evaluate``: they do
 not rank, request risk approval, mutate daily state, or reach a broker.  The
 bracket is produced by the executable builder itself so replay/live formula
 parity is structural rather than maintained by a copied formula.
+
+They belong to the forward A/B campaign and are DEFAULT-OFF: without
+``FORWARD_EVIDENCE_CAMPAIGN=forward_ab_2026_08_v1`` they emit nothing, so the
+generic shadow-setup population is unchanged when the campaign is not running.
 """
 from __future__ import annotations
 
@@ -38,8 +42,17 @@ def reset_engine_cache() -> None:
 
 
 def evaluate_canonical_observers(state: "MarketState", config=None) -> list:
-    """Return isolated canonical VWAP candidates; fail soft on all defects."""
+    """Return isolated canonical VWAP candidates; fail soft on all defects.
+
+    Returns nothing unless the forward A/B campaign is enabled: these observers
+    exist only to build that campaign's control/observer arms, and emitting them
+    otherwise would add two families to the generic shadow population.
+    """
     try:
+        from execution.forward_evidence_campaign import campaign_enabled
+
+        if not campaign_enabled():
+            return []
         if not is_observed_instrument(getattr(state, "instrument", None)):
             return []
         engine = _engine(config)

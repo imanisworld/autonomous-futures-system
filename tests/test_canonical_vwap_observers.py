@@ -3,11 +3,23 @@ from __future__ import annotations
 import dataclasses
 from copy import deepcopy
 
+import pytest
+
 from strategy.canonical_observers import (
     VWAP_HOLD_OBSERVED,
+    VWAP_REJECTION_OBSERVED,
     evaluate_canonical_observers,
     reset_engine_cache,
 )
+
+CAMPAIGN_ENV = "FORWARD_EVIDENCE_CAMPAIGN"
+CAMPAIGN_ID = "forward_ab_2026_08_v1"
+
+
+@pytest.fixture(autouse=True)
+def _campaign_on(monkeypatch):
+    """These observers are campaign-scoped; every case below assumes it is on."""
+    monkeypatch.setenv(CAMPAIGN_ENV, CAMPAIGN_ID)
 
 
 def _hold_state(fresh_market_state):
@@ -74,3 +86,38 @@ def test_shadow_api_remains_backwards_compatible(fresh_market_state):
     state = _hold_state(fresh_market_state)
     assert isinstance(evaluate_shadow_setups(state), list)
     assert isinstance(evaluate_shadow_setups(state, []), list)
+
+
+def test_observers_are_silent_when_campaign_disabled(fresh_market_state, monkeypatch):
+    """Default-off contract: no campaign flag, no observers, anywhere."""
+    state = _hold_state(fresh_market_state)
+    assert evaluate_canonical_observers(state), "precondition: fires while campaign is on"
+
+    monkeypatch.delenv(CAMPAIGN_ENV, raising=False)
+    reset_engine_cache()
+    assert evaluate_canonical_observers(state) == []
+
+
+def test_disabled_campaign_leaves_generic_shadow_population_unchanged(
+    fresh_market_state, monkeypatch
+):
+    """The two observers must not enter the generic shadow families by default."""
+    from strategy.shadow_setups import evaluate_shadow_setups
+
+    state = _hold_state(fresh_market_state)
+    reset_engine_cache()
+    with_campaign = {c.strategy for c in evaluate_shadow_setups(state)}
+    assert VWAP_HOLD_OBSERVED in with_campaign
+
+    monkeypatch.delenv(CAMPAIGN_ENV, raising=False)
+    reset_engine_cache()
+    without_campaign = {c.strategy for c in evaluate_shadow_setups(state)}
+
+    assert without_campaign.isdisjoint({VWAP_HOLD_OBSERVED, VWAP_REJECTION_OBSERVED})
+    assert without_campaign == with_campaign - {VWAP_HOLD_OBSERVED, VWAP_REJECTION_OBSERVED}
+
+
+def test_wrong_campaign_id_does_not_enable_observers(fresh_market_state, monkeypatch):
+    monkeypatch.setenv(CAMPAIGN_ENV, "some_other_campaign")
+    reset_engine_cache()
+    assert evaluate_canonical_observers(_hold_state(fresh_market_state)) == []

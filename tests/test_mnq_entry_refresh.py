@@ -387,6 +387,123 @@ def test_shadow_mode_opens_a_position_when_refreshed_and_a_second_detached_event
     assert pos_after == pos  # unchanged — still the FIRST position, not overwritten
 
 
+def test_occupied_shadow_slot_still_writes_the_paired_modified_arm(tmp_path, monkeypatch):
+    """Every campaign control arm must keep its modified counterpart.
+
+    The control row is written unconditionally, so if the modified row were
+    dropped whenever the shadow slot happened to be occupied, A/B coverage would
+    be conditioned on slot availability — a selection effect in the evidence.
+    """
+    import json
+
+    monkeypatch.setenv("FORWARD_EVIDENCE_CAMPAIGN", "forward_ab_2026_08_v1")
+    today = date(2026, 5, 23)
+    cfg = replace(
+        _base_config(tmp_path), entry_refresh_mode="shadow", entry_refresh_max_detachment_r=3.0,
+    )
+    _patch_detached_candidate(monkeypatch, entry=19479.25, stop=19469.25, target=19504.25)
+
+    process_alert(
+        _base_payload(timestamp="2026-05-23T15:00:00+00:00"),
+        config=cfg, log_dir=cfg.log_dir, for_date=today,
+    )
+    assert get_pending_shadow_position(cfg.log_dir, "MNQ", "orb_reclaim") is not None
+
+    # Second detached event while the first shadow position is still pending:
+    # open_shadow_position() dedupes and returns False.
+    process_alert(
+        _base_payload(
+            timestamp="2026-05-23T15:15:00+00:00",
+            close=19506.0, high=19507.0, low=19505.0,
+        ),
+        config=cfg, log_dir=cfg.log_dir, for_date=today,
+    )
+
+    rows = [
+        json.loads(line)
+        for line in (Path(cfg.log_dir) / "forward_ab_2026_08_v1.jsonl").read_text().splitlines()
+    ]
+    orb = [r for r in rows if r["strategy"] == "orb_reclaim" and r["record_type"] == "CANDIDATE"]
+
+    by_event: dict[str, set[str]] = {}
+    for row in orb:
+        by_event.setdefault(row["event_id"], set()).add(row["variant"])
+    assert len(by_event) == 2, "two distinct detached events"
+    for event_id, variants in by_event.items():
+        assert variants == {"control", "modified"}, f"unpaired arm on {event_id}"
+
+    occupied = [r for r in orb if r["reject_reason"] == "SHADOW_SLOT_OCCUPIED"]
+    assert len(occupied) == 1
+    assert occupied[0]["variant"] == "modified"
+    assert occupied[0]["fillable_state"] == "REJECTED"
+    assert occupied[0]["terminal_state"] == "REJECTED"
+    assert occupied[0]["hypothetical_fill_price"] is None
+    assert "SHADOW_SLOT_OCCUPIED" in occupied[0]["failed_gates"]
+    # The blocked arm must not be counted as an economic outcome.
+    assert occupied[0]["net_pnl_dollars"] is None
+
+    # The first event's modified arm is untouched by the fix.
+    filled = [r for r in orb if r["variant"] == "modified" and r["fillable_state"] == "FILLED"]
+    assert len(filled) == 1
+    assert filled[0]["reject_reason"] is None
+
+
+def test_failed_shadow_state_write_is_not_reported_as_an_occupied_slot(tmp_path, monkeypatch):
+    """A persistence failure must never be filed as clean campaign evidence.
+
+    open_shadow_position() returns False for two different causes — an occupied
+    slot and an OSError writing the shadow state. Labelling both
+    SHADOW_SLOT_OCCUPIED would make an infrastructure fault indistinguishable
+    from a legitimately-blocked arm when the campaign is analysed.
+
+    No mocking: planting a directory where the atomic temp file must be written
+    makes the real write raise IsADirectoryError (an OSError), which the real
+    fail-soft handler swallows into False.
+    """
+    import json
+
+    monkeypatch.setenv("FORWARD_EVIDENCE_CAMPAIGN", "forward_ab_2026_08_v1")
+    today = date(2026, 5, 23)
+    cfg = replace(
+        _base_config(tmp_path), entry_refresh_mode="shadow", entry_refresh_max_detachment_r=3.0,
+    )
+    _patch_detached_candidate(monkeypatch, entry=19479.25, stop=19469.25, target=19504.25)
+
+    blocked_tmp = (Path(cfg.log_dir) / STATE_FILENAME).with_suffix(".tmp")
+    blocked_tmp.mkdir(parents=True)
+
+    process_alert(
+        _base_payload(timestamp="2026-05-23T15:00:00+00:00"),
+        config=cfg, log_dir=cfg.log_dir, for_date=today,
+    )
+
+    # The write genuinely failed: no state file, so no pending position exists.
+    assert not (Path(cfg.log_dir) / STATE_FILENAME).exists()
+    assert get_pending_shadow_position(cfg.log_dir, "MNQ", "orb_reclaim") is None
+
+    rows = [
+        json.loads(line)
+        for line in (Path(cfg.log_dir) / "forward_ab_2026_08_v1.jsonl").read_text().splitlines()
+    ]
+    orb = [r for r in rows if r["strategy"] == "orb_reclaim" and r["record_type"] == "CANDIDATE"]
+    modified = [r for r in orb if r["variant"] == "modified"]
+
+    # The arm is still written, so the control does not end up orphaned.
+    assert len(modified) == 1
+    assert {r["variant"] for r in orb} == {"control", "modified"}
+
+    row = modified[0]
+    assert row["reject_reason"] != "SHADOW_SLOT_OCCUPIED"
+    assert row["reject_reason"] == "SHADOW_STATE_OPEN_FAILED"
+    assert row["exit_reason"] == "SHADOW_STATE_OPEN_FAILED"
+    assert "SHADOW_STATE_OPEN_FAILED" in row["failed_gates"]
+    assert row["fillable_state"] == "REJECTED"
+    assert row["terminal_state"] == "REJECTED"
+    assert row["hypothetical_fill_price"] is None
+    assert row["net_pnl_dollars"] is None
+    assert row["gross_pnl_dollars"] is None
+
+
 def test_shadow_lane_never_reaches_risk_or_broker(tmp_path, monkeypatch):
     """Proves — not infers — the shadow lane cannot trigger a real
     TRADE_INTENT/risk/broker path, same monkeypatch-raises technique as

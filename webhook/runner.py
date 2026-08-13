@@ -1867,7 +1867,44 @@ def process_alert(
                         detachment_r=_er_decision.detachment_r,
                         campaign_record=_er_modified_campaign_record,
                     )
-                    if _er_opened and _er_modified_campaign_record is not None:
+                    if _er_modified_campaign_record is not None:
+                        if not _er_opened:
+                            # The control arm for this event_id was written above,
+                            # so dropping the modified arm here would leave an
+                            # unpaired control and condition A/B coverage on slot
+                            # availability. Record it as not-filled instead.
+                            #
+                            # open_shadow_position() collapses two causes into
+                            # False: an occupied slot, and an OSError persisting
+                            # the shadow state. Only claim SHADOW_SLOT_OCCUPIED
+                            # when a pending position is POSITIVELY observed --
+                            # otherwise an infrastructure failure would be filed
+                            # as clean campaign evidence. A verification that
+                            # cannot read the state is itself unverified.
+                            try:
+                                _er_pending = get_pending_shadow_position(
+                                    log_dir, _er_root, _er_candidate.get("strategy")
+                                )
+                            except Exception:  # noqa: BLE001 — unreadable == unverified
+                                _er_pending = None
+                            _er_open_failure = (
+                                "SHADOW_SLOT_OCCUPIED"
+                                if _er_pending is not None
+                                else "SHADOW_STATE_OPEN_FAILED"
+                            )
+                            _er_modified_campaign_record = {
+                                **_er_modified_campaign_record,
+                                "fillable_state": "REJECTED",
+                                "terminal_state": "REJECTED",
+                                "reject_reason": _er_open_failure,
+                                "exit_reason": _er_open_failure,
+                                "exit_timestamp": bar_ts,
+                                "hypothetical_fill_price": None,
+                                "failed_gates": [
+                                    *(_er_modified_campaign_record.get("failed_gates") or []),
+                                    _er_open_failure,
+                                ],
+                            }
                         append_forward_campaign_record(log_dir, _er_modified_campaign_record)
                 elif _er_modified_campaign_record is not None:
                     append_forward_campaign_record(log_dir, _er_modified_campaign_record)
