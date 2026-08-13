@@ -39,31 +39,109 @@ def _checkpoint_path(repo_root: Path) -> Path:
     return repo_root / ".git" / CHECKPOINT_SUBDIR / CHECKPOINT_FILENAME
 
 
-def load_checkpoint(repo_root: Path) -> str | None:
+def load_checkpoint_full(repo_root: Path) -> dict[str, Any] | None:
     path = _checkpoint_path(repo_root)
     if not path.exists():
         return None
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return None
-    return data.get("last_processed_ts")
 
 
-def save_checkpoint(repo_root: Path, last_processed_ts: str | None) -> None:
+def load_checkpoint(repo_root: Path) -> str | None:
+    data = load_checkpoint_full(repo_root)
+    return data.get("last_processed_ts") if data else None
+
+
+def save_checkpoint(
+    repo_root: Path, last_processed_ts: str | None, *, entries_at_or_before_count: int | None = None
+) -> None:
+    """Persist the checkpoint ts plus a count fingerprint used to detect a
+    journal that was rotated/truncated/rewritten, or backdated-appended to,
+    behind the checkpoint boundary between runs (see
+    `_journal_integrity_check`). Never called on a FAIL result -- see
+    build_trade_chain_report.
+    """
     if last_processed_ts is None:
         return
     path = _checkpoint_path(repo_root)
     path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {"last_processed_ts": last_processed_ts, "saved_at": _now_iso()}
+    if entries_at_or_before_count is not None:
+        payload["entries_at_or_before_count"] = entries_at_or_before_count
     fd, tmp_name = tempfile.mkstemp(prefix=f".{CHECKPOINT_FILENAME}.", dir=path.parent)
     try:
         with os.fdopen(fd, "w") as fh:
-            json.dump({"last_processed_ts": last_processed_ts, "saved_at": _now_iso()}, fh, indent=2)
+            json.dump(payload, fh, indent=2)
             fh.write("\n")
         os.replace(tmp_name, path)
     finally:
         if os.path.exists(tmp_name):
             os.unlink(tmp_name)
+
+
+def _count_at_or_before(entries: list[dict[str, Any]], ts_cutoff: str) -> int:
+    return sum(1 for e in entries if e.get("ts") and str(e["ts"]) <= ts_cutoff)
+
+
+def _journal_integrity_check(
+    entries_no_errors: list[dict[str, Any]], checkpoint_data: dict[str, Any] | None, checkpoint_ts: str | None
+) -> dict[str, Any]:
+    """Detect a journal that changed shape behind the checkpoint boundary
+    since it was saved -- rotation, truncation, a rewrite, or an append with a
+    backdated timestamp into an already-processed day file. Pure ts-based
+    windowing (`entry.ts > checkpoint_ts`) cannot see any of these on its own:
+    a shrink silently drops evidence that was already counted, and a
+    backdated append silently never counts as "new". Both are exactly the
+    kind of thing "no proof, no run" requires surfacing, not assuming away.
+    """
+    if checkpoint_ts is None:
+        return {"checked": False, "status": "NOT_APPLICABLE", "reason": "no checkpoint in use this run"}
+    current_count = _count_at_or_before(entries_no_errors, checkpoint_ts)
+    recorded_count = (checkpoint_data or {}).get("entries_at_or_before_count")
+    if recorded_count is None:
+        return {
+            "checked": True,
+            "status": "UNKNOWN",
+            "reason": "saved checkpoint predates integrity-fingerprint tracking; cannot verify",
+            "current_at_or_before_count": current_count,
+            "recorded_at_or_before_count": None,
+        }
+    if current_count < recorded_count:
+        return {
+            "checked": True,
+            "status": "SHRUNK",
+            "reason": (
+                f"journal history at/before the checkpoint boundary shrank from {recorded_count} to "
+                f"{current_count} entries -- rotation, truncation, or a rewrite likely destroyed "
+                f"evidence behind the checkpoint; the checkpoint window is not trustworthy this run "
+                f"and was NOT used (falling back to a full scan)"
+            ),
+            "current_at_or_before_count": current_count,
+            "recorded_at_or_before_count": recorded_count,
+        }
+    if current_count > recorded_count:
+        return {
+            "checked": True,
+            "status": "GREW_BEHIND_CHECKPOINT",
+            "reason": (
+                f"{current_count - recorded_count} entries now sit at/before the checkpoint boundary "
+                f"that were not there when the checkpoint was saved -- likely a late/backdated append "
+                f"into an already-processed journal day. Pure timestamp windowing will NEVER pick these "
+                f"up as 'new'; re-run with --no-checkpoint (use_checkpoint=False) to force a full rescan "
+                f"and confirm what they are."
+            ),
+            "current_at_or_before_count": current_count,
+            "recorded_at_or_before_count": recorded_count,
+        }
+    return {
+        "checked": True,
+        "status": "OK",
+        "reason": None,
+        "current_at_or_before_count": current_count,
+        "recorded_at_or_before_count": recorded_count,
+    }
 
 
 def _entry_ts(entry: dict[str, Any]) -> datetime | None:
@@ -116,33 +194,59 @@ def build_trade_chain_report(
 ) -> dict[str, Any]:
     entries = read_journal_entries(journal_dir)
     read_errors = [e for e in entries if e.get("type") == "READ_ERROR"]
+    entries_no_errors = [e for e in entries if e.get("type") != "READ_ERROR"]
 
+    checkpoint_data: dict[str, Any] | None = None
     checkpoint_ts = since_ts
     if checkpoint_ts is None and use_checkpoint:
-        checkpoint_ts = load_checkpoint(repo_root)
+        checkpoint_data = load_checkpoint_full(repo_root)
+        checkpoint_ts = checkpoint_data.get("last_processed_ts") if checkpoint_data else None
 
-    def in_window(entry: dict[str, Any]) -> bool:
-        if checkpoint_ts is None:
+    journal_integrity = _journal_integrity_check(entries_no_errors, checkpoint_data, checkpoint_ts)
+    # A SHRUNK journal (rotation/truncation/rewrite behind the checkpoint)
+    # means the checkpoint boundary can no longer be trusted -- fall back to
+    # a full scan rather than silently windowing off of a boundary that may
+    # no longer correspond to what's actually on disk.
+    effective_checkpoint_ts = None if journal_integrity["status"] == "SHRUNK" else checkpoint_ts
+
+    def is_new(entry: dict[str, Any]) -> bool:
+        if effective_checkpoint_ts is None:
             return True
         ts = entry.get("ts")
-        return ts is not None and str(ts) > checkpoint_ts
+        return ts is not None and str(ts) > effective_checkpoint_ts
 
-    windowed = [e for e in entries if e.get("type") != "READ_ERROR" and in_window(e)]
-    all_ts = sorted(str(e.get("ts")) for e in entries if e.get("type") != "READ_ERROR" and e.get("ts"))
+    all_ts = sorted(str(e.get("ts")) for e in entries_no_errors if e.get("ts"))
     latest_journal_ts = all_ts[-1] if all_ts else None
     latest_journal_day = latest_journal_ts[:10] if latest_journal_ts else None
 
-    attempts = [
-        e for e in windowed
+    # Pairing MUST run over the full journal history, not just the entries
+    # newer than the checkpoint: a TRADE attempt logged before the checkpoint
+    # can still be waiting on an OUTCOME that only arrives after it. Windowing
+    # before pairing would make that OUTCOME look unmatched even though it
+    # correctly resolves an older, still-open attempt -- exactly the false
+    # permanent-FAIL failure mode this function exists to avoid.
+    attempts_all = [
+        e for e in entries_no_errors
         if e.get("decision") == "TRADE" and (e.get("risk_check") or {}).get("result") == "APPROVED"
     ]
-    outcomes = [e for e in windowed if e.get("type") == "OUTCOME"]
-    order_id_events = [e for e in windowed if e.get("type") == "ORDER_IDS"]
-    risk_rejected = [e for e in windowed if e.get("decision") == "RISK_REJECTED"]
-    config_blocked = [e for e in windowed if e.get("decision") == "CONFIG_BLOCKED"]
+    outcomes_all = [e for e in entries_no_errors if e.get("type") == "OUTCOME"]
+    order_id_events_all = [e for e in entries_no_errors if e.get("type") == "ORDER_IDS"]
+    risk_rejected = [e for e in entries_no_errors if e.get("decision") == "RISK_REJECTED" and is_new(e)]
+    config_blocked = [e for e in entries_no_errors if e.get("decision") == "CONFIG_BLOCKED" and is_new(e)]
 
-    outcome_by_attempt, unmatched_outcomes = _pair_fifo_by_instrument(attempts, outcomes, windowed)
-    orderids_by_attempt, unmatched_order_ids = _pair_fifo_by_instrument(attempts, order_id_events, windowed)
+    outcome_by_attempt, unmatched_outcomes_all = _pair_fifo_by_instrument(
+        attempts_all, outcomes_all, entries_no_errors
+    )
+    orderids_by_attempt, unmatched_order_ids_all = _pair_fifo_by_instrument(
+        attempts_all, order_id_events_all, entries_no_errors
+    )
+    # Only report NEW unmatched events: one at/before the checkpoint was
+    # already visible (and would have blocked the prior PASS) in an earlier
+    # run, so re-flagging it forever would defeat the point of a checkpoint.
+    unmatched_outcomes = [e for e in unmatched_outcomes_all if is_new(e)]
+    unmatched_order_ids = [e for e in unmatched_order_ids_all if is_new(e)]
+
+    attempts = [a for a in attempts_all if is_new(a)]
 
     resolved_fills: list[dict[str, Any]] = []
     resolved_cancellations: list[dict[str, Any]] = []
@@ -150,9 +254,14 @@ def build_trade_chain_report(
     unverified_open_attempts: list[dict[str, Any]] = []
     unresolved_orphan: list[dict[str, Any]] = []
     naked_position_risk: list[dict[str, Any]] = []
+    # A carryover resolution: the ATTEMPT is old (at/before the checkpoint,
+    # already reported by a prior run), but its OUTCOME just arrived. This is
+    # new information -- a previously open/unresolved attempt got resolved --
+    # surfaced separately rather than either re-counted as a "new attempt" or
+    # dropped.
+    carryover_resolutions: list[dict[str, Any]] = []
 
-    for attempt in attempts:
-        outcome = outcome_by_attempt.get(id(attempt))
+    def _classify_row(attempt: dict[str, Any], outcome: dict[str, Any] | None) -> dict[str, Any]:
         setup = attempt.get("setup") or {}
         row = {
             "trade_ts": attempt.get("ts"),
@@ -163,13 +272,24 @@ def build_trade_chain_report(
             "line": attempt.get("_line"),
         }
         if outcome is None:
+            return {**row, "_bucket": "unresolved", "_setup": setup}
+        category = classify_outcome(outcome.get("outcome") or {})
+        row["category"] = category
+        row["exit_reason"] = (outcome.get("outcome") or {}).get("exit_reason")
+        row["pnl_dollars"] = (outcome.get("outcome") or {}).get("pnl_dollars")
+        return {**row, "_bucket": "resolved", "_category": category, "_setup": setup}
+
+    for attempt in attempts:
+        outcome = outcome_by_attempt.get(id(attempt))
+        classified = _classify_row(attempt, outcome)
+        if classified["_bucket"] == "unresolved":
             # No OUTCOME row means this attempt has NOT been proven to fill --
             # a journaled TRADE decision is an order attempt, not confirmed
             # broker evidence of a fill (see ops/forward_campaign_report.py's
             # fillable_state convention for the same distinction elsewhere in
-            # the repo). This routine never counts either bucket below as a
-            # "fill" -- both require independent fill/order evidence first.
+            # the repo). Neither bucket below is ever counted as a "fill".
             attempt_day = (str(attempt.get("ts")) or "")[:10]
+            row = {k: v for k, v in classified.items() if not k.startswith("_")}
             if latest_journal_day is not None and attempt_day == latest_journal_day:
                 unverified_open_attempts.append({**row, "category": "UNVERIFIED_OPEN_ATTEMPT"})
             else:
@@ -181,10 +301,10 @@ def build_trade_chain_report(
                     }
                 )
             continue
-        category = classify_outcome(outcome.get("outcome") or {})
-        row["category"] = category
-        row["exit_reason"] = (outcome.get("outcome") or {}).get("exit_reason")
-        row["pnl_dollars"] = (outcome.get("outcome") or {}).get("pnl_dollars")
+        setup = classified.pop("_setup")
+        category = classified.pop("_category")
+        classified.pop("_bucket")
+        row = classified
         if category in ("filled_win_loss", "breakeven"):
             resolved_fills.append(row)
             if setup.get("stop") in (None, "") or setup.get("target") in (None, ""):
@@ -193,6 +313,19 @@ def build_trade_chain_report(
             resolved_cancellations.append(row)
         else:
             needs_broker_verification.append(row)
+
+    for attempt in attempts_all:
+        if is_new(attempt):
+            continue  # already handled above as a "new" attempt
+        outcome = outcome_by_attempt.get(id(attempt))
+        if outcome is None or not is_new(outcome):
+            continue  # still unresolved, or was already resolved before the checkpoint
+        classified = _classify_row(attempt, outcome)
+        setup = classified.pop("_setup")
+        category = classified.pop("_category")
+        classified.pop("_bucket")
+        classified["fills_this_run"] = category in ("filled_win_loss", "breakeven")
+        carryover_resolutions.append(classified)
 
     # Duplicate order-identity check across all order_ids events in the window.
     seen_order_ids: dict[str, list[str]] = defaultdict(list)
@@ -255,6 +388,7 @@ def build_trade_chain_report(
         or bool(unmatched_outcomes)
         or bool(unmatched_order_ids)
         or bool(read_errors)
+        or journal_integrity["status"] in ("SHRUNK", "GREW_BEHIND_CHECKPOINT")
     )
     status = "PASS" if not problems else "FAIL"
 
@@ -268,7 +402,11 @@ def build_trade_chain_report(
     checkpoint_skip_reason = None
     if advance_checkpoint and latest_journal_ts:
         if status == "PASS":
-            save_checkpoint(repo_root, latest_journal_ts)
+            save_checkpoint(
+                repo_root,
+                latest_journal_ts,
+                entries_at_or_before_count=_count_at_or_before(entries_no_errors, latest_journal_ts),
+            )
             checkpoint_advanced = True
         else:
             checkpoint_skip_reason = (
@@ -285,12 +423,14 @@ def build_trade_chain_report(
         "journal_dir": str(journal_dir),
         "window": {
             "since_ts_exclusive": checkpoint_ts,
+            "effective_since_ts_exclusive": effective_checkpoint_ts,
             "latest_journal_ts": latest_journal_ts,
             "used_checkpoint": use_checkpoint and since_ts is None,
             "checkpoint_advance_requested": advance_checkpoint,
             "checkpoint_advanced": checkpoint_advanced,
             "checkpoint_skip_reason": checkpoint_skip_reason,
         },
+        "journal_integrity": journal_integrity,
         "journal_read_errors": read_errors,
         "status": status,
         "summary": {
@@ -308,6 +448,7 @@ def build_trade_chain_report(
             "config_blocked": len(config_blocked),
             "unmatched_outcomes": len(unmatched_outcomes),
             "unmatched_order_ids": len(unmatched_order_ids),
+            "carryover_resolutions": len(carryover_resolutions),
         },
         "accounting": {
             "attempts_identity": (
@@ -332,6 +473,7 @@ def build_trade_chain_report(
             "duplicate_order_identities": duplicate_order_ids,
             "naked_position_risk": naked_position_risk,
             "risk_rejected_missing_reason": risk_rejected_missing_reason,
+            "carryover_resolutions": carryover_resolutions,
             "unmatched_outcomes": [
                 {
                     "ts": e.get("ts"),

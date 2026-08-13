@@ -3,7 +3,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from ops.project_check.trade_chain import build_trade_chain_report, load_checkpoint, save_checkpoint
+from ops.project_check.trade_chain import (
+    build_trade_chain_report,
+    load_checkpoint,
+    load_checkpoint_full,
+    save_checkpoint,
+)
 
 
 def _write_jsonl(path: Path, rows: list[dict]) -> None:
@@ -251,3 +256,186 @@ def test_never_writes_journal_files(tmp_path: Path) -> None:
     build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=False, advance_checkpoint=True)
     after = day.read_text()
     assert before == after
+
+
+# ---------------------------------------------------------------------------
+# Required regression coverage: TRADE before the checkpoint boundary whose
+# OUTCOME (or ORDER_IDS) arrives after it must reconcile correctly and must
+# NOT be reported as unmatched -- pairing has to run over full journal
+# history, not just the post-checkpoint slice.
+# ---------------------------------------------------------------------------
+
+
+def test_outcome_after_checkpoint_for_trade_before_checkpoint_reconciles(tmp_path: Path) -> None:
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    _write_jsonl(
+        journal_dir / "journal_2026-07-01.jsonl",
+        [
+            _trade("2026-07-01T10:00:00Z"),  # before checkpoint, unresolved as of the checkpoint
+            _outcome("2026-07-01T13:00:00Z", result="WIN", pnl=25.0),  # arrives after checkpoint
+        ],
+    )
+    report = build_trade_chain_report(
+        journal_dir=journal_dir,
+        repo_root=tmp_path,
+        since_ts="2026-07-01T12:00:00Z",  # simulates a checkpoint saved between the two rows
+        use_checkpoint=False,
+    )
+    assert report["status"] == "PASS"
+    assert report["summary"]["unmatched_outcomes"] == 0
+    assert report["detail"]["unmatched_outcomes"] == []
+    # Not a "new attempt" (the TRADE predates the checkpoint) and not a fill
+    # counted under this run's attempts identity -- it shows up as a
+    # carryover resolution instead.
+    assert report["summary"]["attempts"] == 0
+    assert report["summary"]["carryover_resolutions"] == 1
+    carryover = report["detail"]["carryover_resolutions"][0]
+    assert carryover["trade_ts"] == "2026-07-01T10:00:00Z"
+    assert carryover["category"] == "filled_win_loss"
+    assert carryover["fills_this_run"] is True
+
+
+def test_order_ids_after_checkpoint_for_trade_before_checkpoint_reconciles(tmp_path: Path) -> None:
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    _write_jsonl(
+        journal_dir / "journal_2026-07-01.jsonl",
+        [
+            _trade("2026-07-01T10:00:00Z"),
+            _order_ids("2026-07-01T13:00:00Z", order_id="77777777"),
+        ],
+    )
+    report = build_trade_chain_report(
+        journal_dir=journal_dir,
+        repo_root=tmp_path,
+        since_ts="2026-07-01T12:00:00Z",
+        use_checkpoint=False,
+    )
+    assert report["summary"]["unmatched_order_ids"] == 0
+    assert report["detail"]["unmatched_order_ids"] == []
+
+
+def test_end_to_end_checkpoint_lifecycle_does_not_false_flag_late_outcome(tmp_path: Path) -> None:
+    """The exact scenario from the review: TRADE id=ABC before a saved
+    checkpoint, OUTCOME id=ABC arrives after it. Run 2 (which uses the saved
+    checkpoint, not an explicit since_ts) must not report it unmatched."""
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    day = journal_dir / "journal_2026-07-01.jsonl"
+    _write_jsonl(day, [_trade("2026-07-01T10:00:00Z")])
+
+    run1 = build_trade_chain_report(
+        journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=True, advance_checkpoint=True
+    )
+    assert run1["status"] == "PASS"  # unresolved-but-on-latest-day is not a failure
+    assert load_checkpoint(tmp_path) == "2026-07-01T10:00:00Z"
+
+    _write_jsonl(
+        day, [_trade("2026-07-01T10:00:00Z"), _outcome("2026-07-01T13:00:00Z", result="WIN", pnl=25.0)]
+    )
+    run2 = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=True)
+    assert run2["status"] == "PASS"
+    assert run2["summary"]["unmatched_outcomes"] == 0
+    assert run2["summary"]["carryover_resolutions"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Journal-integrity fingerprint: detect rotation/truncation/rewrite, or a
+# backdated append behind the checkpoint boundary, between runs.
+# ---------------------------------------------------------------------------
+
+
+def test_journal_integrity_ok_on_unchanged_history(tmp_path: Path) -> None:
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    _write_jsonl(
+        journal_dir / "journal_2026-07-01.jsonl",
+        [_trade("2026-07-01T10:00:00Z"), _outcome("2026-07-01T10:30:00Z")],
+    )
+    run1 = build_trade_chain_report(
+        journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=True, advance_checkpoint=True
+    )
+    assert run1["status"] == "PASS"
+
+    _write_jsonl(
+        journal_dir / "journal_2026-07-02.jsonl",
+        [_trade("2026-07-02T10:00:00Z"), _outcome("2026-07-02T10:30:00Z")],
+    )
+    run2 = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=True)
+    assert run2["journal_integrity"]["status"] == "OK"
+    assert run2["status"] == "PASS"
+
+
+def test_journal_integrity_detects_shrink_and_falls_back_to_full_scan(tmp_path: Path) -> None:
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    day = journal_dir / "journal_2026-07-01.jsonl"
+    _write_jsonl(
+        day,
+        [
+            _trade("2026-07-01T10:00:00Z"),
+            _outcome("2026-07-01T10:30:00Z"),
+            _trade("2026-07-01T11:00:00Z"),
+            _outcome("2026-07-01T11:30:00Z"),
+        ],
+    )
+    run1 = build_trade_chain_report(
+        journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=True, advance_checkpoint=True
+    )
+    assert run1["status"] == "PASS"
+
+    # Simulate truncation/rewrite: one previously-counted row behind the
+    # checkpoint boundary disappears.
+    _write_jsonl(day, [_trade("2026-07-01T10:00:00Z"), _outcome("2026-07-01T10:30:00Z")])
+    run2 = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=True)
+    assert run2["journal_integrity"]["status"] == "SHRUNK"
+    assert run2["status"] == "FAIL"
+    # The checkpoint boundary was not trusted -- everything remaining was rescanned.
+    assert run2["window"]["effective_since_ts_exclusive"] is None
+
+
+def test_journal_integrity_detects_backdated_append_behind_checkpoint(tmp_path: Path) -> None:
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    day = journal_dir / "journal_2026-07-01.jsonl"
+    _write_jsonl(day, [_trade("2026-07-01T10:00:00Z"), _outcome("2026-07-01T10:30:00Z")])
+    run1 = build_trade_chain_report(
+        journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=True, advance_checkpoint=True
+    )
+    assert run1["status"] == "PASS"
+    checkpoint_ts = load_checkpoint(tmp_path)
+
+    # Simulate a late/backdated append: a row with a timestamp BEHIND the
+    # checkpoint boundary shows up in an already-processed day file.
+    _write_jsonl(
+        day,
+        [
+            _trade("2026-07-01T09:00:00Z"),  # backdated, before checkpoint_ts
+            _outcome("2026-07-01T09:30:00Z"),
+            _trade("2026-07-01T10:00:00Z"),
+            _outcome("2026-07-01T10:30:00Z"),
+        ],
+    )
+    run2 = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=True)
+    assert run2["journal_integrity"]["status"] == "GREW_BEHIND_CHECKPOINT"
+    assert run2["status"] == "FAIL"
+    assert checkpoint_ts is not None
+
+
+def test_journal_integrity_unknown_for_legacy_checkpoint_without_fingerprint(tmp_path: Path) -> None:
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    _write_jsonl(
+        journal_dir / "journal_2026-07-01.jsonl",
+        [_trade("2026-07-01T10:00:00Z"), _outcome("2026-07-01T10:30:00Z")],
+    )
+    # A checkpoint saved without the fingerprint field (as if written by a
+    # pre-fix version of this tool).
+    save_checkpoint(tmp_path, "2026-07-01T10:30:00Z")
+    assert "entries_at_or_before_count" not in (load_checkpoint_full(tmp_path) or {})
+
+    report = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=True)
+    assert report["journal_integrity"]["status"] == "UNKNOWN"
+    # Absence of a fingerprint alone must not force a FAIL.
+    assert report["status"] == "PASS"
