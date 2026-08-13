@@ -218,7 +218,11 @@ def build_daily_report(
     )
 
     return {
-        "ok": True,
+        # Mirrors the trade-chain result -- a daily report is not "ok" if the
+        # trade-chain check FAILed, even though every field above rendered
+        # successfully. An API/import consumer reading only "ok" must not be
+        # able to mistake a FAIL for a clean run.
+        "ok": trade_chain.get("status") == "PASS",
         "routine": "daily-reconciliation",
         "generated_at": _now_iso(),
         "repo_reconciliation": hygiene,

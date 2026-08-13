@@ -118,6 +118,19 @@ def test_build_daily_report_smoke(repo: Path) -> None:
     assert report["trade_chain"]["summary"]["attempts"] == 0
 
 
+def test_build_daily_report_ok_reflects_trade_chain_fail(repo: Path) -> None:
+    logs = repo / "logs"
+    logs.mkdir()
+    # A RISK_REJECTED row with no reason fails the trade-chain check.
+    (logs / "journal_2026-07-01.jsonl").write_text(
+        '{"ts": "2026-07-01T14:00:00Z", "instrument": "MNQ", "decision": "RISK_REJECTED"}\n',
+        encoding="utf-8",
+    )
+    report = build_daily_report(repo_root=repo, journal_dir="logs", use_checkpoint=False, advance_checkpoint=False)
+    assert report["trade_chain"]["status"] == "FAIL"
+    assert report["ok"] is False
+
+
 def test_build_daily_report_never_deletes_or_creates_tags_or_branches(repo: Path) -> None:
     _git(repo, "branch", "stale/unmerged")
     (repo / "logs").mkdir()

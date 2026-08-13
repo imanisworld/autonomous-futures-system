@@ -17,6 +17,7 @@ all instruments in one pass instead of one instrument at a time.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
 import os
@@ -55,12 +56,16 @@ def load_checkpoint(repo_root: Path) -> str | None:
 
 
 def save_checkpoint(
-    repo_root: Path, last_processed_ts: str | None, *, entries_at_or_before_count: int | None = None
+    repo_root: Path,
+    last_processed_ts: str | None,
+    *,
+    entries_at_or_before_count: int | None = None,
+    content_fingerprint: str | None = None,
 ) -> None:
-    """Persist the checkpoint ts plus a count fingerprint used to detect a
-    journal that was rotated/truncated/rewritten, or backdated-appended to,
-    behind the checkpoint boundary between runs (see
-    `_journal_integrity_check`). Never called on a FAIL result -- see
+    """Persist the checkpoint ts plus a fingerprint of everything at/before it
+    used to detect a journal that was rotated/truncated/rewritten, or
+    backdated-appended/mutated, behind the checkpoint boundary between runs
+    (see `_journal_integrity_check`). Never called on a FAIL result -- see
     build_trade_chain_report.
     """
     if last_processed_ts is None:
@@ -70,6 +75,8 @@ def save_checkpoint(
     payload = {"last_processed_ts": last_processed_ts, "saved_at": _now_iso()}
     if entries_at_or_before_count is not None:
         payload["entries_at_or_before_count"] = entries_at_or_before_count
+    if content_fingerprint is not None:
+        payload["content_fingerprint"] = content_fingerprint
     fd, tmp_name = tempfile.mkstemp(prefix=f".{CHECKPOINT_FILENAME}.", dir=path.parent)
     try:
         with os.fdopen(fd, "w") as fh:
@@ -81,34 +88,69 @@ def save_checkpoint(
             os.unlink(tmp_name)
 
 
+def _entries_at_or_before(entries: list[dict[str, Any]], ts_cutoff: str) -> list[dict[str, Any]]:
+    at_or_before = [e for e in entries if e.get("ts") and str(e["ts"]) <= ts_cutoff]
+    # Sort explicitly rather than trusting read_journal_entries' file/line
+    # order to stay stable -- the fingerprint must be reproducible across
+    # runs regardless of read order, and must change if a row's CONTENT
+    # changes even when its ts/count/position do not.
+    return sorted(at_or_before, key=lambda e: (str(e.get("ts") or ""), str(e.get("_path") or ""), e.get("_line") or 0))
+
+
 def _count_at_or_before(entries: list[dict[str, Any]], ts_cutoff: str) -> int:
-    return sum(1 for e in entries if e.get("ts") and str(e["ts"]) <= ts_cutoff)
+    return len(_entries_at_or_before(entries, ts_cutoff))
+
+
+def _content_fingerprint(entries: list[dict[str, Any]], ts_cutoff: str) -> str:
+    """SHA-256 over every field of every entry at/before ts_cutoff, in a
+    stable order, EXCLUDING the reader-injected _path/_line (file layout is
+    not semantic content -- a row moving between files without its content
+    changing should not itself trip this). This is the check that catches a
+    same-count, same-timestamp REWRITE (e.g. an OUTCOME's result silently
+    changed from WIN to LOSS) that `_count_at_or_before` alone cannot see.
+    """
+    rows = _entries_at_or_before(entries, ts_cutoff)
+    canonical = [
+        json.dumps({k: v for k, v in e.items() if k not in ("_path", "_line")}, sort_keys=True, default=str)
+        for e in rows
+    ]
+    digest = hashlib.sha256("\n".join(canonical).encode("utf-8"))
+    return digest.hexdigest()
 
 
 def _journal_integrity_check(
     entries_no_errors: list[dict[str, Any]], checkpoint_data: dict[str, Any] | None, checkpoint_ts: str | None
 ) -> dict[str, Any]:
-    """Detect a journal that changed shape behind the checkpoint boundary
-    since it was saved -- rotation, truncation, a rewrite, or an append with a
-    backdated timestamp into an already-processed day file. Pure ts-based
-    windowing (`entry.ts > checkpoint_ts`) cannot see any of these on its own:
-    a shrink silently drops evidence that was already counted, and a
-    backdated append silently never counts as "new". Both are exactly the
-    kind of thing "no proof, no run" requires surfacing, not assuming away.
+    """Detect a journal that changed behind the checkpoint boundary since it
+    was saved -- rotation, truncation, a same-count content rewrite, or an
+    append with a backdated timestamp into an already-processed day file.
+    Pure ts-based windowing (`entry.ts > checkpoint_ts`) cannot see any of
+    these on its own: a shrink silently drops evidence that was already
+    counted, a rewrite silently swaps evidence without changing the count,
+    and a backdated append silently never counts as "new". All three are
+    exactly the kind of thing "no proof, no run" requires surfacing, not
+    assuming away.
     """
     if checkpoint_ts is None:
         return {"checked": False, "status": "NOT_APPLICABLE", "reason": "no checkpoint in use this run"}
     current_count = _count_at_or_before(entries_no_errors, checkpoint_ts)
+    current_fingerprint = _content_fingerprint(entries_no_errors, checkpoint_ts)
     recorded_count = (checkpoint_data or {}).get("entries_at_or_before_count")
-    if recorded_count is None:
+    recorded_fingerprint = (checkpoint_data or {}).get("content_fingerprint")
+    base = {
+        "current_at_or_before_count": current_count,
+        "recorded_at_or_before_count": recorded_count,
+        "current_content_fingerprint": current_fingerprint,
+        "recorded_content_fingerprint": recorded_fingerprint,
+    }
+    if recorded_count is None and recorded_fingerprint is None:
         return {
             "checked": True,
             "status": "UNKNOWN",
             "reason": "saved checkpoint predates integrity-fingerprint tracking; cannot verify",
-            "current_at_or_before_count": current_count,
-            "recorded_at_or_before_count": None,
+            **base,
         }
-    if current_count < recorded_count:
+    if recorded_count is not None and current_count < recorded_count:
         return {
             "checked": True,
             "status": "SHRUNK",
@@ -118,10 +160,9 @@ def _journal_integrity_check(
                 f"evidence behind the checkpoint; the checkpoint window is not trustworthy this run "
                 f"and was NOT used (falling back to a full scan)"
             ),
-            "current_at_or_before_count": current_count,
-            "recorded_at_or_before_count": recorded_count,
+            **base,
         }
-    if current_count > recorded_count:
+    if recorded_count is not None and current_count > recorded_count:
         return {
             "checked": True,
             "status": "GREW_BEHIND_CHECKPOINT",
@@ -132,16 +173,33 @@ def _journal_integrity_check(
                 f"up as 'new'; re-run with --no-checkpoint (use_checkpoint=False) to force a full rescan "
                 f"and confirm what they are."
             ),
-            "current_at_or_before_count": current_count,
-            "recorded_at_or_before_count": recorded_count,
+            **base,
         }
-    return {
-        "checked": True,
-        "status": "OK",
-        "reason": None,
-        "current_at_or_before_count": current_count,
-        "recorded_at_or_before_count": recorded_count,
-    }
+    if recorded_fingerprint is not None and current_fingerprint != recorded_fingerprint:
+        return {
+            "checked": True,
+            "status": "MUTATED",
+            "reason": (
+                "journal history at/before the checkpoint boundary has the SAME row count as when the "
+                "checkpoint was saved, but its content fingerprint changed -- one or more rows behind "
+                "the checkpoint were rewritten in place (e.g. a result/strategy/order-id/P&L field "
+                "changed without changing the row count or timestamp). This is evidence tampering or "
+                "corruption, not new activity; the checkpoint window is not trustworthy this run and "
+                "was NOT used (falling back to a full scan)"
+            ),
+            **base,
+        }
+    if recorded_fingerprint is None:
+        return {
+            "checked": True,
+            "status": "OK_COUNT_ONLY",
+            "reason": (
+                "count matches the saved checkpoint, but it predates content-fingerprint tracking, so "
+                "a same-count in-place rewrite behind the checkpoint cannot be ruled out this run"
+            ),
+            **base,
+        }
+    return {"checked": True, "status": "OK", "reason": None, **base}
 
 
 def _entry_ts(entry: dict[str, Any]) -> datetime | None:
@@ -203,11 +261,12 @@ def build_trade_chain_report(
         checkpoint_ts = checkpoint_data.get("last_processed_ts") if checkpoint_data else None
 
     journal_integrity = _journal_integrity_check(entries_no_errors, checkpoint_data, checkpoint_ts)
-    # A SHRUNK journal (rotation/truncation/rewrite behind the checkpoint)
-    # means the checkpoint boundary can no longer be trusted -- fall back to
-    # a full scan rather than silently windowing off of a boundary that may
-    # no longer correspond to what's actually on disk.
-    effective_checkpoint_ts = None if journal_integrity["status"] == "SHRUNK" else checkpoint_ts
+    # A SHRUNK or MUTATED journal (rotation/truncation, or a same-count
+    # in-place rewrite, behind the checkpoint) means the checkpoint boundary
+    # can no longer be trusted -- fall back to a full scan rather than
+    # silently windowing off of a boundary that may no longer correspond to
+    # what's actually on disk.
+    effective_checkpoint_ts = None if journal_integrity["status"] in ("SHRUNK", "MUTATED") else checkpoint_ts
 
     def is_new(entry: dict[str, Any]) -> bool:
         if effective_checkpoint_ts is None:
@@ -388,7 +447,7 @@ def build_trade_chain_report(
         or bool(unmatched_outcomes)
         or bool(unmatched_order_ids)
         or bool(read_errors)
-        or journal_integrity["status"] in ("SHRUNK", "GREW_BEHIND_CHECKPOINT")
+        or journal_integrity["status"] in ("SHRUNK", "GREW_BEHIND_CHECKPOINT", "MUTATED")
     )
     status = "PASS" if not problems else "FAIL"
 
@@ -406,6 +465,7 @@ def build_trade_chain_report(
                 repo_root,
                 latest_journal_ts,
                 entries_at_or_before_count=_count_at_or_before(entries_no_errors, latest_journal_ts),
+                content_fingerprint=_content_fingerprint(entries_no_errors, latest_journal_ts),
             )
             checkpoint_advanced = True
         else:

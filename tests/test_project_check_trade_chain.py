@@ -439,3 +439,61 @@ def test_journal_integrity_unknown_for_legacy_checkpoint_without_fingerprint(tmp
     assert report["journal_integrity"]["status"] == "UNKNOWN"
     # Absence of a fingerprint alone must not force a FAIL.
     assert report["status"] == "PASS"
+
+
+def test_journal_integrity_detects_same_count_content_rewrite(tmp_path: Path) -> None:
+    """Required regression: a row count can stay identical while the actual
+    content behind the checkpoint changes (e.g. WIN silently rewritten to
+    LOSS with the same timestamp) -- a count-only fingerprint cannot see
+    this. The content hash must."""
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    day = journal_dir / "journal_2026-07-01.jsonl"
+    _write_jsonl(
+        day,
+        [_trade("2026-07-01T10:00:00Z"), _outcome("2026-07-01T10:30:00Z", result="WIN", pnl=25.0)],
+    )
+    run1 = build_trade_chain_report(
+        journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=True, advance_checkpoint=True
+    )
+    assert run1["status"] == "PASS"
+
+    # Rewrite the WIN row to LOSS, same timestamp, same total row count.
+    _write_jsonl(
+        day,
+        [_trade("2026-07-01T10:00:00Z"), _outcome("2026-07-01T10:30:00Z", result="LOSS", pnl=-25.0)],
+    )
+    run2 = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=True)
+    assert run2["journal_integrity"]["status"] == "MUTATED"
+    assert run2["status"] == "FAIL"
+    # Count-only comparison alone would have missed this.
+    integrity = run2["journal_integrity"]
+    assert integrity["current_at_or_before_count"] == integrity["recorded_at_or_before_count"]
+    assert integrity["current_content_fingerprint"] != integrity["recorded_content_fingerprint"]
+    # The checkpoint boundary was not trusted -- full rescan.
+    assert run2["window"]["effective_since_ts_exclusive"] is None
+
+
+def test_journal_integrity_detects_same_count_field_level_mutation(tmp_path: Path) -> None:
+    """Same-count mutation of a single field (strategy name here; the
+    reviewer also named order ID and P&L as representative) must trip the
+    same MUTATED detection as a result-field rewrite."""
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    day = journal_dir / "journal_2026-07-01.jsonl"
+    _write_jsonl(
+        day,
+        [_trade("2026-07-01T10:00:00Z", strategy="orb_breakout"), _outcome("2026-07-01T10:30:00Z")],
+    )
+    run1 = build_trade_chain_report(
+        journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=True, advance_checkpoint=True
+    )
+    assert run1["status"] == "PASS"
+
+    _write_jsonl(
+        day,
+        [_trade("2026-07-01T10:00:00Z", strategy="vwap_hold"), _outcome("2026-07-01T10:30:00Z")],
+    )
+    run2 = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=True)
+    assert run2["journal_integrity"]["status"] == "MUTATED"
+    assert run2["status"] == "FAIL"
