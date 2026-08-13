@@ -8,9 +8,12 @@ restart recovery, duplicate prevention, append-only reconciliation.
 from __future__ import annotations
 
 import asyncio
+import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
+
+import pytest
 
 from alert_ranker.config import ScannerConfig
 from alert_ranker.discord import DiscordAlerter
@@ -303,3 +306,13 @@ def test_direct_resolution_rules_are_deterministic():
         direction="SHORT", contract={"stop": 104.0, "target": 99.0}, underlying_price=98.0, now=now
     )
     assert status == "WIN"
+
+
+def test_storage_connection_context_closes_database(tmp_path):
+    storage = ScanStorage(tmp_path / "scanner.sqlite")
+
+    with storage._connect() as conn:
+        assert conn.execute("SELECT 1").fetchone()[0] == 1
+
+    with pytest.raises(sqlite3.ProgrammingError, match="closed database"):
+        conn.execute("SELECT 1")
