@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 from .scorer import ScoreResult
 
@@ -500,10 +501,23 @@ class ScanStorage:
                 reconciled += 1
         return reconciled
 
-    def _connect(self) -> sqlite3.Connection:
+    @contextmanager
+    def _connect(self) -> Iterator[sqlite3.Connection]:
+        """Yield one transaction-scoped connection and always close it.
+
+        ``sqlite3.Connection`` commits or rolls back from its own context
+        manager, but it does not close the underlying file descriptor.  The
+        scanner opens a connection for every storage operation, so relying on
+        that behavior leaked descriptors until GC and made legacy journal
+        reconciliation fail at the process ulimit.
+        """
         conn = sqlite3.connect(self.path)
         conn.row_factory = sqlite3.Row
-        return conn
+        try:
+            with conn:
+                yield conn
+        finally:
+            conn.close()
 
 
 def _derive_shadow_outcome_math(
