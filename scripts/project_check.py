@@ -13,9 +13,12 @@
   daily          Daily Reconciliation + Trade Chain Integrity: repo/PR/branch
                  hygiene, evidence preservation, deployed state, strategy
                  source-of-truth drift, and trade-chain accounting since the
-                 prior checkpoint. Read-only against git/journals; advances
-                 its own local checkpoint file by default (pass
-                 --no-advance-checkpoint to disable).
+                 prior checkpoint. Read-only against git/journals. Does NOT
+                 advance its local checkpoint file unless you pass
+                 --advance-checkpoint explicitly -- and even then, it never
+                 advances on a FAIL result (that would let today's
+                 orphans/duplicate-identities/unmatched-outcomes silently
+                 drop out of tomorrow's window).
 
 None of these subcommands commit, push, pull, reset, rebase, check out,
 delete a branch/worktree, drop a stash, create/delete a tag, cancel an
@@ -25,7 +28,7 @@ Usage:
   python3 scripts/project_check.py session-start [--json]
   python3 scripts/project_check.py precommit [--json]
   python3 scripts/project_check.py promotion --strategy <name> [--evidence-file path.json] [--json]
-  python3 scripts/project_check.py daily [--journal-dir logs] [--no-advance-checkpoint] [--json]
+  python3 scripts/project_check.py daily [--journal-dir logs] [--advance-checkpoint] [--json]
 """
 from __future__ import annotations
 
@@ -137,11 +140,11 @@ def _cmd_daily(args: argparse.Namespace) -> int:
         repo_root=ROOT,
         journal_dir=args.journal_dir,
         use_checkpoint=not args.no_checkpoint,
-        advance_checkpoint=not args.no_advance_checkpoint,
+        advance_checkpoint=args.advance_checkpoint,
     )
     if args.json:
         _print_json(report)
-        return 0
+        return 0 if report["trade_chain"]["status"] == "PASS" else 1
     tc = report["trade_chain"]
     print("DAILY RECONCILIATION")
     hy = report["repo_reconciliation"]
@@ -156,22 +159,28 @@ def _cmd_daily(args: argparse.Namespace) -> int:
         print(f"  strategy inventory drift findings: {len(sd['drift_findings'])} (unmatched rows: {len(sd['unmatched_inventory_rows'])})")
     else:
         print(f"  strategy inventory check: NOT CHECKED ({sd.get('reason')})")
+    w = tc["window"]
+    if w["checkpoint_advance_requested"]:
+        if w["checkpoint_advanced"]:
+            print(f"  checkpoint advanced to {w['latest_journal_ts']}")
+        else:
+            print(f"  checkpoint NOT advanced: {w['checkpoint_skip_reason']}")
     if tc["status"] == "PASS":
         s = tc["summary"]
         print(
             f"  TRADE CHAIN: PASS\n"
             f"  {s['attempts']} attempts\n"
-            f"  {s['fills']} fills\n"
+            f"  {s['fills']} fills (resolved WIN/LOSS/BREAKEVEN only)\n"
             f"  {s['cancellations']} cancellations\n"
-            f"  {s['resolved_fills']} resolved\n"
-            f"  {s['legitimately_open']} legitimate opens\n"
+            f"  {s['unverified_open_attempts']} unverified open attempts (no OUTCOME yet, not counted as fills)\n"
             f"  0 orphans\n"
             f"  0 duplicate identities\n"
+            f"  0 unmatched outcomes\n"
         )
     else:
         print("  TRADE CHAIN: FAIL")
         _print_json(tc)
-    return 0
+    return 0 if tc["status"] == "PASS" else 1
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -197,7 +206,12 @@ def main(argv: list[str] | None = None) -> int:
     p_daily = sub.add_parser("daily", help="Daily reconciliation + trade chain integrity")
     p_daily.add_argument("--journal-dir", default="logs")
     p_daily.add_argument("--no-checkpoint", action="store_true", help="ignore any saved checkpoint; scan all journals")
-    p_daily.add_argument("--no-advance-checkpoint", action="store_true", help="do not update the local checkpoint file")
+    p_daily.add_argument(
+        "--advance-checkpoint",
+        action="store_true",
+        help="update the local checkpoint file -- only takes effect when the trade-chain result is PASS; "
+        "omit this flag to run report-only with no state change (the default)",
+    )
     p_daily.add_argument("--json", action="store_true")
     p_daily.set_defaults(func=_cmd_daily)
 

@@ -55,8 +55,8 @@ def test_clean_day_fill_and_cancel_passes(tmp_path: Path) -> None:
     assert s["orphans"] == 0
     assert s["duplicate_order_identities"] == 0
     assert s["naked_position_risk"] == 0
+    assert s["unmatched_outcomes"] == 0
     assert report["accounting"]["attempts_identity_holds"] is True
-    assert report["accounting"]["fills_identity_holds"] is True
 
 
 def test_stale_unresolved_trade_from_a_prior_day_is_an_orphan(tmp_path: Path) -> None:
@@ -76,7 +76,7 @@ def test_stale_unresolved_trade_from_a_prior_day_is_an_orphan(tmp_path: Path) ->
     assert report["detail"]["orphans"][0]["trade_ts"] == "2026-07-01T14:00:00Z"
 
 
-def test_unresolved_trade_on_latest_day_is_legitimately_open(tmp_path: Path) -> None:
+def test_unresolved_trade_on_latest_day_is_unverified_open_not_a_fill(tmp_path: Path) -> None:
     journal_dir = tmp_path / "logs"
     journal_dir.mkdir()
     _write_jsonl(
@@ -85,7 +85,13 @@ def test_unresolved_trade_on_latest_day_is_legitimately_open(tmp_path: Path) -> 
     )
     report = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=False)
     assert report["summary"]["orphans"] == 0
-    assert report["summary"]["legitimately_open"] == 1
+    assert report["summary"]["unverified_open_attempts"] == 1
+    # The unresolved attempt must NOT be counted as a fill -- only the one
+    # resolved WIN outcome counts. A TRADE row alone is an order attempt, not
+    # proof of a fill.
+    assert report["summary"]["fills"] == 1
+    assert report["summary"]["resolved_fills"] == 1
+    assert report["detail"]["unverified_open_attempts"][0]["category"] == "UNVERIFIED_OPEN_ATTEMPT"
     assert report["status"] == "PASS"
 
 
@@ -162,6 +168,77 @@ def test_risk_rejected_missing_reason_is_flagged(tmp_path: Path) -> None:
     )
     report = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=False)
     assert report["summary"]["risk_rejected_missing_reason"] == 1
+    assert report["status"] == "FAIL"
+
+
+def test_checkpoint_never_advances_when_status_is_fail(tmp_path: Path) -> None:
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    # A duplicate order identity forces status=FAIL.
+    _write_jsonl(
+        journal_dir / "journal_2026-07-01.jsonl",
+        [
+            _trade("2026-07-01T14:00:00Z"),
+            _order_ids("2026-07-01T14:00:05Z", order_id="1"),
+            _outcome("2026-07-01T14:30:00Z"),
+            _trade("2026-07-01T15:00:00Z"),
+            _order_ids("2026-07-01T15:00:05Z", order_id="1"),
+            _outcome("2026-07-01T15:30:00Z"),
+        ],
+    )
+    report = build_trade_chain_report(
+        journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=False, advance_checkpoint=True
+    )
+    assert report["status"] == "FAIL"
+    assert report["window"]["checkpoint_advance_requested"] is True
+    assert report["window"]["checkpoint_advanced"] is False
+    assert report["window"]["checkpoint_skip_reason"] is not None
+    assert load_checkpoint(tmp_path) is None
+
+    # Re-running must still see everything -- nothing was silently skipped.
+    rerun = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=True)
+    assert rerun["summary"]["attempts"] == 2
+    assert rerun["status"] == "FAIL"
+
+
+def test_advance_checkpoint_defaults_to_false(tmp_path: Path) -> None:
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    _write_jsonl(
+        journal_dir / "journal_2026-07-01.jsonl",
+        [_trade("2026-07-01T14:00:00Z"), _outcome("2026-07-01T14:30:00Z")],
+    )
+    report = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=False)
+    assert report["status"] == "PASS"
+    assert report["window"]["checkpoint_advance_requested"] is False
+    assert report["window"]["checkpoint_advanced"] is False
+    assert load_checkpoint(tmp_path) is None
+
+
+def test_unmatched_outcome_is_reported_not_dropped(tmp_path: Path) -> None:
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    # An OUTCOME with no preceding approved TRADE for that instrument in the
+    # window -- must show up as unmatched, not silently vanish.
+    _write_jsonl(
+        journal_dir / "journal_2026-07-01.jsonl",
+        [_outcome("2026-07-01T14:30:00Z", result="WIN", pnl=10.0)],
+    )
+    report = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=False)
+    assert report["summary"]["unmatched_outcomes"] == 1
+    assert report["detail"]["unmatched_outcomes"][0]["ts"] == "2026-07-01T14:30:00Z"
+    assert report["status"] == "FAIL"
+
+
+def test_unmatched_order_ids_is_reported_not_dropped(tmp_path: Path) -> None:
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    _write_jsonl(
+        journal_dir / "journal_2026-07-01.jsonl",
+        [_order_ids("2026-07-01T14:30:00Z", order_id="55555555")],
+    )
+    report = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=False)
+    assert report["summary"]["unmatched_order_ids"] == 1
     assert report["status"] == "FAIL"
 
 

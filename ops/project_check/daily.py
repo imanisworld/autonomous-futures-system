@@ -204,7 +204,7 @@ def build_daily_report(
     journal_dir: str | Path = "logs",
     risk_rules_path: str | Path = "risk_rules.yaml",
     use_checkpoint: bool = True,
-    advance_checkpoint: bool = True,
+    advance_checkpoint: bool = False,
 ) -> dict[str, Any]:
     root = Path(repo_root)
     hygiene = _repo_hygiene(root)

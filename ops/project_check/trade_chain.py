@@ -72,9 +72,12 @@ def _entry_ts(entry: dict[str, Any]) -> datetime | None:
 
 def _pair_fifo_by_instrument(
     anchors: list[dict[str, Any]], events: list[dict[str, Any]], all_in_order: list[dict[str, Any]]
-) -> dict[int, dict[str, Any]]:
+) -> tuple[dict[int, dict[str, Any]], list[dict[str, Any]]]:
     """Pair each anchor with the next same-instrument event in a strict FIFO
-    queue, walking all entries in journal (chronological) order.
+    queue, walking all entries in journal (chronological) order. Returns
+    (paired, unmatched_events) -- an event that arrives with no anchor
+    currently queued for its instrument is NOT silently dropped, it comes
+    back in unmatched_events for the caller to report.
 
     Same approach as ops.proof_30_mnq.pair_resolved_trades (queue.pop(0) on
     the oldest open anchor for that instrument when a matching event arrives),
@@ -88,13 +91,17 @@ def _pair_fifo_by_instrument(
     event_ids = {id(e) for e in events}
     queues: dict[str, list[dict[str, Any]]] = defaultdict(list)
     paired: dict[int, dict[str, Any]] = {}
+    unmatched: list[dict[str, Any]] = []
     for entry in all_in_order:
         instrument = entry.get("instrument")
         if id(entry) in anchor_ids:
             queues[instrument].append(entry)
-        elif id(entry) in event_ids and queues[instrument]:
-            paired[id(queues[instrument].pop(0))] = entry
-    return paired
+        elif id(entry) in event_ids:
+            if queues[instrument]:
+                paired[id(queues[instrument].pop(0))] = entry
+            else:
+                unmatched.append(entry)
+    return paired, unmatched
 
 
 def build_trade_chain_report(
@@ -134,13 +141,13 @@ def build_trade_chain_report(
     risk_rejected = [e for e in windowed if e.get("decision") == "RISK_REJECTED"]
     config_blocked = [e for e in windowed if e.get("decision") == "CONFIG_BLOCKED"]
 
-    outcome_by_attempt = _pair_fifo_by_instrument(attempts, outcomes, windowed)
-    orderids_by_attempt = _pair_fifo_by_instrument(attempts, order_id_events, windowed)
+    outcome_by_attempt, unmatched_outcomes = _pair_fifo_by_instrument(attempts, outcomes, windowed)
+    orderids_by_attempt, unmatched_order_ids = _pair_fifo_by_instrument(attempts, order_id_events, windowed)
 
     resolved_fills: list[dict[str, Any]] = []
     resolved_cancellations: list[dict[str, Any]] = []
     needs_broker_verification: list[dict[str, Any]] = []
-    unresolved_open: list[dict[str, Any]] = []
+    unverified_open_attempts: list[dict[str, Any]] = []
     unresolved_orphan: list[dict[str, Any]] = []
     naked_position_risk: list[dict[str, Any]] = []
 
@@ -156,11 +163,23 @@ def build_trade_chain_report(
             "line": attempt.get("_line"),
         }
         if outcome is None:
+            # No OUTCOME row means this attempt has NOT been proven to fill --
+            # a journaled TRADE decision is an order attempt, not confirmed
+            # broker evidence of a fill (see ops/forward_campaign_report.py's
+            # fillable_state convention for the same distinction elsewhere in
+            # the repo). This routine never counts either bucket below as a
+            # "fill" -- both require independent fill/order evidence first.
             attempt_day = (str(attempt.get("ts")) or "")[:10]
             if latest_journal_day is not None and attempt_day == latest_journal_day:
-                unresolved_open.append(row)
+                unverified_open_attempts.append({**row, "category": "UNVERIFIED_OPEN_ATTEMPT"})
             else:
-                unresolved_orphan.append({**row, "reason": "no OUTCOME found and not from the most recent journal day"})
+                unresolved_orphan.append(
+                    {
+                        **row,
+                        "category": "UNVERIFIED_STALE_ATTEMPT",
+                        "reason": "no OUTCOME found and not from the most recent journal day",
+                    }
+                )
             continue
         category = classify_outcome(outcome.get("outcome") or {})
         row["category"] = category
@@ -189,14 +208,24 @@ def build_trade_chain_report(
             seen_order_ids[str(value)].append(label)
     duplicate_order_ids = {oid: locs for oid, locs in seen_order_ids.items() if len(locs) > 1}
 
-    fills_count = len(resolved_fills) + len(unresolved_open)
+    # "fills" counts ONLY attempts with independent fill evidence -- a resolved
+    # OUTCOME classified WIN/LOSS/BREAKEVEN by ops.proof_30_mnq.classify_outcome.
+    # A TRADE row alone is an order attempt, not proof of a fill: an
+    # unresolved attempt (no OUTCOME yet) is reported separately as
+    # UNVERIFIED_OPEN_ATTEMPT / UNVERIFIED_STALE_ATTEMPT and is NEVER folded
+    # into fills, per the same "TRADE row != proven fill" distinction
+    # ops/forward_campaign_report.py's fillable_state draws elsewhere in this
+    # repo. Counting it as a fill without broker/order confirmation would let
+    # this routine report a clean identity without actually proving anything
+    # filled.
+    fills_count = len(resolved_fills)
     cancellations_count = len(resolved_cancellations)
     rejects_or_no_fill_count = len(needs_broker_verification)
+    unverified_open_count = len(unverified_open_attempts)
     orphans_count = len(unresolved_orphan)
     attempts_identity_holds = len(attempts) == (
-        fills_count + cancellations_count + rejects_or_no_fill_count + orphans_count
+        fills_count + cancellations_count + rejects_or_no_fill_count + unverified_open_count + orphans_count
     )
-    fills_identity_holds = fills_count == (len(resolved_fills) + len(unresolved_open))
 
     risk_rejected_missing_reason = [
         {"ts": e.get("ts"), "instrument": e.get("instrument"), "path": e.get("_path"), "line": e.get("_line")}
@@ -222,12 +251,32 @@ def build_trade_chain_report(
         or bool(duplicate_order_ids)
         or bool(naked_position_risk)
         or not attempts_identity_holds
-        or not fills_identity_holds
         or bool(risk_rejected_missing_reason)
+        or bool(unmatched_outcomes)
+        or bool(unmatched_order_ids)
+        or bool(read_errors)
     )
+    status = "PASS" if not problems else "FAIL"
 
+    # Never advance the checkpoint on FAIL: doing so would let today's
+    # orphans/duplicate-identities/unmatched-outcomes/naked-fill findings
+    # silently drop out of tomorrow's window, which is exactly the "checkpoint
+    # hides a failure" defect this build was HELD for. Checkpoint advancement
+    # is also opt-in (advance_checkpoint defaults to False, both here and in
+    # the CLI) rather than a default side effect of running the report.
+    checkpoint_advanced = False
+    checkpoint_skip_reason = None
     if advance_checkpoint and latest_journal_ts:
-        save_checkpoint(repo_root, latest_journal_ts)
+        if status == "PASS":
+            save_checkpoint(repo_root, latest_journal_ts)
+            checkpoint_advanced = True
+        else:
+            checkpoint_skip_reason = (
+                f"status=FAIL: checkpoint NOT advanced so the next run re-scans and re-reports "
+                f"these findings instead of silently skipping past them"
+            )
+    elif advance_checkpoint and not latest_journal_ts:
+        checkpoint_skip_reason = "no journal entries found in range; nothing to advance the checkpoint to"
 
     return {
         "ok": not read_errors,
@@ -238,14 +287,17 @@ def build_trade_chain_report(
             "since_ts_exclusive": checkpoint_ts,
             "latest_journal_ts": latest_journal_ts,
             "used_checkpoint": use_checkpoint and since_ts is None,
+            "checkpoint_advance_requested": advance_checkpoint,
+            "checkpoint_advanced": checkpoint_advanced,
+            "checkpoint_skip_reason": checkpoint_skip_reason,
         },
         "journal_read_errors": read_errors,
-        "status": "PASS" if not problems else "FAIL",
+        "status": status,
         "summary": {
             "attempts": len(attempts),
             "fills": fills_count,
             "resolved_fills": len(resolved_fills),
-            "legitimately_open": len(unresolved_open),
+            "unverified_open_attempts": unverified_open_count,
             "cancellations": cancellations_count,
             "needs_broker_verification": rejects_or_no_fill_count,
             "orphans": orphans_count,
@@ -254,22 +306,47 @@ def build_trade_chain_report(
             "risk_rejected": len(risk_rejected),
             "risk_rejected_missing_reason": len(risk_rejected_missing_reason),
             "config_blocked": len(config_blocked),
+            "unmatched_outcomes": len(unmatched_outcomes),
+            "unmatched_order_ids": len(unmatched_order_ids),
         },
         "accounting": {
-            "attempts_identity": "attempts = fills + cancellations + needs_broker_verification + orphans",
+            "attempts_identity": (
+                "attempts = fills + cancellations + needs_broker_verification + "
+                "unverified_open_attempts + orphans"
+            ),
             "attempts_identity_holds": attempts_identity_holds,
-            "fills_identity": "fills = resolved_fills + legitimately_open",
-            "fills_identity_holds": fills_identity_holds,
+            "fills_definition": (
+                "fills counts ONLY attempts with a resolved WIN/LOSS/BREAKEVEN OUTCOME row "
+                "(independent fill evidence via ops.proof_30_mnq.classify_outcome). An "
+                "unresolved TRADE attempt is NEVER counted as a fill -- it is reported as "
+                "unverified_open_attempts (current journal day) or orphans (stale) until an "
+                "OUTCOME or broker fill confirmation proves it either way."
+            ),
         },
         "detail": {
             "resolved_fills": resolved_fills,
-            "legitimately_open": unresolved_open,
+            "unverified_open_attempts": unverified_open_attempts,
             "cancellations": resolved_cancellations,
             "needs_broker_verification": needs_broker_verification,
             "orphans": unresolved_orphan,
             "duplicate_order_identities": duplicate_order_ids,
             "naked_position_risk": naked_position_risk,
             "risk_rejected_missing_reason": risk_rejected_missing_reason,
+            "unmatched_outcomes": [
+                {
+                    "ts": e.get("ts"),
+                    "instrument": e.get("instrument"),
+                    "path": e.get("_path"),
+                    "line": e.get("_line"),
+                    "result": (e.get("outcome") or {}).get("result"),
+                    "exit_reason": (e.get("outcome") or {}).get("exit_reason"),
+                }
+                for e in unmatched_outcomes
+            ],
+            "unmatched_order_ids": [
+                {"ts": e.get("ts"), "instrument": e.get("instrument"), "path": e.get("_path"), "line": e.get("_line")}
+                for e in unmatched_order_ids
+            ],
         },
         "broker_journal_parity": broker_parity,
         "eod_day_only_boundary_check": {
