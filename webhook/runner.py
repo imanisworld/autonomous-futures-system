@@ -1867,7 +1867,27 @@ def process_alert(
                         detachment_r=_er_decision.detachment_r,
                         campaign_record=_er_modified_campaign_record,
                     )
-                    if _er_opened and _er_modified_campaign_record is not None:
+                    if _er_modified_campaign_record is not None:
+                        if not _er_opened:
+                            # The (instrument, strategy) shadow slot is already
+                            # held by an unresolved position. The control arm for
+                            # this event_id was written above, so dropping the
+                            # modified arm here would leave an unpaired control
+                            # and condition A/B coverage on slot availability.
+                            # Record it explicitly as not-filled instead.
+                            _er_modified_campaign_record = {
+                                **_er_modified_campaign_record,
+                                "fillable_state": "REJECTED",
+                                "terminal_state": "REJECTED",
+                                "reject_reason": "SHADOW_SLOT_OCCUPIED",
+                                "exit_reason": "SHADOW_SLOT_OCCUPIED",
+                                "exit_timestamp": bar_ts,
+                                "hypothetical_fill_price": None,
+                                "failed_gates": [
+                                    *(_er_modified_campaign_record.get("failed_gates") or []),
+                                    "SHADOW_SLOT_OCCUPIED",
+                                ],
+                            }
                         append_forward_campaign_record(log_dir, _er_modified_campaign_record)
                 elif _er_modified_campaign_record is not None:
                     append_forward_campaign_record(log_dir, _er_modified_campaign_record)
