@@ -97,6 +97,15 @@ def _average(rows: Iterable[dict[str, Any]], field: str) -> float | None:
     return round(sum(values) / len(values), 4) if values else None
 
 
+def _is_resolved_filled_economic_outcome(row: dict[str, Any]) -> bool:
+    """True only for terminal filled rows with independently retained P&L."""
+    return (
+        row.get("fillable_state") == "FILLED"
+        and str(row.get("terminal_state") or "OPEN") != "OPEN"
+        and row.get("gross_pnl_dollars") is not None
+    )
+
+
 def _all_arm_population(
     strategy: str,
     variant: str,
@@ -122,7 +131,11 @@ def _all_arm_population(
         float(row["gross_pnl_dollars"])
         for row in cell_outcomes if row.get("gross_pnl_dollars") is not None
     ]
+    resolved_filled_outcomes = [
+        row for row in cell_outcomes if _is_resolved_filled_economic_outcome(row)
+    ]
     days = {str(row.get("signal_timestamp", ""))[:10] for row in cells if row.get("signal_timestamp")}
+    review_eligible = len(days) >= 20 and len(resolved_filled_outcomes) >= 30
     return {
         "strategy": strategy,
         "variant": variant,
@@ -131,6 +144,7 @@ def _all_arm_population(
         "no_fill": no_fill,
         "open": open_count,
         "resolved": len(cell_outcomes),
+        "resolved_filled_outcomes": len(resolved_filled_outcomes),
         "wins": wins,
         "losses": losses,
         "breakeven": breakevens,
@@ -149,9 +163,9 @@ def _all_arm_population(
         "regimes": dict(Counter(str(row.get("regime")) for row in cells)),
         "code_shas": sorted({str(row.get("generating_git_sha")) for row in cells}),
         "trading_days": len(days),
-        "review_eligible": len(days) >= 20 and len(cell_outcomes) >= 30,
+        "review_eligible": review_eligible,
         "classification_if_not_eligible": (
-            None if len(days) >= 20 and len(cell_outcomes) >= 30
+            None if review_eligible
             else "WAIT / PROMISING BUT UNPROVEN"
         ),
     }
@@ -318,7 +332,7 @@ def build_report(path: str | Path) -> dict[str, Any]:
         ],
         "review_gate": {
             "minimum_trading_days": 20,
-            "minimum_resolved_outcomes_per_variant": 30,
+            "minimum_resolved_filled_outcomes_per_variant": 30,
             "automatic_promotion": False,
         },
     }

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -455,6 +455,60 @@ def test_report_recalculates_one_two_three_tick_costs_from_retained_gross(tmp_pa
     assert population["cost_sensitivity"]["1_rt_tick"]["economic_after_cost"] == {
         "wins": 1, "losses": 1, "breakeven": 0,
     }
+
+
+def _campaign_timestamp(index: int) -> str:
+    day = datetime(2026, 7, 1, 14, 30, tzinfo=timezone.utc) + timedelta(days=index % 20)
+    return day.isoformat()
+
+
+def test_thirty_no_fills_do_not_satisfy_resolved_filled_review_gate(tmp_path):
+    rows = []
+    for index in range(30):
+        candidate = _record(
+            event_id=f"no-fill-{index}", signal_timestamp=_campaign_timestamp(index)
+        )
+        rows.extend([
+            candidate,
+            _outcome(
+                candidate, "EXPIRED", None, fillable_state="NO_FILL",
+                mfe=None, mae=None,
+            ),
+        ])
+    path = tmp_path / "no-fills.jsonl"
+    path.write_text("\n".join(json.dumps(row) for row in rows) + "\n")
+
+    report = build_report(path)
+    population = report["populations"][0]
+    assert population["trading_days"] == 20
+    assert population["resolved"] == 30
+    assert population["no_fill"] == 30
+    assert population["resolved_filled_outcomes"] == 0
+    assert population["review_eligible"] is False
+    assert report["review_gate"]["minimum_resolved_filled_outcomes_per_variant"] == 30
+
+
+def test_thirty_filled_economic_outcomes_satisfy_review_gate(tmp_path):
+    rows = []
+    for index in range(30):
+        candidate = _record(
+            event_id=f"filled-{index}", signal_timestamp=_campaign_timestamp(index)
+        )
+        # A filled terminal timeout/expiry with retained P&L is economic
+        # evidence just like W/L/BE and must count toward the preregistered gate.
+        terminal = "EXPIRED" if index == 29 else ("WIN" if index % 2 == 0 else "LOSS")
+        gross = 0.0 if terminal == "EXPIRED" else (10.0 if terminal == "WIN" else -5.0)
+        rows.extend([candidate, _outcome(candidate, terminal, gross)])
+    path = tmp_path / "filled.jsonl"
+    path.write_text("\n".join(json.dumps(row) for row in rows) + "\n")
+
+    population = build_report(path)["populations"][0]
+    assert population["trading_days"] == 20
+    assert population["resolved"] == 30
+    assert population["no_fill"] == 0
+    assert population["resolved_filled_outcomes"] == 30
+    assert population["review_eligible"] is True
+    assert population["classification_if_not_eligible"] is None
 
 
 def test_risk_rules_keep_only_mnq_orb_breakout_executable():

@@ -18,7 +18,7 @@
   },
   "review_gate": {
     "minimum_trading_days": 20,
-    "minimum_resolved_outcomes_per_variant": 30,
+    "minimum_resolved_filled_outcomes_per_variant": 30,
     "automatic_promotion": false,
     "insufficient_sample_classification": "WAIT / PROMISING BUT UNPROVEN"
   }
