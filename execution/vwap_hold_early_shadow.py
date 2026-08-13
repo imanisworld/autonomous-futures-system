@@ -61,11 +61,12 @@ def open_shadow_position(
     entry_ts: str,
     opened_at: Optional[str] = None,
     rr_ratio: Optional[float] = None,
-) -> None:
+    campaign_record: Optional[dict] = None,
+) -> bool:
     """Fail-soft: a persistence hiccup must never affect trading. No-ops if a
     shadow position is already pending."""
     if get_pending_shadow_position(log_dir) is not None:
-        return
+        return False
     path = _state_path(log_dir)
     try:
         try:
@@ -86,13 +87,15 @@ def open_shadow_position(
             "opened_at": opened_at or datetime.now(timezone.utc).isoformat(),
             "rr_ratio": rr_ratio,
             "source": "5m_early_signal",
+            "campaign_record": campaign_record,
         }
         path.parent.mkdir(parents=True, exist_ok=True)
         tmp = path.with_suffix(".tmp")
         tmp.write_text(json.dumps({"positions": positions}, separators=(",", ":")))
         tmp.replace(path)
+        return True
     except OSError:
-        pass
+        return False
 
 
 def close_shadow_position(log_dir: str | Path) -> None:

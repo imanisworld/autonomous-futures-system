@@ -98,7 +98,10 @@ def resolve_shadow_candidate(
             bars_to_exit=None,
         )
 
-    for j in range(fill_idx + 1, len(forward_bars)):
+    # Resting entry: the bar that first trades through the entry is also the
+    # first possible outcome bar. OHLC cannot establish intrabar ordering, so
+    # the existing pessimistic both-hit convention applies on that fill bar.
+    for j in range(fill_idx, len(forward_bars)):
         high, low = forward_bars[j]
         if is_long:
             target_hit = high >= target
@@ -164,6 +167,8 @@ RISK_MATRIX = {
     "ema_pullback_trend": ("B", 0.75),
     "impulse_first_pullback_observed": ("B", 0.5),
     "trend_consolidation_break_observed": ("B", 0.5),
+    "vwap_hold_observed": ("B", 0.5),
+    "vwap_rejection_observed": ("B", 0.5),
 }
 
 # Mirrors the hard RiskEngine backstop for the instruments currently traded.
@@ -188,6 +193,7 @@ _FOURHR_MAX_STOP_TICKS = {"MNQ": 80, "MES": 40}
 def evaluate_shadow_setups(
     state: MarketState,
     recent_bars: list[dict] | None = None,
+    config=None,
 ) -> list[ShadowSetupCandidate]:
     """Return all shadow-only setup candidates visible on this bar."""
     candidates = [
@@ -201,7 +207,11 @@ def evaluate_shadow_setups(
         _impulse_first_pullback(state, recent_bars or []),
         _trend_consolidation_break(state, recent_bars or []),
     ]
-    return [candidate for candidate in candidates if candidate is not None]
+    resolved = [candidate for candidate in candidates if candidate is not None]
+    from strategy.canonical_observers import evaluate_canonical_observers
+
+    resolved.extend(evaluate_canonical_observers(state, config))
+    return resolved
 
 
 def _bar_num(bar: dict, key: str) -> float:
