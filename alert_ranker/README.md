@@ -2,30 +2,34 @@
 
 Runs a separate FastAPI microservice on port `8010` alongside the futures paper-trading webhook on port `8000`.
 
-This service is advisory-only. It reads market data from a configured provider, scores option setups, logs each scan to SQLite, and optionally sends Discord alerts for high-scoring setups. It does not submit orders, connect to order endpoints, or mutate the futures engine.
+This service is test-only and advisory-only. It reads market data from a configured provider, scores option setups, logs each scan to SQLite, and optionally sends Discord alerts for high-scoring setups. It never submits or authorizes orders, discovers account data, connects to trading endpoints, or mutates the futures engine. Enabling it does not enable options or futures trading.
 
 ## Setup
 
 Add these values to `.env`:
 
 ```env
+OPTIONS_SCANNER_ENABLED=false
 OPTIONS_MARKET_DATA_PROVIDER=public
-TASTYTRADE_USERNAME=
-TASTYTRADE_PASSWORD=
-PUBLIC_API_KEY=
+PUBLIC_API_SECRET_KEY=
+PUBLIC_ACCOUNT_ID=
 PUBLIC_BASE_URL=https://api.public.com
-ALPACA_API_KEY=
-ALPACA_SECRET_KEY=
-ALPACA_DATA_BASE_URL=https://data.alpaca.markets
+PUBLIC_TOKEN_VALIDITY_MINUTES=1440
+PUBLIC_STALE_QUOTE_SECONDS=900
 OPTIONS_SCANNER_PORT=8010
+OPTIONS_SCANNER_SQLITE_PATH=logs/options_scanner.sqlite
 OPTIONS_SCANNER_DISCORD_WEBHOOK_URL=
 OPTIONS_SCANNER_WATCHLIST=AAPL,MSFT,NVDA,TSLA,SPY,QQQ
 OPTIONS_SCANNER_INTERVAL_MINUTES=5
 ```
 
+Keep `OPTIONS_SCANNER_ENABLED=false` unless intentionally running this separate local advisory service. For the `public` provider, `PUBLIC_API_SECRET_KEY` and `PUBLIC_ACCOUNT_ID` are required. The account number is an explicit configuration pin used only to construct account-scoped market-data URLs; the scanner never calls account endpoints to discover it. `PUBLIC_API_KEY` remains a legacy secret-name fallback, but new scanner configuration should use `PUBLIC_API_SECRET_KEY`.
+
+The Public.com flow exchanges the long-lived secret at `POST /userapiauthservice/personal/access-tokens`, then uses the returned bearer token only with `POST /userapigateway/marketdata/{accountId}/quotes`, `option-expirations`, and `option-chain`. The client allowlist rejects account, position, balance, transaction, trading, and order paths before a request can be sent.
+
 Supported `OPTIONS_MARKET_DATA_PROVIDER` values:
 
-- `public` — preferred provider target; fails soft until the exact Public API shape is configured.
+- `public` — preferred provider; requires the Public secret plus pinned account number and uses only auth-token and account-scoped market-data paths.
 - `tastytrade` — read-only metrics fallback adapter.
 - `alpaca` — read-only Alpaca market-data adapter; no account or order client is created.
 
@@ -37,8 +41,27 @@ pip install -r requirements.txt
 
 ## Run
 
+First run the offline preflight. It prints only redacted configuration state, makes no network request, and exits non-zero with a `missing_configuration` list when the scanner flag, secret, or account pin is absent:
+
 ```bash
-python -m alert_ranker
+python3 -m alert_ranker.preflight
+```
+
+For a credential-free structural demonstration, use obvious local placeholders. They are treated only as presence checks and are never sent anywhere:
+
+```bash
+OPTIONS_SCANNER_ENABLED=true \
+PUBLIC_API_SECRET_KEY=redacted-local-placeholder \
+PUBLIC_ACCOUNT_ID=redacted-account-pin \
+python3 -m alert_ranker.preflight
+```
+
+The successful report must show `network_called: false`, `trading_account_order_paths: blocked`, and only the auth-token plus redacted account-scoped market-data families under `reachable_path_families`. This does not validate a real credential or contact Public.com.
+
+To start the separate local advisory service after supplying authorized read-only credentials:
+
+```bash
+OPTIONS_SCANNER_ENABLED=true python3 -m alert_ranker
 ```
 
 The service listens on `http://127.0.0.1:8010` by default.
