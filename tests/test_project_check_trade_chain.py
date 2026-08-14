@@ -25,12 +25,27 @@ def _trade(ts: str, *, instrument: str = "MNQ", strategy: str = "orb_breakout", 
     }
 
 
-def _outcome(ts: str, *, instrument: str = "MNQ", result: str = "WIN", exit_reason: str = "target hit", pnl=25.0) -> dict:
+def _outcome(
+    ts: str,
+    *,
+    instrument: str = "MNQ",
+    result: str = "WIN",
+    exit_reason: str = "target hit",
+    pnl=25.0,
+    order_type: str | None = None,
+    ticks_moved_from_entry: float | None = None,
+) -> dict:
     return {
         "ts": ts,
         "instrument": instrument,
         "type": "OUTCOME",
-        "outcome": {"result": result, "exit_reason": exit_reason, "pnl_dollars": pnl},
+        "outcome": {
+            "result": result,
+            "exit_reason": exit_reason,
+            "pnl_dollars": pnl,
+            "order_type": order_type,
+            "ticks_moved_from_entry": ticks_moved_from_entry,
+        },
     }
 
 
@@ -497,3 +512,102 @@ def test_journal_integrity_detects_same_count_field_level_mutation(tmp_path: Pat
     run2 = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=True)
     assert run2["journal_integrity"]["status"] == "MUTATED"
     assert run2["status"] == "FAIL"
+
+
+# ── execution context: actual entry model / effective tolerance ─────────────
+# "the entry model and effective tolerance belong in both promotion evidence
+# and actual trade-chain monitoring" -- resolved fills are compared against
+# the live entry_fill_model/entry_tolerance_ticks the caller supplies (daily.py
+# passes these from ops.project_check.runtime.runtime_snapshot).
+
+
+def test_fill_execution_context_clean_when_model_and_slippage_match(tmp_path: Path) -> None:
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    _write_jsonl(
+        journal_dir / "journal_2026-07-01.jsonl",
+        [
+            _trade("2026-07-01T14:00:00Z"),
+            _outcome("2026-07-01T14:30:00Z", order_type="ioc_limit", ticks_moved_from_entry=10.0),
+        ],
+    )
+    report = build_trade_chain_report(
+        journal_dir=journal_dir,
+        repo_root=tmp_path,
+        use_checkpoint=False,
+        entry_fill_model="ioc_limit",
+        entry_tolerance_by_root={"MNQ": {"effective_replay_paper": 32.0}},
+    )
+    assert report["status"] == "PASS"
+    ctx = report["detail"]["resolved_fills"][0]["execution_context"]
+    assert ctx["entry_model_mismatch"] is False
+    assert ctx["slippage_exceeds_tolerance"] is False
+    assert report["summary"]["execution_context_mismatches"] == 0
+
+
+def test_fill_execution_context_entry_model_mismatch_fails_closed(tmp_path: Path) -> None:
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    _write_jsonl(
+        journal_dir / "journal_2026-07-01.jsonl",
+        [
+            _trade("2026-07-01T14:00:00Z"),
+            _outcome("2026-07-01T14:30:00Z", order_type="market", ticks_moved_from_entry=0.0),
+        ],
+    )
+    report = build_trade_chain_report(
+        journal_dir=journal_dir,
+        repo_root=tmp_path,
+        use_checkpoint=False,
+        entry_fill_model="ioc_limit",
+        entry_tolerance_by_root={"MNQ": {"effective_replay_paper": 32.0}},
+    )
+    assert report["status"] == "FAIL"
+    assert report["summary"]["execution_context_mismatches"] == 1
+    mismatch = report["detail"]["execution_context_mismatches"][0]
+    assert mismatch["execution_context"]["actual_entry_model"] == "market"
+    assert mismatch["execution_context"]["live_entry_fill_model"] == "ioc_limit"
+    assert mismatch["execution_context"]["entry_model_mismatch"] is True
+
+
+def test_fill_execution_context_slippage_exceeds_tolerance_fails_closed(tmp_path: Path) -> None:
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    _write_jsonl(
+        journal_dir / "journal_2026-07-01.jsonl",
+        [
+            _trade("2026-07-01T14:00:00Z"),
+            _outcome("2026-07-01T14:30:00Z", order_type="ioc_limit", ticks_moved_from_entry=50.0),
+        ],
+    )
+    report = build_trade_chain_report(
+        journal_dir=journal_dir,
+        repo_root=tmp_path,
+        use_checkpoint=False,
+        entry_fill_model="ioc_limit",
+        entry_tolerance_by_root={"MNQ": {"effective_replay_paper": 32.0}},
+    )
+    assert report["status"] == "FAIL"
+    assert report["summary"]["execution_context_mismatches"] == 1
+    mismatch = report["detail"]["execution_context_mismatches"][0]
+    assert mismatch["execution_context"]["slippage_exceeds_tolerance"] is True
+
+
+def test_fill_execution_context_unknown_when_no_live_runtime_supplied(tmp_path: Path) -> None:
+    """No live entry_fill_model/tolerance passed in (e.g. an older caller):
+    never invents a mismatch from missing data -- reports UNKNOWN and passes."""
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    _write_jsonl(
+        journal_dir / "journal_2026-07-01.jsonl",
+        [
+            _trade("2026-07-01T14:00:00Z"),
+            _outcome("2026-07-01T14:30:00Z", order_type="market", ticks_moved_from_entry=999.0),
+        ],
+    )
+    report = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=False)
+    assert report["status"] == "PASS"
+    ctx = report["detail"]["resolved_fills"][0]["execution_context"]
+    assert ctx["entry_model_mismatch"] is None
+    assert ctx["slippage_exceeds_tolerance"] is None
+    assert report["summary"]["execution_context_mismatches"] == 0

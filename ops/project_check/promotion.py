@@ -22,7 +22,8 @@ evidence. It:
     tolerance must be checked against live runtime, not just asserted in the
     evidence packet
   - applies hard, deterministic safety caps (zero fills, accounting mismatch,
-    lookahead/parity defects) that no classification may bypass
+    lookahead/parity defects, unowned/duplicated worktree, stale origin/main)
+    that no classification may bypass
   - never invents a VALIDATED/BROKEN/etc. verdict from raw numbers alone --
     the qualitative classification is either taken from the evidence file's
     own `stated_classification` (subject to the caps above overriding it
@@ -73,6 +74,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from ops.project_check import gitutil
 from ops.project_check.runtime import runtime_snapshot
 
 VALID_CLASSIFICATIONS = {
@@ -189,15 +191,48 @@ def _execution_context_check(*, repo_root: Path, claimed: dict[str, Any]) -> dic
     }
 
 
+def _provenance_gate(root: Path) -> dict[str, Any]:
+    """Was this evidence generated from code that is uniquely owned by this
+    worktree and current with origin/main? A stale or duplicated-worktree
+    checkout would let promotion evidence be trusted for code that is not
+    actually what would deploy. Deliberately does NOT check for a clean
+    working tree here -- an evidence-facts file passed via --evidence-file is
+    itself expected to be untracked/uncommitted at review time, so that check
+    belongs to session/precommit (before evidence generation starts), not here.
+    """
+    ownership = gitutil.worktree_ownership(root)
+    main = gitutil.verified_origin_main(root)
+    blockers: list[str] = list(ownership["errors"])
+    for duplicate in ownership["duplicate_branch_owners"]:
+        blockers.append(
+            f"branch {duplicate['branch']!r} is registered to multiple worktrees: "
+            + ", ".join(duplicate["paths"])
+        )
+    if main["freshness"] != "CURRENT":
+        blockers.append(
+            f"origin/main verification is {main['freshness']}: {main['detail']}; "
+            "refresh origin/main explicitly, then rerun"
+        )
+    elif main["head_contains_verified_main"] is not True:
+        blockers.append(main["ancestry_detail"])
+    return {
+        "ok": not blockers,
+        "blockers": blockers,
+        "worktree_ownership": ownership,
+        "origin_main": main,
+    }
+
+
 def _safety_caps(
     *,
     identity_parity: dict[str, Any],
     accounting: dict[str, Any],
     execution: dict[str, Any],
     execution_context: dict[str, Any],
+    provenance_blockers: list[str],
     stated_classification: str | None,
 ) -> dict[str, Any]:
-    blockers: list[str] = []
+    blockers: list[str] = list(provenance_blockers)
     warnings: list[str] = []
 
     fills = execution.get("fills")
@@ -281,16 +316,18 @@ def build_promotion_report(
 
     accounting = _check_accounting_identities(execution)
     execution_context = _execution_context_check(repo_root=root, claimed=execution_context_claimed)
+    provenance = _provenance_gate(root)
     caps = _safety_caps(
         identity_parity=identity_parity,
         accounting=accounting,
         execution=execution,
         execution_context=execution_context,
+        provenance_blockers=provenance["blockers"],
         stated_classification=stated_classification,
     )
 
     return {
-        "ok": evidence_error is None,
+        "ok": evidence_error is None and provenance["ok"],
         "routine": "promotion-proof-gate",
         "generated_at": _now_iso(),
         "strategy": strategy,
@@ -316,6 +353,7 @@ def build_promotion_report(
         "runtime_parity": runtime_parity,
         "paper_forward_evidence": paper_forward_evidence,
         "execution_context": execution_context,
+        "provenance_gate": provenance,
         "classification": caps,
         "notes": evidence.get("notes"),
         "forbidden_actions_reminder": (

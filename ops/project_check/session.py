@@ -80,6 +80,8 @@ def build_session_start_report(*, cwd: str | Path | None = None) -> dict[str, An
     stashes = gitutil.stash_list(root)
     prs = gitutil.open_prs(root)
     closed_unmerged = gitutil.unmerged_remote_branches_missing_archive_tag(root)
+    origin_main_live_verification = gitutil.verified_origin_main(root)
+    worktree_ownership = gitutil.worktree_ownership(root)
     runtime = runtime_snapshot(repo_root=root)
 
     branch_after = gitutil.current_branch(root)
@@ -111,6 +113,12 @@ def build_session_start_report(*, cwd: str | Path | None = None) -> dict[str, An
             "archive_tags": archive_tags,
             "stash_count": len(stashes),
             "stashes": stashes,
+            # Live (non-fetching) freshness/ownership checks -- catches
+            # comparing research against a stale local origin/main, or a
+            # branch checked out in more than one worktree, before work
+            # starts rather than after.
+            "origin_main_live_verification": origin_main_live_verification,
+            "worktree_ownership": worktree_ownership,
         },
         "branch_changed_during_check": branch_changed_during_check,
         "runtime_snapshot": runtime,

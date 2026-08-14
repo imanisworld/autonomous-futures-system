@@ -1,33 +1,36 @@
 #!/usr/bin/env python3
 """Read-only CLI for the project-check routines.
 
-  preflight      Strictly read-only ownership/base check before research or
-                 promotion. Makes no bookkeeping writes and never fetches.
-  session-start  Repo/worktree/branch/PR/runtime snapshot; writes a small
-                 session-state cache under .git/ so `precommit` can compare
-                 against it later. Otherwise read-only.
-  precommit      Strictly read-only. Compares current repo state against the
-                 last session-start snapshot and fails closed on drift.
-  promotion      Strategy Promotion Proof Gate: accounting-identity + safety-
-                 gate validator over an explicit evidence-facts file (see
-                 ops/project_check/promotion.py's module docstring for the
-                 schema). Read-only.
-  daily          Daily Reconciliation + Trade Chain Integrity: repo/PR/branch
-                 hygiene, evidence preservation, deployed state, strategy
-                 source-of-truth drift, and trade-chain accounting since the
-                 prior checkpoint. Read-only against git/journals. Does NOT
-                 advance its local checkpoint file unless you pass
-                 --advance-checkpoint explicitly -- and even then, it never
-                 advances on a FAIL result (that would let today's
-                 orphans/duplicate-identities/unmatched-outcomes silently
-                 drop out of tomorrow's window).
+  session-start  Routine 1 (Session Safety + Runtime Snapshot), mode A:
+                 repo/worktree/branch/PR/runtime snapshot, plus a live
+                 (non-fetching) origin/main freshness check and worktree-
+                 ownership check. Writes a small session-state cache under
+                 .git/ so `precommit` can compare against it later.
+                 Otherwise read-only.
+  precommit      Routine 1, mode B: strictly read-only. Compares current repo
+                 state against the last session-start snapshot and fails
+                 closed on drift.
+  promotion      Routine 2 (Strategy Promotion Proof Gate): accounting-
+                 identity + safety-gate validator over an explicit evidence-
+                 facts file (see ops/project_check/promotion.py's module
+                 docstring for the schema), plus the same live origin/main
+                 freshness + worktree-ownership check as a provenance gate.
+                 Read-only.
+  daily          Routine 3 (Daily Reconciliation + Trade Chain Integrity):
+                 repo/PR/branch hygiene, evidence preservation, deployed
+                 state, strategy source-of-truth drift, and trade-chain
+                 accounting since the prior checkpoint. Read-only against
+                 git/journals. Does NOT advance its local checkpoint file
+                 unless you pass --advance-checkpoint explicitly -- and even
+                 then, it never advances on a FAIL result (that would let
+                 today's orphans/duplicate-identities/unmatched-outcomes
+                 silently drop out of tomorrow's window).
 
 None of these subcommands commit, push, pull, reset, rebase, check out,
 delete a branch/worktree, drop a stash, create/delete a tag, cancel an
 order, flatten a position, or edit docs/config.
 
 Usage:
-  python3 scripts/project_check.py preflight --purpose research|promotion [--json]
   python3 scripts/project_check.py session-start [--json]
   python3 scripts/project_check.py precommit [--json]
   python3 scripts/project_check.py promotion --strategy <name> [--evidence-file path.json] [--json]
@@ -45,28 +48,12 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from ops.project_check.daily import build_daily_report
-from ops.project_check.preflight import build_ownership_preflight_report
 from ops.project_check.promotion import build_promotion_report
 from ops.project_check.session import build_precommit_report, build_session_start_report
 
 
 def _print_json(payload: dict) -> None:
     print(json.dumps(payload, indent=2, sort_keys=True, default=str))
-
-
-def _cmd_preflight(args: argparse.Namespace) -> int:
-    report = build_ownership_preflight_report(args.purpose, cwd=args.cwd)
-    if args.json:
-        _print_json(report)
-        return 0 if report.get("ok") else 2
-    verdict = "PASS" if report.get("ok") else "FAIL_CLOSED"
-    print(f"OWNERSHIP PREFLIGHT — {args.purpose.upper()} — {verdict}")
-    if report.get("blockers"):
-        for blocker in report["blockers"]:
-            print(f"  - {blocker}")
-    else:
-        print("  branch/worktree ownership, remote main, and ancestry verified")
-    return 0 if report.get("ok") else 2
 
 
 def _cmd_session_start(args: argparse.Namespace) -> int:
@@ -83,6 +70,8 @@ def _cmd_session_start(args: argparse.Namespace) -> int:
     print(f"  current branch:       {repo['current_branch']}")
     print(f"  HEAD sha:             {repo['head_sha']}")
     print(f"  local main vs origin: {repo['local_main_relationship']['state']}")
+    print(f"  origin/main live verification: {repo['origin_main_live_verification']['freshness']}")
+    print(f"  worktree ownership ok: {repo['worktree_ownership']['ok']}")
     print(f"  upstream:             {repo['upstream']}")
     print(f"  dirty tracked files:  {len(repo['dirty_tracked_files'])}")
     print(f"  staged files:         {len(repo['staged_files'])}")
@@ -151,6 +140,11 @@ def _cmd_promotion(args: argparse.Namespace) -> int:
     if ctx["mismatches"]:
         for m in ctx["mismatches"]:
             print(f"    - {m}")
+    prov = report["provenance_gate"]
+    print(f"  provenance gate ok: {prov['ok']}")
+    if prov["blockers"]:
+        for b in prov["blockers"]:
+            print(f"    - {b}")
     return 0
 
 
@@ -205,15 +199,6 @@ def _cmd_daily(args: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
-
-    p_preflight = sub.add_parser(
-        "preflight",
-        help="Read-only ownership/base check before research or promotion",
-    )
-    p_preflight.add_argument("--purpose", choices=("research", "promotion"), required=True)
-    p_preflight.add_argument("--cwd", default=None)
-    p_preflight.add_argument("--json", action="store_true")
-    p_preflight.set_defaults(func=_cmd_preflight)
 
     p_session = sub.add_parser("session-start", help="Repo/worktree/branch/PR/runtime snapshot")
     p_session.add_argument("--cwd", default=None)

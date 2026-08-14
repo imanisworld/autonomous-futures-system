@@ -14,6 +14,15 @@ Reuses ops.proof_30_mnq (read_journal_entries, classify_outcome, parse_proof_ts)
 and mirrors the TRADE<->OUTCOME/ORDER_IDS pairing style already used by
 ops/reconciler_outcome_audit.py and scripts/session_audit.py, generalized to
 all instruments in one pass instead of one instrument at a time.
+
+Each resolved fill also carries an `execution_context` block (actual entry
+model from the OUTCOME row's `order_type`, actual slippage from
+`ticks_moved_from_entry`) compared against the live entry_fill_model/
+entry_tolerance_ticks the caller passes in (daily.py supplies these from
+ops.project_check.runtime.runtime_snapshot). A mismatch fails the run closed,
+same as an orphan or duplicate order identity -- the entry model and
+effective tolerance belong in actual trade-chain monitoring, not just
+promotion evidence.
 """
 from __future__ import annotations
 
@@ -202,6 +211,50 @@ def _journal_integrity_check(
     return {"checked": True, "status": "OK", "reason": None, **base}
 
 
+def _fill_execution_context(
+    outcome_entry: dict[str, Any] | None,
+    *,
+    live_entry_fill_model: str | None,
+    live_tolerance_by_root: dict[str, Any] | None,
+    instrument: str | None,
+) -> dict[str, Any]:
+    """Actual entry model and effective tolerance for one resolved fill,
+    compared against the live/configured runtime -- the same "entry model and
+    effective tolerance must be checked against live runtime, not just
+    asserted" lesson ops.project_check.promotion encodes for evidence, applied
+    here to actual paper/demo trade-chain activity. Never invents a mismatch
+    when either side is unavailable -- reports UNKNOWN (None) instead.
+    """
+    outcome = (outcome_entry or {}).get("outcome") or {}
+    actual_entry_model = outcome.get("order_type")
+    ticks_moved = outcome.get("ticks_moved_from_entry")
+
+    tolerance_info = (live_tolerance_by_root or {}).get(instrument) if instrument else None
+    effective_tolerance = (
+        tolerance_info.get("effective_replay_paper") if isinstance(tolerance_info, dict) else None
+    )
+
+    entry_model_mismatch = None
+    if actual_entry_model and live_entry_fill_model not in (None, "UNKNOWN"):
+        entry_model_mismatch = str(actual_entry_model) != str(live_entry_fill_model)
+
+    slippage_exceeds_tolerance = None
+    if ticks_moved is not None and effective_tolerance is not None:
+        try:
+            slippage_exceeds_tolerance = abs(float(ticks_moved)) > float(effective_tolerance)
+        except (TypeError, ValueError):
+            slippage_exceeds_tolerance = None
+
+    return {
+        "actual_entry_model": actual_entry_model,
+        "live_entry_fill_model": live_entry_fill_model,
+        "entry_model_mismatch": entry_model_mismatch,
+        "ticks_moved_from_entry": ticks_moved,
+        "effective_tolerance_ticks": effective_tolerance,
+        "slippage_exceeds_tolerance": slippage_exceeds_tolerance,
+    }
+
+
 def _entry_ts(entry: dict[str, Any]) -> datetime | None:
     return parse_proof_ts(entry.get("ts"))
 
@@ -249,6 +302,8 @@ def build_trade_chain_report(
     advance_checkpoint: bool = False,
     broker_positions: Callable[[], list[dict[str, Any]]] | None = None,
     broker_orders: Callable[[], list[dict[str, Any]]] | None = None,
+    entry_fill_model: str | None = None,
+    entry_tolerance_by_root: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     entries = read_journal_entries(journal_dir)
     read_errors = [e for e in entries if e.get("type") == "READ_ERROR"]
@@ -365,6 +420,12 @@ def build_trade_chain_report(
         classified.pop("_bucket")
         row = classified
         if category in ("filled_win_loss", "breakeven"):
+            row["execution_context"] = _fill_execution_context(
+                outcome,
+                live_entry_fill_model=entry_fill_model,
+                live_tolerance_by_root=entry_tolerance_by_root,
+                instrument=row.get("instrument"),
+            )
             resolved_fills.append(row)
             if setup.get("stop") in (None, "") or setup.get("target") in (None, ""):
                 naked_position_risk.append({**row, "issue": "filled trade missing stop or target in journaled setup"})
@@ -399,6 +460,13 @@ def build_trade_chain_report(
                 continue
             seen_order_ids[str(value)].append(label)
     duplicate_order_ids = {oid: locs for oid, locs in seen_order_ids.items() if len(locs) > 1}
+
+    execution_context_mismatches = [
+        row
+        for row in resolved_fills
+        if row["execution_context"]["entry_model_mismatch"] is True
+        or row["execution_context"]["slippage_exceeds_tolerance"] is True
+    ]
 
     # "fills" counts ONLY attempts with independent fill evidence -- a resolved
     # OUTCOME classified WIN/LOSS/BREAKEVEN by ops.proof_30_mnq.classify_outcome.
@@ -447,6 +515,7 @@ def build_trade_chain_report(
         or bool(unmatched_outcomes)
         or bool(unmatched_order_ids)
         or bool(read_errors)
+        or bool(execution_context_mismatches)
         or journal_integrity["status"] in ("SHRUNK", "GREW_BEHIND_CHECKPOINT", "MUTATED")
     )
     status = "PASS" if not problems else "FAIL"
@@ -509,6 +578,7 @@ def build_trade_chain_report(
             "unmatched_outcomes": len(unmatched_outcomes),
             "unmatched_order_ids": len(unmatched_order_ids),
             "carryover_resolutions": len(carryover_resolutions),
+            "execution_context_mismatches": len(execution_context_mismatches),
         },
         "accounting": {
             "attempts_identity": (
@@ -534,6 +604,7 @@ def build_trade_chain_report(
             "naked_position_risk": naked_position_risk,
             "risk_rejected_missing_reason": risk_rejected_missing_reason,
             "carryover_resolutions": carryover_resolutions,
+            "execution_context_mismatches": execution_context_mismatches,
             "unmatched_outcomes": [
                 {
                     "ts": e.get("ts"),

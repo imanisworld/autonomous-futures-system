@@ -97,3 +97,37 @@ def test_precommit_reports_changed_staged_untracked_lists(repo: Path) -> None:
     report = build_precommit_report(cwd=repo)
     assert "a.txt" in report["repo"]["changed_files"]
     assert "new.txt" in report["repo"]["staged_files"]
+
+
+# ── origin/main live verification + worktree ownership (folded in from the
+# retired standalone `preflight` routine) ────────────────────────────────────
+
+
+def test_session_start_reports_missing_origin_without_remote(repo: Path) -> None:
+    report = build_session_start_report(cwd=repo)
+    live_check = report["repo"]["origin_main_live_verification"]
+    assert live_check["freshness"] == "MISSING_LOCAL_REF"
+    assert report["repo"]["worktree_ownership"]["ok"] is True
+
+
+def test_session_start_reports_current_origin_main(tmp_path: Path) -> None:
+    remote = tmp_path / "origin.git"
+    subprocess.run(
+        ["git", "init", "-q", "--bare", "-b", "main", str(remote)],
+        cwd=tmp_path, check=True, capture_output=True,
+    )
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "config", "user.email", "test@example.com")
+    _git(repo, "config", "user.name", "Test")
+    (repo / "a.txt").write_text("one\n")
+    _git(repo, "add", "a.txt")
+    _git(repo, "commit", "-q", "-m", "initial")
+    _git(repo, "remote", "add", "origin", str(remote))
+    _git(repo, "push", "-q", "-u", "origin", "main")
+
+    report = build_session_start_report(cwd=repo)
+    live_check = report["repo"]["origin_main_live_verification"]
+    assert live_check["freshness"] == "CURRENT"
+    assert live_check["head_contains_verified_main"] is True
