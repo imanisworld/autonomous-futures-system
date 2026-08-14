@@ -87,6 +87,21 @@ def test_staged_and_untracked_evidence_fail_closed(
 
 
 @pytest.mark.parametrize("purpose", ("research", "promotion"))
+def test_unstaged_tracked_modification_fails_closed(
+    repo_with_origin: tuple[Path, Path],
+    purpose: str,
+) -> None:
+    repo, _remote = repo_with_origin
+    (repo / "tracked.txt").write_text("modified without staging\n", encoding="utf-8")
+
+    report = build_ownership_preflight_report(purpose, cwd=repo)
+
+    assert report["ok"] is False
+    assert report["current_worktree_evidence"]["dirty_tracked"] == ["tracked.txt"]
+    assert any("unstaged tracked modifications" in item for item in report["blockers"])
+
+
+@pytest.mark.parametrize("purpose", ("research", "promotion"))
 def test_duplicate_branch_ownership_fails_closed(
     repo_with_origin: tuple[Path, Path],
     tmp_path: Path,

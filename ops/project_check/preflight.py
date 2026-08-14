@@ -164,6 +164,11 @@ def build_ownership_preflight_report(
                 "current worktree already has staged evidence: "
                 + ", ".join(sorted(status["staged"]))
             )
+        if status["dirty_tracked"]:
+            blockers.append(
+                "current worktree has unstaged tracked modifications: "
+                + ", ".join(sorted(status["dirty_tracked"]))
+            )
         if status["untracked"]:
             blockers.append(
                 "current worktree already has untracked evidence: "
