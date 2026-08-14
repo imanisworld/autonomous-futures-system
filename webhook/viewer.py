@@ -142,9 +142,26 @@ async def viewer_status(request: Request, _: None = Depends(require_viewer)):
 
 @router.get("/viewer/api/dashboard")
 async def viewer_dashboard(request: Request, _: None = Depends(require_viewer)):
-    p = _app()._dashboard_payload(date.today())
+    app_module = _app()
+    p = app_module._dashboard_payload(date.today())
+    mode_info = app_module._execution_mode_info()
+    latest = p.get("latest_webhook") or {}
+    age_seconds = app_module._latest_webhook_age_seconds(latest)
+    stale_after_seconds = int(p.get("feed_stale_after_minutes") or 0) * 60
+    feed_active = bool(p.get("feed_window_active"))
+    if age_seconds is None:
+        market_data_state = "NONE"
+    elif stale_after_seconds and age_seconds <= stale_after_seconds:
+        market_data_state = "FRESH"
+    elif feed_active:
+        market_data_state = "STALE"
+    else:
+        market_data_state = "IDLE"
     safe = {
-        "mode": "paper" if p.get("paper_mode") else "live",
+        "mode": mode_info["key"],
+        "execution_mode_label": mode_info["label"],
+        "market_data_state": market_data_state,
+        "market_data_age_seconds": age_seconds,
         "today_pnl": round(float(p.get("today_pnl_dollars") or 0), 2),
         "trades": p.get("trade_count", 0),
         "max_trades": p.get("max_trades_per_day", 0),
@@ -292,16 +309,21 @@ body{background:#070706;color:#E9E4DA;font-family:Inter,system-ui,sans-serif;pad
 _VIEWER_BODY = """
 <div class="banner"><b>READ-ONLY LIVE VIEW</b><div class="muted">Real demo dashboard data · Controls disabled</div></div>
 <div class="strip">
-  <div class="cell"><div class="k">MARKET DATA</div><div class="v good">Live</div></div>
-  <div class="cell"><div class="k">EXECUTION</div><div class="v">Demo</div></div>
+  <div class="cell"><div class="k">MARKET DATA</div><div class="v muted" id="market">Loading</div></div>
+  <div class="cell"><div class="k">EXECUTION MODE</div><div class="v" id="mode">—</div></div>
   <div class="cell"><div class="k">ORDERS</div><div class="v bad">Disabled</div></div>
   <div class="cell"><div class="k">ACCESS</div><div class="v">Read-only</div></div>
 </div>
 <div class="card"><h3>Today</h3>
   <div class="row"><span>P&amp;L</span><span id="pnl">—</span></div>
   <div class="row"><span>Trades</span><span id="trades">—</span></div>
-  <div class="row"><span>Win rate</span><span id="wr">—</span></div>
   <div class="row"><span>Open position</span><span id="open">—</span></div>
+</div>
+<div class="card"><h3>Risk</h3>
+  <div class="row"><span>Risk state</span><span id="risk_state">—</span></div>
+  <div class="row"><span>Daily loss usage</span><span id="loss_usage">—</span></div>
+  <div class="row"><span>Consecutive losses</span><span id="losses">—</span></div>
+  <div class="row"><span>News blackout</span><span id="blackout">—</span></div>
 </div>
 <div class="card"><h3>Latest decision</h3>
   <div class="row"><span>Instrument</span><span id="d_inst">—</span></div>
@@ -312,14 +334,34 @@ _VIEWER_BODY = """
 <div class="muted" id="updated">Loading…</div>
 <script>
 function t(id,v){var el=document.getElementById(id);if(el)el.textContent=(v==null?'—':v);}
+function stateText(state,age){
+  if(state==='FRESH')return 'Fresh'+(age==null?'':(' · '+Math.floor(age/60)+'m old'));
+  if(state==='STALE')return 'Stale'+(age==null?'':(' · '+Math.floor(age/60)+'m old'));
+  if(state==='IDLE')return 'Idle / outside feed window';
+  return 'No data';
+}
+function stateClass(state){return state==='FRESH'?'good':(state==='STALE'?'bad':(state==='IDLE'?'gold':'muted'));}
 async function poll(){
   try{
-    var d=await (await fetch('/viewer/api/dashboard',{credentials:'same-origin'})).json();
+    var responses=await Promise.all([
+      fetch('/viewer/api/dashboard',{credentials:'same-origin'}),
+      fetch('/viewer/api/risk',{credentials:'same-origin'}),
+      fetch('/viewer/api/latest-decision',{credentials:'same-origin'})
+    ]);
+    var d=await responses[0].json();
+    var r=await responses[1].json();
+    var x=await responses[2].json();
+    var market=document.getElementById('market');
+    t('market',stateText(d.market_data_state,d.market_data_age_seconds));
+    market.className='v '+stateClass(d.market_data_state);
+    t('mode',d.execution_mode_label);
     var p=d.today_pnl; t('pnl',(p>=0?'+':'')+'$'+p);
     t('trades',d.trades+' / '+d.max_trades);
-    t('wr',(d.win_rate||0)+'%  ('+(d.wins||0)+'W/'+(d.losses||0)+'L)');
     t('open',d.has_open_position?'Yes':'Flat');
-    var x=await (await fetch('/viewer/api/latest-decision',{credentials:'same-origin'})).json();
+    t('risk_state',r.drawdown_state||'UNKNOWN');
+    t('loss_usage',(r.max_daily_loss_usage_pct||0)+'%');
+    t('losses',(r.consecutive_losses||0)+' / '+(r.max_consecutive_losses||0));
+    t('blackout',r.news_blackout?'ACTIVE':'None');
     if(x && x.available){
       t('d_inst',x.instrument); t('d_dec',x.final_decision); t('d_reason',x.primary_reason);
       if(x.candidate_status==='PRESENT' && x.candidate){

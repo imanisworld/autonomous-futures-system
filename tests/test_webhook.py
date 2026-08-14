@@ -1304,13 +1304,24 @@ def test_fastapi_dashboard_endpoint():
     assert "Options Lab" in resp.text
     # Embedded JSON view-model the client renders from.
     assert 'id="init-data"' in resp.text
-    # Ops modal is present; force-open confirmation modal + close-all path live
-    # in the client script (rendered only when manual controls are enabled).
-    assert 'id="force-modal"' in resp.text
-    assert 'id="ops-modal"' in resp.text
-    assert 'data-ops="preflight"' in resp.text
-    assert 'data-ops="discord"' in resp.text
-    assert "CLOSE ALL " in resp.text
+    # SAT is a truthful read-only regression surface: no mutation controls,
+    # protected-action secrets, or confirmation modals exist in its DOM/script.
+    assert "RISK LIMITS CLEAR" in resp.text
+    assert 'id="force-modal"' not in resp.text
+    assert 'id="ops-modal"' not in resp.text
+    assert 'data-ops=' not in resp.text
+    assert 'data-force=' not in resp.text
+    assert "Arm Live Today" not in resp.text
+    assert "Send Test Discord" not in resp.text
+    assert "CLOSE ALL " not in resp.text
+    assert "CLEAR TO TRADE" not in resp.text
+    assert "▁▂▃▅▇█▇▅▃▂▁" not in resp.text
+    # One bottom navigation only; Options Lab is the sole maturity label.
+    assert 'class="mode-tabs"' not in resp.text
+    assert '>Options</button>' not in resp.text
+    # Header mode is populated from the embedded server-derived mode object.
+    assert 'id="brand-mode"' in resp.text
+    assert "Backend SAT · Paper Mode" not in resp.text
     # Options Lab demo data must be unmistakably simulated.
     assert "OPTIONS LAB · DEMO DATA" in resp.text
     assert "SIMULATED" in resp.text

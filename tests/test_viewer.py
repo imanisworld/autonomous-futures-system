@@ -81,6 +81,40 @@ def test_viewer_header_and_bearer_auth(monkeypatch, tmp_path):
     assert client.get("/viewer/api/dashboard", headers={"Authorization": "Bearer demo"}).status_code == 200
 
 
+def test_viewer_derives_market_freshness_and_execution_mode(monkeypatch, tmp_path):
+    client, app_module = _client(monkeypatch, tmp_path, token="demo")
+    monkeypatch.setenv("BROKER", "tradovate")
+    monkeypatch.setenv("TRADOVATE_ENV", "demo")
+    monkeypatch.setattr(app_module._config, "paper_mode", False)
+    monkeypatch.setattr(app_module._config, "live_trading_enabled", False)
+    monkeypatch.setattr(
+        app_module,
+        "_dashboard_payload",
+        lambda for_date: _fake_dashboard_payload(
+            feed_window_active=True,
+            feed_stale_after_minutes=31,
+        ),
+    )
+    monkeypatch.setattr(app_module, "_latest_webhook_age_seconds", lambda latest: 32 * 60)
+
+    data = client.get("/viewer/api/dashboard", headers={"X-Viewer-Token": "demo"}).json()
+    assert data["mode"] == "demo"
+    assert data["execution_mode_label"] == "Tradovate demo"
+    assert data["market_data_state"] == "STALE"
+    assert data["market_data_age_seconds"] == 32 * 60
+
+
+def test_viewer_html_has_dynamic_data_state_and_risk_panel(monkeypatch, tmp_path):
+    client, _ = _client(monkeypatch, tmp_path, token="demo")
+    response = client.get("/viewer", headers={"X-Viewer-Token": "demo"})
+    assert response.status_code == 200
+    assert 'id="market">Loading' in response.text
+    assert 'MARKET DATA</div><div class="v good">Live' not in response.text
+    assert 'id="risk_state"' in response.text
+    assert 'id="loss_usage"' in response.text
+    assert "Win rate" not in response.text
+
+
 def test_viewer_no_or_wrong_token_401(monkeypatch, tmp_path):
     client, _ = _client(monkeypatch, tmp_path, token="demo")
     assert client.get("/viewer/api/dashboard").status_code == 401

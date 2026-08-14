@@ -2855,13 +2855,12 @@ def _format_generated_age(value: str) -> str:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Operator dashboard — tabbed single page.
+# SAT dashboard — tabbed, read-only single page.
 #
 # The server ships a JSON view-model embedded in the page; every tab is rendered
 # client-side from that view-model so the 30s refresh reuses one render path and
-# the server never duplicates presentation logic. UI only — no trading state is
-# mutated here; the only manual action (CLOSE_ALL emergency exit) goes through
-# the guarded /webhook/manual endpoint. Force-OPEN was removed.
+# the server never duplicates presentation logic. This surface exposes status
+# and diagnostics only; execution-changing controls belong in the operator app.
 # ─────────────────────────────────────────────────────────────────────────────
 
 _FUTURES_UNIVERSE = ["MES", "MNQ", "MGC", "MCL"]
@@ -2878,6 +2877,7 @@ def _dashboard_init(status: dict) -> dict:
         for s in _FUTURES_UNIVERSE
     ]
     universe_missing = [s for s in required if s not in allowed]
+    mode_info = _execution_mode_info()
     return {
         "today": status,
         "committee": committee,
@@ -2894,12 +2894,10 @@ def _dashboard_init(status: dict) -> dict:
         "tradovate_env": os.getenv("TRADOVATE_ENV", "").strip().lower(),
         "paper_mode": bool(status.get("paper_mode", True)),
         "live_trading_enabled": bool(status.get("live_trading_enabled")),
+        # Use the server's single runtime-derived source everywhere in the UI.
+        "execution_mode": mode_info,
         "max_drawdown_pct": round(float(getattr(_config, "max_drawdown_percent", 0.10)) * 100, 2),
         "poll_seconds": 30,
-        # Monitor-only mode: when False the UI renders NO manual execution controls.
-        "manual_controls_enabled": bool(
-            getattr(_config, "enable_manual_execution_controls", False)
-        ),
     }
 
 
@@ -2970,45 +2968,6 @@ _DASHBOARD_HTML = r"""<!doctype html>
       overflow: hidden;
       background: var(--shell);
       box-shadow: 0 18px 40px rgba(0,0,0,0.32);
-    }
-    .mode-tabs {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 12px;
-      padding: 22px 28px 16px;
-      background: var(--shell);
-    }
-    .mode-tabs button {
-      position: relative;
-      height: 68px;
-      border: 1px solid var(--line);
-      border-radius: 18px;
-      background: var(--panel2);
-      color: var(--muted2);
-      font: inherit;
-      font-family: var(--font-console);
-      font-size: 21px;
-      font-weight: 800;
-      letter-spacing: 0.16em;
-      text-transform: uppercase;
-      cursor: pointer;
-    }
-    .mode-tabs button.on {
-      color: var(--purple);
-      background: var(--panel3);
-      border-color: rgba(154,104,255,0.62);
-    }
-    .mode-tabs button.on::before {
-      content: "";
-      position: absolute;
-      top: 0;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 40px;
-      height: 4px;
-      border-radius: 0 0 4px 4px;
-      background: var(--purple);
-      box-shadow: 0 0 14px rgba(154,104,255,0.85);
     }
     .appbar {
       display: flex;
@@ -3132,13 +3091,6 @@ _DASHBOARD_HTML = r"""<!doctype html>
       font-size: 12px; font-weight: 800;
     }
     .mood { margin-top: 10px; color: var(--muted); font-size: 14px; line-height: 1.45; }
-
-    .monitorbar {
-      margin: 8px 12px 0; padding: 9px 12px; border-radius: 10px;
-      background: rgba(0,213,255,0.08); border: 1px solid rgba(0,213,255,0.30);
-      color: #cfe2ff; font-size: 12px; line-height: 1.5; text-align: center;
-    }
-    .monitorbar b { color: #eaf2ff; letter-spacing: 0.04em; }
 
     .sandbox-banner {
       z-index: 29;
@@ -3278,7 +3230,6 @@ _DASHBOARD_HTML = r"""<!doctype html>
     }
     .metric label { display: block; color: var(--muted); font-size: 10px; font-weight: 750; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 5px; }
     .metric strong { font-family: var(--font-console); font-size: 18px; font-weight: 800; }
-    .sparkline { font-family: var(--font-console); color: var(--blue); font-size: 12px; letter-spacing: 0.05em; margin-left: 8px; white-space: nowrap; }
     .empty-val { color: var(--gray); opacity: 0.65; cursor: help; }
     .placeholder { color: var(--gray); opacity: 0.7; font-style: italic; }
     .update-line { margin-top: 8px; color: var(--gray); font-family: var(--font-console); font-size: 11px; }
@@ -3458,9 +3409,6 @@ _DASHBOARD_HTML = r"""<!doctype html>
       letter-spacing: 0.02em; cursor: pointer; border: 1px solid var(--line);
       background: var(--panel2); color: var(--text); text-align: center; width: 100%;
     }
-    .btn.long { border-color: rgba(0,255,136,0.6); color: var(--green); background: rgba(0,255,136,0.07); }
-    .btn.short { border-color: rgba(255,68,68,0.55); color: var(--red); background: rgba(255,68,68,0.06); }
-    .btn.danger { border-color: rgba(255,68,68,0.7); color: var(--red); background: rgba(255,68,68,0.10); }
     .btn:disabled { opacity: 0.4; cursor: not-allowed; }
     .btn.slim { padding: 9px 11px; font-size: 12px; }
     .ops-card {
@@ -3472,33 +3420,7 @@ _DASHBOARD_HTML = r"""<!doctype html>
     .ops-card b { font-family: var(--font-console); font-size: 13px; letter-spacing: 0.04em; }
     .ops-card p { margin-top: 4px; color: var(--muted); font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
     .ops-card .btn { width: auto; min-width: 128px; }
-    .ops-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; margin-top: 12px; }
-    .ops-grid .btn { min-height: 44px; }
-    .ops-secret { margin-top: 12px; }
-    .ops-output {
-      margin-top: 12px; min-height: 42px; padding: 10px;
-      border: 1px solid var(--line-soft); border-radius: 8px;
-      background: rgba(0,0,0,0.18); color: var(--muted);
-      font-family: var(--font-console); font-size: 11px; line-height: 1.45;
-      white-space: pre-wrap; overflow-wrap: anywhere;
-    }
-    .force-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 6px; }
     .force-meta { color: var(--muted); font-size: 12px; margin-top: 10px; line-height: 1.5; }
-
-    /* modal */
-    .modal-wrap { position: fixed; inset: 0; z-index: 60; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.66); padding: 18px; }
-    .modal-wrap.open { display: flex; }
-    .modal { width: min(420px, 100%); background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
-    .modal.ops { width: min(560px, 100%); }
-    .modal h3 { font-size: 17px; margin-bottom: 6px; }
-    .modal .mode-tag { font-size: 12px; font-weight: 900; letter-spacing: 0.05em; }
-    .modal .kv { margin-top: 12px; }
-    .modal input[type=password] { width: 100%; margin-top: 12px; border: 1px solid var(--line); background: var(--panel3); color: var(--text); border-radius: 8px; padding: 11px 12px; font: inherit; }
-    .modal .warn { margin-top: 12px; font-size: 12px; color: var(--yellow); line-height: 1.5; }
-    .modal .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 14px; }
-    .modal .actions .btn { padding: 11px; }
-    .modal .ghost { background: transparent; color: var(--muted); }
-    .modal .result { margin-top: 10px; font-size: 12px; color: var(--muted); min-height: 16px; overflow-wrap: anywhere; }
 
     canvas.chart { width: 100%; display: block; margin-top: 8px; border-radius: 6px; background: var(--panel3); }
 
@@ -3524,36 +3446,31 @@ _DASHBOARD_HTML = r"""<!doctype html>
     }
     @media (max-width: 720px) {
       .live-frame { width: 100%; margin-top: 0; border-left: 0; border-right: 0; border-radius: 0; }
-      .mode-tabs { gap: 8px; padding: 14px 12px 10px; }
-      .mode-tabs button { height: 48px; border-radius: 12px; font-size: 13px; }
-      .appbar { padding: 10px 12px 14px; align-items: flex-start; }
-      .brand-title { font-size: 22px; }
-      .brand-sub { font-size: 12px; line-height: 1.45; }
+      .appbar { padding: 8px 10px 10px; align-items: center; }
+      .brand-title { font-size: 18px; }
+      .brand-sub { margin-top: 4px; font-size: 10px; line-height: 1.35; letter-spacing: 0.04em; }
       .app-actions { gap: 8px; }
-      .live-chip { font-size: 14px; padding: 6px 10px; }
-      .refresh-tile { width: 52px; height: 52px; border-radius: 14px; font-size: 24px; }
+      .live-chip { display: none; }
+      .refresh-tile { width: 40px; height: 40px; border-radius: 11px; font-size: 20px; }
       .statusbar { padding: 0 8px; }
-      .statusbar .seg { padding: 10px 8px; }
-      .statusbar .seg b { font-size: 13px; }
-      .statusbar .seg span { font-size: 14px; }
+      .statusbar .seg { padding: 8px 7px; }
+      .statusbar .seg b { font-size: 11px; }
+      .statusbar .seg span { font-size: 12px; }
+      .statusbar .seg-backend, .statusbar .seg-broker, .statusbar .seg-poll { display: none; }
+      .sandbox-banner { padding: 7px 10px; font-size: 10px; }
     }
     @media (max-width: 560px) {
       .ops-card { grid-template-columns: 1fr; }
       .ops-card .btn { width: 100%; }
-      .ops-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 <body>
   <div class="live-frame">
-    <div class="mode-tabs">
-      <button class="top-tab" data-tab="futures">Futures</button>
-      <button class="top-tab" data-tab="options">Options</button>
-    </div>
     <header class="appbar">
       <div>
         <div class="brand-title"><span class="afs">AFS</span><span class="slash">/</span>Backend Console</div>
-        <div class="brand-sub">Autonomous Futures System · Backend SAT · Paper Mode</div>
+        <div class="brand-sub">Autonomous Futures System · Backend SAT · <span id="brand-mode">Runtime mode loading</span></div>
       </div>
       <div class="app-actions">
         <span class="live-chip">CONSOLE ONLINE</span>
@@ -3563,7 +3480,6 @@ _DASHBOARD_HTML = r"""<!doctype html>
     <div class="statusbar" id="statusbar"></div>
     <div class="alertbar" id="alertbar" hidden></div>
     <div class="shadowbar" id="shadowbar" hidden></div>
-    <div class="monitorbar" id="monitorbar" hidden></div>
     <div class="sandbox-banner">SAT / BACKEND CONSOLE <span class="soft">read-only regression surface · not the operator app</span></div>
     <main>
       <section class="tab active" id="tab-home"></section>
@@ -3581,42 +3497,6 @@ _DASHBOARD_HTML = r"""<!doctype html>
     <button data-tab="risk"><span class="ic">🛡</span>Risk</button>
     <button data-tab="log"><span class="ic">≣</span>Log</button>
   </nav>
-
-  <div class="modal-wrap" id="force-modal">
-    <div class="modal">
-      <h3 id="fm-title">Confirm</h3>
-      <div class="mode-tag" id="fm-mode"></div>
-      <dl class="kv" id="fm-kv"></dl>
-      <div class="warn" id="fm-warn"></div>
-      <input type="password" id="fm-secret" placeholder="Webhook secret (required)" autocomplete="off">
-      <div class="actions">
-        <button class="btn ghost" id="fm-cancel">Cancel</button>
-        <button class="btn" id="fm-confirm">Confirm</button>
-      </div>
-      <div class="result" id="fm-result"></div>
-    </div>
-  </div>
-
-  <div class="modal-wrap" id="ops-modal">
-    <div class="modal ops">
-      <h3>Ops Controls</h3>
-      <div class="mode-tag" id="ops-mode"></div>
-      <dl class="kv" id="ops-kv"></dl>
-      <input class="ops-secret" type="password" id="ops-secret" placeholder="Webhook secret for protected actions" autocomplete="off">
-      <div class="ops-grid">
-        <button class="btn" data-ops="preflight">Run Preflight</button>
-        <button class="btn long" data-ops="arm">Arm Live Today</button>
-        <button class="btn danger" data-ops="disarm">Disarm Live</button>
-        <button class="btn" data-ops="broker">Broker Status</button>
-        <button class="btn" data-ops="diagnostics">Run Diagnostics</button>
-        <button class="btn" data-ops="discord">Send Test Discord</button>
-      </div>
-      <div class="ops-output" id="ops-output">Choose an action.</div>
-      <div class="actions">
-        <button class="btn ghost" id="ops-close">Close</button>
-      </div>
-    </div>
-  </div>
 
   <script type="application/json" id="init-data">__INIT_JSON__</script>
   <script>
@@ -3728,24 +3608,20 @@ _DASHBOARD_HTML = r"""<!doctype html>
       LOCKED: 'No trades — wait for conditions to improve'
     };
     function moodLine(risk) { return RISK_MOOD[risk] || RISK_MOOD.CLEAR; }
-    // Single source of truth for execution-mode wording — mirrors
-    // _execution_mode_info() in webhook/app.py. Three states, never conflated:
-    // an internal paper simulator, a real Tradovate demo account (real broker,
-    // real money blocked), and genuine live trading.
+    // Server-derived execution mode. All labels consume the exact same object
+    // produced by _execution_mode_info(); the browser does not infer mode.
     function execMode() {
-      var paper = !!INIT.paper_mode;
-      var tvEnv = (INIT.tradovate_env || '').toLowerCase();
-      var liveEnabled = !!INIT.live_trading_enabled;
-      var broker = (INIT.broker || '').toUpperCase();
-      if (paper) return { key: 'PAPER', word: 'PAPER', badge: '📄 PAPER MODE', moneyBlocked: true };
-      if (liveEnabled && tvEnv === 'live') return { key: 'LIVE', word: 'LIVE', badge: '⚡ LIVE MODE', moneyBlocked: false };
-      if (broker === 'TRADOVATE' && tvEnv === 'demo') {
-        return { key: 'DEMO', word: 'DEMO', badge: '🧪 TRADOVATE DEMO', moneyBlocked: !liveEnabled };
-      }
-      // Any other combination is neither proven paper nor proven live — never claim either.
-      return { key: 'DEMO', word: 'DEMO', badge: '🧪 ' + (broker || 'UNKNOWN') + ' DEMO', moneyBlocked: !liveEnabled };
+      var raw = INIT.execution_mode || {};
+      var key = String(raw.key || 'unknown').toUpperCase();
+      var word = String(raw.word || key).toUpperCase();
+      var label = String(raw.label || 'Unknown execution mode');
+      return { key: key, word: word, label: label, moneyBlocked: raw.money_blocked !== false };
     }
-    function modeLabel() { return execMode().badge; }
+    function modeLabel() {
+      var m = execMode();
+      var icon = m.key === 'LIVE' ? '⚡' : (m.key === 'DEMO' ? '🧪' : (m.key === 'PAPER' ? '📄' : '•'));
+      return icon + ' ' + m.label.toUpperCase();
+    }
     function lockLabel(lock) { return lock ? '🔒 ACTIVE' : '🔓 NONE'; }
     function livePreflight() { return (state.today && state.today.live_preflight) || {}; }
     function preflightStatusLine() {
@@ -3767,18 +3643,23 @@ _DASHBOARD_HTML = r"""<!doctype html>
       return '<div class="panel accent-yellow"><h2>SAT Data Boundary</h2>' +
         '<div class="source-grid">' +
         '<div class="source-item"><b>Pulled Now</b><span>/status/today, /status/history, /status/risk, per-instrument latest webhook snapshots.</span></div>' +
-        '<div class="source-item"><b>Derived Here</b><span>Risk mood, freshness age, empty states, UI grouping, and placeholder sparkline.</span></div>' +
+        '<div class="source-item"><b>Derived Here</b><span>Risk mood, freshness age, empty states, and UI grouping.</span></div>' +
         '<div class="source-item"><b>Not Pulled Yet</b><span>Live operator quote panel, live options chain, and order-entry/bracket controls.</span></div>' +
         '</div></div>';
     }
     function opsCard() {
       var pf = preflightStatusLine();
-      return '<div class="panel"><h2>Ops</h2>' +
-        '<div class="ops-card">' +
-        '<div><b class="' + pf[0] + '">LIVE PREFLIGHT: ' + esc(pf[1]) + '</b>' +
-        '<p>' + esc(pf[2]) + '</p></div>' +
-        '<button class="btn slim" id="open-ops" type="button">Open Ops</button>' +
-        '</div></div>';
+      var raw = livePreflight();
+      return '<div class="panel"><h2>Execution Diagnostics · Read Only</h2>' +
+        '<div class="ops-card"><div>' +
+        '<b class="' + pf[0] + '">LIVE PREFLIGHT: ' + esc(pf[1]) + '</b>' +
+        '<p>' + esc(pf[2]) + '</p></div></div>' +
+        '<dl class="kv">' +
+        kv('Broker', esc(INIT.broker || 'PAPER')) +
+        kv('Runtime mode', esc(execMode().label)) +
+        kv('Reason', esc(raw.reason || raw.disarmed_reason || '—')) +
+        kv('Last preflight', esc(raw.last_preflight_at || 'never')) +
+        '</dl></div>';
     }
     function fillRealismCard() {
       var fill = state.fillRealism;
@@ -3869,17 +3750,18 @@ _DASHBOARD_HTML = r"""<!doctype html>
       var modeC = em.key === 'LIVE' ? 'red' : (em.key === 'DEMO' ? 'yellow' : 'blue');
       var whTag = fr.state === 'NONE' ? 'gray' : (fr.state === 'FRESH' ? 'green' : (fr.state === 'IDLE' ? 'gray' : 'yellow'));
       var segs = [
-        ['BACKEND:', 'ONLINE', 'green'],
-        ['MODE:', mode, modeC],
-        ['BROKER:', (INIT.broker || 'PAPER'), 'blue'],
-        ['RISK:', risk, RISK_COLOR[risk] || 'gray'],
-        ['LOCKOUT:', lock ? 'ACTIVE' : 'NONE', lock ? 'red' : 'green'],
-        ['DATA:', fr.state === 'NONE' ? 'NONE' : fr.state, whTag],
-        ['POLL:', (POLL / 1000) + 's', 'gray']
+        ['BACKEND:', 'ONLINE', 'green', 'backend'],
+        ['MODE:', mode, modeC, 'mode'],
+        ['BROKER:', (INIT.broker || 'PAPER'), 'blue', 'broker'],
+        ['RISK:', risk, RISK_COLOR[risk] || 'gray', 'risk'],
+        ['LOCKOUT:', lock ? 'ACTIVE' : 'NONE', lock ? 'red' : 'green', 'lockout'],
+        ['DATA:', fr.state === 'NONE' ? 'NONE' : fr.state, whTag, 'data'],
+        ['POLL:', (POLL / 1000) + 's', 'gray', 'poll']
       ];
       el('statusbar').innerHTML = segs.map(function (s) {
-        return '<div class="seg"><b>' + esc(s[0]) + '</b><span class="' + s[2] + '">' + esc(s[1]) + '</span></div>';
+        return '<div class="seg seg-' + s[3] + '"><b>' + esc(s[0]) + '</b><span class="' + s[2] + '">' + esc(s[1]) + '</span></div>';
       }).join('');
+      el('brand-mode').textContent = execMode().label;
     }
 
     // ── freshness widget (shared Home + Futures) ───────────────────────
@@ -3903,10 +3785,9 @@ _DASHBOARD_HTML = r"""<!doctype html>
       var dv = decisionView(today, fr);
       var pnl = num(today.today_pnl_dollars);
       var lock = num(today.consecutive_losses) >= num(today.max_consecutive_losses) && num(today.max_consecutive_losses) > 0;
-      var clearLabel = risk === 'CLEAR' && !lock ? '✅ CLEAR TO TRADE' : ((RISK_ICON[risk] || '•') + ' ' + risk);
+      var clearLabel = risk === 'CLEAR' && !lock ? '✅ RISK LIMITS CLEAR' : ((RISK_ICON[risk] || '•') + ' RISK STATE: ' + risk);
       var traded = hasTradeData(today);
       var pnlDisplay = traded ? money(pnl) : emptyValue('No trades yet');
-      var winRateDisplay = traded ? (num(today.win_rate).toFixed(1) + '%') : emptyValue('Win rate appears after at least 1 trade');
       var tradesDisplay = num(today.trade_count) + ' / ' + num(today.max_trades_per_day);
       var html = '';
       if (state.firstLoad) {
@@ -3922,19 +3803,16 @@ _DASHBOARD_HTML = r"""<!doctype html>
         '<p class="mood">' + esc(moodLine(risk)) + '</p>' +
         '<div class="update-line" id="last-update"></div>' +
         '</div>';
-      html += sourceBoundaryPanel();
-      html += opsCard();
-      html += fillRealismCard();
-
       html += '<div class="tabhead"><h1>Today</h1><span class="when">' + esc(today.date || '') + '</span></div>';
 
       html += '<div class="panel">' +
         '<h2>Decision</h2>' +
         '<div class="decision d-' + esc(dv.decision) + '"><span class="dot"></span>' + esc(dv.decision) + '</div>' +
         '<div class="metric-grid">' +
-        '<div class="metric"><label>💰 Today P&amp;L</label><strong class="' + (!traded ? 'gray' : (pnl < 0 ? 'red' : 'green')) + '">' + pnlDisplay + '</strong><span class="sparkline">▁▂▃▅▇█▇▅▃▂▁</span></div>' +
+        '<div class="metric"><label>💰 Today P&amp;L</label><strong class="' + (!traded ? 'gray' : (pnl < 0 ? 'red' : 'green')) + '">' + pnlDisplay + '</strong></div>' +
         '<div class="metric"><label>📊 Trades Used</label><strong>' + tradesDisplay + '</strong></div>' +
-        '<div class="metric"><label>🏁 Win Rate</label><strong>' + winRateDisplay + '</strong></div>' +
+        '<div class="metric"><label>🛡 Risk State</label><strong class="' + (RISK_COLOR[risk] || 'gray') + '">' + esc(risk) + '</strong></div>' +
+        '<div class="metric"><label>Position</label><strong>' + esc(openPositionText(today)) + '</strong></div>' +
         '</div>' +
         '<dl class="kv">' +
         kv('Risk state', '<span class="' + (RISK_COLOR[risk] || 'gray') + '">' + risk + '</span>') +
@@ -3951,10 +3829,11 @@ _DASHBOARD_HTML = r"""<!doctype html>
         html += card('Next Required Validation', listReasons(dv.nextValidation, '→', 'blue'), '');
       }
 
+      html += sourceBoundaryPanel();
+      html += opsCard();
+      html += fillRealismCard();
       html += compactPnl(today);
       el('tab-home').innerHTML = html;
-      var opsBtn = el('open-ops');
-      if (opsBtn) opsBtn.addEventListener('click', openOpsModal);
       updateAgeText();
     }
     function kv(k, v) { return '<dt>' + esc(k) + '</dt><dd>' + v + '</dd>'; }
@@ -4089,7 +3968,6 @@ _DASHBOARD_HTML = r"""<!doctype html>
       html += renderForce();
       html += '</aside></div>';
       el('tab-futures').innerHTML = html;
-      wireForce();
     }
     function ctxItem(label, val) {
       return '<div class="c"><label>' + esc(label) + '</label><strong>' + esc(val) + '</strong></div>';
@@ -4108,128 +3986,11 @@ _DASHBOARD_HTML = r"""<!doctype html>
       return card('Allowed Futures', body, '');
     }
 
-    // ── force-open controls ────────────────────────────────────────────
-    var POINTS = { MES: { stop: 7, target: 15, dollar: 5 }, MNQ: { stop: 7, target: 15, dollar: 2 }, MGC: { stop: 5, target: 10, dollar: 10 }, MCL: { stop: 0.3, target: 0.6, dollar: 100 } };
-    function modeWord() { return execMode().word; }
+    // ── execution boundary ─────────────────────────────────────────────
     function renderForce() {
-      // Monitor-only mode (default): render NO order-sending controls.
-      if (!INIT.manual_controls_enabled) {
-        return '<div class="panel accent-yellow"><h2>Manual Execution — Disabled</h2>' +
-          '<div class="force-meta">MODE: MONITOR ONLY · Broker actions hidden until the alert pipeline is validated. ' +
-          'No force-open, close-all, or flatten controls render in this phase. ' +
-          'Read-only broker status is shown on the Home tab.</div></div>';
-      }
-      // Force-OPEN was removed (it bypassed all risk gates). Only the CLOSE_ALL
-      // kill-switch remains — it can never open risk, only flatten it.
-      var meta = '<div class="force-meta">Force-entry is disabled. Entries only via the risk-gated alert pipeline. This is an emergency exit only.</div>';
-      var close = '<div style="margin-top:12px;"><button class="btn danger" data-force="*|CLOSE">CLOSE ALL ' + modeWord() + ' POSITIONS</button></div>';
-      return '<div class="panel accent-red"><h2>Emergency Exit — ' + modeWord() + '</h2>' +
-        meta + close + '</div>';
-    }
-    function wireForce() {
-      var btns = document.querySelectorAll('[data-force]');
-      Array.prototype.forEach.call(btns, function (b) {
-        b.addEventListener('click', function () { openForceModal(b.getAttribute('data-force')); });
-      });
-    }
-    var pendingForce = null;
-    function openForceModal(spec) {
-      var parts = spec.split('|');
-      var sym = parts[0], side = parts[1];
-      var m = execMode();
-      var mode = m.word;
-      var live = m.key === 'LIVE';
-      el('fm-mode').innerHTML = '<span class="' + (live ? 'red' : (m.key === 'DEMO' ? 'yellow' : 'blue')) + '">MODE: ' + mode + '</span>';
-      // CLOSE_ALL is the only manual action — force-OPEN was removed.
-      if (side !== 'CLOSE') return;
-      el('fm-title').textContent = 'Close all ' + mode.toLowerCase() + ' positions?';
-      el('fm-kv').innerHTML = kv('Action', 'CLOSE ALL') + kv('Mode', mode) + kv('Scope', 'Cancel working orders + flatten');
-      el('fm-warn').textContent = m.key === 'LIVE'
-        ? 'LIVE MODE — this cancels real working orders and flattens a real broker position. This cannot be undone.'
-        : (m.key === 'DEMO'
-          ? 'Tradovate demo — cancels real working orders and flattens a real demo-account position. Real money is blocked.'
-          : 'Paper simulator — cancels working orders and flattens the simulated position.');
-      pendingForce = { action: 'CLOSE_ALL' };
-      el('fm-confirm').className = 'btn danger';
-      el('fm-confirm').textContent = 'CONFIRM CLOSE';
-      el('fm-secret').value = '';
-      el('fm-result').textContent = '';
-      el('force-modal').classList.add('open');
-    }
-    function closeForceModal() { el('force-modal').classList.remove('open'); pendingForce = null; }
-    function submitForce() {
-      if (!pendingForce) return;
-      var secret = el('fm-secret').value.trim();
-      if (!secret) { el('fm-result').textContent = 'Webhook secret is required.'; return; }
-      el('fm-confirm').disabled = true;
-      el('fm-result').textContent = 'Sending…';
-      fetch('/webhook/manual', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Webhook-Secret': secret },
-        body: JSON.stringify(pendingForce)
-      }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
-        .then(function (res) {
-          var d = res.d || {};
-          if (!res.ok || d.ok === false) el('fm-result').innerHTML = '<span class="red">' + esc(d.error || d.detail || 'Request rejected.') + '</span>';
-          else { el('fm-result').innerHTML = '<span class="green">' + esc(d.note || 'Request accepted.') + '</span>'; }
-        }).catch(function () { el('fm-result').innerHTML = '<span class="red">Failed before reaching the server.</span>'; })
-        .then(function () { el('fm-confirm').disabled = false; });
-    }
-
-    function openOpsModal() {
-      var pf = preflightStatusLine();
-      var raw = livePreflight();
-      el('ops-mode').innerHTML = '<span class="' + pf[0] + '">LIVE PREFLIGHT: ' + esc(pf[1]) + '</span>';
-      el('ops-kv').innerHTML =
-        kv('Broker', esc(INIT.broker || 'PAPER')) +
-        kv('Mode', esc(modeWord())) +
-        kv('Reason', esc(raw.reason || raw.disarmed_reason || '—')) +
-        kv('Last preflight', esc(raw.last_preflight_at || 'never'));
-      el('ops-output').textContent = 'Choose an action.';
-      el('ops-modal').classList.add('open');
-    }
-    function closeOpsModal() { el('ops-modal').classList.remove('open'); }
-    function opsSecretRequired() {
-      var secret = el('ops-secret').value.trim();
-      if (!secret) {
-        el('ops-output').innerHTML = '<span class="yellow">Webhook secret required for this action.</span>';
-        return null;
-      }
-      return secret;
-    }
-    function opsPrint(label, data, ok) {
-      var text = label + '\n' + JSON.stringify(data, null, 2);
-      el('ops-output').innerHTML = '<span class="' + (ok === false ? 'red' : 'green') + '">' + esc(text) + '</span>';
-    }
-    function opsFetch(path, opts, label) {
-      el('ops-output').textContent = 'Working…';
-      return fetch(path, opts || { cache: 'no-store' })
-        .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
-        .then(function (res) { opsPrint(label, res.d, res.ok && res.d.ok !== false); return res; })
-        .catch(function (err) { opsPrint(label, { error: String(err) }, false); });
-    }
-    function protectedPost(path, body, label) {
-      var secret = opsSecretRequired();
-      if (!secret) return;
-      return opsFetch(path, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Webhook-Secret': secret },
-        body: JSON.stringify(body || {})
-      }, label).then(function () { refresh(); });
-    }
-    function wireOps() {
-      var btns = document.querySelectorAll('[data-ops]');
-      Array.prototype.forEach.call(btns, function (btn) {
-        btn.addEventListener('click', function () {
-          var action = btn.getAttribute('data-ops');
-          if (action === 'preflight') return protectedPost('/admin/live-preflight/run', {}, 'Preflight');
-          if (action === 'arm') return protectedPost('/admin/live-preflight/arm', {}, 'Arm Live Today');
-          if (action === 'disarm') return protectedPost('/admin/live-preflight/disarm', { reason: 'manual_dashboard' }, 'Disarm Live');
-          if (action === 'discord') return protectedPost('/admin/test-discord', {}, 'Discord Test');
-          if (action === 'broker') return opsFetch('/status/broker-account', { cache: 'no-store' }, 'Broker Status');
-          if (action === 'diagnostics') return opsFetch('/status/diagnostics', { cache: 'no-store' }, 'Diagnostics');
-        });
-      });
+      return '<div class="panel accent-yellow"><h2>Execution Boundary · Read Only</h2>' +
+        '<div class="force-meta">This SAT surface reports risk and execution state only. ' +
+        'Arming, disarming, manual orders, flattening, tests, and protected confirmations are available only in the operator workflow.</div></div>';
     }
 
     // ── OPTIONS LAB (demo) ─────────────────────────────────────────────
@@ -4501,21 +4262,6 @@ _DASHBOARD_HTML = r"""<!doctype html>
       b.addEventListener('click', function () { setTab(b.getAttribute('data-tab')); });
     });
     el('refresh-now').addEventListener('click', refresh);
-    el('fm-cancel').addEventListener('click', closeForceModal);
-    el('fm-confirm').addEventListener('click', submitForce);
-    el('force-modal').addEventListener('click', function (e) { if (e.target === el('force-modal')) closeForceModal(); });
-    el('ops-close').addEventListener('click', closeOpsModal);
-    el('ops-modal').addEventListener('click', function (e) { if (e.target === el('ops-modal')) closeOpsModal(); });
-    wireOps();
-
-    function renderMonitorBar() {
-      var bar = el('monitorbar');
-      if (!bar) return;
-      if (INIT.manual_controls_enabled) { bar.hidden = true; return; }
-      bar.hidden = false;
-      bar.innerHTML = '<b>MODE: MONITOR ONLY</b> · Manual execution controls disabled · ' +
-        'Broker actions hidden until the alert pipeline is validated';
-    }
 
     // Loud red banner for a misconfigured live alert: a required instrument
     // missing from the universe (CONFIG ERROR), or a wrong-timeframe webhook
@@ -4559,7 +4305,6 @@ _DASHBOARD_HTML = r"""<!doctype html>
         (sfs.footer ? '<span class="foot">' + esc(sfs.footer) + '</span>' : '');
     }
 
-    renderMonitorBar();
     renderAlertBar();
     renderShadowBar();
     renderStatusBar();
