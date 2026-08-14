@@ -1,13 +1,21 @@
+import re
 from pathlib import Path
 
 
 SCRIPT = Path("scripts/atomic_release.sh")
 
+# The release tool must carry no box address. Asserted as "no IPv4 literal at
+# all" rather than by naming the box, so this check does not itself put the
+# address in the repo -- and so it also catches a *different* host being
+# hardcoded later, which naming one address never would.
+_IPV4 = re.compile(r"\b\d{1,3}(?:\.\d{1,3}){3}\b")
+
 
 def test_atomic_release_tool_is_host_agnostic_and_three_phase():
     text = SCRIPT.read_text()
     assert 'BOX="${AFS_BOX:?' in text
-    assert "5.78.84.223" not in text
+    # Loopback is the candidate's own health-check target, not a box identity.
+    assert not _IPV4.search(text.replace("127.0.0.1", ""))
     assert "build) build_release" in text
     assert "verify) verify_release" in text
     assert "promote) promote_release" in text
