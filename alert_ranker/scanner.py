@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import math
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Any
@@ -12,6 +13,7 @@ import httpx
 
 from .config import ScannerConfig
 from .discord import DiscordAlerter
+from .lifecycle import classify_candidate, open_candidate_fields, resolve_open_setup
 from .market_data import MarketDataClient, build_provider_capabilities
 from .rh_options import build_candidate_embed
 from .scorer import ScoreResult, is_ny_open, score_setup
@@ -26,6 +28,41 @@ class ScanOutcome:
     alert_suppression_reason: str
     storage_id: int
     shadow_id: int
+    shadow_reason: str = ""
+
+
+_BULLISH_SIGNAL_LABELS = frozenset({"BULLISH", "UP", "LONG", "BUY", "POSITIVE"})
+_BEARISH_SIGNAL_LABELS = frozenset({"BEARISH", "DOWN", "SHORT", "SELL", "NEGATIVE"})
+_SIGNAL_MULTIPLIERS = {"K": 1_000.0, "M": 1_000_000.0, "B": 1_000_000_000.0}
+
+
+def signal_direction(value: Any) -> str | None:
+    """Map explicit labels or a signed signal value to LONG/SHORT.
+
+    Zero, non-finite values, and unrecognized text are ambiguous and return
+    ``None`` so callers fail safe instead of defaulting to either direction.
+    """
+    if value is None or isinstance(value, bool):
+        return None
+    text = str(value).strip().upper()
+    if text in _BULLISH_SIGNAL_LABELS:
+        return "LONG"
+    if text in _BEARISH_SIGNAL_LABELS:
+        return "SHORT"
+    normalized = text.replace(",", "").replace("$", "")
+    if normalized.endswith("%"):
+        normalized = normalized[:-1]
+    multiplier = 1.0
+    if normalized[-1:] in _SIGNAL_MULTIPLIERS:
+        multiplier = _SIGNAL_MULTIPLIERS[normalized[-1]]
+        normalized = normalized[:-1]
+    try:
+        number = float(normalized) * multiplier
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(number) or number == 0:
+        return None
+    return "LONG" if number > 0 else "SHORT"
 
 
 class OptionsScanner:
@@ -90,17 +127,71 @@ class OptionsScanner:
             alert_suppression_reason=decision.reason,
             timestamp=now,
         )
-        shadow_id = self.storage.record_shadow_setup(
-            result,
-            scan_id=storage_id,
-            setup_inputs=_shadow_setup_inputs(result.raw),
-            provider_snapshot=_provider_snapshot(result.raw),
-            selected_contract=_selected_contract(result.raw),
-            timestamp=now,
+        # Only fully-formed candidates open a paper position in the shadow
+        # journal; ordinary scans and provider failures record the scan row only.
+        classification = classify_candidate({**result.raw, "direction": result.direction})
+        shadow_id = 0
+        shadow_reason = classification.reason or "candidate"
+        if classification.is_open_eligible:
+            duplicate = self.storage.find_open_duplicate(
+                result.ticker, classification.contract_key
+            )
+            if duplicate is not None:
+                shadow_reason = f"duplicate_open:{duplicate}"
+            else:
+                selected = _selected_contract(result.raw)
+                selected.update(open_candidate_fields(result.raw, classification.contract_key))
+                shadow_id = self.storage.record_shadow_setup(
+                    result,
+                    scan_id=storage_id,
+                    setup_inputs=_shadow_setup_inputs(result.raw),
+                    provider_snapshot=_provider_snapshot(result.raw),
+                    selected_contract=selected,
+                    timestamp=now,
+                )
+        elif not classification.reason.startswith("provider_error"):
+            shadow_reason = "not_a_candidate:" + ",".join(classification.missing)
+        # Fire enriched options candidate alert when Signa qualifies — never on
+        # a failed or incomplete scan.
+        if not normalized.get("market_data_error") or "price" in (context or {}):
+            await self._maybe_send_candidate_alert(ticker, normalized, now)
+        return ScanOutcome(
+            result, decision.sent, decision.reason, storage_id, shadow_id, shadow_reason
         )
-        # Fire enriched options candidate alert when Signa qualifies
-        await self._maybe_send_candidate_alert(ticker, normalized, now)
-        return ScanOutcome(result, decision.sent, decision.reason, storage_id, shadow_id)
+
+    async def resolve_open_candidates(self, now: datetime | None = None) -> dict[str, int]:
+        """Resolve OPEN paper candidates against fresh underlying quotes.
+
+        Provider failures leave rows OPEN — a candidate is never resolved on
+        missing data (expiry is the only exception, which needs no quote).
+        """
+        now = now or datetime.now(ZoneInfo(self.config.timezone))
+        counts = {"checked": 0, "resolved": 0}
+        prices: dict[str, float | None] = {}
+        last_id = 0
+        while True:
+            batch = self.storage.open_setups_after(last_id)
+            if not batch:
+                break
+            for setup in batch:
+                last_id = setup.id
+                counts["checked"] += 1
+                ticker = setup.ticker
+                if ticker not in prices:
+                    snapshot = await self.market_data.fetch_market_snapshot(ticker)
+                    prices[ticker] = None if snapshot.error else snapshot.price
+                resolution = resolve_open_setup(
+                    direction=setup.direction,
+                    contract=setup.selected_contract,
+                    underlying_price=prices[ticker],
+                    now=now,
+                )
+                if resolution is None:
+                    continue
+                status, outcome = resolution
+                self.storage.update_shadow_outcome(setup.id, status=status, outcome=outcome)
+                counts["resolved"] += 1
+        return counts
 
     async def _maybe_send_candidate_alert(
         self, ticker: str, normalized: dict[str, Any], now: datetime
@@ -117,10 +208,11 @@ class OptionsScanner:
 
         score = normalized.get("signa_score")
         grade = normalized.get("signa_grade")
-        direction_raw = normalized.get("signa_daily_direction") or ""
+        direction_raw = normalized.get("signa_daily_direction")
         price_raw = normalized.get("price")
+        direction = signal_direction(direction_raw)
 
-        if not score or not grade or not direction_raw or not price_raw:
+        if not score or not grade or direction is None or not price_raw:
             return
         try:
             score_f = float(score)
@@ -132,8 +224,6 @@ class OptionsScanner:
             return
         if str(grade).upper() not in ("A+", "A", "B"):
             return
-
-        direction = "LONG" if str(direction_raw).upper() in ("BULLISH", "UP", "LONG") else "SHORT"
 
         # Earnings guard — suppress alert if earnings within 5 days
         earnings_note: str | None = None
@@ -211,6 +301,9 @@ class OptionsScanner:
             "implied_volatility": context.get("implied_volatility") or context.get("iv"),
             "risk_free_rate": context.get("risk_free_rate"),
             "ny_open": is_ny_open(now, self.config.timezone),
+            "source_timestamp": context.get("timestamp")
+            or context.get("source_timestamp")
+            or now.isoformat(),
             "market_data_provider": self.config.market_data_provider,
             "market_data_error": snapshot.error,
             "market_data_raw": snapshot.raw,
@@ -228,9 +321,19 @@ class OptionsScanner:
             "expiration",
             "stop",
             "stop_level",
+            "invalidation",
             "target",
             "target_1",
             "target_2",
+            "option_bid",
+            "option_ask",
+            "open_interest",
+            "option_open_interest",
+            "option_volume",
+            "oi",
+            "risk_cap",
+            "max_loss",
+            "risk_dollars",
             "why",
             "why_forming",
             "edge",
