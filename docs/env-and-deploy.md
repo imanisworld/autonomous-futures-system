@@ -27,17 +27,23 @@ box edit plus restart.
 
 ## Updating the Hetzner `.env` (the only place that affects live trading)
 
+The box address is deliberately not recorded in this repository. Set `AFS_BOX`
+in your own shell, the same variable `scripts/atomic_release.sh` and
+`scripts/afs-drift-gate.sh` take:
+
 ```bash
-ssh root@5.78.84.223
+ssh "$AFS_BOX"                             # e.g. AFS_BOX=root@host
 cd /root/autonomous-futures-system
 
 cp .env .env.bak.$(date +%Y%m%d-%H%M%S)   # ALWAYS back up first
 nano .env                                  # change the one key you mean to
 sudo systemctl restart futures-bot         # REQUIRED — .env loads only at startup
 
-curl -s http://5.78.84.223/health          # confirm it's up + value is live
-curl -s http://5.78.84.223/status/diagnostics   # for safety-critical flags
-curl -s http://5.78.84.223/status/today    # use journal_path as runtime truth
+# Run from the box (you are already on it). The service binds loopback, so
+# these read it directly rather than going back out through the proxy.
+curl -s http://127.0.0.1:8000/health              # confirm it's up + value is live
+curl -s http://127.0.0.1:8000/status/diagnostics  # for safety-critical flags
+curl -s http://127.0.0.1:8000/status/today        # use journal_path as runtime truth
 ```
 
 Runtime evidence is frozen to the active box/API:
