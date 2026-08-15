@@ -206,6 +206,40 @@ def _entry_ts(entry: dict[str, Any]) -> datetime | None:
     return parse_proof_ts(entry.get("ts"))
 
 
+def _fill_execution_context(outcome_entry: dict[str, Any]) -> dict[str, Any]:
+    """Surface the per-fill entry-model/tolerance record already logged by
+    execution.paper_broker/tradovate_broker (execution.post_fill_validation's
+    PostFillValidation, logged under OUTCOME.outcome.execution_audit.
+    post_fill_validation). Reused, not recomputed: this routine never has an
+    order object to reconstruct actual_risk/actual_rr from, but the
+    system already did that math at fill time and journaled the result.
+
+    A fill with no such record is reported as unverified rather than assumed
+    within-tolerance -- the lesson this exists to encode is that entry model
+    and effective tolerance must be checked, not asserted, per fill.
+    """
+    outcome = outcome_entry.get("outcome") or {}
+    audit = (outcome.get("execution_audit") or {}).get("post_fill_validation")
+    if not isinstance(audit, dict):
+        return {
+            "recorded": False,
+            "reason": "no execution_audit.post_fill_validation on this OUTCOME row",
+        }
+    checks = audit.get("checks") or {}
+    return {
+        "recorded": True,
+        "execution_model": audit.get("execution_model"),
+        "requested_entry": audit.get("requested_entry"),
+        "actual_entry": audit.get("actual_entry"),
+        "slippage_ticks": audit.get("slippage_ticks"),
+        "adverse_slippage_ticks": audit.get("adverse_slippage_ticks"),
+        "max_slippage_ticks": audit.get("max_slippage_ticks"),
+        "slippage_within_bound": checks.get("slippage_limit"),
+        "accepted": audit.get("accepted"),
+        "failed_checks": audit.get("failed_checks"),
+    }
+
+
 def _pair_fifo_by_instrument(
     anchors: list[dict[str, Any]], events: list[dict[str, Any]], all_in_order: list[dict[str, Any]]
 ) -> tuple[dict[int, dict[str, Any]], list[dict[str, Any]]]:
@@ -240,6 +274,39 @@ def _pair_fifo_by_instrument(
     return paired, unmatched
 
 
+def _entry_model_and_tolerance_section(
+    *, resolved_fills: list[dict[str, Any]], runtime_ctx: dict[str, Any] | None
+) -> dict[str, Any]:
+    """Compare what each fill's own post_fill_validation record says was used
+    against the CURRENT live runtime config -- the same "check live, don't
+    trust the evidence packet" lesson ops.project_check.promotion applies to
+    promotion evidence, applied here to actual trade-chain fills. A fill
+    recorded under a since-changed entry_fill_model/tolerance is exactly the
+    kind of drift a per-fill count alone would hide.
+    """
+    recorded_models = sorted(
+        {
+            r["entry_execution_context"].get("execution_model")
+            for r in resolved_fills
+            if r["entry_execution_context"]["recorded"] and r["entry_execution_context"].get("execution_model")
+        }
+    )
+    live_fill_model = (runtime_ctx or {}).get("entry_fill_model")
+    live_tolerance = (runtime_ctx or {}).get("entry_tolerance_ticks")
+    return {
+        "checked_against_live_runtime": runtime_ctx is not None,
+        "live_entry_fill_model": live_fill_model,
+        "live_entry_tolerance_ticks": live_tolerance,
+        "recorded_execution_models_in_window": recorded_models,
+        "note": (
+            "recorded_execution_models_in_window reflects each fill's OWN post_fill_validation "
+            "record at fill time, not current config -- compare against live_entry_fill_model to "
+            "catch a fill evidenced under a tolerance/model that has since changed. Per-fill detail "
+            "is in resolved_fills[*].entry_execution_context."
+        ),
+    }
+
+
 def build_trade_chain_report(
     *,
     journal_dir: Path,
@@ -247,6 +314,7 @@ def build_trade_chain_report(
     since_ts: str | None = None,
     use_checkpoint: bool = True,
     advance_checkpoint: bool = False,
+    runtime_ctx: dict[str, Any] | None = None,
     broker_positions: Callable[[], list[dict[str, Any]]] | None = None,
     broker_orders: Callable[[], list[dict[str, Any]]] | None = None,
 ) -> dict[str, Any]:
@@ -336,6 +404,7 @@ def build_trade_chain_report(
         row["category"] = category
         row["exit_reason"] = (outcome.get("outcome") or {}).get("exit_reason")
         row["pnl_dollars"] = (outcome.get("outcome") or {}).get("pnl_dollars")
+        row["entry_execution_context"] = _fill_execution_context(outcome)
         return {**row, "_bucket": "resolved", "_category": category, "_setup": setup}
 
     for attempt in attempts:
@@ -372,6 +441,19 @@ def build_trade_chain_report(
             resolved_cancellations.append(row)
         else:
             needs_broker_verification.append(row)
+
+    fills_missing_execution_context = [
+        r for r in resolved_fills if not r["entry_execution_context"]["recorded"]
+    ]
+    fills_slippage_outside_bound = [
+        r
+        for r in resolved_fills
+        if r["entry_execution_context"]["recorded"]
+        and r["entry_execution_context"]["slippage_within_bound"] is False
+    ]
+    entry_model_and_tolerance = _entry_model_and_tolerance_section(
+        resolved_fills=resolved_fills, runtime_ctx=runtime_ctx
+    )
 
     for attempt in attempts_all:
         if is_new(attempt):
@@ -447,6 +529,7 @@ def build_trade_chain_report(
         or bool(unmatched_outcomes)
         or bool(unmatched_order_ids)
         or bool(read_errors)
+        or bool(fills_slippage_outside_bound)
         or journal_integrity["status"] in ("SHRUNK", "GREW_BEHIND_CHECKPOINT", "MUTATED")
     )
     status = "PASS" if not problems else "FAIL"
@@ -509,6 +592,8 @@ def build_trade_chain_report(
             "unmatched_outcomes": len(unmatched_outcomes),
             "unmatched_order_ids": len(unmatched_order_ids),
             "carryover_resolutions": len(carryover_resolutions),
+            "fills_missing_execution_context": len(fills_missing_execution_context),
+            "fills_slippage_outside_bound": len(fills_slippage_outside_bound),
         },
         "accounting": {
             "attempts_identity": (
@@ -524,6 +609,7 @@ def build_trade_chain_report(
                 "OUTCOME or broker fill confirmation proves it either way."
             ),
         },
+        "entry_model_and_tolerance": entry_model_and_tolerance,
         "detail": {
             "resolved_fills": resolved_fills,
             "unverified_open_attempts": unverified_open_attempts,
@@ -534,6 +620,20 @@ def build_trade_chain_report(
             "naked_position_risk": naked_position_risk,
             "risk_rejected_missing_reason": risk_rejected_missing_reason,
             "carryover_resolutions": carryover_resolutions,
+            "fills_missing_execution_context": [
+                {"trade_ts": r.get("trade_ts"), "instrument": r.get("instrument"), "path": r.get("path"), "line": r.get("line")}
+                for r in fills_missing_execution_context
+            ],
+            "fills_slippage_outside_bound": [
+                {
+                    "trade_ts": r.get("trade_ts"),
+                    "instrument": r.get("instrument"),
+                    "path": r.get("path"),
+                    "line": r.get("line"),
+                    "entry_execution_context": r.get("entry_execution_context"),
+                }
+                for r in fills_slippage_outside_bound
+            ],
             "unmatched_outcomes": [
                 {
                     "ts": e.get("ts"),

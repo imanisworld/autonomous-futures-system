@@ -1,13 +1,28 @@
 #!/usr/bin/env python3
 """Read-only CLI for the project-check routines.
 
-  preflight      Strictly read-only ownership/base check before research or
-                 promotion. Makes no bookkeeping writes and never fetches.
-  session-start  Repo/worktree/branch/PR/runtime snapshot; writes a small
-                 session-state cache under .git/ so `precommit` can compare
-                 against it later. Otherwise read-only.
-  precommit      Strictly read-only. Compares current repo state against the
-                 last session-start snapshot and fails closed on drift.
+Exactly three routines:
+
+  1. Session Safety + Runtime Snapshot -- session-start, precommit, and the
+     preflight pre-work gate (below) all live under this routine.
+  2. Strategy Promotion Proof Gate -- `promotion`.
+  3. Daily Reconciliation + Trade Chain Integrity -- `daily` (trade-chain
+     accounting, including per-fill entry-model/effective-tolerance
+     verification, is folded into this routine's output, not a separate one).
+
+  preflight      Routine 1's pre-work mode: strictly read-only ownership/base
+                 check before research or promotion. Makes no bookkeeping
+                 writes and never fetches. Unlike session-start/precommit, it
+                 fails closed on a dirty worktree -- it exists to gate the
+                 START of new evidence generation, not to snapshot or diff an
+                 already-in-progress session.
+  session-start  Routine 1's mode A: repo/worktree/branch/PR/runtime
+                 snapshot; writes a small session-state cache under .git/ so
+                 `precommit` can compare against it later. Otherwise
+                 read-only.
+  precommit      Routine 1's mode B: strictly read-only. Compares current
+                 repo state against the last session-start snapshot and
+                 fails closed on drift.
   promotion      Strategy Promotion Proof Gate: accounting-identity + safety-
                  gate validator over an explicit evidence-facts file (see
                  ops/project_check/promotion.py's module docstring for the
@@ -15,8 +30,10 @@
   daily          Daily Reconciliation + Trade Chain Integrity: repo/PR/branch
                  hygiene, evidence preservation, deployed state, strategy
                  source-of-truth drift, and trade-chain accounting since the
-                 prior checkpoint. Read-only against git/journals. Does NOT
-                 advance its local checkpoint file unless you pass
+                 prior checkpoint -- including, per fill, the entry model and
+                 effective tolerance actually used, live-verified against
+                 current runtime config. Read-only against git/journals. Does
+                 NOT advance its local checkpoint file unless you pass
                  --advance-checkpoint explicitly -- and even then, it never
                  advances on a FAIL result (that would let today's
                  orphans/duplicate-identities/unmatched-outcomes silently
@@ -186,6 +203,7 @@ def _cmd_daily(args: argparse.Namespace) -> int:
             print(f"  checkpoint NOT advanced: {w['checkpoint_skip_reason']}")
     if tc["status"] == "PASS":
         s = tc["summary"]
+        emt = tc["entry_model_and_tolerance"]
         print(
             f"  TRADE CHAIN: PASS\n"
             f"  {s['attempts']} attempts\n"
@@ -195,6 +213,10 @@ def _cmd_daily(args: argparse.Namespace) -> int:
             f"  0 orphans\n"
             f"  0 duplicate identities\n"
             f"  0 unmatched outcomes\n"
+            f"  entry model (live): {emt['live_entry_fill_model']}"
+            f"  (recorded on fills: {emt['recorded_execution_models_in_window']})\n"
+            f"  fills missing execution-context: {s['fills_missing_execution_context']}\n"
+            f"  fills with slippage outside modelled bound: {s['fills_slippage_outside_bound']}\n"
         )
     else:
         print("  TRADE CHAIN: FAIL")

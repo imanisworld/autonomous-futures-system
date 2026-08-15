@@ -25,12 +25,47 @@ def _trade(ts: str, *, instrument: str = "MNQ", strategy: str = "orb_breakout", 
     }
 
 
-def _outcome(ts: str, *, instrument: str = "MNQ", result: str = "WIN", exit_reason: str = "target hit", pnl=25.0) -> dict:
+def _outcome(
+    ts: str,
+    *,
+    instrument: str = "MNQ",
+    result: str = "WIN",
+    exit_reason: str = "target hit",
+    pnl=25.0,
+    execution_audit: dict | None = None,
+) -> dict:
+    outcome = {"result": result, "exit_reason": exit_reason, "pnl_dollars": pnl}
+    if execution_audit is not None:
+        outcome["execution_audit"] = execution_audit
     return {
         "ts": ts,
         "instrument": instrument,
         "type": "OUTCOME",
-        "outcome": {"result": result, "exit_reason": exit_reason, "pnl_dollars": pnl},
+        "outcome": outcome,
+    }
+
+
+def _post_fill_validation(
+    *,
+    execution_model: str = "anchored_structure",
+    requested_entry: float = 30000.0,
+    actual_entry: float = 30001.0,
+    slippage_ticks: float = 4.0,
+    max_slippage_ticks: float | None = 32.0,
+    slippage_within_bound: bool = True,
+) -> dict:
+    return {
+        "post_fill_validation": {
+            "execution_model": execution_model,
+            "requested_entry": requested_entry,
+            "actual_entry": actual_entry,
+            "slippage_ticks": slippage_ticks,
+            "adverse_slippage_ticks": max(0.0, slippage_ticks),
+            "max_slippage_ticks": max_slippage_ticks,
+            "accepted": slippage_within_bound,
+            "failed_checks": [] if slippage_within_bound else ["slippage_limit"],
+            "checks": {"slippage_limit": slippage_within_bound},
+        }
     }
 
 
@@ -497,3 +532,90 @@ def test_journal_integrity_detects_same_count_field_level_mutation(tmp_path: Pat
     run2 = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=True)
     assert run2["journal_integrity"]["status"] == "MUTATED"
     assert run2["status"] == "FAIL"
+
+
+def test_fill_missing_execution_context_is_reported_but_does_not_fail(tmp_path: Path) -> None:
+    """A fill with no execution_audit.post_fill_validation (e.g. a legacy
+    journal row from before this instrumentation existed) must be visibly
+    flagged as unverified rather than silently assumed within tolerance --
+    but must not, on its own, flip the whole daily reconciliation to FAIL."""
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    day = journal_dir / "journal_2026-07-01.jsonl"
+    _write_jsonl(day, [_trade("2026-07-01T14:00:00Z"), _outcome("2026-07-01T14:30:00Z")])
+
+    report = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=False)
+
+    assert report["status"] == "PASS"
+    assert report["summary"]["fills_missing_execution_context"] == 1
+    assert report["summary"]["fills_slippage_outside_bound"] == 0
+    fill = report["detail"]["resolved_fills"][0]
+    assert fill["entry_execution_context"]["recorded"] is False
+
+
+def test_fill_with_slippage_outside_modelled_bound_fails_closed(tmp_path: Path) -> None:
+    """A fill whose own post_fill_validation record shows slippage outside
+    its modelled bound is a real execution-integrity defect and must FAIL
+    the trade-chain check, the same severity as an orphan or naked fill."""
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    day = journal_dir / "journal_2026-07-01.jsonl"
+    _write_jsonl(
+        day,
+        [
+            _trade("2026-07-01T14:00:00Z"),
+            _outcome(
+                "2026-07-01T14:30:00Z",
+                execution_audit=_post_fill_validation(slippage_ticks=99.0, slippage_within_bound=False),
+            ),
+        ],
+    )
+
+    report = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=False)
+
+    assert report["status"] == "FAIL"
+    assert report["summary"]["fills_slippage_outside_bound"] == 1
+    flagged = report["detail"]["fills_slippage_outside_bound"][0]
+    assert flagged["entry_execution_context"]["slippage_within_bound"] is False
+
+
+def test_entry_model_and_tolerance_compares_recorded_fills_to_live_runtime(tmp_path: Path) -> None:
+    """recorded_execution_models_in_window reflects each fill's OWN record;
+    live_entry_fill_model reflects the current runtime snapshot passed in by
+    the caller (daily.py) -- the two are reported side by side so a fill
+    evidenced under a since-changed model/tolerance is visible, not hidden
+    behind a single merged value."""
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    day = journal_dir / "journal_2026-07-01.jsonl"
+    _write_jsonl(
+        day,
+        [
+            _trade("2026-07-01T14:00:00Z"),
+            _outcome("2026-07-01T14:30:00Z", execution_audit=_post_fill_validation(execution_model="anchored_structure")),
+        ],
+    )
+
+    report = build_trade_chain_report(
+        journal_dir=journal_dir,
+        repo_root=tmp_path,
+        use_checkpoint=False,
+        runtime_ctx={"entry_fill_model": "ioc_limit", "entry_tolerance_ticks": {"MNQ": {"effective_replay_paper": 32.0}}},
+    )
+
+    emt = report["entry_model_and_tolerance"]
+    assert emt["checked_against_live_runtime"] is True
+    assert emt["live_entry_fill_model"] == "ioc_limit"
+    assert emt["recorded_execution_models_in_window"] == ["anchored_structure"]
+
+
+def test_entry_model_and_tolerance_without_runtime_ctx_reports_not_checked(tmp_path: Path) -> None:
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    day = journal_dir / "journal_2026-07-01.jsonl"
+    _write_jsonl(day, [_trade("2026-07-01T14:00:00Z"), _outcome("2026-07-01T14:30:00Z")])
+
+    report = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=False)
+
+    assert report["entry_model_and_tolerance"]["checked_against_live_runtime"] is False
+    assert report["entry_model_and_tolerance"]["live_entry_fill_model"] is None

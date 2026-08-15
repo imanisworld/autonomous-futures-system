@@ -1,13 +1,25 @@
 """Read-only, manually-invoked repo/process routines.
 
-Four routines, each a thin wrapper over existing ops/* machinery plus a
-small amount of new (read-only) git/runtime plumbing that did not exist
-elsewhere in the repo:
+Exactly THREE routines, each a thin wrapper over existing ops/* machinery
+plus a small amount of new (read-only) git/runtime plumbing that did not
+exist elsewhere in the repo:
 
-1. Ownership Preflight                 -> ops.project_check.preflight
-2. Session Safety + Runtime Snapshot   -> ops.project_check.session
-3. Strategy Promotion Proof Gate       -> ops.project_check.promotion
-4. Daily Reconciliation + Trade Chain  -> ops.project_check.daily
+1. Session Safety + Runtime Snapshot   -> ops.project_check.session
+                                           (session-start, precommit) plus
+                                           the pre-work ownership/remote-
+                                           freshness gate for research or
+                                           promotion -> ops.project_check.preflight
+2. Strategy Promotion Proof Gate       -> ops.project_check.promotion
+3. Daily Reconciliation + Trade Chain  -> ops.project_check.daily
+                                           (folds in ops.project_check.trade_chain,
+                                           including per-fill entry-model/
+                                           effective-tolerance verification)
+
+preflight.py stays a separate module (it is tested independently and has a
+distinct fail-closed contract -- it blocks on a dirty worktree, which
+session-start/precommit intentionally do not) but is not a fourth routine:
+it is Session Safety's third mode, run before starting research or a
+promotion pass rather than at session start or immediately pre-commit.
 
 Nothing in this package commits, pushes, pulls, resets, rebases, checks out,
 deletes branches/worktrees/tags, drops stashes, cancels orders, flattens
