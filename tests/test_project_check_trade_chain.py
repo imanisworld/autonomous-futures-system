@@ -3,34 +3,59 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from ops.project_check.trade_chain import (
-    build_trade_chain_report,
-    load_checkpoint,
-    load_checkpoint_full,
-    save_checkpoint,
-)
+import pytest
+
+from ops.project_check.trade_chain import build_trade_chain_report, load_checkpoint, load_checkpoint_full, save_checkpoint
+
+
+@pytest.fixture(autouse=True)
+def clean_tolerance_env(monkeypatch):
+    for name in (
+        "ENTRY_SLIPPAGE_TOLERANCE_TICKS",
+        "ENTRY_SLIPPAGE_TOLERANCE_TICKS_MES",
+        "ENTRY_SLIPPAGE_TOLERANCE_TICKS_MNQ",
+        "ENTRY_FILL_MODEL",
+    ):
+        monkeypatch.delenv(name, raising=False)
 
 
 def _write_jsonl(path: Path, rows: list[dict]) -> None:
     path.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
 
 
-def _trade(ts: str, *, instrument: str = "MNQ", strategy: str = "orb_breakout", stop=29990.0, target=30025.0) -> dict:
+def _trade(ts: str, *, instrument: str = "MNQ", strategy: str = "orb_breakout", stop=29990.0, target=30025.0, entry=30000.0) -> dict:
     return {
         "ts": ts,
         "instrument": instrument,
         "decision": "TRADE",
         "risk_check": {"result": "APPROVED"},
-        "setup": {"direction": "LONG", "strategy": strategy, "entry": 30000.0, "stop": stop, "target": target, "contracts": 1},
+        "setup": {"direction": "LONG", "strategy": strategy, "entry": entry, "stop": stop, "target": target, "contracts": 1},
     }
 
 
-def _outcome(ts: str, *, instrument: str = "MNQ", result: str = "WIN", exit_reason: str = "target hit", pnl=25.0) -> dict:
+def _outcome(
+    ts: str,
+    *,
+    instrument: str = "MNQ",
+    result: str = "WIN",
+    exit_reason: str = "target hit",
+    pnl=25.0,
+    order_type: str | None = None,
+    requested_entry: float | None = None,
+    entry_price: float | None = None,
+) -> dict:
+    body = {"result": result, "exit_reason": exit_reason, "pnl_dollars": pnl}
+    if order_type is not None:
+        body["order_type"] = order_type
+    if requested_entry is not None:
+        body["requested_entry"] = requested_entry
+    if entry_price is not None:
+        body["entry_price"] = entry_price
     return {
         "ts": ts,
         "instrument": instrument,
         "type": "OUTCOME",
-        "outcome": {"result": result, "exit_reason": exit_reason, "pnl_dollars": pnl},
+        "outcome": body,
     }
 
 
@@ -497,3 +522,82 @@ def test_journal_integrity_detects_same_count_field_level_mutation(tmp_path: Pat
     run2 = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=True)
     assert run2["journal_integrity"]["status"] == "MUTATED"
     assert run2["status"] == "FAIL"
+
+
+def test_resolved_fill_reports_unknown_entry_model_when_journal_row_predates_it(tmp_path: Path) -> None:
+    """An OUTCOME row with no order_type/requested_entry/entry_price (older
+    journal format, or a path that never set them) must report UNKNOWN
+    rather than fabricate an entry model or a slippage figure."""
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    _write_jsonl(
+        journal_dir / "journal_2026-07-01.jsonl",
+        [_trade("2026-07-01T14:00:00Z"), _outcome("2026-07-01T14:30:00Z", result="WIN")],
+    )
+    report = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=False)
+    assert report["status"] == "PASS"
+    fill = report["detail"]["resolved_fills"][0]
+    ctx = fill["execution_context"]
+    assert ctx["entry_model_recorded"] == "UNKNOWN"
+    assert ctx["actual_slippage_ticks"] == "UNKNOWN"
+    assert ctx["exceeds_current_tolerance"] == "UNKNOWN"
+    assert report["summary"]["slippage_exceeds_current_tolerance"] == 0
+
+
+def test_resolved_fill_records_actual_entry_model_and_slippage_within_tolerance(tmp_path: Path) -> None:
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    _write_jsonl(
+        journal_dir / "journal_2026-07-01.jsonl",
+        [
+            _trade("2026-07-01T14:00:00Z", entry=30000.0),
+            _outcome(
+                "2026-07-01T14:30:00Z",
+                result="WIN",
+                order_type="ioc_limit",
+                requested_entry=30000.0,
+                entry_price=30002.0,  # 2.0 pts / 0.25 tick = 8 ticks adverse for a LONG
+            ),
+        ],
+    )
+    report = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=False)
+    assert report["status"] == "PASS"
+    ctx = report["detail"]["resolved_fills"][0]["execution_context"]
+    assert ctx["entry_model_recorded"] == "ioc_limit"
+    assert ctx["actual_slippage_ticks"] == 8.0
+    # MNQ's replay/paper fallback tolerance is 32 ticks when unpinned by env.
+    assert ctx["current_effective_tolerance_ticks"] == 32.0
+    assert ctx["exceeds_current_tolerance"] is False
+    assert report["summary"]["slippage_exceeds_current_tolerance"] == 0
+
+
+def test_resolved_fill_flags_slippage_exceeding_current_tolerance(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS_MNQ", "5")
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    _write_jsonl(
+        journal_dir / "journal_2026-07-01.jsonl",
+        [
+            _trade("2026-07-01T14:00:00Z", entry=30000.0),
+            _outcome(
+                "2026-07-01T14:30:00Z",
+                result="WIN",
+                order_type="ioc_limit",
+                requested_entry=30000.0,
+                entry_price=30002.0,  # 8 ticks adverse > the 5-tick tolerance pinned above
+            ),
+        ],
+    )
+    report = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=False)
+    # Still PASS: an execution-context flag is visibility-only, it does not by
+    # itself fail the trade-chain (see execution_context_note in the report).
+    assert report["status"] == "PASS"
+    ctx = report["detail"]["resolved_fills"][0]["execution_context"]
+    assert ctx["actual_slippage_ticks"] == 8.0
+    assert ctx["current_effective_tolerance_ticks"] == 5.0
+    assert ctx["exceeds_current_tolerance"] is True
+    assert report["summary"]["slippage_exceeds_current_tolerance"] == 1
+    flag = report["detail"]["slippage_flags"][0]
+    assert flag["instrument"] == "MNQ"
+    assert flag["actual_slippage_ticks"] == 8.0
+    assert flag["current_effective_tolerance_ticks"] == 5.0

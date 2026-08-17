@@ -26,10 +26,99 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
+from execution.paper_broker import TICK_SIZE
 from ops.proof_30_mnq import classify_outcome, parse_proof_ts, read_journal_entries
+from ops.project_check.runtime import runtime_snapshot
 
 CHECKPOINT_SUBDIR = "afs-project-check"
 CHECKPOINT_FILENAME = "trade_chain_checkpoint.json"
+UNKNOWN = "UNKNOWN"
+
+
+def _instrument_root(instrument: str | None) -> str | None:
+    """MNQU5 -> MNQ, MESZ5 -> MES, etc: match down to the known alphabetic
+    root TICK_SIZE and the runtime tolerance map are keyed on. Returns the
+    raw instrument string unchanged if it doesn't match a known root
+    (TICK_SIZE/tolerance lookups on it will then correctly report UNKNOWN
+    rather than silently guessing), or None if instrument is empty/None.
+    """
+    if not instrument:
+        return None
+    for known in TICK_SIZE:
+        if instrument == known or instrument.startswith(known):
+            return known
+    return instrument
+
+
+def _execution_context_for_fill(
+    row: dict[str, Any], outcome_body: dict[str, Any], live_snapshot: dict[str, Any]
+) -> dict[str, Any]:
+    """Fold the journaled fill's ACTUAL entry model + the CURRENTLY configured
+    tolerance into every resolved fill row -- the same "entry model and
+    effective tolerance must be checked, not just assumed" lesson the
+    promotion gate (ops/project_check/promotion.py) already encodes for
+    research evidence, applied here to real paper/demo fills instead.
+
+    entry_model_recorded comes straight from the journaled OUTCOME's
+    order_type (set by PaperBroker/TradovateBroker at fill time -- see
+    execution/paper_broker.py's `order_type=self._entry_fill_model`); it is
+    UNKNOWN, never guessed, when the journal row predates that field or the
+    broker path didn't set it.
+
+    current_effective_tolerance_ticks is the runtime's tolerance RIGHT NOW,
+    not necessarily what was configured when this historical fill happened --
+    that caveat is stated explicitly rather than implied, so this is never
+    mistaken for a claim about point-in-time configuration.
+    """
+    entry_model_recorded = outcome_body.get("order_type") or UNKNOWN
+    requested_entry = outcome_body.get("requested_entry")
+    entry_price = outcome_body.get("entry_price")
+    root = _instrument_root(row.get("instrument"))
+    tick_size = TICK_SIZE.get(root) if root else None
+    live_tol = (live_snapshot.get("entry_tolerance_ticks") or {}).get(root) if root else None
+    current_tolerance_ticks = (
+        live_tol.get("effective_replay_paper") if isinstance(live_tol, dict) else None
+    )
+
+    actual_slippage_ticks: float | None = None
+    direction = row.get("direction")
+    if (
+        requested_entry is not None
+        and entry_price is not None
+        and tick_size
+        and direction in ("LONG", "SHORT")
+    ):
+        try:
+            requested_f = float(requested_entry)
+            entry_f = float(entry_price)
+            adverse_price_delta = (
+                (entry_f - requested_f) if direction == "LONG" else (requested_f - entry_f)
+            )
+            actual_slippage_ticks = round(adverse_price_delta / tick_size, 2)
+        except (TypeError, ValueError, ZeroDivisionError):
+            actual_slippage_ticks = None
+
+    exceeds_tolerance = None
+    if actual_slippage_ticks is not None and current_tolerance_ticks is not None:
+        try:
+            exceeds_tolerance = actual_slippage_ticks > float(current_tolerance_ticks)
+        except (TypeError, ValueError):
+            exceeds_tolerance = None
+
+    return {
+        "entry_model_recorded": entry_model_recorded,
+        "requested_entry": requested_entry,
+        "entry_price": entry_price,
+        "actual_slippage_ticks": actual_slippage_ticks if actual_slippage_ticks is not None else UNKNOWN,
+        "current_effective_tolerance_ticks": (
+            current_tolerance_ticks if current_tolerance_ticks is not None else UNKNOWN
+        ),
+        "current_tolerance_note": (
+            "reflects the runtime's tolerance configuration NOW, at report time -- not "
+            "necessarily what was configured when this historical fill executed"
+        ),
+        "exceeds_current_tolerance": exceeds_tolerance if exceeds_tolerance is not None else UNKNOWN,
+    }
 
 
 def _now_iso() -> str:
@@ -254,6 +343,12 @@ def build_trade_chain_report(
     read_errors = [e for e in entries if e.get("type") == "READ_ERROR"]
     entries_no_errors = [e for e in entries if e.get("type") != "READ_ERROR"]
 
+    # Read once, reused for every resolved fill's execution-context check below
+    # (see _execution_context_for_fill) -- this is the same "check the CURRENT
+    # live runtime, don't just assert it" lesson ops/project_check/promotion.py
+    # already applies to research evidence, applied here to real fills instead.
+    live_snapshot = runtime_snapshot(repo_root=repo_root)
+
     checkpoint_data: dict[str, Any] | None = None
     checkpoint_ts = since_ts
     if checkpoint_ts is None and use_checkpoint:
@@ -313,6 +408,7 @@ def build_trade_chain_report(
     unverified_open_attempts: list[dict[str, Any]] = []
     unresolved_orphan: list[dict[str, Any]] = []
     naked_position_risk: list[dict[str, Any]] = []
+    slippage_flags: list[dict[str, Any]] = []
     # A carryover resolution: the ATTEMPT is old (at/before the checkpoint,
     # already reported by a prior run), but its OUTCOME just arrived. This is
     # new information -- a previously open/unresolved attempt got resolved --
@@ -365,7 +461,17 @@ def build_trade_chain_report(
         classified.pop("_bucket")
         row = classified
         if category in ("filled_win_loss", "breakeven"):
+            exec_ctx = _execution_context_for_fill(row, outcome.get("outcome") or {}, live_snapshot)
+            row = {**row, "execution_context": exec_ctx}
             resolved_fills.append(row)
+            if exec_ctx.get("exceeds_current_tolerance") is True:
+                slippage_flags.append(
+                    {
+                        **{k: row[k] for k in ("trade_ts", "instrument", "strategy", "direction", "path", "line")},
+                        "actual_slippage_ticks": exec_ctx["actual_slippage_ticks"],
+                        "current_effective_tolerance_ticks": exec_ctx["current_effective_tolerance_ticks"],
+                    }
+                )
             if setup.get("stop") in (None, "") or setup.get("target") in (None, ""):
                 naked_position_risk.append({**row, "issue": "filled trade missing stop or target in journaled setup"})
         elif category == "cancelled_nofill":
@@ -384,6 +490,10 @@ def build_trade_chain_report(
         category = classified.pop("_category")
         classified.pop("_bucket")
         classified["fills_this_run"] = category in ("filled_win_loss", "breakeven")
+        if classified["fills_this_run"]:
+            classified["execution_context"] = _execution_context_for_fill(
+                classified, outcome.get("outcome") or {}, live_snapshot
+            )
         carryover_resolutions.append(classified)
 
     # Duplicate order-identity check across all order_ids events in the window.
@@ -509,6 +619,7 @@ def build_trade_chain_report(
             "unmatched_outcomes": len(unmatched_outcomes),
             "unmatched_order_ids": len(unmatched_order_ids),
             "carryover_resolutions": len(carryover_resolutions),
+            "slippage_exceeds_current_tolerance": len(slippage_flags),
         },
         "accounting": {
             "attempts_identity": (
@@ -532,6 +643,7 @@ def build_trade_chain_report(
             "orphans": unresolved_orphan,
             "duplicate_order_identities": duplicate_order_ids,
             "naked_position_risk": naked_position_risk,
+            "slippage_flags": slippage_flags,
             "risk_rejected_missing_reason": risk_rejected_missing_reason,
             "carryover_resolutions": carryover_resolutions,
             "unmatched_outcomes": [
@@ -551,6 +663,17 @@ def build_trade_chain_report(
             ],
         },
         "broker_journal_parity": broker_parity,
+        "execution_context_note": (
+            "Every resolved fill's detail.resolved_fills row carries an execution_context "
+            "block: the actual entry model recorded on that fill's journaled OUTCOME "
+            "(order_type, UNKNOWN if the row predates it), the runtime's CURRENTLY "
+            "configured tolerance for that instrument (not necessarily what was configured "
+            "at execution time), and the actual adverse slippage in ticks computed from "
+            "requested_entry vs entry_price. A fill exceeding the current tolerance is "
+            "flagged in detail.slippage_flags and summary.slippage_exceeds_current_tolerance "
+            "-- this is visibility only and does not by itself fail the trade-chain status; "
+            "see the promotion gate for hard execution-context blockers on new evidence."
+        ),
         "eod_day_only_boundary_check": {
             "checked": False,
             "reason": "no machine-readable per-strategy day-only-exit registry found in the repo to verify against",

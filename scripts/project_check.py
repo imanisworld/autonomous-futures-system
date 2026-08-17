@@ -196,6 +196,13 @@ def _cmd_daily(args: argparse.Namespace) -> int:
             f"  0 duplicate identities\n"
             f"  0 unmatched outcomes\n"
         )
+        if s.get("slippage_exceeds_current_tolerance"):
+            print(f"  SLIPPAGE FLAG: {s['slippage_exceeds_current_tolerance']} fill(s) exceeded the current effective tolerance")
+            for flag in tc["detail"]["slippage_flags"]:
+                print(
+                    f"    - {flag['instrument']} {flag['strategy']} @ {flag['trade_ts']}: "
+                    f"{flag['actual_slippage_ticks']} ticks vs {flag['current_effective_tolerance_ticks']} tolerance"
+                )
     else:
         print("  TRADE CHAIN: FAIL")
         _print_json(tc)
