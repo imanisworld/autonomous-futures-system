@@ -4,11 +4,20 @@ Two modes:
   A. build_session_start_report()  -- full repo/runtime snapshot; the only
      thing in this module that writes anything, and all it writes is a small
      session-state cache file under .git/ (never a tracked path, never
-     committed) so precommit can later detect drift.
+     committed) so precommit can later detect drift. Also live-verifies
+     origin/main against the remote (gitutil.verified_origin_main) and
+     checks worktree/branch ownership (gitutil.worktree_ownership) --
+     folded in here rather than kept as a separate "ownership preflight"
+     routine, since both are exactly the kind of thing you want to know
+     at the start of a session.
   B. build_precommit_report()      -- strictly read-only; fails closed on
-     branch/worktree drift or an unverifiable session-start baseline. Never
-     commits, pushes, pulls, resets, rebases, checks out, deletes a
-     branch/worktree, drops a stash, creates/deletes a tag, or modifies files.
+     branch/worktree drift, an ownership conflict, or an unverifiable
+     session-start baseline. Never commits, pushes, pulls, resets, rebases,
+     checks out, deletes a branch/worktree, drops a stash, creates/deletes a
+     tag, or modifies files. Never fetches -- it reuses gitutil.worktree_ownership
+     (local-only) but not gitutil.verified_origin_main (that's a live remote
+     read, appropriate for the start-of-session snapshot, not for every
+     precommit check).
 """
 from __future__ import annotations
 
@@ -80,6 +89,8 @@ def build_session_start_report(*, cwd: str | Path | None = None) -> dict[str, An
     stashes = gitutil.stash_list(root)
     prs = gitutil.open_prs(root)
     closed_unmerged = gitutil.unmerged_remote_branches_missing_archive_tag(root)
+    origin_main_verified = gitutil.verified_origin_main(root)
+    worktree_ownership = gitutil.worktree_ownership(root)
     runtime = runtime_snapshot(repo_root=root)
 
     branch_after = gitutil.current_branch(root)
@@ -111,6 +122,8 @@ def build_session_start_report(*, cwd: str | Path | None = None) -> dict[str, An
             "archive_tags": archive_tags,
             "stash_count": len(stashes),
             "stashes": stashes,
+            "origin_main_verified": origin_main_verified,
+            "worktree_ownership": worktree_ownership,
         },
         "branch_changed_during_check": branch_changed_during_check,
         "runtime_snapshot": runtime,
@@ -189,10 +202,12 @@ def build_precommit_report(*, cwd: str | Path | None = None) -> dict[str, Any]:
                 f"(nothing in this session should change HEAD before a commit)"
             )
 
-    owner = next((w for w in all_worktrees if w.get("branch") == branch), None)
-    if owner is not None and Path(owner["path"]).resolve() != root.resolve():
+    ownership = gitutil.worktree_ownership(root)
+    reasons.extend(ownership["errors"])
+    for duplicate in ownership["duplicate_branch_owners"]:
         reasons.append(
-            f"intended branch {branch!r} is checked out in another worktree: {owner['path']}"
+            f"branch {duplicate['branch']!r} is registered to multiple worktrees: "
+            + ", ".join(duplicate["paths"])
         )
 
     verdict = "FAIL_CLOSED" if reasons else "OK"
@@ -215,6 +230,7 @@ def build_precommit_report(*, cwd: str | Path | None = None) -> dict[str, Any]:
             "changed_files": status.get("dirty_tracked", []),
             "staged_files": status.get("staged", []),
             "untracked_files": status.get("untracked", []),
+            "worktree_ownership": ownership,
         },
         "note": (
             "This routine is read-only and never commits/pushes/pulls/resets/rebases/"

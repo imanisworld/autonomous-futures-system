@@ -25,12 +25,27 @@ def _trade(ts: str, *, instrument: str = "MNQ", strategy: str = "orb_breakout", 
     }
 
 
-def _outcome(ts: str, *, instrument: str = "MNQ", result: str = "WIN", exit_reason: str = "target hit", pnl=25.0) -> dict:
+def _outcome(
+    ts: str,
+    *,
+    instrument: str = "MNQ",
+    result: str = "WIN",
+    exit_reason: str = "target hit",
+    pnl=25.0,
+    entry_price=None,
+) -> dict:
+    outcome = {"result": result, "exit_reason": exit_reason, "pnl_dollars": pnl}
+    if entry_price is not None:
+        outcome["entry_price"] = entry_price
+    return {"ts": ts, "instrument": instrument, "type": "OUTCOME", "outcome": outcome}
+
+
+def _runtime(*, root: str = "MNQ", tolerance_ticks: float = 2.0, entry_fill_model: str = "ioc_limit") -> dict:
     return {
-        "ts": ts,
-        "instrument": instrument,
-        "type": "OUTCOME",
-        "outcome": {"result": result, "exit_reason": exit_reason, "pnl_dollars": pnl},
+        "entry_fill_model": entry_fill_model,
+        "entry_fill_model_source": "test",
+        "entry_tolerance_ticks": {root: {"effective_replay_paper": tolerance_ticks}},
+        "quantity_caps": {},
     }
 
 
@@ -497,3 +512,72 @@ def test_journal_integrity_detects_same_count_field_level_mutation(tmp_path: Pat
     run2 = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=True)
     assert run2["journal_integrity"]["status"] == "MUTATED"
     assert run2["status"] == "FAIL"
+
+
+# --- Per-fill entry-model / effective-tolerance / slippage recording -------
+
+
+def test_fill_records_entry_model_and_slippage_within_tolerance(tmp_path: Path) -> None:
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    day = journal_dir / "journal_2026-07-01.jsonl"
+    # setup entry 30000.0, actual fill 30000.25 -> 1 tick of adverse LONG
+    # slippage (MNQ tick size 0.25), inside a 2-tick effective tolerance.
+    _write_jsonl(
+        day,
+        [_trade("2026-07-01T14:00:00Z"), _outcome("2026-07-01T14:30:00Z", entry_price=30000.25)],
+    )
+    report = build_trade_chain_report(
+        journal_dir=journal_dir,
+        repo_root=tmp_path,
+        use_checkpoint=False,
+        runtime=_runtime(tolerance_ticks=2.0),
+    )
+    assert report["status"] == "PASS"
+    fill = report["detail"]["resolved_fills"][0]
+    ctx = fill["execution_context"]
+    assert ctx["entry_fill_model"] == "ioc_limit"
+    assert ctx["effective_entry_tolerance_ticks"] == 2.0
+    assert ctx["actual_slippage_ticks"] == 1.0
+    assert ctx["slippage_within_tolerance"] is True
+    assert report["summary"]["slippage_outside_tolerance"] == 0
+
+
+def test_fill_flags_slippage_outside_effective_tolerance(tmp_path: Path) -> None:
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    day = journal_dir / "journal_2026-07-01.jsonl"
+    # 1.5 points adverse on a 0.25 tick = 6 ticks, outside a 2-tick tolerance.
+    _write_jsonl(
+        day,
+        [_trade("2026-07-01T14:00:00Z"), _outcome("2026-07-01T14:30:00Z", entry_price=30001.5)],
+    )
+    report = build_trade_chain_report(
+        journal_dir=journal_dir,
+        repo_root=tmp_path,
+        use_checkpoint=False,
+        runtime=_runtime(tolerance_ticks=2.0),
+    )
+    assert report["status"] == "FAIL"
+    assert report["summary"]["slippage_outside_tolerance"] == 1
+    flagged = report["detail"]["slippage_outside_tolerance"][0]
+    assert flagged["execution_context"]["actual_slippage_ticks"] == 6.0
+    assert flagged["execution_context"]["slippage_within_tolerance"] is False
+
+
+def test_fill_without_recorded_entry_price_reports_unknown_slippage(tmp_path: Path) -> None:
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    day = journal_dir / "journal_2026-07-01.jsonl"
+    _write_jsonl(day, [_trade("2026-07-01T14:00:00Z"), _outcome("2026-07-01T14:30:00Z")])
+    report = build_trade_chain_report(
+        journal_dir=journal_dir,
+        repo_root=tmp_path,
+        use_checkpoint=False,
+        runtime=_runtime(tolerance_ticks=2.0),
+    )
+    assert report["status"] == "PASS"
+    ctx = report["detail"]["resolved_fills"][0]["execution_context"]
+    assert ctx["actual_slippage_ticks"] is None
+    assert ctx["slippage_within_tolerance"] is None
+    assert ctx["slippage_unavailable_reason"] is not None
