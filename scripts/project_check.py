@@ -1,20 +1,31 @@
 #!/usr/bin/env python3
 """Read-only CLI for the project-check routines.
 
-  preflight      Strictly read-only ownership/base check before research or
-                 promotion. Makes no bookkeeping writes and never fetches.
+Three routines total:
+
+  1. SESSION SAFETY + RUNTIME SNAPSHOT (session-start, precommit, preflight)
   session-start  Repo/worktree/branch/PR/runtime snapshot; writes a small
                  session-state cache under .git/ so `precommit` can compare
                  against it later. Otherwise read-only.
   precommit      Strictly read-only. Compares current repo state against the
                  last session-start snapshot and fails closed on drift.
+  preflight      Strictly read-only ownership/base check before research or
+                 promotion -- the narrower pre-work check within this same
+                 routine: worktree-ownership uniqueness + verified-live
+                 origin/main, run once before generating evidence rather than
+                 at every commit. Makes no bookkeeping writes and never fetches.
+
+  2. STRATEGY PROMOTION PROOF GATE
   promotion      Strategy Promotion Proof Gate: accounting-identity + safety-
                  gate validator over an explicit evidence-facts file (see
                  ops/project_check/promotion.py's module docstring for the
                  schema). Read-only.
+
+  3. DAILY RECONCILIATION + TRADE CHAIN INTEGRITY
   daily          Daily Reconciliation + Trade Chain Integrity: repo/PR/branch
                  hygiene, evidence preservation, deployed state, strategy
-                 source-of-truth drift, and trade-chain accounting since the
+                 source-of-truth drift, and trade-chain accounting (including
+                 per-fill entry-model/tolerance/slippage evidence) since the
                  prior checkpoint. Read-only against git/journals. Does NOT
                  advance its local checkpoint file unless you pass
                  --advance-checkpoint explicitly -- and even then, it never
@@ -196,6 +207,12 @@ def _cmd_daily(args: argparse.Namespace) -> int:
             f"  0 duplicate identities\n"
             f"  0 unmatched outcomes\n"
         )
+        if s["fills_missing_execution_context"] or s["fills_slippage_outside_tolerance"] or s["fills_model_mismatch_current_runtime"]:
+            print(
+                f"  execution-context evidence: {s['fills_missing_execution_context']} fills missing, "
+                f"{s['fills_slippage_outside_tolerance']} slippage outside recorded tolerance, "
+                f"{s['fills_model_mismatch_current_runtime']} entry-model mismatch vs current runtime"
+            )
     else:
         print("  TRADE CHAIN: FAIL")
         _print_json(tc)

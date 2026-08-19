@@ -14,6 +14,19 @@ Reuses ops.proof_30_mnq (read_journal_entries, classify_outcome, parse_proof_ts)
 and mirrors the TRADE<->OUTCOME/ORDER_IDS pairing style already used by
 ops/reconciler_outcome_audit.py and scripts/session_audit.py, generalized to
 all instruments in one pass instead of one instrument at a time.
+
+Each resolved fill also carries a `fill_execution_context`: the entry fill
+model and effective slippage tolerance actually recorded for THAT trade
+(read straight from its journaled OUTCOME.execution_audit.post_fill_validation
+-- see execution/post_fill_validation.py -- which is ground truth for that
+fill, not a guess from today's config), plus whether its recorded slippage
+was within its recorded tolerance. This mirrors
+ops.project_check.promotion._execution_context_check's live-runtime
+verification: the promotion gate proves a strategy's evidence used the real
+entry model/tolerance before paper-readiness; this does the same per fill,
+after the fact. When a `runtime_view` (see ops.project_check.runtime) is
+supplied, each fill is also compared against the CURRENT live entry
+model/tolerance to surface config drift since that fill happened.
 """
 from __future__ import annotations
 
@@ -26,10 +39,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
+from execution.day_only_exit import instrument_root
 from ops.proof_30_mnq import classify_outcome, parse_proof_ts, read_journal_entries
 
 CHECKPOINT_SUBDIR = "afs-project-check"
 CHECKPOINT_FILENAME = "trade_chain_checkpoint.json"
+UNKNOWN = "UNKNOWN"
 
 
 def _now_iso() -> str:
@@ -240,6 +255,85 @@ def _pair_fifo_by_instrument(
     return paired, unmatched
 
 
+def _fill_execution_context(
+    outcome_entry: dict[str, Any], instrument: str, runtime_view: dict[str, Any] | None
+) -> dict[str, Any]:
+    """Actual entry model, actual effective tolerance, and slippage-vs-tolerance
+    for one resolved fill.
+
+    The "actual" fields are read directly from the fill's own journaled
+    OUTCOME.execution_audit.post_fill_validation (recorded at the moment of
+    that fill by execution/post_fill_validation.py) -- ground truth for that
+    specific trade. Older journal rows written before post_fill_validation
+    existed have no execution_audit at all; those fields report UNKNOWN
+    rather than being guessed from today's config.
+
+    When `runtime_view` (a ops.project_check.runtime.runtime_snapshot dict)
+    is supplied, the recorded model/tolerance are also compared against the
+    CURRENT live runtime to surface config drift since the fill -- a
+    mismatch here means runtime config has since changed, not that the fill
+    itself was wrong.
+    """
+    outcome = outcome_entry.get("outcome") or {}
+    audit = outcome.get("execution_audit") or {}
+    post_fill = audit.get("post_fill_validation") or {}
+
+    entry_fill_model_recorded = outcome.get("order_type")
+    tolerance_ticks_recorded = post_fill.get("max_slippage_ticks")
+    slippage_ticks_recorded = post_fill.get("slippage_ticks")
+    slippage_check_recorded = (post_fill.get("checks") or {}).get("slippage_limit")
+
+    if slippage_check_recorded is not None:
+        slippage_within_tolerance = bool(slippage_check_recorded)
+        slippage_source = "recorded_post_fill_validation_check"
+    elif slippage_ticks_recorded is not None and tolerance_ticks_recorded is not None:
+        try:
+            slippage_within_tolerance = abs(float(slippage_ticks_recorded)) <= float(tolerance_ticks_recorded) + 1e-9
+            slippage_source = "computed_from_recorded_slippage_and_tolerance"
+        except (TypeError, ValueError):
+            slippage_within_tolerance = None
+            slippage_source = "UNKNOWN: recorded slippage/tolerance not numeric"
+    else:
+        slippage_within_tolerance = None
+        slippage_source = "UNKNOWN: no execution_audit.post_fill_validation recorded for this fill"
+
+    row: dict[str, Any] = {
+        "entry_fill_model_recorded": entry_fill_model_recorded or UNKNOWN,
+        "effective_tolerance_ticks_recorded": tolerance_ticks_recorded,
+        "slippage_ticks_recorded": slippage_ticks_recorded,
+        "slippage_within_tolerance": slippage_within_tolerance,
+        "slippage_within_tolerance_source": slippage_source,
+        "requested_entry_recorded": outcome.get("requested_entry"),
+        "entry_price_recorded": outcome.get("entry_price"),
+    }
+
+    if runtime_view is None:
+        row["entry_fill_model_current_runtime"] = UNKNOWN
+        row["entry_fill_model_matches_current_runtime"] = None
+        row["effective_tolerance_ticks_current_runtime"] = None
+        row["current_runtime_comparison_note"] = (
+            "no runtime snapshot supplied to this check; current-runtime comparison skipped"
+        )
+        return row
+
+    root = instrument_root(instrument)
+    live_model = runtime_view.get("entry_fill_model")
+    live_tol = (runtime_view.get("entry_tolerance_ticks") or {}).get(root)
+    live_tol_ticks = live_tol.get("effective_replay_paper") if isinstance(live_tol, dict) else None
+    model_matches = None
+    if entry_fill_model_recorded and live_model not in (None, UNKNOWN):
+        model_matches = str(entry_fill_model_recorded) == str(live_model)
+    row["entry_fill_model_current_runtime"] = live_model or UNKNOWN
+    row["entry_fill_model_matches_current_runtime"] = model_matches
+    row["effective_tolerance_ticks_current_runtime"] = live_tol_ticks
+    row["current_runtime_comparison_note"] = (
+        "current-runtime fields compare this fill's recorded model/tolerance to the LIVE "
+        "config as of THIS check, not the config active when the fill happened -- a mismatch "
+        "here means runtime config has since changed, not that the fill was wrong"
+    )
+    return row
+
+
 def build_trade_chain_report(
     *,
     journal_dir: Path,
@@ -249,6 +343,7 @@ def build_trade_chain_report(
     advance_checkpoint: bool = False,
     broker_positions: Callable[[], list[dict[str, Any]]] | None = None,
     broker_orders: Callable[[], list[dict[str, Any]]] | None = None,
+    runtime_view: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     entries = read_journal_entries(journal_dir)
     read_errors = [e for e in entries if e.get("type") == "READ_ERROR"]
@@ -365,6 +460,7 @@ def build_trade_chain_report(
         classified.pop("_bucket")
         row = classified
         if category in ("filled_win_loss", "breakeven"):
+            row["fill_execution_context"] = _fill_execution_context(outcome, attempt.get("instrument"), runtime_view)
             resolved_fills.append(row)
             if setup.get("stop") in (None, "") or setup.get("target") in (None, ""):
                 naked_position_risk.append({**row, "issue": "filled trade missing stop or target in journaled setup"})
@@ -418,6 +514,24 @@ def build_trade_chain_report(
     attempts_identity_holds = len(attempts) == (
         fills_count + cancellations_count + rejects_or_no_fill_count + unverified_open_count + orphans_count
     )
+
+    # Per-fill entry-model/tolerance/slippage evidence (see
+    # _fill_execution_context). Reported, never used to flip PASS/FAIL: a
+    # historical fill predating post_fill_validation being journaled, or one
+    # filled under a runtime config that has since changed, is not itself a
+    # trade-chain integrity defect -- it is a gap in the evidence this routine
+    # surfaces so it can be explicitly followed up on, not silently assumed.
+    fills_missing_execution_context = [
+        f for f in resolved_fills if f.get("fill_execution_context", {}).get("slippage_within_tolerance") is None
+    ]
+    fills_slippage_outside_tolerance = [
+        f for f in resolved_fills if f.get("fill_execution_context", {}).get("slippage_within_tolerance") is False
+    ]
+    fills_model_mismatch_current_runtime = [
+        f
+        for f in resolved_fills
+        if f.get("fill_execution_context", {}).get("entry_fill_model_matches_current_runtime") is False
+    ]
 
     risk_rejected_missing_reason = [
         {"ts": e.get("ts"), "instrument": e.get("instrument"), "path": e.get("_path"), "line": e.get("_line")}
@@ -509,6 +623,9 @@ def build_trade_chain_report(
             "unmatched_outcomes": len(unmatched_outcomes),
             "unmatched_order_ids": len(unmatched_order_ids),
             "carryover_resolutions": len(carryover_resolutions),
+            "fills_missing_execution_context": len(fills_missing_execution_context),
+            "fills_slippage_outside_tolerance": len(fills_slippage_outside_tolerance),
+            "fills_model_mismatch_current_runtime": len(fills_model_mismatch_current_runtime),
         },
         "accounting": {
             "attempts_identity": (
@@ -522,6 +639,16 @@ def build_trade_chain_report(
                 "unresolved TRADE attempt is NEVER counted as a fill -- it is reported as "
                 "unverified_open_attempts (current journal day) or orphans (stale) until an "
                 "OUTCOME or broker fill confirmation proves it either way."
+            ),
+            "execution_context_definition": (
+                "Each resolved fill carries fill_execution_context (see detail.resolved_fills): "
+                "its actual entry model and actual effective tolerance as recorded on that fill's "
+                "own OUTCOME.execution_audit.post_fill_validation, whether its recorded slippage "
+                "was within its recorded tolerance, and -- when a runtime snapshot was supplied -- "
+                "whether that model/tolerance still matches the CURRENT live runtime. "
+                "fills_missing_execution_context counts fills with no recoverable evidence either "
+                "way (pre-dates post_fill_validation being journaled); this is a reported gap, "
+                "never a guess, and never on its own flips status to FAIL."
             ),
         },
         "detail": {

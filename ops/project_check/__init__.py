@@ -1,13 +1,20 @@
 """Read-only, manually-invoked repo/process routines.
 
-Four routines, each a thin wrapper over existing ops/* machinery plus a
+Three routines, each a thin wrapper over existing ops/* machinery plus a
 small amount of new (read-only) git/runtime plumbing that did not exist
 elsewhere in the repo:
 
-1. Ownership Preflight                 -> ops.project_check.preflight
-2. Session Safety + Runtime Snapshot   -> ops.project_check.session
-3. Strategy Promotion Proof Gate       -> ops.project_check.promotion
-4. Daily Reconciliation + Trade Chain  -> ops.project_check.daily
+1. Session Safety + Runtime Snapshot   -> ops.project_check.session
+                                           (session-start, precommit/prepush)
+                                           plus ops.project_check.preflight
+                                           for the narrower pre-research/
+                                           pre-promotion worktree-ownership +
+                                           verified-origin/main check run
+                                           before generating evidence.
+2. Strategy Promotion Proof Gate       -> ops.project_check.promotion
+3. Daily Reconciliation + Trade Chain  -> ops.project_check.daily
+                                           (folds ops.project_check.trade_chain
+                                           in as its trade-chain-integrity pass)
 
 Nothing in this package commits, pushes, pulls, resets, rebases, checks out,
 deletes branches/worktrees/tags, drops stashes, cancels orders, flattens
