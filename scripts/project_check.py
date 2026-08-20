@@ -195,6 +195,7 @@ def _cmd_daily(args: argparse.Namespace) -> int:
             f"  0 orphans\n"
             f"  0 duplicate identities\n"
             f"  0 unmatched outcomes\n"
+            f"  0 execution-context drift (entry model / slippage vs live runtime)\n"
         )
     else:
         print("  TRADE CHAIN: FAIL")

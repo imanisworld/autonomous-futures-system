@@ -15,13 +15,47 @@ def _write_jsonl(path: Path, rows: list[dict]) -> None:
     path.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
 
 
-def _trade(ts: str, *, instrument: str = "MNQ", strategy: str = "orb_breakout", stop=29990.0, target=30025.0) -> dict:
-    return {
+def _trade(
+    ts: str,
+    *,
+    instrument: str = "MNQ",
+    strategy: str = "orb_breakout",
+    stop=29990.0,
+    target=30025.0,
+    execution_audit: dict | None = None,
+) -> dict:
+    entry = {
         "ts": ts,
         "instrument": instrument,
         "decision": "TRADE",
         "risk_check": {"result": "APPROVED"},
         "setup": {"direction": "LONG", "strategy": strategy, "entry": 30000.0, "stop": stop, "target": target, "contracts": 1},
+    }
+    if execution_audit is not None:
+        entry["execution_audit"] = execution_audit
+    return entry
+
+
+def _post_fill_audit(
+    *,
+    execution_model: str = "market",
+    requested_entry: float = 30000.0,
+    actual_entry: float = 30001.0,
+    slippage_ticks: float = 4.0,
+    adverse_slippage_ticks: float = 4.0,
+    max_slippage_ticks: float | None = 8.0,
+    slippage_within_bound: bool = True,
+) -> dict:
+    return {
+        "post_fill_validation": {
+            "execution_model": execution_model,
+            "requested_entry": requested_entry,
+            "actual_entry": actual_entry,
+            "slippage_ticks": slippage_ticks,
+            "adverse_slippage_ticks": adverse_slippage_ticks,
+            "max_slippage_ticks": max_slippage_ticks,
+            "checks": {"slippage_limit": slippage_within_bound},
+        }
     }
 
 
@@ -472,6 +506,93 @@ def test_journal_integrity_detects_same_count_content_rewrite(tmp_path: Path) ->
     assert integrity["current_content_fingerprint"] != integrity["recorded_content_fingerprint"]
     # The checkpoint boundary was not trusted -- full rescan.
     assert run2["window"]["effective_since_ts_exclusive"] is None
+
+
+# ---------------------------------------------------------------------------
+# Execution context (entry model / effective tolerance / slippage) belongs
+# in trade-chain monitoring, not only the promotion evidence gate: a fill
+# whose actual entry model or slippage diverges from what the CURRENT
+# runtime is configured for must be surfaced, not silently folded into a
+# clean PASS.
+# ---------------------------------------------------------------------------
+
+
+def test_clean_fill_execution_context_matches_live_runtime_and_passes(tmp_path: Path) -> None:
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    # repo_root has no risk_rules.yaml and ENTRY_FILL_MODEL is unset in the
+    # test env, so live runtime falls back to the code default "market".
+    _write_jsonl(
+        journal_dir / "journal_2026-07-01.jsonl",
+        [
+            _trade("2026-07-01T14:00:00Z", execution_audit=_post_fill_audit(execution_model="market")),
+            _outcome("2026-07-01T14:30:00Z"),
+        ],
+    )
+    report = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=False)
+    assert report["status"] == "PASS"
+    assert report["summary"]["execution_context_drift"] == 0
+    assert report["detail"]["resolved_fills"][0]["entry_fill_model_used"] == "market"
+    assert report["detail"]["resolved_fills"][0]["slippage_within_modelled_bound"] is True
+
+
+def test_execution_context_drift_flagged_when_fill_model_diverges_from_live_runtime(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setenv("ENTRY_FILL_MODEL", "ioc_limit")
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    _write_jsonl(
+        journal_dir / "journal_2026-07-01.jsonl",
+        [
+            _trade("2026-07-01T14:00:00Z", execution_audit=_post_fill_audit(execution_model="market")),
+            _outcome("2026-07-01T14:30:00Z"),
+        ],
+    )
+    report = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=False)
+    assert report["status"] == "FAIL"
+    assert report["summary"]["execution_context_drift"] == 1
+    drift = report["detail"]["execution_context_drift"][0]
+    assert "entry_fill_model_used='market'" in drift["issues"][0]
+    assert "ioc_limit" in drift["issues"][0]
+
+
+def test_execution_context_drift_flagged_when_slippage_exceeds_modelled_bound(tmp_path: Path) -> None:
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    _write_jsonl(
+        journal_dir / "journal_2026-07-01.jsonl",
+        [
+            _trade(
+                "2026-07-01T14:00:00Z",
+                execution_audit=_post_fill_audit(
+                    adverse_slippage_ticks=12.0, max_slippage_ticks=8.0, slippage_within_bound=False
+                ),
+            ),
+            _outcome("2026-07-01T14:30:00Z"),
+        ],
+    )
+    report = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=False)
+    assert report["status"] == "FAIL"
+    assert report["summary"]["execution_context_drift"] == 1
+    assert "exceeded the modelled" in report["detail"]["execution_context_drift"][0]["issues"][0]
+
+
+def test_missing_execution_audit_is_not_flagged_as_drift(tmp_path: Path) -> None:
+    """An attempt that predates this instrumentation (no execution_audit on
+    the TRADE row) must not be treated as clean OR as drifted -- it simply
+    has nothing to compare, same as any other UNKNOWN-sourced field in this
+    package."""
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    _write_jsonl(
+        journal_dir / "journal_2026-07-01.jsonl",
+        [_trade("2026-07-01T14:00:00Z"), _outcome("2026-07-01T14:30:00Z")],
+    )
+    report = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=False)
+    assert report["status"] == "PASS"
+    assert report["summary"]["execution_context_drift"] == 0
+    assert report["detail"]["resolved_fills"][0].get("entry_fill_model_used") is None
 
 
 def test_journal_integrity_detects_same_count_field_level_mutation(tmp_path: Path) -> None:

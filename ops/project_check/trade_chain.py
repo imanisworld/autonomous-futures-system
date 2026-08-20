@@ -14,6 +14,12 @@ Reuses ops.proof_30_mnq (read_journal_entries, classify_outcome, parse_proof_ts)
 and mirrors the TRADE<->OUTCOME/ORDER_IDS pairing style already used by
 ops/reconciler_outcome_audit.py and scripts/session_audit.py, generalized to
 all instruments in one pass instead of one instrument at a time.
+
+Also compares each FILL's actual entry_fill_model/slippage (already recorded
+in execution_audit.post_fill_validation on the TRADE row) against the
+CURRENT live runtime configuration -- entry model and effective tolerance
+must be watched here, not only at strategy promotion time, since a runtime/
+config change after promotion would otherwise go unnoticed forever.
 """
 from __future__ import annotations
 
@@ -27,6 +33,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from ops.proof_30_mnq import classify_outcome, parse_proof_ts, read_journal_entries
+from ops.project_check.runtime import runtime_snapshot
 
 CHECKPOINT_SUBDIR = "afs-project-check"
 CHECKPOINT_FILENAME = "trade_chain_checkpoint.json"
@@ -202,6 +209,52 @@ def _journal_integrity_check(
     return {"checked": True, "status": "OK", "reason": None, **base}
 
 
+def _execution_context_fields(attempt: dict[str, Any]) -> dict[str, Any]:
+    """Per-fill entry-model/tolerance/slippage facts already recorded on the
+    TRADE row's execution_audit.post_fill_validation (see
+    execution/post_fill_validation.py, execution/paper_broker.py) -- read
+    only, never recomputed or guessed. Returns {} when the attempt predates
+    this instrumentation or the audit was not attached.
+    """
+    audit = ((attempt.get("execution_audit") or {}).get("post_fill_validation")) or {}
+    if not audit:
+        return {}
+    checks = audit.get("checks") or {}
+    return {
+        "entry_fill_model_used": audit.get("execution_model"),
+        "requested_entry": audit.get("requested_entry"),
+        "actual_entry": audit.get("actual_entry"),
+        "slippage_ticks": audit.get("slippage_ticks"),
+        "adverse_slippage_ticks": audit.get("adverse_slippage_ticks"),
+        "max_slippage_ticks": audit.get("max_slippage_ticks"),
+        "slippage_within_modelled_bound": checks.get("slippage_limit"),
+    }
+
+
+def _execution_context_drift(row: dict[str, Any], *, live_entry_fill_model: Any) -> list[str]:
+    """Compare what a FILL actually used against the CURRENT live runtime
+    configuration -- the specific lesson this check exists to encode: the
+    entry model and effective tolerance belong in trade-chain monitoring,
+    not only promotion evidence, so a runtime/config change made after a
+    strategy was promoted is still caught here on the next fill, not only
+    at promotion time.
+    """
+    issues: list[str] = []
+    used_model = row.get("entry_fill_model_used")
+    if used_model and live_entry_fill_model not in (None, "UNKNOWN"):
+        if str(used_model) != str(live_entry_fill_model):
+            issues.append(
+                f"entry_fill_model_used={used_model!r} at fill time differs from the currently "
+                f"configured entry_fill_model={live_entry_fill_model!r}"
+            )
+    if row.get("slippage_within_modelled_bound") is False:
+        issues.append(
+            f"adverse slippage ({row.get('adverse_slippage_ticks')} ticks) exceeded the modelled "
+            f"max_slippage_ticks ({row.get('max_slippage_ticks')}) bound at fill time"
+        )
+    return issues
+
+
 def _entry_ts(entry: dict[str, Any]) -> datetime | None:
     return parse_proof_ts(entry.get("ts"))
 
@@ -253,6 +306,8 @@ def build_trade_chain_report(
     entries = read_journal_entries(journal_dir)
     read_errors = [e for e in entries if e.get("type") == "READ_ERROR"]
     entries_no_errors = [e for e in entries if e.get("type") != "READ_ERROR"]
+
+    live_entry_fill_model = runtime_snapshot(repo_root=repo_root).get("entry_fill_model")
 
     checkpoint_data: dict[str, Any] | None = None
     checkpoint_ts = since_ts
@@ -313,6 +368,7 @@ def build_trade_chain_report(
     unverified_open_attempts: list[dict[str, Any]] = []
     unresolved_orphan: list[dict[str, Any]] = []
     naked_position_risk: list[dict[str, Any]] = []
+    execution_context_drift: list[dict[str, Any]] = []
     # A carryover resolution: the ATTEMPT is old (at/before the checkpoint,
     # already reported by a prior run), but its OUTCOME just arrived. This is
     # new information -- a previously open/unresolved attempt got resolved --
@@ -336,6 +392,11 @@ def build_trade_chain_report(
         row["category"] = category
         row["exit_reason"] = (outcome.get("outcome") or {}).get("exit_reason")
         row["pnl_dollars"] = (outcome.get("outcome") or {}).get("pnl_dollars")
+        row["entry"] = setup.get("entry")
+        row["stop"] = setup.get("stop")
+        row["target"] = setup.get("target")
+        row["contracts"] = setup.get("contracts")
+        row.update(_execution_context_fields(attempt))
         return {**row, "_bucket": "resolved", "_category": category, "_setup": setup}
 
     for attempt in attempts:
@@ -368,6 +429,9 @@ def build_trade_chain_report(
             resolved_fills.append(row)
             if setup.get("stop") in (None, "") or setup.get("target") in (None, ""):
                 naked_position_risk.append({**row, "issue": "filled trade missing stop or target in journaled setup"})
+            drift_issues = _execution_context_drift(row, live_entry_fill_model=live_entry_fill_model)
+            if drift_issues:
+                execution_context_drift.append({**row, "issues": drift_issues})
         elif category == "cancelled_nofill":
             resolved_cancellations.append(row)
         else:
@@ -442,6 +506,7 @@ def build_trade_chain_report(
         orphans_count > 0
         or bool(duplicate_order_ids)
         or bool(naked_position_risk)
+        or bool(execution_context_drift)
         or not attempts_identity_holds
         or bool(risk_rejected_missing_reason)
         or bool(unmatched_outcomes)
@@ -503,6 +568,7 @@ def build_trade_chain_report(
             "orphans": orphans_count,
             "duplicate_order_identities": len(duplicate_order_ids),
             "naked_position_risk": len(naked_position_risk),
+            "execution_context_drift": len(execution_context_drift),
             "risk_rejected": len(risk_rejected),
             "risk_rejected_missing_reason": len(risk_rejected_missing_reason),
             "config_blocked": len(config_blocked),
@@ -532,6 +598,7 @@ def build_trade_chain_report(
             "orphans": unresolved_orphan,
             "duplicate_order_identities": duplicate_order_ids,
             "naked_position_risk": naked_position_risk,
+            "execution_context_drift": execution_context_drift,
             "risk_rejected_missing_reason": risk_rejected_missing_reason,
             "carryover_resolutions": carryover_resolutions,
             "unmatched_outcomes": [
@@ -549,6 +616,14 @@ def build_trade_chain_report(
                 {"ts": e.get("ts"), "instrument": e.get("instrument"), "path": e.get("_path"), "line": e.get("_line")}
                 for e in unmatched_order_ids
             ],
+        },
+        "execution_context": {
+            "live_entry_fill_model_at_check_time": live_entry_fill_model,
+            "note": (
+                "Per-fill entry_fill_model_used/slippage are read from execution_audit."
+                "post_fill_validation on the TRADE row (present since that instrumentation "
+                "was added); attempts without it are not flagged for drift, not asserted clean."
+            ),
         },
         "broker_journal_parity": broker_parity,
         "eod_day_only_boundary_check": {
