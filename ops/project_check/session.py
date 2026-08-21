@@ -4,17 +4,30 @@ Two modes:
   A. build_session_start_report()  -- full repo/runtime snapshot; the only
      thing in this module that writes anything, and all it writes is a small
      session-state cache file under .git/ (never a tracked path, never
-     committed) so precommit can later detect drift.
+     committed) so precommit can later detect drift. Also live-verifies
+     origin/main against the actual remote (no fetch -- `ls-remote`) so
+     research/promotion work started this session isn't silently based on a
+     stale local origin/main.
   B. build_precommit_report()      -- strictly read-only; fails closed on
-     branch/worktree drift or an unverifiable session-start baseline. Never
-     commits, pushes, pulls, resets, rebases, checks out, deletes a
-     branch/worktree, drops a stash, creates/deletes a tag, or modifies files.
+     branch/worktree drift, worktree-ownership ambiguity (detached HEAD, a
+     branch registered to more than one worktree), or an unverifiable
+     session-start baseline. Never commits, pushes, pulls, resets, rebases,
+     checks out, deletes a branch/worktree, drops a stash, creates/deletes a
+     tag, or modifies files.
+
+Formerly a separate "ownership preflight" routine (`ops.project_check.
+preflight`) duplicated most of this module's job -- verifying origin/main
+freshness and worktree ownership before trusting local state -- under a
+different name and a fourth CLI subcommand. Its two checks now live here
+(`verified_origin_main`, `worktree_ownership`) so the system has exactly
+three routines, not four.
 """
 from __future__ import annotations
 
 import json
 import os
 import tempfile
+from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -28,6 +41,119 @@ STATE_FILENAME = "session_state.json"
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _remote_main_sha(output: str) -> str | None:
+    for line in output.splitlines():
+        fields = line.split()
+        if len(fields) == 2 and fields[1] == "refs/heads/main":
+            return fields[0]
+    return None
+
+
+def verified_origin_main(root: Path) -> dict[str, Any]:
+    """Compare local origin/main to the live remote without updating either.
+
+    Deliberately does not fetch: `gitutil.main_sync_state` reports local vs.
+    the remote-tracking ref as of the last fetch, which can look IN_SYNC while
+    the *actual* origin/main has moved. This performs one read-only
+    `ls-remote` to catch that case and reports STALE/UNVERIFIED rather than
+    silently trusting a possibly-outdated local ref.
+    """
+    local = gitutil.run_git_result(
+        ["rev-parse", "--verify", "refs/remotes/origin/main^{commit}"],
+        cwd=root,
+    )
+    remote = gitutil.run_git_result(
+        ["ls-remote", "--heads", "origin", "refs/heads/main"],
+        cwd=root,
+    )
+    local_sha = local.stdout.strip() if local.returncode == 0 and local.stdout.strip() else None
+    remote_sha = _remote_main_sha(remote.stdout) if remote.returncode == 0 else None
+
+    if local_sha is None:
+        freshness = "MISSING_LOCAL_REF"
+        detail = "local refs/remotes/origin/main is missing"
+    elif remote.returncode != 0:
+        freshness = "UNVERIFIED"
+        detail = remote.stderr or "origin/main could not be verified against origin"
+    elif remote_sha is None:
+        freshness = "MISSING_REMOTE_REF"
+        detail = "origin did not advertise refs/heads/main"
+    elif local_sha != remote_sha:
+        freshness = "STALE"
+        detail = "local origin/main differs from the branch currently advertised by origin"
+    else:
+        freshness = "CURRENT"
+        detail = "local origin/main matches the live remote"
+
+    contains: bool | None = None
+    ancestry_detail = "not checked because origin/main was not verified current"
+    if freshness == "CURRENT":
+        ancestry = gitutil.run_git_result(
+            ["merge-base", "--is-ancestor", "refs/remotes/origin/main", "HEAD"],
+            cwd=root,
+        )
+        if ancestry.returncode == 0:
+            contains = True
+            ancestry_detail = "HEAD contains verified current origin/main"
+        elif ancestry.returncode == 1:
+            contains = False
+            ancestry_detail = "HEAD does not contain verified current origin/main"
+        else:
+            ancestry_detail = ancestry.stderr or "HEAD ancestry could not be verified"
+
+    return {
+        "freshness": freshness,
+        "local_sha": local_sha,
+        "remote_sha": remote_sha,
+        "detail": detail,
+        "head_contains_verified_main": contains,
+        "ancestry_detail": ancestry_detail,
+    }
+
+
+def worktree_ownership(root: Path) -> dict[str, Any]:
+    """Verify an attached branch uniquely belongs to the current worktree."""
+    branch = gitutil.current_branch(root)
+    detached = gitutil.is_detached_head(root)
+    registrations = gitutil.worktrees(root)
+    current_path = str(root.resolve())
+    current = next(
+        (item for item in registrations if str(Path(item.path).resolve()) == current_path),
+        None,
+    )
+
+    owners: dict[str, set[str]] = defaultdict(set)
+    for item in registrations:
+        if item.branch:
+            owners[item.branch].add(str(Path(item.path).resolve()))
+    duplicates = [
+        {"branch": name, "paths": sorted(paths)}
+        for name, paths in sorted(owners.items())
+        if len(paths) > 1
+    ]
+
+    errors: list[str] = []
+    if detached:
+        errors.append("detached HEAD has no auditable branch ownership")
+    if current is None:
+        errors.append("current worktree is absent from `git worktree list --porcelain`")
+    elif not detached and current.branch != branch:
+        errors.append(
+            "current worktree registration does not own the checked-out branch "
+            f"({current.branch!r} != {branch!r})"
+        )
+
+    return {
+        "ok": not errors and not duplicates,
+        "current_branch": branch,
+        "current_worktree": current_path,
+        "detached_head": detached,
+        "current_registration": current.as_dict() if current else None,
+        "duplicate_branch_owners": duplicates,
+        "errors": errors,
+    }
 
 
 def _state_path(root: Path) -> Path:
@@ -81,6 +207,8 @@ def build_session_start_report(*, cwd: str | Path | None = None) -> dict[str, An
     prs = gitutil.open_prs(root)
     closed_unmerged = gitutil.unmerged_remote_branches_missing_archive_tag(root)
     runtime = runtime_snapshot(repo_root=root)
+    live_origin_main = verified_origin_main(root)
+    ownership = worktree_ownership(root)
 
     branch_after = gitutil.current_branch(root)
     head_after = gitutil.head_sha(root)
@@ -111,6 +239,8 @@ def build_session_start_report(*, cwd: str | Path | None = None) -> dict[str, An
             "archive_tags": archive_tags,
             "stash_count": len(stashes),
             "stashes": stashes,
+            "live_origin_main_verification": live_origin_main,
+            "worktree_ownership": ownership,
         },
         "branch_changed_during_check": branch_changed_during_check,
         "runtime_snapshot": runtime,
@@ -195,6 +325,15 @@ def build_precommit_report(*, cwd: str | Path | None = None) -> dict[str, Any]:
             f"intended branch {branch!r} is checked out in another worktree: {owner['path']}"
         )
 
+    ownership = worktree_ownership(root)
+    if ownership["detached_head"]:
+        reasons.append("repository state is ambiguous: detached HEAD has no auditable branch ownership")
+    for duplicate in ownership["duplicate_branch_owners"]:
+        reasons.append(
+            f"branch {duplicate['branch']!r} is registered to multiple worktrees: "
+            + ", ".join(duplicate["paths"])
+        )
+
     verdict = "FAIL_CLOSED" if reasons else "OK"
     return {
         "ok": verdict == "OK",
@@ -215,6 +354,7 @@ def build_precommit_report(*, cwd: str | Path | None = None) -> dict[str, Any]:
             "changed_files": status.get("dirty_tracked", []),
             "staged_files": status.get("staged", []),
             "untracked_files": status.get("untracked", []),
+            "worktree_ownership": ownership,
         },
         "note": (
             "This routine is read-only and never commits/pushes/pulls/resets/rebases/"

@@ -3,12 +3,25 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from ops.project_check.trade_chain import (
     build_trade_chain_report,
     load_checkpoint,
     load_checkpoint_full,
     save_checkpoint,
 )
+
+
+@pytest.fixture(autouse=True)
+def clean_tolerance_env(monkeypatch):
+    for name in (
+        "ENTRY_SLIPPAGE_TOLERANCE_TICKS",
+        "ENTRY_SLIPPAGE_TOLERANCE_TICKS_MES",
+        "ENTRY_SLIPPAGE_TOLERANCE_TICKS_MNQ",
+        "ENTRY_FILL_MODEL",
+    ):
+        monkeypatch.delenv(name, raising=False)
 
 
 def _write_jsonl(path: Path, rows: list[dict]) -> None:
@@ -497,3 +510,94 @@ def test_journal_integrity_detects_same_count_field_level_mutation(tmp_path: Pat
     run2 = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=True)
     assert run2["journal_integrity"]["status"] == "MUTATED"
     assert run2["status"] == "FAIL"
+
+
+# ---------------------------------------------------------------------------
+# Entry model / effective tolerance in trade-chain monitoring. The same
+# lesson ops.project_check.promotion's execution-context check encodes for
+# promotion evidence -- entry fill model and effective tolerance must be
+# verified against the live runtime, not assumed -- applied here to actual
+# fills.
+# ---------------------------------------------------------------------------
+
+
+def test_execution_context_reports_live_runtime_config(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("ENTRY_FILL_MODEL", "ioc_limit")
+    monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS_MNQ", "32")
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    report = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=False)
+    ec = report["execution_context"]
+    assert ec["live_entry_fill_model"] == "ioc_limit"
+    assert ec["live_entry_tolerance_ticks"]["MNQ"]["effective_replay_paper"] == 32.0
+
+
+def test_fill_within_live_tolerance_reports_slippage_and_passes(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS_MNQ", "32")
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    outcome_base = _outcome("2026-07-01T14:30:00Z")
+    _write_jsonl(
+        journal_dir / "journal_2026-07-01.jsonl",
+        [
+            _trade("2026-07-01T14:00:00Z"),
+            {
+                **outcome_base,
+                "outcome": {
+                    **outcome_base["outcome"],
+                    "requested_entry": 30000.0,
+                    "entry_price": 30002.0,
+                    "ticks_moved_from_entry": 8.0,
+                },
+            },
+        ],
+    )
+    report = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=False)
+    assert report["status"] == "PASS"
+    fill = report["detail"]["resolved_fills"][0]
+    exec_ctx = fill["entry_execution"]
+    assert exec_ctx["slippage_ticks"] == 8.0
+    assert exec_ctx["within_tolerance"] is True
+    assert report["summary"]["fills_exceeding_tolerance"] == 0
+
+
+def test_fill_exceeding_live_tolerance_fails_closed(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS_MNQ", "32")
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    outcome_base = _outcome("2026-07-01T14:30:00Z")
+    _write_jsonl(
+        journal_dir / "journal_2026-07-01.jsonl",
+        [
+            _trade("2026-07-01T14:00:00Z"),
+            {
+                **outcome_base,
+                "outcome": {
+                    **outcome_base["outcome"],
+                    "requested_entry": 30000.0,
+                    "entry_price": 30050.0,
+                    "ticks_moved_from_entry": 200.0,
+                },
+            },
+        ],
+    )
+    report = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=False)
+    assert report["status"] == "FAIL"
+    assert report["summary"]["fills_exceeding_tolerance"] == 1
+    flagged = report["detail"]["fills_exceeding_tolerance"][0]
+    assert flagged["entry_execution"]["within_tolerance"] is False
+
+
+def test_fill_missing_slippage_evidence_is_unknown_not_a_failure(tmp_path: Path) -> None:
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    _write_jsonl(
+        journal_dir / "journal_2026-07-01.jsonl",
+        [_trade("2026-07-01T14:00:00Z"), _outcome("2026-07-01T14:30:00Z")],
+    )
+    report = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=False)
+    assert report["status"] == "PASS"
+    fill = report["detail"]["resolved_fills"][0]
+    assert fill["entry_execution"]["slippage_ticks"] is None
+    assert fill["entry_execution"]["within_tolerance"] is None
+    assert report["summary"]["fills_exceeding_tolerance"] == 0

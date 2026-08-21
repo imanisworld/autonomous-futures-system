@@ -5,11 +5,13 @@ from pathlib import Path
 
 import pytest
 
+from ops.project_check import gitutil
 from ops.project_check.session import build_precommit_report, build_session_start_report
 
 
-def _git(root: Path, *args: str) -> None:
-    subprocess.run(["git", *args], cwd=root, check=True, capture_output=True)
+def _git(root: Path, *args: str) -> str:
+    result = subprocess.run(["git", *args], cwd=root, check=True, capture_output=True, text=True)
+    return result.stdout.strip()
 
 
 @pytest.fixture
@@ -23,6 +25,39 @@ def repo(tmp_path: Path) -> Path:
     _git(root, "add", "a.txt")
     _git(root, "commit", "-q", "-m", "initial")
     return root
+
+
+@pytest.fixture
+def repo_with_origin(tmp_path: Path) -> tuple[Path, Path]:
+    """A repo with a real `origin` remote, for the live origin/main checks
+    formerly covered by the standalone ownership-preflight routine (folded
+    into session-start/precommit -- see session.py's module docstring)."""
+    remote = tmp_path / "origin.git"
+    _git(tmp_path, "init", "-q", "--bare", "-b", "main", str(remote))
+
+    origin_repo = tmp_path / "repo"
+    origin_repo.mkdir()
+    _git(origin_repo, "init", "-q", "-b", "main")
+    _git(origin_repo, "config", "user.email", "test@example.com")
+    _git(origin_repo, "config", "user.name", "Test")
+    (origin_repo / "tracked.txt").write_text("initial\n", encoding="utf-8")
+    _git(origin_repo, "add", "tracked.txt")
+    _git(origin_repo, "commit", "-q", "-m", "initial")
+    _git(origin_repo, "remote", "add", "origin", str(remote))
+    _git(origin_repo, "push", "-q", "-u", "origin", "main")
+    return origin_repo, remote
+
+
+def _advance_remote(tmp_path: Path, remote: Path) -> str:
+    publisher = tmp_path / "publisher"
+    _git(tmp_path, "clone", "-q", str(remote), str(publisher))
+    _git(publisher, "config", "user.email", "publisher@example.com")
+    _git(publisher, "config", "user.name", "Publisher")
+    (publisher / "remote.txt").write_text("new remote work\n", encoding="utf-8")
+    _git(publisher, "add", "remote.txt")
+    _git(publisher, "commit", "-q", "-m", "advance main")
+    _git(publisher, "push", "-q", "origin", "main")
+    return _git(publisher, "rev-parse", "HEAD")
 
 
 def test_session_start_reports_ok_and_writes_state(repo: Path) -> None:
@@ -97,3 +132,62 @@ def test_precommit_reports_changed_staged_untracked_lists(repo: Path) -> None:
     report = build_precommit_report(cwd=repo)
     assert "a.txt" in report["repo"]["changed_files"]
     assert "new.txt" in report["repo"]["staged_files"]
+
+
+# ── Folded-in from the former standalone ownership-preflight routine ────────
+# (live origin/main freshness + worktree ownership -- see session.py's module
+# docstring for why these now live in session-start/precommit instead of a
+# fourth routine).
+
+
+def test_session_start_reports_live_origin_main_current(repo_with_origin: tuple[Path, Path]) -> None:
+    repo, _remote = repo_with_origin
+    report = build_session_start_report(cwd=repo)
+    lom = report["repo"]["live_origin_main_verification"]
+    assert lom["freshness"] == "CURRENT"
+    assert lom["head_contains_verified_main"] is True
+
+
+def test_session_start_flags_stale_local_origin_main_without_fetching(
+    repo_with_origin: tuple[Path, Path], tmp_path: Path
+) -> None:
+    repo, remote = repo_with_origin
+    old_local = _git(repo, "rev-parse", "origin/main")
+    new_remote = _advance_remote(tmp_path, remote)
+
+    report = build_session_start_report(cwd=repo)
+
+    lom = report["repo"]["live_origin_main_verification"]
+    assert lom["freshness"] == "STALE"
+    assert lom["local_sha"] == old_local
+    assert lom["remote_sha"] == new_remote
+    # Read-only: the local origin/main ref must not have been updated by this check.
+    assert _git(repo, "rev-parse", "origin/main") == old_local
+    # session-start never fails closed -- it's a report, not a gate.
+    assert report["ok"] is True
+
+
+def test_precommit_fails_closed_on_detached_head(repo: Path) -> None:
+    build_session_start_report(cwd=repo)
+    _git(repo, "checkout", "-q", "--detach")
+    report = build_precommit_report(cwd=repo)
+    assert report["ok"] is False
+    assert any("detached HEAD" in r for r in report["reasons"])
+
+
+def test_precommit_fails_closed_on_duplicate_branch_worktree_ownership(
+    repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    build_session_start_report(cwd=repo)
+    stale = tmp_path / "stale-registration"
+    monkeypatch.setattr(
+        gitutil,
+        "worktrees",
+        lambda _root: [
+            gitutil.Worktree(str(repo), _git(repo, "rev-parse", "HEAD"), "main", False, False, False),
+            gitutil.Worktree(str(stale), _git(repo, "rev-parse", "HEAD"), "main", False, False, False),
+        ],
+    )
+    report = build_precommit_report(cwd=repo)
+    assert report["ok"] is False
+    assert any("registered to multiple worktrees" in r for r in report["reasons"])

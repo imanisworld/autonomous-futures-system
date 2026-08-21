@@ -14,6 +14,16 @@ Reuses ops.proof_30_mnq (read_journal_entries, classify_outcome, parse_proof_ts)
 and mirrors the TRADE<->OUTCOME/ORDER_IDS pairing style already used by
 ops/reconciler_outcome_audit.py and scripts/session_audit.py, generalized to
 all instruments in one pass instead of one instrument at a time.
+
+Also reuses ops.project_check.runtime.runtime_snapshot to record the entry
+fill model and effective entry tolerance actually configured for the live
+runtime *right now*, and, per fill, whatever entry-price/slippage evidence
+the journal itself carries (`outcome.requested_entry`, `outcome.entry_price`,
+`outcome.ticks_moved_from_entry` -- see journal/journal_logger.py's
+`log_outcome`). This is the same lesson ops.project_check.promotion's
+execution-context check exists to encode, applied to actual trade evidence
+instead of a promotion evidence packet: a fill's slippage must be compared
+against what the runtime says it should be, not assumed to match.
 """
 from __future__ import annotations
 
@@ -27,9 +37,68 @@ from pathlib import Path
 from typing import Any, Callable
 
 from ops.proof_30_mnq import classify_outcome, parse_proof_ts, read_journal_entries
+from ops.project_check.runtime import runtime_snapshot
 
 CHECKPOINT_SUBDIR = "afs-project-check"
 CHECKPOINT_FILENAME = "trade_chain_checkpoint.json"
+
+# ops.project_check.runtime._entry_tolerance_ticks only has fallback defaults
+# for these roots; an instrument outside this set is reported UNKNOWN rather
+# than guessed.
+_KNOWN_TOLERANCE_ROOTS = ("MES", "MNQ")
+
+
+def _tolerance_root(instrument: str | None) -> str | None:
+    if not instrument:
+        return None
+    upper = str(instrument).upper()
+    for root in _KNOWN_TOLERANCE_ROOTS:
+        if upper.startswith(root):
+            return root
+    return None
+
+
+def _entry_execution(
+    *, instrument: str | None, outcome_body: dict[str, Any], live_tolerance: dict[str, Any]
+) -> dict[str, Any]:
+    """Per-fill entry-price/slippage evidence, compared against the entry
+    tolerance the live runtime is configured with *right now* -- not what a
+    strategy's evidence doc claims, and not re-derived from a hardcoded tick
+    size. Only fields the journal itself carries are used (see
+    journal/journal_logger.py's `log_outcome`); anything the journal did not
+    record is UNKNOWN rather than guessed.
+    """
+    requested_entry = outcome_body.get("requested_entry")
+    actual_entry_price = outcome_body.get("entry_price")
+    slippage_ticks = outcome_body.get("ticks_moved_from_entry")
+
+    root = _tolerance_root(instrument)
+    tolerance_info = live_tolerance.get(root) if root else None
+    tolerance_ticks = (
+        tolerance_info.get("effective_replay_paper") if isinstance(tolerance_info, dict) else None
+    )
+
+    within_tolerance: bool | None = None
+    if slippage_ticks is not None and tolerance_ticks is not None:
+        try:
+            within_tolerance = abs(float(slippage_ticks)) <= float(tolerance_ticks)
+        except (TypeError, ValueError):
+            within_tolerance = None
+
+    return {
+        "requested_entry": requested_entry,
+        "actual_entry_price": actual_entry_price,
+        "slippage_ticks": slippage_ticks,
+        "slippage_source": "journal outcome.ticks_moved_from_entry" if slippage_ticks is not None else None,
+        "live_entry_tolerance_ticks": tolerance_ticks,
+        "live_entry_tolerance_root": root,
+        "within_tolerance": within_tolerance,
+        "note": (
+            None
+            if slippage_ticks is not None
+            else "journal did not record ticks_moved_from_entry for this fill; slippage is UNKNOWN, not assumed in-tolerance"
+        ),
+    }
 
 
 def _now_iso() -> str:
@@ -249,7 +318,15 @@ def build_trade_chain_report(
     advance_checkpoint: bool = False,
     broker_positions: Callable[[], list[dict[str, Any]]] | None = None,
     broker_orders: Callable[[], list[dict[str, Any]]] | None = None,
+    runtime: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    # `runtime` lets a caller that already computed a runtime_snapshot this
+    # run (e.g. ops.project_check.daily, which needs it for deployed_state
+    # too) pass it in instead of paying for live_box_drift_report's git/yaml
+    # reads twice in the same report.
+    live_runtime = runtime if runtime is not None else runtime_snapshot(repo_root=repo_root)
+    live_tolerance = live_runtime.get("entry_tolerance_ticks") or {}
+
     entries = read_journal_entries(journal_dir)
     read_errors = [e for e in entries if e.get("type") == "READ_ERROR"]
     entries_no_errors = [e for e in entries if e.get("type") != "READ_ERROR"]
@@ -332,10 +409,14 @@ def build_trade_chain_report(
         }
         if outcome is None:
             return {**row, "_bucket": "unresolved", "_setup": setup}
-        category = classify_outcome(outcome.get("outcome") or {})
+        outcome_body = outcome.get("outcome") or {}
+        category = classify_outcome(outcome_body)
         row["category"] = category
-        row["exit_reason"] = (outcome.get("outcome") or {}).get("exit_reason")
-        row["pnl_dollars"] = (outcome.get("outcome") or {}).get("pnl_dollars")
+        row["exit_reason"] = outcome_body.get("exit_reason")
+        row["pnl_dollars"] = outcome_body.get("pnl_dollars")
+        row["entry_execution"] = _entry_execution(
+            instrument=attempt.get("instrument"), outcome_body=outcome_body, live_tolerance=live_tolerance
+        )
         return {**row, "_bucket": "resolved", "_category": category, "_setup": setup}
 
     for attempt in attempts:
@@ -415,6 +496,15 @@ def build_trade_chain_report(
     rejects_or_no_fill_count = len(needs_broker_verification)
     unverified_open_count = len(unverified_open_attempts)
     orphans_count = len(unresolved_orphan)
+
+    # Fills whose journaled slippage exceeds what the live runtime is
+    # configured to tolerate right now -- explicitly flagged rather than
+    # assumed in-tolerance, per the entry-model/tolerance lesson this section
+    # exists to encode (see module docstring). A fill with no recorded
+    # ticks_moved_from_entry is UNKNOWN, not counted here either way.
+    fills_exceeding_tolerance = [
+        row for row in resolved_fills if row["entry_execution"]["within_tolerance"] is False
+    ]
     attempts_identity_holds = len(attempts) == (
         fills_count + cancellations_count + rejects_or_no_fill_count + unverified_open_count + orphans_count
     )
@@ -447,6 +537,7 @@ def build_trade_chain_report(
         or bool(unmatched_outcomes)
         or bool(unmatched_order_ids)
         or bool(read_errors)
+        or bool(fills_exceeding_tolerance)
         or journal_integrity["status"] in ("SHRUNK", "GREW_BEHIND_CHECKPOINT", "MUTATED")
     )
     status = "PASS" if not problems else "FAIL"
@@ -509,6 +600,20 @@ def build_trade_chain_report(
             "unmatched_outcomes": len(unmatched_outcomes),
             "unmatched_order_ids": len(unmatched_order_ids),
             "carryover_resolutions": len(carryover_resolutions),
+            "fills_exceeding_tolerance": len(fills_exceeding_tolerance),
+        },
+        "execution_context": {
+            "live_entry_fill_model": live_runtime.get("entry_fill_model"),
+            "live_entry_fill_model_source": live_runtime.get("entry_fill_model_source"),
+            "live_entry_tolerance_ticks": live_tolerance,
+            "note": (
+                "This is the entry fill model/tolerance the runtime is configured with as of "
+                "when this report ran, not necessarily what was configured when each historical "
+                "fill below executed -- the journal does not record a per-trade fill-model "
+                "identifier. Per-fill entry_execution.slippage_ticks is compared against this "
+                "current configuration; a fill from before a tolerance change may show a mismatch "
+                "that reflects the config change, not a runtime defect."
+            ),
         },
         "accounting": {
             "attempts_identity": (
@@ -534,6 +639,7 @@ def build_trade_chain_report(
             "naked_position_risk": naked_position_risk,
             "risk_rejected_missing_reason": risk_rejected_missing_reason,
             "carryover_resolutions": carryover_resolutions,
+            "fills_exceeding_tolerance": fills_exceeding_tolerance,
             "unmatched_outcomes": [
                 {
                     "ts": e.get("ts"),
