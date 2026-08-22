@@ -118,6 +118,14 @@ def test_build_daily_report_smoke(repo: Path) -> None:
     assert report["trade_chain"]["summary"]["attempts"] == 0
 
 
+def test_build_daily_report_wires_runtime_snapshot_into_trade_chain_execution_context(repo: Path) -> None:
+    (repo / "logs").mkdir()
+    report = build_daily_report(repo_root=repo, journal_dir="logs", use_checkpoint=False, advance_checkpoint=False)
+    # daily.py already computes deployed_state (runtime_snapshot); trade_chain
+    # must reuse it rather than re-deriving entry_fill_model/tolerance itself.
+    assert report["trade_chain"]["execution_context_supplied"] is True
+
+
 def test_build_daily_report_ok_reflects_trade_chain_fail(repo: Path) -> None:
     logs = repo / "logs"
     logs.mkdir()

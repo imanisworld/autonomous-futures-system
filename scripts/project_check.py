@@ -196,6 +196,12 @@ def _cmd_daily(args: argparse.Namespace) -> int:
             f"  0 duplicate identities\n"
             f"  0 unmatched outcomes\n"
         )
+        if s["fills_execution_context_flagged"]:
+            print(
+                f"  NOTE: entry-model/tolerance not verifiable on "
+                f"{s['fills_execution_context_flagged']}/{s['fills']} fills -- see "
+                f"trade_chain.detail.fills_execution_context_flagged (--json)"
+            )
     else:
         print("  TRADE CHAIN: FAIL")
         _print_json(tc)

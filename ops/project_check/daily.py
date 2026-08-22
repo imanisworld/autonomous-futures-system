@@ -215,6 +215,7 @@ def build_daily_report(
         repo_root=root,
         use_checkpoint=use_checkpoint,
         advance_checkpoint=advance_checkpoint,
+        execution_context=runtime,
     )
 
     return {

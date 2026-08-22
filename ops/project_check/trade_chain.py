@@ -14,6 +14,13 @@ Reuses ops.proof_30_mnq (read_journal_entries, classify_outcome, parse_proof_ts)
 and mirrors the TRADE<->OUTCOME/ORDER_IDS pairing style already used by
 ops/reconciler_outcome_audit.py and scripts/session_audit.py, generalized to
 all instruments in one pass instead of one instrument at a time.
+
+Each resolved fill is also cross-checked against the CURRENT live runtime's
+entry_fill_model / effective entry tolerance (pass `execution_context`, e.g.
+ops.project_check.runtime.runtime_snapshot()'s return value -- daily.py
+already does this) -- the same "entry model and effective tolerance must be
+checked against live runtime" lesson ops/project_check/promotion.py encodes
+for promotion evidence, applied here to actual trade-chain fills instead.
 """
 from __future__ import annotations
 
@@ -26,6 +33,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
+from execution.day_only_exit import instrument_root
 from ops.proof_30_mnq import classify_outcome, parse_proof_ts, read_journal_entries
 
 CHECKPOINT_SUBDIR = "afs-project-check"
@@ -240,6 +248,74 @@ def _pair_fifo_by_instrument(
     return paired, unmatched
 
 
+def _fill_execution_context(
+    outcome_body: dict[str, Any], instrument: str | None, execution_context: dict[str, Any] | None
+) -> dict[str, Any]:
+    """Cross-check one resolved fill's recorded entry model/slippage against the
+    CURRENT live runtime (ops.project_check.runtime.runtime_snapshot's
+    entry_fill_model / entry_tolerance_ticks), mirroring the same lesson the
+    promotion gate already encodes: entry model and effective tolerance must be
+    verified against live runtime, not assumed. As of this build,
+    journal/journal_logger.py's log_outcome() call sites for a resolved
+    WIN/LOSS/BREAKEVEN fill do not pass order_type/requested_entry/
+    ticks_moved_from_entry (those are only populated on the CANCELLED/no-fill
+    diagnostic paths) -- so this reports that gap explicitly rather than
+    inventing a value or silently skipping the check.
+    """
+    entry_fill_model_recorded = outcome_body.get("order_type")
+    requested_entry = outcome_body.get("requested_entry")
+    entry_price_actual = outcome_body.get("entry_price")
+    ticks_moved = outcome_body.get("ticks_moved_from_entry")
+
+    result: dict[str, Any] = {
+        "entry_fill_model_recorded": entry_fill_model_recorded,
+        "requested_entry": requested_entry,
+        "entry_price_actual": entry_price_actual,
+        "ticks_moved_from_entry": ticks_moved,
+        "live_entry_fill_model": None,
+        "live_entry_tolerance_ticks": None,
+        "flags": [],
+    }
+    if execution_context is None:
+        result["flags"].append("no live runtime execution-context supplied to this check")
+        return result
+
+    root = instrument_root(instrument)
+    live_fill_model = execution_context.get("entry_fill_model")
+    result["live_entry_fill_model"] = live_fill_model
+    live_tol_map = execution_context.get("entry_tolerance_ticks") or {}
+    live_tol_info = live_tol_map.get(root) if isinstance(live_tol_map, dict) else None
+    live_tolerance = live_tol_info.get("effective_replay_paper") if isinstance(live_tol_info, dict) else None
+    result["live_entry_tolerance_ticks"] = live_tolerance
+
+    if entry_fill_model_recorded is None:
+        result["flags"].append(
+            "entry fill model not recorded on this OUTCOME row -- cannot verify against "
+            f"live runtime entry_fill_model={live_fill_model!r}"
+        )
+    elif live_fill_model not in (None, "UNKNOWN") and str(entry_fill_model_recorded) != str(live_fill_model):
+        result["flags"].append(
+            f"recorded entry_fill_model={entry_fill_model_recorded!r} != live runtime "
+            f"entry_fill_model={live_fill_model!r}"
+        )
+
+    if ticks_moved is None:
+        result["flags"].append(
+            "slippage (ticks_moved_from_entry) not recorded on this OUTCOME row -- cannot verify "
+            f"against live runtime tolerance {live_tolerance!r} for {root}"
+        )
+    elif live_tolerance is not None:
+        try:
+            exceeds = abs(float(ticks_moved)) > float(live_tolerance)
+        except (TypeError, ValueError):
+            exceeds = False
+        if exceeds:
+            result["flags"].append(
+                f"slippage {ticks_moved} ticks exceeds live runtime tolerance {live_tolerance} ticks for {root}"
+            )
+    return result
+
+
 def build_trade_chain_report(
     *,
     journal_dir: Path,
@@ -249,6 +325,7 @@ def build_trade_chain_report(
     advance_checkpoint: bool = False,
     broker_positions: Callable[[], list[dict[str, Any]]] | None = None,
     broker_orders: Callable[[], list[dict[str, Any]]] | None = None,
+    execution_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     entries = read_journal_entries(journal_dir)
     read_errors = [e for e in entries if e.get("type") == "READ_ERROR"]
@@ -365,6 +442,9 @@ def build_trade_chain_report(
         classified.pop("_bucket")
         row = classified
         if category in ("filled_win_loss", "breakeven"):
+            row["execution_context"] = _fill_execution_context(
+                outcome.get("outcome") or {}, attempt.get("instrument"), execution_context
+            )
             resolved_fills.append(row)
             if setup.get("stop") in (None, "") or setup.get("target") in (None, ""):
                 naked_position_risk.append({**row, "issue": "filled trade missing stop or target in journaled setup"})
@@ -410,6 +490,10 @@ def build_trade_chain_report(
     # repo. Counting it as a fill without broker/order confirmation would let
     # this routine report a clean identity without actually proving anything
     # filled.
+    fills_execution_context_flagged = [
+        row for row in resolved_fills if row["execution_context"]["flags"]
+    ]
+
     fills_count = len(resolved_fills)
     cancellations_count = len(resolved_cancellations)
     rejects_or_no_fill_count = len(needs_broker_verification)
@@ -438,6 +522,14 @@ def build_trade_chain_report(
     else:
         broker_parity = {"checked": True, "note": "broker snapshot comparison not yet implemented for the supplied data"}
 
+    # fills_execution_context_flagged is deliberately NOT a `problems` input: it
+    # flags a pre-existing journal-logging gap (log_outcome()'s resolved-fill
+    # call sites don't pass order_type/requested_entry/ticks_moved_from_entry
+    # today -- see _fill_execution_context), not a defect in THIS run's trades.
+    # Turning every daily run red over a standing instrumentation gap would
+    # bury the orphan/duplicate/accounting failures this status exists to
+    # surface. It is still reported -- never silently dropped -- in summary/
+    # detail above and in the human-readable CLI output below.
     problems = (
         orphans_count > 0
         or bool(duplicate_order_ids)
@@ -492,6 +584,7 @@ def build_trade_chain_report(
         },
         "journal_integrity": journal_integrity,
         "journal_read_errors": read_errors,
+        "execution_context_supplied": execution_context is not None,
         "status": status,
         "summary": {
             "attempts": len(attempts),
@@ -509,6 +602,7 @@ def build_trade_chain_report(
             "unmatched_outcomes": len(unmatched_outcomes),
             "unmatched_order_ids": len(unmatched_order_ids),
             "carryover_resolutions": len(carryover_resolutions),
+            "fills_execution_context_flagged": len(fills_execution_context_flagged),
         },
         "accounting": {
             "attempts_identity": (
@@ -534,6 +628,7 @@ def build_trade_chain_report(
             "naked_position_risk": naked_position_risk,
             "risk_rejected_missing_reason": risk_rejected_missing_reason,
             "carryover_resolutions": carryover_resolutions,
+            "fills_execution_context_flagged": fills_execution_context_flagged,
             "unmatched_outcomes": [
                 {
                     "ts": e.get("ts"),

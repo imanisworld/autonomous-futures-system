@@ -497,3 +497,96 @@ def test_journal_integrity_detects_same_count_field_level_mutation(tmp_path: Pat
     run2 = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=True)
     assert run2["journal_integrity"]["status"] == "MUTATED"
     assert run2["status"] == "FAIL"
+
+
+def _runtime_execution_context(*, entry_fill_model="ioc_limit", mnq_tolerance=32.0) -> dict:
+    return {
+        "entry_fill_model": entry_fill_model,
+        "entry_tolerance_ticks": {
+            "MNQ": {"effective_replay_paper": mnq_tolerance},
+            "MES": {"effective_replay_paper": 16.0},
+        },
+    }
+
+
+def test_resolved_fill_flags_missing_execution_context_when_none_supplied(tmp_path: Path) -> None:
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    _write_jsonl(
+        journal_dir / "journal_2026-07-01.jsonl",
+        [_trade("2026-07-01T14:00:00Z"), _outcome("2026-07-01T14:30:00Z")],
+    )
+    report = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=False)
+    assert report["execution_context_supplied"] is False
+    fill = report["detail"]["resolved_fills"][0]
+    assert "no live runtime execution-context supplied to this check" in fill["execution_context"]["flags"]
+    # A standing instrumentation gap must never itself flip the day red.
+    assert report["status"] == "PASS"
+    assert report["summary"]["fills_execution_context_flagged"] == 1
+
+
+def test_resolved_fill_flags_unrecorded_entry_model_and_slippage(tmp_path: Path) -> None:
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    # log_outcome()'s resolved-fill call sites do not currently pass order_type/
+    # ticks_moved_from_entry, so a real journal row looks like this.
+    _write_jsonl(
+        journal_dir / "journal_2026-07-01.jsonl",
+        [_trade("2026-07-01T14:00:00Z"), _outcome("2026-07-01T14:30:00Z")],
+    )
+    report = build_trade_chain_report(
+        journal_dir=journal_dir,
+        repo_root=tmp_path,
+        use_checkpoint=False,
+        execution_context=_runtime_execution_context(),
+    )
+    fill = report["detail"]["resolved_fills"][0]
+    ctx = fill["execution_context"]
+    assert ctx["live_entry_fill_model"] == "ioc_limit"
+    assert ctx["live_entry_tolerance_ticks"] == 32.0
+    assert any("entry fill model not recorded" in f for f in ctx["flags"])
+    assert any("slippage" in f and "not recorded" in f for f in ctx["flags"])
+    assert report["status"] == "PASS"
+    assert report["summary"]["fills_execution_context_flagged"] == 1
+
+
+def test_resolved_fill_execution_context_clean_when_fully_recorded_and_within_tolerance(tmp_path: Path) -> None:
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    outcome = _outcome("2026-07-01T14:30:00Z")
+    outcome["outcome"]["order_type"] = "ioc_limit"
+    outcome["outcome"]["ticks_moved_from_entry"] = 4.0
+    _write_jsonl(journal_dir / "journal_2026-07-01.jsonl", [_trade("2026-07-01T14:00:00Z"), outcome])
+    report = build_trade_chain_report(
+        journal_dir=journal_dir,
+        repo_root=tmp_path,
+        use_checkpoint=False,
+        execution_context=_runtime_execution_context(),
+    )
+    fill = report["detail"]["resolved_fills"][0]
+    assert fill["execution_context"]["flags"] == []
+    assert report["summary"]["fills_execution_context_flagged"] == 0
+    assert report["status"] == "PASS"
+
+
+def test_resolved_fill_execution_context_flags_model_mismatch_and_excess_slippage(tmp_path: Path) -> None:
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    outcome = _outcome("2026-07-01T14:30:00Z")
+    outcome["outcome"]["order_type"] = "market"  # runtime says ioc_limit
+    outcome["outcome"]["ticks_moved_from_entry"] = 50.0  # exceeds the 32-tick MNQ tolerance
+    _write_jsonl(journal_dir / "journal_2026-07-01.jsonl", [_trade("2026-07-01T14:00:00Z"), outcome])
+    report = build_trade_chain_report(
+        journal_dir=journal_dir,
+        repo_root=tmp_path,
+        use_checkpoint=False,
+        execution_context=_runtime_execution_context(),
+    )
+    fill = report["detail"]["resolved_fills"][0]
+    flags = fill["execution_context"]["flags"]
+    assert any("recorded entry_fill_model='market' != live runtime entry_fill_model='ioc_limit'" in f for f in flags)
+    assert any("exceeds live runtime tolerance" in f for f in flags)
+    # Still a PASS: this is a flagged parity defect on an already-resolved fill,
+    # not one of the hard integrity failures (orphan/duplicate/accounting/etc).
+    assert report["status"] == "PASS"
+    assert report["summary"]["fills_execution_context_flagged"] == 1
