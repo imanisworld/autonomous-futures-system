@@ -97,3 +97,22 @@ def test_precommit_reports_changed_staged_untracked_lists(repo: Path) -> None:
     report = build_precommit_report(cwd=repo)
     assert "a.txt" in report["repo"]["changed_files"]
     assert "new.txt" in report["repo"]["staged_files"]
+
+
+def test_session_start_includes_worktree_ownership_and_origin_main_checks(repo: Path) -> None:
+    # The system has exactly three routines: worktree-ownership and
+    # origin/main-freshness checks used to be a separate fourth "ownership
+    # preflight" routine and are now folded into session-start/precommit.
+    report = build_session_start_report(cwd=repo)
+    assert report["worktree_ownership"]["ok"] is True
+    assert report["worktree_ownership"]["current_branch"] == "main"
+    # No origin configured in this fixture -- freshness must fail closed to
+    # UNVERIFIED/MISSING_*, never be silently assumed CURRENT.
+    assert report["origin_main_live_check"]["freshness"] != "CURRENT"
+
+
+def test_precommit_includes_worktree_ownership(repo: Path) -> None:
+    build_session_start_report(cwd=repo)
+    report = build_precommit_report(cwd=repo)
+    assert report["worktree_ownership"]["ok"] is True
+    assert report["worktree_ownership"]["current_branch"] == "main"

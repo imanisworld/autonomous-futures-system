@@ -9,6 +9,11 @@ Two modes:
      branch/worktree drift or an unverifiable session-start baseline. Never
      commits, pushes, pulls, resets, rebases, checks out, deletes a
      branch/worktree, drops a stash, creates/deletes a tag, or modifies files.
+
+Both modes reuse ops.project_check.preflight's worktree-ownership and
+origin/main-freshness checks (never fetches; ls-remote only) instead of
+re-deriving them -- ownership/base checking used to be a separate fourth
+routine, folded in here so the system has exactly three routines total.
 """
 from __future__ import annotations
 
@@ -20,6 +25,7 @@ from pathlib import Path
 from typing import Any
 
 from ops.project_check import gitutil
+from ops.project_check.preflight import verified_origin_main, worktree_ownership
 from ops.project_check.runtime import runtime_snapshot
 
 STATE_SUBDIR = "afs-project-check"
@@ -81,6 +87,8 @@ def build_session_start_report(*, cwd: str | Path | None = None) -> dict[str, An
     prs = gitutil.open_prs(root)
     closed_unmerged = gitutil.unmerged_remote_branches_missing_archive_tag(root)
     runtime = runtime_snapshot(repo_root=root)
+    ownership = worktree_ownership(root)
+    origin_main_live_check = verified_origin_main(root)
 
     branch_after = gitutil.current_branch(root)
     head_after = gitutil.head_sha(root)
@@ -112,6 +120,8 @@ def build_session_start_report(*, cwd: str | Path | None = None) -> dict[str, An
             "stash_count": len(stashes),
             "stashes": stashes,
         },
+        "worktree_ownership": ownership,
+        "origin_main_live_check": origin_main_live_check,
         "branch_changed_during_check": branch_changed_during_check,
         "runtime_snapshot": runtime,
     }
@@ -195,6 +205,14 @@ def build_precommit_report(*, cwd: str | Path | None = None) -> dict[str, Any]:
             f"intended branch {branch!r} is checked out in another worktree: {owner['path']}"
         )
 
+    ownership = worktree_ownership(root)
+    reasons.extend(ownership["errors"])
+    for duplicate in ownership["duplicate_branch_owners"]:
+        reasons.append(
+            f"branch {duplicate['branch']!r} is registered to multiple worktrees: "
+            + ", ".join(duplicate["paths"])
+        )
+
     verdict = "FAIL_CLOSED" if reasons else "OK"
     return {
         "ok": verdict == "OK",
@@ -216,6 +234,7 @@ def build_precommit_report(*, cwd: str | Path | None = None) -> dict[str, Any]:
             "staged_files": status.get("staged", []),
             "untracked_files": status.get("untracked", []),
         },
+        "worktree_ownership": ownership,
         "note": (
             "This routine is read-only and never commits/pushes/pulls/resets/rebases/"
             "checks out/deletes branches or worktrees/drops stashes/creates or deletes "

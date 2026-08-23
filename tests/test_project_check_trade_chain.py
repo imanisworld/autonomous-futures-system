@@ -497,3 +497,120 @@ def test_journal_integrity_detects_same_count_field_level_mutation(tmp_path: Pat
     run2 = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=True)
     assert run2["journal_integrity"]["status"] == "MUTATED"
     assert run2["status"] == "FAIL"
+
+
+def _outcome_with_execution_context(
+    ts: str,
+    *,
+    instrument: str = "MNQ",
+    order_type: str = "ioc_limit",
+    max_slippage_ticks: float = 32.0,
+    slippage_ticks: float = 4.0,
+    accepted: bool = True,
+) -> dict:
+    return {
+        "ts": ts,
+        "instrument": instrument,
+        "type": "OUTCOME",
+        "outcome": {
+            "result": "WIN",
+            "exit_reason": "target hit",
+            "pnl_dollars": 25.0,
+            "order_type": order_type,
+            "execution_audit": {
+                "post_fill_validation": {
+                    "accepted": accepted,
+                    "requested_entry": 30000.0,
+                    "actual_entry": 30001.0,
+                    "slippage_ticks": slippage_ticks,
+                    "adverse_slippage_ticks": slippage_ticks,
+                    "max_slippage_ticks": max_slippage_ticks,
+                }
+            },
+        },
+    }
+
+
+def test_resolved_fill_carries_execution_context(tmp_path: Path) -> None:
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    _write_jsonl(
+        journal_dir / "journal_2026-07-01.jsonl",
+        [_trade("2026-07-01T14:00:00Z"), _outcome_with_execution_context("2026-07-01T14:30:00Z")],
+    )
+    report = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=False)
+    assert report["status"] == "PASS"
+    ctx = report["detail"]["resolved_fills"][0]["execution_context"]
+    assert ctx["actual_entry_model"] == "ioc_limit"
+    assert ctx["effective_tolerance_ticks"] == 32.0
+    assert ctx["actual_slippage_ticks"] == 4.0
+    assert ctx["slippage_within_bound"] is True
+    assert ctx["post_fill_validation_recorded"] is True
+
+
+def test_fill_missing_post_fill_validation_is_not_flagged(tmp_path: Path) -> None:
+    # Not every order sets post_fill_validation_required -- absence of the
+    # data must not itself fail the trade chain (see test_clean_day_fill_and_
+    # cancel_passes, whose plain _outcome() fixture carries none of this).
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    _write_jsonl(
+        journal_dir / "journal_2026-07-01.jsonl",
+        [_trade("2026-07-01T14:00:00Z"), _outcome("2026-07-01T14:30:00Z")],
+    )
+    report = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=False)
+    assert report["status"] == "PASS"
+    ctx = report["detail"]["resolved_fills"][0]["execution_context"]
+    assert ctx["post_fill_validation_recorded"] is False
+    assert ctx["slippage_within_bound"] is None
+    assert report["summary"]["execution_context_flagged"] == 0
+
+
+def test_fill_with_rejected_post_fill_validation_is_flagged_and_fails(tmp_path: Path) -> None:
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    _write_jsonl(
+        journal_dir / "journal_2026-07-01.jsonl",
+        [
+            _trade("2026-07-01T14:00:00Z"),
+            _outcome_with_execution_context(
+                "2026-07-01T14:30:00Z", accepted=False, slippage_ticks=99.0
+            ),
+        ],
+    )
+    report = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=False)
+    assert report["status"] == "FAIL"
+    assert report["summary"]["execution_context_flagged"] == 1
+    flagged = report["detail"]["execution_context_flagged"][0]
+    assert flagged["execution_context"]["slippage_within_bound"] is False
+
+
+def test_execution_context_runtime_comparison_flags_divergence_but_never_fails(tmp_path: Path) -> None:
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    _write_jsonl(
+        journal_dir / "journal_2026-07-01.jsonl",
+        [_trade("2026-07-01T14:00:00Z"), _outcome_with_execution_context("2026-07-01T14:30:00Z", order_type="market")],
+    )
+    report = build_trade_chain_report(
+        journal_dir=journal_dir,
+        repo_root=tmp_path,
+        use_checkpoint=False,
+        runtime_execution_context={"entry_fill_model": "ioc_limit"},
+    )
+    comparison = report["execution_context_runtime_comparison"]
+    assert comparison["checked"] is True
+    assert len(comparison["fills_with_entry_model_diverging_from_current_runtime"]) == 1
+    # Informational only -- must not itself fail the trade chain.
+    assert report["status"] == "PASS"
+
+
+def test_execution_context_runtime_comparison_unchecked_when_not_supplied(tmp_path: Path) -> None:
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    _write_jsonl(
+        journal_dir / "journal_2026-07-01.jsonl",
+        [_trade("2026-07-01T14:00:00Z"), _outcome("2026-07-01T14:30:00Z")],
+    )
+    report = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=False)
+    assert report["execution_context_runtime_comparison"]["checked"] is False

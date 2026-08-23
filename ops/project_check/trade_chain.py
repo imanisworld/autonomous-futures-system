@@ -14,6 +14,20 @@ Reuses ops.proof_30_mnq (read_journal_entries, classify_outcome, parse_proof_ts)
 and mirrors the TRADE<->OUTCOME/ORDER_IDS pairing style already used by
 ops/reconciler_outcome_audit.py and scripts/session_audit.py, generalized to
 all instruments in one pass instead of one instrument at a time.
+
+Per-fill execution context: the same lesson ops.project_check.promotion
+encodes for promotion evidence (entry model and effective tolerance must be
+checked against live runtime, not just asserted) applies to actual trades,
+not only research claims. Each resolved fill's recorded `order_type` and
+`execution_audit.post_fill_validation` (written by execution/paper_broker.py
+and execution/tradovate_broker.py at fill time) are surfaced here as
+`execution_context`, and a fill whose recorded slippage was NOT accepted by
+post-fill validation is flagged (contributes to FAIL) rather than silently
+counted as a clean fill. Comparing a fill's recorded entry model against the
+CURRENT runtime's configured entry_fill_model is informational only (see
+`execution_context_runtime_comparison`) -- it never fails the trade chain,
+since a past fill legitimately predating a runtime change is not itself a
+defect.
 """
 from __future__ import annotations
 
@@ -240,6 +254,65 @@ def _pair_fifo_by_instrument(
     return paired, unmatched
 
 
+def _execution_context_from_outcome(outcome: dict[str, Any]) -> dict[str, Any]:
+    """Pull the actual entry model + effective tolerance a fill was recorded
+    under out of its OUTCOME row, instead of assuming it matches whatever the
+    runtime is configured to right now. `order_type` is set by the broker/
+    paper-broker at fill time (journal/journal_logger.py's `order_type`
+    param); `execution_audit.post_fill_validation` (when present -- only
+    recorded when `post_fill_validation_required` was set on the order, see
+    execution/post_fill_validation.py) carries the requested vs. actual entry
+    and the tolerance the fill was checked against.
+    """
+    out = outcome.get("outcome") or {}
+    audit = out.get("execution_audit") or {}
+    post_fill = audit.get("post_fill_validation") or {}
+    return {
+        "actual_entry_model": out.get("order_type"),
+        "requested_entry": post_fill.get("requested_entry"),
+        "actual_entry": post_fill.get("actual_entry", out.get("entry_price")),
+        "effective_tolerance_ticks": post_fill.get("max_slippage_ticks"),
+        "actual_slippage_ticks": post_fill.get("slippage_ticks"),
+        "adverse_slippage_ticks": post_fill.get("adverse_slippage_ticks"),
+        "slippage_within_bound": post_fill.get("accepted"),
+        "post_fill_validation_recorded": bool(post_fill),
+    }
+
+
+def _execution_context_runtime_comparison(
+    resolved_fills: list[dict[str, Any]], runtime_execution_context: dict[str, Any] | None
+) -> dict[str, Any]:
+    if not runtime_execution_context:
+        return {
+            "checked": False,
+            "reason": "no current runtime execution context supplied by the caller",
+        }
+    current_model = runtime_execution_context.get("entry_fill_model")
+    diverging: list[dict[str, Any]] = []
+    for row in resolved_fills:
+        ctx = row.get("execution_context") or {}
+        actual_model = ctx.get("actual_entry_model")
+        if actual_model and current_model and str(actual_model) != str(current_model):
+            diverging.append(
+                {
+                    "trade_ts": row.get("trade_ts"),
+                    "instrument": row.get("instrument"),
+                    "recorded_entry_model": actual_model,
+                    "current_entry_fill_model": current_model,
+                }
+            )
+    return {
+        "checked": True,
+        "current_entry_fill_model": current_model,
+        "fills_with_entry_model_diverging_from_current_runtime": diverging,
+        "note": (
+            "informational only -- does NOT fail the trade chain. A divergence means the "
+            "fill was recorded under a different entry_fill_model than what is configured "
+            "right now; confirm this is an intentional runtime change, not silent drift."
+        ),
+    }
+
+
 def build_trade_chain_report(
     *,
     journal_dir: Path,
@@ -249,6 +322,7 @@ def build_trade_chain_report(
     advance_checkpoint: bool = False,
     broker_positions: Callable[[], list[dict[str, Any]]] | None = None,
     broker_orders: Callable[[], list[dict[str, Any]]] | None = None,
+    runtime_execution_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     entries = read_journal_entries(journal_dir)
     read_errors = [e for e in entries if e.get("type") == "READ_ERROR"]
@@ -336,6 +410,7 @@ def build_trade_chain_report(
         row["category"] = category
         row["exit_reason"] = (outcome.get("outcome") or {}).get("exit_reason")
         row["pnl_dollars"] = (outcome.get("outcome") or {}).get("pnl_dollars")
+        row["execution_context"] = _execution_context_from_outcome(outcome)
         return {**row, "_bucket": "resolved", "_category": category, "_setup": setup}
 
     for attempt in attempts:
@@ -425,6 +500,23 @@ def build_trade_chain_report(
         if not e.get("reason")
     ]
 
+    # A fill whose OWN recorded post-fill validation says its slippage was NOT
+    # accepted is a real execution-context defect (the trade should not have
+    # been treated as a clean fill), not merely a note -- so it is flagged
+    # here and counted in `problems` below. Missing post-fill-validation data
+    # (post_fill_validation_recorded is False) is NOT itself flagged: not
+    # every order sets post_fill_validation_required, and treating absence of
+    # data as a failure would fail-closed on ordinary fills that never opted
+    # into that check.
+    execution_context_flagged = [
+        row
+        for row in resolved_fills
+        if (row.get("execution_context") or {}).get("slippage_within_bound") is False
+    ]
+    execution_context_runtime_comparison = _execution_context_runtime_comparison(
+        resolved_fills, runtime_execution_context
+    )
+
     broker_parity: dict[str, Any]
     if broker_positions is None and broker_orders is None:
         broker_parity = {
@@ -447,6 +539,7 @@ def build_trade_chain_report(
         or bool(unmatched_outcomes)
         or bool(unmatched_order_ids)
         or bool(read_errors)
+        or bool(execution_context_flagged)
         or journal_integrity["status"] in ("SHRUNK", "GREW_BEHIND_CHECKPOINT", "MUTATED")
     )
     status = "PASS" if not problems else "FAIL"
@@ -509,6 +602,7 @@ def build_trade_chain_report(
             "unmatched_outcomes": len(unmatched_outcomes),
             "unmatched_order_ids": len(unmatched_order_ids),
             "carryover_resolutions": len(carryover_resolutions),
+            "execution_context_flagged": len(execution_context_flagged),
         },
         "accounting": {
             "attempts_identity": (
@@ -549,7 +643,9 @@ def build_trade_chain_report(
                 {"ts": e.get("ts"), "instrument": e.get("instrument"), "path": e.get("_path"), "line": e.get("_line")}
                 for e in unmatched_order_ids
             ],
+            "execution_context_flagged": execution_context_flagged,
         },
+        "execution_context_runtime_comparison": execution_context_runtime_comparison,
         "broker_journal_parity": broker_parity,
         "eod_day_only_boundary_check": {
             "checked": False,

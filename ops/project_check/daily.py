@@ -4,7 +4,8 @@ One daily read-only source-of-truth pass combining:
   A. GitHub/repo reconciliation (PRs, branches, worktrees, evidence preservation)
   B. Deployed state (reuses ops.project_check.runtime.runtime_snapshot)
   C. Strategy source of truth (Strategy_Inventory.md vs risk_rules.yaml drift)
-  D. Trade chain integrity (reuses ops.project_check.trade_chain)
+  D. Trade chain integrity (reuses ops.project_check.trade_chain, including
+     per-fill entry model + effective tolerance vs. the current runtime)
 
 Never deletes a branch/worktree, never creates/deletes an archive tag, never
 edits docs/config, never cancels an order or flattens a position. Everything
@@ -215,6 +216,10 @@ def build_daily_report(
         repo_root=root,
         use_checkpoint=use_checkpoint,
         advance_checkpoint=advance_checkpoint,
+        runtime_execution_context={
+            "entry_fill_model": runtime.get("entry_fill_model"),
+            "entry_tolerance_ticks": runtime.get("entry_tolerance_ticks"),
+        },
     )
 
     return {

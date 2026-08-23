@@ -1,9 +1,17 @@
-"""Read-only repository ownership preflight for research and promotion.
+"""Read-only worktree-ownership and origin/main-freshness helpers.
 
-This routine is manually invoked before generating evidence or preparing a
-promotion. It never fetches or modifies refs. Instead it compares the locally
-known ``origin/main`` SHA with the SHA currently advertised by the remote and
-fails closed when that comparison cannot be made.
+Not a standalone routine -- ops.project_check.session's session-start and
+precommit modes (Routine 1: Session Safety + Runtime Snapshot) import
+`worktree_ownership` and `verified_origin_main` from here so the system has
+exactly three routines total. `build_ownership_preflight_report` remains as
+a directly-callable, independently-tested combination of both checks for
+callers that want it standalone (e.g. before generating evidence or
+preparing a promotion), but it is not wired into the CLI or the package's
+public routine exports.
+
+Never fetches or modifies refs. Origin/main freshness compares the locally
+known ``origin/main`` SHA with the SHA currently advertised by the remote
+(via `git ls-remote`) and fails closed when that comparison cannot be made.
 """
 from __future__ import annotations
 
