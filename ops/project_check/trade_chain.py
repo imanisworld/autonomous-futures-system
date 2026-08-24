@@ -14,6 +14,19 @@ Reuses ops.proof_30_mnq (read_journal_entries, classify_outcome, parse_proof_ts)
 and mirrors the TRADE<->OUTCOME/ORDER_IDS pairing style already used by
 ops/reconciler_outcome_audit.py and scripts/session_audit.py, generalized to
 all instruments in one pass instead of one instrument at a time.
+
+Also reuses ops.project_check.runtime.runtime_snapshot to surface the CURRENT
+live entry fill model and effective slippage tolerance alongside the fill
+detail below -- the same "entry model and effective tolerance must be
+checked against live runtime, not just assumed" lesson
+ops/project_check/promotion.py encodes for promotion evidence applies here
+too: a fill logged under one entry-tolerance regime read next to today's
+runtime value (which may have since changed) is how a silent tolerance drift
+gets caught. Per-fill journal rows do not carry an actual fill price or a
+per-trade recorded fill model/tolerance (no such fields exist in the journal
+schema), so actual-vs-modelled slippage is reported UNKNOWN per fill rather
+than invented -- see `execution_context` and each fill row's `entry`/`stop`/
+`target`/`contracts` (the journaled setup) below.
 """
 from __future__ import annotations
 
@@ -27,6 +40,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from ops.proof_30_mnq import classify_outcome, parse_proof_ts, read_journal_entries
+from ops.project_check.runtime import runtime_snapshot
 
 CHECKPOINT_SUBDIR = "afs-project-check"
 CHECKPOINT_FILENAME = "trade_chain_checkpoint.json"
@@ -247,9 +261,26 @@ def build_trade_chain_report(
     since_ts: str | None = None,
     use_checkpoint: bool = True,
     advance_checkpoint: bool = False,
+    risk_rules_path: str | Path = "risk_rules.yaml",
     broker_positions: Callable[[], list[dict[str, Any]]] | None = None,
     broker_orders: Callable[[], list[dict[str, Any]]] | None = None,
 ) -> dict[str, Any]:
+    live_runtime = runtime_snapshot(repo_root=repo_root, risk_rules_path=risk_rules_path)
+    execution_context = {
+        "entry_fill_model": live_runtime.get("entry_fill_model"),
+        "entry_fill_model_source": live_runtime.get("entry_fill_model_source"),
+        "entry_tolerance_ticks": live_runtime.get("entry_tolerance_ticks"),
+        "quantity_caps": live_runtime.get("quantity_caps"),
+        "note": (
+            "This is the CURRENT live entry fill model/tolerance (same source promotion.py "
+            "checks execution-context claims against), not a per-fill recorded value -- the "
+            "journal schema does not carry a per-trade fill model, tolerance, or actual fill "
+            "price, so actual-vs-modelled slippage per fill is UNKNOWN, not zero/ok. Each fill "
+            "row below carries the journaled entry/stop/target/contracts (the setup, i.e. the "
+            "intended order) for a manual correctness read against this context."
+        ),
+    }
+
     entries = read_journal_entries(journal_dir)
     read_errors = [e for e in entries if e.get("type") == "READ_ERROR"]
     entries_no_errors = [e for e in entries if e.get("type") != "READ_ERROR"]
@@ -327,6 +358,10 @@ def build_trade_chain_report(
             "instrument": attempt.get("instrument"),
             "strategy": setup.get("strategy"),
             "direction": setup.get("direction"),
+            "entry": setup.get("entry"),
+            "stop": setup.get("stop"),
+            "target": setup.get("target"),
+            "contracts": setup.get("contracts"),
             "path": attempt.get("_path"),
             "line": attempt.get("_line"),
         }
@@ -492,6 +527,7 @@ def build_trade_chain_report(
         },
         "journal_integrity": journal_integrity,
         "journal_read_errors": read_errors,
+        "execution_context": execution_context,
         "status": status,
         "summary": {
             "attempts": len(attempts),

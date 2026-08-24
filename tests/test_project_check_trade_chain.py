@@ -62,6 +62,20 @@ def test_clean_day_fill_and_cancel_passes(tmp_path: Path) -> None:
     assert s["naked_position_risk"] == 0
     assert s["unmatched_outcomes"] == 0
     assert report["accounting"]["attempts_identity_holds"] is True
+    # Execution context: the current live entry fill model/tolerance, surfaced
+    # alongside trade-chain evidence (same lesson promotion.py encodes for
+    # promotion evidence: entry model/tolerance must be checked against live
+    # runtime, not assumed).
+    ctx = report["execution_context"]
+    assert ctx["entry_fill_model"]
+    assert "MNQ" in ctx["entry_tolerance_ticks"]
+    # Each fill row carries the journaled setup (quantity/entry/stop/target)
+    # for a correctness read against that context.
+    fill = report["detail"]["resolved_fills"][0]
+    assert fill["entry"] == 30000.0
+    assert fill["stop"] == 29990.0
+    assert fill["target"] == 30025.0
+    assert fill["contracts"] == 1
 
 
 def test_stale_unresolved_trade_from_a_prior_day_is_an_orphan(tmp_path: Path) -> None:
