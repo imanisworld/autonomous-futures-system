@@ -93,7 +93,17 @@ def score_setup(data: dict[str, Any], now: datetime | None = None) -> ScoreResul
     )
 
     if direction not in {"LONG", "SHORT"}:
-        return ScoreResult(ticker, "UNKNOWN", 0, pattern, {}, dict(data), "direction_unknown")
+        # Distinguish "the feed gave us nothing to score" from "the inputs are
+        # present but disagree".  Both yield an unknown direction, but only the
+        # first one means the lane is blind, and that difference is the whole
+        # signal when a provider silently stops supplying fields.
+        missing = [
+            name
+            for name, value in (("price", price), ("vwap", vwap), ("ema20", ema20))
+            if value is None
+        ]
+        reason = f"missing_inputs:{','.join(missing)}" if missing else "direction_unknown"
+        return ScoreResult(ticker, "UNKNOWN", 0, pattern, {}, dict(data), reason)
 
     # Build full component breakdown before applying hard gates so callers
     # can always see what would have scored (useful for debugging and logging).

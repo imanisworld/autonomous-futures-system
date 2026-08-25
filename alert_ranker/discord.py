@@ -42,7 +42,12 @@ class DiscordAlerter:
 
     async def send_if_eligible(self, result: ScoreResult, now: datetime | None = None) -> AlertDecision:
         if result.score < self.config.alert_threshold:
-            return AlertDecision(False, "score_below_threshold")
+            # The scorer already knows why it could not score (missing feed
+            # inputs, against_vwap, against_trend).  Reporting
+            # "score_below_threshold" for those cases makes a dead data feed
+            # indistinguishable from a quiet market -- which is how 11,974
+            # unscorable scans were logged as ordinary near-misses.
+            return AlertDecision(False, result.reason or "score_below_threshold")
         if not self.config.discord_webhook_url:
             return AlertDecision(False, "discord_not_configured")
         if self.storage.recent_alert_exists(

@@ -135,3 +135,56 @@ def test_census_never_writes(tmp_path):
     before = sorted(p.name for p in tmp_path.iterdir())
     build_census(tmp_path, NOW)
     assert sorted(p.name for p in tmp_path.iterdir()) == before
+
+
+# --- suppression-reason honesty -------------------------------------------
+# A scan that could never be scored must not be logged as a near-miss.
+
+from datetime import datetime as _dt
+
+from alert_ranker.scorer import score_setup
+
+_NY = _dt(2026, 8, 25, 10, 0, tzinfo=timezone.utc)
+
+
+def test_missing_feed_inputs_are_named_not_hidden():
+    # Exactly the shape the box produces today: a Public equity quote with no
+    # vwap/ema20, which yields UNKNOWN direction.
+    result = score_setup({"ticker": "AAPL", "price": 312.36}, now=_NY)
+    assert result.score == 0
+    assert result.direction == "UNKNOWN"
+    assert result.reason == "missing_inputs:vwap,ema20"
+
+
+def test_all_inputs_missing_lists_all_three():
+    result = score_setup({"ticker": "AAPL"}, now=_NY)
+    assert result.reason == "missing_inputs:price,vwap,ema20"
+
+
+def test_inputs_present_but_unaligned_is_not_a_missing_input():
+    # price sits between vwap and ema20 -> genuinely undecidable, not blind.
+    result = score_setup(
+        {"ticker": "AAPL", "price": 100.0, "vwap": 99.0, "ema20": 101.0}, now=_NY
+    )
+    assert result.reason == "direction_unknown"
+
+
+def test_scorer_reason_survives_into_the_suppression_decision():
+    import asyncio
+    from alert_ranker.discord import DiscordAlerter
+
+    class _Cfg:
+        alert_threshold = 6
+        discord_webhook_url = ""
+        duplicate_window_minutes = 30
+
+    result = score_setup({"ticker": "AAPL", "price": 312.36}, now=_NY)
+    alerter = DiscordAlerter.__new__(DiscordAlerter)
+    alerter.config = _Cfg()
+    alerter.storage = None
+
+    decision = asyncio.run(alerter.send_if_eligible(result))
+    assert decision.sent is False
+    # The bug: this used to read "score_below_threshold" on a scan that never
+    # had the inputs to be scored at all.
+    assert decision.reason == "missing_inputs:vwap,ema20"
