@@ -113,6 +113,45 @@ class ScannerConfig:
         return False
 
 
+# The box stores Alpaca credentials as ALPACA_KEY / ALPACA_SECRET, while this
+# module originally read only ALPACA_API_KEY / ALPACA_SECRET_KEY.  The mismatch
+# made a fully-credentialed provider report `credentials_missing`, which is
+# indistinguishable from having no key at all.  Accept both spellings -- the
+# same fallback PUBLIC_API_SECRET_KEY/PUBLIC_API_KEY already uses.
+ALPACA_KEY_ENV: tuple[str, ...] = ("ALPACA_API_KEY", "ALPACA_KEY")
+ALPACA_SECRET_ENV: tuple[str, ...] = ("ALPACA_SECRET_KEY", "ALPACA_SECRET")
+
+
+def _first_env(env: dict[str, str], names: tuple[str, ...]) -> str:
+    for name in names:
+        value = env.get(name, "").strip()
+        if value:
+            return value
+    return ""
+
+
+def resolve_alpaca_credentials(env: dict[str, str] | None = None) -> tuple[str, str]:
+    """Return (key, secret) accepting either supported spelling of each."""
+    source = dict(os.environ) if env is None else env
+    return _first_env(source, ALPACA_KEY_ENV), _first_env(source, ALPACA_SECRET_ENV)
+
+
+def misnamed_alpaca_env(env: dict[str, str] | None = None) -> list[str]:
+    """Names holding a credential that the canonical variable is missing.
+
+    Reported so a misnamed key surfaces as a config problem instead of
+    silently degrading to "unconfigured".
+    """
+    source = dict(os.environ) if env is None else env
+    flagged: list[str] = []
+    for names in (ALPACA_KEY_ENV, ALPACA_SECRET_ENV):
+        canonical, *aliases = names
+        if source.get(canonical, "").strip():
+            continue
+        flagged.extend(a for a in aliases if source.get(a, "").strip())
+    return flagged
+
+
 def load_config(environ: Iterable[tuple[str, str]] | None = None) -> ScannerConfig:
     load_dotenv()
     env = dict(environ) if environ is not None else os.environ
@@ -128,8 +167,8 @@ def load_config(environ: Iterable[tuple[str, str]] | None = None) -> ScannerConf
         public_account_id=env.get("PUBLIC_ACCOUNT_ID", "").strip(),
         public_token_validity_minutes=_as_int(env.get("PUBLIC_TOKEN_VALIDITY_MINUTES"), 1440),
         public_stale_quote_seconds=_as_float(env.get("PUBLIC_STALE_QUOTE_SECONDS"), 900.0),
-        alpaca_api_key_configured=bool(env.get("ALPACA_API_KEY", "").strip()),
-        alpaca_secret_key_configured=bool(env.get("ALPACA_SECRET_KEY", "").strip()),
+        alpaca_api_key_configured=bool(_first_env(env, ALPACA_KEY_ENV)),
+        alpaca_secret_key_configured=bool(_first_env(env, ALPACA_SECRET_ENV)),
         alpaca_paper=_as_bool(env.get("ALPACA_PAPER"), True),
         alpaca_data_base_url=env.get("ALPACA_DATA_BASE_URL", "https://data.alpaca.markets").strip().rstrip("/"),
         port=_as_int(env.get("OPTIONS_SCANNER_PORT"), 8010),
