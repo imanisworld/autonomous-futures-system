@@ -188,3 +188,64 @@ def test_scorer_reason_survives_into_the_suppression_decision():
     # The bug: this used to read "score_below_threshold" on a scan that never
     # had the inputs to be scored at all.
     assert decision.reason == "missing_inputs:vwap,ema20"
+
+
+# --- Alpaca credential-name resolution ------------------------------------
+# Real credentials on the box live in ALPACA_KEY / ALPACA_SECRET while the
+# loader read only ALPACA_API_KEY / ALPACA_SECRET_KEY, so a fully-credentialed
+# provider reported `credentials_missing`.
+
+from alert_ranker.config import (
+    misnamed_alpaca_env,
+    resolve_alpaca_credentials,
+)
+
+
+def test_canonical_names_resolve():
+    key, secret = resolve_alpaca_credentials(
+        {"ALPACA_API_KEY": "k1", "ALPACA_SECRET_KEY": "s1"}
+    )
+    assert (key, secret) == ("k1", "s1")
+
+
+def test_box_spelling_resolves():
+    key, secret = resolve_alpaca_credentials({"ALPACA_KEY": "k2", "ALPACA_SECRET": "s2"})
+    assert (key, secret) == ("k2", "s2")
+
+
+def test_canonical_wins_over_alias():
+    key, _ = resolve_alpaca_credentials({"ALPACA_API_KEY": "canon", "ALPACA_KEY": "alias"})
+    assert key == "canon"
+
+
+def test_empty_canonical_falls_through_to_alias():
+    # The exact box shape: canonical present but blank, value under the alias.
+    key, secret = resolve_alpaca_credentials(
+        {"ALPACA_API_KEY": "", "ALPACA_KEY": "k3",
+         "ALPACA_SECRET_KEY": "  ", "ALPACA_SECRET": "s3"}
+    )
+    assert (key, secret) == ("k3", "s3")
+
+
+def test_nothing_set_resolves_empty():
+    assert resolve_alpaca_credentials({}) == ("", "")
+
+
+def test_misnamed_env_is_reported():
+    flagged = misnamed_alpaca_env({"ALPACA_KEY": "k", "ALPACA_SECRET": "s"})
+    assert sorted(flagged) == ["ALPACA_KEY", "ALPACA_SECRET"]
+
+
+def test_correctly_named_env_is_not_flagged():
+    assert misnamed_alpaca_env({"ALPACA_API_KEY": "k", "ALPACA_SECRET_KEY": "s"}) == []
+
+
+def test_loader_sees_alias_credentials_as_configured():
+    from alert_ranker.config import load_config
+
+    cfg = load_config(
+        [("ALPACA_KEY", "k"), ("ALPACA_SECRET", "s"),
+         ("OPTIONS_MARKET_DATA_PROVIDER", "alpaca")]
+    )
+    assert cfg.alpaca_api_key_configured is True
+    assert cfg.alpaca_secret_key_configured is True

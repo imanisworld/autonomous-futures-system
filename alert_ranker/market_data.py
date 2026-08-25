@@ -8,7 +8,7 @@ from typing import Any, Protocol
 
 import httpx
 
-from .config import ScannerConfig
+from .config import ScannerConfig, resolve_alpaca_credentials
 from .tastytrade_client import MarketSnapshot, READ_ONLY_PREFIXES, TastytradeClient
 
 
@@ -395,10 +395,8 @@ class AlpacaMarketDataClient(_HttpProvider):
             return MarketSnapshot(symbol, error="credentials_missing")
         payload = await self._get(
             f"/v1beta1/options/snapshots/{symbol}",
-            headers={
-                "APCA-API-KEY-ID": os.getenv("ALPACA_API_KEY", "").strip(),
-                "APCA-API-SECRET-KEY": os.getenv("ALPACA_SECRET_KEY", "").strip(),
-            },
+            headers=dict(zip(("APCA-API-KEY-ID", "APCA-API-SECRET-KEY"),
+                             resolve_alpaca_credentials())),
         )
         data = _first_payload(payload)
         if not data and self.last_error is None:
