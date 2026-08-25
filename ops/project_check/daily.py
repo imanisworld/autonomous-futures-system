@@ -215,6 +215,14 @@ def build_daily_report(
         repo_root=root,
         use_checkpoint=use_checkpoint,
         advance_checkpoint=advance_checkpoint,
+        # Cross-checks each fill's actual recorded entry model/tolerance
+        # against what is CURRENTLY configured -- the same "don't trust the
+        # evidence doc, verify live runtime" lesson promotion.py's
+        # execution_context check already applies, now also applied here.
+        current_execution_context={
+            "entry_fill_model": runtime.get("entry_fill_model"),
+            "entry_tolerance_ticks": runtime.get("entry_tolerance_ticks"),
+        },
     )
 
     return {

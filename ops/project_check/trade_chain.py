@@ -206,6 +206,78 @@ def _entry_ts(entry: dict[str, Any]) -> datetime | None:
     return parse_proof_ts(entry.get("ts"))
 
 
+def _instrument_root(instrument: Any) -> str:
+    return str(instrument or "").replace("1!", "").upper()
+
+
+def _current_runtime_context_for_instrument(
+    current_execution_context: dict[str, Any] | None, instrument: Any
+) -> dict[str, Any] | None:
+    """Read-only lookup into the runtime snapshot the caller (daily.py)
+    already computed -- never re-derived here. See runtime.runtime_snapshot's
+    entry_fill_model/entry_tolerance_ticks fields.
+    """
+    if not current_execution_context:
+        return None
+    tol_map = current_execution_context.get("entry_tolerance_ticks") or {}
+    tol_info = tol_map.get(_instrument_root(instrument)) if isinstance(tol_map, dict) else None
+    return {
+        "entry_fill_model": current_execution_context.get("entry_fill_model"),
+        "entry_tolerance_ticks_replay_paper": (tol_info or {}).get("effective_replay_paper"),
+        "entry_tolerance_ticks_live_broker": (tol_info or {}).get("effective_live_broker"),
+    }
+
+
+def _fill_execution_context(
+    outcome: dict[str, Any], *, current_execution_context: dict[str, Any] | None, instrument: Any
+) -> dict[str, Any]:
+    """The specific lesson this exists to encode: the entry fill model and
+    effective slippage tolerance ACTUALLY used for a fill belong in trade-chain
+    monitoring too, not only in promotion evidence (see
+    ops.project_check.promotion._execution_context_check). Read from the
+    OUTCOME row's execution_audit.post_fill_validation (see
+    execution/post_fill_validation.py's PostFillValidation), which is only
+    populated when the order that filled required post-fill validation --
+    never guessed or invented when absent.
+    """
+    body = outcome.get("outcome") or {}
+    audit = body.get("execution_audit") or {}
+    pfv = audit.get("post_fill_validation") or {}
+    recorded = bool(pfv)
+
+    slippage_ticks = pfv.get("slippage_ticks")
+    if slippage_ticks is None:
+        slippage_ticks = body.get("ticks_moved_from_entry")
+    max_slippage_ticks = pfv.get("max_slippage_ticks")
+
+    within_bound = None
+    if slippage_ticks is not None and max_slippage_ticks is not None:
+        try:
+            within_bound = abs(float(slippage_ticks)) <= float(max_slippage_ticks)
+        except (TypeError, ValueError):
+            within_bound = None
+
+    actual_entry_model = pfv.get("execution_model")
+    current_ctx = _current_runtime_context_for_instrument(current_execution_context, instrument)
+    entry_model_differs_from_current_runtime = None
+    if current_ctx is not None and actual_entry_model is not None:
+        current_model = current_ctx.get("entry_fill_model")
+        if current_model not in (None, "UNKNOWN"):
+            entry_model_differs_from_current_runtime = str(actual_entry_model) != str(current_model)
+
+    return {
+        "recorded": recorded,
+        "actual_entry_model": actual_entry_model if actual_entry_model is not None else "UNKNOWN",
+        "requested_entry": pfv.get("requested_entry", body.get("requested_entry")),
+        "actual_entry": pfv.get("actual_entry", body.get("entry_price")),
+        "slippage_ticks": slippage_ticks if slippage_ticks is not None else "UNKNOWN",
+        "effective_tolerance_ticks": max_slippage_ticks if max_slippage_ticks is not None else "UNKNOWN",
+        "slippage_within_modelled_bound": within_bound,
+        "current_runtime_context": current_ctx,
+        "entry_model_differs_from_current_runtime": entry_model_differs_from_current_runtime,
+    }
+
+
 def _pair_fifo_by_instrument(
     anchors: list[dict[str, Any]], events: list[dict[str, Any]], all_in_order: list[dict[str, Any]]
 ) -> tuple[dict[int, dict[str, Any]], list[dict[str, Any]]]:
@@ -249,6 +321,7 @@ def build_trade_chain_report(
     advance_checkpoint: bool = False,
     broker_positions: Callable[[], list[dict[str, Any]]] | None = None,
     broker_orders: Callable[[], list[dict[str, Any]]] | None = None,
+    current_execution_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     entries = read_journal_entries(journal_dir)
     read_errors = [e for e in entries if e.get("type") == "READ_ERROR"]
@@ -365,6 +438,9 @@ def build_trade_chain_report(
         classified.pop("_bucket")
         row = classified
         if category in ("filled_win_loss", "breakeven"):
+            row["execution_context"] = _fill_execution_context(
+                outcome, current_execution_context=current_execution_context, instrument=attempt.get("instrument")
+            )
             resolved_fills.append(row)
             if setup.get("stop") in (None, "") or setup.get("target") in (None, ""):
                 naked_position_risk.append({**row, "issue": "filled trade missing stop or target in journaled setup"})
@@ -419,6 +495,19 @@ def build_trade_chain_report(
         fills_count + cancellations_count + rejects_or_no_fill_count + unverified_open_count + orphans_count
     )
 
+    # Entry model / effective tolerance belong in trade-chain monitoring, not
+    # only in promotion evidence (see _fill_execution_context's docstring).
+    # Only a CONFIRMED breach (slippage_within_modelled_bound is False, i.e.
+    # both the actual slippage and the modelled bound were recorded and the
+    # former exceeds the latter) fails the chain -- missing execution_audit
+    # data is reported, never guessed or treated as a failure on its own.
+    fills_missing_execution_context = [
+        r for r in resolved_fills if not r["execution_context"]["recorded"]
+    ]
+    fills_exceeding_modelled_slippage_bound = [
+        r for r in resolved_fills if r["execution_context"]["slippage_within_modelled_bound"] is False
+    ]
+
     risk_rejected_missing_reason = [
         {"ts": e.get("ts"), "instrument": e.get("instrument"), "path": e.get("_path"), "line": e.get("_line")}
         for e in risk_rejected
@@ -447,6 +536,7 @@ def build_trade_chain_report(
         or bool(unmatched_outcomes)
         or bool(unmatched_order_ids)
         or bool(read_errors)
+        or bool(fills_exceeding_modelled_slippage_bound)
         or journal_integrity["status"] in ("SHRUNK", "GREW_BEHIND_CHECKPOINT", "MUTATED")
     )
     status = "PASS" if not problems else "FAIL"
@@ -509,6 +599,8 @@ def build_trade_chain_report(
             "unmatched_outcomes": len(unmatched_outcomes),
             "unmatched_order_ids": len(unmatched_order_ids),
             "carryover_resolutions": len(carryover_resolutions),
+            "fills_missing_execution_context": len(fills_missing_execution_context),
+            "fills_exceeding_modelled_slippage_bound": len(fills_exceeding_modelled_slippage_bound),
         },
         "accounting": {
             "attempts_identity": (
@@ -523,6 +615,15 @@ def build_trade_chain_report(
                 "unverified_open_attempts (current journal day) or orphans (stale) until an "
                 "OUTCOME or broker fill confirmation proves it either way."
             ),
+            "execution_context_note": (
+                "each resolved_fill carries an execution_context block with the actual entry "
+                "fill model, effective slippage tolerance, and actual slippage recorded on that "
+                "fill (from OUTCOME.execution_audit.post_fill_validation), plus the CURRENT "
+                "runtime's entry_fill_model/entry_tolerance_ticks when current_execution_context "
+                "was supplied -- reported UNKNOWN, never guessed, when the order didn't require "
+                "post-fill validation. Only a confirmed slippage-exceeds-modelled-bound breach "
+                "fails the chain; missing execution-audit data alone does not."
+            ),
         },
         "detail": {
             "resolved_fills": resolved_fills,
@@ -534,6 +635,7 @@ def build_trade_chain_report(
             "naked_position_risk": naked_position_risk,
             "risk_rejected_missing_reason": risk_rejected_missing_reason,
             "carryover_resolutions": carryover_resolutions,
+            "fills_exceeding_modelled_slippage_bound": fills_exceeding_modelled_slippage_bound,
             "unmatched_outcomes": [
                 {
                     "ts": e.get("ts"),

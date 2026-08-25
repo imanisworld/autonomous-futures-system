@@ -497,3 +497,123 @@ def test_journal_integrity_detects_same_count_field_level_mutation(tmp_path: Pat
     run2 = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=True)
     assert run2["journal_integrity"]["status"] == "MUTATED"
     assert run2["status"] == "FAIL"
+
+
+# ---------------------------------------------------------------------------
+# Execution context on fills: actual entry model + effective slippage
+# tolerance recorded on a fill (from OUTCOME.execution_audit.post_fill_
+# validation), and the comparison against the CURRENT runtime's
+# entry_fill_model/entry_tolerance_ticks -- the same "verify against live
+# runtime, don't just trust the record" lesson promotion.py's
+# execution_context check already applies, now applied to trade-chain fills.
+# ---------------------------------------------------------------------------
+
+
+def _outcome_with_execution_audit(
+    ts: str,
+    *,
+    instrument: str = "MNQ",
+    result: str = "WIN",
+    pnl: float = 25.0,
+    execution_model: str = "ioc_limit",
+    slippage_ticks: float = 2.0,
+    max_slippage_ticks: float = 32.0,
+) -> dict:
+    return {
+        "ts": ts,
+        "instrument": instrument,
+        "type": "OUTCOME",
+        "outcome": {
+            "result": result,
+            "exit_reason": "target hit",
+            "pnl_dollars": pnl,
+            "execution_audit": {
+                "post_fill_validation": {
+                    "execution_model": execution_model,
+                    "requested_entry": 30000.0,
+                    "actual_entry": 30000.0 + slippage_ticks * 0.25,
+                    "slippage_ticks": slippage_ticks,
+                    "max_slippage_ticks": max_slippage_ticks,
+                    "accepted": True,
+                }
+            },
+        },
+    }
+
+
+def test_fill_execution_context_recorded_and_within_bound(tmp_path: Path) -> None:
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    _write_jsonl(
+        journal_dir / "journal_2026-07-01.jsonl",
+        [_trade("2026-07-01T14:00:00Z"), _outcome_with_execution_audit("2026-07-01T14:30:00Z")],
+    )
+    report = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=False)
+    assert report["status"] == "PASS"
+    ec = report["detail"]["resolved_fills"][0]["execution_context"]
+    assert ec["recorded"] is True
+    assert ec["actual_entry_model"] == "ioc_limit"
+    assert ec["slippage_ticks"] == 2.0
+    assert ec["effective_tolerance_ticks"] == 32.0
+    assert ec["slippage_within_modelled_bound"] is True
+    assert report["summary"]["fills_exceeding_modelled_slippage_bound"] == 0
+
+
+def test_fill_missing_execution_audit_is_reported_unknown_and_does_not_fail(tmp_path: Path) -> None:
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    _write_jsonl(
+        journal_dir / "journal_2026-07-01.jsonl",
+        [_trade("2026-07-01T14:00:00Z"), _outcome("2026-07-01T14:30:00Z")],
+    )
+    report = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=False)
+    assert report["status"] == "PASS"
+    ec = report["detail"]["resolved_fills"][0]["execution_context"]
+    assert ec["recorded"] is False
+    assert ec["actual_entry_model"] == "UNKNOWN"
+    assert ec["slippage_within_modelled_bound"] is None
+    assert report["summary"]["fills_missing_execution_context"] == 1
+
+
+def test_fill_slippage_exceeding_modelled_bound_fails_the_chain(tmp_path: Path) -> None:
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    _write_jsonl(
+        journal_dir / "journal_2026-07-01.jsonl",
+        [
+            _trade("2026-07-01T14:00:00Z"),
+            _outcome_with_execution_audit(
+                "2026-07-01T14:30:00Z", slippage_ticks=40.0, max_slippage_ticks=32.0
+            ),
+        ],
+    )
+    report = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=False)
+    assert report["status"] == "FAIL"
+    assert report["summary"]["fills_exceeding_modelled_slippage_bound"] == 1
+    flagged = report["detail"]["fills_exceeding_modelled_slippage_bound"][0]
+    assert flagged["execution_context"]["slippage_ticks"] == 40.0
+
+
+def test_fill_entry_model_compared_against_current_runtime(tmp_path: Path) -> None:
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    _write_jsonl(
+        journal_dir / "journal_2026-07-01.jsonl",
+        [
+            _trade("2026-07-01T14:00:00Z"),
+            _outcome_with_execution_audit("2026-07-01T14:30:00Z", execution_model="ioc_limit"),
+        ],
+    )
+    report = build_trade_chain_report(
+        journal_dir=journal_dir,
+        repo_root=tmp_path,
+        use_checkpoint=False,
+        current_execution_context={
+            "entry_fill_model": "market",
+            "entry_tolerance_ticks": {"MNQ": {"effective_replay_paper": 32.0, "effective_live_broker": 0.0}},
+        },
+    )
+    ec = report["detail"]["resolved_fills"][0]["execution_context"]
+    assert ec["entry_model_differs_from_current_runtime"] is True
+    assert ec["current_runtime_context"]["entry_fill_model"] == "market"
+    assert ec["current_runtime_context"]["entry_tolerance_ticks_replay_paper"] == 32.0
