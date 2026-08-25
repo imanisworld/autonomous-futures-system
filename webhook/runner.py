@@ -3036,6 +3036,12 @@ def _market_state_context(state) -> dict:
             "price_vs_vwap": state.vwap.price_vs_vwap,
             "reclaimed": state.vwap.reclaimed,
             "holding": state.vwap.holding,
+            # Serialized so the journal can answer whether Pine actually sent
+            # the field. It gates the vwap_rejection observer and is populated
+            # live ONLY from payload.vwap_failed_reclaim, which defaults to
+            # False — so an unset field and a genuine False were previously
+            # indistinguishable in every recorded surface.
+            "failed_reclaim": state.vwap.failed_reclaim,
         },
         "orb": {
             "high": state.orb.high,
