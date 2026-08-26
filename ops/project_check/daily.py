@@ -215,6 +215,10 @@ def build_daily_report(
         repo_root=root,
         use_checkpoint=use_checkpoint,
         advance_checkpoint=advance_checkpoint,
+        expected_execution_context={
+            "entry_fill_model": runtime.get("entry_fill_model"),
+            "entry_tolerance_ticks": runtime.get("entry_tolerance_ticks"),
+        },
     )
 
     return {

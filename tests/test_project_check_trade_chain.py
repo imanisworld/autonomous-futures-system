@@ -38,6 +38,38 @@ def _order_ids(ts: str, *, instrument: str = "MNQ", order_id: str = "12345678") 
     return {"ts": ts, "instrument": instrument, "type": "ORDER_IDS", "order_ids": {"instrument": instrument, "entry": order_id}}
 
 
+def _outcome_with_execution_context(
+    ts: str,
+    *,
+    instrument: str = "MNQ",
+    result: str = "WIN",
+    exit_reason: str = "target hit",
+    pnl=25.0,
+    order_type: str = "ioc_limit",
+    max_slippage_ticks: float = 32.0,
+    adverse_slippage_ticks: float = 4.0,
+    slippage_within_bound: bool = True,
+) -> dict:
+    return {
+        "ts": ts,
+        "instrument": instrument,
+        "type": "OUTCOME",
+        "outcome": {
+            "result": result,
+            "exit_reason": exit_reason,
+            "pnl_dollars": pnl,
+            "order_type": order_type,
+            "execution_audit": {
+                "post_fill_validation": {
+                    "max_slippage_ticks": max_slippage_ticks,
+                    "adverse_slippage_ticks": adverse_slippage_ticks,
+                    "checks": {"slippage_limit": slippage_within_bound},
+                }
+            },
+        },
+    }
+
+
 def test_clean_day_fill_and_cancel_passes(tmp_path: Path) -> None:
     journal_dir = tmp_path / "logs"
     journal_dir.mkdir()
@@ -62,6 +94,84 @@ def test_clean_day_fill_and_cancel_passes(tmp_path: Path) -> None:
     assert s["naked_position_risk"] == 0
     assert s["unmatched_outcomes"] == 0
     assert report["accounting"]["attempts_identity_holds"] is True
+
+
+def test_fill_missing_execution_context_is_informational_not_a_failure(tmp_path: Path) -> None:
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    day = journal_dir / "journal_2026-07-01.jsonl"
+    _write_jsonl(
+        day,
+        [_trade("2026-07-01T14:00:00Z"), _outcome("2026-07-01T14:30:00Z", result="WIN", pnl=25.0)],
+    )
+    report = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=False)
+    assert report["status"] == "PASS"
+    assert report["summary"]["fills_missing_execution_context"] == 1
+    fill = report["detail"]["resolved_fills"][0]
+    assert fill["execution_context"]["recorded"] is False
+    assert fill["execution_context"]["entry_fill_model"] is None
+
+
+def test_fill_with_recorded_execution_context_within_bound_passes(tmp_path: Path) -> None:
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    day = journal_dir / "journal_2026-07-01.jsonl"
+    _write_jsonl(
+        day,
+        [_trade("2026-07-01T14:00:00Z"), _outcome_with_execution_context("2026-07-01T14:30:00Z")],
+    )
+    report = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=False)
+    assert report["status"] == "PASS"
+    assert report["summary"]["fills_missing_execution_context"] == 0
+    assert report["summary"]["fills_with_slippage_flagged"] == 0
+    fill = report["detail"]["resolved_fills"][0]
+    assert fill["execution_context"] == {
+        "entry_fill_model": "ioc_limit",
+        "entry_tolerance_ticks": 32.0,
+        "adverse_slippage_ticks": 4.0,
+        "slippage_within_bound": True,
+        "recorded": True,
+    }
+
+
+def test_fill_with_slippage_outside_recorded_bound_fails_closed(tmp_path: Path) -> None:
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    day = journal_dir / "journal_2026-07-01.jsonl"
+    _write_jsonl(
+        day,
+        [
+            _trade("2026-07-01T14:00:00Z"),
+            _outcome_with_execution_context(
+                "2026-07-01T14:30:00Z", adverse_slippage_ticks=99.0, slippage_within_bound=False
+            ),
+        ],
+    )
+    report = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=False)
+    assert report["status"] == "FAIL"
+    assert report["summary"]["fills_with_slippage_flagged"] == 1
+    assert len(report["execution_context"]["fills_with_slippage_flagged"]) == 1
+
+
+def test_fill_execution_context_mismatch_vs_current_runtime_fails_closed(tmp_path: Path) -> None:
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    day = journal_dir / "journal_2026-07-01.jsonl"
+    _write_jsonl(
+        day,
+        [_trade("2026-07-01T14:00:00Z"), _outcome_with_execution_context("2026-07-01T14:30:00Z", order_type="market")],
+    )
+    report = build_trade_chain_report(
+        journal_dir=journal_dir,
+        repo_root=tmp_path,
+        use_checkpoint=False,
+        expected_execution_context={"entry_fill_model": "ioc_limit", "entry_tolerance_ticks": {}},
+    )
+    assert report["status"] == "FAIL"
+    assert report["summary"]["fills_with_execution_context_mismatch"] == 1
+    fill = report["detail"]["resolved_fills"][0]
+    assert fill["execution_context_mismatches"]
+    assert "market" in fill["execution_context_mismatches"][0]
 
 
 def test_stale_unresolved_trade_from_a_prior_day_is_an_orphan(tmp_path: Path) -> None:

@@ -118,6 +118,17 @@ def test_build_daily_report_smoke(repo: Path) -> None:
     assert report["trade_chain"]["summary"]["attempts"] == 0
 
 
+def test_build_daily_report_wires_deployed_state_into_trade_chain_execution_context(repo: Path) -> None:
+    (repo / "logs").mkdir()
+    report = build_daily_report(repo_root=repo, journal_dir="logs", use_checkpoint=False, advance_checkpoint=False)
+    tc_ctx = report["trade_chain"]["execution_context"]
+    assert tc_ctx["checked_against_current_runtime"] is True
+    # No fills in this fixture, so nothing to flag -- this only proves the
+    # current deployed_state (not a hardcoded/duplicated value) is what got
+    # passed through as the trade-chain routine's expected execution context.
+    assert tc_ctx["fills_with_execution_context_mismatch"] == []
+
+
 def test_build_daily_report_ok_reflects_trade_chain_fail(repo: Path) -> None:
     logs = repo / "logs"
     logs.mkdir()

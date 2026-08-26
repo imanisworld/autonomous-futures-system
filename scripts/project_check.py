@@ -195,6 +195,8 @@ def _cmd_daily(args: argparse.Namespace) -> int:
             f"  0 orphans\n"
             f"  0 duplicate identities\n"
             f"  0 unmatched outcomes\n"
+            f"  entry model/tolerance: {s['fills_missing_execution_context']} fills missing execution context, "
+            f"0 slippage flagged, 0 mismatched vs current runtime\n"
         )
     else:
         print("  TRADE CHAIN: FAIL")

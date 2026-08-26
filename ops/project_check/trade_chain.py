@@ -32,6 +32,69 @@ CHECKPOINT_SUBDIR = "afs-project-check"
 CHECKPOINT_FILENAME = "trade_chain_checkpoint.json"
 
 
+def _root(instrument: str | None) -> str:
+    return str(instrument or "").replace("1!", "").upper()
+
+
+def _execution_context_from_outcome(outcome_data: dict[str, Any]) -> dict[str, Any]:
+    """Actual entry model / effective tolerance / slippage this fill recorded.
+
+    Pulls from the same fields the paper/live broker paths already write on
+    every OUTCOME (order_type, execution_audit.post_fill_validation) -- see
+    execution/paper_broker.py and execution/post_fill_validation.py. Missing
+    fields are reported as not recorded, never guessed: most historical
+    journal rows predate this instrumentation.
+    """
+    execution_audit = outcome_data.get("execution_audit") or {}
+    post_fill = execution_audit.get("post_fill_validation") or {}
+    checks = post_fill.get("checks") or {}
+    entry_fill_model = outcome_data.get("order_type")
+    entry_tolerance_ticks = post_fill.get("max_slippage_ticks")
+    return {
+        "entry_fill_model": entry_fill_model,
+        "entry_tolerance_ticks": entry_tolerance_ticks,
+        "adverse_slippage_ticks": post_fill.get("adverse_slippage_ticks"),
+        "slippage_within_bound": checks.get("slippage_limit"),
+        "recorded": bool(entry_fill_model or post_fill),
+    }
+
+
+def _execution_context_mismatches(
+    row: dict[str, Any], expected: dict[str, Any] | None
+) -> list[str]:
+    """Compare an actually-recorded fill's execution context to the currently
+    configured runtime (ops.project_check.runtime.runtime_snapshot output).
+    Read-only comparison -- never changes runtime/risk config. Silent (no
+    mismatch reported) whenever either side is UNKNOWN/unrecorded, since an
+    absent value is a gap to report separately, not evidence of a mismatch.
+    """
+    if not expected:
+        return []
+    ctx = row.get("execution_context") or {}
+    mismatches: list[str] = []
+    actual_model = ctx.get("entry_fill_model")
+    expected_model = expected.get("entry_fill_model")
+    if actual_model and expected_model not in (None, "UNKNOWN") and str(actual_model) != str(expected_model):
+        mismatches.append(
+            f"fill recorded entry_fill_model={actual_model!r} != current runtime "
+            f"entry_fill_model={expected_model!r}"
+        )
+    actual_tol = ctx.get("entry_tolerance_ticks")
+    tol_by_root = expected.get("entry_tolerance_ticks") or {}
+    root_tol = tol_by_root.get(_root(row.get("instrument")))
+    expected_tol = root_tol.get("effective_replay_paper") if isinstance(root_tol, dict) else None
+    if actual_tol is not None and expected_tol is not None:
+        try:
+            if float(actual_tol) != float(expected_tol):
+                mismatches.append(
+                    f"fill recorded entry_tolerance_ticks={actual_tol!r} != current runtime "
+                    f"effective tolerance {expected_tol!r} for {_root(row.get('instrument'))}"
+                )
+        except (TypeError, ValueError):
+            pass
+    return mismatches
+
+
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -249,6 +312,7 @@ def build_trade_chain_report(
     advance_checkpoint: bool = False,
     broker_positions: Callable[[], list[dict[str, Any]]] | None = None,
     broker_orders: Callable[[], list[dict[str, Any]]] | None = None,
+    expected_execution_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     entries = read_journal_entries(journal_dir)
     read_errors = [e for e in entries if e.get("type") == "READ_ERROR"]
@@ -332,10 +396,12 @@ def build_trade_chain_report(
         }
         if outcome is None:
             return {**row, "_bucket": "unresolved", "_setup": setup}
-        category = classify_outcome(outcome.get("outcome") or {})
+        outcome_data = outcome.get("outcome") or {}
+        category = classify_outcome(outcome_data)
         row["category"] = category
-        row["exit_reason"] = (outcome.get("outcome") or {}).get("exit_reason")
-        row["pnl_dollars"] = (outcome.get("outcome") or {}).get("pnl_dollars")
+        row["exit_reason"] = outcome_data.get("exit_reason")
+        row["pnl_dollars"] = outcome_data.get("pnl_dollars")
+        row["execution_context"] = _execution_context_from_outcome(outcome_data)
         return {**row, "_bucket": "resolved", "_category": category, "_setup": setup}
 
     for attempt in attempts:
@@ -365,6 +431,9 @@ def build_trade_chain_report(
         classified.pop("_bucket")
         row = classified
         if category in ("filled_win_loss", "breakeven"):
+            row["execution_context_mismatches"] = _execution_context_mismatches(
+                row, expected_execution_context
+            )
             resolved_fills.append(row)
             if setup.get("stop") in (None, "") or setup.get("target") in (None, ""):
                 naked_position_risk.append({**row, "issue": "filled trade missing stop or target in journaled setup"})
@@ -425,6 +494,23 @@ def build_trade_chain_report(
         if not e.get("reason")
     ]
 
+    # Execution-context lesson (entry fill model + effective tolerance):
+    # surfaced per-fill above; here it's rolled up. A fill missing this data
+    # entirely is reported, not guessed -- most historical journal rows predate
+    # this instrumentation, so "not recorded" is informational, not a FAIL.
+    # An explicit slippage_within_bound=False (the paper/live broker itself
+    # recorded a fill outside its own configured tolerance) and a mismatch
+    # against the CURRENT runtime config are both real integrity problems.
+    fills_missing_execution_context = [
+        r for r in resolved_fills if not (r.get("execution_context") or {}).get("recorded")
+    ]
+    fills_with_slippage_flagged = [
+        r for r in resolved_fills if (r.get("execution_context") or {}).get("slippage_within_bound") is False
+    ]
+    fills_with_execution_context_mismatch = [
+        r for r in resolved_fills if r.get("execution_context_mismatches")
+    ]
+
     broker_parity: dict[str, Any]
     if broker_positions is None and broker_orders is None:
         broker_parity = {
@@ -448,6 +534,8 @@ def build_trade_chain_report(
         or bool(unmatched_order_ids)
         or bool(read_errors)
         or journal_integrity["status"] in ("SHRUNK", "GREW_BEHIND_CHECKPOINT", "MUTATED")
+        or bool(fills_with_slippage_flagged)
+        or bool(fills_with_execution_context_mismatch)
     )
     status = "PASS" if not problems else "FAIL"
 
@@ -509,6 +597,9 @@ def build_trade_chain_report(
             "unmatched_outcomes": len(unmatched_outcomes),
             "unmatched_order_ids": len(unmatched_order_ids),
             "carryover_resolutions": len(carryover_resolutions),
+            "fills_missing_execution_context": len(fills_missing_execution_context),
+            "fills_with_slippage_flagged": len(fills_with_slippage_flagged),
+            "fills_with_execution_context_mismatch": len(fills_with_execution_context_mismatch),
         },
         "accounting": {
             "attempts_identity": (
@@ -523,6 +614,22 @@ def build_trade_chain_report(
                 "unverified_open_attempts (current journal day) or orphans (stale) until an "
                 "OUTCOME or broker fill confirmation proves it either way."
             ),
+        },
+        "execution_context": {
+            "note": (
+                "Actual entry model + effective tolerance recorded per fill (from "
+                "outcome.order_type / execution_audit.post_fill_validation), compared "
+                "against the currently configured runtime when expected_execution_context "
+                "is supplied. A fill missing this data is reported, not guessed -- most "
+                "historical journal rows predate this instrumentation and are informational "
+                "only. A fill whose own recorded slippage exceeded its configured tolerance, "
+                "or whose recorded entry model/tolerance no longer matches current runtime "
+                "config, fails this routine closed."
+            ),
+            "checked_against_current_runtime": bool(expected_execution_context),
+            "fills_missing_execution_context": fills_missing_execution_context,
+            "fills_with_slippage_flagged": fills_with_slippage_flagged,
+            "fills_with_execution_context_mismatch": fills_with_execution_context_mismatch,
         },
         "detail": {
             "resolved_fills": resolved_fills,
