@@ -4,11 +4,15 @@ Two modes:
   A. build_session_start_report()  -- full repo/runtime snapshot; the only
      thing in this module that writes anything, and all it writes is a small
      session-state cache file under .git/ (never a tracked path, never
-     committed) so precommit can later detect drift.
+     committed) so precommit can later detect drift. Also folds in the
+     ownership/origin-freshness check from ops.project_check.preflight (a
+     read-only `git ls-remote` plus worktree-ownership check) so there is a
+     single before-you-start check instead of a separate routine.
   B. build_precommit_report()      -- strictly read-only; fails closed on
-     branch/worktree drift or an unverifiable session-start baseline. Never
-     commits, pushes, pulls, resets, rebases, checks out, deletes a
-     branch/worktree, drops a stash, creates/deletes a tag, or modifies files.
+     branch/worktree drift, a worktree/branch ownership collision, or an
+     unverifiable session-start baseline. Never commits, pushes, pulls,
+     resets, rebases, checks out, deletes a branch/worktree, drops a stash,
+     creates/deletes a tag, or modifies files.
 """
 from __future__ import annotations
 
@@ -20,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from ops.project_check import gitutil
+from ops.project_check.preflight import build_ownership_preflight_report, worktree_ownership
 from ops.project_check.runtime import runtime_snapshot
 
 STATE_SUBDIR = "afs-project-check"
@@ -81,6 +86,12 @@ def build_session_start_report(*, cwd: str | Path | None = None) -> dict[str, An
     prs = gitutil.open_prs(root)
     closed_unmerged = gitutil.unmerged_remote_branches_missing_archive_tag(root)
     runtime = runtime_snapshot(repo_root=root)
+    # Live remote freshness + worktree-ownership check -- the only thing here
+    # that touches the network (a read-only `git ls-remote`, never a fetch).
+    # This is the same machinery a standalone "preflight" routine used to
+    # expose on its own; folded in here so session-start remains the single
+    # before-you-start check instead of a fourth routine.
+    ownership_preflight = build_ownership_preflight_report("research", cwd=root)
 
     branch_after = gitutil.current_branch(root)
     head_after = gitutil.head_sha(root)
@@ -114,6 +125,7 @@ def build_session_start_report(*, cwd: str | Path | None = None) -> dict[str, An
         },
         "branch_changed_during_check": branch_changed_during_check,
         "runtime_snapshot": runtime,
+        "ownership_preflight": ownership_preflight,
     }
 
     _save_state(
@@ -195,6 +207,17 @@ def build_precommit_report(*, cwd: str | Path | None = None) -> dict[str, Any]:
             f"intended branch {branch!r} is checked out in another worktree: {owner['path']}"
         )
 
+    # No live network call here (unlike session-start's ownership_preflight) --
+    # precommit stays fast and local; it only re-checks worktree/branch
+    # ownership, which is derivable from already-registered worktrees.
+    ownership = worktree_ownership(root)
+    reasons.extend(ownership["errors"])
+    for duplicate in ownership["duplicate_branch_owners"]:
+        reasons.append(
+            f"branch {duplicate['branch']!r} is registered to multiple worktrees: "
+            + ", ".join(duplicate["paths"])
+        )
+
     verdict = "FAIL_CLOSED" if reasons else "OK"
     return {
         "ok": verdict == "OK",
@@ -216,6 +239,7 @@ def build_precommit_report(*, cwd: str | Path | None = None) -> dict[str, Any]:
             "staged_files": status.get("staged", []),
             "untracked_files": status.get("untracked", []),
         },
+        "worktree_ownership": ownership,
         "note": (
             "This routine is read-only and never commits/pushes/pulls/resets/rebases/"
             "checks out/deletes branches or worktrees/drops stashes/creates or deletes "

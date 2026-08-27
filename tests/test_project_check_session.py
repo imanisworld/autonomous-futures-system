@@ -5,11 +5,13 @@ from pathlib import Path
 
 import pytest
 
+from ops.project_check import gitutil
 from ops.project_check.session import build_precommit_report, build_session_start_report
 
 
-def _git(root: Path, *args: str) -> None:
-    subprocess.run(["git", *args], cwd=root, check=True, capture_output=True)
+def _git(root: Path, *args: str) -> str:
+    result = subprocess.run(["git", *args], cwd=root, check=True, capture_output=True, text=True)
+    return result.stdout.strip()
 
 
 @pytest.fixture
@@ -22,6 +24,24 @@ def repo(tmp_path: Path) -> Path:
     (root / "a.txt").write_text("one\n")
     _git(root, "add", "a.txt")
     _git(root, "commit", "-q", "-m", "initial")
+    return root
+
+
+@pytest.fixture
+def repo_with_origin(tmp_path: Path) -> Path:
+    remote = tmp_path / "origin.git"
+    _git(tmp_path, "init", "-q", "--bare", "-b", "main", str(remote))
+
+    root = tmp_path / "repo"
+    root.mkdir()
+    _git(root, "init", "-q", "-b", "main")
+    _git(root, "config", "user.email", "test@example.com")
+    _git(root, "config", "user.name", "Test")
+    (root / "a.txt").write_text("one\n")
+    _git(root, "add", "a.txt")
+    _git(root, "commit", "-q", "-m", "initial")
+    _git(root, "remote", "add", "origin", str(remote))
+    _git(root, "push", "-q", "-u", "origin", "main")
     return root
 
 
@@ -97,3 +117,49 @@ def test_precommit_reports_changed_staged_untracked_lists(repo: Path) -> None:
     report = build_precommit_report(cwd=repo)
     assert "a.txt" in report["repo"]["changed_files"]
     assert "new.txt" in report["repo"]["staged_files"]
+
+
+# -- Session-start folds in the ownership/origin-freshness preflight that used
+# -- to be its own routine (ops.project_check.preflight). These cover that the
+# -- fold-in actually wires through, without re-testing preflight's own logic
+# -- (see tests/test_project_check_preflight.py for that).
+
+
+def test_session_start_reports_clean_ownership_preflight(repo_with_origin: Path) -> None:
+    report = build_session_start_report(cwd=repo_with_origin)
+    op = report["ownership_preflight"]
+    assert op["ok"] is True
+    assert op["origin_main"]["freshness"] == "CURRENT"
+    assert op["worktree_ownership"]["ok"] is True
+
+
+def test_session_start_ok_even_when_ownership_preflight_fails(repo: Path) -> None:
+    # `repo` has no origin remote at all -- ownership_preflight can't verify
+    # origin/main and is expected to fail closed, but session-start itself is
+    # a snapshot/report, not a gate: it must still succeed and surface the
+    # failure as data rather than erroring out.
+    report = build_session_start_report(cwd=repo)
+    assert report["ok"] is True
+    assert report["ownership_preflight"]["ok"] is False
+
+
+def test_precommit_fails_closed_on_duplicate_worktree_ownership(
+    repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    build_session_start_report(cwd=repo)
+    stale = tmp_path / "stale-registration"
+    head = _git(repo, "rev-parse", "HEAD")
+    monkeypatch.setattr(
+        gitutil,
+        "worktrees",
+        lambda _root: [
+            gitutil.Worktree(str(repo), head, "main", False, False, False),
+            gitutil.Worktree(str(stale), head, "main", False, False, False),
+        ],
+    )
+
+    report = build_precommit_report(cwd=repo)
+
+    assert report["ok"] is False
+    assert any("multiple worktrees" in reason for reason in report["reasons"])
+    assert report["worktree_ownership"]["ok"] is False

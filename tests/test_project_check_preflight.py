@@ -1,3 +1,8 @@
+"""Tests for ops.project_check.preflight -- the ownership/origin-freshness
+machinery that Routine 1 (session.py: session-start + precommit) calls into.
+It is not a standalone routine or CLI subcommand; see
+tests/test_project_check_session.py for coverage of the fold-in itself.
+"""
 from __future__ import annotations
 
 import subprocess
