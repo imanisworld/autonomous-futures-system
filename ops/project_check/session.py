@@ -4,11 +4,16 @@ Two modes:
   A. build_session_start_report()  -- full repo/runtime snapshot; the only
      thing in this module that writes anything, and all it writes is a small
      session-state cache file under .git/ (never a tracked path, never
-     committed) so precommit can later detect drift.
+     committed) so precommit can later detect drift. Also reports live-remote
+     origin/main freshness and worktree/branch ownership (see
+     ops.project_check.preflight) so "accidental work on outdated main" and
+     "worktree/branch collisions" are visible at session start, not just
+     inferred from the last local fetch.
   B. build_precommit_report()      -- strictly read-only; fails closed on
-     branch/worktree drift or an unverifiable session-start baseline. Never
-     commits, pushes, pulls, resets, rebases, checks out, deletes a
-     branch/worktree, drops a stash, creates/deletes a tag, or modifies files.
+     branch/worktree drift, worktree/branch ownership collisions, or an
+     unverifiable session-start baseline. Never commits, pushes, pulls,
+     resets, rebases, checks out, deletes a branch/worktree, drops a stash,
+     creates/deletes a tag, or modifies files.
 """
 from __future__ import annotations
 
@@ -20,6 +25,7 @@ from pathlib import Path
 from typing import Any
 
 from ops.project_check import gitutil
+from ops.project_check.preflight import verified_origin_main, worktree_ownership
 from ops.project_check.runtime import runtime_snapshot
 
 STATE_SUBDIR = "afs-project-check"
@@ -81,6 +87,8 @@ def build_session_start_report(*, cwd: str | Path | None = None) -> dict[str, An
     prs = gitutil.open_prs(root)
     closed_unmerged = gitutil.unmerged_remote_branches_missing_archive_tag(root)
     runtime = runtime_snapshot(repo_root=root)
+    live_remote_main = verified_origin_main(root)
+    ownership = worktree_ownership(root)
 
     branch_after = gitutil.current_branch(root)
     head_after = gitutil.head_sha(root)
@@ -114,6 +122,8 @@ def build_session_start_report(*, cwd: str | Path | None = None) -> dict[str, An
         },
         "branch_changed_during_check": branch_changed_during_check,
         "runtime_snapshot": runtime,
+        "live_remote_main_verification": live_remote_main,
+        "worktree_ownership": ownership,
     }
 
     _save_state(
@@ -195,6 +205,14 @@ def build_precommit_report(*, cwd: str | Path | None = None) -> dict[str, Any]:
             f"intended branch {branch!r} is checked out in another worktree: {owner['path']}"
         )
 
+    ownership = worktree_ownership(root)
+    reasons.extend(ownership["errors"])
+    for duplicate in ownership["duplicate_branch_owners"]:
+        reasons.append(
+            f"branch {duplicate['branch']!r} is registered to multiple worktrees: "
+            + ", ".join(duplicate["paths"])
+        )
+
     verdict = "FAIL_CLOSED" if reasons else "OK"
     return {
         "ok": verdict == "OK",
@@ -216,6 +234,7 @@ def build_precommit_report(*, cwd: str | Path | None = None) -> dict[str, Any]:
             "staged_files": status.get("staged", []),
             "untracked_files": status.get("untracked", []),
         },
+        "worktree_ownership": ownership,
         "note": (
             "This routine is read-only and never commits/pushes/pulls/resets/rebases/"
             "checks out/deletes branches or worktrees/drops stashes/creates or deletes "

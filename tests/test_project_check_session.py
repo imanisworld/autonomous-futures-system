@@ -97,3 +97,20 @@ def test_precommit_reports_changed_staged_untracked_lists(repo: Path) -> None:
     report = build_precommit_report(cwd=repo)
     assert "a.txt" in report["repo"]["changed_files"]
     assert "new.txt" in report["repo"]["staged_files"]
+
+
+def test_session_start_reports_live_remote_main_and_worktree_ownership(repo: Path) -> None:
+    report = build_session_start_report(cwd=repo)
+    assert "live_remote_main_verification" in report
+    assert report["live_remote_main_verification"]["freshness"] == "MISSING_LOCAL_REF"
+    assert report["worktree_ownership"]["ok"] is True
+    assert report["worktree_ownership"]["detached_head"] is False
+
+
+def test_precommit_fails_closed_on_detached_head(repo: Path) -> None:
+    build_session_start_report(cwd=repo)
+    _git(repo, "checkout", "-q", "--detach")
+    report = build_precommit_report(cwd=repo)
+    assert report["ok"] is False
+    assert any("detached HEAD" in r for r in report["reasons"])
+    assert report["worktree_ownership"]["detached_head"] is True

@@ -1,24 +1,28 @@
-"""Read-only repository ownership preflight for research and promotion.
+"""Read-only git verification helpers used by Routine 1 (Session Safety).
 
-This routine is manually invoked before generating evidence or preparing a
-promotion. It never fetches or modifies refs. Instead it compares the locally
-known ``origin/main`` SHA with the SHA currently advertised by the remote and
-fails closed when that comparison cannot be made.
+These two checks were originally exposed as a standalone fourth
+"ownership-preflight" routine. The system is consolidated to exactly three
+routines (Session Safety, Strategy Promotion Proof Gate, Daily
+Reconciliation + Trade Chain Integrity), so they now live here as helpers
+consumed by ``ops.project_check.session``:
+
+- ``verified_origin_main`` compares the locally known ``origin/main`` SHA
+  with the SHA currently advertised by the live remote (via
+  ``git ls-remote``, which never fetches or writes anything) so that
+  "local origin/main looked in sync" and "origin/main is actually current"
+  stay distinguishable -- ``gitutil.main_sync_state`` alone only compares
+  against the last-fetched remote-tracking ref.
+- ``worktree_ownership`` verifies the checked-out branch uniquely belongs to
+  the current worktree (no detached HEAD, no branch registered to more than
+  one worktree).
 """
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from ops.project_check import gitutil
-
-PURPOSES = frozenset({"research", "promotion"})
-
-
-def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
 
 
 def _remote_main_sha(output: str) -> str | None:
@@ -129,86 +133,4 @@ def worktree_ownership(root: Path) -> dict[str, Any]:
         "current_registration": current.as_dict() if current else None,
         "duplicate_branch_owners": duplicates,
         "errors": errors,
-    }
-
-
-def build_ownership_preflight_report(
-    purpose: str,
-    *,
-    cwd: str | Path | None = None,
-) -> dict[str, Any]:
-    if purpose not in PURPOSES:
-        raise ValueError(f"unsupported preflight purpose: {purpose!r}")
-    cwd_path = Path(cwd) if cwd is not None else Path.cwd()
-    root = gitutil.repo_root(cwd_path)
-    if root is None:
-        return {
-            "ok": False,
-            "routine": "ownership-preflight",
-            "purpose": purpose,
-            "read_only": True,
-            "bookkeeping_writes": [],
-            "blockers": ["not inside a Git worktree"],
-        }
-
-    status = gitutil.status_porcelain(root)
-    ownership = worktree_ownership(root)
-    main = verified_origin_main(root)
-    blockers: list[str] = []
-
-    if status.get("error"):
-        blockers.append(f"current worktree evidence could not be inspected: {status['error']}")
-    else:
-        if status["staged"]:
-            blockers.append(
-                "current worktree already has staged evidence: "
-                + ", ".join(sorted(status["staged"]))
-            )
-        # An unstaged edit to an ALREADY-TRACKED file is the most dangerous of
-        # the three: the file exists at a committed path, so the run looks
-        # provenanced while the code that generates the evidence is not. It must
-        # fail closed exactly like staged and untracked.
-        if status["dirty_tracked"]:
-            blockers.append(
-                "current worktree already has dirty tracked evidence: "
-                + ", ".join(sorted(status["dirty_tracked"]))
-            )
-        if status["untracked"]:
-            blockers.append(
-                "current worktree already has untracked evidence: "
-                + ", ".join(sorted(status["untracked"]))
-            )
-
-    blockers.extend(ownership["errors"])
-    for duplicate in ownership["duplicate_branch_owners"]:
-        blockers.append(
-            f"branch {duplicate['branch']!r} is registered to multiple worktrees: "
-            + ", ".join(duplicate["paths"])
-        )
-
-    if main["freshness"] != "CURRENT":
-        blockers.append(
-            f"origin/main verification is {main['freshness']}: {main['detail']}; "
-            "refresh origin/main explicitly, then rerun"
-        )
-    elif main["head_contains_verified_main"] is not True:
-        blockers.append(main["ancestry_detail"])
-
-    return {
-        "ok": not blockers,
-        "routine": "ownership-preflight",
-        "purpose": purpose,
-        "generated_at": _now_iso(),
-        "read_only": True,
-        "bookkeeping_writes": [],
-        "repo_root": str(root),
-        "blockers": blockers,
-        "current_worktree_evidence": {
-            "staged": sorted(status.get("staged", [])),
-            "dirty_tracked": sorted(status.get("dirty_tracked", [])),
-            "untracked": sorted(status.get("untracked", [])),
-            "error": status.get("error"),
-        },
-        "worktree_ownership": ownership,
-        "origin_main": main,
     }

@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from ops.project_check import gitutil
-from ops.project_check.preflight import build_ownership_preflight_report
+from ops.project_check.preflight import verified_origin_main, worktree_ownership
 
 
 def _git(root: Path, *args: str) -> str:
@@ -50,87 +50,87 @@ def _advance_remote(tmp_path: Path, remote: Path) -> str:
     return _git(publisher, "rev-parse", "HEAD")
 
 
-@pytest.mark.parametrize("purpose", ("research", "promotion"))
-def test_clean_current_state_passes_without_writes(
-    repo_with_origin: tuple[Path, Path],
-    purpose: str,
-) -> None:
+def test_verified_origin_main_current_and_never_writes(repo_with_origin: tuple[Path, Path]) -> None:
     repo, _remote = repo_with_origin
     before_status = _git(repo, "status", "--porcelain=v1", "--untracked-files=all")
     before_head = _git(repo, "rev-parse", "HEAD")
     before_origin_main = _git(repo, "rev-parse", "origin/main")
 
-    report = build_ownership_preflight_report(purpose, cwd=repo)
+    result = verified_origin_main(repo)
 
-    assert report["ok"] is True
-    assert report["bookkeeping_writes"] == []
+    assert result["freshness"] == "CURRENT"
+    assert result["head_contains_verified_main"] is True
     assert _git(repo, "status", "--porcelain=v1", "--untracked-files=all") == before_status
     assert _git(repo, "rev-parse", "HEAD") == before_head
     assert _git(repo, "rev-parse", "origin/main") == before_origin_main
 
 
-@pytest.mark.parametrize("purpose", ("research", "promotion"))
-def test_staged_and_untracked_evidence_fail_closed(
+def test_verified_origin_main_stale_local(
     repo_with_origin: tuple[Path, Path],
-    purpose: str,
+    tmp_path: Path,
+) -> None:
+    repo, remote = repo_with_origin
+    old_local = _git(repo, "rev-parse", "origin/main")
+    new_remote = _advance_remote(tmp_path, remote)
+
+    result = verified_origin_main(repo)
+
+    assert result["freshness"] == "STALE"
+    assert result["local_sha"] == old_local
+    assert result["remote_sha"] == new_remote
+    assert _git(repo, "rev-parse", "origin/main") == old_local
+
+
+def test_verified_origin_main_unreachable_remote(
+    repo_with_origin: tuple[Path, Path],
+    tmp_path: Path,
 ) -> None:
     repo, _remote = repo_with_origin
-    (repo / "staged.txt").write_text("staged\n", encoding="utf-8")
-    (repo / "untracked.txt").write_text("untracked\n", encoding="utf-8")
-    _git(repo, "add", "staged.txt")
+    _git(repo, "remote", "set-url", "origin", str(tmp_path / "missing.git"))
 
-    report = build_ownership_preflight_report(purpose, cwd=repo)
+    result = verified_origin_main(repo)
 
-    assert report["ok"] is False
-    assert any("staged evidence" in item for item in report["blockers"])
-    assert any("untracked evidence" in item for item in report["blockers"])
+    assert result["freshness"] == "UNVERIFIED"
 
 
-@pytest.mark.parametrize("purpose", ("research", "promotion"))
-def test_unstaged_tracked_modification_fails_closed(
+def test_verified_origin_main_head_not_containing_verified_main(
     repo_with_origin: tuple[Path, Path],
-    purpose: str,
+    tmp_path: Path,
 ) -> None:
-    """An unstaged edit to a TRACKED file must fail closed.
+    repo, remote = repo_with_origin
+    _git(repo, "switch", "-q", "-c", "research/old-base")
+    _advance_remote(tmp_path, remote)
+    _git(repo, "fetch", "-q", "origin", "main")
 
-    This is the most dangerous of the three dirty states: the file already
-    exists at a committed path, so remote/main/worktree checks all pass and the
-    run looks provenanced while the evidence-generating code is uncommitted.
-    Reporting it without blocking would let `preflight --purpose research`
-    return ok=true over unprovenanced code, defeating the no-proof-no-run rule.
-    """
+    result = verified_origin_main(repo)
+
+    assert result["freshness"] == "CURRENT"
+    assert result["head_contains_verified_main"] is False
+
+
+def test_worktree_ownership_ok(repo_with_origin: tuple[Path, Path]) -> None:
     repo, _remote = repo_with_origin
-    (repo / "tracked.txt").write_text("locally modified, never staged\n", encoding="utf-8")
-
-    # Precondition, asserted via gitutil (which classifies correctly) rather
-    # than via the report under test: this is dirty_tracked ONLY.
-    from ops.project_check import gitutil
-
-    status = gitutil.status_porcelain(repo)
-    assert status["dirty_tracked"] == ["tracked.txt"]
-    assert status["staged"] == []
-    assert status["untracked"] == []
-
-    report = build_ownership_preflight_report(purpose, cwd=repo)
-
-    assert report["ok"] is False
-    assert any("dirty tracked evidence" in item for item in report["blockers"])
-    assert any("tracked.txt" in item for item in report["blockers"])
-    assert report["current_worktree_evidence"]["dirty_tracked"] == ["tracked.txt"]
-    # The other two states are genuinely absent, so this proves dirty_tracked
-    # blocks on its own rather than riding on a staged/untracked blocker.
-    assert report["current_worktree_evidence"]["staged"] == []
-    assert report["current_worktree_evidence"]["untracked"] == []
-    assert not any("staged evidence" in item for item in report["blockers"])
-    assert not any("untracked evidence" in item for item in report["blockers"])
+    result = worktree_ownership(repo)
+    assert result["ok"] is True
+    assert result["detached_head"] is False
+    assert result["duplicate_branch_owners"] == []
 
 
-@pytest.mark.parametrize("purpose", ("research", "promotion"))
-def test_duplicate_branch_ownership_fails_closed(
+def test_worktree_ownership_detached_head_fails(repo_with_origin: tuple[Path, Path]) -> None:
+    repo, _remote = repo_with_origin
+    _git(repo, "checkout", "-q", "--detach")
+
+    result = worktree_ownership(repo)
+
+    assert result["ok"] is False
+    assert result["detached_head"] is True
+    assert any("detached HEAD" in e for e in result["errors"])
+
+
+def test_worktree_ownership_duplicate_registration_fails(
     repo_with_origin: tuple[Path, Path],
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    purpose: str,
 ) -> None:
     repo, _remote = repo_with_origin
     stale = tmp_path / "stale-registration"
@@ -143,76 +143,7 @@ def test_duplicate_branch_ownership_fails_closed(
         ],
     )
 
-    report = build_ownership_preflight_report(purpose, cwd=repo)
+    result = worktree_ownership(repo)
 
-    assert report["ok"] is False
-    assert any("multiple worktrees" in item for item in report["blockers"])
-
-
-@pytest.mark.parametrize("purpose", ("research", "promotion"))
-def test_detached_head_fails_closed(
-    repo_with_origin: tuple[Path, Path],
-    purpose: str,
-) -> None:
-    repo, _remote = repo_with_origin
-    _git(repo, "checkout", "-q", "--detach")
-
-    report = build_ownership_preflight_report(purpose, cwd=repo)
-
-    assert report["ok"] is False
-    assert report["worktree_ownership"]["detached_head"] is True
-    assert any("detached HEAD" in item for item in report["blockers"])
-
-
-@pytest.mark.parametrize("purpose", ("research", "promotion"))
-def test_stale_local_origin_main_fails_closed(
-    repo_with_origin: tuple[Path, Path],
-    tmp_path: Path,
-    purpose: str,
-) -> None:
-    repo, remote = repo_with_origin
-    old_local = _git(repo, "rev-parse", "origin/main")
-    new_remote = _advance_remote(tmp_path, remote)
-
-    report = build_ownership_preflight_report(purpose, cwd=repo)
-
-    assert report["ok"] is False
-    assert report["origin_main"]["freshness"] == "STALE"
-    assert report["origin_main"]["local_sha"] == old_local
-    assert report["origin_main"]["remote_sha"] == new_remote
-    assert _git(repo, "rev-parse", "origin/main") == old_local
-
-
-@pytest.mark.parametrize("purpose", ("research", "promotion"))
-def test_unreachable_remote_fails_closed(
-    repo_with_origin: tuple[Path, Path],
-    tmp_path: Path,
-    purpose: str,
-) -> None:
-    repo, _remote = repo_with_origin
-    _git(repo, "remote", "set-url", "origin", str(tmp_path / "missing.git"))
-
-    report = build_ownership_preflight_report(purpose, cwd=repo)
-
-    assert report["ok"] is False
-    assert report["origin_main"]["freshness"] == "UNVERIFIED"
-    assert any("UNVERIFIED" in item for item in report["blockers"])
-
-
-@pytest.mark.parametrize("purpose", ("research", "promotion"))
-def test_head_not_containing_verified_main_fails_closed(
-    repo_with_origin: tuple[Path, Path],
-    tmp_path: Path,
-    purpose: str,
-) -> None:
-    repo, remote = repo_with_origin
-    _git(repo, "switch", "-q", "-c", "research/old-base")
-    _advance_remote(tmp_path, remote)
-    _git(repo, "fetch", "-q", "origin", "main")
-
-    report = build_ownership_preflight_report(purpose, cwd=repo)
-
-    assert report["ok"] is False
-    assert report["origin_main"]["freshness"] == "CURRENT"
-    assert report["origin_main"]["head_contains_verified_main"] is False
-    assert any("does not contain" in item for item in report["blockers"])
+    assert result["ok"] is False
+    assert len(result["duplicate_branch_owners"]) == 1
