@@ -9,6 +9,12 @@ Two modes:
      branch/worktree drift or an unverifiable session-start baseline. Never
      commits, pushes, pulls, resets, rebases, checks out, deletes a
      branch/worktree, drops a stash, creates/deletes a tag, or modifies files.
+
+Both modes reuse gitutil.worktree_ownership() (branch registered to more than
+one worktree, detached HEAD) and, at session-start, gitutil.verified_origin_main()
+(local origin/main checked against the LIVE remote, not just the last-fetched
+tracking ref) -- this is what prevents branch/worktree collisions and
+accidental work on a stale main.
 """
 from __future__ import annotations
 
@@ -80,6 +86,8 @@ def build_session_start_report(*, cwd: str | Path | None = None) -> dict[str, An
     stashes = gitutil.stash_list(root)
     prs = gitutil.open_prs(root)
     closed_unmerged = gitutil.unmerged_remote_branches_missing_archive_tag(root)
+    ownership = gitutil.worktree_ownership(root)
+    origin_main_live = gitutil.verified_origin_main(root)
     runtime = runtime_snapshot(repo_root=root)
 
     branch_after = gitutil.current_branch(root)
@@ -111,6 +119,8 @@ def build_session_start_report(*, cwd: str | Path | None = None) -> dict[str, An
             "archive_tags": archive_tags,
             "stash_count": len(stashes),
             "stashes": stashes,
+            "worktree_ownership": ownership,
+            "origin_main_live_verification": origin_main_live,
         },
         "branch_changed_during_check": branch_changed_during_check,
         "runtime_snapshot": runtime,
@@ -195,6 +205,13 @@ def build_precommit_report(*, cwd: str | Path | None = None) -> dict[str, Any]:
             f"intended branch {branch!r} is checked out in another worktree: {owner['path']}"
         )
 
+    ownership = gitutil.worktree_ownership(root)
+    for duplicate in ownership["duplicate_branch_owners"]:
+        reasons.append(
+            f"branch {duplicate['branch']!r} is registered to multiple worktrees "
+            "(branch/worktree collision): " + ", ".join(duplicate["paths"])
+        )
+
     verdict = "FAIL_CLOSED" if reasons else "OK"
     return {
         "ok": verdict == "OK",
@@ -215,6 +232,7 @@ def build_precommit_report(*, cwd: str | Path | None = None) -> dict[str, Any]:
             "changed_files": status.get("dirty_tracked", []),
             "staged_files": status.get("staged", []),
             "untracked_files": status.get("untracked", []),
+            "worktree_ownership": ownership,
         },
         "note": (
             "This routine is read-only and never commits/pushes/pulls/resets/rebases/"

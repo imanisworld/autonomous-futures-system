@@ -34,6 +34,38 @@ def test_session_start_reports_ok_and_writes_state(repo: Path) -> None:
     assert state_file.exists()
 
 
+def test_session_start_reports_worktree_ownership_and_live_main_verification(repo: Path) -> None:
+    report = build_session_start_report(cwd=repo)
+    ownership = report["repo"]["worktree_ownership"]
+    assert ownership["ok"] is True
+    assert ownership["current_branch"] == "main"
+    # No origin configured in this fixture, so the live-remote check reports
+    # UNVERIFIED/MISSING_LOCAL_REF rather than guessing -- never CURRENT.
+    assert report["repo"]["origin_main_live_verification"]["freshness"] != "CURRENT"
+
+
+def test_precommit_fails_closed_on_duplicate_branch_ownership(
+    repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from ops.project_check import gitutil
+
+    build_session_start_report(cwd=repo)
+    stale = tmp_path / "stale-registration"
+    real_worktrees = gitutil.worktrees
+
+    def fake_worktrees(root: Path):
+        actual = real_worktrees(root)
+        current = next(w for w in actual if Path(w.path).resolve() == repo.resolve())
+        return actual + [
+            gitutil.Worktree(str(stale), current.head, current.branch, False, False, False)
+        ]
+
+    monkeypatch.setattr(gitutil, "worktrees", fake_worktrees)
+    report = build_precommit_report(cwd=repo)
+    assert report["ok"] is False
+    assert any("branch/worktree collision" in r for r in report["reasons"])
+
+
 def test_session_start_outside_git_repo(tmp_path: Path) -> None:
     outside = tmp_path / "not_a_repo"
     outside.mkdir()
