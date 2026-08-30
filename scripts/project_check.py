@@ -85,7 +85,10 @@ def _cmd_session_start(args: argparse.Namespace) -> int:
         print("  WARNING: branch/HEAD changed DURING this check")
     ownership = repo["worktree_ownership"]
     if not ownership["ok"]:
-        print(f"  WARNING: worktree ownership issue: {ownership['errors'] + [d['branch'] for d in ownership['duplicate_branch_owners']]}")
+        for issue in ownership["errors"]:
+            print(f"  WARNING: worktree ownership: {issue}")
+        for duplicate in ownership["duplicate_branch_owners"]:
+            print(f"  WARNING: branch {duplicate['branch']!r} registered to multiple worktrees: {duplicate['paths']}")
     live_main = repo["origin_main_live_verification"]
     print(f"  origin/main vs LIVE remote: {live_main['freshness']}")
     rt = report["runtime_snapshot"]
