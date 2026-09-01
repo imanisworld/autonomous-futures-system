@@ -50,6 +50,7 @@ SIG_REJECT = "RANGE_REJECT"
 SIG_BOUNCE = "RANGE_BOUNCE"
 SIG_MIDDLE = "RANGE_MIDDLE_NO_TRADE"
 SIG_NO_DATA = "RANGE_NO_DATA"
+SIG_BREAK_CLOSE_REPEAT = "RANGE_BREAK_CLOSE_REPEAT"   # armed break, no new candidate
 
 # ── Wall source names (for wall_source field) ──────────────────────────────────
 _SOURCE_PRIORITY = ["ORB_HIGH", "ORB_LOW", "PDH", "PDL",
@@ -545,3 +546,52 @@ def _no_data_signal(notes: Optional[str] = None) -> RangeSignal:
         polling_risk=False,
         notes=notes,
     )
+
+
+# ─── One-shot arming for RANGE_BREAK_CLOSE ────────────────────────────────────
+
+class RangeBreakArmState:
+    """
+    One-shot / clear-re-arm gate for RANGE_BREAK_CLOSE, per instrument.
+
+    ``_build_range_signal`` is stateless: as long as a 15m close sits more than
+    0.15% beyond a broken wall it emits an executable BREAK_CLOSE every bar, so
+    one structural break produced dozens of shadow candidates (680 of 950
+    resolved rows in Aug 2026 fired >1h after the first signal on the same
+    wall). This gate lets the FIRST break of a given wall+direction through,
+    then downgrades repeats to a non-executable ``RANGE_BREAK_CLOSE_REPEAT``
+    (no bracket, so the shadow resolver builds no candidate). It re-arms when
+    the instrument produces any non-break, non-NO_DATA signal — i.e. price has
+    closed back inside. A break of a different wall is a new event and passes.
+
+    State is in-process only; a restart re-arms every instrument once.
+    """
+
+    def __init__(self) -> None:
+        self._armed: dict[str, tuple[str, Optional[float]]] = {}
+
+    def apply(self, instrument: Optional[str], signal: RangeSignal) -> RangeSignal:
+        inst = (instrument or "").upper()
+        if signal.signal_type == SIG_BREAK_CLOSE:
+            key = (signal.direction, signal.stop_candidate)
+            if self._armed.get(inst) == key:
+                return RangeSignal(
+                    signal_type=SIG_BREAK_CLOSE_REPEAT,
+                    direction=signal.direction,
+                    entry_candidate=None,
+                    target_candidate=None,
+                    stop_candidate=None,
+                    executable=False,
+                    retest_eligible=False,
+                    retest_bars_available=None,
+                    polling_risk=signal.polling_risk,
+                    notes=f"repeat of armed break; {signal.notes}",
+                )
+            self._armed[inst] = key
+            return signal
+        if signal.signal_type != SIG_NO_DATA:
+            self._armed.pop(inst, None)
+        return signal
+
+    def reset(self) -> None:
+        self._armed.clear()

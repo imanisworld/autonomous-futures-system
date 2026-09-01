@@ -814,3 +814,86 @@ def test_break_close_stop_construction_unchanged():
     ctx = _wall_at_price_ctx_long()
     sig = build_range_signal(build_range_state(ctx, "RANGE_BOUND"), ctx)
     assert sig.stop_candidate == pytest.approx(round(5920.0 * 0.999, 2), abs=0.001)
+
+
+# ─── RangeBreakArmState — one-shot / clear-re-arm ─────────────────────────────
+
+from context.range_signal import RangeBreakArmState, SIG_BREAK_CLOSE_REPEAT  # noqa: E402
+
+
+def _break_sig(ctx: WallContext) -> RangeSignal:
+    return build_range_signal(build_range_state(ctx, "RANGE_BOUND"), ctx)
+
+
+def test_arm_state_first_break_passes_through():
+    arm = RangeBreakArmState()
+    sig = arm.apply("MES", _break_sig(_ctx_break_long()))
+    assert sig.signal_type == SIG_BREAK_CLOSE and sig.executable is True
+
+
+def test_arm_state_repeat_same_wall_is_not_executable():
+    arm = RangeBreakArmState()
+    arm.apply("MES", _break_sig(_ctx_break_long()))
+    # Next 15m bar, still beyond the same wall (price drifted higher).
+    ctx2 = _make_ctx(
+        5940.0,
+        walls_above=[_wl("PDH", KIND_RESISTANCE, 5950.0)],
+        walls_below=[_wl("ORB_HIGH", KIND_RESISTANCE, 5920.0), _wl("ORB_LOW", KIND_SUPPORT, 5880.0)],
+    )
+    rep = arm.apply("MES", _break_sig(ctx2))
+    assert rep.signal_type == SIG_BREAK_CLOSE_REPEAT
+    assert rep.executable is False
+    assert rep.entry_candidate is None and rep.stop_candidate is None and rep.target_candidate is None
+    assert rep.direction == "LONG"
+
+
+def test_arm_state_rearms_after_price_closes_back_inside():
+    arm = RangeBreakArmState()
+    arm.apply("MES", _break_sig(_ctx_break_long()))
+    # Back inside the range: a non-break signal clears the arm.
+    inside = _make_ctx(
+        5900.0,
+        walls_above=[_wl("ORB_HIGH", KIND_RESISTANCE, 5920.0)],
+        walls_below=[_wl("ORB_LOW", KIND_SUPPORT, 5880.0)],
+    )
+    mid = arm.apply("MES", _break_sig(inside))
+    assert mid.signal_type != SIG_BREAK_CLOSE
+    again = arm.apply("MES", _break_sig(_ctx_break_long()))
+    assert again.signal_type == SIG_BREAK_CLOSE and again.executable is True
+
+
+def test_arm_state_no_data_does_not_rearm():
+    arm = RangeBreakArmState()
+    arm.apply("MES", _break_sig(_ctx_break_long()))
+    arm.apply("MES", _break_sig(_empty_ctx(5930.0)))  # RANGE_NO_DATA
+    rep = arm.apply("MES", _break_sig(_ctx_break_long()))
+    assert rep.signal_type == SIG_BREAK_CLOSE_REPEAT
+
+
+def test_arm_state_is_per_instrument():
+    arm = RangeBreakArmState()
+    arm.apply("MES", _break_sig(_ctx_break_long()))
+    other = arm.apply("MNQ", _break_sig(_ctx_break_long()))
+    assert other.signal_type == SIG_BREAK_CLOSE and other.executable is True
+
+
+def test_arm_state_different_wall_is_a_new_event():
+    arm = RangeBreakArmState()
+    arm.apply("MES", _break_sig(_ctx_break_long()))          # broke ORB_HIGH 5920
+    ctx2 = _make_ctx(                                        # now also broke PDH 5950
+        5965.0,
+        walls_above=[_wl("PWH", KIND_RESISTANCE, 5990.0)],
+        walls_below=[_wl("PDH", KIND_RESISTANCE, 5950.0), _wl("ORB_HIGH", KIND_RESISTANCE, 5920.0)],
+    )
+    sig = arm.apply("MES", _break_sig(ctx2))
+    assert sig.signal_type == SIG_BREAK_CLOSE and sig.executable is True
+
+
+def test_arm_state_short_repeat_and_rearm():
+    arm = RangeBreakArmState()
+    first = arm.apply("MES", _break_sig(_ctx_break_short()))
+    assert first.executable is True
+    rep = arm.apply("MES", _break_sig(_ctx_break_short()))
+    assert rep.signal_type == SIG_BREAK_CLOSE_REPEAT
+    arm.reset()
+    assert arm.apply("MES", _break_sig(_ctx_break_short())).executable is True
