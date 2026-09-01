@@ -38,6 +38,12 @@ class OptionsManagerConfig:
     # true only if a GEX source is present AND has earned the gate on evidence.
     risk_reject_empty_gex_regime: bool = False
     risk_warn_unknown_gex_regime: bool = True
+    # Canonical portfolio-risk budget for the advisory decision path. NO
+    # DEFAULT: the earlier hardcoded $1,000 was never approved policy. Unset
+    # (or unparseable) means every canonical decision blocks on portfolio
+    # risk with an explicit reason and can never be TAKE. Set it only as a
+    # deliberate operator decision.
+    max_aggregate_open_risk_dollars: float | None = None
 
     # Phase 3 — contract quality / market data gate. Independent of
     # risk_rules.yaml; gates options_manager's own contract snapshots only.
@@ -164,6 +170,9 @@ class OptionsManagerConfig:
             risk_reject_empty_gex_regime=_as_bool(
                 os.getenv("OPTIONS_MANAGER_RISK_REJECT_EMPTY_GEX_REGIME"),
                 default=False,
+            ),
+            max_aggregate_open_risk_dollars=_as_optional_float(
+                os.getenv("OPTIONS_MANAGER_MAX_AGGREGATE_OPEN_RISK_DOLLARS")
             ),
             risk_warn_unknown_gex_regime=_as_bool(
                 os.getenv("OPTIONS_MANAGER_RISK_WARN_UNKNOWN_GEX_REGIME"),
@@ -362,6 +371,17 @@ def _as_float(value: str | None, default: float) -> float:
         return float(value)
     except ValueError:
         return default
+
+
+def _as_optional_float(value: str | None) -> float | None:
+    """A float the operator set, or None. Unset and garbage both read as None
+    so the caller fails closed instead of running on a guessed number."""
+    if value is None or value.strip() == "":
+        return None
+    try:
+        return float(value)
+    except ValueError:
+        return None
 
 
 def _as_bool(value: str | None, default: bool = False) -> bool:

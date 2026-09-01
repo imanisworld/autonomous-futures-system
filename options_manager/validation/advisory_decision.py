@@ -16,7 +16,7 @@ from .contract_quality_gate import ContractQualityResult, GateVerdict, check_con
 from .morning_scan_packet import MorningScanPacketResult, check_morning_scan_packet_intake
 from .no_trade_reasons import NoTradeReason, reasons_from_intake_result
 from .portfolio_risk_gate import (
-    DEFAULT_MAX_AGGREGATE_OPEN_RISK_DOLLARS,
+    AGGREGATE_RISK_BUDGET_UNCONFIGURED,
     DEFAULT_MAX_TRADE_RISK_DOLLARS,
     PortfolioRiskResult,
     PortfolioRiskVerdict,
@@ -87,8 +87,18 @@ def _no_trade_reasons_for_avoid(
             seen.add(mapped)
             reasons.append(mapped)
     if portfolio_result is not None and portfolio_result.verdict == PortfolioRiskVerdict.BLOCK:
-        if NoTradeReason.RISK_TOO_HIGH not in seen:
-            reasons.append(NoTradeReason.RISK_TOO_HIGH)
+        # An unconfigured budget is not "risk too high" -- the risk was never
+        # measured against anything. Say OTHER and let blocking_reasons carry
+        # the specific cause, rather than mislabel a config gap as a risk call.
+        unconfigured = any(
+            reason == AGGREGATE_RISK_BUDGET_UNCONFIGURED
+            for reason in portfolio_result.blocking_reasons
+        )
+        only_unconfigured = unconfigured and len(portfolio_result.blocking_reasons) == 1
+        mapped = NoTradeReason.OTHER if only_unconfigured else NoTradeReason.RISK_TOO_HIGH
+        if mapped not in seen:
+            seen.add(mapped)
+            reasons.append(mapped)
     if not reasons:
         reasons.append(NoTradeReason.OTHER)
     return tuple(reasons)
@@ -197,13 +207,17 @@ def check_advisory_decision_intake(
     *,
     require_portfolio_risk: bool = False,
     max_trade_risk_dollars: float = DEFAULT_MAX_TRADE_RISK_DOLLARS,
-    max_aggregate_open_risk_dollars: float = DEFAULT_MAX_AGGREGATE_OPEN_RISK_DOLLARS,
+    max_aggregate_open_risk_dollars: float | None = None,
 ) -> AdvisoryDecisionResult:
     """Normalize one nested advisory payload and evaluate it without raising.
 
     `require_portfolio_risk=True` is the canonical API mode. The default remains
     false so existing manual validation fixtures can continue to evaluate old
     evidence that predates portfolio snapshots.
+
+    `max_aggregate_open_risk_dollars` has no default. Whenever portfolio risk
+    is evaluated and the budget is None, the portfolio gate blocks and the
+    verdict cannot be TAKE.
     """
     if not isinstance(payload, Mapping):
         return AdvisoryDecisionResult(
