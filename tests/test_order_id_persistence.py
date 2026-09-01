@@ -187,3 +187,42 @@ def test_live_trading_still_blocked(monkeypatch):
     monkeypatch.setenv("LIVE_TRADING_ENABLED", "true")
     with pytest.raises(LiveTradingBlockedError):
         load_config()
+
+
+def test_client_order_id_persists_on_outcome_and_open_position(tmp_path):
+    from datetime import date
+    from journal.journal_logger import JournalLogger
+
+    d = date(2026, 9, 1)
+    j = JournalLogger(log_dir=str(tmp_path))
+    trade = _trade_record()
+    trade["client_order_id"] = "AFS-identity-test"
+    j.log_decision(trade, {"result": "APPROVED", "failed_rule": None, "reason": None}, for_date=d)
+    open_pos = j.get_open_position(d)
+    assert open_pos is not None
+    assert open_pos["client_order_id"] == "AFS-identity-test"
+
+    j.log_outcome(
+        instrument="MNQ", session="new_york", result="CANCELLED",
+        entry_price=30000.0, exit_price=None, exit_reason="ENTRY_NOT_FILLED",
+        pnl_ticks=0.0, pnl_dollars=0.0, for_date=d,
+        client_order_id="AFS-identity-test",
+    )
+    rows = j.read_day(d)
+    outcome = next(row for row in rows if row.get("type") == "OUTCOME")
+    assert outcome["outcome"]["client_order_id"] == "AFS-identity-test"
+
+
+def test_client_order_id_persists_on_order_ids_record(tmp_path):
+    from datetime import date
+    from journal.journal_logger import JournalLogger
+
+    d = date(2026, 9, 1)
+    j = JournalLogger(log_dir=str(tmp_path))
+    j.log_order_ids(
+        instrument="MNQ", session="new_york",
+        order_ids={"entry": "E1", "stop": "S1", "target": "T1"},
+        client_order_id="AFS-identity-test", for_date=d,
+    )
+    row = next(row for row in j.read_day(d) if row.get("type") == "ORDER_IDS")
+    assert row["client_order_id"] == "AFS-identity-test"

@@ -109,6 +109,7 @@ class JournalLogger:
         best_ask_at_submit: Optional[float] = None,
         ticks_moved_from_entry: Optional[float] = None,
         paper_order_id: Optional[str] = None,
+        client_order_id: Optional[str] = None,
         execution_audit: Optional[dict] = None,
     ) -> None:
         """
@@ -143,6 +144,7 @@ class JournalLogger:
                 "best_ask_at_submit": best_ask_at_submit,
                 "ticks_moved_from_entry": ticks_moved_from_entry,
                 "paper_order_id": paper_order_id,
+                "client_order_id": client_order_id,
                 "execution_audit": execution_audit,
             },
         }
@@ -178,6 +180,7 @@ class JournalLogger:
         *,
         stop: Optional[float] = None,
         exit_mode: Optional[str] = None,
+        client_order_id: Optional[str] = None,
     ) -> None:
         """Append the broker's OSO order ids for the currently-open position.
 
@@ -193,6 +196,8 @@ class JournalLogger:
             "session": session,
             "order_ids": dict(order_ids or {}),
         }
+        if client_order_id:
+            record["client_order_id"] = str(client_order_id)
         if stop is not None:
             record["stop"] = float(stop)
         if exit_mode:
@@ -667,6 +672,7 @@ class JournalLogger:
                         "contracts": setup.get("contracts", 1),
                         "strategy": setup.get("strategy"),
                         "paper_order_id": entry.get("paper_order_id"),
+                        "client_order_id": entry.get("client_order_id"),
                         "mnq_orb_reclaim_proof_audit": entry.get(
                             "mnq_orb_reclaim_proof_audit"
                         ),
