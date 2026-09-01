@@ -21,29 +21,7 @@ jobs:
       - name: Apply exact audited edit
         run: |
           python scripts/_chatgpt_apply_trade_chain_semantics.py
-          # Current-format TRADE_INTENT cancellations are joined before confirmed
-          # TRADE outcomes. A legacy TRADE->CANCELLED row is intentionally left
-          # for the confirmed-trade fallback; once that fallback consumes it, do
-          # not also keep the same row in the unmatched-intent set.
-          python - <<'PY'
-          from pathlib import Path
-          p = Path("ops/project_check/trade_chain.py")
-          text = p.read_text(encoding="utf-8")
-          old = '''    unmatched_outcomes_all = unmatched_confirmed_outcomes + unmatched_intent_cancellations
-'''
-          new = '''    confirmed_outcome_ids = {id(row) for row in outcome_by_attempt.values()}
-    unmatched_intent_cancellations = [
-        row for row in unmatched_intent_cancellations
-        if id(row) not in confirmed_outcome_ids
-    ]
-    unmatched_outcomes_all = unmatched_confirmed_outcomes + unmatched_intent_cancellations
-'''
-          if text.count(old) != 1:
-              raise SystemExit("expected one unmatched-outcome merge point")
-          p.write_text(text.replace(old, new, 1), encoding="utf-8")
-          PY
-          # Use a cancellation reason classified by the existing no-fill taxonomy.
-          sed -i 's/exit_reason="legacy cancel"/exit_reason="IOC limit expired"/' tests/test_project_check_trade_chain.py
+          python scripts/_chatgpt_patch_trade_chain_legacy.py
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
       - name: Run targeted trade-chain tests
