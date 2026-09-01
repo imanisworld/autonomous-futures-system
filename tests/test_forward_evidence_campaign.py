@@ -368,9 +368,19 @@ def test_report_never_combines_variants(tmp_path):
     path.write_text("\n".join(json.dumps({"observed_at": "2026-08-13T15:00:00+00:00", **r}) for r in (control, modified)) + "\n")
     report = build_report(path)
     assert report["candidate_rows"] == 2
-    assert {(p["strategy"], p["variant"], p["candidates"]) for p in report["populations"]} == {
-        ("vwap_hold", "control", 1), ("vwap_hold", "modified", 1),
+    counts = {
+        (p["strategy"], p["variant"]): p["candidates"]
+        for p in report["populations"]
     }
+    assert report["configured_population_count"] == 5
+    assert counts == {
+        ("vwap_hold", "control"): 1,
+        ("vwap_hold", "modified"): 1,
+        ("orb_reclaim", "control"): 0,
+        ("orb_reclaim", "modified"): 0,
+        ("vwap_rejection", "observer"): 0,
+    }
+    assert report["unexpected_populations"] == []
     assert all(p["review_eligible"] is False for p in report["populations"])
 
 
@@ -519,3 +529,44 @@ def test_risk_rules_keep_only_mnq_orb_breakout_executable():
     assert cfg.enabled_concepts == ["orb_breakout"]
     assert cfg.strategy_status["orb_breakout"] == "PAPER_ELIGIBLE"
     assert cfg.strategy_status["vwap_hold"] == "SHADOW_ONLY"
+
+
+def test_report_flags_conflicting_duplicate_candidate_id(tmp_path):
+    first = _record()
+    conflict = deepcopy(first)
+    conflict["original_entry"] = first["original_entry"] + 1.0
+    path = tmp_path / "candidate-conflict.jsonl"
+    path.write_text("\n".join(json.dumps(row) for row in (first, conflict)) + "\n")
+    report = build_report(path)
+    assert report["duplicate_candidate_rows_ignored"] == 0
+    assert report["conflicting_candidate_rows"] == 1
+    assert report["evidence_integrity"]["ok"] is False
+    assert report["evidence_integrity"]["conflicting_candidate_ids"] == [first["candidate_id"]]
+    assert report["review_gate"]["blocked_by_evidence_integrity"] is True
+    assert all(p["review_eligible"] is False for p in report["populations"])
+
+
+def test_report_flags_conflicting_duplicate_outcome_id(tmp_path):
+    candidate = _record()
+    first = _outcome(candidate, "WIN", 10.0)
+    conflict = deepcopy(first)
+    conflict["terminal_state"] = "LOSS"
+    conflict["gross_pnl_dollars"] = -10.0
+    path = tmp_path / "outcome-conflict.jsonl"
+    path.write_text("\n".join(json.dumps(row) for row in (candidate, first, conflict)) + "\n")
+    report = build_report(path)
+    assert report["duplicate_outcome_rows_ignored"] == 0
+    assert report["conflicting_outcome_rows"] == 1
+    assert report["evidence_integrity"]["ok"] is False
+    assert report["evidence_integrity"]["conflicting_outcome_ids"] == [candidate["candidate_id"]]
+
+
+def test_report_separates_unexpected_population(tmp_path):
+    unexpected = _record(strategy="not_registered", variant="control")
+    path = tmp_path / "unexpected.jsonl"
+    path.write_text(json.dumps(unexpected) + "\n")
+    report = build_report(path)
+    assert len(report["populations"]) == 5
+    assert [(p["strategy"], p["variant"], p["candidates"]) for p in report["unexpected_populations"]] == [
+        ("not_registered", "control", 1)
+    ]

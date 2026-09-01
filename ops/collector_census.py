@@ -31,6 +31,21 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
+_CAMPAIGN_CONFIG_PATH = Path(__file__).resolve().parents[1] / "config" / "forward_evidence_campaign.json"
+
+
+def _configured_campaign_populations() -> tuple[tuple[str, str], ...]:
+    try:
+        config = json.loads(_CAMPAIGN_CONFIG_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        return ()
+    return tuple(
+        (str(row.get("strategy")), str(row.get("variant")))
+        for row in (config.get("populations") or [])
+        if isinstance(row, dict)
+    )
+
+
 FRESH = "FRESH"
 STALE = "STALE"
 DEAD = "DEAD"
@@ -62,13 +77,12 @@ COLLECTORS: tuple[Collector, ...] = (
     Collector("bars MES", "daily_jsonl", "bars_MES_{date}.jsonl", 30),
     Collector("strategy context", "jsonl", "strategy_context_observations.jsonl", 30),
     Collector("feed gap alarm", "file", "feed_gap_alarm_state.json", 15),
-    # --- shadow / strategy evidence (cadence follows the lane timeframe) --
-    Collector("vwap_hold_early shadow", "jsonl", "vwap_hold_early_shadow_evidence.jsonl", 60),
-    Collector("mnq_strat_22 continuation", "jsonl", "mnq_strat_22_continuation_evidence.jsonl", 60),
-    Collector("mes_trend_consolidation", "jsonl", "mes_trend_consolidation_break_evidence.jsonl", 60),
-    Collector("mnq_strat_22 reversal", "jsonl", "mnq_strat_22_reversal_evidence.jsonl", 360),
-    Collector("mnq_strat_32", "jsonl", "mnq_strat_32_evidence.jsonl", 720),
-    Collector("mnq_strat_322", "jsonl", "mnq_strat_322_evidence.jsonl", 1440),
+    # --- event-driven futures strategy evidence -------------------------
+    # Do not assign wall-clock DEAD thresholds to candidate-driven files.
+    # MNQ Strat / MES lane health is owned by ops.evidence_lane_health, which
+    # separates feed health from NO_PATTERN_MATCHES. VWAP early health is
+    # checked via its 5m feed/runtime prerequisites and campaign/raw evidence;
+    # candidate-file silence alone is not a valid death signal.
     # --- forward A/B campaign -------------------------------------------
     Collector(
         "forward A/B campaign",
@@ -241,41 +255,52 @@ def check(collector: Collector, log_dir: Path, now: datetime) -> dict[str, Any]:
 
 
 def campaign_arms(log_dir: Path, now: datetime) -> dict[str, Any]:
-    """Per-arm accrual for the forward A/B campaign.
-
-    A campaign whose file is fresh can still have a silently stalled arm --
-    which is exactly what happened to the `modified` arm after 2026-08-19 --
-    so whole-file freshness is not a sufficient check here.
-    """
+    """Per-population accrual, including configured populations with zero rows."""
+    configured = {
+        f"{strategy}/{variant}": {
+            "strategy": strategy,
+            "variant": variant,
+            "count": 0,
+            "last": None,
+        }
+        for strategy, variant in _configured_campaign_populations()
+    }
+    unexpected: dict[str, dict[str, Any]] = {}
     path = log_dir / "forward_ab_2026_08_v1.jsonl"
-    if not path.exists():
-        return {}
-    arms: dict[str, dict[str, Any]] = {}
-    try:
-        with path.open() as handle:
-            for line in handle:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    row = json.loads(line)
-                except ValueError:
-                    continue
-                if row.get("record_type") != "CANDIDATE":
-                    continue
-                arm = str(row.get("variant") or "unknown")
-                stamp = _parse_ts(row.get("signal_timestamp"))
-                entry = arms.setdefault(arm, {"count": 0, "last": None})
-                entry["count"] += 1
-                if stamp and (entry["last"] is None or stamp > entry["last"]):
-                    entry["last"] = stamp
-    except OSError:
-        return {}
-    for entry in arms.values():
-        last = entry["last"]
-        entry["idle_hours"] = None if last is None else round(_age_minutes(last, now) / 60, 1)
-        entry["last"] = last.isoformat() if last else None
-    return arms
+    if path.exists():
+        try:
+            with path.open() as handle:
+                for line in handle:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        row = json.loads(line)
+                    except ValueError:
+                        continue
+                    if row.get("record_type") != "CANDIDATE":
+                        continue
+                    strategy = str(row.get("strategy") or "unknown")
+                    variant = str(row.get("variant") or "unknown")
+                    key = f"{strategy}/{variant}"
+                    target = configured if key in configured else unexpected
+                    entry = target.setdefault(
+                        key,
+                        {"strategy": strategy, "variant": variant, "count": 0, "last": None},
+                    )
+                    stamp = _parse_ts(row.get("signal_timestamp"))
+                    entry["count"] += 1
+                    if stamp and (entry["last"] is None or stamp > entry["last"]):
+                        entry["last"] = stamp
+        except OSError:
+            pass
+
+    for population in (configured, unexpected):
+        for entry in population.values():
+            last = entry["last"]
+            entry["idle_hours"] = None if last is None else round(_age_minutes(last, now) / 60, 1)
+            entry["last"] = last.isoformat() if last else None
+    return {"configured": configured, "unexpected": unexpected}
 
 
 def build_census(log_dir: Path, now: datetime | None = None) -> dict[str, Any]:
@@ -312,11 +337,19 @@ def format_census(census: dict[str, Any]) -> str:
         if row["note"] and row["status"] != FRESH:
             lines.append(f"{'':<7} {'':<28} -> {row['note']}")
 
-    if census["campaign_arms"]:
-        lines += ["", "forward A/B campaign arms:"]
-        for arm, entry in sorted(census["campaign_arms"].items()):
+    campaign = census["campaign_arms"]
+    configured_arms = campaign.get("configured", {})
+    unexpected_arms = campaign.get("unexpected", {})
+    if configured_arms:
+        lines += ["", "forward A/B configured populations:"]
+        for arm, entry in sorted(configured_arms.items()):
             idle = "never" if entry["idle_hours"] is None else f"{entry['idle_hours']:.0f}h idle"
-            lines.append(f"  {arm:<12} candidates={entry['count']:<4} {idle}")
+            lines.append(f"  {arm:<28} candidates={entry['count']:<4} {idle}")
+    if unexpected_arms:
+        lines += ["", "forward A/B UNEXPECTED populations:"]
+        for arm, entry in sorted(unexpected_arms.items()):
+            idle = "never" if entry["idle_hours"] is None else f"{entry['idle_hours']:.0f}h idle"
+            lines.append(f"  {arm:<28} candidates={entry['count']:<4} {idle}")
 
     summary = ", ".join(f"{k}={v}" for k, v in sorted(census["counts"].items()))
     lines += ["", f"summary: {summary}"]

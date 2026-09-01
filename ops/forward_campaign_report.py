@@ -16,6 +16,40 @@ from execution.forward_evidence_campaign import (
 
 COST_TIERS = (1, 2, 3)
 PAIR_VARIANTS = ("control", "modified")
+_CAMPAIGN_CONFIG_PATH = Path(__file__).resolve().parents[1] / "config" / "forward_evidence_campaign.json"
+
+
+def _configured_population_keys() -> tuple[tuple[str, str], ...]:
+    config = json.loads(_CAMPAIGN_CONFIG_PATH.read_text(encoding="utf-8"))
+    if config.get("campaign_id") != CAMPAIGN_ID:
+        raise RuntimeError(
+            f"campaign config id {config.get('campaign_id')!r} does not match {CAMPAIGN_ID!r}"
+        )
+    populations = config.get("populations") or []
+    return tuple((str(row["strategy"]), str(row["variant"])) for row in populations)
+
+
+CONFIGURED_POPULATIONS = _configured_population_keys()
+
+
+def _dedupe_rows(
+    rows: list[dict[str, Any]],
+) -> tuple[dict[str, dict[str, Any]], int, list[str]]:
+    """First-wins dedupe that distinguishes identical retries from conflicts."""
+    unique: dict[str, dict[str, Any]] = {}
+    identical_duplicates = 0
+    conflicting_ids: set[str] = set()
+    for row in rows:
+        candidate_id = str(row.get("candidate_id"))
+        prior = unique.get(candidate_id)
+        if prior is None:
+            unique[candidate_id] = row
+            continue
+        if row == prior:
+            identical_duplicates += 1
+        else:
+            conflicting_ids.add(candidate_id)
+    return unique, identical_duplicates, sorted(conflicting_ids)
 
 
 def _rows(path: Path) -> list[dict[str, Any]]:
@@ -293,18 +327,49 @@ def build_report(path: str | Path) -> dict[str, Any]:
     rows = _rows(Path(path))
     candidate_rows = [row for row in rows if row.get("record_type") == "CANDIDATE"]
     outcome_rows = [row for row in rows if row.get("record_type") == "OUTCOME"]
-    candidates = {str(row.get("candidate_id")): row for row in candidate_rows}
-    outcomes = {str(row.get("candidate_id")): row for row in outcome_rows}
-    keys = sorted({(row.get("strategy"), row.get("variant")) for row in candidates.values()})
+    candidates, identical_candidate_duplicates, conflicting_candidate_ids = _dedupe_rows(candidate_rows)
+    outcomes, identical_outcome_duplicates, conflicting_outcome_ids = _dedupe_rows(outcome_rows)
+
+    configured_keys = list(CONFIGURED_POPULATIONS)
+    configured_set = set(configured_keys)
+    observed_keys = {
+        (str(row.get("strategy")), str(row.get("variant")))
+        for row in candidates.values()
+    }
+    unexpected_keys = sorted(observed_keys - configured_set)
+
     populations = [
         _all_arm_population(
             strategy,
             variant,
-            [row for row in candidates.values() if (row.get("strategy"), row.get("variant")) == (strategy, variant)],
+            [
+                row for row in candidates.values()
+                if (str(row.get("strategy")), str(row.get("variant"))) == (strategy, variant)
+            ],
             outcomes,
         )
-        for strategy, variant in keys
+        for strategy, variant in configured_keys
     ]
+    unexpected_populations = [
+        _all_arm_population(
+            strategy,
+            variant,
+            [
+                row for row in candidates.values()
+                if (str(row.get("strategy")), str(row.get("variant"))) == (strategy, variant)
+            ],
+            outcomes,
+        )
+        for strategy, variant in unexpected_keys
+    ]
+
+    evidence_integrity_ok = not conflicting_candidate_ids and not conflicting_outcome_ids
+    if not evidence_integrity_ok:
+        for population in populations + unexpected_populations:
+            population["review_eligible"] = False
+            population["review_blockers"] = ["EVIDENCE_INTEGRITY_CONFLICT"]
+            population["classification_if_not_eligible"] = "WAIT / PROMISING BUT UNPROVEN"
+
     pair_strategies = sorted({
         str(row.get("strategy")) for row in candidates.values()
         if row.get("variant") in PAIR_VARIANTS
@@ -319,9 +384,18 @@ def build_report(path: str | Path) -> dict[str, Any]:
         "raw_outcome_rows": len(outcome_rows),
         "candidate_rows": len(candidates),
         "outcome_rows": len(outcomes),
-        "duplicate_candidate_rows_ignored": len(candidate_rows) - len(candidates),
-        "duplicate_outcome_rows_ignored": len(outcome_rows) - len(outcomes),
+        "duplicate_candidate_rows_ignored": identical_candidate_duplicates,
+        "duplicate_outcome_rows_ignored": identical_outcome_duplicates,
+        "conflicting_candidate_rows": len(conflicting_candidate_ids),
+        "conflicting_outcome_rows": len(conflicting_outcome_ids),
+        "evidence_integrity": {
+            "ok": evidence_integrity_ok,
+            "conflicting_candidate_ids": conflicting_candidate_ids,
+            "conflicting_outcome_ids": conflicting_outcome_ids,
+        },
+        "configured_population_count": len(configured_keys),
         "populations": populations,
+        "unexpected_populations": unexpected_populations,
         "matched_pairs": [
             _matched_pair_report(
                 strategy,
@@ -334,6 +408,8 @@ def build_report(path: str | Path) -> dict[str, Any]:
             "minimum_trading_days": 20,
             "minimum_resolved_filled_outcomes_per_variant": 30,
             "automatic_promotion": False,
+            "evidence_integrity_ok": evidence_integrity_ok,
+            "blocked_by_evidence_integrity": not evidence_integrity_ok,
         },
     }
 
