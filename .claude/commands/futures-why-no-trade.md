@@ -18,10 +18,11 @@ Required files/checks (walk in this order; stop at the first stage that explains
 - Timeframe matched? — did the payload's timeframe match `expected_timeframe_minutes`, or was it CONFIG_BLOCKED / TIMEFRAME_MISMATCH
 - Data quality passed? — `_check_payload_quality`: contradictory OHLC, or stale bar past `max_staleness_seconds`
 - Session allowed? — was this session in `allowed_sessions` / within `session_hours_et` / past `session_cutoffs`
+- Capacity/loss lock fired before strategy evaluation? — for `BLOCKED_MAX_TRADES` / `BLOCKED_LOSS_LOCKOUT`, consult `strategy_context_observations.jsonl`; these early-return reasons are preserved there even when the primary decision journal has no normal decision row
 - Decision engine produced a candidate? — did `DecisionEngine.evaluate` return TRADE with a setup, or NO_TRADE with a reason
 - Risk engine rejected? — if TRADE, which specific `RiskEngine.validate()` check fired (`failed_rule`), including the alert-freshness gate (`alert_timestamp_missing` / `alert_timestamp_future` / `stale_alert`)
-- Schedule gate suppressed? — `adaptive.execution_gate.order_placement_allowed` / `SHADOW_NO_ORDER`
-- Working-order recheck suppressed? — `ORDER_SUPPRESSED` with `gate_reason` of `working_order_conflict` or `order_state_unreadable`
+- Schedule gate suppressed? — `adaptive.execution_gate.order_placement_allowed` / `SHADOW_NO_ORDER`; confirm the inert `ORDER_SUPPRESSION` journal row carries the final `gate_reason`
+- Working-order recheck suppressed? — `ORDER_SUPPRESSED` with `gate_reason` of `working_order_conflict` or `order_state_unreadable`; confirm the inert `ORDER_SUPPRESSION` journal row matches the earlier `TRADE_INTENT`
 - Broker call reached? — did `broker.execute_bracket` actually get invoked
 - Order placed? — fill result and order IDs if applicable
 - Journal entry present? — is there a record for this decision at all, and does it match what actually happened

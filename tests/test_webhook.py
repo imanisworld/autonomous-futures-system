@@ -1019,6 +1019,7 @@ def test_runner_blocks_when_max_trades_reached(config, tmp_path):
         p = _base_payload(timestamp=ts, high=99999.0)
         r = process_alert(p, config=config, log_dir=log_dir, for_date=today)
         if r["decision"] == "BLOCKED_MAX_TRADES":
+            assert r["reason"] == "Daily trade capacity reached before strategy evaluation."
             return  # ✓ limit enforced
 
     pytest.fail("max_trades_per_day limit was never triggered")
@@ -1073,6 +1074,7 @@ def test_runner_blocks_on_loss_lockout(config, tmp_path):
     result = process_alert(p, config=config, log_dir=log_dir, for_date=today)
 
     assert result["decision"] == "BLOCKED_LOSS_LOCKOUT"
+    assert result["reason"] == "Maximum consecutive-loss limit reached before strategy evaluation."
 
 
 # ─── FastAPI endpoint ─────────────────────────────────────────────────────────
