@@ -8,7 +8,9 @@ non-canonical. No broker calls or order calls exist here.
 
 from __future__ import annotations
 
+import ipaddress
 import logging
+import os
 import secrets as secrets_module
 
 from fastapi import FastAPI, Request
@@ -42,6 +44,26 @@ def _auth_ok(request: Request, config: OptionsManagerConfig) -> bool:
 
 def _is_canonical_payload(raw_input: object) -> bool:
     return isinstance(raw_input, dict) and bool(_CANONICAL_SECTION_KEYS & set(raw_input))
+
+
+def _assert_safe_bind(bind_host: str, ingest_secret: str) -> None:
+    """Fail closed if the advisory API is exposed off-box without its secret."""
+    host = (bind_host or "").strip()
+    if host == "localhost":
+        return
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        # A hostname other than localhost may resolve off-box. Require auth.
+        if not ingest_secret:
+            raise RuntimeError(
+                "OPTIONS_MANAGER_INGEST_SECRET is required for non-loopback bind host"
+            )
+        return
+    if not address.is_loopback and not ingest_secret:
+        raise RuntimeError(
+            "OPTIONS_MANAGER_INGEST_SECRET is required for non-loopback bind host"
+        )
 
 
 @app.post("/options/packet")
@@ -127,7 +149,9 @@ def run() -> None:
     import uvicorn
 
     config = OptionsManagerConfig.from_env()
-    uvicorn.run("options_manager.app:app", host="0.0.0.0", port=config.port)
+    bind_host = os.getenv("OPTIONS_MANAGER_BIND_HOST", "127.0.0.1").strip() or "127.0.0.1"
+    _assert_safe_bind(bind_host, config.ingest_secret)
+    uvicorn.run("options_manager.app:app", host=bind_host, port=config.port)
 
 
 if __name__ == "__main__":
