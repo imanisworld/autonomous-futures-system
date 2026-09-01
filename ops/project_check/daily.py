@@ -169,9 +169,7 @@ def _strategy_source_of_truth(*, repo_root: Path, rules_active_lanes: dict[str, 
 def _repo_hygiene(root: Path) -> dict[str, Any]:
     main_sync = gitutil.main_sync_state(root)
     status = gitutil.status_porcelain(root)
-    all_worktrees = [w.as_dict() for w in gitutil.worktrees(root)]
-    for w in all_worktrees:
-        w["dirty_status"] = gitutil.worktree_dirty(w["path"])
+    all_worktrees = gitutil.worktree_inventory(root)
     stashes = gitutil.stash_list(root)
     prs = gitutil.open_prs(root)
     branches_tracking_deleted_remotes = [b for b in gitutil.local_branches(root) if b["tracking_deleted_remote"]]
@@ -186,8 +184,10 @@ def _repo_hygiene(root: Path) -> dict[str, Any]:
         "staged_files": status.get("staged", []),
         "untracked_files": status.get("untracked", []),
         "worktrees": all_worktrees,
+        "worktree_inventory_checked": bool(all_worktrees),
         "stash_count": len(stashes),
         "stashes": stashes,
+        "stash_preservation_note": "Stashed work is outside all branch-cleanup conclusions; retain and review separately.",
         "open_prs": prs,
         "branches_tracking_deleted_remotes": branches_tracking_deleted_remotes,
         "local_only_branches": local_only_branches,

@@ -54,6 +54,25 @@ def _print_json(payload: dict) -> None:
     print(json.dumps(payload, indent=2, sort_keys=True, default=str))
 
 
+def _print_preservation(worktrees: list[dict], preservation: dict, stashes: list[dict]) -> None:
+    if not worktrees:
+        print("    worktree inventory: UNKNOWN (enumeration unavailable)")
+    for tree in worktrees:
+        status = tree.get("dirty_status") or {}
+        if not status.get("checked"):
+            print(f"    worktree {tree['path']}: UNKNOWN ({status.get('reason', 'not checked')})")
+        elif status["dirty"]:
+            print(f"    worktree {tree['path']}: DIRTY — {status['dirty_tracked_count']} tracked, "
+                  f"{status['staged_count']} staged, {status['untracked_count']} untracked")
+    if not preservation.get("checked"):
+        print(f"    preservation: UNKNOWN ({preservation.get('reason')})")
+    for row in preservation.get("branches", []):
+        print(f"    {row['branch']}: {row['classification']} — {row['reason']}")
+    print("    Branch preservation covers committed tips only; dirty files and stashes remain separate.")
+    for stash in stashes:
+        print(f"    retained stash {stash['ref']}: {stash['message']}")
+
+
 def _cmd_preflight(args: argparse.Namespace) -> int:
     report = build_ownership_preflight_report(args.purpose, cwd=args.cwd)
     if args.json:
@@ -93,7 +112,8 @@ def _cmd_session_start(args: argparse.Namespace) -> int:
     print(f"  local-only branches:  {len(repo['local_only_branches'])}")
     print(f"  archive tags:         {len(repo['archive_tags'])}")
     cu = repo["closed_unmerged_branches_missing_archive_tag"]
-    print(f"  unmerged remote branches w/o archive tag: {len(cu.get('flagged', []))}")
+    print(f"  unpreserved branch blockers: {len(cu.get('flagged', []))}; unknown: {len(cu.get('unknown', []))}")
+    _print_preservation(repo["all_worktrees"], cu, repo["stashes"])
     print(f"  open PRs available:   {repo['open_prs'].get('available')}")
     if report["branch_changed_during_check"]:
         print("  WARNING: branch/HEAD changed DURING this check")
@@ -174,7 +194,8 @@ def _cmd_daily(args: argparse.Namespace) -> int:
     print(f"  branch: {hy['current_branch']}  main sync: {hy['local_main_relationship']['state']}")
     print(f"  dirty files: {len(hy['dirty_tracked_files'])}  worktrees: {len(hy['worktrees'])}  stashes: {hy['stash_count']}")
     ep = hy["evidence_preservation"]["closed_unmerged_branches_missing_archive_tag"]
-    print(f"  unmerged remote branches missing archive tag: {len(ep.get('flagged', []))}")
+    print(f"  unpreserved branch blockers: {len(ep.get('flagged', []))}; unknown: {len(ep.get('unknown', []))}")
+    _print_preservation(hy["worktrees"], ep, hy["stashes"])
     ds = report["deployed_state"]
     print(f"  deployed sha: {ds['deployed_release_sha']}  entry_fill_model: {ds['entry_fill_model']}")
     sd = report["strategy_source_of_truth"]

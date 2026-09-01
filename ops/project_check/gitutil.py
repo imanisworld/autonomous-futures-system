@@ -15,6 +15,7 @@ unavailable rather than guessed.
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 from dataclasses import dataclass, field
@@ -44,6 +45,11 @@ def _is_read_only_git_command(args: list[str]) -> bool:
     command = args[0]
     if command in {"rev-parse", "status", "for-each-ref", "rev-list", "merge-base"}:
         return True
+    if command == "diff":
+        return args[1:4] in (
+            ["--no-ext-diff", "--no-textconv", "--quiet"],
+            ["--no-ext-diff", "--no-textconv", "--name-only"],
+        ) and not any(arg.startswith(("--output", "--ext-diff", "--textconv")) for arg in args[4:])
     if command == "ls-remote":
         return args == ["ls-remote", "--heads", "origin", "refs/heads/main"]
     if command == "worktree":
@@ -73,7 +79,7 @@ def run_git_result(
         raise ValueError(f"git command shape not in read-only allowlist: {args!r}")
     try:
         result = subprocess.run(
-            ["git", *args],
+            ["git", "--no-optional-locks", *args],
             cwd=str(cwd),
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -101,6 +107,16 @@ def run_git(args: list[str], *, cwd: Path, timeout: float = DEFAULT_TIMEOUT_S) -
 def repo_root(cwd: Path) -> Path | None:
     out, _err = run_git(["rev-parse", "--show-toplevel"], cwd=cwd)
     return Path(out.strip()) if out else None
+
+
+def git_dir(root: Path) -> Path:
+    """Keep bookkeeping per worktree, including when .git is a gitfile."""
+    if not (root / ".git").is_file():
+        return root / ".git"
+    out, error = run_git(["rev-parse", "--absolute-git-dir"], cwd=root)
+    if not out:
+        raise OSError(error or "could not resolve worktree git directory")
+    return Path(out.strip())
 
 
 def current_branch(root: Path) -> str | None:
@@ -220,15 +236,16 @@ def main_sync_state(root: Path) -> dict[str, Any]:
     }
 
 
-def status_porcelain(root: Path) -> dict[str, list[str]]:
+def status_porcelain(root: Path) -> dict[str, Any]:
     """Split `git status --porcelain=v1` into staged / unstaged (dirty tracked) / untracked."""
-    out, err = run_git(["status", "--porcelain=v1"], cwd=root)
+    out, err = run_git(["status", "--porcelain=v1", "-z", "--untracked-files=all"], cwd=root)
     staged: list[str] = []
     dirty_tracked: list[str] = []
     untracked: list[str] = []
     if out is None:
         return {"staged": [], "dirty_tracked": [], "untracked": [], "error": err}
-    for line in out.splitlines():
+    records = iter(out.split("\0"))
+    for line in records:
         if not line:
             continue
         code = line[:2]
@@ -237,6 +254,8 @@ def status_porcelain(root: Path) -> dict[str, list[str]]:
             untracked.append(path)
             continue
         index_state, worktree_state = code[0], code[1]
+        if "R" in code or "C" in code:
+            next(records, None)  # -z emits the rename/copy source separately.
         if index_state not in (" ", "?"):
             staged.append(path)
         if worktree_state not in (" ", "?"):
@@ -252,6 +271,7 @@ class Worktree:
     bare: bool
     detached: bool
     locked: bool
+    prunable: bool = False
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -261,6 +281,7 @@ class Worktree:
             "bare": self.bare,
             "detached": self.detached,
             "locked": self.locked,
+            "prunable": self.prunable,
         }
 
 
@@ -281,6 +302,7 @@ def worktrees(root: Path) -> list[Worktree]:
                     bare=cur.get("bare", False),
                     detached=cur.get("detached", False),
                     locked=cur.get("locked", False),
+                    prunable=cur.get("prunable", False),
                 )
             )
 
@@ -302,6 +324,8 @@ def worktrees(root: Path) -> list[Worktree]:
             cur["detached"] = True
         elif line.startswith("locked"):
             cur["locked"] = True
+        elif line.startswith("prunable"):
+            cur["prunable"] = True
     flush()
     return entries
 
@@ -310,6 +334,9 @@ def worktree_dirty(path: str) -> dict[str, Any]:
     p = Path(path)
     if not p.is_dir():
         return {"checked": False, "reason": "path not found"}
+    actual_root = repo_root(p)
+    if actual_root is None or actual_root.resolve() != p.resolve():
+        return {"checked": False, "reason": "path is not the registered worktree root"}
     status = status_porcelain(p)
     if status.get("error"):
         return {"checked": False, "reason": status["error"]}
@@ -320,7 +347,21 @@ def worktree_dirty(path: str) -> dict[str, Any]:
         "staged_count": len(status["staged"]),
         "dirty_tracked_count": len(status["dirty_tracked"]),
         "untracked_count": len(status["untracked"]),
+        "staged": status["staged"],
+        "dirty_tracked": status["dirty_tracked"],
+        "untracked": status["untracked"],
     }
+
+
+def worktree_inventory(root: Path) -> list[dict[str, Any]]:
+    entries = []
+    for worktree in worktrees(root):
+        row = worktree.as_dict()
+        row["dirty_status"] = worktree_dirty(worktree.path)
+        if row["dirty_status"]["checked"] and head_sha(Path(worktree.path)) != worktree.head:
+            row["dirty_status"] = {"checked": False, "reason": "HEAD changed during inspection"}
+        entries.append(row)
+    return entries
 
 
 def stash_list(root: Path) -> list[dict[str, Any]]:
@@ -343,8 +384,8 @@ def archive_tags(root: Path) -> list[dict[str, Any]]:
         name = name.strip()
         if not name:
             continue
-        sha = ref_sha(root, name)
-        tags.append({"tag": name, "sha": sha})
+        sha = ref_sha(root, f"refs/tags/{name}^{{commit}}")
+        tags.append({"tag": name, "sha": sha, "object_sha": ref_sha(root, f"refs/tags/{name}")})
     return tags
 
 
@@ -401,45 +442,138 @@ def unique_commit_count(root: Path, base_ref: str, branch_ref: str) -> int | Non
         return None
 
 
+def _is_ancestor(root: Path, tip: str, target: str) -> bool | None:
+    result = run_git_result(["merge-base", "--is-ancestor", tip, target], cwd=root)
+    return result.returncode == 0 if result.returncode in (0, 1) else None
+
+
+def _content_preserved(root: Path, tip: str, target: str, base_ref: str) -> bool | None:
+    """Compare every path changed by the branch, including deletes and modes.
+
+    Unrelated main changes do not defeat a squash match. A differing path is
+    not proof of loss: a merged PR can also preserve it in main's history.
+    """
+    base, error = run_git(["merge-base", base_ref, tip], cwd=root)
+    if error or not base:
+        return None
+    paths, error = run_git(
+        ["diff", "--no-ext-diff", "--no-textconv", "--name-only", "-z", base.strip(), tip, "--"],
+        cwd=root,
+    )
+    if error or paths is None:
+        return None
+    changed = [p for p in paths.split("\0") if p]
+    if not changed:
+        return True
+    result = run_git_result(
+        ["diff", "--no-ext-diff", "--no-textconv", "--quiet", tip, target, "--", *changed], cwd=root,
+    )
+    return result.returncode == 0 if result.returncode in (0, 1) else None
+
+
 def unmerged_remote_branches_missing_archive_tag(root: Path) -> dict[str, Any]:
-    """Remote branches not merged into origin/main with unique commits and no
-    archive/* tag pointing at their current tip. Mirrors the manual disposition
-    method documented in docs/BRANCH_ARCHIVE_INDEX.md, without deleting anything."""
-    main_branch = local_main_branch(root)
-    remote_ref = remote_default_ref(root, main_branch)
-    if remote_ref is None:
-        return {"checked": False, "reason": "no origin/main remote-tracking ref available", "flagged": []}
+    """Preservation of committed local AND origin branch tips (legacy API name).
 
-    all_remote = [b for b in remote_branches(root) if b != remote_ref and not b.endswith("/HEAD")]
-    merged = merged_remote_branches(root, remote_ref)
+    Ancestry counts are never treated as unpushed-work proof after a squash.
+    Dirty files, worktree ownership and stashes remain outside tip-preservation
+    conclusions. No result here authorizes cleanup.
+    """
+    remote_ref = remote_default_ref(root, local_main_branch(root))
+    main_tip = ref_sha(root, remote_ref) if remote_ref else None
+    refs, error = run_git(
+        ["for-each-ref", "--format=%(refname)\t%(objectname)", "refs/heads/", "refs/remotes/origin/"],
+        cwd=root,
+    )
+    if refs is None:
+        return {"checked": False, "reason": error, "flagged": [], "branches": [], "unknown": []}
+    tips = dict(line.split("\t", 1) for line in refs.splitlines())
     tags = archive_tags(root)
-    tag_shas = {t["sha"] for t in tags if t["sha"]}
-
-    flagged = []
-    for branch in all_remote:
-        if branch in merged:
+    owners = worktrees(root)
+    prs = None  # One bounded, read-only PR query, only if Git alone is insufficient.
+    rows = []
+    for ref, tip in tips.items():
+        local = ref.startswith("refs/heads/")
+        name = ref.removeprefix("refs/heads/") if local else ref.removeprefix("refs/remotes/origin/")
+        if ref == f"refs/remotes/{remote_ref}" or name == "HEAD":
             continue
-        tip = ref_sha(root, branch)
-        unique = unique_commit_count(root, remote_ref, branch)
-        has_archive_tag = tip is not None and tip in tag_shas
-        if unique and unique > 0 and not has_archive_tag:
-            flagged.append(
-                {
-                    "branch": branch,
-                    "tip_sha": tip,
-                    "unique_commit_count": unique,
-                    "archive_tag": None,
-                    "pr_status": "UNKNOWN (gh unavailable or not queried)",
-                }
-            )
-    return {"checked": True, "reason": None, "remote_ref": remote_ref, "flagged": flagged}
+        origin_tip = tips.get(f"refs/remotes/origin/{name}")
+        matching_tags = [t for t in tags if re.fullmatch(
+            rf"archive/{re.escape(name.replace('/', '-'))}(?:-pr\d+)?-\d{{4}}-\d{{2}}-\d{{2}}", t["tag"]
+        )]
+        row = {
+            "branch": name if local else f"origin/{name}", "ref": ref, "tip_sha": tip,
+            "classification": "UNKNOWN", "reason": "preservation not verified",
+            "worktree_owners": [w.path for w in owners if w.branch == name or (
+                w.branch and w.branch.casefold() == name.casefold() and w.head == tip
+            )],
+            "ahead_of_origin_branch": unique_commit_count(root, origin_tip, tip) if local and origin_tip else None,
+            "matching_archive_tags": [{**t, "exact_tip_match": t["sha"] == tip} for t in matching_tags],
+            "preserved_by": [], "pr_status": "NOT_QUERIED",
+        }
+        contains, contains_error = run_git(
+            ["for-each-ref", f"--contains={tip}", "--format=%(refname)", "refs/remotes/origin/", "refs/tags/archive/"],
+            cwd=root,
+        )
+        containing = set((contains or "").splitlines())
+        ancestry = _is_ancestor(root, tip, main_tip) if main_tip else None
+        main_contains = f"refs/remotes/{remote_ref}" in containing if remote_ref else None
+        archives = [f"refs/tags/{t['tag']}" for t in tags if t["sha"] and f"refs/tags/{t['tag']}" in containing]
+        other_origins = sorted(r for r in containing if r.startswith("refs/remotes/origin/") and r != ref and not r.endswith("/HEAD"))
+        if contains_error or (main_tip and (ancestry is None or ancestry != main_contains)):
+            row["reason"] = contains_error or "independent main ancestry checks failed or disagree"
+        elif ancestry:
+            row.update(classification="REDUNDANT", reason="tip is reachable from main", preserved_by=[remote_ref])
+        elif any(r.startswith("refs/tags/archive/") and r not in archives for r in containing):
+            row["reason"] = "archive inventory could not be verified against containing refs"
+        elif archives or other_origins:
+            row.update(classification="ARCHIVED / PRESERVED", reason="tip is reachable from an archive or another origin ref", preserved_by=archives + other_origins)
+        elif not main_tip:
+            row["reason"] = "no main ref available for content comparison"
+        elif any(t["sha"] is None for t in tags):
+            row["reason"] = "an archive tag could not be dereferenced to a commit"
+        else:
+            if prs is None:
+                prs = open_prs(root, state="all")
+            pr = pr_status_for_branch(root, name, prs=prs, tip_sha=tip)
+            row["pr_status"] = pr["status"]
+            row["pr"] = pr.get("pr")
+            equivalent = _content_preserved(root, tip, main_tip, main_tip)
+            row["content_equivalent_on_main"] = equivalent
+            if pr["status"] == "MERGED":
+                merged = (pr.get("pr", {}).get("mergeCommit") or {}).get("oid")
+                merge_reachable = _is_ancestor(root, merged, main_tip) if merged else None
+                historical = _content_preserved(root, tip, merged, main_tip) if merge_reachable else None
+                row["content_preserved_at_merge"] = historical
+                if merge_reachable is True and (equivalent is True or historical is True):
+                    row.update(classification="REDUNDANT", reason="matching MERGED PR and content preserved on main", preserved_by=[merged])
+                else:
+                    row["reason"] = "MERGED PR alone is insufficient; main/content preservation is unverified"
+            elif pr["status"] == "UNKNOWN":
+                row["reason"] = pr.get("reason") or "PR state is unavailable or ambiguous"
+            elif equivalent is True:
+                row.update(classification="REDUNDANT", reason="all branch-changed paths equal main", preserved_by=[main_tip])
+            elif equivalent is False and pr["status"] in {"CLOSED", "NO_PR_FOUND"}:
+                row.update(classification="UNARCHIVED UNIQUE EVIDENCE — BLOCKER", reason="tip has no preserving ref and changed paths differ from main; preserve evidence or review supersession before cleanup")
+            else:
+                row["reason"] = "active PR or content comparison requires review"
+        if ref_sha(root, ref) != tip:
+            row.update(classification="UNKNOWN", reason="branch tip changed during inspection")
+        row["worktree_ownership_checked"] = bool(owners)
+        row["cleanup_blocked"] = not owners or bool(row["worktree_owners"]) or row["classification"] not in {"REDUNDANT", "ARCHIVED / PRESERVED"}
+        rows.append(row)
+    return {
+        "checked": True, "reason": None, "remote_ref": remote_ref, "branches": rows,
+        "flagged": [r for r in rows if r["classification"] == "UNARCHIVED UNIQUE EVIDENCE — BLOCKER"],
+        "unknown": [r for r in rows if r["classification"] == "UNKNOWN"],
+        "note": "Committed tips only, using cached Git refs. Dirty/untracked files and stashes are NOT covered; no cleanup is authorized.",
+    }
 
 
 def gh_available() -> bool:
     return shutil.which("gh") is not None
 
 
-def open_prs(root: Path, *, timeout: float = 10.0) -> dict[str, Any]:
+def open_prs(root: Path, *, timeout: float = 10.0, state: str = "open") -> dict[str, Any]:
     """Best-effort `gh pr list` (read-only). Reports unavailable rather than guessing."""
     if not gh_available():
         return {"available": False, "reason": "gh CLI not found on PATH", "prs": []}
@@ -450,11 +584,11 @@ def open_prs(root: Path, *, timeout: float = 10.0) -> dict[str, Any]:
                 "pr",
                 "list",
                 "--state",
-                "open",
+                state,
                 "--json",
-                "number,title,headRefName,url,isDraft,updatedAt",
+                "number,title,headRefName,headRefOid,baseRefName,isCrossRepository,mergeCommit,state,url,isDraft,updatedAt",
                 "--limit",
-                "50",
+                "1000" if state == "all" else "50",
             ],
             cwd=str(root),
             stdout=subprocess.PIPE,
@@ -474,30 +608,31 @@ def open_prs(root: Path, *, timeout: float = 10.0) -> dict[str, Any]:
         prs = json.loads(result.stdout)
     except json.JSONDecodeError as exc:
         return {"available": False, "reason": f"could not parse gh output: {exc}", "prs": []}
-    return {"available": True, "reason": None, "prs": prs}
+    if not isinstance(prs, list) or not all(isinstance(pr, dict) for pr in prs):
+        return {"available": False, "reason": "unexpected gh output shape", "prs": []}
+    return {"available": True, "reason": None, "prs": prs, "complete": len(prs) < (1000 if state == "all" else 50)}
 
 
-def pr_status_for_branch(root: Path, branch: str, *, timeout: float = 10.0) -> dict[str, Any]:
-    """Best-effort PR status (open/merged/closed/unknown) for one branch via gh."""
-    if not gh_available():
-        return {"available": False, "status": "UNKNOWN", "reason": "gh CLI not found on PATH"}
-    try:
-        result = subprocess.run(
-            ["gh", "pr", "list", "--state", "all", "--head", branch, "--json", "state,number,url"],
-            cwd=str(root),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            timeout=timeout,
-        )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        return {"available": False, "status": "UNKNOWN", "reason": str(exc)}
-    if result.returncode != 0:
-        return {"available": False, "status": "UNKNOWN", "reason": (result.stderr or "").strip()}
-    try:
-        rows = json.loads(result.stdout)
-    except json.JSONDecodeError:
-        return {"available": False, "status": "UNKNOWN", "reason": "could not parse gh output"}
-    if not rows:
-        return {"available": True, "status": "NO_PR_FOUND", "reason": None}
-    return {"available": True, "status": rows[0].get("state", "UNKNOWN"), "reason": None, "pr": rows[0]}
+def pr_status_for_branch(
+    root: Path, branch: str, *, timeout: float = 10.0,
+    prs: dict | None = None, tip_sha: str | None = None,
+) -> dict[str, Any]:
+    """Use only an unambiguous PR for the exact tip; branch names can be reused."""
+    if prs is None:
+        prs = open_prs(root, timeout=timeout, state="all")
+    if not prs.get("available"):
+        return {"available": False, "status": "UNKNOWN", "reason": prs.get("reason")}
+    rows = [pr for pr in prs["prs"] if pr.get("headRefName") == branch and not pr.get("isCrossRepository")]
+    # Replacement PRs can merge the exact head of a closed original under a
+    # different branch name. Verify by SHA, never by title or name similarity.
+    replacements = [pr for pr in prs["prs"] if tip_sha and pr.get("headRefOid") == tip_sha
+                    and pr.get("state") == "MERGED" and pr.get("baseRefName") == "main"
+                    and pr.get("headRefName") != branch and not pr.get("isCrossRepository")]
+    if len(replacements) == 1:
+        return {"available": True, "status": "MERGED", "pr": replacements[0]}
+    matches = [pr for pr in rows if pr.get("headRefOid") == tip_sha] if tip_sha else rows
+    if len(matches) == 1:
+        return {"available": True, "status": matches[0].get("state", "UNKNOWN"), "pr": matches[0]}
+    if rows or not prs.get("complete"):
+        return {"available": True, "status": "UNKNOWN", "reason": "PR heads disagree with this tip, are ambiguous, or the PR inventory is incomplete"}
+    return {"available": True, "status": "NO_PR_FOUND"}

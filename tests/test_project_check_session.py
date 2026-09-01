@@ -97,3 +97,30 @@ def test_precommit_reports_changed_staged_untracked_lists(repo: Path) -> None:
     report = build_precommit_report(cwd=repo)
     assert "a.txt" in report["repo"]["changed_files"]
     assert "new.txt" in report["repo"]["staged_files"]
+
+
+def test_linked_worktree_session_and_checkpoint_are_isolated(repo: Path, tmp_path: Path) -> None:
+    from ops.project_check import gitutil
+    from ops.project_check.daily import _repo_hygiene
+    from ops.project_check.trade_chain import load_checkpoint, save_checkpoint
+
+    linked = tmp_path / "linked"
+    _git(repo, "worktree", "add", "-b", "other", str(linked))
+    (repo / "a.txt").write_text("original dirty worktree\n")
+    (repo / "untracked.txt").write_text("preserve this\n")
+    report = build_session_start_report(cwd=linked)
+    by_path = {w["path"]: w for w in report["repo"]["all_worktrees"]}
+    assert by_path[str(repo)]["dirty_status"]["dirty_tracked"] == ["a.txt"]
+    assert by_path[str(repo)]["dirty_status"]["untracked"] == ["untracked.txt"]
+    assert by_path[str(linked)]["dirty_status"]["dirty"] is False
+    assert "outside" in report["repo"]["stash_preservation_note"]
+    assert not (repo / ".git/afs-project-check/session_state.json").exists()
+    assert (gitutil.git_dir(linked) / "afs-project-check/session_state.json").exists()
+    assert build_precommit_report(cwd=linked)["ok"] is True
+    daily_trees = {w["path"]: w for w in _repo_hygiene(linked)["worktrees"]}
+    assert daily_trees[str(repo)]["dirty_status"] == by_path[str(repo)]["dirty_status"]
+    save_checkpoint(repo, "2026-01-01T00:00:00Z")
+    save_checkpoint(linked, "2026-02-01T00:00:00Z")
+    assert load_checkpoint(repo) == "2026-01-01T00:00:00Z"
+    assert load_checkpoint(linked) == "2026-02-01T00:00:00Z"
+    assert (repo / "a.txt").read_text() == "original dirty worktree\n"
