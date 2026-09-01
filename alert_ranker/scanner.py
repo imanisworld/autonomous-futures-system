@@ -231,16 +231,28 @@ class OptionsScanner:
     def _structural_gate(self, normalized: dict[str, Any]) -> str:
         """Reason this scan may not alert, or ``""`` when it may.
 
-        Absent telemetry means the lane is not in play (unconfigured, or the
-        caller supplied its own structure, which is the webhook path), and the
-        previous behaviour is preserved untouched.
+        With the lane off, the previous behaviour is preserved untouched. With
+        the lane on, a generic alert requires a TRIGGERED verdict from the
+        shared setup authority -- for every source, including a webhook that
+        supplied its own VWAP, EMA20 and pattern. Caller-supplied values may
+        still win precedence for scoring and display; they never stand in for
+        mechanical proof. And telemetry that is simply absent is not
+        permission: it fails closed as ``setup_proof_missing``.
         """
-        if "bar_context_available" not in normalized:
+        if not self._causal_lane_active():
             return ""
+        if "bar_context_available" not in normalized:
+            return "setup_proof_missing"
         if not normalized.get("bar_context_available"):
             return str(normalized.get("bar_context_reason") or "bar_context_unavailable")
-        setup_gate = normalized.get("setup_suppression_reason")
-        return str(setup_gate) if setup_gate else ""
+        status = normalized.get("setup_status")
+        if not status:
+            return "setup_proof_missing"
+        if status != "TRIGGERED":
+            return str(
+                normalized.get("setup_suppression_reason") or f"no_setup:{str(status).lower()}"
+            )
+        return ""
 
     def _legacy_callout_allowed(self, normalized: dict[str, Any]) -> bool:
         """Whether the pre-structure Signa-only Discord path may still fire.
@@ -350,7 +362,7 @@ class OptionsScanner:
     ) -> dict[str, Any]:
         snapshot = await self.market_data.fetch_market_snapshot(ticker)
         signa_context = await self._fetch_signa_context(ticker, context)
-        bar_fields = await self._fetch_bar_context(ticker, context, now)
+        bar_fields = await self._fetch_bar_context(ticker, now)
         caller_vwap = context.get("vwap")
         caller_ema20 = context.get("ema20")
         if caller_ema20 is None:
@@ -445,23 +457,18 @@ class OptionsScanner:
                 data["volume_ratio"] = None
         return data
 
-    async def _fetch_bar_context(
-        self, ticker: str, context: dict[str, Any], now: datetime
-    ) -> dict[str, Any]:
+    async def _fetch_bar_context(self, ticker: str, now: datetime) -> dict[str, Any]:
         """Causal structural context, or telemetry stating why there is none.
 
         Skipped entirely when the lane is off, so a deployment that never
-        switched it on behaves exactly as it did before this lane existed, and
-        skipped when the caller already supplied both structural inputs, which
-        is the webhook path. Switched on but not constructible is a third,
+        switched it on behaves exactly as it did before this lane existed.
+        With the lane on it is evaluated for every scan, including a webhook
+        that supplied its own VWAP and EMA20: those values may take precedence
+        for scoring, but they are not a setup verdict and must not suppress the
+        one source of it. Switched on but not constructible is a third,
         explicitly reported case -- never a silent fourth.
         """
         if not self._causal_lane_active():
-            return {}
-        caller_ema20 = context.get("ema20")
-        if caller_ema20 is None:
-            caller_ema20 = context.get("ema_20")
-        if context.get("vwap") is not None and caller_ema20 is not None:
             return {}
         if self.bar_context is None:
             # Switched on but not constructible: missing or unreadable

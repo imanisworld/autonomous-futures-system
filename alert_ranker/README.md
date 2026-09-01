@@ -35,8 +35,11 @@ names; the actionable `pattern` field is filled only by a TRIGGERED verdict of
 the shared `options_manager` strategy authority, which this lane cannot reach
 because it supplies no targets, market context or contract constraints. The
 lane therefore observes and records, and cannot promote an observation into an
-alert. While it is on, the legacy Signa-only Discord callout is suppressed for
-the same reason.
+alert. While it is on, a webhook's own VWAP/EMA20/pattern keep scoring
+precedence but do not bypass that verdict, and the legacy Signa-only Discord
+callout is suppressed for the same reason. A confirmed 2-1-2 staying
+non-actionable without targets, context and contract proof is the intended
+Phase 1 boundary, not a defect to tune away.
 
 ```env
 OPTIONS_BAR_CONTEXT_ENABLED=false      # the single switch

@@ -1247,3 +1247,86 @@ def test_the_same_candidate_opens_when_the_lane_is_off(tmp_path):
     )
     assert outcome.shadow_id > 0
     assert outcome.shadow_reason == "candidate"
+
+
+# ─── 7. caller-supplied structure never bypasses the setup authority ──────────
+
+
+_WEBHOOK_STRUCTURE = {"price": 137.0, "vwap": 130.0, "ema20": 129.0, "pattern": "2-1-2"}
+
+
+def test_a_caller_supplied_setup_cannot_alert_while_the_lane_is_on(tmp_path):
+    """A: webhook VWAP + EMA20 + pattern, score over the bar, no TRIGGERED verdict."""
+    _, _, scanner = make_scanner(
+        tmp_path, standard_builder(), discord_webhook_url="https://discord.invalid/webhook"
+    )
+    outcome = asyncio.run(
+        scanner.scan_ticker("AAPL", source="webhook", context=_WEBHOOK_STRUCTURE, now=NOW)
+    )
+    assert outcome.result.score >= scanner.config.alert_threshold
+    assert outcome.result.pattern == "2-1-2"
+    assert outcome.result.raw["setup_status"] != "TRIGGERED"
+    assert outcome.alert_sent is False
+    assert outcome.alert_suppression_reason.startswith("no_setup:")
+
+
+def test_the_setup_authority_is_still_evaluated_behind_caller_values(tmp_path):
+    """B: caller values keep scoring precedence, and the verdict is still taken."""
+    _, _, scanner = make_scanner(tmp_path, standard_builder())
+    outcome = asyncio.run(
+        scanner.scan_ticker("AAPL", source="webhook", context=_WEBHOOK_STRUCTURE, now=NOW)
+    )
+    raw = outcome.result.raw
+    assert raw["vwap"] == 130.0 and raw["ema20"] == 129.0
+    assert raw["bar_context_available"] is True
+    assert raw["setup_status"] in {"NO_TRADE", "WATCH", "INVALID"}
+    assert raw["setup_reason_code"]
+    assert raw["candle_type"] == "two_up"
+
+
+def test_absent_setup_telemetry_fails_closed_as_setup_proof_missing(tmp_path, monkeypatch):
+    """C: available context with no verdict is not permission to alert."""
+    _, _, scanner = make_scanner(
+        tmp_path, standard_builder(), discord_webhook_url="https://discord.invalid/webhook"
+    )
+
+    async def context_without_a_verdict(ticker, now):
+        return {"bar_context_available": True, "vwap": 130.0, "ema20": 129.0}
+
+    monkeypatch.setattr(scanner, "_fetch_bar_context", context_without_a_verdict)
+    outcome = asyncio.run(
+        scanner.scan_ticker("AAPL", source="webhook", context={"pattern": "2-1-2"}, now=NOW)
+    )
+    assert outcome.result.score >= scanner.config.alert_threshold
+    assert outcome.alert_sent is False
+    assert outcome.alert_suppression_reason == "setup_proof_missing"
+
+
+def test_no_telemetry_at_all_while_the_lane_is_on_also_fails_closed(tmp_path, monkeypatch):
+    _, _, scanner = make_scanner(
+        tmp_path, standard_builder(), discord_webhook_url="https://discord.invalid/webhook"
+    )
+
+    async def nothing(ticker, now):
+        return {}
+
+    monkeypatch.setattr(scanner, "_fetch_bar_context", nothing)
+    outcome = asyncio.run(
+        scanner.scan_ticker("AAPL", source="webhook", context=_WEBHOOK_STRUCTURE, now=NOW)
+    )
+    assert outcome.alert_sent is False
+    assert outcome.alert_suppression_reason == "setup_proof_missing"
+
+
+def test_legacy_webhook_alerting_is_unchanged_with_the_lane_off(tmp_path):
+    """D: the same webhook alerts exactly as it always did when the lane is off."""
+    _, _, scanner = make_scanner(
+        tmp_path, None, discord_webhook_url="https://discord.invalid/webhook"
+    )
+    outcome = asyncio.run(
+        scanner.scan_ticker("AAPL", source="webhook", context=_WEBHOOK_STRUCTURE, now=NOW)
+    )
+    assert "bar_context_available" not in outcome.result.raw
+    assert outcome.result.score >= scanner.config.alert_threshold
+    assert outcome.alert_sent is True
+    assert outcome.alert_suppression_reason == ""

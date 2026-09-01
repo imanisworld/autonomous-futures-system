@@ -5,6 +5,29 @@ No broker execution, no paper auto-entry, no provider switch, no deployment
 change. The lane is **off by default**; enabling it is a separate operator
 decision.
 
+## Phase boundary — read this first
+
+PR C supplies **causal structural context and mechanical setup observation**.
+It does not supply a trade recommendation, and in its current state it cannot.
+
+The shared strategy authority (`options_manager.scanner.scan_watchlist_strat_212`)
+marks a 2-1-2 TRIGGERED only when entry, invalidation, targets, market context
+and contract constraints are all proven. PR C derives the two mechanical
+levels from the bars and supplies nothing else, so a confirmed 2-1-2 is
+recorded as `INVALID / missing_target_1` with `setup_sequence_confirmed = true`
+and remains **non-actionable**. That is intentional. It is the strategy layer
+failing closed on inputs it was not given, which is what it is for.
+
+**Do not loosen that gate to produce alerts.** The missing proof must arrive
+through the canonical validation path — targets via the level finder, context
+via the market validator, contracts via the contract validator — not by
+relaxing what TRIGGERED means or by letting context, a caller-supplied
+pattern, or a Signa grade stand in for it.
+
+Delayed 30-minute consolidated bars also make this **Phase 1 shadow and
+advisory evidence**, not a timely execution feed. The first usable bar of a
+session arrives around 10:16 ET.
+
 ## Why this exists
 
 Every retained scheduled scan in the options journal recorded `UNKNOWN`
@@ -82,6 +105,15 @@ Only the 2-1-2 continuation is evaluated, because it is the only mechanical
 setup the strategy layer implements. A 3-1-2 reports `no_setup:sequence_not_212`
 rather than being approximated.
 
+### Caller-supplied structure does not bypass the authority
+
+A webhook may supply its own VWAP, EMA20 and pattern. With the lane off, that
+path behaves exactly as it always did. With the lane on, those values keep
+their precedence for scoring and display, but the setup authority is still
+evaluated on the canonical bars and a generic alert still requires its
+TRIGGERED verdict. Absent setup telemetry while the lane is on is not
+permission: it fails closed as `setup_proof_missing`.
+
 ### The legacy Signa-only callout
 
 `_maybe_send_candidate_alert` predates all of this: it needs only a Signa score
@@ -150,7 +182,8 @@ Structural failures are named rather than collapsed into
 `provider_malformed` · `feed_not_consolidated` · `unsupported_timeframe` ·
 `bar_context_unconfigured` · `missing_context:spy` · `missing_context:qqq` ·
 `calendar_unavailable` · `calendar_malformed` · `setup_forming` ·
-`setup_proof_incomplete:<reason_code>` · `no_setup:<reason_code>`
+`setup_proof_incomplete:<reason_code>` · `no_setup:<reason_code>` ·
+`setup_proof_missing`
 
 `bar_context_unconfigured` is the enabled-but-broken case: the switch is on and
 the builder could not be constructed, usually because credentials are missing.
