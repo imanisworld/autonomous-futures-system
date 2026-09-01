@@ -97,7 +97,6 @@ verify_release() {
     test -d '$RELEASES/$sha'
     test -f '$SHARED/.env'
     candidate_env='$SHARED/candidate-env-$sha'
-    trap 'rm -f "\$candidate_env"' EXIT
     grep -v '^EXPECTED_RELEASE_FINGERPRINT=' '$SHARED/.env' > "\$candidate_env"
     printf 'EXPECTED_RELEASE_FINGERPRINT=%s\n' '$fingerprint' >> "\$candidate_env"
     systemctl stop '$unit' 2>/dev/null || true
