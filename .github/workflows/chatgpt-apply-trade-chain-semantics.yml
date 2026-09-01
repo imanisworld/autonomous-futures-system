@@ -19,7 +19,12 @@ jobs:
           python-version: "3.13"
           cache: pip
       - name: Apply exact audited edit
-        run: python scripts/_chatgpt_apply_trade_chain_semantics.py
+        run: |
+          python scripts/_chatgpt_apply_trade_chain_semantics.py
+          # The legacy-compatibility test must use an actually classified
+          # no-fill reason; the first draft used a generic label that the
+          # existing taxonomy correctly treats as unknown.
+          sed -i 's/exit_reason="legacy cancel"/exit_reason="IOC limit expired"/' tests/test_project_check_trade_chain.py
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
       - name: Run targeted trade-chain tests
