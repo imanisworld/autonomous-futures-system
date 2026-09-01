@@ -11,8 +11,9 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
+from .bar_context import BarContextBuilder
 from .config import ScannerConfig
-from .discord import DiscordAlerter
+from .discord import AlertDecision, DiscordAlerter
 from .lifecycle import classify_candidate, open_candidate_fields, resolve_open_setup
 from .market_data import MarketDataClient, build_provider_capabilities
 from .rh_options import build_candidate_embed
@@ -73,12 +74,16 @@ class OptionsScanner:
         storage: ScanStorage,
         discord: DiscordAlerter,
         signa_client: SignaClient | None = None,
+        bar_context: BarContextBuilder | None = None,
     ):
         self.config = config
         self.market_data = market_data
         self.storage = storage
         self.discord = discord
         self.signa_client = signa_client
+        # Optional by design: with no builder the scanner behaves exactly as
+        # before, so enabling causal context is one explicit switch.
+        self.bar_context = bar_context
         self.last_run_at: str | None = None
         self.last_skip_reason: str | None = None
 
@@ -119,12 +124,22 @@ class OptionsScanner:
         now = now or datetime.now(ZoneInfo(self.config.timezone))
         normalized = await self._build_normalized_data(ticker, context or {}, now)
         result = score_setup(normalized, now=now)
-        decision = await self.discord.send_if_eligible(result, now=now)
+        # The gate runs BEFORE the send, not as a relabel afterwards: an
+        # unproven setup must not reach Discord at all, and a structural
+        # failure is the more specific truth than "score below threshold" --
+        # without it a blind lane and a quiet market are logged identically,
+        # which is the exact defect this lane already had once.
+        gate = self._structural_gate(normalized)
+        if gate:
+            decision = AlertDecision(False, gate)
+        else:
+            decision = await self.discord.send_if_eligible(result, now=now)
+        suppression_reason = decision.reason
         storage_id = self.storage.record_scan(
             result,
             source=source,
             alert_sent=decision.sent,
-            alert_suppression_reason=decision.reason,
+            alert_suppression_reason=suppression_reason,
             timestamp=now,
         )
         # Only fully-formed candidates open a paper position in the shadow
@@ -132,7 +147,12 @@ class OptionsScanner:
         classification = classify_candidate({**result.raw, "direction": result.direction})
         shadow_id = 0
         shadow_reason = classification.reason or "candidate"
-        if classification.is_open_eligible:
+        if classification.is_open_eligible and gate:
+            # No setup, no candidate: an unproven scan must not open a paper
+            # position in the shadow journal either, or the campaign measures
+            # its own blind spots as though they were setups.
+            shadow_reason = f"suppressed:{gate}"
+        elif classification.is_open_eligible:
             duplicate = self.storage.find_open_duplicate(
                 result.ticker, classification.contract_key
             )
@@ -152,11 +172,14 @@ class OptionsScanner:
         elif not classification.reason.startswith("provider_error"):
             shadow_reason = "not_a_candidate:" + ",".join(classification.missing)
         # Fire enriched options candidate alert when Signa qualifies — never on
-        # a failed or incomplete scan.
-        if not normalized.get("market_data_error") or "price" in (context or {}):
+        # a failed or incomplete scan, and never at all once the causal lane
+        # is active without a mechanically triggered setup behind it.
+        if self._legacy_callout_allowed(normalized) and (
+            not normalized.get("market_data_error") or "price" in (context or {})
+        ):
             await self._maybe_send_candidate_alert(ticker, normalized, now)
         return ScanOutcome(
-            result, decision.sent, decision.reason, storage_id, shadow_id, shadow_reason
+            result, decision.sent, suppression_reason, storage_id, shadow_id, shadow_reason
         )
 
     async def resolve_open_candidates(self, now: datetime | None = None) -> dict[str, int]:
@@ -192,6 +215,62 @@ class OptionsScanner:
                 self.storage.update_shadow_outcome(setup.id, status=status, outcome=outcome)
                 counts["resolved"] += 1
         return counts
+
+    def _causal_lane_active(self) -> bool:
+        """Whether this scanner is meant to be running on causal structure.
+
+        True when the operator switched the lane on, even if the builder could
+        not be constructed -- an enabled-but-broken configuration must not be
+        indistinguishable from an intentional OFF.
+        """
+        return bool(
+            getattr(self.config, "bar_context_enabled", False)
+            or self.bar_context is not None
+        )
+
+    def _structural_gate(self, normalized: dict[str, Any]) -> str:
+        """Reason this scan may not alert, or ``""`` when it may.
+
+        With the lane off, the previous behaviour is preserved untouched. With
+        the lane on, a generic alert requires a TRIGGERED verdict from the
+        shared setup authority -- for every source, including a webhook that
+        supplied its own VWAP, EMA20 and pattern. Caller-supplied values may
+        still win precedence for scoring and display; they never stand in for
+        mechanical proof. And telemetry that is simply absent is not
+        permission: it fails closed as ``setup_proof_missing``.
+        """
+        if not self._causal_lane_active():
+            return ""
+        if "bar_context_available" not in normalized:
+            return "setup_proof_missing"
+        if not normalized.get("bar_context_available"):
+            return str(normalized.get("bar_context_reason") or "bar_context_unavailable")
+        status = normalized.get("setup_status")
+        if not status:
+            return "setup_proof_missing"
+        if status != "TRIGGERED":
+            return str(
+                normalized.get("setup_suppression_reason") or f"no_setup:{str(status).lower()}"
+            )
+        return ""
+
+    def _legacy_callout_allowed(self, normalized: dict[str, Any]) -> bool:
+        """Whether the pre-structure Signa-only Discord path may still fire.
+
+        That path predates any structural proof: it needs only a Signa score
+        and grade, substitutes Signa pivots for gamma walls, defaults the
+        regime, and posts to Discord independently of everything above. A high
+        Signa grade is not a setup, and a Phase 1 shadow campaign contaminated
+        by Signa-only callouts cannot measure the setups it exists to measure.
+        So once the causal lane is active, only a mechanically TRIGGERED setup
+        lets it through -- including on the webhook path, which carries no
+        mechanical verdict of its own. The function itself is left intact for
+        the later consolidation pass and for the historical evidence it
+        produced.
+        """
+        if not self._causal_lane_active():
+            return True
+        return normalized.get("setup_status") == "TRIGGERED"
 
     async def _maybe_send_candidate_alert(
         self, ticker: str, normalized: dict[str, Any], now: datetime
@@ -283,12 +362,22 @@ class OptionsScanner:
     ) -> dict[str, Any]:
         snapshot = await self.market_data.fetch_market_snapshot(ticker)
         signa_context = await self._fetch_signa_context(ticker, context)
+        bar_fields = await self._fetch_bar_context(ticker, now)
+        caller_vwap = context.get("vwap")
+        caller_ema20 = context.get("ema20")
+        if caller_ema20 is None:
+            caller_ema20 = context.get("ema_20")
         data = {
             "ticker": ticker.upper(),
-            "pattern": context.get("pattern") or context.get("strat_pattern") or "N/A",
+            "pattern": (
+                context.get("pattern")
+                or context.get("strat_pattern")
+                or bar_fields.get("pattern")
+                or "N/A"
+            ),
             "price": context.get("price", snapshot.price),
-            "vwap": context.get("vwap"),
-            "ema20": context.get("ema20") or context.get("ema_20"),
+            "vwap": caller_vwap if caller_vwap is not None else bar_fields.get("vwap"),
+            "ema20": caller_ema20 if caller_ema20 is not None else bar_fields.get("ema20"),
             "volume": context.get("volume", snapshot.volume),
             "average_volume": context.get("average_volume") or context.get("avg_volume"),
             "volume_ratio": context.get("volume_ratio"),
@@ -355,12 +444,48 @@ class OptionsScanner:
         ):
             if key in context:
                 data[key] = context[key]
+        # Caller-supplied context always wins; bar context fills the rest and
+        # always contributes its telemetry, including on failure.
+        for key, value in bar_fields.items():
+            if key in {"vwap", "ema20", "pattern"}:
+                continue
+            data.setdefault(key, value)
         if data["volume_ratio"] is None and data["volume"] and data["average_volume"]:
             try:
                 data["volume_ratio"] = float(data["volume"]) / float(data["average_volume"])
             except (TypeError, ValueError, ZeroDivisionError):
                 data["volume_ratio"] = None
         return data
+
+    async def _fetch_bar_context(self, ticker: str, now: datetime) -> dict[str, Any]:
+        """Causal structural context, or telemetry stating why there is none.
+
+        Skipped entirely when the lane is off, so a deployment that never
+        switched it on behaves exactly as it did before this lane existed.
+        With the lane on it is evaluated for every scan, including a webhook
+        that supplied its own VWAP and EMA20: those values may take precedence
+        for scoring, but they are not a setup verdict and must not suppress the
+        one source of it. Switched on but not constructible is a third,
+        explicitly reported case -- never a silent fourth.
+        """
+        if not self._causal_lane_active():
+            return {}
+        if self.bar_context is None:
+            # Switched on but not constructible: missing or unreadable
+            # credentials, most likely. Say so rather than behaving as though
+            # the lane had been left off on purpose.
+            return {
+                "bar_context_available": False,
+                "bar_context_reason": "bar_context_unconfigured",
+            }
+        try:
+            market_context = await self.bar_context.build(ticker, now)
+        except Exception as exc:  # noqa: BLE001 - a context failure must not kill the scan
+            return {
+                "bar_context_available": False,
+                "bar_context_reason": f"bar_context_error:{type(exc).__name__}",
+            }
+        return market_context.to_scanner_fields()
 
     async def _fetch_signa_context(self, ticker: str, context: dict[str, Any]) -> dict[str, Any]:
         if not self.config.signa_api_enabled:

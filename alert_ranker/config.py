@@ -92,10 +92,34 @@ class ScannerConfig:
     rh_bearer_token: str = ""
     rh_refresh_token: str = ""
     rh_auto_check_interval_minutes: int = 15
+    # Causal bar context (PR C). Default OFF: enabling it changes what the
+    # scheduled scanner sees, so it is an explicit operator decision rather
+    # than something a deploy turns on by itself.
+    bar_context_enabled: bool = False
+    bar_context_feed: str = "sip"
+    # 30Min is the only canonical source timeframe. Any other value is
+    # refused fail-closed at build time rather than silently corrected --
+    # native hourly bars are not valid regular-session Strat candles, and an
+    # hourly candle is rebuilt from session-aligned 30m pairs instead.
+    bar_context_timeframe: str = "30Min"
+    bar_context_lookback_days: int = 10
+    # Measured entitlement boundary for consolidated bars is exactly 15
+    # minutes, and a request inside it fails the whole call. The default
+    # carries one minute of margin for clock skew.
+    sip_delay_buffer_seconds: int = 960
+    alpaca_trading_base_url: str = "https://paper-api.alpaca.markets"
 
     @property
     def rh_configured(self) -> bool:
         return bool(self.rh_bearer_token)
+
+    @property
+    def bar_context_configured(self) -> bool:
+        return (
+            self.bar_context_enabled
+            and self.alpaca_api_key_configured
+            and self.alpaca_secret_key_configured
+        )
 
     @property
     def tastytrade_configured(self) -> bool:
@@ -186,4 +210,12 @@ def load_config(environ: Iterable[tuple[str, str]] | None = None) -> ScannerConf
         rh_bearer_token=env.get("RH_BEARER_TOKEN", "").strip(),
         rh_refresh_token=env.get("RH_REFRESH_TOKEN", "").strip(),
         rh_auto_check_interval_minutes=_as_int(env.get("RH_AUTO_CHECK_INTERVAL_MINUTES"), 15),
+        bar_context_enabled=_as_bool(env.get("OPTIONS_BAR_CONTEXT_ENABLED"), False),
+        bar_context_feed=env.get("OPTIONS_BAR_CONTEXT_FEED", "sip").strip().lower(),
+        bar_context_timeframe=env.get("OPTIONS_BAR_CONTEXT_TIMEFRAME", "30Min").strip(),
+        bar_context_lookback_days=_as_int(env.get("OPTIONS_BAR_CONTEXT_LOOKBACK_DAYS"), 10),
+        sip_delay_buffer_seconds=_as_int(env.get("OPTIONS_SIP_DELAY_BUFFER_SECONDS"), 960),
+        alpaca_trading_base_url=env.get(
+            "ALPACA_ENDPOINT", "https://paper-api.alpaca.markets"
+        ).strip().rstrip("/"),
     )

@@ -22,6 +22,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 
+from .bar_context import create_bar_context
 from .config import ScannerConfig, _as_bool, load_config
 from .discord import DiscordAlerter
 from .market_data import build_provider_capabilities, create_market_data_client
@@ -56,7 +57,13 @@ def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | No
         nonlocal scanner
         storage = ScanStorage(cfg.sqlite_path)
         async with create_market_data_client(cfg) as market_data, DiscordAlerter(cfg, storage) as discord:
-            scanner = scanner or OptionsScanner(cfg, market_data, storage, discord)
+            scanner = scanner or OptionsScanner(
+                cfg,
+                market_data,
+                storage,
+                discord,
+                bar_context=create_bar_context(cfg),
+            )
             app.state.scanner = scanner
             # Restart recovery / legacy-backlog reconciliation: OPEN rows that
             # never met candidate requirements are reclassified REJECTED
