@@ -218,6 +218,43 @@ class JournalLogger:
         except Exception as exc:  # noqa: BLE001 — visibility must never raise
             logger.debug("log_block_visibility failed: %s", exc)
 
+    def log_order_suppression(
+        self,
+        *,
+        instrument: str,
+        session: str,
+        final_decision: str,
+        gate_reason: str,
+        strategy: Optional[str] = None,
+        signal_timestamp: Optional[str] = None,
+        client_order_id: Optional[str] = None,
+        for_date: Optional[date] = None,
+    ) -> None:
+        """Append the final reason an approved intent did not reach the broker.
+
+        Audit-only and inert to daily state: the record carries no `decision`
+        field and is not an OUTCOME/TRADE/ORDER_IDS row. It therefore cannot
+        create, close, count, or otherwise mutate a position; it only makes the
+        terminal suppression durable after the earlier TRADE_INTENT row.
+        """
+        try:
+            self._append(
+                {
+                    "ts": datetime.now(timezone.utc).isoformat(),
+                    "type": "ORDER_SUPPRESSION",
+                    "instrument": instrument,
+                    "session": session,
+                    "final_decision": final_decision,
+                    "gate_reason": gate_reason,
+                    "strategy": strategy,
+                    "signal_timestamp": signal_timestamp,
+                    "client_order_id": client_order_id,
+                },
+                for_date,
+            )
+        except Exception as exc:  # noqa: BLE001 — visibility must never raise
+            logger.debug("log_order_suppression failed: %s", exc)
+
     def last_reconcile_ts(self, for_date: Optional[date] = None) -> Optional[str]:
         """Best-effort timestamp of the most recent reconcile-sourced OUTCOME on
         `for_date` (session=='reconcile'), else None. Read-only; used only to

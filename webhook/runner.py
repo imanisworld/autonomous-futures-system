@@ -1499,10 +1499,11 @@ def process_alert(
     total_daily_capacity = cfg.max_trades_per_day + int(getattr(cfg, "bonus_trades_after_max", 0) or 0)
     if daily_state.trade_count >= total_daily_capacity:
         result["decision"] = "BLOCKED_MAX_TRADES"
+        result["reason"] = "Daily trade capacity reached before strategy evaluation."
         _observe_strategy_context_once(
             _capacity_observation(
                 "BLOCKED_MAX_TRADES",
-                "Daily trade capacity reached before strategy evaluation.",
+                result["reason"],
             )
         )
         return result
@@ -1510,10 +1511,11 @@ def process_alert(
     # circuit_breaker_losses (lower threshold) triggers a temporary pause via adaptive layer.
     if daily_state.consecutive_losses >= cfg.max_consecutive_losses:
         result["decision"] = "BLOCKED_LOSS_LOCKOUT"
+        result["reason"] = "Maximum consecutive-loss limit reached before strategy evaluation."
         _observe_strategy_context_once(
             _capacity_observation(
                 "BLOCKED_LOSS_LOCKOUT",
-                "Maximum consecutive-loss limit reached before strategy evaluation.",
+                result["reason"],
             )
         )
         return result
@@ -2425,6 +2427,16 @@ def process_alert(
             broker_result="NOT_SENT",
             gate_reason=_gate_reason,
         )
+        journal.log_order_suppression(
+            instrument=state.instrument,
+            session=state.session,
+            final_decision="SHADOW_NO_ORDER",
+            gate_reason=_gate_reason,
+            strategy=order.strategy,
+            signal_timestamp=state.timestamp.isoformat() if state.timestamp else None,
+            client_order_id=order.client_order_id,
+            for_date=today,
+        )
         return result
 
     # ── Final working-order recheck (execution-safety gate) ──────────────────
@@ -2472,6 +2484,16 @@ def process_alert(
                 "ORDER_SUPPRESSED",
                 broker_result="NOT_SENT",
                 gate_reason=_wo_reason,
+            )
+            journal.log_order_suppression(
+                instrument=state.instrument,
+                session=state.session,
+                final_decision="ORDER_SUPPRESSED",
+                gate_reason=_wo_reason,
+                strategy=order.strategy,
+                signal_timestamp=state.timestamp.isoformat() if state.timestamp else None,
+                client_order_id=order.client_order_id,
+                for_date=today,
             )
             return result
 

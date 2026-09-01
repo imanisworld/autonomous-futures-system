@@ -271,3 +271,34 @@ def test_prior_day_open_lifecycle_flags_local_open_crossday(tmp_path, monkeypatc
     v = hd.evaluate_health(checks)
     assert v["status"] == "ALERT"
     assert any("drift" in p for p in v["problems"])
+
+
+def test_order_suppression_record_is_inert_to_daily_state(tmp_path):
+    d = date(2026, 7, 21)
+    j = JournalLogger(log_dir=str(tmp_path))
+    _seed_open(j, d)
+    before = j.get_daily_state(d)
+    before_open = j.get_open_position(d)
+
+    j.log_order_suppression(
+        instrument="MES",
+        session="new_york",
+        final_decision="ORDER_SUPPRESSED",
+        gate_reason="working_order_conflict: 1 working order(s) on account",
+        strategy="orb_breakout",
+        signal_timestamp="2026-07-21T18:00:00+00:00",
+        client_order_id="AFS-test",
+        for_date=d,
+    )
+
+    after = j.get_daily_state(d)
+    assert after.trade_count == before.trade_count
+    assert after.has_open_position == before.has_open_position
+    assert after.realized_pnl_dollars == before.realized_pnl_dollars
+    assert j.get_open_position(d) == before_open
+    rows = j._read_entries(j._journal_path(d))
+    rec = next(row for row in rows if row.get("type") == "ORDER_SUPPRESSION")
+    assert rec["final_decision"] == "ORDER_SUPPRESSED"
+    assert rec["gate_reason"].startswith("working_order_conflict")
+    assert rec["client_order_id"] == "AFS-test"
+    assert "decision" not in rec
