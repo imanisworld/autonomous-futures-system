@@ -1,67 +1,9 @@
-"""options_manager/validation/advisory_decision.py
+"""Pure coordinator for options-manager advisory TAKE / WAIT / AVOID decisions.
 
-Options advisory decision coordinator -- Increment 25O. Every validator
-below this module answers one question on its own: is the setup proven
-(`proof_packet_intake.py`, 25J)? Is the contract tradable
-(`contract_quality_gate.py`, 25L)? Is the candidate actually triggered
-(`watchlist_lifecycle.py`, 25N)? Was the morning context captured
-(`morning_scan_packet.py`, 25M)? Answering "should I take this trade
-right now" still meant calling all four by hand and combining the
-answers manually. This module automates exactly that combination --
-never the trade itself.
-
-`evaluate_advisory_decision()` takes the already-computed results from
-those four validators (the two proof/contract ones are required, the
-watchlist/morning-scan ones are optional) and produces one
-`AdvisoryDecisionResult` with a single `AdvisoryVerdict` of `TAKE`,
-`WAIT`, or `AVOID`. `check_advisory_decision_intake()` is the manual-
-payload entry point -- one nested dict
-(`{"proof_packet": {...}, "contract_quality": {...},
-"watchlist_candidate": {...}, "morning_scan_packet": {...},
-"risk_accepted": bool, "notes": str}`) -- that runs the underlying
-`check_*_intake()` functions itself and evaluates the result. Never
-raises regardless of how malformed the payload is, the same non-
-throwing pattern established by every intake function in this package.
-
-Decision order (first match wins -- more severe conditions are checked
-first so a single AVOID-worthy fact is never masked by a later, milder
-one):
-
-1. Proof packet invalid -> AVOID
-2. Contract quality BLOCK -> AVOID
-3. Watchlist status is INVALIDATED/SKIPPED/EXITED/EXPIRED -> AVOID
-   (a terminal watchlist status is disqualifying regardless of whether
-   the proof and contract checks would otherwise pass)
-4. Watchlist payload supplied but unreadable -> WAIT (status unknown)
-5. Watchlist status is WATCHING (not yet TRIGGERED) -> WAIT
-6. Morning scan packet supplied but invalid (missing market context,
-   or a candidate failure) -> WAIT
-7. Contract quality WARN and `risk_accepted` is not explicitly set ->
-   WAIT
-8. Otherwise -> TAKE
-
-`no_trade_reasons` is populated only when the verdict is `AVOID`,
-derived automatically from the proof packet's own missing/blocking
-fields (via `no_trade_reasons.reasons_from_intake_result()`) plus a
-best-effort mapping of the contract gate's blocking reasons onto the
-same `NoTradeReason` vocabulary -- so an AVOID verdict never needs to be
-re-diagnosed by hand.
-
-This coordinator changes nothing about entries, orders, or broker
-state -- it has no order or action fields of any kind, and a `TAKE`
-verdict is still just an advisory recommendation for a human to act on
-manually. It never fetches a quote, a candle, an option chain, or a
-broker order, and never reads the system clock. It never places an
-order, changes a scanner setting, or promotes anything to
-`FixtureStatus.CLEAN_COMPLETE_FIXTURE`, and there is no live/paper
-execution pathway anywhere in this module. Performs no I/O of any kind:
-no candle fetch, no option-chain fetch, no market-data fetch, no broker
-call, no order placement, no execution, no alert sending, no file
-access at runtime, no network calls, no MCP calls, no system-clock
-reads. Does not import replay/replay_engine.py, the live
-context.market_context loader, alert_ranker, options_companion,
-execution, webhook, broker systems, options_manager.scanner, or
-risk/risk_engine.py.
+The coordinator combines setup proof, contract quality, optional portfolio
+risk, watchlist state, and morning context. It performs no I/O and never
+changes broker or scanner state. Canonical API callers require a portfolio
+snapshot; legacy/manual callers may omit it for backward-compatible analysis.
 """
 
 from __future__ import annotations
@@ -73,6 +15,13 @@ from typing import Any, Mapping, Optional
 from .contract_quality_gate import ContractQualityResult, GateVerdict, check_contract_quality_intake
 from .morning_scan_packet import MorningScanPacketResult, check_morning_scan_packet_intake
 from .no_trade_reasons import NoTradeReason, reasons_from_intake_result
+from .portfolio_risk_gate import (
+    DEFAULT_MAX_AGGREGATE_OPEN_RISK_DOLLARS,
+    DEFAULT_MAX_TRADE_RISK_DOLLARS,
+    PortfolioRiskResult,
+    PortfolioRiskVerdict,
+    check_portfolio_risk_intake,
+)
 from .proof_packet_intake import IntakeResult, check_proof_packet_intake
 from .watchlist_lifecycle import WatchlistCandidateResult, WatchlistCandidateStatus, check_watchlist_candidate_intake
 
@@ -87,9 +36,6 @@ _TERMINAL_WATCHLIST_STATUSES = frozenset(
 
 
 class AdvisoryVerdict(str, Enum):
-    """A single combined recommendation -- always advisory, never an
-    order, and never itself a `FixtureStatus`."""
-
     TAKE = "take"
     WAIT = "wait"
     AVOID = "avoid"
@@ -97,14 +43,10 @@ class AdvisoryVerdict(str, Enum):
 
 @dataclass(frozen=True, kw_only=True)
 class AdvisoryDecisionResult:
-    """One coordinated advisory decision. Contains no order or action
-    field of any kind -- `verdict` is a recommendation for a human to
-    act on manually, not an instruction this or any other module
-    executes."""
-
     verdict: AdvisoryVerdict
     proof_valid: bool
     contract_verdict: GateVerdict
+    portfolio_verdict: PortfolioRiskVerdict = PortfolioRiskVerdict.PASS
     watchlist_status: Optional[WatchlistCandidateStatus] = None
     blocking_reasons: tuple[str, ...] = ()
     warnings: tuple[str, ...] = ()
@@ -114,10 +56,6 @@ class AdvisoryDecisionResult:
 
 
 def _contract_reason_to_no_trade_reason(reason: str) -> NoTradeReason:
-    """Best-effort mapping of a contract_quality_gate blocking reason
-    onto the no_trade_reasons vocabulary. Deliberately conservative --
-    anything not clearly recognized maps to OTHER rather than being
-    force-fit onto the wrong reason."""
     lowered = reason.lower()
     if "spread too wide" in lowered or "spread_percent" in lowered:
         return NoTradeReason.WIDE_SPREAD
@@ -129,7 +67,7 @@ def _contract_reason_to_no_trade_reason(reason: str) -> NoTradeReason:
         return NoTradeReason.TOO_SHORT_DTE
     if "premium" in lowered and ("exceeds" in lowered or "cap" in lowered):
         return NoTradeReason.PREMIUM_TOO_EXPENSIVE
-    if "max_dollar_risk" in lowered:
+    if "max_dollar_risk" in lowered or "planned premium-stop risk" in lowered:
         return NoTradeReason.RISK_TOO_HIGH
     if "bid" in lowered or "ask" in lowered or "strike" in lowered or "max_contracts" in lowered:
         return NoTradeReason.MISSING_CONTRACT_DATA
@@ -137,7 +75,9 @@ def _contract_reason_to_no_trade_reason(reason: str) -> NoTradeReason:
 
 
 def _no_trade_reasons_for_avoid(
-    proof_result: IntakeResult, contract_result: ContractQualityResult
+    proof_result: IntakeResult,
+    contract_result: ContractQualityResult,
+    portfolio_result: Optional[PortfolioRiskResult],
 ) -> tuple[NoTradeReason, ...]:
     reasons: list[NoTradeReason] = list(reasons_from_intake_result(proof_result))
     seen = set(reasons)
@@ -146,6 +86,9 @@ def _no_trade_reasons_for_avoid(
         if mapped not in seen:
             seen.add(mapped)
             reasons.append(mapped)
+    if portfolio_result is not None and portfolio_result.verdict == PortfolioRiskVerdict.BLOCK:
+        if NoTradeReason.RISK_TOO_HIGH not in seen:
+            reasons.append(NoTradeReason.RISK_TOO_HIGH)
     if not reasons:
         reasons.append(NoTradeReason.OTHER)
     return tuple(reasons)
@@ -157,14 +100,22 @@ def evaluate_advisory_decision(
     watchlist_result: Optional[WatchlistCandidateResult] = None,
     morning_scan_result: Optional[MorningScanPacketResult] = None,
     *,
+    portfolio_result: Optional[PortfolioRiskResult] = None,
     risk_accepted: bool = False,
     notes: str = "",
 ) -> AdvisoryDecisionResult:
-    """Combines already-computed validator results into one advisory
-    verdict. See the module docstring for the exact decision order."""
-    blocking_reasons: list[str] = [f"proof packet: missing {name}" for name in proof_result.missing_fields]
+    """Combine validator outputs into one human-facing advisory verdict."""
+    blocking_reasons: list[str] = [
+        f"proof packet: missing {name}" for name in proof_result.missing_fields
+    ]
     blocking_reasons.extend(f"proof packet: {reason}" for reason in proof_result.blocking_reasons)
-    blocking_reasons.extend(f"contract quality: {reason}" for reason in contract_result.blocking_reasons)
+    blocking_reasons.extend(
+        f"contract quality: {reason}" for reason in contract_result.blocking_reasons
+    )
+    if portfolio_result is not None:
+        blocking_reasons.extend(
+            f"portfolio risk: {reason}" for reason in portfolio_result.blocking_reasons
+        )
 
     warnings: list[str] = [f"proof packet: {warning}" for warning in proof_result.warnings]
     warnings.extend(f"contract quality: {warning}" for warning in contract_result.warnings)
@@ -181,6 +132,9 @@ def evaluate_advisory_decision(
     elif contract_result.verdict == GateVerdict.BLOCK:
         verdict = AdvisoryVerdict.AVOID
         next_required_action = "Resolve contract quality blocks before proceeding (see blocking_reasons)."
+    elif portfolio_result is not None and portfolio_result.verdict == PortfolioRiskVerdict.BLOCK:
+        verdict = AdvisoryVerdict.AVOID
+        next_required_action = "Resolve portfolio-risk blocks before proceeding (see blocking_reasons)."
     elif watchlist_status in _TERMINAL_WATCHLIST_STATUSES:
         verdict = AdvisoryVerdict.AVOID
         next_required_action = f"Candidate is already {watchlist_status.value} -- no further action available."
@@ -200,10 +154,10 @@ def evaluate_advisory_decision(
         next_required_action = "Review contract quality warnings, or explicitly accept the risk to proceed."
     else:
         verdict = AdvisoryVerdict.TAKE
-        next_required_action = "Proceed manually per this advisory verdict -- no order is placed automatically."
+        next_required_action = "Proceed manually per this advisory verdict; no automated action follows."
 
     no_trade_reasons = (
-        _no_trade_reasons_for_avoid(proof_result, contract_result)
+        _no_trade_reasons_for_avoid(proof_result, contract_result, portfolio_result)
         if verdict == AdvisoryVerdict.AVOID
         else ()
     )
@@ -212,6 +166,11 @@ def evaluate_advisory_decision(
         verdict=verdict,
         proof_valid=proof_result.valid,
         contract_verdict=contract_result.verdict,
+        portfolio_verdict=(
+            portfolio_result.verdict
+            if portfolio_result is not None
+            else PortfolioRiskVerdict.PASS
+        ),
         watchlist_status=watchlist_status,
         blocking_reasons=tuple(blocking_reasons),
         warnings=tuple(warnings),
@@ -233,21 +192,29 @@ def _coerce_bool(value: Any) -> bool:
     raise ValueError(f"{value!r} is not a valid boolean")
 
 
-def check_advisory_decision_intake(payload: Any) -> AdvisoryDecisionResult:
-    """Normalizes a manual nested dict payload
-    (`{"proof_packet": {...}, "contract_quality": {...},
-    "watchlist_candidate": {...}, "morning_scan_packet": {...},
-    "risk_accepted": bool, "notes": str}`) and evaluates it. Never
-    raises regardless of how malformed `payload` is -- an unreadable
-    top-level payload, or unreadable required sub-payloads, resolves to
-    `AVOID` rather than an exception, since `check_proof_packet_intake()`
-    and `check_contract_quality_intake()` already handle malformed
-    input for their own sections without raising."""
+def check_advisory_decision_intake(
+    payload: Any,
+    *,
+    require_portfolio_risk: bool = False,
+    max_trade_risk_dollars: float = DEFAULT_MAX_TRADE_RISK_DOLLARS,
+    max_aggregate_open_risk_dollars: float = DEFAULT_MAX_AGGREGATE_OPEN_RISK_DOLLARS,
+) -> AdvisoryDecisionResult:
+    """Normalize one nested advisory payload and evaluate it without raising.
+
+    `require_portfolio_risk=True` is the canonical API mode. The default remains
+    false so existing manual validation fixtures can continue to evaluate old
+    evidence that predates portfolio snapshots.
+    """
     if not isinstance(payload, Mapping):
         return AdvisoryDecisionResult(
             verdict=AdvisoryVerdict.AVOID,
             proof_valid=False,
             contract_verdict=GateVerdict.BLOCK,
+            portfolio_verdict=(
+                PortfolioRiskVerdict.BLOCK
+                if require_portfolio_risk
+                else PortfolioRiskVerdict.PASS
+            ),
             blocking_reasons=(
                 f"malformed payload: expected a dict-like mapping, got {type(payload).__name__}",
             ),
@@ -256,6 +223,16 @@ def check_advisory_decision_intake(payload: Any) -> AdvisoryDecisionResult:
 
     proof_result = check_proof_packet_intake(payload.get("proof_packet"))
     contract_result = check_contract_quality_intake(payload.get("contract_quality"))
+
+    portfolio_result: Optional[PortfolioRiskResult] = None
+    if require_portfolio_risk or "portfolio_risk" in payload:
+        portfolio_result = check_portfolio_risk_intake(
+            payload.get("portfolio_risk"),
+            proof_packet=proof_result.packet,
+            contract=contract_result.contract,
+            max_trade_risk_dollars=max_trade_risk_dollars,
+            max_aggregate_open_risk_dollars=max_aggregate_open_risk_dollars,
+        )
 
     watchlist_result: Optional[WatchlistCandidateResult] = None
     if payload.get("watchlist_candidate") is not None:
@@ -278,6 +255,7 @@ def check_advisory_decision_intake(payload: Any) -> AdvisoryDecisionResult:
         contract_result,
         watchlist_result,
         morning_scan_result,
+        portfolio_result=portfolio_result,
         risk_accepted=risk_accepted,
         notes=notes,
     )

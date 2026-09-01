@@ -2,18 +2,23 @@
 
 This module deliberately does not impose a position-count cap. It evaluates
 planned dollar risk and reports capital deployed and caller-supplied
-correlation groups separately. No I/O, market data, broker, scanner, or order
-path is used here.
+correlation groups separately. Canonical intake derives the candidate's risk
+from the validated contract premium stop; callers only supply the current
+open-position snapshot.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Literal, Sequence
+from typing import Any, Literal, Mapping, Sequence
+
+from .contract_quality_gate import ContractQualityInput
+from .proof_packet import ProofPacket
 
 DEFAULT_MAX_TRADE_RISK_DOLLARS = 300.0
 DEFAULT_MAX_AGGREGATE_OPEN_RISK_DOLLARS = 1000.0
+CONTRACT_MULTIPLIER = 100
 
 
 class PortfolioRiskVerdict(str, Enum):
@@ -50,12 +55,7 @@ def evaluate_portfolio_risk(
     max_trade_risk_dollars: float = DEFAULT_MAX_TRADE_RISK_DOLLARS,
     max_aggregate_open_risk_dollars: float = DEFAULT_MAX_AGGREGATE_OPEN_RISK_DOLLARS,
 ) -> PortfolioRiskResult:
-    """Evaluate a candidate against planned risk dollars, never position count.
-
-    `planned_dollar_risk` should come from the trade's premium-stop /
-    invalidation plan. `capital_deployed` is tracked for visibility but is
-    intentionally not treated as planned max loss.
-    """
+    """Evaluate a candidate against planned risk dollars, never position count."""
     blocking: list[str] = []
 
     if max_trade_risk_dollars <= 0:
@@ -108,4 +108,174 @@ def evaluate_portfolio_risk(
         projected_capital_deployed=projected_capital,
         correlation_risk=tuple(sorted(grouped.items())),
         blocking_reasons=tuple(blocking),
+    )
+
+
+def _blocked(*reasons: str) -> PortfolioRiskResult:
+    return PortfolioRiskResult(
+        verdict=PortfolioRiskVerdict.BLOCK,
+        open_position_count=0,
+        aggregate_open_risk=0.0,
+        candidate_risk=0.0,
+        projected_open_risk=0.0,
+        aggregate_capital_deployed=0.0,
+        projected_capital_deployed=0.0,
+        blocking_reasons=tuple(reasons),
+    )
+
+
+def _coerce_exposure(payload: Any, *, label: str) -> tuple[RiskExposure | None, tuple[str, ...]]:
+    if not isinstance(payload, Mapping):
+        return None, (f"{label} must be a dict-like mapping",)
+    try:
+        ticker = str(payload["ticker"]).strip()
+        direction = str(payload["direction"]).strip().upper()
+        planned_dollar_risk = float(payload["planned_dollar_risk"])
+        capital_deployed = float(payload.get("capital_deployed", 0.0))
+        correlation_group = str(payload.get("correlation_group", ""))
+    except (KeyError, TypeError, ValueError) as exc:
+        return None, (f"{label} malformed: {exc}",)
+
+    errors: list[str] = []
+    if not ticker:
+        errors.append(f"{label} missing ticker")
+    if direction not in ("CALL", "PUT"):
+        errors.append(f"{label} direction must be CALL or PUT")
+    if planned_dollar_risk < 0:
+        errors.append(f"{label} planned_dollar_risk must be >= 0")
+    if capital_deployed < 0:
+        errors.append(f"{label} capital_deployed must be >= 0")
+    if errors:
+        return None, tuple(errors)
+
+    return (
+        RiskExposure(
+            ticker=ticker,
+            direction=direction,
+            planned_dollar_risk=planned_dollar_risk,
+            capital_deployed=capital_deployed,
+            correlation_group=correlation_group,
+        ),
+        (),
+    )
+
+
+def _proof_contract_consistency_errors(
+    proof_packet: ProofPacket,
+    contract: ContractQualityInput,
+) -> tuple[str, ...]:
+    errors: list[str] = []
+    exact_pairs = (
+        ("ticker", proof_packet.ticker, contract.ticker),
+        ("direction", proof_packet.direction, contract.direction),
+        ("expiration", proof_packet.expiration, contract.expiration),
+        ("max_contracts", proof_packet.max_contracts, contract.max_contracts),
+    )
+    for name, proof_value, contract_value in exact_pairs:
+        if proof_value != contract_value:
+            errors.append(
+                f"proof/contract mismatch for {name}: {proof_value!r} != {contract_value!r}"
+            )
+
+    numeric_pairs = (
+        ("strike", proof_packet.strike, contract.strike),
+        ("premium", proof_packet.premium, contract.premium),
+        ("bid", proof_packet.bid, contract.bid),
+        ("ask", proof_packet.ask, contract.ask),
+        ("spread_percent", proof_packet.spread_percent, contract.spread_percent),
+        ("max_dollar_risk", proof_packet.max_dollar_risk, contract.max_dollar_risk),
+    )
+    for name, proof_value, contract_value in numeric_pairs:
+        if abs(float(proof_value) - float(contract_value)) > 1e-9:
+            errors.append(
+                f"proof/contract mismatch for {name}: {proof_value!r} != {contract_value!r}"
+            )
+
+    if proof_packet.volume != contract.volume:
+        errors.append(
+            f"proof/contract mismatch for volume: {proof_packet.volume!r} != {contract.volume!r}"
+        )
+    if proof_packet.open_interest != contract.open_interest:
+        errors.append(
+            "proof/contract mismatch for open_interest: "
+            f"{proof_packet.open_interest!r} != {contract.open_interest!r}"
+        )
+
+    if contract.premium_stop is None:
+        errors.append("contract_quality missing numeric premium_stop")
+    else:
+        try:
+            proof_stop = float(proof_packet.premium_stop)
+        except (TypeError, ValueError):
+            errors.append("proof_packet premium_stop must be numeric for canonical intake")
+        else:
+            if abs(proof_stop - contract.premium_stop) > 1e-9:
+                errors.append(
+                    "proof/contract mismatch for premium_stop: "
+                    f"{proof_stop!r} != {contract.premium_stop!r}"
+                )
+
+    return tuple(errors)
+
+
+def check_portfolio_risk_intake(
+    payload: Any,
+    *,
+    proof_packet: ProofPacket | None,
+    contract: ContractQualityInput | None,
+    max_trade_risk_dollars: float = DEFAULT_MAX_TRADE_RISK_DOLLARS,
+    max_aggregate_open_risk_dollars: float = DEFAULT_MAX_AGGREGATE_OPEN_RISK_DOLLARS,
+) -> PortfolioRiskResult:
+    """Canonical portfolio snapshot intake.
+
+    The caller supplies current open-position risk and an optional correlation
+    label for the new candidate. The candidate's own risk and debit are derived
+    from the validated contract, so they cannot be overridden independently.
+    """
+    if not isinstance(payload, Mapping):
+        return _blocked("missing or malformed portfolio_risk snapshot")
+    if proof_packet is None or contract is None:
+        return _blocked("cannot evaluate portfolio risk without valid proof and contract facts")
+
+    consistency_errors = _proof_contract_consistency_errors(proof_packet, contract)
+    if consistency_errors:
+        return _blocked(*consistency_errors)
+
+    raw_open_positions = payload.get("open_positions")
+    if not isinstance(raw_open_positions, list):
+        return _blocked(
+            "portfolio_risk.open_positions must be supplied as a list (use [] when flat)"
+        )
+
+    open_positions: list[RiskExposure] = []
+    errors: list[str] = []
+    for index, raw in enumerate(raw_open_positions):
+        exposure, exposure_errors = _coerce_exposure(raw, label=f"open_positions[{index}]")
+        errors.extend(exposure_errors)
+        if exposure is not None:
+            open_positions.append(exposure)
+
+    if errors:
+        return _blocked(*errors)
+
+    assert contract.premium_stop is not None
+    candidate_risk = (
+        (contract.premium - contract.premium_stop)
+        * CONTRACT_MULTIPLIER
+        * contract.max_contracts
+    )
+    candidate_capital = contract.premium * CONTRACT_MULTIPLIER * contract.max_contracts
+    candidate = RiskExposure(
+        ticker=proof_packet.ticker,
+        direction=proof_packet.direction,
+        planned_dollar_risk=max(0.0, candidate_risk),
+        capital_deployed=max(0.0, candidate_capital),
+        correlation_group=str(payload.get("candidate_correlation_group", "")),
+    )
+
+    return evaluate_portfolio_risk(
+        open_positions=open_positions,
+        candidate=candidate,
+        max_trade_risk_dollars=max_trade_risk_dollars,
+        max_aggregate_open_risk_dollars=max_aggregate_open_risk_dollars,
     )
