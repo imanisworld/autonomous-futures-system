@@ -293,9 +293,14 @@ def _paper_broker(starting_balance: float, cfg: Optional[SystemConfig]) -> Paper
         starting_balance=starting_balance,
         slippage_ticks=float(getattr(cfg, "fill_slippage_ticks", 0.0) or 0.0),
         pessimistic_both_hit=bool(getattr(cfg, "fill_pessimistic_both_hit", False)),
+        breakeven_at_1r=bool(getattr(cfg, "breakeven_at_1r", False)),
         runner_mode=bool(getattr(cfg, "runner_mode", False)),
         runner_activation_r=float(getattr(cfg, "runner_activation_r", 1.0) or 1.0),
         runner_trail_r=float(getattr(cfg, "runner_trail_r", 0.5) or 0.5),
+        entry_fill_model=str(getattr(cfg, "entry_fill_model", "market") or "market"),
+        entry_tolerance_ticks_by_root=dict(
+            getattr(cfg, "entry_tolerance_ticks_by_root", {}) or {}
+        ),
     )
 
 
