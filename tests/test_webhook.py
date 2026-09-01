@@ -613,6 +613,8 @@ def test_paper_open_writes_intent_then_confirmed_trade(config, tmp_path):
     confirmed = [r for r in rows if r.get("decision") == "TRADE"]
     assert len(intents) == 1
     assert len(confirmed) == 1
+    assert intents[0]["client_order_id"].startswith("AFS-")
+    assert confirmed[0]["client_order_id"] == intents[0]["client_order_id"]
     # The confirmed row carries the full payload readers depend on.
     assert confirmed[0]["context"]["orb"]["status"] == "above"
     assert confirmed[0]["confluence"]["grade"]
@@ -638,9 +640,15 @@ def test_real_broker_open_with_order_ids_confirms_and_counts(config, tmp_path, m
     assert result["fill"]["status"] == "OPEN"
 
     rows = _read_journal_rows(tmp_path)
-    assert len([r for r in rows if r.get("decision") == "TRADE_INTENT"]) == 1
-    assert len([r for r in rows if r.get("decision") == "TRADE"]) == 1
-    assert any(r.get("type") == "ORDER_IDS" for r in rows)
+    intents = [r for r in rows if r.get("decision") == "TRADE_INTENT"]
+    confirmed = [r for r in rows if r.get("decision") == "TRADE"]
+    order_rows = [r for r in rows if r.get("type") == "ORDER_IDS"]
+    assert len(intents) == 1
+    assert len(confirmed) == 1
+    assert len(order_rows) == 1
+    assert intents[0]["client_order_id"].startswith("AFS-")
+    assert confirmed[0]["client_order_id"] == intents[0]["client_order_id"]
+    assert order_rows[0]["client_order_id"] == intents[0]["client_order_id"]
     ds = JournalLogger(log_dir=log_dir).get_daily_state(_journal_date(tmp_path))
     assert ds.has_open_position is True
     assert ds.trade_count == 1
@@ -659,12 +667,15 @@ def test_real_broker_open_without_order_ids_fails_closed(config, tmp_path, monke
     assert result["decision"] == "BLOCKED_ORDER_CONFIRMATION_MISSING"
     rows = _read_journal_rows(tmp_path)
     assert [r for r in rows if r.get("decision") == "TRADE"] == []  # NO confirmed trade
-    assert any(
-        r.get("type") == "OUTCOME"
+    intent = next(r for r in rows if r.get("decision") == "TRADE_INTENT")
+    cancelled = next(
+        r for r in rows
+        if r.get("type") == "OUTCOME"
         and (r.get("outcome") or {}).get("result") == "CANCELLED"
         and (r.get("outcome") or {}).get("no_fill_reason") == "ORDER_CONFIRMATION_MISSING"
-        for r in rows
     )
+    assert intent["client_order_id"].startswith("AFS-")
+    assert cancelled["outcome"]["client_order_id"] == intent["client_order_id"]
     ds = JournalLogger(log_dir=log_dir).get_daily_state(_journal_date(tmp_path))
     assert ds.has_open_position is False
     assert ds.trade_count == 0
@@ -682,10 +693,13 @@ def test_real_broker_non_open_writes_cancelled_no_confirmed_trade(config, tmp_pa
     assert result["decision"] == "BLOCKED_EXECUTION_FAILED"
     rows = _read_journal_rows(tmp_path)
     assert [r for r in rows if r.get("decision") == "TRADE"] == []
-    assert any(
-        r.get("type") == "OUTCOME" and (r.get("outcome") or {}).get("result") == "CANCELLED"
-        for r in rows
+    intent = next(r for r in rows if r.get("decision") == "TRADE_INTENT")
+    cancelled = next(
+        r for r in rows
+        if r.get("type") == "OUTCOME" and (r.get("outcome") or {}).get("result") == "CANCELLED"
     )
+    assert intent["client_order_id"].startswith("AFS-")
+    assert cancelled["outcome"]["client_order_id"] == intent["client_order_id"]
     ds = JournalLogger(log_dir=log_dir).get_daily_state(_journal_date(tmp_path))
     assert ds.has_open_position is False
     assert ds.trade_count == 0

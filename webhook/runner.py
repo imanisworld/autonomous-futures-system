@@ -1377,6 +1377,7 @@ def process_alert(
                             for_date=open_position_date,
                             stop=float(_t["would_stop"]),
                             exit_mode="runner_live",
+                            client_order_id=open_pos.get("client_order_id"),
                         )
                 except Exception as _exc:  # live trail must never break trading
                     logger.warning("trail-live skipped: %s", _exc)
@@ -1472,6 +1473,7 @@ def process_alert(
                     contracts=fill.contracts,
                     for_date=open_position_date,
                     paper_order_id=getattr(fill, "paper_order_id", None),
+                    client_order_id=open_pos.get("client_order_id"),
                 )
                 result["resolution"] = fill.result
                 if fill.result in {"WIN", "LOSS"}:
@@ -2175,11 +2177,39 @@ def process_alert(
         risk_result=risk_result.result,
         risk_failed_rule=risk_result.failed_rule,
     )
+    _client_order_id = None
+    _execution_direction = None
     if not risk_result.approved:
         # Update journal entry decision before writing so the log reflects reality.
         journal_entry["decision"] = "RISK_REJECTED"
         journal_entry["reason"] = risk_result.reason or journal_entry.get("reason")
     else:
+        # Mint the same deterministic identity the broker order already uses,
+        # but do it before the intent is journaled so intent/order/outcome can be
+        # joined exactly. strat_212/122 evidence is already decided by its watched
+        # bar and never submits this normal bracket, so it deliberately carries no
+        # broker client-order identity.
+        if decision.setup.strategy not in (STRAT_212, STRAT_122):
+            import hashlib as _hashlib
+            _execution_direction = (
+                mnq_breakout_inverse_audit["submitted_setup"]["direction"]
+                if (
+                    mnq_breakout_inverse_decision is not None
+                    and mnq_breakout_inverse_decision.apply_override
+                )
+                else decision.setup.direction
+            )
+            _signal_identity = "|".join(
+                str(part)
+                for part in (
+                    state.instrument,
+                    decision.setup.strategy,
+                    _execution_direction,
+                    getattr(state, "timestamp", ""),
+                )
+            )
+            _client_order_id = "AFS-" + _hashlib.sha1(_signal_identity.encode()).hexdigest()[:24]
+            journal_entry["client_order_id"] = _client_order_id
         # Confirmed-execution model (2026-07-10, EXECUTION_STATE_BUG fix): the
         # pre-broker row is an INTENT, not an open position. Log it as
         # decision="TRADE_INTENT" so NO reader (get_open_position /
@@ -2333,31 +2363,23 @@ def process_alert(
         result["decision"] = "LIVE_TRADING_BLOCKED"
         return result
 
-    # Deterministic client order identity: the same logical signal (same
-    # instrument/strategy/direction/decision-bar) always maps to the same id,
-    # so a retry or recovery path can never create a second parent order at
-    # the broker (TradovateBroker refuses a registered clOrdId; ambiguous
-    # submissions must reconcile first). Derived, not random — restarts and
-    # duplicate webhook deliveries produce the identical identity.
-    import hashlib as _hashlib
-    _execution_direction = (
-        mnq_breakout_inverse_audit["submitted_setup"]["direction"]
-        if (
-            mnq_breakout_inverse_decision is not None
-            and mnq_breakout_inverse_decision.apply_override
+    # `_client_order_id` was minted before TRADE_INTENT so the append-only
+    # journal and broker order share one identity. This fallback preserves the
+    # pre-existing order behavior if a future control-flow change reaches Step 5
+    # without the earlier persistence block.
+    if _client_order_id is None:
+        import hashlib as _hashlib
+        _execution_direction = decision.setup.direction
+        _signal_identity = "|".join(
+            str(part)
+            for part in (
+                state.instrument,
+                decision.setup.strategy,
+                _execution_direction,
+                getattr(state, "timestamp", ""),
+            )
         )
-        else decision.setup.direction
-    )
-    _signal_identity = "|".join(
-        str(part)
-        for part in (
-            state.instrument,
-            decision.setup.strategy,
-            _execution_direction,
-            getattr(state, "timestamp", ""),
-        )
-    )
-    _client_order_id = "AFS-" + _hashlib.sha1(_signal_identity.encode()).hexdigest()[:24]
+        _client_order_id = "AFS-" + _hashlib.sha1(_signal_identity.encode()).hexdigest()[:24]
 
     order = BracketOrder(
         instrument=state.instrument,
@@ -2627,6 +2649,7 @@ def process_alert(
             best_bid_at_submit=None,
             best_ask_at_submit=None,
             ticks_moved_from_entry=None,
+            client_order_id=order.client_order_id,
             execution_audit=getattr(fill, "execution_audit", None),
         )
         daily_state.has_open_position = False
@@ -2693,6 +2716,7 @@ def process_alert(
             cancel_timestamp=_cancel_ts.isoformat(),
             seconds_until_cancel=(_cancel_ts - _submit_ts).total_seconds(),
             requested_entry=order.entry,
+            client_order_id=order.client_order_id,
         )
         daily_state.has_open_position = False
         result["decision"] = "BLOCKED_ORDER_CONFIRMATION_MISSING"
@@ -2767,6 +2791,7 @@ def process_alert(
                 for_date=today,
                 stop=decision.setup.stop,
                 exit_mode=getattr(cfg, "exit_mode", "static"),
+                client_order_id=order.client_order_id,
             )
     except Exception as _exc:  # pragma: no cover - persistence must never break trading
         logger.warning("order-id persist skipped: %s", _exc)
