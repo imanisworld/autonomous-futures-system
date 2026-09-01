@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from .models import OptionTradePacket
+from .validation.advisory_decision import AdvisoryDecisionResult
 
 JOURNAL_FILENAME_PREFIX = "options_journal_"
 
@@ -30,9 +31,38 @@ def _serialize(packet: OptionTradePacket) -> dict[str, Any]:
     return data
 
 
+def _json_safe(value: Any) -> Any:
+    if hasattr(value, "value"):
+        return _json_safe(value.value)
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    return value
+
+
 def log_packet(packet: OptionTradePacket, journal_dir: str = "logs") -> Path:
     path = journal_path(journal_dir, for_date=packet.created_at.date())
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(_serialize(packet)) + "\n")
+    return path
+
+
+def log_advisory_decision(
+    *,
+    request_payload: dict[str, Any],
+    result: AdvisoryDecisionResult,
+    journal_dir: str = "logs",
+) -> Path:
+    """Append a canonical advisory record to the existing options journal."""
+    path = journal_path(journal_dir)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    record = {
+        "record_type": "advisory_decision",
+        "request": _json_safe(request_payload),
+        "decision": _json_safe(asdict(result)),
+    }
+    with path.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(record) + "\n")
     return path
