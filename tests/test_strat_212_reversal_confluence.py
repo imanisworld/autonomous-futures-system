@@ -1,4 +1,8 @@
-"""Regression coverage for canonical 2-1-2 reversal confluence scoring."""
+"""Regression coverage for canonical 2-1-2 reversal confluence scoring.
+
+Relabeling these bars out of ``strat_inside_break`` must not silently remove
+the +3 Strat confirmation bonus they already received under the legacy label.
+"""
 
 from datetime import datetime, timezone
 
