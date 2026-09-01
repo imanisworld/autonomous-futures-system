@@ -128,11 +128,12 @@ def _cmd_promotion(args: argparse.Namespace) -> int:
     )
     if args.json:
         _print_json(report)
-        return 0 if report.get("ok") else 1
+        return 0 if report.get("gate_pass") else 1
     print(f"PROMOTION PROOF GATE: {args.strategy}")
     if report.get("evidence_load_error"):
         print(f"  evidence load error: {report['evidence_load_error']}")
     print(f"  evidence supplied: {report['evidence_supplied']}")
+    print(f"  gate pass: {report['gate_pass']}")
     cls = report["classification"]
     print(f"  stated classification:   {cls['stated_classification']}")
     print(f"  effective classification:{cls['effective_classification']}")
@@ -151,7 +152,7 @@ def _cmd_promotion(args: argparse.Namespace) -> int:
     if ctx["mismatches"]:
         for m in ctx["mismatches"]:
             print(f"    - {m}")
-    return 0
+    return 0 if report.get("gate_pass") else 1
 
 
 def _cmd_daily(args: argparse.Namespace) -> int:

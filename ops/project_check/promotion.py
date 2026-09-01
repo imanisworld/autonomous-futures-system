@@ -57,6 +57,7 @@ reported UNKNOWN, never guessed:
   "runtime_parity": {"replay_live_logic_confirmed": true, "notes": "..."},
   "paper_forward_evidence": {"filled_trades": 0, "notes": "no paper-forward fills yet"},
   "execution_context_claimed": {
+    "instrument": "MNQ",
     "entry_fill_model": "ioc_limit",
     "entry_tolerance_ticks": 32,
     "contract_qty": 1,
@@ -144,7 +145,31 @@ def _execution_context_check(*, repo_root: Path, claimed: dict[str, Any]) -> dic
         "entry_tolerance_ticks": live.get("entry_tolerance_ticks"),
         "quantity_caps": live.get("quantity_caps"),
     }
-    mismatches = []
+    mismatches: list[str] = []
+
+    def _as_float(value: Any) -> float | None:
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    def _as_positive_int(value: Any) -> int | None:
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            return None
+        return parsed if parsed > 0 else None
+
+    instrument_raw = claimed.get("instrument")
+    instrument = str(instrument_raw).strip().upper() if instrument_raw not in (None, "") else None
+    claimed_tolerance = claimed.get("entry_tolerance_ticks")
+    claimed_qty = claimed.get("contract_qty")
+    if (claimed_tolerance is not None or claimed_qty is not None) and instrument is None:
+        mismatches.append(
+            "execution_context_claimed.instrument is required when entry_tolerance_ticks "
+            "or contract_qty is claimed"
+        )
+
     claimed_fill_model = claimed.get("entry_fill_model")
     if claimed_fill_model and live_view["entry_fill_model"] not in (UNKNOWN, None):
         if str(claimed_fill_model) != str(live_view["entry_fill_model"]):
@@ -152,28 +177,28 @@ def _execution_context_check(*, repo_root: Path, claimed: dict[str, Any]) -> dic
                 f"claimed entry_fill_model={claimed_fill_model!r} != live runtime "
                 f"entry_fill_model={live_view['entry_fill_model']!r}"
             )
-    live_tol = live_view["entry_tolerance_ticks"] or {}
-    claimed_tolerance = claimed.get("entry_tolerance_ticks")
-    if claimed_tolerance is not None:
-        replay_paper_values = [
-            v.get("effective_replay_paper")
-            for k, v in live_tol.items()
-            if isinstance(v, dict) and "effective_replay_paper" in v
-        ]
-        def _as_float(value: Any) -> float | None:
-            try:
-                return float(value)
-            except (TypeError, ValueError):
-                return None
 
-        claimed_float = _as_float(claimed_tolerance)
-        replay_paper_floats = [_as_float(v) for v in replay_paper_values]
-        if replay_paper_values and (claimed_float is None or claimed_float not in replay_paper_floats):
+    live_tol = live_view["entry_tolerance_ticks"] or {}
+    if claimed_tolerance is not None and instrument is not None:
+        info = live_tol.get(instrument)
+        if not isinstance(info, dict) or "effective_replay_paper" not in info:
             mismatches.append(
-                f"claimed entry_tolerance_ticks={claimed_tolerance!r} does not match any live "
-                f"runtime replay/paper-path tolerance {live_tol}"
+                f"no live runtime replay/paper-path tolerance is available for instrument {instrument}"
             )
-    for root, info in live_tol.items():
+        else:
+            claimed_float = _as_float(claimed_tolerance)
+            live_float = _as_float(info.get("effective_replay_paper"))
+            if claimed_float is None or live_float is None or claimed_float != live_float:
+                mismatches.append(
+                    f"claimed entry_tolerance_ticks={claimed_tolerance!r} for {instrument} != "
+                    f"live runtime replay/paper-path tolerance {info.get('effective_replay_paper')!r}"
+                )
+
+    roots_to_check = [instrument] if instrument is not None else [
+        root for root, info in live_tol.items() if isinstance(info, dict)
+    ]
+    for root in roots_to_check:
+        info = live_tol.get(root)
         if isinstance(info, dict) and info.get("diverges"):
             mismatches.append(
                 f"entry tolerance for {root} is unpinned (env unset): replay/paper path would "
@@ -181,6 +206,33 @@ def _execution_context_check(*, repo_root: Path, claimed: dict[str, Any]) -> dic
                 f"path would use {info.get('effective_live_broker')} ticks -- pin "
                 f"ENTRY_SLIPPAGE_TOLERANCE_TICKS_{root} before treating this as promotion evidence"
             )
+
+    if claimed_qty is not None and instrument is not None:
+        claimed_qty_int = _as_positive_int(claimed_qty)
+        if claimed_qty_int is None:
+            mismatches.append(f"claimed contract_qty={claimed_qty!r} is not a positive integer")
+        else:
+            caps = live_view["quantity_caps"] or {}
+            per_instrument = caps.get("max_contracts_per_instrument_config")
+            per_cap = per_instrument.get(instrument) if isinstance(per_instrument, dict) else None
+            hard_cap = caps.get("hard_cap_env")
+            known_caps = [
+                cap
+                for cap in (_as_positive_int(per_cap), _as_positive_int(hard_cap))
+                if cap is not None
+            ]
+            if not known_caps:
+                mismatches.append(
+                    f"could not resolve a live contract cap for instrument {instrument}"
+                )
+            else:
+                effective_cap = min(known_caps)
+                if claimed_qty_int > effective_cap:
+                    mismatches.append(
+                        f"claimed contract_qty={claimed_qty_int} for {instrument} exceeds "
+                        f"live effective contract cap {effective_cap}"
+                    )
+
     return {
         "claimed": claimed,
         "live_verified": live_view,
@@ -289,14 +341,24 @@ def build_promotion_report(
         stated_classification=stated_classification,
     )
 
+    evidence_supplied = bool(evidence)
+    gate_pass = (
+        evidence_error is None
+        and evidence_supplied
+        and not caps["blockers"]
+        and execution_context["parity_ok"]
+    )
+
     return {
         "ok": evidence_error is None,
+        "gate_pass": gate_pass,
+        "promotion_eligible": gate_pass,
         "routine": "promotion-proof-gate",
         "generated_at": _now_iso(),
         "strategy": strategy,
         "evidence_path": str(evidence_path) if evidence_path else None,
         "evidence_load_error": evidence_error,
-        "evidence_supplied": bool(evidence),
+        "evidence_supplied": evidence_supplied,
         "identity_parity": {
             k: identity_parity.get(k, None)
             for k in (
