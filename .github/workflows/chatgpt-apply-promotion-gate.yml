@@ -18,8 +18,19 @@ jobs:
         with:
           python-version: "3.13"
           cache: pip
-      - name: Apply exact audited edit
-        run: python scripts/_chatgpt_apply_promotion_gate.py
+      - name: Repair test-fixture escaping and apply exact audited edit
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path("scripts/_chatgpt_apply_promotion_gate.py")
+          text = p.read_text(encoding="utf-8")
+          old = '        "position_rules:\\n  max_contracts_per_instrument:\\n    MNQ: 6\\n",\n'
+          new = '        "position_rules:\\\\n"\n        "  max_contracts_per_instrument:\\\\n"\n        "    MNQ: 6\\\\n",\n'
+          if text.count(old) != 1:
+              raise SystemExit(f"expected one fixture string, found {text.count(old)}")
+          p.write_text(text.replace(old, new, 1), encoding="utf-8")
+          PY
+          python scripts/_chatgpt_apply_promotion_gate.py
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
       - name: Run targeted promotion tests
