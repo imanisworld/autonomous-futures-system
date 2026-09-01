@@ -1,6 +1,6 @@
 # STRATEGY INVENTORY
 **Autonomous Futures System — Master Reference**
-*Last updated: 2026-07-23*
+*Evidence classifications reconciled: 2026-09-01*
 
 ---
 
@@ -30,15 +30,20 @@ Verdict taxonomy:
 
 ---
 
+> **Runtime boundary (2026-09-01):** strategy verdicts below are evidence classifications. They do not prove the current VPS service, environment pins, enabled concepts, feeds, or broker account routing. Those remain box-side facts to verify separately.
+
 ## Master Table
 
 | Strategy | Rules | Detector | Replay parity | Honest fills | Walk-forward | Slippage | Sample | Verdict |
 |---|---|---|---|---|---|---|---|---|
-| ORB Reclaim (MES) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ n=305 | **PAPER PROOF** |
-| ORB Reclaim (MNQ) | ✅ | ✅ | Partial | ✅ | ❌ insufficient | ✅ | ⚠️ n=253 thin | **PROMISING BUT UNPROVEN** |
-| 4HR Re-Trigger | ✅ blockers resolved | ❌ | ❌ | Partial — external study | ✅ | Partial | ⚠️ n=32 MNQ | **WAIT — build detector** |
-| 12HR Miyagi | ✅ blockers resolved | ✅ | Partial — standalone research module | ✅ | ✅ both halves (H2 thin) | ✅ 1-4 tick | ⚠️ n=15 MNQ / n=19 MES thin | **PROMISING BUT UNPROVEN** |
-| 60M 3-2-2 First Live | ✅ blockers resolved | ✅ | Partial — standalone research module | ✅ IOC-faithful | ✅ both halves | ✅ 1-4 tick | ⚠️ n=34 MNQ thin | **PROMISING BUT UNPROVEN** |
+| ORB Reclaim — current/first_cross (MNQ+MES) | ✅ | ✅ | ✅ isolated own-account audit (#368) | ✅ ioc_limit | ❌ own drawdown breaker halts H2 | n/a — halted | ⚠️ n=38; MNQ −$164.44 / MES −$49.30 | **BROKEN — negative evidence** |
+| ORB Reclaim V4-R candidate | ✅ preregistered | ✅ research detector | ✅ isolated own-account audit (#368) | ✅ ioc_limit | ❌ H2 −$451.20 vs H1 +$900.57 | not established | ⚠️ n=31 | **WAIT** — positive aggregate, fails frozen H2 + concentration gates |
+| 4HR Re-Trigger (MNQ) | ✅ | ✅ | ✅ full-engine audit (#372) | ❌ 1/81 real fills | n/a | n/a | n=81 known / 1 fill | **BROKEN FOR CURRENT EXECUTABLE FORM** |
+| 4HR Re-Trigger (MES) | ✅ | ✅ | ✅ full-engine audit (#372) | ⚠️ ceiling 12/76 fills | ❌ H2 negative | n/a | n=76 known / 12 ceiling fills | **BROKEN / WAIT** |
+| 12HR Miyagi | ✅ | ✅ | ✅ causal-stop closure (#366) | n/a — fails risk before fill | n/a | n/a | MNQ 0/8, MES 2/10 fit `max_stop_ticks` | **BROKEN FOR CURRENT SYSTEM RISK CONSTRAINTS** |
+| 60M 3-2-2 First Live | ✅ | ✅ | ✅ full-engine closure (#367) | ❌ 0/34 real candidates fill | n/a | n/a | n=34 / 0 fill | **BROKEN FOR CURRENT SYSTEM RISK CONSTRAINTS** |
+| ORB Breakout — inverted (MNQ evidence lane) | ✅ | ✅ | ✅ | ✅ IOC | ✅ historical sub-period/session/direction checks | ✅ through +4 ticks (#364) | n=111 historical study | **PROMISING BUT UNPROVEN** |
+| MES 1-2-2 (`strat_122`) | ✅ | ✅ | ✅ executable audit (#373) | ✅ | ⚠️ executable subset thin | ✅ historical stress | 16/33 canonical candidates executable | **WAIT** |
 | VWAP Hold (MNQ NY) | ❌ entry definition unclear (stale — see 2026-07-26 audit note in profile below) | Partial | ❌ (stale — see profile) | ✅ ioc_close, production-matching (2026-07-26) | ✅ both halves, all 3 exits, NY-only ioc_close (2026-07-26) | ✅ 1-3 tick, NY-only ioc_close (2026-07-26) | ⚠️ n=107 armed / **~55 filled, NY-only** (canonical — session-filtered from the 348-arm blended pop, which is provenance-context only) — thin, clears the 30-min literal bar but not comfortably | **PROMISING BUT UNPROVEN** |
 | VWAP Reclaim (MNQ NY) | ✅ cleanest of the 3 VWAP predicates | Partial | ✅ isolated, confirmed no leaks (2026-07-26) | ✅ ioc_limit (2026-07-26) | ❌ H2 negative (2026-07-26) | ❌ fails 3-tick (2026-07-26) | ⚠️ n=70 combined / n=21 MNQ thin (2026-07-26) | **WAIT** |
 | VWAP Rejection | ❌ | Partial | ❌ | ❌ | ❌ | ❌ | — | **BROKEN — unreachable predicate** |
@@ -61,122 +66,52 @@ Verdict taxonomy:
 
 ---
 
-### ORB Reclaim — MES
-**Verdict: PAPER PROOF**
+### ORB Reclaim — current/first_cross
+**Verdict: BROKEN — negative evidence**
 
-- Entry: price reclaims ORB high (long) or ORB low (short) after a failed break
-- Stop: structural stop below/above ORB level
-- Target: runner exit (1.0R activation, 0.5R trail)
-- Session: New York strongest, all sessions positive
-- Fill model: IOC-faithful
-- Results: +$9.87/trade NY, both walk-forward halves positive
-- Live: active paper_sim lane
-- Next: accumulate live paper evidence
+- Binding evidence: PR #368 isolated the currently implemented `first_cross` rule on its own account under IOC-faithful execution.
+- Result: n=38 resolved, net −$213.74, PF 0.858; MNQ −$164.44 and MES −$49.30.
+- The strategy's own drawdown breaker stops the second half; the older MES PAPER PROOF / MNQ PROMISING figures are superseded for the executable rule.
+- Runtime enablement is a separate deployment fact and must be read from the actual box/config; this document does not infer current runtime posture from the evidence verdict.
 
 ---
 
-### ORB Reclaim — MNQ
-**Verdict: PROMISING BUT UNPROVEN**
+### ORB Reclaim — V4-R candidate
+**Verdict: WAIT**
 
-- Same definition as MES
-- Results inconsistent across sessions under honest fills
-- NY positive but thin; London negative
-- Not yet walk-forward proven under IOC-faithful fills
-- Next: dedicated MNQ NY-only honest fill test
+- Preregistered PR #368 variant: New York + prior rejected-high/low context.
+- Result: n=31, PF 1.338, +$449.37 aggregate, but H2 was −$451.20 and one month carried 70.6% of net P&L.
+- It failed the frozen H2 and concentration criteria. Do not iterate another variant from the same corpus without new evidence.
 
 ---
 
 ### 4HR Re-Trigger
-**Verdict: WAIT — build detector**
+**Verdict: MNQ BROKEN FOR CURRENT EXECUTABLE FORM; MES BROKEN / WAIT**
 
-- Rules: complete as of 2026-07-23 (all blockers resolved)
-- Timeframe: 4-hour candles, fixed ET windows
-- Setup: 4AM = 2D/2U vs prior 4PM candle; 8AM reversal + 5-min close retrace before 9:30 AM
-- Entry: break of 4AM high/low, 9:30–11:00 AM window
-- Stop: last completed 1H candle at entry, fixed
-- Target: prior 4PM candle high/low
-- Monday reference: MNQ/MES = Sunday 4PM-8PM ET; QQQ = Friday 4PM close
-- Retrace confirmation: first 5-min bar CLOSE beyond 4AM level before 9:30 AM
-- External study results: MNQ 84.4% target touch (n=32), QQQ 72.4% (n=29)
-- Gaps: no coded detector, no replay parity proof, no honest fill P&L, walk-forward not confirmed under detector
-- Next: build detector → reconcile against manual samples → honest fill replay
+- Binding full-engine audit: PR #372.
+- MNQ: the prior 80-fill standalone population collapses to 1/81 real fills through `ReplayEngine -> DecisionEngine -> RiskEngine -> PaperBroker`, including the hypothetical parity-defect ceiling pass.
+- MES: ceiling improves 7 to 12 fills out of 76, PF 1.854, but H2 is −$273.75 versus H1 +$655.00.
+- Legitimate preserved gates, not a parity patch, explain the MNQ collapse. No strategy/risk widening is justified by this evidence.
 
 ---
 
 ### 12HR Miyagi
-**Verdict: PROMISING BUT UNPROVEN** (2026-07-26 canonical evidence study)
+**Verdict: BROKEN FOR CURRENT SYSTEM RISK CONSTRAINTS**
 
-- Rules: complete as of 2026-07-23 (blocker resolved)
-- Timeframe: 12-hour candles, 4AM/4PM ET boundaries
-- Setup: 1-3-1 candle sequence (inside → outside → inside)
-- Direction: confirmed at 9:30 AM only — price location at open vs Candle 3 midpoint
-- Entry: trigger = midpoint of Candle 3; enter when price hits trigger from correct side
-- Stop: last completed 60-min candle at entry, fixed
-- Target: T1 = Candle 3 high/low (single-contract, T1-only, per hard rule);
-  T2 = Candle 2 high/low (recorded, not used for exit — 2-contract scale only,
-  not the current validated mode)
-- External study results (provenance context only, not reproduced or targeted):
-  MNQ 92.3% T1 touch (n=13), MES 75.0% (n=20)
-- Detector + honest-fill replay built (`research/detector_12hr_miyagi.py`,
-  `research/bars_12hr_miyagi_loader.py`, `research/replay_12hr_miyagi_honest_fill.py`).
-  Canonical study 2024-07-02..2026-06-26: MNQ 15 candidates / 8 resolved fills /
-  7W-1L / net $516.33 / PF 2.81; MES 19 candidates / 10 resolved fills / 8W-2L /
-  net $198.85 / PF 1.98. Both positive both halves (MNQ H2 is a single trade —
-  not a meaningful check), both survive 1-4 tick slippage, 0 `EOD_BAR_MISSING`.
-  MES SHORT direction is net slightly negative on its own (-$5.56, PF 0.97) —
-  MES's aggregate result is carried entirely by LONG. Both instruments were net
-  negative in 2024 and net positive only in 2025-2026. Detector reconciled via
-  16 synthetic branch-coverage fixtures + 5 hand-verified real dates (21/21
-  passed) — no dated manual-sample ground truth exists for this strategy, so
-  synthetic coverage carries more of the correctness burden than the 3-2-2
-  precedent's own gate could rely on. Step-5 pre-market granularity-ambiguity
-  count: 0/0 (MNQ/MES) — see
-  `docs/strategy-rules/12HR_MIYAGI_CANONICAL_EVIDENCE_2026-07-26.md` §1 for the
-  underlying data-coverage correction (the original brief's "5m cache is
-  RTH-only" premise was wrong for all but the first day of coverage).
-- Gaps: samples (8/10 resolved fills) are thinner than the already-thin 3-2-2
-  precedent's 20; MNQ LONG and MES's whole positive result rest on very small
-  same-direction slices; over half of all detected candidates never fill at all
-  (`TRIGGER_NOT_HIT`).
-- Next: none authorized under the standing evidence-phase directive
-  (no new strategies/gates/runtime changes until collector evidence suffices,
-  deadline 2026-09-30). Remains disabled/unbuilt in runtime.
+- Binding causal-stop closure: PR #366.
+- The earlier PF/P&L study used a stop-reference formula with a confirmed lookahead defect.
+- With the causal stop corrected, MNQ 0/8 and MES 2/10 historical trigger events fit the account's existing `max_stop_ticks` risk cap.
+- The cap was independently confirmed as an intentional account risk control and is not widened here. Any bounded-stop Miyagi idea would be a new strategy variant requiring new evidence.
 
 ---
 
 ### 60M 3-2-2 First Live
-**Verdict: PROMISING BUT UNPROVEN** (PR #340, 2026-07-26)
+**Verdict: BROKEN FOR CURRENT SYSTEM RISK CONSTRAINTS**
 
-- Rules: complete as of 2026-07-23 (all blockers resolved)
-- Timeframe: 60-minute candles
-- Setup: 8AM = outside bar vs 7AM candle; 9AM = directional; 10AM = opposite direction
-- Entry: first live break of 9AM opposite boundary, 10:00–11:00 AM; gap-open counts
-- Stop: opposite 9AM boundary, fixed, no cap
-- Target: 8AM outside bar boundary
-- Instrument: MNQ only (MES marginal, QQQ unconfirmed, IWM negative)
-- Detector + honest-fill replay built (`research/detector_322_first_live.py`,
-  `research/replay_322_honest_fill.py`), current `EOD_BAR_MISSING`/`DAY_ONLY_FLATTEN`
-  contract applied — corrected canonical baseline: 34 candidates, 21 fills, 20 resolved
-  (1 `EOD_BAR_MISSING`), 18W-2L, net $1,595.70, PF 10.36. Positive both halves/directions,
-  6/8 quarters, all 3 years; survives 1-4 tick slippage (PF stays >9.9). See
-  [`60M_322_EXPANDED_EVIDENCE_2026-07-26.md`](60M_322_EXPANDED_EVIDENCE_2026-07-26.md).
-- Gaps: sample still thin (n=34) — top-5 winners = 54% of net P&L (concentration flag),
-  LONG side 11-for-11 undefeated (small-sample-luck flag). OOS expansion blocked by data
-  coverage — no 5-minute MNQ bar cache exists past 2026-06-26 in this environment.
-- Next: preserve baseline, collect new 5-minute MNQ data prospectively, do not tune rules
-  while waiting.
-- **Runtime wiring (2026-07-27, demo-readiness pass):** first live/replay-shared
-  implementation, `strategy/strat_322_first_live.py` — a pure causal state machine
-  (mirrors `strategy/four_hr_retrigger.py`'s contract) wired into `signal_engine.py`'s
-  canonical 5m-native path. Setup detection (7/8/9AM) evaluates once at the exact 10:00
-  boundary from fully-closed 60m bars; entry recovery uses the honest-fill replay's
-  5-minute crossing detection (`research/replay_322_honest_fill.py`'s fidelity — NOT
-  `research/detector_322_first_live.py`'s completed-60m-bar shortcut, which is
-  lookahead-unsafe for live use). Day-only exit (4PM ET) applied via the shared
-  `execution/day_only_exit.py` contract. Enabled in `risk_rules.yaml` (MNQ only, MES
-  explicitly excluded, `PAPER_ELIGIBLE`) for demo forward-evidence collection this week.
-  Classification unchanged — still PROMISING BUT UNPROVEN pending forward evidence; the
-  wiring does not itself constitute new evidence.
+- Binding executable-parity closure: PR #367.
+- The prior 34-candidate / 21-fill / PF 10.36 study was standalone research and did not exercise the account's real runtime controls.
+- Full-engine result: 0/34 real historical candidates reach a fill; even the most favorable parity-defect ceiling still leaves the population blocked by legitimate risk architecture, principally stop width and confluence.
+- Do not change those account controls to rescue this strategy.
 
 ---
 
