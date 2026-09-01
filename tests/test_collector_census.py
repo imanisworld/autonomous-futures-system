@@ -102,23 +102,31 @@ def test_missing_table_reports_absent(tmp_path):
     assert check(collector, tmp_path, NOW)["status"] == ABSENT
 
 
-def test_campaign_arms_report_per_arm_idle(tmp_path):
+def test_campaign_arms_report_exact_configured_populations_and_idle(tmp_path):
     _write_jsonl(
         tmp_path / "forward_ab_2026_08_v1.jsonl",
         [
-            {"record_type": "CANDIDATE", "variant": "control",
+            {"record_type": "CANDIDATE", "strategy": "vwap_hold", "variant": "control",
              "signal_timestamp": "2026-08-25T12:00:00+00:00"},
-            {"record_type": "CANDIDATE", "variant": "modified",
+            {"record_type": "CANDIDATE", "strategy": "vwap_hold", "variant": "modified",
              "signal_timestamp": "2026-08-19T04:00:00+00:00"},
-            {"record_type": "OUTCOME", "variant": "control",
+            {"record_type": "OUTCOME", "strategy": "vwap_hold", "variant": "control",
              "signal_timestamp": "2026-08-25T12:30:00+00:00"},
         ],
     )
-    arms = campaign_arms(tmp_path, NOW)
-    assert arms["control"]["count"] == 1  # OUTCOME rows are not candidates
-    assert arms["modified"]["count"] == 1
-    # A whole-file freshness check would call this healthy; per-arm does not.
-    assert arms["modified"]["idle_hours"] > arms["control"]["idle_hours"]
+    campaign = campaign_arms(tmp_path, NOW)
+    arms = campaign["configured"]
+    assert set(arms) == {
+        "vwap_hold/control", "vwap_hold/modified",
+        "orb_reclaim/control", "orb_reclaim/modified",
+        "vwap_rejection/observer",
+    }
+    assert arms["vwap_hold/control"]["count"] == 1  # OUTCOME rows are not candidates
+    assert arms["vwap_hold/modified"]["count"] == 1
+    assert arms["orb_reclaim/control"]["count"] == 0
+    assert arms["orb_reclaim/control"]["last"] is None
+    assert arms["vwap_hold/modified"]["idle_hours"] > arms["vwap_hold/control"]["idle_hours"]
+    assert campaign["unexpected"] == {}
 
 
 def test_census_flags_dead_and_renders(tmp_path):
@@ -249,3 +257,42 @@ def test_loader_sees_alias_credentials_as_configured():
     )
     assert cfg.alpaca_api_key_configured is True
     assert cfg.alpaca_secret_key_configured is True
+
+
+def test_campaign_arms_separate_shared_variants_by_strategy(tmp_path):
+    _write_jsonl(
+        tmp_path / "forward_ab_2026_08_v1.jsonl",
+        [
+            {"record_type": "CANDIDATE", "strategy": "vwap_hold", "variant": "control",
+             "signal_timestamp": "2026-08-25T12:00:00+00:00"},
+            {"record_type": "CANDIDATE", "strategy": "orb_reclaim", "variant": "control",
+             "signal_timestamp": "2026-08-25T11:00:00+00:00"},
+        ],
+    )
+    arms = campaign_arms(tmp_path, NOW)["configured"]
+    assert arms["vwap_hold/control"]["count"] == 1
+    assert arms["orb_reclaim/control"]["count"] == 1
+
+
+def test_campaign_arms_report_unexpected_population_separately(tmp_path):
+    _write_jsonl(
+        tmp_path / "forward_ab_2026_08_v1.jsonl",
+        [{"record_type": "CANDIDATE", "strategy": "unexpected", "variant": "control",
+          "signal_timestamp": "2026-08-25T12:00:00+00:00"}],
+    )
+    campaign = campaign_arms(tmp_path, NOW)
+    assert "unexpected/control" not in campaign["configured"]
+    assert campaign["unexpected"]["unexpected/control"]["count"] == 1
+
+
+def test_event_driven_futures_files_are_not_false_dead_cadence_collectors(tmp_path):
+    census = build_census(tmp_path, NOW)
+    names = {row["name"] for row in census["collectors"]}
+    assert names.isdisjoint({
+        "vwap_hold_early shadow",
+        "mnq_strat_22 continuation",
+        "mes_trend_consolidation",
+        "mnq_strat_22 reversal",
+        "mnq_strat_32",
+        "mnq_strat_322",
+    })
