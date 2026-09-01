@@ -120,6 +120,8 @@ def evaluate_contract_quality(contract: ContractQualityInput) -> ContractQuality
 
     if contract.dte < 0:
         blocking.append("missing/invalid dte")
+    elif contract.dte == 0 and not contract.dte_exceptional:
+        blocking.append("missing/invalid dte: 0 DTE requires explicit exception")
     elif contract.dte < DEFAULT_MIN_DTE:
         if contract.dte_exceptional:
             warnings.append(
