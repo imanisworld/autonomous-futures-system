@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from ops.project_check.daily import _normalize, _parse_strategy_inventory, _strategy_source_of_truth, build_daily_report
+from ops.project_check.daily import _normalize, _overall_blockers, _parse_strategy_inventory, _strategy_source_of_truth, build_daily_report
 
 
 def _git(root: Path, *args: str) -> None:
@@ -64,7 +64,7 @@ def test_parse_strategy_inventory_extracts_name_and_verdict(tmp_path: Path) -> N
     assert by_name["ORB Breakout (MNQ)"] == "WAIT"
 
 
-def test_strategy_source_of_truth_flags_active_in_docs_but_disabled_in_config(tmp_path: Path) -> None:
+def test_strategy_source_of_truth_separates_evidence_verdict_from_config_state(tmp_path: Path) -> None:
     inventory_dir = tmp_path / "docs" / "strategy-rules"
     inventory_dir.mkdir(parents=True)
     (inventory_dir / "Strategy_Inventory.md").write_text(
@@ -74,18 +74,34 @@ def test_strategy_source_of_truth_flags_active_in_docs_but_disabled_in_config(tm
                 "",
                 "| Strategy | Verdict |",
                 "|---|---|",
-                "| ORB Reclaim (MES) | **PAPER PROOF** |",
+                "| ORB Reclaim (MES) | **PROMISING BUT UNPROVEN** |",
                 "| ORB Breakout (MNQ) | **WAIT** |",
             ]
         ),
         encoding="utf-8",
     )
-    lanes = {"active_lane_summary": {"MNQ": ["orb_breakout"]}}  # orb_reclaim not active anywhere
+    lanes = {"active_lane_summary": {"MNQ": ["orb_breakout"]}}
     result = _strategy_source_of_truth(repo_root=tmp_path, rules_active_lanes=lanes)
     assert result["checked"] is True
-    issues = {f["strategy"]: f["issue"] for f in result["drift_findings"]}
-    assert "described as active" in issues["ORB Reclaim (MES)"]
-    assert "described as BROKEN/RETIRE/WAIT" in issues["ORB Breakout (MNQ)"]
+    assert result["drift_findings"] == []
+    statuses = {row["strategy"]: row["configured_active"] for row in result["matched_inventory_rows"]}
+    assert statuses == {"ORB Reclaim (MES)": False, "ORB Breakout (MNQ)": True}
+
+
+def test_strategy_source_of_truth_flags_explicit_broken_concept_when_active(tmp_path: Path) -> None:
+    inventory_dir = tmp_path / "docs" / "strategy-rules"
+    inventory_dir.mkdir(parents=True)
+    (inventory_dir / "Strategy_Inventory.md").write_text(
+        "\n".join([
+            "## Master Table", "", "| Strategy | Verdict |", "|---|---|",
+            "| ORB Breakout (MNQ) | **BROKEN** |",
+        ]),
+        encoding="utf-8",
+    )
+    lanes = {"active_lane_summary": {"MNQ": ["orb_breakout"]}}
+    result = _strategy_source_of_truth(repo_root=tmp_path, rules_active_lanes=lanes)
+    assert len(result["drift_findings"]) == 1
+    assert "BROKEN/RETIRE/UNSAFE" in result["drift_findings"][0]["issue"]
 
 
 def test_strategy_source_of_truth_unmatched_rows_reported_not_dropped(tmp_path: Path) -> None:
@@ -112,7 +128,9 @@ def test_strategy_source_of_truth_unmatched_rows_reported_not_dropped(tmp_path: 
 def test_build_daily_report_smoke(repo: Path) -> None:
     (repo / "logs").mkdir()
     report = build_daily_report(repo_root=repo, journal_dir="logs", use_checkpoint=False, advance_checkpoint=False)
-    assert report["ok"] is True
+    assert report["overall_status"] in {"PASS", "FAIL"}
+    assert report["ok"] is (report["overall_status"] == "PASS")
+    assert isinstance(report["overall_blockers"], list)
     assert report["repo_reconciliation"]["current_branch"] == "main"
     assert report["trade_chain"]["status"] == "PASS"
     assert report["trade_chain"]["summary"]["attempts"] == 0
@@ -129,6 +147,7 @@ def test_build_daily_report_ok_reflects_trade_chain_fail(repo: Path) -> None:
     report = build_daily_report(repo_root=repo, journal_dir="logs", use_checkpoint=False, advance_checkpoint=False)
     assert report["trade_chain"]["status"] == "FAIL"
     assert report["ok"] is False
+    assert any(b["code"] == "TRADE_CHAIN_FAIL" for b in report["overall_blockers"])
 
 
 def test_build_daily_report_never_deletes_or_creates_tags_or_branches(repo: Path) -> None:
@@ -145,3 +164,36 @@ def test_build_daily_report_never_deletes_or_creates_tags_or_branches(repo: Path
     after_tags = subprocess.run(["git", "tag"], cwd=repo, capture_output=True, text=True, check=True).stdout
     assert before_branches == after_branches
     assert before_tags == after_tags
+
+
+def test_overall_blockers_fail_on_runtime_drift_error() -> None:
+    blockers = _overall_blockers(
+        hygiene={"dirty_tracked_files": [], "staged_files": []},
+        runtime={
+            "live_box_drift": {"status": "error", "summary": "branch mismatch"},
+            "risk_rules_load_error": None,
+        },
+        strategy_drift={"checked": True, "drift_findings": []},
+        trade_chain={"status": "PASS"},
+    )
+    assert any(b["code"] == "RUNTIME_DRIFT_ERROR" for b in blockers)
+
+
+def test_overall_blockers_allow_promising_disabled_and_wait_active() -> None:
+    blockers = _overall_blockers(
+        hygiene={"dirty_tracked_files": [], "staged_files": []},
+        runtime={"live_box_drift": {"status": "ok"}, "risk_rules_load_error": None},
+        strategy_drift={"checked": True, "drift_findings": []},
+        trade_chain={"status": "PASS"},
+    )
+    assert blockers == []
+
+
+def test_overall_blockers_fail_when_explicit_unsafe_concept_is_active() -> None:
+    blockers = _overall_blockers(
+        hygiene={"dirty_tracked_files": [], "staged_files": []},
+        runtime={"live_box_drift": {"status": "ok"}, "risk_rules_load_error": None},
+        strategy_drift={"checked": True, "drift_findings": [{"strategy": "ORB Breakout"}]},
+        trade_chain={"status": "PASS"},
+    )
+    assert any(b["code"] == "UNSAFE_STRATEGY_ACTIVE" for b in blockers)

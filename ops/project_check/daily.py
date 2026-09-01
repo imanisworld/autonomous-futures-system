@@ -98,10 +98,15 @@ def _strategy_source_of_truth(*, repo_root: Path, rules_active_lanes: dict[str, 
     lane_summary = (rules_active_lanes or {}).get("active_lane_summary") or {}
     active_concepts_any_instrument = {c for concepts in lane_summary.values() for c in concepts}
 
-    active_verdicts = {"VALIDATED", "PAPER PROOF", "PROMISING BUT UNPROVEN"}
-    inactive_verdicts = {"BROKEN", "RETIRE", "WAIT", "RESEARCH ONLY"}
+    # Evidence classification and runtime enablement are separate dimensions.
+    # PROMISING does not mean a lane must be enabled, and WAIT does not prove
+    # that a concept may never be active as a source for a derived evidence lane.
+    # Only explicit unsafe/retired classifications are automatic blockers when
+    # that exact executable concept is active.
+    unsafe_active_verdicts = {"BROKEN", "RETIRE", "UNSAFE"}
 
     findings: list[dict[str, Any]] = []
+    matched: list[dict[str, Any]] = []
     unmatched: list[dict[str, Any]] = []
     for row in rows:
         normalized = _normalize(row["name"])
@@ -122,29 +127,26 @@ def _strategy_source_of_truth(*, repo_root: Path, rules_active_lanes: dict[str, 
 
         is_active_in_config = concept in active_concepts_any_instrument
         verdict = (row.get("verdict") or "").upper()
-        verdict_says_active = any(v in verdict for v in active_verdicts)
-        verdict_says_inactive = any(v in verdict for v in inactive_verdicts)
-
-        if verdict_says_active and not is_active_in_config:
+        matched.append(
+            {
+                "strategy": row["name"],
+                "concept_key": concept,
+                "match_kind": match_kind,
+                "inventory_verdict": row.get("verdict"),
+                "configured_active": is_active_in_config,
+            }
+        )
+        if is_active_in_config and any(v in verdict for v in unsafe_active_verdicts):
             findings.append(
                 {
                     "strategy": row["name"],
                     "concept_key": concept,
                     "match_kind": match_kind,
                     "inventory_verdict": row.get("verdict"),
-                    "issue": "described as active/promising in Strategy_Inventory.md but not "
-                    "paper-eligible/enabled for any instrument in the current risk_rules.yaml",
-                }
-            )
-        elif verdict_says_inactive and is_active_in_config:
-            findings.append(
-                {
-                    "strategy": row["name"],
-                    "concept_key": concept,
-                    "match_kind": match_kind,
-                    "inventory_verdict": row.get("verdict"),
-                    "issue": "described as BROKEN/RETIRE/WAIT/RESEARCH ONLY in Strategy_Inventory.md but "
-                    "IS paper-eligible/enabled for at least one instrument in the current risk_rules.yaml",
+                    "issue": (
+                        "explicitly classified BROKEN/RETIRE/UNSAFE in Strategy_Inventory.md "
+                        "but the exact concept is paper-eligible/enabled for at least one instrument"
+                    ),
                 }
             )
 
@@ -154,10 +156,12 @@ def _strategy_source_of_truth(*, repo_root: Path, rules_active_lanes: dict[str, 
         "inventory_path": str(inventory_path),
         "inventory_row_count": len(rows),
         "drift_findings": findings,
+        "matched_inventory_rows": matched,
         "unmatched_inventory_rows": unmatched,
         "note": (
-            "Name matching is best-effort (confirmed aliases + heuristic substring fallback); "
-            "unmatched rows are listed, never silently dropped or guessed."
+            "Evidence verdict and config enablement are reported separately. Only explicit "
+            "BROKEN/RETIRE/UNSAFE + active exact-concept combinations are automatic drift findings. "
+            "Name matching is best-effort; unmatched rows are listed, never guessed."
         ),
     }
 
@@ -198,6 +202,59 @@ def _repo_hygiene(root: Path) -> dict[str, Any]:
     }
 
 
+def _overall_blockers(
+    *,
+    hygiene: dict[str, Any],
+    runtime: dict[str, Any],
+    strategy_drift: dict[str, Any],
+    trade_chain: dict[str, Any],
+) -> list[dict[str, Any]]:
+    blockers: list[dict[str, Any]] = []
+
+    if trade_chain.get("status") != "PASS":
+        blockers.append({"code": "TRADE_CHAIN_FAIL", "detail": "trade-chain integrity check failed"})
+
+    drift = runtime.get("live_box_drift") or {}
+    if str(drift.get("status") or "").lower() == "error":
+        blockers.append(
+            {
+                "code": "RUNTIME_DRIFT_ERROR",
+                "detail": str(drift.get("summary") or "live-box/runtime drift check returned error"),
+            }
+        )
+    if runtime.get("risk_rules_load_error"):
+        blockers.append(
+            {"code": "RISK_RULES_UNVERIFIED", "detail": str(runtime["risk_rules_load_error"])}
+        )
+
+    if hygiene.get("dirty_tracked_files") or hygiene.get("staged_files"):
+        blockers.append(
+            {
+                "code": "REPO_TRACKED_DIRTY",
+                "detail": "tracked/staged repository changes are present during daily reconciliation",
+            }
+        )
+
+    if not strategy_drift.get("checked"):
+        blockers.append(
+            {
+                "code": "STRATEGY_SOURCE_UNVERIFIED",
+                "detail": str(strategy_drift.get("reason") or "strategy inventory check was not completed"),
+            }
+        )
+    elif strategy_drift.get("drift_findings"):
+        blockers.append(
+            {
+                "code": "UNSAFE_STRATEGY_ACTIVE",
+                "detail": (
+                    f"{len(strategy_drift['drift_findings'])} active concept(s) carry an explicit "
+                    "BROKEN/RETIRE/UNSAFE inventory classification"
+                ),
+            }
+        )
+    return blockers
+
+
 def build_daily_report(
     *,
     repo_root: str | Path,
@@ -217,12 +274,18 @@ def build_daily_report(
         advance_checkpoint=advance_checkpoint,
     )
 
+    overall_blockers = _overall_blockers(
+        hygiene=hygiene,
+        runtime=runtime,
+        strategy_drift=strategy_drift,
+        trade_chain=trade_chain,
+    )
+    overall_status = "PASS" if not overall_blockers else "FAIL"
+
     return {
-        # Mirrors the trade-chain result -- a daily report is not "ok" if the
-        # trade-chain check FAILed, even though every field above rendered
-        # successfully. An API/import consumer reading only "ok" must not be
-        # able to mistake a FAIL for a clean run.
-        "ok": trade_chain.get("status") == "PASS",
+        "ok": overall_status == "PASS",
+        "overall_status": overall_status,
+        "overall_blockers": overall_blockers,
         "routine": "daily-reconciliation",
         "generated_at": _now_iso(),
         "repo_reconciliation": hygiene,

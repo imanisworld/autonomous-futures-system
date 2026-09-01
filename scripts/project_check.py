@@ -163,9 +163,12 @@ def _cmd_daily(args: argparse.Namespace) -> int:
     )
     if args.json:
         _print_json(report)
-        return 0 if report["trade_chain"]["status"] == "PASS" else 1
+        return 0 if report["ok"] else 1
     tc = report["trade_chain"]
     print("DAILY RECONCILIATION")
+    print(f"  overall: {report['overall_status']}")
+    for blocker in report["overall_blockers"]:
+        print(f"    BLOCKER {blocker['code']}: {blocker['detail']}")
     hy = report["repo_reconciliation"]
     print(f"  branch: {hy['current_branch']}  main sync: {hy['local_main_relationship']['state']}")
     print(f"  dirty files: {len(hy['dirty_tracked_files'])}  worktrees: {len(hy['worktrees'])}  stashes: {hy['stash_count']}")
@@ -199,7 +202,7 @@ def _cmd_daily(args: argparse.Namespace) -> int:
     else:
         print("  TRADE CHAIN: FAIL")
         _print_json(tc)
-    return 0 if tc["status"] == "PASS" else 1
+    return 0 if report["ok"] else 1
 
 
 def main(argv: list[str] | None = None) -> int:
