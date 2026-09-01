@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from ops.proof_30_mnq import classify_outcome, parse_proof_ts, read_journal_entries
+from ops.project_check import gitutil
 
 CHECKPOINT_SUBDIR = "afs-project-check"
 CHECKPOINT_FILENAME = "trade_chain_checkpoint.json"
@@ -37,7 +38,7 @@ def _now_iso() -> str:
 
 
 def _checkpoint_path(repo_root: Path) -> Path:
-    return repo_root / ".git" / CHECKPOINT_SUBDIR / CHECKPOINT_FILENAME
+    return gitutil.git_dir(repo_root) / CHECKPOINT_SUBDIR / CHECKPOINT_FILENAME
 
 
 def load_checkpoint_full(repo_root: Path) -> dict[str, Any] | None:

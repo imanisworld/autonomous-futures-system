@@ -31,7 +31,7 @@ def _now_iso() -> str:
 
 
 def _state_path(root: Path) -> Path:
-    return root / ".git" / STATE_SUBDIR / STATE_FILENAME
+    return gitutil.git_dir(root) / STATE_SUBDIR / STATE_FILENAME
 
 
 def _save_state(root: Path, state: dict[str, Any]) -> None:
@@ -70,7 +70,7 @@ def build_session_start_report(*, cwd: str | Path | None = None) -> dict[str, An
     main_sync = gitutil.main_sync_state(root)
     upstream = gitutil.upstream_of(root)
     status = gitutil.status_porcelain(root)
-    all_worktrees = [w.as_dict() for w in gitutil.worktrees(root)]
+    all_worktrees = gitutil.worktree_inventory(root)
     current_wt = next((w for w in all_worktrees if Path(w["path"]).resolve() == root.resolve()), None)
     branches_tracking_deleted_remotes = [
         b for b in gitutil.local_branches(root) if b["tracking_deleted_remote"]
@@ -101,6 +101,7 @@ def build_session_start_report(*, cwd: str | Path | None = None) -> dict[str, An
             "upstream": upstream,
             "current_worktree": current_wt,
             "all_worktrees": all_worktrees,
+            "worktree_inventory_checked": bool(all_worktrees),
             "dirty_tracked_files": status.get("dirty_tracked", []),
             "staged_files": status.get("staged", []),
             "untracked_files": status.get("untracked", []),
@@ -111,6 +112,7 @@ def build_session_start_report(*, cwd: str | Path | None = None) -> dict[str, An
             "archive_tags": archive_tags,
             "stash_count": len(stashes),
             "stashes": stashes,
+            "stash_preservation_note": "Stashed work is outside all branch-cleanup conclusions; retain and review separately.",
         },
         "branch_changed_during_check": branch_changed_during_check,
         "runtime_snapshot": runtime,
