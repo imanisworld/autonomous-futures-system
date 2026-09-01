@@ -79,7 +79,6 @@ def test_contracts_over_max_rejects():
 
 
 def test_total_premium_risk_over_max_rejects():
-    # 2.00 * 100 * 1 = 200, cap 150 -> reject
     result = evaluate_packet(
         _packet(max_premium=2.00, max_contracts=1),
         _config(risk_max_total_premium_dollars=150.00),
@@ -119,29 +118,27 @@ def test_put_target_above_entry_rejects():
     assert result.failed_rule == "target_direction_mismatch"
 
 
-def test_low_signa_score_rejects():
+def test_low_signa_score_is_observational_warning():
     result = evaluate_packet(_packet(signa_score=10), _config(risk_min_signa_score=30))
-    assert result.status == "REJECTED"
-    assert result.failed_rule == "signa_score_min"
+    assert result.status == "APPROVED"
+    assert any("SIGNA_OBSERVATION" in w and "score" in w for w in result.warnings)
 
 
-def test_grade_c_rejects():
+def test_grade_c_is_observational_warning():
     result = evaluate_packet(_packet(signa_grade="C"), _config())
-    assert result.status == "REJECTED"
-    assert result.failed_rule == "signa_grade_not_allowed"
+    assert result.status == "APPROVED"
+    assert any("SIGNA_OBSERVATION" in w and "grade" in w for w in result.warnings)
 
 
-def test_signa_bias_mismatch_rejects():
+def test_signa_bias_mismatch_is_observational_warning():
     result = evaluate_packet(
         _packet(direction="CALL", signa_bias="BEARISH"), _config()
     )
-    assert result.status == "REJECTED"
-    assert result.failed_rule == "signa_bias_mismatch"
+    assert result.status == "APPROVED"
+    assert any("SIGNA_OBSERVATION" in w and "bias" in w for w in result.warnings)
 
 
 def test_empty_gex_regime_approves_with_warning_by_default():
-    """GEX is optional enrichment. The default must not block, or the lane
-    cannot run without a GEX subscription."""
     result = evaluate_packet(_packet(gex_regime=""), _config())
     assert result.approved is True
     assert result.status == "APPROVED"
@@ -157,13 +154,13 @@ def test_empty_gex_regime_rejects_only_when_explicitly_opted_in():
     assert result.failed_rule == "gex_regime_missing"
 
 
-def test_signa_gate_still_rejects_when_gex_is_absent():
-    """Dropping the GEX requirement must not weaken the Signa gate."""
+def test_signa_and_gex_are_both_observational_when_absent_or_weak():
     result = evaluate_packet(
         _packet(gex_regime="", signa_grade="D"), _config()
     )
-    assert result.approved is False
-    assert result.failed_rule == "signa_grade_not_allowed"
+    assert result.approved is True
+    assert any("GEX_UNAVAILABLE" in w for w in result.warnings)
+    assert any("SIGNA_OBSERVATION" in w for w in result.warnings)
 
 
 def test_unknown_gex_regime_approves_with_warning():
@@ -196,7 +193,6 @@ def test_invalid_account_tag_rejects():
 def test_risk_gate_does_not_write_futures_journal(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     evaluate_packet(_packet(), _config())
-
     today = date.today().isoformat()
     assert not (tmp_path / "logs" / f"journal_{today}.jsonl").exists()
     assert not (tmp_path / "logs" / f"options_journal_{today}.jsonl").exists()
@@ -231,8 +227,6 @@ def _risk_gate_referenced_identifiers() -> set[str]:
 
 
 def test_risk_gate_has_no_forbidden_imports():
-    # Real imports only — ast.Import/ImportFrom nodes never include docstrings
-    # or comments, so this can't false-positive on descriptive text.
     modules = _risk_gate_imported_modules()
     forbidden_module_fragments = (
         "execution",
@@ -250,8 +244,6 @@ def test_risk_gate_has_no_forbidden_imports():
 
 
 def test_risk_gate_has_no_broker_or_order_or_notify_identifiers():
-    # Real identifiers referenced in code (Name/Attribute nodes) — again,
-    # docstrings/comments are not part of the AST and can't trigger this.
     identifiers = {name.lower() for name in _risk_gate_referenced_identifiers()}
     forbidden = {
         "place_order",
@@ -277,17 +269,11 @@ def test_risk_gate_module_has_no_journal_or_config_file_reads():
 
 
 def test_evaluate_packet_requires_explicit_config():
-    # config has no default — omitting it must fail loudly at call time,
-    # never silently fall back to reading env/.env.
     with pytest.raises(TypeError):
         evaluate_packet(_packet())
 
 
 def test_risk_gate_does_not_call_config_from_env():
-    # Structural guarantee via real AST Name/Attribute nodes only (never
-    # docstrings/comments, so this can't false-positive on descriptive text).
-    # Catches any reintroduction of the from_env()/getenv/load_dotenv fallback
-    # this fix removed.
     identifiers = _risk_gate_referenced_identifiers()
     for forbidden in ("from_env", "getenv", "load_dotenv", "environ"):
         assert forbidden not in identifiers, (
