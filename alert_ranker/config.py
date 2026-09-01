@@ -97,6 +97,10 @@ class ScannerConfig:
     # than something a deploy turns on by itself.
     bar_context_enabled: bool = False
     bar_context_feed: str = "sip"
+    # 30Min is the only canonical source timeframe. Any other value is
+    # refused fail-closed at build time rather than silently corrected --
+    # native hourly bars are not valid regular-session Strat candles, and an
+    # hourly candle is rebuilt from session-aligned 30m pairs instead.
     bar_context_timeframe: str = "30Min"
     bar_context_lookback_days: int = 10
     # Measured entitlement boundary for consolidated bars is exactly 15

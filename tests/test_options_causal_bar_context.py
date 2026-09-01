@@ -29,7 +29,14 @@ from alert_ranker import bar_context as bar_context_module
 from alert_ranker import bar_provider as bar_provider_module
 from alert_ranker import causal_bars as causal_bars_module
 from alert_ranker import session_calendar as session_calendar_module
-from alert_ranker.bar_context import BarContextBuilder, SymbolContext
+from alert_ranker import setup_authority as setup_authority_module
+from alert_ranker.bar_context import (
+    CANONICAL_TIMEFRAME,
+    BarContextBuilder,
+    SymbolContext,
+    create_bar_context,
+    timeframe_from_name,
+)
 from alert_ranker.bar_provider import AlpacaBarProvider, BarProviderError
 from alert_ranker.causal_bars import (
     HOUR_1,
@@ -47,6 +54,7 @@ from alert_ranker.causal_bars import (
 from alert_ranker.config import ScannerConfig
 from alert_ranker.discord import DiscordAlerter
 from alert_ranker.scanner import OptionsScanner
+from alert_ranker.setup_authority import evaluate_setup
 from alert_ranker.session_calendar import (
     Session,
     SessionCalendarError,
@@ -414,7 +422,12 @@ def test_context_fails_closed_when_history_is_too_short_for_ema20():
         symbol: rising_series(full_session(date(2026, 9, 1)), 13, base=base)
         for symbol, base in (("AAPL", 100.0), ("SPY", 500.0), ("QQQ", 400.0))
     }
-    builder = standard_builder(provider=FakeProvider(only_today))
+    # Only today is on the calendar, so no prior session is expected and the
+    # short history is the only thing wrong.
+    builder = standard_builder(
+        provider=FakeProvider(only_today),
+        calendar=StaticSessionCalendar.from_sessions([full_session(date(2026, 9, 1))]),
+    )
     context = build_context(builder, "AAPL", NOW)
     assert context.available is False
     assert context.reason == "insufficient_history"
@@ -589,10 +602,12 @@ def test_available_context_carries_the_structure_the_scorer_needs():
     context = build_context(standard_builder(), "AAPL", NOW)
     assert context.available, context.reason
     fields = context.to_scanner_fields()
-    for key in ("vwap", "ema20", "pattern", "prev_candle_high", "prev_candle_low",
+    for key in ("vwap", "ema20", "prev_candle_high", "prev_candle_low",
                 "candle_type", "session_date", "session_open", "session_close",
                 "latest_completed_bar_close", "bar_context_feed", "timeframe"):
         assert fields.get(key) is not None, key
+    # Context, not a setup: no approved setup here, so nothing fills `pattern`.
+    assert "pattern" not in fields
     assert fields["bar_context_feed"] == "sip"
     assert fields["session_date"] == "2026-09-01"
     assert fields["spy_context_available"] is True
@@ -620,7 +635,7 @@ def test_unavailable_context_still_emits_telemetry():
 # ─── 19, 20. scanner integration ──────────────────────────────────────────────
 
 
-def scanner_config(tmp_path: Path) -> ScannerConfig:
+def scanner_config(tmp_path: Path, **overrides) -> ScannerConfig:
     return ScannerConfig(
         market_data_provider="public",
         tastytrade_username="",
@@ -633,10 +648,10 @@ def scanner_config(tmp_path: Path) -> ScannerConfig:
         alpaca_paper=True,
         alpaca_data_base_url="https://data.alpaca.markets",
         port=8010,
-        discord_webhook_url="",
         watchlist=["AAPL"],
         interval_minutes=5,
         sqlite_path=tmp_path / "options_scanner.sqlite",
+        **{"discord_webhook_url": "", **overrides},
     )
 
 
@@ -652,8 +667,8 @@ class StubMarketData:
         return MarketSnapshot(ticker.upper(), price=self.price, volume=1_000_000)
 
 
-def make_scanner(tmp_path: Path, builder: BarContextBuilder | None):
-    cfg = scanner_config(tmp_path)
+def make_scanner(tmp_path: Path, builder: BarContextBuilder | None, **overrides):
+    cfg = scanner_config(tmp_path, **overrides)
     storage = ScanStorage(cfg.sqlite_path)
     discord = DiscordAlerter(
         cfg, storage,
@@ -735,6 +750,7 @@ _PR_C_MODULES = (
     session_calendar_module,
     bar_provider_module,
     bar_context_module,
+    setup_authority_module,
 )
 
 _FORBIDDEN_IDENTIFIERS = (
@@ -776,3 +792,458 @@ def test_bar_provider_only_reads_the_historical_bars_path():
 def test_context_builder_never_declares_a_fallback_feed():
     source = inspect.getsource(bar_context_module)
     assert "iex" not in source.lower()
+
+
+# ═══ review blockers ══════════════════════════════════════════════════════════
+#
+# Six fail-closed rules found missing in review of the first PR C head. Each
+# section below pins one of them.
+
+
+def ranged_series(session: Session, ranges: list[tuple[float, float]]) -> list[Bar]:
+    """Bars with caller-chosen (low, high) extremes, so a sequence is exact."""
+    return [
+        make_bar(
+            session.open + MINUTE_30.delta * index,
+            o=low + 0.1,
+            h=high,
+            low=low,
+            c=high - 0.1,
+            v=1000.0 + index,
+        )
+        for index, (low, high) in enumerate(ranges)
+    ]
+
+
+# 2-up, 2-up, inside, 2-up: the last four completed bars form a bullish 2-1-2.
+_TRIGGERED_RANGES = [
+    (130.0, 131.0),
+    (131.0, 132.0),
+    (132.0, 133.0),
+    (133.0, 134.0),
+    (134.0, 135.0),
+    (134.2, 134.8),
+    (134.5, 135.5),
+]
+# ...same run, but the inside bar has not broken out yet.
+_FORMING_RANGES = _TRIGGERED_RANGES[:-1] + [(134.3, 134.7)]
+# ...and a run with no inside bar at all.
+_NO_SETUP_RANGES = [(130.0 + i, 131.0 + i) for i in range(7)]
+
+
+def sequence_bars(ranges: list[tuple[float, float]]) -> dict[str, list[Bar]]:
+    """Three complete prior sessions plus a current session with `ranges`."""
+    out: dict[str, list[Bar]] = {}
+    for symbol, base in (("AAPL", 100.0), ("SPY", 500.0), ("QQQ", 400.0)):
+        bars: list[Bar] = []
+        for index, day in enumerate(SESSIONS[:-1]):
+            bars.extend(rising_series(full_session(day), 13, base=base + index * 10))
+        current = full_session(SESSIONS[-1])
+        if symbol == "AAPL":
+            bars.extend(ranged_series(current, ranges))
+        else:
+            bars.extend(rising_series(current, 13, base=base + 30))
+        out[symbol] = bars
+    return out
+
+
+# ─── 1. an ordinary candle type is never a setup ──────────────────────────────
+
+
+def test_candle_type_and_sequence_stay_separate_from_the_actionable_pattern():
+    fields = build_context(standard_builder(), "AAPL", NOW).to_scanner_fields()
+    assert fields["candle_type"] == "two_up"
+    assert fields["previous_candle_type"] is not None
+    assert "pattern" not in fields
+    assert fields["setup_status"] in {"NO_TRADE", "INVALID", "WATCH"}
+
+
+def test_ordinary_candle_with_vwap_and_ema_alignment_cannot_alert(tmp_path):
+    """The unsafe path: a plain candle plus alignment reaching the threshold."""
+    _, _, scanner = make_scanner(
+        tmp_path,
+        standard_builder(),
+        discord_webhook_url="https://discord.invalid/webhook",
+    )
+    outcome = asyncio.run(
+        scanner.scan_ticker(
+            "AAPL",
+            source="scheduled",
+            # Volume and IV alone carry this over the alert threshold.
+            context={"volume_ratio": 1.5, "iv_rank": 10},
+            now=NOW,
+        )
+    )
+    # The score genuinely clears the bar...
+    assert outcome.result.score >= scanner.config.alert_threshold
+    assert outcome.result.raw["candle_type"] == "two_up"
+    # ...and no approved setup exists, so nothing is sent.
+    assert outcome.result.pattern == "N/A"
+    assert outcome.result.components["strat_pattern"] == 0
+    assert outcome.alert_sent is False
+    assert outcome.alert_suppression_reason.startswith("no_setup:")
+
+
+# ─── 2. the shared strategy authority decides what a setup is ─────────────────
+
+
+def test_a_real_212_is_recognised_by_the_shared_authority():
+    context = build_context(
+        standard_builder(provider=FakeProvider(sequence_bars(_TRIGGERED_RANGES))),
+        "AAPL",
+        NOW,
+    )
+    assert context.available, context.reason
+    ticker = context.ticker
+    assert ticker is not None
+    assert ticker.strat_sequence == "strat_212"
+    assert ticker.setup_sequence_confirmed is True
+    assert ticker.setup_direction == "CALL"
+    # Mechanical levels only: the inside bar's own high and low.
+    assert ticker.setup_entry_trigger == 134.8
+    assert ticker.setup_invalidation == 134.2
+
+
+def test_a_real_212_still_cannot_alert_without_the_rest_of_the_proof():
+    """PR C supplies no targets, context or contract, so nothing is actionable."""
+    context = build_context(
+        standard_builder(provider=FakeProvider(sequence_bars(_TRIGGERED_RANGES))),
+        "AAPL",
+        NOW,
+    )
+    ticker = context.ticker
+    assert ticker is not None
+    assert ticker.setup_status == "INVALID"
+    assert ticker.setup_reason_code == "missing_target_1"
+    assert ticker.setup_suppression_reason == "setup_proof_incomplete:missing_target_1"
+    assert "pattern" not in context.to_scanner_fields()
+
+
+def test_a_forming_inside_bar_is_watch_not_an_alert():
+    context = build_context(
+        standard_builder(provider=FakeProvider(sequence_bars(_FORMING_RANGES))),
+        "AAPL",
+        NOW,
+    )
+    ticker = context.ticker
+    assert ticker is not None
+    assert ticker.setup_status == "WATCH"
+    assert ticker.setup_suppression_reason == "setup_forming"
+    assert "pattern" not in context.to_scanner_fields()
+
+
+def test_no_sequence_is_no_trade_not_an_error():
+    context = build_context(
+        standard_builder(provider=FakeProvider(sequence_bars(_NO_SETUP_RANGES))),
+        "AAPL",
+        NOW,
+    )
+    ticker = context.ticker
+    assert ticker is not None
+    assert ticker.setup_status == "NO_TRADE"
+    assert ticker.setup_sequence_confirmed is False
+    assert ticker.setup_suppression_reason == "no_setup:sequence_not_212"
+
+
+def test_setup_authority_fails_closed_on_too_little_history():
+    session = full_session(date(2026, 9, 1))
+    verdict = evaluate_setup(ranged_series(session, _TRIGGERED_RANGES[:3]))
+    assert verdict.status == "INVALID"
+    assert verdict.reason_code == "insufficient_bars"
+    assert verdict.actionable is False
+
+
+def test_setup_authority_delegates_and_reimplements_nothing():
+    source = inspect.getsource(setup_authority_module)
+    assert "scan_watchlist_strat_212" in source
+    tree = ast.parse(source)
+    imported = {
+        node.module
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and node.module
+    }
+    assert "options_manager.scanner" in imported
+    assert "options_manager.strategies" in imported
+    # No target, contract or risk value is ever invented here.
+    for invented in ("target_1=", "target_2=", "contract_constraints_inputs=",
+                     "market_context_inputs=", "risk"):
+        assert invented not in source
+
+
+# ─── 3. the legacy Signa-only callout cannot contaminate Phase 1 ──────────────
+
+
+def _signa_context() -> dict:
+    return {
+        "signa_grade": "A+",
+        "signa_score": 95,
+        "signa_daily_direction": "UP",
+        "signa_pivot_s1": 120.0,
+        "signa_pivot_r1": 150.0,
+    }
+
+
+def _record_legacy_callout(scanner, monkeypatch) -> list:
+    calls: list = []
+
+    async def record(ticker, normalized, now):
+        calls.append(ticker)
+
+    monkeypatch.setattr(scanner, "_maybe_send_candidate_alert", record)
+    return calls
+
+
+def test_signa_only_callout_is_disabled_once_the_causal_lane_is_active(
+    tmp_path, monkeypatch
+):
+    _, _, scanner = make_scanner(
+        tmp_path,
+        standard_builder(),
+        signa_api_enabled=True,
+        discord_webhook_url="https://discord.invalid/webhook",
+    )
+    calls = _record_legacy_callout(scanner, monkeypatch)
+    outcome = asyncio.run(
+        scanner.scan_ticker("AAPL", source="scheduled", context=_signa_context(), now=NOW)
+    )
+    # A qualifying Signa grade and score, and no mechanically triggered setup.
+    assert outcome.result.raw["signa_grade"] == "A+"
+    assert outcome.result.raw["setup_status"] != "TRIGGERED"
+    assert calls == []
+
+
+def test_legacy_callout_still_fires_when_the_causal_lane_is_off(tmp_path, monkeypatch):
+    _, _, scanner = make_scanner(
+        tmp_path,
+        None,
+        signa_api_enabled=True,
+        discord_webhook_url="https://discord.invalid/webhook",
+    )
+    calls = _record_legacy_callout(scanner, monkeypatch)
+    asyncio.run(
+        scanner.scan_ticker("AAPL", source="scheduled", context=_signa_context(), now=NOW)
+    )
+    assert calls == ["AAPL"]
+
+
+def test_enabling_the_lane_by_config_alone_also_disables_the_legacy_callout(
+    tmp_path, monkeypatch
+):
+    """Enabled but unbuildable must not fall back to the unproven path."""
+    _, _, scanner = make_scanner(
+        tmp_path,
+        None,
+        bar_context_enabled=True,
+        signa_api_enabled=True,
+        discord_webhook_url="https://discord.invalid/webhook",
+    )
+    calls = _record_legacy_callout(scanner, monkeypatch)
+    asyncio.run(
+        scanner.scan_ticker("AAPL", source="scheduled", context=_signa_context(), now=NOW)
+    )
+    assert calls == []
+
+
+# ─── 4. the canonical source timeframe is locked to 30 minutes ────────────────
+
+
+def test_native_hourly_bars_are_refused_before_any_fetch():
+    provider = FakeProvider(standard_bars({"AAPL": 100.0, "SPY": 500.0, "QQQ": 400.0}))
+    builder = standard_builder(provider=provider)
+    builder.timeframe = HOUR_1
+    context = build_context(builder, "AAPL", NOW)
+    assert context.available is False
+    assert context.reason == "unsupported_timeframe"
+    assert context.timeframe == "1Hour"
+    # Refused before any I/O: the provider is never asked for hourly bars.
+    assert provider.calls == []
+
+
+@pytest.mark.parametrize("configured", ("1Hour", "5Min", "1Min", "hourly", ""))
+def test_configuration_cannot_make_anything_but_30m_canonical(monkeypatch, configured):
+    monkeypatch.setenv("ALPACA_API_KEY", "key")
+    monkeypatch.setenv("ALPACA_SECRET_KEY", "secret")
+
+    class Cfg:
+        bar_context_configured = True
+        bar_context_feed = "sip"
+        bar_context_timeframe = configured
+        bar_context_lookback_days = 10
+        sip_delay_buffer_seconds = 960
+        alpaca_data_base_url = "https://data.alpaca.markets"
+        alpaca_trading_base_url = "https://paper-api.alpaca.markets/v2"
+        timezone = "America/New_York"
+
+    builder = create_bar_context(Cfg())
+    assert builder is not None
+    assert builder.timeframe.name != CANONICAL_TIMEFRAME.name
+    context = asyncio.run(builder.build("AAPL", NOW))
+    assert context.available is False
+    assert context.reason == "unsupported_timeframe"
+
+
+def test_a_configured_timeframe_is_never_silently_corrected():
+    assert timeframe_from_name("1Hour") is HOUR_1
+    assert timeframe_from_name("30Min") is CANONICAL_TIMEFRAME
+    assert timeframe_from_name("nonsense").name == "nonsense"
+
+
+# ─── 5. every session used in a calculation must be complete ──────────────────
+
+
+def drop_session(bars_by_symbol: dict[str, list[Bar]], symbol: str, day: date):
+    tz = NY
+    return {
+        s: ([b for b in bars if b.start_utc.astimezone(tz).date() != day] if s == symbol else bars)
+        for s, bars in bars_by_symbol.items()
+    }
+
+
+def test_a_whole_missing_prior_trading_day_fails_closed():
+    bars = drop_session(
+        standard_bars({"AAPL": 100.0, "SPY": 500.0, "QQQ": 400.0}), "AAPL", date(2026, 8, 28)
+    )
+    context = build_context(standard_builder(provider=FakeProvider(bars)), "AAPL", NOW)
+    assert context.available is False
+    assert context.reason == "missing_bars"
+    ticker = context.ticker
+    assert ticker is not None
+    assert ticker.incomplete_session_date == "2026-08-28"
+    assert ticker.missing_bar_count == 13
+
+
+def test_one_missing_bar_in_a_prior_session_fails_closed():
+    bars = standard_bars({"AAPL": 100.0, "SPY": 500.0, "QQQ": 400.0})
+    gap_start = full_session(date(2026, 8, 31)).open + MINUTE_30.delta * 5
+    bars["AAPL"] = [b for b in bars["AAPL"] if b.start_utc != gap_start]
+    context = build_context(standard_builder(provider=FakeProvider(bars)), "AAPL", NOW)
+    assert context.available is False
+    assert context.reason == "missing_bars"
+    ticker = context.ticker
+    assert ticker is not None
+    assert ticker.incomplete_session_date == "2026-08-31"
+    assert ticker.missing_bar_count == 1
+
+
+def test_an_incomplete_prior_session_never_becomes_a_daily_candle():
+    bars = standard_bars({"AAPL": 100.0, "SPY": 500.0, "QQQ": 400.0})
+    session = full_session(date(2026, 8, 27))
+    # Truncate the session after lunch: a real but partial day.
+    cut = session.open + MINUTE_30.delta * 6
+    bars["AAPL"] = [
+        b
+        for b in bars["AAPL"]
+        if not (b.start_utc.astimezone(NY).date() == date(2026, 8, 27) and b.start_utc >= cut)
+    ]
+    context = build_context(standard_builder(provider=FakeProvider(bars)), "AAPL", NOW)
+    assert context.available is False
+    ticker = context.ticker
+    assert ticker is not None
+    assert ticker.reason == "missing_bars"
+    assert ticker.daily_candle_type is None
+
+
+def test_ema_and_strat_context_fail_closed_rather_than_bridging_a_gap():
+    """The whole point: no number is produced across a hole in the history."""
+    bars = drop_session(
+        standard_bars({"AAPL": 100.0, "SPY": 500.0, "QQQ": 400.0}), "AAPL", date(2026, 8, 31)
+    )
+    context = build_context(standard_builder(provider=FakeProvider(bars)), "AAPL", NOW)
+    ticker = context.ticker
+    assert ticker is not None
+    assert ticker.available is False
+    for absent in (ticker.ema20, ticker.vwap, ticker.strat_sequence,
+                   ticker.candle_type, ticker.setup_status):
+        assert absent is None
+    fields = context.to_scanner_fields()
+    assert "vwap" not in fields and "ema20" not in fields
+
+
+def test_a_holiday_inside_the_window_is_not_required_to_have_bars():
+    """Absence of a calendar session is not a gap; only a real session is."""
+    sessions = [d for d in SESSIONS if d != date(2026, 8, 28)]
+    calendar = StaticSessionCalendar.from_sessions(full_session(d) for d in sessions)
+    bars = drop_session(
+        standard_bars({"AAPL": 100.0, "SPY": 500.0, "QQQ": 400.0}), "AAPL", date(2026, 8, 28)
+    )
+    context = build_context(
+        standard_builder(provider=FakeProvider(bars), calendar=calendar), "AAPL", NOW
+    )
+    assert context.available, context.reason
+
+
+def test_a_session_clipped_by_the_lookback_window_is_excluded_not_failed():
+    """Our own truncation must not read as the provider losing a session."""
+    builder = standard_builder(lookback_days=2)
+    context = build_context(builder, "AAPL", NOW)
+    assert context.available, context.reason
+    ticker = context.ticker
+    assert ticker is not None
+    # 2026-08-31 (13 bars) plus the completed part of 2026-09-01 (7 bars).
+    assert ticker.bar_count == 20
+
+
+# ─── 6. enabled-but-misconfigured is visible, not silent ──────────────────────
+
+
+def test_enabled_but_unconfigured_lane_reports_itself(tmp_path):
+    _, _, scanner = make_scanner(tmp_path, None, bar_context_enabled=True)
+    outcome = asyncio.run(scanner.scan_ticker("AAPL", source="scheduled", now=NOW))
+    assert outcome.result.raw["bar_context_available"] is False
+    assert outcome.result.raw["bar_context_reason"] == "bar_context_unconfigured"
+    assert outcome.alert_sent is False
+    assert outcome.alert_suppression_reason == "bar_context_unconfigured"
+
+
+def test_an_intentionally_off_lane_stays_silent_and_unchanged(tmp_path):
+    _, _, scanner = make_scanner(tmp_path, None)
+    outcome = asyncio.run(scanner.scan_ticker("AAPL", source="scheduled", now=NOW))
+    assert "bar_context_available" not in outcome.result.raw
+    assert "bar_context_reason" not in outcome.result.raw
+
+
+def _full_candidate_context() -> dict:
+    """Everything the shadow journal needs to open a paper candidate."""
+    return {
+        "contract": "AAPL260918C00140000",
+        "strike": 140.0,
+        "expiry": "2026-09-18",
+        "option_type": "CALL",
+        "option_mark": 2.10,
+        "option_bid": 2.05,
+        "option_ask": 2.15,
+        "open_interest": 4200,
+        "stop": 133.0,
+        "target": 142.0,
+        "risk_cap": 400.0,
+    }
+
+
+def test_no_setup_means_no_shadow_candidate_either(tmp_path):
+    """"No setup" has to reach the journal too, or the campaign measures noise."""
+    _, storage, scanner = make_scanner(tmp_path, standard_builder())
+    outcome = asyncio.run(
+        scanner.scan_ticker(
+            "AAPL", source="scheduled", context=_full_candidate_context(), now=NOW
+        )
+    )
+    assert outcome.result.direction == "LONG"
+    assert outcome.result.raw["setup_status"] != "TRIGGERED"
+    assert outcome.shadow_id == 0
+    assert outcome.shadow_reason.startswith("suppressed:no_setup:")
+    assert storage.latest_shadow_setups(limit=5) == []
+
+
+def test_the_same_candidate_opens_when_the_lane_is_off(tmp_path):
+    """Proves the guard above is what stops it, not a missing field."""
+    _, _, scanner = make_scanner(tmp_path, None)
+    outcome = asyncio.run(
+        scanner.scan_ticker(
+            "AAPL",
+            source="scheduled",
+            context={**_full_candidate_context(), "vwap": 130.0, "ema20": 129.0},
+            now=NOW,
+        )
+    )
+    assert outcome.shadow_id > 0
+    assert outcome.shadow_reason == "candidate"

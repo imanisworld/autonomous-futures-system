@@ -30,16 +30,25 @@ Strat candle classification and prior candle high/low — from consolidated
 equity bars, under a strict no-future-leakage policy. Advisory and shadow
 only; it adds no execution path.
 
+Context is not a setup. Candle type and sequence are recorded under their own
+names; the actionable `pattern` field is filled only by a TRIGGERED verdict of
+the shared `options_manager` strategy authority, which this lane cannot reach
+because it supplies no targets, market context or contract constraints. The
+lane therefore observes and records, and cannot promote an observation into an
+alert. While it is on, the legacy Signa-only Discord callout is suppressed for
+the same reason.
+
 ```env
 OPTIONS_BAR_CONTEXT_ENABLED=false      # the single switch
 OPTIONS_BAR_CONTEXT_FEED=sip
-OPTIONS_BAR_CONTEXT_TIMEFRAME=30Min
+OPTIONS_BAR_CONTEXT_TIMEFRAME=30Min    # the only accepted value
 OPTIONS_BAR_CONTEXT_LOOKBACK_DAYS=10
 OPTIONS_SIP_DELAY_BUFFER_SECONDS=960   # 16 min
 ```
 
-Left disabled, or with Alpaca credentials absent, the scanner behaves exactly
-as before. See `docs/options-causal-bar-context-pr-c.md` for the data policy,
+Left disabled, the scanner behaves exactly as before. Switched on with
+credentials absent it reports `bar_context_unconfigured` rather than quietly
+reverting. See `docs/options-causal-bar-context-pr-c.md` for the data policy,
 the provider failure modes it defends against, and the first-live-session
 acceptance checklist.
 

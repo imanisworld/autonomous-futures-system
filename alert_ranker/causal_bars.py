@@ -26,7 +26,7 @@ from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from typing import Iterable, Sequence
 
-from strategy.strat_classifier import classify_from_ohlc
+from strategy.strat_classifier import StratBar, classify_bar, classify_from_ohlc
 
 __all__ = [
     "Bar",
@@ -306,6 +306,11 @@ def classify_last_bar(bars: Sequence[Bar]) -> dict[str, str | None]:
 
     Delegates to the shared futures classifier so the options lane and the
     futures lane cannot drift apart on what a 2-up is.
+
+    The third bar back is classified from a fourth when one is available. The
+    classifier needs that type to name the sequences that depend on it, and
+    without it a 2-1-2 reports as the weaker ``strat_inside_break`` -- which
+    would understate exactly the setups this lane exists to observe.
     """
     empty: dict[str, str | None] = {
         "candle_type": None,
@@ -318,6 +323,13 @@ def classify_last_bar(bars: Sequence[Bar]) -> dict[str, str | None]:
     current = bars[-1]
     previous = bars[-2]
     two_back = bars[-3] if len(bars) >= 3 else None
+    two_back_type: str | None = None
+    if len(bars) >= 4 and two_back is not None:
+        three_back = bars[-4]
+        two_back_type = classify_bar(
+            StratBar(high=two_back.high, low=two_back.low),
+            StratBar(high=three_back.high, low=three_back.low),
+        )
     context = classify_from_ohlc(
         current_high=current.high,
         current_low=current.low,
@@ -325,6 +337,7 @@ def classify_last_bar(bars: Sequence[Bar]) -> dict[str, str | None]:
         previous_low=previous.low,
         two_bars_back_high=two_back.high if two_back else None,
         two_bars_back_low=two_back.low if two_back else None,
+        two_bars_back_type=two_back_type,
     )
     return {
         "candle_type": context.current_bar_type,

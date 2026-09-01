@@ -25,12 +25,15 @@ how that provider fails. This PR encodes those measurements.
 | Lag buffer | `information_cutoff = now − OPTIONS_SIP_DELAY_BUFFER_SECONDS` (default 960s = 16 min). |
 | Completed bars | Keep a bar only when `start + timeframe ≤ information_cutoff`. |
 | Session authority | The market calendar. Never inferred from the presence of bars. |
-| 30m | Native bars, filtered to the calendar-defined regular session. |
+| Session completeness | Every calendar session inside the request window must be whole. A missing day, or one missing bar in a prior session, fails the context closed. |
+| 30m | Native bars, filtered to the calendar-defined regular session. The only accepted canonical timeframe; any other configured value is refused. |
 | 1h | Rebuilt from session-aligned 30m pairs. Native hourly bars are never used. |
 | Daily | Rebuilt from completed regular sessions. The vendor daily bar is not used for Strat. |
 | VWAP | Cumulative `Σ(vw·v)/Σv` over regular-session bars, reset each session. |
 | EMA20 | Completed regular-session closes only; fewer than 20 bars is unavailable, not a smaller EMA. |
 | SPY / QQQ | Identical rules to the scanned ticker; both required. |
+| Setup authority | `options_manager.scanner.scan_watchlist_strat_212`. This lane classifies no setup of its own. |
+| Actionability | TRIGGERED only. NO_TRADE, WATCH and INVALID all mean no alert. |
 | Failure | Any missing, stale, incomplete, wrong-session or entitlement-blocked input yields WAIT with a named reason. |
 
 ### Why not the fresher single-venue feed
@@ -42,6 +45,66 @@ in **17–35% of sessions**, because those are threshold comparisons rather than
 averages. One AAPL bar understated the true session high by about $1.00. A
 16-minute lag costs nothing when measuring whether setups have edge; a 2.6%
 classification error corrupts the measurement itself.
+
+## Context is not a setup
+
+The scorer credits any non-`N/A` `pattern` with +3, VWAP alignment with +2 and
+trend alignment with +2, against a default alert threshold of 7. So if a bare
+candle type were allowed to fill `pattern`, an ordinary 1, 2U, 2D or 3 candle
+with price above VWAP and EMA20 would clear the threshold with no setup behind
+it at all. It is not allowed to.
+
+`candle_type`, `previous_candle_type` and `strat_sequence` are context and are
+recorded under those names. `pattern` is filled only from a TRIGGERED verdict
+of `options_manager.scanner.scan_watchlist_strat_212`, which is the same
+authority the rest of the options system uses, reached through
+`alert_ranker/setup_authority.py`. That module reimplements nothing: it
+classifies the third bar back from a fourth, hands the strategy layer the two
+mechanical levels that come straight out of the bars — the inside bar's high
+and low — and returns the verdict unchanged.
+
+TRIGGERED additionally requires proven targets, market context and contract
+constraints. This lane supplies none of those and invents none of them, so a
+genuine 2-1-2 reports as `INVALID / missing_target_1`, is recorded with
+`setup_sequence_confirmed = true`, and cannot alert. Phase 1 is structurally
+observe-only; that is a property of the wiring, not a convention.
+
+Suppression reasons distinguish the cases:
+
+| Verdict | Suppression reason |
+| --- | --- |
+| TRIGGERED | *(none — but unreachable in PR C)* |
+| WATCH | `setup_forming` |
+| Sequence real, proof incomplete | `setup_proof_incomplete:<reason_code>` |
+| No sequence | `no_setup:<reason_code>` |
+
+Only the 2-1-2 continuation is evaluated, because it is the only mechanical
+setup the strategy layer implements. A 3-1-2 reports `no_setup:sequence_not_212`
+rather than being approximated.
+
+### The legacy Signa-only callout
+
+`_maybe_send_candidate_alert` predates all of this: it needs only a Signa score
+and grade, substitutes Signa pivots for gamma walls, defaults the regime to
+`TRANSITION`, and posts to Discord independently of the scan's own decision.
+A high Signa grade is not a setup, and a Phase 1 shadow campaign contaminated
+by Signa-only callouts cannot measure the setups it exists to measure. While
+the causal lane is on, that path fires only behind a TRIGGERED setup. The
+function and its historical output are left intact for the later consolidation
+pass.
+
+## Every session used must be complete
+
+The current session's gaps were always checked. Historical sessions are used
+too — for EMA20, for previous-candle continuity, and for the reconstructed
+daily candle — so they are held to the same bar. The calendar decides which
+sessions must exist, which means a trading day that returned no bars at all is
+still expected and still fails the check; a holiday is simply absent and is not
+expected. A session that opened before the request window is excluded rather
+than failed, because that truncation is ours.
+
+The failing session is named in telemetry (`incomplete_session_date`,
+`missing_bar_count`) so a provider gap is diagnosable rather than just fatal.
 
 ## Provider behaviours defended against
 
@@ -84,16 +147,27 @@ Structural failures are named rather than collapsed into
 `stale_market_data` · `missing_bars` · `no_completed_bars` · `no_session_bars` ·
 `no_session` · `session_not_started` · `provider_entitlement` ·
 `missing_symbol:<sym>` · `pagination_truncated` · `provider_unavailable` ·
-`provider_malformed` · `feed_not_consolidated` · `missing_context:spy` ·
-`missing_context:qqq` · `calendar_unavailable` · `calendar_malformed`
+`provider_malformed` · `feed_not_consolidated` · `unsupported_timeframe` ·
+`bar_context_unconfigured` · `missing_context:spy` · `missing_context:qqq` ·
+`calendar_unavailable` · `calendar_malformed` · `setup_forming` ·
+`setup_proof_incomplete:<reason_code>` · `no_setup:<reason_code>`
+
+`bar_context_unconfigured` is the enabled-but-broken case: the switch is on and
+the builder could not be constructed, usually because credentials are missing.
+It is reported rather than degraded into the intentional-OFF behaviour, and it
+blocks alerts — an operator who asked for causal structure should not get blind
+alerts because the wiring failed.
 
 ## Telemetry recorded per scan
 
 Feed identity, request as-of, information cutoff, configured delay buffer,
 timeframe, session date and open/close, early-close flag, completed bar count,
 latest completed bar start and close, VWAP, EMA20, prior candle high and low,
-candle type, session-aligned hourly candle type, reconstructed daily candle
-type, and SPY/QQQ availability.
+candle type, previous candle type, Strat sequence, session-aligned hourly
+candle type, reconstructed daily candle type, SPY/QQQ availability, the
+incomplete session date and missing bar count when completeness failed, and the
+setup verdict: status, reason code, direction, mechanical entry trigger,
+invalidation, whether the sequence was confirmed, and the suppression reason.
 
 ## First-live-session acceptance check
 
@@ -115,6 +189,10 @@ one full regular session and confirm:
 - [ ] Reconstructed session-aligned 1h context populates, and the opening
       candle carries no pre-market range.
 - [ ] Missing or stale data produces WAIT with a named reason, never a score.
+- [ ] Prior sessions in the lookback window are complete; `missing_bars` with a
+      named `incomplete_session_date` does not appear every scan.
+- [ ] `setup_status` is populated, and no scan alerts without TRIGGERED.
+- [ ] No Signa-only callout fires while the lane is on.
 
 Expect no context in the first part of the session: with a 30-minute timeframe
 and a 16-minute buffer, the first completed regular-session bar is only usable
