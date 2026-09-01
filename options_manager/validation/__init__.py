@@ -110,6 +110,7 @@ from .portfolio_risk_gate import (
     PortfolioRiskResult,
     PortfolioRiskVerdict,
     RiskExposure,
+    check_portfolio_risk_intake,
     evaluate_portfolio_risk,
 )
 
@@ -186,5 +187,6 @@ __all__ = [
     "PortfolioRiskResult",
     "PortfolioRiskVerdict",
     "RiskExposure",
+    "check_portfolio_risk_intake",
     "evaluate_portfolio_risk",
 ]
