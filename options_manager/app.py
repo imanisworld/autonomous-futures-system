@@ -91,6 +91,9 @@ async def receive_packet(request: Request) -> JSONResponse:
         result = check_advisory_decision_intake(
             raw_input,
             require_portfolio_risk=True,
+            # No default budget lives below this line. Unset here means the
+            # portfolio gate blocks and the verdict cannot be TAKE.
+            max_aggregate_open_risk_dollars=config.max_aggregate_open_risk_dollars,
         )
         log_advisory_decision(
             request_payload=raw_input,

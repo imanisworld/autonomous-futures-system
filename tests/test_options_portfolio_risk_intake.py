@@ -2,10 +2,14 @@
 
 from options_manager.validation.contract_quality_gate import ContractQualityInput
 from options_manager.validation.portfolio_risk_gate import (
+    AGGREGATE_RISK_BUDGET_UNCONFIGURED,
     PortfolioRiskVerdict,
     check_portfolio_risk_intake,
 )
 from options_manager.validation.proof_packet import ProofPacket, ProofPacketStatus
+
+# Every PASS expectation states its budget. There is no implicit one.
+BUDGET = 1000.0
 
 
 def _proof(**overrides):
@@ -71,6 +75,7 @@ def test_candidate_risk_and_capital_are_derived_not_caller_supplied():
         {"open_positions": [], "candidate_correlation_group": "tech"},
         proof_packet=_proof(),
         contract=_contract(),
+        max_aggregate_open_risk_dollars=BUDGET,
     )
     assert result.verdict == PortfolioRiskVerdict.PASS
     assert result.candidate_risk == 100.0
@@ -121,7 +126,19 @@ def test_many_positions_are_allowed_when_projected_risk_is_under_budget():
         {"open_positions": open_positions},
         proof_packet=_proof(max_contracts=1, max_dollar_risk=100.0),
         contract=_contract(max_contracts=1, max_dollar_risk=100.0),
+        max_aggregate_open_risk_dollars=BUDGET,
     )
     assert result.verdict == PortfolioRiskVerdict.PASS
     assert result.open_position_count == 12
     assert result.projected_open_risk == 650.0
+
+
+def test_canonical_intake_without_a_budget_blocks_by_name():
+    result = check_portfolio_risk_intake(
+        {"open_positions": []},
+        proof_packet=_proof(),
+        contract=_contract(),
+    )
+    assert result.verdict == PortfolioRiskVerdict.BLOCK
+    assert AGGREGATE_RISK_BUDGET_UNCONFIGURED in result.blocking_reasons
+    assert result.candidate_risk == 100.0

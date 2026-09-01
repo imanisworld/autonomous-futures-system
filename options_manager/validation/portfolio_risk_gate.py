@@ -5,10 +5,19 @@ planned dollar risk and reports capital deployed and caller-supplied
 correlation groups separately. Canonical intake derives the candidate's risk
 from the validated contract premium stop; callers only supply the current
 open-position snapshot.
+
+There is no default aggregate open-risk budget. The earlier hardcoded $1,000
+was never approved policy, and a limit the operator did not choose is not a
+limit -- it is a number that lets a TAKE through. The budget is supplied by
+the operator (``OPTIONS_MANAGER_MAX_AGGREGATE_OPEN_RISK_DOLLARS``) and, when
+absent, every evaluation blocks with an explicit reason. Phase 1 is shadow
+and advisory; a blocked verdict costs nothing, an unapproved one is a policy
+decision made by accident.
 """
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Literal, Mapping, Sequence
@@ -17,8 +26,37 @@ from .contract_quality_gate import ContractQualityInput
 from .proof_packet import ProofPacket
 
 DEFAULT_MAX_TRADE_RISK_DOLLARS = 300.0
-DEFAULT_MAX_AGGREGATE_OPEN_RISK_DOLLARS = 1000.0
 CONTRACT_MULTIPLIER = 100
+
+AGGREGATE_RISK_BUDGET_ENV = "OPTIONS_MANAGER_MAX_AGGREGATE_OPEN_RISK_DOLLARS"
+# Stable reason codes lead each message so the gate that fired is identifiable
+# without parsing prose. "missing" and "invalid" are deliberately distinct: an
+# operator who set a bad value needs a different fix from one who set nothing.
+AGGREGATE_RISK_BUDGET_MISSING_CODE = "aggregate_risk_budget_missing"
+AGGREGATE_RISK_BUDGET_INVALID_CODE = "aggregate_risk_budget_invalid"
+AGGREGATE_RISK_BUDGET_UNCONFIGURED = (
+    f"{AGGREGATE_RISK_BUDGET_MISSING_CODE}: {AGGREGATE_RISK_BUDGET_ENV} is not configured; "
+    "no default is assumed"
+)
+
+
+def _invalid_budget_reason(value: float) -> str:
+    return (
+        f"{AGGREGATE_RISK_BUDGET_INVALID_CODE}: max_aggregate_open_risk_dollars must be a "
+        f"finite number > 0 (got {value!r}; an unparseable configured value also arrives "
+        "here as nan); no default is substituted"
+    )
+
+
+def _usable_budget(value: float | None) -> bool:
+    """True only for a finite, strictly positive budget.
+
+    Checked here, at the gate, not only at config parsing: ``nan`` slips past
+    ``<= 0`` and ``inf`` passes ``> 0`` while making every ``projected > cap``
+    comparison false -- an unlimited budget wearing a configured value's
+    clothes. Neither may reach the comparison below.
+    """
+    return value is not None and math.isfinite(value) and value > 0
 
 
 class PortfolioRiskVerdict(str, Enum):
@@ -53,15 +91,25 @@ def evaluate_portfolio_risk(
     open_positions: Sequence[RiskExposure],
     candidate: RiskExposure,
     max_trade_risk_dollars: float = DEFAULT_MAX_TRADE_RISK_DOLLARS,
-    max_aggregate_open_risk_dollars: float = DEFAULT_MAX_AGGREGATE_OPEN_RISK_DOLLARS,
+    max_aggregate_open_risk_dollars: float | None = None,
 ) -> PortfolioRiskResult:
-    """Evaluate a candidate against planned risk dollars, never position count."""
+    """Evaluate a candidate against planned risk dollars, never position count.
+
+    ``max_aggregate_open_risk_dollars`` has no default. ``None`` blocks, and the
+    exposure arithmetic below still runs so the caller can see what the
+    projected risk *would* have been measured against.
+    """
     blocking: list[str] = []
 
-    if max_trade_risk_dollars <= 0:
+    # Same finiteness guard on the per-trade cap: a nan or inf there would
+    # silently disable the per-trade comparison in exactly the same way. The
+    # cap's value is not changed here.
+    if not _usable_budget(max_trade_risk_dollars):
         blocking.append("missing/invalid max_trade_risk_dollars")
-    if max_aggregate_open_risk_dollars <= 0:
-        blocking.append("missing/invalid max_aggregate_open_risk_dollars")
+    if max_aggregate_open_risk_dollars is None:
+        blocking.append(AGGREGATE_RISK_BUDGET_UNCONFIGURED)
+    elif not _usable_budget(max_aggregate_open_risk_dollars):
+        blocking.append(_invalid_budget_reason(max_aggregate_open_risk_dollars))
 
     exposures = tuple(open_positions)
     for index, exposure in enumerate((*exposures, candidate)):
@@ -80,13 +128,16 @@ def evaluate_portfolio_risk(
     projected_open_risk = aggregate_open_risk + candidate.planned_dollar_risk
     projected_capital = aggregate_capital + candidate.capital_deployed
 
-    if candidate.planned_dollar_risk > max_trade_risk_dollars:
+    if _usable_budget(max_trade_risk_dollars) and candidate.planned_dollar_risk > max_trade_risk_dollars:
         blocking.append(
             f"candidate planned risk ${candidate.planned_dollar_risk:.2f} exceeds "
             f"per-trade cap ${max_trade_risk_dollars:.2f}"
         )
 
-    if projected_open_risk > max_aggregate_open_risk_dollars:
+    if (
+        _usable_budget(max_aggregate_open_risk_dollars)
+        and projected_open_risk > max_aggregate_open_risk_dollars
+    ):
         blocking.append(
             f"projected aggregate open risk ${projected_open_risk:.2f} exceeds "
             f"cap ${max_aggregate_open_risk_dollars:.2f}"
@@ -224,7 +275,7 @@ def check_portfolio_risk_intake(
     proof_packet: ProofPacket | None,
     contract: ContractQualityInput | None,
     max_trade_risk_dollars: float = DEFAULT_MAX_TRADE_RISK_DOLLARS,
-    max_aggregate_open_risk_dollars: float = DEFAULT_MAX_AGGREGATE_OPEN_RISK_DOLLARS,
+    max_aggregate_open_risk_dollars: float | None = None,
 ) -> PortfolioRiskResult:
     """Canonical portfolio snapshot intake.
 

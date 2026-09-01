@@ -235,7 +235,9 @@ from roughly 10:16 ET. Scans before that correctly report
 ## Deliberately out of scope
 
 - The hardcoded $1,000 aggregate-risk default. Known unapproved policy,
-  separate cleanup, untouched here and not to be read as validated.
+  untouched by PR C and removed in the separate cleanup that followed: the
+  budget is now `OPTIONS_MANAGER_MAX_AGGREGATE_OPEN_RISK_DOLLARS` with no
+  default, and an unset budget blocks.
 - The legacy GEX and Signa-pivot substitution paths outside the code this PR
   touches. This PR introduces no gamma context and depends on none; real GEX
   remains optional enrichment and its absence stays explicit.
