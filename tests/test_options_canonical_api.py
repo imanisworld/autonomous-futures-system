@@ -240,14 +240,35 @@ def test_unconfigured_budget_can_never_return_take(monkeypatch, tmp_path):
     assert "risk_too_high" not in body["no_trade_reasons"]
 
 
-def test_unparseable_budget_fails_closed_like_unset(monkeypatch, tmp_path):
+@pytest.mark.parametrize("raw", ("garbage", "one thousand", "1,000", "$1000", "NaN", "nan",
+                                 "inf", "+inf", "-inf", "Infinity"))
+def test_malformed_or_non_finite_budget_is_invalid_not_missing_and_never_take(
+    monkeypatch, tmp_path, raw
+):
+    """The operator configured *something*; the fix is to correct it, not to set it.
+    And none of these may read as an unlimited budget."""
     monkeypatch.delenv("OPTIONS_MANAGER_INGEST_SECRET", raising=False)
     monkeypatch.setenv("OPTIONS_MANAGER_JOURNAL_DIR", str(tmp_path))
-    monkeypatch.setenv("OPTIONS_MANAGER_MAX_AGGREGATE_OPEN_RISK_DOLLARS", "one thousand")
+    monkeypatch.setenv("OPTIONS_MANAGER_MAX_AGGREGATE_OPEN_RISK_DOLLARS", raw)
 
     body = client.post("/options/packet", json=_payload()).json()
     assert body["verdict"] == "AVOID"
-    assert any("not configured" in reason for reason in body["blocking_reasons"])
+    assert body["actionable"] is False
+    assert body["portfolio_verdict"] == "block"
+    assert any("aggregate_risk_budget_invalid" in r for r in body["blocking_reasons"]), raw
+    assert not any("aggregate_risk_budget_missing" in r for r in body["blocking_reasons"]), raw
+
+
+@pytest.mark.parametrize("raw", ("", "   "))
+def test_blank_budget_is_missing_not_invalid(monkeypatch, tmp_path, raw):
+    monkeypatch.delenv("OPTIONS_MANAGER_INGEST_SECRET", raising=False)
+    monkeypatch.setenv("OPTIONS_MANAGER_JOURNAL_DIR", str(tmp_path))
+    monkeypatch.setenv("OPTIONS_MANAGER_MAX_AGGREGATE_OPEN_RISK_DOLLARS", raw)
+
+    body = client.post("/options/packet", json=_payload()).json()
+    assert body["verdict"] == "AVOID"
+    assert any("aggregate_risk_budget_missing" in r for r in body["blocking_reasons"])
+    assert not any("aggregate_risk_budget_invalid" in r for r in body["blocking_reasons"])
 
 
 def test_zero_or_negative_budget_is_invalid_not_unlimited(monkeypatch, tmp_path):

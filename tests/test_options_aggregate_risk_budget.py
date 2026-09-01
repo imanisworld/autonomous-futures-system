@@ -10,17 +10,23 @@ stay separate.
 
 from __future__ import annotations
 
+import math
 from dataclasses import replace
 
-from options_manager.config import OptionsManagerConfig, _as_optional_float
+import pytest
+
+from options_manager.config import OptionsManagerConfig, _as_budget_float
 from options_manager.validation.advisory_decision import (
     AdvisoryVerdict,
     check_advisory_decision_intake,
 )
 from options_manager.validation.no_trade_reasons import NoTradeReason
 from options_manager.validation.portfolio_risk_gate import (
+    AGGREGATE_RISK_BUDGET_INVALID_CODE,
     AGGREGATE_RISK_BUDGET_MISSING_CODE,
     PortfolioRiskVerdict,
+    RiskExposure,
+    evaluate_portfolio_risk,
 )
 
 
@@ -99,17 +105,85 @@ def test_config_default_is_none_not_a_number():
     assert OptionsManagerConfig().max_aggregate_open_risk_dollars is None
 
 
-def test_env_parsing_never_invents_a_value(monkeypatch):
-    for raw in (None, "", "   ", "one thousand", "1,000", "$1000"):
-        assert _as_optional_float(raw) is None, raw
-    assert _as_optional_float("1000") == 1000.0
-    assert _as_optional_float("0") == 0.0  # parses; the gate rejects it as invalid
-    assert _as_optional_float("-5") == -5.0
+def test_env_parsing_keeps_unset_and_invalid_apart(monkeypatch):
+    # Genuinely unset or blank: the operator configured nothing.
+    for raw in (None, "", "   "):
+        assert _as_budget_float(raw) is None, raw
+    # Supplied but unparseable: configured, invalid -- carried as nan, never None.
+    for raw in ("one thousand", "garbage", "1,000", "$1000"):
+        parsed = _as_budget_float(raw)
+        assert parsed is not None and math.isnan(parsed), raw
+    # Python's float() accepts these; they parse, and the gate rejects them.
+    for raw in ("NaN", "nan", "inf", "+inf", "-inf", "Infinity"):
+        parsed = _as_budget_float(raw)
+        assert parsed is not None and not math.isfinite(parsed), raw
+    assert _as_budget_float("1000") == 1000.0
+    assert _as_budget_float("0") == 0.0
+    assert _as_budget_float("-5") == -5.0
 
     monkeypatch.delenv("OPTIONS_MANAGER_MAX_AGGREGATE_OPEN_RISK_DOLLARS", raising=False)
     assert OptionsManagerConfig.from_env().max_aggregate_open_risk_dollars is None
     monkeypatch.setenv("OPTIONS_MANAGER_MAX_AGGREGATE_OPEN_RISK_DOLLARS", "750")
     assert OptionsManagerConfig.from_env().max_aggregate_open_risk_dollars == 750.0
+    monkeypatch.setenv("OPTIONS_MANAGER_MAX_AGGREGATE_OPEN_RISK_DOLLARS", "garbage")
+    assert math.isnan(OptionsManagerConfig.from_env().max_aggregate_open_risk_dollars)
+
+
+# ─── the gate itself is safe against non-finite values, parsing aside ─────────
+
+
+def _exposure(risk: float) -> RiskExposure:
+    return RiskExposure(ticker="AAPL", direction="CALL", planned_dollar_risk=risk)
+
+
+@pytest.mark.parametrize("budget", (float("nan"), float("inf"), float("-inf")))
+def test_direct_gate_call_with_non_finite_budget_blocks(budget):
+    result = evaluate_portfolio_risk(
+        open_positions=[_exposure(50.0)],
+        candidate=_exposure(50.0),
+        max_aggregate_open_risk_dollars=budget,
+    )
+    assert result.verdict == PortfolioRiskVerdict.BLOCK
+    assert any(r.startswith(AGGREGATE_RISK_BUDGET_INVALID_CODE) for r in result.blocking_reasons)
+    assert not any(r.startswith(AGGREGATE_RISK_BUDGET_MISSING_CODE) for r in result.blocking_reasons)
+    # inf must not read as "unlimited": nothing about it is treated as a cap.
+    assert not any("exceeds cap" in r for r in result.blocking_reasons)
+
+
+def test_positive_infinity_is_not_an_unlimited_budget():
+    """The specific hole: inf > 0 is True and projected > inf is always False."""
+    result = evaluate_portfolio_risk(
+        open_positions=[_exposure(250.0), _exposure(250.0), _exposure(250.0)],
+        candidate=_exposure(250.0),
+        max_aggregate_open_risk_dollars=float("inf"),
+    )
+    assert result.verdict == PortfolioRiskVerdict.BLOCK
+    assert result.projected_open_risk == 1000.0
+
+
+def test_finite_positive_budget_still_evaluates_normally():
+    under = evaluate_portfolio_risk(
+        open_positions=[_exposure(100.0)], candidate=_exposure(100.0),
+        max_aggregate_open_risk_dollars=250.0,
+    )
+    assert under.verdict == PortfolioRiskVerdict.PASS
+    over = evaluate_portfolio_risk(
+        open_positions=[_exposure(200.0)], candidate=_exposure(100.0),
+        max_aggregate_open_risk_dollars=250.0,
+    )
+    assert over.verdict == PortfolioRiskVerdict.BLOCK
+    assert any("exceeds cap $250.00" in r for r in over.blocking_reasons)
+
+
+@pytest.mark.parametrize("cap", (float("nan"), float("inf")))
+def test_per_trade_cap_gets_the_same_finiteness_guard(cap):
+    """Same class of hole on the other parameter; the $300 value itself is untouched."""
+    result = evaluate_portfolio_risk(
+        open_positions=[], candidate=_exposure(10.0),
+        max_trade_risk_dollars=cap, max_aggregate_open_risk_dollars=1000.0,
+    )
+    assert result.verdict == PortfolioRiskVerdict.BLOCK
+    assert "missing/invalid max_trade_risk_dollars" in result.blocking_reasons
 
 
 def test_config_is_the_only_place_a_budget_can_come_from():

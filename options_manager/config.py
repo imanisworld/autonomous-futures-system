@@ -6,6 +6,7 @@ independent of the futures system's configuration.
 
 from __future__ import annotations
 
+import math
 import os
 from dataclasses import dataclass
 
@@ -39,9 +40,11 @@ class OptionsManagerConfig:
     risk_reject_empty_gex_regime: bool = False
     risk_warn_unknown_gex_regime: bool = True
     # Canonical portfolio-risk budget for the advisory decision path. NO
-    # DEFAULT: the earlier hardcoded $1,000 was never approved policy. Unset
-    # (or unparseable) means every canonical decision blocks on portfolio
-    # risk with an explicit reason and can never be TAKE. Set it only as a
+    # DEFAULT: the earlier hardcoded $1,000 was never approved policy. None
+    # means unset (aggregate_risk_budget_missing); a supplied value that is
+    # unparseable, non-finite, zero or negative is carried through and
+    # rejected at the gate (aggregate_risk_budget_invalid). Either way the
+    # canonical decision blocks and can never be TAKE. Set it only as a
     # deliberate operator decision.
     max_aggregate_open_risk_dollars: float | None = None
 
@@ -171,7 +174,7 @@ class OptionsManagerConfig:
                 os.getenv("OPTIONS_MANAGER_RISK_REJECT_EMPTY_GEX_REGIME"),
                 default=False,
             ),
-            max_aggregate_open_risk_dollars=_as_optional_float(
+            max_aggregate_open_risk_dollars=_as_budget_float(
                 os.getenv("OPTIONS_MANAGER_MAX_AGGREGATE_OPEN_RISK_DOLLARS")
             ),
             risk_warn_unknown_gex_regime=_as_bool(
@@ -373,15 +376,22 @@ def _as_float(value: str | None, default: float) -> float:
         return default
 
 
-def _as_optional_float(value: str | None) -> float | None:
-    """A float the operator set, or None. Unset and garbage both read as None
-    so the caller fails closed instead of running on a guessed number."""
+def _as_budget_float(value: str | None) -> float | None:
+    """Parse an operator-supplied risk budget without losing its state.
+
+    ``None`` means genuinely unset or blank -- the operator configured nothing.
+    A value that was supplied but does not parse comes back as ``nan``: it is
+    a *configured, invalid* budget, and the risk gate rejects every non-finite
+    value under its own reason code. Collapsing it to ``None`` would tell the
+    operator to set a variable they already set. Nothing here ever returns a
+    number the operator did not type.
+    """
     if value is None or value.strip() == "":
         return None
     try:
         return float(value)
     except ValueError:
-        return None
+        return math.nan
 
 
 def _as_bool(value: str | None, default: bool = False) -> bool:

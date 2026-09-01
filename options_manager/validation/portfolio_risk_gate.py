@@ -17,6 +17,7 @@ decision made by accident.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Literal, Mapping, Sequence
@@ -41,9 +42,21 @@ AGGREGATE_RISK_BUDGET_UNCONFIGURED = (
 
 def _invalid_budget_reason(value: float) -> str:
     return (
-        f"{AGGREGATE_RISK_BUDGET_INVALID_CODE}: max_aggregate_open_risk_dollars must be "
-        f"> 0 (got {value!r}); no default is substituted"
+        f"{AGGREGATE_RISK_BUDGET_INVALID_CODE}: max_aggregate_open_risk_dollars must be a "
+        f"finite number > 0 (got {value!r}; an unparseable configured value also arrives "
+        "here as nan); no default is substituted"
     )
+
+
+def _usable_budget(value: float | None) -> bool:
+    """True only for a finite, strictly positive budget.
+
+    Checked here, at the gate, not only at config parsing: ``nan`` slips past
+    ``<= 0`` and ``inf`` passes ``> 0`` while making every ``projected > cap``
+    comparison false -- an unlimited budget wearing a configured value's
+    clothes. Neither may reach the comparison below.
+    """
+    return value is not None and math.isfinite(value) and value > 0
 
 
 class PortfolioRiskVerdict(str, Enum):
@@ -88,11 +101,14 @@ def evaluate_portfolio_risk(
     """
     blocking: list[str] = []
 
-    if max_trade_risk_dollars <= 0:
+    # Same finiteness guard on the per-trade cap: a nan or inf there would
+    # silently disable the per-trade comparison in exactly the same way. The
+    # cap's value is not changed here.
+    if not _usable_budget(max_trade_risk_dollars):
         blocking.append("missing/invalid max_trade_risk_dollars")
     if max_aggregate_open_risk_dollars is None:
         blocking.append(AGGREGATE_RISK_BUDGET_UNCONFIGURED)
-    elif max_aggregate_open_risk_dollars <= 0:
+    elif not _usable_budget(max_aggregate_open_risk_dollars):
         blocking.append(_invalid_budget_reason(max_aggregate_open_risk_dollars))
 
     exposures = tuple(open_positions)
@@ -112,15 +128,14 @@ def evaluate_portfolio_risk(
     projected_open_risk = aggregate_open_risk + candidate.planned_dollar_risk
     projected_capital = aggregate_capital + candidate.capital_deployed
 
-    if candidate.planned_dollar_risk > max_trade_risk_dollars:
+    if _usable_budget(max_trade_risk_dollars) and candidate.planned_dollar_risk > max_trade_risk_dollars:
         blocking.append(
             f"candidate planned risk ${candidate.planned_dollar_risk:.2f} exceeds "
             f"per-trade cap ${max_trade_risk_dollars:.2f}"
         )
 
     if (
-        max_aggregate_open_risk_dollars is not None
-        and max_aggregate_open_risk_dollars > 0
+        _usable_budget(max_aggregate_open_risk_dollars)
         and projected_open_risk > max_aggregate_open_risk_dollars
     ):
         blocking.append(
