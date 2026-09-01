@@ -26,8 +26,8 @@ All items below are **unmerged** unless a later handoff update explicitly says o
 | #400 | Exact five forward-campaign populations, conflicting-duplicate integrity, collector-census ownership correction | targeted tests + full CI passed |
 | #401 | `project_check daily` overall blockers / false-green correction | targeted tests + full CI passed |
 | #406 | Durable final no-trade suppression evidence + Discord reason visibility + existing why-no-trade diagnostic update | targeted tests + full CI passed |
-| #407 | Current `TRADE_INTENT -> CANCELLED` trade-chain semantics; exact identity preferred when available | targeted trade-chain tests passed; latest exact-client-id head requires normal PR CI/review before merge |
-| #408 | Persist the existing deterministic `AFS-...` client order id across intent/trade/outcome/order-id evidence | targeted webhook/order-id tests passed; normal PR CI/review required |
+| #407 | Current `TRADE_INTENT -> CANCELLED` trade-chain semantics; exact identity preferred when available | targeted tests + full CI passed on latest exact-client-id head |
+| #408 | Persist the existing deterministic `AFS-...` client order id across intent/trade/outcome/order-id evidence | targeted tests + full CI passed |
 
 Older PRs #371/#374/#377/#383/#390 are not substitutes for these fixes. In particular, #374's Tradovate account pin remains conditional on box evidence showing multiple/ambiguous demo-account routing.
 
