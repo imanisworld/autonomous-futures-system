@@ -115,9 +115,14 @@ from webhook.payload import AlertPayload
 from webhook.state_builder import build_market_state
 from context.wall_context import build_wall_context as _build_wall_context
 from context.range_signal import (
+    RangeBreakArmState as _RangeBreakArmState,
     build_range_state as _build_range_state,
     build_range_signal as _build_range_signal,
 )
+
+# One-shot gate so a single structural break does not re-emit a BREAK_CLOSE
+# candidate every 15m bar (context/range_signal.RangeBreakArmState).
+_RANGE_BREAK_ARM = _RangeBreakArmState()
 
 logger = logging.getLogger(__name__)
 
@@ -815,7 +820,9 @@ def process_alert(
                 _wall_ctx, state.market_condition or "", orb_status=_orb_status
             )
             _range_state_dict = _range_state.to_dict()
-            _range_signal = _build_range_signal(_range_state, _wall_ctx)
+            _range_signal = _RANGE_BREAK_ARM.apply(
+                state.instrument, _build_range_signal(_range_state, _wall_ctx)
+            )
             _range_signal_dict = _range_signal.to_dict()
         except Exception:  # noqa: BLE001 — fail-soft, never break ingestion
             logger.debug("wall_context/range_signal build failed", exc_info=True)
