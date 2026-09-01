@@ -240,6 +240,102 @@ def _pair_fifo_by_instrument(
     return paired, unmatched
 
 
+def _signal_identity_key(entry: dict[str, Any]) -> tuple[str, str, str] | None:
+    """Return the current runner's exact signal identity fields when present.
+
+    TRADE_INTENT/TRADE rows carry instrument + setup.strategy + decision-bar ts.
+    Current no-fill OUTCOME rows carry the same instrument plus outcome.strategy
+    and outcome.signal_timestamp. This is stronger than same-instrument FIFO and
+    is available on current-format rows without changing the journal schema.
+    """
+    instrument = str(entry.get("instrument") or "").strip()
+    if entry.get("type") == "OUTCOME":
+        outcome = entry.get("outcome") or {}
+        strategy = str(outcome.get("strategy") or "").strip()
+        signal_ts = outcome.get("signal_timestamp")
+    else:
+        setup = entry.get("setup") or {}
+        strategy = str(setup.get("strategy") or "").strip()
+        signal_ts = entry.get("ts")
+    parsed = parse_proof_ts(signal_ts)
+    if not instrument or not strategy or parsed is None:
+        return None
+    return instrument, strategy, parsed.isoformat()
+
+
+def _pair_cancelled_outcomes_to_intents(
+    intents: list[dict[str, Any]],
+    confirmed_trades: list[dict[str, Any]],
+    cancelled_outcomes: list[dict[str, Any]],
+    all_in_order: list[dict[str, Any]],
+) -> tuple[dict[int, dict[str, Any]], list[dict[str, Any]]]:
+    """Join current-format no-fill OUTCOMEs to TRADE_INTENT rows.
+
+    Exact signal identity is authoritative when available. Historical rows that
+    predate strategy/signal_timestamp diagnostics fall back to a latest-pending
+    same-instrument intent queue. Confirmed TRADE rows consume their own intent
+    first so a later cancellation can never be FIFO-guessed onto an older fill.
+    """
+    intent_ids = {id(row) for row in intents}
+    confirmed_ids = {id(row) for row in confirmed_trades}
+    cancelled_ids = {id(row) for row in cancelled_outcomes}
+
+    by_key: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)
+    for intent in intents:
+        key = _signal_identity_key(intent)
+        if key is not None:
+            by_key[key].append(intent)
+
+    paired: dict[int, dict[str, Any]] = {}
+    consumed_intents: set[int] = set()
+    consumed_outcomes: set[int] = set()
+
+    # A confirmed TRADE is the same current-format attempt as its prior intent,
+    # not a second attempt. Mark the matching intent consumed before pairing
+    # no-fill outcomes.
+    for trade in confirmed_trades:
+        key = _signal_identity_key(trade)
+        candidates = [row for row in by_key.get(key, []) if id(row) not in consumed_intents] if key else []
+        if len(candidates) == 1:
+            consumed_intents.add(id(candidates[0]))
+
+    # Current-format cancellation: exact signal identity first. If an identity
+    # key is duplicated/ambiguous, fail closed by leaving the OUTCOME unmatched.
+    for outcome in cancelled_outcomes:
+        key = _signal_identity_key(outcome)
+        candidates = [row for row in by_key.get(key, []) if id(row) not in consumed_intents] if key else []
+        if len(candidates) == 1:
+            intent = candidates[0]
+            consumed_intents.add(id(intent))
+            consumed_outcomes.add(id(outcome))
+            paired[id(intent)] = outcome
+
+    # Legacy fallback only: rows lacking exact signal identity. Use the most
+    # recent still-pending intent for that instrument. This mirrors the actual
+    # serialized runner flow better than oldest-first FIFO while keeping all
+    # identity-bearing rows out of guesswork entirely.
+    pending: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for entry in all_in_order:
+        instrument = str(entry.get("instrument") or "")
+        if id(entry) in intent_ids:
+            if id(entry) not in consumed_intents and _signal_identity_key(entry) is None:
+                pending[instrument].append(entry)
+        elif id(entry) in confirmed_ids:
+            if _signal_identity_key(entry) is None and pending[instrument]:
+                consumed_intents.add(id(pending[instrument].pop()))
+        elif id(entry) in cancelled_ids:
+            if id(entry) in consumed_outcomes or _signal_identity_key(entry) is not None:
+                continue
+            if pending[instrument]:
+                intent = pending[instrument].pop()
+                consumed_intents.add(id(intent))
+                consumed_outcomes.add(id(entry))
+                paired[id(intent)] = entry
+
+    unmatched = [row for row in cancelled_outcomes if id(row) not in consumed_outcomes]
+    return paired, unmatched
+
+
 def build_trade_chain_report(
     *,
     journal_dir: Path,
@@ -288,14 +384,33 @@ def build_trade_chain_report(
         e for e in entries_no_errors
         if e.get("decision") == "TRADE" and (e.get("risk_check") or {}).get("result") == "APPROVED"
     ]
+    intents_all = [
+        e for e in entries_no_errors
+        if e.get("decision") == "TRADE_INTENT" and (e.get("risk_check") or {}).get("result") == "APPROVED"
+    ]
     outcomes_all = [e for e in entries_no_errors if e.get("type") == "OUTCOME"]
+    cancelled_outcomes_all = [
+        e for e in outcomes_all
+        if classify_outcome(e.get("outcome") or {}) == "cancelled_nofill"
+    ]
     order_id_events_all = [e for e in entries_no_errors if e.get("type") == "ORDER_IDS"]
     risk_rejected = [e for e in entries_no_errors if e.get("decision") == "RISK_REJECTED" and is_new(e)]
     config_blocked = [e for e in entries_no_errors if e.get("decision") == "CONFIG_BLOCKED" and is_new(e)]
 
-    outcome_by_attempt, unmatched_outcomes_all = _pair_fifo_by_instrument(
-        attempts_all, outcomes_all, entries_no_errors
+    cancelled_by_intent, unmatched_intent_cancellations = _pair_cancelled_outcomes_to_intents(
+        intents_all, attempts_all, cancelled_outcomes_all, entries_no_errors
     )
+    intent_cancel_outcome_ids = {id(row) for row in cancelled_by_intent.values()}
+    outcomes_for_confirmed = [row for row in outcomes_all if id(row) not in intent_cancel_outcome_ids]
+    outcome_by_attempt, unmatched_confirmed_outcomes = _pair_fifo_by_instrument(
+        attempts_all, outcomes_for_confirmed, entries_no_errors
+    )
+    confirmed_outcome_ids = {id(row) for row in outcome_by_attempt.values()}
+    unmatched_intent_cancellations = [
+        row for row in unmatched_intent_cancellations
+        if id(row) not in confirmed_outcome_ids
+    ]
+    unmatched_outcomes_all = unmatched_confirmed_outcomes + unmatched_intent_cancellations
     orderids_by_attempt, unmatched_order_ids_all = _pair_fifo_by_instrument(
         attempts_all, order_id_events_all, entries_no_errors
     )
@@ -305,7 +420,9 @@ def build_trade_chain_report(
     unmatched_outcomes = [e for e in unmatched_outcomes_all if is_new(e)]
     unmatched_order_ids = [e for e in unmatched_order_ids_all if is_new(e)]
 
-    attempts = [a for a in attempts_all if is_new(a)]
+    confirmed_attempts = [a for a in attempts_all if is_new(a)]
+    cancellation_intents = [a for a in intents_all if id(a) in cancelled_by_intent and is_new(a)]
+    attempts = confirmed_attempts + cancellation_intents
 
     resolved_fills: list[dict[str, Any]] = []
     resolved_cancellations: list[dict[str, Any]] = []
@@ -339,7 +456,7 @@ def build_trade_chain_report(
         return {**row, "_bucket": "resolved", "_category": category, "_setup": setup}
 
     for attempt in attempts:
-        outcome = outcome_by_attempt.get(id(attempt))
+        outcome = cancelled_by_intent.get(id(attempt)) or outcome_by_attempt.get(id(attempt))
         classified = _classify_row(attempt, outcome)
         if classified["_bucket"] == "unresolved":
             # No OUTCOME row means this attempt has NOT been proven to fill --
@@ -373,14 +490,14 @@ def build_trade_chain_report(
         else:
             needs_broker_verification.append(row)
 
-    for attempt in attempts_all:
+    for attempt in attempts_all + intents_all:
         if is_new(attempt):
-            continue  # already handled above as a "new" attempt
-        outcome = outcome_by_attempt.get(id(attempt))
+            continue  # already handled above as a "new" attempt when applicable
+        outcome = cancelled_by_intent.get(id(attempt)) or outcome_by_attempt.get(id(attempt))
         if outcome is None or not is_new(outcome):
-            continue  # still unresolved, or was already resolved before the checkpoint
+            continue  # still unresolved/suppressed, or was already resolved before checkpoint
         classified = _classify_row(attempt, outcome)
-        setup = classified.pop("_setup")
+        classified.pop("_setup")
         category = classified.pop("_category")
         classified.pop("_bucket")
         classified["fills_this_run"] = category in ("filled_win_loss", "breakeven")
@@ -495,6 +612,8 @@ def build_trade_chain_report(
         "status": status,
         "summary": {
             "attempts": len(attempts),
+            "confirmed_trade_attempts": len(confirmed_attempts),
+            "no_fill_intent_attempts": len(cancellation_intents),
             "fills": fills_count,
             "resolved_fills": len(resolved_fills),
             "unverified_open_attempts": unverified_open_count,
@@ -512,7 +631,8 @@ def build_trade_chain_report(
         },
         "accounting": {
             "attempts_identity": (
-                "attempts = fills + cancellations + needs_broker_verification + "
+                "attempts (confirmed TRADEs + matched no-fill TRADE_INTENTs) = "
+                "fills + cancellations + needs_broker_verification + "
                 "unverified_open_attempts + orphans"
             ),
             "attempts_identity_holds": attempts_identity_holds,

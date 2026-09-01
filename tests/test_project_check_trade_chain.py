@@ -25,13 +25,28 @@ def _trade(ts: str, *, instrument: str = "MNQ", strategy: str = "orb_breakout", 
     }
 
 
-def _outcome(ts: str, *, instrument: str = "MNQ", result: str = "WIN", exit_reason: str = "target hit", pnl=25.0) -> dict:
-    return {
-        "ts": ts,
-        "instrument": instrument,
-        "type": "OUTCOME",
-        "outcome": {"result": result, "exit_reason": exit_reason, "pnl_dollars": pnl},
-    }
+def _intent(ts: str, *, instrument: str = "MNQ", strategy: str = "orb_breakout") -> dict:
+    row = _trade(ts, instrument=instrument, strategy=strategy)
+    row["decision"] = "TRADE_INTENT"
+    return row
+
+
+def _outcome(
+    ts: str,
+    *,
+    instrument: str = "MNQ",
+    result: str = "WIN",
+    exit_reason: str = "target hit",
+    pnl=25.0,
+    strategy: str | None = None,
+    signal_timestamp: str | None = None,
+) -> dict:
+    outcome = {"result": result, "exit_reason": exit_reason, "pnl_dollars": pnl}
+    if strategy is not None:
+        outcome["strategy"] = strategy
+    if signal_timestamp is not None:
+        outcome["signal_timestamp"] = signal_timestamp
+    return {"ts": ts, "instrument": instrument, "type": "OUTCOME", "outcome": outcome}
 
 
 def _order_ids(ts: str, *, instrument: str = "MNQ", order_id: str = "12345678") -> dict:
@@ -47,14 +62,22 @@ def test_clean_day_fill_and_cancel_passes(tmp_path: Path) -> None:
         [
             _trade("2026-07-01T14:00:00Z"),
             _outcome("2026-07-01T14:30:00Z", result="WIN", pnl=25.0),
-            _trade("2026-07-01T15:00:00Z"),
-            _outcome("2026-07-01T15:10:00Z", result="CANCELLED", exit_reason="IOC limit expired"),
+            _intent("2026-07-01T15:00:00Z"),
+            _outcome(
+                "2026-07-01T15:10:00Z",
+                result="CANCELLED",
+                exit_reason="IOC limit expired",
+                strategy="orb_breakout",
+                signal_timestamp="2026-07-01T15:00:00Z",
+            ),
         ],
     )
     report = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=False)
     assert report["status"] == "PASS"
     s = report["summary"]
     assert s["attempts"] == 2
+    assert s["confirmed_trade_attempts"] == 1
+    assert s["no_fill_intent_attempts"] == 1
     assert s["fills"] == 1
     assert s["cancellations"] == 1
     assert s["orphans"] == 0
@@ -497,3 +520,76 @@ def test_journal_integrity_detects_same_count_field_level_mutation(tmp_path: Pat
     run2 = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=True)
     assert run2["journal_integrity"]["status"] == "MUTATED"
     assert run2["status"] == "FAIL"
+
+
+def test_current_format_cancel_does_not_pair_to_older_confirmed_trade(tmp_path: Path) -> None:
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    _write_jsonl(
+        journal_dir / "journal_2026-07-01.jsonl",
+        [
+            _trade("2026-07-01T14:00:00Z"),
+            _outcome("2026-07-01T14:30:00Z", result="WIN"),
+            # A suppressed intent may exist with no terminal OUTCOME. It must
+            # not steal the later broker-attempt cancellation.
+            _intent("2026-07-01T14:45:00Z"),
+            _intent("2026-07-01T15:00:00Z"),
+            _outcome(
+                "2026-07-01T15:00:05Z",
+                result="CANCELLED",
+                exit_reason="execution_failed:CANCELLED",
+                strategy="orb_breakout",
+                signal_timestamp="2026-07-01T15:00:00Z",
+            ),
+        ],
+    )
+    report = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=False)
+    assert report["status"] == "PASS"
+    assert report["summary"]["fills"] == 1
+    assert report["summary"]["cancellations"] == 1
+    assert report["summary"]["unmatched_outcomes"] == 0
+    assert report["summary"]["orphans"] == 0
+
+
+def test_legacy_trade_cancel_still_reconciles(tmp_path: Path) -> None:
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    _write_jsonl(
+        journal_dir / "journal_2026-07-01.jsonl",
+        [
+            _trade("2026-07-01T14:00:00Z"),
+            _outcome("2026-07-01T14:05:00Z", result="CANCELLED", exit_reason="IOC limit expired"),
+        ],
+    )
+    report = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=False)
+    assert report["status"] == "PASS"
+    assert report["summary"]["attempts"] == 1
+    assert report["summary"]["cancellations"] == 1
+    assert report["summary"]["unmatched_outcomes"] == 0
+
+
+def test_cancelled_intent_before_checkpoint_resolves_as_carryover(tmp_path: Path) -> None:
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    _write_jsonl(
+        journal_dir / "journal_2026-07-01.jsonl",
+        [
+            _intent("2026-07-01T10:00:00Z"),
+            _outcome(
+                "2026-07-01T13:00:00Z",
+                result="CANCELLED",
+                strategy="orb_breakout",
+                signal_timestamp="2026-07-01T10:00:00Z",
+            ),
+        ],
+    )
+    report = build_trade_chain_report(
+        journal_dir=journal_dir,
+        repo_root=tmp_path,
+        since_ts="2026-07-01T12:00:00Z",
+        use_checkpoint=False,
+    )
+    assert report["status"] == "PASS"
+    assert report["summary"]["attempts"] == 0
+    assert report["summary"]["carryover_resolutions"] == 1
+    assert report["detail"]["carryover_resolutions"][0]["category"] == "cancelled_nofill"
