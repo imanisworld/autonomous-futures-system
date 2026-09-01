@@ -240,6 +240,68 @@ def _pair_fifo_by_instrument(
     return paired, unmatched
 
 
+def _client_order_id(entry: dict[str, Any]) -> str | None:
+    """Return the persisted broker client identity when a row has one."""
+    if entry.get("type") == "OUTCOME":
+        raw = (entry.get("outcome") or {}).get("client_order_id")
+    else:
+        raw = entry.get("client_order_id")
+    value = str(raw or "").strip()
+    return value or None
+
+
+def _pair_by_client_id_then_legacy_fifo(
+    anchors: list[dict[str, Any]],
+    events: list[dict[str, Any]],
+    all_in_order: list[dict[str, Any]],
+) -> tuple[dict[int, dict[str, Any]], list[dict[str, Any]]]:
+    """Pair exact persisted client ids first; FIFO only when BOTH rows are legacy.
+
+    A row that carries a client id is never guessed onto an identity-less row.
+    Duplicate/ambiguous ids fail closed by remaining unmatched/unresolved.
+    """
+    anchors_by_client: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    events_by_client: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in anchors:
+        cid = _client_order_id(row)
+        if cid:
+            anchors_by_client[cid].append(row)
+    for row in events:
+        cid = _client_order_id(row)
+        if cid:
+            events_by_client[cid].append(row)
+
+    paired: dict[int, dict[str, Any]] = {}
+    consumed_events: set[int] = set()
+    for cid, anchor_rows in anchors_by_client.items():
+        event_rows = events_by_client.get(cid, [])
+        if len(anchor_rows) == 1 and len(event_rows) == 1:
+            paired[id(anchor_rows[0])] = event_rows[0]
+            consumed_events.add(id(event_rows[0]))
+
+    # Historical fallback is deliberately narrower than the old behavior:
+    # only rows with no persisted client identity on either side may FIFO-pair.
+    legacy_anchors = [
+        row for row in anchors
+        if _client_order_id(row) is None and id(row) not in paired
+    ]
+    legacy_events = [
+        row for row in events
+        if _client_order_id(row) is None and id(row) not in consumed_events
+    ]
+    legacy_pairs, legacy_unmatched = _pair_fifo_by_instrument(
+        legacy_anchors, legacy_events, all_in_order
+    )
+    paired.update(legacy_pairs)
+    consumed_events.update(id(row) for row in legacy_pairs.values())
+
+    unmatched = [row for row in events if id(row) not in consumed_events]
+    # Preserve the legacy helper's ordering semantics for identity-less rows;
+    # the comprehension above already includes those same unmatched rows once.
+    assert {id(row) for row in legacy_unmatched} <= {id(row) for row in unmatched}
+    return paired, unmatched
+
+
 def _signal_identity_key(entry: dict[str, Any]) -> tuple[str, str, str] | None:
     """Return the current runner's exact signal identity fields when present.
 
@@ -280,8 +342,12 @@ def _pair_cancelled_outcomes_to_intents(
     confirmed_ids = {id(row) for row in confirmed_trades}
     cancelled_ids = {id(row) for row in cancelled_outcomes}
 
+    by_client: dict[str, list[dict[str, Any]]] = defaultdict(list)
     by_key: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)
     for intent in intents:
+        client_id = _client_order_id(intent)
+        if client_id is not None:
+            by_client[client_id].append(intent)
         key = _signal_identity_key(intent)
         if key is not None:
             by_key[key].append(intent)
@@ -294,16 +360,37 @@ def _pair_cancelled_outcomes_to_intents(
     # not a second attempt. Mark the matching intent consumed before pairing
     # no-fill outcomes.
     for trade in confirmed_trades:
-        key = _signal_identity_key(trade)
-        candidates = [row for row in by_key.get(key, []) if id(row) not in consumed_intents] if key else []
+        client_id = _client_order_id(trade)
+        if client_id is not None:
+            candidates = [
+                row for row in by_client.get(client_id, [])
+                if id(row) not in consumed_intents
+            ]
+        else:
+            key = _signal_identity_key(trade)
+            candidates = [
+                row for row in by_key.get(key, [])
+                if id(row) not in consumed_intents and _client_order_id(row) is None
+            ] if key else []
         if len(candidates) == 1:
             consumed_intents.add(id(candidates[0]))
 
-    # Current-format cancellation: exact signal identity first. If an identity
-    # key is duplicated/ambiguous, fail closed by leaving the OUTCOME unmatched.
+    # Current-format cancellation: persisted broker identity wins. Signal
+    # identity remains the exact fallback for pre-client-id current rows. An
+    # identity-bearing row is never allowed into legacy/FIFO guesswork.
     for outcome in cancelled_outcomes:
-        key = _signal_identity_key(outcome)
-        candidates = [row for row in by_key.get(key, []) if id(row) not in consumed_intents] if key else []
+        client_id = _client_order_id(outcome)
+        if client_id is not None:
+            candidates = [
+                row for row in by_client.get(client_id, [])
+                if id(row) not in consumed_intents
+            ]
+        else:
+            key = _signal_identity_key(outcome)
+            candidates = [
+                row for row in by_key.get(key, [])
+                if id(row) not in consumed_intents and _client_order_id(row) is None
+            ] if key else []
         if len(candidates) == 1:
             intent = candidates[0]
             consumed_intents.add(id(intent))
@@ -318,13 +405,25 @@ def _pair_cancelled_outcomes_to_intents(
     for entry in all_in_order:
         instrument = str(entry.get("instrument") or "")
         if id(entry) in intent_ids:
-            if id(entry) not in consumed_intents and _signal_identity_key(entry) is None:
+            if (
+                id(entry) not in consumed_intents
+                and _client_order_id(entry) is None
+                and _signal_identity_key(entry) is None
+            ):
                 pending[instrument].append(entry)
         elif id(entry) in confirmed_ids:
-            if _signal_identity_key(entry) is None and pending[instrument]:
+            if (
+                _client_order_id(entry) is None
+                and _signal_identity_key(entry) is None
+                and pending[instrument]
+            ):
                 consumed_intents.add(id(pending[instrument].pop()))
         elif id(entry) in cancelled_ids:
-            if id(entry) in consumed_outcomes or _signal_identity_key(entry) is not None:
+            if (
+                id(entry) in consumed_outcomes
+                or _client_order_id(entry) is not None
+                or _signal_identity_key(entry) is not None
+            ):
                 continue
             if pending[instrument]:
                 intent = pending[instrument].pop()
@@ -402,7 +501,7 @@ def build_trade_chain_report(
     )
     intent_cancel_outcome_ids = {id(row) for row in cancelled_by_intent.values()}
     outcomes_for_confirmed = [row for row in outcomes_all if id(row) not in intent_cancel_outcome_ids]
-    outcome_by_attempt, unmatched_confirmed_outcomes = _pair_fifo_by_instrument(
+    outcome_by_attempt, unmatched_confirmed_outcomes = _pair_by_client_id_then_legacy_fifo(
         attempts_all, outcomes_for_confirmed, entries_no_errors
     )
     confirmed_outcome_ids = {id(row) for row in outcome_by_attempt.values()}
@@ -411,7 +510,7 @@ def build_trade_chain_report(
         if id(row) not in confirmed_outcome_ids
     ]
     unmatched_outcomes_all = unmatched_confirmed_outcomes + unmatched_intent_cancellations
-    orderids_by_attempt, unmatched_order_ids_all = _pair_fifo_by_instrument(
+    orderids_by_attempt, unmatched_order_ids_all = _pair_by_client_id_then_legacy_fifo(
         attempts_all, order_id_events_all, entries_no_errors
     )
     # Only report NEW unmatched events: one at/before the checkpoint was

@@ -593,3 +593,71 @@ def test_cancelled_intent_before_checkpoint_resolves_as_carryover(tmp_path: Path
     assert report["summary"]["attempts"] == 0
     assert report["summary"]["carryover_resolutions"] == 1
     assert report["detail"]["carryover_resolutions"][0]["category"] == "cancelled_nofill"
+
+
+def test_client_order_id_prevents_confirmed_outcome_fifo_misattribution(tmp_path: Path) -> None:
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    first = _trade("2026-07-01T14:00:00Z")
+    first["client_order_id"] = "AFS-A"
+    second = _trade("2026-07-01T15:00:00Z")
+    second["client_order_id"] = "AFS-B"
+    outcome_b = _outcome("2026-07-01T15:30:00Z", result="WIN")
+    outcome_b["outcome"]["client_order_id"] = "AFS-B"
+    _write_jsonl(journal_dir / "journal_2026-07-01.jsonl", [first, second, outcome_b])
+
+    report = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=False)
+    assert report["status"] == "PASS"
+    assert report["summary"]["fills"] == 1
+    assert report["summary"]["unverified_open_attempts"] == 1
+    assert report["detail"]["resolved_fills"][0]["trade_ts"] == "2026-07-01T15:00:00Z"
+
+
+def test_identity_bearing_outcome_never_falls_back_to_legacy_trade(tmp_path: Path) -> None:
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    legacy_trade = _trade("2026-07-01T14:00:00Z")
+    identified_outcome = _outcome("2026-07-01T14:30:00Z", result="WIN")
+    identified_outcome["outcome"]["client_order_id"] = "AFS-new-format"
+    _write_jsonl(journal_dir / "journal_2026-07-01.jsonl", [legacy_trade, identified_outcome])
+
+    report = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=False)
+    assert report["status"] == "FAIL"
+    assert report["summary"]["unmatched_outcomes"] == 1
+    assert report["summary"]["fills"] == 0
+
+
+def test_client_order_id_disambiguates_current_no_fill_intents(tmp_path: Path) -> None:
+    journal_dir = tmp_path / "logs"
+    journal_dir.mkdir()
+    a = _intent("2026-07-01T15:00:00Z")
+    a["client_order_id"] = "AFS-A"
+    b = _intent("2026-07-01T15:00:00Z")
+    b["client_order_id"] = "AFS-B"
+    cancelled = _outcome(
+        "2026-07-01T15:00:05Z", result="CANCELLED",
+        exit_reason="IOC limit expired", strategy="orb_breakout",
+        signal_timestamp="2026-07-01T15:00:00Z",
+    )
+    cancelled["outcome"]["client_order_id"] = "AFS-B"
+    _write_jsonl(journal_dir / "journal_2026-07-01.jsonl", [a, b, cancelled])
+
+    report = build_trade_chain_report(journal_dir=journal_dir, repo_root=tmp_path, use_checkpoint=False)
+    assert report["status"] == "PASS"
+    assert report["summary"]["cancellations"] == 1
+    assert report["summary"]["unmatched_outcomes"] == 0
+
+
+def test_order_ids_pair_by_client_id_before_legacy_fifo() -> None:
+    from ops.project_check.trade_chain import _pair_by_client_id_then_legacy_fifo
+
+    a = _trade("2026-07-01T14:00:00Z")
+    a["client_order_id"] = "AFS-A"
+    b = _trade("2026-07-01T15:00:00Z")
+    b["client_order_id"] = "AFS-B"
+    order_b = _order_ids("2026-07-01T15:00:05Z", order_id="B-entry")
+    order_b["client_order_id"] = "AFS-B"
+    paired, unmatched = _pair_by_client_id_then_legacy_fifo([a, b], [order_b], [a, b, order_b])
+    assert id(a) not in paired
+    assert paired[id(b)] is order_b
+    assert unmatched == []
