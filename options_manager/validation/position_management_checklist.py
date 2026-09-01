@@ -1,72 +1,8 @@
-"""options_manager/validation/position_management_checklist.py
+"""Advisory checklist for managing an already-open options position.
 
-Options position management checklist -- Increment 25P. Everything
-upstream of this module answers a pre-entry question: is the setup
-proven (`proof_packet_intake.py`, 25J)? Is the contract tradable
-(`contract_quality_gate.py`, 25L)? Should the trade be taken right now
-(`advisory_decision.py`, 25O)? Nothing in this package addresses the
-question that starts the moment a position is actually open: given what
-the position is doing right now, what should a human check before
-deciding to hold, trim, or exit? `management_cases.py` (Increment 23) is
-the closest existing module, but it is strictly retrospective -- a
-human's own labeled read of a decision already made, after the trade is
-closed. This module is prospective: it runs a fixed checklist against
-the *current* state of an *open* position and produces one advisory
-`PositionAction` recommendation, before any decision has been made.
-
-`evaluate_position_management_checklist()` takes an already-typed
-`PositionManagementInput` and returns a `PositionManagementChecklistResult`:
-one `ChecklistItemResult` per checklist item (thesis status, invalidation
-level, position sizing vs. plan, target proximity, earnings/event risk,
-DTE decay, premium decay) plus one overall `PositionAction` of
-`CONTINUE_HOLD`, `CONSIDER_TRIM`, `CONSIDER_EXIT`, or `EXIT_REQUIRED`.
-`check_position_management_checklist_intake()` is the manual-payload
-entry point -- a loose dict, typed in by hand -- that normalizes into a
-`PositionManagementInput` and runs the same evaluation. Never raises
-regardless of how malformed the payload is, the same non-throwing
-pattern established by every `check_*_intake()` function in this
-package.
-
-Decision order (first match wins -- more severe conditions are checked
-first so a single EXIT-worthy fact is never masked by a later, milder
-one):
-
-1. `thesis_status` is `"broken"` -> EXIT_REQUIRED
-2. the underlying has crossed the stated invalidation level (direction-
-   aware: at/below for a CALL, at/above for a PUT) -> EXIT_REQUIRED
-3. `position_sizing` is `"oversized"`, or `current_dollar_risk` exceeds
-   `max_dollar_risk` -> CONSIDER_TRIM
-4. the underlying has reached `target_2` (when supplied) -> CONSIDER_EXIT
-5. the underlying has reached `target_1` -> CONSIDER_TRIM
-6. `earnings_before_expiration` is true and `iv_event_risk` is `"high"`
-   -> CONSIDER_TRIM
-7. `dte` is at or below `DEFAULT_DTE_WARNING_THRESHOLD` -> CONSIDER_TRIM
-8. `current_premium` has decayed by `DEFAULT_PREMIUM_DECAY_WARNING_PERCENT`
-   or more from `entry_premium` -> CONSIDER_TRIM
-9. otherwise -> CONTINUE_HOLD
-
-A malformed payload, a missing required field, or an uncoercible field
-value in `check_position_management_checklist_intake()` returns
-`EXIT_REQUIRED` naming the problem, with `position=None` -- the same
-fail-closed convention `check_contract_quality_intake()` established for
-a malformed contract payload (the most severe verdict already defined,
-reused rather than inventing a separate "unknown" state).
-
-This module changes nothing about entries, orders, or broker state -- it
-has no order or action field of any kind, and every `PositionAction` is
-still just an advisory recommendation for a human to act on manually. It
-never fetches a quote, a candle, an option chain, or a broker order, and
-never reads the system clock. It never places an order, changes a
-scanner setting, or promotes anything to
-`FixtureStatus.CLEAN_COMPLETE_FIXTURE`, and there is no live/paper
-execution pathway anywhere in this module. Performs no I/O of any kind:
-no candle fetch, no option-chain fetch, no market-data fetch, no broker
-call, no order placement, no execution, no alert sending, no file
-access at runtime, no network calls, no MCP calls, no system-clock
-reads. Does not import replay/replay_engine.py, the live
-context.market_context loader, alert_ranker, options_companion,
-execution, webhook, broker systems, options_manager.scanner, or
-risk/risk_engine.py.
+The checklist is pure and non-executable. It reports whether the thesis,
+invalidation, sizing, targets, event risk, DTE, or premium decay require a
+human reassessment. It never submits, changes, or prepares an order.
 """
 
 from __future__ import annotations
@@ -79,7 +15,7 @@ from typing import Any, Literal, Mapping, Optional
 from .management_cases import PositionSizing, ThesisStatus
 
 DEFAULT_DTE_WARNING_THRESHOLD = 5
-DEFAULT_PREMIUM_DECAY_WARNING_PERCENT = 50.0
+DEFAULT_PREMIUM_DECAY_WARNING_PERCENT = 25.0
 
 _RiskSeverity = Literal["none", "low", "moderate", "high"]
 _SEVERITY_VALUES = ("none", "low", "moderate", "high")
@@ -88,9 +24,6 @@ _POSITION_SIZING_VALUES = ("defined_risk", "oversized", "undefined_risk")
 
 
 class PositionAction(str, Enum):
-    """One coordinated advisory recommendation -- always advisory, never
-    an order, and never itself a `FixtureStatus` or `GateVerdict`."""
-
     CONTINUE_HOLD = "continue_hold"
     CONSIDER_TRIM = "consider_trim"
     CONSIDER_EXIT = "consider_exit"
@@ -98,9 +31,6 @@ class PositionAction(str, Enum):
 
 
 class ChecklistItemStatus(str, Enum):
-    """One checklist item's own outcome, independent of the overall
-    `PositionAction` -- several items can warn or fail at once."""
-
     PASS = "pass"
     WARN = "warn"
     FAIL = "fail"
@@ -108,9 +38,6 @@ class ChecklistItemStatus(str, Enum):
 
 @dataclass(frozen=True, kw_only=True)
 class ChecklistItemResult:
-    """One checklist item's evaluation, reported independently of
-    whether it ended up driving the overall `PositionAction`."""
-
     name: str
     status: ChecklistItemStatus
     detail: str = ""
@@ -118,13 +45,6 @@ class ChecklistItemResult:
 
 @dataclass(frozen=True, kw_only=True)
 class PositionManagementInput:
-    """One open position's current state, entirely as reported by the
-    human filling this out -- nothing here is fetched from a quote,
-    candle, or broker record. `thesis_status` and `position_sizing`
-    reuse the same vocabulary `management_cases.py` uses for its
-    retrospective grading, so a position's in-flight read and its
-    eventual after-the-fact case share one set of terms."""
-
     ticker: str
     direction: Literal["CALL", "PUT"]
     strike: float
@@ -148,14 +68,6 @@ class PositionManagementInput:
 
 @dataclass(frozen=True, kw_only=True)
 class PositionManagementChecklistResult:
-    """Outcome of evaluating (or intaking) a `PositionManagementInput`.
-    Contains no order or action field of any kind -- `action` is a
-    recommendation for a human to act on manually, not an instruction
-    this or any other module executes. `position` is populated only
-    when `check_position_management_checklist_intake()` normalized a
-    payload cleanly; `evaluate_position_management_checklist()` callers
-    already have their own `PositionManagementInput` and can ignore it."""
-
     action: PositionAction
     checklist_items: tuple[ChecklistItemResult, ...] = ()
     blocking_reasons: tuple[str, ...] = ()
@@ -166,43 +78,41 @@ class PositionManagementChecklistResult:
 
 
 def _invalidation_breached(direction: str, spot: float, invalidation: float) -> bool:
-    if direction == "CALL":
-        return spot <= invalidation
-    return spot >= invalidation
+    return spot <= invalidation if direction == "CALL" else spot >= invalidation
 
 
 def _target_reached(direction: str, spot: float, target: float) -> bool:
-    if direction == "CALL":
-        return spot >= target
-    return spot <= target
+    return spot >= target if direction == "CALL" else spot <= target
 
 
 def evaluate_position_management_checklist(
     position: PositionManagementInput,
 ) -> PositionManagementChecklistResult:
-    """Runs the fixed checklist against an already-typed
-    `PositionManagementInput`. Every item runs regardless of earlier
-    results -- never partially reported. See the module docstring for
-    the exact decision order that derives the overall `PositionAction`."""
     invalidation_breached = _invalidation_breached(
         position.direction, position.underlying_spot, position.underlying_invalidation
     )
-    target_1_reached = _target_reached(position.direction, position.underlying_spot, position.target_1)
+    target_1_reached = _target_reached(
+        position.direction, position.underlying_spot, position.target_1
+    )
     target_2_reached = position.target_2 is not None and _target_reached(
         position.direction, position.underlying_spot, position.target_2
     )
     risk_over_cap = position.current_dollar_risk > position.max_dollar_risk
     oversized = position.position_sizing == "oversized"
     dte_low = position.dte <= DEFAULT_DTE_WARNING_THRESHOLD
-    earnings_event_risk = position.earnings_before_expiration and position.iv_event_risk == "high"
+    earnings_event_risk = (
+        position.earnings_before_expiration and position.iv_event_risk == "high"
+    )
     premium_decay_percent = (
-        (position.entry_premium - position.current_premium) / position.entry_premium * 100.0
+        (position.entry_premium - position.current_premium)
+        / position.entry_premium
+        * 100.0
         if position.entry_premium > 0
         else 0.0
     )
     premium_decayed = premium_decay_percent >= DEFAULT_PREMIUM_DECAY_WARNING_PERCENT
 
-    items: list[ChecklistItemResult] = [
+    items = (
         ChecklistItemResult(
             name="thesis_status",
             status=(
@@ -216,7 +126,11 @@ def evaluate_position_management_checklist(
         ),
         ChecklistItemResult(
             name="invalidation_level",
-            status=ChecklistItemStatus.FAIL if invalidation_breached else ChecklistItemStatus.PASS,
+            status=(
+                ChecklistItemStatus.FAIL
+                if invalidation_breached
+                else ChecklistItemStatus.PASS
+            ),
             detail=(
                 f"underlying at {position.underlying_spot} has breached invalidation "
                 f"{position.underlying_invalidation}"
@@ -226,11 +140,15 @@ def evaluate_position_management_checklist(
         ),
         ChecklistItemResult(
             name="position_sizing",
-            status=ChecklistItemStatus.FAIL if (oversized or risk_over_cap) else ChecklistItemStatus.PASS,
+            status=(
+                ChecklistItemStatus.FAIL
+                if oversized or risk_over_cap
+                else ChecklistItemStatus.PASS
+            ),
             detail=(
                 f"position_sizing={position.position_sizing}, current_dollar_risk="
                 f"{position.current_dollar_risk} vs max_dollar_risk={position.max_dollar_risk}"
-                if (oversized or risk_over_cap)
+                if oversized or risk_over_cap
                 else "within risk plan"
             ),
         ),
@@ -238,7 +156,7 @@ def evaluate_position_management_checklist(
             name="target_proximity",
             status=(
                 ChecklistItemStatus.WARN
-                if (target_1_reached or target_2_reached)
+                if target_1_reached or target_2_reached
                 else ChecklistItemStatus.PASS
             ),
             detail=(
@@ -251,7 +169,11 @@ def evaluate_position_management_checklist(
         ),
         ChecklistItemResult(
             name="earnings_event_risk",
-            status=ChecklistItemStatus.WARN if earnings_event_risk else ChecklistItemStatus.PASS,
+            status=(
+                ChecklistItemStatus.WARN
+                if earnings_event_risk
+                else ChecklistItemStatus.PASS
+            ),
             detail=(
                 "earnings before expiration with high IV/event risk"
                 if earnings_event_risk
@@ -262,38 +184,53 @@ def evaluate_position_management_checklist(
             name="dte_decay",
             status=ChecklistItemStatus.WARN if dte_low else ChecklistItemStatus.PASS,
             detail=(
-                f"dte {position.dte} is at or below the {DEFAULT_DTE_WARNING_THRESHOLD}-day warning threshold"
+                f"dte {position.dte} is at or below the "
+                f"{DEFAULT_DTE_WARNING_THRESHOLD}-day warning threshold"
                 if dte_low
                 else "dte is above the warning threshold"
             ),
         ),
         ChecklistItemResult(
             name="premium_decay",
-            status=ChecklistItemStatus.WARN if premium_decayed else ChecklistItemStatus.PASS,
+            status=(
+                ChecklistItemStatus.WARN
+                if premium_decayed
+                else ChecklistItemStatus.PASS
+            ),
             detail=(
-                f"current_premium {position.current_premium} is down {premium_decay_percent:.1f}% "
-                f"from entry_premium {position.entry_premium}"
+                f"current_premium {position.current_premium} is down "
+                f"{premium_decay_percent:.1f}% from entry_premium {position.entry_premium}"
                 if premium_decayed
                 else "premium has not decayed past the warning threshold"
             ),
         ),
-    ]
+    )
 
-    blocking_reasons = tuple(item.detail for item in items if item.status == ChecklistItemStatus.FAIL)
-    warnings = tuple(item.detail for item in items if item.status == ChecklistItemStatus.WARN)
+    blocking_reasons = tuple(
+        item.detail for item in items if item.status == ChecklistItemStatus.FAIL
+    )
+    warnings = tuple(
+        item.detail for item in items if item.status == ChecklistItemStatus.WARN
+    )
 
     if position.thesis_status == "broken":
         action = PositionAction.EXIT_REQUIRED
         next_required_action = "Thesis is broken -- exit the position."
     elif invalidation_breached:
         action = PositionAction.EXIT_REQUIRED
-        next_required_action = "Underlying has breached the stated invalidation level -- exit the position."
+        next_required_action = (
+            "Underlying has breached the stated invalidation level -- exit the position."
+        )
     elif oversized or risk_over_cap:
         action = PositionAction.CONSIDER_TRIM
-        next_required_action = "Position is outside the risk plan -- trim to get back within max_dollar_risk."
+        next_required_action = (
+            "Position is outside the risk plan -- trim to get back within max_dollar_risk."
+        )
     elif target_2_reached:
         action = PositionAction.CONSIDER_EXIT
-        next_required_action = "Target 2 has been reached -- consider exiting the remainder into strength."
+        next_required_action = (
+            "Target 2 has been reached -- consider exiting the remainder into strength."
+        )
     elif target_1_reached:
         action = PositionAction.CONSIDER_TRIM
         next_required_action = "Target 1 has been reached -- consider trimming into strength."
@@ -311,8 +248,8 @@ def evaluate_position_management_checklist(
     elif premium_decayed:
         action = PositionAction.CONSIDER_TRIM
         next_required_action = (
-            "Premium has decayed significantly from entry without the thesis breaking -- "
-            "re-check the thesis before continuing to hold."
+            "Premium is down at least 25% from entry -- reassess the thesis immediately; "
+            "trim or exit if the setup has weakened, and exit if underlying invalidation is hit."
         )
     else:
         action = PositionAction.CONTINUE_HOLD
@@ -320,7 +257,7 @@ def evaluate_position_management_checklist(
 
     return PositionManagementChecklistResult(
         action=action,
-        checklist_items=tuple(items),
+        checklist_items=items,
         blocking_reasons=blocking_reasons,
         warnings=warnings,
         next_required_action=next_required_action,
@@ -383,23 +320,23 @@ def _coerce_bool(value: Any) -> bool:
     raise ValueError(f"{value!r} is not a valid boolean")
 
 
-def check_position_management_checklist_intake(payload: Any) -> PositionManagementChecklistResult:
-    """Normalizes a manual dict-like payload into a
-    `PositionManagementInput` and evaluates it with
-    `evaluate_position_management_checklist()`. Never raises regardless
-    of how malformed `payload` is -- a malformed payload, a missing
-    required field, or an uncoercible field value returns an
-    `EXIT_REQUIRED` result naming the problem, with `position=None`."""
+def check_position_management_checklist_intake(
+    payload: Any,
+) -> PositionManagementChecklistResult:
     if not isinstance(payload, Mapping):
         return PositionManagementChecklistResult(
             action=PositionAction.EXIT_REQUIRED,
             blocking_reasons=(
                 f"malformed payload: expected a dict-like mapping, got {type(payload).__name__}",
             ),
-            next_required_action="Provide a valid position management payload before relying on this checklist.",
+            next_required_action=(
+                "Provide a valid position management payload before relying on this checklist."
+            ),
         )
 
-    missing = [name for name in _REQUIRED_FIELD_NAMES if not _is_present(payload.get(name))]
+    missing = [
+        name for name in _REQUIRED_FIELD_NAMES if not _is_present(payload.get(name))
+    ]
     if missing:
         return PositionManagementChecklistResult(
             action=PositionAction.EXIT_REQUIRED,
