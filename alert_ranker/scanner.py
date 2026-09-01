@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
+from .bar_context import BarContextBuilder
 from .config import ScannerConfig
 from .discord import DiscordAlerter
 from .lifecycle import classify_candidate, open_candidate_fields, resolve_open_setup
@@ -73,12 +74,16 @@ class OptionsScanner:
         storage: ScanStorage,
         discord: DiscordAlerter,
         signa_client: SignaClient | None = None,
+        bar_context: BarContextBuilder | None = None,
     ):
         self.config = config
         self.market_data = market_data
         self.storage = storage
         self.discord = discord
         self.signa_client = signa_client
+        # Optional by design: with no builder the scanner behaves exactly as
+        # before, so enabling causal context is one explicit switch.
+        self.bar_context = bar_context
         self.last_run_at: str | None = None
         self.last_skip_reason: str | None = None
 
@@ -120,11 +125,18 @@ class OptionsScanner:
         normalized = await self._build_normalized_data(ticker, context or {}, now)
         result = score_setup(normalized, now=now)
         decision = await self.discord.send_if_eligible(result, now=now)
+        # A structural-context failure is the more specific truth: without it
+        # a blind lane and a quiet market are logged identically, which is the
+        # exact defect this lane already had once.
+        suppression_reason = decision.reason
+        context_reason = normalized.get("bar_context_reason")
+        if not decision.sent and context_reason:
+            suppression_reason = str(context_reason)
         storage_id = self.storage.record_scan(
             result,
             source=source,
             alert_sent=decision.sent,
-            alert_suppression_reason=decision.reason,
+            alert_suppression_reason=suppression_reason,
             timestamp=now,
         )
         # Only fully-formed candidates open a paper position in the shadow
@@ -156,7 +168,7 @@ class OptionsScanner:
         if not normalized.get("market_data_error") or "price" in (context or {}):
             await self._maybe_send_candidate_alert(ticker, normalized, now)
         return ScanOutcome(
-            result, decision.sent, decision.reason, storage_id, shadow_id, shadow_reason
+            result, decision.sent, suppression_reason, storage_id, shadow_id, shadow_reason
         )
 
     async def resolve_open_candidates(self, now: datetime | None = None) -> dict[str, int]:
@@ -283,12 +295,22 @@ class OptionsScanner:
     ) -> dict[str, Any]:
         snapshot = await self.market_data.fetch_market_snapshot(ticker)
         signa_context = await self._fetch_signa_context(ticker, context)
+        bar_fields = await self._fetch_bar_context(ticker, context, now)
+        caller_vwap = context.get("vwap")
+        caller_ema20 = context.get("ema20")
+        if caller_ema20 is None:
+            caller_ema20 = context.get("ema_20")
         data = {
             "ticker": ticker.upper(),
-            "pattern": context.get("pattern") or context.get("strat_pattern") or "N/A",
+            "pattern": (
+                context.get("pattern")
+                or context.get("strat_pattern")
+                or bar_fields.get("pattern")
+                or "N/A"
+            ),
             "price": context.get("price", snapshot.price),
-            "vwap": context.get("vwap"),
-            "ema20": context.get("ema20") or context.get("ema_20"),
+            "vwap": caller_vwap if caller_vwap is not None else bar_fields.get("vwap"),
+            "ema20": caller_ema20 if caller_ema20 is not None else bar_fields.get("ema20"),
             "volume": context.get("volume", snapshot.volume),
             "average_volume": context.get("average_volume") or context.get("avg_volume"),
             "volume_ratio": context.get("volume_ratio"),
@@ -355,12 +377,44 @@ class OptionsScanner:
         ):
             if key in context:
                 data[key] = context[key]
+        # Caller-supplied context always wins; bar context fills the rest and
+        # always contributes its telemetry, including on failure.
+        for key, value in bar_fields.items():
+            if key in {"vwap", "ema20", "pattern"}:
+                continue
+            data.setdefault(key, value)
         if data["volume_ratio"] is None and data["volume"] and data["average_volume"]:
             try:
                 data["volume_ratio"] = float(data["volume"]) / float(data["average_volume"])
             except (TypeError, ValueError, ZeroDivisionError):
                 data["volume_ratio"] = None
         return data
+
+    async def _fetch_bar_context(
+        self, ticker: str, context: dict[str, Any], now: datetime
+    ) -> dict[str, Any]:
+        """Causal structural context, or telemetry stating why there is none.
+
+        Skipped entirely when no builder is wired, so an unconfigured
+        deployment behaves exactly as it did before this lane existed, and
+        skipped when the caller already supplied both structural inputs, which
+        is the webhook path.
+        """
+        if self.bar_context is None:
+            return {}
+        caller_ema20 = context.get("ema20")
+        if caller_ema20 is None:
+            caller_ema20 = context.get("ema_20")
+        if context.get("vwap") is not None and caller_ema20 is not None:
+            return {}
+        try:
+            market_context = await self.bar_context.build(ticker, now)
+        except Exception as exc:  # noqa: BLE001 - a context failure must not kill the scan
+            return {
+                "bar_context_available": False,
+                "bar_context_reason": f"bar_context_error:{type(exc).__name__}",
+            }
+        return market_context.to_scanner_fields()
 
     async def _fetch_signa_context(self, ticker: str, context: dict[str, Any]) -> dict[str, Any]:
         if not self.config.signa_api_enabled:
