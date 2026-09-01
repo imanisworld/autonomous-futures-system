@@ -249,6 +249,57 @@ def build_range_signal(
         return _no_data_signal("build_range_signal failed")
 
 
+def _break_target(
+    price: float,
+    broken_cp: float,
+    walls: list,
+    *,
+    direction: str,
+) -> float:
+    """
+    Target for a RANGE_BREAK_CLOSE: the next structural wall in the trade's
+    direction, strictly beyond price and of the matching kind.
+
+    LONG  → next resistance (or supply zone) strictly ABOVE price.
+    SHORT → next support (or demand zone) strictly BELOW price.
+
+    ``walls`` is the already-sorted nearest-first list (walls_above for LONG,
+    walls_below for SHORT). WallContext places a level that sits exactly at
+    price into BOTH lists, and the previous ``walls[0]`` selection took that
+    at-price level of any kind as the target — producing target == entry and
+    LONG targets at supports. Falls back to a symmetric 1:1 projection off the
+    broken wall when no qualifying wall exists; never returns the entry price.
+    """
+    from context.wall_context import KIND_RESISTANCE, KIND_SUPPORT, KIND_ZONE
+
+    is_long = direction == "LONG"
+    if is_long:
+        kind_ok = lambda w: w.kind == KIND_RESISTANCE or (  # noqa: E731
+            w.kind == KIND_ZONE and w.name == "SUPPLY_ZONE"
+        )
+        beyond = lambda cp: cp > price  # noqa: E731
+    else:
+        kind_ok = lambda w: w.kind == KIND_SUPPORT or (  # noqa: E731
+            w.kind == KIND_ZONE and w.name == "DEMAND_ZONE"
+        )
+        beyond = lambda cp: cp < price  # noqa: E731
+
+    for wall in walls:
+        if not kind_ok(wall):
+            continue
+        wcp = wall.char_price()
+        if wcp is None or wcp <= 0 or not beyond(wcp):
+            continue
+        target = round(wcp, 2)
+        if beyond(target):
+            return target
+
+    # Symmetric fallback: project the broken-wall distance beyond price.
+    if is_long:
+        return round(price + (price - broken_cp), 2)
+    return round(price - (broken_cp - price), 2)
+
+
 def _build_range_signal(
     rs: RangeState,
     wall_ctx: "WallContext",
@@ -271,9 +322,9 @@ def _build_range_signal(
             break_pct = (price - cp) / cp
             if break_pct > _BREAK_CLOSE_PCT:
                 stop = round(cp * (1 - 0.001), 2)
-                next_res = wall_ctx.walls_above[0] if wall_ctx.walls_above else None
-                target_cp = next_res.char_price() if next_res else None
-                target = round(target_cp, 2) if target_cp else round(price + (price - cp), 2)
+                target = _break_target(
+                    price, cp, wall_ctx.walls_above, direction="LONG"
+                )
                 return RangeSignal(
                     signal_type=SIG_BREAK_CLOSE,
                     direction="LONG",
@@ -296,9 +347,9 @@ def _build_range_signal(
             break_pct = (cp - price) / cp
             if break_pct > _BREAK_CLOSE_PCT:
                 stop = round(cp * (1 + 0.001), 2)
-                next_sup = wall_ctx.walls_below[0] if wall_ctx.walls_below else None
-                target_cp = next_sup.char_price() if next_sup else None
-                target = round(target_cp, 2) if target_cp else round(price - (cp - price), 2)
+                target = _break_target(
+                    price, cp, wall_ctx.walls_below, direction="SHORT"
+                )
                 return RangeSignal(
                     signal_type=SIG_BREAK_CLOSE,
                     direction="SHORT",

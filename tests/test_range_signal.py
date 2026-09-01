@@ -719,3 +719,98 @@ def test_to_dict_round_trips_no_crash():
     d_sig = sig.to_dict()
     assert isinstance(d_rs, dict)
     assert isinstance(d_sig, dict)
+
+
+# ─── RANGE_BREAK_CLOSE — target selection (directional, matching kind) ────────
+#
+# WallContext places a level that sits exactly at price into BOTH walls_above
+# and walls_below. The old target selection took walls_above[0] / walls_below[0]
+# of any kind, which produced target == entry (16 resolved rows, Aug 2026) and
+# LONG targets at supports (115 of 1,284 candidates).
+
+
+def _wall_at_price_ctx_long() -> WallContext:
+    """Price 5930 closed above ORB_HIGH 5920; HOD sits exactly at 5930."""
+    hod = _wl("HOD", KIND_RESISTANCE, 5930.0)
+    return _make_ctx(
+        5930.0,
+        walls_above=[hod, _wl("PDH", KIND_RESISTANCE, 5950.0)],
+        walls_below=[hod, _wl("ORB_HIGH", KIND_RESISTANCE, 5920.0)],
+    )
+
+
+def _wall_at_price_ctx_short() -> WallContext:
+    """Price 5870 closed below ORB_LOW 5880; LOD sits exactly at 5870."""
+    lod = _wl("LOD", KIND_SUPPORT, 5870.0)
+    return _make_ctx(
+        5870.0,
+        walls_above=[lod, _wl("ORB_LOW", KIND_SUPPORT, 5880.0)],
+        walls_below=[lod, _wl("PWL", KIND_SUPPORT, 5850.0)],
+    )
+
+
+def test_break_close_long_target_never_equals_entry():
+    ctx = _wall_at_price_ctx_long()
+    sig = build_range_signal(build_range_state(ctx, "RANGE_BOUND"), ctx)
+    assert sig.signal_type == SIG_BREAK_CLOSE and sig.direction == "LONG"
+    assert sig.target_candidate != sig.entry_candidate
+    assert sig.target_candidate == pytest.approx(5950.0, abs=0.01)
+
+
+def test_break_close_short_target_never_equals_entry():
+    ctx = _wall_at_price_ctx_short()
+    sig = build_range_signal(build_range_state(ctx, "RANGE_BOUND"), ctx)
+    assert sig.signal_type == SIG_BREAK_CLOSE and sig.direction == "SHORT"
+    assert sig.target_candidate != sig.entry_candidate
+    assert sig.target_candidate == pytest.approx(5850.0, abs=0.01)
+
+
+def test_break_close_long_skips_support_above_price():
+    # A support (LOD) above price is not a LONG target; PDH is.
+    ctx = _make_ctx(
+        5930.0,
+        walls_above=[_wl("LOD", KIND_SUPPORT, 5935.0), _wl("PDH", KIND_RESISTANCE, 5950.0)],
+        walls_below=[_wl("ORB_HIGH", KIND_RESISTANCE, 5920.0)],
+    )
+    sig = build_range_signal(build_range_state(ctx, "RANGE_BOUND"), ctx)
+    assert sig.direction == "LONG"
+    assert sig.target_candidate == pytest.approx(5950.0, abs=0.01)
+
+
+def test_break_close_short_skips_resistance_below_price():
+    ctx = _make_ctx(
+        5870.0,
+        walls_above=[_wl("ORB_LOW", KIND_SUPPORT, 5880.0)],
+        walls_below=[_wl("HOD", KIND_RESISTANCE, 5865.0), _wl("PWL", KIND_SUPPORT, 5850.0)],
+    )
+    sig = build_range_signal(build_range_state(ctx, "RANGE_BOUND"), ctx)
+    assert sig.direction == "SHORT"
+    assert sig.target_candidate == pytest.approx(5850.0, abs=0.01)
+
+
+def test_break_close_long_supply_zone_is_a_valid_target():
+    ctx = _make_ctx(
+        5930.0,
+        walls_above=[_wl("SUPPLY_ZONE", KIND_ZONE, 5945.0), _wl("PDH", KIND_RESISTANCE, 5950.0)],
+        walls_below=[_wl("ORB_HIGH", KIND_RESISTANCE, 5920.0)],
+    )
+    sig = build_range_signal(build_range_state(ctx, "RANGE_BOUND"), ctx)
+    assert sig.target_candidate == pytest.approx(5945.0, abs=0.01)
+
+
+def test_break_close_long_falls_back_symmetric_when_no_resistance_above():
+    # Only a support sits above; fall back to a 1:1 projection off the broken wall.
+    ctx = _make_ctx(
+        5930.0,
+        walls_above=[_wl("LOD", KIND_SUPPORT, 5935.0)],
+        walls_below=[_wl("ORB_HIGH", KIND_RESISTANCE, 5920.0)],
+    )
+    sig = build_range_signal(build_range_state(ctx, "RANGE_BOUND"), ctx)
+    assert sig.target_candidate == pytest.approx(5940.0, abs=0.01)
+    assert sig.target_candidate > sig.entry_candidate
+
+
+def test_break_close_stop_construction_unchanged():
+    ctx = _wall_at_price_ctx_long()
+    sig = build_range_signal(build_range_state(ctx, "RANGE_BOUND"), ctx)
+    assert sig.stop_candidate == pytest.approx(round(5920.0 * 0.999, 2), abs=0.001)
