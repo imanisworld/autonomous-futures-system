@@ -154,6 +154,14 @@ class ContractShortlistResult:
 
 
 def _spread_percent(bid: object, ask: object) -> Optional[float]:
+    """Raw quote arithmetic only; never a fallback value.
+
+    A crossed or non-positive quote still yields its actual (zero or negative)
+    spread so the shared validator can reject it with its own ``bid_invalid`` /
+    ``ask_invalid`` reason instead of a misleading ``missing_spread_percent``.
+    ``None`` is returned only when the arithmetic is undefined: a missing or
+    non-finite side, or a non-positive midpoint.
+    """
     try:
         bid_value = float(bid)
         ask_value = float(ask)
@@ -161,9 +169,9 @@ def _spread_percent(bid: object, ask: object) -> Optional[float]:
         return None
     if not math.isfinite(bid_value) or not math.isfinite(ask_value):
         return None
-    if bid_value <= 0 or ask_value <= bid_value:
-        return None
     midpoint = (bid_value + ask_value) / 2.0
+    if midpoint <= 0:
+        return None
     return (ask_value - bid_value) / midpoint * 100.0
 
 
