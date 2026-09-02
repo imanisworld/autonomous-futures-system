@@ -124,7 +124,7 @@ def exposure_fact_from_risk_telemetry(
 def _finite_nonnegative(value: object, label: str, reasons: list[str]) -> Optional[float]:
     try:
         parsed = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         reasons.append(f"{label}_not_numeric")
         return None
     if not math.isfinite(parsed):
