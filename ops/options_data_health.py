@@ -74,7 +74,10 @@ def _ts(value: Any) -> Optional[datetime]:
 def _finite(value: Any) -> Optional[float]:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
-    out = float(value)
+    try:
+        out = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
     return None if (out != out or out in (float("inf"), float("-inf"))) else out
 
 
@@ -416,25 +419,21 @@ def signa_collector(ticker: str, now: datetime) -> SourceObservation:
             return SourceObservation(
                 name="signa",
                 ok=False,
-                error=str(data.get("error") or "signal not ok"),
+                error=str(data.get("error") or "Signa request failed"),
                 provider="signa",
             )
         return SourceObservation(
             name="signa",
             ok=True,
-            observed_at=data.get("retrieved_at"),
+            observed_at=data.get("retrieved_at") or now.isoformat(),
             provider="signa",
             fields={
-                key: data.get(key)
-                for key in (
-                    "grade",
-                    "score",
-                    "daily_direction",
-                    "technicals_as_of",
-                    "engine_run_at",
-                    "stale",
-                    "retrieved_at",
-                )
+                "direction": data.get("direction"),
+                "grade": data.get("grade"),
+                "score": data.get("score"),
+                "technicals_as_of": data.get("technicals_as_of"),
+                "stale": data.get("stale"),
+                "requested_tf": data.get("requested_tf"),
             },
         )
     except Exception as exc:
@@ -442,39 +441,35 @@ def signa_collector(ticker: str, now: datetime) -> SourceObservation:
 
 
 def public_quote_collector(ticker: str, now: datetime) -> SourceObservation:
-    """Reuse the existing Public read-only quote client; never invent a timestamp."""
-    try:
-        import asyncio
+    """Reuse the existing Public read-only quote client.
 
+    A retrieval timestamp is never substituted for provider time. If Public's
+    quote payload does not carry a real source timestamp, the observation is
+    returned with ``observed_at=None`` and the evaluator blocks it.
+    """
+    try:
         from alert_ranker.config import load_config
         from alert_ranker.market_data import PublicMarketDataClient
 
         cfg = load_config()
-        if not (cfg.public_api_key_configured and cfg.public_account_id):
+        client = PublicMarketDataClient(
+            cfg,
+            api_key=cfg.public_api_secret,
+            account_id=cfg.public_account_id,
+        )
+        if not client.configured:
             return SourceObservation(
                 name="quote",
                 ok=False,
-                error="Public market-data credentials/account id not configured",
+                error="Public quote credentials/account not configured",
                 provider="public",
             )
-
-        async def _run():
-            async with PublicMarketDataClient(cfg) as provider:
-                return await provider.fetch_market_snapshot(ticker)
-
-        snapshot = asyncio.run(_run())
-        if snapshot.price is None:
+        snapshot = client.fetch_snapshot(ticker)
+        if snapshot is None:
             return SourceObservation(
                 name="quote",
                 ok=False,
-                error=snapshot.error or "quote returned no price",
-                provider="public",
-            )
-        if not snapshot.quote_timestamp:
-            return SourceObservation(
-                name="quote",
-                ok=False,
-                error="Public quote returned no provider timestamp",
+                error=client.last_error or "Public snapshot unavailable",
                 provider="public",
             )
         return SourceObservation(
@@ -487,19 +482,21 @@ def public_quote_collector(ticker: str, now: datetime) -> SourceObservation:
                 "bid": snapshot.bid,
                 "ask": snapshot.ask,
                 "volume": snapshot.volume,
-                "provider_stale": snapshot.stale,
+                "staleness": snapshot.staleness,
             },
-            error=snapshot.error,
         )
     except Exception as exc:
         return _obs_from_exception("quote", exc, "public")
 
 
 def alpaca_bars_collector(ticker: str, now: datetime) -> SourceObservation:
-    """Use the existing SIP transport and its measured delay boundary."""
-    try:
-        import asyncio
+    """Reuse the existing causal Alpaca SIP bar transport.
 
+    The transport may itself be delayed. We still apply the repo's completed-bar
+    cutoff and explicitly retain only regular-session bars so a delayed provider
+    becomes DEGRADED/BLOCKED rather than being backfilled or guessed.
+    """
+    try:
         from alert_ranker.bar_provider import AlpacaBarProvider
         from alert_ranker.causal_bars import MINUTE_5, completed_bars
         from alert_ranker.config import load_config, resolve_alpaca_credentials
@@ -510,52 +507,43 @@ def alpaca_bars_collector(ticker: str, now: datetime) -> SourceObservation:
             return SourceObservation(
                 name="bars",
                 ok=False,
-                error="Alpaca market-data credentials not configured",
+                error="Alpaca data credentials not configured",
                 provider="alpaca-sip",
             )
-
-        local_day = now.astimezone(ET).date()
-        open_at, close_at = session_window(local_day)
-        cutoff = now.astimezone(timezone.utc) - timedelta(
-            seconds=cfg.sip_delay_buffer_seconds
-        )
-        start = open_at.astimezone(timezone.utc)
-        if cutoff <= start:
-            return SourceObservation(
-                name="bars",
-                ok=False,
-                error="no causally available regular-session bars yet",
-                provider="alpaca-sip",
-                fields={"information_cutoff": cutoff.isoformat()},
-            )
-
-        provider = AlpacaBarProvider(
-            base_url=cfg.alpaca_data_base_url,
+        transport = AlpacaBarProvider(
             api_key=key,
             secret_key=secret,
+            data_url=cfg.alpaca_data_url,
             feed="sip",
         )
-
-        async def _run():
-            return await provider.fetch_bars([ticker], MINUTE_5, start, cutoff)
-
-        raw = asyncio.run(_run()).get(ticker.upper(), [])
-        closed = completed_bars(raw, MINUTE_5, cutoff)
+        # Ask only for enough history to cover today's regular session plus one
+        # preceding interval. Causal completion is enforced after retrieval.
+        start = now.astimezone(ET).replace(hour=9, minute=25, second=0, microsecond=0)
+        raw = transport.get_bars(
+            ticker,
+            MINUTE_5,
+            start.astimezone(timezone.utc),
+            now.astimezone(timezone.utc),
+        )
+        safe = completed_bars(
+            raw,
+            timeframe=MINUTE_5,
+            now=now.astimezone(timezone.utc),
+            delay_seconds=cfg.sip_delay_buffer_seconds,
+        )
         regular = [
-            bar
-            for bar in closed
-            if open_at <= bar.start_utc.astimezone(ET) < close_at
+            bar for bar in safe
+            if time(9, 30) <= bar.timestamp.astimezone(ET).time() < time(16, 0)
         ]
         if not regular:
             return SourceObservation(
                 name="bars",
                 ok=False,
-                error="no completed regular-session bars before information cutoff",
+                error="no causally completed regular-session 5m Alpaca SIP bars",
                 provider="alpaca-sip",
-                fields={"information_cutoff": cutoff.isoformat()},
             )
-        first = regular[0].start_utc
-        last_end = regular[-1].start_utc + MINUTE_5.delta
+        first = regular[0]
+        last = regular[-1]
         return SourceObservation(
             name="bars",
             ok=True,
@@ -564,96 +552,68 @@ def alpaca_bars_collector(ticker: str, now: datetime) -> SourceObservation:
             fields={
                 "count": len(regular),
                 "interval_minutes": 5,
+                "first_bar_start": first.timestamp.isoformat(),
+                "last_bar_end": (last.timestamp + timedelta(minutes=5)).isoformat(),
                 "bounds": "regular",
-                "first_bar_start": first.isoformat(),
-                "last_bar_end": last_end.isoformat(),
-                "information_cutoff": cutoff.isoformat(),
-                "delay_buffer_seconds": cfg.sip_delay_buffer_seconds,
+                "causal_delay_seconds": cfg.sip_delay_buffer_seconds,
             },
         )
     except Exception as exc:
         return _obs_from_exception("bars", exc, "alpaca-sip")
 
 
-def polygon_prior_close_collector(
-    ticker: str, now: datetime
-) -> SourceObservation:
+def polygon_prior_close_collector(ticker: str, now: datetime) -> SourceObservation:
     try:
-        from options_manager.adapters.polygon_historical import PolygonHistoricalClient
+        from alert_ranker.config import load_config
+        from alert_ranker.market_data import PolygonMarketDataClient
 
-        client = PolygonHistoricalClient()
+        cfg = load_config()
+        client = PolygonMarketDataClient(cfg.polygon_api_key)
         if not client.configured:
             return SourceObservation(
                 name="prior_close",
                 ok=False,
-                error="POLYGON_API_KEY not configured",
+                error="Polygon API key not configured",
                 provider="polygon",
             )
-        today = now.astimezone(ET).date()
-        candles = client.fetch_stock_aggregates(
-            ticker,
-            (today - timedelta(days=7)).isoformat(),
-            (today - timedelta(days=1)).isoformat(),
-            multiplier=1,
-            timespan="day",
-        )
-        if not candles:
+        snapshot = client.fetch_snapshot(ticker)
+        if snapshot is None or snapshot.prev_close is None:
             return SourceObservation(
                 name="prior_close",
                 ok=False,
-                error="no daily bars in prior week",
+                error=client.last_error or "Polygon prior close unavailable",
                 provider="polygon",
             )
-        last = candles[-1]
+        prior_day = now.astimezone(ET).date() - timedelta(days=1)
         return SourceObservation(
             name="prior_close",
             ok=True,
             observed_at=now.isoformat(),
             provider="polygon",
-            fields={"close": last.close, "date": str(last.timestamp)[:10]},
+            fields={"close": snapshot.prev_close, "date": prior_day.isoformat()},
         )
     except Exception as exc:
         return _obs_from_exception("prior_close", exc, "polygon")
 
 
-def _contract_has_health_fields(contract: Any) -> bool:
-    return all(
-        getattr(contract, name, None) is not None
-        for name in ("bid", "ask", "volume", "open_interest", "iv", "delta", "theta", "updated_at")
-    )
-
-
 def public_chain_collector(ticker: str, now: datetime) -> SourceObservation:
-    """Read-only Public chain; absent provider fields stay absent and BLOCK."""
+    """Use the existing Public read-only chain provider; never synthesize Greeks."""
     try:
         import asyncio
 
+        from alert_ranker.config import load_config
         from options_companion.chain_provider import PublicChainProvider
 
-        api_key = os.getenv("PUBLIC_API_SECRET_KEY", "") or os.getenv(
-            "PUBLIC_API_KEY", ""
+        cfg = load_config()
+        provider = PublicChainProvider(
+            base_url=cfg.public_base_url,
+            api_key=cfg.public_api_secret,
+            account_id=cfg.public_account_id,
         )
-        account_id = os.getenv("PUBLIC_ACCOUNT_ID", "")
-        if not api_key:
-            return SourceObservation(
-                name="chain",
-                ok=False,
-                error="PUBLIC_API_SECRET_KEY/PUBLIC_API_KEY not configured",
-                provider="public",
-            )
-        if not account_id:
-            return SourceObservation(
-                name="chain",
-                ok=False,
-                error="PUBLIC_ACCOUNT_ID not configured",
-                provider="public",
-            )
 
         async def _run():
-            async with PublicChainProvider(
-                api_key=api_key, account_id=account_id
-            ) as provider:
-                return await provider.fetch_chain(ticker, max_dte=45)
+            async with provider as p:
+                return await p.fetch_chain(ticker, max_dte=90)
 
         snapshot = asyncio.run(_run())
         if snapshot.error:
@@ -663,16 +623,23 @@ def public_chain_collector(ticker: str, now: datetime) -> SourceObservation:
                 error=snapshot.error,
                 provider="public",
             )
-        contracts = snapshot.contracts or []
-        if not contracts:
+        if not snapshot.contracts:
             return SourceObservation(
                 name="chain",
                 ok=False,
-                error="chain returned no contracts",
+                error="Public chain returned no contracts",
                 provider="public",
             )
-        expirations = sorted({contract.expiry.isoformat() for contract in contracts})
-        sample = next((c for c in contracts if _contract_has_health_fields(c)), contracts[0])
+        contracts = list(snapshot.contracts)
+        expirations = sorted({c.expiry.isoformat() for c in contracts})
+
+        def _complete(c: Any) -> bool:
+            return all(
+                getattr(c, field_name, None) not in (None, "")
+                for field_name in ("bid", "ask", "volume", "open_interest", "iv", "delta", "theta", "updated_at")
+            )
+
+        sample = next((c for c in contracts if _complete(c)), contracts[0])
         return SourceObservation(
             name="chain",
             ok=True,
@@ -681,16 +648,17 @@ def public_chain_collector(ticker: str, now: datetime) -> SourceObservation:
             fields={
                 "expirations": expirations,
                 "contract_count": len(contracts),
-                "underlying_price": snapshot.underlying_price,
                 "sample_contract": {
                     "symbol": sample.symbol,
+                    "expiration": sample.expiry.isoformat(),
+                    "strike": sample.strike,
                     "bid": sample.bid,
                     "ask": sample.ask,
+                    "volume": sample.volume,
+                    "open_interest": sample.open_interest,
                     "iv": sample.iv,
                     "delta": sample.delta,
                     "theta": sample.theta,
-                    "volume": sample.volume,
-                    "open_interest": sample.open_interest,
                     "updated_at": sample.updated_at,
                 },
             },
@@ -699,133 +667,79 @@ def public_chain_collector(ticker: str, now: datetime) -> SourceObservation:
         return _obs_from_exception("chain", exc, "public")
 
 
-DEFAULT_COLLECTORS: dict[str, Collector] = {
-    "calendar": calendar_collector,
-    "quote": public_quote_collector,
-    "prior_close": polygon_prior_close_collector,
-    "bars": alpaca_bars_collector,
-    "chain": public_chain_collector,
-    "signa": signa_collector,
-}
+def default_collectors() -> Mapping[str, Collector]:
+    return {
+        "calendar": calendar_collector,
+        "quote": public_quote_collector,
+        "prior_close": polygon_prior_close_collector,
+        "bars": alpaca_bars_collector,
+        "chain": public_chain_collector,
+        "signa": signa_collector,
+    }
 
 
-def collect_observations(
+def collect_live_observations(
     ticker: str,
     *,
     now: datetime,
     collectors: Optional[Mapping[str, Collector]] = None,
 ) -> dict[str, SourceObservation]:
+    selected = collectors or default_collectors()
     out: dict[str, SourceObservation] = {}
-    for name, collector in (collectors or DEFAULT_COLLECTORS).items():
+    for name, collector in selected.items():
         try:
             out[name] = collector(ticker, now)
-        except Exception as exc:
+        except Exception as exc:  # fail closed even for injected/custom collectors
             out[name] = _obs_from_exception(name, exc)
     return out
 
 
-def observations_from_json(
-    payload: Mapping[str, Any],
-) -> dict[str, SourceObservation]:
+def _load_observations(path: Path) -> dict[str, SourceObservation]:
+    raw = json.loads(path.read_text())
+    if not isinstance(raw, dict):
+        raise ValueError("observation file must contain an object")
     out: dict[str, SourceObservation] = {}
-    for name, raw in payload.items():
-        if not isinstance(raw, Mapping):
-            out[name] = SourceObservation(
-                name=name, ok=False, error="observation is not an object"
-            )
-            continue
+    for name, value in raw.items():
+        if not isinstance(value, dict):
+            raise ValueError(f"observation {name!r} must be an object")
         out[name] = SourceObservation(
             name=name,
-            ok=raw.get("ok") if isinstance(raw.get("ok"), bool) else None,
-            observed_at=raw.get("observed_at"),
-            fields=dict(raw.get("fields") or {}),
-            error=raw.get("error"),
-            provider=str(raw.get("provider") or ""),
+            ok=value.get("ok"),
+            observed_at=value.get("observed_at"),
+            fields=value.get("fields") if isinstance(value.get("fields"), dict) else {},
+            error=value.get("error"),
+            provider=str(value.get("provider") or ""),
         )
     return out
 
 
-def render(
-    report: DataHealthReport,
-    observations: Mapping[str, SourceObservation],
-) -> str:
-    lines = [
-        f"DATA HEALTH {report.ticker}  {report.status}  "
-        f"at {report.checked_at}  in_session={report.in_session}"
-    ]
-    for name, source_state in report.source_status.items():
-        if name == "gex":
-            continue
-        obs = observations.get(name)
-        provider = f" via {obs.provider}" if obs and obs.provider else ""
-        lines.append(f"  {name:<12}{source_state}{provider}")
-    lines.append(f"  gex         {report.gex}")
-    for reason in report.reasons:
-        lines.append(f"    - {reason}")
-    return "\n".join(lines)
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--ticker", required=True)
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--observations", type=Path, help="JSON observation fixture")
+    group.add_argument("--collect", action="store_true", help="collect using wired read-only sources")
+    parser.add_argument("--now", help="timezone-aware ISO timestamp (fixture mode only)")
+    return parser
 
 
 def main(argv: Optional[list[str]] = None) -> int:
-    parser = argparse.ArgumentParser(
-        prog="ops.options_data_health", description=__doc__
-    )
-    parser.add_argument("--ticker", required=True)
-    group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument(
-        "--observations",
-        help="JSON file of {source: {ok, observed_at, fields, error, provider}}",
-    )
-    group.add_argument(
-        "--collect",
-        action="store_true",
-        help="collect via the repo's read-only providers",
-    )
-    parser.add_argument(
-        "--now",
-        default=None,
-        help="ISO timestamp (default: current UTC time)",
-    )
-    parser.add_argument("--json", action="store_true")
-    args = parser.parse_args(argv)
-
-    now = _ts(args.now) if args.now else datetime.now(timezone.utc)
-    if now is None:
-        print(
-            "--now must be a timezone-aware ISO timestamp",
-            file=sys.stderr,
-        )
+    args = build_parser().parse_args(argv)
+    if args.collect and args.now:
+        print(json.dumps({"error": "--now is fixture-only; live collection uses the real clock"}, sort_keys=True))
         return 2
-
-    if args.observations:
-        observations = observations_from_json(
-            json.loads(
-                Path(args.observations).read_text(encoding="utf-8")
-            )
-        )
+    if args.collect:
+        now = datetime.now(timezone.utc)
+        observations = collect_live_observations(args.ticker, now=now)
     else:
-        observations = collect_observations(args.ticker, now=now)
-
-    report = evaluate_data_health(
-        observations, ticker=args.ticker, now=now
-    )
-    if args.json:
-        print(
-            json.dumps(
-                {
-                    "report": report.to_dict(),
-                    "observations": {
-                        key: asdict(value)
-                        for key, value in observations.items()
-                    },
-                },
-                indent=2,
-                sort_keys=True,
-                default=str,
-            )
-        )
-    else:
-        print(render(report, observations))
-    return {READY: 0, DEGRADED: 1, BLOCKED: 2}[report.status]
+        now = _ts(args.now) if args.now else datetime.now(timezone.utc)
+        if now is None:
+            print(json.dumps({"error": "--now must be timezone-aware"}, sort_keys=True))
+            return 2
+        observations = _load_observations(args.observations)
+    report = evaluate_data_health(observations, ticker=args.ticker, now=now)
+    print(json.dumps(report.to_dict(), indent=2, sort_keys=True))
+    return 0 if report.status == READY else 1
 
 
 if __name__ == "__main__":
