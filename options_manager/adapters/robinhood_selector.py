@@ -179,7 +179,7 @@ def build_selector_candidates(
         merged.setdefault("strike_price", row.get("strike_price") or row.get("strike"))
         try:
             mapped = normalize_option_quote(merged)
-        except (TypeError, ValueError) as exc:
+        except (TypeError, ValueError, OverflowError) as exc:
             reject("unmappable", f"quote does not map: {exc}")
             continue
         bad = next((name for name in _NUMERIC_FIELDS if not _finite(getattr(mapped, name))), None)
@@ -205,7 +205,7 @@ def build_selector_candidates(
             expiration=expiration,
             dte=dte,
             strike=mapped.strike,
-            premium=mapped.premium,  # the quote mark; the selector's premium check reads it as such
+            premium=mapped.premium,  # provider mark used only as current premium evidence, not a planned entry
             bid=mapped.bid,
             ask=mapped.ask,
             volume=mapped.volume,
