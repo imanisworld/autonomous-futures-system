@@ -115,12 +115,8 @@ def test_observer_rejects_out_of_scope_instrument(tmp_path):
         enabled_concepts=["orb_breakout"],
         entry_refresh_mode="shadow",
     )
-    state = build_market_state(
-        _base_payload(
-            ticker="MES1!",
-            timestamp="2026-05-23T15:00:00+00:00",
-        )
-    )
+    state = build_market_state(_base_payload(timestamp="2026-05-23T15:00:00+00:00"))
+    state.instrument = "MES"
 
     assert observe_entry_refresh_decision(state, _daily_state(), cfg) is None
     assert cfg.enabled_concepts == ["orb_breakout"]
