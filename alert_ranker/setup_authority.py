@@ -28,7 +28,7 @@ from dataclasses import dataclass
 from typing import Sequence
 
 from options_manager.scanner import WatchlistRow, scan_watchlist_strat_212
-from options_manager.strategies import Strat212Bars
+from options_manager.strategies import Strat212Bars, strat_212_mechanical_levels
 from strategy.strat_classifier import TWO_DOWN, TWO_UP, StratBar, classify_bar
 
 from .causal_bars import Bar
@@ -124,11 +124,9 @@ def evaluate_setup(
 
     best: SetupVerdict | None = None
     for direction in _DIRECTIONS:
-        # The mechanical trigger is the break of the inside bar's high (CALL)
-        # or low (PUT); invalidation is that bar's opposite extreme. Both come
-        # straight out of the bars -- neither is chosen, tuned or inferred.
-        entry = previous.high if direction == "CALL" else previous.low
-        invalidation = previous.low if direction == "CALL" else previous.high
+        # Mechanical price levels come from the shared options strategy helper;
+        # this adapter does not maintain a second copy of the rule.
+        entry, invalidation = strat_212_mechanical_levels(strat_bars, direction)
         report = scan_watchlist_strat_212(
             [
                 WatchlistRow(
