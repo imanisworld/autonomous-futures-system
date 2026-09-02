@@ -29,12 +29,16 @@ _FAILED_CONCLUSIONS = {
 _PASSED_CONCLUSIONS = {"SUCCESS"}
 
 # Areas an advisory options change must never touch. Any match is a REJECT,
-# regardless of scope profile.
+# regardless of scope profile. The one exact options_companion exception is the
+# existing Public chain provider, whose module-level/runtime guards constrain it
+# to auth-token mint + market-data/option-details reads. It is still allowed
+# only by the dedicated options-data-health profile below; every other
+# options_companion file remains forbidden.
 FORBIDDEN_AREA_PATTERNS: tuple[tuple[str, str], ...] = (
     (r"^execution/", "broker submission / live execution"),
     (r"^options_manager/broker_boundary\.py$", "broker boundary"),
     (r"^options_manager/mock_broker_preview\.py$", "broker preview"),
-    (r"^options_companion/", "credentialed companion lane"),
+    (r"^options_companion/(?!chain_provider\.py$)", "credentialed companion lane"),
     (r"^deploy/", "deployment"),
     (r"^scripts/(atomic_release|deploy_lock)\.sh$", "deployment"),
     (r"^ops/(release_integrity|release_manifest|live_box_guard)\.py$", "deployment / live-box guard"),
@@ -84,6 +88,19 @@ SCOPE_POLICIES: dict[str, ScopePolicy] = {
             r"^tests/test_pr_promotion_readiness",
             r"^docs/",
             r"^data/promotion_readiness/",
+        ),
+    ),
+    "options-data-health": ScopePolicy(
+        name="options-data-health",
+        description=(
+            "Read-only options provider/data-health collection and its exact tests; "
+            "no selector, broker, order, runtime-config, or execution surface."
+        ),
+        allowed_patterns=(
+            r"^ops/options_data_health\.py$",
+            r"^options_companion/chain_provider\.py$",
+            r"^tests/test_options_data_health\.py$",
+            r"^tests/test_gex_observer\.py$",
         ),
     ),
 }
