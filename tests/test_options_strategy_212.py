@@ -578,7 +578,7 @@ def test_bullish_212_derives_clean_valid_context_from_market_context_inputs():
     assert result.context_status == "VALID"
     assert result.market_context_reason_code == "context_confirmed"
     assert result.context_warnings == []
-    assert result.context_score == 5.0
+    assert result.context_score == 4.0
 
 
 def test_bearish_212_derives_clean_valid_context_from_market_context_inputs():

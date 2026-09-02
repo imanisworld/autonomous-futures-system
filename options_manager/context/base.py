@@ -33,18 +33,24 @@ EventRisk = Literal["none", "low", "high"]
 
 @dataclass(frozen=True)
 class MarketContextInputs:
-    """Explicit, caller-supplied market context only. `direction`,
-    `ticker`, and `underlying_price` are always required; every other
-    field defaults to None (not yet resolved) and must fail closed to
-    INVALID, exactly like omitting it entirely — a context validator must
-    never assume favorable context by default.
+    """Explicit, caller-supplied market context only.
 
-    The GEX block (`gex_regime`, `price_above_gex_flip`, and the two
-    `distance_to_gamma_*` fields) is the single exception: it is optional
-    enrichment. Absent GEX degrades to a GEX_UNAVAILABLE warning rather
-    than INVALID, because the system must operate honestly on Signa +
-    SPY/QQQ + HTF context alone. Failing closed on GEX would make an
-    unsubscribed vendor feed a hard dependency."""
+    ``direction``, ``ticker``, and ``underlying_price`` are always required.
+    SPY/QQQ context, higher-timeframe alignment, and event risk remain
+    fail-closed inputs for the market validator.
+
+    The GEX block (``gex_regime``, ``price_above_gex_flip``, and the two
+    ``distance_to_gamma_*`` fields) is optional enrichment. Absent GEX degrades
+    to a ``GEX_UNAVAILABLE`` warning rather than INVALID; no regime or flip is
+    invented.
+
+    The Signa fields are also optional, but for a different reason: they are
+    observational telemetry only. The effectiveness audit did not establish
+    incremental value, so ``signa_direction``, ``signa_grade``, and
+    ``signa_score`` must not authorize, veto, caution, confirm, or score a
+    setup. They remain on this input model solely so callers can carry the
+    observed vendor state alongside the independently evaluated context.
+    """
 
     direction: Literal["CALL", "PUT"]
     ticker: Optional[str]
@@ -53,11 +59,13 @@ class MarketContextInputs:
     qqq_trend: Optional[Trend] = None
     spy_above_flip: Optional[bool] = None
     qqq_above_flip: Optional[bool] = None
-    # GEX is the one OPTIONAL context block. Both fields absent => the
-    # validator emits GEX_UNAVAILABLE and drops gamma-wall targeting; it does
-    # NOT reject, and it does NOT substitute a neutral regime or a fake flip.
+    # GEX is OPTIONAL enrichment. Both fields absent => the validator emits
+    # GEX_UNAVAILABLE and drops gamma-wall targeting; it does NOT reject and it
+    # does NOT substitute a neutral regime or a fake flip.
     gex_regime: Optional[GexRegime] = None
     price_above_gex_flip: Optional[bool] = None
+    # Signa is OBSERVATIONAL ONLY. These fields may be absent or contradictory
+    # without changing the market-context verdict or context score.
     signa_direction: Optional[SignaDirection] = None
     signa_grade: Optional[str] = None
     signa_score: Optional[float] = None
@@ -82,13 +90,14 @@ class MarketContextResult:
     reason: str = ""
     warnings: list[str] = field(default_factory=list)
     context_score: Optional[float] = None
-    # False when the caller supplied no GEX context. GEX is an OPTIONAL
+    # False when the caller supplied no GEX context. GEX is OPTIONAL
     # enrichment, not a requirement: absent GEX degrades the context to a
     # warning (see GEX_UNAVAILABLE in market_validator) instead of rejecting.
     # Never infer a regime or a flip side to fill the gap.
     gex_available: bool = True
-    # Denominator for `context_score`. Drops when a component is unavailable,
-    # so a 4/4 score is not silently read as 4/5.
+    # Denominator for ``context_score``. Signa is never included; GEX is
+    # included only when available. This prevents an absent/observational
+    # component from being silently scored as aligned or opposed.
     context_score_max: Optional[float] = None
 
 
