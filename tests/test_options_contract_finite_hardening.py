@@ -16,6 +16,7 @@ from options_manager.contracts import ContractConstraintsInputs, evaluate_contra
 from options_manager.validation.contract_quality_gate import (
     ContractQualityInput,
     GateVerdict,
+    check_contract_quality_intake,
     evaluate_contract_quality,
 )
 
@@ -74,6 +75,29 @@ def _quality(**overrides):
     return ContractQualityInput(**base)
 
 
+def _quality_payload(**overrides):
+    payload = dict(
+        ticker="AAPL",
+        direction="CALL",
+        expiration="2026-10-16",
+        strike=100.0,
+        premium=2.0,
+        bid=1.95,
+        ask=2.05,
+        spread_percent=5.0,
+        volume=1000,
+        open_interest=2000,
+        dte=44,
+        max_contracts=1,
+        max_dollar_risk=300.0,
+        distance_to_target=3.0,
+        iv_event_risk="none",
+        theta_risk="none",
+    )
+    payload.update(overrides)
+    return payload
+
+
 def test_baselines_are_clean():
     assert evaluate_contract_constraints(_constraints()).status == "VALID"
     assert evaluate_contract_quality(_quality()).verdict is not GateVerdict.BLOCK
@@ -127,6 +151,14 @@ def test_contract_quality_gate_blocks_non_finite(field, value):
     result = evaluate_contract_quality(_quality(**{field: value}))
     assert result.verdict is GateVerdict.BLOCK
     assert f"non-finite {field}" in result.blocking_reasons
+
+
+@pytest.mark.parametrize("field", ["volume", "open_interest", "dte", "max_contracts"])
+@pytest.mark.parametrize("value", _NON_FINITE, ids=["nan", "inf", "-inf"])
+def test_contract_quality_intake_blocks_non_finite_integer_fields_without_raising(field, value):
+    result = check_contract_quality_intake(_quality_payload(**{field: value}))
+    assert result.verdict is GateVerdict.BLOCK
+    assert any(f"invalid value for {field}" in reason for reason in result.blocking_reasons)
 
 
 def test_finite_values_are_unaffected():
