@@ -137,21 +137,73 @@ def test_renderer_shows_contract_liquidity_planned_risk_full_debit_and_position_
     assert "mega_cap_tech=$90.00" in rendered.body
 
 
-def test_contract_or_risk_fact_change_is_material_and_classified_without_creating_new_thesis():
+def test_contract_or_risk_policy_change_is_material_and_classified_without_creating_new_thesis():
     first = _snapshot()
     contract_changed = update_trade_thesis(
         first,
-        _observation(contract_plan=ContractPlanSnapshot(**{**_contract().__dict__, "bid": 1.97})),
+        _observation(
+            contract_plan=ContractPlanSnapshot(
+                **{**_contract().__dict__, "premium_stop": 1.55}
+            )
+        ),
     )
     assert "contract_plan_changed" in contract_changed.material_reasons
     assert render_plan_update(contract_changed).kind.value == "CONTRACT_UPDATED"
 
     risk_changed = update_trade_thesis(
         first,
-        _observation(risk_plan=RiskPlanSnapshot(**{**_risk().__dict__, "aggregate_open_risk": 150.0, "projected_open_risk": 190.0})),
+        _observation(
+            risk_plan=RiskPlanSnapshot(
+                **{**_risk().__dict__, "max_aggregate_open_risk_dollars": 600.0}
+            )
+        ),
     )
     assert "risk_plan_changed" in risk_changed.material_reasons
     assert render_plan_update(risk_changed).kind.value == "RISK_UPDATED"
+
+
+def test_quote_and_exposure_telemetry_refresh_without_duplicate_user_facing_update():
+    first = _snapshot()
+    refreshed_contract = ContractPlanSnapshot(
+        **{
+            **_contract().__dict__,
+            "premium": 2.03,
+            "bid": 1.98,
+            "ask": 2.08,
+            "spread_percent": 4.9,
+            "volume": 1110,
+            "open_interest": 2015,
+            "dte": 44,
+            "distance_to_target": 3.8,
+        }
+    )
+    refreshed_risk = RiskPlanSnapshot(
+        **{
+            **_risk().__dict__,
+            "planned_dollar_risk": 43.0,
+            "capital_deployed": 203.0,
+            "aggregate_open_risk": 150.0,
+            "projected_open_risk": 193.0,
+            "aggregate_capital_deployed": 700.0,
+            "projected_capital_deployed": 903.0,
+            "open_position_count": 4,
+            "correlation_risk": (("mega_cap_tech", 123.0),),
+        }
+    )
+    update = update_trade_thesis(
+        first,
+        _observation(
+            observed_at="2026-09-02T14:05:00+00:00",
+            contract_plan=refreshed_contract,
+            risk_plan=refreshed_risk,
+        ),
+    )
+
+    assert update.snapshot.contract_plan == refreshed_contract
+    assert update.snapshot.risk_plan == refreshed_risk
+    assert update.material_reasons == ()
+    assert update.should_emit_update is False
+    assert render_plan_update(update).kind.value == "UNCHANGED"
 
 
 def test_contract_and_risk_facts_round_trip_in_existing_options_sqlite_snapshot_json(tmp_path):
