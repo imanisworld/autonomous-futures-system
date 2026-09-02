@@ -16,6 +16,7 @@ from .base import (
     StrategySignal,
     StrategyStatus,
 )
+from .mechanical import strat_212_mechanical_levels
 from .strat_212 import STRATEGY_NAME as STRAT_212_STRATEGY_NAME
 from .strat_212 import Strat212Bars, evaluate_strat_212
 
@@ -26,5 +27,6 @@ __all__ = [
     "StrategyStatus",
     "Strat212Bars",
     "evaluate_strat_212",
+    "strat_212_mechanical_levels",
     "STRAT_212_STRATEGY_NAME",
 ]
