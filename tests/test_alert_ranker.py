@@ -462,7 +462,7 @@ def test_alert_ranker_does_not_import_futures_execution_or_risk_modules():
     assert not any(name in source for name in forbidden)
 
 
-def test_war_room_discord_payload_uses_rich_confirmed_template():
+def test_war_room_discord_payload_uses_triggered_template():
     result = score_setup(
         setup_payload(
             ticker="NVDA",
@@ -484,14 +484,15 @@ def test_war_room_discord_payload_uses_rich_confirmed_template():
             dte=19,
             implied_volatility=25,
             option_mark=8.0,
+            setup_status="TRIGGERED",
         )
     )
 
     embed = build_discord_payload(result)["embeds"][0]
     field_map = {field["name"]: field["value"] for field in embed["fields"]}
 
-    assert embed["title"] == "▲ NVDA CALL - A+ CONFIRMED ⭐ GOLDEN SETUP"
-    assert "bullish structure" in embed["description"]
+    assert embed["title"] == "▲ NVDA CALL - MECHANICAL SETUP TRIGGERED"
+    assert "Mechanical setup status: TRIGGERED" in embed["description"]
     assert field_map["Strat Combo"] == "2U-1-2U"
     assert field_map["Timeframe"] == "15m"
     assert field_map["FTFC"] == "Yes (UP)"
@@ -500,7 +501,7 @@ def test_war_room_discord_payload_uses_rich_confirmed_template():
     assert field_map["Target 1"] == "$965.00"
     assert field_map["Target 2"] == "$975.00"
     assert field_map["Why"] == "Demand zone reclaim. Volume expanding. GEX flip at 950 cleared."
-    assert field_map["Edge"] == "Multi-timeframe alignment confirmed. All gates passed."
+    assert field_map["Context"] == "Multi-timeframe alignment confirmed. All gates passed."
     assert "Premium Value" in field_map
     assert "fair" in field_map["Premium Value"].lower() or "discount" in field_map["Premium Value"].lower() or "overpriced" in field_map["Premium Value"].lower()
     assert field_map["Risk"] == "Size for your account. Exit at stop - no exceptions."
@@ -512,9 +513,9 @@ def test_war_room_discord_payload_marks_forming_setup():
     embed = build_discord_payload(result)["embeds"][0]
     field_map = {field["name"]: field["value"] for field in embed["fields"]}
 
-    assert embed["title"] == "▲ QQQ CALL - SETUP FORMING ⭐"
-    assert "do not enter early" in embed["description"]
-    assert field_map["Risk"] == "Setup is developing - NOT confirmed. Wait for the A+ signal before entering."
+    assert embed["title"] == "▲ QQQ CALL - SETUP FORMING"
+    assert "observational only" in embed["description"]
+    assert field_map["Risk"] == "No entry. Wait for mechanical TRIGGERED setup and canonical contract/risk proof."
 
 
 def test_webhook_context_passes_rich_alert_fields_to_storage_status(tmp_path):
@@ -558,7 +559,6 @@ def test_strat_context_fields_support_aliases():
     assert field_map["Strat Combo"] == "1-2-2 REV"
     assert field_map["Timeframe"] == "15m / 30m / 1h"
     assert field_map["FTFC"] == "Yes (UP)"
-
 
 
 
@@ -679,10 +679,10 @@ def test_options_scanner_enriches_with_signa_context(tmp_path):
     assert outcome.result.raw["signa_symbol"] == "SPY"
     assert outcome.result.raw["signa_grade"] == "A"
     assert outcome.result.raw["signa_daily_direction"] == "UP"
-    assert outcome.result.components["signa"] == 2
+    assert outcome.result.components["signa"] == 0
 
 
-def test_discord_payload_shows_signa_flow_field():
+def test_discord_payload_shows_signa_observational_context_field():
     result = score_setup(setup_payload(
         ticker="QQQ",
         signa_symbol="QQQ",
@@ -695,12 +695,13 @@ def test_discord_payload_shows_signa_flow_field():
     embed = build_discord_payload(result)["embeds"][0]
     field_map = {field["name"]: field["value"] for field in embed["fields"]}
 
-    assert "Signa Flow" in field_map
-    assert "QQQ" in field_map["Signa Flow"]
-    assert "grade B" in field_map["Signa Flow"]
-    assert "score 74" in field_map["Signa Flow"]
-    assert "UP" in field_map["Signa Flow"]
-    assert result.components["signa"] == 2
+    assert "Signa Context" in field_map
+    assert "Observational" in field_map["Signa Context"]
+    assert "QQQ" in field_map["Signa Context"]
+    assert "grade B" in field_map["Signa Context"]
+    assert "score 74" in field_map["Signa Context"]
+    assert "UP" in field_map["Signa Context"]
+    assert result.components["signa"] == 0
 
 
 def test_options_config_loads_signa_settings(tmp_path):

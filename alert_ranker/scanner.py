@@ -3,20 +3,16 @@
 from __future__ import annotations
 
 import asyncio
-import math
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
-
-import httpx
 
 from .bar_context import BarContextBuilder
 from .config import ScannerConfig
 from .discord import AlertDecision, DiscordAlerter
 from .lifecycle import classify_candidate, open_candidate_fields, resolve_open_setup
 from .market_data import MarketDataClient, build_provider_capabilities
-from .rh_options import build_candidate_embed
 from .scorer import ScoreResult, is_ny_open, score_setup
 from .storage import ScanStorage
 from sources.signa_client import SignaClient
@@ -30,40 +26,6 @@ class ScanOutcome:
     storage_id: int
     shadow_id: int
     shadow_reason: str = ""
-
-
-_BULLISH_SIGNAL_LABELS = frozenset({"BULLISH", "UP", "LONG", "BUY", "POSITIVE"})
-_BEARISH_SIGNAL_LABELS = frozenset({"BEARISH", "DOWN", "SHORT", "SELL", "NEGATIVE"})
-_SIGNAL_MULTIPLIERS = {"K": 1_000.0, "M": 1_000_000.0, "B": 1_000_000_000.0}
-
-
-def signal_direction(value: Any) -> str | None:
-    """Map explicit labels or a signed signal value to LONG/SHORT.
-
-    Zero, non-finite values, and unrecognized text are ambiguous and return
-    ``None`` so callers fail safe instead of defaulting to either direction.
-    """
-    if value is None or isinstance(value, bool):
-        return None
-    text = str(value).strip().upper()
-    if text in _BULLISH_SIGNAL_LABELS:
-        return "LONG"
-    if text in _BEARISH_SIGNAL_LABELS:
-        return "SHORT"
-    normalized = text.replace(",", "").replace("$", "")
-    if normalized.endswith("%"):
-        normalized = normalized[:-1]
-    multiplier = 1.0
-    if normalized[-1:] in _SIGNAL_MULTIPLIERS:
-        multiplier = _SIGNAL_MULTIPLIERS[normalized[-1]]
-        normalized = normalized[:-1]
-    try:
-        number = float(normalized) * multiplier
-    except (TypeError, ValueError):
-        return None
-    if not math.isfinite(number) or number == 0:
-        return None
-    return "LONG" if number > 0 else "SHORT"
 
 
 class OptionsScanner:
@@ -171,13 +133,10 @@ class OptionsScanner:
                 )
         elif not classification.reason.startswith("provider_error"):
             shadow_reason = "not_a_candidate:" + ",".join(classification.missing)
-        # Fire enriched options candidate alert when Signa qualifies — never on
-        # a failed or incomplete scan, and never at all once the causal lane
-        # is active without a mechanically triggered setup behind it.
-        if self._legacy_callout_allowed(normalized) and (
-            not normalized.get("market_data_error") or "price" in (context or {})
-        ):
-            await self._maybe_send_candidate_alert(ticker, normalized, now)
+
+        # Signa is observational telemetry only. There is intentionally no
+        # second Signa-only Discord path here; all user-facing scanner alerts
+        # flow through the same structural gate and DiscordAlerter above.
         return ScanOutcome(
             result, decision.sent, suppression_reason, storage_id, shadow_id, shadow_reason
         )
@@ -253,109 +212,6 @@ class OptionsScanner:
                 normalized.get("setup_suppression_reason") or f"no_setup:{str(status).lower()}"
             )
         return ""
-
-    def _legacy_callout_allowed(self, normalized: dict[str, Any]) -> bool:
-        """Whether the pre-structure Signa-only Discord path may still fire.
-
-        That path predates any structural proof: it needs only a Signa score
-        and grade, substitutes Signa pivots for gamma walls, defaults the
-        regime, and posts to Discord independently of everything above. A high
-        Signa grade is not a setup, and a Phase 1 shadow campaign contaminated
-        by Signa-only callouts cannot measure the setups it exists to measure.
-        So once the causal lane is active, only a mechanically TRIGGERED setup
-        lets it through -- including on the webhook path, which carries no
-        mechanical verdict of its own. The function itself is left intact for
-        the later consolidation pass and for the historical evidence it
-        produced.
-        """
-        if not self._causal_lane_active():
-            return True
-        return normalized.get("setup_status") == "TRIGGERED"
-
-    async def _maybe_send_candidate_alert(
-        self, ticker: str, normalized: dict[str, Any], now: datetime
-    ) -> None:
-        """Send enriched options Discord when Signa score/grade qualify.
-
-        Uses Signa pivots as proxy GEX walls (same approach as evaluate-auto).
-        Fires in addition to (not instead of) the generic watchlist alert.
-        Advisory only — no gates blocked, no orders placed.
-        """
-        discord_url = self.config.discord_webhook_url
-        if not discord_url:
-            return
-
-        score = normalized.get("signa_score")
-        grade = normalized.get("signa_grade")
-        direction_raw = normalized.get("signa_daily_direction")
-        price_raw = normalized.get("price")
-        direction = signal_direction(direction_raw)
-
-        if not score or not grade or direction is None or not price_raw:
-            return
-        try:
-            score_f = float(score)
-            price_f = float(price_raw)
-        except (TypeError, ValueError):
-            return
-
-        if score_f < 70:
-            return
-        if str(grade).upper() not in ("A+", "A", "B"):
-            return
-
-        # Earnings guard — suppress alert if earnings within 5 days
-        earnings_note: str | None = None
-        earnings_raw = normalized.get("earnings_date")
-        if earnings_raw:
-            try:
-                from datetime import date
-                earnings_dt = date.fromisoformat(str(earnings_raw))
-                days_to_earnings = (earnings_dt - now.date()).days
-                if 0 <= days_to_earnings <= 5:
-                    return  # too close to earnings — don't ping
-                if days_to_earnings <= 14:
-                    earnings_note = f"Earnings in {days_to_earnings}d ({earnings_raw})"
-            except ValueError:
-                pass
-
-        # GEX walls: use Signa pivots as proxy (S1 = put wall, R1 = call wall)
-        pivot_s1 = normalized.get("signa_pivot_s1")
-        pivot_r1 = normalized.get("signa_pivot_r1")
-        call_wall: float | None = None
-        put_wall: float | None = None
-        regime = "TRANSITION"
-        try:
-            if pivot_s1 and pivot_r1:
-                put_wall = float(pivot_s1)
-                call_wall = float(pivot_r1)
-                if price_f > call_wall:
-                    regime = "BREAKOUT"
-                elif price_f < put_wall:
-                    regime = "BREAKDOWN"
-                elif abs(price_f - call_wall) / price_f <= 0.01 or abs(price_f - put_wall) / price_f <= 0.01:
-                    regime = "LOW_PINNING"
-        except (TypeError, ValueError):
-            pass
-
-        embed = build_candidate_embed(
-            ticker,
-            direction,
-            score_f,
-            str(grade).upper(),
-            price_f,
-            call_wall=call_wall,
-            put_wall=put_wall,
-            regime=regime,
-            note=earnings_note,
-        )
-        payload = {"embeds": [embed]}
-        try:
-            await asyncio.to_thread(
-                httpx.post, discord_url, json=payload, timeout=5.0
-            )
-        except Exception:
-            pass
 
     async def _build_normalized_data(
         self, ticker: str, context: dict[str, Any], now: datetime
@@ -501,6 +357,17 @@ class OptionsScanner:
                 "signa_risk_rating": context.get("signa_risk_rating"),
                 "signa_pivot_s1": context.get("signa_pivot_s1"),
                 "signa_pivot_r1": context.get("signa_pivot_r1"),
+                "signa_requested_timeframe": context.get("signa_requested_timeframe"),
+                "signa_retrieved_at": context.get("signa_retrieved_at"),
+                "signa_engine_run_at": context.get("signa_engine_run_at"),
+                "signa_technicals_as_of": context.get("signa_technicals_as_of"),
+                "signa_stale": context.get("signa_stale"),
+                "signa_cached": context.get("signa_cached"),
+                "signa_raw_engine_grade": context.get("signa_raw_engine_grade"),
+                "signa_raw_engine_score": context.get("signa_raw_engine_score"),
+                "signa_raw_engine_direction": context.get("signa_raw_engine_direction"),
+                "signa_raw_data_direction": context.get("signa_raw_data_direction"),
+                "signa_raw_payload": context.get("signa_raw_payload"),
             }
         symbol = self._signa_symbol_for(ticker)
         client = self.signa_client or SignaClient(
@@ -508,8 +375,14 @@ class OptionsScanner:
             timeout=self.config.signa_timeout_seconds,
         )
         signal = await asyncio.to_thread(client.fetch_signal, symbol)
+        provenance = signal.provenance_fields()
         if not signal.ok:
-            return {"signa_symbol": symbol, "signa_error": signal.error}
+            return {
+                "signa_symbol": symbol,
+                "signa_error": signal.error,
+                "signa_raw_payload": signal.raw,
+                **provenance,
+            }
         return {
             "signa_symbol": symbol,
             "signa_grade": signal.grade,
@@ -518,8 +391,8 @@ class OptionsScanner:
             "signa_weekly_direction": signal.weekly_direction,
             "signa_action": signal.action,
             "signa_risk_rating": signal.risk_rating,
-            "signa_pivot_s1": getattr(signal, "pivot_s1", None),
-            "signa_pivot_r1": getattr(signal, "pivot_r1", None),
+            "signa_raw_payload": signal.raw,
+            **provenance,
         }
 
     def _signa_symbol_for(self, ticker: str) -> str:
@@ -552,6 +425,12 @@ class OptionsScanner:
                 "score": s["raw"].get("signa_score"),
                 "action": s["raw"].get("signa_action"),
                 "direction": s["raw"].get("signa_daily_direction") or s["raw"].get("signa_direction"),
+                "requestedTimeframe": s["raw"].get("signa_requested_timeframe"),
+                "retrievedAt": s["raw"].get("signa_retrieved_at"),
+                "engineRunAt": s["raw"].get("signa_engine_run_at"),
+                "technicalsAsOf": s["raw"].get("signa_technicals_as_of"),
+                "stale": s["raw"].get("signa_stale"),
+                "cached": s["raw"].get("signa_cached"),
                 "alertSent": s["alert_sent"],
                 "suppressedReason": s["alert_suppression_reason"] or None,
             }
@@ -602,5 +481,8 @@ def _selected_contract(raw: dict[str, Any]) -> dict[str, Any]:
 
 
 def _shadow_setup_inputs(raw: dict[str, Any]) -> dict[str, Any]:
-    omitted = {"market_data_raw", "tastytrade_raw"}
+    # Keep compact Signa provenance in the shadow row, but avoid duplicating the
+    # full raw API payload into every shadow candidate. The scan journal still
+    # retains `signa_raw_payload` for reconstruction.
+    omitted = {"market_data_raw", "tastytrade_raw", "signa_raw_payload"}
     return {key: value for key, value in raw.items() if key not in omitted}
