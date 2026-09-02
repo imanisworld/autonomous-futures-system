@@ -226,14 +226,15 @@ def test_matching_authorities_produce_actionable_triggered_thesis():
     assert snapshot.contract_plan.premium_stop == 1.60
     assert snapshot.contract_plan.max_contracts == 1
     assert snapshot.risk_plan is not None
-    assert snapshot.risk_plan.planned_dollar_risk == 40.0
+    assert math.isclose(snapshot.risk_plan.planned_dollar_risk, 40.0)
     assert snapshot.risk_plan.capital_deployed == 200.0
     assert snapshot.risk_plan.max_trade_risk_dollars == MAX_TRADE_RISK
     assert snapshot.risk_plan.aggregate_open_risk == 0.0
-    assert snapshot.risk_plan.projected_open_risk == 40.0
+    assert math.isclose(snapshot.risk_plan.projected_open_risk, 40.0)
     assert snapshot.risk_plan.max_aggregate_open_risk_dollars == MAX_AGGREGATE_RISK
     assert snapshot.risk_plan.open_position_count == 0
-    assert snapshot.risk_plan.correlation_risk == (("mega_cap_tech", 40.0),)
+    assert snapshot.risk_plan.correlation_risk[0][0] == "mega_cap_tech"
+    assert math.isclose(snapshot.risk_plan.correlation_risk[0][1], 40.0)
 
 
 def test_gex_unavailable_can_still_pass_when_required_market_proof_is_aligned():
