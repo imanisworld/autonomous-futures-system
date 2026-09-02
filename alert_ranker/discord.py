@@ -43,10 +43,9 @@ class DiscordAlerter:
     async def send_if_eligible(self, result: ScoreResult, now: datetime | None = None) -> AlertDecision:
         if result.score < self.config.alert_threshold:
             # The scorer already knows why it could not score (missing feed
-            # inputs, against_vwap, against_trend).  Reporting
+            # inputs, against_vwap, against_trend). Reporting
             # "score_below_threshold" for those cases makes a dead data feed
-            # indistinguishable from a quiet market -- which is how 11,974
-            # unscorable scans were logged as ordinary near-misses.
+            # indistinguishable from a quiet market.
             return AlertDecision(False, result.reason or "score_below_threshold")
         if not self.config.discord_webhook_url:
             return AlertDecision(False, "discord_not_configured")
@@ -87,7 +86,7 @@ def build_discord_payload(result: ScoreResult) -> dict[str, Any]:
     color = 3066993 if result.direction == "LONG" else 15158332
     fields = [
         {"name": "Direction", "value": direction, "inline": True},
-        {"name": "Confidence", "value": f"{result.score * 10}/100", "inline": True},
+        {"name": "Scanner Score", "value": f"{result.score}/10", "inline": True},
         {"name": "Pattern", "value": result.pattern or "N/A", "inline": True},
         {"name": "Strat Combo", "value": _strat_combo_text(result), "inline": True},
         {"name": "Timeframe", "value": _timeframe_text(result), "inline": True},
@@ -100,11 +99,11 @@ def build_discord_payload(result: ScoreResult) -> dict[str, Any]:
         {"name": "Volume", "value": _ratio_text(volume_ratio), "inline": True},
         {"name": "IV Rank", "value": _iv_text(iv_rank, iv_label), "inline": True},
         {"name": "Premium Value", "value": _premium_value_text(result), "inline": True},
-        {"name": "Signa Flow", "value": _signa_text(result), "inline": True},
+        {"name": "Signa Context", "value": _signa_text(result), "inline": True},
         {"name": "VWAP", "value": _pass_fail(result.components.get("vwap")), "inline": True},
         {"name": "Trend", "value": _pass_fail(result.components.get("trend")), "inline": True},
         {"name": "Why", "value": _why_text(result, session), "inline": False},
-        {"name": "Edge", "value": _edge_text(result), "inline": False},
+        {"name": "Context", "value": _edge_text(result), "inline": False},
         {"name": "Risk", "value": _risk_text(result), "inline": False},
     ]
     return {
@@ -125,10 +124,16 @@ def build_discord_payload(result: ScoreResult) -> dict[str, Any]:
     }
 
 
+def _mechanically_triggered(result: ScoreResult) -> bool:
+    return str(result.raw.get("setup_status") or "").upper() == "TRIGGERED"
+
+
 def _alert_state(result: ScoreResult) -> str:
     raw_state = str(result.raw.get("status") or result.raw.get("alert_state") or "").lower()
-    if raw_state in {"forming", "developing", "on_deck"}:
-        return "forming"
+    if not _mechanically_triggered(result):
+        if raw_state in {"forming", "developing", "on_deck"}:
+            return "forming"
+        return "watching"
     if result.score >= 9:
         return "golden"
     return "confirmed"
@@ -137,26 +142,28 @@ def _alert_state(result: ScoreResult) -> str:
 def _alert_title(result: ScoreResult, side: str, state: str) -> str:
     prefix = "▲"
     if state == "forming":
-        return f"{prefix} {result.ticker} {side} - SETUP FORMING ⭐"
+        return f"{prefix} {result.ticker} {side} - SETUP FORMING"
+    if state == "watching":
+        return f"{prefix} {result.ticker} {side} - SETUP WATCHING"
     if state == "golden":
-        return f"{prefix} {result.ticker} {side} - A+ CONFIRMED ⭐ GOLDEN SETUP"
-    return f"{prefix} {result.ticker} {side} - A+ SETUP CONFIRMED"
+        return f"{prefix} {result.ticker} {side} - MECHANICAL SETUP TRIGGERED"
+    return f"{prefix} {result.ticker} {side} - SETUP TRIGGERED"
 
 
 def _alert_description(result: ScoreResult, side: str, state: str) -> str:
     raw = result.raw
+    if state in {"forming", "watching"}:
+        return (
+            f"**{result.ticker} {side}** is observational only. "
+            "Mechanical setup proof is not TRIGGERED; do not treat scanner score or Signa as entry permission."
+        )
     thesis = raw.get("thesis") or raw.get("summary")
     if thesis:
         return str(thesis)
-    if state == "forming":
-        return (
-            f"**{result.ticker} {side}** structure is building. "
-            "All gates not yet passed. Monitor closely - do not enter early."
-        )
     return (
         f"**{result.ticker} is showing "
         f"{'bullish' if result.direction == 'LONG' else 'bearish'} structure.** "
-        f"All gates passed. System confidence: {result.score * 10}/100."
+        f"Mechanical setup status: TRIGGERED. Scanner score: {result.score}/10."
     )
 
 
@@ -176,12 +183,15 @@ def _contract_text(result: ScoreResult, side: str) -> str:
 
 def _why_text(result: ScoreResult, session: str) -> str:
     raw = result.raw
-    why = raw.get("why") or raw.get("why_forming")
-    if why:
-        return str(why)
+    if _mechanically_triggered(result):
+        why = raw.get("why") or raw.get("why_forming")
+        if why:
+            return str(why)
     reasons = []
-    if result.pattern and result.pattern.upper() != "N/A":
-        reasons.append(f"{result.pattern} confirmed")
+    if _mechanically_triggered(result):
+        reasons.append("mechanical setup TRIGGERED")
+    elif result.pattern and result.pattern.upper() != "N/A":
+        reasons.append(f"{result.pattern} observed")
     if result.components.get("vwap"):
         reasons.append("VWAP aligned")
     if result.components.get("trend"):
@@ -190,26 +200,29 @@ def _why_text(result: ScoreResult, session: str) -> str:
         reasons.append("volume expanding")
     if result.components.get("session"):
         reasons.append(f"{session} window")
-    return "; ".join(reasons) if reasons else "Setup passed the scanner gates."
+    return "; ".join(reasons) if reasons else "Observational scanner context only."
 
 
 def _edge_text(result: ScoreResult) -> str:
     raw = result.raw
-    edge = raw.get("edge") or raw.get("flow_note") or raw.get("gex_note")
-    if edge:
-        return str(edge)
-    gates = sum(1 for value in result.components.values() if value > 0)
-    return f"Multi-factor alignment confirmed. {gates} positive gates passed."
+    if _mechanically_triggered(result):
+        edge = raw.get("edge") or raw.get("flow_note") or raw.get("gex_note")
+        if edge:
+            return str(edge)
+    gates = sum(
+        1 for name, value in result.components.items() if name != "signa" and value > 0
+    )
+    return f"{gates} positive scanner components. Signa is observational and not counted."
 
 
 def _risk_text(result: ScoreResult) -> str:
     raw = result.raw
+    if not _mechanically_triggered(result):
+        return "No entry. Wait for mechanical TRIGGERED setup and canonical contract/risk proof."
     risk = raw.get("risk")
     if risk:
         return str(risk)
-    if _alert_state(result) == "forming":
-        return "Setup is developing - NOT confirmed. Wait for the A+ signal before entering."
-    return "Size for your account. Exit at stop - no exceptions. Targets 1 and 2 are the plan."
+    return "Mechanical setup triggered; use canonical invalidation, targets, contract and risk validation before any trade."
 
 
 def _strat_combo_text(result: ScoreResult) -> str:
@@ -303,10 +316,10 @@ def _signa_text(result: ScoreResult) -> str:
     action = raw.get("signa_action")
     error = raw.get("signa_error")
     if error:
-        return f"Unavailable ({error})"
+        return f"Observational · unavailable ({error})"
     if not any((grade, score, direction, action)):
         return "N/A"
-    parts = []
+    parts = ["Observational"]
     if symbol:
         parts.append(str(symbol))
     if grade:
@@ -320,7 +333,8 @@ def _signa_text(result: ScoreResult) -> str:
         parts.append(str(direction))
     if action and action != direction:
         parts.append(str(action))
-    component = result.components.get("signa", 0)
-    if component:
-        parts.append(f"score {component:+}")
-    return " · ".join(parts) if parts else "N/A"
+    if raw.get("signa_stale") is True:
+        parts.append("stale")
+    if raw.get("signa_cached") is True:
+        parts.append("cached")
+    return " · ".join(parts)

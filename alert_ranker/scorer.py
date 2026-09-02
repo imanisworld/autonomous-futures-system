@@ -52,24 +52,6 @@ def is_ny_open(now: datetime, tz_name: str = "America/New_York") -> bool:
     )
 
 
-def _signa_component(data: dict[str, Any], direction: str) -> int:
-    grade = str(data.get("signa_grade") or "").strip().upper()
-    signa_direction = str(data.get("signa_daily_direction") or data.get("signa_direction") or "").strip().upper()
-    if not grade and not signa_direction:
-        return 0
-    if grade[:1] in {"C", "D", "F"}:
-        return -3
-    opposes = (direction == "LONG" and signa_direction == "DOWN") or (direction == "SHORT" and signa_direction == "UP")
-    if opposes:
-        return -3
-    aligns = (direction == "LONG" and signa_direction == "UP") or (direction == "SHORT" and signa_direction == "DOWN")
-    if grade[:1] in {"A", "B"} and aligns:
-        return 2
-    if grade[:1] in {"A", "B"}:
-        return 1
-    return 0
-
-
 def score_setup(data: dict[str, Any], now: datetime | None = None) -> ScoreResult:
     now = now or datetime.now(ZoneInfo("America/New_York"))
     ticker = str(data.get("ticker") or "").upper()
@@ -93,20 +75,17 @@ def score_setup(data: dict[str, Any], now: datetime | None = None) -> ScoreResul
     )
 
     if direction not in {"LONG", "SHORT"}:
-        # Distinguish "the feed gave us nothing to score" from "the inputs are
-        # present but disagree".  Both yield an unknown direction, but only the
-        # first one means the lane is blind, and that difference is the whole
-        # signal when a provider silently stops supplying fields.
         missing = [
             name
             for name, value in (("price", price), ("vwap", vwap), ("ema20", ema20))
             if value is None
         ]
         reason = f"missing_inputs:{','.join(missing)}" if missing else "direction_unknown"
-        return ScoreResult(ticker, "UNKNOWN", 0, pattern, {}, dict(data), reason)
+        # Even an unscorable scan may carry Signa telemetry. Keep its explicit
+        # zero contribution visible so no downstream observer can mistake the
+        # absence of a component for an unrecorded scoring path.
+        return ScoreResult(ticker, "UNKNOWN", 0, pattern, {"signa": 0}, dict(data), reason)
 
-    # Build full component breakdown before applying hard gates so callers
-    # can always see what would have scored (useful for debugging and logging).
     components = {
         "strat_pattern": 3 if pattern and pattern.upper() != "N/A" else 0,
         "vwap": 2 if vwap_pass else 0,
@@ -114,7 +93,10 @@ def score_setup(data: dict[str, Any], now: datetime | None = None) -> ScoreResul
         "volume": 2 if volume_ratio is not None and volume_ratio > 1.2 else 0,
         "iv_rank": 0,
         "premium_value": 0,
-        "signa": _signa_component(data, direction),
+        # Signa is retained in raw telemetry/display only. The completed
+        # effectiveness audit found no material incremental value, so Signa
+        # cannot raise or lower the actionable scanner score.
+        "signa": 0,
         "session": 1 if is_ny_open(now) else 0,
     }
     if iv_rank is not None:
@@ -131,9 +113,6 @@ def score_setup(data: dict[str, Any], now: datetime | None = None) -> ScoreResul
         enriched["option_value_verdict"] = valuation.verdict
         enriched["option_value_reason"] = valuation.reason
 
-    # VWAP and trend are hard structural gates — a setup trading against either
-    # is not actionable regardless of other factors. Score is forced to 0 but
-    # the full component dict is preserved so callers can see what failed and why.
     if not vwap_pass:
         return ScoreResult(ticker, direction, 0, pattern, components, enriched, "against_vwap")
     if not trend_pass:
