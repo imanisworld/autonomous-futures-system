@@ -1,14 +1,13 @@
 """Pure Phase-1 options thesis/plan manager.
 
-This is state reduction, not execution.  Repeated Signa observations are
-collapsed into telemetry on one thesis.  Targets are delegated to the existing
+This is state reduction, not execution. Repeated Signa observations are
+collapsed into telemetry on one thesis. Targets are delegated to the existing
 ``options_manager.levels.find_targets`` authority; this module does not invent a
 second target algorithm.
 """
 
 from __future__ import annotations
 
-from dataclasses import replace
 from typing import Optional
 
 from options_manager.levels import LevelFinderInputs, find_targets
@@ -42,7 +41,9 @@ def _snapshot_identity(snapshot: TradePlanSnapshot) -> tuple[str, str, str, str]
     )
 
 
-def _usable_levels(levels: tuple[StructuralLevel, ...]) -> tuple[tuple[StructuralLevel, ...], list[str]]:
+def _usable_levels(
+    levels: tuple[StructuralLevel, ...],
+) -> tuple[tuple[StructuralLevel, ...], list[str]]:
     usable: list[StructuralLevel] = []
     warnings: list[str] = []
     for level in levels:
@@ -56,7 +57,9 @@ def _usable_levels(levels: tuple[StructuralLevel, ...]) -> tuple[tuple[Structura
     return tuple(usable), warnings
 
 
-def _target_source(price: Optional[float], levels: tuple[StructuralLevel, ...]) -> Optional[str]:
+def _target_source(
+    price: Optional[float], levels: tuple[StructuralLevel, ...]
+) -> Optional[str]:
     if price is None:
         return None
     for level in levels:
@@ -72,8 +75,16 @@ def _resolve_targets(observation: PlanObservation, policy: PlanPolicy):
         return None, (), ("underlying_invalidation_missing",)
 
     usable, warnings = _usable_levels(observation.levels)
-    resistance = tuple(level.price for level in usable if level.side == "RESISTANCE")
-    support = tuple(level.price for level in usable if level.side == "SUPPORT")
+    # The shared target finder correctly chooses numeric levels on the profit
+    # side, but it intentionally merges support/resistance inputs. The plan
+    # adapter has richer provenance, so do not allow a semantically wrong wall
+    # (e.g. a stale SUPPORT above a CALL entry) to become a profit target.
+    if observation.direction == "CALL":
+        resistance = tuple(level.price for level in usable if level.side == "RESISTANCE")
+        support: tuple[float, ...] = ()
+    else:
+        resistance = ()
+        support = tuple(level.price for level in usable if level.side == "SUPPORT")
 
     result = find_targets(
         LevelFinderInputs(
@@ -110,13 +121,15 @@ def _actionability(
         blocking.append("htf_not_aligned")
     if not observation.event_risk_clear:
         blocking.append("event_risk_not_clear")
-    # Deliberately absent: Signa.  The completed effectiveness audit assigns it
+    # Deliberately absent: Signa. The completed effectiveness audit assigns it
     # an observational role only; aligned/opposed/missing Signa cannot alter
     # actionability here.
     return (not blocking, tuple(blocking))
 
 
-def _conviction(observation: PlanObservation, policy: PlanPolicy, actionable: bool) -> ConvictionBand:
+def _conviction(
+    observation: PlanObservation, policy: PlanPolicy, actionable: bool
+) -> ConvictionBand:
     if not actionable:
         return ConvictionBand.OBSERVATIONAL
     threshold = policy.high_conviction_min_confirmations
@@ -141,6 +154,11 @@ def _status(
         if previous is None or previous.status != PlanStatus.ACTIVE:
             raise ValueError("mark_exited requires an existing ACTIVE thesis")
         return PlanStatus.EXITED
+    # Once the human has marked a proven plan active, later observations update
+    # its management state; they do not silently demote the held position back
+    # to TRIGGERED merely because ``mark_active`` was not repeated every poll.
+    if previous is not None and previous.status == PlanStatus.ACTIVE:
+        return PlanStatus.ACTIVE
     if observation.mark_active:
         if actionable:
             return PlanStatus.ACTIVE
@@ -150,7 +168,9 @@ def _status(
     return PlanStatus.WATCHING
 
 
-def _append_source(previous: Optional[TradePlanSnapshot], source: Optional[str]) -> tuple[str, ...]:
+def _append_source(
+    previous: Optional[TradePlanSnapshot], source: Optional[str]
+) -> tuple[str, ...]:
     refs = list(previous.source_references if previous is not None else ())
     if source and source not in refs:
         refs.append(source)
@@ -212,7 +232,7 @@ def update_trade_thesis(
 ) -> PlanUpdate:
     """Create or update one advisory thesis from one caller-supplied observation.
 
-    The function performs no I/O.  Terminal theses cannot be reopened in place;
+    The function performs no I/O. Terminal theses cannot be reopened in place;
     a later setup must start a new thesis instead of mutating history.
     """
 
@@ -233,10 +253,14 @@ def update_trade_thesis(
         if _snapshot_identity(previous) != _identity(observation):
             raise ValueError("observation identity does not match existing thesis")
 
-    target_result, target_warnings, target_preconditions = _resolve_targets(observation, policy)
+    target_result, target_warnings, target_preconditions = _resolve_targets(
+        observation, policy
+    )
     if target_result is None:
         target_status = "INVALID"
-        target_reason_code = target_preconditions[0] if target_preconditions else "targets_unresolved"
+        target_reason_code = (
+            target_preconditions[0] if target_preconditions else "targets_unresolved"
+        )
         target_1 = target_2 = rr_1 = rr_2 = None
         usable_levels, level_warnings = _usable_levels(observation.levels)
         warnings = tuple((*target_warnings, *level_warnings))
@@ -248,7 +272,9 @@ def update_trade_thesis(
         rr_1 = target_result.rr_1
         rr_2 = target_result.rr_2
         usable_levels, level_warnings = _usable_levels(observation.levels)
-        warnings = tuple((*target_warnings, *level_warnings, *target_result.warnings))
+        warnings = tuple(
+            (*target_warnings, *level_warnings, *target_result.warnings)
+        )
 
     actionable, base_blocking = _actionability(
         observation, target_status, target_reason_code, target_preconditions
