@@ -163,6 +163,7 @@ def test_inverse_and_legacy_proof_modes_are_mutually_exclusive():
     both_active = dataclasses.replace(
         cfg,
         mnq_orb_breakout_inverse_mode="paper_sim",
+        mnq_orb_breakout_inverse_epoch_start="2026-09-02T00:00:00+00:00",
         mnq_orb_breakout_proof_mode="paper_sim",
     )
     with pytest.raises(ConfigError, match="cannot both be active"):
@@ -172,6 +173,7 @@ def test_inverse_and_legacy_proof_modes_are_mutually_exclusive():
     lane = dataclasses.replace(
         cfg,
         mnq_orb_breakout_inverse_mode="paper_sim",
+        mnq_orb_breakout_inverse_epoch_start="2026-09-02T00:00:00+00:00",
         mnq_orb_breakout_proof_mode="observe_only",
     )
     _validate_config(lane)

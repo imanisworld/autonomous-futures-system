@@ -120,6 +120,22 @@ from context.range_signal import (
     build_range_signal as _build_range_signal,
 )
 
+
+def _inverse_accounting_epoch_start(cfg: SystemConfig) -> Optional[datetime]:
+    if getattr(cfg, "mnq_orb_breakout_inverse_mode", "observe_only") != "paper_sim":
+        return None
+    raw = getattr(cfg, "mnq_orb_breakout_inverse_epoch_start", None)
+    if not raw:
+        raise ValueError(
+            "active MNQ inverse ORB lane has no accounting epoch start"
+        )
+    parsed = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        raise ValueError(
+            "active MNQ inverse ORB accounting epoch start has no UTC offset"
+        )
+    return parsed.astimezone(timezone.utc)
+
 # One-shot gate so a single structural break does not re-emit a BREAK_CLOSE
 # candidate every 15m bar (context/range_signal.RangeBreakArmState).
 _RANGE_BREAK_ARM = _RangeBreakArmState()
@@ -843,6 +859,15 @@ def process_alert(
                 daily_state.has_open_position = True
                 break
 
+    # A clean inverse-ORB paper epoch owns its risk counters from the declared
+    # boundary forward. Keep the global open-position result authoritative so
+    # an older position can never be hidden by the accounting isolation.
+    _inverse_epoch_start = _inverse_accounting_epoch_start(cfg)
+    if _inverse_epoch_start is not None:
+        _global_has_open_position = daily_state.has_open_position
+        daily_state = journal.get_daily_state_since(_inverse_epoch_start, today)
+        daily_state.has_open_position = _global_has_open_position
+
     result: dict = {
         "timestamp": (
             five_min_trigger_payload.timestamp if five_min_trigger_payload else payload.timestamp
@@ -1161,10 +1186,26 @@ def process_alert(
                 fill = tv.resolve_position()
             elif same_instrument:
                 # Paper simulation: resolve against THIS bar's OHLC.
-                _paper_balance = journal.get_account_balance(
-                    cfg.position_sizing.starting_balance, today
-                )
                 if _inverse_paper_position:
+                    _position_epoch_raw = (
+                        open_pos.get("mnq_orb_breakout_inverse_audit") or {}
+                    ).get("accounting_epoch_start")
+                    _position_epoch = (
+                        datetime.fromisoformat(
+                            str(_position_epoch_raw).replace("Z", "+00:00")
+                        )
+                        if _position_epoch_raw
+                        else _inverse_epoch_start
+                    )
+                    if _position_epoch is None:
+                        raise ValueError(
+                            "inverse paper position has no accounting epoch start"
+                        )
+                    _paper_balance, _ = journal.get_account_state_since(
+                        cfg.position_sizing.starting_balance,
+                        _position_epoch,
+                        today,
+                    )
                     broker = PaperBroker(
                         starting_balance=_paper_balance,
                         slippage_ticks=1.0,
@@ -1177,6 +1218,9 @@ def process_alert(
                         },
                     )
                 elif _proof_paper_position:
+                    _paper_balance = journal.get_account_balance(
+                        cfg.position_sizing.starting_balance, today
+                    )
                     broker = PaperBroker(
                         starting_balance=_paper_balance,
                         slippage_ticks=float(getattr(cfg, "fill_slippage_ticks", 0.0) or 0.0),
@@ -1187,6 +1231,9 @@ def process_alert(
                         entry_fill_model="market",
                     )
                 else:
+                    _paper_balance = journal.get_account_balance(
+                        cfg.position_sizing.starting_balance, today
+                    )
                     broker = _paper_broker(_paper_balance, cfg)
                 broker.restore_position(
                     instrument=open_pos["instrument"] or state.instrument,
@@ -2064,13 +2111,23 @@ def process_alert(
         journal_entry["shadow_range_signal"] = _range_signal_dict
 
     # ── Step 4: Risk validation ───────────────────────────────────────────────
-    journal_balance = journal.get_account_balance(
-        cfg.position_sizing.starting_balance, today
-    )
     _inverse_paper_active = (
         mnq_breakout_inverse_decision is not None
         and mnq_breakout_inverse_decision.apply_override
     )
+    _inverse_epoch_peak = None
+    if _inverse_paper_active:
+        if _inverse_epoch_start is None:
+            raise ValueError("inverse paper candidate has no accounting epoch start")
+        journal_balance, _inverse_epoch_peak = journal.get_account_state_since(
+            cfg.position_sizing.starting_balance,
+            _inverse_epoch_start,
+            today,
+        )
+    else:
+        journal_balance = journal.get_account_balance(
+            cfg.position_sizing.starting_balance, today
+        )
     if _inverse_paper_active:
         # Construct the isolated paper adapter directly. Do not even
         # instantiate the configured external broker before replacing it.
@@ -2113,8 +2170,12 @@ def process_alert(
     if account_balance is None:
         account_balance = journal_balance
     daily_state.account_balance = account_balance
-    daily_state.account_peak_balance = journal.get_account_peak_balance(
-        cfg.position_sizing.starting_balance, today
+    daily_state.account_peak_balance = (
+        _inverse_epoch_peak
+        if _inverse_paper_active
+        else journal.get_account_peak_balance(
+            cfg.position_sizing.starting_balance, today
+        )
     )
     risk_engine = RiskEngine(config=cfg)
     recommended_contracts = risk_engine.recommended_contracts(
