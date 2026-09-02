@@ -46,8 +46,10 @@ from .config import OptionsManagerConfig
 from .human_confirm import ConfirmationRecord
 from .order_ticket import PreparedOrderTicket
 from .plans.base import (
+    ContractPlanSnapshot,
     ConvictionBand,
     PlanStatus,
+    RiskPlanSnapshot,
     SignaObservation,
     TradePlanSnapshot,
 )
@@ -406,8 +408,44 @@ def _signa_to_payload(signa: Optional[SignaObservation]) -> Optional[dict]:
     }
 
 
-def _snapshot_to_payload(snapshot: TradePlanSnapshot) -> dict:
+def _contract_plan_to_payload(plan: ContractPlanSnapshot) -> dict:
     return {
+        "expiration": plan.expiration,
+        "strike": plan.strike,
+        "premium": plan.premium,
+        "bid": plan.bid,
+        "ask": plan.ask,
+        "spread_percent": plan.spread_percent,
+        "volume": plan.volume,
+        "open_interest": plan.open_interest,
+        "dte": plan.dte,
+        "max_contracts": plan.max_contracts,
+        "premium_stop": plan.premium_stop,
+        "distance_to_target": plan.distance_to_target,
+        "iv_event_risk": plan.iv_event_risk,
+        "theta_risk": plan.theta_risk,
+        "trade_style": plan.trade_style,
+    }
+
+
+def _risk_plan_to_payload(plan: RiskPlanSnapshot) -> dict:
+    return {
+        "planned_dollar_risk": plan.planned_dollar_risk,
+        "capital_deployed": plan.capital_deployed,
+        "stated_max_dollar_risk": plan.stated_max_dollar_risk,
+        "max_trade_risk_dollars": plan.max_trade_risk_dollars,
+        "aggregate_open_risk": plan.aggregate_open_risk,
+        "projected_open_risk": plan.projected_open_risk,
+        "max_aggregate_open_risk_dollars": plan.max_aggregate_open_risk_dollars,
+        "aggregate_capital_deployed": plan.aggregate_capital_deployed,
+        "projected_capital_deployed": plan.projected_capital_deployed,
+        "open_position_count": plan.open_position_count,
+        "correlation_risk": [list(item) for item in plan.correlation_risk],
+    }
+
+
+def _snapshot_to_payload(snapshot: TradePlanSnapshot) -> dict:
+    payload = {
         "ticker": snapshot.ticker,
         "direction": snapshot.direction,
         "setup_type": snapshot.setup_type,
@@ -439,12 +477,34 @@ def _snapshot_to_payload(snapshot: TradePlanSnapshot) -> dict:
         "latest_signa": _signa_to_payload(snapshot.latest_signa),
         "source_references": list(snapshot.source_references),
     }
+    # Omit absent new fields so snapshots written before this extension keep
+    # their exact canonical JSON/hash and remain readable after upgrade.
+    if snapshot.contract_plan is not None:
+        payload["contract_plan"] = _contract_plan_to_payload(snapshot.contract_plan)
+    if snapshot.risk_plan is not None:
+        payload["risk_plan"] = _risk_plan_to_payload(snapshot.risk_plan)
+    return payload
 
 
 def _snapshot_from_payload(payload: dict) -> TradePlanSnapshot:
     signa_payload = payload.get("latest_signa")
     latest_signa = SignaObservation(**signa_payload) if signa_payload is not None else None
     fingerprint = payload.get("last_signa_fingerprint")
+    contract_payload = payload.get("contract_plan")
+    risk_payload = payload.get("risk_plan")
+    contract_plan = (
+        ContractPlanSnapshot(**contract_payload)
+        if isinstance(contract_payload, dict)
+        else None
+    )
+    risk_plan = None
+    if isinstance(risk_payload, dict):
+        risk_values = dict(risk_payload)
+        risk_values["correlation_risk"] = tuple(
+            (str(item[0]), float(item[1]))
+            for item in risk_values.get("correlation_risk", ())
+        )
+        risk_plan = RiskPlanSnapshot(**risk_values)
     return TradePlanSnapshot(
         ticker=str(payload["ticker"]),
         direction=payload["direction"],
@@ -472,6 +532,8 @@ def _snapshot_from_payload(payload: dict) -> TradePlanSnapshot:
         last_signa_fingerprint=tuple(fingerprint) if fingerprint is not None else None,
         latest_signa=latest_signa,
         source_references=tuple(payload.get("source_references") or ()),
+        contract_plan=contract_plan,
+        risk_plan=risk_plan,
     )
 
 
