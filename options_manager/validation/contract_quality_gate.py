@@ -314,7 +314,7 @@ def check_contract_quality_intake(payload: Any) -> ContractQualityResult:
                 normalized[name] = _coerce_severity(raw_value)
             else:
                 normalized[name] = raw_value
-        except (TypeError, ValueError) as exc:
+        except (TypeError, ValueError, OverflowError) as exc:
             coercion_errors.append(f"invalid value for {name}: {exc}")
 
     for name in _BOOL_FIELDS:
