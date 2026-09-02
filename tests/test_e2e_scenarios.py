@@ -27,6 +27,7 @@ from journal.journal_logger import JournalLogger
 from risk.risk_engine import DailyState, RiskEngine, TradeSetup
 from webhook.payload import AlertPayload
 from webhook.runner import process_alert
+import webhook.runner as runner
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -199,6 +200,24 @@ def _valid_trade_setup(
         contracts=contracts,
         confluence_grade=confluence_grade,
     )
+
+
+def test_memory_critical_blocks_new_paper_entry(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        runner,
+        "read_critical_memory_block",
+        lambda: {"level": "CRITICAL", "reason": "derived headroom exhausted"},
+    )
+    result = process_alert(
+        _base_payload(),
+        config=_base_config(tmp_path),
+        log_dir=str(tmp_path / "logs"),
+        for_date=date(2026, 5, 23),
+    )
+
+    assert result["decision"] == "BLOCKED_MEMORY_CRITICAL"
+    assert result["failed_gates"] == ["MEMORY_CRITICAL"]
+    assert result["reason"] == "derived headroom exhausted"
 
 
 # ─── Scenario A: max_daily_loss ────────────────────────────────────────────────

@@ -25,6 +25,7 @@ CURRENT="${AFS_CURRENT_LINK:-/root/autonomous-futures-system}"
 SERVICE="${AFS_SERVICE:-futures-bot}"
 ROOT="$(git rev-parse --show-toplevel)"
 LOCK_DIR="$SHARED/deploy.lock"
+WATCHER_STATE="${AFS_WATCHER_STATE_FILE:-/tmp/afs_watcher/state.json}"
 
 # rollback takes no ref — let a bare --force-lock land in $2 for that action.
 if [[ "$ACTION" == "rollback" && "$REF" == "--force-lock" ]]; then
@@ -38,6 +39,14 @@ remote() {
 }
 REMOTE_EXEC=remote
 
+deploy_memory_guard_check() {
+  if ! remote "python3 -c 'import json,pathlib,sys; p=pathlib.Path(sys.argv[1]); d=json.loads(p.read_text()) if p.is_file() else {}; g=d.get(\"memory_guard\") or {}; b=d.get(\"blocked\") or {}; raise SystemExit(3 if g.get(\"level\") == \"CRITICAL\" or \"memory_critical\" in b else 0)' '$WATCHER_STATE'"; then
+    echo "deployment refused: afs-watcher memory state is CRITICAL or unreadable in $WATCHER_STATE" >&2
+    echo "wait for the watcher to clear memory_critical after healthy headroom is verified" >&2
+    return 1
+  fi
+}
+
 _require_exact_sha() {
   local value="${1:-}"
   if [[ ! "$value" =~ ^[0-9a-f]{40}$ ]]; then
@@ -47,6 +56,7 @@ _require_exact_sha() {
 }
 
 build_release() {
+  deploy_memory_guard_check || exit 1
   deploy_lock_acquire "$LOCK_DIR" "build $REF" "$0" "$FORCE_LOCK" || exit 1
   trap "deploy_lock_release '$LOCK_DIR' '$DEPLOY_LOCK_OWNER'" EXIT
 
@@ -87,6 +97,7 @@ build_release() {
 }
 
 verify_release() {
+  deploy_memory_guard_check || exit 1
   deploy_lock_acquire "$LOCK_DIR" "verify $REF" "$0" "$FORCE_LOCK" || exit 1
   trap "deploy_lock_release '$LOCK_DIR' '$DEPLOY_LOCK_OWNER'" EXIT
 
@@ -203,6 +214,7 @@ _promote_gate_check() {
 }
 
 promote_release() {
+  deploy_memory_guard_check || exit 1
   deploy_lock_acquire "$LOCK_DIR" "promote $REF" "$0" "$FORCE_LOCK" || exit 1
   trap "deploy_lock_release '$LOCK_DIR' '$DEPLOY_LOCK_OWNER'" EXIT
 
@@ -253,6 +265,7 @@ promote_release() {
 }
 
 rollback_release() {
+  deploy_memory_guard_check || exit 1
   deploy_lock_acquire "$LOCK_DIR" "rollback" "$0" "$FORCE_LOCK" || exit 1
   trap "deploy_lock_release '$LOCK_DIR' '$DEPLOY_LOCK_OWNER'" EXIT
 

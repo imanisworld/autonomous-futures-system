@@ -104,6 +104,7 @@ from execution.mes_trend_consolidation_break_evidence import (
     process_mes_trend_consolidation_break_evidence,
 )
 from execution.paper_broker import TICK_SIZE, NextBarOHLC, PaperBroker
+from ops.watcher_memory_guard import read_critical_memory_block
 from journal.journal_logger import JournalLogger
 from risk.risk_engine import DailyState, RiskEngine, RiskResult, TradeSetup
 from strategy.confluence_scorer import score_setup as _score_setup
@@ -2180,6 +2181,23 @@ def process_alert(
             runner_trail_r=float(getattr(cfg, "runner_trail_r", 0.5) or 0.5),
             entry_fill_model="market",
         )
+    if isinstance(broker, PaperBroker):
+        _memory_block = read_critical_memory_block()
+        if _memory_block is not None:
+            result["decision"] = "BLOCKED_MEMORY_CRITICAL"
+            result["reason"] = str(
+                _memory_block.get("reason")
+                or _memory_block.get("summary")
+                or "afs-watcher reports critical memory pressure"
+            )
+            result["failed_gates"] = ["MEMORY_CRITICAL"]
+            result["memory_guard"] = {
+                key: _memory_block.get(key)
+                for key in ("level", "observed_utc", "reason")
+                if _memory_block.get(key) is not None
+            }
+            logger.warning("PAPER ENTRY BLOCKED: %s", result["reason"])
+            return result
     account_balance = broker.get_account_balance()
     if account_balance is None:
         account_balance = journal_balance

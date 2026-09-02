@@ -1,4 +1,5 @@
 import os
+import json
 import re
 import subprocess
 from pathlib import Path
@@ -32,6 +33,47 @@ def test_atomic_release_tool_is_host_agnostic_and_three_phase():
 
 def test_atomic_release_script_parses_with_bash():
     subprocess.run(["bash", "-n", str(SCRIPT)], check=True)
+
+
+def test_deploy_memory_guard_refuses_critical_watcher_state(tmp_path):
+    state = tmp_path / "state.json"
+    state.write_text(json.dumps({"memory_guard": {"level": "CRITICAL"}}))
+    env = os.environ.copy()
+    env.update({"AFS_BOX": "unused", "AFS_WATCHER_STATE_FILE": str(state)})
+    command = f'''source "{SCRIPT.resolve()}"
+remote() {{ eval "$1"; }}
+deploy_memory_guard_check
+'''
+    result = subprocess.run(
+        ["bash", "-c", command],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 1
+    assert "memory state is CRITICAL or unreadable" in result.stderr
+
+
+def test_deploy_memory_guard_allows_missing_or_healthy_state(tmp_path):
+    env = os.environ.copy()
+    env.update(
+        {
+            "AFS_BOX": "unused",
+            "AFS_WATCHER_STATE_FILE": str(tmp_path / "missing.json"),
+        }
+    )
+    command = f'''source "{SCRIPT.resolve()}"
+remote() {{ eval "$1"; }}
+deploy_memory_guard_check
+'''
+    result = subprocess.run(
+        ["bash", "-c", command],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 def test_release_actions_reject_moving_refs_and_require_exact_sha():
