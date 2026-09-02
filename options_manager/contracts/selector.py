@@ -1,15 +1,15 @@
 """Pure Phase-1 options contract shortlist.
 
 This module does not fetch an option chain and does not place or prepare an
-order.  It consumes caller-supplied contract candidates and delegates the core
+order. It consumes caller-supplied contract candidates and delegates the core
 liquidity/DTE/Greeks/event checks to the existing
 ``evaluate_contract_constraints`` authority.
 
-Selection-specific policy is explicit and has no trading defaults.  In
+Selection-specific policy is explicit and has no trading defaults. In
 particular, the caller must supply DTE, liquidity, premium, theta, and delta
-limits.  A preferred delta is optional: without one, multiple valid contracts
+limits. A preferred delta is optional: without one, multiple valid contracts
 remain a shortlist and this module refuses to pretend it knows which contract
-is best.  This makes the ordering useful for a forward shadow campaign without
+is best. This makes the ordering useful for a forward shadow campaign without
 claiming an unproven contract-selection edge.
 """
 
@@ -56,6 +56,13 @@ class ContractCandidate:
     event_risk: Optional[RiskLevel]
 
 
+
+def _finite_number(value: object) -> bool:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return False
+    return math.isfinite(float(value))
+
+
 @dataclass(frozen=True, kw_only=True)
 class ContractSelectionPolicy:
     """Explicit operator/shadow-campaign limits; no numeric defaults."""
@@ -78,31 +85,36 @@ class ContractSelectionPolicy:
             ("max_theta_abs", self.max_theta_abs),
         )
         for name, value in numeric_positive:
-            if not isinstance(value, (int, float)) or not math.isfinite(float(value)) or value <= 0:
+            if not _finite_number(value) or float(value) <= 0:
                 errors.append(f"{name} must be a finite number > 0")
-        if not isinstance(self.min_volume, int) or self.min_volume < 0:
+        if isinstance(self.min_volume, bool) or not isinstance(self.min_volume, int) or self.min_volume < 0:
             errors.append("min_volume must be an integer >= 0")
-        if not isinstance(self.min_open_interest, int) or self.min_open_interest < 0:
-            errors.append("min_open_interest must be an integer >= 0")
-        if not isinstance(self.min_dte, int) or self.min_dte < 0:
-            errors.append("min_dte must be an integer >= 0")
         if (
-            not isinstance(self.min_abs_delta, (int, float))
-            or not math.isfinite(float(self.min_abs_delta))
-            or not isinstance(self.max_abs_delta, (int, float))
-            or not math.isfinite(float(self.max_abs_delta))
-            or self.min_abs_delta <= 0
-            or self.max_abs_delta > 1
-            or self.min_abs_delta > self.max_abs_delta
+            isinstance(self.min_open_interest, bool)
+            or not isinstance(self.min_open_interest, int)
+            or self.min_open_interest < 0
         ):
+            errors.append("min_open_interest must be an integer >= 0")
+        if isinstance(self.min_dte, bool) or not isinstance(self.min_dte, int) or self.min_dte < 0:
+            errors.append("min_dte must be an integer >= 0")
+
+        delta_range_valid = (
+            _finite_number(self.min_abs_delta)
+            and _finite_number(self.max_abs_delta)
+            and float(self.min_abs_delta) > 0
+            and float(self.max_abs_delta) <= 1
+            and float(self.min_abs_delta) <= float(self.max_abs_delta)
+        )
+        if not delta_range_valid:
             errors.append("delta range must satisfy 0 < min_abs_delta <= max_abs_delta <= 1")
         if self.preferred_abs_delta is not None:
-            if (
-                not isinstance(self.preferred_abs_delta, (int, float))
-                or not math.isfinite(float(self.preferred_abs_delta))
-                or self.preferred_abs_delta < self.min_abs_delta
-                or self.preferred_abs_delta > self.max_abs_delta
-            ):
+            preferred_valid = _finite_number(self.preferred_abs_delta) and delta_range_valid
+            if preferred_valid:
+                preferred = float(self.preferred_abs_delta)
+                preferred_valid = (
+                    float(self.min_abs_delta) <= preferred <= float(self.max_abs_delta)
+                )
+            if not preferred_valid:
                 errors.append("preferred_abs_delta must fall inside the configured delta range")
         return tuple(errors)
 
@@ -155,6 +167,7 @@ def _spread_percent(bid: object, ask: object) -> Optional[float]:
     return (ask_value - bid_value) / midpoint * 100.0
 
 
+
 def _local_rejection(
     candidate: ContractCandidate,
     reason_code: str,
@@ -171,6 +184,27 @@ def _local_rejection(
     )
 
 
+
+def _malformed_numeric_reason(candidate: ContractCandidate) -> Optional[str]:
+    for name in (
+        "dte",
+        "strike",
+        "premium",
+        "bid",
+        "ask",
+        "volume",
+        "open_interest",
+        "delta",
+        "theta",
+        "iv",
+    ):
+        value = getattr(candidate, name)
+        if value is not None and not _finite_number(value):
+            return name
+    return None
+
+
+
 def _evaluate_candidate(
     candidate: ContractCandidate,
     *,
@@ -178,8 +212,8 @@ def _evaluate_candidate(
     direction: Direction,
     policy: ContractSelectionPolicy,
 ) -> EvaluatedContractCandidate:
-    normalized_ticker = candidate.ticker.strip().upper()
-    if not candidate.symbol.strip():
+    normalized_ticker = str(candidate.ticker or "").strip().upper()
+    if not str(candidate.symbol or "").strip():
         return _local_rejection(candidate, "missing_contract_symbol", "contract symbol is required")
     if normalized_ticker != ticker:
         return _local_rejection(
@@ -199,14 +233,34 @@ def _evaluate_candidate(
             "event_risk_missing",
             "earnings_risk and event_risk must both be explicitly resolved",
         )
+    valid_risk_levels = ("NONE", "LOW", "HIGH")
+    if (
+        candidate.earnings_risk not in valid_risk_levels
+        or candidate.event_risk not in valid_risk_levels
+    ):
+        return _local_rejection(
+            candidate,
+            "event_risk_invalid",
+            "earnings_risk and event_risk must be NONE, LOW, or HIGH",
+        )
+
+    malformed = _malformed_numeric_reason(candidate)
+    if malformed is not None:
+        return _local_rejection(
+            candidate,
+            f"invalid_{malformed}",
+            f"{malformed} must be finite numeric data when supplied",
+        )
+    if candidate.strike is not None and candidate.strike <= 0:
+        return _local_rejection(candidate, "invalid_strike", "strike must be > 0")
+    if candidate.premium is not None and candidate.premium <= 0:
+        return _local_rejection(candidate, "invalid_premium", "premium must be > 0")
+    if candidate.iv is not None and candidate.iv <= 0:
+        return _local_rejection(candidate, "invalid_iv", "iv must be > 0")
     if candidate.delta is None:
         return _local_rejection(candidate, "missing_delta", "delta is required")
-    try:
-        abs_delta = abs(float(candidate.delta))
-    except (TypeError, ValueError):
-        return _local_rejection(candidate, "invalid_delta", "delta must be numeric")
-    if not math.isfinite(abs_delta):
-        return _local_rejection(candidate, "invalid_delta", "delta must be finite")
+
+    abs_delta = abs(float(candidate.delta))
     if abs_delta < policy.min_abs_delta or abs_delta > policy.max_abs_delta:
         return _local_rejection(
             candidate,
@@ -257,6 +311,7 @@ def _evaluate_candidate(
     )
 
 
+
 def _ranking_key(evaluated: EvaluatedContractCandidate) -> tuple[float, float, int, int, float]:
     """Transparent shortlist ordering, not an assertion of trading edge."""
     candidate = evaluated.candidate
@@ -268,15 +323,16 @@ def _ranking_key(evaluated: EvaluatedContractCandidate) -> tuple[float, float, i
     return (delta_distance, spread, -oi, -volume, strike)
 
 
+
 def shortlist_contracts(request: ContractSelectionRequest) -> ContractShortlistResult:
     """Validate and shortlist contracts without market-data or order side effects.
 
     Multiple clean contracts are not collapsed to a single candidate unless the
-    caller explicitly supplied ``preferred_abs_delta``.  CAUTION contracts are
+    caller explicitly supplied ``preferred_abs_delta``. CAUTION contracts are
     retained for human/shadow review but are never automatically selected.
     """
 
-    ticker = request.ticker.strip().upper()
+    ticker = str(request.ticker or "").strip().upper()
     request_errors: list[str] = list(request.policy.validation_errors())
     if not ticker:
         request_errors.append("ticker is required")
@@ -307,11 +363,7 @@ def shortlist_contracts(request: ContractSelectionRequest) -> ContractShortlistR
     clean = tuple(item for item in eligible if item.valid_without_caution)
     cautions = tuple(item for item in eligible if not item.valid_without_caution)
     warnings = tuple(
-        dict.fromkeys(
-            warning
-            for item in cautions
-            for warning in item.warnings
-        )
+        dict.fromkeys(warning for item in cautions for warning in item.warnings)
     )
 
     if not eligible:
