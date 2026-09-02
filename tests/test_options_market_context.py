@@ -327,9 +327,9 @@ def test_missing_signa_context_does_not_invalidate():
 def test_signa_states_cannot_change_clean_call_context():
     baseline = evaluate_market_context(_valid_call_inputs())
     variants = (
-        _valid_call_inputs(signa_direction="bearish", signa_grade="A", signa_score=99.0),
-        _valid_call_inputs(signa_direction="neutral", signa_grade="F", signa_score=1.0),
-        _valid_call_inputs(signa_direction=None, signa_grade=None, signa_score=None),
+        evaluate_market_context(_valid_call_inputs(signa_direction="bearish", signa_grade="A", signa_score=99.0)),
+        evaluate_market_context(_valid_call_inputs(signa_direction="neutral", signa_grade="F", signa_score=1.0)),
+        evaluate_market_context(_valid_call_inputs(signa_direction=None, signa_grade=None, signa_score=None)),
     )
     for result in variants:
         assert result.status == baseline.status == "VALID"
@@ -343,9 +343,9 @@ def test_signa_states_cannot_change_clean_call_context():
 def test_signa_states_cannot_change_clean_put_context():
     baseline = evaluate_market_context(_valid_put_inputs())
     variants = (
-        _valid_put_inputs(signa_direction="bullish", signa_grade="A", signa_score=99.0),
-        _valid_put_inputs(signa_direction="neutral", signa_grade="F", signa_score=1.0),
-        _valid_put_inputs(signa_direction=None, signa_grade=None, signa_score=None),
+        evaluate_market_context(_valid_put_inputs(signa_direction="bullish", signa_grade="A", signa_score=99.0)),
+        evaluate_market_context(_valid_put_inputs(signa_direction="neutral", signa_grade="F", signa_score=1.0)),
+        evaluate_market_context(_valid_put_inputs(signa_direction=None, signa_grade=None, signa_score=None)),
     )
     for result in variants:
         assert result.status == baseline.status == "VALID"
