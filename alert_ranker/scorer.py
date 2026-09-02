@@ -81,7 +81,10 @@ def score_setup(data: dict[str, Any], now: datetime | None = None) -> ScoreResul
             if value is None
         ]
         reason = f"missing_inputs:{','.join(missing)}" if missing else "direction_unknown"
-        return ScoreResult(ticker, "UNKNOWN", 0, pattern, {}, dict(data), reason)
+        # Even an unscorable scan may carry Signa telemetry. Keep its explicit
+        # zero contribution visible so no downstream observer can mistake the
+        # absence of a component for an unrecorded scoring path.
+        return ScoreResult(ticker, "UNKNOWN", 0, pattern, {"signa": 0}, dict(data), reason)
 
     components = {
         "strat_pattern": 3 if pattern and pattern.upper() != "N/A" else 0,
