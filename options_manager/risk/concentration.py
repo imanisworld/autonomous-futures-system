@@ -102,6 +102,44 @@ def _finite_nonnegative(value: object, label: str, reasons: list[str]) -> Option
     return parsed
 
 
+def _optional_label(value: object, label: str, reasons: list[str]) -> str:
+    if value is None:
+        return ""
+    if not isinstance(value, str):
+        reasons.append(f"{label}_not_string")
+        return ""
+    return value.strip()
+
+
+def _normalize_index_overlap(
+    value: object,
+    label: str,
+    reasons: list[str],
+) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    if isinstance(value, str) or not isinstance(value, (tuple, list)):
+        reasons.append(f"{label}_not_sequence")
+        return ()
+
+    overlaps: list[str] = []
+    seen: set[str] = set()
+    for raw in value:
+        if not isinstance(raw, str):
+            reasons.append(f"{label}_member_not_string")
+            continue
+        normalized = raw.strip().upper()
+        if not normalized:
+            reasons.append(f"{label}_empty")
+            continue
+        if normalized in seen:
+            reasons.append(f"{label}_duplicate")
+            continue
+        seen.add(normalized)
+        overlaps.append(normalized)
+    return tuple(overlaps)
+
+
 def _dte_bucket(dte: int) -> str:
     if dte == 0:
         return "0DTE"
@@ -155,42 +193,57 @@ def measure_concentration(exposures: Iterable[ExposureFact]) -> ConcentrationRes
     the values describe overlap, not mutually-exclusive allocation.
     """
 
-    facts = tuple(exposures)
+    try:
+        facts = tuple(exposures)
+    except TypeError:
+        return ConcentrationResult(
+            status=ConcentrationStatus.INVALID,
+            snapshot=None,
+            reason_codes=("exposures_not_iterable",),
+        )
+
     reasons: list[str] = []
     normalized: list[tuple[ExposureFact, float, float]] = []
 
     for index, fact in enumerate(facts):
         prefix = f"exposures_{index}"
-        ticker = str(fact.ticker).strip().upper()
-        if not ticker:
+        if not isinstance(fact, ExposureFact):
+            reasons.append(f"{prefix}_wrong_type")
+            continue
+
+        if not isinstance(fact.ticker, str) or not fact.ticker.strip():
             reasons.append(f"{prefix}_ticker_missing")
+            ticker = ""
+        else:
+            ticker = fact.ticker.strip().upper()
+
         if fact.direction not in ("CALL", "PUT"):
             reasons.append(f"{prefix}_direction_invalid")
-        if not str(fact.expiration).strip():
+
+        if not isinstance(fact.expiration, str) or not fact.expiration.strip():
             reasons.append(f"{prefix}_expiration_missing")
+            expiration = ""
+        else:
+            expiration = fact.expiration.strip()
+
         if not isinstance(fact.dte, int) or isinstance(fact.dte, bool) or fact.dte < 0:
             reasons.append(f"{prefix}_dte_invalid")
         if not isinstance(fact.contracts, int) or isinstance(fact.contracts, bool) or fact.contracts <= 0:
             reasons.append(f"{prefix}_contracts_invalid")
+        if not isinstance(fact.is_candidate, bool):
+            reasons.append(f"{prefix}_is_candidate_not_bool")
 
         risk = _finite_nonnegative(fact.planned_dollar_risk, f"{prefix}_planned_risk", reasons)
         debit = _finite_nonnegative(fact.full_debit, f"{prefix}_full_debit", reasons)
+        correlation_group = _optional_label(
+            fact.correlation_group, f"{prefix}_correlation_group", reasons
+        )
+        sector = _optional_label(fact.sector, f"{prefix}_sector", reasons)
+        industry = _optional_label(fact.industry, f"{prefix}_industry", reasons)
+        overlaps = _normalize_index_overlap(
+            fact.index_overlap, f"{prefix}_index_overlap", reasons
+        )
 
-        overlaps: list[str] = []
-        seen: set[str] = set()
-        for raw in fact.index_overlap:
-            label = str(raw).strip().upper()
-            if not label:
-                reasons.append(f"{prefix}_index_overlap_empty")
-                continue
-            if label in seen:
-                reasons.append(f"{prefix}_index_overlap_duplicate")
-                continue
-            seen.add(label)
-            overlaps.append(label)
-
-        if reasons and (risk is None or debit is None):
-            continue
         if risk is not None and debit is not None:
             normalized.append(
                 (
@@ -200,13 +253,13 @@ def measure_concentration(exposures: Iterable[ExposureFact]) -> ConcentrationRes
                         planned_dollar_risk=risk,
                         full_debit=debit,
                         dte=fact.dte,
-                        expiration=str(fact.expiration).strip(),
+                        expiration=expiration,
                         contracts=fact.contracts,
-                        correlation_group=str(fact.correlation_group).strip(),
-                        sector=str(fact.sector).strip(),
-                        industry=str(fact.industry).strip(),
-                        index_overlap=tuple(overlaps),
-                        is_candidate=bool(fact.is_candidate),
+                        correlation_group=correlation_group,
+                        sector=sector,
+                        industry=industry,
+                        index_overlap=overlaps,
+                        is_candidate=fact.is_candidate,
                     ),
                     risk,
                     debit,
