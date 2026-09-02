@@ -1642,7 +1642,7 @@ def test_live_preflight_status_endpoint(monkeypatch, tmp_path):
     except ImportError:
         pytest.skip("fastapi[testclient] not installed")
 
-    monkeypatch.setattr(live_preflight, "DEFAULT_STATE_PATH", tmp_path / "preflight.json")
+    monkeypatch.setenv("LOG_DIR", str(tmp_path))  # preflight artifact resolves under LOG_DIR
 
     resp = TestClient(app).get("/status/live-preflight")
 
@@ -1658,7 +1658,7 @@ def test_live_preflight_arm_requires_prior_pass(monkeypatch, tmp_path):
     except ImportError:
         pytest.skip("fastapi[testclient] not installed")
 
-    monkeypatch.setattr(live_preflight, "DEFAULT_STATE_PATH", tmp_path / "preflight.json")
+    monkeypatch.setenv("LOG_DIR", str(tmp_path))  # preflight artifact resolves under LOG_DIR
     monkeypatch.setenv("WEBHOOK_SECRET", "test-secret")
 
     resp = TestClient(app).post(
@@ -1687,7 +1687,7 @@ def test_live_preflight_run_endpoint_passes_clean_broker(monkeypatch, tmp_path):
         def _get(self, path):
             return []
 
-    monkeypatch.setattr(live_preflight, "DEFAULT_STATE_PATH", tmp_path / "preflight.json")
+    monkeypatch.setenv("LOG_DIR", str(tmp_path))  # preflight artifact resolves under LOG_DIR
     monkeypatch.setattr(live_preflight, "reliability_snapshot", lambda: {
         "state": "HEALTHY",
         "ready": True,
