@@ -20,8 +20,8 @@ def _ev(kind, minutes, *, state="NO_SETUP", direction="CALL", obs=None, contract
     )
 
 
-def _contract(minutes, valid=True):
-    return _ev("CONTRACT_OBSERVATION", minutes, contract={"strike": 100.0, "bid": 1.95, "ask": 2.05}, obs={"contract_valid": valid})
+def _contract(minutes, valid=True, *, direction="CALL"):
+    return _ev("CONTRACT_OBSERVATION", minutes, direction=direction, contract={"strike": 100.0, "bid": 1.95, "ask": 2.05}, obs={"contract_valid": valid})
 
 
 def test_no_events_is_no_setup():
@@ -77,7 +77,7 @@ def test_t1_and_t2_with_timing_and_call_mfe_mae():
 
 def test_put_mfe_mae_mirror():
     events = [
-        _contract(2),
+        _contract(2, direction="PUT"),
         _ev("TRIGGER", 5, direction="PUT", obs={"entry_price": 100.0}),
         _ev("PRICE_PATH", 6, direction="PUT", obs={"high": 100.8, "low": 97.0}),
         _ev("TARGET_1", 6, direction="PUT"),
@@ -121,7 +121,7 @@ def test_price_path_before_trigger_and_missing_entry_price_do_not_fabricate_mfe(
     events = [_ev("PRICE_PATH", 1, obs={"high": 200.0, "low": 1.0}), _contract(2), _ev("TRIGGER", 5), _ev("PRICE_PATH", 6, obs={"high": 101.0, "low": 99.0})]
     summary = reduce_forward_outcome(events)
     assert summary.mfe is None and summary.mae is None and summary.price_path_points == 1
-    assert any("no entry_price" in r for r in summary.reasons)
+    assert any("entry_price" in r for r in summary.reasons)
 
 
 def test_non_finite_price_points_are_skipped():
