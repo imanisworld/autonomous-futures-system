@@ -213,13 +213,10 @@ def test_high_conviction_candidate_is_never_rendered_as_size_instruction():
     assert "evidence label only, no sizing increase" in rendered.body
 
 
-def test_renderer_refuses_to_invent_contract_plan_fields():
+def test_renderer_refuses_to_invent_contract_or_risk_plan_fields():
     rendered = render_plan_update(_update(_snapshot()))
 
-    assert (
-        "Contract plan: canonical contract facts required from proof authority; not invented here"
-        in rendered.body
-    )
-    assert "expiration=" not in rendered.body
-    assert "strike=" not in rendered.body
-    assert "premium=" not in rendered.body
+    assert "Contract plan: UNRESOLVED" in rendered.body
+    assert "Risk plan: UNRESOLVED" in rendered.body
+    assert "Contract:" not in rendered.body
+    assert "Planned risk:" not in rendered.body

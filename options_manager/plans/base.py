@@ -86,6 +86,53 @@ class SignaObservation:
 
 
 @dataclass(frozen=True)
+class ContractPlanSnapshot:
+    """Already-validated contract facts carried with the advisory thesis.
+
+    This is not a selector and contains no broker/order identity.  Values come
+    from the canonical contract-quality authority after proof reconciliation.
+    """
+
+    expiration: str
+    strike: float
+    premium: float
+    bid: float
+    ask: float
+    spread_percent: float
+    volume: int
+    open_interest: int
+    dte: int
+    max_contracts: int
+    premium_stop: float
+    distance_to_target: float
+    iv_event_risk: str
+    theta_risk: str
+    trade_style: str
+
+
+@dataclass(frozen=True)
+class RiskPlanSnapshot:
+    """Measured planned-risk/debit facts from the canonical portfolio gate.
+
+    Position count is telemetry only.  The explicit per-trade and aggregate
+    caps are recorded as the policy inputs used for this exact advisory pass;
+    this model does not choose either value.
+    """
+
+    planned_dollar_risk: float
+    capital_deployed: float
+    stated_max_dollar_risk: float
+    max_trade_risk_dollars: float
+    aggregate_open_risk: float
+    projected_open_risk: float
+    max_aggregate_open_risk_dollars: float
+    aggregate_capital_deployed: float
+    projected_capital_deployed: float
+    open_position_count: int
+    correlation_risk: tuple[tuple[str, float], ...] = ()
+
+
+@dataclass(frozen=True)
 class ConvictionProofs:
     """Independent *extra* proof used only for a candidate conviction label.
 
@@ -166,6 +213,8 @@ class PlanObservation:
     event_risk_clear: bool = False
     conviction_proofs: ConvictionProofs = field(default_factory=ConvictionProofs)
     signa: Optional[SignaObservation] = None
+    contract_plan: Optional[ContractPlanSnapshot] = None
+    risk_plan: Optional[RiskPlanSnapshot] = None
     mark_active: bool = False
     mark_exited: bool = False
     invalidation_hit: bool = False
@@ -206,6 +255,8 @@ class TradePlanSnapshot:
     last_signa_fingerprint: Optional[tuple[object, ...]] = None
     latest_signa: Optional[SignaObservation] = None
     source_references: tuple[str, ...] = ()
+    contract_plan: Optional[ContractPlanSnapshot] = None
+    risk_plan: Optional[RiskPlanSnapshot] = None
 
     @property
     def terminal(self) -> bool:

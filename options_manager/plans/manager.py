@@ -13,11 +13,13 @@ from typing import Optional
 from options_manager.levels import LevelFinderInputs, find_targets
 
 from .base import (
+    ContractPlanSnapshot,
     ConvictionBand,
     PlanObservation,
     PlanPolicy,
     PlanStatus,
     PlanUpdate,
+    RiskPlanSnapshot,
     StructuralLevel,
     TradePlanSnapshot,
 )
@@ -201,6 +203,45 @@ def _signa_state(previous: Optional[TradePlanSnapshot], observation: PlanObserva
     return event_count, repeat_count, last_fingerprint, latest, changed, repeated
 
 
+def _contract_material_key(plan: Optional[ContractPlanSnapshot]) -> object:
+    """Return only contract facts that change the actual plan, not every quote.
+
+    Premium/bid/ask/spread/volume/OI/target-distance are useful current facts and
+    stay on the snapshot, but making each tick user-facing would recreate the
+    repeated-alert problem this thesis manager exists to solve. A contract
+    identity, stop, allowed size, or categorical risk/style change is material.
+    """
+    if plan is None:
+        return None
+    return (
+        plan.expiration,
+        plan.strike,
+        plan.max_contracts,
+        plan.premium_stop,
+        plan.iv_event_risk,
+        plan.theta_risk,
+        plan.trade_style,
+    )
+
+
+def _risk_material_key(plan: Optional[RiskPlanSnapshot]) -> object:
+    """Return risk-policy facts that merit a user-facing plan update.
+
+    Current aggregate exposure and candidate quote-derived risk are retained as
+    telemetry on the snapshot. They do not independently create another alert
+    while the canonical risk authority still passes. Crossing a gate changes
+    actionability/blocking upstream; changing an explicit risk policy or stated
+    plan risk limit is itself material here.
+    """
+    if plan is None:
+        return None
+    return (
+        plan.stated_max_dollar_risk,
+        plan.max_trade_risk_dollars,
+        plan.max_aggregate_open_risk_dollars,
+    )
+
+
 def _material_changes(
     previous: Optional[TradePlanSnapshot], current: TradePlanSnapshot
 ) -> tuple[str, ...]:
@@ -221,6 +262,12 @@ def _material_changes(
         reasons.append("entry_or_invalidation_changed")
     if (previous.target_1, previous.target_2) != (current.target_1, current.target_2):
         reasons.append("targets_changed")
+    if _contract_material_key(previous.contract_plan) != _contract_material_key(
+        current.contract_plan
+    ):
+        reasons.append("contract_plan_changed")
+    if _risk_material_key(previous.risk_plan) != _risk_material_key(current.risk_plan):
+        reasons.append("risk_plan_changed")
     if previous.blocking_reasons != current.blocking_reasons:
         reasons.append("blocking_reasons_changed")
     return tuple(reasons)
@@ -294,6 +341,20 @@ def update_trade_thesis(
         signa_repeated,
     ) = _signa_state(previous, observation)
 
+    # Canonical proof observations carry these facts every pass. Direct/manual
+    # management observations may omit them; omission must not erase previously
+    # validated contract/risk facts from an existing thesis generation.
+    contract_plan = (
+        observation.contract_plan
+        if observation.contract_plan is not None
+        else previous.contract_plan if previous is not None else None
+    )
+    risk_plan = (
+        observation.risk_plan
+        if observation.risk_plan is not None
+        else previous.risk_plan if previous is not None else None
+    )
+
     current = TradePlanSnapshot(
         ticker=observation.ticker.strip().upper(),
         direction=observation.direction,
@@ -321,6 +382,8 @@ def update_trade_thesis(
         last_signa_fingerprint=last_signa_fingerprint,
         latest_signa=latest_signa,
         source_references=_append_sources(previous, observation),
+        contract_plan=contract_plan,
+        risk_plan=risk_plan,
     )
 
     material_reasons = _material_changes(previous, current)

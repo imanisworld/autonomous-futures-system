@@ -40,14 +40,19 @@ from options_manager.validation.contract_quality_gate import (
     GateVerdict,
     check_contract_quality_intake,
 )
-from options_manager.validation.portfolio_risk_gate import PortfolioRiskVerdict
+from options_manager.validation.portfolio_risk_gate import (
+    PortfolioRiskVerdict,
+    check_portfolio_risk_intake,
+)
 from options_manager.validation.proof_packet_intake import check_proof_packet_intake
 
 from .base import (
+    ContractPlanSnapshot,
     ConvictionProofs,
     PlanObservation,
     PlanPolicy,
     PlanUpdate,
+    RiskPlanSnapshot,
     SignaObservation,
     StructuralLevel,
     TradePlanSnapshot,
@@ -270,6 +275,16 @@ def update_trade_thesis_from_authorities(
     )
     packet = proof_result.packet
     canonical_contract = contract_quality.contract
+    # Re-run the existing pure portfolio gate so the exact measured risk/debit
+    # facts can be carried into the thesis. This is the same authority and same
+    # inputs used by advisory_decision; no risk rule is duplicated here.
+    portfolio_result = check_portfolio_risk_intake(
+        canonical_payload.get("portfolio_risk"),
+        proof_packet=packet,
+        contract=canonical_contract,
+        max_trade_risk_dollars=max_trade_risk_dollars,
+        max_aggregate_open_risk_dollars=max_aggregate_open_risk_dollars,
+    )
 
     row_ticker = row.ticker.strip().upper()
     if not row_ticker:
@@ -408,8 +423,19 @@ def update_trade_thesis_from_authorities(
         blocking.append("canonical_contract_blocked")
     if advisory.portfolio_verdict != PortfolioRiskVerdict.PASS:
         blocking.append("canonical_portfolio_risk_not_pass")
+    if portfolio_result.verdict != advisory.portfolio_verdict:
+        blocking.append("canonical_portfolio_result_mismatch")
+    if portfolio_result.verdict != PortfolioRiskVerdict.PASS:
+        blocking.extend(f"portfolio:{reason}" for reason in portfolio_result.blocking_reasons)
 
-    if blocking or packet is None or context_result is None or scanner_contract_result is None:
+    if (
+        blocking
+        or packet is None
+        or canonical_contract is None
+        or context_result is None
+        or scanner_contract_result is None
+        or canonical_contract.premium_stop is None
+    ):
         return CanonicalPlanProofResult(
             valid=False,
             plan_update=None,
@@ -417,6 +443,40 @@ def update_trade_thesis_from_authorities(
             blocking_reasons=tuple(dict.fromkeys(blocking)),
             warnings=tuple(dict.fromkeys(warnings)),
         )
+
+    contract_plan = ContractPlanSnapshot(
+        expiration=canonical_contract.expiration,
+        strike=canonical_contract.strike,
+        premium=canonical_contract.premium,
+        bid=canonical_contract.bid,
+        ask=canonical_contract.ask,
+        spread_percent=canonical_contract.spread_percent,
+        volume=canonical_contract.volume,
+        open_interest=canonical_contract.open_interest,
+        dte=canonical_contract.dte,
+        max_contracts=canonical_contract.max_contracts,
+        premium_stop=canonical_contract.premium_stop,
+        distance_to_target=canonical_contract.distance_to_target,
+        iv_event_risk=canonical_contract.iv_event_risk,
+        theta_risk=canonical_contract.theta_risk,
+        trade_style=canonical_contract.trade_style,
+    )
+    risk_plan = RiskPlanSnapshot(
+        planned_dollar_risk=portfolio_result.candidate_risk,
+        capital_deployed=(
+            portfolio_result.projected_capital_deployed
+            - portfolio_result.aggregate_capital_deployed
+        ),
+        stated_max_dollar_risk=canonical_contract.max_dollar_risk,
+        max_trade_risk_dollars=float(max_trade_risk_dollars),
+        aggregate_open_risk=portfolio_result.aggregate_open_risk,
+        projected_open_risk=portfolio_result.projected_open_risk,
+        max_aggregate_open_risk_dollars=float(max_aggregate_open_risk_dollars),
+        aggregate_capital_deployed=portfolio_result.aggregate_capital_deployed,
+        projected_capital_deployed=portfolio_result.projected_capital_deployed,
+        open_position_count=portfolio_result.open_position_count,
+        correlation_risk=portfolio_result.correlation_risk,
+    )
 
     observation = PlanObservation(
         ticker=row_ticker,
@@ -440,6 +500,8 @@ def update_trade_thesis_from_authorities(
         event_risk_clear=context_result.event_risk_clear,
         conviction_proofs=conviction_proofs,
         signa=signa,
+        contract_plan=contract_plan,
+        risk_plan=risk_plan,
         source_references=packet.source_references,
     )
     plan_update = update_trade_thesis(previous, observation, policy=policy)
@@ -461,6 +523,10 @@ def update_trade_thesis_from_authorities(
         post_blocking.append("plan_proof_target_2_mismatch")
     if snapshot.target_1_source is None or snapshot.target_2_source is None:
         post_blocking.append("target_provenance_missing")
+    if snapshot.contract_plan != contract_plan:
+        post_blocking.append("contract_plan_not_preserved")
+    if snapshot.risk_plan != risk_plan:
+        post_blocking.append("risk_plan_not_preserved")
 
     if post_blocking:
         return CanonicalPlanProofResult(
