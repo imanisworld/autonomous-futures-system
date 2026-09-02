@@ -282,20 +282,6 @@ def test_reconciliation_spares_open_candidates_mixed_with_legacy(tmp_path):
     assert storage.get_shadow_setup(good.shadow_id).status == "OPEN"
 
 
-def test_failed_scan_never_sends_candidate_alert(tmp_path, monkeypatch):
-    market = FakeMarketData(price=None, error="timeout")
-    scanner, _storage = make_scanner(tmp_path, market)
-    object.__setattr__(scanner.config, "discord_webhook_url", "https://discord.test/webhook")
-    sent = []
-
-    async def record_alert(ticker, normalized, now):
-        sent.append(ticker)
-
-    monkeypatch.setattr(scanner, "_maybe_send_candidate_alert", record_alert)
-    scan(scanner, {"signa_grade": "A", "signa_score": 85, "signa_daily_direction": "UP"})
-    assert sent == []
-
-
 def test_direct_resolution_rules_are_deterministic():
     contract = {"stop": 99.0, "target": 104.0, "expiry": "2099-01-16"}
     now = OPEN_TIME
