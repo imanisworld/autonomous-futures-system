@@ -106,6 +106,13 @@ from .position_management_checklist import (
     check_position_management_checklist_intake,
     evaluate_position_management_checklist,
 )
+from .forward_session import (
+    ForwardSessionResult,
+    ForwardSessionVerdict,
+    check_forward_session_intake,
+    evaluate_forward_session,
+    parse_session_markdown,
+)
 from .portfolio_risk_gate import (
     PortfolioRiskResult,
     PortfolioRiskVerdict,
@@ -187,6 +194,11 @@ __all__ = [
     "PortfolioRiskResult",
     "PortfolioRiskVerdict",
     "RiskExposure",
+    "ForwardSessionResult",
+    "ForwardSessionVerdict",
+    "check_forward_session_intake",
+    "evaluate_forward_session",
+    "parse_session_markdown",
     "check_portfolio_risk_intake",
     "evaluate_portfolio_risk",
 ]
