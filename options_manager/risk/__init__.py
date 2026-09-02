@@ -1,7 +1,8 @@
 """Measurement-only options risk telemetry.
 
-This package records already-proven advisory risk facts. It does not choose
-risk limits, size positions, submit orders, or alter portfolio policy.
+This package projects already-persisted canonical advisory risk facts. It does
+not re-run portfolio-risk formulas, choose limits, size positions, submit
+orders, or alter portfolio policy.
 """
 
 from .telemetry import (
