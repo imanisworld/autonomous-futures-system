@@ -221,6 +221,10 @@ def _material_changes(
         reasons.append("entry_or_invalidation_changed")
     if (previous.target_1, previous.target_2) != (current.target_1, current.target_2):
         reasons.append("targets_changed")
+    if previous.contract_plan != current.contract_plan:
+        reasons.append("contract_plan_changed")
+    if previous.risk_plan != current.risk_plan:
+        reasons.append("risk_plan_changed")
     if previous.blocking_reasons != current.blocking_reasons:
         reasons.append("blocking_reasons_changed")
     return tuple(reasons)
@@ -294,6 +298,20 @@ def update_trade_thesis(
         signa_repeated,
     ) = _signa_state(previous, observation)
 
+    # Canonical proof observations carry these facts every pass. Direct/manual
+    # management observations may omit them; omission must not erase previously
+    # validated contract/risk facts from an existing thesis generation.
+    contract_plan = (
+        observation.contract_plan
+        if observation.contract_plan is not None
+        else previous.contract_plan if previous is not None else None
+    )
+    risk_plan = (
+        observation.risk_plan
+        if observation.risk_plan is not None
+        else previous.risk_plan if previous is not None else None
+    )
+
     current = TradePlanSnapshot(
         ticker=observation.ticker.strip().upper(),
         direction=observation.direction,
@@ -321,6 +339,8 @@ def update_trade_thesis(
         last_signa_fingerprint=last_signa_fingerprint,
         latest_signa=latest_signa,
         source_references=_append_sources(previous, observation),
+        contract_plan=contract_plan,
+        risk_plan=risk_plan,
     )
 
     material_reasons = _material_changes(previous, current)
