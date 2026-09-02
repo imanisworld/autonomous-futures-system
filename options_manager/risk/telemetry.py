@@ -1,8 +1,10 @@
 """Pure, measurement-only risk telemetry for advisory options theses.
 
-The canonical portfolio gate remains the risk authority. This module does not
-choose limits or re-size positions; it only reconciles already-persisted plan,
-contract, and risk facts into a calibration-friendly snapshot.
+The canonical portfolio gate remains the only risk authority. This module does
+not re-run its formulas, caps, or approval rules. It projects the already-
+persisted ContractPlanSnapshot and RiskPlanSnapshot facts into a stable
+calibration/analysis shape and rejects only missing or malformed telemetry
+inputs.
 
 Important distinctions are kept explicit:
 
@@ -12,8 +14,8 @@ Important distinctions are kept explicit:
 * recorded policy caps are evidence about the decision that was made, not a
   recommendation that those caps are optimal.
 
-No I/O, broker, execution, provider fetch, config read, or policy mutation is
-performed here.
+No I/O, broker, execution, provider fetch, config read, policy mutation, or
+second portfolio-risk calculation is performed here.
 """
 
 from __future__ import annotations
@@ -24,9 +26,6 @@ from enum import Enum
 from typing import Optional
 
 from options_manager.plans import TradePlanSnapshot
-from options_manager.validation.portfolio_risk_gate import CONTRACT_MULTIPLIER
-
-_EPSILON = 1e-6
 
 
 class RiskTelemetryStatus(str, Enum):
@@ -101,7 +100,7 @@ class RiskTelemetryResult:
 def _finite(value: object, label: str, reasons: list[str]) -> Optional[float]:
     try:
         parsed = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         reasons.append(f"{label}_not_numeric")
         return None
     if not math.isfinite(parsed):
@@ -120,17 +119,31 @@ def _finite_optional(
     return _finite(value, label, reasons)
 
 
-def _same_number(left: float, right: float) -> bool:
-    return math.isclose(left, right, rel_tol=0.0, abs_tol=_EPSILON)
+def _integer(value: object, label: str, reasons: list[str]) -> Optional[int]:
+    if isinstance(value, bool):
+        reasons.append(f"{label}_not_integer")
+        return None
+    numeric = _finite(value, label, reasons)
+    if numeric is None:
+        return None
+    if not numeric.is_integer():
+        reasons.append(f"{label}_not_integer")
+        return None
+    try:
+        return int(numeric)
+    except (ValueError, OverflowError):
+        reasons.append(f"{label}_not_integer")
+        return None
 
 
 def measure_risk_telemetry(plan: TradePlanSnapshot) -> RiskTelemetryResult:
-    """Reconcile a thesis into risk telemetry without choosing any policy.
+    """Project canonical persisted facts into measurement-only telemetry.
 
-    Missing contract/risk snapshots yield INCOMPLETE rather than inventing
-    values. Present-but-malformed or internally contradictory facts yield
-    INVALID. A COMPLETE result means only that the measurement reconciles; it
-    does not approve a trade or certify that the recorded limits are optimal.
+    Missing contract/risk snapshots yield INCOMPLETE rather than invented
+    values. Malformed/non-finite persisted facts yield INVALID. This function
+    deliberately does *not* recompute premium-stop risk, aggregate-risk policy,
+    or cap compliance; those belong exclusively to the canonical portfolio
+    gate that produced ``RiskPlanSnapshot``.
     """
 
     missing: list[str] = []
@@ -158,6 +171,9 @@ def measure_risk_telemetry(plan: TradePlanSnapshot) -> RiskTelemetryResult:
     bid = _finite(contract.bid, "bid", reasons)
     ask = _finite(contract.ask, "ask", reasons)
     spread_percent = _finite(contract.spread_percent, "spread_percent", reasons)
+    distance_to_target = _finite(
+        contract.distance_to_target, "distance_to_target", reasons
+    )
     planned_total = _finite(risk.planned_dollar_risk, "planned_dollar_risk", reasons)
     full_debit_total = _finite(risk.capital_deployed, "capital_deployed", reasons)
     aggregate_risk = _finite(risk.aggregate_open_risk, "aggregate_open_risk", reasons)
@@ -184,16 +200,13 @@ def measure_risk_telemetry(plan: TradePlanSnapshot) -> RiskTelemetryResult:
     rr_1 = _finite_optional(plan.rr_1, "rr_1", reasons)
     rr_2 = _finite_optional(plan.rr_2, "rr_2", reasons)
 
-    if contract.max_contracts <= 0:
-        reasons.append("max_contracts_not_positive")
-    if contract.dte < 0:
-        reasons.append("dte_negative")
-    if contract.volume < 0:
-        reasons.append("volume_negative")
-    if contract.open_interest < 0:
-        reasons.append("open_interest_negative")
-    if risk.open_position_count < 0:
-        reasons.append("open_position_count_negative")
+    max_contracts = _integer(contract.max_contracts, "max_contracts", reasons)
+    dte = _integer(contract.dte, "dte", reasons)
+    volume = _integer(contract.volume, "volume", reasons)
+    open_interest = _integer(contract.open_interest, "open_interest", reasons)
+    open_position_count = _integer(
+        risk.open_position_count, "open_position_count", reasons
+    )
 
     for label, value in (
         ("premium", premium),
@@ -202,6 +215,7 @@ def measure_risk_telemetry(plan: TradePlanSnapshot) -> RiskTelemetryResult:
         ("bid", bid),
         ("ask", ask),
         ("spread_percent", spread_percent),
+        ("distance_to_target", distance_to_target),
         ("planned_dollar_risk", planned_total),
         ("capital_deployed", full_debit_total),
         ("aggregate_open_risk", aggregate_risk),
@@ -215,26 +229,41 @@ def measure_risk_telemetry(plan: TradePlanSnapshot) -> RiskTelemetryResult:
         if value is not None and value < 0:
             reasons.append(f"{label}_negative")
 
+    if max_contracts is not None and max_contracts <= 0:
+        reasons.append("max_contracts_not_positive")
+    if dte is not None and dte < 0:
+        reasons.append("dte_negative")
+    if volume is not None and volume < 0:
+        reasons.append("volume_negative")
+    if open_interest is not None and open_interest < 0:
+        reasons.append("open_interest_negative")
+    if open_position_count is not None and open_position_count < 0:
+        reasons.append("open_position_count_negative")
+
+    # Structural sanity only. No thresholds or risk-policy decisions live here.
     if premium is not None and premium <= 0:
         reasons.append("premium_not_positive")
     if premium_stop is not None and premium_stop < 0:
         reasons.append("premium_stop_negative")
-    if premium is not None and premium_stop is not None and premium_stop > premium:
-        reasons.append("premium_stop_above_premium")
     if strike is not None and strike <= 0:
         reasons.append("strike_not_positive")
     if bid is not None and bid <= 0:
         reasons.append("bid_not_positive")
-    if bid is not None and ask is not None and ask <= bid:
-        reasons.append("ask_not_above_bid")
+    if ask is not None and ask <= 0:
+        reasons.append("ask_not_positive")
     if max_trade is not None and max_trade <= 0:
         reasons.append("max_trade_risk_not_positive")
     if max_aggregate is not None and max_aggregate <= 0:
         reasons.append("max_aggregate_risk_not_positive")
 
     correlation: list[tuple[str, float]] = []
-    for index, pair in enumerate(risk.correlation_risk):
-        if len(pair) != 2:
+    try:
+        raw_correlation = tuple(risk.correlation_risk)
+    except TypeError:
+        raw_correlation = ()
+        reasons.append("correlation_risk_malformed")
+    for index, pair in enumerate(raw_correlation):
+        if not isinstance(pair, (tuple, list)) or len(pair) != 2:
             reasons.append(f"correlation_risk_{index}_malformed")
             continue
         group, raw_value = pair
@@ -254,6 +283,7 @@ def measure_risk_telemetry(plan: TradePlanSnapshot) -> RiskTelemetryResult:
         bid,
         ask,
         spread_percent,
+        distance_to_target,
         planned_total,
         full_debit_total,
         aggregate_risk,
@@ -264,7 +294,23 @@ def measure_risk_telemetry(plan: TradePlanSnapshot) -> RiskTelemetryResult:
         max_trade,
         max_aggregate,
     )
-    if any(value is None for value in required_numbers):
+    required_integers = (
+        max_contracts,
+        dte,
+        volume,
+        open_interest,
+        open_position_count,
+    )
+    if any(value is None for value in required_numbers) or any(
+        value is None for value in required_integers
+    ):
+        return RiskTelemetryResult(
+            status=RiskTelemetryStatus.INVALID,
+            snapshot=None,
+            reason_codes=tuple(dict.fromkeys(reasons)),
+        )
+
+    if reasons:
         return RiskTelemetryResult(
             status=RiskTelemetryStatus.INVALID,
             snapshot=None,
@@ -286,31 +332,16 @@ def measure_risk_telemetry(plan: TradePlanSnapshot) -> RiskTelemetryResult:
     assert stated_max is not None
     assert max_trade is not None
     assert max_aggregate is not None
+    assert max_contracts is not None
+    assert dte is not None
+    assert volume is not None
+    assert open_interest is not None
+    assert open_position_count is not None
 
-    planned_per_contract = (premium - premium_stop) * CONTRACT_MULTIPLIER
-    expected_planned_total = planned_per_contract * contract.max_contracts
-    debit_per_contract = premium * CONTRACT_MULTIPLIER
-    expected_full_debit_total = debit_per_contract * contract.max_contracts
-
-    if not _same_number(planned_total, expected_planned_total):
-        reasons.append("planned_risk_contract_math_mismatch")
-    if not _same_number(full_debit_total, expected_full_debit_total):
-        reasons.append("full_debit_contract_math_mismatch")
-    if not _same_number(projected_risk - aggregate_risk, planned_total):
-        reasons.append("projected_risk_reconciliation_mismatch")
-    if not _same_number(projected_debit - aggregate_debit, full_debit_total):
-        reasons.append("projected_debit_reconciliation_mismatch")
-    if planned_total > max_trade + _EPSILON:
-        reasons.append("recorded_trade_risk_exceeds_recorded_cap")
-    if projected_risk > max_aggregate + _EPSILON:
-        reasons.append("recorded_projected_risk_exceeds_recorded_aggregate_cap")
-
-    if reasons:
-        return RiskTelemetryResult(
-            status=RiskTelemetryStatus.INVALID,
-            snapshot=None,
-            reason_codes=tuple(dict.fromkeys(reasons)),
-        )
+    # Per-contract values are decompositions of the canonical persisted totals,
+    # not a second calculation from contract premium/stop policy.
+    planned_per_contract = planned_total / max_contracts
+    debit_per_contract = full_debit_total / max_contracts
 
     distance_to_invalidation = None
     if entry is not None and invalidation is not None:
@@ -326,7 +357,7 @@ def measure_risk_telemetry(plan: TradePlanSnapshot) -> RiskTelemetryResult:
             observed_at=plan.observed_at,
             plan_status=plan.status.value,
             actionable=plan.actionable,
-            max_contracts=contract.max_contracts,
+            max_contracts=max_contracts,
             planned_stop_risk_per_contract=planned_per_contract,
             planned_total_trade_risk=planned_total,
             full_debit_per_contract=debit_per_contract,
@@ -335,7 +366,7 @@ def measure_risk_telemetry(plan: TradePlanSnapshot) -> RiskTelemetryResult:
             projected_aggregate_planned_open_risk=projected_risk,
             aggregate_full_debit=aggregate_debit,
             projected_aggregate_full_debit=projected_debit,
-            open_position_count=risk.open_position_count,
+            open_position_count=open_position_count,
             correlation_risk=tuple(correlation),
             stated_max_dollar_risk=stated_max,
             max_trade_risk_dollars=max_trade,
@@ -348,15 +379,15 @@ def measure_risk_telemetry(plan: TradePlanSnapshot) -> RiskTelemetryResult:
             rr_1=rr_1,
             rr_2=rr_2,
             expiration=contract.expiration,
-            dte=contract.dte,
+            dte=dte,
             strike=strike,
             premium=premium,
             premium_stop=premium_stop,
             bid=bid,
             ask=ask,
             spread_percent=spread_percent,
-            volume=contract.volume,
-            open_interest=contract.open_interest,
+            volume=volume,
+            open_interest=open_interest,
             iv_event_risk=contract.iv_event_risk,
             theta_risk=contract.theta_risk,
             trade_style=contract.trade_style,
