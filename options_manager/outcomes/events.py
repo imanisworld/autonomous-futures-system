@@ -17,16 +17,16 @@ from datetime import datetime
 from typing import Any, Mapping, Optional
 
 EVENT_TYPES: tuple[str, ...] = (
-    "SESSION_STAGE",          # a 09:26 / 09:46 / 10:03 stage was captured
-    "SETUP_STATE",            # setup_state changed or was (re)asserted
-    "TRIGGER",                # mechanical entry level broken (with bar/quote proof)
-    "INVALIDATION",           # underlying invalidation level broken
-    "TARGET_1",               # T1 level reached
-    "TARGET_2",               # T2 level reached
-    "CONTRACT_OBSERVATION",   # read-only chain facts at event_at
-    "MARKET_CONTEXT",         # SPY/QQQ context at event_at
-    "PRICE_PATH",             # bar-level MFE/MAE bookkeeping point
-    "NOTE",                   # free-form, never an outcome claim
+    "SESSION_STAGE",
+    "SETUP_STATE",
+    "TRIGGER",
+    "INVALIDATION",
+    "TARGET_1",
+    "TARGET_2",
+    "CONTRACT_OBSERVATION",
+    "MARKET_CONTEXT",
+    "PRICE_PATH",
+    "NOTE",
 )
 SETUP_STATES: tuple[str, ...] = (
     "NO_SETUP",
@@ -38,6 +38,18 @@ SETUP_STATES: tuple[str, ...] = (
     "T2_HIT",
 )
 _DIRECTIONS = ("CALL", "PUT", "NONE")
+_STRING_FIELDS = (
+    "session_id",
+    "thesis_id",
+    "ticker",
+    "direction",
+    "setup_type",
+    "timeframe",
+    "event_type",
+    "provider",
+    "system_commit_sha",
+    "setup_state",
+)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -45,11 +57,11 @@ class ForwardOutcomeEvent:
     session_id: str
     thesis_id: str
     ticker: str
-    direction: str  # CALL / PUT / NONE (no thesis yet)
+    direction: str
     setup_type: str
     timeframe: str
     event_type: str
-    event_at: datetime  # source timestamp, tz-aware
+    event_at: datetime
     provider: str
     system_commit_sha: str
     setup_state: str
@@ -57,12 +69,14 @@ class ForwardOutcomeEvent:
     market_context: Mapping[str, Any] = field(default_factory=dict)
     observations: Mapping[str, Any] = field(default_factory=dict)
     reason_codes: tuple[str, ...] = ()
-    provider_updated_at: Optional[datetime] = None  # provider's own timestamp when it has one
+    provider_updated_at: Optional[datetime] = None
 
     def to_payload(self) -> dict[str, Any]:
         data = asdict(self)
         data["event_at"] = self.event_at.isoformat()
-        data["provider_updated_at"] = self.provider_updated_at.isoformat() if self.provider_updated_at else None
+        data["provider_updated_at"] = (
+            self.provider_updated_at.isoformat() if self.provider_updated_at else None
+        )
         data["reason_codes"] = list(self.reason_codes)
         data["contract_facts"] = dict(self.contract_facts)
         data["market_context"] = dict(self.market_context)
@@ -71,13 +85,17 @@ class ForwardOutcomeEvent:
 
 
 def _is_tz_aware(value: Any) -> bool:
-    return isinstance(value, datetime) and value.tzinfo is not None and value.utcoffset() is not None
+    return (
+        isinstance(value, datetime)
+        and value.tzinfo is not None
+        and value.utcoffset() is not None
+    )
 
 
 def _json_safe(value: Any) -> bool:
     try:
-        json.dumps(value, sort_keys=True)
-    except (TypeError, ValueError):
+        json.dumps(value, sort_keys=True, allow_nan=False)
+    except (TypeError, ValueError, OverflowError):
         return False
     return True
 
@@ -95,36 +113,58 @@ def _has_non_finite(value: Any) -> bool:
 def validate_forward_outcome_event(event: ForwardOutcomeEvent) -> tuple[str, ...]:
     """Reasons the event is not storable; empty when it is. Never raises."""
     reasons: list[str] = []
-    for name in ("session_id", "thesis_id", "ticker", "setup_type", "timeframe", "provider", "system_commit_sha"):
-        if not str(getattr(event, name, "") or "").strip():
+
+    for name in _STRING_FIELDS:
+        value = getattr(event, name, None)
+        if not isinstance(value, str):
+            reasons.append(f"{name} must be a string")
+        elif not value.strip():
             reasons.append(f"missing {name}")
-    if event.direction not in _DIRECTIONS:
+
+    if isinstance(event.direction, str) and event.direction not in _DIRECTIONS:
         reasons.append(f"direction {event.direction!r} must be CALL, PUT, or NONE")
-    if event.event_type not in EVENT_TYPES:
+    if isinstance(event.event_type, str) and event.event_type not in EVENT_TYPES:
         reasons.append(f"event_type {event.event_type!r} not in vocabulary")
-    if event.setup_state not in SETUP_STATES:
+    if isinstance(event.setup_state, str) and event.setup_state not in SETUP_STATES:
         reasons.append(f"setup_state {event.setup_state!r} not in vocabulary")
+
     if not _is_tz_aware(event.event_at):
         reasons.append("event_at must be timezone-aware")
     if event.provider_updated_at is not None and not _is_tz_aware(event.provider_updated_at):
         reasons.append("provider_updated_at must be timezone-aware when supplied")
-    if len(str(event.system_commit_sha or "")) < 7:
+
+    if isinstance(event.system_commit_sha, str) and len(event.system_commit_sha.strip()) < 7:
         reasons.append("system_commit_sha too short")
+
     for name in ("contract_facts", "market_context", "observations"):
-        value = getattr(event, name)
+        value = getattr(event, name, None)
         if not isinstance(value, Mapping):
             reasons.append(f"{name} must be a mapping")
             continue
-        if not _json_safe(dict(value)):
+        try:
+            copied = dict(value)
+        except Exception:
+            reasons.append(f"{name} cannot be materialized as a mapping")
+            continue
+        if not _json_safe(copied):
             reasons.append(f"{name} is not JSON-serializable")
-        elif _has_non_finite(value):
+        elif _has_non_finite(copied):
             reasons.append(f"{name} contains a non-finite number")
-    if not isinstance(event.reason_codes, tuple) or not all(isinstance(r, str) for r in event.reason_codes):
+
+    if not isinstance(event.reason_codes, tuple) or not all(
+        isinstance(reason, str) for reason in event.reason_codes
+    ):
         reasons.append("reason_codes must be a tuple of strings")
-    return tuple(reasons)
+
+    return tuple(dict.fromkeys(reasons))
 
 
 def event_content_hash(event: ForwardOutcomeEvent) -> str:
     """sha256 of the canonical payload; identical events dedupe on it."""
-    canonical = json.dumps(event.to_payload(), sort_keys=True, separators=(",", ":"))
+    canonical = json.dumps(
+        event.to_payload(),
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
