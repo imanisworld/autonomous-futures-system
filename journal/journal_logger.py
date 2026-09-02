@@ -31,6 +31,13 @@ from risk.risk_engine import DailyState
 logger = logging.getLogger(__name__)
 
 
+# Full journal rows are large Python object graphs (several times larger than
+# their JSONL representation).  Keep only the small recent working set needed
+# by daily/status readers.  All-history account/performance scans use the
+# compact outcome cache below instead of pinning every parsed journal in RAM.
+_MAX_PARSED_JOURNAL_CACHE_FILES = 8
+
+
 def _aware_utc(value: datetime) -> datetime:
     if value.tzinfo is None:
         return value.replace(tzinfo=timezone.utc)
@@ -53,6 +60,9 @@ class JournalLogger:
     # the entry automatically; stat() is ~microseconds vs a full re-parse. Shared
     # across instances because each request builds a fresh JournalLogger.
     _entries_cache: dict = {}
+    # path -> ((mtime_ns, size), {account: [(ts, pnl)], performance: [(result, pnl)]})
+    # This preserves fast all-history scans without retaining every decision row.
+    _outcome_cache: dict = {}
 
     def __init__(self, log_dir: str = "logs"):
         self.log_dir = Path(log_dir)
@@ -453,12 +463,15 @@ class JournalLogger:
             st = path.stat()
         except FileNotFoundError:
             JournalLogger._entries_cache.pop(key, None)
+            JournalLogger._outcome_cache.pop(key, None)
             return []
         sig = (st.st_mtime_ns, st.st_size)
         cached = JournalLogger._entries_cache.get(key)
         if cached is not None and cached[0] == sig:
             # Unchanged since last parse — reuse. Callers treat entries as
             # read-only (they filter/iterate, never mutate in place).
+            JournalLogger._entries_cache.pop(key)
+            JournalLogger._entries_cache[key] = cached
             return cached[1]
         entries: List[dict] = []
         with self._locked():
@@ -471,8 +484,69 @@ class JournalLogger:
                         entries.append(json.loads(line))
                     except json.JSONDecodeError:
                         continue
+        JournalLogger._entries_cache.pop(key, None)
         JournalLogger._entries_cache[key] = (sig, entries)
+        while len(JournalLogger._entries_cache) > _MAX_PARSED_JOURNAL_CACHE_FILES:
+            oldest = next(iter(JournalLogger._entries_cache))
+            JournalLogger._entries_cache.pop(oldest, None)
         return entries
+
+    def _read_outcome_summary(self, path: Path) -> dict:
+        """Return compact realized-outcome facts for one journal file.
+
+        Account reconstruction historically counts standalone OUTCOME rows,
+        while performance stats also accept the legacy inline TRADE outcome
+        format.  Keep those two views separate so this memory repair does not
+        change accounting semantics.
+        """
+        key = str(path)
+        try:
+            st = path.stat()
+        except FileNotFoundError:
+            JournalLogger._entries_cache.pop(key, None)
+            JournalLogger._outcome_cache.pop(key, None)
+            return {"account": [], "performance": []}
+        sig = (st.st_mtime_ns, st.st_size)
+        cached = JournalLogger._outcome_cache.get(key)
+        if cached is not None and cached[0] == sig:
+            return cached[1]
+
+        account: list[tuple[object, float]] = []
+        performance: list[tuple[str, float]] = []
+        with self._locked():
+            with open(path) as handle:
+                for line in handle:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        entry = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+
+                    if entry.get("type") == "OUTCOME":
+                        outcome = entry.get("outcome") or {}
+                        result = outcome.get("result")
+                        pnl = float(outcome.get("pnl_dollars") or 0.0)
+                        account.append((entry.get("ts"), pnl))
+                        if result in ("WIN", "LOSS", "BREAKEVEN"):
+                            performance.append((str(result), pnl))
+                        continue
+
+                    if entry.get("decision") != "TRADE":
+                        continue
+                    if (entry.get("risk_check") or {}).get("result") != "APPROVED":
+                        continue
+                    outcome = entry.get("outcome") or {}
+                    result = outcome.get("result")
+                    if result in ("WIN", "LOSS", "BREAKEVEN"):
+                        performance.append(
+                            (str(result), float(outcome.get("pnl_dollars") or 0.0))
+                        )
+
+        summary = {"account": account, "performance": performance}
+        JournalLogger._outcome_cache[key] = (sig, summary)
+        return summary
 
     def _compute_daily_state(
         self, entries: List[dict], for_date: Optional[date]
@@ -738,11 +812,8 @@ class JournalLogger:
             paths = [path for path in paths if path.name <= cutoff_name]
 
         for path in paths:
-            for entry in self._read_entries(path):
-                if entry.get("type") != "OUTCOME":
-                    continue
-                outcome = entry.get("outcome") or {}
-                balance += float(outcome.get("pnl_dollars") or 0.0)
+            for _, pnl in self._read_outcome_summary(path)["account"]:
+                balance += pnl
         return round(balance, 2)
 
 
@@ -760,11 +831,8 @@ class JournalLogger:
             paths = [path for path in paths if path.name <= cutoff_name]
 
         for path in paths:
-            for entry in self._read_entries(path):
-                if entry.get("type") != "OUTCOME":
-                    continue
-                outcome = entry.get("outcome") or {}
-                balance += float(outcome.get("pnl_dollars") or 0.0)
+            for _, pnl in self._read_outcome_summary(path)["account"]:
+                balance += pnl
                 peak = max(peak, balance)
         return round(peak, 2)
 
@@ -783,14 +851,11 @@ class JournalLogger:
             paths = [path for path in paths if path.name <= cutoff_name]
 
         for path in paths:
-            for entry in self._read_entries(path):
-                if entry.get("type") != "OUTCOME":
-                    continue
-                entry_ts = _parse_ts(entry.get("ts"))
+            for raw_ts, pnl in self._read_outcome_summary(path)["account"]:
+                entry_ts = _parse_ts(raw_ts)
                 if entry_ts is None or _aware_utc(entry_ts) < boundary:
                     continue
-                outcome = entry.get("outcome") or {}
-                balance += float(outcome.get("pnl_dollars") or 0.0)
+                balance += pnl
                 peak = max(peak, balance)
         return round(balance, 2), round(peak, 2)
 
@@ -814,34 +879,18 @@ class JournalLogger:
             day_str = path.stem[len("journal_"):]
             day_pnl = 0.0
 
-            for entry in self._read_entries(path):
-                pnl: Optional[float] = None
-                result: Optional[str] = None
-
-                if entry.get("type") == "OUTCOME":
-                    out = entry.get("outcome") or {}
-                    result = out.get("result")
-                    pnl = float(out.get("pnl_dollars") or 0.0)
-                elif entry.get("decision") == "TRADE":
-                    risk = entry.get("risk_check") or {}
-                    if risk.get("result") == "APPROVED":
-                        out = entry.get("outcome") or {}
-                        result = out.get("result")
-                        if result in ("WIN", "LOSS", "BREAKEVEN"):
-                            pnl = float(out.get("pnl_dollars") or 0.0)
-
-                if pnl is not None and result in ("WIN", "LOSS", "BREAKEVEN"):
-                    day_pnl += pnl
-                    balance += pnl
-                    if balance > peak:
-                        peak = balance
-                    dd = peak - balance
-                    if dd > max_drawdown:
-                        max_drawdown = dd
-                    if result == "WIN" and pnl > 0:
-                        wins.append(pnl)
-                    elif result == "LOSS":
-                        losses.append(abs(pnl))
+            for result, pnl in self._read_outcome_summary(path)["performance"]:
+                day_pnl += pnl
+                balance += pnl
+                if balance > peak:
+                    peak = balance
+                dd = peak - balance
+                if dd > max_drawdown:
+                    max_drawdown = dd
+                if result == "WIN" and pnl > 0:
+                    wins.append(pnl)
+                elif result == "LOSS":
+                    losses.append(abs(pnl))
 
             if day_pnl:
                 daily_pnl[day_str] = round(day_pnl, 2)
