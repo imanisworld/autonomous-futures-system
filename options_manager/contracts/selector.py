@@ -56,11 +56,14 @@ class ContractCandidate:
     event_risk: Optional[RiskLevel]
 
 
-
 def _finite_number(value: object) -> bool:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return False
-    return math.isfinite(float(value))
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return False
+    return math.isfinite(parsed)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -152,7 +155,6 @@ class ContractShortlistResult:
     warnings: tuple[str, ...] = ()
 
 
-
 def _spread_percent(bid: object, ask: object) -> Optional[float]:
     """Raw quote arithmetic only; never a fallback value.
 
@@ -165,15 +167,15 @@ def _spread_percent(bid: object, ask: object) -> Optional[float]:
     try:
         bid_value = float(bid)
         ask_value = float(ask)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return None
     if not math.isfinite(bid_value) or not math.isfinite(ask_value):
         return None
     midpoint = (bid_value + ask_value) / 2.0
-    if midpoint <= 0:
+    if not math.isfinite(midpoint) or midpoint <= 0:
         return None
-    return (ask_value - bid_value) / midpoint * 100.0
-
+    spread = (ask_value - bid_value) / midpoint * 100.0
+    return spread if math.isfinite(spread) else None
 
 
 def _local_rejection(
@@ -190,7 +192,6 @@ def _local_rejection(
         reason=reason,
         spread_percent=spread_percent,
     )
-
 
 
 def _malformed_numeric_reason(candidate: ContractCandidate) -> Optional[str]:
@@ -210,7 +211,6 @@ def _malformed_numeric_reason(candidate: ContractCandidate) -> Optional[str]:
         if value is not None and not _finite_number(value):
             return name
     return None
-
 
 
 def _evaluate_candidate(
@@ -319,7 +319,6 @@ def _evaluate_candidate(
     )
 
 
-
 def _ranking_key(evaluated: EvaluatedContractCandidate) -> tuple[float, float, int, int, float]:
     """Transparent shortlist ordering, not an assertion of trading edge."""
     candidate = evaluated.candidate
@@ -329,7 +328,6 @@ def _ranking_key(evaluated: EvaluatedContractCandidate) -> tuple[float, float, i
     volume = candidate.volume if candidate.volume is not None else -1
     strike = candidate.strike if candidate.strike is not None else math.inf
     return (delta_distance, spread, -oi, -volume, strike)
-
 
 
 def shortlist_contracts(request: ContractSelectionRequest) -> ContractShortlistResult:
