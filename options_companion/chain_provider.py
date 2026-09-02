@@ -353,9 +353,12 @@ def _first_float(payload: dict[str, Any], names: tuple[str, ...]) -> Optional[fl
     for name in names:
         value = payload.get(name)
         try:
-            return float(value)
-        except (TypeError, ValueError):
+            parsed = float(value)
+        except (TypeError, ValueError, OverflowError):
             continue
+        if parsed != parsed or parsed in (float("inf"), float("-inf")):
+            continue
+        return parsed
     return None
 
 
