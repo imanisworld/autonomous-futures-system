@@ -21,6 +21,29 @@ DEFAULT_MIN_VOLUME = 100
 DEFAULT_MIN_OPEN_INTEREST = 500
 DEFAULT_MIN_DISTANCE_TO_TARGET_PERCENT = 2.0
 
+def _is_finite_number(value: object) -> bool:
+    """True only for a real, finite int/float (bool excluded). Kept
+    import-free on purpose: this module's import surface is asserted by
+    tests to stay within options_manager and the stdlib names already used."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return False
+    return value == value and value not in (float("inf"), float("-inf"))
+
+
+_NUMERIC_CONTRACT_FIELDS = (
+    "strike",
+    "premium",
+    "bid",
+    "ask",
+    "spread_percent",
+    "volume",
+    "open_interest",
+    "dte",
+    "max_contracts",
+    "max_dollar_risk",
+    "distance_to_target",
+    "premium_stop",
+)
 _RiskSeverity = Literal["none", "low", "moderate", "high"]
 _VALID_SEVERITIES = ("none", "low", "moderate", "high")
 _TradeStyle = Literal["swing", "intraday"]
@@ -69,6 +92,13 @@ class ContractQualityResult:
 def evaluate_contract_quality(contract: ContractQualityInput) -> ContractQualityResult:
     blocking: list[str] = []
     warnings: list[str] = []
+
+    for name in _NUMERIC_CONTRACT_FIELDS:
+        value = getattr(contract, name)
+        if value is None:
+            continue
+        if not _is_finite_number(value):
+            blocking.append(f"non-finite {name}")
 
     if not contract.ticker.strip():
         blocking.append("missing ticker")

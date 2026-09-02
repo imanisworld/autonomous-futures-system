@@ -20,6 +20,34 @@ from typing import Optional
 
 from .base import ContractConstraintsInputs, ContractConstraintsResult, _invalid
 
+def _is_finite_number(value: object) -> bool:
+    """True only for a real, finite int/float (bool excluded). Kept
+    import-free on purpose: this module's import surface is asserted by
+    tests to stay within options_manager and the stdlib names already used."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return False
+    return value == value and value not in (float("inf"), float("-inf"))
+
+
+_NUMERIC_INPUT_FIELDS = (
+    "dte",
+    "strike",
+    "premium",
+    "bid",
+    "ask",
+    "spread_percent",
+    "volume",
+    "open_interest",
+    "delta",
+    "theta",
+    "iv",
+    "max_premium",
+    "max_spread_percent",
+    "min_volume",
+    "min_open_interest",
+    "min_dte",
+    "max_theta_abs",
+)
 _NEAR_THRESHOLD_MARGIN = 0.20
 _ELEVATED_IV_THRESHOLD = 0.80
 
@@ -99,6 +127,16 @@ def evaluate_contract_constraints(
             "max_premium, max_spread_percent, min_volume, min_open_interest, "
             "and min_dte are all required",
         )
+
+    for name in _NUMERIC_INPUT_FIELDS:
+        value = getattr(inputs, name)
+        if value is None:
+            continue
+        if not _is_finite_number(value):
+            return _invalid(
+                f"non_finite_{name}",
+                f"{name} {value!r} must be a finite number",
+            )
 
     if inputs.bid <= 0:
         return _invalid("bid_invalid", f"bid {inputs.bid} must be positive")
