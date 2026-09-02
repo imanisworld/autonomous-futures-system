@@ -43,6 +43,7 @@ from pathlib import Path
 from typing import Literal, Optional
 
 from .config import OptionsManagerConfig
+from .outcomes import ForwardOutcomeEvent, event_content_hash, validate_forward_outcome_event
 from .human_confirm import ConfirmationRecord
 from .order_ticket import PreparedOrderTicket
 from .plans.base import (
@@ -184,6 +185,35 @@ def init_options_storage(db_path: str, config: OptionsManagerConfig) -> StorageW
                     snapshot_json TEXT NOT NULL,
                     UNIQUE(thesis_id, snapshot_hash)
                 )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS forward_outcome_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id TEXT NOT NULL,
+                    thesis_id TEXT NOT NULL,
+                    ticker TEXT NOT NULL,
+                    direction TEXT NOT NULL,
+                    setup_type TEXT NOT NULL,
+                    timeframe TEXT NOT NULL,
+                    event_type TEXT NOT NULL,
+                    setup_state TEXT NOT NULL,
+                    event_at TEXT NOT NULL,
+                    recorded_at TEXT NOT NULL,
+                    provider TEXT NOT NULL,
+                    provider_updated_at TEXT,
+                    system_commit_sha TEXT NOT NULL,
+                    content_hash TEXT NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    UNIQUE(session_id, thesis_id, content_hash)
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_forward_outcome_session
+                ON forward_outcome_events (session_id, thesis_id, event_at, id)
                 """
             )
             conn.execute(
@@ -741,3 +771,111 @@ def _parse_tz_aware(value: str) -> datetime:
     if parsed.tzinfo is None:
         raise ValueError(f"stored timestamp {value!r} is not timezone-aware")
     return parsed
+
+
+def append_forward_outcome_event(
+    db_path: str,
+    event: ForwardOutcomeEvent,
+    config: OptionsManagerConfig,
+    *,
+    recorded_at: datetime,
+) -> StorageWriteResult:
+    """Append one causal forward outcome event. Append-only and idempotent:
+    an identical event (same session, thesis, and content hash) returns
+    DUPLICATE instead of a second row. Fails closed when the event is not
+    storable or when its source timestamp is later than ``recorded_at``
+    (a source cannot report the future)."""
+    if not config.storage_enabled:
+        return _write_rejected("storage_disabled", "storage_enabled is False; outcome event not written")
+    if not _is_tz_aware(recorded_at):
+        return _write_data_blocked("timestamp", "recorded_at has no timezone info")
+    problems = validate_forward_outcome_event(event)
+    if problems:
+        return _write_data_blocked("event", "; ".join(problems))
+    if event.event_at > recorded_at:
+        return _write_data_blocked(
+            "causality", f"event_at {event.event_at.isoformat()} is after recorded_at {recorded_at.isoformat()}"
+        )
+    if event.provider_updated_at is not None and event.provider_updated_at > recorded_at:
+        return _write_data_blocked("causality", "provider_updated_at is after recorded_at")
+    payload = event.to_payload()
+    payload["recorded_at"] = recorded_at.isoformat()
+    content_hash = event_content_hash(event)
+    try:
+        payload_json = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    except (TypeError, ValueError) as exc:
+        return _write_data_blocked("event", f"outcome event is not serializable: {exc}")
+    try:
+        with _connect(db_path) as conn:
+            conn.execute(
+                """
+                INSERT INTO forward_outcome_events (
+                    session_id, thesis_id, ticker, direction, setup_type, timeframe,
+                    event_type, setup_state, event_at, recorded_at, provider,
+                    provider_updated_at, system_commit_sha, content_hash, payload_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    event.session_id.strip(),
+                    event.thesis_id.strip(),
+                    event.ticker.strip().upper(),
+                    event.direction,
+                    event.setup_type.strip(),
+                    event.timeframe.strip(),
+                    event.event_type,
+                    event.setup_state,
+                    event.event_at.isoformat(),
+                    recorded_at.isoformat(),
+                    event.provider.strip(),
+                    event.provider_updated_at.isoformat() if event.provider_updated_at else None,
+                    event.system_commit_sha.strip(),
+                    content_hash,
+                    payload_json,
+                ),
+            )
+    except sqlite3.IntegrityError:
+        return _write_duplicate("content_hash", f"session {event.session_id!r} thesis {event.thesis_id!r} already has this event")
+    except sqlite3.DatabaseError as exc:
+        return _write_corrupt("db_error", f"failed to write forward outcome event: {exc}")
+    return _written(content_hash)
+
+
+def load_forward_outcome_events(
+    db_path: str,
+    config: OptionsManagerConfig,
+    *,
+    session_id: Optional[str] = None,
+    thesis_id: Optional[str] = None,
+) -> StorageReadResult:
+    """Read events in causal order (event_at, then insertion id). A row whose
+    payload does not parse is reported CORRUPT rather than skipped."""
+    if not config.storage_enabled:
+        return _read_data_blocked("storage_disabled", "storage_enabled is False; outcome events not read")
+    clauses: list[str] = []
+    params: list[str] = []
+    if session_id:
+        clauses.append("session_id = ?")
+        params.append(session_id.strip())
+    if thesis_id:
+        clauses.append("thesis_id = ?")
+        params.append(thesis_id.strip())
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    try:
+        with _connect(db_path) as conn:
+            rows = conn.execute(
+                f"SELECT payload_json, content_hash, recorded_at FROM forward_outcome_events {where} ORDER BY event_at, id",
+                params,
+            ).fetchall()
+    except sqlite3.DatabaseError as exc:
+        return _read_corrupt("db_error", f"failed to read forward outcome events: {exc}")
+    events: list[dict] = []
+    for row in rows:
+        try:
+            payload = json.loads(row["payload_json"])
+        except (TypeError, ValueError) as exc:
+            return _read_corrupt("payload", f"stored outcome event {row['content_hash']} is corrupt: {exc}")
+        if not isinstance(payload, dict):
+            return _read_corrupt("payload", f"stored outcome event {row['content_hash']} is not an object")
+        payload["content_hash"] = row["content_hash"]
+        events.append(payload)
+    return _found({"events": events, "count": len(events)})
