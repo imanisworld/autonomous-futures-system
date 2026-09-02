@@ -82,7 +82,7 @@ def test_aggregates_ticker_direction_and_group_without_position_cap():
 
 
 def test_index_overlap_is_multi_valued_not_allocation():
-    result = measure_concentration([_fact(index_overlap=("SPY", "QQQ"))])
+    result = measure_concentration([_fact(index_overlap=("spy", "QQQ"))])
     snap = result.snapshot
     assert snap is not None
     assert _bucket(snap.by_index_overlap, "SPY").share_of_planned_risk == 1
@@ -93,7 +93,7 @@ def test_unknown_labels_are_counted_not_inferred():
     result = measure_concentration(
         [
             _fact(correlation_group="", sector="", industry="", index_overlap=()),
-            _fact(ticker="MSFT", correlation_group="", sector="Technology", industry=""),
+            _fact(ticker="MSFT", correlation_group=None, sector="Technology", industry=None),
         ]
     )
     snap = result.snapshot
@@ -152,14 +152,22 @@ def test_negative_values_fail_closed():
     "overrides,reason",
     [
         ({"ticker": ""}, "exposures_0_ticker_missing"),
+        ({"ticker": None}, "exposures_0_ticker_missing"),
         ({"direction": "SIDEWAYS"}, "exposures_0_direction_invalid"),
         ({"expiration": ""}, "exposures_0_expiration_missing"),
+        ({"expiration": None}, "exposures_0_expiration_missing"),
         ({"dte": -1}, "exposures_0_dte_invalid"),
         ({"dte": True}, "exposures_0_dte_invalid"),
         ({"contracts": 0}, "exposures_0_contracts_invalid"),
         ({"contracts": True}, "exposures_0_contracts_invalid"),
+        ({"is_candidate": 1}, "exposures_0_is_candidate_not_bool"),
         ({"index_overlap": ("SPY", "SPY")}, "exposures_0_index_overlap_duplicate"),
         ({"index_overlap": ("",)}, "exposures_0_index_overlap_empty"),
+        ({"index_overlap": "SPY"}, "exposures_0_index_overlap_not_sequence"),
+        ({"index_overlap": (123,)}, "exposures_0_index_overlap_member_not_string"),
+        ({"correlation_group": 123}, "exposures_0_correlation_group_not_string"),
+        ({"sector": 123}, "exposures_0_sector_not_string"),
+        ({"industry": 123}, "exposures_0_industry_not_string"),
     ],
 )
 def test_malformed_fact_fails_closed(overrides, reason):
@@ -167,6 +175,20 @@ def test_malformed_fact_fails_closed(overrides, reason):
     assert result.status == ConcentrationStatus.INVALID
     assert result.snapshot is None
     assert reason in result.reason_codes
+
+
+def test_noniterable_exposures_fail_closed():
+    result = measure_concentration(None)
+    assert result.status == ConcentrationStatus.INVALID
+    assert result.snapshot is None
+    assert result.reason_codes == ("exposures_not_iterable",)
+
+
+def test_wrong_exposure_type_fails_closed():
+    result = measure_concentration([{"ticker": "AAPL"}])
+    assert result.status == ConcentrationStatus.INVALID
+    assert result.snapshot is None
+    assert result.reason_codes == ("exposures_0_wrong_type",)
 
 
 def test_position_count_is_measurement_only_even_at_large_count():
