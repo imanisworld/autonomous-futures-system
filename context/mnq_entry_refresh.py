@@ -34,8 +34,9 @@ owns all of that.
 """
 from __future__ import annotations
 
+import copy
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Optional
 
 VALID_MODES = ("off", "observe_only", "shadow")
@@ -115,6 +116,44 @@ def is_entry_refresh_candidate(
         root in entry_refresh_instruments(cfg)
         and strategy in entry_refresh_strategies(cfg)
     )
+
+
+def observe_entry_refresh_decision(
+    state,
+    daily_state,
+    cfg,
+    *,
+    strategy: str = "orb_reclaim",
+):
+    """Evaluate one entry-refresh strategy through the canonical engine, isolated.
+
+    The active futures config may deliberately omit ``orb_reclaim`` from
+    ``enabled_concepts`` to isolate another execution lane. Entry-refresh and
+    forward-campaign evidence must not disappear as a side effect of that active
+    ranking choice. This helper therefore reuses the real DecisionEngine against
+    a throwaway config copy containing exactly one strategy and a deep-copied
+    DailyState. It returns only a DecisionOutput for observation; it never calls
+    RiskEngine, a broker, journal I/O, or shadow-position I/O.
+
+    Invalid scope/mode or any evaluation failure returns None so the caller can
+    fail soft without changing the active decision path.
+    """
+    if entry_refresh_mode(cfg) == "off":
+        return None
+    if not is_entry_refresh_candidate(getattr(state, "instrument", None), strategy, cfg):
+        return None
+    try:
+        from strategy.signal_engine import DecisionEngine
+
+        scoped_cfg = replace(cfg, enabled_concepts=[strategy])
+        scoped_daily = copy.deepcopy(daily_state)
+        engine = DecisionEngine(
+            scoped_cfg,
+            schedule_mode=getattr(cfg, "schedule_mode", None),
+        )
+        return engine.evaluate(state, scoped_daily)
+    except Exception:
+        return None
 
 
 @dataclass(frozen=True)
