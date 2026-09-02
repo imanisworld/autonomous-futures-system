@@ -51,6 +51,7 @@ def build_watchlist_row_from_adapter_data(
     two_bars_back_candle: AdapterCandle,
     previous_candle: AdapterCandle,
     current_candle: AdapterCandle,
+    timeframe: Optional[str] = None,
     entry_trigger: Optional[float] = None,
     underlying_invalidation: Optional[float] = None,
     target_1: Optional[float] = None,
@@ -80,6 +81,9 @@ def build_watchlist_row_from_adapter_data(
     fourth, even-earlier candle this module never asks for, and this
     module must not reimplement strategy.strat_classifier's own
     candle-classification logic.
+
+    `timeframe` is carried through as source identity only. It is not inferred
+    from timestamp spacing or used to alter the supplied bars.
 
     `entry_trigger`/`underlying_invalidation`/`target_1`/`target_2` are
     never derived from the supplied candles -- they are always the
@@ -171,6 +175,7 @@ def build_watchlist_row_from_adapter_data(
         timestamp=timestamp,
         direction=direction,
         bars=bars,
+        timeframe=timeframe,
         entry_trigger=entry_trigger,
         underlying_invalidation=underlying_invalidation,
         target_1=target_1,
