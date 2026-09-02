@@ -19,7 +19,7 @@ from ops.options_data_health import (
     observations_from_json,
 )
 
-NOW = datetime(2026, 9, 2, 14, 10, tzinfo=timezone.utc)  # 10:10 ET, in session
+NOW = datetime(2026, 9, 2, 14, 10, tzinfo=timezone.utc)  # 10:10 ET
 
 
 def _iso(minutes_ago: float) -> str:
@@ -28,7 +28,18 @@ def _iso(minutes_ago: float) -> str:
 
 def _ready() -> dict[str, SourceObservation]:
     return {
-        "calendar": SourceObservation("calendar", True, NOW.isoformat(), {"is_trading_day": True}, provider="calendar"),
+        "calendar": SourceObservation(
+            "calendar",
+            True,
+            NOW.isoformat(),
+            {
+                "is_trading_day": True,
+                "session_open": "2026-09-02T13:30:00+00:00",
+                "session_close": "2026-09-02T20:00:00+00:00",
+                "is_early_close": False,
+            },
+            provider="calendar",
+        ),
         "quote": SourceObservation("quote", True, _iso(1), {"last": 123.4}, provider="rh"),
         "prior_close": SourceObservation("prior_close", True, _iso(1), {"close": 121.0, "date": "2026-09-01"}, provider="rh"),
         "bars": SourceObservation("bars", True, _iso(0), {"count": 8, "interval_minutes": 5, "bounds": "regular", "first_bar_start": "2026-09-02T13:30:00+00:00", "last_bar_end": _iso(5)}, provider="rh"),
@@ -66,9 +77,12 @@ def _with(obs, name, **changes):
         (lambda o: _with(o, "bars", fields={"count": 0}), "no bars returned"),
         (lambda o: _with(o, "bars", fields={"last_bar_end": (NOW + timedelta(minutes=10)).isoformat()}), "future leakage"),
         (lambda o: _with(o, "chain", fields={"expirations": []}), "no expirations"),
+        (lambda o: _with(o, "chain", fields={"expirations": ["garbage", "2026-08-01"]}), "no parseable current/future expiration"),
         (lambda o: _with(o, "chain", fields={"sample_contract": {"bid": 1.95, "ask": 2.05, "volume": 1, "open_interest": 1, "updated_at": _iso(1)}}), "missing iv, delta, theta"),
         (lambda o: _with(o, "chain", fields={"sample_contract": {**o["chain"].fields["sample_contract"], "delta": float("inf")}}), "delta is not finite"),
+        (lambda o: _with(o, "chain", fields={"sample_contract": {**o["chain"].fields["sample_contract"], "volume": float("nan")}}), "volume is not finite"),
         (lambda o: _with(o, "chain", fields={"sample_contract": {**o["chain"].fields["sample_contract"], "updated_at": "yesterday"}}), "updated_at unparseable"),
+        (lambda o: _with(o, "chain", fields={"sample_contract": {**o["chain"].fields["sample_contract"], "updated_at": (NOW + timedelta(minutes=5)).isoformat()}}), "timestamp -5.0 min in the future"),
         (lambda o: _with(o, "calendar", fields={"is_trading_day": False}), "not a trading day"),
     ],
 )
@@ -86,7 +100,6 @@ def test_hard_gaps_block(mutate, fragment):
         (lambda o: _with(o, "bars", fields={"first_bar_start": "2026-09-02T14:00:00+00:00"}), "misaligned"),
         (lambda o: _with(o, "bars", fields={"last_bar_end": _iso(20)}), "last bar 20 min old"),
         (lambda o: _with(o, "bars", fields={"bounds": "extended"}), "not regular session"),
-        (lambda o: _with(o, "chain", fields={"expirations": ["2026-12-18"]}), "no expiration within 14 days"),
         (lambda o: _with(o, "chain", fields={"sample_contract": {**o["chain"].fields["sample_contract"], "ask": 1.90}}), "crossed or locked"),
         (lambda o: _with(o, "chain", fields={"sample_contract": {**o["chain"].fields["sample_contract"], "updated_at": _iso(20)}}), "20 min stale"),
         (lambda o: {k: v for k, v in o.items() if k != "signa"}, "signa: unavailable (observational only)"),
@@ -95,12 +108,44 @@ def test_hard_gaps_block(mutate, fragment):
         (lambda o: _with(o, "signa", fields={"stale": True}), "provider marks the signal stale"),
         (lambda o: _with(o, "signa", fields={"grade": None}), "grade/score missing"),
         (lambda o: {k: v for k, v in o.items() if k != "calendar"}, "calendar alignment unknown"),
+        (lambda o: _with(o, "calendar", fields={"session_open": None}), "verified session open/close unavailable"),
     ],
 )
 def test_soft_gaps_degrade(mutate, fragment):
     report = evaluate_data_health(mutate(_ready()), ticker="XYZ", now=NOW)
     assert report.status == DEGRADED, report.reasons
     assert any(fragment in r for r in report.reasons), report.reasons
+
+
+def test_longer_dated_chain_is_not_degraded_just_for_lacking_weeklies():
+    obs = _with(_ready(), "chain", fields={"expirations": ["2026-12-18"]})
+    report = evaluate_data_health(obs, ticker="XYZ", now=NOW)
+    assert report.status == READY
+
+
+def test_verified_early_close_controls_session_state():
+    now = datetime(2026, 11, 27, 18, 0, tzinfo=timezone.utc)  # 13:00 ET
+    obs = _ready()
+    obs["calendar"] = SourceObservation(
+        "calendar",
+        True,
+        now.isoformat(),
+        {
+            "is_trading_day": True,
+            "session_open": "2026-11-27T14:30:00+00:00",
+            "session_close": "2026-11-27T18:00:00+00:00",
+            "is_early_close": True,
+        },
+        provider="calendar",
+    )
+    obs["quote"] = SourceObservation("quote", True, (now - timedelta(hours=2)).isoformat(), {"last": 123.4}, provider="rh")
+    obs["bars"] = SourceObservation("bars", True, now.isoformat(), {"count": 42, "interval_minutes": 5, "bounds": "regular", "first_bar_start": "2026-11-27T14:30:00+00:00", "last_bar_end": "2026-11-27T18:00:00+00:00"}, provider="rh")
+    obs["prior_close"] = SourceObservation("prior_close", True, now.isoformat(), {"close": 121.0, "date": "2026-11-25"}, provider="rh")
+    obs["chain"] = SourceObservation("chain", True, now.isoformat(), {"expirations": ["2026-12-18"], "sample_contract": {"bid": 1.95, "ask": 2.05, "volume": 1401, "open_interest": 7683, "iv": 0.13, "delta": 0.57, "theta": -0.19, "updated_at": (now - timedelta(hours=2)).isoformat()}}, provider="rh")
+    obs["signa"] = SourceObservation("signa", True, now.isoformat(), {"grade": "B", "score": 63.0, "technicals_as_of": "2026-11-27", "stale": False}, provider="signa")
+    report = evaluate_data_health(obs, ticker="XYZ", now=now)
+    assert report.in_session is False
+    assert report.status == READY
 
 
 def test_signa_never_blocks_and_gex_never_changes_status():
