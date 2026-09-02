@@ -630,10 +630,10 @@ def public_chain_collector(ticker: str, now: datetime) -> SourceObservation:
                     "ask": sample.ask,
                     "iv": sample.iv,
                     "delta": sample.delta,
-                    "theta": None,
-                    "volume": None,
+                    "theta": sample.theta,
+                    "volume": sample.volume,
                     "open_interest": sample.open_interest,
-                    "updated_at": None,
+                    "updated_at": sample.updated_at,
                 },
             },
         )
