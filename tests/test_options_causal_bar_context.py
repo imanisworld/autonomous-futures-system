@@ -970,7 +970,7 @@ def test_setup_authority_delegates_and_reimplements_nothing():
         assert invented not in source
 
 
-# ─── 3. the legacy Signa-only callout cannot contaminate Phase 1 ──────────────
+# ─── 3. Signa has no independent alert authority ──────────────────────────────
 
 
 def _signa_context() -> dict:
@@ -983,65 +983,46 @@ def _signa_context() -> dict:
     }
 
 
-def _record_legacy_callout(scanner, monkeypatch) -> list:
-    calls: list = []
-
-    async def record(ticker, normalized, now):
-        calls.append(ticker)
-
-    monkeypatch.setattr(scanner, "_maybe_send_candidate_alert", record)
-    return calls
+def test_signa_only_callout_method_is_removed_from_scanner():
+    assert not hasattr(OptionsScanner, "_maybe_send_candidate_alert")
+    source = inspect.getsource(OptionsScanner.scan_ticker)
+    assert "_maybe_send_candidate_alert" not in source
 
 
-def test_signa_only_callout_is_disabled_once_the_causal_lane_is_active(
-    tmp_path, monkeypatch
-):
+def test_signa_alone_cannot_alert_with_causal_lane_on(tmp_path):
     _, _, scanner = make_scanner(
         tmp_path,
         standard_builder(),
         signa_api_enabled=True,
         discord_webhook_url="https://discord.invalid/webhook",
     )
-    calls = _record_legacy_callout(scanner, monkeypatch)
     outcome = asyncio.run(
         scanner.scan_ticker("AAPL", source="scheduled", context=_signa_context(), now=NOW)
     )
-    # A qualifying Signa grade and score, and no mechanically triggered setup.
     assert outcome.result.raw["signa_grade"] == "A+"
+    assert outcome.result.components["signa"] == 0
     assert outcome.result.raw["setup_status"] != "TRIGGERED"
-    assert calls == []
+    assert outcome.alert_sent is False
 
 
-def test_legacy_callout_still_fires_when_the_causal_lane_is_off(tmp_path, monkeypatch):
-    _, _, scanner = make_scanner(
-        tmp_path,
-        None,
-        signa_api_enabled=True,
-        discord_webhook_url="https://discord.invalid/webhook",
-    )
-    calls = _record_legacy_callout(scanner, monkeypatch)
-    asyncio.run(
-        scanner.scan_ticker("AAPL", source="scheduled", context=_signa_context(), now=NOW)
-    )
-    assert calls == ["AAPL"]
-
-
-def test_enabling_the_lane_by_config_alone_also_disables_the_legacy_callout(
-    tmp_path, monkeypatch
-):
-    """Enabled but unbuildable must not fall back to the unproven path."""
-    _, _, scanner = make_scanner(
-        tmp_path,
-        None,
-        bar_context_enabled=True,
-        signa_api_enabled=True,
-        discord_webhook_url="https://discord.invalid/webhook",
-    )
-    calls = _record_legacy_callout(scanner, monkeypatch)
-    asyncio.run(
-        scanner.scan_ticker("AAPL", source="scheduled", context=_signa_context(), now=NOW)
-    )
-    assert calls == []
+def test_signa_alone_cannot_alert_with_causal_lane_off_or_unconfigured(tmp_path):
+    for suffix, kwargs in (
+        ("off", {}),
+        ("enabled-unconfigured", {"bar_context_enabled": True}),
+    ):
+        _, _, scanner = make_scanner(
+            tmp_path / suffix,
+            None,
+            signa_api_enabled=True,
+            discord_webhook_url="https://discord.invalid/webhook",
+            **kwargs,
+        )
+        outcome = asyncio.run(
+            scanner.scan_ticker("AAPL", source="scheduled", context=_signa_context(), now=NOW)
+        )
+        assert outcome.result.raw["signa_grade"] == "A+"
+        assert outcome.result.components["signa"] == 0
+        assert outcome.alert_sent is False
 
 
 # ─── 4. the canonical source timeframe is locked to 30 minutes ────────────────
