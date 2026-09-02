@@ -153,3 +153,37 @@ def test_parse_chain_never_invents_provider_timestamp():
     }
     c = _parse_chain(payload, "2026-09-18")[0]
     assert c.updated_at is None
+
+
+def test_parse_chain_rejects_nonfinite_and_overflow_numeric_fields():
+    huge = 10**10000
+    payload = {
+        "calls": [
+            {
+                "instrument": {"symbol": "SPY...C00700"},
+                "bid": "inf",
+                "ask": "4.40",
+                "volume": huge,
+                "openInterest": huge,
+                "optionDetails": {
+                    "strikePrice": "700",
+                    "greeks": {
+                        "delta": "nan",
+                        "gamma": "-inf",
+                        "theta": "-0.187",
+                        "impliedVolatility": "0.1879",
+                    },
+                },
+            }
+        ],
+        "puts": [],
+    }
+    c = _parse_chain(payload, "2026-09-18")[0]
+    assert c.bid is None
+    assert c.delta is None
+    assert c.gamma is None
+    assert c.volume is None
+    assert c.open_interest is None
+    assert c.ask == pytest.approx(4.40)
+    assert c.theta == pytest.approx(-0.187)
+    assert c.iv == pytest.approx(0.1879)
