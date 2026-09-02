@@ -137,7 +137,8 @@ def evaluate_market_context(inputs: MarketContextInputs) -> MarketContextResult:
 
     spy_aligned = inputs.spy_trend == aligned_trend
     qqq_aligned = inputs.qqq_trend == aligned_trend
-    if not (spy_aligned and qqq_aligned):
+    spy_qqq_aligned = spy_aligned and qqq_aligned
+    if not spy_qqq_aligned:
         warnings.append(
             f"SPY/QQQ trend not both aligned with {direction} "
             f"(spy_trend={inputs.spy_trend!r}, qqq_trend={inputs.qqq_trend!r})"
@@ -160,15 +161,18 @@ def evaluate_market_context(inputs: MarketContextInputs) -> MarketContextResult:
             "htf_opposite",
             "higher_timeframe_alignment is opposite the requested direction",
         )
-    if inputs.higher_timeframe_alignment == "mixed":
+    htf_aligned = inputs.higher_timeframe_alignment == "aligned"
+    if not htf_aligned:
         warnings.append("higher_timeframe_alignment is mixed, not fully aligned")
+
+    event_risk_clear = inputs.event_risk in ("none", "low")
 
     # Actionable context score contains only independent market-structure
     # components. Signa is deliberately absent from numerator and denominator.
     context_score = (
         (1.0 if spy_aligned else 0.0)
         + (1.0 if qqq_aligned else 0.0)
-        + (1.0 if inputs.higher_timeframe_alignment == "aligned" else 0.0)
+        + (1.0 if htf_aligned else 0.0)
     )
     context_score_max = 3.0
     if gex_available:
@@ -185,6 +189,9 @@ def evaluate_market_context(inputs: MarketContextInputs) -> MarketContextResult:
             context_score=context_score,
             context_score_max=context_score_max,
             gex_available=gex_available,
+            spy_qqq_aligned=spy_qqq_aligned,
+            htf_aligned=htf_aligned,
+            event_risk_clear=event_risk_clear,
         )
 
     return MarketContextResult(
@@ -195,4 +202,7 @@ def evaluate_market_context(inputs: MarketContextInputs) -> MarketContextResult:
         context_score=context_score,
         context_score_max=context_score_max,
         gex_available=gex_available,
+        spy_qqq_aligned=spy_qqq_aligned,
+        htf_aligned=htf_aligned,
+        event_risk_clear=event_risk_clear,
     )
