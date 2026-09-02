@@ -4,6 +4,8 @@ from pathlib import Path
 
 from alert_ranker.app import _render_scanner_dashboard, create_app
 from alert_ranker.config import ScannerConfig
+from alert_ranker.discord import build_discord_payload
+from alert_ranker.scorer import ScoreResult
 
 
 def _config(tmp_path: Path) -> ScannerConfig:
@@ -56,3 +58,33 @@ def test_app_source_has_no_removed_auto_authority_or_default_gex_regime():
     assert "rh_options_rank_and_evaluate" not in source
     assert "rank_option_contracts" not in source
     assert "LOW_PINNING" not in source
+
+
+def test_untriggered_discord_ignores_legacy_confirmed_copy():
+    result = ScoreResult(
+        ticker="AAPL",
+        direction="LONG",
+        score=9,
+        pattern="2-1-2",
+        components={"strat_pattern": 3, "vwap": 2, "trend": 2, "volume": 2, "signa": 0},
+        raw={
+            "setup_status": "WATCH",
+            "thesis": "A+ CONFIRMED GOLDEN SETUP",
+            "why": "All gates passed",
+            "edge": "Multi-timeframe alignment confirmed",
+            "risk": "Enter now and size up",
+        },
+    )
+
+    embed = build_discord_payload(result)["embeds"][0]
+    rendered = " ".join(
+        [embed["title"], embed["description"]]
+        + [str(field["value"]) for field in embed["fields"]]
+    )
+
+    assert "SETUP WATCHING" in embed["title"]
+    assert "A+ CONFIRMED" not in rendered
+    assert "All gates passed" not in rendered
+    assert "alignment confirmed" not in rendered
+    assert "Enter now" not in rendered
+    assert "No entry" in rendered
