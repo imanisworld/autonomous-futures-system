@@ -43,10 +43,9 @@ class DiscordAlerter:
     async def send_if_eligible(self, result: ScoreResult, now: datetime | None = None) -> AlertDecision:
         if result.score < self.config.alert_threshold:
             # The scorer already knows why it could not score (missing feed
-            # inputs, against_vwap, against_trend).  Reporting
+            # inputs, against_vwap, against_trend). Reporting
             # "score_below_threshold" for those cases makes a dead data feed
-            # indistinguishable from a quiet market -- which is how 11,974
-            # unscorable scans were logged as ordinary near-misses.
+            # indistinguishable from a quiet market.
             return AlertDecision(False, result.reason or "score_below_threshold")
         if not self.config.discord_webhook_url:
             return AlertDecision(False, "discord_not_configured")
@@ -153,14 +152,14 @@ def _alert_title(result: ScoreResult, side: str, state: str) -> str:
 
 def _alert_description(result: ScoreResult, side: str, state: str) -> str:
     raw = result.raw
-    thesis = raw.get("thesis") or raw.get("summary")
-    if thesis:
-        return str(thesis)
     if state in {"forming", "watching"}:
         return (
             f"**{result.ticker} {side}** is observational only. "
             "Mechanical setup proof is not TRIGGERED; do not treat scanner score or Signa as entry permission."
         )
+    thesis = raw.get("thesis") or raw.get("summary")
+    if thesis:
+        return str(thesis)
     return (
         f"**{result.ticker} is showing "
         f"{'bullish' if result.direction == 'LONG' else 'bearish'} structure.** "
@@ -184,9 +183,10 @@ def _contract_text(result: ScoreResult, side: str) -> str:
 
 def _why_text(result: ScoreResult, session: str) -> str:
     raw = result.raw
-    why = raw.get("why") or raw.get("why_forming")
-    if why:
-        return str(why)
+    if _mechanically_triggered(result):
+        why = raw.get("why") or raw.get("why_forming")
+        if why:
+            return str(why)
     reasons = []
     if _mechanically_triggered(result):
         reasons.append("mechanical setup TRIGGERED")
@@ -205,9 +205,10 @@ def _why_text(result: ScoreResult, session: str) -> str:
 
 def _edge_text(result: ScoreResult) -> str:
     raw = result.raw
-    edge = raw.get("edge") or raw.get("flow_note") or raw.get("gex_note")
-    if edge:
-        return str(edge)
+    if _mechanically_triggered(result):
+        edge = raw.get("edge") or raw.get("flow_note") or raw.get("gex_note")
+        if edge:
+            return str(edge)
     gates = sum(
         1 for name, value in result.components.items() if name != "signa" and value > 0
     )
@@ -216,11 +217,11 @@ def _edge_text(result: ScoreResult) -> str:
 
 def _risk_text(result: ScoreResult) -> str:
     raw = result.raw
+    if not _mechanically_triggered(result):
+        return "No entry. Wait for mechanical TRIGGERED setup and canonical contract/risk proof."
     risk = raw.get("risk")
     if risk:
         return str(risk)
-    if not _mechanically_triggered(result):
-        return "No entry. Wait for mechanical TRIGGERED setup and canonical contract/risk proof."
     return "Mechanical setup triggered; use canonical invalidation, targets, contract and risk validation before any trade."
 
 
