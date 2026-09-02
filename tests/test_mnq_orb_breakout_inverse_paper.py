@@ -29,6 +29,7 @@ def _config(tmp_path, **overrides):
         base,
         enabled_concepts=list(base.enabled_concepts) + ["orb_breakout"],
         orb_stop_ticks={"MNQ": 48},
+        mnq_orb_breakout_inverse_epoch_start="2026-05-23T14:00:00+00:00",
         **overrides,
     )
 
@@ -72,11 +73,29 @@ def test_inverse_and_legacy_breakout_proof_modes_are_mutually_exclusive(tmp_path
     cfg = replace(
         _base_config(tmp_path),
         mnq_orb_breakout_inverse_mode="paper_sim",
+        mnq_orb_breakout_inverse_epoch_start="2026-05-23T14:00:00+00:00",
         mnq_orb_breakout_proof_mode="paper_sim",
         max_staleness_seconds=60,
     )
     with pytest.raises(ConfigError, match="cannot both be active"):
         _validate_config(cfg)
+
+
+def test_active_inverse_requires_offset_aware_epoch_start(tmp_path):
+    missing = replace(
+        _base_config(tmp_path),
+        mnq_orb_breakout_inverse_mode="paper_sim",
+        max_staleness_seconds=60,
+    )
+    with pytest.raises(ConfigError, match="EPOCH_START is required"):
+        _validate_config(missing)
+
+    naive = replace(
+        missing,
+        mnq_orb_breakout_inverse_epoch_start="2026-09-02T00:00:00",
+    )
+    with pytest.raises(ConfigError, match="UTC offset"):
+        _validate_config(naive)
 
 
 @pytest.mark.parametrize(
@@ -193,6 +212,7 @@ def test_runtime_signal_to_ioc_order_parity(tmp_path, monkeypatch):
     intent = next(row for row in rows if row.get("decision") == "TRADE_INTENT")
     confirmed = next(row for row in rows if row.get("decision") == "TRADE")
     audit = intent["mnq_orb_breakout_inverse_audit"]
+    assert audit["accounting_epoch_start"] == "2026-05-23T14:00:00+00:00"
     assert audit["source_setup"] == {
         "direction": "LONG",
         "entry": 19498.5,
@@ -210,6 +230,72 @@ def test_runtime_signal_to_ioc_order_parity(tmp_path, monkeypatch):
     assert confirmed["setup"]["stop"] == 19511.0
     assert confirmed["setup"]["target"] == 19471.0
     assert confirmed["setup"]["contracts"] == 1
+
+
+def _write_outcomes(log_dir, rows):
+    path = Path(log_dir) / "journal_2026-05-23.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("".join(json.dumps(row) + "\n" for row in rows))
+
+
+def _outcome(ts, result, pnl):
+    return {
+        "ts": ts,
+        "type": "OUTCOME",
+        "instrument": "MNQ",
+        "session": "new_york",
+        "outcome": {"result": result, "pnl_dollars": pnl},
+    }
+
+
+def test_pre_epoch_shared_drawdown_and_loss_streak_do_not_block(tmp_path):
+    cfg = _config(
+        tmp_path,
+        mnq_orb_breakout_inverse_mode="paper_sim",
+        max_drawdown_percent=0.20,
+    )
+    _write_outcomes(
+        cfg.log_dir,
+        [
+            _outcome("2026-05-23T12:00:00+00:00", "WIN", 410.75),
+            _outcome("2026-05-23T12:15:00+00:00", "LOSS", -205.00),
+            _outcome("2026-05-23T12:30:00+00:00", "LOSS", -205.00),
+        ],
+    )
+
+    result = process_alert(
+        _payload(timestamp="2026-05-23T15:00:00+00:00"),
+        config=cfg,
+        log_dir=cfg.log_dir,
+        for_date=date(2026, 5, 23),
+    )
+
+    assert result["decision"] == "TRADE"
+    assert result["risk"]["result"] == "APPROVED"
+
+
+def test_loss_inside_epoch_still_trips_unchanged_max_drawdown(tmp_path):
+    cfg = _config(
+        tmp_path,
+        mnq_orb_breakout_inverse_mode="paper_sim",
+        max_drawdown_percent=0.20,
+        max_daily_loss=0.0,
+        max_consecutive_losses=99,
+    )
+    _write_outcomes(
+        cfg.log_dir,
+        [_outcome("2026-05-23T14:30:00+00:00", "LOSS", -2_500.00)],
+    )
+
+    result = process_alert(
+        _payload(timestamp="2026-05-23T15:00:00+00:00"),
+        config=cfg,
+        log_dir=cfg.log_dir,
+        for_date=date(2026, 5, 23),
+    )
+
+    assert result["decision"] == "RISK_REJECTED"
+    assert result["risk"]["failed_rule"] == "max_drawdown"
 
 
 def test_dynamic_sizing_is_diagnostic_only(tmp_path, monkeypatch):

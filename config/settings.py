@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
@@ -468,6 +469,11 @@ class SystemConfig:
     # Paper-only implementation of the preregistered fixed-one-contract
     # inverse + eight-tick marketable IOC candidate. No demo/live mode exists.
     mnq_orb_breakout_inverse_mode: str = "observe_only"
+    # UTC/offset-aware start of the isolated forward-accounting epoch. Required
+    # whenever the inverse paper lane is active so unrelated historical journal
+    # P&L cannot trip its drawdown gate while every loss inside this epoch still
+    # counts normally.
+    mnq_orb_breakout_inverse_epoch_start: Optional[str] = None
 
     # ── MNQ vwap_hold proof mode (strategy-restoration candidate #3,
     # 2026-07-14) ─────────────────────────────────────────────────────────
@@ -780,6 +786,9 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         mnq_orb_breakout_inverse_mode=str(
             os.getenv("MNQ_ORB_BREAKOUT_INVERSE_MODE", "observe_only") or "observe_only"
         ).strip().lower(),
+        mnq_orb_breakout_inverse_epoch_start=(
+            os.getenv("MNQ_ORB_BREAKOUT_INVERSE_EPOCH_START") or None
+        ),
         mnq_vwap_hold_proof_mode=str(
             os.getenv("MNQ_VWAP_HOLD_PROOF_MODE", "observe_only") or "observe_only"
         ).strip().lower(),
@@ -1074,6 +1083,25 @@ def _validate_config(config: SystemConfig) -> None:
             f"(got {config.mnq_orb_breakout_inverse_mode!r}); "
             "this candidate is paper-only."
         )
+    if config.mnq_orb_breakout_inverse_mode == "paper_sim":
+        _epoch_start = config.mnq_orb_breakout_inverse_epoch_start
+        if not _epoch_start:
+            raise ConfigError(
+                "MNQ_ORB_BREAKOUT_INVERSE_EPOCH_START is required when "
+                "MNQ_ORB_BREAKOUT_INVERSE_MODE=paper_sim."
+            )
+        try:
+            _parsed_epoch_start = datetime.fromisoformat(
+                str(_epoch_start).replace("Z", "+00:00")
+            )
+        except ValueError as exc:
+            raise ConfigError(
+                "MNQ_ORB_BREAKOUT_INVERSE_EPOCH_START must be an ISO-8601 timestamp."
+            ) from exc
+        if _parsed_epoch_start.tzinfo is None:
+            raise ConfigError(
+                "MNQ_ORB_BREAKOUT_INVERSE_EPOCH_START must include a UTC offset."
+            )
     if (
         config.mnq_orb_breakout_inverse_mode != "observe_only"
         and config.mnq_orb_breakout_proof_mode != "observe_only"

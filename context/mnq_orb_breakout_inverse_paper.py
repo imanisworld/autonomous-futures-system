@@ -108,6 +108,7 @@ def mirror_order(source: BracketOrder) -> BracketOrder:
 @dataclass(frozen=True)
 class PaperDecision:
     mode: str
+    epoch_start: Optional[str]
     apply_override: bool
     force_paper_broker: bool
     marketable_ticks: float
@@ -126,6 +127,7 @@ class PaperDecision:
         return {
             "candidate": "mnq_orb_breakout_marketable_limit_inverse_v1",
             "paper_mode": self.mode,
+            "accounting_epoch_start": self.epoch_start,
             "apply_override": self.apply_override,
             "force_paper_broker": self.force_paper_broker,
             "marketable_ticks": self.marketable_ticks,
@@ -148,8 +150,10 @@ class PaperDecision:
 def evaluate(cfg=None) -> PaperDecision:
     selected = mode(cfg)
     active = selected == "paper_sim"
+    epoch_start = getattr(cfg, "mnq_orb_breakout_inverse_epoch_start", None)
     return PaperDecision(
         mode=selected,
+        epoch_start=str(epoch_start) if epoch_start else None,
         apply_override=active,
         force_paper_broker=active,
         marketable_ticks=MARKETABLE_TICKS,

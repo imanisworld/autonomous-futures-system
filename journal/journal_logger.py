@@ -31,6 +31,12 @@ from risk.risk_engine import DailyState
 logger = logging.getLogger(__name__)
 
 
+def _aware_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
 class JournalLogger:
     """
     Append-only JSONL decision and trade journal.
@@ -418,6 +424,29 @@ class JournalLogger:
         entries = self._read_entries(path)
         return self._compute_daily_state(entries, for_date)
 
+    def get_daily_state_since(
+        self,
+        since: datetime,
+        for_date: Optional[date] = None,
+    ) -> DailyState:
+        """Reconstruct daily risk counters from an explicit epoch boundary.
+
+        Entries without a parseable processing timestamp are excluded. This is
+        used only by preregistered isolated paper epochs; the ordinary shared
+        account reconstruction remains unchanged.
+        """
+        path = self._journal_path(for_date)
+        if not path.exists():
+            return DailyState(date=(for_date or date.today()).isoformat())
+        boundary = _aware_utc(since)
+        entries = [
+            entry
+            for entry in self._read_entries(path)
+            if (entry_ts := _parse_ts(entry.get("ts"))) is not None
+            and _aware_utc(entry_ts) >= boundary
+        ]
+        return self._compute_daily_state(entries, for_date)
+
     def _read_entries(self, path: Path) -> List[dict]:
         key = str(path)
         try:
@@ -738,6 +767,32 @@ class JournalLogger:
                 balance += float(outcome.get("pnl_dollars") or 0.0)
                 peak = max(peak, balance)
         return round(peak, 2)
+
+    def get_account_state_since(
+        self,
+        starting_balance: float,
+        since: datetime,
+        through_date: Optional[date] = None,
+    ) -> tuple[float, float]:
+        """Return balance and peak using only resolved outcomes in an epoch."""
+        balance = peak = float(starting_balance)
+        boundary = _aware_utc(since)
+        paths = sorted(self.log_dir.glob("journal_*.jsonl"))
+        if through_date is not None:
+            cutoff_name = f"journal_{through_date.isoformat()}.jsonl"
+            paths = [path for path in paths if path.name <= cutoff_name]
+
+        for path in paths:
+            for entry in self._read_entries(path):
+                if entry.get("type") != "OUTCOME":
+                    continue
+                entry_ts = _parse_ts(entry.get("ts"))
+                if entry_ts is None or _aware_utc(entry_ts) < boundary:
+                    continue
+                outcome = entry.get("outcome") or {}
+                balance += float(outcome.get("pnl_dollars") or 0.0)
+                peak = max(peak, balance)
+        return round(balance, 2), round(peak, 2)
 
     def get_performance_stats(self, starting_balance: float) -> dict:
         """
