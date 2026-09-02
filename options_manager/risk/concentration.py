@@ -12,6 +12,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Iterable, Literal, Optional
 
+from .telemetry import RiskTelemetrySnapshot
+
 
 Direction = Literal["CALL", "PUT"]
 
@@ -85,6 +87,38 @@ class ConcentrationResult:
     @property
     def complete(self) -> bool:
         return self.status == ConcentrationStatus.COMPLETE and self.snapshot is not None
+
+
+def exposure_fact_from_risk_telemetry(
+    snapshot: RiskTelemetrySnapshot,
+    *,
+    correlation_group: str = "",
+    sector: str = "",
+    industry: str = "",
+    index_overlap: tuple[str, ...] = (),
+    is_candidate: bool = False,
+) -> ExposureFact:
+    """Map canonical risk telemetry into a concentration input without new math.
+
+    Planned risk, full debit, DTE, expiration and contract count are copied from
+    the already-reconciled risk snapshot. Optional grouping labels remain
+    explicit caller evidence and are not inferred here.
+    """
+
+    return ExposureFact(
+        ticker=snapshot.ticker,
+        direction=snapshot.direction,
+        planned_dollar_risk=snapshot.planned_total_trade_risk,
+        full_debit=snapshot.full_debit_total,
+        dte=snapshot.dte,
+        expiration=snapshot.expiration,
+        contracts=snapshot.max_contracts,
+        correlation_group=correlation_group,
+        sector=sector,
+        industry=industry,
+        index_overlap=index_overlap,
+        is_candidate=is_candidate,
+    )
 
 
 def _finite_nonnegative(value: object, label: str, reasons: list[str]) -> Optional[float]:
