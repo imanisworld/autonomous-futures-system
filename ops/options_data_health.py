@@ -1,0 +1,458 @@
+"""Read-only provider / data health for the options advisory lane.
+
+    python -m ops.options_data_health --ticker XYZ --observations obs.json
+    python -m ops.options_data_health --ticker XYZ --collect          # repo providers
+
+READY / DEGRADED / BLOCKED from what the read-only sources actually
+returned: quote, bars, prior close, option chain (with Greeks), source
+timestamps, session/calendar alignment, and Signa provenance. GEX is
+always UNAVAILABLE without an independently verified feed and never
+changes the status. Fail closed: a missing or errored required source is
+BLOCKED; a stale, misaligned, or observational-only gap is DEGRADED.
+
+The evaluator is pure (``evaluate_data_health``); collectors are
+injectable so tests never touch the network. Default collectors reuse
+the existing read-only clients (sources.signa_client,
+options_manager.adapters.polygon_historical, options_companion
+PublicChainProvider); none can place an order.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+from dataclasses import asdict, dataclass, field
+from datetime import date, datetime, time, timedelta, timezone
+from pathlib import Path
+from typing import Any, Callable, Mapping, Optional
+from zoneinfo import ZoneInfo
+
+ET = ZoneInfo("America/New_York")
+READY, DEGRADED, BLOCKED = "READY", "DEGRADED", "BLOCKED"
+GEX_STATUS = "UNAVAILABLE (no independently verified GEX feed)"
+REQUIRED_SOURCES = ("quote", "prior_close", "bars", "chain")
+REQUIRED_CONTRACT_FIELDS = ("bid", "ask", "volume", "open_interest", "iv", "delta", "theta", "updated_at")
+QUOTE_STALE_DEGRADED_MIN = 5
+QUOTE_STALE_BLOCKED_MIN = 30
+CHAIN_STALE_DEGRADED_MIN = 15
+SIGNA_STALE_DAYS = 5
+
+
+@dataclass(frozen=True)
+class SourceObservation:
+    name: str
+    ok: Optional[bool] = None
+    observed_at: Optional[str] = None  # source timestamp, ISO tz-aware
+    fields: Mapping[str, Any] = field(default_factory=dict)
+    error: Optional[str] = None
+    provider: str = ""
+
+
+@dataclass(frozen=True)
+class DataHealthReport:
+    ticker: str
+    status: str
+    checked_at: str
+    source_status: Mapping[str, str]
+    reasons: tuple[str, ...]
+    gex: str = GEX_STATUS
+    in_session: Optional[bool] = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+def _ts(value: Any) -> Optional[datetime]:
+    if isinstance(value, datetime):
+        return value if value.tzinfo else None
+    if not isinstance(value, str) or not value:
+        return None
+    text = value[:-1] + "+00:00" if value.endswith("Z") else value
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else None
+
+
+def _finite(value: Any) -> Optional[float]:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    out = float(value)
+    return None if (out != out or out in (float("inf"), float("-inf"))) else out
+
+
+def _age_minutes(now: datetime, when: Optional[datetime]) -> Optional[float]:
+    return None if when is None else (now - when).total_seconds() / 60.0
+
+
+def session_window(day: date) -> tuple[datetime, datetime]:
+    return datetime.combine(day, time(9, 30), tzinfo=ET), datetime.combine(day, time(16, 0), tzinfo=ET)
+
+
+def evaluate_data_health(observations: Mapping[str, SourceObservation], *, ticker: str, now: datetime) -> DataHealthReport:
+    if now.tzinfo is None:
+        raise ValueError("now must be timezone-aware")
+    blocked: list[str] = []
+    degraded: list[str] = []
+    status: dict[str, str] = {}
+
+    calendar = observations.get("calendar")
+    is_trading_day: Optional[bool] = None
+    in_session: Optional[bool] = None
+    if calendar is None or calendar.ok is not True:
+        degraded.append("calendar: session/calendar alignment unknown" + (f" ({calendar.error})" if calendar and calendar.error else ""))
+        status["calendar"] = DEGRADED
+    else:
+        is_trading_day = bool(calendar.fields.get("is_trading_day"))
+        if not is_trading_day:
+            blocked.append("calendar: not a trading day")
+            status["calendar"] = BLOCKED
+        else:
+            open_at, close_at = session_window(now.astimezone(ET).date())
+            in_session = open_at <= now < close_at
+            status["calendar"] = READY
+
+    for name in REQUIRED_SOURCES:
+        obs = observations.get(name)
+        if obs is None or obs.ok is not True:
+            blocked.append(f"{name}: unavailable" + (f" ({obs.error})" if obs and obs.error else ""))
+            status[name] = BLOCKED
+    # quote ------------------------------------------------------------------
+    quote = observations.get("quote")
+    if quote is not None and quote.ok is True:
+        last = _finite(quote.fields.get("last"))
+        when = _ts(quote.observed_at)
+        if last is None or last <= 0:
+            blocked.append("quote: no finite positive last price")
+            status["quote"] = BLOCKED
+        elif when is None:
+            blocked.append("quote: no source timestamp")
+            status["quote"] = BLOCKED
+        else:
+            age = _age_minutes(now, when)
+            if age is not None and age < -1:
+                blocked.append(f"quote: timestamp {age:.1f} min in the future")
+                status["quote"] = BLOCKED
+            elif in_session and age is not None and age > QUOTE_STALE_BLOCKED_MIN:
+                blocked.append(f"quote: {age:.0f} min stale during session")
+                status["quote"] = BLOCKED
+            elif in_session and age is not None and age > QUOTE_STALE_DEGRADED_MIN:
+                degraded.append(f"quote: {age:.0f} min stale during session")
+                status["quote"] = DEGRADED
+            else:
+                status["quote"] = READY
+    # prior close --------------------------------------------------------------
+    prior = observations.get("prior_close")
+    if prior is not None and prior.ok is True:
+        value = _finite(prior.fields.get("close"))
+        close_date = str(prior.fields.get("date") or "")
+        if value is None or value <= 0:
+            blocked.append("prior_close: no finite positive close")
+            status["prior_close"] = BLOCKED
+        elif not close_date:
+            degraded.append("prior_close: close date missing")
+            status["prior_close"] = DEGRADED
+        elif close_date >= now.astimezone(ET).date().isoformat():
+            blocked.append(f"prior_close: dated {close_date}, not a prior session")
+            status["prior_close"] = BLOCKED
+        else:
+            status["prior_close"] = READY
+    # bars -----------------------------------------------------------------------
+    bars = observations.get("bars")
+    if bars is not None and bars.ok is True:
+        count = bars.fields.get("count")
+        interval_min = _finite(bars.fields.get("interval_minutes"))
+        last_end = _ts(bars.fields.get("last_bar_end"))
+        first_start = _ts(bars.fields.get("first_bar_start"))
+        if not isinstance(count, int) or count <= 0:
+            blocked.append("bars: no bars returned")
+            status["bars"] = BLOCKED
+        elif interval_min is None or last_end is None:
+            blocked.append("bars: interval or last bar timestamp missing")
+            status["bars"] = BLOCKED
+        elif last_end > now + timedelta(minutes=1):
+            blocked.append(f"bars: last bar ends {last_end.isoformat()} after now (future leakage)")
+            status["bars"] = BLOCKED
+        else:
+            s = READY
+            if in_session:
+                open_at, _ = session_window(now.astimezone(ET).date())
+                if first_start is not None and first_start.astimezone(ET) > open_at + timedelta(minutes=interval_min):
+                    degraded.append("bars: today's first bar starts after the session open (misaligned)")
+                    s = DEGRADED
+                age = _age_minutes(now, last_end)
+                if age is not None and age > 2 * interval_min + 1:
+                    degraded.append(f"bars: last bar {age:.0f} min old during session")
+                    s = DEGRADED
+            if bars.fields.get("bounds") not in (None, "regular"):
+                degraded.append(f"bars: bounds={bars.fields.get('bounds')!r}, not regular session")
+                s = DEGRADED
+            status["bars"] = s
+    # chain + greeks ---------------------------------------------------------------
+    chain = observations.get("chain")
+    if chain is not None and chain.ok is True:
+        expirations = chain.fields.get("expirations") or []
+        sample = chain.fields.get("sample_contract") or {}
+        s = READY
+        if not isinstance(expirations, list) or not expirations:
+            blocked.append("chain: no expirations")
+            s = BLOCKED
+        else:
+            today = now.astimezone(ET).date()
+            weekly = [e for e in expirations if isinstance(e, str) and today < date.fromisoformat(e) <= today + timedelta(days=14)]
+            if not weekly:
+                degraded.append("chain: no expiration within 14 days")
+                s = DEGRADED
+        missing = [f for f in REQUIRED_CONTRACT_FIELDS if sample.get(f) in (None, "")]
+        if missing:
+            blocked.append(f"chain: sampled contract missing {', '.join(missing)}")
+            s = BLOCKED
+        else:
+            for f in ("bid", "ask", "iv", "delta", "theta"):
+                if _finite(sample.get(f)) is None:
+                    blocked.append(f"chain: sampled contract {f} is not finite")
+                    s = BLOCKED
+            if _finite(sample.get("bid")) is not None and _finite(sample.get("ask")) is not None and _finite(sample["ask"]) <= _finite(sample["bid"]):
+                degraded.append("chain: sampled quote is crossed or locked")
+                s = DEGRADED if s != BLOCKED else s
+            updated = _ts(sample.get("updated_at"))
+            age = _age_minutes(now, updated)
+            if updated is None:
+                blocked.append("chain: sampled contract updated_at unparseable")
+                s = BLOCKED
+            elif in_session and age is not None and age > CHAIN_STALE_DEGRADED_MIN and s != BLOCKED:
+                degraded.append(f"chain: sampled quote {age:.0f} min stale during session")
+                s = DEGRADED
+        status["chain"] = s
+        status["greeks"] = BLOCKED if any(r.startswith("chain: sampled contract") for r in blocked) else READY
+    else:
+        status["greeks"] = BLOCKED
+    # signa (observational only) ---------------------------------------------------
+    signa = observations.get("signa")
+    if signa is None or signa.ok is not True:
+        degraded.append("signa: unavailable (observational only)" + (f" ({signa.error})" if signa and signa.error else ""))
+        status["signa"] = DEGRADED
+    else:
+        as_of = str(signa.fields.get("technicals_as_of") or "")[:10]
+        s = READY
+        if not signa.fields.get("grade") or signa.fields.get("score") is None:
+            degraded.append("signa: grade/score missing (observational only)")
+            s = DEGRADED
+        if not as_of:
+            degraded.append("signa: technicals_as_of missing (observational only)")
+            s = DEGRADED
+        else:
+            try:
+                age_days = (now.astimezone(ET).date() - date.fromisoformat(as_of)).days
+            except ValueError:
+                age_days = None
+            if age_days is None or age_days > SIGNA_STALE_DAYS:
+                degraded.append(f"signa: technicals_as_of {as_of} is stale ({age_days} days; observational only)")
+                s = DEGRADED
+        if signa.fields.get("stale") is True:
+            degraded.append("signa: provider marks the signal stale (observational only)")
+            s = DEGRADED
+        status["signa"] = s
+    status["gex"] = "UNAVAILABLE"
+
+    overall = BLOCKED if blocked else DEGRADED if degraded else READY
+    return DataHealthReport(
+        ticker=ticker.upper(),
+        status=overall,
+        checked_at=now.isoformat(timespec="seconds"),
+        source_status=dict(status),
+        reasons=tuple(blocked) + tuple(degraded),
+        in_session=in_session,
+    )
+
+
+# --- collectors ----------------------------------------------------------------
+
+Collector = Callable[[str, datetime], SourceObservation]
+
+
+def _obs_from_exception(name: str, exc: BaseException, provider: str = "") -> SourceObservation:
+    return SourceObservation(name=name, ok=False, error=f"{type(exc).__name__}: {exc}", provider=provider)
+
+
+def calendar_collector(ticker: str, now: datetime) -> SourceObservation:
+    """Weekday-only calendar; holidays are unknown to the repo, so a weekday
+    is reported as a trading day with that caveat in ``fields``."""
+    local = now.astimezone(ET)
+    weekday = local.weekday() < 5
+    return SourceObservation(name="calendar", ok=True, observed_at=now.isoformat(), provider="weekday-rule",
+                             fields={"is_trading_day": weekday, "holiday_check": "not available in repo"})
+
+
+def signa_collector(ticker: str, now: datetime) -> SourceObservation:
+    try:
+        from sources.signa_client import SignaClient
+
+        client = SignaClient(api_key=os.getenv("SIGNA_API_KEY", ""), base_url=os.getenv("SIGNA_BASE_URL", "https://app.getsigna.ai"))
+        if not client.configured:
+            return SourceObservation(name="signa", ok=False, error="SIGNA_API_KEY not configured", provider="signa")
+        signal = client.fetch_signal(ticker)
+        data = signal.to_dict()
+        if not data.get("ok"):
+            return SourceObservation(name="signa", ok=False, error=str(data.get("error") or "signal not ok"), provider="signa")
+        return SourceObservation(name="signa", ok=True, observed_at=data.get("retrieved_at"), provider="signa",
+                                 fields={k: data.get(k) for k in ("grade", "score", "daily_direction", "technicals_as_of", "engine_run_at", "stale", "retrieved_at")})
+    except Exception as exc:  # noqa: BLE001 - any failure is reported, never raised
+        return _obs_from_exception("signa", exc, "signa")
+
+
+def polygon_bars_collector(ticker: str, now: datetime) -> SourceObservation:
+    try:
+        from options_manager.adapters.polygon_historical import PolygonHistoricalClient
+
+        client = PolygonHistoricalClient()
+        if not client.configured:
+            return SourceObservation(name="bars", ok=False, error="POLYGON_API_KEY not configured", provider="polygon")
+        day = now.astimezone(ET).date().isoformat()
+        candles = client.fetch_stock_aggregates(ticker, day, day, multiplier=5, timespan="minute")
+        if not candles:
+            return SourceObservation(name="bars", ok=False, error="no 5-minute bars for today", provider="polygon")
+        last = _ts(candles[-1].timestamp)
+        first = _ts(candles[0].timestamp)
+        return SourceObservation(name="bars", ok=True, observed_at=now.isoformat(), provider="polygon",
+                                 fields={"count": len(candles), "interval_minutes": 5, "bounds": "unknown",
+                                         "first_bar_start": first.isoformat() if first else None,
+                                         "last_bar_end": (last + timedelta(minutes=5)).isoformat() if last else None})
+    except Exception as exc:  # noqa: BLE001
+        return _obs_from_exception("bars", exc, "polygon")
+
+
+def polygon_prior_close_collector(ticker: str, now: datetime) -> SourceObservation:
+    try:
+        from options_manager.adapters.polygon_historical import PolygonHistoricalClient
+
+        client = PolygonHistoricalClient()
+        if not client.configured:
+            return SourceObservation(name="prior_close", ok=False, error="POLYGON_API_KEY not configured", provider="polygon")
+        today = now.astimezone(ET).date()
+        candles = client.fetch_stock_aggregates(ticker, (today - timedelta(days=7)).isoformat(), (today - timedelta(days=1)).isoformat(), multiplier=1, timespan="day")
+        if not candles:
+            return SourceObservation(name="prior_close", ok=False, error="no daily bars in prior week", provider="polygon")
+        last = candles[-1]
+        return SourceObservation(name="prior_close", ok=True, observed_at=now.isoformat(), provider="polygon",
+                                 fields={"close": last.close, "date": str(last.timestamp)[:10]})
+    except Exception as exc:  # noqa: BLE001
+        return _obs_from_exception("prior_close", exc, "polygon")
+
+
+def public_chain_collector(ticker: str, now: datetime) -> SourceObservation:
+    """Read-only Public.com chain via the companion provider (data-only)."""
+    try:
+        import asyncio
+
+        from options_companion.chain_provider import PublicChainProvider
+
+        api_key = os.getenv("PUBLIC_API_KEY", "")
+        account_id = os.getenv("PUBLIC_ACCOUNT_ID", "")
+        if not api_key:
+            return SourceObservation(name="chain", ok=False, error="PUBLIC_API_KEY not configured", provider="public")
+
+        async def _run():
+            async with PublicChainProvider(api_key=api_key, account_id=account_id) as provider:
+                return await provider.fetch_chain(ticker, max_dte=45)
+
+        snapshot = asyncio.run(_run())
+        if snapshot.error:
+            return SourceObservation(name="chain", ok=False, error=snapshot.error, provider="public")
+        contracts = snapshot.contracts or []
+        if not contracts:
+            return SourceObservation(name="chain", ok=False, error="chain returned no contracts", provider="public")
+        expirations = sorted({c.expiry.isoformat() for c in contracts})
+        sample = contracts[0]
+        fields = {"expirations": expirations, "contract_count": len(contracts), "underlying_price": snapshot.underlying_price,
+                  "sample_contract": {"symbol": sample.symbol, "bid": sample.bid, "ask": sample.ask, "iv": sample.iv, "delta": sample.delta,
+                                      "theta": None, "volume": None, "open_interest": sample.open_interest, "updated_at": None}}
+        return SourceObservation(name="chain", ok=True, observed_at=now.isoformat(), provider="public", fields=fields)
+    except Exception as exc:  # noqa: BLE001
+        return _obs_from_exception("chain", exc, "public")
+
+
+def quote_from_chain_collector(ticker: str, now: datetime) -> SourceObservation:
+    """The repo has no wired read-only underlying quote path for this lane;
+    the only in-repo source is the chain snapshot's underlying price. It is
+    reported as such -- never as a real quote."""
+    return SourceObservation(name="quote", ok=False, provider="none",
+                             error="no read-only underlying quote path wired in the repo (Robinhood MCP quotes are interactive-only)")
+
+
+DEFAULT_COLLECTORS: dict[str, Collector] = {
+    "calendar": calendar_collector,
+    "quote": quote_from_chain_collector,
+    "prior_close": polygon_prior_close_collector,
+    "bars": polygon_bars_collector,
+    "chain": public_chain_collector,
+    "signa": signa_collector,
+}
+
+
+def collect_observations(ticker: str, *, now: datetime, collectors: Optional[Mapping[str, Collector]] = None) -> dict[str, SourceObservation]:
+    out: dict[str, SourceObservation] = {}
+    for name, collector in (collectors or DEFAULT_COLLECTORS).items():
+        try:
+            out[name] = collector(ticker, now)
+        except Exception as exc:  # noqa: BLE001
+            out[name] = _obs_from_exception(name, exc)
+    return out
+
+
+def observations_from_json(payload: Mapping[str, Any]) -> dict[str, SourceObservation]:
+    out: dict[str, SourceObservation] = {}
+    for name, raw in payload.items():
+        if not isinstance(raw, Mapping):
+            out[name] = SourceObservation(name=name, ok=False, error="observation is not an object")
+            continue
+        out[name] = SourceObservation(name=name, ok=raw.get("ok") if isinstance(raw.get("ok"), bool) else None,
+                                      observed_at=raw.get("observed_at"), fields=dict(raw.get("fields") or {}),
+                                      error=raw.get("error"), provider=str(raw.get("provider") or ""))
+    return out
+
+
+def render(report: DataHealthReport, observations: Mapping[str, SourceObservation]) -> str:
+    lines = [f"DATA HEALTH {report.ticker}  {report.status}  at {report.checked_at}  in_session={report.in_session}"]
+    for name, status in report.source_status.items():
+        if name == "gex":
+            continue
+        obs = observations.get(name)
+        provider = f" via {obs.provider}" if obs and obs.provider else ""
+        lines.append(f"  {name:<12}{status}{provider}")
+    lines.append(f"  gex         {report.gex}")
+    for reason in report.reasons:
+        lines.append(f"    - {reason}")
+    return "\n".join(lines)
+
+
+def main(argv: Optional[list[str]] = None) -> int:
+    parser = argparse.ArgumentParser(prog="ops.options_data_health", description=__doc__)
+    parser.add_argument("--ticker", required=True)
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--observations", help="JSON file of {source: {ok, observed_at, fields, error, provider}}")
+    group.add_argument("--collect", action="store_true", help="collect via the repo's read-only providers")
+    parser.add_argument("--now", default=None, help="ISO timestamp (default: current UTC time)")
+    parser.add_argument("--json", action="store_true")
+    args = parser.parse_args(argv)
+    now = _ts(args.now) if args.now else datetime.now(timezone.utc)
+    if now is None:
+        print("--now must be a timezone-aware ISO timestamp", file=sys.stderr)
+        return 2
+    if args.observations:
+        observations = observations_from_json(json.loads(Path(args.observations).read_text(encoding="utf-8")))
+    else:
+        observations = collect_observations(args.ticker, now=now)
+    report = evaluate_data_health(observations, ticker=args.ticker, now=now)
+    if args.json:
+        print(json.dumps({"report": report.to_dict(), "observations": {k: asdict(v) for k, v in observations.items()}}, indent=2, sort_keys=True, default=str))
+    else:
+        print(render(report, observations))
+    return {READY: 0, DEGRADED: 1, BLOCKED: 2}[report.status]
+
+
+if __name__ == "__main__":  # pragma: no cover
+    sys.exit(main())
