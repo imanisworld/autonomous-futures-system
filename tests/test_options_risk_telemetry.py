@@ -196,52 +196,97 @@ def test_nonfinite_contract_premium_fails_closed(bad: float) -> None:
     assert "premium_not_finite" in result.reason_codes
 
 
-def test_planned_risk_must_reconcile_to_premium_stop_math() -> None:
+@pytest.mark.parametrize(
+    "field,bad",
+    [
+        ("max_contracts", float("inf")),
+        ("dte", float("nan")),
+        ("volume", "bad"),
+        ("open_interest", 3.5),
+    ],
+)
+def test_malformed_integer_contract_facts_fail_closed(field: str, bad: object) -> None:
+    result = measure_risk_telemetry(_plan(contract_plan=_contract(**{field: bad})))
+
+    assert result.status == RiskTelemetryStatus.INVALID
+    assert result.snapshot is None
+    assert any(reason.startswith(field) for reason in result.reason_codes)
+
+
+def test_huge_integer_does_not_raise_overflow() -> None:
+    result = measure_risk_telemetry(
+        _plan(contract_plan=_contract(max_contracts=10**10000))
+    )
+
+    assert result.status == RiskTelemetryStatus.INVALID
+    assert result.snapshot is None
+    assert any(reason.startswith("max_contracts") for reason in result.reason_codes)
+
+
+def test_malformed_correlation_payload_does_not_raise() -> None:
+    result = measure_risk_telemetry(_plan(risk_plan=_risk(correlation_risk=(42,))))
+
+    assert result.status == RiskTelemetryStatus.INVALID
+    assert result.snapshot is None
+    assert "correlation_risk_0_malformed" in result.reason_codes
+
+
+def test_telemetry_does_not_recompute_canonical_premium_stop_risk() -> None:
     result = measure_risk_telemetry(_plan(risk_plan=_risk(planned_dollar_risk=49.0)))
 
-    assert result.status == RiskTelemetryStatus.INVALID
-    assert "planned_risk_contract_math_mismatch" in result.reason_codes
+    assert result.status == RiskTelemetryStatus.COMPLETE
+    assert result.snapshot is not None
+    assert result.snapshot.planned_total_trade_risk == pytest.approx(49.0)
+    assert result.snapshot.planned_stop_risk_per_contract == pytest.approx(49.0)
 
 
-def test_full_debit_must_reconcile_to_contract_premium() -> None:
+def test_telemetry_does_not_recompute_full_debit_from_contract_premium() -> None:
     result = measure_risk_telemetry(_plan(risk_plan=_risk(capital_deployed=249.0)))
 
-    assert result.status == RiskTelemetryStatus.INVALID
-    assert "full_debit_contract_math_mismatch" in result.reason_codes
+    assert result.status == RiskTelemetryStatus.COMPLETE
+    assert result.snapshot is not None
+    assert result.snapshot.full_debit_total == pytest.approx(249.0)
+    assert result.snapshot.full_debit_per_contract == pytest.approx(249.0)
 
 
-def test_projected_risk_must_equal_current_plus_candidate() -> None:
+def test_telemetry_does_not_reapply_projected_risk_formula() -> None:
     result = measure_risk_telemetry(_plan(risk_plan=_risk(projected_open_risk=351.0)))
 
-    assert result.status == RiskTelemetryStatus.INVALID
-    assert "projected_risk_reconciliation_mismatch" in result.reason_codes
+    assert result.status == RiskTelemetryStatus.COMPLETE
+    assert result.snapshot is not None
+    assert result.snapshot.projected_aggregate_planned_open_risk == pytest.approx(351.0)
 
 
-def test_projected_debit_must_equal_current_plus_candidate() -> None:
+def test_telemetry_does_not_reapply_projected_debit_formula() -> None:
     result = measure_risk_telemetry(
         _plan(risk_plan=_risk(projected_capital_deployed=1251.0))
     )
 
-    assert result.status == RiskTelemetryStatus.INVALID
-    assert "projected_debit_reconciliation_mismatch" in result.reason_codes
+    assert result.status == RiskTelemetryStatus.COMPLETE
+    assert result.snapshot is not None
+    assert result.snapshot.projected_aggregate_full_debit == pytest.approx(1251.0)
 
 
-def test_recorded_trade_risk_cannot_exceed_recorded_cap() -> None:
+def test_telemetry_does_not_reapply_trade_cap() -> None:
     result = measure_risk_telemetry(
         _plan(risk_plan=_risk(max_trade_risk_dollars=40.0))
     )
 
-    assert result.status == RiskTelemetryStatus.INVALID
-    assert "recorded_trade_risk_exceeds_recorded_cap" in result.reason_codes
+    assert result.status == RiskTelemetryStatus.COMPLETE
+    assert result.snapshot is not None
+    assert result.snapshot.max_trade_risk_dollars == pytest.approx(40.0)
+    assert result.snapshot.planned_total_trade_risk == pytest.approx(50.0)
 
 
-def test_recorded_projected_risk_cannot_exceed_recorded_aggregate_cap() -> None:
+def test_telemetry_does_not_reapply_aggregate_cap() -> None:
     result = measure_risk_telemetry(
         _plan(risk_plan=_risk(max_aggregate_open_risk_dollars=349.0))
     )
 
-    assert result.status == RiskTelemetryStatus.INVALID
-    assert "recorded_projected_risk_exceeds_recorded_aggregate_cap" in result.reason_codes
+    assert result.status == RiskTelemetryStatus.COMPLETE
+    assert result.snapshot is not None
+    assert result.snapshot.max_aggregate_open_risk_dollars == pytest.approx(349.0)
+    assert result.snapshot.projected_aggregate_planned_open_risk == pytest.approx(350.0)
 
 
 def test_optional_underlying_levels_can_be_absent_without_inventing_them() -> None:
