@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import ast
 import math
-from dataclasses import replace
 from pathlib import Path
 
 import options_manager.contracts.selector as selector_module
@@ -136,11 +135,11 @@ def test_low_liquidity_and_wide_spread_do_not_pass_quietly():
 def test_missing_or_crossed_quote_has_no_midpoint_fallback():
     missing = shortlist_contracts(_request(_candidate(bid=None, ask=2.05)))
     assert missing.status == "NO_ELIGIBLE"
-    assert missing.rejected[0].reason_code == "missing_spread_percent"
+    assert missing.rejected[0].reason_code == "missing_bid"
 
     crossed = shortlist_contracts(_request(_candidate(bid=2.05, ask=2.00)))
     assert crossed.status == "NO_ELIGIBLE"
-    assert crossed.rejected[0].reason_code == "missing_spread_percent"
+    assert crossed.rejected[0].reason_code == "ask_invalid"
 
 
 def test_caution_only_contracts_are_never_auto_selected():
