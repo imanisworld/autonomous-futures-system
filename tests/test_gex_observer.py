@@ -156,6 +156,8 @@ def test_parse_chain_never_invents_provider_timestamp():
 
 
 def test_parse_chain_rejects_nonfinite_and_overflow_numeric_fields():
+    # Provider corruption must disappear at the chain boundary rather than
+    # becoming NaN/inf telemetry or raising before data health can fail closed.
     huge = 10**10000
     payload = {
         "calls": [
