@@ -143,7 +143,12 @@ class PlanPolicy:
 
 @dataclass(frozen=True)
 class PlanObservation:
-    """Caller-supplied observation used to create/update one thesis."""
+    """Low-level observation used to create/update one thesis.
+
+    Integration code should prefer the canonical proof adapter rather than
+    hand-setting the proof booleans below.  This low-level shape remains useful
+    for pure state-machine tests and explicit/manual advisory tooling.
+    """
 
     ticker: str
     direction: Direction
@@ -165,7 +170,10 @@ class PlanObservation:
     mark_exited: bool = False
     invalidation_hit: bool = False
     expired: bool = False
+    # Kept for backward compatibility with existing direct callers.
     source_reference: Optional[str] = None
+    # Canonical proof packets carry multiple references; preserve them all.
+    source_references: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

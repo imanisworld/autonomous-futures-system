@@ -168,12 +168,14 @@ def _status(
     return PlanStatus.WATCHING
 
 
-def _append_source(
-    previous: Optional[TradePlanSnapshot], source: Optional[str]
+def _append_sources(
+    previous: Optional[TradePlanSnapshot], observation: PlanObservation
 ) -> tuple[str, ...]:
     refs = list(previous.source_references if previous is not None else ())
-    if source and source not in refs:
-        refs.append(source)
+    candidates = (*observation.source_references, observation.source_reference)
+    for source in candidates:
+        if source and source not in refs:
+            refs.append(source)
     return tuple(refs)
 
 
@@ -318,7 +320,7 @@ def update_trade_thesis(
         signa_repeat_count=signa_repeat_count,
         last_signa_fingerprint=last_signa_fingerprint,
         latest_signa=latest_signa,
-        source_references=_append_source(previous, observation.source_reference),
+        source_references=_append_sources(previous, observation),
     )
 
     material_reasons = _material_changes(previous, current)

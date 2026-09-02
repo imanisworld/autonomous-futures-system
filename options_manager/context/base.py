@@ -79,10 +79,13 @@ class MarketContextInputs:
 
 @dataclass(kw_only=True)
 class MarketContextResult:
-    """Advisory-only output. Never a broker call, never an order, never
-    an execution side effect — a pure description of whether the broader
-    market context supports a hypothetical CALL/PUT setup, for a human or
-    a downstream advisory pipeline to independently re-evaluate."""
+    """Advisory-only output of the market-context authority.
+
+    The three explicit proof booleans are outputs of this authority, not
+    caller-supplied shortcuts. They let downstream advisory code consume the
+    already-evaluated independent components without reimplementing SPY/QQQ,
+    HTF, or event-risk logic from warning strings or aggregate scores.
+    """
 
     status: MarketContextStatus
     confirmed: bool
@@ -99,6 +102,12 @@ class MarketContextResult:
     # included only when available. This prevents an absent/observational
     # component from being silently scored as aligned or opposed.
     context_score_max: Optional[float] = None
+    # Independent proof components for downstream plan/actionability wiring.
+    # INVALID early exits leave these false; VALID/CAUTION results populate
+    # them from the exact inputs already evaluated by market_validator.
+    spy_qqq_aligned: bool = False
+    htf_aligned: bool = False
+    event_risk_clear: bool = False
 
 
 def _invalid(reason_code: str, reason: str) -> MarketContextResult:
