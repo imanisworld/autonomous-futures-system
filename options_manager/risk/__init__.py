@@ -10,6 +10,7 @@ from .concentration import (
     ConcentrationSnapshot,
     ConcentrationStatus,
     ExposureFact,
+    exposure_fact_from_risk_telemetry,
     measure_concentration,
 )
 from .telemetry import (
@@ -28,6 +29,7 @@ __all__ = [
     "RiskTelemetryResult",
     "RiskTelemetrySnapshot",
     "RiskTelemetryStatus",
+    "exposure_fact_from_risk_telemetry",
     "measure_concentration",
     "measure_risk_telemetry",
 ]
