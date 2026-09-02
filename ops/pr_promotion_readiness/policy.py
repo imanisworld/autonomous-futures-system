@@ -14,6 +14,7 @@ from dataclasses import asdict, dataclass
 from typing import Optional
 
 from .models import HOLD, READY, REJECT, PromotionEvidence, PromotionVerdict, ScopeFinding
+from .regression import describe, scan_patches
 
 _FAILED_CONCLUSIONS = {
     "FAILURE",
@@ -221,6 +222,16 @@ def evaluate_promotion_readiness(
         elif finding.category == "out_of_scope":
             holds.append(f"outside scope {policy.name!r}: {finding.path}")
 
+    # --- policy regressions (patch content) ------------------------------------
+    regression_findings = scan_patches(evidence.patches)
+    if evidence.changed_files and not evidence.patches:
+        holds.append("patch content unavailable; policy-regression scan not performed")
+    for finding, text in zip(regression_findings, describe(regression_findings)):
+        if finding.severity == "reject":
+            blockers.append(text)
+        else:
+            holds.append(text)
+
     if blockers:
         verdict = REJECT
     elif holds:
@@ -237,6 +248,7 @@ def evaluate_promotion_readiness(
             + ", ".join(f"{t.passed} passed/{t.skipped or 0} skipped ({t.source})" for t in full),
             f"all {len(evidence.changed_files)} changed files inside scope {policy.name!r}",
             "no unresolved review comments or hold markers",
+            f"policy-regression scan clean over {len(evidence.patches)} patch(es)",
         )
     return PromotionVerdict(
         verdict=verdict,
@@ -246,6 +258,7 @@ def evaluate_promotion_readiness(
         scope_findings=scope_findings,
         scope_policy=policy.name,
         evidence=evidence,
+        regression_findings=regression_findings,
     )
 
 

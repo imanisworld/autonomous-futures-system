@@ -79,6 +79,7 @@ class PromotionEvidence:
     changed_files: tuple[str, ...] = ()
     checks: tuple[CheckResult, ...] = ()
     tests: tuple[TestEvidence, ...] = ()
+    patches: tuple[tuple[str, str], ...] = ()  # (path, unified patch) per changed file
     collection_errors: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
@@ -94,6 +95,13 @@ class PromotionVerdict:
     scope_findings: tuple[ScopeFinding, ...]
     scope_policy: str
     evidence: PromotionEvidence
+    regression_findings: tuple = ()
+
+    @property
+    def label(self) -> str:
+        if self.verdict == REJECT and self.regression_findings:
+            return "REJECT — POLICY REGRESSION"
+        return self.verdict
 
     @property
     def exit_code(self) -> int:

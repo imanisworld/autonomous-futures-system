@@ -103,6 +103,8 @@ def _runner(*, main_sha=MAIN, merge_base=None, pr438_state="OPEN", merge_commit_
             return 0, json.dumps(prs[int(args[2])]), ""
         if args[0] == "api" and args[1].endswith("/branches/main"):
             return 0, json.dumps({"commit": {"sha": main_sha}}), ""
+        if args[0] == "api" and "/pulls/" in args[1] and args[1].endswith("/files"):
+            return 0, json.dumps([{"filename": "options_manager/contracts/selector.py", "patch": "@@ -1 +1 @@\n+x = 1\n"}]), ""
         if args[0] == "api" and "/compare/" in args[1]:
             base, _, head = args[1].rsplit("/", 1)[1].partition("...")
             if head == "main":

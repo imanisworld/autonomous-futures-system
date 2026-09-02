@@ -40,7 +40,7 @@ def render(verdict: PromotionVerdict) -> str:
     ]
     if ev.collection_errors:
         lines.append("  collection  " + "; ".join(ev.collection_errors))
-    lines.append(f"  VERDICT     {verdict.verdict}")
+    lines.append(f"  VERDICT     {verdict.label}")
     for reason in verdict.reasons:
         lines.append(f"    - {reason}")
     lines.append("  action      " + NoPromotionAction().perform(verdict))

@@ -50,6 +50,8 @@ def build_promotion_record(verdict: PromotionVerdict) -> dict[str, Any]:
         "blockers": list(verdict.blockers),
         "holds": list(verdict.holds),
         "verdict": verdict.verdict,
+        "verdict_label": verdict.label,
+        "regression_findings": [asdict(f) for f in verdict.regression_findings],
         "reasons": list(verdict.reasons),
         "action_taken": "none (validation only; merge requires human approval)",
     }

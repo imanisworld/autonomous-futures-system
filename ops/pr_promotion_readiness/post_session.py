@@ -298,6 +298,7 @@ def run_post_session_workflow(
                         scope_findings=verdict.scope_findings,
                         scope_policy=verdict.scope_policy,
                         evidence=verdict.evidence,
+                        regression_findings=verdict.regression_findings,
                     )
                 else:
                     note_list.append("capability audit clean: no merge/push/deploy/restart/trade/risk-policy capability; gh allowlist rejects every mutating shape")
@@ -372,7 +373,7 @@ def render_status_block(result: PostSessionResult) -> str:
             lines.append(f"#{number}: HOLD — SESSION EVIDENCE INCOMPLETE")
             continue
         ev = verdict.evidence
-        label = "READY" if verdict.verdict == READY else verdict.verdict
+        label = "READY" if verdict.verdict == READY else verdict.label
         suffix = " — HUMAN MERGE APPROVAL REQUIRED" if verdict.verdict == READY else ""
         lines.append(f"#{number}: {label}{suffix}  head {ev.head_sha or 'unknown'}  main {ev.base_sha or main_sha or 'unknown'}")
         decisive = verdict.blockers or verdict.holds

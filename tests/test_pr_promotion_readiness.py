@@ -63,6 +63,7 @@ def _ready_evidence(**overrides) -> PromotionEvidence:
         review_decision="",
         review_threads=(),
         changed_files=("options_manager/contracts/selector.py", "tests/test_options_contract_shortlist.py"),
+        patches=(("options_manager/contracts/selector.py", "@@ -1 +1 @@\n+spread = None\n"), ("tests/test_options_contract_shortlist.py", "@@ -1 +1 @@\n+assert True\n")),
         checks=(_check("tests"), _check("CodeQL", url="https://github.com/o/r/runs/5")),
         tests=(_full(),),
         collection_errors=(),
@@ -233,6 +234,8 @@ def _canned_runner(*, tests_conclusion="SUCCESS", log="4507 passed, 6 skipped in
             }), ""
         if args[:1] == ["api"] and args[1].endswith("/branches/main"):
             return 0, json.dumps({"commit": {"sha": MAIN}}), ""
+        if args[:1] == ["api"] and "/pulls/" in args[1] and args[1].endswith("/files"):
+            return 0, json.dumps([{"filename": "options_manager/contracts/selector.py", "patch": "@@ -1 +1 @@\n+x = 1\n"}]), ""
         if args[:1] == ["api"] and "/compare/" in args[1]:
             if fail_compare:
                 return 1, "", "HTTP 500"

@@ -52,6 +52,7 @@ def _is_read_only_gh_command(args: list[str]) -> bool:
         path = args[1]
         return path.startswith("repos/") and (
             "/branches/" in path or "/compare/" in path or "/actions/jobs/" in path
+            or (("/pulls/" in path) and path.endswith("/files"))
         )
     return False
 
@@ -232,6 +233,16 @@ def collect_pr_evidence(
             )
         )
 
+    patches: list[tuple[str, str]] = []
+    if repo:
+        files_json, err = _gh_json(["api", f"repos/{repo}/pulls/{pr_number}/files"], runner=runner)
+        if err:
+            errors.append(f"pr files/patches: {err}")
+        else:
+            for item in files_json or []:
+                if isinstance(item, dict):
+                    patches.append((str(item.get("filename") or ""), str(item.get("patch") or "")))
+
     return PromotionEvidence(
         pr_number=pr_number,
         collected_at=collected_at,
@@ -256,6 +267,7 @@ def collect_pr_evidence(
         changed_files=tuple(str(f.get("path") or "") for f in pr.get("files") or []),
         checks=tuple(checks),
         tests=tuple(tests),
+        patches=tuple(patches),
         collection_errors=tuple(errors),
     )
 

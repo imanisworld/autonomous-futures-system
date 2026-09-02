@@ -83,3 +83,17 @@ implementation step (the read-only Robinhood contract adapter) becomes
 eligible only when #438 is MERGED and fresh main contains its merge
 commit -- never on READY alone. Output is one status block:
 SESSION / #438 / #439 / #440 / NEXT ELIGIBLE STEP / HUMAN ACTION REQUIRED.
+
+## Policy-regression scan
+
+Every readiness run fetches each changed file's patch (read-only) and
+scans added lines in source files for the Phase 1 charter regressions:
+a second Strat classifier, Signa promoted to a gate, proxy/inferred GEX,
+a hard position-count cap, a numeric aggregate-risk default, missing
+risk or contract treated as pass, broker submission / auto entry-exit,
+automatic averaging, and a `MIN_*` lowered or `MAX_*` raised. Any hit is
+`REJECT — POLICY REGRESSION` with category, file, and line; it is never
+auto-cleared. Test files are scanned only for removed fail-closed
+assertions, which HOLD for human review. Missing patch content HOLDs
+rather than assuming clean. The scanner's own file is excluded (it must
+spell the patterns); the capability audit covers it by AST.
