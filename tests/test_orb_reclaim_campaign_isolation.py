@@ -109,6 +109,36 @@ def test_observer_uses_throwaway_daily_state_including_nested_dicts(
     assert cfg.enabled_concepts == ["orb_breakout"]
 
 
+def test_observer_uses_throwaway_market_state_including_nested_raw(
+    tmp_path, monkeypatch
+):
+    cfg = replace(
+        _base_config(tmp_path),
+        enabled_concepts=["orb_breakout"],
+        entry_refresh_mode="shadow",
+    )
+    state = build_market_state(_base_payload(timestamp="2026-05-23T15:00:00+00:00"))
+    state.raw["observer_isolation_sentinel"] = "live"
+    original_instrument = state.instrument
+
+    sentinel = SimpleNamespace(decision="NO_TRADE", failed_gates=[], candidate_audit=[])
+
+    def _mutating_evaluate(self, observed_state, scoped_daily):
+        assert observed_state is not state
+        observed_state.instrument = "MUTATED"
+        observed_state.raw["observer_isolation_sentinel"] = "scoped"
+        return sentinel
+
+    monkeypatch.setattr(DecisionEngine, "evaluate", _mutating_evaluate)
+
+    result = observe_entry_refresh_decision(state, _daily_state(), cfg)
+
+    assert result is sentinel
+    assert state.instrument == original_instrument
+    assert state.raw["observer_isolation_sentinel"] == "live"
+    assert cfg.enabled_concepts == ["orb_breakout"]
+
+
 def test_observer_rejects_out_of_scope_instrument(tmp_path):
     cfg = replace(
         _base_config(tmp_path),
