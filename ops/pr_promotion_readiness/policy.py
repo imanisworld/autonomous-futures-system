@@ -7,8 +7,10 @@ READY requires every required item to be present *and* passing.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Optional
 
 from .models import HOLD, READY, REJECT, PromotionEvidence, PromotionVerdict, ScopeFinding
@@ -245,3 +247,12 @@ def evaluate_promotion_readiness(
         scope_policy=policy.name,
         evidence=evidence,
     )
+
+
+def policy_fingerprint() -> str:
+    """sha256 over every scope profile and forbidden-area pattern. Recorded
+    with each run so a silent change to scope/forbidden policy is visible
+    as a fingerprint change between records."""
+    payload = {name: asdict(policy) for name, policy in sorted(SCOPE_POLICIES.items())}
+    payload["_forbidden"] = list(FORBIDDEN_AREA_PATTERNS)
+    return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()

@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from .models import PromotionVerdict
+from .policy import policy_fingerprint
 
 RECORD_VERSION = 1
 DEFAULT_RECORD_PATH = Path("data/promotion_readiness/promotion_records.jsonl")
@@ -18,6 +19,7 @@ def build_promotion_record(verdict: PromotionVerdict) -> dict[str, Any]:
     ev = verdict.evidence
     return {
         "record_version": RECORD_VERSION,
+        "record_type": "pr_readiness",
         "tool": "ops.pr_promotion_readiness",
         "timestamp": ev.collected_at,
         "pr_number": ev.pr_number,
@@ -42,6 +44,7 @@ def build_promotion_record(verdict: PromotionVerdict) -> dict[str, Any]:
         "tests": [asdict(t) for t in ev.tests],
         "changed_files": list(ev.changed_files),
         "scope_policy": verdict.scope_policy,
+        "policy_fingerprint": policy_fingerprint(),
         "scope_findings": [asdict(f) for f in verdict.scope_findings],
         "collection_errors": list(ev.collection_errors),
         "blockers": list(verdict.blockers),
@@ -63,3 +66,22 @@ def append_promotion_record(path: Path, record: dict[str, Any]) -> None:
         fh.write(line)
         fh.flush()
         os.fsync(fh.fileno())
+
+
+def read_records(path: Path) -> list[dict[str, Any]]:
+    """Read-only. Malformed lines are skipped, never repaired."""
+    path = Path(path)
+    if not path.is_file():
+        return []
+    out: list[dict[str, Any]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            item = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(item, dict):
+            out.append(item)
+    return out

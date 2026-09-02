@@ -62,3 +62,24 @@ not change for that. Only `NoPromotionAction` exists today.
 Scope profiles live in `policy.SCOPE_POLICIES`; `require_approved_review`
 and `require_targeted_evidence` are off by default and can be switched on
 per profile.
+
+## Post-session workflow
+
+`python -m ops.pr_promotion_readiness.post_session --session-file F --pr 438:options-advisory:c1456fb:data/promotion_readiness/targeted_tests_pr438.json --pr 439:options-advisory --pr 440:ops-tooling`
+
+Runs only after the morning session file is complete (`## 09:26 ET`,
+`## 09:46 ET`, `## 10:03 ET` sections, each with a retrieval timestamp),
+the 10:03 ET stage time has passed, and the file's sha256 matches the last
+recorded fingerprint (frozen). Otherwise every PR is
+`HOLD — SESSION EVIDENCE INCOMPLETE` and GitHub is not consulted.
+
+Then, per PR: fresh evidence through the same read-only path, the same
+policy, one appended record. A previous READY is discarded whenever the
+head or main SHA differs. For the PR that ships this automation it also
+runs a capability audit (AST: no forbidden imports, no non-gh subprocess,
+no shell=, no os.system; runtime: the gh allowlist rejects every mutating
+shape; policy fingerprint unchanged since the last record). The next
+implementation step (the read-only Robinhood contract adapter) becomes
+eligible only when #438 is MERGED and fresh main contains its merge
+commit -- never on READY alone. Output is one status block:
+SESSION / #438 / #439 / #440 / NEXT ELIGIBLE STEP / HUMAN ACTION REQUIRED.

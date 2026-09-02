@@ -314,21 +314,17 @@ def test_mutating_gh_shapes_are_refused(args):
         evidence_mod.run_gh(args, runner=lambda a: (0, "{}", ""))
 
 
-def test_package_source_has_no_promotion_side_effect_calls():
+def test_package_capability_audit_is_clean():
+    from ops.pr_promotion_readiness.post_session import audit_automation_capabilities
+
     root = Path(evidence_mod.__file__).parent
-    forbidden = (
-        '"merge"', "'merge'", '"push"', "'push'", '"close"', '"comment"', '"review"', '"dispatch"',
-        '["git"', "'git'", "systemctl", "os.system", "shutil.rmtree", "os.remove", "unlink(",
-        "place_order", "submit_order", "requests.", "httpx.", "urllib",
-    )
-    for path in root.glob("*.py"):
-        text = path.read_text()
-        for verb in forbidden:
-            assert verb not in text, f"{path.name} contains {verb!r}"
-    # the only subprocess use is the gh runner, and it always passes an arg list
-    assert 'subprocess.run(\n            ["gh", *args],' in (root / "evidence.py").read_text()
-    for name in ("policy.py", "record.py", "actions.py", "cli.py", "models.py"):
+    audit = audit_automation_capabilities(root, previous_policy_fingerprint=None)
+    assert audit.findings == (), audit.findings
+    # only evidence.py may spawn a process, and only the gh CLI with an arg list
+    # (post_session.py names the word in its audit rule; the AST audit above proves it never imports it)
+    for name in ("policy.py", "record.py", "actions.py", "cli.py", "models.py", "session_evidence.py"):
         assert "subprocess" not in (root / name).read_text()
+    assert 'subprocess.run(\n            ["gh", *args],' in (root / "evidence.py").read_text()
 
 
 # --- record ------------------------------------------------------------------
