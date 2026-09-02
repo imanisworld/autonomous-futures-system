@@ -7,8 +7,10 @@ import pytest
 from options_manager.risk.concentration import (
     ConcentrationStatus,
     ExposureFact,
+    exposure_fact_from_risk_telemetry,
     measure_concentration,
 )
+from options_manager.risk.telemetry import RiskTelemetrySnapshot
 
 
 def _fact(**overrides) -> ExposureFact:
@@ -30,6 +32,54 @@ def _fact(**overrides) -> ExposureFact:
     return ExposureFact(**values)
 
 
+def _risk_snapshot(**overrides) -> RiskTelemetrySnapshot:
+    values = dict(
+        ticker="AAPL",
+        direction="CALL",
+        setup_type="strat_212",
+        timeframe="30m",
+        observed_at="2026-09-02T10:03:00-04:00",
+        plan_status="triggered",
+        actionable=True,
+        max_contracts=2,
+        planned_stop_risk_per_contract=100.0,
+        planned_total_trade_risk=200.0,
+        full_debit_per_contract=250.0,
+        full_debit_total=500.0,
+        aggregate_planned_open_risk=300.0,
+        projected_aggregate_planned_open_risk=500.0,
+        aggregate_full_debit=700.0,
+        projected_aggregate_full_debit=1200.0,
+        open_position_count=3,
+        correlation_risk=(("mega_cap_tech", 500.0),),
+        stated_max_dollar_risk=300.0,
+        max_trade_risk_dollars=300.0,
+        max_aggregate_open_risk_dollars=1500.0,
+        entry_trigger=230.0,
+        underlying_invalidation=226.0,
+        distance_to_invalidation=4.0,
+        target_1=236.0,
+        target_2=242.0,
+        rr_1=1.5,
+        rr_2=3.0,
+        expiration="2026-10-16",
+        dte=44,
+        strike=230.0,
+        premium=2.5,
+        premium_stop=1.5,
+        bid=2.4,
+        ask=2.6,
+        spread_percent=0.08,
+        volume=1000,
+        open_interest=5000,
+        iv_event_risk="CLEAR",
+        theta_risk="ACCEPTABLE",
+        trade_style="swing",
+    )
+    values.update(overrides)
+    return RiskTelemetrySnapshot(**values)
+
+
 def _bucket(mapping, name):
     return next(bucket for bucket in mapping if bucket.name == name)
 
@@ -42,6 +92,45 @@ def test_empty_portfolio_is_complete_zero_measurement():
     assert result.snapshot.total_full_debit == 0
     assert result.snapshot.position_count == 0
     assert result.snapshot.contract_count == 0
+
+
+def test_bridge_copies_reconciled_risk_facts_without_recomputing_them():
+    risk = _risk_snapshot(
+        planned_total_trade_risk=217.35,
+        full_debit_total=511.25,
+        max_contracts=3,
+        dte=37,
+        expiration="2026-10-09",
+    )
+    fact = exposure_fact_from_risk_telemetry(
+        risk,
+        correlation_group="mega_cap_tech",
+        sector="Technology",
+        industry="Consumer Electronics",
+        index_overlap=("SPY", "QQQ"),
+        is_candidate=True,
+    )
+    assert fact.ticker == "AAPL"
+    assert fact.direction == "CALL"
+    assert fact.planned_dollar_risk == 217.35
+    assert fact.full_debit == 511.25
+    assert fact.contracts == 3
+    assert fact.dte == 37
+    assert fact.expiration == "2026-10-09"
+    assert fact.correlation_group == "mega_cap_tech"
+    assert fact.index_overlap == ("SPY", "QQQ")
+    assert fact.is_candidate is True
+
+
+def test_bridge_output_flows_through_same_fail_closed_concentration_validation():
+    fact = exposure_fact_from_risk_telemetry(
+        _risk_snapshot(planned_total_trade_risk=math.nan),
+        index_overlap=("SPY",),
+    )
+    result = measure_concentration([fact])
+    assert result.status == ConcentrationStatus.INVALID
+    assert result.snapshot is None
+    assert "exposures_0_planned_risk_not_finite" in result.reason_codes
 
 
 def test_aggregates_ticker_direction_and_group_without_position_cap():
