@@ -350,6 +350,7 @@ def _parse_date(value: str | None) -> Optional[date]:
 
 
 def _first_float(payload: dict[str, Any], names: tuple[str, ...]) -> Optional[float]:
+    """Return the first finite numeric value; malformed/non-finite data stays missing."""
     for name in names:
         value = payload.get(name)
         try:
