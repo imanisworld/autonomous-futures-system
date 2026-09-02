@@ -7,12 +7,14 @@ no network, broker, alert, order, execution, or live position mutation.
 from __future__ import annotations
 
 from .base import (
+    ContractPlanSnapshot,
     ConvictionBand,
     ConvictionProofs,
     PlanObservation,
     PlanPolicy,
     PlanStatus,
     PlanUpdate,
+    RiskPlanSnapshot,
     SignaObservation,
     StructuralLevel,
     TradePlanSnapshot,
@@ -23,6 +25,7 @@ from .renderer import PlanUpdateKind, RenderedPlanUpdate, render_plan_update
 
 __all__ = [
     "CanonicalPlanProofResult",
+    "ContractPlanSnapshot",
     "ConvictionBand",
     "ConvictionProofs",
     "PlanObservation",
@@ -31,6 +34,7 @@ __all__ = [
     "PlanUpdate",
     "PlanUpdateKind",
     "RenderedPlanUpdate",
+    "RiskPlanSnapshot",
     "SignaObservation",
     "StructuralLevel",
     "TradePlanSnapshot",
