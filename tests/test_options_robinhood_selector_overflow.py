@@ -36,4 +36,4 @@ def test_integer_normalization_overflow_is_rejected_not_raised():
 
     assert result.records == ()
     assert result.rejected
-    assert result.rejected[0].reason_code == "unmappable"
+    assert result.rejected[0].reason_code == "non_finite_volume"
