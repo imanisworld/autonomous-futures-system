@@ -146,10 +146,13 @@ def validate_forward_outcome_event(event: ForwardOutcomeEvent) -> tuple[str, ...
         except Exception:
             reasons.append(f"{name} cannot be materialized as a mapping")
             continue
-        if not _json_safe(copied):
-            reasons.append(f"{name} is not JSON-serializable")
-        elif _has_non_finite(copied):
+        # Preserve the precise data-quality reason for NaN/inf. Strict JSON
+        # serialization also rejects them, so this check must run first rather
+        # than misclassifying a finite-data defect as generic serialization.
+        if _has_non_finite(copied):
             reasons.append(f"{name} contains a non-finite number")
+        elif not _json_safe(copied):
+            reasons.append(f"{name} is not JSON-serializable")
 
     if not isinstance(event.reason_codes, tuple) or not all(
         isinstance(reason, str) for reason in event.reason_codes
