@@ -59,6 +59,7 @@ from context.mnq_entry_refresh import (
     entry_refresh_mode,
     entry_refresh_strategies,
     is_entry_refresh_candidate,
+    observe_entry_refresh_decision,
     refresh_detached_entry,
 )
 from context.strategy_context_observer import append_strategy_context_observation
@@ -1834,19 +1835,32 @@ def process_alert(
     # risk-evaluated, never broker-evaluated).
     entry_refresh_audit = None
     _er_mode = entry_refresh_mode(cfg)
-    if (
-        _er_mode != "off"
-        and decision.decision != "TRADE"
-        and "ENTRY_DETACHED_FROM_PRICE" in (decision.failed_gates or [])
-    ):
-        _er_candidate = next(
-            (
-                c for c in (decision.candidate_audit or [])
-                if c.get("reject_code") == "ENTRY_DETACHED_FROM_PRICE"
-                and is_entry_refresh_candidate(state.instrument, c.get("strategy"), cfg)
-            ),
-            None,
-        )
+    _er_candidate = None
+    _er_observed = None
+    if _er_mode != "off" and decision.decision != "TRADE":
+        # PR #448 isolation: the entry-refresh candidate comes from the
+        # canonical DecisionEngine run on a THROWAWAY config scoped to the
+        # entry-refresh strategy (default orb_reclaim) over deep-copied state,
+        # so it keeps flowing even when the ACTIVE enabled_concepts deliberately
+        # omit orb_reclaim (e.g. the isolated orb_breakout inverse lane). The
+        # observed decision is evidence input only: it never replaces or
+        # mutates `decision`, never enters ranking/RiskEngine/broker, and the
+        # campaign rows below take failed_gates/reason/regime/market_condition
+        # from IT, not from the unrelated active decision.
+        _er_observed = observe_entry_refresh_decision(state, daily_state, cfg)
+        if (
+            _er_observed is not None
+            and _er_observed.decision != "TRADE"
+            and "ENTRY_DETACHED_FROM_PRICE" in (_er_observed.failed_gates or [])
+        ):
+            _er_candidate = next(
+                (
+                    c for c in (_er_observed.candidate_audit or [])
+                    if c.get("reject_code") == "ENTRY_DETACHED_FROM_PRICE"
+                    and is_entry_refresh_candidate(state.instrument, c.get("strategy"), cfg)
+                ),
+                None,
+            )
         if _er_candidate is not None:
             try:
                 _er_root = (state.instrument or "").upper().replace("1!", "")
@@ -1876,15 +1890,15 @@ def process_alert(
                         signal_timestamp=bar_ts,
                         source_timeframe=f"{bar_timeframe_minutes}m",
                         session=state.session,
-                        regime=decision.regime,
-                        market_condition=decision.market_condition,
+                        regime=_er_observed.regime,
+                        market_condition=_er_observed.market_condition,
                         original_entry=_er_decision.original_entry,
                         original_stop=_er_decision.original_stop,
                         original_target=_er_decision.original_target,
                         entry_policy="current_disposition",
                         exit_policy="none",
-                        failed_gates=list(decision.failed_gates or []),
-                        reject_reason=decision.reason,
+                        failed_gates=list(_er_observed.failed_gates or []),
+                        reject_reason=_er_observed.reason,
                         fillable_state="REJECTED",
                         terminal_state="REJECTED",
                     )
@@ -1896,8 +1910,8 @@ def process_alert(
                         signal_timestamp=bar_ts,
                         source_timeframe=f"{bar_timeframe_minutes}m",
                         session=state.session,
-                        regime=decision.regime,
-                        market_condition=decision.market_condition,
+                        regime=_er_observed.regime,
+                        market_condition=_er_observed.market_condition,
                         original_entry=_er_decision.original_entry,
                         original_stop=_er_decision.original_stop,
                         original_target=_er_decision.original_target,
