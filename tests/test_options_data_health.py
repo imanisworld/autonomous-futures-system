@@ -69,6 +69,8 @@ def _with(obs, name, **changes):
         (lambda o: {k: v for k, v in o.items() if k != "quote"}, "quote: unavailable"),
         (lambda o: _with(o, "chain", ok=False, error="HTTP 502"), "chain: unavailable (HTTP 502)"),
         (lambda o: _with(o, "quote", fields={"last": float("nan")}), "no finite positive last price"),
+        # Python can represent integers that overflow float(); health evaluation must
+        # still fail closed instead of raising on malformed provider/fixture data.
         (lambda o: _with(o, "quote", fields={"last": 10**10000}), "no finite positive last price"),
         (lambda o: _with(o, "quote", observed_at=None), "no source timestamp"),
         (lambda o: _with(o, "quote", observed_at=_iso(45)), "45 min stale"),
