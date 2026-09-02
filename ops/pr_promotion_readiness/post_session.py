@@ -1,7 +1,12 @@
 """Post-session promotion workflow: automatic verification, human merge.
 
 Runs only after the morning forward-proof session file is complete,
-timestamped, frozen, and the 10:03 ET stage time has passed. Then, for
+timestamped, FROZEN under the durable-freeze standard in
+``session_evidence`` (a previously persisted fingerprint that still
+matches, recorded contemporaneously with the 10:03 ET stage and aged at
+least ``MIN_FROZEN_AGE``; first sight never counts), and the 10:03 ET
+stage time has passed. The first run over a session file therefore only
+persists its fingerprint and HOLDs. Then, for
 each PR, re-collects *fresh* GitHub evidence through the existing
 read-only path, evaluates the existing policy, appends to the existing
 record, audits this automation's own capabilities (for the PR that ships
@@ -30,7 +35,7 @@ from .evidence import Runner, _gh_json, _is_read_only_gh_command, collect_pr_evi
 from .models import HOLD, READY, REJECT, PromotionVerdict, TestEvidence
 from .policy import SCOPE_POLICIES, ScopePolicy, evaluate_promotion_readiness, policy_fingerprint
 from .record import DEFAULT_RECORD_PATH, append_promotion_record, build_promotion_record, read_records
-from .session_evidence import SESSION_INCOMPLETE, SessionEvidenceStatus, verify_session_evidence
+from .session_evidence import SESSION_INCOMPLETE, SessionEvidenceStatus, SessionFreeze, verify_session_evidence
 
 ADAPTER_STEP = "read-only Robinhood contract adapter (normalize real chain output into ContractCandidate)"
 AUTOMATION_PR_MARKER = "ops/pr_promotion_readiness/"
@@ -221,11 +226,32 @@ def _last_record_for(records: list[dict[str, Any]], pr_number: int) -> Optional[
     return None
 
 
-def _last_session_fingerprint(records: list[dict[str, Any]], session_path: str) -> Optional[str]:
-    for item in reversed(records):
-        if item.get("record_type") == "post_session_workflow" and item.get("session_file") == session_path:
-            return item.get("session_sha256")
-    return None
+def _find_session_freeze(records: list[dict[str, Any]], session_path: str) -> Optional[SessionFreeze]:
+    """The persisted freeze record for this session path, read-only.
+
+    Only previous ``post_session_workflow`` records that actually carried a
+    sha256 count (a missing-file run records nothing). The freeze is the
+    EARLIEST record in the unbroken tail that shares the latest recorded
+    sha256, so reruns never shorten the freeze age; a later record with a
+    different sha256 makes that newer sha256 the freeze and the change is
+    caught by the fingerprint rule.
+    """
+    observed = [
+        (idx, item)
+        for idx, item in enumerate(records)
+        if item.get("record_type") == "post_session_workflow"
+        and item.get("session_file") == session_path
+        and item.get("session_sha256")
+    ]
+    if not observed:
+        return None
+    latest_sha = str(observed[-1][1]["session_sha256"])
+    earliest_idx, earliest = observed[-1]
+    for idx, item in reversed(observed):
+        if str(item.get("session_sha256")) != latest_sha:
+            break
+        earliest_idx, earliest = idx, item
+    return SessionFreeze(sha256=latest_sha, recorded_at=str(earliest.get("timestamp") or ""), source=f"record line {earliest_idx + 1}")
 
 
 def _last_policy_fingerprint(records: list[dict[str, Any]]) -> Optional[str]:
@@ -250,7 +276,7 @@ def run_post_session_workflow(
     record_path = Path(record_path)
     records = read_records(record_path)
     session = verify_session_evidence(
-        Path(session_file), now=current, previous_sha256=_last_session_fingerprint(records, str(session_file))
+        Path(session_file), now=current, freeze=_find_session_freeze(records, str(session_file))
     )
 
     verdicts: dict[int, Optional[PromotionVerdict]] = {}
@@ -365,7 +391,11 @@ def render_status_block(result: PostSessionResult) -> str:
     if not result.session.complete:
         lines.append(f"  {SESSION_INCOMPLETE}: " + "; ".join(result.session.reasons))
     else:
-        lines.append(f"  file {result.session.path} sha256 {result.session.sha256[:12]} sections {','.join(result.session.sections_present)} frozen={result.session.frozen if result.session.frozen is not None else 'first-record'}")
+        lines.append(
+            f"  file {result.session.path} sha256 {result.session.sha256[:12]} sections {','.join(result.session.sections_present)} "
+            f"frozen=True since {result.session.freeze_recorded_at} (age {result.session.freeze_age_seconds}s, "
+            f"latency {result.session.freeze_latency_seconds}s after 10:03 ET)"
+        )
     main_sha = result.merge_438.main_sha if result.merge_438 else None
     for number in sorted(result.verdicts):
         verdict = result.verdicts[number]

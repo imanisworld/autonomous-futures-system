@@ -3,8 +3,9 @@ audit, merged-by-human gating, append-only records, idempotent reruns."""
 
 from __future__ import annotations
 
+import hashlib
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -22,7 +23,15 @@ from ops.pr_promotion_readiness.post_session import (
     run_post_session_workflow,
 )
 from ops.pr_promotion_readiness.record import read_records
-from ops.pr_promotion_readiness.session_evidence import SESSION_INCOMPLETE, verify_session_evidence
+from ops.pr_promotion_readiness.session_evidence import (
+    CHANGED,
+    MAX_FREEZE_LATENCY,
+    MIN_FROZEN_AGE,
+    NOT_FROZEN,
+    SESSION_INCOMPLETE,
+    SessionFreeze,
+    verify_session_evidence,
+)
 
 HEAD438 = "c1456fb755a6998f7528ee4b1f571c165e5835ac"
 HEAD439 = "16f2602a2905cdd703f156af5d4bf339585c61e8"
@@ -30,6 +39,8 @@ HEAD440 = "6c8061200000000000000000000000000000000000"[:40]
 MAIN = "a2d97cf5ce53305b5e0324379a5f10be74d8a37d"
 AFTER = datetime(2026, 9, 2, 15, 0, tzinfo=timezone.utc)  # 11:00 ET
 BEFORE = datetime(2026, 9, 2, 13, 50, tzinfo=timezone.utc)  # 09:50 ET
+STAGE = datetime(2026, 9, 2, 14, 3, tzinfo=timezone.utc)  # 10:03 ET final stage
+FREEZE_AT = datetime(2026, 9, 2, 14, 10, tzinfo=timezone.utc)  # 10:10 ET: fingerprint persisted 7 min after the stage
 
 COMPLETE_SESSION = """# session 2026-09-02
 ## 09:26 ET packet
@@ -49,13 +60,33 @@ def _session(tmp_path, text=COMPLETE_SESSION, name="morning_packet_2026-09-02_SE
     return path
 
 
+def _sha(text=COMPLETE_SESSION):
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
+def _freeze(sha=None, at=FREEZE_AT):
+    return SessionFreeze(sha256=sha or _sha(), recorded_at=at.isoformat(timespec="seconds"), source="test")
+
+
+def _seed_freeze(record, session_path, *, sha=None, at=FREEZE_AT):
+    """Persist a prior post_session_workflow record: the freeze record the
+    durable-freeze standard verifies against. Append-only, like the tool."""
+    line = {"record_type": "post_session_workflow", "timestamp": at.isoformat(timespec="seconds"),
+            "session_file": str(session_path), "session_sha256": sha or _sha()}
+    with open(record, "a") as fh:
+        fh.write(json.dumps(line) + "\n")
+
+
 # --- session evidence gate ----------------------------------------------------
 
 
 def test_session_gate(tmp_path):
     path = _session(tmp_path)
-    ok = verify_session_evidence(path, now=AFTER)
-    assert ok.complete and ok.sections_present == ("09:26", "09:46", "10:03") and ok.sha256
+    ok = verify_session_evidence(path, now=AFTER, freeze=_freeze())
+    assert ok.complete and ok.frozen is True and ok.sections_present == ("09:26", "09:46", "10:03") and ok.sha256 == _sha()
+    assert ok.freeze_recorded_at == FREEZE_AT.isoformat(timespec="seconds")
+    assert ok.freeze_age_seconds == int((AFTER - FREEZE_AT).total_seconds())
+    assert ok.freeze_latency_seconds == int((FREEZE_AT - STAGE).total_seconds())
     early = verify_session_evidence(path, now=BEFORE)
     assert not early.complete and any("not reached" in r for r in early.reasons)
     missing = verify_session_evidence(tmp_path / "nope.md", now=AFTER)
@@ -64,10 +95,35 @@ def test_session_gate(tmp_path):
     assert "10:03 ET section missing" in partial.reasons
     no_ts = verify_session_evidence(_session(tmp_path, COMPLETE_SESSION.replace("retrieved_at: 2026-09-02T13:46:05+00:00\n", ""), "t_2026-09-02.md"), now=AFTER)
     assert "09:46 ET section has no retrieval timestamp" in no_ts.reasons
-    changed = verify_session_evidence(path, now=AFTER, previous_sha256="0" * 64)
-    assert changed.frozen is False and any("changed since last recorded fingerprint" in r for r in changed.reasons)
-    frozen = verify_session_evidence(path, now=AFTER, previous_sha256=ok.sha256)
-    assert frozen.frozen is True and frozen.complete
+    changed = verify_session_evidence(path, now=AFTER, freeze=_freeze("0" * 64))
+    assert changed.frozen is False and any(r.startswith(CHANGED) for r in changed.reasons)
+
+
+def test_freeze_rules_each_fail_closed(tmp_path):
+    path = _session(tmp_path)
+    # too recent: fingerprint persisted 5 min ago
+    recent = verify_session_evidence(path, now=AFTER, freeze=_freeze(at=AFTER - timedelta(minutes=5)))
+    assert recent.frozen is False and not recent.complete
+    assert any(r.startswith(NOT_FROZEN) and "only 5 min ago" in r for r in recent.reasons), recent.reasons
+    # exactly MIN_FROZEN_AGE is enough; one second less is not
+    assert verify_session_evidence(path, now=FREEZE_AT + MIN_FROZEN_AGE, freeze=_freeze()).frozen is True
+    assert verify_session_evidence(path, now=FREEZE_AT + MIN_FROZEN_AGE - timedelta(seconds=1), freeze=_freeze()).frozen is False
+    # late: fingerprint first persisted hours after the 10:03 ET stage (today's real case)
+    late_at = datetime(2026, 9, 2, 16, 17, 34, tzinfo=timezone.utc)
+    late = verify_session_evidence(path, now=datetime(2026, 9, 2, 20, 0, tzinfo=timezone.utc), freeze=_freeze(at=late_at))
+    assert late.frozen is False and not late.complete
+    assert any(r.startswith(NOT_FROZEN) and "134 min after the 10:03 ET stage" in r for r in late.reasons), late.reasons
+    assert verify_session_evidence(path, now=STAGE + timedelta(hours=3), freeze=_freeze(at=STAGE + MAX_FREEZE_LATENCY)).frozen is True
+    assert verify_session_evidence(path, now=STAGE + timedelta(hours=3), freeze=_freeze(at=STAGE + MAX_FREEZE_LATENCY + timedelta(seconds=1))).frozen is False
+    # before the stage: a fingerprint of a not-yet-final file proves nothing
+    early = verify_session_evidence(path, now=AFTER, freeze=_freeze(at=STAGE - timedelta(minutes=1)))
+    assert early.frozen is False and any("before the 10:03 ET stage" in r for r in early.reasons)
+    # unparseable freeze timestamp
+    bad = verify_session_evidence(path, now=AFTER, freeze=SessionFreeze(sha256=_sha(), recorded_at="yesterday"))
+    assert bad.frozen is False and any("no parseable timestamp" in r for r in bad.reasons)
+    # a changed file fails on the fingerprint even when the freeze is otherwise perfect
+    path.write_text(COMPLETE_SESSION + "\nbackfilled line\n")
+    assert verify_session_evidence(path, now=AFTER, freeze=_freeze()).frozen is False
 
 
 # --- canned read-only gh --------------------------------------------------------
@@ -125,9 +181,12 @@ def _runner(*, main_sha=MAIN, merge_base=None, pr438_state="OPEN", merge_commit_
 SPECS = (PRSpec(438, "options-advisory"), PRSpec(439, "options-advisory"), PRSpec(440, "ops-tooling"))
 
 
-def _run(tmp_path, runner, *, now=AFTER, session_text=COMPLETE_SESSION, record=None):
+def _run(tmp_path, runner, *, now=AFTER, session_text=COMPLETE_SESSION, record=None, freeze=True):
     session = _session(tmp_path, session_text)
-    return run_post_session_workflow(session_file=session, pr_specs=SPECS, record_path=record or tmp_path / "rec.jsonl", runner=runner, now=now)
+    record = record or tmp_path / "rec.jsonl"
+    if freeze and not read_records(record):
+        _seed_freeze(record, session, sha=_sha(session_text))
+    return run_post_session_workflow(session_file=session, pr_specs=SPECS, record_path=record, runner=runner, now=now)
 
 
 def test_incomplete_session_holds_everything_and_touches_no_pr(tmp_path):
@@ -140,14 +199,14 @@ def test_incomplete_session_holds_everything_and_touches_no_pr(tmp_path):
     block = render_status_block(result)
     assert block.startswith("SESSION: HOLD") and "#438: HOLD — SESSION EVIDENCE INCOMPLETE" in block
     records = read_records(tmp_path / "rec.jsonl")
-    assert len(records) == 1 and records[0]["record_type"] == "post_session_workflow"
-    assert records[0]["verdicts"] == {"438": SESSION_INCOMPLETE, "439": SESSION_INCOMPLETE, "440": SESSION_INCOMPLETE}
+    assert len(records) == 2 and records[-1]["record_type"] == "post_session_workflow"  # seed freeze + this run
+    assert records[-1]["verdicts"] == {"438": SESSION_INCOMPLETE, "439": SESSION_INCOMPLETE, "440": SESSION_INCOMPLETE}
 
 
 def test_complete_session_evaluates_fresh_and_gates_next_step_on_merge(tmp_path):
     runner = _runner()
     result = _run(tmp_path, runner)
-    assert result.session.complete
+    assert result.session.complete and result.session.frozen is True
     assert result.verdicts[438].verdict == READY
     assert result.verdicts[439].verdict == HOLD
     assert result.verdicts[440].verdict == HOLD  # draft + hold marker + claude/* branch
@@ -160,8 +219,9 @@ def test_complete_session_evaluates_fresh_and_gates_next_step_on_merge(tmp_path)
     assert "HUMAN ACTION REQUIRED: #438 READY — HUMAN MERGE APPROVAL REQUIRED" in block
     for call in runner.calls:
         assert evidence_mod._is_read_only_gh_command(call), call
+    assert "frozen=True since 2026-09-02T14:10:00+00:00" in block
     records = read_records(tmp_path / "rec.jsonl")
-    assert [r["record_type"] for r in records] == ["pr_readiness"] * 3 + ["post_session_workflow"]
+    assert [r["record_type"] for r in records] == ["post_session_workflow"] + ["pr_readiness"] * 3 + ["post_session_workflow"]
     assert records[-1]["next_eligible_step"] == result.next_eligible_step
     assert records[-1]["action_taken"].startswith("none")
 
@@ -191,13 +251,18 @@ def test_previous_ready_is_discarded_when_head_or_main_changes(tmp_path):
 def test_rerun_is_idempotent_append_only_and_detects_session_change(tmp_path):
     record = tmp_path / "rec.jsonl"
     first = _run(tmp_path, _runner(), record=record)
-    second = _run(tmp_path, _runner(), record=record)
+    assert first.session.frozen is True and first.session.freeze_recorded_at == FREEZE_AT.isoformat(timespec="seconds")
+    second = _run(tmp_path, _runner(), record=record, now=AFTER + timedelta(minutes=5))
     assert second.session.frozen is True and second.session.complete
-    assert len(read_records(record)) == 8
+    # the rerun's own record did not refresh the freeze: age is still measured from the seed
+    assert second.session.freeze_recorded_at == FREEZE_AT.isoformat(timespec="seconds")
+    assert second.session.freeze_age_seconds == first.session.freeze_age_seconds + 300
+    assert len(read_records(record)) == 9  # seed + 2 x (3 pr + 1 summary)
     session = tmp_path / "morning_packet_2026-09-02_SESSION.md"
     session.write_text(COMPLETE_SESSION + "\nbackfilled line\n")
     third = run_post_session_workflow(session_file=session, pr_specs=SPECS, record_path=record, runner=_runner(), now=AFTER)
     assert not third.session.complete and third.session.frozen is False
+    assert any(r.startswith(CHANGED) for r in third.session.reasons)
     assert all(v is None for v in third.verdicts.values())
     assert session.read_text().endswith("backfilled line\n")  # never rewritten by the tool
 
@@ -231,6 +296,7 @@ def test_capability_audit_flags_real_capabilities(tmp_path):
 def test_policy_drift_rejects_automation_pr(tmp_path):
     record = tmp_path / "rec.jsonl"
     record.write_text(json.dumps({"record_type": "pr_readiness", "pr_number": 1, "policy_fingerprint": "0" * 64}) + "\n")
+    _seed_freeze(record, tmp_path / "morning_packet_2026-09-02_SESSION.md")
     result = _run(tmp_path, _runner(), record=record)
     assert result.verdicts[440].verdict == REJECT
     assert any("policy fingerprint changed" in b for b in result.verdicts[440].blockers)
@@ -263,3 +329,58 @@ def test_cli_exit_codes(tmp_path, monkeypatch, capsys):
     assert "SESSION: COMPLETE" in capsys.readouterr().out
     monkeypatch.setattr(ps, "run_post_session_workflow", lambda **kw: _run(tmp_path, _runner(), now=BEFORE, record=record))
     assert main(["--session-file", str(session), "--pr", "438", "--record", str(record)]) == 2
+
+
+# --- freeze semantics: first sight is never proof ---------------------------------
+
+
+def test_first_sight_session_frozen_none_is_not_sufficient(tmp_path):
+    """A complete, timestamped session file seen for the first time has no
+    persisted freeze record (frozen=None). That is not durable evidence: the
+    gate must HOLD with a session_evidence_not_frozen reason and consult no PR."""
+    path = _session(tmp_path)
+    first = verify_session_evidence(path, now=AFTER)
+    assert first.frozen is None
+    assert not first.complete, "first sight (frozen=None) must not count as complete"
+    assert any(r.startswith("session_evidence_not_frozen") for r in first.reasons), first.reasons
+
+    runner = _runner()
+    result = _run(tmp_path, runner, freeze=False)
+    assert not result.session.complete
+    assert all(v is None for v in result.verdicts.values())
+    assert result.verdict_notes[438] == (SESSION_INCOMPLETE,)
+    assert not any(c[:2] == ["pr", "view"] for c in runner.calls)
+    block = render_status_block(result)
+    assert block.startswith("SESSION: HOLD") and "session_evidence_not_frozen" in block
+    record = read_records(tmp_path / "rec.jsonl")[-1]
+    assert record["session_status"]["frozen"] is None
+    assert record["verdicts"] == {"438": SESSION_INCOMPLETE, "439": SESSION_INCOMPLETE, "440": SESSION_INCOMPLETE}
+
+
+def test_first_sight_then_rerun_seconds_later_is_still_not_frozen(tmp_path):
+    """The first run persists the fingerprint; a rerun seconds later must not
+    turn that into a freeze (MIN_FROZEN_AGE). A run after the age elapses,
+    with the freeze recorded contemporaneously, is frozen."""
+    record = tmp_path / "rec.jsonl"
+    t0 = STAGE + timedelta(minutes=7)
+    first = _run(tmp_path, _runner(), record=record, now=t0, freeze=False)
+    assert first.session.frozen is None and not first.session.complete
+    second = _run(tmp_path, _runner(), record=record, now=t0 + timedelta(seconds=30), freeze=False)
+    assert second.session.frozen is False and not second.session.complete
+    assert any("only 0 min ago" in r for r in second.session.reasons), second.session.reasons
+    assert all(v is None for v in second.verdicts.values())
+    third = _run(tmp_path, _runner(), record=record, now=t0 + MIN_FROZEN_AGE, freeze=False)
+    assert third.session.frozen is True and third.session.complete
+    assert third.session.freeze_recorded_at == t0.isoformat(timespec="seconds")
+    assert third.verdicts[438] is not None
+
+
+def test_missing_file_records_do_not_count_as_freeze(tmp_path):
+    """A run that found no file persisted session_sha256=None; it is not a
+    freeze record, so the next sighting is still first sight."""
+    record = tmp_path / "rec.jsonl"
+    session = tmp_path / "morning_packet_2026-09-02_SESSION.md"
+    run_post_session_workflow(session_file=session, pr_specs=SPECS, record_path=record, runner=_runner(), now=FREEZE_AT)
+    assert read_records(record)[-1]["session_sha256"] is None
+    result = _run(tmp_path, _runner(), record=record, freeze=False)
+    assert result.session.frozen is None and any(r.startswith(NOT_FROZEN) and "first sight" in r for r in result.session.reasons)

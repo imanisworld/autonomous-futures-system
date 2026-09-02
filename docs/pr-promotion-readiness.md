@@ -69,9 +69,37 @@ per profile.
 
 Runs only after the morning session file is complete (`## 09:26 ET`,
 `## 09:46 ET`, `## 10:03 ET` sections, each with a retrieval timestamp),
-the 10:03 ET stage time has passed, and the file's sha256 matches the last
-recorded fingerprint (frozen). Otherwise every PR is
+the 10:03 ET stage time has passed, and the file is **frozen** under the
+durable-freeze standard below. Otherwise every PR is
 `HOLD — SESSION EVIDENCE INCOMPLETE` and GitHub is not consulted.
+
+### Freeze standard (what counts as frozen / durable)
+
+Seeing a complete file is not proof -- it could have been written seconds
+before the run. **First sight (`frozen=None`) is never sufficient**; the
+first run over a session file only persists its fingerprint (the
+`post_session_workflow` record's `session_file`, `session_sha256`,
+`timestamp`) and HOLDs with `session_evidence_not_frozen`. The file counts
+as frozen only when every rule holds against that *previously persisted*
+freeze record (`ops/pr_promotion_readiness/session_evidence.py`):
+
+1. a previous run persisted a sha256 for this exact session path (runs
+   that found no file persisted `null` and do not count);
+2. the current sha256 equals it (`session_evidence_changed` otherwise);
+3. the freeze was recorded at or after the 10:03 ET stage of the session
+   date;
+4. the freeze was recorded within `MAX_FREEZE_LATENCY` (60 min) of that
+   stage -- a fingerprint first persisted hours later cannot anchor the
+   content to the session it describes;
+5. at least `MIN_FROZEN_AGE` (30 min) has elapsed since the freeze was
+   recorded -- two runs seconds apart are not a freeze.
+
+Freeze age is measured from the *earliest* persisted observation of the
+current sha256 in the unbroken tail of records for that path, so reruns
+never refresh it. The knobs are module constants, not CLI flags: a run
+cannot loosen them. The tool never writes, reconstructs, or backfills the
+session file; a file that fails the standard stays NOT READY -- the
+correct outcome, not something to paper over with a fresh freeze.
 
 Then, per PR: fresh evidence through the same read-only path, the same
 policy, one appended record. A previous READY is discarded whenever the
