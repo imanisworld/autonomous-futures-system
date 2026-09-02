@@ -53,8 +53,12 @@ signa_role: OBSERVATIONAL
 
 
 def _set(text: str, stage: str, key: str, value: str | None) -> str:
-    """Replace (or drop when value is None) one key line inside one stage."""
-    headers = {"0926": "## 09:26 ET", "0946": "## 09:46 ET", "1003": "## 10:03 ET"}
+    """Replace (or drop) one key line inside one stage."""
+    headers = {
+        "0926": "## 09:26 ET",
+        "0946": "## 09:46 ET",
+        "1003": "## 10:03 ET",
+    }
     out, current, done = [], None, False
     for line in text.splitlines():
         if line.startswith("## "):
@@ -70,75 +74,259 @@ def _set(text: str, stage: str, key: str, value: str | None) -> str:
     return "\n".join(out) + "\n"
 
 
-def test_valid_session():
+def _actionable_call(text: str = VALID) -> str:
+    text = _set(text, "1003", "strat_type_0930", "1")
+    text = _set(text, "1003", "preceding_sequence", "1,2U")
+    text = _set(
+        text,
+        "1003",
+        "canonical_setup",
+        "2-1-2 CALL continuation\n"
+        "direction: CALL\n"
+        "entry_trigger: 123.9\n"
+        "current_high: 124.1\n"
+        "current_low: 121.0",
+    )
+    text = _set(text, "1003", "verdict", "WAIT — setup proven; trade gate separate")
+    return text
+
+
+def _actionable_put(text: str = VALID) -> str:
+    text = _set(text, "1003", "candle_0930_ohlc", "122.0/123.9/120.8/121.5")
+    text = _set(text, "1003", "strat_type_0930", "1")
+    text = _set(text, "1003", "preceding_sequence", "1,2D")
+    text = _set(
+        text,
+        "1003",
+        "canonical_setup",
+        "2-1-2 PUT continuation\n"
+        "direction: PUT\n"
+        "entry_trigger: 120.8\n"
+        "current_high: 123.0\n"
+        "current_low: 120.5",
+    )
+    text = _set(text, "1003", "verdict", "WAIT — setup proven; trade gate separate")
+    return text
+
+
+def test_valid_non_actionable_session():
     result = evaluate_forward_session(VALID, session_date="2026-09-02")
-    assert result.verdict is ForwardSessionVerdict.VALID, (result.hard_failures, result.soft_gaps)
+    assert result.verdict is ForwardSessionVerdict.VALID, (
+        result.hard_failures,
+        result.soft_gaps,
+    )
     assert result.locked_ticker == "XYZ"
     assert result.stages_present == ("0926", "0946", "1003")
     assert result.stage_retrieved_at["1003"] == "2026-09-02T14:03:20+00:00"
 
 
 def test_parser_uses_first_occurrence_and_flags_duplicates():
-    stages = parse_session_markdown(VALID + "\n## 09:26 ET packet\nlocked_ticker: ZZZ\n")
+    stages = parse_session_markdown(
+        VALID + "\n## 09:26 ET packet\nlocked_ticker: ZZZ\n"
+    )
     assert stages["0926"]["locked_ticker"] == "XYZ"
     assert stages["_meta"]["duplicate_0926"] == "true"
     assert stages["_meta"]["order"] == "0926,0946,1003"
 
 
 @pytest.mark.parametrize(
+    "stage,timestamp",
+    [
+        ("0926", "2026-09-02T13:25:59+00:00"),
+        ("0926", "2026-09-02T13:27:00+00:00"),
+        ("0946", "2026-09-02T13:45:59+00:00"),
+        ("0946", "2026-09-02T13:47:00+00:00"),
+        ("1003", "2026-09-02T14:02:59+00:00"),
+        ("1003", "2026-09-02T14:04:00+00:00"),
+    ],
+)
+def test_named_stage_must_be_captured_in_its_preregistered_minute(stage, timestamp):
+    result = evaluate_forward_session(
+        _set(VALID, stage, "retrieved_at", timestamp),
+        session_date="2026-09-02",
+    )
+    assert result.verdict is ForwardSessionVerdict.INVALID
+    assert any("preregistered minute" in reason for reason in result.hard_failures)
+
+
+@pytest.mark.parametrize(
     "mutate, fragment",
     [
         (lambda t: t.split("## 10:03")[0], "stage 1003 missing"),
-        (lambda t: t + "\n## 09:46 ET ORB update\nlocked_ticker: XYZ\n", "appears more than once"),
-        (lambda t: _set(t, "0926", "retrieved_at", None), "no timezone-aware retrieved_at"),
-        (lambda t: _set(t, "0926", "retrieved_at", "2026-09-02T13:26:10"), "no timezone-aware retrieved_at"),
-        (lambda t: _set(t, "0926", "retrieved_at", "2026-09-02T13:31:00+00:00"), "outside its window"),  # after the open
-        (lambda t: _set(t, "0946", "retrieved_at", "2026-09-02T13:44:00+00:00"), "outside its window"),  # ORB not final
-        (lambda t: _set(t, "1003", "retrieved_at", "2026-09-02T13:59:00+00:00"), "outside its window"),  # candle not closed
-        (lambda t: _set(t, "0946", "retrieved_at", "2026-09-02T13:25:00+00:00"), "not after stage 0926"),
-        (lambda t: _set(t, "1003", "retrieved_at", "2026-09-03T14:03:20+00:00"), "not session date"),
-        (lambda t: t + "\nnote: values reconstructed from the chart afterwards\n", "reconstruction language"),
-        (lambda t: _set(t, "1003", "verdict", "WAIT — NO ACTIONABLE SETUP\nreconstructed: true"), "marked reconstructed"),
+        (
+            lambda t: t + "\n## 09:46 ET ORB update\nlocked_ticker: XYZ\n",
+            "appears more than once",
+        ),
+        (
+            lambda t: _set(t, "0926", "retrieved_at", None),
+            "no timezone-aware retrieved_at",
+        ),
+        (
+            lambda t: _set(t, "0926", "retrieved_at", "2026-09-02T13:26:10"),
+            "no timezone-aware retrieved_at",
+        ),
+        (
+            lambda t: _set(t, "1003", "retrieved_at", "2026-09-03T14:03:20+00:00"),
+            "not session date",
+        ),
+        (
+            lambda t: t + "\nnote: values reconstructed from the chart afterwards\n",
+            "reconstruction language",
+        ),
+        (
+            lambda t: _set(
+                t,
+                "1003",
+                "verdict",
+                "WAIT — NO ACTIONABLE SETUP\nreconstructed: true",
+            ),
+            "marked reconstructed",
+        ),
         (lambda t: _set(t, "0946", "locked_ticker", "QQQ"), "ticker lock broken"),
-        (lambda t: _set(t, "1003", "locked_ticker", None), "does not restate locked_ticker"),
+        (
+            lambda t: _set(t, "1003", "locked_ticker", None),
+            "does not restate locked_ticker",
+        ),
         (lambda t: _set(t, "0926", "locked_ticker", None), "no locked_ticker"),
-        (lambda t: _set(t, "0926", "orb_high", "123.4"), "before the opening range existed"),
-        (lambda t: _set(t, "0946", "orb_bars_retrieved_at", "2026-09-02T13:40:00+00:00"), "ORB recorded before 09:45"),
+        (
+            lambda t: _set(t, "0926", "orb_high", "123.4"),
+            "before the opening range existed",
+        ),
+        (
+            lambda t: _set(
+                t, "0946", "orb_bars_retrieved_at", "2026-09-02T13:40:00+00:00"
+            ),
+            "ORB recorded before 09:45",
+        ),
+        (
+            lambda t: _set(
+                t, "0946", "orb_bars_retrieved_at", "2026-09-03T13:46:02+00:00"
+            ),
+            "not on the 09:46 stage date",
+        ),
+        (
+            lambda t: _set(
+                t, "0946", "orb_bars_retrieved_at", "2026-09-02T13:46:06+00:00"
+            ),
+            "after the 09:46 retrieval time",
+        ),
         (lambda t: _set(t, "0946", "orb_high", "nan"), "lacks finite orb_high/orb_low"),
         (lambda t: _set(t, "0946", "orb_high", "120.0"), "not above orb_low"),
-        (lambda t: _set(t, "1003", "candle_0930_complete", "false"), "candle_0930_complete: true"),
-        (lambda t: _set(t, "1003", "candle_0930_complete", None), "candle_0930_complete: true"),
-        (lambda t: _set(t, "1003", "strat_type_0930", "4"), "not one of 1/2U/2D/3"),
-        (lambda t: _set(t, "1003", "preceding_sequence", "2D,X"), "non-Strat type"),
-        (lambda t: _set(t, "1003", "canonical_setup", "2-1-2 CALL entry over 123.9"), "not an inside bar"),
-        (lambda t: _set(_set(t, "1003", "strat_type_0930", "1"), "1003", "canonical_setup", "2-1-2 CALL"), "without a directional"),
-        (lambda t: _set(t, "1003", "canonical_setup", None), "no canonical_setup"),
+        (
+            lambda t: _set(t, "1003", "candle_0930_complete", "false"),
+            "candle_0930_complete: true",
+        ),
+        (
+            lambda t: _set(t, "1003", "candle_0930_complete", None),
+            "candle_0930_complete: true",
+        ),
+        (
+            lambda t: _set(t, "1003", "strat_type_0930", "4"),
+            "not one of 1/2U/2D/3",
+        ),
+        (
+            lambda t: _set(t, "1003", "preceding_sequence", "2D,X"),
+            "non-Strat type",
+        ),
+        (
+            lambda t: _set(t, "1003", "canonical_setup", None),
+            "no canonical_setup",
+        ),
         (lambda t: _set(t, "1003", "verdict", "TAKE"), "not WAIT"),
         (lambda t: _set(t, "1003", "verdict", None), "no verdict line"),
-        (lambda t: _set(t, "0926", "signa_role", "GATE"), "must be OBSERVATIONAL"),
-        (lambda t: _set(t, "1003", "verdict", "WAIT — NO ACTIONABLE SETUP\nsigna_used_as_authority: true"), "used Signa as authority"),
-        (lambda t: _set(t, "0926", "gex_regime", "POSITIVE"), "without a verified gex_source"),
-        (lambda t: _set(t, "0926", "spy_flip", "760"), "without a verified gex_source"),
+        (
+            lambda t: _set(t, "0926", "signa_role", "GATE"),
+            "must be OBSERVATIONAL",
+        ),
+        (
+            lambda t: _set(
+                t,
+                "1003",
+                "verdict",
+                "WAIT — NO ACTIONABLE SETUP\nsigna_used_as_authority: true",
+            ),
+            "used Signa as authority",
+        ),
+        (
+            lambda t: _set(t, "0926", "gex_regime", "POSITIVE"),
+            "without a verified gex_source",
+        ),
+        (
+            lambda t: _set(t, "0926", "spy_flip", "760"),
+            "without a verified gex_source",
+        ),
     ],
 )
 def test_hard_failures_are_invalid(mutate, fragment):
     result = evaluate_forward_session(mutate(VALID), session_date="2026-09-02")
-    assert result.verdict is ForwardSessionVerdict.INVALID, (result.hard_failures, result.soft_gaps)
-    assert any(fragment in h for h in result.hard_failures), result.hard_failures
+    assert result.verdict is ForwardSessionVerdict.INVALID, (
+        result.hard_failures,
+        result.soft_gaps,
+    )
+    assert any(fragment in reason for reason in result.hard_failures), result.hard_failures
 
 
-def test_legitimate_212_on_an_inside_0930_candle_is_valid():
-    text = _set(VALID, "1003", "strat_type_0930", "1")
-    text = _set(text, "1003", "preceding_sequence", "1,2U")
-    text = _set(text, "1003", "canonical_setup", "2-1-2 CALL: entry break of 09:30 high 123.9, invalidation 120.8")
-    text = _set(text, "1003", "verdict", "WAIT — trigger not yet broken")
-    result = evaluate_forward_session(text, session_date="2026-09-02")
+def test_actionable_call_requires_and_accepts_full_mechanical_right_side_break():
+    result = evaluate_forward_session(_actionable_call(), session_date="2026-09-02")
     assert result.verdict is ForwardSessionVerdict.VALID, result.hard_failures
 
 
+def test_actionable_put_requires_and_accepts_full_mechanical_right_side_break():
+    result = evaluate_forward_session(_actionable_put(), session_date="2026-09-02")
+    assert result.verdict is ForwardSessionVerdict.VALID, result.hard_failures
+
+
+@pytest.mark.parametrize(
+    "mutate, fragment",
+    [
+        (
+            lambda t: _set(
+                t,
+                "1003",
+                "canonical_setup",
+                "2-1-2 CALL continuation\nentry_trigger: 123.9\ncurrent_high: 124.1\ncurrent_low: 121.0",
+            ),
+            "requires direction",
+        ),
+        (
+            lambda t: _set(t, "1003", "preceding_sequence", "1,2D"),
+            "requires preceding directional bar 2U",
+        ),
+        (
+            lambda t: _set(t, "1003", "current_high", "123.8"),
+            "right-side candle",
+        ),
+        (
+            lambda t: _set(t, "1003", "current_low", "120.5"),
+            "right-side candle",
+        ),
+        (
+            lambda t: _set(t, "1003", "entry_trigger", "123.8"),
+            "does not equal inside-bar high",
+        ),
+        (
+            lambda t: _set(t, "1003", "candle_0930_ohlc", "bad"),
+            "requires finite candle_0930_ohlc",
+        ),
+    ],
+)
+def test_actionable_212_fails_closed_without_right_side_proof(mutate, fragment):
+    result = evaluate_forward_session(mutate(_actionable_call()), session_date="2026-09-02")
+    assert result.verdict is ForwardSessionVerdict.INVALID
+    assert any(fragment in reason for reason in result.hard_failures), result.hard_failures
+
+
 def test_verified_gex_source_is_accepted():
-    text = _set(VALID, "0926", "gex_regime", "POSITIVE\ngex_source: verified:vendor-feed-x")
-    assert evaluate_forward_session(text, session_date="2026-09-02").verdict is ForwardSessionVerdict.VALID
+    text = _set(
+        VALID,
+        "0926",
+        "gex_regime",
+        "POSITIVE\ngex_source: verified:vendor-feed-x",
+    )
+    assert (
+        evaluate_forward_session(text, session_date="2026-09-02").verdict
+        is ForwardSessionVerdict.VALID
+    )
 
 
 @pytest.mark.parametrize(
@@ -146,17 +334,32 @@ def test_verified_gex_source_is_accepted():
     [
         (lambda t: _set(t, "0926", "runner_up", None), "no runner_up"),
         (lambda t: _set(t, "0926", "selection_rule", None), "no selection_rule"),
-        (lambda t: _set(t, "0946", "orb_bars_retrieved_at", None), "no timezone-aware orb_bars_retrieved_at"),
-        (lambda t: _set(t, "1003", "preceding_sequence", None), "no preceding_sequence"),
-        (lambda t: _set(t, "0926", "signa_role", None), "does not state signa_role"),
-        (lambda t: _set(t, "0926", "gex_regime", None), "does not state gex_regime"),
+        (
+            lambda t: _set(t, "0946", "orb_bars_retrieved_at", None),
+            "no timezone-aware orb_bars_retrieved_at",
+        ),
+        (
+            lambda t: _set(t, "1003", "preceding_sequence", None),
+            "no preceding_sequence",
+        ),
+        (
+            lambda t: _set(t, "0926", "signa_role", None),
+            "does not state signa_role",
+        ),
+        (
+            lambda t: _set(t, "0926", "gex_regime", None),
+            "does not state gex_regime",
+        ),
         (lambda t: _set(t, "0926", "sources", None), "does not list sources"),
     ],
 )
 def test_soft_gaps_degrade(mutate, fragment):
     result = evaluate_forward_session(mutate(VALID), session_date="2026-09-02")
-    assert result.verdict is ForwardSessionVerdict.DEGRADED, (result.hard_failures, result.soft_gaps)
-    assert any(fragment in s for s in result.soft_gaps)
+    assert result.verdict is ForwardSessionVerdict.DEGRADED, (
+        result.hard_failures,
+        result.soft_gaps,
+    )
+    assert any(fragment in gap for gap in result.soft_gaps)
     assert result.hard_failures == ()
 
 
@@ -164,7 +367,10 @@ def test_intake_never_raises():
     assert check_forward_session_intake(None).verdict is ForwardSessionVerdict.INVALID
     assert check_forward_session_intake({"text": 42}).verdict is ForwardSessionVerdict.INVALID
     assert check_forward_session_intake("").verdict is ForwardSessionVerdict.INVALID
-    assert check_forward_session_intake({"text": VALID, "session_date": "2026-09-02"}).verdict is ForwardSessionVerdict.VALID
+    assert (
+        check_forward_session_intake({"text": VALID, "session_date": "2026-09-02"}).verdict
+        is ForwardSessionVerdict.VALID
+    )
     assert check_forward_session_intake(VALID).verdict is ForwardSessionVerdict.VALID
 
 
@@ -173,5 +379,13 @@ def test_module_is_pure():
     from pathlib import Path
 
     source = Path(mod.__file__).read_text()
-    for forbidden in ("import os", "subprocess", "open(", "requests", "httpx", "datetime.now", "socket"):
+    for forbidden in (
+        "import os",
+        "subprocess",
+        "open(",
+        "requests",
+        "httpx",
+        "datetime.now",
+        "socket",
+    ):
         assert forbidden not in source, forbidden
