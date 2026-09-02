@@ -280,12 +280,7 @@ def test_actionable_put_requires_and_accepts_full_mechanical_right_side_break():
     "mutate, fragment",
     [
         (
-            lambda t: _set(
-                t,
-                "1003",
-                "canonical_setup",
-                "2-1-2 CALL continuation\nentry_trigger: 123.9\ncurrent_high: 124.1\ncurrent_low: 121.0",
-            ),
+            lambda t: _set(t, "1003", "direction", None),
             "requires direction",
         ),
         (
