@@ -267,7 +267,10 @@ def measure_risk_telemetry(plan: TradePlanSnapshot) -> RiskTelemetryResult:
             reasons.append(f"correlation_risk_{index}_malformed")
             continue
         group, raw_value = pair
-        group_name = str(group).strip()
+        if not isinstance(group, str):
+            reasons.append(f"correlation_risk_{index}_group_not_string")
+            continue
+        group_name = group.strip()
         if not group_name:
             reasons.append(f"correlation_risk_{index}_group_missing")
         value = _finite(raw_value, f"correlation_risk_{index}", reasons)
