@@ -773,6 +773,116 @@ def _parse_tz_aware(value: str) -> datetime:
     return parsed
 
 
+_FORWARD_OUTCOME_INDEXED_COLUMNS = (
+    "session_id",
+    "thesis_id",
+    "ticker",
+    "direction",
+    "setup_type",
+    "timeframe",
+    "event_type",
+    "setup_state",
+    "event_at",
+    "recorded_at",
+    "provider",
+    "provider_updated_at",
+    "system_commit_sha",
+)
+
+
+def _forward_outcome_payload_json(event: ForwardOutcomeEvent, recorded_at: datetime) -> str:
+    """Canonical stored text for one row: the event payload plus ``recorded_at``.
+    The write path stores exactly this text; the read path re-derives it and
+    requires a byte-for-byte match, mirroring ``_snapshot_json_and_hash``."""
+    payload = event.to_payload()
+    payload["recorded_at"] = recorded_at.isoformat()
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"), allow_nan=False)
+
+
+def _forward_outcome_event_from_payload(payload: dict) -> ForwardOutcomeEvent:
+    """Rebuild the event from its stored payload (counterpart of ``_snapshot_from_payload``).
+    Missing or ill-typed fields raise KeyError/TypeError/ValueError for the caller's
+    CORRUPT_RECORD handling; extra or re-ordered fields surface as a canonical-text
+    mismatch."""
+    provider_updated_at = payload["provider_updated_at"]
+    reason_codes = payload["reason_codes"]
+    if not isinstance(reason_codes, list):
+        raise ValueError("reason_codes must be a list")
+    for name in ("contract_facts", "market_context", "observations"):
+        if not isinstance(payload[name], dict):
+            raise ValueError(f"{name} must be an object")
+    return ForwardOutcomeEvent(
+        session_id=payload["session_id"],
+        thesis_id=payload["thesis_id"],
+        ticker=payload["ticker"],
+        direction=payload["direction"],
+        setup_type=payload["setup_type"],
+        timeframe=payload["timeframe"],
+        event_type=payload["event_type"],
+        event_at=_parse_tz_aware(payload["event_at"]),
+        provider=payload["provider"],
+        system_commit_sha=payload["system_commit_sha"],
+        setup_state=payload["setup_state"],
+        contract_facts=payload["contract_facts"],
+        market_context=payload["market_context"],
+        observations=payload["observations"],
+        reason_codes=tuple(reason_codes),
+        provider_updated_at=(
+            _parse_tz_aware(provider_updated_at) if provider_updated_at is not None else None
+        ),
+    )
+
+
+def _forward_outcome_indexed_values(event: ForwardOutcomeEvent, recorded_at: datetime) -> tuple:
+    """The indexed column values the write path derives from an event, in
+    ``_FORWARD_OUTCOME_INDEXED_COLUMNS`` order. Read-side verification compares
+    the stored row against this so a column edit cannot disagree with the payload."""
+    return (
+        event.session_id.strip(),
+        event.thesis_id.strip(),
+        event.ticker.strip().upper(),
+        event.direction,
+        event.setup_type.strip(),
+        event.timeframe.strip(),
+        event.event_type,
+        event.setup_state,
+        event.event_at.isoformat(),
+        recorded_at.isoformat(),
+        event.provider.strip(),
+        event.provider_updated_at.isoformat() if event.provider_updated_at else None,
+        event.system_commit_sha.strip(),
+    )
+
+
+def _verify_forward_outcome_row(row: sqlite3.Row) -> dict:
+    """Re-verify one stored row before trusting it. Raises KeyError/TypeError/
+    ValueError (including json.JSONDecodeError) on any defect: unparseable or
+    non-object payload, unstorable event, content-hash mismatch, non-canonical
+    text, indexed-column/payload disagreement, or a causal violation the write
+    path would have refused (event_at or provider_updated_at after recorded_at)."""
+    payload = json.loads(row["payload_json"])
+    if not isinstance(payload, dict):
+        raise ValueError("payload_json must decode to an object")
+    event = _forward_outcome_event_from_payload(payload)
+    problems = validate_forward_outcome_event(event)
+    if problems:
+        raise ValueError("stored event is not storable: " + "; ".join(problems))
+    recorded_at = _parse_tz_aware(payload["recorded_at"])
+    if event_content_hash(event) != row["content_hash"]:
+        raise ValueError("content hash does not match stored payload")
+    if _forward_outcome_payload_json(event, recorded_at) != row["payload_json"]:
+        raise ValueError("outcome payload is not canonical")
+    expected = _forward_outcome_indexed_values(event, recorded_at)
+    for column, value in zip(_FORWARD_OUTCOME_INDEXED_COLUMNS, expected):
+        if row[column] != value:
+            raise ValueError(f"{column} does not match indexed row")
+    if event.event_at > recorded_at:
+        raise ValueError("event_at is after recorded_at")
+    if event.provider_updated_at is not None and event.provider_updated_at > recorded_at:
+        raise ValueError("provider_updated_at is after recorded_at")
+    return payload
+
+
 def append_forward_outcome_event(
     db_path: str,
     event: ForwardOutcomeEvent,
@@ -798,11 +908,9 @@ def append_forward_outcome_event(
         )
     if event.provider_updated_at is not None and event.provider_updated_at > recorded_at:
         return _write_data_blocked("causality", "provider_updated_at is after recorded_at")
-    payload = event.to_payload()
-    payload["recorded_at"] = recorded_at.isoformat()
     content_hash = event_content_hash(event)
     try:
-        payload_json = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+        payload_json = _forward_outcome_payload_json(event, recorded_at)
     except (TypeError, ValueError) as exc:
         return _write_data_blocked("event", f"outcome event is not serializable: {exc}")
     try:
@@ -847,8 +955,10 @@ def load_forward_outcome_events(
     session_id: Optional[str] = None,
     thesis_id: Optional[str] = None,
 ) -> StorageReadResult:
-    """Read events in causal order (event_at, then insertion id). A row whose
-    payload does not parse is reported CORRUPT rather than skipped."""
+    """Read events in causal order (event_at, then insertion id). Every row is
+    re-verified before it is trusted (hash, canonical text, indexed columns,
+    causality -- see ``_verify_forward_outcome_row``); any defect is reported
+    CORRUPT_RECORD for the whole read rather than skipped."""
     if not config.storage_enabled:
         return _read_data_blocked("storage_disabled", "storage_enabled is False; outcome events not read")
     clauses: list[str] = []
@@ -863,7 +973,7 @@ def load_forward_outcome_events(
     try:
         with _connect(db_path) as conn:
             rows = conn.execute(
-                f"SELECT payload_json, content_hash, recorded_at FROM forward_outcome_events {where} ORDER BY event_at, id",
+                f"SELECT * FROM forward_outcome_events {where} ORDER BY event_at, id",
                 params,
             ).fetchall()
     except sqlite3.DatabaseError as exc:
@@ -871,11 +981,11 @@ def load_forward_outcome_events(
     events: list[dict] = []
     for row in rows:
         try:
-            payload = json.loads(row["payload_json"])
-        except (TypeError, ValueError) as exc:
-            return _read_corrupt("payload", f"stored outcome event {row['content_hash']} is corrupt: {exc}")
-        if not isinstance(payload, dict):
-            return _read_corrupt("payload", f"stored outcome event {row['content_hash']} is not an object")
+            payload = _verify_forward_outcome_row(row)
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            return _read_corrupt(
+                "malformed_row", f"stored outcome event {row['content_hash']} is malformed: {exc}"
+            )
         payload["content_hash"] = row["content_hash"]
         events.append(payload)
     return _found({"events": events, "count": len(events)})

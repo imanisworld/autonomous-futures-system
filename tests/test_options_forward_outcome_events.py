@@ -163,3 +163,116 @@ def test_outcomes_package_has_no_execution_network_or_clock_access():
     source = Path(mod.__file__).read_text()
     for forbidden in ("datetime.now", "utcnow", "subprocess", "requests", "httpx", "socket", "execution", "options_companion", "sqlite3", "open("):
         assert forbidden not in source, forbidden
+
+
+# --- read-integrity regressions: a stored row must be re-verified on read, mirroring
+# thesis_snapshot_events (hash + canonical text + indexed columns + causality). ---
+
+
+def _stored_row(db_path):
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        return conn.execute("SELECT * FROM forward_outcome_events").fetchone()
+
+
+def _write_one(db_path):
+    assert append_forward_outcome_event(db_path, _event(), _config(), recorded_at=NOW).status == "WRITTEN"
+
+
+def test_valid_json_payload_tampering_is_corrupt_not_trusted(db_path):
+    """(a) payload rewritten to different but syntactically valid JSON."""
+    _write_one(db_path)
+    payload = json.loads(_stored_row(db_path)["payload_json"])
+    payload["setup_state"] = "T2_HIT"
+    payload["observations"] = {"stage": "10:03", "strat_type_0930": "2U", "bar_close": 999.0}
+    tampered = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("UPDATE forward_outcome_events SET payload_json = ?", (tampered,))
+    read = load_forward_outcome_events(db_path, _config())
+    assert read.status == "CORRUPT_RECORD", read
+    assert read.record is None
+
+
+def test_content_hash_mismatch_is_corrupt(db_path):
+    """(b) stored hash no longer matches the sha256 of the canonical payload."""
+    _write_one(db_path)
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("UPDATE forward_outcome_events SET content_hash = ?", ("0" * 64,))
+    read = load_forward_outcome_events(db_path, _config())
+    assert read.status == "CORRUPT_RECORD", read
+
+
+def test_non_canonical_but_equivalent_payload_text_is_corrupt(db_path):
+    """(a/b) same data, non-canonical serialization: the row was not written by this writer."""
+    _write_one(db_path)
+    payload = json.loads(_stored_row(db_path)["payload_json"])
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("UPDATE forward_outcome_events SET payload_json = ?", (json.dumps(payload, indent=2),))
+    read = load_forward_outcome_events(db_path, _config())
+    assert read.status == "CORRUPT_RECORD", read
+
+
+@pytest.mark.parametrize(
+    "column, value",
+    [
+        ("thesis_id", "2026-09-02:ABC:PUT:strat_212:30m"),
+        ("event_type", "TRIGGER"),
+        ("setup_state", "T1_HIT"),
+        ("event_at", (NOW - timedelta(minutes=30)).isoformat()),
+        ("recorded_at", (NOW - timedelta(minutes=1)).isoformat()),
+        ("ticker", "ABC"),
+        ("provider", "someone-else"),
+        ("system_commit_sha", "deadbeefcafe"),
+    ],
+)
+def test_indexed_column_payload_mismatch_is_corrupt(db_path, column, value):
+    """(c) indexed column edited while the payload still says otherwise."""
+    _write_one(db_path)
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(f"UPDATE forward_outcome_events SET {column} = ?", (value,))
+    read = load_forward_outcome_events(db_path, _config())
+    assert read.status == "CORRUPT_RECORD", read
+
+
+def test_causal_order_is_revalidated_on_read(db_path):
+    """(d) recorded_at moved before event_at consistently in column AND payload.
+    content_hash excludes recorded_at, so only a causal re-check catches this."""
+    _write_one(db_path)
+    row = _stored_row(db_path)
+    payload = json.loads(row["payload_json"])
+    early = (NOW - timedelta(hours=1)).isoformat()  # event_at is NOW-3m, provider_updated_at NOW-4m
+    payload["recorded_at"] = early
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "UPDATE forward_outcome_events SET recorded_at = ?, payload_json = ?",
+            (early, json.dumps(payload, sort_keys=True, separators=(",", ":"))),
+        )
+    read = load_forward_outcome_events(db_path, _config())
+    assert read.status == "CORRUPT_RECORD", read
+
+
+def test_provider_timestamp_after_recorded_at_is_corrupt_on_read(db_path):
+    """(d) provider_updated_at pushed after recorded_at in column AND payload with a
+    freshly consistent content_hash: still a causal violation the reader must reject."""
+    _write_one(db_path)
+    row = _stored_row(db_path)
+    payload = json.loads(row["payload_json"])
+    late = (NOW + timedelta(seconds=5)).isoformat()
+    payload["provider_updated_at"] = late
+    forged_hash = event_content_hash(_event(provider_updated_at=NOW + timedelta(seconds=5)))
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "UPDATE forward_outcome_events SET provider_updated_at = ?, payload_json = ?, content_hash = ?",
+            (late, json.dumps(payload, sort_keys=True, separators=(",", ":")), forged_hash),
+        )
+    read = load_forward_outcome_events(db_path, _config())
+    assert read.status == "CORRUPT_RECORD", read
+
+
+def test_untampered_rows_still_load_after_integrity_checks(db_path):
+    _write_one(db_path)
+    other = _event(thesis_id="2026-09-02:ABC:PUT:strat_212:30m", ticker="abc ", direction="PUT", provider_updated_at=None, reason_codes=())
+    assert append_forward_outcome_event(db_path, other, _config(), recorded_at=NOW).status == "WRITTEN"
+    read = load_forward_outcome_events(db_path, _config())
+    assert read.status == "FOUND", read
+    assert read.record["count"] == 2
