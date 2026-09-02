@@ -89,6 +89,10 @@ def session_window(day: date) -> tuple[datetime, datetime]:
     )
 
 
+def _calendar_bounds(calendar: SourceObservation) -> tuple[Optional[datetime], Optional[datetime]]:
+    return _ts(calendar.fields.get("session_open")), _ts(calendar.fields.get("session_close"))
+
+
 def evaluate_data_health(
     observations: Mapping[str, SourceObservation], *, ticker: str, now: datetime
 ) -> DataHealthReport:
@@ -100,19 +104,24 @@ def evaluate_data_health(
 
     calendar = observations.get("calendar")
     in_session: Optional[bool] = None
+    session_open: Optional[datetime] = None
+    session_close: Optional[datetime] = None
     if calendar is None or calendar.ok is not True:
         degraded.append(
             "calendar: session/calendar alignment unknown"
             + (f" ({calendar.error})" if calendar and calendar.error else "")
         )
         status["calendar"] = DEGRADED
+    elif not bool(calendar.fields.get("is_trading_day")):
+        blocked.append("calendar: not a trading day")
+        status["calendar"] = BLOCKED
     else:
-        if not bool(calendar.fields.get("is_trading_day")):
-            blocked.append("calendar: not a trading day")
-            status["calendar"] = BLOCKED
+        session_open, session_close = _calendar_bounds(calendar)
+        if session_open is None or session_close is None or session_close <= session_open:
+            degraded.append("calendar: verified session open/close unavailable")
+            status["calendar"] = DEGRADED
         else:
-            open_at, close_at = session_window(now.astimezone(ET).date())
-            in_session = open_at <= now < close_at
+            in_session = session_open <= now < session_close
             status["calendar"] = READY
 
     for name in REQUIRED_SOURCES:
@@ -184,11 +193,10 @@ def evaluate_data_health(
         else:
             s = READY
             if in_session:
-                open_at, _ = session_window(now.astimezone(ET).date())
                 if (
                     first_start is not None
-                    and first_start.astimezone(ET)
-                    > open_at + timedelta(minutes=interval_min)
+                    and session_open is not None
+                    and first_start > session_open + timedelta(minutes=interval_min)
                 ):
                     degraded.append(
                         "bars: today's first bar starts after the session open (misaligned)"
@@ -215,7 +223,7 @@ def evaluate_data_health(
             s = BLOCKED
         else:
             today = now.astimezone(ET).date()
-            near = []
+            valid_expirations = []
             for expiry in expirations:
                 if not isinstance(expiry, str):
                     continue
@@ -223,11 +231,11 @@ def evaluate_data_health(
                     parsed = date.fromisoformat(expiry)
                 except ValueError:
                     continue
-                if today < parsed <= today + timedelta(days=14):
-                    near.append(expiry)
-            if not near:
-                degraded.append("chain: no expiration within 14 days")
-                s = DEGRADED
+                if parsed >= today:
+                    valid_expirations.append(expiry)
+            if not valid_expirations:
+                blocked.append("chain: no parseable current/future expiration")
+                s = BLOCKED
 
         missing = [
             name for name in REQUIRED_CONTRACT_FIELDS
@@ -237,20 +245,27 @@ def evaluate_data_health(
             blocked.append(f"chain: sampled contract missing {', '.join(missing)}")
             s = BLOCKED
         else:
-            for name in ("bid", "ask", "iv", "delta", "theta"):
+            for name in ("bid", "ask", "volume", "open_interest", "iv", "delta", "theta"):
                 if _finite(sample.get(name)) is None:
                     blocked.append(f"chain: sampled contract {name} is not finite")
                     s = BLOCKED
             bid = _finite(sample.get("bid"))
             ask = _finite(sample.get("ask"))
-            if bid is not None and ask is not None and ask <= bid:
-                degraded.append("chain: sampled quote is crossed or locked")
-                if s != BLOCKED:
-                    s = DEGRADED
+            if bid is not None and ask is not None:
+                if bid <= 0 or ask <= 0:
+                    blocked.append("chain: sampled contract bid/ask must be positive")
+                    s = BLOCKED
+                elif ask <= bid:
+                    degraded.append("chain: sampled quote is crossed or locked")
+                    if s != BLOCKED:
+                        s = DEGRADED
             updated = _ts(sample.get("updated_at"))
             age = _age_minutes(now, updated)
             if updated is None:
                 blocked.append("chain: sampled contract updated_at unparseable")
+                s = BLOCKED
+            elif age is not None and age < -1:
+                blocked.append(f"chain: sampled quote timestamp {age:.1f} min in the future")
                 s = BLOCKED
             elif (
                 in_session
@@ -330,18 +345,54 @@ def _obs_from_exception(
 
 
 def calendar_collector(ticker: str, now: datetime) -> SourceObservation:
-    local = now.astimezone(ET)
-    weekday = local.weekday() < 5
-    return SourceObservation(
-        name="calendar",
-        ok=True,
-        observed_at=now.isoformat(),
-        provider="weekday-rule",
-        fields={
-            "is_trading_day": weekday,
-            "holiday_check": "not available in repo",
-        },
-    )
+    """Reuse the repo's exchange calendar; never infer a session from weekday/bars."""
+    try:
+        import asyncio
+
+        from alert_ranker.config import load_config, resolve_alpaca_credentials
+        from alert_ranker.session_calendar import AlpacaSessionCalendar
+
+        cfg = load_config()
+        key, secret = resolve_alpaca_credentials()
+        if not (key and secret):
+            return SourceObservation(
+                name="calendar",
+                ok=False,
+                error="Alpaca calendar credentials not configured",
+                provider="alpaca-calendar",
+            )
+        calendar = AlpacaSessionCalendar(
+            cfg.alpaca_trading_base_url,
+            key,
+            secret,
+        )
+
+        async def _run():
+            return await calendar.session_for(now.astimezone(ET).date())
+
+        session = asyncio.run(_run())
+        if session is None:
+            return SourceObservation(
+                name="calendar",
+                ok=True,
+                observed_at=now.isoformat(),
+                provider="alpaca-calendar",
+                fields={"is_trading_day": False},
+            )
+        return SourceObservation(
+            name="calendar",
+            ok=True,
+            observed_at=now.isoformat(),
+            provider="alpaca-calendar",
+            fields={
+                "is_trading_day": True,
+                "session_open": session.open.isoformat(),
+                "session_close": session.close.isoformat(),
+                "is_early_close": session.is_early_close,
+            },
+        )
+    except Exception as exc:
+        return _obs_from_exception("calendar", exc, "alpaca-calendar")
 
 
 def signa_collector(ticker: str, now: datetime) -> SourceObservation:
@@ -565,6 +616,13 @@ def polygon_prior_close_collector(
         return _obs_from_exception("prior_close", exc, "polygon")
 
 
+def _contract_has_health_fields(contract: Any) -> bool:
+    return all(
+        getattr(contract, name, None) is not None
+        for name in ("bid", "ask", "volume", "open_interest", "iv", "delta", "theta", "updated_at")
+    )
+
+
 def public_chain_collector(ticker: str, now: datetime) -> SourceObservation:
     """Read-only Public chain; absent provider fields stay absent and BLOCK."""
     try:
@@ -614,7 +672,7 @@ def public_chain_collector(ticker: str, now: datetime) -> SourceObservation:
                 provider="public",
             )
         expirations = sorted({contract.expiry.isoformat() for contract in contracts})
-        sample = contracts[0]
+        sample = next((c for c in contracts if _contract_has_health_fields(c)), contracts[0])
         return SourceObservation(
             name="chain",
             ok=True,
