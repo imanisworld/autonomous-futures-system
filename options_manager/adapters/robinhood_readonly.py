@@ -12,15 +12,14 @@ of already-fetched adapter data.
 This module's public surface is limited to the five functions below and
 nothing else. No broker instruction of any kind can be created, changed,
 or removed through anything in this file, under any name. Missing fields
-in the raw input are always left as None on the returned model rather
-than guessed at, matching every other adapter/translation module in this
-codebase.
+in the raw input are always left as None on the returned model rather than
+guessed at, matching every other adapter/translation module in this codebase.
 
 Does not import alert_ranker (a separate system with its own login
 boundary), options_companion, execution, webhook, or risk/risk_engine.py.
 Never reads or mutates the live-options trading enablement flag. Never
-logs, stores, or returns any login material -- there is no login
-material anywhere in this module's inputs or outputs.
+logs, stores, or returns any login material -- there is no login material
+anywhere in this module's inputs or outputs.
 """
 
 from __future__ import annotations
@@ -33,8 +32,7 @@ from .base import AdapterOptionQuote, AdapterUnderlyingSnapshot
 
 @dataclass(frozen=True)
 class RobinhoodAccountSummary:
-    """Account-level figures only -- no account number, no routing or
-    identifying detail of any kind."""
+    """Account-level figures only -- no account number or routing detail."""
 
     cash_available: Optional[float] = None
     cash: Optional[float] = None
@@ -61,20 +59,26 @@ def _first_present(raw: dict[str, Any], *keys: str) -> Any:
 
 
 def _optional_float(value: Any) -> Optional[float]:
-    if value in (None, ""):
+    if value in (None, "") or isinstance(value, bool):
         return None
     try:
-        return float(value)
-    except (TypeError, ValueError):
+        parsed = float(value)
+    except (TypeError, ValueError, OverflowError):
         return None
+    if parsed != parsed or parsed in (float("inf"), float("-inf")):
+        return None
+    return parsed
 
 
 def _optional_int(value: Any) -> Optional[int]:
-    if value in (None, ""):
+    if value in (None, "") or isinstance(value, bool):
+        return None
+    parsed = _optional_float(value)
+    if parsed is None or not parsed.is_integer():
         return None
     try:
-        return int(float(value))
-    except (TypeError, ValueError):
+        return int(parsed)
+    except (TypeError, ValueError, OverflowError):
         return None
 
 
@@ -106,39 +110,29 @@ def _map_option_quote(raw: dict[str, Any]) -> AdapterOptionQuote:
 
 
 def normalize_option_quote(raw: dict[str, Any]) -> AdapterOptionQuote:
-    """Maps one already-obtained raw contract quote dict into an
-    AdapterOptionQuote. `earnings_risk`/`event_risk` are always left None
-    here -- a quote payload does not natively carry either, and this
-    function never invents a value for a field it wasn't given."""
+    """Map one already-obtained raw contract quote into AdapterOptionQuote."""
     return _map_option_quote(raw)
 
 
 def normalize_option_chain(raw: list[dict[str, Any]]) -> list[AdapterOptionQuote]:
-    """Maps an already-obtained list of raw contract dicts into
-    AdapterOptionQuote entries, skipping any row that fails to map
-    rather than fabricating a value for it."""
+    """Map already-obtained raw contract rows without inventing values."""
     quotes: list[AdapterOptionQuote] = []
     for row in raw:
         try:
             quotes.append(_map_option_quote(row))
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             continue
     return quotes
 
 
 def normalize_underlying_quote(raw: dict[str, Any]) -> AdapterUnderlyingSnapshot:
-    """Maps an already-obtained raw underlying quote dict into an
-    AdapterUnderlyingSnapshot. This module never detects levels itself --
-    resistance_levels/support_levels/gamma_resistance/gamma_support are
-    always left at their defaults; only spot_price is populated here."""
+    """Map one already-obtained underlying quote; levels remain unresolved."""
     spot_price = _optional_float(_first_present(raw, "mark_price", "price"))
     return AdapterUnderlyingSnapshot(spot_price=spot_price)
 
 
 def normalize_account_summary(raw: dict[str, Any]) -> RobinhoodAccountSummary:
-    """Maps an already-obtained raw account dict into a
-    RobinhoodAccountSummary. Deliberately carries no account number or
-    other identifying detail -- only the four display figures below."""
+    """Map account-level display figures only."""
     return RobinhoodAccountSummary(
         cash_available=_optional_float(_first_present(raw, "cash_available")),
         cash=_optional_float(_first_present(raw, "cash")),
@@ -148,9 +142,7 @@ def normalize_account_summary(raw: dict[str, Any]) -> RobinhoodAccountSummary:
 
 
 def normalize_portfolio_positions(raw: list[dict[str, Any]]) -> list[RobinhoodPosition]:
-    """Maps an already-obtained list of raw position dicts into
-    RobinhoodPosition entries, skipping any row that fails to map rather
-    than fabricating a value for it."""
+    """Map held-position display figures without fabricating malformed data."""
     positions: list[RobinhoodPosition] = []
     for row in raw:
         try:
@@ -166,6 +158,6 @@ def normalize_portfolio_positions(raw: list[dict[str, Any]]) -> list[RobinhoodPo
                     ),
                 )
             )
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             continue
     return positions
