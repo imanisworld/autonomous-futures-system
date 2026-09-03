@@ -15,6 +15,7 @@ from .events import (
     event_content_hash,
     validate_forward_outcome_event,
 )
+from .reducer import OUTCOMES, UNDETERMINED, ForwardOutcomeSummary, reduce_forward_outcome
 
 __all__ = [
     "EVENT_TYPES",
@@ -22,4 +23,8 @@ __all__ = [
     "ForwardOutcomeEvent",
     "event_content_hash",
     "validate_forward_outcome_event",
+    "OUTCOMES",
+    "UNDETERMINED",
+    "ForwardOutcomeSummary",
+    "reduce_forward_outcome",
 ]
