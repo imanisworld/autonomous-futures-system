@@ -19,14 +19,6 @@ REPO = Path(__file__).resolve().parents[1]
 # Runtime packages that execute inside the immutable release with cwd = release root.
 RUNTIME_PACKAGES = ("execution", "webhook")
 _RELATIVE_LOGS_LITERAL = re.compile(r"""Path\(\s*["']logs["']|["']logs/""")
-# Pre-existing relative defaults outside the futures durable-artifact contract.
-# Each entry is an env-overridable default that is out of scope here (options
-# companion lane). Do not add futures artifacts to this list; fix them instead.
-KNOWN_RELATIVE_DEFAULTS = {
-    "webhook/runner.py": ('"logs/options_companion.sqlite"',),
-}
-
-
 def test_default_state_path_resolves_under_log_dir(monkeypatch, tmp_path):
     shared = tmp_path / "shared-logs"
     monkeypatch.setenv("LOG_DIR", str(shared))
@@ -105,9 +97,6 @@ def test_runtime_packages_have_no_cwd_relative_logs_literals():
                 if stripped.startswith("#"):
                     continue
                 if not _RELATIVE_LOGS_LITERAL.search(line):
-                    continue
-                allowed = KNOWN_RELATIVE_DEFAULTS.get(str(path.relative_to(REPO)), ())
-                if any(token in line for token in allowed):
                     continue
                 offenders.append(f"{path.relative_to(REPO)}:{lineno}: {stripped}")
     assert offenders == [], "cwd-relative logs/ literals in runtime packages:\n" + "\n".join(offenders)

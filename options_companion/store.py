@@ -1,7 +1,8 @@
 """SQLite ledger for the companion options paper lane.
 
-Separate DB (``logs/options_companion.sqlite``) from the futures journal and from
-the advisory scanner DB. One table, frozen-dataclass read schema, JSON-free columns.
+Separate DB (``LOG_DIR/options_companion.sqlite`` by default) from the futures
+journal and from the advisory scanner DB. One table, frozen-dataclass read schema,
+JSON-free columns.
 Mirrors the ``alert_ranker.storage.ScanStorage`` conventions (``with self._connect()``,
 ``sqlite3.Row`` factory, indexes).
 """

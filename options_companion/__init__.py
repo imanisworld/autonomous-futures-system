@@ -3,7 +3,7 @@
 When a futures trade is fully approved and opened, this lane derives an INTERNAL
 paper options trade (long-premium call/put on the matching ETF) using Signa as a
 stricter confirmation filter, and tracks its outcome in a SEPARATE paper ledger
-(``logs/options_companion.sqlite``).
+(``LOG_DIR/options_companion.sqlite`` by default).
 
 V1 places NO live or broker-paper options orders. "Paper" means an internal SQLite
 ledger marked to live option quotes — nothing is ever submitted to a broker. The

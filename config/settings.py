@@ -20,6 +20,20 @@ import yaml
 from dotenv import load_dotenv
 
 
+OPTIONS_COMPANION_SQLITE_FILENAME = "options_companion.sqlite"
+
+
+def default_options_companion_sqlite_path() -> Path:
+    """Resolve the companion ledger under ``LOG_DIR`` at call time."""
+    return Path(os.getenv("LOG_DIR", "logs")) / OPTIONS_COMPANION_SQLITE_FILENAME
+
+
+def options_companion_sqlite_path() -> Path:
+    """Return the explicit companion path, or the ``LOG_DIR``-based default."""
+    configured = os.getenv("OPTIONS_COMPANION_SQLITE_PATH", "").strip()
+    return Path(configured) if configured else default_options_companion_sqlite_path()
+
+
 # ─── Exceptions ──────────────────────────────────────────────────────────────
 
 class LiveTradingBlockedError(RuntimeError):
@@ -394,7 +408,9 @@ class SystemConfig:
     # Default OFF: a disabled lane changes nothing.
     options_companion_enabled: bool = False
     options_companion_mode: str = "paper"
-    options_companion_sqlite_path: str = "logs/options_companion.sqlite"
+    options_companion_sqlite_path: str = field(
+        default_factory=lambda: str(options_companion_sqlite_path())
+    )
     # Strict (default) = only grade A/B + daily-aligned candidates record an OPEN.
     # Set OPTIONS_COMPANION_STRICT_SIGNA=false to run "loose" (demo observe): the
     # Signa verdict is still recorded but non-blocking, so every directional candidate
@@ -911,9 +927,7 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
 
         options_companion_enabled=_env_bool("OPTIONS_COMPANION_ENABLED", False),
         options_companion_mode=os.getenv("OPTIONS_COMPANION_MODE", "paper").strip().lower(),
-        options_companion_sqlite_path=os.getenv(
-            "OPTIONS_COMPANION_SQLITE_PATH", "logs/options_companion.sqlite"
-        ).strip(),
+        options_companion_sqlite_path=str(options_companion_sqlite_path()),
         options_companion_strict_signa=_env_bool("OPTIONS_COMPANION_STRICT_SIGNA", True),
         public_base_url=os.getenv("PUBLIC_BASE_URL", "https://api.public.com").strip().rstrip("/"),
         public_api_key_configured=bool(os.getenv("PUBLIC_API_KEY", "").strip()),
