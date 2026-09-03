@@ -91,6 +91,11 @@ nothing to the live process.
 Hetzner live values: `PAPER_MODE=false`, `BROKER=tradovate`, `TRADOVATE_ENV=demo`,
 `LIVE_TRADING_ENABLED=false` (leave this last one alone).
 
+The companion options paper ledger defaults to
+`LOG_DIR/options_companion.sqlite`. `OPTIONS_COMPANION_SQLITE_PATH` may override
+the full path when needed; without that override it must never resolve relative
+to the process working directory independently of `LOG_DIR`.
+
 **Secrets — edited by hand and never copied blindly between machines:**
 
 `WEBHOOK_SECRET` · `TRADINGVIEW_WEBHOOK_SECRET` ·

@@ -25,7 +25,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Optional
 
-from config.settings import SystemConfig, load_config
+from config.settings import SystemConfig, load_config, options_companion_sqlite_path
 from execution.broker_interface import BracketOrder, BrokerInterface
 from context.bar_history import BarHistory
 from context.structural_regime import (
@@ -2944,7 +2944,11 @@ def _companion_provider_and_store(cfg: SystemConfig):
             account_id=os.getenv("PUBLIC_ACCOUNT_ID", "").strip(),
         )
         store = OptionsCompanionStore(
-            getattr(cfg, "options_companion_sqlite_path", "logs/options_companion.sqlite")
+            getattr(
+                cfg,
+                "options_companion_sqlite_path",
+                str(options_companion_sqlite_path()),
+            )
         )
         return provider, store
     except Exception:  # noqa: BLE001 — companion setup must never affect futures

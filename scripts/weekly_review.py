@@ -27,6 +27,8 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
+from config.settings import options_companion_sqlite_path
+
 _FILLED = {"WIN", "LOSS", "BREAKEVEN", "BE"}
 
 
@@ -248,7 +250,7 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     log_dir = Path(os.getenv("LOG_DIR", "logs"))
     journal = load_journal(log_dir, monday, sunday)
-    options = load_option_rows(log_dir / "options_companion.sqlite", monday, sunday)
+    options = load_option_rows(options_companion_sqlite_path(), monday, sunday)
     health = collect_health(monday)
 
     data = summarize_week(journal, options, health=health)
