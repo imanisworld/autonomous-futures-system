@@ -283,3 +283,29 @@ def test_outcome_cache_hit_refreshes_recency(tmp_path, monkeypatch):
     finally:
         JournalLogger._entries_cache.clear()
         JournalLogger._outcome_cache.clear()
+
+
+def test_entries_cache_hit_refresh_survives_concurrent_eviction(tmp_path):
+    """Same defect class as the outcome cache: a bare pop() could KeyError.
+
+    `_entries_cache` is process-wide, so another caller can evict a key between
+    this reader's get() and its recency-refresh pop().
+    """
+    JournalLogger._outcome_cache.clear()
+    original = JournalLogger._entries_cache
+    JournalLogger._entries_cache = {}
+    try:
+        logger = JournalLogger(log_dir=str(tmp_path))
+        path = tmp_path / "journal_2026-08-01.jsonl"
+        _write(path, {"decision": "NO_TRADE", "index": 0})
+        first = logger._read_entries(path)
+        assert first[0]["index"] == 0
+        JournalLogger._entries_cache = _RacyDict(JournalLogger._entries_cache)
+        again = logger._read_entries(path)   # bare pop() would raise here
+        assert again == first
+        # an entry another caller deliberately evicted must not be resurrected
+        assert str(path) not in JournalLogger._entries_cache
+    finally:
+        JournalLogger._entries_cache = original
+        JournalLogger._entries_cache.clear()
+        JournalLogger._outcome_cache.clear()

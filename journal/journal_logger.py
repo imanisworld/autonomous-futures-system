@@ -483,8 +483,13 @@ class JournalLogger:
         if cached is not None and cached[0] == sig:
             # Unchanged since last parse — reuse. Callers treat entries as
             # read-only (they filter/iterate, never mutate in place).
-            JournalLogger._entries_cache.pop(key)
-            JournalLogger._entries_cache[key] = cached
+            # Refresh recency the same way _read_outcome_summary does: the cache
+            # is process-wide, so a bare pop() raises KeyError if another caller
+            # evicted this key between the get() and the pop(), and unconditional
+            # re-insertion would resurrect an entry eviction had dropped. Only
+            # reorder what is still present.
+            if JournalLogger._entries_cache.pop(key, None) is not None:
+                JournalLogger._entries_cache[key] = cached
             return cached[1]
         entries: List[dict] = []
         with self._locked():
