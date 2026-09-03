@@ -276,3 +276,110 @@ def test_untampered_rows_still_load_after_integrity_checks(db_path):
     read = load_forward_outcome_events(db_path, _config())
     assert read.status == "FOUND", read
     assert read.record["count"] == 2
+
+
+# --- timestamp canonicalization: every stored timestamp is UTC ISO-8601 so the
+# TEXT ``ORDER BY event_at, id`` is chronological, and same-instant/different-offset
+# text in a column or payload is non-canonical (CORRUPT_RECORD), never silently equal. ---
+
+NY = timezone(timedelta(hours=-4))  # fixed offset; no tzdata dependency
+
+
+def _utc_event(event: ForwardOutcomeEvent) -> ForwardOutcomeEvent:
+    return replace(
+        event,
+        event_at=event.event_at.astimezone(timezone.utc),
+        provider_updated_at=(
+            event.provider_updated_at.astimezone(timezone.utc) if event.provider_updated_at else None
+        ),
+    )
+
+
+def test_mixed_offset_events_load_in_chronological_order(db_path):
+    """Reproduction: CONTRACT_OBSERVATION @ 13:29Z appended first, then TRIGGER @
+    09:30-04:00 (= 13:30Z, LATER). A lexical sort on the raw offset text put the
+    TRIGGER first ("2026-09-02T09:30" < "2026-09-02T13:29")."""
+    obs = _event(event_type="CONTRACT_OBSERVATION", event_at=datetime(2026, 9, 2, 13, 29, tzinfo=timezone.utc))
+    trig = _event(event_type="TRIGGER", setup_state="TRIGGERED_ACTIONABLE", event_at=datetime(2026, 9, 2, 9, 30, tzinfo=NY))
+    assert append_forward_outcome_event(db_path, obs, _config(), recorded_at=NOW).status == "WRITTEN"
+    assert append_forward_outcome_event(db_path, trig, _config(), recorded_at=NOW).status == "WRITTEN"
+    read = load_forward_outcome_events(db_path, _config(), session_id="2026-09-02")
+    assert read.status == "FOUND", read
+    assert [e["event_type"] for e in read.record["events"]] == ["CONTRACT_OBSERVATION", "TRIGGER"]
+
+
+def test_canonical_utc_text_orders_across_offsets_and_microseconds(db_path):
+    """Chronological order must hold for mixed offsets AND for the zero-microsecond
+    isoformat shortening ("...:00+00:00" vs "...:00.000001+00:00")."""
+    stamps = [
+        ("a", datetime(2026, 9, 2, 13, 30, 0, 1, tzinfo=timezone.utc)),
+        ("b", datetime(2026, 9, 2, 9, 30, tzinfo=NY)),                 # 13:30:00.000000Z
+        ("c", datetime(2026, 9, 2, 13, 29, 59, 999999, tzinfo=timezone.utc)),
+        ("d", datetime(2026, 9, 2, 15, 30, 0, 500000, tzinfo=timezone(timedelta(hours=2)))),  # 13:30:00.5Z
+    ]
+    for tag, at in stamps:  # insertion order deliberately not chronological
+        ev = _event(event_at=at, observations={"tag": tag}, provider_updated_at=None)
+        assert append_forward_outcome_event(db_path, ev, _config(), recorded_at=NOW).status == "WRITTEN"
+    read = load_forward_outcome_events(db_path, _config())
+    assert read.status == "FOUND", read
+    assert [e["observations"]["tag"] for e in read.record["events"]] == ["c", "b", "a", "d"]
+
+
+def test_stored_timestamps_are_canonical_utc_in_columns_payload_and_hash(db_path):
+    """Write-time rule: event_at, provider_updated_at, recorded_at are stored as
+    astimezone(UTC).isoformat() in the indexed columns AND the payload; the content
+    hash is that of the UTC-normalized event, so the same instant from any offset is
+    one identity (DUPLICATE on retry)."""
+    ev = _event(
+        event_at=datetime(2026, 9, 2, 9, 30, tzinfo=NY),
+        provider_updated_at=datetime(2026, 9, 2, 9, 29, tzinfo=NY),
+    )
+    written = append_forward_outcome_event(db_path, ev, _config(), recorded_at=datetime(2026, 9, 2, 10, 3, 20, tzinfo=NY))
+    assert written.status == "WRITTEN", written
+    row = _stored_row(db_path)
+    assert row["event_at"] == "2026-09-02T13:30:00+00:00"
+    assert row["provider_updated_at"] == "2026-09-02T13:29:00+00:00"
+    assert row["recorded_at"] == "2026-09-02T14:03:20+00:00"
+    payload = json.loads(row["payload_json"])
+    assert payload["event_at"] == "2026-09-02T13:30:00+00:00"
+    assert payload["provider_updated_at"] == "2026-09-02T13:29:00+00:00"
+    assert payload["recorded_at"] == "2026-09-02T14:03:20+00:00"
+    assert row["content_hash"] == event_content_hash(_utc_event(ev)) == written.record_id
+    # Same instant re-submitted with a UTC clock: same identity, not a second row.
+    retry = append_forward_outcome_event(db_path, _utc_event(ev), _config(), recorded_at=NOW)
+    assert retry.status == "DUPLICATE", retry
+    read = load_forward_outcome_events(db_path, _config())
+    assert read.status == "FOUND" and read.record["count"] == 1
+    assert read.record["events"][0]["event_at"] == "2026-09-02T13:30:00+00:00"
+
+
+@pytest.mark.parametrize("column", ["event_at", "recorded_at", "provider_updated_at"])
+def test_same_instant_different_offset_column_is_corrupt(db_path, column):
+    """Read-side rule: an indexed timestamp column rewritten to the SAME instant in a
+    non-UTC offset is non-canonical text the writer never produces -> CORRUPT_RECORD,
+    not silently accepted as equal."""
+    _write_one(db_path)
+    row = _stored_row(db_path)
+    same_instant_ny = datetime.fromisoformat(row[column]).astimezone(NY).isoformat()
+    assert same_instant_ny != row[column] and same_instant_ny.endswith("-04:00")
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(f"UPDATE forward_outcome_events SET {column} = ?", (same_instant_ny,))
+    read = load_forward_outcome_events(db_path, _config())
+    assert read.status == "CORRUPT_RECORD", read
+    assert f"{column} does not match indexed row" in read.reason
+
+
+def test_same_instant_different_offset_payload_is_corrupt(db_path):
+    """Same rule for the payload text: an offset-shifted but equal-instant event_at in
+    payload_json (with column and hash left as written) is non-canonical."""
+    _write_one(db_path)
+    row = _stored_row(db_path)
+    payload = json.loads(row["payload_json"])
+    payload["event_at"] = datetime.fromisoformat(payload["event_at"]).astimezone(NY).isoformat()
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "UPDATE forward_outcome_events SET payload_json = ?",
+            (json.dumps(payload, sort_keys=True, separators=(",", ":")),),
+        )
+    read = load_forward_outcome_events(db_path, _config())
+    assert read.status == "CORRUPT_RECORD", read
