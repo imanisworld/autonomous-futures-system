@@ -1,9 +1,13 @@
 import json
+from datetime import datetime, timedelta, timezone
 
 from ops.watcher_memory_guard import (
     MemoryReading,
     evaluate_memory,
     read_critical_memory_block,
+    CODE_MEMORY_CRITICAL,
+    CODE_STATE_MALFORMED,
+    CODE_STATE_STALE,
 )
 
 
@@ -59,30 +63,97 @@ def test_critical_available_memory_blocks():
     assert "critical reserve" in status.reason
 
 
-def test_runtime_reads_only_active_critical_state(tmp_path, monkeypatch):
+NOW = datetime(2026, 9, 2, 20, 0, tzinfo=timezone.utc)
+
+
+def _state(level="HEALTHY", *, age_minutes=1.0, extra=None):
+    observed = (NOW - timedelta(minutes=age_minutes)).isoformat()
+    state = {
+        "last_tick_utc": observed,
+        "memory_guard": {
+            "level": level,
+            "reason": "derived headroom exhausted" if level == "CRITICAL" else "ok",
+            "reading": {"observed_utc": observed, "pid": 123},
+        },
+    }
+    if extra:
+        state.update(extra)
+    return state
+
+
+def test_fresh_non_critical_state_does_not_block(tmp_path, monkeypatch):
     state = tmp_path / "state.json"
     monkeypatch.setenv("AFS_WATCHER_STATE_FILE", str(state))
-    state.write_text(json.dumps({"memory_guard": {"level": "WARNING"}}))
-    assert read_critical_memory_block() is None
-
-    state.write_text(
-        json.dumps(
-            {
-                "memory_guard": {
-                    "level": "CRITICAL",
-                    "observed_utc": "2026-09-02T19:00:00Z",
-                    "reason": "derived headroom exhausted",
-                }
-            }
-        )
-    )
-    assert read_critical_memory_block()["reason"] == "derived headroom exhausted"
+    state.write_text(json.dumps(_state("WARNING")))
+    assert read_critical_memory_block(now=NOW) is None
 
 
-def test_malformed_or_missing_watcher_state_preserves_legacy_behavior(tmp_path):
-    missing = tmp_path / "missing.json"
+def test_fresh_critical_state_blocks_with_code(tmp_path):
+    state = tmp_path / "state.json"
+    state.write_text(json.dumps(_state("CRITICAL")))
+    block = read_critical_memory_block(state, now=NOW)
+    assert block["code"] == CODE_MEMORY_CRITICAL
+    assert block["reason"] == "derived headroom exhausted"
+    assert block["state_stale"] is False
+
+
+def test_blocked_memory_critical_entry_blocks_even_without_guard_level(tmp_path):
+    state = tmp_path / "state.json"
+    state.write_text(json.dumps(_state("HEALTHY", extra={"blocked": {"memory_critical": {"summary": "held"}}})))
+    block = read_critical_memory_block(state, now=NOW)
+    assert block["code"] == CODE_MEMORY_CRITICAL and block["level"] == "CRITICAL"
+
+
+def test_missing_state_preserves_legacy_fail_open(tmp_path):
+    assert read_critical_memory_block(tmp_path / "missing.json", now=NOW) is None
+
+
+def test_malformed_state_fails_closed(tmp_path):
     malformed = tmp_path / "malformed.json"
     malformed.write_text("{")
+    block = read_critical_memory_block(malformed, now=NOW)
+    assert block["code"] == CODE_STATE_MALFORMED
+    not_object = tmp_path / "list.json"
+    not_object.write_text("[1, 2]")
+    assert read_critical_memory_block(not_object, now=NOW)["code"] == CODE_STATE_MALFORMED
+    no_stamp = tmp_path / "nostamp.json"
+    no_stamp.write_text(json.dumps({"memory_guard": {"level": "HEALTHY"}}))
+    assert read_critical_memory_block(no_stamp, now=NOW)["code"] == CODE_STATE_MALFORMED
 
-    assert read_critical_memory_block(missing) is None
-    assert read_critical_memory_block(malformed) is None
+
+def test_stale_state_fails_closed_when_watcher_is_silent(tmp_path, monkeypatch):
+    state = tmp_path / "state.json"
+    state.write_text(json.dumps(_state("HEALTHY", age_minutes=31)))
+    block = read_critical_memory_block(state, now=NOW)
+    assert block["code"] == CODE_STATE_STALE
+    assert "31 min ago" in block["reason"]
+    # just inside the window is fine
+    state.write_text(json.dumps(_state("HEALTHY", age_minutes=29)))
+    assert read_critical_memory_block(state, now=NOW) is None
+    # operator-tunable window
+    monkeypatch.setenv("AFS_WATCHER_STALE_MINUTES", "45")
+    state.write_text(json.dumps(_state("HEALTHY", age_minutes=40)))
+    assert read_critical_memory_block(state, now=NOW) is None
+    assert read_critical_memory_block(state, now=NOW, stale_after_minutes=10)["code"] == CODE_STATE_STALE
+
+
+def test_future_timestamp_fails_closed(tmp_path):
+    state = tmp_path / "state.json"
+    state.write_text(json.dumps(_state("HEALTHY", age_minutes=-10)))
+    block = read_critical_memory_block(state, now=NOW)
+    assert block["code"] == CODE_STATE_STALE and "in the future" in block["reason"]
+
+
+def test_stale_critical_still_reports_memory_critical(tmp_path):
+    state = tmp_path / "state.json"
+    state.write_text(json.dumps(_state("CRITICAL", age_minutes=120)))
+    block = read_critical_memory_block(state, now=NOW)
+    assert block["code"] == CODE_MEMORY_CRITICAL and block["state_stale"] is True
+
+
+def test_newest_of_tick_and_reading_timestamp_is_used(tmp_path):
+    state = tmp_path / "state.json"
+    data = _state("HEALTHY", age_minutes=50)
+    data["last_tick_utc"] = (NOW - timedelta(minutes=2)).isoformat()
+    state.write_text(json.dumps(data))
+    assert read_critical_memory_block(state, now=NOW) is None

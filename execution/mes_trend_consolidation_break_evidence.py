@@ -277,9 +277,11 @@ def _candidate_event(
     if mode == "paper_sim" and flatness.get("confirmed") is not True:
         accepted = False
         reasons.append("STRUCTURAL_ISOLATION_UNCONFIRMED_FAIL_CLOSED")
-    if mode == "paper_sim" and read_critical_memory_block() is not None:
-        accepted = False
-        reasons.append("MEMORY_CRITICAL")
+    if mode == "paper_sim":
+        _memory_block = read_critical_memory_block()
+        if _memory_block is not None:
+            accepted = False
+            reasons.append(str(_memory_block.get("code") or "MEMORY_CRITICAL"))
 
     paper_order_id = None
     pending_order = None

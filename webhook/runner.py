@@ -2184,16 +2184,17 @@ def process_alert(
     if isinstance(broker, PaperBroker):
         _memory_block = read_critical_memory_block()
         if _memory_block is not None:
-            result["decision"] = "BLOCKED_MEMORY_CRITICAL"
+            _memory_code = str(_memory_block.get("code") or "MEMORY_CRITICAL")
+            result["decision"] = f"BLOCKED_{_memory_code}"
             result["reason"] = str(
                 _memory_block.get("reason")
                 or _memory_block.get("summary")
                 or "afs-watcher reports critical memory pressure"
             )
-            result["failed_gates"] = ["MEMORY_CRITICAL"]
+            result["failed_gates"] = [_memory_code]
             result["memory_guard"] = {
                 key: _memory_block.get(key)
-                for key in ("level", "observed_utc", "reason")
+                for key in ("level", "code", "observed_utc", "state_observed_utc", "state_stale", "reason")
                 if _memory_block.get(key) is not None
             }
             logger.warning("PAPER ENTRY BLOCKED: %s", result["reason"])
