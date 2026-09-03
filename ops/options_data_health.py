@@ -4,9 +4,21 @@
     python -m ops.options_data_health --ticker XYZ --collect
 
 READY / DEGRADED / BLOCKED from what the read-only sources actually returned:
-quote, bars, prior close, option chain/Greeks, timestamps, calendar alignment,
-and Signa provenance. Missing required evidence fails closed. GEX is always
-UNAVAILABLE unless an independently verified feed exists.
+quote, bars, option chain/Greeks, timestamps, calendar alignment, and Signa
+provenance. Missing required evidence fails closed. GEX is always UNAVAILABLE
+unless an independently verified feed exists.
+
+A prior-session close was evaluated and removed (2026-09-03): nothing in this
+package or the wider options advisory lane consumes it -- it fed no
+sanity-check, no display, no downstream decision, only its own presence in
+REQUIRED_SOURCES. Its only provider (Polygon, via polygon_prior_close_collector)
+was not otherwise used anywhere in this codebase or configured in this
+deployment, and this PR's own history already found Polygon's related
+intraday-bars path returns 403 here. Requiring a new, unused-elsewhere
+credential to satisfy a check with no consumer is not a real readiness
+requirement; if a genuine prior-close need appears later, the already-wired,
+already-authenticated Alpaca bar provider (used for bars/calendar in this same
+module) is the provider to reach for, not Polygon.
 """
 
 from __future__ import annotations
@@ -24,7 +36,7 @@ from zoneinfo import ZoneInfo
 ET = ZoneInfo("America/New_York")
 READY, DEGRADED, BLOCKED = "READY", "DEGRADED", "BLOCKED"
 GEX_STATUS = "UNAVAILABLE (no independently verified GEX feed)"
-REQUIRED_SOURCES = ("quote", "prior_close", "bars", "chain")
+REQUIRED_SOURCES = ("quote", "bars", "chain")
 REQUIRED_CONTRACT_FIELDS = (
     "bid", "ask", "volume", "open_interest", "iv", "delta", "theta", "updated_at"
 )
@@ -160,22 +172,6 @@ def evaluate_data_health(
             else:
                 status["quote"] = READY
 
-    prior = observations.get("prior_close")
-    if prior is not None and prior.ok is True:
-        value = _finite(prior.fields.get("close"))
-        close_date = str(prior.fields.get("date") or "")
-        if value is None or value <= 0:
-            blocked.append("prior_close: no finite positive close")
-            status["prior_close"] = BLOCKED
-        elif not close_date:
-            degraded.append("prior_close: close date missing")
-            status["prior_close"] = DEGRADED
-        elif close_date >= now.astimezone(ET).date().isoformat():
-            blocked.append(f"prior_close: dated {close_date}, not a prior session")
-            status["prior_close"] = BLOCKED
-        else:
-            status["prior_close"] = READY
-
     bars = observations.get("bars")
     if bars is not None and bars.ok is True:
         count = bars.fields.get("count")
@@ -206,9 +202,34 @@ def evaluate_data_health(
                     )
                     s = DEGRADED
                 age = _age_minutes(now, last_end)
-                if age is not None and age > 2 * interval_min + 1:
-                    degraded.append(f"bars: last bar {age:.0f} min old during session")
-                    s = DEGRADED
+                if age is not None:
+                    # The collector (alpaca_bars_collector) never returns a bar
+                    # less than delay_buffer_seconds old by design -- it only
+                    # trusts SIP data at or before now - delay_buffer_seconds,
+                    # so the last eligible bar's age is causally guaranteed to
+                    # fall in [delay_buffer_min, delay_buffer_min + interval_min)
+                    # even when everything is healthy. A fixed threshold below
+                    # that floor (the old 2*interval_min+1 = 11 min) is
+                    # unsatisfiable whenever delay_buffer_min exceeds it, which
+                    # it always does at the configured 16 min -- proven live on
+                    # 2026-09-03 (18 min old, in-range, wrongly flagged
+                    # DEGRADED). Derive the threshold from the buffer that
+                    # actually governs the data instead of a fixed number that
+                    # ignores it; a missing buffer (e.g. --observations JSON
+                    # without it) falls back to the old, more conservative
+                    # bound rather than silently trusting an unknown delay.
+                    delay_buffer_min = _finite(bars.fields.get("delay_buffer_seconds"))
+                    if delay_buffer_min is not None:
+                        delay_buffer_min = delay_buffer_min / 60.0
+                        max_healthy_age = delay_buffer_min + interval_min + 1
+                    else:
+                        max_healthy_age = 2 * interval_min + 1
+                    if age > max_healthy_age:
+                        degraded.append(
+                            f"bars: last bar {age:.0f} min old during session "
+                            f"(expected <= {max_healthy_age:.0f} min given the causal delay)"
+                        )
+                        s = DEGRADED
             if bars.fields.get("bounds") not in (None, "regular"):
                 degraded.append(
                     f"bars: bounds={bars.fields.get('bounds')!r}, not regular session"
@@ -578,47 +599,6 @@ def alpaca_bars_collector(ticker: str, now: datetime) -> SourceObservation:
         return _obs_from_exception("bars", exc, "alpaca-sip")
 
 
-def polygon_prior_close_collector(
-    ticker: str, now: datetime
-) -> SourceObservation:
-    try:
-        from options_manager.adapters.polygon_historical import PolygonHistoricalClient
-
-        client = PolygonHistoricalClient()
-        if not client.configured:
-            return SourceObservation(
-                name="prior_close",
-                ok=False,
-                error="POLYGON_API_KEY not configured",
-                provider="polygon",
-            )
-        today = now.astimezone(ET).date()
-        candles = client.fetch_stock_aggregates(
-            ticker,
-            (today - timedelta(days=7)).isoformat(),
-            (today - timedelta(days=1)).isoformat(),
-            multiplier=1,
-            timespan="day",
-        )
-        if not candles:
-            return SourceObservation(
-                name="prior_close",
-                ok=False,
-                error="no daily bars in prior week",
-                provider="polygon",
-            )
-        last = candles[-1]
-        return SourceObservation(
-            name="prior_close",
-            ok=True,
-            observed_at=now.isoformat(),
-            provider="polygon",
-            fields={"close": last.close, "date": str(last.timestamp)[:10]},
-        )
-    except Exception as exc:
-        return _obs_from_exception("prior_close", exc, "polygon")
-
-
 def _contract_has_health_fields(contract: Any) -> bool:
     return all(
         getattr(contract, name, None) is not None
@@ -705,7 +685,6 @@ def public_chain_collector(ticker: str, now: datetime) -> SourceObservation:
 DEFAULT_COLLECTORS: dict[str, Collector] = {
     "calendar": calendar_collector,
     "quote": public_quote_collector,
-    "prior_close": polygon_prior_close_collector,
     "bars": alpaca_bars_collector,
     "chain": public_chain_collector,
     "signa": signa_collector,

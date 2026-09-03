@@ -41,7 +41,6 @@ def _ready() -> dict[str, SourceObservation]:
             provider="calendar",
         ),
         "quote": SourceObservation("quote", True, _iso(1), {"last": 123.4}, provider="rh"),
-        "prior_close": SourceObservation("prior_close", True, _iso(1), {"close": 121.0, "date": "2026-09-01"}, provider="rh"),
         "bars": SourceObservation("bars", True, _iso(0), {"count": 8, "interval_minutes": 5, "bounds": "regular", "first_bar_start": "2026-09-02T13:30:00+00:00", "last_bar_end": _iso(5)}, provider="rh"),
         "chain": SourceObservation("chain", True, _iso(1), {"expirations": ["2026-09-04", "2026-09-11", "2026-10-16"], "sample_contract": {"bid": 1.95, "ask": 2.05, "volume": 1401, "open_interest": 7683, "iv": 0.13, "delta": 0.57, "theta": -0.19, "updated_at": _iso(2)}}, provider="rh"),
         "signa": SourceObservation("signa", True, _iso(1), {"grade": "B", "score": 63.0, "technicals_as_of": "2026-09-01", "stale": False}, provider="signa"),
@@ -75,8 +74,6 @@ def _with(obs, name, **changes):
         (lambda o: _with(o, "quote", observed_at=None), "no source timestamp"),
         (lambda o: _with(o, "quote", observed_at=_iso(45)), "45 min stale"),
         (lambda o: _with(o, "quote", observed_at=(NOW + timedelta(minutes=5)).isoformat()), "in the future"),
-        (lambda o: _with(o, "prior_close", fields={"close": 0.0}), "no finite positive close"),
-        (lambda o: _with(o, "prior_close", fields={"date": "2026-09-02"}), "not a prior session"),
         (lambda o: _with(o, "bars", fields={"count": 0}), "no bars returned"),
         (lambda o: _with(o, "bars", fields={"last_bar_end": (NOW + timedelta(minutes=10)).isoformat()}), "future leakage"),
         (lambda o: _with(o, "chain", fields={"expirations": []}), "no expirations"),
@@ -99,7 +96,6 @@ def test_hard_gaps_block(mutate, fragment):
     "mutate, fragment",
     [
         (lambda o: _with(o, "quote", observed_at=_iso(12)), "12 min stale"),
-        (lambda o: _with(o, "prior_close", fields={"date": ""}), "close date missing"),
         (lambda o: _with(o, "bars", fields={"first_bar_start": "2026-09-02T14:00:00+00:00"}), "misaligned"),
         (lambda o: _with(o, "bars", fields={"last_bar_end": _iso(20)}), "last bar 20 min old"),
         (lambda o: _with(o, "bars", fields={"bounds": "extended"}), "not regular session"),
@@ -143,7 +139,6 @@ def test_verified_early_close_controls_session_state():
     )
     obs["quote"] = SourceObservation("quote", True, (now - timedelta(hours=2)).isoformat(), {"last": 123.4}, provider="rh")
     obs["bars"] = SourceObservation("bars", True, now.isoformat(), {"count": 42, "interval_minutes": 5, "bounds": "regular", "first_bar_start": "2026-11-27T14:30:00+00:00", "last_bar_end": "2026-11-27T18:00:00+00:00"}, provider="rh")
-    obs["prior_close"] = SourceObservation("prior_close", True, now.isoformat(), {"close": 121.0, "date": "2026-11-25"}, provider="rh")
     obs["chain"] = SourceObservation("chain", True, now.isoformat(), {"expirations": ["2026-12-18"], "sample_contract": {"bid": 1.95, "ask": 2.05, "volume": 1401, "open_interest": 7683, "iv": 0.13, "delta": 0.57, "theta": -0.19, "updated_at": (now - timedelta(hours=2)).isoformat()}}, provider="rh")
     obs["signa"] = SourceObservation("signa", True, now.isoformat(), {"grade": "B", "score": 63.0, "technicals_as_of": "2026-11-27", "stale": False}, provider="signa")
     report = evaluate_data_health(obs, ticker="XYZ", now=now)
@@ -165,6 +160,47 @@ def test_out_of_session_staleness_is_not_penalized():
     obs = _with(obs, "bars", fields={"last_bar_end": (evening - timedelta(minutes=120)).isoformat()})
     report = evaluate_data_health(obs, ticker="XYZ", now=evening)
     assert report.in_session is False and report.status == READY
+
+def test_bars_freshness_threshold_is_derived_from_the_causal_delay_buffer():
+    """The collector never returns a bar less than delay_buffer_seconds old by
+    design (see alpaca_bars_collector) -- age routinely falls in
+    [delay_buffer_min, delay_buffer_min + interval_min) even when everything
+    is healthy. Proven live 2026-09-03 10:18 ET: a genuine 18-min-old bar with
+    a 960s (16 min) delay buffer was wrongly flagged DEGRADED under the old
+    fixed 2*interval_min+1 = 11 min threshold. It must be READY."""
+    obs = _with(_ready(), "bars", fields={"last_bar_end": _iso(18), "delay_buffer_seconds": 960})
+    report = evaluate_data_health(obs, ticker="XYZ", now=NOW)
+    assert report.status == READY, report.reasons
+
+
+def test_bars_at_the_edge_of_the_causal_window_is_still_ready():
+    # delay_buffer_min(16) + interval_min(5) + margin(1) = 22 min: the exact
+    # edge of what the collector's own design can produce is still healthy.
+    obs = _with(_ready(), "bars", fields={"last_bar_end": _iso(22), "delay_buffer_seconds": 960})
+    report = evaluate_data_health(obs, ticker="XYZ", now=NOW)
+    assert report.status == READY, report.reasons
+
+
+def test_bars_genuinely_stale_beyond_the_causal_window_still_degrades():
+    # One minute past that same boundary is no longer explained by the
+    # configured delay -- the feed is actually behind, not just causally
+    # delayed -- and must still be caught. Causality itself is untouched: this
+    # does not accept a future or incomplete bar, only judges the age of a
+    # bar the collector already deemed causally valid.
+    obs = _with(_ready(), "bars", fields={"last_bar_end": _iso(23), "delay_buffer_seconds": 960})
+    report = evaluate_data_health(obs, ticker="XYZ", now=NOW)
+    assert report.status == DEGRADED
+    assert any("last bar 23 min old" in r for r in report.reasons), report.reasons
+
+
+def test_bars_missing_delay_buffer_falls_back_to_the_conservative_fixed_threshold():
+    # A bars observation without delay_buffer_seconds (e.g. --observations
+    # JSON, or an older/other collector) must not silently trust an unknown
+    # delay: the old, tighter 2*interval_min+1 = 11 min bound still applies.
+    obs = _with(_ready(), "bars", fields={"last_bar_end": _iso(15)})
+    report = evaluate_data_health(obs, ticker="XYZ", now=NOW)
+    assert report.status == DEGRADED
+    assert any("last bar 15 min old" in r for r in report.reasons), report.reasons
 
 
 def test_naive_now_is_rejected():
