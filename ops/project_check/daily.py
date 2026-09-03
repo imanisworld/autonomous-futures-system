@@ -170,12 +170,28 @@ def _repo_hygiene(root: Path) -> dict[str, Any]:
     main_sync = gitutil.main_sync_state(root)
     status = gitutil.status_porcelain(root)
     all_worktrees = gitutil.worktree_inventory(root)
-    stashes = gitutil.stash_list(root)
+    stash_inventory = gitutil.stash_inventory(root)
+    stashes = stash_inventory["stashes"]
     prs = gitutil.open_prs(root)
-    branches_tracking_deleted_remotes = [b for b in gitutil.local_branches(root) if b["tracking_deleted_remote"]]
-    local_only_branches = [b for b in gitutil.local_branches(root) if b["local_only"]]
+    branch_inventory = gitutil.local_branch_inventory(root)
+    branches_tracking_deleted_remotes = [b for b in branch_inventory["branches"] if b["tracking_deleted_remote"]]
+    local_only_branches = [b for b in branch_inventory["branches"] if b["local_only"]]
     closed_unmerged = gitutil.unmerged_remote_branches_missing_archive_tag(root)
-    archive_tags = gitutil.archive_tags(root)
+    archive_inventory = gitutil.archive_tag_inventory(root)
+
+    # Any enumeration that failed leaves a preservation conclusion unproven, so
+    # it is reported as UNKNOWN and escalated -- never as an empty/clean result.
+    unverified: list[str] = []
+    if not all_worktrees:
+        unverified.append("worktree inventory could not be enumerated")
+    if not stash_inventory["checked"]:
+        unverified.append(f"stash inventory could not be enumerated: {stash_inventory['reason']}")
+    if not branch_inventory["checked"]:
+        unverified.append(f"local branch inventory could not be enumerated: {branch_inventory['reason']}")
+    if not archive_inventory["checked"]:
+        unverified.append(f"archive tag inventory could not be enumerated: {archive_inventory['reason']}")
+    if not closed_unmerged.get("checked"):
+        unverified.append(f"branch preservation check did not complete: {closed_unmerged.get('reason')}")
 
     return {
         "current_branch": gitutil.current_branch(root),
@@ -185,15 +201,25 @@ def _repo_hygiene(root: Path) -> dict[str, Any]:
         "untracked_files": status.get("untracked", []),
         "worktrees": all_worktrees,
         "worktree_inventory_checked": bool(all_worktrees),
-        "stash_count": len(stashes),
+        "stash_count": len(stashes) if stash_inventory["checked"] else None,
         "stashes": stashes,
+        "stash_enumeration": {"checked": stash_inventory["checked"], "reason": stash_inventory["reason"]},
         "stash_preservation_note": "Stashed work is outside all branch-cleanup conclusions; retain and review separately.",
         "open_prs": prs,
         "branches_tracking_deleted_remotes": branches_tracking_deleted_remotes,
         "local_only_branches": local_only_branches,
+        "local_branch_enumeration": {"checked": branch_inventory["checked"], "reason": branch_inventory["reason"]},
+        "local_branch_note": (
+            "local-only or deleted-remote status is descriptive only; disposability is decided "
+            "solely by the preservation classification."
+        ),
+        "unverified_enumerations": unverified,
         "evidence_preservation": {
             "closed_unmerged_branches_missing_archive_tag": closed_unmerged,
-            "archive_tags": archive_tags,
+            "archive_tags": archive_inventory["tags"],
+            "archive_tag_enumeration": {
+                "checked": archive_inventory["checked"], "reason": archive_inventory["reason"],
+            },
             "note": (
                 "This never creates or deletes an archive tag and never deletes a branch. "
                 "A flagged branch here is a BLOCKER for cleanup, not an instruction to act."
@@ -225,6 +251,14 @@ def _overall_blockers(
     if runtime.get("risk_rules_load_error"):
         blockers.append(
             {"code": "RISK_RULES_UNVERIFIED", "detail": str(runtime["risk_rules_load_error"])}
+        )
+
+    if hygiene.get("unverified_enumerations"):
+        blockers.append(
+            {
+                "code": "REPO_PRESERVATION_UNVERIFIED",
+                "detail": "; ".join(hygiene["unverified_enumerations"]),
+            }
         )
 
     if hygiene.get("dirty_tracked_files") or hygiene.get("staged_files"):
