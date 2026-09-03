@@ -54,6 +54,43 @@ def _print_json(payload: dict) -> None:
     print(json.dumps(payload, indent=2, sort_keys=True, default=str))
 
 
+def _count(value: object) -> str:
+    """Render a count that is only known when its enumeration actually ran."""
+    return "UNKNOWN" if value is None else str(value)
+
+
+def _preservation_headline(preservation: dict) -> str:
+    if not preservation.get("checked"):
+        return "  unpreserved branch blockers: UNKNOWN (preservation check did not complete)"
+    return (
+        f"  unpreserved branch blockers: {len(preservation.get('flagged', []))}; "
+        f"unknown: {len(preservation.get('unknown', []))}"
+    )
+
+
+def _archive_proof(row: dict) -> str:
+    """Show the SHA evidence behind a preservation verdict, not just the verdict.
+
+    An archive tag preserves a tip only when its dereferenced commit is that
+    tip (or the tip is an ancestor of it); a name-matching tag at a different
+    SHA is reported as a MISMATCH rather than counted as preservation.
+    """
+    tags = row.get("matching_archive_tags") or []
+    if not tags:
+        detail = "no name-matching archive tag"
+    else:
+        detail = ", ".join(
+            f"{t['tag']}={(t['sha'] or 'UNDEREFERENCEABLE')[:12]}"
+            f"{'=tip' if t.get('exact_tip_match') else ' MISMATCH'}"
+            for t in tags
+        )
+    preserved_by = ", ".join(row.get("preserved_by") or []) or "nothing"
+    return (
+        f"      tip {(row.get('tip_sha') or '?')[:12]} | preserved_by: {preserved_by} | "
+        f"archive: {detail}"
+    )
+
+
 def _print_preservation(worktrees: list[dict], preservation: dict, stashes: list[dict]) -> None:
     if not worktrees:
         print("    worktree inventory: UNKNOWN (enumeration unavailable)")
@@ -66,8 +103,15 @@ def _print_preservation(worktrees: list[dict], preservation: dict, stashes: list
                   f"{status['staged_count']} staged, {status['untracked_count']} untracked")
     if not preservation.get("checked"):
         print(f"    preservation: UNKNOWN ({preservation.get('reason')})")
+    archive_enum = preservation.get("archive_tag_enumeration") or {}
+    if preservation.get("checked") and not archive_enum.get("checked", True):
+        print(f"    archive tag inventory: UNKNOWN ({archive_enum.get('reason')})")
     for row in preservation.get("branches", []):
         print(f"    {row['branch']}: {row['classification']} — {row['reason']}")
+        # Anything not already reachable from main rests on a tag or another
+        # ref; print that evidence so the verdict can be checked, not trusted.
+        if row["classification"] != "REDUNDANT":
+            print(_archive_proof(row))
     print("    Branch preservation covers committed tips only; dirty files and stashes remain separate.")
     for stash in stashes:
         print(f"    retained stash {stash['ref']}: {stash['message']}")
@@ -107,12 +151,13 @@ def _cmd_session_start(args: argparse.Namespace) -> int:
     print(f"  staged files:         {len(repo['staged_files'])}")
     print(f"  untracked files:      {len(repo['untracked_files'])}")
     print(f"  worktrees:            {len(repo['all_worktrees'])}")
-    print(f"  stashes:              {repo['stash_count']}")
-    print(f"  branches->deleted remotes: {len(repo['branches_tracking_deleted_remotes'])}")
-    print(f"  local-only branches:  {len(repo['local_only_branches'])}")
-    print(f"  archive tags:         {len(repo['archive_tags'])}")
+    print(f"  stashes:              {_count(repo['stash_count'])}")
+    branch_enum_ok = repo["local_branch_enumeration"]["checked"]
+    print(f"  branches->deleted remotes: {_count(len(repo['branches_tracking_deleted_remotes']) if branch_enum_ok else None)}")
+    print(f"  local-only branches:  {_count(len(repo['local_only_branches']) if branch_enum_ok else None)}")
+    print(f"  archive tags:         {_count(len(repo['archive_tags']) if repo['archive_tag_enumeration']['checked'] else None)}")
     cu = repo["closed_unmerged_branches_missing_archive_tag"]
-    print(f"  unpreserved branch blockers: {len(cu.get('flagged', []))}; unknown: {len(cu.get('unknown', []))}")
+    print(_preservation_headline(cu))
     _print_preservation(repo["all_worktrees"], cu, repo["stashes"])
     print(f"  open PRs available:   {repo['open_prs'].get('available')}")
     if report["branch_changed_during_check"]:
@@ -192,9 +237,9 @@ def _cmd_daily(args: argparse.Namespace) -> int:
         print(f"    BLOCKER {blocker['code']}: {blocker['detail']}")
     hy = report["repo_reconciliation"]
     print(f"  branch: {hy['current_branch']}  main sync: {hy['local_main_relationship']['state']}")
-    print(f"  dirty files: {len(hy['dirty_tracked_files'])}  worktrees: {len(hy['worktrees'])}  stashes: {hy['stash_count']}")
+    print(f"  dirty files: {len(hy['dirty_tracked_files'])}  worktrees: {len(hy['worktrees'])}  stashes: {_count(hy['stash_count'])}")
     ep = hy["evidence_preservation"]["closed_unmerged_branches_missing_archive_tag"]
-    print(f"  unpreserved branch blockers: {len(ep.get('flagged', []))}; unknown: {len(ep.get('unknown', []))}")
+    print(_preservation_headline(ep))
     _print_preservation(hy["worktrees"], ep, hy["stashes"])
     ds = report["deployed_state"]
     print(f"  deployed sha: {ds['deployed_release_sha']}  entry_fill_model: {ds['entry_fill_model']}")

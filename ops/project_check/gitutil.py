@@ -364,44 +364,76 @@ def worktree_inventory(root: Path) -> list[dict[str, Any]]:
     return entries
 
 
-def stash_list(root: Path) -> list[dict[str, Any]]:
-    out, _err = run_git(["stash", "list"], cwd=root)
-    if not out:
-        return []
+def _listing(root: Path, args: list[str]) -> tuple[list[str] | None, str | None]:
+    """Split a read-only listing into lines, keeping "command failed" distinct
+    from "nothing to list".
+
+    Collapsing the two is a fail-open in a preservation routine: a stash, an
+    archive tag, or a local branch that could not be enumerated would otherwise
+    be reported identically to one that does not exist.
+    """
+    out, error = run_git(args, cwd=root)
+    if out is None:
+        return None, error or f"git {' '.join(args)} failed"
+    return [line for line in out.splitlines() if line.strip()], None
+
+
+def stash_inventory(root: Path) -> dict[str, Any]:
+    """Stash listing that reports UNKNOWN rather than an empty list on failure."""
+    lines, error = _listing(root, ["stash", "list"])
+    if lines is None:
+        return {"checked": False, "reason": error, "stashes": []}
     entries = []
-    for line in out.splitlines():
+    for line in lines:
         ref, _, message = line.partition(": ")
         entries.append({"ref": ref, "message": message})
-    return entries
+    return {"checked": True, "reason": None, "stashes": entries}
+
+
+def stash_list(root: Path) -> list[dict[str, Any]]:
+    return stash_inventory(root)["stashes"]
+
+
+def archive_tag_inventory(root: Path) -> dict[str, Any]:
+    """Archive-tag listing with each tag dereferenced to its commit.
+
+    ``sha`` is the dereferenced commit (annotated or lightweight); a tag that
+    cannot be dereferenced keeps ``sha`` None so callers can refuse to treat it
+    as proof that a tip is preserved.
+    """
+    lines, error = _listing(root, ["tag", "-l", "archive/*"])
+    if lines is None:
+        return {"checked": False, "reason": error, "tags": []}
+    tags = []
+    for name in lines:
+        name = name.strip()
+        sha = ref_sha(root, f"refs/tags/{name}^{{commit}}")
+        tags.append({"tag": name, "sha": sha, "object_sha": ref_sha(root, f"refs/tags/{name}")})
+    return {"checked": True, "reason": None, "tags": tags}
 
 
 def archive_tags(root: Path) -> list[dict[str, Any]]:
-    out, _err = run_git(["tag", "-l", "archive/*"], cwd=root)
-    if not out:
-        return []
-    tags = []
-    for name in out.splitlines():
-        name = name.strip()
-        if not name:
-            continue
-        sha = ref_sha(root, f"refs/tags/{name}^{{commit}}")
-        tags.append({"tag": name, "sha": sha, "object_sha": ref_sha(root, f"refs/tags/{name}")})
-    return tags
+    return archive_tag_inventory(root)["tags"]
 
 
-def local_branches(root: Path) -> list[dict[str, Any]]:
-    out, _err = run_git(
+def local_branch_inventory(root: Path) -> dict[str, Any]:
+    """Local-branch listing that reports UNKNOWN rather than an empty list on failure.
+
+    ``local_only`` and ``tracking_deleted_remote`` are descriptive facts only;
+    neither is ever a disposability signal on its own.
+    """
+    lines, error = _listing(
+        root,
         [
             "for-each-ref",
             "--format=%(refname:short)\t%(upstream:short)\t%(upstream:track)\t%(objectname)",
             "refs/heads/",
         ],
-        cwd=root,
     )
-    if not out:
-        return []
+    if lines is None:
+        return {"checked": False, "reason": error, "branches": []}
     branches = []
-    for line in out.splitlines():
+    for line in lines:
         parts = line.split("\t")
         if len(parts) != 4:
             continue
@@ -415,7 +447,11 @@ def local_branches(root: Path) -> list[dict[str, Any]]:
                 "sha": sha,
             }
         )
-    return branches
+    return {"checked": True, "reason": None, "branches": branches}
+
+
+def local_branches(root: Path) -> list[dict[str, Any]]:
+    return local_branch_inventory(root)["branches"]
 
 
 def remote_branches(root: Path) -> list[str]:
@@ -487,7 +523,8 @@ def unmerged_remote_branches_missing_archive_tag(root: Path) -> dict[str, Any]:
     if refs is None:
         return {"checked": False, "reason": error, "flagged": [], "branches": [], "unknown": []}
     tips = dict(line.split("\t", 1) for line in refs.splitlines())
-    tags = archive_tags(root)
+    archive_inventory = archive_tag_inventory(root)
+    tags = archive_inventory["tags"]
     owners = worktrees(root)
     prs = None  # One bounded, read-only PR query, only if Git alone is insufficient.
     rows = []
@@ -508,6 +545,13 @@ def unmerged_remote_branches_missing_archive_tag(root: Path) -> dict[str, Any]:
             )],
             "ahead_of_origin_branch": unique_commit_count(root, origin_tip, tip) if local and origin_tip else None,
             "matching_archive_tags": [{**t, "exact_tip_match": t["sha"] == tip} for t in matching_tags],
+            # None: no name-matching tag (or the tag inventory is unknown).
+            # False: a name-matching archive tag exists but its dereferenced
+            # commit is NOT this tip -- existence alone never proves preservation.
+            "archive_tag_exact_match": (
+                None if not archive_inventory["checked"] or not matching_tags
+                else any(t["sha"] == tip for t in matching_tags)
+            ),
             "preserved_by": [], "pr_status": "NOT_QUERIED",
         }
         contains, contains_error = run_git(
@@ -523,6 +567,8 @@ def unmerged_remote_branches_missing_archive_tag(root: Path) -> dict[str, Any]:
             row["reason"] = contains_error or "independent main ancestry checks failed or disagree"
         elif ancestry:
             row.update(classification="REDUNDANT", reason="tip is reachable from main", preserved_by=[remote_ref])
+        elif not archive_inventory["checked"]:
+            row["reason"] = f"archive tag inventory could not be enumerated: {archive_inventory['reason']}"
         elif any(r.startswith("refs/tags/archive/") and r not in archives for r in containing):
             row["reason"] = "archive inventory could not be verified against containing refs"
         elif archives or other_origins:
@@ -563,6 +609,10 @@ def unmerged_remote_branches_missing_archive_tag(root: Path) -> dict[str, Any]:
         rows.append(row)
     return {
         "checked": True, "reason": None, "remote_ref": remote_ref, "branches": rows,
+        "archive_tag_enumeration": {
+            "checked": archive_inventory["checked"], "reason": archive_inventory["reason"],
+            "tag_count": len(tags) if archive_inventory["checked"] else None,
+        },
         "flagged": [r for r in rows if r["classification"] == "UNARCHIVED UNIQUE EVIDENCE — BLOCKER"],
         "unknown": [r for r in rows if r["classification"] == "UNKNOWN"],
         "note": "Committed tips only, using cached Git refs. Dirty/untracked files and stashes are NOT covered; no cleanup is authorized.",
