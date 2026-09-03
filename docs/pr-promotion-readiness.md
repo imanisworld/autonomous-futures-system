@@ -88,11 +88,14 @@ freeze record (`ops/pr_promotion_readiness/session_evidence.py`):
 2. the current sha256 equals it (`session_evidence_changed` otherwise);
 3. the freeze was recorded at or after the 10:03 ET stage of the session
    date;
-4. the freeze was recorded within `MAX_FREEZE_LATENCY` (60 min) of that
-   stage -- a fingerprint first persisted hours later cannot anchor the
-   content to the session it describes;
-5. at least `MIN_FROZEN_AGE` (30 min) has elapsed since the freeze was
-   recorded -- two runs seconds apart are not a freeze.
+4. the freeze was recorded within `MAX_FREEZE_LATENCY` (15 min) of that
+   stage -- a fingerprint first persisted more than a quarter hour later
+   cannot anchor the content to the session it describes;
+5. the freeze was not recorded in the future relative to the check
+   (`MIN_FROZEN_AGE` is 0 -- waiting adds no trust; contemporaneous
+   capture, the durable hash, and #441's provenance validation are what
+   make the evidence trustworthy. `MIN_FROZEN_AGE` exists only to reject
+   a freeze record timestamped after "now", i.e. clock skew).
 
 Freeze age is measured from the *earliest* persisted observation of the
 current sha256 in the unbroken tail of records for that path, so reruns

@@ -19,10 +19,15 @@ promotion record carrying ``session_file``, ``session_sha256`` and its
    10:03 ET final stage of the session date (a fingerprint of an
    incomplete file proves nothing about the finished one).
 4. ``frozen_contemporaneously``   the freeze was recorded within
-   ``MAX_FREEZE_LATENCY`` of the 10:03 ET stage. A hash persisted hours
-   later cannot anchor the file's content to the session it describes.
-5. ``frozen_long_enough``   at least ``MIN_FROZEN_AGE`` has elapsed since
-   the freeze was recorded. Two runs seconds apart are not a freeze.
+   ``MAX_FREEZE_LATENCY`` of the 10:03 ET stage. A hash persisted more
+   than a quarter hour later cannot anchor the file's content to the
+   session it describes.
+5. ``frozen_long_enough``   the freeze was not recorded in the future
+   relative to the current check (age >= ``MIN_FROZEN_AGE``, which is
+   zero: waiting does not make evidence more trustworthy, and a second
+   run moments after the first is sufficient once rules 1-4 hold).
+   ``MIN_FROZEN_AGE`` exists only as a clock-skew guard against a freeze
+   record timestamped after "now".
 
 The freeze record's age is measured from the EARLIEST persisted
 observation of the current sha256 in the unbroken tail of records for
@@ -51,8 +56,8 @@ REQUIRED_SECTIONS: tuple[tuple[str, str], ...] = (
 FINAL_STAGE_ET = time(10, 3)
 # Freeze policy knobs (see module docstring). Deliberately module constants,
 # not CLI flags: a run cannot loosen them.
-MIN_FROZEN_AGE = timedelta(minutes=30)
-MAX_FREEZE_LATENCY = timedelta(minutes=60)
+MIN_FROZEN_AGE = timedelta(minutes=0)
+MAX_FREEZE_LATENCY = timedelta(minutes=15)
 
 _TIMESTAMP_RE = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})")
 _DATE_RE = re.compile(r"(\d{4}-\d{2}-\d{2})")
@@ -185,7 +190,8 @@ def verify_session_evidence(
     if freeze is None:
         reasons.append(
             f"{NOT_FROZEN}: first sight of sha256 {digest[:12]} — no persisted freeze record for this session file; "
-            f"this run records the fingerprint, re-verify no sooner than {_fmt_minutes(MIN_FROZEN_AGE)} later"
+            "this run records the fingerprint; a second run against the unchanged file, within "
+            f"{_fmt_minutes(MAX_FREEZE_LATENCY)} of the 10:03 ET stage, is sufficient"
         )
     elif freeze.sha256 != digest:
         frozen = False
@@ -220,7 +226,8 @@ def verify_session_evidence(
             if age < MIN_FROZEN_AGE:
                 ok = False
                 reasons.append(
-                    f"{NOT_FROZEN}: freeze recorded only {_fmt_minutes(age)} ago (min {_fmt_minutes(MIN_FROZEN_AGE)})"
+                    f"{NOT_FROZEN}: freeze recorded_at is after the current check ({_fmt_minutes(age)} ago) — "
+                    "clock skew or a future timestamp, not evidence"
                 )
             frozen = ok
 

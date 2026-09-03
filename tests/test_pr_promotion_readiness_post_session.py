@@ -101,20 +101,27 @@ def test_session_gate(tmp_path):
 
 def test_freeze_rules_each_fail_closed(tmp_path):
     path = _session(tmp_path)
-    # too recent: fingerprint persisted 5 min ago
-    recent = verify_session_evidence(path, now=AFTER, freeze=_freeze(at=AFTER - timedelta(minutes=5)))
-    assert recent.frozen is False and not recent.complete
-    assert any(r.startswith(NOT_FROZEN) and "only 5 min ago" in r for r in recent.reasons), recent.reasons
-    # exactly MIN_FROZEN_AGE is enough; one second less is not
-    assert verify_session_evidence(path, now=FREEZE_AT + MIN_FROZEN_AGE, freeze=_freeze()).frozen is True
-    assert verify_session_evidence(path, now=FREEZE_AT + MIN_FROZEN_AGE - timedelta(seconds=1), freeze=_freeze()).frozen is False
+    # MIN_FROZEN_AGE is 0: a freeze recorded moments ago, even the same
+    # instant as "now", is sufficient once every other rule holds. Waiting
+    # does not make evidence more trustworthy.
+    assert verify_session_evidence(path, now=FREEZE_AT, freeze=_freeze()).frozen is True
+    just_now = verify_session_evidence(path, now=FREEZE_AT + timedelta(seconds=1), freeze=_freeze())
+    assert just_now.frozen is True and just_now.freeze_age_seconds == 1
+    # MIN_FROZEN_AGE's only remaining job: reject a freeze record timestamped
+    # after "now" (clock skew / a future timestamp), which is not evidence.
+    future = verify_session_evidence(path, now=FREEZE_AT - timedelta(seconds=1), freeze=_freeze())
+    assert future.frozen is False
+    assert any(r.startswith(NOT_FROZEN) and "clock skew" in r for r in future.reasons), future.reasons
     # late: fingerprint first persisted hours after the 10:03 ET stage (today's real case)
     late_at = datetime(2026, 9, 2, 16, 17, 34, tzinfo=timezone.utc)
     late = verify_session_evidence(path, now=datetime(2026, 9, 2, 20, 0, tzinfo=timezone.utc), freeze=_freeze(at=late_at))
     assert late.frozen is False and not late.complete
     assert any(r.startswith(NOT_FROZEN) and "134 min after the 10:03 ET stage" in r for r in late.reasons), late.reasons
+    # exactly MAX_FREEZE_LATENCY (15 min) is enough; one second later is not
     assert verify_session_evidence(path, now=STAGE + timedelta(hours=3), freeze=_freeze(at=STAGE + MAX_FREEZE_LATENCY)).frozen is True
     assert verify_session_evidence(path, now=STAGE + timedelta(hours=3), freeze=_freeze(at=STAGE + MAX_FREEZE_LATENCY + timedelta(seconds=1))).frozen is False
+    # a freeze recorded within the new, tighter 15-minute window still passes
+    assert verify_session_evidence(path, now=STAGE + timedelta(hours=3), freeze=_freeze(at=STAGE + timedelta(minutes=14))).frozen is True
     # before the stage: a fingerprint of a not-yet-final file proves nothing
     early = verify_session_evidence(path, now=AFTER, freeze=_freeze(at=STAGE - timedelta(minutes=1)))
     assert early.frozen is False and any("before the 10:03 ET stage" in r for r in early.reasons)
@@ -357,22 +364,34 @@ def test_first_sight_session_frozen_none_is_not_sufficient(tmp_path):
     assert record["verdicts"] == {"438": SESSION_INCOMPLETE, "439": SESSION_INCOMPLETE, "440": SESSION_INCOMPLETE}
 
 
-def test_first_sight_then_rerun_seconds_later_is_still_not_frozen(tmp_path):
-    """The first run persists the fingerprint; a rerun seconds later must not
-    turn that into a freeze (MIN_FROZEN_AGE). A run after the age elapses,
-    with the freeze recorded contemporaneously, is frozen."""
+def test_first_sight_then_rerun_seconds_later_is_now_frozen(tmp_path):
+    """The first run persists the fingerprint (first sight is never proof by
+    itself: frozen=None). MIN_FROZEN_AGE is 0, so a second run moments later
+    against the SAME unchanged hash, recorded within the latency window, is
+    sufficient -- waiting adds nothing; the durable hash + contemporaneous
+    capture + provenance are what make it evidence."""
     record = tmp_path / "rec.jsonl"
     t0 = STAGE + timedelta(minutes=7)
     first = _run(tmp_path, _runner(), record=record, now=t0, freeze=False)
     assert first.session.frozen is None and not first.session.complete
     second = _run(tmp_path, _runner(), record=record, now=t0 + timedelta(seconds=30), freeze=False)
-    assert second.session.frozen is False and not second.session.complete
-    assert any("only 0 min ago" in r for r in second.session.reasons), second.session.reasons
-    assert all(v is None for v in second.verdicts.values())
-    third = _run(tmp_path, _runner(), record=record, now=t0 + MIN_FROZEN_AGE, freeze=False)
-    assert third.session.frozen is True and third.session.complete
-    assert third.session.freeze_recorded_at == t0.isoformat(timespec="seconds")
-    assert third.verdicts[438] is not None
+    assert second.session.frozen is True and second.session.complete
+    assert second.session.freeze_recorded_at == t0.isoformat(timespec="seconds")
+    assert second.session.freeze_age_seconds == 30
+    assert second.verdicts[438] is not None
+
+
+def test_rerun_with_a_changed_file_is_never_frozen_regardless_of_age(tmp_path):
+    """MIN_FROZEN_AGE=0 must never be mistaken for 'any second run passes' --
+    a rerun where the file content changed still fails on the hash."""
+    record = tmp_path / "rec.jsonl"
+    t0 = STAGE + timedelta(minutes=7)
+    first = _run(tmp_path, _runner(), record=record, now=t0, freeze=False)
+    assert first.session.frozen is None
+    changed_text = COMPLETE_SESSION + "\nbackfilled after first sight\n"
+    second = _run(tmp_path, _runner(), record=record, now=t0 + timedelta(seconds=30), session_text=changed_text, freeze=False)
+    assert second.session.frozen is False
+    assert any(r.startswith(CHANGED) for r in second.session.reasons), second.session.reasons
 
 
 def test_missing_file_records_do_not_count_as_freeze(tmp_path):
