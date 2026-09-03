@@ -9,6 +9,7 @@ from ops.watcher_memory_guard import (
     CODE_STATE_MALFORMED,
     CODE_STATE_STALE,
     CODE_STATE_MISSING,
+    CODE_MEMORY_WARNING,
 )
 
 
@@ -82,10 +83,10 @@ def _state(level="HEALTHY", *, age_minutes=1.0, extra=None):
     return state
 
 
-def test_fresh_non_critical_state_does_not_block(tmp_path, monkeypatch):
+def test_fresh_healthy_state_does_not_block(tmp_path, monkeypatch):
     state = tmp_path / "state.json"
     monkeypatch.setenv("AFS_WATCHER_STATE_FILE", str(state))
-    state.write_text(json.dumps(_state("WARNING")))
+    state.write_text(json.dumps(_state("HEALTHY")))
     assert read_critical_memory_block(now=NOW) is None
 
 
@@ -155,6 +156,30 @@ def test_stale_critical_still_reports_memory_critical(tmp_path):
     state.write_text(json.dumps(_state("CRITICAL", age_minutes=120)))
     block = read_critical_memory_block(state, now=NOW)
     assert block["code"] == CODE_MEMORY_CRITICAL and block["state_stale"] is True
+
+
+def test_fresh_warning_state_blocks_with_code(tmp_path):
+    state = tmp_path / "state.json"
+    state.write_text(json.dumps(_state("WARNING")))
+    block = read_critical_memory_block(state, now=NOW)
+    assert block["code"] == CODE_MEMORY_WARNING
+    assert block["state_stale"] is False
+
+
+def test_blocked_memory_warning_entry_blocks_even_without_guard_level(tmp_path):
+    state = tmp_path / "state.json"
+    state.write_text(json.dumps(_state("HEALTHY", extra={"blocked": {"memory_warning": {"summary": "elevated"}}})))
+    block = read_critical_memory_block(state, now=NOW)
+    assert block["code"] == CODE_MEMORY_WARNING and block["level"] == "WARNING"
+
+
+def test_stale_warning_reports_stale_not_warning(tmp_path):
+    # Unlike CRITICAL, a stale WARNING carries no evidence the watcher died,
+    # so the stale rule (not the warning rule) governs.
+    state = tmp_path / "state.json"
+    state.write_text(json.dumps(_state("WARNING", age_minutes=31)))
+    block = read_critical_memory_block(state, now=NOW)
+    assert block["code"] == CODE_STATE_STALE
 
 
 def test_newest_of_tick_and_reading_timestamp_is_used(tmp_path):

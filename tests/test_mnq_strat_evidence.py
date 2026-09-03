@@ -198,6 +198,26 @@ def test_missing_watcher_state_blocks_new_paper_position(
     assert "WATCHER_STATE_MISSING" in event["rejection_reason"]
 
 
+def test_memory_warning_blocks_new_paper_position(
+    tmp_path, fresh_market_state, config, monkeypatch
+):
+    monkeypatch.setattr(
+        evidence,
+        "read_critical_memory_block",
+        lambda: {"level": "WARNING", "code": "MEMORY_WARNING", "reason": "derived headroom inside the warning reserve"},
+    )
+    event = process_mnq_strat_evidence(
+        state=_state(fresh_market_state, "strat_22_reversal"),
+        cfg=_paper_cfg(config),
+        log_dir=tmp_path,
+        flatness_snapshot=FLAT,
+    )[0]
+
+    assert event["accepted"] is False
+    assert event["paper_order_id"] is None
+    assert "MEMORY_WARNING" in event["rejection_reason"]
+
+
 def test_absent_flatness_evidence_fails_structural_isolation_closed(
     tmp_path, fresh_market_state, config, monkeypatch
 ):
