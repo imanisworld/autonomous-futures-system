@@ -1701,7 +1701,20 @@ def process_alert(
         and decision.setup is not None
         and is_mnq_orb_breakout_candidate(state.instrument, decision.setup.strategy)
     ):
-        if not five_min_trigger and bar_timeframe_minutes == 15:
+        # A 5m retest re-runs the ORIGINAL armed 15m decision (`payload` was
+        # swapped back to the armed 15m payload above), but
+        # bar_timeframe_minutes deliberately reports 5 so the bar claim is
+        # tagged to the 5m bar the alert actually arrived on. That made BOTH
+        # halves of the old `not five_min_trigger and bar_timeframe_minutes ==
+        # 15` guard false, so a re-triggered candidate skipped the inverse lane
+        # and fell through to the non-inverse branch — all-history journal
+        # accounting (peak frozen from a pre-epoch drawdown) plus the
+        # configured external broker, for a candidate the active lane owns.
+        # ENTRY_DETACHED_FROM_PRICE is the arming gate AND this lane's most
+        # common miss, so the retest is its main second-chance route, not an
+        # edge case. It is the same 15m bracket, so it gets the same isolation.
+        _inverse_lane_bar = bool(five_min_trigger) or bar_timeframe_minutes == 15
+        if _inverse_lane_bar:
             mnq_breakout_inverse_decision = evaluate_mnq_orb_breakout_inverse(cfg)
             mnq_breakout_inverse_audit = mnq_breakout_inverse_decision.audit(
                 source_direction=decision.setup.direction,
