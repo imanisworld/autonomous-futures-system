@@ -152,8 +152,13 @@ def test_outcome_cache_is_bounded_by_row_ceiling(tmp_path, monkeypatch):
         JournalLogger._outcome_cache.clear()
 
 
-def test_single_oversized_journal_still_returns_correct_accounting(tmp_path, monkeypatch):
-    """A file bigger than the row ceiling degrades to no caching, not wrong math."""
+def test_single_oversized_journal_is_returned_but_not_retained(tmp_path, monkeypatch):
+    """A file bigger than the row ceiling must be returned and NOT cached.
+
+    Retaining it would leave one entry permanently over budget that eviction
+    could not remove, so the "bounded" total would be unbounded in exactly the
+    pathological case the ceiling exists for.
+    """
     JournalLogger._entries_cache.clear()
     JournalLogger._outcome_cache.clear()
     try:
@@ -162,9 +167,74 @@ def test_single_oversized_journal_still_returns_correct_accounting(tmp_path, mon
         _seed_days(tmp_path, 3, outcomes_per_day=6)
         first = _accounting(logger)
         second = _accounting(logger)
-        assert first == second, "repeat reads under eviction must agree"
-        assert len(JournalLogger._outcome_cache) >= 1
+        assert first == second, "repeat reads without caching must agree"
+        assert JournalLogger._outcome_cache == {}, "oversized summaries must not be retained"
     finally:
+        JournalLogger._entries_cache.clear()
+        JournalLogger._outcome_cache.clear()
+
+
+def test_row_ceiling_is_a_hard_bound_with_one_pathological_journal(tmp_path, monkeypatch):
+    """The ceiling must hold even when a single journal alone exceeds it."""
+    JournalLogger._entries_cache.clear()
+    JournalLogger._outcome_cache.clear()
+    try:
+        monkeypatch.setattr(journal_logger_module, "_MAX_OUTCOME_CACHE_ROWS", 12)
+        logger = JournalLogger(log_dir=str(tmp_path))
+        _seed_days(tmp_path, 4, outcomes_per_day=2)          # small files, 4 rows each
+        pathological = tmp_path / "journal_2026-08-09.jsonl"
+        _write(
+            pathological,
+            *[
+                {
+                    "type": "OUTCOME",
+                    "ts": f"2026-08-09T{8 + (n % 12):02d}:00:00+00:00",
+                    "outcome": {"result": "WIN", "pnl_dollars": 1.0},
+                }
+                for n in range(500)
+            ],
+        )
+        logger.get_account_balance(100.0)
+        rows = sum(
+            len(s["account"]) + len(s["performance"])
+            for _sig, s in JournalLogger._outcome_cache.values()
+        )
+        assert rows <= 12, f"row ceiling breached: {rows}"
+        assert str(pathological) not in JournalLogger._outcome_cache
+        # and the uncached pathological file's rows are still counted in full:
+        # 100 opening + 500 (500 x +1.0) + 24 (four seeded days netting +6 each)
+        assert logger.get_account_balance(100.0) == 624.0
+    finally:
+        JournalLogger._entries_cache.clear()
+        JournalLogger._outcome_cache.clear()
+
+
+class _RacyDict(dict):
+    """Evicts the key inside get(), standing in for a concurrent evictor."""
+
+    def get(self, key, default=None):
+        value = super().get(key, default)
+        super().pop(key, None)
+        return value
+
+
+def test_cache_hit_refresh_survives_concurrent_eviction(tmp_path):
+    """The recency refresh must not KeyError if the entry vanishes under it."""
+    JournalLogger._entries_cache.clear()
+    original = JournalLogger._outcome_cache
+    JournalLogger._outcome_cache = {}
+    try:
+        logger = JournalLogger(log_dir=str(tmp_path))
+        _seed_days(tmp_path, 1)
+        path = tmp_path / "journal_2026-08-01.jsonl"
+        first = logger._read_outcome_summary(path)
+        JournalLogger._outcome_cache = _RacyDict(JournalLogger._outcome_cache)
+        again = logger._read_outcome_summary(path)   # bare pop() would raise here
+        assert again == first
+        # the deliberately-evicted entry must not be resurrected
+        assert str(path) not in JournalLogger._outcome_cache
+    finally:
+        JournalLogger._outcome_cache = original
         JournalLogger._entries_cache.clear()
         JournalLogger._outcome_cache.clear()
 

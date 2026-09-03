@@ -48,7 +48,7 @@ _MAX_PARSED_JOURNAL_CACHE_FILES = 8
 # 96 OUTCOME rows and 32 performance rows in total -- about 20 KB of tuples,
 # growing about 1-2 rows/day. Both ceilings are unreachable at that rate.
 _MAX_OUTCOME_CACHE_FILES = 512      # ~1.4 years of daily journals
-_MAX_OUTCOME_CACHE_ROWS = 50_000    # ~8 MB worst case, ~390x the current total
+_MAX_OUTCOME_CACHE_ROWS = 50_000    # hard total ceiling; ~390x the current total
 
 
 def _aware_utc(value: datetime) -> datetime:
@@ -522,9 +522,13 @@ class JournalLogger:
         sig = (st.st_mtime_ns, st.st_size)
         cached = JournalLogger._outcome_cache.get(key)
         if cached is not None and cached[0] == sig:
-            # Refresh recency so a hot file is not the next one evicted.
-            JournalLogger._outcome_cache.pop(key)
-            JournalLogger._outcome_cache[key] = cached
+            # Refresh recency so a hot file is not the next one evicted. The
+            # cache is process-wide, so a bare pop() could raise KeyError if
+            # another caller evicted this key between the get() and the pop();
+            # and re-inserting unconditionally would resurrect an entry that
+            # eviction had deliberately dropped. Only reorder what is still there.
+            if JournalLogger._outcome_cache.pop(key, None) is not None:
+                JournalLogger._outcome_cache[key] = cached
             return cached[1]
 
         account: list[tuple[object, float]] = []
@@ -561,9 +565,16 @@ class JournalLogger:
                         )
 
         summary = {"account": account, "performance": performance}
+        # A single summary at or above the row ceiling is returned to the caller
+        # but NOT retained. Caching it would make the ceiling unenforceable:
+        # there would permanently be one entry over budget that eviction could
+        # not remove, so the "bounded" total would be unbounded in exactly the
+        # pathological case the ceiling exists for. Dropping any stale entry for
+        # this path keeps the cache free of a smaller, now-superseded summary.
         JournalLogger._outcome_cache.pop(key, None)
-        JournalLogger._outcome_cache[key] = (sig, summary)
-        JournalLogger._evict_outcome_cache()
+        if len(account) + len(performance) <= _MAX_OUTCOME_CACHE_ROWS:
+            JournalLogger._outcome_cache[key] = (sig, summary)
+            JournalLogger._evict_outcome_cache()
         return summary
 
     @staticmethod
@@ -571,9 +582,10 @@ class JournalLogger:
         """Drop least-recently-used summaries until both ceilings hold.
 
         Eviction only costs a re-parse of that file on its next read; it never
-        changes an accounting result. The newest entry is always retained, so a
-        single journal larger than the row ceiling degrades to no caching for
-        that file rather than to an empty cache.
+        changes an accounting result. Every retained entry is individually at or
+        under the row ceiling (the caller refuses to store a larger one), so
+        this loop always terminates with the total at or under the ceiling and
+        can never evict down to an empty cache to satisfy it.
         """
         cache = JournalLogger._outcome_cache
         while len(cache) > _MAX_OUTCOME_CACHE_FILES:
@@ -582,7 +594,7 @@ class JournalLogger:
             len(summary["account"]) + len(summary["performance"])
             for _sig, summary in cache.values()
         )
-        while rows > _MAX_OUTCOME_CACHE_ROWS and len(cache) > 1:
+        while rows > _MAX_OUTCOME_CACHE_ROWS and cache:
             _key, (_sig, summary) = next(iter(cache.items()))
             rows -= len(summary["account"]) + len(summary["performance"])
             cache.pop(_key, None)
