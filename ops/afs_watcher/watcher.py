@@ -90,6 +90,7 @@ MEM_FIXED_THRESHOLDS = {
     "avail_warn_mb": 250, "avail_crit_mb": 120,         # MemAvailable (enforced only if MEM_FIXED_ABSOLUTE_CHECKS)
     "swap_warn_mb": 1400, "swap_crit_mb": 1800,         # swap in use, of 2048 MB
     "swap_activity_warn_mb_tick": 100, "swap_activity_crit_mb_tick": 300,  # MB paged in+out per tick
+    "swap_activity_sustained_ticks": 3,                 # consecutive >=warn ticks that count as "sustained" paging
     "growth_warn_mb_2h": 150,                           # WARN: footprint rose this much over the window, mostly rising
     "growth_crit_mb_2h": 250,                           # CRITICAL: footprint rose this much over the window (any profile)
 }
@@ -628,10 +629,31 @@ def check_memory_fixed(state: dict, f: Findings, tick: dict) -> None:
             f.add("BLOCKED", "memory_avail_critical", f"MemAvailable {avail_mb} MB <= critical {th['avail_crit_mb']} MB")
         elif avail_mb <= th["avail_warn_mb"]:
             f.add("WARN", "memory_avail_warning", f"MemAvailable {avail_mb} MB <= warning {th['avail_warn_mb']} MB")
-    # swap PRESSURE = the kernel actively paging, not idle pages parked in swap
-    if swapin_mb + swapout_mb >= th["swap_activity_crit_mb_tick"]:
-        f.add("BLOCKED", "swap_pressure_critical", f"swap activity {swapin_mb} MB in / {swapout_mb} MB out since last tick >= critical {th['swap_activity_crit_mb_tick']} MB")
-    elif swapin_mb + swapout_mb >= th["swap_activity_warn_mb_tick"]:
+    # swap PRESSURE = the kernel actively paging, not idle pages parked in swap.
+    # Magnitude alone is not reliable: a reclaim burst right after a process
+    # restart can page hundreds of MB while MemAvailable is healthy and rising
+    # (proven false positive 2026-09-03T01:36Z: 354 MB out while MemAvailable
+    # rose 557->840 MB). CRITICAL now additionally requires corroboration —
+    # low headroom, or paging sustained across consecutive ticks — magnitude
+    # alone only ever reaches WARNING.
+    paging_mb = swapin_mb + swapout_mb
+    streak = state.get("memory_fixed_paging_streak", 0)
+    streak = streak + 1 if paging_mb >= th["swap_activity_warn_mb_tick"] else 0
+    state["memory_fixed_paging_streak"] = streak
+    mem["swap_activity_streak"] = streak
+    low_headroom = avail_mb <= th["avail_warn_mb"]
+    sustained = streak >= th["swap_activity_sustained_ticks"]
+    if paging_mb >= th["swap_activity_crit_mb_tick"] and (low_headroom or sustained):
+        corroboration = " and ".join(
+            s for s, ok in (
+                (f"MemAvailable {avail_mb} MB <= warning {th['avail_warn_mb']} MB", low_headroom),
+                (f"paging sustained {streak} consecutive ticks >= warning {th['swap_activity_warn_mb_tick']} MB", sustained),
+            ) if ok
+        )
+        f.add("BLOCKED", "swap_pressure_critical",
+              f"swap activity {swapin_mb} MB in / {swapout_mb} MB out since last tick >= critical "
+              f"{th['swap_activity_crit_mb_tick']} MB, corroborated by {corroboration}")
+    elif paging_mb >= th["swap_activity_warn_mb_tick"]:
         f.add("WARN", "swap_pressure_warning", f"swap activity {swapin_mb} MB in / {swapout_mb} MB out since last tick >= warning {th['swap_activity_warn_mb_tick']} MB")
     if swap_used_mb >= th["swap_crit_mb"]:
         f.add("BLOCKED", "swap_used_critical", f"swap used {swap_used_mb} MB of {swap_total_mb} >= critical {th['swap_crit_mb']} MB")
