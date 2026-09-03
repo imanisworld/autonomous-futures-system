@@ -24,8 +24,11 @@ def _contract(minutes, valid=True, *, direction="CALL"):
     return _ev("CONTRACT_OBSERVATION", minutes, direction=direction, contract={"strike": 100.0, "bid": 1.95, "ask": 2.05}, obs={"contract_valid": valid})
 
 
-def test_no_events_is_no_setup():
-    assert reduce_forward_outcome([]).outcome == "NO_SETUP"
+def test_no_events_is_undetermined_not_no_setup():
+    summary = reduce_forward_outcome([])
+    assert summary.outcome == UNDETERMINED
+    assert summary.thesis_id is None and summary.event_count == 0
+    assert summary.reasons == ("no events",)
 
 
 def test_no_setup_and_setup_not_triggered():

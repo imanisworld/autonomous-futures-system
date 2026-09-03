@@ -13,7 +13,11 @@ causally available stays None.
 A target level touched without a preceding actionable TRIGGER is theoretical,
 not a trade outcome. Events after an INVALIDATION never resurrect the thesis.
 Mixed thesis/identity facts, missing timestamps, or unknown vocabulary yield
-UNDETERMINED. No I/O, no clock.
+UNDETERMINED. So does an empty event list: no evidence is not evidence of
+NO_SETUP. ``thesis_id`` (and every other identity field) is carried through
+byte-identical to the stored rows so summaries join back to storage; only
+``direction`` is case-folded, because it is vocabulary rather than a key.
+No I/O, no clock.
 """
 
 from __future__ import annotations
@@ -105,7 +109,17 @@ def _minutes(start: Optional[datetime], end: Optional[datetime]) -> Optional[flo
 
 
 def _identity_value(item: Mapping[str, Any], name: str) -> str:
+    """The identity field exactly as stored; "" when absent or blank.
+
+    Never normalized: storage keys rows on the literal value, so a summary
+    that changed case or whitespace could not be joined back to its rows.
+    """
     value = item.get(name)
+    return value if isinstance(value, str) and value.strip() else ""
+
+
+def _direction_value(item: Mapping[str, Any]) -> str:
+    value = item.get("direction")
     return value.strip().upper() if isinstance(value, str) else ""
 
 
@@ -139,13 +153,13 @@ def reduce_forward_outcome(events: Sequence[Any]) -> ForwardOutcomeSummary:
         when = _ts(item.get("event_at"))
         if when is None:
             return ForwardOutcomeSummary(
-                thesis_id=item.get("thesis_id"),
+                thesis_id=_identity_value(item, "thesis_id") or None,
                 outcome=UNDETERMINED,
                 reasons=(f"event {index} has no timezone-aware event_at",),
             )
         if item.get("event_type") not in EVENT_TYPES:
             return ForwardOutcomeSummary(
-                thesis_id=item.get("thesis_id"),
+                thesis_id=_identity_value(item, "thesis_id") or None,
                 outcome=UNDETERMINED,
                 reasons=(
                     f"event {index} has unknown event_type {item.get('event_type')!r}",
@@ -153,7 +167,7 @@ def reduce_forward_outcome(events: Sequence[Any]) -> ForwardOutcomeSummary:
             )
         if item.get("setup_state") not in SETUP_STATES:
             return ForwardOutcomeSummary(
-                thesis_id=item.get("thesis_id"),
+                thesis_id=_identity_value(item, "thesis_id") or None,
                 outcome=UNDETERMINED,
                 reasons=(
                     f"event {index} has unknown setup_state {item.get('setup_state')!r}",
@@ -165,7 +179,7 @@ def reduce_forward_outcome(events: Sequence[Any]) -> ForwardOutcomeSummary:
         ticker = _identity_value(item, "ticker")
         setup_type = _identity_value(item, "setup_type")
         timeframe = _identity_value(item, "timeframe")
-        direction_value = _identity_value(item, "direction")
+        direction_value = _direction_value(item)
         if not all((thesis, session, ticker, setup_type, timeframe)):
             return ForwardOutcomeSummary(
                 thesis_id=thesis or None,
@@ -189,9 +203,10 @@ def reduce_forward_outcome(events: Sequence[Any]) -> ForwardOutcomeSummary:
         rows.append((when, index, item))
 
     if not rows:
+        # No evidence is not evidence of NO_SETUP: nothing was observed.
         return ForwardOutcomeSummary(
             thesis_id=None,
-            outcome="NO_SETUP",
+            outcome=UNDETERMINED,
             reasons=("no events",),
         )
     if len(thesis_ids) != 1:
