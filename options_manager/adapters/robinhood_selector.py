@@ -14,6 +14,10 @@ Boundary rules:
   * explicitly malformed/non-finite provider numbers are rejected before
     normalization can turn them into an indistinguishable ``None``;
   * genuinely missing values remain ``None`` and fail closed downstream;
+    a greek key present with ``null`` is rejected as ``missing_<greek>``,
+    never as corrupt;
+  * instrument ``state``/``tradability`` must be present; absent values are
+    rejected, never assumed active/tradable;
   * the quote's mark is preserved separately from planned entry premium,
     which this module never invents;
   * spread is NOT computed here -- the selector owns the shared definition;
@@ -56,6 +60,7 @@ _RAW_NUMERIC_KEYS: dict[str, tuple[str, ...]] = {
     "iv": ("implied_volatility", "iv"),
 }
 _INTEGER_PROVIDER_FIELDS = {"volume", "open_interest"}
+_GREEK_FIELDS = {"delta", "theta", "iv"}
 
 
 @dataclass(frozen=True)
@@ -120,6 +125,9 @@ def _raw_numeric_defect(payload: Mapping[str, Any]) -> Optional[tuple[str, str, 
                 break
         if not supplied:
             continue
+        if raw is None and name in _GREEK_FIELDS:
+            # A greek key carrying ``null`` is an absent value, not a corrupt one.
+            return (name, f"missing_{name}", f"provider {name} is null")
         if raw in (None, "") or isinstance(raw, bool):
             return (
                 name,
@@ -255,14 +263,22 @@ def build_selector_candidates(
                 f"instrument is {row_direction}, requested {direction}",
             )
             continue
-        if (
-            str(row.get("state") or "active").lower() != "active"
-            or str(row.get("tradability") or "tradable").lower() != "tradable"
-        ):
+        state = row.get("state")
+        tradability = row.get("tradability")
+        if state is None or str(state).strip() == "":
+            reject("missing_state", "instrument state is absent; not assumed active")
+            continue
+        if tradability is None or str(tradability).strip() == "":
             reject(
-                "not_tradable",
-                f"state={row.get('state')!r} tradability={row.get('tradability')!r}",
+                "missing_tradability",
+                "instrument tradability is absent; not assumed tradable",
             )
+            continue
+        if (
+            str(state).strip().lower() != "active"
+            or str(tradability).strip().lower() != "tradable"
+        ):
+            reject("not_tradable", f"state={state!r} tradability={tradability!r}")
             continue
         expiry = _parse_date(expiration)
         if expiry is None:
