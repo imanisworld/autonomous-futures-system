@@ -490,7 +490,6 @@ _SOURCE_SETUP = {
     "target": 19526.0,
     "rr_ratio": 2.2,
     "strategy": "orb_breakout",
-    "contracts": 1,
 }
 
 
@@ -516,6 +515,10 @@ def _arm_then_retest(cfg, monkeypatch):
 
 
 def _inverse_audits(log_dir) -> list[dict]:
+    # A bare 5m bar is dropped by the timeframe guard before anything is
+    # journaled, so "no journal at all" is a legitimate empty result here.
+    if not list(Path(log_dir).glob("journal_*.jsonl")):
+        return []
     return [
         row["mnq_orb_breakout_inverse_audit"]
         for row in _journal_rows(log_dir)
@@ -619,12 +622,14 @@ def test_five_min_retrigger_uses_epoch_scoped_balance_and_peak(
         paper_mode=False,
         max_drawdown_percent=0.20,
     )
+    # Pre-epoch only, and deep enough to trip the ALL-HISTORY gate: peak
+    # $5,410.75 against balance $3,910.75 is a 27.7% drawdown. Epoch-scoped
+    # accounting sees no outcomes at all, so it must read 0%.
     _write_outcomes(
         cfg.log_dir,
         [
             _outcome("2026-05-23T12:00:00+00:00", "WIN", 410.75),
-            _outcome("2026-05-23T12:15:00+00:00", "LOSS", -205.00),
-            _outcome("2026-05-23T12:30:00+00:00", "LOSS", -205.00),
+            _outcome("2026-05-23T12:30:00+00:00", "LOSS", -1_500.00),
         ],
     )
     retest = _arm_then_retest(cfg, monkeypatch)
