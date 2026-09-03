@@ -223,6 +223,7 @@ STALE_MINUTES_ENV = "AFS_WATCHER_STALE_MINUTES"
 CODE_MEMORY_CRITICAL = "MEMORY_CRITICAL"
 CODE_STATE_MALFORMED = "WATCHER_STATE_MALFORMED"
 CODE_STATE_STALE = "WATCHER_STATE_STALE"
+CODE_STATE_MISSING = "WATCHER_STATE_MISSING"
 
 
 def _latest_state_timestamp(state: dict[str, Any]) -> datetime | None:
@@ -265,18 +266,29 @@ def read_critical_memory_block(
       * ``MEMORY_CRITICAL``        — the watcher published CRITICAL (or a
         ``memory_critical`` BLOCKED entry).  Stays authoritative until the
         watcher writes a non-critical state, even if that state is stale.
+      * ``WATCHER_STATE_MISSING``   — no state file at all.  The watcher keeps
+        its state on tmpfs, so a reboot removes it; until the watcher is
+        re-armed and publishes a fresh tick, memory is unprotected and new
+        paper entries stay blocked.  Service startup is unaffected: this gate
+        is only consulted on the paper-entry path.
       * ``WATCHER_STATE_MALFORMED`` — the state file exists but is unreadable,
         not JSON, not an object, or carries no watcher timestamp.
       * ``WATCHER_STATE_STALE``    — the newest watcher timestamp is older than
         ``stale_after_minutes`` (default 30, env ``AFS_WATCHER_STALE_MINUTES``)
         or more than five minutes in the future: the watcher is dead or the
         clock is wrong, so memory is unprotected.
-    A MISSING state file returns None (legacy behaviour): the watcher keeps its
-    state on tmpfs, so a reboot legitimately removes it.
+    Only a present, parseable, fresh, non-critical state returns None.
     """
     path = Path(state_path or os.getenv("AFS_WATCHER_STATE_FILE", str(DEFAULT_WATCHER_STATE)))
     if not path.exists():
-        return None
+        return {
+            "level": "MISSING",
+            "code": CODE_STATE_MISSING,
+            "reason": (
+                f"afs-watcher state {path} does not exist; no fresh watcher tick "
+                "(watcher not armed since reboot?), failing closed"
+            ),
+        }
     try:
         state = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError, TypeError) as exc:

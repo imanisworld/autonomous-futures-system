@@ -220,6 +220,21 @@ def test_memory_critical_blocks_new_paper_entry(tmp_path, monkeypatch):
     assert result["reason"] == "derived headroom exhausted"
 
 
+def test_missing_watcher_state_blocks_new_paper_entry(tmp_path, monkeypatch):
+    monkeypatch.setenv("AFS_WATCHER_STATE_FILE", str(tmp_path / "no-watcher-state.json"))
+    result = process_alert(
+        _base_payload(),
+        config=_base_config(tmp_path),
+        log_dir=str(tmp_path / "logs"),
+        for_date=date(2026, 5, 23),
+    )
+
+    assert result["decision"] == "BLOCKED_WATCHER_STATE_MISSING"
+    assert result["failed_gates"] == ["WATCHER_STATE_MISSING"]
+    assert result["memory_guard"]["code"] == "WATCHER_STATE_MISSING"
+    assert "does not exist" in result["reason"]
+
+
 # ─── Scenario A: max_daily_loss ────────────────────────────────────────────────
 
 def test_scenario_a_max_daily_loss_blocks_after_large_loss(tmp_path):

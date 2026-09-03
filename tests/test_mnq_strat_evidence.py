@@ -182,6 +182,22 @@ def test_memory_critical_blocks_new_paper_position(
     assert "MEMORY_CRITICAL" in event["rejection_reason"]
 
 
+def test_missing_watcher_state_blocks_new_paper_position(
+    tmp_path, fresh_market_state, config, monkeypatch
+):
+    monkeypatch.setenv("AFS_WATCHER_STATE_FILE", str(tmp_path / "no-watcher-state.json"))
+    event = process_mnq_strat_evidence(
+        state=_state(fresh_market_state, "strat_22_reversal"),
+        cfg=_paper_cfg(config),
+        log_dir=tmp_path,
+        flatness_snapshot=FLAT,
+    )[0]
+
+    assert event["accepted"] is False
+    assert event["paper_order_id"] is None
+    assert "WATCHER_STATE_MISSING" in event["rejection_reason"]
+
+
 def test_absent_flatness_evidence_fails_structural_isolation_closed(
     tmp_path, fresh_market_state, config, monkeypatch
 ):

@@ -42,7 +42,9 @@ REMOTE_EXEC=remote
 deploy_memory_guard_check() {
   # Refuse while the watcher publishes CRITICAL, while its state is unreadable,
   # or while it has gone silent (stale > AFS_WATCHER_STALE_MINUTES, default 30).
-  # A MISSING state file is allowed (tmpfs is lost on reboot).
+  # A MISSING state file is allowed for deploys (tmpfs is lost on reboot, and
+  # service startup must not depend on the watcher); the paper-entry gate in
+  # ops.watcher_memory_guard fails closed on it until a fresh tick exists.
   local stale_minutes="${AFS_WATCHER_STALE_MINUTES:-30}"
   if ! remote "python3 - '$WATCHER_STATE' '$stale_minutes' <<'PY'
 import json, pathlib, sys

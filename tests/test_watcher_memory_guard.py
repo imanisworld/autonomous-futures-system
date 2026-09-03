@@ -8,6 +8,7 @@ from ops.watcher_memory_guard import (
     CODE_MEMORY_CRITICAL,
     CODE_STATE_MALFORMED,
     CODE_STATE_STALE,
+    CODE_STATE_MISSING,
 )
 
 
@@ -104,8 +105,13 @@ def test_blocked_memory_critical_entry_blocks_even_without_guard_level(tmp_path)
     assert block["code"] == CODE_MEMORY_CRITICAL and block["level"] == "CRITICAL"
 
 
-def test_missing_state_preserves_legacy_fail_open(tmp_path):
-    assert read_critical_memory_block(tmp_path / "missing.json", now=NOW) is None
+def test_missing_state_fails_closed(tmp_path, monkeypatch):
+    block = read_critical_memory_block(tmp_path / "missing.json", now=NOW)
+    assert block["code"] == CODE_STATE_MISSING and block["level"] == "MISSING"
+    assert "does not exist" in block["reason"]
+    # the default path (env override) is subject to the same rule
+    monkeypatch.setenv("AFS_WATCHER_STATE_FILE", str(tmp_path / "also-missing.json"))
+    assert read_critical_memory_block(now=NOW)["code"] == CODE_STATE_MISSING
 
 
 def test_malformed_state_fails_closed(tmp_path):
