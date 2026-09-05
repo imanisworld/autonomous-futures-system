@@ -25,6 +25,7 @@ CURRENT="${AFS_CURRENT_LINK:-/root/autonomous-futures-system}"
 SERVICE="${AFS_SERVICE:-futures-bot}"
 ROOT="$(git rev-parse --show-toplevel)"
 LOCK_DIR="$SHARED/deploy.lock"
+WATCHER_STATE="${AFS_WATCHER_STATE_FILE:-/tmp/afs_watcher/state.json}"
 
 # rollback takes no ref — let a bare --force-lock land in $2 for that action.
 if [[ "$ACTION" == "rollback" && "$REF" == "--force-lock" ]]; then
@@ -38,6 +39,41 @@ remote() {
 }
 REMOTE_EXEC=remote
 
+deploy_memory_guard_check() {
+  # Refuse while the watcher publishes CRITICAL, while its state is unreadable,
+  # or while it has gone silent (stale > AFS_WATCHER_STALE_MINUTES, default 30).
+  # A MISSING state file is allowed for deploys (tmpfs is lost on reboot, and
+  # service startup must not depend on the watcher); the paper-entry gate in
+  # ops.watcher_memory_guard fails closed on it until a fresh tick exists.
+  local stale_minutes="${AFS_WATCHER_STALE_MINUTES:-30}"
+  if ! remote "python3 - '$WATCHER_STATE' '$stale_minutes' <<'PY'
+import json, pathlib, sys
+from datetime import datetime, timezone
+path = pathlib.Path(sys.argv[1]); limit = float(sys.argv[2])
+if not path.is_file():
+    raise SystemExit(0)
+state = json.loads(path.read_text())
+if not isinstance(state, dict):
+    raise SystemExit(3)
+guard = state.get('memory_guard') or {}
+blocked = state.get('blocked') or {}
+if guard.get('level') == 'CRITICAL' or 'memory_critical' in blocked:
+    raise SystemExit(3)
+stamps = []
+for raw in (state.get('last_tick_utc'), ((guard.get('reading') or {}).get('observed_utc'))):
+    if isinstance(raw, str) and raw:
+        stamps.append(datetime.fromisoformat(raw.replace('Z', '+00:00')).astimezone(timezone.utc))
+if not stamps:
+    raise SystemExit(3)
+age = (datetime.now(timezone.utc) - max(stamps)).total_seconds() / 60.0
+raise SystemExit(4 if (age > limit or age < -5.0) else 0)
+PY"; then
+    echo "deployment refused: afs-watcher memory state is CRITICAL, unreadable, or stale (> ${stale_minutes} min) in $WATCHER_STATE" >&2
+    echo "wait for the watcher to publish a fresh non-critical state (or re-arm it) before deploying" >&2
+    return 1
+  fi
+}
+
 _require_exact_sha() {
   local value="${1:-}"
   if [[ ! "$value" =~ ^[0-9a-f]{40}$ ]]; then
@@ -47,6 +83,7 @@ _require_exact_sha() {
 }
 
 build_release() {
+  deploy_memory_guard_check || exit 1
   deploy_lock_acquire "$LOCK_DIR" "build $REF" "$0" "$FORCE_LOCK" || exit 1
   trap "deploy_lock_release '$LOCK_DIR' '$DEPLOY_LOCK_OWNER'" EXIT
 
@@ -87,6 +124,7 @@ build_release() {
 }
 
 verify_release() {
+  deploy_memory_guard_check || exit 1
   deploy_lock_acquire "$LOCK_DIR" "verify $REF" "$0" "$FORCE_LOCK" || exit 1
   trap "deploy_lock_release '$LOCK_DIR' '$DEPLOY_LOCK_OWNER'" EXIT
 
@@ -203,6 +241,7 @@ _promote_gate_check() {
 }
 
 promote_release() {
+  deploy_memory_guard_check || exit 1
   deploy_lock_acquire "$LOCK_DIR" "promote $REF" "$0" "$FORCE_LOCK" || exit 1
   trap "deploy_lock_release '$LOCK_DIR' '$DEPLOY_LOCK_OWNER'" EXIT
 
@@ -253,6 +292,9 @@ promote_release() {
 }
 
 rollback_release() {
+  # Deliberately NOT gated on the memory guard: rollback is the recovery path
+  # for a release that is itself the cause of memory pressure, so refusing it
+  # while the watcher says CRITICAL would lock the box into the bad release.
   deploy_lock_acquire "$LOCK_DIR" "rollback" "$0" "$FORCE_LOCK" || exit 1
   trap "deploy_lock_release '$LOCK_DIR' '$DEPLOY_LOCK_OWNER'" EXIT
 
