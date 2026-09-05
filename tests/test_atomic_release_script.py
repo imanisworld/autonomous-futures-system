@@ -1,4 +1,5 @@
 import os
+import json
 import re
 import subprocess
 from pathlib import Path
@@ -32,6 +33,87 @@ def test_atomic_release_tool_is_host_agnostic_and_three_phase():
 
 def test_atomic_release_script_parses_with_bash():
     subprocess.run(["bash", "-n", str(SCRIPT)], check=True)
+
+
+def test_deploy_memory_guard_refuses_critical_watcher_state(tmp_path):
+    state = tmp_path / "state.json"
+    state.write_text(json.dumps({"memory_guard": {"level": "CRITICAL"}}))
+    env = os.environ.copy()
+    env.update({"AFS_BOX": "unused", "AFS_WATCHER_STATE_FILE": str(state)})
+    command = f'''source "{SCRIPT.resolve()}"
+remote() {{ eval "$1"; }}
+deploy_memory_guard_check
+'''
+    result = subprocess.run(
+        ["bash", "-c", command],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 1
+    assert "memory state is CRITICAL, unreadable, or stale" in result.stderr
+
+
+def _guard_check(state_path, extra_env=None):
+    env = os.environ.copy()
+    env.update({"AFS_BOX": "unused", "AFS_WATCHER_STATE_FILE": str(state_path)})
+    env.update(extra_env or {})
+    command = f'''source "{SCRIPT.resolve()}"
+remote() {{ eval "$1"; }}
+deploy_memory_guard_check
+'''
+    return subprocess.run(["bash", "-c", command], env=env, capture_output=True, text=True)
+
+
+def _fresh_state(level="HEALTHY", age_minutes=1):
+    from datetime import datetime, timedelta, timezone
+    stamp = (datetime.now(timezone.utc) - timedelta(minutes=age_minutes)).isoformat()
+    return {"last_tick_utc": stamp, "memory_guard": {"level": level, "reading": {"observed_utc": stamp}}}
+
+
+def test_deploy_memory_guard_refuses_stale_or_malformed_state(tmp_path):
+    stale = tmp_path / "stale.json"
+    stale.write_text(json.dumps(_fresh_state(age_minutes=45)))
+    result = _guard_check(stale)
+    assert result.returncode == 1 and "stale" in result.stderr
+    malformed = tmp_path / "malformed.json"
+    malformed.write_text("{")
+    assert _guard_check(malformed).returncode == 1
+    not_object = tmp_path / "list.json"
+    not_object.write_text("[]")
+    assert _guard_check(not_object).returncode == 1
+
+
+def test_deploy_memory_guard_allows_fresh_healthy_state_and_honours_window(tmp_path):
+    fresh = tmp_path / "fresh.json"
+    fresh.write_text(json.dumps(_fresh_state(age_minutes=1)))
+    assert _guard_check(fresh).returncode == 0
+    older = tmp_path / "older.json"
+    older.write_text(json.dumps(_fresh_state(age_minutes=40)))
+    assert _guard_check(older).returncode == 1
+    assert _guard_check(older, {"AFS_WATCHER_STALE_MINUTES": "60"}).returncode == 0
+
+
+def test_deploy_memory_guard_allows_missing_or_healthy_state(tmp_path):
+    env = os.environ.copy()
+    env.update(
+        {
+            "AFS_BOX": "unused",
+            "AFS_WATCHER_STATE_FILE": str(tmp_path / "missing.json"),
+        }
+    )
+    command = f'''source "{SCRIPT.resolve()}"
+remote() {{ eval "$1"; }}
+deploy_memory_guard_check
+'''
+    result = subprocess.run(
+        ["bash", "-c", command],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 def test_release_actions_reject_moving_refs_and_require_exact_sha():
