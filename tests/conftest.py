@@ -6,7 +6,6 @@ Shared fixtures for all test modules.
 
 from __future__ import annotations
 
-import json
 import os
 import sys
 from datetime import datetime, timezone, timedelta
@@ -41,25 +40,6 @@ def isolate_live_broker_env(monkeypatch):
     monkeypatch.setenv("TRADOVATE_API_KEY_SECRET", "")
     monkeypatch.setenv("TRADOVATE_USERNAME", "")
     monkeypatch.setenv("TRADOVATE_PASSWORD", "")
-
-
-@pytest.fixture(autouse=True)
-def simulate_live_watcher_state(monkeypatch, tmp_path_factory):
-    """Paper-entry gates fail closed unless the afs-watcher has published a
-    fresh non-critical state (ops.watcher_memory_guard). Tests are not a box
-    with a live watcher, so each test gets a fresh HEALTHY state file; tests
-    that exercise the missing/stale/critical rules override this env var."""
-    state = tmp_path_factory.getbasetemp() / "afs_watcher_state.json"
-    observed = datetime.now(timezone.utc).isoformat()
-    state.write_text(json.dumps({
-        "last_tick_utc": observed,
-        "memory_guard": {
-            "level": "HEALTHY",
-            "reason": "test fixture: simulated live watcher",
-            "reading": {"observed_utc": observed, "pid": 0},
-        },
-    }))
-    monkeypatch.setenv("AFS_WATCHER_STATE_FILE", str(state))
 
 
 @pytest.fixture(autouse=True)

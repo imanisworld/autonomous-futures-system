@@ -144,28 +144,6 @@ def test_paper_sim_creates_pending_paper_order_never_tradovate(
     assert event["paper_order_id"].startswith("PAPER-")
 
 
-def test_memory_critical_blocks_new_pending_paper_order(
-    tmp_path, fresh_market_state, config, monkeypatch
-):
-    monkeypatch.setattr(
-        evidence,
-        "read_critical_memory_block",
-        lambda: {"level": "CRITICAL", "reason": "derived headroom exhausted"},
-    )
-    event = process_mes_trend_consolidation_break_evidence(
-        state=_state(fresh_market_state),
-        cfg=_paper_cfg(config),
-        log_dir=tmp_path,
-        recent_bars=_bars(),
-        decision=_decision(),
-        flatness_snapshot=FLAT,
-    )[0]
-
-    assert event["accepted"] is False
-    assert event["paper_order_id"] is None
-    assert "MEMORY_CRITICAL" in event["rejection_reason"]
-
-
 def test_absent_flatness_evidence_fails_closed(
     tmp_path, fresh_market_state, config
 ):

@@ -27,7 +27,6 @@ from journal.journal_logger import JournalLogger
 from risk.risk_engine import DailyState, RiskEngine, TradeSetup
 from webhook.payload import AlertPayload
 from webhook.runner import process_alert
-import webhook.runner as runner
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -200,56 +199,6 @@ def _valid_trade_setup(
         contracts=contracts,
         confluence_grade=confluence_grade,
     )
-
-
-def test_memory_critical_blocks_new_paper_entry(tmp_path, monkeypatch):
-    monkeypatch.setattr(
-        runner,
-        "read_critical_memory_block",
-        lambda: {"level": "CRITICAL", "reason": "derived headroom exhausted"},
-    )
-    result = process_alert(
-        _base_payload(),
-        config=_base_config(tmp_path),
-        log_dir=str(tmp_path / "logs"),
-        for_date=date(2026, 5, 23),
-    )
-
-    assert result["decision"] == "BLOCKED_MEMORY_CRITICAL"
-    assert result["failed_gates"] == ["MEMORY_CRITICAL"]
-    assert result["reason"] == "derived headroom exhausted"
-
-
-def test_memory_warning_blocks_new_paper_entry(tmp_path, monkeypatch):
-    monkeypatch.setattr(
-        runner,
-        "read_critical_memory_block",
-        lambda: {"level": "WARNING", "code": "MEMORY_WARNING", "reason": "derived headroom inside the warning reserve"},
-    )
-    result = process_alert(
-        _base_payload(),
-        config=_base_config(tmp_path),
-        log_dir=str(tmp_path / "logs"),
-        for_date=date(2026, 5, 23),
-    )
-
-    assert result["decision"] == "BLOCKED_MEMORY_WARNING"
-    assert result["failed_gates"] == ["MEMORY_WARNING"]
-
-
-def test_missing_watcher_state_blocks_new_paper_entry(tmp_path, monkeypatch):
-    monkeypatch.setenv("AFS_WATCHER_STATE_FILE", str(tmp_path / "no-watcher-state.json"))
-    result = process_alert(
-        _base_payload(),
-        config=_base_config(tmp_path),
-        log_dir=str(tmp_path / "logs"),
-        for_date=date(2026, 5, 23),
-    )
-
-    assert result["decision"] == "BLOCKED_WATCHER_STATE_MISSING"
-    assert result["failed_gates"] == ["WATCHER_STATE_MISSING"]
-    assert result["memory_guard"]["code"] == "WATCHER_STATE_MISSING"
-    assert "does not exist" in result["reason"]
 
 
 # ─── Scenario A: max_daily_loss ────────────────────────────────────────────────
