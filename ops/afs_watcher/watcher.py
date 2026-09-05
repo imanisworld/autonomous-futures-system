@@ -555,18 +555,50 @@ def check_runtime(state: dict, f: Findings, tick: dict) -> None:
         # for longer than one full 15-minute bar interval.  5-minute alerts
         # (:05/:10/...) only write tf5m/bar files; the journal advances on
         # 15-minute bars, so a single unchanged tick is normal, not a stall.
+        # The journal advances on the 15-MINUTE decision path only. A 5-minute
+        # alert with nothing armed returns FIVE_MIN_CONTEXT in webhook/runner.py
+        # BEFORE any decision is journaled -- it is recorded on the 5m lane
+        # (logs/tf5m/) instead. Counting every inbound alert therefore made this
+        # fire on any quiet stretch: 5m alerts keep arriving every 5 minutes
+        # while the 15m stream is legitimately idle (between bars, after the
+        # session's last 15m bar, or overnight), so alerts_since_advance climbs
+        # and stalled_min passes JOURNAL_STALL_MIN with nothing actually wrong.
+        # Observed 2026-09-03 22:06Z: "2 alerts received but journal unchanged
+        # for 60 min" while logs/tf5m/ was advancing normally and the feed-gap
+        # alarm independently reported both instruments healthy.
+        #
+        # A real stall is causal: a 15-MINUTE BAR ARRIVED and no journal row
+        # followed. 15m bar files live directly in LOG_DIR; 5m bars are under
+        # LOG_DIR/tf5m/, so this non-recursive glob deliberately excludes them.
+        try:
+            _bar_mtimes = [os.stat(b).st_mtime for b in LOG_DIR.glob("bars_*.jsonl")]
+            newest_bar_mtime = max(_bar_mtimes) if _bar_mtimes else 0.0
+        except OSError:
+            newest_bar_mtime = 0.0
+        rt["newest_15m_bar_mtime"] = (
+            iso(datetime.fromtimestamp(newest_bar_mtime, timezone.utc)) if newest_bar_mtime else None
+        )
         jp = state.get("journal_progress") or {}
         alerts_now = sum(posts.values())
         if jp.get("path") != str(newest) or st.st_size != jp.get("size") or st.st_mtime != jp.get("mtime"):
             jp = {"path": str(newest), "size": st.st_size, "mtime": st.st_mtime,
-                  "last_advanced_utc": iso(now_utc()), "alerts_since_advance": 0}
+                  "last_advanced_utc": iso(now_utc()), "alerts_since_advance": 0,
+                  "bar_mtime_at_advance": newest_bar_mtime}
+        jp.setdefault("bar_mtime_at_advance", newest_bar_mtime)
         jp["alerts_since_advance"] = int(jp.get("alerts_since_advance") or 0) + alerts_now
         state["journal_progress"] = jp
         last_adv = _ts(jp.get("last_advanced_utc"))
         stalled_min = (now_utc() - last_adv).total_seconds() / 60 if last_adv else 0.0
         rt["journal_stalled_min"] = round(stalled_min, 1)
-        if jp["alerts_since_advance"] > 0 and stalled_min > JOURNAL_STALL_MIN:
-            f.add("BLOCKED", "journal_not_advancing", f"{jp['alerts_since_advance']} alerts received but {newest.name} unchanged for {stalled_min:.0f} min (size {st.st_size})")
+        # Strictly greater: the 15m bar write and the journal row for that same
+        # bar happen within seconds of each other, so equality means "no new 15m
+        # bar since the journal last advanced".
+        bar_since_advance = newest_bar_mtime > float(jp.get("bar_mtime_at_advance") or 0.0)
+        rt["fifteen_min_bar_since_journal_advance"] = bar_since_advance
+        if jp["alerts_since_advance"] > 0 and stalled_min > JOURNAL_STALL_MIN and bar_since_advance:
+            f.add("BLOCKED", "journal_not_advancing",
+                  f"a 15m bar arrived but {newest.name} did not grow for {stalled_min:.0f} min "
+                  f"({jp['alerts_since_advance']} alerts since last advance, size {st.st_size})")
         # validate the last COMPLETE line (rows can exceed 4 KB; read a wide tail
         # and only judge a line that is fully contained in the window)
         tail = read_prod_bytes_tail(newest, 1_048_576)
@@ -1306,7 +1338,7 @@ def smallest_fix(key: str) -> str:
         "alert_non200": "operator: read the rejected alert lines in the snapshot (secret/rate-limit/payload)",
         "service_traceback": "operator: read the traceback in the snapshot; no fix is applied automatically",
         "evidence_write_error": "operator: check disk/permissions on /root/afs-shared/logs; see snapshot",
-        "journal_not_advancing": "operator: alerts arrive but the journal does not grow — check the service log in the snapshot",
+        "journal_not_advancing": "operator: a 15m bar arrived but the journal did not grow — real stall (5m-only traffic no longer triggers this); check the service log in the snapshot",
         "unexpected_broker_position": "operator: verify the demo account manually; the watcher never touches broker state",
         "post_epoch_wrong_sha": "operator: evidence provenance defect — quarantine the rows listed in the snapshot",
         "orb_reclaim_unpaired": "operator: pairing defect — audit the listed event_ids",
