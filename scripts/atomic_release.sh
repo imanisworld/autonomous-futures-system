@@ -292,7 +292,9 @@ promote_release() {
 }
 
 rollback_release() {
-  deploy_memory_guard_check || exit 1
+  # Deliberately NOT gated on the memory guard: rollback is the recovery path
+  # for a release that is itself the cause of memory pressure, so refusing it
+  # while the watcher says CRITICAL would lock the box into the bad release.
   deploy_lock_acquire "$LOCK_DIR" "rollback" "$0" "$FORCE_LOCK" || exit 1
   trap "deploy_lock_release '$LOCK_DIR' '$DEPLOY_LOCK_OWNER'" EXIT
 

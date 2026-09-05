@@ -116,6 +116,16 @@ deploy_memory_guard_check
     assert result.returncode == 0, result.stderr
 
 
+def test_memory_guard_gates_forward_actions_but_never_rollback():
+    text = SCRIPT.read_text()
+    gated = "deploy_memory_guard_check || exit 1"
+    for fn in ("build_release", "verify_release", "promote_release"):
+        body = text.split(f"{fn}() {{", 1)[1].split("\n}\n", 1)[0]
+        assert gated in body, fn
+    rollback_body = text.split("rollback_release() {", 1)[1].split("\n}\n", 1)[0]
+    assert "deploy_memory_guard_check" not in rollback_body
+
+
 def test_release_actions_reject_moving_refs_and_require_exact_sha():
     repo_root = SCRIPT.parent.parent.resolve()
     env = os.environ.copy()
