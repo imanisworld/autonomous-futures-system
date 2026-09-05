@@ -42,4 +42,8 @@ NOT started. If a tmux-supervised watcher is still running, stop it first:
 Then start the service:
   systemctl start afs-watcher.service
   systemctl status afs-watcher.service
+If afs-watcher.service was ALREADY running, it is still executing the previous
+watcher.py from /tmp/afs_watcher; the files installed here are adopted only on
+  systemctl restart afs-watcher.service
+(bootstrap_tmp_state.sh re-copies them into /tmp on every start).
 MSG

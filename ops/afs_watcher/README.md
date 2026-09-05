@@ -24,4 +24,7 @@ does not survive a reboot.
 `/root/afs-shared/afs_watcher_src/`, installs and enables the systemd unit).
 It must be run manually, as root, after stopping the tmux-supervised watcher
 (`tmux kill-session -t afs-watcher`) to avoid two supervisors racing on the
-same state file. It does not start the service.
+same state file. It does not start the service. Re-running it on a box where
+the unit is already installed is idempotent, but the running watcher keeps
+executing the old `/tmp/afs_watcher/watcher.py` until
+`systemctl restart afs-watcher.service` (bootstrap re-copies on start).
