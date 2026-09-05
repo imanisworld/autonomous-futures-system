@@ -316,6 +316,15 @@ def build_market_state(payload: AlertPayload) -> MarketState:
         orb_h = payload.high
         orb_l = payload.low
         orb_status_val = "undefined"
+    elif session != "new_york":
+        # Pine never clears orb_high/orb_low: the NY opening range stays on
+        # every payload until the next NY open, so in the Asian session it is
+        # the PREVIOUS day's 09:30 bar (2026-09-04: a 15h-old range ~250 pts
+        # below price produced five detached orb_breakout setups). No ORB
+        # exists outside NY/London — fail closed like the London branch.
+        orb_h = payload.high
+        orb_l = payload.low
+        orb_status_val = "undefined"
     elif payload.orb_high is not None:
         orb_h = payload.orb_high
         orb_l = payload.orb_low if payload.orb_low is not None else payload.low
@@ -352,6 +361,8 @@ def build_market_state(payload: AlertPayload) -> MarketState:
         timestamp=ts,
         instrument=instrument,
         session=session,
+        previous_bar_high=payload.previous_bar_high,
+        previous_bar_low=payload.previous_bar_low,
         price=PriceData(last=payload.close, bid=payload.close, ask=payload.close),
         ohlc=OHLCData(
             open=payload.open,

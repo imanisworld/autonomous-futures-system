@@ -1071,6 +1071,12 @@ class ReplayEngine:
             orb_high = candle.high
             orb_low = candle.low
             orb_status = "undefined"
+        elif candle.session != "new_york":
+            # Mirrors webhook/state_builder.py: the persisted NY range is a
+            # prior session's outside NY/London, so no ORB exists there.
+            orb_high = candle.high
+            orb_low = candle.low
+            orb_status = "undefined"
         else:
             orb_high = candle.orb_high
             orb_low = candle.orb_low
@@ -1079,6 +1085,8 @@ class ReplayEngine:
             timestamp=_parse_timestamp(candle.timestamp),
             instrument=candle.instrument,
             session=candle.session,
+            previous_bar_high=candle.previous_bar_high,
+            previous_bar_low=candle.previous_bar_low,
             price=PriceData(last=candle.close, bid=candle.close, ask=candle.close),
             ohlc=OHLCData(
                 open=candle.open,
