@@ -39,19 +39,141 @@ from zoneinfo import ZoneInfo
 from watcher_memory_guard import MemoryReading, evaluate_memory, sample_process_memory
 
 # ── fixed facts ──────────────────────────────────────────────────────────────
-RELEASE_SHA = "b3d72f87d53409289cbd2f1499eda6baa7737b47"
-EPOCH = datetime(2026, 9, 2, 1, 15, 19, tzinfo=timezone.utc)
-INTERIM_AT = EPOCH + timedelta(days=14)          # 2026-09-16T01:15:19Z
 RELEASE_LINK = Path("/root/autonomous-futures-system")
-RELEASE_DIR = Path(f"/root/afs-releases/{RELEASE_SHA}")
 SHARED = Path("/root/afs-shared")
 LOG_DIR = SHARED / "logs"
 ENV_FILE = SHARED / ".env"
+
+# The release and epoch this watcher checks against are NOT literals. They used
+# to be, and nothing in the deploy path updated them: every sanctioned release
+# left the watcher reporting BLOCKED until someone hand-edited this file and
+# restarted the unit. An alarm that fires on every correct deploy is one people
+# learn to clear without reading.
+#
+# The release wrapper already pins its identity into the shared .env during the
+# atomic promote (EXPECTED_LIVE_COMMIT, EXPECTED_RELEASE_FINGERPRINT) and the
+# epoch step pins the evidence window twice. Those pins are the authoritative
+# deploy-written record, so reading them here means a sanctioned deploy re-arms
+# this watcher by doing what it already does. A deploy that bypasses the wrapper
+# does not re-pin, so it still BLOCKS — which is the whole reason this runs.
+COMMIT_PIN = "EXPECTED_LIVE_COMMIT"
+FINGERPRINT_PIN = "EXPECTED_RELEASE_FINGERPRINT"
+EPOCH_PIN = "MNQ_ORB_BREAKOUT_INVERSE_EPOCH_START"
+EPOCH_PROOF_PIN = "EXPECTED_PROOF_MNQ_ORB_BREAKOUT_INVERSE_EPOCH_START"
+
+
+def read_env_pins(env_path: Path) -> dict[str, str]:
+    """Parse `KEY=VALUE` lines. Later assignments win, matching shell `.env`."""
+    values: dict[str, str] = {}
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        if key:
+            values[key] = value.strip().strip("'\"")
+    return values
+
+
+def load_deploy_pins(env_path: Path) -> tuple[dict[str, str] | None, str | None]:
+    """Read the deploy's pinned identity. Returns `(None, reason)` on any doubt.
+
+    The two epoch pins must agree: the service's own startup guard refuses to
+    boot when they diverge, so a divergence seen here means one was rewritten
+    while the service was already running.
+    """
+    try:
+        values = read_env_pins(env_path)
+    except OSError as exc:
+        return None, f"cannot read the deploy's pinned identity at {env_path}: {exc}"
+
+    wanted = (COMMIT_PIN, FINGERPRINT_PIN, EPOCH_PIN, EPOCH_PROOF_PIN)
+    missing = [k for k in wanted if not values.get(k)]
+    if missing:
+        return None, f"deploy pins missing or blank in {env_path}: {', '.join(missing)}"
+    if values[EPOCH_PIN] != values[EPOCH_PROOF_PIN]:
+        return None, (f"epoch pins disagree: {EPOCH_PIN}={values[EPOCH_PIN]} but "
+                      f"{EPOCH_PROOF_PIN}={values[EPOCH_PROOF_PIN]} — the startup "
+                      "guard would refuse to boot on this configuration")
+    try:
+        datetime.strptime(values[EPOCH_PIN], "%Y-%m-%dT%H:%M:%SZ")
+    except ValueError:
+        return None, f"{EPOCH_PIN}={values[EPOCH_PIN]!r} is not an ISO-8601 UTC instant"
+    return {k: values[k] for k in wanted}, None
+
+
+def manifest_identity(release_dir: Path) -> tuple[str | None, str | None]:
+    """`(commit, fingerprint)` from a release manifest; `None` on any failure."""
+    try:
+        data = json.loads((release_dir / "release_manifest.json").read_text(encoding="utf-8"))
+        repo = data.get("repo")
+        commit = repo.get("commit") if isinstance(repo, dict) else None
+        fingerprint = data.get("fingerprint_sha256")
+    except (OSError, ValueError, AttributeError):
+        return None, None
+    return (commit if isinstance(commit, str) else None,
+            fingerprint if isinstance(fingerprint, str) else None)
+
+
+def resolve_release_dir(link: Path, pins: dict[str, str]) -> tuple[Path | None, str | None]:
+    """Resolve the release link, then VERIFY it before it is ever used.
+
+    Resolve-then-verify, and only once: this directory is where the watcher
+    executes a Python interpreter from, so it must never follow a link to
+    something the deploy did not pin. A directory whose manifest does not match
+    both the pinned commit and the pinned fingerprint is refused outright rather
+    than adopted and reported on — being wrong about which release is live is
+    the one error this process cannot recover from.
+    """
+    try:
+        resolved = Path(os.path.realpath(link))
+    except OSError as exc:
+        return None, f"cannot resolve release link {link}: {exc}"
+    if not resolved.is_dir():
+        return None, f"release link {link} does not resolve to a directory ({resolved})"
+
+    commit, fingerprint = manifest_identity(resolved)
+    if commit is None or fingerprint is None:
+        return None, f"release manifest under {resolved} is unreadable — cannot verify identity"
+    if not _sha_match(commit, pins[COMMIT_PIN]):
+        return None, (f"release at {resolved} is commit {commit[:12]}, but the deploy "
+                      f"pinned {pins[COMMIT_PIN][:12]} — refusing to run against an "
+                      "unpinned release")
+    if fingerprint.strip().lower() != pins[FINGERPRINT_PIN].strip().lower():
+        return None, (f"release at {resolved} has fingerprint {fingerprint[:16]}…, but the "
+                      f"deploy pinned {pins[FINGERPRINT_PIN][:16]}… — source does not match "
+                      "the pinned release")
+    return resolved, None
+
+
+def _sha_match(a: str, b: str) -> bool:
+    """Compare commit ids recorded at different lengths; never on a colliding prefix."""
+    a, b = a.strip().lower(), b.strip().lower()
+    n = min(len(a), len(b))
+    return bool(a) and bool(b) and n >= 12 and a[:n] == b[:n]
+
+
+# Resolved once, at import, and then treated as fixed for the life of the
+# process. `main()` refuses to start when either is unresolved, so every use
+# below runs against a release the deploy pinned and this process verified.
+DEPLOY_PINS, PINS_ERROR = load_deploy_pins(ENV_FILE)
+if DEPLOY_PINS is not None:
+    RELEASE_DIR, RELEASE_ERROR = resolve_release_dir(RELEASE_LINK, DEPLOY_PINS)
+    RELEASE_SHA = DEPLOY_PINS[COMMIT_PIN]
+    RELEASE_FINGERPRINT = DEPLOY_PINS[FINGERPRINT_PIN]
+    EPOCH = datetime.strptime(DEPLOY_PINS[EPOCH_PIN], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    INTERIM_AT = EPOCH + timedelta(days=14)
+else:
+    RELEASE_DIR, RELEASE_ERROR = None, PINS_ERROR
+    RELEASE_SHA = RELEASE_FINGERPRINT = ""
+    EPOCH = INTERIM_AT = None
+
 CAMPAIGN_ID = "forward_ab_2026_08_v1"
 CAMPAIGN_JSONL = LOG_DIR / f"{CAMPAIGN_ID}.jsonl"
 CAMPAIGN_STATE = LOG_DIR / f"{CAMPAIGN_ID}_state.json"
 FEED_STATE = LOG_DIR / "feed_gap_alarm_state.json"
-CAMPAIGN_CONFIG = RELEASE_DIR / "config" / "forward_evidence_campaign.json"
+CAMPAIGN_CONFIG = (RELEASE_DIR / "config" / "forward_evidence_campaign.json") if RELEASE_DIR else None
 EXPECTED_POPULATIONS = [
     ("vwap_hold", "control"), ("vwap_hold", "modified"),
     ("orb_reclaim", "control"), ("orb_reclaim", "modified"),
@@ -179,8 +301,12 @@ def log(msg: str) -> None:
 
 def run(cmd: list[str], timeout: int = 60, env: dict | None = None, cwd: str | None = None) -> tuple[int, str]:
     exe = os.path.basename(cmd[0])
-    if exe not in READ_ONLY_COMMANDS and not cmd[0].startswith(str(RELEASE_DIR / ".venv")):
-        raise RuntimeError(f"command not in read-only allowlist: {cmd}")
+    if exe not in READ_ONLY_COMMANDS:
+        # Only the interpreter inside the VERIFIED release may run. With no
+        # verified release there is no such path, so this refuses everything
+        # outside the read-only allowlist rather than falling back.
+        if RELEASE_DIR is None or not cmd[0].startswith(str(RELEASE_DIR / ".venv")):
+            raise RuntimeError(f"command not in read-only allowlist: {cmd}")
     if exe == "systemctl" and cmd[1] not in ("show", "is-active", "list-units"):
         raise RuntimeError(f"systemctl verb not allowed: {cmd}")
     try:
@@ -301,8 +427,29 @@ def check_runtime(state: dict, f: Findings, tick: dict) -> None:
     except Exception as exc:  # noqa: BLE001
         rt["release_link"] = None
         f.add("BLOCKED", "release_link_unreadable", f"cannot resolve {RELEASE_LINK}: {exc}")
+    live_pins, live_pins_err = load_deploy_pins(ENV_FILE)
+    rt["deploy_pins_error"] = live_pins_err
+    if live_pins is None:
+        f.add("BLOCKED", "deploy_pins_unreadable",
+              f"the deploy's pinned identity is unusable, so nothing can be verified: {live_pins_err}")
+    elif live_pins[EPOCH_PIN] != iso(EPOCH):
+        f.add("BLOCKED", "epoch_drift",
+              f"evidence epoch pin is now {live_pins[EPOCH_PIN]}, but this watcher was armed "
+              f"for {iso(EPOCH)} — the evidence window was redefined under a running watcher")
+
     if rt.get("release_link") and rt["release_link"] != str(RELEASE_DIR):
-        f.add("BLOCKED", "unexpected_deploy", f"release symlink now → {rt['release_link']} (expected {RELEASE_SHA[:7]})")
+        live_commit, _ = manifest_identity(Path(rt["release_link"]))
+        if live_pins is not None and live_commit and _sha_match(live_commit, live_pins[COMMIT_PIN]):
+            # Sanctioned: the wrapper promoted and re-pinned. This process still
+            # executes from the release it verified at startup, so it must be
+            # restarted to adopt the new one — it must not follow the link.
+            f.add("BLOCKED", "watcher_release_stale",
+                  f"a sanctioned release is live ({live_commit[:12]}) but this watcher is still "
+                  f"armed for {RELEASE_SHA[:12]}; restart the watcher to adopt it")
+        else:
+            f.add("BLOCKED", "unexpected_deploy",
+                  f"release symlink now → {rt['release_link']}, which the deploy did not pin "
+                  f"(armed for {RELEASE_SHA[:12]})")
 
     rc, out = run(["systemctl", "show", SERVICE, "-p", "ActiveState", "-p", "SubState", "-p", "ExecMainPID",
                    "-p", "NRestarts", "-p", "ActiveEnterTimestamp"])
@@ -408,18 +555,50 @@ def check_runtime(state: dict, f: Findings, tick: dict) -> None:
         # for longer than one full 15-minute bar interval.  5-minute alerts
         # (:05/:10/...) only write tf5m/bar files; the journal advances on
         # 15-minute bars, so a single unchanged tick is normal, not a stall.
+        # The journal advances on the 15-MINUTE decision path only. A 5-minute
+        # alert with nothing armed returns FIVE_MIN_CONTEXT in webhook/runner.py
+        # BEFORE any decision is journaled -- it is recorded on the 5m lane
+        # (logs/tf5m/) instead. Counting every inbound alert therefore made this
+        # fire on any quiet stretch: 5m alerts keep arriving every 5 minutes
+        # while the 15m stream is legitimately idle (between bars, after the
+        # session's last 15m bar, or overnight), so alerts_since_advance climbs
+        # and stalled_min passes JOURNAL_STALL_MIN with nothing actually wrong.
+        # Observed 2026-09-03 22:06Z: "2 alerts received but journal unchanged
+        # for 60 min" while logs/tf5m/ was advancing normally and the feed-gap
+        # alarm independently reported both instruments healthy.
+        #
+        # A real stall is causal: a 15-MINUTE BAR ARRIVED and no journal row
+        # followed. 15m bar files live directly in LOG_DIR; 5m bars are under
+        # LOG_DIR/tf5m/, so this non-recursive glob deliberately excludes them.
+        try:
+            _bar_mtimes = [os.stat(b).st_mtime for b in LOG_DIR.glob("bars_*.jsonl")]
+            newest_bar_mtime = max(_bar_mtimes) if _bar_mtimes else 0.0
+        except OSError:
+            newest_bar_mtime = 0.0
+        rt["newest_15m_bar_mtime"] = (
+            iso(datetime.fromtimestamp(newest_bar_mtime, timezone.utc)) if newest_bar_mtime else None
+        )
         jp = state.get("journal_progress") or {}
         alerts_now = sum(posts.values())
         if jp.get("path") != str(newest) or st.st_size != jp.get("size") or st.st_mtime != jp.get("mtime"):
             jp = {"path": str(newest), "size": st.st_size, "mtime": st.st_mtime,
-                  "last_advanced_utc": iso(now_utc()), "alerts_since_advance": 0}
+                  "last_advanced_utc": iso(now_utc()), "alerts_since_advance": 0,
+                  "bar_mtime_at_advance": newest_bar_mtime}
+        jp.setdefault("bar_mtime_at_advance", newest_bar_mtime)
         jp["alerts_since_advance"] = int(jp.get("alerts_since_advance") or 0) + alerts_now
         state["journal_progress"] = jp
         last_adv = _ts(jp.get("last_advanced_utc"))
         stalled_min = (now_utc() - last_adv).total_seconds() / 60 if last_adv else 0.0
         rt["journal_stalled_min"] = round(stalled_min, 1)
-        if jp["alerts_since_advance"] > 0 and stalled_min > JOURNAL_STALL_MIN:
-            f.add("BLOCKED", "journal_not_advancing", f"{jp['alerts_since_advance']} alerts received but {newest.name} unchanged for {stalled_min:.0f} min (size {st.st_size})")
+        # Strictly greater: the 15m bar write and the journal row for that same
+        # bar happen within seconds of each other, so equality means "no new 15m
+        # bar since the journal last advanced".
+        bar_since_advance = newest_bar_mtime > float(jp.get("bar_mtime_at_advance") or 0.0)
+        rt["fifteen_min_bar_since_journal_advance"] = bar_since_advance
+        if jp["alerts_since_advance"] > 0 and stalled_min > JOURNAL_STALL_MIN and bar_since_advance:
+            f.add("BLOCKED", "journal_not_advancing",
+                  f"a 15m bar arrived but {newest.name} did not grow for {stalled_min:.0f} min "
+                  f"({jp['alerts_since_advance']} alerts since last advance, size {st.st_size})")
         # validate the last COMPLETE line (rows can exceed 4 KB; read a wide tail
         # and only judge a line that is fully contained in the window)
         tail = read_prod_bytes_tail(newest, 1_048_576)
@@ -1159,7 +1338,7 @@ def smallest_fix(key: str) -> str:
         "alert_non200": "operator: read the rejected alert lines in the snapshot (secret/rate-limit/payload)",
         "service_traceback": "operator: read the traceback in the snapshot; no fix is applied automatically",
         "evidence_write_error": "operator: check disk/permissions on /root/afs-shared/logs; see snapshot",
-        "journal_not_advancing": "operator: alerts arrive but the journal does not grow — check the service log in the snapshot",
+        "journal_not_advancing": "operator: a 15m bar arrived but the journal did not grow — real stall (5m-only traffic no longer triggers this); check the service log in the snapshot",
         "unexpected_broker_position": "operator: verify the demo account manually; the watcher never touches broker state",
         "post_epoch_wrong_sha": "operator: evidence provenance defect — quarantine the rows listed in the snapshot",
         "orb_reclaim_unpaired": "operator: pairing defect — audit the listed event_ids",
@@ -1360,6 +1539,15 @@ def sleep_until_next_slot() -> None:
 
 
 def main(argv: list[str]) -> int:
+    if DEPLOY_PINS is None or RELEASE_DIR is None:
+        sys.stderr.write(
+            "refusing to start: cannot establish what the box should be running.\n"
+            f"  {RELEASE_ERROR}\n"
+            "A watcher that cannot state its expectation would report OK for a box\n"
+            "it never verified, which reads as coverage. Fix the pins or the release\n"
+            "link, then start it again.\n"
+        )
+        return 4
     static_selfcheck()
     _ensure_dirs()
     lock_fd = os.open(STATE_DIR / "lock", os.O_RDWR | os.O_CREAT, 0o600)
