@@ -237,6 +237,11 @@ class MarketState:
     htf: Optional[HTFContext] = None
     sd: Optional[SupplyDemandData] = None
     key_levels: Optional[KeyLevels] = None
+    # Range of the immediately preceding bar (Pine's previous_bar_high/low on the
+    # live path, the candle's own fields on replay). Lets a level strategy tell a
+    # fresh break from a bar that merely remains beyond an old level.
+    previous_bar_high: Optional[float] = None
+    previous_bar_low: Optional[float] = None
     # Direction of recent close-to-close price action over a window of prior bars
     # (UP/DOWN/None), from context.bar_history. Populated on the LIVE ingest path
     # only (the replay/test paths leave it None → no behavior change there). Lets

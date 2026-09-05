@@ -117,6 +117,7 @@ def test_confirmed_trade_result_and_journal_carry_event_id(config, tmp_path):
         open=5885.0, high=5901.0, low=5880.0, close=5900.0,
         volume=5000, avg_volume=3800, vwap=5895.0,
         orb_high=5898.0, orb_low=5862.0, orb_status="above",
+        previous_bar_high=5899.0, previous_bar_low=5890.0,
         previous_day_high=5920.0, previous_day_low=5840.0, previous_day_close=5875.0,
         event_id="evt-mes-orb-1",
     )
@@ -149,6 +150,7 @@ def test_event_id_does_not_change_decision_or_routing(config, tmp_path):
         open=5885.0, high=5901.0, low=5880.0, close=5900.0,
         volume=5000, avg_volume=3800, vwap=5895.0,
         orb_high=5898.0, orb_low=5862.0, orb_status="above",
+        previous_bar_high=5899.0, previous_bar_low=5890.0,
         previous_day_high=5920.0, previous_day_low=5840.0, previous_day_close=5875.0,
     )
 

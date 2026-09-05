@@ -55,6 +55,10 @@ def _base_payload(**overrides) -> AlertPayload:
         "current_bar_type": "two_up",
         "previous_bar_type": "inside_bar",
         "two_bars_back_type": "two_up",
+        # previous bar still traded at the ORB high: an orb_breakout built on
+        # this payload is a fresh break, not a bar merely remaining above
+        "previous_bar_high": 19500.0,
+        "previous_bar_low": 19490.0,
     }
     data.update(overrides)
     return AlertPayload(**data)
@@ -460,6 +464,8 @@ def test_runner_trending_orb_breakout_mes_produces_trade(config, tmp_path):
         orb_high=5898.0,
         orb_low=5862.0,
         orb_status="above",
+        previous_bar_high=5899.0,
+        previous_bar_low=5890.0,
         previous_day_high=5920.0,
         previous_day_low=5840.0,
         previous_day_close=5875.0,
@@ -504,6 +510,8 @@ def test_runner_logs_exec_trace_around_broker_call(config, tmp_path, caplog):
         orb_high=5898.0,
         orb_low=5862.0,
         orb_status="above",
+        previous_bar_high=5899.0,
+        previous_bar_low=5890.0,
         previous_day_high=5920.0,
         previous_day_low=5840.0,
         previous_day_close=5875.0,
@@ -541,6 +549,7 @@ def _mes_orb_payload() -> AlertPayload:
         ticker="MES1!", open=5885.0, high=5901.0, low=5880.0, close=5900.0,
         volume=5000, avg_volume=3800, vwap=5895.0,
         orb_high=5898.0, orb_low=5862.0, orb_status="above",
+        previous_bar_high=5899.0, previous_bar_low=5890.0,
         previous_day_high=5920.0, previous_day_low=5840.0, previous_day_close=5875.0,
     )
 

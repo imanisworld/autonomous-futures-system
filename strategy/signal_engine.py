@@ -1929,9 +1929,20 @@ class DecisionEngine:
         Entry just beyond ORB boundary, stop just inside, target 2.2R.
         Only fires once per direction per day (orb_continuation_blocked gates repeats).
         GEX gate: skipped in positive gamma regime (MMs compress ORB breaks).
+        Fresh only: the previous bar must still have traded at the boundary.
         """
         if not self._gex_allows_orb(state):
             return None
+
+        # "above"/"below" are PERSISTENT states — Pine reports them on every
+        # bar whose close stays beyond the range (the crossing bar itself is
+        # reclaimed_*, which belongs to orb_reclaim). On their own they re-emit
+        # this setup for hours after the break at an entry far from the market
+        # (2026-08-25..09-04: 44/44 orb_breakout setups ENTRY_DETACHED). A
+        # breakout is fresh only if the previous bar still traded at or beyond
+        # the boundary it is breaking; an unknown previous bar fails closed.
+        prev_low = state.previous_bar_low
+        prev_high = state.previous_bar_high
 
         tick = self.TICK_SIZE.get(state.instrument, 0.25)
         max_stop_ticks = self.MAX_ORB_STOP_TICKS.get(state.instrument, 80)
@@ -1941,6 +1952,8 @@ class DecisionEngine:
         orb_stop_off = tick * float(self.config.orb_stop_ticks.get(state.instrument, 8))
 
         if state.orb.status == "above":
+            if prev_low is None or prev_low > state.orb.high:
+                return None
             if state.vwap.price_vs_vwap != "above":
                 return None
             if not (state.trend and state.trend.direction == "UP"):
@@ -1971,6 +1984,8 @@ class DecisionEngine:
             )
 
         if state.orb.status == "below":
+            if prev_high is None or prev_high < state.orb.low:
+                return None
             if state.vwap.price_vs_vwap != "below":
                 return None
             if not (state.trend and state.trend.direction == "DOWN"):
