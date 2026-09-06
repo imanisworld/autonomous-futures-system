@@ -6,11 +6,11 @@ _As of 2026-09-06. This is the single current futures handoff. Do not recreate c
 
 **PAPER ONLY / COLLECTION CONTINUES / NO IMMEDIATE REPAIR REQUIRED.**
 
-The current futures system is not fully strategy-validated, but the active paper collection/runtime lane has no newly confirmed blocker from the latest audit. Recent work closed the real Pine ORB parity defects, reduced VPS memory pressure, and merged the Tradovate exact-account routing guard into the repository. The remaining Tradovate step is operational activation later, not more development.
+The current futures system is not fully strategy-validated, but the active paper collection/runtime lane has no newly confirmed blocker from the latest audit. Recent work closed the Pine ORB parity defects, the 5-minute-native replay routing parity defect, reduced VPS memory pressure, and merged the Tradovate exact-account routing guard into the repository. The remaining Tradovate step is operational activation later, not more development.
 
 ## Current repo vs deployed runtime
 
-- Repository `main`: `48037967ff40a722d247f0cc22be474d06d28b4a` (`48037967`) after merged PR #374.
+- Repository `main`: `95d1eb8621f1df70c12334f8c013695d17fa39ff` (`95d1eb86`) after merged PR #472.
 - Running `futures-bot` remains on the previously proven deployed release `73bffb1`; do not assume repo `main` changes are on the bot until a separate pinned deploy is performed.
 - The watcher-only #466 rollout did not redeploy `futures-bot`.
 - Latest verified bot state from the current maintenance pass: service healthy, health endpoint 200, no restart/crash-loop issue reported.
@@ -45,6 +45,19 @@ Operational TradingView refresh is complete:
 
 Already fixed on current repo code before this maintenance pass. The explicit replay regression populates `window_direction` and proves the effective-condition parity behavior. No new CHOPPY patch was made. Do not reopen it without a new reproducible failure.
 
+### 5-minute-native replay routing parity
+
+PR #472 fixed the remaining replay-state mismatch for the direct 5-minute-native strategies.
+
+- Live already sets `state.canonical_4hr_only = True` for direct 5-minute requests when `strat_4hr_retrigger` or `strat_322_first_live` is enabled.
+- Replay already populated the same `bar_history_5m`, but previously left `canonical_4hr_only` false.
+- Replay now sets canonical mode per candle only when the replay contract explicitly declares `expected_timeframe_minutes == 5`, one of the two 5m-native strategies is enabled, and the current candle itself is tagged 5m.
+- Normal 15m replay is explicitly protected from flag leakage.
+- Focused regressions cover both 4HR Re-Trigger and 3-2-2 First Live plus 15m/incidental-5m negative controls.
+- Current-main merge-candidate CI: **4664 passed, 6 skipped, 0 failures**.
+
+This repair changes replay/evidence tooling only. It does not make either strategy validated and does not justify loosening their existing evidence classifications.
+
 ### Tradovate exact account routing — repository fix complete
 
 PR #374 was refreshed onto current main, re-audited, tested, and merged as `48037967`.
@@ -58,7 +71,7 @@ The merged guard:
 - fails closed before order submission if the pinned account balance cannot be verified as positive;
 - adds the account-routing cancellations to the existing no-fill taxonomy.
 
-Current-main merge-candidate CI: **4660 passed, 6 skipped, 0 failures**.
+Current-main merge-candidate CI for that repair: **4660 passed, 6 skipped, 0 failures**.
 
 **Important:** this code is merged but not yet deployed to the running bot, and `TRADOVATE_EXPECTED_ACCOUNT_ID` is not yet set on the VPS. That is intentionally deferred. No Tradovate reconnect, credential recreation, or account setup is required. Later, read the bot's existing intended demo account id from the VPS/Tradovate account list, pin that same id, deploy the already-merged code, and verify it. Do not guess an account id.
 
