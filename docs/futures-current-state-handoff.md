@@ -1,158 +1,140 @@
 # Futures — Current State Handoff
 
-_As of 2026-09-02. This is the single current handoff. Do not recreate completed audits or reopen strategy work unless new evidence proves a defect._
+_As of 2026-09-06. This is the single current futures handoff. Do not recreate completed audits, redo merged fixes, or reopen strategy work unless new evidence proves a defect._
 
 ## Verdict
 
-**PAPER COLLECTION GO / STRATEGY VALIDATION WAIT.**
+**PAPER ONLY / COLLECTION CONTINUES / NO IMMEDIATE REPAIR REQUIRED.**
 
-The futures collection stack is running on deployed release `b3d72f8`. A VPS OOM incident exposed a real infrastructure blocker; persistent swap and additive alert-only memory monitoring are now installed and the current runtime verdict is **MEMORY STABLE**. No strategy logic, risk rules, broker routing, campaign definitions, or deployed futures release were changed by the memory work.
+The current futures system is not fully strategy-validated, but the active paper collection/runtime lane has no newly confirmed blocker from the latest audit. Recent work closed the real Pine ORB parity defects, reduced VPS memory pressure, and merged the Tradovate exact-account routing guard into the repository. The remaining Tradovate step is operational activation later, not more development.
 
-There is still no basis to call any collection strategy validated. At the last check, no new post-epoch campaign candidate/outcome rows had appeared, so strategy evidence remains a natural-data wait.
+## Current repo vs deployed runtime
 
-## Current deployed/runtime state
+- Repository `main`: `48037967ff40a722d247f0cc22be474d06d28b4a` (`48037967`) after merged PR #374.
+- Running `futures-bot` remains on the previously proven deployed release `73bffb1`; do not assume repo `main` changes are on the bot until a separate pinned deploy is performed.
+- The watcher-only #466 rollout did not redeploy `futures-bot`.
+- Latest verified bot state from the current maintenance pass: service healthy, health endpoint 200, no restart/crash-loop issue reported.
+- Evidence epoch remains the current paper-collection epoch; do not create a new epoch merely because `main` advanced.
 
-- Deployed futures release: `b3d72f8`.
-- Original collection evidence epoch marker: `2026-09-02T01:15:19Z`.
-- `futures-bot` was OOM-killed once and restarted automatically on the same `b3d72f8` release.
-- Post-restart evidence integrity was checked clean: no duplicate campaign/webhook evidence, lost/unmatched outcomes, lost pending/open state, or restart-window evidence corruption was found.
-- All five campaign populations remain configured:
-  - `vwap_hold / control`
-  - `vwap_hold / modified`
-  - `orb_reclaim / control`
-  - `orb_reclaim / modified`
-  - `vwap_rejection / observer`
-- Feeds, TradingView alerts, journals, Tradovate health, and single-account routing checked clean.
-- The old Tradovate account-routing ambiguity is therefore not a current blocker; do not revive an account-pin change unless the account landscape changes.
-- No post-epoch campaign rows had appeared at the latest evidence check. Do not fabricate traffic or signals to force proof.
+## Completed September fixes — do not redo
 
-## Memory/OOM incident — resolved for collection, still monitored
+### Pine / TradingView
 
-The OOM root-cause correlation classified the incident as **BOT MEMORY GROWTH + OTHER PROCESS PRESSURE**, not a historical-report scan.
+PR #467 — stale ORB bracket state:
 
-At the OOM review:
+- Fixed Pine carrying an old NY ORB bracket after the canonical runtime/replay ORB had expired/reset.
+- Pine reset/expiry now follows the canonical ORB lifecycle instead of leaving the prior bracket alive until the next open.
+- No entry, target, filter, risk, or broker behavior was tuned.
 
-- `futures-bot`: about 789 MB
-- IB Gateway: about 431 MB
-- options ranker: about 298 MB
-- VPS physical RAM: about 1.9 GB
-- no swap existed at the time of the kill
+PR #468 — ORB stop parity:
 
-No heavy report/history/backup job correlated with the incident.
+- Fixed Pine `orb_breakout` advisory stop offsets to match backend `risk_rules.yaml`.
+- MNQ ORB stop offset: 48 ticks.
+- MES ORB stop offset: 16 ticks.
+- 4HR Re-Trigger and other strategy brackets were intentionally left unchanged.
+- Current-main CI passed before merge.
 
-### Remediation now active
+Operational TradingView refresh is complete:
 
-- Existing 2 GB persistent `/swapfile` is active and present in `fstab`.
-- Existing Codex dynamic memory guard was preserved.
-- Existing journal-stall watcher fix was preserved.
-- An additive watcher extension was deployed at the box level without changing `futures-bot`.
-- Watcher reads OS `/proc` and kernel metrics directly; it does not poll expensive historical-report endpoints.
-- It records one memory sample per tick to `memory.jsonl` and routes warning/critical episodes through the existing Discord error path.
-- Monitoring is alert-only. It does not kill/restart/redeploy the bot or alter trading state.
+- Latest `tradingview/risksentinel_context.pine` was copied into TradingView after #467/#468.
+- Script was saved/compiled.
+- Active alert was recreated so TradingView uses the updated Pine snapshot.
+- No VPS deploy is required for those Pine-only fixes.
 
-Latest verified live tick after additive deployment:
+### CHOPPY live/replay parity
 
-- bot PID: `454299`
-- `NRestarts`: `1`
-- footprint (RSS + bot swap): about 623 MB
-- process high-water RSS since the incident: 851 MB
-- `MemAvailable`: about 557 MB
-- total swap used: about 726 / 2048 MB
-- bot swapped pages: about 4.5 MB
-- paging during the tick: zero
-- kernel OOM count: 1, no new event
-- watcher warnings/criticals: none
+Already fixed on current repo code before this maintenance pass. The explicit replay regression populates `window_direction` and proves the effective-condition parity behavior. No new CHOPPY patch was made. Do not reopen it without a new reproducible failure.
 
-The 851 MB high-water mark proves transient spikes can occur between five-minute samples. Current memory verdict is **MEMORY STABLE**, with monitoring armed to escalate on renewed pressure or sustained growth.
+### Tradovate exact account routing — repository fix complete
 
-### Active memory thresholds
+PR #374 was refreshed onto current main, re-audited, tested, and merged as `48037967`.
 
-The pre-existing dynamic guard owns absolute RSS/headroom budgets so duplicate fixed alerts remain disabled. The additive checks cover the gaps:
+The merged guard:
 
-- swap used: WARN 1400 MB / CRIT 1800 MB
-- paging activity per tick: WARN 100 MB / CRIT 300 MB
-- two-hour footprint growth: WARN +150 MB mostly rising / CRIT +250 MB any profile
-- swap active/persistent check
-- kernel OOM-count delta
+- adds optional `TRADOVATE_EXPECTED_ACCOUNT_ID`;
+- searches the full Tradovate `/account/list` for the exact pinned id rather than trusting `accounts[0]`;
+- uses the same selector in normal account resolution and the reliability heartbeat;
+- fails closed if the pinned account is absent, duplicated/ambiguous, unresolved, or malformed;
+- fails closed before order submission if the pinned account balance cannot be verified as positive;
+- adds the account-routing cancellations to the existing no-fill taxonomy.
 
-Do not replace this watcher with an older standalone patch. It is intentionally additive because the live watcher already contains other verified work.
+Current-main merge-candidate CI: **4660 passed, 6 skipped, 0 failures**.
 
-## IB Gateway — deferred, not a futures collection blocker
+**Important:** this code is merged but not yet deployed to the running bot, and `TRADOVATE_EXPECTED_ACCOUNT_ID` is not yet set on the VPS. That is intentionally deferred. No Tradovate reconnect, credential recreation, or account setup is required. Later, read the bot's existing intended demo account id from the VPS/Tradovate account list, pin that same id, deploy the already-merged code, and verify it. Do not guess an account id.
 
-A separate read-only check found:
+## VPS memory / IB Gateway
 
-- The old IB Gateway watchdog unit is dead residue. Its script was removed months ago and its timer is now disabled.
-- The gateway container's daily restart is clean and not an OOM event.
-- The deployed futures release does not use IB Gateway, and no futures connection to its ports was found.
-- The container currently consumes roughly 400 MB and is therefore meaningful reclaimable pressure on this 1.9 GB VPS.
-- API port `4004` is currently published externally.
+The earlier VPS memory pressure was real, but the current maintenance pass removed the largest unnecessary resident process from the active box state.
 
-Do **not** stop/disable the container, remove dead units, or firewall port `4004` until dependency on the options/other system is checked. This is tomorrow's narrow follow-up; it does not block futures collection tonight.
+IB Gateway status now:
 
-## Repository state / completed cleanup
+- `ibgateway` container is stopped/exited.
+- Container restart policy is `no`, so Docker daemon restarts or host reboots will not automatically bring it back.
+- Container and image were preserved; this was not an uninstall.
+- `futures-bot` was not touched by the stop/restart-policy change.
 
-The Sept. 2 local cleanup is complete for everything already proven preserved:
+Observed memory improvement after stopping IB Gateway:
 
-- workspace returned to `main`
-- tracked tree clean
-- local `main` matched `origin/main` at pre-handoff-update baseline `4042d08c1cc5146d49a95786e8b981be55ffba1b`
-- four stale tracked edits were discarded only after exact remote preservation was proven
-- eleven stale untracked files were removed only after exact remote/tag preservation was proven
-- no worktrees or unrelated branches were touched
+- RAM used: about 957 MB -> 651 MB.
+- RAM available: about 957 MB -> 1262 MB.
+- Swap used: about 914 MB -> 726 MB.
 
-Three local-only untracked directories were intentionally retained because they contain unique or active material:
+Do not recreate the prior IB dependency audit or restart the container unless a real consumer is identified later.
 
-- `codex/` — sole-copy/private evidence and artifacts; do not commit to the public repo or delete without an explicit preservation/disposal ruling
-- `.agents/` — includes one `systematic-debugging/SKILL.md` file not yet proven preserved remotely
-- `.codex-worktrees/` — contains registered active worktrees
+## Watcher state
 
-These paths do not affect the deployed VPS or futures evidence collection. Do not redo the branch/preservation audit merely because they appear in `git status`.
+The current watcher work is already deployed and should not be rewritten.
 
-## Approved futures fixes — already complete
-
-Do not reopen the prior September defect list. The relevant fixes were already merged/reconciled before the current collection state, including:
-
-- normal paper/replay fill parity
-- fail-closed promotion gate
-- exact five-population campaign reporting, including zero-count arms
-- daily overall false-green correction
-- trade/order identity persistence and joins
-- durable why-no-trade evidence
-- Strategy Inventory reconciliation
-- VWAP Hold control/modified collection lanes
-- ORB Reclaim control/modified collection lanes
-- VWAP Rejection observer payload correction
-
-The current MNQ inverse ORB lane remains paper-only and **PROMISING BUT UNPROVEN**. Do not tune its entries, stops, targets, filters, or risk settings during the evidence window.
+- #466 is watcher-only and includes release-identity/rebaseline handling.
+- Watcher remained healthy after the IB Gateway change; latest reported tick in this pass was OK with nothing blocked and no warnings.
+- The next real futures release should provide the natural proof of the watcher self-rebaseline path. That is a proof item, not a reason for another watcher code change now.
 
 ## Strategy evidence classifications
 
-`docs/strategy-rules/Strategy_Inventory.md` remains the strategy evidence source of truth.
+`docs/strategy-rules/Strategy_Inventory.md` remains the evidence source of truth.
 
-- ORB Reclaim current/first_cross — **BROKEN — negative evidence**
-- ORB Reclaim V4-R — **WAIT**
-- 4HR Re-Trigger MNQ — **BROKEN FOR CURRENT EXECUTABLE FORM**
-- 4HR Re-Trigger MES — **BROKEN / WAIT**
-- 12HR Miyagi — **BROKEN FOR CURRENT SYSTEM RISK CONSTRAINTS**
-- 60M 3-2-2 First Live — **BROKEN FOR CURRENT SYSTEM RISK CONSTRAINTS**
-- ORB Breakout inverted evidence lane — **PROMISING BUT UNPROVEN**
-- MES `strat_122` — **WAIT**
+These are evidence outcomes, not software bugs to "fix" by weakening risk or tuning rules:
 
-## Collection rules
+- ORB Reclaim current/first_cross — **BROKEN — negative evidence**.
+- ORB Reclaim V4-R — **WAIT**.
+- 4HR Re-Trigger MNQ — **BROKEN FOR CURRENT EXECUTABLE FORM**.
+- 4HR Re-Trigger MES — **BROKEN / WAIT**.
+- 12HR Miyagi — **BROKEN FOR CURRENT SYSTEM RISK CONSTRAINTS**.
+- 60M 3-2-2 First Live — **BROKEN FOR CURRENT SYSTEM RISK CONSTRAINTS**.
+- ORB Breakout inverted evidence lane — **PROMISING BUT UNPROVEN**.
+- VWAP Hold MNQ NY — **PROMISING BUT UNPROVEN**.
+- MES `strat_122` — **WAIT**.
+
+Do not widen stops, loosen risk gates, or change entry/target/filter logic to make the broken forms pass. A changed strategy is a new variant and requires preregistration and new evidence.
+
+## Current safety posture
 
 - Paper only.
-- No live broker execution.
-- Do not alter strategy parameters to manufacture evidence.
-- Do not fabricate signals or traffic.
-- Do not redeploy just because repository `main` advances with unrelated/docs work.
-- First natural campaign evidence should be checked for correct generating SHA/release provenance.
-- A memory warning/critical, new OOM, unexpected futures-bot restart, stale feed, failed alert/journal write, or campaign-lane failure is grounds to investigate before trusting continued evidence.
-- Promotion remains gated on the preregistered evidence requirements, including sufficient trading days and resolved filled economic outcomes; intermediate P&L is not promotion proof.
+- No live broker execution is authorized.
+- Active isolated futures lane remains MNQ-first.
+- Max 3 trades/day for the isolated lane.
+- Daily loss and drawdown survival controls remain in force.
+- No averaging down.
+- Bracket/stop requirements remain in force.
+- Do not fabricate signals, force traffic, or tune strategy parameters to manufacture evidence.
+- Do not deploy merely because repository `main` moved.
 
-## Smallest next steps
+## Open items that are NOT current defects
 
-1. Leave `b3d72f8` and strategy/risk configuration unchanged and continue natural paper evidence collection.
-2. Allow the memory watcher to accumulate its two-hour growth window and ongoing history; intervene only on a proven warning/critical or new OOM/restart.
-3. On the next natural campaign candidate, verify release provenance is attributable to `b3d72f8`.
-4. Tomorrow, perform only the narrow dependency check for IB Gateway. If nothing else uses it, then separately consider stopping/disabling it, removing the dead watchdog units, and closing external port `4004`.
-5. Do not redo repository cleanup, preservation audits, or completed futures defect audits.
+- Tradovate account pin activation on the VPS — later operational step; repo code already fixed.
+- Watcher self-rebaseline proof — wait for the next real pinned release.
+- First-bars check — intentionally unscheduled/deferred; do not recreate an automation for it unless explicitly requested.
+- PR #463 memory-entry/deploy gate — deliberate HOLD/policy item; do not merge just because memory is currently healthier.
+- Options-lane PRs/evidence are separate from this futures handoff; do not mix their work into futures maintenance.
+
+## Smallest safe next step
+
+**Stop changing futures code for now and continue natural paper evidence collection.**
+
+When a real futures deployment is next justified, separately:
+
+1. read/confirm the existing intended Tradovate demo account id;
+2. set `TRADOVATE_EXPECTED_ACCOUNT_ID` to that exact id;
+3. deploy the exact reviewed commit through the normal pinned release path;
+4. verify paper/demo mode, exact account routing, watcher rebaseline, health, and first natural post-deploy evidence;
+5. stop again unless new evidence proves another defect.
