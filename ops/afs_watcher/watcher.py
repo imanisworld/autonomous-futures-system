@@ -439,7 +439,7 @@ def sanctioned_restart_reason(base: dict, props: dict, pid: str, cwd: str | None
     switched the release link, re-pinned `.env`, and restarted the service —
     and this process was (re)armed from those same pins. The proof therefore
     has to tie the new process to a release CHANGE, not merely to a healthy
-    box: a hand `systemctl restart` on the same release looks identical in
+    box: a hand restart of the service on the same release looks identical in
     every other respect and must still BLOCK.
 
     `other_blocked` is every other BLOCKED key of the whole tick's runtime
