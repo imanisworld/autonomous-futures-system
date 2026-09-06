@@ -35,6 +35,7 @@ from replay.candle_loader import ReplayCandle
 from replay.replay_engine import ReplayEngine
 from strategy.signal_engine import DecisionEngine
 from webhook.payload import AlertPayload
+from webhook.runner import _market_state_context
 from webhook.state_builder import build_market_state
 
 
@@ -317,3 +318,24 @@ def test_mixed_instrument_replay_does_not_leak_reclaim_across_instruments(tmp_pa
     assert mnq_bar1 == ("MNQ", False, False)
     assert mnq_bar2 == ("MNQ", True, False)
     assert mes_bar1 == ("MES", False, False)  # NOT contaminated by MNQ's reclaim
+
+
+# ─── Journal: state -> recorded context serialization ────────────────────────
+#
+# Closes the last blind link in the chain. The field flows
+# payload -> state_builder -> MarketState (asserted above) but was never
+# serialized into the journal's vwap block, so the only recorded surfaces that
+# mention it (`context.vwap`, `latest_webhook*.json`) either omitted it or
+# echoed the pydantic default. Absence therefore proved nothing about whether
+# Pine sent it, which is why the vwap_rejection observer arm of
+# forward_ab_2026_08_v1 could not be diagnosed from recorded evidence.
+
+
+def test_journal_context_serializes_failed_reclaim_true():
+    state = build_market_state(_payload(vwap_failed_reclaim=True, vwap_reclaimed=False))
+    assert _market_state_context(state)["vwap"]["failed_reclaim"] is True
+
+
+def test_journal_context_serializes_failed_reclaim_false():
+    state = build_market_state(_payload(vwap_failed_reclaim=False))
+    assert _market_state_context(state)["vwap"]["failed_reclaim"] is False

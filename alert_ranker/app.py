@@ -22,7 +22,8 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 
-from .config import ScannerConfig, load_config
+from .bar_context import create_bar_context
+from .config import ScannerConfig, _as_bool, load_config
 from .discord import DiscordAlerter
 from .market_data import build_provider_capabilities, create_market_data_client
 from .rh_client import RHClient
@@ -35,15 +36,15 @@ from .rh_options import (
     kill_switch,
     manage_rh_options_position,
     morning_check,
-    rank_option_contracts,
     sample_rh_options_payload,
     sample_rh_options_text,
 )
+from .lifecycle import classify_candidate
 from .scanner import OptionsScanner
 from .storage import ScanStorage
 
 
-SHADOW_OUTCOME_STATUSES = {"OPEN", "WIN", "LOSS", "BREAKEVEN", "CANCELLED", "EXPIRED"}
+SHADOW_OUTCOME_STATUSES = {"OPEN", "WIN", "LOSS", "BREAKEVEN", "CANCELLED", "EXPIRED", "REJECTED"}
 
 def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | None = None) -> FastAPI:
     cfg = config or load_config()
@@ -55,8 +56,20 @@ def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | No
         nonlocal scanner
         storage = ScanStorage(cfg.sqlite_path)
         async with create_market_data_client(cfg) as market_data, DiscordAlerter(cfg, storage) as discord:
-            scanner = scanner or OptionsScanner(cfg, market_data, storage, discord)
+            scanner = scanner or OptionsScanner(
+                cfg,
+                market_data,
+                storage,
+                discord,
+                bar_context=create_bar_context(cfg),
+            )
             app.state.scanner = scanner
+            # Restart recovery / legacy-backlog reconciliation: OPEN rows that
+            # never met candidate requirements are reclassified REJECTED
+            # (append-only outcome note, row data preserved). Idempotent.
+            app.state.last_reconciled_count = storage.reconcile_open_non_candidates(
+                classify_candidate
+            )
             scheduler = AsyncIOScheduler(timezone=cfg.timezone)
             scheduler.add_job(
                 scanner.scan_watchlist,
@@ -64,6 +77,15 @@ def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | No
                 minutes=cfg.interval_minutes,
                 kwargs={"source": "scheduled"},
                 id="options-watchlist-scan",
+                replace_existing=True,
+                max_instances=1,
+                coalesce=True,
+            )
+            scheduler.add_job(
+                scanner.resolve_open_candidates,
+                "interval",
+                minutes=cfg.interval_minutes,
+                id="options-resolve-open-candidates",
                 replace_existing=True,
                 max_instances=1,
                 coalesce=True,
@@ -103,8 +125,10 @@ def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | No
             if getattr(app.state, "scanner", None) is not None
             else None,
         ).to_dict()
+        market_data_error = provider_profile.get("last_error")
+        degraded = not cfg.market_data_configured or bool(market_data_error)
         return {
-            "status": "healthy",
+            "status": "degraded" if degraded else "healthy",
             "service": "options-scanner",
             "advisory_only": True,
             "port": cfg.port,
@@ -112,6 +136,7 @@ def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | No
             "scheduler_running": bool(app_state["scheduler"] and app_state["scheduler"].running),
             "market_data_provider": cfg.market_data_provider,
             "market_data_configured": cfg.market_data_configured,
+            "market_data_error": market_data_error,
             "provider_profile": provider_profile,
             "tastytrade_configured": cfg.tastytrade_configured,
         }
@@ -162,6 +187,11 @@ def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | No
             "ticker": ticker.upper() if ticker else None,
             "summary": get_scanner().storage.shadow_summary(ticker=ticker).__dict__,
         }
+
+    @app.post("/shadow-journal/reconcile")
+    async def reconcile_shadow_journal() -> dict[str, Any]:
+        count = get_scanner().storage.reconcile_open_non_candidates(classify_candidate)
+        return {"advisory_only": True, "reconciled": count}
 
     @app.get("/shadow-journal/{shadow_id}")
     async def get_shadow_setup(shadow_id: int) -> dict[str, Any]:
@@ -218,6 +248,7 @@ def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | No
                     "alert_suppression_reason": outcome.alert_suppression_reason,
                     "storage_id": outcome.storage_id,
                     "shadow_id": outcome.shadow_id,
+                    "shadow_reason": outcome.shadow_reason,
                 }
                 for outcome in outcomes
             ],
@@ -240,167 +271,6 @@ def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | No
             return evaluate_messy_rh_options_text(str(text or ""), storage=get_scanner().storage)
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
-
-    @app.post("/rh-options/evaluate-auto")
-    async def rh_options_evaluate_auto(request: Request) -> dict[str, Any]:
-        import asyncio
-        from sources.signa_client import SignaClient
-        body = await request.json()
-        ticker = str(body.get("ticker") or "").strip().upper()
-        if not ticker:
-            raise HTTPException(status_code=422, detail="ticker is required")
-
-        signa_enrichment: dict[str, Any] = {}
-        api_key = os.getenv("SIGNA_API_KEY", "").strip()
-        if api_key:
-            scanner = get_scanner()
-            signa_symbol = scanner._signa_symbol_for(ticker)
-            client = SignaClient(
-                api_key=api_key,
-                base_url=scanner.config.signa_base_url,
-                timeout=scanner.config.signa_timeout_seconds,
-            )
-            signal = await asyncio.to_thread(client.fetch_signal, signa_symbol)
-            if signal.ok:
-                signa_enrichment = {
-                    "signa_grade": signal.grade,
-                    "signa_score": signal.score,
-                    "signa_daily_direction": signal.daily_direction,
-                    "signa_weekly_direction": signal.weekly_direction,
-                    "current_price": signal.price,
-                    "flow_score": signal.flow_score,
-                    "regime_class": signal.regime_class,
-                    "trend_strength": signal.trend_strength,
-                    "_pivot_s1": signal.pivot_s1,
-                    "_pivot_r1": signal.pivot_r1,
-                }
-            else:
-                signa_enrichment = {"signa_error": signal.error}
-
-        # Merge: Signa fills defaults; body values override
-        merged: dict[str, Any] = {}
-        if signa_enrichment.get("signa_grade"):
-            merged["signa_grade"] = signa_enrichment["signa_grade"]
-        if signa_enrichment.get("signa_score") is not None:
-            merged["signa_score"] = signa_enrichment["signa_score"]
-        if signa_enrichment.get("signa_daily_direction"):
-            merged["signa_daily_direction"] = signa_enrichment["signa_daily_direction"]
-        if signa_enrichment.get("signa_weekly_direction"):
-            merged["signa_weekly_direction"] = signa_enrichment["signa_weekly_direction"]
-        if signa_enrichment.get("current_price") is not None:
-            merged["current_price"] = signa_enrichment["current_price"]
-        # Pivot points as GEX wall fallback only if user didn't supply walls
-        if not body.get("gex_support_wall") and signa_enrichment.get("_pivot_s1"):
-            merged["gex_support_wall"] = signa_enrichment["_pivot_s1"]
-        if not body.get("gex_resistance_wall") and signa_enrichment.get("_pivot_r1"):
-            merged["gex_resistance_wall"] = signa_enrichment["_pivot_r1"]
-        # User-supplied values always win
-        merged.update({k: v for k, v in body.items() if v is not None})
-
-        try:
-            inputs = _parse_rh_inputs(merged)
-        except ValueError as exc:
-            return {
-                "ok": False,
-                "error": str(exc),
-                "signa_enriched": {k: v for k, v in signa_enrichment.items() if not k.startswith("_")},
-                "merged_inputs": merged,
-            }
-
-        result = evaluate_rh_options(inputs, storage=get_scanner().storage)
-        result["signa_enriched"] = {k: v for k, v in signa_enrichment.items() if not k.startswith("_")}
-        return result
-
-    @app.post("/rh-options/rank-and-evaluate")
-    async def rh_options_rank_and_evaluate(request: Request) -> dict[str, Any]:
-        import asyncio
-        from sources.signa_client import SignaClient
-        body = await request.json()
-        ticker = str(body.get("ticker") or "").strip().upper()
-        if not ticker:
-            raise HTTPException(status_code=422, detail="ticker is required")
-        candidates = list(body.get("candidates") or [])
-        if not candidates:
-            raise HTTPException(status_code=422, detail="candidates list is required")
-
-        top_n = max(1, min(int(body.get("top_n") or 3), 10))
-        direction = str(body.get("direction") or "LONG")
-        gex_regime = str(body.get("gex_regime") or "LOW_PINNING").upper().strip()
-        gex_support_wall = _optional_request_float(body.get("gex_support_wall"))
-        gex_resistance_wall = _optional_request_float(body.get("gex_resistance_wall"))
-        nine_ma = _optional_request_float(body.get("nine_ma"))
-        max_premium = float(body.get("max_premium_per_contract") or 250.0)
-
-        # Auto-fetch Signa
-        signa_enrichment: dict[str, Any] = {}
-        api_key = os.getenv("SIGNA_API_KEY", "").strip()
-        if api_key:
-            scanner = get_scanner()
-            signa_symbol = scanner._signa_symbol_for(ticker)
-            client = SignaClient(
-                api_key=api_key,
-                base_url=scanner.config.signa_base_url,
-                timeout=scanner.config.signa_timeout_seconds,
-            )
-            signal = await asyncio.to_thread(client.fetch_signal, signa_symbol)
-            if signal.ok:
-                signa_enrichment = {
-                    "signa_grade": signal.grade,
-                    "signa_score": signal.score,
-                    "signa_daily_direction": signal.daily_direction,
-                    "signa_weekly_direction": signal.weekly_direction,
-                    "current_price": signal.price,
-                }
-            else:
-                signa_enrichment = {"signa_error": signal.error}
-
-        current_price = signa_enrichment.get("current_price") or _optional_request_float(body.get("current_price"))
-        if not current_price:
-            raise HTTPException(status_code=422, detail="current_price required (Signa did not return price)")
-
-        ranked = rank_option_contracts(
-            candidates,
-            direction=direction,
-            current_price=current_price,
-            gex_resistance_wall=gex_resistance_wall,
-            gex_support_wall=gex_support_wall,
-            max_premium_per_contract=max_premium,
-        )
-
-        evaluated = []
-        for contract in ranked[:top_n]:
-            merged = {
-                "ticker": ticker,
-                "direction": direction,
-                "contract_type": "CALL" if "LONG" in direction.upper() else "PUT",
-                "gex_regime": gex_regime,
-                "gex_support_wall": gex_support_wall,
-                "gex_resistance_wall": gex_resistance_wall,
-                "current_price": current_price,
-                "nine_ma": nine_ma,
-                **signa_enrichment,
-                **contract,
-            }
-            try:
-                inputs = _parse_rh_inputs(merged)
-                ev = evaluate_rh_options(inputs, storage=get_scanner().storage)
-                ev["contract"] = {k: contract[k] for k in ("strike", "expiry_date", "dte", "premium", "option_volume", "open_interest", "rr", "rank", "dollar_gain", "dollar_risk") if k in contract}
-                evaluated.append(ev)
-            except (ValueError, KeyError) as exc:
-                evaluated.append({"error": str(exc), "contract": contract})
-
-        return {
-            "advisory_only": True,
-            "ticker": ticker,
-            "direction": direction,
-            "gex_resistance_wall": gex_resistance_wall,
-            "gex_support_wall": gex_support_wall,
-            "candidates_received": len(candidates),
-            "contracts_ranked": len(ranked),
-            "evaluated": evaluated,
-            "signa_enriched": {k: v for k, v in signa_enrichment.items() if not k.startswith("_")},
-            "all_ranked": ranked,
-        }
 
     @app.get("/rh-options/sample")
     async def rh_options_sample() -> dict[str, Any]:
@@ -903,9 +773,9 @@ def _render_scanner_dashboard() -> str:
     function renderWalls(data) {
       const rows = (data.latest || []).map(item => {
         const raw = item.raw || {};
-        const support = raw.gex_support_wall || raw.signa_pivot_s1 || raw._pivot_s1;
-        const resistance = raw.gex_resistance_wall || raw.signa_pivot_r1 || raw._pivot_r1;
-        const regime = raw.gex_regime || raw.regime_class || raw.gex_note || '-';
+        const support = raw.gex_support_wall;
+        const resistance = raw.gex_resistance_wall;
+        const regime = raw.gex_regime || raw.gex_note || '-';
         const contract = latestContract(raw);
         if (!support && !resistance && contract === '-') return '';
         return '<tr>' +
@@ -1349,7 +1219,7 @@ def _render_rh_options_terminal(sample_payload: dict[str, Any], sample_text: str
 
 def options_scanner_enabled() -> bool:
     """The scanner only runs when explicitly opted in (test environments)."""
-    return os.getenv("OPTIONS_SCANNER_ENABLED", "false").strip().lower() in {"true", "1", "yes"}
+    return _as_bool(os.getenv("OPTIONS_SCANNER_ENABLED"), False)
 
 
 def _disabled_app() -> FastAPI:
@@ -1381,4 +1251,4 @@ def run() -> None:
             "test environment to run it."
         )
     cfg = load_config()
-    uvicorn.run("alert_ranker.app:app", host="0.0.0.0", port=cfg.port)
+    uvicorn.run("alert_ranker.app:app", host="127.0.0.1", port=cfg.port)

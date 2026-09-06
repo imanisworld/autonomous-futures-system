@@ -18,7 +18,22 @@ from execution.tradovate_supervisor import HEARTBEAT_FRESH_SECONDS, reliability_
 from ops.live_box_guard import live_box_drift_report
 
 
-DEFAULT_STATE_PATH = Path("logs/live_preflight_state.json")
+STATE_FILENAME = "live_preflight_state.json"
+
+
+def default_state_path() -> Path:
+    """Durable artifact path, resolved at call time from ``LOG_DIR``.
+
+    The release tree is immutable and may ship a real ``logs/`` directory, so a
+    cwd-relative default would silently write the preflight artifact into the
+    release instead of the shared log directory that the flatness cron and the
+    evidence lanes read. Resolve against ``LOG_DIR`` (same contract as the
+    journal and evidence writers); fall back to the relative ``logs/`` only when
+    ``LOG_DIR`` is unset (local dev / tests).
+    """
+    return Path(os.getenv("LOG_DIR", "logs")) / STATE_FILENAME
+
+
 WORKING_ORDER_STATUSES = {
     "accepted",
     "pending",
@@ -88,7 +103,7 @@ def _now_iso() -> str:
 
 
 def _state_path(path: str | Path | None = None) -> Path:
-    return Path(path) if path is not None else DEFAULT_STATE_PATH
+    return Path(path) if path is not None else default_state_path()
 
 
 def _default_state() -> LivePreflightState:

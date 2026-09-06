@@ -330,10 +330,24 @@ alone cannot satisfy promotion criteria.
 
 ### GEX Shadow Analysis
 
+**GEX is optional enrichment across the whole system. No GEX vendor
+subscription exists or is required.** The options lane runs fully without it:
+a missing regime or flip yields `GEX_UNAVAILABLE` plus a warning, gamma-wall
+targeting is skipped, and the GEX component drops out of both `context_score`
+and `context_score_max`. No neutral regime and no flip level is ever
+substituted. A GEX-less evaluation can reach `CAUTION` but never `VALID` —
+the system operates honestly on Signa + SPY/QQQ + higher-timeframe context
+without claiming a confirmation it does not have.
+
 `gex_observed` snapshots are observe-only. When a producer journals compact
 `gex_observed` records, this analysis scores them against resolved outcomes — it
 never changes `DecisionEngine`, `RiskEngine`, or trade gating. The separate
 observe-only GEX producer is rebuilt on the Public.com chain feed.
+
+That in-house producer is **not** a substitute for a vendor feed and must not be
+wired into trade approval. Collect and compare it separately first; it earns the
+gate on measured evidence or not at all. No GEX proof means no GEX-based
+decision.
 
 Important distinction: payload-provided `state.gex` fields are not the same as
 `gex_observed`. The active decision path currently calls `strategy/gex_gate.py`,

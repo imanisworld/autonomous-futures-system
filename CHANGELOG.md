@@ -8,6 +8,62 @@ Types: `Added`, `Changed`, `Fixed`, `Removed`, `Security`, `Rulebook`
 
 ---
 
+## [1.8.0] 2026-07-28
+
+Config + test-only entry. `risk_rules.yaml` bumped to its own internal
+`1.2.0`. No signal, bracket, fill-model, session, trend, confluence, stop,
+target, exit, sizing, broker, or runtime logic changed.
+
+### Rulebook
+- **Isolated MNQ ORB Breakout inverse forward-paper lane becomes the repo's
+  explicit default configuration.** Prepares the already-merged inverse lane
+  (PR #364, `context/mnq_orb_breakout_inverse_paper.py`) for isolated forward
+  paper operation. Four coordinated `risk_rules.yaml` changes:
+  - `instruments.allowed` / `instruments.required` → `[MNQ]` (MES commented
+    out).
+  - `strategy.enabled_concepts` → `[orb_breakout]` only; the other ten
+    concepts commented out.
+  - `strategy_permission_gate.strategy_status` → only `orb_breakout` stays
+    `PAPER_ELIGIBLE`; the rest commented out so they fall back to
+    `default_status: SHADOW_ONLY`. The explicit `vwap_hold: SHADOW_ONLY` and
+    `pdh_reclaim: SHADOW_ONLY` entries are deliberately **preserved
+    uncommented** as historical governance records — those demotions are
+    real, evidence-based classifications independent of this lane (see their
+    own comments) and are not something to "restore" when it concludes.
+  - `daily_limits.max_trades_per_day` → `3` (was `9999`/unlimited). Scoped to
+    this lane only; NOT a reversal of the 2026-06-17 throttle-removal
+    decision, which stays documented in place.
+
+  **Why `enabled_concepts` had to be narrowed and the permission gate alone
+  was insufficient:** `DecisionEngine` ranks all candidate setups first and
+  applies the permission gate only to the winner, so a `SHADOW_ONLY` strategy
+  that outranks `orb_breakout` wins selection, is blocked as
+  `STRATEGY_NOT_PAPER_ELIGIBLE`, and yields `NO_TRADE` — silently suppressing
+  the `orb_breakout` candidate instead of falling through to it. PR #373
+  confirmed this behavior (7 of 33 MES 1-2-2 candidates preempted by a
+  shadow-only `vwap_hold`).
+
+  PaperBroker-only and fixed-one-contract need no config change — both are
+  already forced by the merged inverse module, whose `is_candidate()` is
+  MNQ + `orb_breakout` only. Lane activation remains environment-driven
+  (`MNQ_ORB_BREAKOUT_INVERSE_MODE=paper_sim`,
+  `MNQ_ORB_BREAKOUT_PROOF_MODE=observe_only`), unchanged here.
+
+### Changed
+- Governance tests updated to assert the new intentional shipped
+  configuration rather than the previous multi-strategy/multi-instrument
+  defaults. Runtime tests that require MES or non-`orb_breakout` strategies
+  now construct explicit test-local permissive configs instead of relying on
+  the shipped default being permissive. No safety assertion was weakened,
+  skipped, xfailed, or deleted.
+
+### Added
+- `tests/test_isolated_mnq_orb_breakout_lane.py` — focused proof of the
+  isolated configuration, including that a higher-ranked non-ORB candidate
+  cannot suppress the lane because it is no longer an enabled concept.
+
+---
+
 ## [1.7.0] 2026-07-26
 
 Config-only entry — does not attempt to backfill the ~7 weeks of unlogged

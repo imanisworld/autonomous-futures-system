@@ -80,14 +80,18 @@ def evaluate_packet(
             f"max_premium {packet.max_premium} exceeds risk cap {cfg.risk_max_premium}",
         )
 
-    # 3. Contract count cap.
+    # 3. Contract count cap. Legacy packet-path compatibility only; PR B
+    # removes this path as canonical authority. This is not a portfolio
+    # position-count rule.
     if packet.max_contracts > cfg.risk_max_contracts:
         return _rejected(
             "contracts_cap",
             f"max_contracts {packet.max_contracts} exceeds risk cap {cfg.risk_max_contracts}",
         )
 
-    # 4. Total planned premium risk.
+    # 4. Legacy full-debit cap. OptionTradePacket does not carry a numeric
+    # premium stop, so canonical planned-loss math lives in validation/
+    # portfolio_risk_gate.py and the PR B advisory integration.
     total_risk = packet.max_premium * 100 * packet.max_contracts
     if total_risk > cfg.risk_max_total_premium_dollars:
         return _rejected(
@@ -116,29 +120,28 @@ def evaluate_packet(
             "price_target must be below entry_price for PUT",
         )
 
-    # 7. Signa minimum.
+    # 7. Signa is observational context only. It may warn, but it cannot veto
+    # an otherwise valid options packet.
     if packet.signa_score < cfg.risk_min_signa_score:
-        return _rejected(
-            "signa_score_min",
-            f"signa_score {packet.signa_score} below risk minimum {cfg.risk_min_signa_score}",
+        warnings.append(
+            f"SIGNA_OBSERVATION: score {packet.signa_score} below reference "
+            f"{cfg.risk_min_signa_score}"
         )
     if packet.signa_grade not in cfg.risk_allowed_grades:
-        return _rejected(
-            "signa_grade_not_allowed",
-            f"signa_grade '{packet.signa_grade}' not in allowed grades {cfg.risk_allowed_grades}",
+        warnings.append(
+            f"SIGNA_OBSERVATION: grade '{packet.signa_grade}' outside reference "
+            f"grades {cfg.risk_allowed_grades}"
         )
     if packet.direction == "CALL" and packet.signa_bias != "BULLISH":
-        return _rejected(
-            "signa_bias_mismatch",
-            f"signa_bias '{packet.signa_bias}' does not align with CALL (requires BULLISH)",
+        warnings.append(
+            f"SIGNA_OBSERVATION: bias '{packet.signa_bias}' conflicts with CALL direction"
         )
     if packet.direction == "PUT" and packet.signa_bias != "BEARISH":
-        return _rejected(
-            "signa_bias_mismatch",
-            f"signa_bias '{packet.signa_bias}' does not align with PUT (requires BEARISH)",
+        warnings.append(
+            f"SIGNA_OBSERVATION: bias '{packet.signa_bias}' conflicts with PUT direction"
         )
 
-    # 8. GEX regime handling.
+    # 8. GEX regime handling. OPTIONAL by default — see risk_reject_empty_gex_regime.
     regime = (packet.gex_regime or "").strip()
     if not regime:
         if cfg.risk_reject_empty_gex_regime:
@@ -146,12 +149,10 @@ def evaluate_packet(
                 "gex_regime_missing",
                 "gex_regime is empty/missing; insufficient data to assess",
             )
-        warnings.append("gex_regime is empty/missing; proceeding without GEX context")
+        warnings.append(
+            "GEX_UNAVAILABLE: gex_regime is empty/missing; no gamma-wall targeting"
+        )
     elif regime not in KNOWN_GEX_REGIMES:
-        # Covers both the literal "UNKNOWN" value and any unrecognized,
-        # provider-specific label — treated identically, per design: GEX
-        # labels vary by provider, so warn rather than assume the label is
-        # invalid.
         if cfg.risk_warn_unknown_gex_regime:
             warnings.append(f"gex_regime '{regime}' is not a recognized regime")
 

@@ -1,6 +1,8 @@
 #!/bin/bash
 # Smoke-test the live webhook with a realistic MNQ orb_reclaim setup.
-# Prod runs on the Hetzner VPS; override the host via WEBHOOK_URL if needed.
+# Defaults to the box's own loopback listener, so run it on the box. Set
+# WEBHOOK_URL to target a different host; the box address is deliberately
+# not recorded in this repository.
 # Usage: WEBHOOK_SECRET=your_secret bash scripts/test_webhook.sh
 
 SECRET="${WEBHOOK_SECRET:-}"
@@ -10,7 +12,7 @@ if [ -z "$SECRET" ]; then
   exit 1
 fi
 
-URL="${WEBHOOK_URL:-http://5.78.84.223}/webhook/alert?secret=${SECRET}"
+URL="${WEBHOOK_URL:-http://127.0.0.1:8000}/webhook/alert?secret=${SECRET}"
 
 curl -s -X POST "$URL" \
   -H "Content-Type: application/json" \

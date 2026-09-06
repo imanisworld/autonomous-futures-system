@@ -3,7 +3,7 @@
 #
 # Host identity stays outside the repository:
 #   AFS_BOX=root@example AFS_SHARED_DIR=/root/afs-shared \
-#     scripts/atomic_release.sh build origin/main
+#     scripts/atomic_release.sh build <sha>
 #   scripts/atomic_release.sh verify <sha>
 #   scripts/atomic_release.sh promote <sha>
 #   scripts/atomic_release.sh rollback
@@ -16,7 +16,7 @@
 set -euo pipefail
 
 ACTION="${1:-}"
-REF="${2:-origin/main}"
+REF="${2:-}"
 FORCE_LOCK="${3:-}"
 BOX="${AFS_BOX:?set AFS_BOX (for example root@host)}"
 RELEASES="${AFS_RELEASES_DIR:-/root/afs-releases}"
@@ -38,13 +38,21 @@ remote() {
 }
 REMOTE_EXEC=remote
 
+_require_exact_sha() {
+  local value="${1:-}"
+  if [[ ! "$value" =~ ^[0-9a-f]{40}$ ]]; then
+    echo "release action requires an exact 40-character lowercase commit SHA" >&2
+    return 1
+  fi
+}
+
 build_release() {
   deploy_lock_acquire "$LOCK_DIR" "build $REF" "$0" "$FORCE_LOCK" || exit 1
   trap "deploy_lock_release '$LOCK_DIR' '$DEPLOY_LOCK_OWNER'" EXIT
 
   git fetch -q origin
   local sha short work archive manifest
-  sha="$(git rev-parse "$REF")"
+  sha="$(git rev-parse "$REF^{commit}")"
   short="${sha:0:12}"
   work="$(mktemp -d "/tmp/afs-release-${short}.XXXX")"
   archive="/tmp/afs-release-${short}.tgz"
@@ -85,10 +93,10 @@ verify_release() {
   local sha="$REF" short="${REF:0:12}" unit="afs-candidate-${REF:0:12}" fingerprint port candidate_overrides posture_label
   if [[ "${AFS_VERIFY_POSTURE:-shadow_baseline}" == "preserve_current" ]]; then
     candidate_overrides=""
-    posture_label="current production pins"
+    posture_label="current strategy/exit pins with paper-isolated broker"
   else
     candidate_overrides="--setenv=SCHEDULE_MODE=always_on_shadow --setenv=EXPECTED_PROOF_SCHEDULE_MODE=always_on_shadow --setenv=HTF_DIRECTION_MODE=off --setenv=EXPECTED_PROOF_HTF_DIRECTION_MODE=off --setenv=EXIT_MODE=static --setenv=EXPECTED_PROOF_EXIT_MODE=static"
-    posture_label="always_on_shadow/static"
+    posture_label="always_on_shadow/static with paper-isolated broker"
   fi
   fingerprint="$(remote "'$RELEASES/$sha/.venv/bin/python' -c \"import json;print(json.load(open('$RELEASES/$sha/release_manifest.json'))['fingerprint_sha256'])\"")"
   port="$(remote "python3 -c 'import socket; s=socket.socket(); s.bind((\"127.0.0.1\", 0)); print(s.getsockname()[1]); s.close()'")"
@@ -97,13 +105,17 @@ verify_release() {
     test -d '$RELEASES/$sha'
     test -f '$SHARED/.env'
     candidate_env='$SHARED/candidate-env-$sha'
-    trap 'rm -f "\$candidate_env"' EXIT
-    grep -v '^EXPECTED_RELEASE_FINGERPRINT=' '$SHARED/.env' > "\$candidate_env"
-    printf 'EXPECTED_RELEASE_FINGERPRINT=%s\n' '$fingerprint' >> "\$candidate_env"
+    cleanup_candidate() {
+      systemctl stop '$unit' >/dev/null 2>&1 || true
+      rm -f \"\$candidate_env\"
+    }
+    trap cleanup_candidate EXIT
+    grep -Ev '^(EXPECTED_RELEASE_FINGERPRINT|BROKER)=' '$SHARED/.env' > \"\$candidate_env\"
+    printf 'EXPECTED_RELEASE_FINGERPRINT=%s\nBROKER=paper\n' '$fingerprint' >> \"\$candidate_env\"
     systemctl stop '$unit' 2>/dev/null || true
     systemd-run --unit='$unit' \
       --property=WorkingDirectory='$RELEASES/$sha' \
-      --property=EnvironmentFile="\$candidate_env" \
+      --property=EnvironmentFile=\"\$candidate_env\" \
       --setenv=PYTHONDONTWRITEBYTECODE=1 \
       --setenv=PYTHONPATH='$RELEASES/$sha' \
       --setenv=PORT='$port' \
@@ -219,6 +231,7 @@ promote_release() {
       'Environment=PYTHONDONTWRITEBYTECODE=1' \
       'Environment=PYTHONPATH=$CURRENT' \
       'Environment=LOG_DIR=$SHARED/logs' \
+      'Environment=RELEASE_INTEGRITY_ENFORCED=true' \
       'ExecStart=' \
       'ExecStart=$CURRENT/.venv/bin/python -m uvicorn webhook.app:app --host 127.0.0.1 --port 8000' \
       > /etc/systemd/system/'$SERVICE'.service.d/atomic-release.conf
@@ -247,6 +260,14 @@ rollback_release() {
     set -e
     previous=\$(cat '$SHARED/current.previous')
     test -d \"\$previous\"
+    manifest=\"\$previous/release_manifest.json\"
+    test -f \"\$manifest\"
+    prev_fp=\$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[\"fingerprint_sha256\"])' \"\$manifest\")
+    prev_commit=\$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[\"repo\"][\"commit\"])' \"\$manifest\")
+    prev_risk=\$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[\"risk_rules_sha256\"])' \"\$manifest\")
+    sed -i '/^EXPECTED_RELEASE_FINGERPRINT=/d;/^EXPECTED_LIVE_BRANCH=/d;/^EXPECTED_LIVE_COMMIT=/d;/^EXPECTED_RISK_RULES_SHA256=/d' '$SHARED/.env'
+    printf 'EXPECTED_RELEASE_FINGERPRINT=%s\nEXPECTED_LIVE_BRANCH=main\nEXPECTED_LIVE_COMMIT=%s\nEXPECTED_RISK_RULES_SHA256=%s\n' \
+      \"\$prev_fp\" \"\$prev_commit\" \"\$prev_risk\" >> '$SHARED/.env'
     current=\$(readlink '$CURRENT')
     ln -s \"\$previous\" '$CURRENT.next'
     mv -Tf '$CURRENT.next' '$CURRENT'
@@ -262,6 +283,8 @@ rollback_release() {
       exit 1
     }
     curl -fsS http://127.0.0.1:8000/health
+    PYTHONPATH='$CURRENT' '$CURRENT/.venv/bin/python' \
+      -m ops.release_integrity --repo-root '$CURRENT'
   "
 }
 
@@ -269,12 +292,23 @@ rollback_release() {
 # directly against a fake box/git repo) without triggering a real action.
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
   case "$ACTION" in
-    build) build_release ;;
-    verify) verify_release ;;
-    promote) promote_release ;;
-    rollback) rollback_release ;;
+    build)
+      _require_exact_sha "$REF" || exit 64
+      build_release ;;
+    verify)
+      _require_exact_sha "$REF" || exit 64
+      verify_release ;;
+    promote)
+      _require_exact_sha "$REF" || exit 64
+      promote_release ;;
+    rollback)
+      if [[ -n "$REF" && "$REF" != "--force-lock" ]]; then
+        echo "rollback takes no release ref" >&2
+        exit 64
+      fi
+      rollback_release ;;
     *)
-      echo "usage: $0 {build [ref]|verify <sha>|promote <sha>|rollback} [--force-lock]" >&2
+      echo "usage: $0 {build <sha>|verify <sha>|promote <sha>|rollback} [--force-lock]" >&2
       exit 64
       ;;
   esac

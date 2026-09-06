@@ -36,21 +36,34 @@ def fresh_market_state() -> dict:
 
 
 def risk_rules_without_position_sizing(tmp_path):
-    text = Path("risk_rules.yaml").read_text()
-    text = re.sub(
-        r"position_sizing_enabled: true",
-        "position_sizing_enabled: false",
-        text,
-        count=1,
+    """Temp risk_rules for the MES resolution fixtures.
+
+    Also restores the pre-isolated-lane permissive universe (MES+MNQ, all
+    concepts paper-eligible). The shipped risk_rules.yaml is narrowed to the
+    isolated MNQ orb_breakout lane, and data/sample_market_state.json is an
+    MES state — these tests prove main()'s fill-resolution and journaling
+    wiring, so they construct their own permissive config explicitly rather
+    than depending on the shipped default being broad.
+    """
+    import yaml
+    from tests.conftest import (
+        _PERMISSIVE_ENABLED_CONCEPTS,
+        _PERMISSIVE_STRATEGY_STATUS,
     )
-    text = re.sub(
-        r"max_staleness_seconds: \d+",
-        "max_staleness_seconds: 999999",
-        text,
-        count=1,
+
+    rules = yaml.safe_load(Path("risk_rules.yaml").read_text())
+    rules["position_sizing"]["position_sizing_enabled"] = False
+    rules["data_quality"]["max_staleness_seconds"] = 999999
+    rules["instruments"]["allowed"] = ["MES", "MNQ"]
+    rules["instruments"]["required"] = ["MES", "MNQ"]
+    rules["strategy"]["enabled_concepts"] = list(_PERMISSIVE_ENABLED_CONCEPTS)
+    rules["strategy_permission_gate"]["strategy_status"] = dict(
+        _PERMISSIVE_STRATEGY_STATUS
     )
+    rules["daily_limits"]["max_trades_per_day"] = 9999
+
     path = tmp_path / "risk_rules_no_sizing.yaml"
-    path.write_text(text)
+    path.write_text(yaml.safe_dump(rules))
     return path
 
 def test_load_next_bar_reads_high_low(tmp_path):

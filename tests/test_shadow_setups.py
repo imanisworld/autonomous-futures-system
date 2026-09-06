@@ -64,9 +64,6 @@ def test_resolve_shadow_loss_after_fill():
 def test_resolve_shadow_both_hit_is_pessimistic_loss():
     cand = _candidate("LONG", entry=100.0, stop=90.0, target=120.0)
     # bar 1 fills entry; bar 2 straddles BOTH stop and target → worst case = LOSS.
-    # Resolution starts on the bar AFTER the fill (mirrors PaperBroker, which
-    # resolves from the next bar — the fill bar's range is not re-used, since
-    # pre-entry excursion would otherwise be counted as a stop-out).
     bars = [(101.0, 99.0), (125.0, 88.0)]
     out = resolve_shadow_candidate(cand, bars, instrument="MNQ")
     assert out.result == "LOSS"
@@ -75,6 +72,96 @@ def test_resolve_shadow_both_hit_is_pessimistic_loss():
         cand, bars, instrument="MNQ", pessimistic_both_hit=False
     )
     assert optimistic.result == "WIN"
+
+
+def test_resolve_shadow_resting_fill_bar_both_hit_is_loss_for_long_and_short():
+    long = resolve_shadow_candidate(
+        _candidate("LONG", entry=100.0, stop=90.0, target=120.0),
+        [(125.0, 88.0)], instrument="MNQ",
+    )
+    short = resolve_shadow_candidate(
+        _candidate("SHORT", entry=100.0, stop=110.0, target=80.0),
+        [(112.0, 78.0)], instrument="MNQ",
+    )
+    assert long.result == "LOSS"
+    assert short.result == "LOSS"
+    assert long.bars_to_fill == short.bars_to_fill == 1
+    assert long.bars_to_exit == short.bars_to_exit == 1
+
+
+def test_resolve_shadow_fill_bar_target_only_is_never_a_win():
+    """A target touched on the FILL bar may have traded before the entry filled.
+
+    OHLC cannot order the two, so it is not earned. Crediting it would reproduce
+    the unearned-fill fiction this lane exists to avoid.
+    """
+    long = resolve_shadow_candidate(
+        _candidate("LONG", entry=100.0, stop=90.0, target=120.0),
+        [(125.0, 99.0)], instrument="MNQ",
+    )
+    short = resolve_shadow_candidate(
+        _candidate("SHORT", entry=100.0, stop=110.0, target=80.0),
+        [(101.0, 78.0)], instrument="MNQ",
+    )
+    for out in (long, short):
+        assert out.result == "OPEN"
+        assert out.result != "WIN"
+        assert out.entry_filled is True
+        assert out.bars_to_fill == 1
+        assert out.exit_price is None
+        assert out.pnl_ticks is None
+        assert out.fill_bar_target_ambiguous_ignored is True
+
+
+def test_resolve_shadow_target_after_fill_bar_still_wins():
+    """Only the fill bar is ambiguous — a later target touch is earned."""
+    long = resolve_shadow_candidate(
+        _candidate("LONG", entry=100.0, stop=90.0, target=120.0),
+        [(101.0, 99.0), (125.0, 100.0)], instrument="MNQ",
+    )
+    short = resolve_shadow_candidate(
+        _candidate("SHORT", entry=100.0, stop=110.0, target=80.0),
+        [(101.0, 99.0), (100.0, 78.0)], instrument="MNQ",
+    )
+    for out in (long, short):
+        assert out.result == "WIN"
+        assert out.exit_reason == "TARGET_HIT"
+        assert out.bars_to_fill == 1
+        assert out.bars_to_exit == 2
+        assert out.fill_bar_target_ambiguous_ignored is False
+
+
+def test_resolve_shadow_fill_bar_target_ignored_then_stop_later_is_loss():
+    """Ignoring the fill-bar target does not skip the bar's later resolution."""
+    long = resolve_shadow_candidate(
+        _candidate("LONG", entry=100.0, stop=90.0, target=120.0),
+        [(125.0, 99.0), (110.0, 88.0)], instrument="MNQ",
+    )
+    short = resolve_shadow_candidate(
+        _candidate("SHORT", entry=100.0, stop=110.0, target=80.0),
+        [(101.0, 78.0), (112.0, 95.0)], instrument="MNQ",
+    )
+    for out in (long, short):
+        assert out.result == "LOSS"
+        assert out.exit_reason == "STOP_HIT"
+        assert out.bars_to_exit == 2
+        assert out.fill_bar_target_ambiguous_ignored is True
+
+
+def test_resolve_shadow_fill_bar_stop_only_is_still_a_loss():
+    """The conservative direction is unchanged: a fill-bar stop touch resolves."""
+    long = resolve_shadow_candidate(
+        _candidate("LONG", entry=100.0, stop=90.0, target=120.0),
+        [(101.0, 88.0)], instrument="MNQ",
+    )
+    short = resolve_shadow_candidate(
+        _candidate("SHORT", entry=100.0, stop=110.0, target=80.0),
+        [(112.0, 99.0)], instrument="MNQ",
+    )
+    for out in (long, short):
+        assert out.result == "LOSS"
+        assert out.bars_to_exit == 1
+        assert out.fill_bar_target_ambiguous_ignored is False
 
 
 def test_resolve_shadow_open_when_unresolved_by_window_end():

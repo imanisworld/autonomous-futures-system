@@ -9,8 +9,9 @@ env + Discord post. Fail-soft: a reporting error never affects anything else.
 
 from __future__ import annotations
 
-import os
 from datetime import datetime, timezone
+
+from config.settings import options_companion_sqlite_path
 
 from .notify import notify_companion_daily_report
 from .status import companion_summary
@@ -65,8 +66,7 @@ def main() -> int:
     except Exception:  # noqa: BLE001 — dotenv optional; cron may export env directly
         pass
 
-    path = os.getenv("OPTIONS_COMPANION_SQLITE_PATH", "logs/options_companion.sqlite")
-    store = OptionsCompanionStore(path)
+    store = OptionsCompanionStore(options_companion_sqlite_path())
     day_iso = datetime.now(timezone.utc).date().isoformat()
     report = build_report(store.all_rows(), companion_summary(store), day_iso=day_iso)
     sent = notify_companion_daily_report(report)

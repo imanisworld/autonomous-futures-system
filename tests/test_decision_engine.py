@@ -534,6 +534,10 @@ class TestORBBreakoutStopWidth:
         # close meaningfully above ORB high (orb.high + 2 ticks = 7500.5)
         state.ohlc = OHLCData(open=7499.0, high=7503.0, low=7498.5, close=7502.0, timeframe=15)
         state.volume = VolumeData(current_bar=1500.0, avg_bar=1000.0, relative=1.5)
+        # previous bar still traded at the ORB high — a fresh break, not a bar
+        # merely remaining above an old range
+        state.previous_bar_high = 7500.75
+        state.previous_bar_low = 7497.0
         return state
 
     def test_default_orb_stop_is_legacy_8_ticks(self, engine, fresh_market_state):

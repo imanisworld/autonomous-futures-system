@@ -511,22 +511,36 @@ def test_cross_instrument_state_does_not_leak(config):
 # ── risk_rules.yaml activation (the actual demo-execution wiring) ──────────
 
 
-def test_risk_rules_yaml_enables_mnq_only():
+def test_risk_rules_yaml_disables_322_during_isolated_lane_preserving_mes_exclusion():
+    """Isolated MNQ orb_breakout lane (risk_rules 1.2.0): strat_322_first_live
+    is disabled entirely — it is not an enabled concept and has no explicit
+    permission entry, so it inherits default_status=SHADOW_ONLY.
+
+    Its MES exclusion record is asserted as still present so the MNQ-only
+    restriction survives the isolated lane and is automatically back in force
+    whenever the concept is re-enabled."""
     from config.settings import load_config
 
     cfg = load_config()
-    assert "strat_322_first_live" in cfg.enabled_concepts
-    assert "strat_322_first_live" not in cfg.disabled_concepts_per_instrument.get("MNQ", [])
+    assert "strat_322_first_live" not in cfg.enabled_concepts
+    assert cfg.strategy_status.get("strat_322_first_live") is None
+    assert cfg.strategy_permission_default_status == "SHADOW_ONLY"
+    # Preserved MNQ-only record for whenever the concept is re-enabled.
     assert "strat_322_first_live" in cfg.disabled_concepts_per_instrument.get("MES", [])
-    assert cfg.strategy_status.get("strat_322_first_live") == "PAPER_ELIGIBLE"
+    assert "strat_322_first_live" not in cfg.disabled_concepts_per_instrument.get("MNQ", [])
 
 
-def test_risk_rules_yaml_enables_strat_122_mes_only_leaves_212_disabled():
+def test_risk_rules_yaml_disables_strat_122_during_isolated_lane_leaves_212_disabled():
+    """Isolated lane: strat_122 is disabled alongside every other non-ORB
+    concept, and strat_212 remains disabled exactly as before (its BROKEN/WAIT
+    status is unchanged by this lane). Both MES/MNQ per-instrument records are
+    asserted as preserved for re-enablement."""
     from config.settings import load_config
 
     cfg = load_config()
-    assert "strat_122" in cfg.enabled_concepts
+    assert "strat_122" not in cfg.enabled_concepts
+    assert "strat_212" not in cfg.enabled_concepts
+    assert cfg.strategy_status.get("strat_122") is None
+    # Preserved MES-only record for whenever the concept is re-enabled.
     assert "strat_122" in cfg.disabled_concepts_per_instrument.get("MNQ", [])
     assert "strat_122" not in cfg.disabled_concepts_per_instrument.get("MES", [])
-    assert "strat_212" not in cfg.enabled_concepts
-    assert cfg.strategy_status.get("strat_122") == "PAPER_ELIGIBLE"

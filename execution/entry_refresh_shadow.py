@@ -75,11 +75,12 @@ def open_shadow_position(
     refresh_policy: str = "translate",
     detachment_ticks: Optional[float] = None,
     detachment_r: Optional[float] = None,
-) -> None:
+    campaign_record: Optional[dict] = None,
+) -> bool:
     """Fail-soft: a persistence hiccup must never affect trading. No-ops if a
     shadow position is already pending for this (instrument, strategy)."""
     if get_pending_shadow_position(log_dir, instrument, strategy) is not None:
-        return
+        return False
     path = _state_path(log_dir)
     try:
         try:
@@ -101,13 +102,15 @@ def open_shadow_position(
             "refresh_policy": refresh_policy,
             "detachment_ticks": detachment_ticks,
             "detachment_r": detachment_r,
+            "campaign_record": campaign_record,
         }
         path.parent.mkdir(parents=True, exist_ok=True)
         tmp = path.with_suffix(".tmp")
         tmp.write_text(json.dumps({"positions": positions}, separators=(",", ":")))
         tmp.replace(path)
+        return True
     except OSError:
-        pass
+        return False
 
 
 def close_shadow_position(log_dir: str | Path, instrument: str, strategy: str) -> None:

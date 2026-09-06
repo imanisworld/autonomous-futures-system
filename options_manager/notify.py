@@ -1,10 +1,8 @@
 """Discord outbound notifications for options_manager.
 
-Mirrors the pattern used by alert_ranker/discord.py's DiscordAlerter (webhook
-URL from config, JSON payload, httpx post) as a reference shape only. Does not
-import alert_ranker.
-
-Outbound only — no inbound listener, no approval channel, no order control.
+Outbound only. This module does not listen for approvals or control orders.
+Legacy packet notifications remain for compatibility; canonical advisory
+notifications reuse the same sender and webhook configuration.
 """
 
 from __future__ import annotations
@@ -15,6 +13,7 @@ import httpx
 
 from .config import OptionsManagerConfig
 from .models import OptionTradePacket
+from .validation.advisory_decision import AdvisoryDecisionResult
 
 SendFn = Callable[[str, dict[str, Any]], bool]
 
@@ -54,3 +53,36 @@ def notify_packet(
         return False
     send = send_fn or _default_send
     return send(cfg.discord_webhook_url, build_payload(packet))
+
+
+def build_advisory_payload(
+    result: AdvisoryDecisionResult,
+    proof_payload: dict[str, Any] | None,
+) -> dict[str, Any]:
+    proof = proof_payload or {}
+    ticker = str(proof.get("ticker", "UNKNOWN"))
+    direction = str(proof.get("direction", "UNKNOWN"))
+    title = f"[options_manager] {result.verdict.value.upper()} {ticker} {direction}"
+    parts = [
+        result.next_required_action,
+        f"contract={result.contract_verdict.value}",
+        f"portfolio={result.portfolio_verdict.value}",
+    ]
+    if result.blocking_reasons:
+        parts.append("blocks=" + " | ".join(result.blocking_reasons[:4]))
+    if result.warnings:
+        parts.append("warnings=" + " | ".join(result.warnings[:4]))
+    return {"embeds": [{"title": title, "description": "\n".join(parts)}]}
+
+
+def notify_advisory_decision(
+    result: AdvisoryDecisionResult,
+    proof_payload: dict[str, Any] | None,
+    config: Optional[OptionsManagerConfig] = None,
+    send_fn: Optional[SendFn] = None,
+) -> bool:
+    cfg = config or OptionsManagerConfig.from_env()
+    if not cfg.discord_webhook_url and send_fn is None:
+        return False
+    send = send_fn or _default_send
+    return send(cfg.discord_webhook_url, build_advisory_payload(result, proof_payload))

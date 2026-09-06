@@ -184,7 +184,11 @@ def test_process_alert_blocks_off_timeframe_as_config_blocked(tmp_path):
 
 
 def test_required_instruments_present_in_config():
+    """Isolated MNQ orb_breakout lane (risk_rules 1.2.0): MES is deliberately
+    disabled, so MNQ alone is required. The load-bearing assertion — every
+    required instrument must actually be allowed, catching a stale in-memory
+    universe silently dropping one — is unchanged and still enforced."""
     cfg = load_config()
-    assert set(["MES", "MNQ"]).issubset(set(cfg.required_instruments))
+    assert set(["MNQ"]).issubset(set(cfg.required_instruments))
     missing = [s for s in cfg.required_instruments if s not in cfg.allowed_instruments]
     assert missing == []

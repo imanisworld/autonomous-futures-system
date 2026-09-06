@@ -50,7 +50,12 @@ def _grade(score: int) -> str:
 
 # ─── Strat sequences that earn the +3 confirmation bonus ─────────────────────
 
-_SCORED_STRAT_SEQUENCES = frozenset({"strat_212", "strat_122", "strat_inside_break"})
+_SCORED_STRAT_SEQUENCES = frozenset({
+    "strat_212",
+    "strat_212_reversal",
+    "strat_122",
+    "strat_inside_break",
+})
 
 
 # ─── Main scorer ─────────────────────────────────────────────────────────────

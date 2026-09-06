@@ -254,9 +254,9 @@ def parse_messy_rh_options_text(text: str, *, now: datetime | None = None) -> di
 
     # "Target 1: $600" → resistance wall for longs (first numbered target = nearest resistance)
     if "gex_resistance_wall" not in extracted:
-        t1 = _match_group(r"\bTARGET\s+1\s*[:.]?\s*(\d+(?:\.\d+)?)\b", upper)
+        t1 = _match_group(r"\bTARGET\s+1\s*(?:[:.]\s*)?(\d+(?:\.\d+)?)\b", upper)
         if t1 is None:
-            t1 = _match_group(r"\bTARGET\s*[:.]?\s*(\d+(?:\.\d+)?)\b", upper)
+            t1 = _match_group(r"\bTARGET\s*(?:[:.]\s*)?(\d+(?:\.\d+)?)\b", upper)
         if t1 is not None:
             direction_now = extracted.get("direction", "LONG")
             if direction_now == "LONG":
@@ -966,7 +966,7 @@ def _first_ticker_token(text: str) -> str | None:
 
 
 def _number_after_label(text: str, label: str) -> float | None:
-    pattern = rf"\b{re.escape(label)}\s*[:=]?\s*(\d+(?:\.\d+)?)\b"
+    pattern = rf"\b{re.escape(label)}\s*(?:[:=]\s*)?(\d+(?:\.\d+)?)\b"
     value = _match_group(pattern, text)
     return float(value) if value is not None else None
 

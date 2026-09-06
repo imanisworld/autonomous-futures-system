@@ -193,6 +193,23 @@ def test_wrong_trend_direction_is_not_detected_with_real_reason(tmp_path):
     assert audit["reason"]
 
 
+def test_shadow_only_permission_does_not_erase_otherwise_qualified_observation(tmp_path):
+    """Execution permission remains blocked; only the shadow detector records it."""
+    cfg = replace(
+        _base_config(tmp_path),
+        strategy_permission_gate_enabled=True,
+        strategy_permission_default_status="SHADOW_ONLY",
+        strategy_status={"vwap_hold": "SHADOW_ONLY"},
+    )
+    audit = detect_early_vwap_hold(
+        build_market_state(_five_min_short_payload()), _daily_state(), cfg
+    )
+    assert audit["decision"] == "NO_TRADE"
+    assert audit["failed_gates"] == ["STRATEGY_NOT_PAPER_ELIGIBLE"]
+    assert audit["signal_detected"] is True
+    assert audit["shadow_eligibility_basis"] == "EXECUTION_PERMISSION_BLOCK_ONLY"
+
+
 # ─── Isolation proof (load-bearing) ────────────────────────────────────────────
 
 def test_daily_state_is_never_mutated_by_detection(tmp_path):

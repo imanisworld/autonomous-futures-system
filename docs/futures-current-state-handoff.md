@@ -1,100 +1,140 @@
 # Futures — Current State Handoff
 
-_As of 2026-07-08. Read-only summary of where things stand; not a proof
-artifact itself — see linked evidence for backing detail._
+_As of 2026-09-06. This is the single current futures handoff. Do not recreate completed audits, redo merged fixes, or reopen strategy work unless new evidence proves a defect._
 
-## Execution mode
+## Verdict
 
-- **Execution mode**: Tradovate demo (`BROKER=tradovate`, `TRADOVATE_ENV=demo`).
-- **Live money**: blocked. `LIVE_TRADING_ENABLED` is hardcoded `false` and
-  enforced independently at five layers: config load (`config/settings.py:load_config`),
-  `RiskEngine._check_live_trading_disabled`, `TradovateBroker.execute_bracket`,
-  `webhook/runner.py`'s `broker.is_live` cross-check, and same-day
-  `live_preflight` arming (`execution/live_preflight.py`).
-- **Paper simulator (`PaperBroker`, in-process)**: available in the codebase
-  but not necessarily what's running on the box right now. The dashboard's
-  "PAPER MODE" / "PAPER SYSTEM" labels are driven by `risk_rules.yaml:
-  trading_mode.paper_mode`, not by `BROKER`/`TRADOVATE_ENV` — so the label
-  does not by itself distinguish "Tradovate demo (real broker, demo
-  account)" from "PaperBroker in-process simulator." Not a safety gap
-  (`BROKER` env var controls the actual code path either way), but a
-  display-only wording gap worth fixing in a small, display-only PR if
-  useful.
+**PAPER ONLY / COLLECTION CONTINUES / NO IMMEDIATE REPAIR REQUIRED.**
 
-## System posture
+The current futures system is not fully strategy-validated, but the active paper collection/runtime lane has no newly confirmed blocker from the latest audit. Recent work closed the real Pine ORB parity defects, reduced VPS memory pressure, and merged the Tradovate exact-account routing guard into the repository. The remaining Tradovate step is operational activation later, not more development.
 
-**HOLD / OBSERVATION ONLY.**
+## Current repo vs deployed runtime
 
-- Execution-safety patch (alert-freshness gate + Tradovate working-order
-  recheck) is on `main` as commit `016c4e8`. Alert-age cutoff is in
-  observe-only mode by design (`log_alert_age_only: true`) — zero production
-  reps yet on the freshness gate.
-- Note: an earlier session-branch attempt at this same patch
-  (`claude/futures-system-audit-synl3f`, commit `164f934`) implemented the
-  working-order recheck more broadly — checking both open *positions* and
-  working *orders* (`has_open_exposure()`) — whereas `016c4e8`'s merged
-  version checks working orders only (`_list_orders`/`WORKING_ORDER_STATUSES`
-  in `webhook/runner.py`). That branch was abandoned as superseded/redundant
-  rather than merged, per operator instruction (one source of truth). The
-  narrower scope of the merged version is flagged here as a real, open
-  question — not a confirmed bug — worth a deliberate decision (e.g. "is a
-  bracket ever left with a naked position and no working child order in
-  practice?"), not silently carried forward or fixed in this pass.
-- Cancelled-row / Option C taxonomy proof: **BLOCKED** — requires actual
-  Hetzner VPS journal access (`logs/journal_*.jsonl` or the deployed
-  `LOG_DIR`), which is not reachable from a sandboxed code-checkout session.
-  See the box-side proof checklist below for what to run once VPS access is
-  available.
-- No strategy, fill-model, runner, GEX, broker, or config work approved or
-  in progress.
+- Repository `main`: `48037967ff40a722d247f0cc22be474d06d28b4a` (`48037967`) after merged PR #374.
+- Running `futures-bot` remains on the previously proven deployed release `73bffb1`; do not assume repo `main` changes are on the bot until a separate pinned deploy is performed.
+- The watcher-only #466 rollout did not redeploy `futures-bot`.
+- Latest verified bot state from the current maintenance pass: service healthy, health endpoint 200, no restart/crash-loop issue reported.
+- Evidence epoch remains the current paper-collection epoch; do not create a new epoch merely because `main` advanced.
 
-## Phase ladder (see full audit for detail)
+## Completed September fixes — do not redo
 
-F0 complete. F1 (frozen 30-trade paper-proof window) has never actually run
-under a genuine freeze — the best real evidence is one audited week
-(`docs/session-audit-2026-06-24-to-2026-07-01.md`): 29 TRADE decisions, 19
-IOC-CANCELLED (66%), 4 FILLED-LOSS, 5 PHANTOM-CLEARED, **0 FILLED-WIN** —
-and that window predates two relevant bug fixes. F2 is real but of mixed,
-mostly unproven-in-production maturity. F3 (live-vs-replay comparison) does
-not exist as specified.
+### Pine / TradingView
 
-Separately flagged, not yet resolved: the IOC-faithful 622-day backtest
-(`docs/ioc-faithful-baseline-622d-2026-07-06.md`) found the "honest"
-non-optimistic-fill backtest is ~zero/negative and would trip the 20%
-drawdown breaker in month 1 — a strategy-viability question independent of
-execution-safety mechanics, not resolved by this document.
+PR #467 — stale ORB bracket state:
 
-## Box-side proof checklist (hand to whoever has VPS access)
+- Fixed Pine carrying an old NY ORB bracket after the canonical runtime/replay ORB had expired/reset.
+- Pine reset/expiry now follows the canonical ORB lifecycle instead of leaving the prior bracket alive until the next open.
+- No entry, target, filter, risk, or broker behavior was tuned.
 
-```
-Lane: FUTURES
-Task: Box-side CANCELLED / Option C proof check
-Mode: read-only only
+PR #468 — ORB stop parity:
 
-Required output:
-- hostname
-- deployed SHA
-- service health
-- LIVE_TRADING_ENABLED value
-- execution mode label
-- current position state
-- LOG_DIR path
-- journal files checked
-- latest journal timestamp
-- post-taxonomy CANCELLED row count (cutoff 2026-07-07T18:35:33Z)
-- option_c_recurrence count
-- MISLABELED_FILL_SUSPECT count
-- final verdict
-```
+- Fixed Pine `orb_breakout` advisory stop offsets to match backend `risk_rules.yaml`.
+- MNQ ORB stop offset: 48 ticks.
+- MES ORB stop offset: 16 ticks.
+- 4HR Re-Trigger and other strategy brackets were intentionally left unchanged.
+- Current-main CI passed before merge.
 
-## Open items
+Operational TradingView refresh is complete:
 
-- Box-side CANCELLED-row / Option C proof check — blocked pending VPS access.
-- PR #158 (VP futures manual strategy snapshot, docs-only) — not reviewed
-  this pass.
-- Dashboard paper/demo wording gap (above) — not fixed, flagged only.
-- `MISLABELED_FILL_SUSPECT` / `option_c_recurrence` / an explicit "≥30
-  resolved TRADE↔OUTCOME pairs, ≥10 filled" gate — none of these exact terms
-  exist in this repo today; only `ops/proof_30_mnq.py`'s `filled_wl_count`
-  logic was found. Not confirmed as missing-by-design — just not present as
-  written here.
+- Latest `tradingview/risksentinel_context.pine` was copied into TradingView after #467/#468.
+- Script was saved/compiled.
+- Active alert was recreated so TradingView uses the updated Pine snapshot.
+- No VPS deploy is required for those Pine-only fixes.
+
+### CHOPPY live/replay parity
+
+Already fixed on current repo code before this maintenance pass. The explicit replay regression populates `window_direction` and proves the effective-condition parity behavior. No new CHOPPY patch was made. Do not reopen it without a new reproducible failure.
+
+### Tradovate exact account routing — repository fix complete
+
+PR #374 was refreshed onto current main, re-audited, tested, and merged as `48037967`.
+
+The merged guard:
+
+- adds optional `TRADOVATE_EXPECTED_ACCOUNT_ID`;
+- searches the full Tradovate `/account/list` for the exact pinned id rather than trusting `accounts[0]`;
+- uses the same selector in normal account resolution and the reliability heartbeat;
+- fails closed if the pinned account is absent, duplicated/ambiguous, unresolved, or malformed;
+- fails closed before order submission if the pinned account balance cannot be verified as positive;
+- adds the account-routing cancellations to the existing no-fill taxonomy.
+
+Current-main merge-candidate CI: **4660 passed, 6 skipped, 0 failures**.
+
+**Important:** this code is merged but not yet deployed to the running bot, and `TRADOVATE_EXPECTED_ACCOUNT_ID` is not yet set on the VPS. That is intentionally deferred. No Tradovate reconnect, credential recreation, or account setup is required. Later, read the bot's existing intended demo account id from the VPS/Tradovate account list, pin that same id, deploy the already-merged code, and verify it. Do not guess an account id.
+
+## VPS memory / IB Gateway
+
+The earlier VPS memory pressure was real, but the current maintenance pass removed the largest unnecessary resident process from the active box state.
+
+IB Gateway status now:
+
+- `ibgateway` container is stopped/exited.
+- Container restart policy is `no`, so Docker daemon restarts or host reboots will not automatically bring it back.
+- Container and image were preserved; this was not an uninstall.
+- `futures-bot` was not touched by the stop/restart-policy change.
+
+Observed memory improvement after stopping IB Gateway:
+
+- RAM used: about 957 MB -> 651 MB.
+- RAM available: about 957 MB -> 1262 MB.
+- Swap used: about 914 MB -> 726 MB.
+
+Do not recreate the prior IB dependency audit or restart the container unless a real consumer is identified later.
+
+## Watcher state
+
+The current watcher work is already deployed and should not be rewritten.
+
+- #466 is watcher-only and includes release-identity/rebaseline handling.
+- Watcher remained healthy after the IB Gateway change; latest reported tick in this pass was OK with nothing blocked and no warnings.
+- The next real futures release should provide the natural proof of the watcher self-rebaseline path. That is a proof item, not a reason for another watcher code change now.
+
+## Strategy evidence classifications
+
+`docs/strategy-rules/Strategy_Inventory.md` remains the evidence source of truth.
+
+These are evidence outcomes, not software bugs to "fix" by weakening risk or tuning rules:
+
+- ORB Reclaim current/first_cross — **BROKEN — negative evidence**.
+- ORB Reclaim V4-R — **WAIT**.
+- 4HR Re-Trigger MNQ — **BROKEN FOR CURRENT EXECUTABLE FORM**.
+- 4HR Re-Trigger MES — **BROKEN / WAIT**.
+- 12HR Miyagi — **BROKEN FOR CURRENT SYSTEM RISK CONSTRAINTS**.
+- 60M 3-2-2 First Live — **BROKEN FOR CURRENT SYSTEM RISK CONSTRAINTS**.
+- ORB Breakout inverted evidence lane — **PROMISING BUT UNPROVEN**.
+- VWAP Hold MNQ NY — **PROMISING BUT UNPROVEN**.
+- MES `strat_122` — **WAIT**.
+
+Do not widen stops, loosen risk gates, or change entry/target/filter logic to make the broken forms pass. A changed strategy is a new variant and requires preregistration and new evidence.
+
+## Current safety posture
+
+- Paper only.
+- No live broker execution is authorized.
+- Active isolated futures lane remains MNQ-first.
+- Max 3 trades/day for the isolated lane.
+- Daily loss and drawdown survival controls remain in force.
+- No averaging down.
+- Bracket/stop requirements remain in force.
+- Do not fabricate signals, force traffic, or tune strategy parameters to manufacture evidence.
+- Do not deploy merely because repository `main` moved.
+
+## Open items that are NOT current defects
+
+- Tradovate account pin activation on the VPS — later operational step; repo code already fixed.
+- Watcher self-rebaseline proof — wait for the next real pinned release.
+- First-bars check — intentionally unscheduled/deferred; do not recreate an automation for it unless explicitly requested.
+- PR #463 memory-entry/deploy gate — deliberate HOLD/policy item; do not merge just because memory is currently healthier.
+- Options-lane PRs/evidence are separate from this futures handoff; do not mix their work into futures maintenance.
+
+## Smallest safe next step
+
+**Stop changing futures code for now and continue natural paper evidence collection.**
+
+When a real futures deployment is next justified, separately:
+
+1. read/confirm the existing intended Tradovate demo account id;
+2. set `TRADOVATE_EXPECTED_ACCOUNT_ID` to that exact id;
+3. deploy the exact reviewed commit through the normal pinned release path;
+4. verify paper/demo mode, exact account routing, watcher rebaseline, health, and first natural post-deploy evidence;
+5. stop again unless new evidence proves another defect.

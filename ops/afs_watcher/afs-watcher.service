@@ -1,0 +1,14 @@
+[Unit]
+Description=AFS read-only memory watcher (observation-only; supervises futures-bot memory state)
+After=network.target futures-bot.service
+
+[Service]
+Type=simple
+WorkingDirectory=__AFS_WATCHER_SRC__
+ExecStartPre=/bin/bash __AFS_WATCHER_SRC__/bootstrap_tmp_state.sh
+ExecStart=/bin/bash __AFS_WATCHER_SRC__/supervisor.sh
+Restart=always
+RestartSec=15
+
+[Install]
+WantedBy=multi-user.target

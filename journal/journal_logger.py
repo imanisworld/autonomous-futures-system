@@ -31,6 +31,32 @@ from risk.risk_engine import DailyState
 logger = logging.getLogger(__name__)
 
 
+# Full journal rows are large Python object graphs (several times larger than
+# their JSONL representation).  Keep only the small recent working set needed
+# by daily/status readers.  All-history account/performance scans use the
+# compact outcome cache below instead of pinning every parsed journal in RAM.
+_MAX_PARSED_JOURNAL_CACHE_FILES = 8
+
+# Ceilings for the compact outcome cache below. That cache is what keeps
+# all-history balance/peak/epoch scans cheap without pinning parsed rows, and
+# those scans touch EVERY retained journal, so a ceiling at or below the
+# journal count would re-parse the whole set on every scan -- LRU is the worst
+# policy for a full-sweep access pattern, because it evicts exactly what the
+# next sweep reads first. These are therefore set far above observed volume:
+# they bound a pathological day, they are not a working-set limit.
+# Measured on the live box 2026-09-03: 82 journal files / 86.3 MB of JSONL held
+# 96 OUTCOME rows and 32 performance rows in total -- about 20 KB of tuples,
+# growing about 1-2 rows/day. Both ceilings are unreachable at that rate.
+_MAX_OUTCOME_CACHE_FILES = 512      # ~1.4 years of daily journals
+_MAX_OUTCOME_CACHE_ROWS = 50_000    # hard total ceiling; ~390x the current total
+
+
+def _aware_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
 class JournalLogger:
     """
     Append-only JSONL decision and trade journal.
@@ -47,6 +73,9 @@ class JournalLogger:
     # the entry automatically; stat() is ~microseconds vs a full re-parse. Shared
     # across instances because each request builds a fresh JournalLogger.
     _entries_cache: dict = {}
+    # path -> ((mtime_ns, size), {account: [(ts, pnl)], performance: [(result, pnl)]})
+    # This preserves fast all-history scans without retaining every decision row.
+    _outcome_cache: dict = {}
 
     def __init__(self, log_dir: str = "logs"):
         self.log_dir = Path(log_dir)
@@ -109,6 +138,7 @@ class JournalLogger:
         best_ask_at_submit: Optional[float] = None,
         ticks_moved_from_entry: Optional[float] = None,
         paper_order_id: Optional[str] = None,
+        client_order_id: Optional[str] = None,
         execution_audit: Optional[dict] = None,
     ) -> None:
         """
@@ -143,6 +173,7 @@ class JournalLogger:
                 "best_ask_at_submit": best_ask_at_submit,
                 "ticks_moved_from_entry": ticks_moved_from_entry,
                 "paper_order_id": paper_order_id,
+                "client_order_id": client_order_id,
                 "execution_audit": execution_audit,
             },
         }
@@ -178,6 +209,7 @@ class JournalLogger:
         *,
         stop: Optional[float] = None,
         exit_mode: Optional[str] = None,
+        client_order_id: Optional[str] = None,
     ) -> None:
         """Append the broker's OSO order ids for the currently-open position.
 
@@ -193,6 +225,8 @@ class JournalLogger:
             "session": session,
             "order_ids": dict(order_ids or {}),
         }
+        if client_order_id:
+            record["client_order_id"] = str(client_order_id)
         if stop is not None:
             record["stop"] = float(stop)
         if exit_mode:
@@ -217,6 +251,43 @@ class JournalLogger:
             self._append(entry, for_date)
         except Exception as exc:  # noqa: BLE001 — visibility must never raise
             logger.debug("log_block_visibility failed: %s", exc)
+
+    def log_order_suppression(
+        self,
+        *,
+        instrument: str,
+        session: str,
+        final_decision: str,
+        gate_reason: str,
+        strategy: Optional[str] = None,
+        signal_timestamp: Optional[str] = None,
+        client_order_id: Optional[str] = None,
+        for_date: Optional[date] = None,
+    ) -> None:
+        """Append the final reason an approved intent did not reach the broker.
+
+        Audit-only and inert to daily state: the record carries no `decision`
+        field and is not an OUTCOME/TRADE/ORDER_IDS row. It therefore cannot
+        create, close, count, or otherwise mutate a position; it only makes the
+        terminal suppression durable after the earlier TRADE_INTENT row.
+        """
+        try:
+            self._append(
+                {
+                    "ts": datetime.now(timezone.utc).isoformat(),
+                    "type": "ORDER_SUPPRESSION",
+                    "instrument": instrument,
+                    "session": session,
+                    "final_decision": final_decision,
+                    "gate_reason": gate_reason,
+                    "strategy": strategy,
+                    "signal_timestamp": signal_timestamp,
+                    "client_order_id": client_order_id,
+                },
+                for_date,
+            )
+        except Exception as exc:  # noqa: BLE001 — visibility must never raise
+            logger.debug("log_order_suppression failed: %s", exc)
 
     def last_reconcile_ts(self, for_date: Optional[date] = None) -> Optional[str]:
         """Best-effort timestamp of the most recent reconcile-sourced OUTCOME on
@@ -376,18 +447,49 @@ class JournalLogger:
         entries = self._read_entries(path)
         return self._compute_daily_state(entries, for_date)
 
+    def get_daily_state_since(
+        self,
+        since: datetime,
+        for_date: Optional[date] = None,
+    ) -> DailyState:
+        """Reconstruct daily risk counters from an explicit epoch boundary.
+
+        Entries without a parseable processing timestamp are excluded. This is
+        used only by preregistered isolated paper epochs; the ordinary shared
+        account reconstruction remains unchanged.
+        """
+        path = self._journal_path(for_date)
+        if not path.exists():
+            return DailyState(date=(for_date or date.today()).isoformat())
+        boundary = _aware_utc(since)
+        entries = [
+            entry
+            for entry in self._read_entries(path)
+            if (entry_ts := _parse_ts(entry.get("ts"))) is not None
+            and _aware_utc(entry_ts) >= boundary
+        ]
+        return self._compute_daily_state(entries, for_date)
+
     def _read_entries(self, path: Path) -> List[dict]:
         key = str(path)
         try:
             st = path.stat()
         except FileNotFoundError:
             JournalLogger._entries_cache.pop(key, None)
+            JournalLogger._outcome_cache.pop(key, None)
             return []
         sig = (st.st_mtime_ns, st.st_size)
         cached = JournalLogger._entries_cache.get(key)
         if cached is not None and cached[0] == sig:
             # Unchanged since last parse — reuse. Callers treat entries as
             # read-only (they filter/iterate, never mutate in place).
+            # Refresh recency the same way _read_outcome_summary does: the cache
+            # is process-wide, so a bare pop() raises KeyError if another caller
+            # evicted this key between the get() and the pop(), and unconditional
+            # re-insertion would resurrect an entry eviction had dropped. Only
+            # reorder what is still present.
+            if JournalLogger._entries_cache.pop(key, None) is not None:
+                JournalLogger._entries_cache[key] = cached
             return cached[1]
         entries: List[dict] = []
         with self._locked():
@@ -400,8 +502,107 @@ class JournalLogger:
                         entries.append(json.loads(line))
                     except json.JSONDecodeError:
                         continue
+        JournalLogger._entries_cache.pop(key, None)
         JournalLogger._entries_cache[key] = (sig, entries)
+        while len(JournalLogger._entries_cache) > _MAX_PARSED_JOURNAL_CACHE_FILES:
+            oldest = next(iter(JournalLogger._entries_cache))
+            JournalLogger._entries_cache.pop(oldest, None)
         return entries
+
+    def _read_outcome_summary(self, path: Path) -> dict:
+        """Return compact realized-outcome facts for one journal file.
+
+        Account reconstruction historically counts standalone OUTCOME rows,
+        while performance stats also accept the legacy inline TRADE outcome
+        format.  Keep those two views separate so this memory repair does not
+        change accounting semantics.
+        """
+        key = str(path)
+        try:
+            st = path.stat()
+        except FileNotFoundError:
+            JournalLogger._entries_cache.pop(key, None)
+            JournalLogger._outcome_cache.pop(key, None)
+            return {"account": [], "performance": []}
+        sig = (st.st_mtime_ns, st.st_size)
+        cached = JournalLogger._outcome_cache.get(key)
+        if cached is not None and cached[0] == sig:
+            # Refresh recency so a hot file is not the next one evicted. The
+            # cache is process-wide, so a bare pop() could raise KeyError if
+            # another caller evicted this key between the get() and the pop();
+            # and re-inserting unconditionally would resurrect an entry that
+            # eviction had deliberately dropped. Only reorder what is still there.
+            if JournalLogger._outcome_cache.pop(key, None) is not None:
+                JournalLogger._outcome_cache[key] = cached
+            return cached[1]
+
+        account: list[tuple[object, float]] = []
+        performance: list[tuple[str, float]] = []
+        with self._locked():
+            with open(path) as handle:
+                for line in handle:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        entry = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+
+                    if entry.get("type") == "OUTCOME":
+                        outcome = entry.get("outcome") or {}
+                        result = outcome.get("result")
+                        pnl = float(outcome.get("pnl_dollars") or 0.0)
+                        account.append((entry.get("ts"), pnl))
+                        if result in ("WIN", "LOSS", "BREAKEVEN"):
+                            performance.append((str(result), pnl))
+                        continue
+
+                    if entry.get("decision") != "TRADE":
+                        continue
+                    if (entry.get("risk_check") or {}).get("result") != "APPROVED":
+                        continue
+                    outcome = entry.get("outcome") or {}
+                    result = outcome.get("result")
+                    if result in ("WIN", "LOSS", "BREAKEVEN"):
+                        performance.append(
+                            (str(result), float(outcome.get("pnl_dollars") or 0.0))
+                        )
+
+        summary = {"account": account, "performance": performance}
+        # A single summary at or above the row ceiling is returned to the caller
+        # but NOT retained. Caching it would make the ceiling unenforceable:
+        # there would permanently be one entry over budget that eviction could
+        # not remove, so the "bounded" total would be unbounded in exactly the
+        # pathological case the ceiling exists for. Dropping any stale entry for
+        # this path keeps the cache free of a smaller, now-superseded summary.
+        JournalLogger._outcome_cache.pop(key, None)
+        if len(account) + len(performance) <= _MAX_OUTCOME_CACHE_ROWS:
+            JournalLogger._outcome_cache[key] = (sig, summary)
+            JournalLogger._evict_outcome_cache()
+        return summary
+
+    @staticmethod
+    def _evict_outcome_cache() -> None:
+        """Drop least-recently-used summaries until both ceilings hold.
+
+        Eviction only costs a re-parse of that file on its next read; it never
+        changes an accounting result. Every retained entry is individually at or
+        under the row ceiling (the caller refuses to store a larger one), so
+        this loop always terminates with the total at or under the ceiling and
+        can never evict down to an empty cache to satisfy it.
+        """
+        cache = JournalLogger._outcome_cache
+        while len(cache) > _MAX_OUTCOME_CACHE_FILES:
+            cache.pop(next(iter(cache)), None)
+        rows = sum(
+            len(summary["account"]) + len(summary["performance"])
+            for _sig, summary in cache.values()
+        )
+        while rows > _MAX_OUTCOME_CACHE_ROWS and cache:
+            _key, (_sig, summary) = next(iter(cache.items()))
+            rows -= len(summary["account"]) + len(summary["performance"])
+            cache.pop(_key, None)
 
     def _compute_daily_state(
         self, entries: List[dict], for_date: Optional[date]
@@ -630,6 +831,7 @@ class JournalLogger:
                         "contracts": setup.get("contracts", 1),
                         "strategy": setup.get("strategy"),
                         "paper_order_id": entry.get("paper_order_id"),
+                        "client_order_id": entry.get("client_order_id"),
                         "mnq_orb_reclaim_proof_audit": entry.get(
                             "mnq_orb_reclaim_proof_audit"
                         ),
@@ -666,11 +868,8 @@ class JournalLogger:
             paths = [path for path in paths if path.name <= cutoff_name]
 
         for path in paths:
-            for entry in self._read_entries(path):
-                if entry.get("type") != "OUTCOME":
-                    continue
-                outcome = entry.get("outcome") or {}
-                balance += float(outcome.get("pnl_dollars") or 0.0)
+            for _, pnl in self._read_outcome_summary(path)["account"]:
+                balance += pnl
         return round(balance, 2)
 
 
@@ -688,13 +887,33 @@ class JournalLogger:
             paths = [path for path in paths if path.name <= cutoff_name]
 
         for path in paths:
-            for entry in self._read_entries(path):
-                if entry.get("type") != "OUTCOME":
-                    continue
-                outcome = entry.get("outcome") or {}
-                balance += float(outcome.get("pnl_dollars") or 0.0)
+            for _, pnl in self._read_outcome_summary(path)["account"]:
+                balance += pnl
                 peak = max(peak, balance)
         return round(peak, 2)
+
+    def get_account_state_since(
+        self,
+        starting_balance: float,
+        since: datetime,
+        through_date: Optional[date] = None,
+    ) -> tuple[float, float]:
+        """Return balance and peak using only resolved outcomes in an epoch."""
+        balance = peak = float(starting_balance)
+        boundary = _aware_utc(since)
+        paths = sorted(self.log_dir.glob("journal_*.jsonl"))
+        if through_date is not None:
+            cutoff_name = f"journal_{through_date.isoformat()}.jsonl"
+            paths = [path for path in paths if path.name <= cutoff_name]
+
+        for path in paths:
+            for raw_ts, pnl in self._read_outcome_summary(path)["account"]:
+                entry_ts = _parse_ts(raw_ts)
+                if entry_ts is None or _aware_utc(entry_ts) < boundary:
+                    continue
+                balance += pnl
+                peak = max(peak, balance)
+        return round(balance, 2), round(peak, 2)
 
     def get_performance_stats(self, starting_balance: float) -> dict:
         """
@@ -716,34 +935,18 @@ class JournalLogger:
             day_str = path.stem[len("journal_"):]
             day_pnl = 0.0
 
-            for entry in self._read_entries(path):
-                pnl: Optional[float] = None
-                result: Optional[str] = None
-
-                if entry.get("type") == "OUTCOME":
-                    out = entry.get("outcome") or {}
-                    result = out.get("result")
-                    pnl = float(out.get("pnl_dollars") or 0.0)
-                elif entry.get("decision") == "TRADE":
-                    risk = entry.get("risk_check") or {}
-                    if risk.get("result") == "APPROVED":
-                        out = entry.get("outcome") or {}
-                        result = out.get("result")
-                        if result in ("WIN", "LOSS", "BREAKEVEN"):
-                            pnl = float(out.get("pnl_dollars") or 0.0)
-
-                if pnl is not None and result in ("WIN", "LOSS", "BREAKEVEN"):
-                    day_pnl += pnl
-                    balance += pnl
-                    if balance > peak:
-                        peak = balance
-                    dd = peak - balance
-                    if dd > max_drawdown:
-                        max_drawdown = dd
-                    if result == "WIN" and pnl > 0:
-                        wins.append(pnl)
-                    elif result == "LOSS":
-                        losses.append(abs(pnl))
+            for result, pnl in self._read_outcome_summary(path)["performance"]:
+                day_pnl += pnl
+                balance += pnl
+                if balance > peak:
+                    peak = balance
+                dd = peak - balance
+                if dd > max_drawdown:
+                    max_drawdown = dd
+                if result == "WIN" and pnl > 0:
+                    wins.append(pnl)
+                elif result == "LOSS":
+                    losses.append(abs(pnl))
 
             if day_pnl:
                 daily_pnl[day_str] = round(day_pnl, 2)

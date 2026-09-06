@@ -216,13 +216,15 @@ def test_runner_gate_suppresses_orders_in_shadow_mode(tmp_path):
     suppressed (no fill) in always_on_shadow — proving the gate is a real
     chokepoint in process_alert, not just a standalone function."""
     from datetime import date
-    from config.settings import load_config
+    from tests.conftest import load_permissive_config
     from webhook.runner import process_alert
     import sys
     sys.path.insert(0, "tests")
     from test_e2e_scenarios import _base_payload
 
-    cfg = dataclasses.replace(load_config(), max_staleness_seconds=10 ** 9)
+    # Explicit permissive universe: these are general execution-safety
+    # proofs, not assertions about the shipped isolated-lane config.
+    cfg = load_permissive_config(max_staleness_seconds=10 ** 9)
     payload = _base_payload(timestamp="2026-05-23T14:30:00+00:00")
     fd = date(2026, 5, 23)
 
@@ -242,7 +244,7 @@ def test_runner_demo_hold_blocks_external_but_not_paper(tmp_path, monkeypatch):
     placement on an external-broker route — the broker's execute_bracket is a
     trip-wire that must never fire."""
     from datetime import date
-    from config.settings import load_config
+    from tests.conftest import load_permissive_config
     from webhook.runner import process_alert
     import webhook.runner as runner_mod
     import sys
@@ -251,8 +253,7 @@ def test_runner_demo_hold_blocks_external_but_not_paper(tmp_path, monkeypatch):
 
     payload = _base_payload(timestamp="2026-05-23T14:30:00+00:00")  # new_york
     fd = date(2026, 5, 23)
-    held = dataclasses.replace(
-        load_config(),
+    held = load_permissive_config(
         max_staleness_seconds=10 ** 9,
         demo_execution_hold_sessions=["new_york"],
     )
@@ -322,7 +323,7 @@ def test_execution_failure_clears_phantom_open(tmp_path, monkeypatch):
     instead of blocked for ~20 min until the reconciler sweeps it. Regression for
     the 2026-06-19 limit-entry no-fill phantom churn."""
     from datetime import date
-    from config.settings import load_config
+    from tests.conftest import load_permissive_config
     from webhook.runner import process_alert
     from journal.journal_logger import JournalLogger
     from execution.broker_interface import Fill
@@ -338,7 +339,9 @@ def test_execution_failure_clears_phantom_open(tmp_path, monkeypatch):
                     result="CANCELLED", pnl_ticks=None, pnl_dollars=None)
     monkeypatch.setattr(pb.PaperBroker, "execute_bracket", _cancelled, raising=False)
 
-    cfg = dataclasses.replace(load_config(), max_staleness_seconds=10 ** 9)
+    # Explicit permissive universe: these are general execution-safety
+    # proofs, not assertions about the shipped isolated-lane config.
+    cfg = load_permissive_config(max_staleness_seconds=10 ** 9)
     payload = _base_payload(timestamp="2026-05-23T14:30:00+00:00")
     fd = date(2026, 5, 23)
     log_dir = str(tmp_path / "j")
@@ -360,7 +363,7 @@ def test_cancelled_outcome_carries_no_fill_taxonomy_fields(tmp_path, monkeypatch
     (logging-only addition, no metric drift)."""
     import json
     from datetime import date
-    from config.settings import load_config
+    from tests.conftest import load_permissive_config
     from webhook.runner import process_alert
     from execution.broker_interface import Fill
     import execution.paper_broker as pb
@@ -376,7 +379,9 @@ def test_cancelled_outcome_carries_no_fill_taxonomy_fields(tmp_path, monkeypatch
                     no_fill_reason="NO_FILL_LIMIT_TOO_PASSIVE", order_type="Limit")
     monkeypatch.setattr(pb.PaperBroker, "execute_bracket", _cancelled, raising=False)
 
-    cfg = dataclasses.replace(load_config(), max_staleness_seconds=10 ** 9)
+    # Explicit permissive universe: these are general execution-safety
+    # proofs, not assertions about the shipped isolated-lane config.
+    cfg = load_permissive_config(max_staleness_seconds=10 ** 9)
     payload = _base_payload(timestamp="2026-05-23T14:30:00+00:00")
     fd = date(2026, 5, 23)
     log_dir = str(tmp_path / "j")

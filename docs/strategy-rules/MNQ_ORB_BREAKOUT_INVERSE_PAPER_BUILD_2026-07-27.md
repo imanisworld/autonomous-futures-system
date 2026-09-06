@@ -18,6 +18,15 @@ Activation is paper-only:
 
 `MNQ_ORB_BREAKOUT_INVERSE_MODE=paper_sim`
 
+Every activation also requires an offset-aware accounting boundary:
+
+`MNQ_ORB_BREAKOUT_INVERSE_EPOCH_START=<ISO-8601 timestamp>`
+
+Daily limits, loss streaks, account balance, peak balance, and max drawdown are
+reconstructed from that boundary. Outcomes before it cannot block the lane;
+every outcome at or after it remains subject to the unchanged risk rules. The
+global journal remains authoritative for open-position safety.
+
 Valid values are `observe_only` and `paper_sim`. There is no demo or live
 mode. `paper_sim` constructs the isolated `PaperBroker` directly and never
 constructs an external broker.
@@ -53,6 +62,7 @@ plus recommended and submitted sizing.
 Any demo release activating this lane must include:
 
 - `EXPECTED_PROOF_MNQ_ORB_BREAKOUT_INVERSE_MODE=paper_sim`;
+- `EXPECTED_PROOF_MNQ_ORB_BREAKOUT_INVERSE_EPOCH_START=<same timestamp>`;
 - `EXPECTED_PROOF_MNQ_ORB_BREAKOUT_PROOF_MODE=observe_only`;
 - the ordinary proof-critical pins for paper mode, broker, slippage,
   pessimistic ambiguity, exit mode, and timeframe.

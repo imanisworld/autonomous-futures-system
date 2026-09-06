@@ -206,6 +206,17 @@ def _candidate_line(candidate: dict) -> str:
     )
 
 
+def _decision_reason_line(result: dict) -> Optional[str]:
+    reason = result.get("gate_reason") or result.get("reason")
+    if not reason:
+        failed = result.get("failed_gates") or []
+        if isinstance(failed, str):
+            failed = [failed]
+        if failed:
+            reason = ", ".join(str(item) for item in failed)
+    return f"Why: {reason}" if reason else None
+
+
 def _format_message(payload: AlertPayload, result: dict) -> str:
     decision = result.get("decision") or "UNKNOWN"
     prefix = []
@@ -235,6 +246,9 @@ def _format_message(payload: AlertPayload, result: dict) -> str:
         lines.append(f"Bar time: {_format_bar_time(payload.timestamp)}")
         if resolution:
             lines.append(f"Resolution: {resolution}")
+        reason_line = _decision_reason_line(result)
+        if reason_line:
+            lines.append(reason_line)
         if risk:
             lines.append(_risk_line(risk))
         candidate = result.get("candidate")
