@@ -419,6 +419,109 @@ class Findings:
 
 
 # ── runtime checks ───────────────────────────────────────────────────────────
+def _verified_release_identity() -> dict:
+    """The release this process verified at startup — what a baseline is taken against."""
+    return {"commit": RELEASE_SHA, "fingerprint": RELEASE_FINGERPRINT, "release_dir": str(RELEASE_DIR)}
+
+
+def _baseline_record(props: dict, pid: str) -> dict:
+    return {"ActiveEnterTimestamp": props.get("ActiveEnterTimestamp"), "NRestarts": props.get("NRestarts"),
+            "ExecMainPID": pid, "recorded_utc": iso(now_utc()), "release": _verified_release_identity()}
+
+
+def sanctioned_restart_reason(base: dict, props: dict, pid: str, cwd: str | None,
+                              live_pins: dict | None, release_link: str | None,
+                              other_blocked: list[str]) -> str | None:
+    """Return `None` only when this restart is PROVABLY the sanctioned deploy's own.
+
+    Every service restart is unexplained until shown otherwise. The one restart
+    the watcher may adopt on its own is the atomic promote's: the wrapper
+    switched the release link, re-pinned `.env`, and restarted the service —
+    and this process was (re)armed from those same pins. The proof therefore
+    has to tie the new process to a release CHANGE, not merely to a healthy
+    box: a hand `systemctl restart` on the same release looks identical in
+    every other respect and must still BLOCK.
+
+    `other_blocked` is every other BLOCKED key of the whole tick's runtime
+    check — the decision is taken last, so nothing found later can be missed.
+    Any doubt returns a reason, and the caller BLOCKS as before. Nothing here
+    relaxes `service_crash_restart`, which the caller evaluates separately.
+    """
+    prev = base.get("release")
+    if not isinstance(prev, dict) or not all(prev.get(k) for k in ("commit", "fingerprint", "release_dir")):
+        return "baseline predates release-identity tracking"
+    if prev == _verified_release_identity():
+        return "same release as the baseline — no deploy explains this restart"
+    if other_blocked:
+        return "tick is BLOCKED on " + ", ".join(sorted(set(other_blocked)))
+    if live_pins is None:
+        return "deploy pins unreadable"
+    if not _sha_match(live_pins[COMMIT_PIN], RELEASE_SHA) or \
+            live_pins[FINGERPRINT_PIN].strip().lower() != RELEASE_FINGERPRINT.strip().lower():
+        return "deploy pins do not name the release this watcher verified"
+    if live_pins[EPOCH_PIN] != iso(EPOCH):
+        return "epoch pin does not match the armed epoch"
+    if release_link != str(RELEASE_DIR):
+        return "release link is not the verified release"
+    if props.get("ActiveState") != "active":
+        return f"service ActiveState={props.get('ActiveState')}"
+    if not pid or pid == "0" or pid == base.get("ExecMainPID"):
+        return "no new main pid"
+    if props.get("ActiveEnterTimestamp") == base.get("ActiveEnterTimestamp") or not props.get("ActiveEnterTimestamp"):
+        return "ActiveEnterTimestamp did not move"
+    if cwd != str(RELEASE_DIR):
+        return f"live pid cwd={cwd} is not the verified release"
+    try:
+        if int(props.get("NRestarts", "")) != int(base.get("NRestarts", "")):
+            return f"NRestarts changed {base.get('NRestarts')} → {props.get('NRestarts')}"
+    except (TypeError, ValueError):
+        return "NRestarts unreadable"
+    return None
+
+
+def settle_baseline(state: dict, f: Findings, rt: dict, base: dict | None, restart: dict | None,
+                    props: dict, pid: str, cwd: str | None, live_pins: dict | None) -> None:
+    """Last step of the runtime check, once every finding of the tick is in.
+
+    `restart` is the provisional `unexpected_restart` finding already in `f`
+    (added the moment the restart was seen, so an exception anywhere in the
+    runtime check leaves the BLOCK standing). It is withdrawn ONLY when the
+    restart is proven sanctioned; otherwise it stays, annotated with why not.
+    """
+    if base is None:
+        return
+    identity = _verified_release_identity()
+    if restart is None:
+        if not isinstance(base.get("release"), dict) and not f.blocked() and cwd == str(RELEASE_DIR):
+            # Same process as the baseline, recorded before release identity was
+            # tracked, on a clean tick: stamp the release it was taken against,
+            # so the next sanctioned deploy has something to compare with.
+            base["release"] = identity
+        return
+    other_blocked = [b["key"] for b in f.blocked() if b is not restart]
+    why = sanctioned_restart_reason(base, props, pid, cwd, live_pins, rt.get("release_link"), other_blocked)
+    if why is not None:
+        restart["summary"] += f" (not adopted: {why})"
+        restart["detail"]["not_adopted"] = why
+        return
+    # The sanctioned deploy's own restart: the process now running is the one
+    # the pins name, from the release this watcher verified. Adopt it so the
+    # alarm keeps meaning something; keep the old baseline in the record so
+    # the adoption stays auditable. Record the event BEFORE mutating state.
+    previous = {k: base.get(k) for k in ("ActiveEnterTimestamp", "ExecMainPID", "NRestarts", "release")}
+    summary = restart["summary"]
+    state.setdefault("events_seen", {})
+    state.setdefault("notified", {})
+    emit_event(state, "REBASELINED", f"sanctioned_restart:{RELEASE_SHA[:12]}:{pid}",
+               {"summary": f"{summary} — adopted: sanctioned release {RELEASE_SHA[:12]} "
+                           f"(was {str((previous.get('release') or {}).get('commit'))[:12]})"},
+               "DISCORD_ROUTE_ERROR")
+    f.items.remove(restart)
+    state["baseline"] = {**_baseline_record(props, pid), "adopted_from": previous}
+    rt["baseline_adopted"] = summary
+    log(f"baseline adopted after sanctioned release {RELEASE_SHA[:12]}: {summary}")
+
+
 def check_runtime(state: dict, f: Findings, tick: dict) -> None:
     rt: dict = {}
     tick["runtime"] = rt
@@ -469,14 +572,16 @@ def check_runtime(state: dict, f: Findings, tick: dict) -> None:
         f.add("BLOCKED", "service_wrong_release", f"live pid {pid} cwd={cwd}, expected {RELEASE_DIR}")
 
     base = state.get("baseline")
+    restart: dict | None = None
     if base is None and props.get("ActiveState") == "active":
-        state["baseline"] = {"ActiveEnterTimestamp": props.get("ActiveEnterTimestamp"), "NRestarts": props.get("NRestarts"),
-                             "ExecMainPID": pid, "recorded_utc": iso(now_utc())}
+        state["baseline"] = _baseline_record(props, pid)
         log(f"baseline recorded: {state['baseline']}")
     elif base:
         if props.get("ActiveEnterTimestamp") != base["ActiveEnterTimestamp"] or pid != base["ExecMainPID"]:
+            # Provisional BLOCK, settled at the end of this check (see settle_baseline).
             f.add("BLOCKED", "unexpected_restart",
                   f"{SERVICE} restarted: ActiveEnter {base['ActiveEnterTimestamp']} → {props.get('ActiveEnterTimestamp')}, pid {base['ExecMainPID']} → {pid}")
+            restart = f.items[-1]
         try:
             if int(props.get("NRestarts", "0")) > int(base["NRestarts"]):
                 f.add("BLOCKED", "service_crash_restart", f"NRestarts {base['NRestarts']} → {props.get('NRestarts')}")
@@ -639,6 +744,8 @@ def check_runtime(state: dict, f: Findings, tick: dict) -> None:
         rt["today"] = {k: td.get(k) for k in ("date", "trade_count", "wins", "losses", "has_open_position", "open_position", "realized_pnl_dollars", "live_trading_enabled", "paper_mode")}
         if td.get("live_trading_enabled"):
             f.add("BLOCKED", "live_trading_enabled", "status/today reports live_trading_enabled=true")
+
+    settle_baseline(state, f, rt, base, restart, props, pid, cwd, live_pins)
 
 
 def _reading_from_dict(row: dict) -> MemoryReading:
@@ -1330,7 +1437,7 @@ def smallest_fix(key: str) -> str:
     m = {
         "unexpected_deploy": "operator: confirm the deploy was intended; re-arm the watcher on the new release (no auto-fix)",
         "service_not_active": "operator: inspect `journalctl -u futures-bot`; restart only by operator decision",
-        "unexpected_restart": "operator: confirm who restarted futures-bot; re-baseline the watcher if intended",
+        "unexpected_restart": "operator: confirm who restarted futures-bot — a sanctioned --release re-baselines on its own, and this restart could not be tied to one (see not_adopted); re-baseline by hand only if intended",
         "service_crash_restart": "operator: read the crash traceback in the snapshot before any restart",
         "deploy_candidate_running": "operator: stop the leftover afs-candidate unit (systemctl, operator-run) after confirming it is a stale verifier",
         "webhook_process_count": "operator: identify the extra/missing uvicorn process in the snapshot",
