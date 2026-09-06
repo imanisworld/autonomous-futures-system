@@ -320,3 +320,12 @@ def test_legacy_baseline_is_not_backfilled_across_a_restart(tmp_path, monkeypatc
 
     assert "unexpected_restart" in _keys(findings)
     assert "release" not in state["baseline"]
+
+
+def test_shipped_source_passes_the_watcher_static_selfcheck():
+    """The watcher refuses to start if its own source contains a forbidden token
+    (anywhere after the FORBIDDEN_TOKENS list — docstrings and comments included).
+    On the box that is a silent crash loop under supervisor.sh; here it must be a
+    failing test. Regression for the 2026-09-06 install of #465, whose docstring
+    mentioned a service restart command verbatim."""
+    w.static_selfcheck()
