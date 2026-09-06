@@ -1,0 +1,1 @@
+[{"kind": "targeted", "source": "local worktree wt-pr438 2026-09-02 ~06:45 ET", "sha": "c1456fb755a6998f7528ee4b1f571c165e5835ac", "passed": 77, "failed": 0, "skipped": 0, "errors": 0, "command": "pytest tests/test_options_contract_shortlist.py tests/test_options_contract_shortlist_safety.py tests/test_options_contract_constraints.py tests/test_options_robinhood_readonly.py -q"}]
