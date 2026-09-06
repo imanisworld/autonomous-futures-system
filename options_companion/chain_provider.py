@@ -2,32 +2,19 @@
 
 The ``ChainProvider`` protocol is the only surface the companion lane talks to, so
 selection/resolution logic is fully testable against a mock before a live Public key
-exists. ``PublicChainProvider`` is wired to Public's REAL documented HTTP contract
-(confirmed against https://public.com/api/docs and the official ``publicdotcom-py``
-SDK source), but stays strictly READ-ONLY: its allowed-path whitelist permits only
-the auth-token mint and the ``/userapigateway/marketdata`` (+ ``/option-details``)
-endpoints, so trading/order/account paths are structurally unreachable.
-
-Public's market-data contract (account-scoped, POST-based):
-- Auth:        POST /userapiauthservice/personal/access-tokens  {secret, validityInMinutes}
-               -> {accessToken}; then ``Authorization: Bearer <token>`` (re-mint on expiry).
-- Expirations: POST /userapigateway/marketdata/{accountId}/option-expirations
-               {instrument:{symbol,type:EQUITY}} -> {expirations:[YYYY-MM-DD,...]}.
-- Chain:       POST /userapigateway/marketdata/{accountId}/option-chain
-               {instrument:{symbol,type:EQUITY}, expirationDate} -> {calls:[...], puts:[...]}
-               each contract: instrument.symbol, optionDetails.strikePrice,
-               optionDetails.greeks.delta, top-level bid/ask.
+exists. ``PublicChainProvider`` is wired to Public's documented HTTP contract but
+stays strictly READ-ONLY: its allowed-path whitelist permits only auth-token mint
+and market-data / option-details endpoints.
 
 No order is ever placed. ``fetch_quote`` re-reads the chain for the stored expiry to
-mark an open paper position (Public has no standalone single-contract quote path in
-the read-only market-data scope used here).
+mark an open paper position.
 """
 
 from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Any, Optional, Protocol
 
 import httpx
@@ -64,6 +51,12 @@ class ChainContract:
     gamma: Optional[float] = None
     open_interest: Optional[float] = None
     iv: Optional[float] = None
+    # Current Public option-chain responses also expose these fields. They are
+    # optional to preserve compatibility with older fixtures/providers; callers
+    # that require them must continue to fail closed when they are absent.
+    theta: Optional[float] = None
+    volume: Optional[float] = None
+    updated_at: Optional[str] = None
 
     @property
     def mid(self) -> Optional[float]:
@@ -104,8 +97,6 @@ class ChainProvider(Protocol):
         ...
 
 
-# Whitelist of path prefixes the companion lane may read. Auth-token mint + market
-# data only — every trading/order/account path is structurally unreachable.
 _PUBLIC_ALLOWED_PREFIXES = (
     "/userapiauthservice/personal/access-tokens",
     "/userapigateway/marketdata",
@@ -125,8 +116,6 @@ class PublicChainProvider(_HttpProvider):
         validity_minutes: int = 15,
         client: httpx.AsyncClient | None = None,
     ):
-        # config is only used by _HttpProvider.capabilities(), which this lane never
-        # calls; drive everything off base_url/allowed_prefixes instead.
         super().__init__(
             config=None,  # type: ignore[arg-type]
             client=client,
@@ -140,8 +129,6 @@ class PublicChainProvider(_HttpProvider):
         self.validity_minutes = validity_minutes
         self._token: Optional[str] = None
         self._token_expires_at: Optional[float] = None
-
-    # ── HTTP ──────────────────────────────────────────────────────────────────
 
     async def _post(
         self, path: str, json_data: dict[str, Any], headers: dict[str, str] | None = None
@@ -181,14 +168,11 @@ class PublicChainProvider(_HttpProvider):
                 self.last_error = "auth_failed"
             return False
         self._token = token
-        # Re-mint 5 min early (matches the SDK's safety buffer).
         self._token_expires_at = time.time() + max(60, (self.validity_minutes - 5) * 60)
         return True
 
     def _auth_headers(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {self._token}"} if self._token else {}
-
-    # ── ChainProvider ─────────────────────────────────────────────────────────
 
     async def fetch_chain(self, underlying: str, *, max_dte: int) -> ChainSnapshot:
         symbol = underlying.upper()
@@ -242,18 +226,25 @@ class PublicChainProvider(_HttpProvider):
         expiry_iso = expiry[:10]
         chain_payload = await self._post(
             f"/userapigateway/marketdata/{self.account_id}/option-chain",
-            {"instrument": {"symbol": underlying.upper(), "type": "EQUITY"}, "expirationDate": expiry_iso},
+            {
+                "instrument": {"symbol": underlying.upper(), "type": "EQUITY"},
+                "expirationDate": expiry_iso,
+            },
             self._auth_headers(),
         )
         for contract in _parse_chain(chain_payload, expiry_iso):
             if contract.symbol == option_symbol:
-                return OptionQuote(option_symbol, bid=contract.bid, ask=contract.ask, delta=contract.delta)
+                return OptionQuote(
+                    option_symbol,
+                    bid=contract.bid,
+                    ask=contract.ask,
+                    delta=contract.delta,
+                )
         if self.last_error is None:
             self.last_error = "contract_not_found"
         return OptionQuote(option_symbol, error=self.last_error)
 
     def _preflight(self, symbol: str, kind):
-        """Shared credential/account guards. Returns an error result or None."""
         if not self.api_key:
             return kind(symbol, error="credentials_missing")
         if not self.account_id:
@@ -261,12 +252,8 @@ class PublicChainProvider(_HttpProvider):
         return None
 
 
-# ─── tolerant payload parsing ────────────────────────────────────────────────
-
-
 def _expiries_within_dte(expirations: list[Any], max_dte: int) -> list[str]:
-    """Expirations (YYYY-MM-DD) with 0 <= DTE <= max_dte. Unparseable ones are
-    kept (let selection decide) so a date-format surprise never silently drops all."""
+    """Expirations with 0 <= DTE <= max_dte; malformed dates remain visible."""
     today = date.today()
     kept: list[str] = []
     for raw in expirations:
@@ -313,11 +300,43 @@ def _parse_chain(payload: dict[str, Any], expiry_iso: str) -> list[ChainContract
                     ask=_first_float(el, ("ask", "askPrice", "ap")),
                     delta=_first_float(greeks, ("delta",)),
                     gamma=_first_float(greeks, ("gamma",)),
-                    open_interest=_first_float(el, ("openInterest", "open_interest", "oi")),
+                    open_interest=_first_float(
+                        el, ("openInterest", "open_interest", "oi")
+                    ),
                     iv=_first_float(greeks, ("impliedVolatility", "iv")),
+                    theta=_first_float(greeks, ("theta",)),
+                    volume=_first_float(el, ("volume",)),
+                    updated_at=_latest_quote_timestamp(el),
                 )
             )
     return out
+
+
+def _latest_quote_timestamp(payload: dict[str, Any]) -> Optional[str]:
+    """Return the freshest real provider quote/trade timestamp, never retrieval time.
+
+    Public exposes bidTimestamp, askTimestamp and lastTimestamp independently.
+    A quiet contract may have an old last trade but a fresh market, so freshness
+    is based on the newest valid timezone-aware provider timestamp.
+    """
+    candidates: list[tuple[datetime, str]] = []
+    for name in ("bidTimestamp", "askTimestamp", "lastTimestamp"):
+        raw = payload.get(name)
+        if raw is None:
+            continue
+        text = str(raw).strip()
+        if not text:
+            continue
+        try:
+            parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if parsed.tzinfo is None:
+            continue
+        candidates.append((parsed.astimezone(timezone.utc), text))
+    if not candidates:
+        return None
+    return max(candidates, key=lambda item: item[0])[1]
 
 
 def _parse_date(value: str | None) -> Optional[date]:
@@ -331,12 +350,16 @@ def _parse_date(value: str | None) -> Optional[date]:
 
 
 def _first_float(payload: dict[str, Any], names: tuple[str, ...]) -> Optional[float]:
+    """Return the first finite numeric value; malformed/non-finite data stays missing."""
     for name in names:
         value = payload.get(name)
         try:
-            return float(value)  # Public returns greeks/prices as strings — float() handles both
-        except (TypeError, ValueError):
+            parsed = float(value)
+        except (TypeError, ValueError, OverflowError):
             continue
+        if parsed != parsed or parsed in (float("inf"), float("-inf")):
+            continue
+        return parsed
     return None
 
 

@@ -1,4 +1,4 @@
-"""Tests for the Public-fed observe-only GEX producer + chain gamma/OI parsing."""
+"""Tests for the Public-fed observe-only GEX producer + chain parsing."""
 
 from datetime import date
 from types import SimpleNamespace
@@ -41,7 +41,6 @@ class _FakeProvider:
 
 def _snapshot_with_gamma():
     exp = date(2026, 1, 1)
-    # call gamma dominates → positive net GEX; mids give parity spot ≈ 700.
     contracts = [
         ChainContract("c700", exp, 700, "CALL", bid=4.9, ask=5.1, delta=0.5, gamma=0.05, open_interest=5000),
         ChainContract("p700", exp, 700, "PUT", bid=4.9, ask=5.1, delta=-0.5, gamma=0.05, open_interest=1000),
@@ -51,16 +50,12 @@ def _snapshot_with_gamma():
     return ChainSnapshot(underlying="QQQ", contracts=contracts)
 
 
-# ── mapping ──────────────────────────────────────────────────────────────────
-
 def test_map_underlying_known_and_unknown():
     cfg = _cfg()
     assert map_underlying("MNQH6", cfg) == "QQQ"
     assert map_underlying("MES", cfg) == "SPY"
     assert map_underlying("CL", cfg) is None
 
-
-# ── gating ───────────────────────────────────────────────────────────────────
 
 def test_observe_disabled_returns_none():
     cfg = _cfg(gex_observe_enabled=False)
@@ -72,20 +67,16 @@ def test_unmapped_instrument_returns_none():
     assert observe_gex("CL", cfg, provider=_FakeProvider(_snapshot_with_gamma()), use_cache=False) is None
 
 
-# ── happy path ───────────────────────────────────────────────────────────────
-
 def test_observe_computes_record_from_chain():
     cfg = _cfg()
     rec = observe_gex("MNQ", cfg, provider=_FakeProvider(_snapshot_with_gamma()), use_cache=False)
     assert rec is not None
     assert rec["ok"] is True
     assert rec["underlying"] == "QQQ"
-    assert rec["net_gex"] > 0          # call gamma dominates
+    assert rec["net_gex"] > 0
     assert rec["regime"] == "positive"
-    assert rec["spot"] == pytest.approx(700.0, abs=1.0)  # recovered via parity
+    assert rec["spot"] == pytest.approx(700.0, abs=1.0)
 
-
-# ── fail-soft ────────────────────────────────────────────────────────────────
 
 def test_provider_error_returns_none_not_raise():
     cfg = _cfg()
@@ -96,31 +87,105 @@ def test_snapshot_error_yields_not_ok_record():
     cfg = _cfg()
     snap = ChainSnapshot(underlying="QQQ", error="auth_failed")
     rec = observe_gex("MNQ", cfg, provider=_FakeProvider(snap), use_cache=False)
-    # record returned but ok=False → runner hook drops it (only journals ok=True)
     assert rec["ok"] is False
     assert rec["error"] == "auth_failed"
 
 
-# ── chain parsing: gamma + open interest from a Public-shaped payload ─────────
-
-def test_parse_chain_extracts_gamma_and_open_interest():
+def test_parse_chain_extracts_current_public_fields_and_freshest_provider_timestamp():
     payload = {
         "calls": [
             {
                 "instrument": {"symbol": "SPY...C00700"},
-                "bid": "4.30", "ask": "4.40", "openInterest": 8686,
+                "bid": "4.30",
+                "ask": "4.40",
+                "volume": 321,
+                "openInterest": 8686,
+                "lastTimestamp": "2026-09-02T13:58:00Z",
+                "bidTimestamp": "2026-09-02T14:00:01Z",
+                "askTimestamp": "2026-09-02T14:00:02Z",
                 "optionDetails": {
                     "strikePrice": "700",
-                    "greeks": {"delta": "0.62", "gamma": "0.0495", "impliedVolatility": "0.1879"},
+                    "greeks": {
+                        "delta": "0.62",
+                        "gamma": "0.0495",
+                        "theta": "-0.187",
+                        "impliedVolatility": "0.1879",
+                    },
                 },
             }
         ],
         "puts": [],
     }
-    contracts = _parse_chain(payload, "2026-06-26")
+    contracts = _parse_chain(payload, "2026-09-18")
     assert len(contracts) == 1
     c = contracts[0]
     assert c.gamma == pytest.approx(0.0495)
     assert c.open_interest == pytest.approx(8686)
     assert c.delta == pytest.approx(0.62)
+    assert c.iv == pytest.approx(0.1879)
+    assert c.theta == pytest.approx(-0.187)
+    assert c.volume == pytest.approx(321)
+    assert c.updated_at == "2026-09-02T14:00:02Z"
+
+
+def test_parse_chain_never_invents_provider_timestamp():
+    payload = {
+        "calls": [
+            {
+                "instrument": {"symbol": "SPY...C00700"},
+                "bid": "4.30",
+                "ask": "4.40",
+                "volume": 321,
+                "openInterest": 8686,
+                "bidTimestamp": "not-a-time",
+                "optionDetails": {
+                    "strikePrice": "700",
+                    "greeks": {
+                        "delta": "0.62",
+                        "gamma": "0.0495",
+                        "theta": "-0.187",
+                        "impliedVolatility": "0.1879",
+                    },
+                },
+            }
+        ],
+        "puts": [],
+    }
+    c = _parse_chain(payload, "2026-09-18")[0]
+    assert c.updated_at is None
+
+
+def test_parse_chain_rejects_nonfinite_and_overflow_numeric_fields():
+    # Provider corruption must disappear at the chain boundary rather than
+    # becoming NaN/inf telemetry or raising before data health can fail closed.
+    huge = 10**10000
+    payload = {
+        "calls": [
+            {
+                "instrument": {"symbol": "SPY...C00700"},
+                "bid": "inf",
+                "ask": "4.40",
+                "volume": huge,
+                "openInterest": huge,
+                "optionDetails": {
+                    "strikePrice": "700",
+                    "greeks": {
+                        "delta": "nan",
+                        "gamma": "-inf",
+                        "theta": "-0.187",
+                        "impliedVolatility": "0.1879",
+                    },
+                },
+            }
+        ],
+        "puts": [],
+    }
+    c = _parse_chain(payload, "2026-09-18")[0]
+    assert c.bid is None
+    assert c.delta is None
+    assert c.gamma is None
+    assert c.volume is None
+    assert c.open_interest is None
+    assert c.ask == pytest.approx(4.40)
+    assert c.theta == pytest.approx(-0.187)
     assert c.iv == pytest.approx(0.1879)
