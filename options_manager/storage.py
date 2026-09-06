@@ -37,12 +37,13 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
-from dataclasses import dataclass, field
-from datetime import datetime
+from dataclasses import dataclass, field, replace
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal, Optional
 
 from .config import OptionsManagerConfig
+from .outcomes import ForwardOutcomeEvent, event_content_hash, validate_forward_outcome_event
 from .human_confirm import ConfirmationRecord
 from .order_ticket import PreparedOrderTicket
 from .plans.base import (
@@ -184,6 +185,35 @@ def init_options_storage(db_path: str, config: OptionsManagerConfig) -> StorageW
                     snapshot_json TEXT NOT NULL,
                     UNIQUE(thesis_id, snapshot_hash)
                 )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS forward_outcome_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id TEXT NOT NULL,
+                    thesis_id TEXT NOT NULL,
+                    ticker TEXT NOT NULL,
+                    direction TEXT NOT NULL,
+                    setup_type TEXT NOT NULL,
+                    timeframe TEXT NOT NULL,
+                    event_type TEXT NOT NULL,
+                    setup_state TEXT NOT NULL,
+                    event_at TEXT NOT NULL,
+                    recorded_at TEXT NOT NULL,
+                    provider TEXT NOT NULL,
+                    provider_updated_at TEXT,
+                    system_commit_sha TEXT NOT NULL,
+                    content_hash TEXT NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    UNIQUE(session_id, thesis_id, content_hash)
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_forward_outcome_session
+                ON forward_outcome_events (session_id, thesis_id, event_at, id)
                 """
             )
             conn.execute(
@@ -741,3 +771,268 @@ def _parse_tz_aware(value: str) -> datetime:
     if parsed.tzinfo is None:
         raise ValueError(f"stored timestamp {value!r} is not timezone-aware")
     return parsed
+
+
+def _canonical_utc(value: datetime) -> datetime:
+    """The one stored form of a timestamp: the same instant in UTC, so its
+    ``isoformat()`` text always ends in ``+00:00``. With a fixed offset suffix
+    the ISO-8601 TEXT columns sort chronologically under SQLite's ``ORDER BY``
+    (``'+'`` < ``'.'`` keeps a zero-microsecond stamp ahead of the same second
+    with microseconds), which a raw producer offset does not guarantee."""
+    return value.astimezone(timezone.utc)
+
+
+def _canonical_forward_outcome_event(event: ForwardOutcomeEvent) -> ForwardOutcomeEvent:
+    """The event as stored: ``event_at`` and ``provider_updated_at`` in UTC.
+    Applied after validation on the write path and after payload rebuild on the
+    read path, so hash, payload text and indexed columns all describe the same
+    UTC-normalized event. The stored ``content_hash`` is therefore the hash of
+    this normalized event, not of a producer's non-UTC original; the same
+    instant submitted from any offset is one identity (DUPLICATE on retry)."""
+    return replace(
+        event,
+        event_at=_canonical_utc(event.event_at),
+        provider_updated_at=(
+            _canonical_utc(event.provider_updated_at) if event.provider_updated_at is not None else None
+        ),
+    )
+
+
+_FORWARD_OUTCOME_INDEXED_COLUMNS = (
+    "session_id",
+    "thesis_id",
+    "ticker",
+    "direction",
+    "setup_type",
+    "timeframe",
+    "event_type",
+    "setup_state",
+    "event_at",
+    "recorded_at",
+    "provider",
+    "provider_updated_at",
+    "system_commit_sha",
+)
+
+
+def _forward_outcome_payload_json(event: ForwardOutcomeEvent, recorded_at: datetime) -> str:
+    """Canonical stored text for one row: the event payload plus ``recorded_at``.
+    The write path stores exactly this text; the read path re-derives it and
+    requires a byte-for-byte match, mirroring ``_snapshot_json_and_hash``.
+    Callers pass the UTC-normalized event and ``recorded_at`` (see
+    ``_canonical_forward_outcome_event``), so the payload stores the same
+    ``+00:00`` timestamp text as the indexed columns."""
+    payload = event.to_payload()
+    payload["recorded_at"] = _canonical_utc(recorded_at).isoformat()
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"), allow_nan=False)
+
+
+def _forward_outcome_event_from_payload(payload: dict) -> ForwardOutcomeEvent:
+    """Rebuild the event from its stored payload (counterpart of ``_snapshot_from_payload``).
+    Missing or ill-typed fields raise KeyError/TypeError/ValueError for the caller's
+    CORRUPT_RECORD handling; extra or re-ordered fields surface as a canonical-text
+    mismatch."""
+    provider_updated_at = payload["provider_updated_at"]
+    reason_codes = payload["reason_codes"]
+    if not isinstance(reason_codes, list):
+        raise ValueError("reason_codes must be a list")
+    for name in ("contract_facts", "market_context", "observations"):
+        if not isinstance(payload[name], dict):
+            raise ValueError(f"{name} must be an object")
+    return ForwardOutcomeEvent(
+        session_id=payload["session_id"],
+        thesis_id=payload["thesis_id"],
+        ticker=payload["ticker"],
+        direction=payload["direction"],
+        setup_type=payload["setup_type"],
+        timeframe=payload["timeframe"],
+        event_type=payload["event_type"],
+        event_at=_parse_tz_aware(payload["event_at"]),
+        provider=payload["provider"],
+        system_commit_sha=payload["system_commit_sha"],
+        setup_state=payload["setup_state"],
+        contract_facts=payload["contract_facts"],
+        market_context=payload["market_context"],
+        observations=payload["observations"],
+        reason_codes=tuple(reason_codes),
+        provider_updated_at=(
+            _parse_tz_aware(provider_updated_at) if provider_updated_at is not None else None
+        ),
+    )
+
+
+def _forward_outcome_indexed_values(event: ForwardOutcomeEvent, recorded_at: datetime) -> tuple:
+    """The indexed column values the write path derives from an event, in
+    ``_FORWARD_OUTCOME_INDEXED_COLUMNS`` order. Read-side verification compares
+    the stored row against this so a column edit cannot disagree with the payload.
+    Timestamps are normalized here too, so both sides always expect the canonical
+    UTC text: a column rewritten to the same instant in another offset is a
+    mismatch (CORRUPT_RECORD), never a silent equal."""
+    event = _canonical_forward_outcome_event(event)
+    recorded_at = _canonical_utc(recorded_at)
+    return (
+        event.session_id.strip(),
+        event.thesis_id.strip(),
+        event.ticker.strip().upper(),
+        event.direction,
+        event.setup_type.strip(),
+        event.timeframe.strip(),
+        event.event_type,
+        event.setup_state,
+        event.event_at.isoformat(),
+        recorded_at.isoformat(),
+        event.provider.strip(),
+        event.provider_updated_at.isoformat() if event.provider_updated_at else None,
+        event.system_commit_sha.strip(),
+    )
+
+
+def _verify_forward_outcome_row(row: sqlite3.Row) -> dict:
+    """Re-verify one stored row before trusting it. Raises KeyError/TypeError/
+    ValueError (including json.JSONDecodeError) on any defect: unparseable or
+    non-object payload, unstorable event, content-hash mismatch, non-canonical
+    text, indexed-column/payload disagreement, or a causal violation the write
+    path would have refused (event_at or provider_updated_at after recorded_at).
+    Timestamp rule: the rebuilt event and ``recorded_at`` are UTC-normalized
+    exactly as the write path did, so a payload or column carrying the same
+    instant in a non-UTC offset re-derives to different text and is rejected as
+    non-canonical -- this writer never produces such a row."""
+    payload = json.loads(row["payload_json"])
+    if not isinstance(payload, dict):
+        raise ValueError("payload_json must decode to an object")
+    event = _forward_outcome_event_from_payload(payload)
+    problems = validate_forward_outcome_event(event)
+    if problems:
+        raise ValueError("stored event is not storable: " + "; ".join(problems))
+    event = _canonical_forward_outcome_event(event)
+    recorded_at = _canonical_utc(_parse_tz_aware(payload["recorded_at"]))
+    if event_content_hash(event) != row["content_hash"]:
+        raise ValueError("content hash does not match stored payload")
+    if _forward_outcome_payload_json(event, recorded_at) != row["payload_json"]:
+        raise ValueError("outcome payload is not canonical")
+    expected = _forward_outcome_indexed_values(event, recorded_at)
+    for column, value in zip(_FORWARD_OUTCOME_INDEXED_COLUMNS, expected):
+        if row[column] != value:
+            raise ValueError(f"{column} does not match indexed row")
+    if event.event_at > recorded_at:
+        raise ValueError("event_at is after recorded_at")
+    if event.provider_updated_at is not None and event.provider_updated_at > recorded_at:
+        raise ValueError("provider_updated_at is after recorded_at")
+    return payload
+
+
+def append_forward_outcome_event(
+    db_path: str,
+    event: ForwardOutcomeEvent,
+    config: OptionsManagerConfig,
+    *,
+    recorded_at: datetime,
+) -> StorageWriteResult:
+    """Append one causal forward outcome event. Append-only and idempotent:
+    an identical event (same session, thesis, and content hash) returns
+    DUPLICATE instead of a second row. Fails closed when the event is not
+    storable or when its source timestamp is later than ``recorded_at``
+    (a source cannot report the future)."""
+    if not config.storage_enabled:
+        return _write_rejected("storage_disabled", "storage_enabled is False; outcome event not written")
+    if not _is_tz_aware(recorded_at):
+        return _write_data_blocked("timestamp", "recorded_at has no timezone info")
+    problems = validate_forward_outcome_event(event)
+    if problems:
+        return _write_data_blocked("event", "; ".join(problems))
+    if event.event_at > recorded_at:
+        return _write_data_blocked(
+            "causality", f"event_at {event.event_at.isoformat()} is after recorded_at {recorded_at.isoformat()}"
+        )
+    if event.provider_updated_at is not None and event.provider_updated_at > recorded_at:
+        return _write_data_blocked("causality", "provider_updated_at is after recorded_at")
+    # Store one canonical form: every timestamp (event_at, provider_updated_at,
+    # recorded_at) as UTC ISO-8601 in the hash, the payload and the indexed columns.
+    event = _canonical_forward_outcome_event(event)
+    recorded_at = _canonical_utc(recorded_at)
+    content_hash = event_content_hash(event)
+    try:
+        payload_json = _forward_outcome_payload_json(event, recorded_at)
+    except (TypeError, ValueError) as exc:
+        return _write_data_blocked("event", f"outcome event is not serializable: {exc}")
+    try:
+        with _connect(db_path) as conn:
+            conn.execute(
+                """
+                INSERT INTO forward_outcome_events (
+                    session_id, thesis_id, ticker, direction, setup_type, timeframe,
+                    event_type, setup_state, event_at, recorded_at, provider,
+                    provider_updated_at, system_commit_sha, content_hash, payload_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    event.session_id.strip(),
+                    event.thesis_id.strip(),
+                    event.ticker.strip().upper(),
+                    event.direction,
+                    event.setup_type.strip(),
+                    event.timeframe.strip(),
+                    event.event_type,
+                    event.setup_state,
+                    event.event_at.isoformat(),
+                    recorded_at.isoformat(),
+                    event.provider.strip(),
+                    event.provider_updated_at.isoformat() if event.provider_updated_at else None,
+                    event.system_commit_sha.strip(),
+                    content_hash,
+                    payload_json,
+                ),
+            )
+    except sqlite3.IntegrityError:
+        return _write_duplicate("content_hash", f"session {event.session_id!r} thesis {event.thesis_id!r} already has this event")
+    except sqlite3.DatabaseError as exc:
+        return _write_corrupt("db_error", f"failed to write forward outcome event: {exc}")
+    return _written(content_hash)
+
+
+def load_forward_outcome_events(
+    db_path: str,
+    config: OptionsManagerConfig,
+    *,
+    session_id: Optional[str] = None,
+    thesis_id: Optional[str] = None,
+) -> StorageReadResult:
+    """Read events in causal order (event_at, then insertion id). Ordering relies
+    on the stored ``event_at`` text being canonical UTC (``_canonical_utc``), which
+    sorts chronologically as TEXT; no Python re-sort by parsed datetime. Every row
+    is re-verified before it is trusted (hash, canonical text, indexed columns,
+    causality -- see ``_verify_forward_outcome_row``), and that verification
+    rejects any non-canonical timestamp text, so every returned row honors the
+    order. Any defect is reported CORRUPT_RECORD for the whole read rather than
+    skipped."""
+    if not config.storage_enabled:
+        return _read_data_blocked("storage_disabled", "storage_enabled is False; outcome events not read")
+    clauses: list[str] = []
+    params: list[str] = []
+    if session_id:
+        clauses.append("session_id = ?")
+        params.append(session_id.strip())
+    if thesis_id:
+        clauses.append("thesis_id = ?")
+        params.append(thesis_id.strip())
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    try:
+        with _connect(db_path) as conn:
+            rows = conn.execute(
+                # event_at is canonical UTC text (fixed "+00:00" suffix) -> chronological.
+                f"SELECT * FROM forward_outcome_events {where} ORDER BY event_at, id",
+                params,
+            ).fetchall()
+    except sqlite3.DatabaseError as exc:
+        return _read_corrupt("db_error", f"failed to read forward outcome events: {exc}")
+    events: list[dict] = []
+    for row in rows:
+        try:
+            payload = _verify_forward_outcome_row(row)
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            return _read_corrupt(
+                "malformed_row", f"stored outcome event {row['content_hash']} is malformed: {exc}"
+            )
+        payload["content_hash"] = row["content_hash"]
+        events.append(payload)
+    return _found({"events": events, "count": len(events)})
