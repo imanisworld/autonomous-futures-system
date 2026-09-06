@@ -20,6 +20,23 @@ the three files `run_ro.sh` hard-codes a `/tmp/afs_watcher/` path for into
 that (tmpfs) directory before each start — this is required because tmpfs
 does not survive a reboot.
 
+Restart detection and the sanctioned deploy. The watcher keeps a process
+`baseline` (pid, `ActiveEnterTimestamp`, `NRestarts`, and the release it was
+recorded against) in `state.json`. A new pid is adopted as the new baseline
+on its own ONLY when it is provably the release wrapper's restart: the tick
+has no other BLOCKED finding, the `.env` pins are coherent and name the
+release this watcher verified at startup (commit, fingerprint, epoch), the
+release link and the live pid's `/proc/<pid>/cwd` are that release, the
+service is active, `NRestarts` is unchanged, and the baseline was recorded
+under a DIFFERENT release. That last condition is the discriminator: a hand
+`systemctl restart futures-bot` on the same release still BLOCKS as
+`unexpected_restart`, a crash still BLOCKS as `service_crash_restart`, and
+anything ambiguous fails closed. Adoption is logged, written to
+`events.jsonl` as `REBASELINED`, and keeps the previous baseline under
+`adopted_from`. A baseline recorded before release tracking is stamped with
+the current release while its pid still matches, so the next deploy can be
+proven; across a restart it is never stamped.
+
 `install_afs_watcher_service.sh` is a deploy action (copies these files to
 `/root/afs-shared/afs_watcher_src/`, installs and enables the systemd unit).
 It must be run manually, as root, after stopping the tmux-supervised watcher
