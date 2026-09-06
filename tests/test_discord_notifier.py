@@ -255,3 +255,32 @@ def test_approved_trade_has_no_reason_suffix():
     assert "Risk: APPROVED" in msg
     assert "Risk: APPROVED —" not in msg
     assert "Bar close: 19505.25" in msg
+
+
+def test_non_trade_alert_surfaces_general_reason():
+    from notifications.discord_notifier import _format_message
+    result = _result("BLOCKED_MAX_TRADES")
+    result["risk"] = None
+    result["reason"] = "Daily trade capacity reached before strategy evaluation."
+    msg = _format_message(_payload(), result)
+    assert "Why: Daily trade capacity reached before strategy evaluation." in msg
+
+
+def test_non_trade_alert_prefers_gate_reason():
+    from notifications.discord_notifier import _format_message
+    result = _result("ORDER_SUPPRESSED")
+    result["risk"] = None
+    result["reason"] = "generic"
+    result["gate_reason"] = "working_order_conflict: 1 working order(s) on account"
+    msg = _format_message(_payload(), result)
+    assert "Why: working_order_conflict: 1 working order(s) on account" in msg
+    assert "Why: generic" not in msg
+
+
+def test_non_trade_alert_falls_back_to_failed_gates():
+    from notifications.discord_notifier import _format_message
+    result = _result("NO_TRADE")
+    result["risk"] = None
+    result["failed_gates"] = ["ENTRY_DETACHED_FROM_PRICE"]
+    msg = _format_message(_payload(), result)
+    assert "Why: ENTRY_DETACHED_FROM_PRICE" in msg

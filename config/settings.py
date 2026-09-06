@@ -12,11 +12,26 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
 import yaml
 from dotenv import load_dotenv
+
+
+OPTIONS_COMPANION_SQLITE_FILENAME = "options_companion.sqlite"
+
+
+def default_options_companion_sqlite_path() -> Path:
+    """Resolve the companion ledger under ``LOG_DIR`` at call time."""
+    return Path(os.getenv("LOG_DIR", "logs")) / OPTIONS_COMPANION_SQLITE_FILENAME
+
+
+def options_companion_sqlite_path() -> Path:
+    """Return the explicit companion path, or the ``LOG_DIR``-based default."""
+    configured = os.getenv("OPTIONS_COMPANION_SQLITE_PATH", "").strip()
+    return Path(configured) if configured else default_options_companion_sqlite_path()
 
 
 # ─── Exceptions ──────────────────────────────────────────────────────────────
@@ -393,7 +408,9 @@ class SystemConfig:
     # Default OFF: a disabled lane changes nothing.
     options_companion_enabled: bool = False
     options_companion_mode: str = "paper"
-    options_companion_sqlite_path: str = "logs/options_companion.sqlite"
+    options_companion_sqlite_path: str = field(
+        default_factory=lambda: str(options_companion_sqlite_path())
+    )
     # Strict (default) = only grade A/B + daily-aligned candidates record an OPEN.
     # Set OPTIONS_COMPANION_STRICT_SIGNA=false to run "loose" (demo observe): the
     # Signa verdict is still recorded but non-blocking, so every directional candidate
@@ -468,6 +485,11 @@ class SystemConfig:
     # Paper-only implementation of the preregistered fixed-one-contract
     # inverse + eight-tick marketable IOC candidate. No demo/live mode exists.
     mnq_orb_breakout_inverse_mode: str = "observe_only"
+    # UTC/offset-aware start of the isolated forward-accounting epoch. Required
+    # whenever the inverse paper lane is active so unrelated historical journal
+    # P&L cannot trip its drawdown gate while every loss inside this epoch still
+    # counts normally.
+    mnq_orb_breakout_inverse_epoch_start: Optional[str] = None
 
     # ── MNQ vwap_hold proof mode (strategy-restoration candidate #3,
     # 2026-07-14) ─────────────────────────────────────────────────────────
@@ -780,6 +802,9 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         mnq_orb_breakout_inverse_mode=str(
             os.getenv("MNQ_ORB_BREAKOUT_INVERSE_MODE", "observe_only") or "observe_only"
         ).strip().lower(),
+        mnq_orb_breakout_inverse_epoch_start=(
+            os.getenv("MNQ_ORB_BREAKOUT_INVERSE_EPOCH_START") or None
+        ),
         mnq_vwap_hold_proof_mode=str(
             os.getenv("MNQ_VWAP_HOLD_PROOF_MODE", "observe_only") or "observe_only"
         ).strip().lower(),
@@ -902,9 +927,7 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
 
         options_companion_enabled=_env_bool("OPTIONS_COMPANION_ENABLED", False),
         options_companion_mode=os.getenv("OPTIONS_COMPANION_MODE", "paper").strip().lower(),
-        options_companion_sqlite_path=os.getenv(
-            "OPTIONS_COMPANION_SQLITE_PATH", "logs/options_companion.sqlite"
-        ).strip(),
+        options_companion_sqlite_path=str(options_companion_sqlite_path()),
         options_companion_strict_signa=_env_bool("OPTIONS_COMPANION_STRICT_SIGNA", True),
         public_base_url=os.getenv("PUBLIC_BASE_URL", "https://api.public.com").strip().rstrip("/"),
         public_api_key_configured=bool(os.getenv("PUBLIC_API_KEY", "").strip()),
@@ -1074,6 +1097,25 @@ def _validate_config(config: SystemConfig) -> None:
             f"(got {config.mnq_orb_breakout_inverse_mode!r}); "
             "this candidate is paper-only."
         )
+    if config.mnq_orb_breakout_inverse_mode == "paper_sim":
+        _epoch_start = config.mnq_orb_breakout_inverse_epoch_start
+        if not _epoch_start:
+            raise ConfigError(
+                "MNQ_ORB_BREAKOUT_INVERSE_EPOCH_START is required when "
+                "MNQ_ORB_BREAKOUT_INVERSE_MODE=paper_sim."
+            )
+        try:
+            _parsed_epoch_start = datetime.fromisoformat(
+                str(_epoch_start).replace("Z", "+00:00")
+            )
+        except ValueError as exc:
+            raise ConfigError(
+                "MNQ_ORB_BREAKOUT_INVERSE_EPOCH_START must be an ISO-8601 timestamp."
+            ) from exc
+        if _parsed_epoch_start.tzinfo is None:
+            raise ConfigError(
+                "MNQ_ORB_BREAKOUT_INVERSE_EPOCH_START must include a UTC offset."
+            )
     if (
         config.mnq_orb_breakout_inverse_mode != "observe_only"
         and config.mnq_orb_breakout_proof_mode != "observe_only"

@@ -15,22 +15,7 @@ INSIDE_BAR = "inside_bar"
 TWO_UP = "two_up"
 TWO_DOWN = "two_down"
 OUTSIDE_BAR = "outside_bar"
-
-
-@dataclass(frozen=True)
-class StratBar:
-    high: float
-    low: float
-
-
-@dataclass(frozen=True)
-class StratContext:
-    current_bar_type: Optional[str] = None
-    previous_bar_type: Optional[str] = None
-    two_bars_back_type: Optional[str] = None
-    strat_sequence: Optional[str] = None
-    strat_trigger: Optional[str] = None
-    strat_direction: Optional[str] = None
+STRAT_212_REVERSAL = "strat_212_reversal"
 
 
 # Canonical bar types use the long string forms above. Upstream sources speak
@@ -54,6 +39,66 @@ def normalize_bar_type(bar_type: Optional[str]) -> Optional[str]:
     if bar_type is None:
         return None
     return _BAR_TYPE_ALIASES.get(bar_type.strip().lower(), bar_type)
+
+
+def _is_212_reversal(
+    two_bars_back_type: Optional[str],
+    previous_bar_type: Optional[str],
+    current_bar_type: Optional[str],
+) -> bool:
+    """True for 2D-1-2U or 2U-1-2D, the canonical 2-1-2 reversal."""
+    t2b = normalize_bar_type(two_bars_back_type)
+    prev = normalize_bar_type(previous_bar_type)
+    cur = normalize_bar_type(current_bar_type)
+    return bool(
+        prev == INSIDE_BAR
+        and t2b in (TWO_UP, TWO_DOWN)
+        and cur in (TWO_UP, TWO_DOWN)
+        and t2b != cur
+    )
+
+
+@dataclass(frozen=True)
+class StratBar:
+    high: float
+    low: float
+
+
+@dataclass(frozen=True)
+class StratContext:
+    current_bar_type: Optional[str] = None
+    previous_bar_type: Optional[str] = None
+    two_bars_back_type: Optional[str] = None
+    strat_sequence: Optional[str] = None
+    strat_trigger: Optional[str] = None
+    strat_direction: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        """Correct the legacy Pine label for an unambiguous 2-1-2 reversal.
+
+        TradingView historically labeled every otherwise-unmatched 1 -> 2 break
+        as ``strat_inside_break``. When the bar before the inside bar is a
+        directional 2 and the new 2 breaks the opposite way, that is specifically
+        a 2-1-2 reversal. Normalize that stale payload identity here so live and
+        replay consumers share the same canonical sequence without creating an
+        execution path for the newly distinguished pattern.
+        """
+        if self.strat_sequence != "strat_inside_break":
+            return
+        if not _is_212_reversal(
+            self.two_bars_back_type,
+            self.previous_bar_type,
+            self.current_bar_type,
+        ):
+            return
+        current = normalize_bar_type(self.current_bar_type)
+        object.__setattr__(self, "strat_sequence", STRAT_212_REVERSAL)
+        object.__setattr__(self, "strat_trigger", "reversal")
+        object.__setattr__(
+            self,
+            "strat_direction",
+            "LONG" if current == TWO_UP else "SHORT",
+        )
 
 
 def classify_bar(current: StratBar, previous: StratBar) -> str:
@@ -106,6 +151,10 @@ def classify_sequence(
         elif previous_bar_type == INSIDE_BAR and two_bars_back_type == current_bar_type:
             sequence = "strat_212"
             trigger = "continuation"
+            direction = "LONG" if current_bar_type == TWO_UP else "SHORT"
+        elif _is_212_reversal(two_bars_back_type, previous_bar_type, current_bar_type):
+            sequence = STRAT_212_REVERSAL
+            trigger = "reversal"
             direction = "LONG" if current_bar_type == TWO_UP else "SHORT"
         elif previous_bar_type == INSIDE_BAR:
             sequence = "strat_inside_break"

@@ -106,6 +106,13 @@ from .position_management_checklist import (
     check_position_management_checklist_intake,
     evaluate_position_management_checklist,
 )
+from .portfolio_risk_gate import (
+    PortfolioRiskResult,
+    PortfolioRiskVerdict,
+    RiskExposure,
+    check_portfolio_risk_intake,
+    evaluate_portfolio_risk,
+)
 
 __all__ = [
     "DataProvenance",
@@ -177,4 +184,9 @@ __all__ = [
     "PositionManagementInput",
     "check_position_management_checklist_intake",
     "evaluate_position_management_checklist",
+    "PortfolioRiskResult",
+    "PortfolioRiskVerdict",
+    "RiskExposure",
+    "check_portfolio_risk_intake",
+    "evaluate_portfolio_risk",
 ]

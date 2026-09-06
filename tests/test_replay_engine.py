@@ -750,10 +750,14 @@ FULL_DAY_PATH = Path("data/replay/mnq_full_day_2026_05_22.jsonl")
 )
 class TestFullDayReplay2026_05_22:
     def _run(self, tmp_path):
-        from dataclasses import replace
-        from config.settings import load_config, PositionSizingConfig
+        from config.settings import PositionSizingConfig
+        from tests.conftest import load_permissive_config
 
-        cfg = replace(load_config(), position_sizing=PositionSizingConfig(enabled=False))
+        # Explicit permissive universe: this full-day replay fixture depends on
+        # orb_reclaim/vwap_hold candidates, which the shipped isolated-lane
+        # config disables. The assertions below are about replay-engine and
+        # permission-gate behavior, not about the shipped config's contents.
+        cfg = load_permissive_config(position_sizing=PositionSizingConfig(enabled=False))
         return ReplayEngine(config=cfg, log_dir=str(tmp_path / "logs")).run(FULL_DAY_PATH)
 
     def test_all_13_candles_processed(self, tmp_path):

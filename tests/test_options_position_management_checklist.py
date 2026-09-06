@@ -1,11 +1,7 @@
 """
 tests/test_options_position_management_checklist.py
 
-options_manager/validation/position_management_checklist.py tests.
-Proves the checklist evaluates each item independently, derives one
-PositionAction per the documented decision order, never raises on
-malformed input, and contains no order/action field of any kind and no
-scanner/broker/execution coupling.
+Tests the advisory position-management checklist and its safety boundaries.
 """
 
 from __future__ import annotations
@@ -19,9 +15,9 @@ from options_manager.validation.position_management_checklist import (
     ChecklistItemStatus,
     PositionAction,
     PositionManagementChecklistResult,
+    PositionManagementInput,
     check_position_management_checklist_intake,
     evaluate_position_management_checklist,
-    PositionManagementInput,
 )
 
 _SCANNED_MODULES = (position_management_checklist_module,)
@@ -115,18 +111,12 @@ def _clean_payload(**overrides) -> dict:
     return payload
 
 
-# --- 1. clean position with nothing triggered returns CONTINUE_HOLD -------------------------------------
-
-
 def test_clean_position_returns_continue_hold():
     result = check_position_management_checklist_intake(_clean_payload())
     assert isinstance(result, PositionManagementChecklistResult)
     assert result.action == PositionAction.CONTINUE_HOLD
     assert result.blocking_reasons == ()
     assert len(result.checklist_items) == 7
-
-
-# --- 2. thesis broken / invalidation breach -> EXIT_REQUIRED (most severe) ------------------------------
 
 
 def test_thesis_broken_returns_exit_required():
@@ -155,16 +145,12 @@ def test_put_invalidation_breach_is_direction_aware():
 
 
 def test_thesis_broken_outranks_invalidation_intact():
-    # thesis broken alone is enough, even if the invalidation level hasn't been touched
     result = check_position_management_checklist_intake(
         _clean_payload(thesis_status="broken", underlying_spot=195.0, underlying_invalidation=185.0)
     )
     assert result.action == PositionAction.EXIT_REQUIRED
     thesis_item = next(i for i in result.checklist_items if i.name == "thesis_status")
     assert thesis_item.status == ChecklistItemStatus.FAIL
-
-
-# --- 3. oversized / over-risk-cap -> CONSIDER_TRIM ------------------------------------------------------
 
 
 def test_oversized_position_returns_consider_trim():
@@ -181,12 +167,9 @@ def test_risk_over_cap_returns_consider_trim():
 
 def test_sizing_failure_outranks_target_reached():
     result = check_position_management_checklist_intake(
-        _clean_payload(position_sizing="oversized", underlying_spot=225.0)  # past target_2 too
+        _clean_payload(position_sizing="oversized", underlying_spot=225.0)
     )
     assert result.action == PositionAction.CONSIDER_TRIM
-
-
-# --- 4. target proximity: target_2 -> CONSIDER_EXIT, target_1 -> CONSIDER_TRIM --------------------------
 
 
 def test_target_2_reached_returns_consider_exit():
@@ -204,9 +187,6 @@ def test_target_1_reached_with_no_target_2_supplied_returns_consider_trim():
         _clean_payload(underlying_spot=212.0, target_2=None)
     )
     assert result.action == PositionAction.CONSIDER_TRIM
-
-
-# --- 5. earnings/event risk, DTE decay, premium decay -> CONSIDER_TRIM ----------------------------------
 
 
 def test_earnings_with_high_event_risk_returns_consider_trim():
@@ -235,19 +215,17 @@ def test_dte_above_threshold_does_not_trigger():
 
 def test_premium_decayed_past_threshold_returns_consider_trim():
     result = check_position_management_checklist_intake(
-        _clean_payload(entry_premium=2.00, current_premium=0.90)
+        _clean_payload(entry_premium=2.00, current_premium=1.49)
     )
     assert result.action == PositionAction.CONSIDER_TRIM
+    assert "25%" in result.next_required_action
 
 
 def test_premium_decay_under_threshold_does_not_trigger():
     result = check_position_management_checklist_intake(
-        _clean_payload(entry_premium=2.00, current_premium=1.20)
+        _clean_payload(entry_premium=2.00, current_premium=1.60)
     )
     assert result.action == PositionAction.CONTINUE_HOLD
-
-
-# --- 6. malformed/incomplete payloads fail closed to EXIT_REQUIRED, never raise -------------------------
 
 
 def test_non_dict_payload_returns_structured_failure_not_exception():
@@ -292,17 +270,11 @@ def test_invalid_target_2_returns_exit_required_not_exception():
     assert result.position is None
 
 
-# --- 7. evaluate_position_management_checklist() works directly on a typed input -----------------------
-
-
 def test_evaluate_directly_on_typed_input():
     position = PositionManagementInput(**_clean_payload())
     result = evaluate_position_management_checklist(position)
     assert result.action == PositionAction.CONTINUE_HOLD
     assert result.position is position
-
-
-# --- 8. no order/action fields exist anywhere on the result or module -----------------------------------
 
 
 def test_result_has_no_order_action_fields():
@@ -315,9 +287,6 @@ def test_module_has_no_order_action_verbs():
     source = _module_source()
     for forbidden in _FORBIDDEN_ORDER_ACTION_IDENTIFIERS:
         assert forbidden not in source, f"module must not contain {forbidden!r}"
-
-
-# --- 9. no scanner/broker/execution import, no clock access, no I/O -------------------------------------
 
 
 def test_module_has_no_scanner_import():
@@ -373,7 +342,6 @@ def test_module_has_no_clock_access():
 
 
 def test_no_scanner_execution_or_broker_module_imports_position_management_checklist():
-    """Checks actual import statements, not a raw substring search."""
     repo_root = Path(__file__).resolve().parent.parent
     scanned_dirs = [
         repo_root / "options_manager" / "scanner",

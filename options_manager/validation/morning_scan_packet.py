@@ -63,6 +63,10 @@ _MARKET_CONTEXT_STR_FIELDS = (
     "location_vs_yesterday",
     "broad_market_direction",
 )
+# Optional enrichment: blank warns, never blocks. GEX must not be a hard
+# dependency of the morning scan — a blank one here used to block the whole
+# packet, which in turn invalidated every candidate in it.
+_MARKET_CONTEXT_OPTIONAL_STR_FIELDS = ("gex_regime",)
 _MARKET_CONTEXT_FLOAT_FIELDS = ("gap_percent",)
 
 _CANDIDATE_STR_FIELDS = ("ticker", "name", "regime", "signa_grade", "current_candle_behavior")
@@ -103,11 +107,11 @@ class MarketContext:
     """One session's broad market read. Every field is required --
     `evaluate_morning_scan_packet()` treats a blank one as a missing
     market context, which then propagates into every candidate's own
-    evaluation too."""
+    evaluation too. The sole exception is `gex_regime`, which is optional
+    enrichment: blank yields a GEX_UNAVAILABLE warning, not a block."""
 
     scan_date: str
     session: str
-    gex_regime: str
     spy_flip: str
     qqq_flip: str
     spy_trend: str
@@ -115,6 +119,9 @@ class MarketContext:
     gap_percent: float
     location_vs_yesterday: str
     broad_market_direction: str
+    # Defaulted on purpose: the default is what removes it from the required
+    # set derived in `_normalize_market_context`.
+    gex_regime: str = ""
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -177,16 +184,25 @@ class MorningScanPacketResult:
 
     valid: bool
     market_context_blocking_reasons: tuple[str, ...] = ()
+    # Non-blocking context notes, e.g. GEX_UNAVAILABLE. Also appended to every
+    # candidate's own warnings.
+    market_context_warnings: tuple[str, ...] = ()
     candidate_results: tuple[CandidateEvaluation, ...] = ()
     packet: Optional[MorningScanPacket] = None
 
 
-def _evaluate_market_context(context: MarketContext) -> tuple[str, ...]:
+def _evaluate_market_context(context: MarketContext) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """-> (blocking_reasons, warnings)."""
     blocking: list[str] = []
+    warnings: list[str] = []
     for name in _MARKET_CONTEXT_STR_FIELDS:
-        if not getattr(context, name).strip():
+        if getattr(context, name).strip():
+            continue
+        if name in _MARKET_CONTEXT_OPTIONAL_STR_FIELDS:
+            warnings.append(f"GEX_UNAVAILABLE: no {name} supplied")
+        else:
             blocking.append(f"missing {name}")
-    return tuple(blocking)
+    return tuple(blocking), tuple(warnings)
 
 
 def _evaluate_candidate(candidate: TickerCandidate) -> CandidateEvaluation:
@@ -231,20 +247,28 @@ def evaluate_morning_scan_packet(packet: MorningScanPacket) -> MorningScanPacket
     failure is propagated into every candidate's own blocking reasons --
     a candidate plan is only as good as the shared context it was read
     against."""
-    market_context_blocking = _evaluate_market_context(packet.market_context)
+    market_context_blocking, market_context_warnings = _evaluate_market_context(
+        packet.market_context
+    )
 
     candidate_results: list[CandidateEvaluation] = []
     for candidate in packet.candidates:
         evaluation = _evaluate_candidate(candidate)
+        combined_blocking = evaluation.blocking_reasons
+        combined_warnings = evaluation.warnings
         if market_context_blocking:
-            combined_blocking = evaluation.blocking_reasons + (
+            combined_blocking += (
                 f"missing market context: {', '.join(market_context_blocking)}",
             )
+        # Context-level warnings ride along on every candidate: a candidate read
+        # without GEX must not look fully confirmed just because it was valid.
+        combined_warnings += market_context_warnings
+        if combined_blocking != evaluation.blocking_reasons or combined_warnings != evaluation.warnings:
             evaluation = CandidateEvaluation(
                 ticker=evaluation.ticker,
-                valid=False,
+                valid=not combined_blocking,
                 blocking_reasons=combined_blocking,
-                warnings=evaluation.warnings,
+                warnings=combined_warnings,
             )
         candidate_results.append(evaluation)
 
@@ -253,6 +277,7 @@ def evaluate_morning_scan_packet(packet: MorningScanPacket) -> MorningScanPacket
     return MorningScanPacketResult(
         valid=overall_valid,
         market_context_blocking_reasons=market_context_blocking,
+        market_context_warnings=market_context_warnings,
         candidate_results=tuple(candidate_results),
         packet=packet,
     )
@@ -291,7 +316,14 @@ def _normalize_market_context(raw: Any) -> tuple[Optional[MarketContext], tuple[
 
     errors: list[str] = []
     normalized: dict[str, Any] = {}
-    for name in required:
+    # Optional fields are normalized when supplied and simply omitted when not,
+    # so the dataclass default (blank) stands in — never a fabricated value.
+    optional_present = tuple(
+        name
+        for name in _MARKET_CONTEXT_OPTIONAL_STR_FIELDS
+        if _is_present(raw.get(name))
+    )
+    for name in required + optional_present:
         raw_value = raw[name]
         try:
             if name in _MARKET_CONTEXT_STR_FIELDS:
@@ -354,6 +386,11 @@ def check_morning_scan_packet_intake(payload: Any) -> MorningScanPacketResult:
         )
 
     market_context, market_context_errors = _normalize_market_context(payload.get("market_context"))
+    # Keep intake and evaluate in agreement: an omitted optional field normalizes
+    # cleanly but must still surface its non-blocking warning.
+    market_context_warnings: tuple[str, ...] = ()
+    if market_context is not None:
+        _, market_context_warnings = _evaluate_market_context(market_context)
 
     raw_candidates = payload.get("candidates", ())
     if not isinstance(raw_candidates, Sequence) or isinstance(raw_candidates, (str, bytes)):
@@ -386,13 +423,17 @@ def check_morning_scan_packet_intake(payload: Any) -> MorningScanPacketResult:
             continue
         candidates.append(candidate)
         evaluation = _evaluate_candidate(candidate)
-        if market_context_errors:
+        if market_context_errors or market_context_warnings:
+            blocking = evaluation.blocking_reasons
+            if market_context_errors:
+                blocking += (
+                    f"missing market context: {', '.join(market_context_errors)}",
+                )
             evaluation = CandidateEvaluation(
                 ticker=evaluation.ticker,
-                valid=False,
-                blocking_reasons=evaluation.blocking_reasons
-                + (f"missing market context: {', '.join(market_context_errors)}",),
-                warnings=evaluation.warnings,
+                valid=not blocking,
+                blocking_reasons=blocking,
+                warnings=evaluation.warnings + market_context_warnings,
             )
         candidate_results.append(evaluation)
 
@@ -409,6 +450,7 @@ def check_morning_scan_packet_intake(payload: Any) -> MorningScanPacketResult:
     return MorningScanPacketResult(
         valid=overall_valid,
         market_context_blocking_reasons=market_context_errors,
+        market_context_warnings=market_context_warnings,
         candidate_results=tuple(candidate_results),
         packet=packet,
     )

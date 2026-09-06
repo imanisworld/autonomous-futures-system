@@ -38,19 +38,19 @@ ScanStatus = Literal["TRIGGERED", "WATCH", "INVALID", "NO_TRADE"]
 @dataclass(frozen=True)
 class WatchlistRow:
     """One caller-supplied ticker/setup to scan through evaluate_strat_212().
-    Nothing here is fetched — bars, entry/invalidation, target/level
-    inputs, market-context inputs, and contract-constraints inputs are
-    all supplied by the caller, exactly like options_manager.replay's
-    Strat212ReplayRow, minus that model's replay-only future_* fields.
 
-    `exclude` is a caller-controlled bypass only (e.g. "I already know I
-    don't want this ticker scanned this run") — it carries no session,
-    market-hours, or time-based logic of its own."""
+    ``timeframe`` is carried as source identity only. The scanner does not
+    infer, transform, or validate bar duration; callers that want to promote a
+    result through the canonical proof bridge must supply it so the scanner row
+    can be reconciled against the proof packet instead of trusting another free
+    string later.
+    """
 
     ticker: str
     timestamp: str
     direction: Literal["CALL", "PUT"]
     bars: Strat212Bars
+    timeframe: Optional[str] = None
     entry_trigger: Optional[float] = None
     underlying_invalidation: Optional[float] = None
     target_1: Optional[float] = None

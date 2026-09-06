@@ -55,6 +55,10 @@ def _base_payload(**overrides) -> AlertPayload:
         "current_bar_type": "two_up",
         "previous_bar_type": "two_up",
         "two_bars_back_type": "two_up",
+        # previous bar still traded at the ORB high: an orb_breakout built on
+        # this payload is a fresh break, not a bar merely remaining above
+        "previous_bar_high": 19500.0,
+        "previous_bar_low": 19490.0,
     }
     data.update(overrides)
     return AlertPayload(**data)

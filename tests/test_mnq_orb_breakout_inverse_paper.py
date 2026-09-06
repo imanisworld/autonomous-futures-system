@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from config.settings import ConfigError, _validate_config
+from context.five_min_feed import arm_fifteen_min_setup
 from context.mnq_orb_breakout_inverse_paper import (
     MARKETABLE_TICKS,
     VALID_MODES,
@@ -29,6 +30,7 @@ def _config(tmp_path, **overrides):
         base,
         enabled_concepts=list(base.enabled_concepts) + ["orb_breakout"],
         orb_stop_ticks={"MNQ": 48},
+        mnq_orb_breakout_inverse_epoch_start="2026-05-23T14:00:00+00:00",
         **overrides,
     )
 
@@ -72,11 +74,29 @@ def test_inverse_and_legacy_breakout_proof_modes_are_mutually_exclusive(tmp_path
     cfg = replace(
         _base_config(tmp_path),
         mnq_orb_breakout_inverse_mode="paper_sim",
+        mnq_orb_breakout_inverse_epoch_start="2026-05-23T14:00:00+00:00",
         mnq_orb_breakout_proof_mode="paper_sim",
         max_staleness_seconds=60,
     )
     with pytest.raises(ConfigError, match="cannot both be active"):
         _validate_config(cfg)
+
+
+def test_active_inverse_requires_offset_aware_epoch_start(tmp_path):
+    missing = replace(
+        _base_config(tmp_path),
+        mnq_orb_breakout_inverse_mode="paper_sim",
+        max_staleness_seconds=60,
+    )
+    with pytest.raises(ConfigError, match="EPOCH_START is required"):
+        _validate_config(missing)
+
+    naive = replace(
+        missing,
+        mnq_orb_breakout_inverse_epoch_start="2026-09-02T00:00:00",
+    )
+    with pytest.raises(ConfigError, match="UTC offset"):
+        _validate_config(naive)
 
 
 @pytest.mark.parametrize(
@@ -193,6 +213,7 @@ def test_runtime_signal_to_ioc_order_parity(tmp_path, monkeypatch):
     intent = next(row for row in rows if row.get("decision") == "TRADE_INTENT")
     confirmed = next(row for row in rows if row.get("decision") == "TRADE")
     audit = intent["mnq_orb_breakout_inverse_audit"]
+    assert audit["accounting_epoch_start"] == "2026-05-23T14:00:00+00:00"
     assert audit["source_setup"] == {
         "direction": "LONG",
         "entry": 19498.5,
@@ -210,6 +231,72 @@ def test_runtime_signal_to_ioc_order_parity(tmp_path, monkeypatch):
     assert confirmed["setup"]["stop"] == 19511.0
     assert confirmed["setup"]["target"] == 19471.0
     assert confirmed["setup"]["contracts"] == 1
+
+
+def _write_outcomes(log_dir, rows):
+    path = Path(log_dir) / "journal_2026-05-23.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("".join(json.dumps(row) + "\n" for row in rows))
+
+
+def _outcome(ts, result, pnl):
+    return {
+        "ts": ts,
+        "type": "OUTCOME",
+        "instrument": "MNQ",
+        "session": "new_york",
+        "outcome": {"result": result, "pnl_dollars": pnl},
+    }
+
+
+def test_pre_epoch_shared_drawdown_and_loss_streak_do_not_block(tmp_path):
+    cfg = _config(
+        tmp_path,
+        mnq_orb_breakout_inverse_mode="paper_sim",
+        max_drawdown_percent=0.20,
+    )
+    _write_outcomes(
+        cfg.log_dir,
+        [
+            _outcome("2026-05-23T12:00:00+00:00", "WIN", 410.75),
+            _outcome("2026-05-23T12:15:00+00:00", "LOSS", -205.00),
+            _outcome("2026-05-23T12:30:00+00:00", "LOSS", -205.00),
+        ],
+    )
+
+    result = process_alert(
+        _payload(timestamp="2026-05-23T15:00:00+00:00"),
+        config=cfg,
+        log_dir=cfg.log_dir,
+        for_date=date(2026, 5, 23),
+    )
+
+    assert result["decision"] == "TRADE"
+    assert result["risk"]["result"] == "APPROVED"
+
+
+def test_loss_inside_epoch_still_trips_unchanged_max_drawdown(tmp_path):
+    cfg = _config(
+        tmp_path,
+        mnq_orb_breakout_inverse_mode="paper_sim",
+        max_drawdown_percent=0.20,
+        max_daily_loss=0.0,
+        max_consecutive_losses=99,
+    )
+    _write_outcomes(
+        cfg.log_dir,
+        [_outcome("2026-05-23T14:30:00+00:00", "LOSS", -2_500.00)],
+    )
+
+    result = process_alert(
+        _payload(timestamp="2026-05-23T15:00:00+00:00"),
+        config=cfg,
+        log_dir=cfg.log_dir,
+        for_date=date(2026, 5, 23),
+    )
+
+    assert result["decision"] == "RISK_REJECTED"
+    assert result["risk"]["failed_rule"] == "max_drawdown"
 
 
 def test_dynamic_sizing_is_diagnostic_only(tmp_path, monkeypatch):
@@ -381,3 +468,226 @@ def test_ioc_cap_fails_closed():
     cancelled = broker.execute_bracket(inverse, market_price=102.25)
     assert cancelled.result == "CANCELLED"
     assert cancelled.exit_reason == "ENTRY_NOT_FILLED"
+
+
+# ── 5-minute re-trigger isolation ─────────────────────────────────────────────
+# The armed-setup retest re-runs an ORIGINAL 15m orb_breakout decision on a 5m
+# bar. bar_timeframe_minutes is deliberately 5 there (the claim is tagged to the
+# bar the alert arrived on), which used to make the inverse lane's guard skip the
+# candidate entirely: it fell through to the non-inverse branch and was priced
+# against all-history journal accounting and the configured external broker.
+# ENTRY_DETACHED_FROM_PRICE is both the arming gate and this lane's most common
+# miss, so the retest is its main second-chance route.
+
+_ARMED_15M_TS = "2026-05-23T15:00:00+00:00"
+_RETEST_5M_TS = "2026-05-23T15:20:00+00:00"
+# The 15m engine's own source setup for `_payload(...)`; the runner arms the
+# ORIGINAL (uninverted) setup, so the retest matches a LONG entry.
+_SOURCE_SETUP = {
+    "direction": "LONG",
+    "entry": 19498.5,
+    "stop": 19486.0,
+    "target": 19526.0,
+    "rr_ratio": 2.2,
+    "strategy": "orb_breakout",
+}
+
+
+def _arm_then_retest(cfg, monkeypatch):
+    """Arm the 15m setup, then return the 5m bar that retests its entry."""
+    monkeypatch.setenv("FIVE_MIN_FEED_ENABLED", "true")
+    arm_fifteen_min_setup(
+        "MNQ1!",
+        cfg.log_dir,
+        setup=dict(_SOURCE_SETUP),
+        payload=_payload(timestamp=_ARMED_15M_TS).model_dump(),
+        for_date=date(2026, 5, 23),
+    )
+    # LONG retest: trades at/below entry and closes back within one tick of it.
+    return _payload(
+        timestamp=_RETEST_5M_TS,
+        timeframe="5",
+        open=19500.0,
+        high=19499.0,
+        low=19497.0,
+        close=19498.5,
+    )
+
+
+def _inverse_audits(log_dir) -> list[dict]:
+    # A bare 5m bar is dropped by the timeframe guard before anything is
+    # journaled, so "no journal at all" is a legitimate empty result here.
+    if not list(Path(log_dir).glob("journal_*.jsonl")):
+        return []
+    return [
+        row["mnq_orb_breakout_inverse_audit"]
+        for row in _journal_rows(log_dir)
+        if row.get("mnq_orb_breakout_inverse_audit")
+    ]
+
+
+def test_five_min_retrigger_is_owned_by_the_active_inverse_lane(
+    tmp_path, monkeypatch
+):
+    """REGRESSION: the 5m retest used to escape the lane entirely.
+
+    Before the fix this candidate carried no inverse audit at all — proof it
+    took the non-inverse branch.
+    """
+    import execution.tradovate_broker as tradovate_module
+
+    monkeypatch.setenv("BROKER", "tradovate")
+
+    class TradovateMustNotExist:
+        def __init__(self, *args, **kwargs):
+            raise AssertionError("5m re-triggered inverse candidate reached Tradovate")
+
+    monkeypatch.setattr(tradovate_module, "TradovateBroker", TradovateMustNotExist)
+
+    cfg = _config(
+        tmp_path,
+        mnq_orb_breakout_inverse_mode="paper_sim",
+        paper_mode=False,
+    )
+    retest = _arm_then_retest(cfg, monkeypatch)
+
+    result = process_alert(
+        retest,
+        config=cfg,
+        log_dir=cfg.log_dir,
+        for_date=date(2026, 5, 23),
+    )
+
+    assert result["decision"] == "TRADE"
+    audits = _inverse_audits(cfg.log_dir)
+    assert audits, "5m re-triggered candidate escaped the inverse lane"
+    assert audits[-1]["apply_override"] is True
+    assert audits[-1]["force_paper_broker"] is True
+    # The claim stays tagged to the 5m bar it arrived on — the fix must not
+    # relabel the bar to buy itself the old `== 15` guard.
+    assert [
+        row["timeframe_minutes"]
+        for row in _journal_rows(cfg.log_dir)
+        if row.get("mnq_orb_breakout_inverse_audit")
+    ][-1] == 5
+
+
+def test_five_min_retrigger_submits_the_isolated_inverse_bracket(
+    tmp_path, monkeypatch
+):
+    import execution.tradovate_broker as tradovate_module
+
+    monkeypatch.setenv("BROKER", "tradovate")
+    monkeypatch.setattr(
+        tradovate_module,
+        "TradovateBroker",
+        lambda *a, **k: pytest.fail("external broker constructed"),
+    )
+    cfg = _config(
+        tmp_path,
+        mnq_orb_breakout_inverse_mode="paper_sim",
+        paper_mode=False,
+    )
+    retest = _arm_then_retest(cfg, monkeypatch)
+
+    result = process_alert(
+        retest,
+        config=cfg,
+        log_dir=cfg.log_dir,
+        for_date=date(2026, 5, 23),
+    )
+
+    fill = result["fill"]
+    assert fill["direction"] == "SHORT"          # mirrored from the LONG source
+    assert fill["contracts"] == 1                # fixed one MNQ contract
+    assert fill["paper_order_id"].startswith("PAPER-")
+    audit = _inverse_audits(cfg.log_dir)[-1]
+    assert audit["source_setup"]["direction"] == "LONG"
+    assert audit["submitted_setup"]["direction"] == "SHORT"
+    assert audit["submitted_setup"]["contracts"] == 1
+    assert audit["marketable_ticks"] == MARKETABLE_TICKS
+
+
+def test_five_min_retrigger_uses_epoch_scoped_balance_and_peak(
+    tmp_path, monkeypatch
+):
+    """A pre-epoch drawdown must not gate the 5m path either.
+
+    This is the exact shape of the deployed defect: peak $1,910.75 frozen by a
+    pre-epoch loss run, compared against a candidate the epoch-scoped lane owns.
+    """
+    cfg = _config(
+        tmp_path,
+        mnq_orb_breakout_inverse_mode="paper_sim",
+        paper_mode=False,
+        max_drawdown_percent=0.20,
+    )
+    # Pre-epoch only, and deep enough to trip the ALL-HISTORY gate: peak
+    # $5,410.75 against balance $3,910.75 is a 27.7% drawdown. Epoch-scoped
+    # accounting sees no outcomes at all, so it must read 0%.
+    _write_outcomes(
+        cfg.log_dir,
+        [
+            _outcome("2026-05-23T12:00:00+00:00", "WIN", 410.75),
+            _outcome("2026-05-23T12:30:00+00:00", "LOSS", -1_500.00),
+        ],
+    )
+    retest = _arm_then_retest(cfg, monkeypatch)
+
+    result = process_alert(
+        retest,
+        config=cfg,
+        log_dir=cfg.log_dir,
+        for_date=date(2026, 5, 23),
+    )
+
+    assert result["decision"] == "TRADE"
+    assert result["risk"]["result"] == "APPROVED"
+
+
+def test_five_min_bar_without_an_armed_setup_stays_out_of_the_lane(
+    tmp_path, monkeypatch
+):
+    """The fix widens the guard by exactly one case: a fired retest.
+
+    A bare 5m bar (nothing armed) must still be ignored by the lane.
+    """
+    monkeypatch.setenv("FIVE_MIN_FEED_ENABLED", "true")
+    cfg = _config(
+        tmp_path,
+        mnq_orb_breakout_inverse_mode="paper_sim",
+        paper_mode=True,
+    )
+
+    process_alert(
+        _payload(timestamp=_RETEST_5M_TS, timeframe="5"),
+        config=cfg,
+        log_dir=cfg.log_dir,
+        for_date=date(2026, 5, 23),
+    )
+
+    assert _inverse_audits(cfg.log_dir) == []
+
+
+def test_fifteen_min_path_unchanged_with_the_five_min_feed_enabled(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setenv("FIVE_MIN_FEED_ENABLED", "true")
+    cfg = _config(
+        tmp_path,
+        mnq_orb_breakout_inverse_mode="paper_sim",
+        paper_mode=True,
+    )
+
+    result = process_alert(
+        _payload(timestamp=_ARMED_15M_TS),
+        config=cfg,
+        log_dir=cfg.log_dir,
+        for_date=date(2026, 5, 23),
+    )
+
+    assert result["decision"] == "TRADE"
+    audit = _inverse_audits(cfg.log_dir)[-1]
+    assert audit["apply_override"] is True
+    assert audit["submitted_setup"]["direction"] == "SHORT"
+    assert audit["submitted_setup"]["contracts"] == 1

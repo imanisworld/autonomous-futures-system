@@ -25,7 +25,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Optional
 
-from config.settings import SystemConfig, load_config
+from config.settings import SystemConfig, load_config, options_companion_sqlite_path
 from execution.broker_interface import BracketOrder, BrokerInterface
 from context.bar_history import BarHistory
 from context.structural_regime import (
@@ -59,6 +59,7 @@ from context.mnq_entry_refresh import (
     entry_refresh_mode,
     entry_refresh_strategies,
     is_entry_refresh_candidate,
+    observe_entry_refresh_decision,
     refresh_detached_entry,
 )
 from context.strategy_context_observer import append_strategy_context_observation
@@ -80,6 +81,14 @@ from execution.vwap_hold_early_shadow import (
     get_pending_shadow_position as get_pending_vwap_hold_early_shadow_position,
     open_shadow_position as open_vwap_hold_early_shadow_position,
     resolve_shadow_position as resolve_vwap_hold_early_shadow_position,
+)
+from execution.forward_evidence_campaign import (
+    append_record as append_forward_campaign_record,
+    campaign_enabled as forward_campaign_enabled,
+    candidate_record as forward_candidate_record,
+    outcome_record as forward_outcome_record,
+    record_canonical_candidates,
+    resolve_canonical_positions,
 )
 from context.five_min_feed import (
     arm_fifteen_min_setup,
@@ -107,9 +116,30 @@ from webhook.payload import AlertPayload
 from webhook.state_builder import build_market_state
 from context.wall_context import build_wall_context as _build_wall_context
 from context.range_signal import (
+    RangeBreakArmState as _RangeBreakArmState,
     build_range_state as _build_range_state,
     build_range_signal as _build_range_signal,
 )
+
+
+def _inverse_accounting_epoch_start(cfg: SystemConfig) -> Optional[datetime]:
+    if getattr(cfg, "mnq_orb_breakout_inverse_mode", "observe_only") != "paper_sim":
+        return None
+    raw = getattr(cfg, "mnq_orb_breakout_inverse_epoch_start", None)
+    if not raw:
+        raise ValueError(
+            "active MNQ inverse ORB lane has no accounting epoch start"
+        )
+    parsed = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        raise ValueError(
+            "active MNQ inverse ORB accounting epoch start has no UTC offset"
+        )
+    return parsed.astimezone(timezone.utc)
+
+# One-shot gate so a single structural break does not re-emit a BREAK_CLOSE
+# candidate every 15m bar (context/range_signal.RangeBreakArmState).
+_RANGE_BREAK_ARM = _RangeBreakArmState()
 
 logger = logging.getLogger(__name__)
 
@@ -285,9 +315,14 @@ def _paper_broker(starting_balance: float, cfg: Optional[SystemConfig]) -> Paper
         starting_balance=starting_balance,
         slippage_ticks=float(getattr(cfg, "fill_slippage_ticks", 0.0) or 0.0),
         pessimistic_both_hit=bool(getattr(cfg, "fill_pessimistic_both_hit", False)),
+        breakeven_at_1r=bool(getattr(cfg, "breakeven_at_1r", False)),
         runner_mode=bool(getattr(cfg, "runner_mode", False)),
         runner_activation_r=float(getattr(cfg, "runner_activation_r", 1.0) or 1.0),
         runner_trail_r=float(getattr(cfg, "runner_trail_r", 0.5) or 0.5),
+        entry_fill_model=str(getattr(cfg, "entry_fill_model", "market") or "market"),
+        entry_tolerance_ticks_by_root=dict(
+            getattr(cfg, "entry_tolerance_ticks_by_root", {}) or {}
+        ),
     )
 
 
@@ -513,7 +548,29 @@ def process_alert(
                         vwap_hold_early_audit.get("signal_detected")
                         and vwap_hold_early_mode(cfg) == "shadow"
                     ):
-                        open_vwap_hold_early_shadow_position(
+                        _vhe_campaign_record = None
+                        if forward_campaign_enabled():
+                            _vhe_campaign_record = forward_candidate_record(
+                                strategy="vwap_hold",
+                                variant="modified",
+                                direction=vwap_hold_early_audit["direction"],
+                                signal_timestamp=_vhe_state.timestamp.isoformat(),
+                                source_timeframe="5m",
+                                session=_vhe_state.session,
+                                regime=vwap_hold_early_audit.get("regime"),
+                                market_condition=vwap_hold_early_audit.get("market_condition"),
+                                original_entry=vwap_hold_early_audit["entry"],
+                                original_stop=vwap_hold_early_audit["stop"],
+                                original_target=vwap_hold_early_audit["target"],
+                                modified_entry=vwap_hold_early_audit["entry"],
+                                modified_stop=vwap_hold_early_audit["stop"],
+                                modified_target=vwap_hold_early_audit["target"],
+                                entry_policy="confirmed_5m_close",
+                                exit_policy="runner_1R_0.5R",
+                                fillable_state="FILLED",
+                                hypothetical_fill_price=vwap_hold_early_audit["entry"],
+                            )
+                        _vhe_opened = open_vwap_hold_early_shadow_position(
                             log_dir,
                             direction=vwap_hold_early_audit["direction"],
                             entry=vwap_hold_early_audit["entry"],
@@ -521,7 +578,10 @@ def process_alert(
                             target=vwap_hold_early_audit["target"],
                             entry_ts=_vhe_state.timestamp.isoformat(),
                             rr_ratio=vwap_hold_early_audit.get("rr_ratio"),
+                            campaign_record=_vhe_campaign_record,
                         )
+                        if _vhe_opened and _vhe_campaign_record is not None:
+                            append_forward_campaign_record(log_dir, _vhe_campaign_record)
             except Exception:
                 logger.debug("vwap_hold early-signal detection skipped", exc_info=True)
 
@@ -537,12 +597,22 @@ def process_alert(
                         b for b in recent_five_min("MNQ", log_dir, 500, for_date=for_date)
                         if str(b.get("ts") or "") > _vhe_entry_ts
                     ]
-                    _vhe_outcome = resolve_vwap_hold_early_shadow_position(_vhe_position, _vhe_bars)
+                    _vhe_outcome = resolve_vwap_hold_early_shadow_position(
+                        _vhe_position,
+                        _vhe_bars,
+                        activation_r=float(os.getenv("RUNNER_ACTIVATION_R", "1.0") or 1.0),
+                        trail_r=float(os.getenv("RUNNER_TRAIL_R", "0.5") or 0.5),
+                    )
                     if _vhe_outcome is not None:
                         append_vwap_hold_early_shadow_evidence(
                             log_dir,
                             {"kind": "resolution", "position": _vhe_position, **_vhe_outcome},
                         )
+                        if _vhe_position.get("campaign_record"):
+                            append_forward_campaign_record(
+                                log_dir,
+                                forward_outcome_record(_vhe_position, _vhe_outcome),
+                            )
                         close_vwap_hold_early_shadow_position(log_dir)
             except Exception:
                 logger.debug("vwap_hold early-signal resolution skipped", exc_info=True)
@@ -767,7 +837,9 @@ def process_alert(
                 _wall_ctx, state.market_condition or "", orb_status=_orb_status
             )
             _range_state_dict = _range_state.to_dict()
-            _range_signal = _build_range_signal(_range_state, _wall_ctx)
+            _range_signal = _RANGE_BREAK_ARM.apply(
+                state.instrument, _build_range_signal(_range_state, _wall_ctx)
+            )
             _range_signal_dict = _range_signal.to_dict()
         except Exception:  # noqa: BLE001 — fail-soft, never break ingestion
             logger.debug("wall_context/range_signal build failed", exc_info=True)
@@ -787,6 +859,15 @@ def process_alert(
                 open_position_date = candidate
                 daily_state.has_open_position = True
                 break
+
+    # A clean inverse-ORB paper epoch owns its risk counters from the declared
+    # boundary forward. Keep the global open-position result authoritative so
+    # an older position can never be hidden by the accounting isolation.
+    _inverse_epoch_start = _inverse_accounting_epoch_start(cfg)
+    if _inverse_epoch_start is not None:
+        _global_has_open_position = daily_state.has_open_position
+        daily_state = journal.get_daily_state_since(_inverse_epoch_start, today)
+        daily_state.has_open_position = _global_has_open_position
 
     result: dict = {
         "timestamp": (
@@ -857,7 +938,7 @@ def process_alert(
     # surfaced on `result` + journal for offline study. Fail-soft.
     try:
         shadow_candidates = [
-            c.to_dict() for c in evaluate_shadow_setups(state, recent_bars)
+            c.to_dict() for c in evaluate_shadow_setups(state, recent_bars, cfg)
         ]
     except Exception:
         shadow_candidates = []
@@ -886,6 +967,31 @@ def process_alert(
         result["decision"] = "BLOCKED_DUPLICATE_BAR"
         result["failed_gates"] = [f"Duplicate bar already processed: {state.instrument} {bar_ts}"]
         return result
+
+    # Forward A/B campaign: resolve prior canonical VWAP candidates, then arm
+    # only this bar's new canonical observers. This is an isolated evidence
+    # state file; it cannot affect the active decision, risk, or broker path.
+    if forward_campaign_enabled() and state.instrument == "MNQ" and not five_min_trigger:
+        try:
+            _fab_bars = BarHistory(log_dir=log_dir).recent("MNQ", 500, for_date=today)
+            _fab_resolved = resolve_canonical_positions(
+                log_dir,
+                instrument="MNQ",
+                bars=_fab_bars,
+                current_bar_ts=bar_ts,
+                activation_r=float(os.getenv("RUNNER_ACTIVATION_R", "1.0") or 1.0),
+                trail_r=float(os.getenv("RUNNER_TRAIL_R", "0.5") or 0.5),
+            )
+            _fab_created = record_canonical_candidates(log_dir, state, shadow_candidates)
+            if _fab_resolved or _fab_created:
+                result["forward_campaign"] = {
+                    "campaign_id": "forward_ab_2026_08_v1",
+                    "canonical_candidates": len(_fab_created),
+                    "canonical_outcomes": len(_fab_resolved),
+                    "observation_only": True,
+                }
+        except Exception:  # noqa: BLE001 — campaign evidence must fail soft
+            logger.warning("forward evidence campaign canonical lane skipped", exc_info=True)
 
     # Four independent MNQ Strat evidence lanes. Additive only: this service
     # writes its own evidence/state files, owns hypothetical positions solely
@@ -981,6 +1087,11 @@ def process_alert(
                             "opened_at": _er_pos.get("opened_at"),
                             **_er_outcome,
                         })
+                        if _er_pos.get("campaign_record"):
+                            append_forward_campaign_record(
+                                log_dir,
+                                forward_outcome_record(_er_pos, _er_outcome),
+                            )
                         close_shadow_position(log_dir, _er_root, _er_strategy)
                 except Exception:  # noqa: BLE001 — shadow lane must never break ingestion
                     logger.debug("entry-refresh shadow resolution skipped", exc_info=True)
@@ -1076,10 +1187,26 @@ def process_alert(
                 fill = tv.resolve_position()
             elif same_instrument:
                 # Paper simulation: resolve against THIS bar's OHLC.
-                _paper_balance = journal.get_account_balance(
-                    cfg.position_sizing.starting_balance, today
-                )
                 if _inverse_paper_position:
+                    _position_epoch_raw = (
+                        open_pos.get("mnq_orb_breakout_inverse_audit") or {}
+                    ).get("accounting_epoch_start")
+                    _position_epoch = (
+                        datetime.fromisoformat(
+                            str(_position_epoch_raw).replace("Z", "+00:00")
+                        )
+                        if _position_epoch_raw
+                        else _inverse_epoch_start
+                    )
+                    if _position_epoch is None:
+                        raise ValueError(
+                            "inverse paper position has no accounting epoch start"
+                        )
+                    _paper_balance, _ = journal.get_account_state_since(
+                        cfg.position_sizing.starting_balance,
+                        _position_epoch,
+                        today,
+                    )
                     broker = PaperBroker(
                         starting_balance=_paper_balance,
                         slippage_ticks=1.0,
@@ -1092,6 +1219,9 @@ def process_alert(
                         },
                     )
                 elif _proof_paper_position:
+                    _paper_balance = journal.get_account_balance(
+                        cfg.position_sizing.starting_balance, today
+                    )
                     broker = PaperBroker(
                         starting_balance=_paper_balance,
                         slippage_ticks=float(getattr(cfg, "fill_slippage_ticks", 0.0) or 0.0),
@@ -1102,6 +1232,9 @@ def process_alert(
                         entry_fill_model="market",
                     )
                 else:
+                    _paper_balance = journal.get_account_balance(
+                        cfg.position_sizing.starting_balance, today
+                    )
                     broker = _paper_broker(_paper_balance, cfg)
                 broker.restore_position(
                     instrument=open_pos["instrument"] or state.instrument,
@@ -1304,6 +1437,7 @@ def process_alert(
                             for_date=open_position_date,
                             stop=float(_t["would_stop"]),
                             exit_mode="runner_live",
+                            client_order_id=open_pos.get("client_order_id"),
                         )
                 except Exception as _exc:  # live trail must never break trading
                     logger.warning("trail-live skipped: %s", _exc)
@@ -1399,6 +1533,7 @@ def process_alert(
                     contracts=fill.contracts,
                     for_date=open_position_date,
                     paper_order_id=getattr(fill, "paper_order_id", None),
+                    client_order_id=open_pos.get("client_order_id"),
                 )
                 result["resolution"] = fill.result
                 if fill.result in {"WIN", "LOSS"}:
@@ -1426,10 +1561,11 @@ def process_alert(
     total_daily_capacity = cfg.max_trades_per_day + int(getattr(cfg, "bonus_trades_after_max", 0) or 0)
     if daily_state.trade_count >= total_daily_capacity:
         result["decision"] = "BLOCKED_MAX_TRADES"
+        result["reason"] = "Daily trade capacity reached before strategy evaluation."
         _observe_strategy_context_once(
             _capacity_observation(
                 "BLOCKED_MAX_TRADES",
-                "Daily trade capacity reached before strategy evaluation.",
+                result["reason"],
             )
         )
         return result
@@ -1437,10 +1573,11 @@ def process_alert(
     # circuit_breaker_losses (lower threshold) triggers a temporary pause via adaptive layer.
     if daily_state.consecutive_losses >= cfg.max_consecutive_losses:
         result["decision"] = "BLOCKED_LOSS_LOCKOUT"
+        result["reason"] = "Maximum consecutive-loss limit reached before strategy evaluation."
         _observe_strategy_context_once(
             _capacity_observation(
                 "BLOCKED_LOSS_LOCKOUT",
-                "Maximum consecutive-loss limit reached before strategy evaluation.",
+                result["reason"],
             )
         )
         return result
@@ -1564,7 +1701,20 @@ def process_alert(
         and decision.setup is not None
         and is_mnq_orb_breakout_candidate(state.instrument, decision.setup.strategy)
     ):
-        if not five_min_trigger and bar_timeframe_minutes == 15:
+        # A 5m retest re-runs the ORIGINAL armed 15m decision (`payload` was
+        # swapped back to the armed 15m payload above), but
+        # bar_timeframe_minutes deliberately reports 5 so the bar claim is
+        # tagged to the 5m bar the alert actually arrived on. That made BOTH
+        # halves of the old `not five_min_trigger and bar_timeframe_minutes ==
+        # 15` guard false, so a re-triggered candidate skipped the inverse lane
+        # and fell through to the non-inverse branch — all-history journal
+        # accounting (peak frozen from a pre-epoch drawdown) plus the
+        # configured external broker, for a candidate the active lane owns.
+        # ENTRY_DETACHED_FROM_PRICE is the arming gate AND this lane's most
+        # common miss, so the retest is its main second-chance route, not an
+        # edge case. It is the same 15m bracket, so it gets the same isolation.
+        _inverse_lane_bar = bool(five_min_trigger) or bar_timeframe_minutes == 15
+        if _inverse_lane_bar:
             mnq_breakout_inverse_decision = evaluate_mnq_orb_breakout_inverse(cfg)
             mnq_breakout_inverse_audit = mnq_breakout_inverse_decision.audit(
                 source_direction=decision.setup.direction,
@@ -1698,19 +1848,32 @@ def process_alert(
     # risk-evaluated, never broker-evaluated).
     entry_refresh_audit = None
     _er_mode = entry_refresh_mode(cfg)
-    if (
-        _er_mode != "off"
-        and decision.decision != "TRADE"
-        and "ENTRY_DETACHED_FROM_PRICE" in (decision.failed_gates or [])
-    ):
-        _er_candidate = next(
-            (
-                c for c in (decision.candidate_audit or [])
-                if c.get("reject_code") == "ENTRY_DETACHED_FROM_PRICE"
-                and is_entry_refresh_candidate(state.instrument, c.get("strategy"), cfg)
-            ),
-            None,
-        )
+    _er_candidate = None
+    _er_observed = None
+    if _er_mode != "off" and decision.decision != "TRADE":
+        # PR #448 isolation: the entry-refresh candidate comes from the
+        # canonical DecisionEngine run on a THROWAWAY config scoped to the
+        # entry-refresh strategy (default orb_reclaim) over deep-copied state,
+        # so it keeps flowing even when the ACTIVE enabled_concepts deliberately
+        # omit orb_reclaim (e.g. the isolated orb_breakout inverse lane). The
+        # observed decision is evidence input only: it never replaces or
+        # mutates `decision`, never enters ranking/RiskEngine/broker, and the
+        # campaign rows below take failed_gates/reason/regime/market_condition
+        # from IT, not from the unrelated active decision.
+        _er_observed = observe_entry_refresh_decision(state, daily_state, cfg)
+        if (
+            _er_observed is not None
+            and _er_observed.decision != "TRADE"
+            and "ENTRY_DETACHED_FROM_PRICE" in (_er_observed.failed_gates or [])
+        ):
+            _er_candidate = next(
+                (
+                    c for c in (_er_observed.candidate_audit or [])
+                    if c.get("reject_code") == "ENTRY_DETACHED_FROM_PRICE"
+                    and is_entry_refresh_candidate(state.instrument, c.get("strategy"), cfg)
+                ),
+                None,
+            )
         if _er_candidate is not None:
             try:
                 _er_root = (state.instrument or "").upper().replace("1!", "")
@@ -1730,8 +1893,57 @@ def process_alert(
                     "strategy": _er_candidate.get("strategy"),
                     **_er_decision.to_audit_dict(),
                 }
+                _er_control_campaign_record = None
+                _er_modified_campaign_record = None
+                if forward_campaign_enabled() and _er_root == "MNQ":
+                    _er_control_campaign_record = forward_candidate_record(
+                        strategy="orb_reclaim",
+                        variant="control",
+                        direction=_er_decision.direction,
+                        signal_timestamp=bar_ts,
+                        source_timeframe=f"{bar_timeframe_minutes}m",
+                        session=state.session,
+                        regime=_er_observed.regime,
+                        market_condition=_er_observed.market_condition,
+                        original_entry=_er_decision.original_entry,
+                        original_stop=_er_decision.original_stop,
+                        original_target=_er_decision.original_target,
+                        entry_policy="current_disposition",
+                        exit_policy="none",
+                        failed_gates=list(_er_observed.failed_gates or []),
+                        reject_reason=_er_observed.reason,
+                        fillable_state="REJECTED",
+                        terminal_state="REJECTED",
+                    )
+                    append_forward_campaign_record(log_dir, _er_control_campaign_record)
+                    _er_modified_campaign_record = forward_candidate_record(
+                        strategy="orb_reclaim",
+                        variant="modified",
+                        direction=_er_decision.direction,
+                        signal_timestamp=bar_ts,
+                        source_timeframe=f"{bar_timeframe_minutes}m",
+                        session=state.session,
+                        regime=_er_observed.regime,
+                        market_condition=_er_observed.market_condition,
+                        original_entry=_er_decision.original_entry,
+                        original_stop=_er_decision.original_stop,
+                        original_target=_er_decision.original_target,
+                        modified_entry=_er_decision.refreshed_entry,
+                        modified_stop=_er_decision.refreshed_stop,
+                        modified_target=_er_decision.refreshed_target,
+                        entry_policy="translate_lte_1R",
+                        exit_policy="runner_1R_0.5R",
+                        detachment_ticks=_er_decision.detachment_ticks,
+                        detachment_r=_er_decision.detachment_r,
+                        failed_gates=[] if _er_decision.outcome == "REFRESHED" else [_er_decision.outcome],
+                        reject_reason=None if _er_decision.outcome == "REFRESHED" else _er_decision.reason,
+                        fillable_state="FILLED" if _er_decision.outcome == "REFRESHED" else "REJECTED",
+                        hypothetical_fill_price=_er_decision.refreshed_entry,
+                        terminal_state="OPEN" if _er_decision.outcome == "REFRESHED" else "REJECTED",
+                        event_id=_er_control_campaign_record["event_id"],
+                    )
                 if _er_mode == "shadow" and _er_decision.outcome == "REFRESHED":
-                    open_shadow_position(
+                    _er_opened = open_shadow_position(
                         log_dir,
                         instrument=_er_root,
                         strategy=_er_candidate.get("strategy"),
@@ -1743,7 +1955,49 @@ def process_alert(
                         refresh_policy="translate",
                         detachment_ticks=_er_decision.detachment_ticks,
                         detachment_r=_er_decision.detachment_r,
+                        campaign_record=_er_modified_campaign_record,
                     )
+                    if _er_modified_campaign_record is not None:
+                        if not _er_opened:
+                            # The control arm for this event_id was written above,
+                            # so dropping the modified arm here would leave an
+                            # unpaired control and condition A/B coverage on slot
+                            # availability. Record it as not-filled instead.
+                            #
+                            # open_shadow_position() collapses two causes into
+                            # False: an occupied slot, and an OSError persisting
+                            # the shadow state. Only claim SHADOW_SLOT_OCCUPIED
+                            # when a pending position is POSITIVELY observed --
+                            # otherwise an infrastructure failure would be filed
+                            # as clean campaign evidence. A verification that
+                            # cannot read the state is itself unverified.
+                            try:
+                                _er_pending = get_pending_shadow_position(
+                                    log_dir, _er_root, _er_candidate.get("strategy")
+                                )
+                            except Exception:  # noqa: BLE001 — unreadable == unverified
+                                _er_pending = None
+                            _er_open_failure = (
+                                "SHADOW_SLOT_OCCUPIED"
+                                if _er_pending is not None
+                                else "SHADOW_STATE_OPEN_FAILED"
+                            )
+                            _er_modified_campaign_record = {
+                                **_er_modified_campaign_record,
+                                "fillable_state": "REJECTED",
+                                "terminal_state": "REJECTED",
+                                "reject_reason": _er_open_failure,
+                                "exit_reason": _er_open_failure,
+                                "exit_timestamp": bar_ts,
+                                "hypothetical_fill_price": None,
+                                "failed_gates": [
+                                    *(_er_modified_campaign_record.get("failed_gates") or []),
+                                    _er_open_failure,
+                                ],
+                            }
+                        append_forward_campaign_record(log_dir, _er_modified_campaign_record)
+                elif _er_modified_campaign_record is not None:
+                    append_forward_campaign_record(log_dir, _er_modified_campaign_record)
             except Exception:  # noqa: BLE001 — entry-refresh audit must never break decisions
                 logger.debug("entry-refresh decision skipped", exc_info=True)
                 entry_refresh_audit = None
@@ -1884,13 +2138,23 @@ def process_alert(
         journal_entry["shadow_range_signal"] = _range_signal_dict
 
     # ── Step 4: Risk validation ───────────────────────────────────────────────
-    journal_balance = journal.get_account_balance(
-        cfg.position_sizing.starting_balance, today
-    )
     _inverse_paper_active = (
         mnq_breakout_inverse_decision is not None
         and mnq_breakout_inverse_decision.apply_override
     )
+    _inverse_epoch_peak = None
+    if _inverse_paper_active:
+        if _inverse_epoch_start is None:
+            raise ValueError("inverse paper candidate has no accounting epoch start")
+        journal_balance, _inverse_epoch_peak = journal.get_account_state_since(
+            cfg.position_sizing.starting_balance,
+            _inverse_epoch_start,
+            today,
+        )
+    else:
+        journal_balance = journal.get_account_balance(
+            cfg.position_sizing.starting_balance, today
+        )
     if _inverse_paper_active:
         # Construct the isolated paper adapter directly. Do not even
         # instantiate the configured external broker before replacing it.
@@ -1933,8 +2197,12 @@ def process_alert(
     if account_balance is None:
         account_balance = journal_balance
     daily_state.account_balance = account_balance
-    daily_state.account_peak_balance = journal.get_account_peak_balance(
-        cfg.position_sizing.starting_balance, today
+    daily_state.account_peak_balance = (
+        _inverse_epoch_peak
+        if _inverse_paper_active
+        else journal.get_account_peak_balance(
+            cfg.position_sizing.starting_balance, today
+        )
     )
     risk_engine = RiskEngine(config=cfg)
     recommended_contracts = risk_engine.recommended_contracts(
@@ -2011,11 +2279,39 @@ def process_alert(
         risk_result=risk_result.result,
         risk_failed_rule=risk_result.failed_rule,
     )
+    _client_order_id = None
+    _execution_direction = None
     if not risk_result.approved:
         # Update journal entry decision before writing so the log reflects reality.
         journal_entry["decision"] = "RISK_REJECTED"
         journal_entry["reason"] = risk_result.reason or journal_entry.get("reason")
     else:
+        # Mint the same deterministic identity the broker order already uses,
+        # but do it before the intent is journaled so intent/order/outcome can be
+        # joined exactly. strat_212/122 evidence is already decided by its watched
+        # bar and never submits this normal bracket, so it deliberately carries no
+        # broker client-order identity.
+        if decision.setup.strategy not in (STRAT_212, STRAT_122):
+            import hashlib as _hashlib
+            _execution_direction = (
+                mnq_breakout_inverse_audit["submitted_setup"]["direction"]
+                if (
+                    mnq_breakout_inverse_decision is not None
+                    and mnq_breakout_inverse_decision.apply_override
+                )
+                else decision.setup.direction
+            )
+            _signal_identity = "|".join(
+                str(part)
+                for part in (
+                    state.instrument,
+                    decision.setup.strategy,
+                    _execution_direction,
+                    getattr(state, "timestamp", ""),
+                )
+            )
+            _client_order_id = "AFS-" + _hashlib.sha1(_signal_identity.encode()).hexdigest()[:24]
+            journal_entry["client_order_id"] = _client_order_id
         # Confirmed-execution model (2026-07-10, EXECUTION_STATE_BUG fix): the
         # pre-broker row is an INTENT, not an open position. Log it as
         # decision="TRADE_INTENT" so NO reader (get_open_position /
@@ -2169,31 +2465,23 @@ def process_alert(
         result["decision"] = "LIVE_TRADING_BLOCKED"
         return result
 
-    # Deterministic client order identity: the same logical signal (same
-    # instrument/strategy/direction/decision-bar) always maps to the same id,
-    # so a retry or recovery path can never create a second parent order at
-    # the broker (TradovateBroker refuses a registered clOrdId; ambiguous
-    # submissions must reconcile first). Derived, not random — restarts and
-    # duplicate webhook deliveries produce the identical identity.
-    import hashlib as _hashlib
-    _execution_direction = (
-        mnq_breakout_inverse_audit["submitted_setup"]["direction"]
-        if (
-            mnq_breakout_inverse_decision is not None
-            and mnq_breakout_inverse_decision.apply_override
+    # `_client_order_id` was minted before TRADE_INTENT so the append-only
+    # journal and broker order share one identity. This fallback preserves the
+    # pre-existing order behavior if a future control-flow change reaches Step 5
+    # without the earlier persistence block.
+    if _client_order_id is None:
+        import hashlib as _hashlib
+        _execution_direction = decision.setup.direction
+        _signal_identity = "|".join(
+            str(part)
+            for part in (
+                state.instrument,
+                decision.setup.strategy,
+                _execution_direction,
+                getattr(state, "timestamp", ""),
+            )
         )
-        else decision.setup.direction
-    )
-    _signal_identity = "|".join(
-        str(part)
-        for part in (
-            state.instrument,
-            decision.setup.strategy,
-            _execution_direction,
-            getattr(state, "timestamp", ""),
-        )
-    )
-    _client_order_id = "AFS-" + _hashlib.sha1(_signal_identity.encode()).hexdigest()[:24]
+        _client_order_id = "AFS-" + _hashlib.sha1(_signal_identity.encode()).hexdigest()[:24]
 
     order = BracketOrder(
         instrument=state.instrument,
@@ -2261,6 +2549,16 @@ def process_alert(
             broker_result="NOT_SENT",
             gate_reason=_gate_reason,
         )
+        journal.log_order_suppression(
+            instrument=state.instrument,
+            session=state.session,
+            final_decision="SHADOW_NO_ORDER",
+            gate_reason=_gate_reason,
+            strategy=order.strategy,
+            signal_timestamp=state.timestamp.isoformat() if state.timestamp else None,
+            client_order_id=order.client_order_id,
+            for_date=today,
+        )
         return result
 
     # ── Final working-order recheck (execution-safety gate) ──────────────────
@@ -2308,6 +2606,16 @@ def process_alert(
                 "ORDER_SUPPRESSED",
                 broker_result="NOT_SENT",
                 gate_reason=_wo_reason,
+            )
+            journal.log_order_suppression(
+                instrument=state.instrument,
+                session=state.session,
+                final_decision="ORDER_SUPPRESSED",
+                gate_reason=_wo_reason,
+                strategy=order.strategy,
+                signal_timestamp=state.timestamp.isoformat() if state.timestamp else None,
+                client_order_id=order.client_order_id,
+                for_date=today,
             )
             return result
 
@@ -2463,6 +2771,7 @@ def process_alert(
             best_bid_at_submit=None,
             best_ask_at_submit=None,
             ticks_moved_from_entry=None,
+            client_order_id=order.client_order_id,
             execution_audit=getattr(fill, "execution_audit", None),
         )
         daily_state.has_open_position = False
@@ -2529,6 +2838,7 @@ def process_alert(
             cancel_timestamp=_cancel_ts.isoformat(),
             seconds_until_cancel=(_cancel_ts - _submit_ts).total_seconds(),
             requested_entry=order.entry,
+            client_order_id=order.client_order_id,
         )
         daily_state.has_open_position = False
         result["decision"] = "BLOCKED_ORDER_CONFIRMATION_MISSING"
@@ -2603,6 +2913,7 @@ def process_alert(
                 for_date=today,
                 stop=decision.setup.stop,
                 exit_mode=getattr(cfg, "exit_mode", "static"),
+                client_order_id=order.client_order_id,
             )
     except Exception as _exc:  # pragma: no cover - persistence must never break trading
         logger.warning("order-id persist skipped: %s", _exc)
@@ -2646,7 +2957,11 @@ def _companion_provider_and_store(cfg: SystemConfig):
             account_id=os.getenv("PUBLIC_ACCOUNT_ID", "").strip(),
         )
         store = OptionsCompanionStore(
-            getattr(cfg, "options_companion_sqlite_path", "logs/options_companion.sqlite")
+            getattr(
+                cfg,
+                "options_companion_sqlite_path",
+                str(options_companion_sqlite_path()),
+            )
         )
         return provider, store
     except Exception:  # noqa: BLE001 — companion setup must never affect futures
@@ -2872,6 +3187,12 @@ def _market_state_context(state) -> dict:
             "price_vs_vwap": state.vwap.price_vs_vwap,
             "reclaimed": state.vwap.reclaimed,
             "holding": state.vwap.holding,
+            # Serialized so the journal can answer whether Pine actually sent
+            # the field. It gates the vwap_rejection observer and is populated
+            # live ONLY from payload.vwap_failed_reclaim, which defaults to
+            # False — so an unset field and a genuine False were previously
+            # indistinguishable in every recorded surface.
+            "failed_reclaim": state.vwap.failed_reclaim,
         },
         "orb": {
             "high": state.orb.high,

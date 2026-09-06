@@ -50,6 +50,7 @@ SIG_REJECT = "RANGE_REJECT"
 SIG_BOUNCE = "RANGE_BOUNCE"
 SIG_MIDDLE = "RANGE_MIDDLE_NO_TRADE"
 SIG_NO_DATA = "RANGE_NO_DATA"
+SIG_BREAK_CLOSE_REPEAT = "RANGE_BREAK_CLOSE_REPEAT"   # armed break, no new candidate
 
 # ── Wall source names (for wall_source field) ──────────────────────────────────
 _SOURCE_PRIORITY = ["ORB_HIGH", "ORB_LOW", "PDH", "PDL",
@@ -249,6 +250,57 @@ def build_range_signal(
         return _no_data_signal("build_range_signal failed")
 
 
+def _break_target(
+    price: float,
+    broken_cp: float,
+    walls: list,
+    *,
+    direction: str,
+) -> float:
+    """
+    Target for a RANGE_BREAK_CLOSE: the next structural wall in the trade's
+    direction, strictly beyond price and of the matching kind.
+
+    LONG  → next resistance (or supply zone) strictly ABOVE price.
+    SHORT → next support (or demand zone) strictly BELOW price.
+
+    ``walls`` is the already-sorted nearest-first list (walls_above for LONG,
+    walls_below for SHORT). WallContext places a level that sits exactly at
+    price into BOTH lists, and the previous ``walls[0]`` selection took that
+    at-price level of any kind as the target — producing target == entry and
+    LONG targets at supports. Falls back to a symmetric 1:1 projection off the
+    broken wall when no qualifying wall exists; never returns the entry price.
+    """
+    from context.wall_context import KIND_RESISTANCE, KIND_SUPPORT, KIND_ZONE
+
+    is_long = direction == "LONG"
+    if is_long:
+        kind_ok = lambda w: w.kind == KIND_RESISTANCE or (  # noqa: E731
+            w.kind == KIND_ZONE and w.name == "SUPPLY_ZONE"
+        )
+        beyond = lambda cp: cp > price  # noqa: E731
+    else:
+        kind_ok = lambda w: w.kind == KIND_SUPPORT or (  # noqa: E731
+            w.kind == KIND_ZONE and w.name == "DEMAND_ZONE"
+        )
+        beyond = lambda cp: cp < price  # noqa: E731
+
+    for wall in walls:
+        if not kind_ok(wall):
+            continue
+        wcp = wall.char_price()
+        if wcp is None or wcp <= 0 or not beyond(wcp):
+            continue
+        target = round(wcp, 2)
+        if beyond(target):
+            return target
+
+    # Symmetric fallback: project the broken-wall distance beyond price.
+    if is_long:
+        return round(price + (price - broken_cp), 2)
+    return round(price - (broken_cp - price), 2)
+
+
 def _build_range_signal(
     rs: RangeState,
     wall_ctx: "WallContext",
@@ -271,9 +323,9 @@ def _build_range_signal(
             break_pct = (price - cp) / cp
             if break_pct > _BREAK_CLOSE_PCT:
                 stop = round(cp * (1 - 0.001), 2)
-                next_res = wall_ctx.walls_above[0] if wall_ctx.walls_above else None
-                target_cp = next_res.char_price() if next_res else None
-                target = round(target_cp, 2) if target_cp else round(price + (price - cp), 2)
+                target = _break_target(
+                    price, cp, wall_ctx.walls_above, direction="LONG"
+                )
                 return RangeSignal(
                     signal_type=SIG_BREAK_CLOSE,
                     direction="LONG",
@@ -296,9 +348,9 @@ def _build_range_signal(
             break_pct = (cp - price) / cp
             if break_pct > _BREAK_CLOSE_PCT:
                 stop = round(cp * (1 + 0.001), 2)
-                next_sup = wall_ctx.walls_below[0] if wall_ctx.walls_below else None
-                target_cp = next_sup.char_price() if next_sup else None
-                target = round(target_cp, 2) if target_cp else round(price - (cp - price), 2)
+                target = _break_target(
+                    price, cp, wall_ctx.walls_below, direction="SHORT"
+                )
                 return RangeSignal(
                     signal_type=SIG_BREAK_CLOSE,
                     direction="SHORT",
@@ -494,3 +546,52 @@ def _no_data_signal(notes: Optional[str] = None) -> RangeSignal:
         polling_risk=False,
         notes=notes,
     )
+
+
+# ─── One-shot arming for RANGE_BREAK_CLOSE ────────────────────────────────────
+
+class RangeBreakArmState:
+    """
+    One-shot / clear-re-arm gate for RANGE_BREAK_CLOSE, per instrument.
+
+    ``_build_range_signal`` is stateless: as long as a 15m close sits more than
+    0.15% beyond a broken wall it emits an executable BREAK_CLOSE every bar, so
+    one structural break produced dozens of shadow candidates (680 of 950
+    resolved rows in Aug 2026 fired >1h after the first signal on the same
+    wall). This gate lets the FIRST break of a given wall+direction through,
+    then downgrades repeats to a non-executable ``RANGE_BREAK_CLOSE_REPEAT``
+    (no bracket, so the shadow resolver builds no candidate). It re-arms when
+    the instrument produces any non-break, non-NO_DATA signal — i.e. price has
+    closed back inside. A break of a different wall is a new event and passes.
+
+    State is in-process only; a restart re-arms every instrument once.
+    """
+
+    def __init__(self) -> None:
+        self._armed: dict[str, tuple[str, Optional[float]]] = {}
+
+    def apply(self, instrument: Optional[str], signal: RangeSignal) -> RangeSignal:
+        inst = (instrument or "").upper()
+        if signal.signal_type == SIG_BREAK_CLOSE:
+            key = (signal.direction, signal.stop_candidate)
+            if self._armed.get(inst) == key:
+                return RangeSignal(
+                    signal_type=SIG_BREAK_CLOSE_REPEAT,
+                    direction=signal.direction,
+                    entry_candidate=None,
+                    target_candidate=None,
+                    stop_candidate=None,
+                    executable=False,
+                    retest_eligible=False,
+                    retest_bars_available=None,
+                    polling_risk=signal.polling_risk,
+                    notes=f"repeat of armed break; {signal.notes}",
+                )
+            self._armed[inst] = key
+            return signal
+        if signal.signal_type != SIG_NO_DATA:
+            self._armed.pop(inst, None)
+        return signal
+
+    def reset(self) -> None:
+        self._armed.clear()

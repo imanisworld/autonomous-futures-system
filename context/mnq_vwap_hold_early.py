@@ -46,6 +46,7 @@ from typing import Any, Optional
 from context.five_min_feed import is_five_min
 from risk.risk_engine import DailyState
 from strategy.signal_engine import DecisionEngine
+from strategy.strat_classifier import TWO_DOWN, normalize_bar_type
 
 VALID_MODES = ("off", "observe_only", "shadow")
 DEFAULT_MODE = "off"
@@ -102,14 +103,20 @@ def detect_early_vwap_hold(
         scoped_cfg = _scoped_config(cfg)
         scoped_daily = _scoped_daily_state(daily_state)
         engine = DecisionEngine(scoped_cfg, schedule_mode=getattr(cfg, "schedule_mode", None))
+        canonical_setup = engine._try_vwap_hold(state)
         decision = engine.evaluate(state, scoped_daily)
     except Exception:
         return None
 
-    signal_detected = (
-        decision.decision == "TRADE"
-        and decision.setup is not None
+    permission_only_shadow = (
+        decision.setup is not None
         and decision.setup.strategy == SCOPE_STRATEGY
+        and set(decision.failed_gates or []) == {"STRATEGY_NOT_PAPER_ELIGIBLE"}
+    )
+    signal_detected = (
+        decision.setup is not None
+        and decision.setup.strategy == SCOPE_STRATEGY
+        and (decision.decision == "TRADE" or permission_only_shadow)
     )
     audit: dict[str, Any] = {
         "signal_detected": signal_detected,
@@ -118,6 +125,12 @@ def detect_early_vwap_hold(
         "failed_gates": decision.failed_gates,
         "market_condition": decision.market_condition,
         "regime": decision.regime,
+        "shadow_eligibility_basis": (
+            "EXECUTION_PERMISSION_BLOCK_ONLY"
+            if permission_only_shadow
+            else "CANONICAL_TRADE" if signal_detected else "NOT_ELIGIBLE"
+        ),
+        "diagnostics": _diagnostics(state, engine, canonical_setup),
     }
     if signal_detected:
         setup = decision.setup
@@ -129,3 +142,66 @@ def detect_early_vwap_hold(
             "rr_ratio": setup.rr_ratio,
         })
     return audit
+
+
+def _diagnostics(state, engine: DecisionEngine, canonical_setup) -> dict[str, Any]:
+    """Expose inputs/gates without changing the canonical predicate."""
+    raw = state.raw if isinstance(state.raw, dict) else {}
+    required = {
+        "vwap": raw.get("vwap") is not None,
+        "trend_direction": (
+            raw.get("trend_direction") is not None
+            or all(raw.get(name) is not None for name in ("ema_9", "ema_21", "ema_55"))
+        ),
+        "current_bar_type": raw.get("current_bar_type") is not None,
+        "volume": raw.get("volume") is not None,
+        "avg_volume": raw.get("avg_volume") is not None,
+    }
+    builder_failed_gates: list[str] = []
+    if not (state.vwap and state.vwap.holding and state.vwap.price_vs_vwap == "below"):
+        builder_failed_gates.append("VWAP_NOT_HOLDING_BELOW")
+    if not (state.trend and state.trend.direction == "DOWN"):
+        builder_failed_gates.append("TREND_NOT_DOWN")
+    try:
+        if engine._vwap_entry_out_of_range(state):
+            builder_failed_gates.append("VWAP_ENTRY_OUT_OF_RANGE")
+    except Exception:
+        builder_failed_gates.append("VWAP_RANGE_CHECK_UNAVAILABLE")
+    strat_type = getattr(getattr(state, "strat", None), "current_bar_type", None)
+    if state.strat and normalize_bar_type(strat_type) != TWO_DOWN:
+        builder_failed_gates.append("STRAT_NOT_TWO_DOWN")
+    structure = {
+        "bos_direction": raw.get("bos_direction"),
+        "mss_direction": raw.get("mss_direction"),
+        "market_structure": raw.get("market_structure"),
+    }
+    supplied_structure = any(structure.values())
+    bearish_structure = (
+        str(structure["bos_direction"] or "").lower() == "bearish"
+        or str(structure["mss_direction"] or "").lower() == "bearish"
+        or str(structure["market_structure"] or "").lower() in {"bearish_bos", "bearish_mss"}
+    )
+    if supplied_structure and not bearish_structure:
+        builder_failed_gates.append("STRUCTURE_NOT_BEARISH")
+    return {
+        "payload_complete_for_canonical_evaluator": all(required.values()),
+        "required_input_fields": required,
+        "missing_required_input_fields": [name for name, present in required.items() if not present],
+        "candidate_builder_result": "BUILT" if canonical_setup is not None else "NO_CANDIDATE",
+        "candidate_builder_failed_gates": builder_failed_gates,
+        "session": state.session,
+        "trend_direction": getattr(state.trend, "direction", None),
+        "trend_strength": getattr(state.trend, "strength", None),
+        "market_condition": state.market_condition,
+        "strat_current_bar_type": strat_type,
+        "strat_normalized_bar_type": normalize_bar_type(strat_type),
+        "volume_relative": getattr(state.volume, "relative", None),
+        "volume_gate_at_least_1_2": (
+            getattr(state.volume, "relative", None) is not None
+            and state.volume.relative >= 1.2
+        ),
+        "vwap_holding": getattr(state.vwap, "holding", None),
+        "price_vs_vwap": getattr(state.vwap, "price_vs_vwap", None),
+        "structure_inputs": structure,
+        "rr_ratio": getattr(canonical_setup, "rr_ratio", None),
+    }

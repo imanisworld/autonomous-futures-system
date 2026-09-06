@@ -1,36 +1,41 @@
-"""Phase 12 — inert append-only storage layer.
+"""Append-only options-manager storage.
 
-Durable, replay-protection-only persistence for two facts:
-  - a given confirmation_id has been consumed (used) exactly once
-  - a given confirmation_id has produced exactly one order ticket
+Durable persistence for three advisory/replay event families:
+  - a given confirmation_id has been consumed (used) exactly once;
+  - a given confirmation_id has produced exactly one order ticket; and
+  - immutable thesis snapshots used to restore one evolving options thesis
+    across process restarts.
 
-This module performs no broker calls, no HTTP, no order placement, and
-creates no order queue. It only ever inserts new rows or creates tables —
-existing rows are never modified or removed once written. Every stored
-fact is an already-happened, immutable event — never a forward-looking
-instruction. There is no field representing a queued or self-triggering
-action, no broker routing, no broker payload, no credential, and no
-account-number column anywhere in this schema, by design.
+This module performs no broker calls, no HTTP, no order placement, and creates
+no order queue. It only inserts new rows, reads existing rows, or creates
+schema objects. Existing rows are never modified or removed once written.
+Every stored fact is an already-happened event, never a forward-looking order
+instruction.
 
-Every write defensively re-validates the same invariants already proven in
-Phases 7 and 9 before persisting anything: a ticket must be
-non-executable (`executable=False`), dry-run-only (`dry_run_only=True`),
-and broker-free (`broker=None`, `broker_order_id=None`). Storage never
-weakens those guarantees — it only makes the "was this confirmation/ticket
-already used" fact durable across a process restart.
+Thesis persistence reuses this same SQLite database and the same
+``OptionsManagerConfig.storage_enabled`` boundary. It does not create a second
+plan database. Snapshot events are append-only: the latest event is rebuilt
+into ``TradePlanSnapshot`` on restart, while terminal history remains durable.
+A different thesis_id for the same ticker/direction/setup/timeframe is rejected
+while the latest generation is non-terminal and is allowed only after the
+prior generation reaches a terminal state.
 
-No live-options lock bypass exists here because no order path exists in
-this phase — there is nothing for a lock to gate. This module never reads
-or mutates LIVE_OPTIONS_TRADING_ENABLED, and never imports live_lock.
+Every ticket write defensively re-validates the same invariants already proven
+upstream: the ticket must be non-executable, dry-run-only, and broker-free.
+Storage never weakens those guarantees.
 
-Independent of alert_ranker/storage.py (which mutates rows in place via
-update_shadow_outcome — the opposite of this module's append-only design)
-and options_companion/store.py (a wholly separate subsystem) — neither is
-imported here.
+No live-options lock bypass exists here because no order path exists in this
+module. It never reads or mutates LIVE_OPTIONS_TRADING_ENABLED and never
+imports live_lock.
+
+Independent of alert_ranker/storage.py and options_companion/store.py; neither
+is imported here.
 """
 
 from __future__ import annotations
 
+import hashlib
+import json
 import sqlite3
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -40,6 +45,14 @@ from typing import Literal, Optional
 from .config import OptionsManagerConfig
 from .human_confirm import ConfirmationRecord
 from .order_ticket import PreparedOrderTicket
+from .plans.base import (
+    ContractPlanSnapshot,
+    ConvictionBand,
+    PlanStatus,
+    RiskPlanSnapshot,
+    SignaObservation,
+    TradePlanSnapshot,
+)
 
 
 @dataclass
@@ -121,12 +134,7 @@ def _connect(db_path: str) -> sqlite3.Connection:
 
 
 def init_options_storage(db_path: str, config: OptionsManagerConfig) -> StorageWriteResult:
-    """Create the two append-only tables if they don't already exist.
-
-    config is required and must be passed explicitly by the caller. Safe to
-    call more than once against the same db_path — CREATE TABLE IF NOT
-    EXISTS is idempotent.
-    """
+    """Create append-only tables if they do not already exist."""
     cfg = config
     if not cfg.storage_enabled:
         return _write_rejected(
@@ -160,6 +168,32 @@ def init_options_storage(db_path: str, config: OptionsManagerConfig) -> StorageW
                 )
                 """
             )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS thesis_snapshot_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    thesis_id TEXT NOT NULL,
+                    ticker TEXT NOT NULL,
+                    direction TEXT NOT NULL,
+                    setup_type TEXT NOT NULL,
+                    timeframe TEXT NOT NULL,
+                    recorded_at TEXT NOT NULL,
+                    observed_at TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    snapshot_hash TEXT NOT NULL,
+                    snapshot_json TEXT NOT NULL,
+                    UNIQUE(thesis_id, snapshot_hash)
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_thesis_snapshot_identity
+                ON thesis_snapshot_events (
+                    ticker, direction, setup_type, timeframe, id
+                )
+                """
+            )
     except sqlite3.DatabaseError as exc:
         return _write_corrupt("db_error", f"failed to initialize storage: {exc}")
 
@@ -174,10 +208,7 @@ def append_confirmation_consumed_event(
     *,
     consumed_at: datetime,
 ) -> StorageWriteResult:
-    """Durably record that confirmation_record.confirmation_id has been
-    consumed. Insert-only; a second call for the same confirmation_id
-    returns DUPLICATE rather than overwriting anything.
-    """
+    """Durably record that a confirmation_id has been consumed."""
     cfg = config
     if not cfg.storage_enabled:
         return _write_rejected(
@@ -234,14 +265,7 @@ def append_ticket_created_event(
     ticket: PreparedOrderTicket,
     config: OptionsManagerConfig,
 ) -> StorageWriteResult:
-    """Durably record that a ticket was created for a confirmation_id.
-    Insert-only; a duplicate ticket_id or a second ticket for the same
-    confirmation_id returns DUPLICATE rather than overwriting anything.
-
-    Defensive re-check, same pattern as Phases 7 and 9: refuses to persist
-    a ticket that isn't non-executable/dry-run-only/broker-free, even
-    though the literals upstream already guarantee it today.
-    """
+    """Durably record that a ticket was created for a confirmation_id."""
     cfg = config
     if not cfg.storage_enabled:
         return _write_rejected(
@@ -368,8 +392,352 @@ def has_ticket_for_confirmation(
     return _found(record)
 
 
+def _signa_to_payload(signa: Optional[SignaObservation]) -> Optional[dict]:
+    if signa is None:
+        return None
+    return {
+        "direction": signa.direction,
+        "grade": signa.grade,
+        "score": signa.score,
+        "requested_tf": signa.requested_tf,
+        "signal_timestamp": signa.signal_timestamp,
+        "technicals_as_of": signa.technicals_as_of,
+        "stale_minutes": signa.stale_minutes,
+        "retrieved_at": signa.retrieved_at,
+        "parser_version": signa.parser_version,
+    }
+
+
+def _contract_plan_to_payload(plan: ContractPlanSnapshot) -> dict:
+    return {
+        "expiration": plan.expiration,
+        "strike": plan.strike,
+        "premium": plan.premium,
+        "bid": plan.bid,
+        "ask": plan.ask,
+        "spread_percent": plan.spread_percent,
+        "volume": plan.volume,
+        "open_interest": plan.open_interest,
+        "dte": plan.dte,
+        "max_contracts": plan.max_contracts,
+        "premium_stop": plan.premium_stop,
+        "distance_to_target": plan.distance_to_target,
+        "iv_event_risk": plan.iv_event_risk,
+        "theta_risk": plan.theta_risk,
+        "trade_style": plan.trade_style,
+    }
+
+
+def _risk_plan_to_payload(plan: RiskPlanSnapshot) -> dict:
+    return {
+        "planned_dollar_risk": plan.planned_dollar_risk,
+        "capital_deployed": plan.capital_deployed,
+        "stated_max_dollar_risk": plan.stated_max_dollar_risk,
+        "max_trade_risk_dollars": plan.max_trade_risk_dollars,
+        "aggregate_open_risk": plan.aggregate_open_risk,
+        "projected_open_risk": plan.projected_open_risk,
+        "max_aggregate_open_risk_dollars": plan.max_aggregate_open_risk_dollars,
+        "aggregate_capital_deployed": plan.aggregate_capital_deployed,
+        "projected_capital_deployed": plan.projected_capital_deployed,
+        "open_position_count": plan.open_position_count,
+        "correlation_risk": [list(item) for item in plan.correlation_risk],
+    }
+
+
+def _snapshot_to_payload(snapshot: TradePlanSnapshot) -> dict:
+    payload = {
+        "ticker": snapshot.ticker,
+        "direction": snapshot.direction,
+        "setup_type": snapshot.setup_type,
+        "timeframe": snapshot.timeframe,
+        "observed_at": snapshot.observed_at,
+        "status": snapshot.status.value,
+        "actionable": snapshot.actionable,
+        "conviction": snapshot.conviction.value,
+        "conviction_confirmation_count": snapshot.conviction_confirmation_count,
+        "entry_trigger": snapshot.entry_trigger,
+        "underlying_invalidation": snapshot.underlying_invalidation,
+        "target_1": snapshot.target_1,
+        "target_2": snapshot.target_2,
+        "target_1_source": snapshot.target_1_source,
+        "target_2_source": snapshot.target_2_source,
+        "rr_1": snapshot.rr_1,
+        "rr_2": snapshot.rr_2,
+        "target_status": snapshot.target_status,
+        "target_reason_code": snapshot.target_reason_code,
+        "blocking_reasons": list(snapshot.blocking_reasons),
+        "warnings": list(snapshot.warnings),
+        "signa_event_count": snapshot.signa_event_count,
+        "signa_repeat_count": snapshot.signa_repeat_count,
+        "last_signa_fingerprint": (
+            list(snapshot.last_signa_fingerprint)
+            if snapshot.last_signa_fingerprint is not None
+            else None
+        ),
+        "latest_signa": _signa_to_payload(snapshot.latest_signa),
+        "source_references": list(snapshot.source_references),
+    }
+    # Omit absent new fields so snapshots written before this extension keep
+    # their exact canonical JSON/hash and remain readable after upgrade.
+    if snapshot.contract_plan is not None:
+        payload["contract_plan"] = _contract_plan_to_payload(snapshot.contract_plan)
+    if snapshot.risk_plan is not None:
+        payload["risk_plan"] = _risk_plan_to_payload(snapshot.risk_plan)
+    return payload
+
+
+def _snapshot_from_payload(payload: dict) -> TradePlanSnapshot:
+    signa_payload = payload.get("latest_signa")
+    latest_signa = SignaObservation(**signa_payload) if signa_payload is not None else None
+    fingerprint = payload.get("last_signa_fingerprint")
+    contract_payload = payload.get("contract_plan")
+    risk_payload = payload.get("risk_plan")
+    contract_plan = (
+        ContractPlanSnapshot(**contract_payload)
+        if isinstance(contract_payload, dict)
+        else None
+    )
+    risk_plan = None
+    if isinstance(risk_payload, dict):
+        risk_values = dict(risk_payload)
+        risk_values["correlation_risk"] = tuple(
+            (str(item[0]), float(item[1]))
+            for item in risk_values.get("correlation_risk", ())
+        )
+        risk_plan = RiskPlanSnapshot(**risk_values)
+    return TradePlanSnapshot(
+        ticker=str(payload["ticker"]),
+        direction=payload["direction"],
+        setup_type=str(payload["setup_type"]),
+        timeframe=str(payload["timeframe"]),
+        observed_at=str(payload["observed_at"]),
+        status=PlanStatus(payload["status"]),
+        actionable=bool(payload["actionable"]),
+        conviction=ConvictionBand(payload["conviction"]),
+        conviction_confirmation_count=int(payload["conviction_confirmation_count"]),
+        entry_trigger=payload.get("entry_trigger"),
+        underlying_invalidation=payload.get("underlying_invalidation"),
+        target_1=payload.get("target_1"),
+        target_2=payload.get("target_2"),
+        target_1_source=payload.get("target_1_source"),
+        target_2_source=payload.get("target_2_source"),
+        rr_1=payload.get("rr_1"),
+        rr_2=payload.get("rr_2"),
+        target_status=str(payload["target_status"]),
+        target_reason_code=str(payload["target_reason_code"]),
+        blocking_reasons=tuple(payload.get("blocking_reasons") or ()),
+        warnings=tuple(payload.get("warnings") or ()),
+        signa_event_count=int(payload.get("signa_event_count", 0)),
+        signa_repeat_count=int(payload.get("signa_repeat_count", 0)),
+        last_signa_fingerprint=tuple(fingerprint) if fingerprint is not None else None,
+        latest_signa=latest_signa,
+        source_references=tuple(payload.get("source_references") or ()),
+        contract_plan=contract_plan,
+        risk_plan=risk_plan,
+    )
+
+
+def _snapshot_json_and_hash(snapshot: TradePlanSnapshot) -> tuple[str, str]:
+    text = json.dumps(
+        _snapshot_to_payload(snapshot),
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
+    return text, hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _normalized_thesis_identity(
+    ticker: str, direction: str, setup_type: str, timeframe: str
+) -> tuple[str, str, str, str]:
+    ticker_value = str(ticker or "").strip().upper()
+    direction_value = str(direction or "").strip().upper()
+    setup_value = str(setup_type or "").strip()
+    timeframe_value = str(timeframe or "").strip()
+    if not ticker_value or not setup_value or not timeframe_value:
+        raise ValueError("ticker, setup_type, and timeframe are required")
+    if direction_value not in ("CALL", "PUT"):
+        raise ValueError("direction must be CALL or PUT")
+    return ticker_value, direction_value, setup_value, timeframe_value
+
+
+def append_thesis_snapshot_event(
+    db_path: str,
+    thesis_id: str,
+    snapshot: TradePlanSnapshot,
+    config: OptionsManagerConfig,
+    *,
+    recorded_at: datetime,
+) -> StorageWriteResult:
+    """Append one immutable thesis snapshot to the existing options database.
+
+    ``thesis_id`` distinguishes lifecycle generations. A new generation for the
+    same four-part setup identity is accepted only after the previously latest
+    generation is terminal. Exact event retries are idempotent via snapshot
+    hash and return DUPLICATE.
+    """
+    cfg = config
+    if not cfg.storage_enabled:
+        return _write_rejected(
+            "storage_disabled", "storage_enabled is False; thesis event not written"
+        )
+    thesis_value = str(thesis_id or "").strip()
+    if not thesis_value:
+        return _write_data_blocked("thesis_id", "thesis_id is required")
+    if not _is_tz_aware(recorded_at):
+        return _write_data_blocked("timestamp", "recorded_at has no timezone info")
+    try:
+        _parse_tz_aware(snapshot.observed_at)
+        identity = _normalized_thesis_identity(
+            snapshot.ticker,
+            snapshot.direction,
+            snapshot.setup_type,
+            snapshot.timeframe,
+        )
+        snapshot_json, snapshot_hash = _snapshot_json_and_hash(snapshot)
+    except (TypeError, ValueError) as exc:
+        return _write_data_blocked("snapshot", f"thesis snapshot is not storable: {exc}")
+
+    ticker, direction, setup_type, timeframe = identity
+    terminal_statuses = {
+        PlanStatus.INVALIDATED.value,
+        PlanStatus.EXITED.value,
+        PlanStatus.EXPIRED.value,
+    }
+
+    try:
+        with _connect(db_path) as conn:
+            latest = conn.execute(
+                """
+                SELECT thesis_id, status, snapshot_hash
+                FROM thesis_snapshot_events
+                WHERE ticker = ? AND direction = ? AND setup_type = ? AND timeframe = ?
+                ORDER BY id DESC LIMIT 1
+                """,
+                identity,
+            ).fetchone()
+            if latest is not None:
+                if latest["thesis_id"] == thesis_value and latest["snapshot_hash"] == snapshot_hash:
+                    return _write_duplicate(
+                        "snapshot_hash",
+                        f"thesis_id {thesis_value!r} already has this stored snapshot",
+                    )
+                latest_terminal = latest["status"] in terminal_statuses
+                if latest["thesis_id"] != thesis_value and not latest_terminal:
+                    return _write_rejected(
+                        "active_thesis_exists",
+                        "a different non-terminal thesis already owns this setup identity",
+                    )
+                if latest["thesis_id"] == thesis_value and latest_terminal:
+                    return _write_rejected(
+                        "terminal_thesis_closed",
+                        "terminal thesis cannot accept another snapshot event",
+                    )
+
+            conn.execute(
+                """
+                INSERT INTO thesis_snapshot_events (
+                    thesis_id, ticker, direction, setup_type, timeframe,
+                    recorded_at, observed_at, status, snapshot_hash, snapshot_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    thesis_value,
+                    ticker,
+                    direction,
+                    setup_type,
+                    timeframe,
+                    recorded_at.isoformat(),
+                    snapshot.observed_at,
+                    snapshot.status.value,
+                    snapshot_hash,
+                    snapshot_json,
+                ),
+            )
+    except sqlite3.IntegrityError:
+        return _write_duplicate(
+            "snapshot_hash", f"thesis_id {thesis_value!r} already has this stored snapshot"
+        )
+    except sqlite3.DatabaseError as exc:
+        return _write_corrupt("db_error", f"failed to write thesis snapshot event: {exc}")
+
+    return _written(thesis_value)
+
+
+def load_latest_thesis_for_identity(
+    db_path: str,
+    *,
+    ticker: str,
+    direction: str,
+    setup_type: str,
+    timeframe: str,
+    config: OptionsManagerConfig,
+) -> StorageReadResult:
+    """Load the latest persisted thesis generation for a four-part identity."""
+    if not config.storage_enabled:
+        return _read_data_blocked(
+            "storage_disabled", "storage_enabled is False; cannot read thesis state"
+        )
+    try:
+        identity = _normalized_thesis_identity(ticker, direction, setup_type, timeframe)
+    except ValueError as exc:
+        return _read_data_blocked("identity", str(exc))
+
+    try:
+        with _connect(db_path) as conn:
+            row = conn.execute(
+                """
+                SELECT thesis_id, ticker, direction, setup_type, timeframe,
+                       recorded_at, observed_at, status, snapshot_hash, snapshot_json
+                FROM thesis_snapshot_events
+                WHERE ticker = ? AND direction = ? AND setup_type = ? AND timeframe = ?
+                ORDER BY id DESC LIMIT 1
+                """,
+                identity,
+            ).fetchone()
+    except sqlite3.DatabaseError as exc:
+        return _read_corrupt("db_error", f"failed to read thesis snapshot event: {exc}")
+
+    if row is None:
+        return _not_found()
+
+    try:
+        recorded_at = _parse_tz_aware(row["recorded_at"])
+        _parse_tz_aware(row["observed_at"])
+        payload = json.loads(row["snapshot_json"])
+        if not isinstance(payload, dict):
+            raise ValueError("snapshot_json must decode to an object")
+        snapshot = _snapshot_from_payload(payload)
+        snapshot_text, snapshot_hash = _snapshot_json_and_hash(snapshot)
+        if snapshot_hash != row["snapshot_hash"]:
+            raise ValueError("snapshot hash does not match stored payload")
+        if snapshot_text != row["snapshot_json"]:
+            raise ValueError("snapshot payload is not canonical")
+        if _normalized_thesis_identity(
+            snapshot.ticker,
+            snapshot.direction,
+            snapshot.setup_type,
+            snapshot.timeframe,
+        ) != identity:
+            raise ValueError("snapshot identity does not match indexed row identity")
+        if snapshot.observed_at != row["observed_at"]:
+            raise ValueError("snapshot observed_at does not match indexed row")
+        if snapshot.status.value != row["status"]:
+            raise ValueError("snapshot status does not match indexed row")
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        return _read_corrupt("malformed_row", f"stored thesis event is malformed: {exc}")
+
+    return _found(
+        {
+            "thesis_id": row["thesis_id"],
+            "recorded_at": recorded_at,
+            "snapshot": snapshot,
+        }
+    )
+
+
 def _parse_tz_aware(value: str) -> datetime:
-    parsed = datetime.fromisoformat(value)
+    parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
     if parsed.tzinfo is None:
         raise ValueError(f"stored timestamp {value!r} is not timezone-aware")
     return parsed

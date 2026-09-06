@@ -106,6 +106,10 @@ vwap_val    = ta.vwap(hlc3)
 avg_vol     = ta.sma(volume, i_vol_len)
 rel_vol     = avg_vol > 0 ? volume / avg_vol : 1.0
 vwap_reclaimed = ta.crossover(close, vwap_val)
+// True only on the bar immediately after a genuine reclaim that then closes
+// back below VWAP — the one-bar-lookback condition the backend's
+// _try_vwap_rejection gates on (backend defaults it False until sent).
+vwap_failed_reclaim = vwap_reclaimed[1] and close < vwap_val
 
 [pd_high, pd_low, pd_close] = request.security(syminfo.tickerid, "D", [high[1], low[1], close[1]], lookahead=barmerge.lookahead_on)
 [pw_high, pw_low]            = request.security(syminfo.tickerid, "W", [high[1], low[1]],           lookahead=barmerge.lookahead_on)
@@ -235,6 +239,11 @@ trend_str := bull_stack or bear_stack ? "STRONG" : "WEAK"
 // ─── NY ORB ───────────────────────────────────────────────────────────────────
 bars_needed = math.max(1, math.round(i_orb_min * 60 / timeframe.in_seconds()))
 in_ny  = not na(time(timeframe.period, i_ny_session, "America/New_York"))
+// Runtime/replay route the NY ORB only during the canonical 09:30-17:00 ET
+// New York session. Keep the range after the ORB collection window closes,
+// but expire it on the first observed bar outside that runtime session so a
+// prior-day NY range can never leak into Asian/London alert payloads.
+ny_runtime_active = not na(time(timeframe.period, "0930-1700", "America/New_York"))
 ny_start = in_ny and not in_ny[1]
 var float orb_h = na
 var float orb_l = na
@@ -252,10 +261,18 @@ else if in_ny and not orb_done
         orb_cnt += 1
     else
         orb_done := true
+if not ny_runtime_active and ny_runtime_active[1]
+    orb_h := na
+    orb_l := na
+    orb_cnt := 0
+    orb_done := false
 orb_status = orb_status_for(orb_h, orb_l)
 
 // ─── LONDON ORB ───────────────────────────────────────────────────────────────
 in_london    = not na(time(timeframe.period, i_london_session, "America/New_York"))
+// Runtime/replay route the London ORB through 09:30 ET; expire it as NY begins
+// so the previous London range cannot remain in later payloads.
+london_runtime_active = not na(time(timeframe.period, "0300-0930", "America/New_York"))
 london_start = in_london and not in_london[1]
 var float london_orb_h = na
 var float london_orb_l = na
@@ -273,6 +290,11 @@ else if in_london and not london_orb_done
         london_orb_cnt += 1
     else
         london_orb_done := true
+if not london_runtime_active and london_runtime_active[1]
+    london_orb_h := na
+    london_orb_l := na
+    london_orb_cnt := 0
+    london_orb_done := false
 london_orb_status = orb_status_for(london_orb_h, london_orb_l)
 
 // ─── MARKET CONDITION ─────────────────────────────────────────────────────────
@@ -357,7 +379,7 @@ else
 var string price_vs_pdh = "unknown"
 var string price_vs_pdl = "unknown"
 price_vs_pdh := na(pd_high) ? "unknown" : close > pd_high ? "above" : close < pd_high ? "below" : "at"
-price_vs_pdl := na(pd_low)  ? "unknown" : close > pd_low  ? "above" : close < pd_low  ? "below" : "at"
+price_vs_pdl := na(pd_low)  ? "unknown" : close > pd_low  ? "above" : close < pd_low ? "below" : "at"
 
 ema_9_above_21 = ema_fast > ema_slow
 
@@ -377,6 +399,10 @@ is_mes          = root_ticker == "MES" or str.contains(syminfo.ticker, "MES")
 is_mnq          = root_ticker == "MNQ" or str.contains(syminfo.ticker, "MNQ")
 min_target_pts  = is_mes or is_mnq ? 15.0 : 0.0
 max_stop_ticks  = is_mes ? 40.0 : is_mnq ? 80.0 : 40.0
+// Keep ORB breakout advisory coordinates identical to the backend's
+// risk_rules.yaml strategy.orb_stop_ticks contract. This is strategy-specific:
+// do not reuse it for 4HR Re-Trigger or other advisory brackets.
+orb_breakout_stop_ticks = is_mes ? 16.0 : is_mnq ? 48.0 : 8.0
 tick            = syminfo.mintick
 
 string signal_strategy = na
@@ -419,7 +445,7 @@ else if not na(orb_h) and not na(orb_l) and orb_status == "above" and trend_dir 
     signal_strategy := "orb_breakout"
     signal_direction := "LONG"
     signal_entry := orb_h + tick * 2
-    signal_stop  := math.max(orb_h - tick * 8, signal_entry - tick * max_stop_ticks)
+    signal_stop  := math.max(orb_h - tick * orb_breakout_stop_ticks, signal_entry - tick * max_stop_ticks)
     raw_target   := signal_entry + (signal_entry - signal_stop) * 2.2
 
 // ORB Breakout SHORT
@@ -427,7 +453,7 @@ else if not na(orb_h) and not na(orb_l) and orb_status == "below" and trend_dir 
     signal_strategy := "orb_breakout"
     signal_direction := "SHORT"
     signal_entry := orb_l - tick * 2
-    signal_stop  := math.min(orb_l + tick * 8, signal_entry + tick * max_stop_ticks)
+    signal_stop  := math.min(orb_l + tick * orb_breakout_stop_ticks, signal_entry + tick * max_stop_ticks)
     raw_target   := signal_entry - (signal_stop - signal_entry) * 2.2
 
 // 3. ORB Reclaim
@@ -517,6 +543,7 @@ msg := msg + "\"timeframe\":"          + "\"" + timeframe.period + "\","
 msg := msg + "\"avg_volume\":"         + str.tostring(math.round(avg_vol)) + ","
 msg := msg + "\"vwap\":"               + f2j(vwap_val,  "#.####") + ","
 msg := msg + "\"vwap_reclaimed\":"     + str.tostring(vwap_reclaimed) + ","
+msg := msg + "\"vwap_failed_reclaim\":" + str.tostring(vwap_failed_reclaim) + ","
 msg := msg + "\"orb_high\":"           + f2j(orb_h,     "#.##") + ","
 msg := msg + "\"orb_low\":"            + f2j(orb_l,     "#.##") + ","
 msg := msg + "\"orb_status\":"         + "\"" + orb_status + "\","
@@ -574,7 +601,7 @@ msg := msg + "\"daily_direction\":"     + s2j(daily_direction)     + ","
 msg := msg + "\"four_hour_bar_type\":"  + s2j(four_hour_bar_type)  + ","
 msg := msg + "\"four_hour_direction\":" + s2j(four_hour_direction) + ","
 msg := msg + "\"one_hour_bar_type\":"   + s2j(one_hour_bar_type)   + ","
-msg := msg + "\"one_hour_direction\":"  + s2j(one_hour_direction)  + ","
+msg := msg + "\"one_hour_direction\":"  + s2j(one_hour_direction) + ","
 msg := msg + "\"ftfc_direction\":"      + s2j(ftfc_direction) + ","
 msg := msg + "\"ftfc_aligned\":"        + str.tostring(ftfc_aligned) + ","
 // Supply & Demand (auto-computed from pivot structure)

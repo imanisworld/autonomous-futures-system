@@ -1,100 +1,158 @@
 # Futures — Current State Handoff
 
-_As of 2026-07-08. Read-only summary of where things stand; not a proof
-artifact itself — see linked evidence for backing detail._
+_As of 2026-09-02. This is the single current handoff. Do not recreate completed audits or reopen strategy work unless new evidence proves a defect._
 
-## Execution mode
+## Verdict
 
-- **Execution mode**: Tradovate demo (`BROKER=tradovate`, `TRADOVATE_ENV=demo`).
-- **Live money**: blocked. `LIVE_TRADING_ENABLED` is hardcoded `false` and
-  enforced independently at five layers: config load (`config/settings.py:load_config`),
-  `RiskEngine._check_live_trading_disabled`, `TradovateBroker.execute_bracket`,
-  `webhook/runner.py`'s `broker.is_live` cross-check, and same-day
-  `live_preflight` arming (`execution/live_preflight.py`).
-- **Paper simulator (`PaperBroker`, in-process)**: available in the codebase
-  but not necessarily what's running on the box right now. The dashboard's
-  "PAPER MODE" / "PAPER SYSTEM" labels are driven by `risk_rules.yaml:
-  trading_mode.paper_mode`, not by `BROKER`/`TRADOVATE_ENV` — so the label
-  does not by itself distinguish "Tradovate demo (real broker, demo
-  account)" from "PaperBroker in-process simulator." Not a safety gap
-  (`BROKER` env var controls the actual code path either way), but a
-  display-only wording gap worth fixing in a small, display-only PR if
-  useful.
+**PAPER COLLECTION GO / STRATEGY VALIDATION WAIT.**
 
-## System posture
+The futures collection stack is running on deployed release `b3d72f8`. A VPS OOM incident exposed a real infrastructure blocker; persistent swap and additive alert-only memory monitoring are now installed and the current runtime verdict is **MEMORY STABLE**. No strategy logic, risk rules, broker routing, campaign definitions, or deployed futures release were changed by the memory work.
 
-**HOLD / OBSERVATION ONLY.**
+There is still no basis to call any collection strategy validated. At the last check, no new post-epoch campaign candidate/outcome rows had appeared, so strategy evidence remains a natural-data wait.
 
-- Execution-safety patch (alert-freshness gate + Tradovate working-order
-  recheck) is on `main` as commit `016c4e8`. Alert-age cutoff is in
-  observe-only mode by design (`log_alert_age_only: true`) — zero production
-  reps yet on the freshness gate.
-- Note: an earlier session-branch attempt at this same patch
-  (`claude/futures-system-audit-synl3f`, commit `164f934`) implemented the
-  working-order recheck more broadly — checking both open *positions* and
-  working *orders* (`has_open_exposure()`) — whereas `016c4e8`'s merged
-  version checks working orders only (`_list_orders`/`WORKING_ORDER_STATUSES`
-  in `webhook/runner.py`). That branch was abandoned as superseded/redundant
-  rather than merged, per operator instruction (one source of truth). The
-  narrower scope of the merged version is flagged here as a real, open
-  question — not a confirmed bug — worth a deliberate decision (e.g. "is a
-  bracket ever left with a naked position and no working child order in
-  practice?"), not silently carried forward or fixed in this pass.
-- Cancelled-row / Option C taxonomy proof: **BLOCKED** — requires actual
-  Hetzner VPS journal access (`logs/journal_*.jsonl` or the deployed
-  `LOG_DIR`), which is not reachable from a sandboxed code-checkout session.
-  See the box-side proof checklist below for what to run once VPS access is
-  available.
-- No strategy, fill-model, runner, GEX, broker, or config work approved or
-  in progress.
+## Current deployed/runtime state
 
-## Phase ladder (see full audit for detail)
+- Deployed futures release: `b3d72f8`.
+- Original collection evidence epoch marker: `2026-09-02T01:15:19Z`.
+- `futures-bot` was OOM-killed once and restarted automatically on the same `b3d72f8` release.
+- Post-restart evidence integrity was checked clean: no duplicate campaign/webhook evidence, lost/unmatched outcomes, lost pending/open state, or restart-window evidence corruption was found.
+- All five campaign populations remain configured:
+  - `vwap_hold / control`
+  - `vwap_hold / modified`
+  - `orb_reclaim / control`
+  - `orb_reclaim / modified`
+  - `vwap_rejection / observer`
+- Feeds, TradingView alerts, journals, Tradovate health, and single-account routing checked clean.
+- The old Tradovate account-routing ambiguity is therefore not a current blocker; do not revive an account-pin change unless the account landscape changes.
+- No post-epoch campaign rows had appeared at the latest evidence check. Do not fabricate traffic or signals to force proof.
 
-F0 complete. F1 (frozen 30-trade paper-proof window) has never actually run
-under a genuine freeze — the best real evidence is one audited week
-(`docs/session-audit-2026-06-24-to-2026-07-01.md`): 29 TRADE decisions, 19
-IOC-CANCELLED (66%), 4 FILLED-LOSS, 5 PHANTOM-CLEARED, **0 FILLED-WIN** —
-and that window predates two relevant bug fixes. F2 is real but of mixed,
-mostly unproven-in-production maturity. F3 (live-vs-replay comparison) does
-not exist as specified.
+## Memory/OOM incident — resolved for collection, still monitored
 
-Separately flagged, not yet resolved: the IOC-faithful 622-day backtest
-(`docs/ioc-faithful-baseline-622d-2026-07-06.md`) found the "honest"
-non-optimistic-fill backtest is ~zero/negative and would trip the 20%
-drawdown breaker in month 1 — a strategy-viability question independent of
-execution-safety mechanics, not resolved by this document.
+The OOM root-cause correlation classified the incident as **BOT MEMORY GROWTH + OTHER PROCESS PRESSURE**, not a historical-report scan.
 
-## Box-side proof checklist (hand to whoever has VPS access)
+At the OOM review:
 
-```
-Lane: FUTURES
-Task: Box-side CANCELLED / Option C proof check
-Mode: read-only only
+- `futures-bot`: about 789 MB
+- IB Gateway: about 431 MB
+- options ranker: about 298 MB
+- VPS physical RAM: about 1.9 GB
+- no swap existed at the time of the kill
 
-Required output:
-- hostname
-- deployed SHA
-- service health
-- LIVE_TRADING_ENABLED value
-- execution mode label
-- current position state
-- LOG_DIR path
-- journal files checked
-- latest journal timestamp
-- post-taxonomy CANCELLED row count (cutoff 2026-07-07T18:35:33Z)
-- option_c_recurrence count
-- MISLABELED_FILL_SUSPECT count
-- final verdict
-```
+No heavy report/history/backup job correlated with the incident.
 
-## Open items
+### Remediation now active
 
-- Box-side CANCELLED-row / Option C proof check — blocked pending VPS access.
-- PR #158 (VP futures manual strategy snapshot, docs-only) — not reviewed
-  this pass.
-- Dashboard paper/demo wording gap (above) — not fixed, flagged only.
-- `MISLABELED_FILL_SUSPECT` / `option_c_recurrence` / an explicit "≥30
-  resolved TRADE↔OUTCOME pairs, ≥10 filled" gate — none of these exact terms
-  exist in this repo today; only `ops/proof_30_mnq.py`'s `filled_wl_count`
-  logic was found. Not confirmed as missing-by-design — just not present as
-  written here.
+- Existing 2 GB persistent `/swapfile` is active and present in `fstab`.
+- Existing Codex dynamic memory guard was preserved.
+- Existing journal-stall watcher fix was preserved.
+- An additive watcher extension was deployed at the box level without changing `futures-bot`.
+- Watcher reads OS `/proc` and kernel metrics directly; it does not poll expensive historical-report endpoints.
+- It records one memory sample per tick to `memory.jsonl` and routes warning/critical episodes through the existing Discord error path.
+- Monitoring is alert-only. It does not kill/restart/redeploy the bot or alter trading state.
+
+Latest verified live tick after additive deployment:
+
+- bot PID: `454299`
+- `NRestarts`: `1`
+- footprint (RSS + bot swap): about 623 MB
+- process high-water RSS since the incident: 851 MB
+- `MemAvailable`: about 557 MB
+- total swap used: about 726 / 2048 MB
+- bot swapped pages: about 4.5 MB
+- paging during the tick: zero
+- kernel OOM count: 1, no new event
+- watcher warnings/criticals: none
+
+The 851 MB high-water mark proves transient spikes can occur between five-minute samples. Current memory verdict is **MEMORY STABLE**, with monitoring armed to escalate on renewed pressure or sustained growth.
+
+### Active memory thresholds
+
+The pre-existing dynamic guard owns absolute RSS/headroom budgets so duplicate fixed alerts remain disabled. The additive checks cover the gaps:
+
+- swap used: WARN 1400 MB / CRIT 1800 MB
+- paging activity per tick: WARN 100 MB / CRIT 300 MB
+- two-hour footprint growth: WARN +150 MB mostly rising / CRIT +250 MB any profile
+- swap active/persistent check
+- kernel OOM-count delta
+
+Do not replace this watcher with an older standalone patch. It is intentionally additive because the live watcher already contains other verified work.
+
+## IB Gateway — deferred, not a futures collection blocker
+
+A separate read-only check found:
+
+- The old IB Gateway watchdog unit is dead residue. Its script was removed months ago and its timer is now disabled.
+- The gateway container's daily restart is clean and not an OOM event.
+- The deployed futures release does not use IB Gateway, and no futures connection to its ports was found.
+- The container currently consumes roughly 400 MB and is therefore meaningful reclaimable pressure on this 1.9 GB VPS.
+- API port `4004` is currently published externally.
+
+Do **not** stop/disable the container, remove dead units, or firewall port `4004` until dependency on the options/other system is checked. This is tomorrow's narrow follow-up; it does not block futures collection tonight.
+
+## Repository state / completed cleanup
+
+The Sept. 2 local cleanup is complete for everything already proven preserved:
+
+- workspace returned to `main`
+- tracked tree clean
+- local `main` matched `origin/main` at pre-handoff-update baseline `4042d08c1cc5146d49a95786e8b981be55ffba1b`
+- four stale tracked edits were discarded only after exact remote preservation was proven
+- eleven stale untracked files were removed only after exact remote/tag preservation was proven
+- no worktrees or unrelated branches were touched
+
+Three local-only untracked directories were intentionally retained because they contain unique or active material:
+
+- `codex/` — sole-copy/private evidence and artifacts; do not commit to the public repo or delete without an explicit preservation/disposal ruling
+- `.agents/` — includes one `systematic-debugging/SKILL.md` file not yet proven preserved remotely
+- `.codex-worktrees/` — contains registered active worktrees
+
+These paths do not affect the deployed VPS or futures evidence collection. Do not redo the branch/preservation audit merely because they appear in `git status`.
+
+## Approved futures fixes — already complete
+
+Do not reopen the prior September defect list. The relevant fixes were already merged/reconciled before the current collection state, including:
+
+- normal paper/replay fill parity
+- fail-closed promotion gate
+- exact five-population campaign reporting, including zero-count arms
+- daily overall false-green correction
+- trade/order identity persistence and joins
+- durable why-no-trade evidence
+- Strategy Inventory reconciliation
+- VWAP Hold control/modified collection lanes
+- ORB Reclaim control/modified collection lanes
+- VWAP Rejection observer payload correction
+
+The current MNQ inverse ORB lane remains paper-only and **PROMISING BUT UNPROVEN**. Do not tune its entries, stops, targets, filters, or risk settings during the evidence window.
+
+## Strategy evidence classifications
+
+`docs/strategy-rules/Strategy_Inventory.md` remains the strategy evidence source of truth.
+
+- ORB Reclaim current/first_cross — **BROKEN — negative evidence**
+- ORB Reclaim V4-R — **WAIT**
+- 4HR Re-Trigger MNQ — **BROKEN FOR CURRENT EXECUTABLE FORM**
+- 4HR Re-Trigger MES — **BROKEN / WAIT**
+- 12HR Miyagi — **BROKEN FOR CURRENT SYSTEM RISK CONSTRAINTS**
+- 60M 3-2-2 First Live — **BROKEN FOR CURRENT SYSTEM RISK CONSTRAINTS**
+- ORB Breakout inverted evidence lane — **PROMISING BUT UNPROVEN**
+- MES `strat_122` — **WAIT**
+
+## Collection rules
+
+- Paper only.
+- No live broker execution.
+- Do not alter strategy parameters to manufacture evidence.
+- Do not fabricate signals or traffic.
+- Do not redeploy just because repository `main` advances with unrelated/docs work.
+- First natural campaign evidence should be checked for correct generating SHA/release provenance.
+- A memory warning/critical, new OOM, unexpected futures-bot restart, stale feed, failed alert/journal write, or campaign-lane failure is grounds to investigate before trusting continued evidence.
+- Promotion remains gated on the preregistered evidence requirements, including sufficient trading days and resolved filled economic outcomes; intermediate P&L is not promotion proof.
+
+## Smallest next steps
+
+1. Leave `b3d72f8` and strategy/risk configuration unchanged and continue natural paper evidence collection.
+2. Allow the memory watcher to accumulate its two-hour growth window and ongoing history; intervene only on a proven warning/critical or new OOM/restart.
+3. On the next natural campaign candidate, verify release provenance is attributable to `b3d72f8`.
+4. Tomorrow, perform only the narrow dependency check for IB Gateway. If nothing else uses it, then separately consider stopping/disabling it, removing the dead watchdog units, and closing external port `4004`.
+5. Do not redo repository cleanup, preservation audits, or completed futures defect audits.

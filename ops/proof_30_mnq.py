@@ -19,7 +19,12 @@ from urllib.request import urlopen
 
 
 DEFAULT_JOURNAL_DIR = Path(os.getenv("LOG_DIR", "/root/afs-shared/logs"))
-DEFAULT_API_BASE = "http://5.78.84.223"
+# This report reads the box's own /status endpoints, and is run on the box
+# (see DEFAULT_JOURNAL_DIR above), where the service listens on loopback --
+# so the default reads it directly instead of going back out through the
+# public interface. Point AFS_API_BASE (or --api-base) elsewhere to run it
+# against a different host; the box address is deliberately not in the repo.
+DEFAULT_API_BASE = os.getenv("AFS_API_BASE", "http://127.0.0.1:8000")
 DEFAULT_INSTRUMENT = "MNQ"
 DEFAULT_LIMIT = 30
 

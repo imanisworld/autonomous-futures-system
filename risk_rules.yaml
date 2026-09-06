@@ -7,7 +7,7 @@
 # incrementing the version and updating CHANGELOG.md.
 # ============================================================
 
-version: "1.1.0"
+version: "1.2.0"
 
 # ─── Trading Mode ────────────────────────────────────────────
 trading_mode:
@@ -16,9 +16,12 @@ trading_mode:
   sim_fill_at_entry: true           # Paper broker fills at entry price
 
 # ─── Allowed Universe ────────────────────────────────────────
+# MES disabled 2026-07-28: isolated MNQ ORB Breakout inverse forward-paper
+# lane (see strategy_permission_gate below). Restore MES to `allowed`/
+# `required` when this isolated lane concludes.
 instruments:
   allowed:
-    - MES   # Micro E-mini S&P 500
+    # - MES   # Micro E-mini S&P 500 — disabled for isolated MNQ orb_breakout lane
     - MNQ   # Micro E-mini NASDAQ-100 — same quality gates, separate conservative sizing
     # - ES    # E-mini S&P 500 — disabled (full-size, not paper-appropriate yet)
     # - NQ    # E-mini NASDAQ-100 — disabled (full-size)
@@ -27,7 +30,6 @@ instruments:
   # Instruments that MUST stay in `allowed`. If one goes missing (e.g. a stale
   # in-memory config drops MNQ) the dashboard shows a loud CONFIG ERROR.
   required:
-    - MES
     - MNQ
 
 sessions:
@@ -74,7 +76,11 @@ daily_limits:
   # expectancy PER TRADE rose, so the extra trades are GOOD, not junk. Survival floor
   # (max_daily_loss + max_drawdown_percent) KEPT — those are risk control, not fear.
   # To restore the human throttles, revert this block (values preserved in git).
-  max_trades_per_day: 9999          # was 3 — unlimited (validator requires >=1)
+  # 2026-07-28: capped at 3 for the isolated MNQ orb_breakout inverse
+  # forward-paper lane specifically (see strategy_permission_gate below) —
+  # NOT a reversal of the 2026-06-17 throttle-removal decision above. Restore
+  # to 9999 when this isolated lane concludes.
+  max_trades_per_day: 3             # was 9999 (unlimited) for the isolated lane; originally 3
   max_consecutive_losses: 9999     # was 4 — tilt halt off (validator requires >=1)
   max_daily_loss: 150              # KEPT — survival floor (10% of $1,500)
   daily_profit_protect_threshold: 0 # off (was already 0)
@@ -307,17 +313,28 @@ execution_safety:
 # floor, it does not silently re-approve or re-deny anything not explicitly
 # reviewed. All journaling, shadow candidates, and research/observation paths
 # are unaffected either way; this only gates the final TRADE decision.
+# 2026-07-28: temporarily narrowed to isolate the already-merged MNQ ORB
+# Breakout inverse forward-paper lane (MNQ_ORB_BREAKOUT_INVERSE_MODE=
+# paper_sim, MNQ_ORB_BREAKOUT_PROOF_MODE=observe_only — set via environment,
+# unchanged here). Every entry below except orb_breakout is commented out for
+# this isolated lane ONLY — it is NOT a re-classification of any of these
+# strategies, which fall back to default_status (SHADOW_ONLY) while
+# commented out. To restore normal multi-strategy operation, uncomment every
+# line below back to PAPER_ELIGIBLE. vwap_hold and pdh_reclaim are left
+# UNCOMMENTED at SHADOW_ONLY below because that demotion is a real,
+# evidence-based classification independent of this isolated lane (see their
+# own comments) — not something to "restore" when the lane concludes.
 strategy_permission_gate:
   enabled: true
   default_status: SHADOW_ONLY
   strategy_status:
     orb_breakout: PAPER_ELIGIBLE
-    orb_reclaim: PAPER_ELIGIBLE
-    orb_rejection: PAPER_ELIGIBLE
-    orb_false_break_fade: PAPER_ELIGIBLE
+    # orb_reclaim: PAPER_ELIGIBLE
+    # orb_rejection: PAPER_ELIGIBLE
+    # orb_false_break_fade: PAPER_ELIGIBLE
     vwap_hold: SHADOW_ONLY
-    vwap_reclaim: PAPER_ELIGIBLE
-    vwap_rejection: PAPER_ELIGIBLE
+    # vwap_reclaim: PAPER_ELIGIBLE
+    # vwap_rejection: PAPER_ELIGIBLE
     # pdh_reclaim demoted PAPER_ELIGIBLE -> SHADOW_ONLY 2026-07-16 (operator-approved):
     # tranche 1 REJECTED it (-$4.65/trade MNQ, negative both instruments, docs/
     # strategy-matrix-tranche1-2026-07-14.md) yet it produced a real Tradovate-demo
@@ -327,23 +344,23 @@ strategy_permission_gate:
     # same pattern as vwap_hold. MES unaffected either way (already skipped
     # upstream via disabled_concepts_per_instrument since 2026-07-09).
     pdh_reclaim: SHADOW_ONLY
-    pdl_reclaim: PAPER_ELIGIBLE
-    strat_212: PAPER_ELIGIBLE
-    strat_122: PAPER_ELIGIBLE
-    strat_122_observed: PAPER_ELIGIBLE
-    strat_122_pullback: PAPER_ELIGIBLE
-    strat_inside_break: PAPER_ELIGIBLE
-    strat_outside_continuation: PAPER_ELIGIBLE
-    strat_4hr_retrigger: PAPER_ELIGIBLE
-    strat_4hr_retrigger_observed: PAPER_ELIGIBLE
-    strat_322_first_live: PAPER_ELIGIBLE
-    continuation_pullback: PAPER_ELIGIBLE
-    ema_pullback_trend: PAPER_ELIGIBLE
-    gap_fill: PAPER_ELIGIBLE
-    ovn_high_sweep_reclaim: PAPER_ELIGIBLE
-    ovn_low_sweep_reclaim: PAPER_ELIGIBLE
-    impulse_first_pullback_observed: PAPER_ELIGIBLE
-    trend_consolidation_break_observed: PAPER_ELIGIBLE
+    # pdl_reclaim: PAPER_ELIGIBLE
+    # strat_212: PAPER_ELIGIBLE
+    # strat_122: PAPER_ELIGIBLE
+    # strat_122_observed: PAPER_ELIGIBLE
+    # strat_122_pullback: PAPER_ELIGIBLE
+    # strat_inside_break: PAPER_ELIGIBLE
+    # strat_outside_continuation: PAPER_ELIGIBLE
+    # strat_4hr_retrigger: PAPER_ELIGIBLE
+    # strat_4hr_retrigger_observed: PAPER_ELIGIBLE
+    # strat_322_first_live: PAPER_ELIGIBLE
+    # continuation_pullback: PAPER_ELIGIBLE
+    # ema_pullback_trend: PAPER_ELIGIBLE
+    # gap_fill: PAPER_ELIGIBLE
+    # ovn_high_sweep_reclaim: PAPER_ELIGIBLE
+    # ovn_low_sweep_reclaim: PAPER_ELIGIBLE
+    # impulse_first_pullback_observed: PAPER_ELIGIBLE
+    # trend_consolidation_break_observed: PAPER_ELIGIBLE
 
 # ─── Paper Fill Realism ──────────────────────────────────────
 # Applied by PaperBroker in live paper mode AND in replay, so the simulated
@@ -365,20 +382,36 @@ market_condition:
 # ─── Strategy Concepts ───────────────────────────────────────
 strategy:
   selection_mode: "ranked"         # first_match | ranked. Enabled: 555-day Polygon replay +$9,727 MNQ / +$2,461 MES vs first_match.
+  # ── ISOLATED LANE 2026-07-28: orb_breakout ONLY ───────────────────────────
+  # Every other concept is commented out for the isolated MNQ ORB Breakout
+  # inverse forward-paper run. This is NOT a re-classification of any of them —
+  # each keeps its own evidence status recorded in the comments below and in
+  # strategy_permission_gate. To restore normal multi-strategy operation,
+  # uncomment them here AND in strategy_permission_gate.
+  #
+  # Why disabling here is REQUIRED and the permission gate alone is NOT enough:
+  # DecisionEngine ranks all candidate setups FIRST and applies the permission
+  # gate only to the single winner (strategy/signal_engine.py). A SHADOW_ONLY
+  # strategy that outranks orb_breakout therefore wins selection and is then
+  # blocked as STRATEGY_NOT_PAPER_ELIGIBLE — producing NO_TRADE and silently
+  # suppressing the orb_breakout candidate entirely, rather than falling
+  # through to it. PR #373 confirmed exactly this behavior (7 of 33 MES 1-2-2
+  # candidates were preempted by a shadow-only vwap_hold). Removing the other
+  # concepts from enabled_concepts is what actually guarantees isolation.
   enabled_concepts:
     # ── Core structural setups ────────────────────────────────
     - orb_breakout            # Initial break above ORB high (long) or below ORB low (short)
-    - orb_reclaim             # Price reclaims ORB high after pullback
-    - orb_rejection           # Failed ORB breakout, fade back inside
-    - vwap_reclaim            # Price crosses above/below VWAP and holds
-    - vwap_rejection          # Failed VWAP reclaim attempt — closes back below in downtrend
-    - vwap_hold               # Price holding below VWAP in downtrend (two_down bar required)
-    - pdh_reclaim             # Previous day high reclaimed
-    - pdl_reclaim             # Previous day low reclaimed (breakdown)
+    # - orb_reclaim             # Price reclaims ORB high after pullback
+    # - orb_rejection           # Failed ORB breakout, fade back inside
+    # - vwap_reclaim            # Price crosses above/below VWAP and holds
+    # - vwap_rejection          # Failed VWAP reclaim attempt — closes back below in downtrend
+    # - vwap_hold               # Price holding below VWAP in downtrend (two_down bar required)
+    # - pdh_reclaim             # Previous day high reclaimed
+    # - pdl_reclaim             # Previous day low reclaimed (breakdown)
     # ── The Strat patterns ───────────────────────────────────
     # Phase 1: approximated from single-bar market_state flags
     # Phase 2: full multi-bar Strat classification available
-    - strat_4hr_retrigger     # Canonical 5m-native detector (PR #317), day-only 4PM
+    # - strat_4hr_retrigger     # Canonical 5m-native detector (PR #317), day-only 4PM
       # exit (PR #318). Batch-1 evidence (PR #334, 2026-07-26): MNQ = PROMISING BUT
       # UNPROVEN (positive both chronological halves, stable across 1/2/3-tick
       # slippage) -> forward demo observation. MES = OVERFIT (in-sample edge does
@@ -387,7 +420,7 @@ strategy:
       # 15M-proxy/SHADOW-ONLY posture, which predated the real 5M canonical
       # detector and is no longer accurate. See
       # docs/4hr-retrigger-batch1-evidence-2026-07-26.md for the full evidence.
-    - strat_322_first_live    # MNQ-only, day-only (4PM ET flatten). Canonical 5m-native
+    # - strat_322_first_live    # MNQ-only, day-only (4PM ET flatten). Canonical 5m-native
       # state machine (strategy/strat_322_first_live.py), wired 2026-07-27 from
       # docs/strategy-rules/60M_322_FirstLive_Rules.md + the honest-fill replay's
       # 5-minute entry-recovery fidelity (research/replay_322_honest_fill.py) --
@@ -398,7 +431,7 @@ strategy:
       # n=34 thin. First runtime wiring for this strategy; MES excluded via
       # disabled_concepts_per_instrument (rules doc: MNQ only, do not trade this
       # setup on any other instrument). See docs/strategy-rules/60M_322_FirstLive_Rules.md.
-    - strat_122               # MES only (MNQ excluded via disabled_concepts_per_instrument).
+    # - strat_122               # MES only (MNQ excluded via disabled_concepts_per_instrument).
       # Canonical causal two-phase state machine (strategy/strat_212_122.py, PR
       # #317/#337) -- the SAME code path replay and live both call; NOT the older
       # naive shadow-only pattern the "SHADOW-ONLY — strat_122" comment immediately

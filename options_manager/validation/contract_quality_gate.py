@@ -1,49 +1,7 @@
-"""options_manager/validation/contract_quality_gate.py
+"""Advisory-only contract quality gate for options_manager.
 
-Contract quality gate -- Increment 25L. A `ProofPacket` (Increment 25I)
-proves a *setup* has a real trigger, invalidation, and targets. It says
-nothing about whether the specific contract behind that setup is
-actually tradable: a good chart with a wide-spread, illiquid, over-
-expensive, or too-short-dated contract is still not a trade. This module
-is a standalone advisory gate for that second question, deliberately
-separate from `ProofPacket` -- a contract's own quality does not depend
-on whether its setup is any good, and vice versa.
-
-`evaluate_contract_quality()` takes an already-typed `ContractQualityInput`
-and returns a `ContractQualityResult` with a `GateVerdict` of `PASS`,
-`WARN`, or `BLOCK`, plus the specific `blocking_reasons`/`warnings` that
-produced it. `check_contract_quality_intake()` is the manual-payload
-entry point (a loose dict, typed in by hand) that normalizes into a
-`ContractQualityInput` and runs the same evaluation -- never raising,
-regardless of how malformed the payload is, the same non-throwing
-pattern `check_proof_packet_intake()` established in Increment 25J.
-
-Default thresholds (all named constants, all overridable per call via
-`ContractQualityInput`'s own fields, never hidden inside the logic):
-- preferred max premium: $300 (`DEFAULT_MAX_PREMIUM_DOLLARS`) -- blocks
-  unless `premium_risk_accepted=True`.
-- preferred max loss per trade: $300 (`DEFAULT_MAX_DOLLAR_RISK`) -- no
-  override; a risk plan cap is not meant to be waved through.
-- avoid weeklies: minimum 14 DTE (`DEFAULT_MIN_DTE`) -- blocks unless
-  `dte_exceptional=True`.
-- avoid wide spreads: max 10% (`DEFAULT_MAX_SPREAD_PERCENT`).
-- avoid low liquidity: minimum 100 volume (`DEFAULT_MIN_VOLUME`),
-  minimum 500 open interest (`DEFAULT_MIN_OPEN_INTEREST`).
-- minimum reward distance: 2% (`DEFAULT_MIN_DISTANCE_TO_TARGET_PERCENT`)
-  -- a target too close to spot relative to the risk taken blocks.
-- IV/event risk and theta risk are each a `"none"|"low"|"moderate"|
-  "high"` severity: `"moderate"` warns, `"high"` blocks.
-
-This is advisory only -- it never fetches a quote, a candle, an option
-chain, or a broker order, and it never reads the system clock. It never
-places an order, changes a scanner setting, or promotes anything to
-`FixtureStatus.CLEAN_COMPLETE_FIXTURE`. Performs no I/O of any kind: no
-candle fetch, no option-chain fetch, no market-data fetch, no broker
-call, no order placement, no execution, no alert sending, no file access
-at runtime, no network calls, no MCP calls, no system-clock reads. Does
-not import replay/replay_engine.py, the live context.market_context
-loader, alert_ranker, options_companion, execution, webhook, broker
-systems, options_manager.scanner, or risk/risk_engine.py.
+The gate validates a caller-supplied option snapshot. It performs no I/O and
+never fetches market data, touches a broker, or submits an order.
 """
 
 from __future__ import annotations
@@ -56,6 +14,8 @@ from typing import Any, Literal, Mapping, Optional
 DEFAULT_MAX_PREMIUM_DOLLARS = 300.0
 DEFAULT_MAX_DOLLAR_RISK = 300.0
 DEFAULT_MIN_DTE = 14
+DEFAULT_PREFERRED_SWING_DTE = 45
+DEFAULT_CONTRACT_MULTIPLIER = 100
 DEFAULT_MAX_SPREAD_PERCENT = 10.0
 DEFAULT_MIN_VOLUME = 100
 DEFAULT_MIN_OPEN_INTEREST = 500
@@ -63,11 +23,11 @@ DEFAULT_MIN_DISTANCE_TO_TARGET_PERCENT = 2.0
 
 _RiskSeverity = Literal["none", "low", "moderate", "high"]
 _VALID_SEVERITIES = ("none", "low", "moderate", "high")
+_TradeStyle = Literal["swing", "intraday"]
+_VALID_TRADE_STYLES = ("swing", "intraday")
 
 
 class GateVerdict(str, Enum):
-    """A contract quality check's overall outcome."""
-
     PASS = "pass"
     WARN = "warn"
     BLOCK = "block"
@@ -75,13 +35,6 @@ class GateVerdict(str, Enum):
 
 @dataclass(frozen=True, kw_only=True)
 class ContractQualityInput:
-    """One contract's quality-relevant facts, entirely as reported by
-    the human filling this out -- nothing here is fetched from a quote
-    or option chain. `dte_exceptional` and `premium_risk_accepted` are
-    explicit human overrides for the two thresholds that are allowed
-    one: a deliberately-chosen short-DTE or expensive contract is not an
-    error, but it must be a stated choice, not a silent pass."""
-
     ticker: str
     direction: Literal["CALL", "PUT"]
     expiration: str
@@ -101,15 +54,12 @@ class ContractQualityInput:
     notes: str = ""
     dte_exceptional: bool = False
     premium_risk_accepted: bool = False
+    premium_stop: Optional[float] = None
+    trade_style: _TradeStyle = "swing"
 
 
 @dataclass(frozen=True, kw_only=True)
 class ContractQualityResult:
-    """Outcome of a contract quality check. `contract` is populated only
-    when `check_contract_quality_intake()` normalized a payload cleanly;
-    `evaluate_contract_quality()` callers already have their own
-    `ContractQualityInput` and can ignore it."""
-
     verdict: GateVerdict
     blocking_reasons: tuple[str, ...] = ()
     warnings: tuple[str, ...] = ()
@@ -117,10 +67,6 @@ class ContractQualityResult:
 
 
 def evaluate_contract_quality(contract: ContractQualityInput) -> ContractQualityResult:
-    """Runs every quality check against an already-typed
-    `ContractQualityInput`. Verdict is `BLOCK` if any blocking reason
-    fired, else `WARN` if any warning fired, else `PASS`. Every check
-    runs regardless of earlier failures -- never partially reported."""
     blocking: list[str] = []
     warnings: list[str] = []
 
@@ -132,6 +78,21 @@ def evaluate_contract_quality(contract: ContractQualityInput) -> ContractQuality
         blocking.append("missing/invalid strike")
     if contract.max_contracts <= 0:
         blocking.append("missing/invalid max_contracts")
+
+    if contract.premium <= 0:
+        blocking.append("missing/invalid premium")
+    premium_dollars_per_contract = contract.premium * DEFAULT_CONTRACT_MULTIPLIER
+
+    planned_dollar_risk: Optional[float] = None
+    if contract.premium_stop is not None:
+        if contract.premium_stop < 0 or contract.premium_stop >= contract.premium:
+            blocking.append("missing/invalid premium_stop")
+        else:
+            planned_dollar_risk = (
+                (contract.premium - contract.premium_stop)
+                * DEFAULT_CONTRACT_MULTIPLIER
+                * contract.max_contracts
+            )
 
     if contract.bid <= 0:
         blocking.append("missing bid")
@@ -157,8 +118,10 @@ def evaluate_contract_quality(contract: ContractQualityInput) -> ContractQuality
             f"low open interest ({contract.open_interest} < {DEFAULT_MIN_OPEN_INTEREST})"
         )
 
-    if contract.dte <= 0:
+    if contract.dte < 0:
         blocking.append("missing/invalid dte")
+    elif contract.dte == 0 and not contract.dte_exceptional:
+        blocking.append("missing/invalid dte: 0 DTE requires explicit exception")
     elif contract.dte < DEFAULT_MIN_DTE:
         if contract.dte_exceptional:
             warnings.append(
@@ -169,23 +132,35 @@ def evaluate_contract_quality(contract: ContractQualityInput) -> ContractQuality
             blocking.append(
                 f"DTE too short ({contract.dte}d < {DEFAULT_MIN_DTE}d) and not marked exceptional"
             )
+    elif contract.trade_style == "swing" and contract.dte < DEFAULT_PREFERRED_SWING_DTE:
+        warnings.append(
+            f"swing DTE below preferred {DEFAULT_PREFERRED_SWING_DTE}d "
+            f"({contract.dte}d); contract is valid but not preferred swing duration"
+        )
 
-    if contract.premium > DEFAULT_MAX_PREMIUM_DOLLARS:
+    if premium_dollars_per_contract > DEFAULT_MAX_PREMIUM_DOLLARS:
         if contract.premium_risk_accepted:
             warnings.append(
-                f"premium above preferred cap (${contract.premium:.2f} > "
+                f"premium above preferred cap (${premium_dollars_per_contract:.2f}/contract > "
                 f"${DEFAULT_MAX_PREMIUM_DOLLARS:.2f}), risk explicitly accepted"
             )
         else:
             blocking.append(
-                f"premium ${contract.premium:.2f} exceeds ${DEFAULT_MAX_PREMIUM_DOLLARS:.2f} cap "
-                "and risk not accepted"
+                f"premium ${premium_dollars_per_contract:.2f}/contract exceeds "
+                f"${DEFAULT_MAX_PREMIUM_DOLLARS:.2f} cap and risk not accepted"
             )
 
-    if contract.max_dollar_risk > DEFAULT_MAX_DOLLAR_RISK:
+    if contract.max_dollar_risk <= 0:
+        blocking.append("missing/invalid max_dollar_risk")
+    elif contract.max_dollar_risk > DEFAULT_MAX_DOLLAR_RISK:
         blocking.append(
             f"max_dollar_risk ${contract.max_dollar_risk:.2f} exceeds plan cap "
             f"${DEFAULT_MAX_DOLLAR_RISK:.2f}"
+        )
+    elif planned_dollar_risk is not None and planned_dollar_risk > contract.max_dollar_risk:
+        blocking.append(
+            f"planned premium-stop risk ${planned_dollar_risk:.2f} exceeds stated "
+            f"max_dollar_risk ${contract.max_dollar_risk:.2f}"
         )
 
     if contract.distance_to_target < DEFAULT_MIN_DISTANCE_TO_TARGET_PERCENT:
@@ -204,13 +179,7 @@ def evaluate_contract_quality(contract: ContractQualityInput) -> ContractQuality
     elif contract.theta_risk == "moderate":
         warnings.append("theta risk is MODERATE")
 
-    if blocking:
-        verdict = GateVerdict.BLOCK
-    elif warnings:
-        verdict = GateVerdict.WARN
-    else:
-        verdict = GateVerdict.PASS
-
+    verdict = GateVerdict.BLOCK if blocking else GateVerdict.WARN if warnings else GateVerdict.PASS
     return ContractQualityResult(
         verdict=verdict,
         blocking_reasons=tuple(blocking),
@@ -262,6 +231,13 @@ def _coerce_severity(value: Any) -> str:
     return text
 
 
+def _coerce_trade_style(value: Any) -> str:
+    text = str(value).strip().lower()
+    if text not in _VALID_TRADE_STYLES:
+        raise ValueError(f"{value!r} is not one of {_VALID_TRADE_STYLES}")
+    return text
+
+
 def _coerce_bool(value: Any) -> bool:
     if isinstance(value, bool):
         return value
@@ -275,11 +251,6 @@ def _coerce_bool(value: Any) -> bool:
 
 
 def check_contract_quality_intake(payload: Any) -> ContractQualityResult:
-    """Normalizes a manual dict-like payload into a `ContractQualityInput`
-    and evaluates it with `evaluate_contract_quality()`. Never raises
-    regardless of how malformed `payload` is -- a malformed payload or an
-    uncoercible field value returns a `BLOCK` result naming the problem,
-    with `contract=None`, instead of throwing."""
     if not isinstance(payload, Mapping):
         return ContractQualityResult(
             verdict=GateVerdict.BLOCK,
@@ -311,7 +282,7 @@ def check_contract_quality_intake(payload: Any) -> ContractQualityResult:
                 normalized[name] = _coerce_direction(raw_value)
             elif name in _SEVERITY_FIELDS:
                 normalized[name] = _coerce_severity(raw_value)
-            else:  # pragma: no cover - defensive, every required field is classified above
+            else:
                 normalized[name] = raw_value
         except (TypeError, ValueError) as exc:
             coercion_errors.append(f"invalid value for {name}: {exc}")
@@ -322,6 +293,18 @@ def check_contract_quality_intake(payload: Any) -> ContractQualityResult:
                 normalized[name] = _coerce_bool(payload[name])
             except ValueError as exc:
                 coercion_errors.append(f"invalid value for {name}: {exc}")
+
+    if "premium_stop" in payload and payload["premium_stop"] is not None:
+        try:
+            normalized["premium_stop"] = float(payload["premium_stop"])
+        except (TypeError, ValueError) as exc:
+            coercion_errors.append(f"invalid value for premium_stop: {exc}")
+
+    if "trade_style" in payload and payload["trade_style"] is not None:
+        try:
+            normalized["trade_style"] = _coerce_trade_style(payload["trade_style"])
+        except ValueError as exc:
+            coercion_errors.append(f"invalid value for trade_style: {exc}")
 
     if "notes" in payload and payload["notes"] is not None:
         normalized["notes"] = str(payload["notes"])

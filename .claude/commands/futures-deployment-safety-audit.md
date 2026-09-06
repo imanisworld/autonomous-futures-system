@@ -1,7 +1,7 @@
 # /futures-deployment-safety-audit
 
 Purpose:
-Audit whether the deployed box is actually safe, and whether the deployed code is actually what was reviewed. `~/MAINVSCODE/afs-deploy.sh` / `scripts/atomic_release.sh` build from live `origin/main` at deploy time, not a pinned SHA reviewed earlier — this system has already had a deploy pick up an unreviewed-at-review-time commit that rode along between merge and deploy. This audit exists to catch that class of gap before or after any deploy.
+Audit whether the deployed box is actually safe, and whether the deployed code is actually what was reviewed. `scripts/atomic_release.sh` now requires an exact reviewed 40-character commit SHA for build/verify/promote; any wrapper that still supplies live `origin/main` fails closed. The older path already picked up an unreviewed-at-review-time ride-along commit once, so this audit still verifies reviewed SHA against the box's actual deployed SHA before or after any deploy.
 
 Core rule: No proof, no run. "The box does X" is never asserted from a prior audit or from what main looked like at review time — it is asserted only after checking the box's actual deployed SHA directly.
 

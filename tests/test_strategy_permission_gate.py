@@ -138,6 +138,10 @@ def test_validate_config_rejects_invalid_strategy_status_value(config):
 
 
 def test_shipped_risk_rules_enables_gate_and_demotes_vwap_hold():
+    """Isolated MNQ orb_breakout lane (risk_rules 1.2.0): the gate stays on and
+    vwap_hold stays explicitly demoted; orb_reclaim is no longer listed at all,
+    so it falls back to default_status=SHADOW_ONLY rather than being an
+    explicit PAPER_ELIGIBLE entry."""
     import yaml
     from pathlib import Path
     rules = yaml.safe_load(Path("risk_rules.yaml").read_text())
@@ -145,7 +149,10 @@ def test_shipped_risk_rules_enables_gate_and_demotes_vwap_hold():
     assert gate["enabled"] is True
     assert gate["default_status"] == "SHADOW_ONLY"
     assert gate["strategy_status"]["vwap_hold"] == "SHADOW_ONLY"
-    assert gate["strategy_status"]["orb_reclaim"] == "PAPER_ELIGIBLE"
+    # orb_breakout is the ONLY explicitly paper-eligible strategy in the lane.
+    assert gate["strategy_status"]["orb_breakout"] == "PAPER_ELIGIBLE"
+    # orb_reclaim is deliberately absent -> inherits SHADOW_ONLY.
+    assert "orb_reclaim" not in gate["strategy_status"]
 
 
 def test_shipped_risk_rules_loads_via_load_config():
@@ -163,32 +170,35 @@ def test_shipped_risk_rules_loads_via_load_config():
 # so MNQ candidates journal as blocked WITH an explicit reason (the vwap_hold
 # pattern) instead of silently vanishing (the instrument-disable pattern).
 
+# Isolated MNQ orb_breakout lane (risk_rules 1.2.0): the shipped map is now
+# EXACTLY these three entries. orb_breakout is the only paper-eligible
+# strategy; vwap_hold and pdh_reclaim stay listed as explicit SHADOW_ONLY
+# historical governance records (their demotions are evidence-based and
+# independent of this lane). Every other strategy is absent and therefore
+# inherits default_status=SHADOW_ONLY.
 _EXPECTED_SHIPPED_STATUS = {
     "orb_breakout": "PAPER_ELIGIBLE",
-    "orb_reclaim": "PAPER_ELIGIBLE",
-    "orb_rejection": "PAPER_ELIGIBLE",
-    "orb_false_break_fade": "PAPER_ELIGIBLE",
     "vwap_hold": "SHADOW_ONLY",
-    "vwap_reclaim": "PAPER_ELIGIBLE",
-    "vwap_rejection": "PAPER_ELIGIBLE",
     "pdh_reclaim": "SHADOW_ONLY",
-    "pdl_reclaim": "PAPER_ELIGIBLE",
 }
 
 
 def test_shipped_risk_rules_demotes_pdh_reclaim_and_changes_nothing_else():
     """Every status the shipped yaml assigns is pinned here — a change to ANY
-    strategy's permission (not just pdh_reclaim's) fails this test."""
+    strategy's permission (not just pdh_reclaim's) fails this test.
+
+    Stricter than the pre-1.2.0 version: the shipped map must match the pinned
+    map EXACTLY. Previously an added strategy was tolerated as long as it was
+    PAPER_ELIGIBLE; during the isolated lane no such silent addition is
+    allowed, because a newly paper-eligible strategy would break the lane's
+    isolation guarantee."""
     import yaml
     from pathlib import Path
     status = yaml.safe_load(Path("risk_rules.yaml").read_text())[
         "strategy_permission_gate"]["strategy_status"]
     for name, expected in _EXPECTED_SHIPPED_STATUS.items():
         assert status[name] == expected, f"{name}: {status[name]} != {expected}"
-    unexpected = {
-        k: v for k, v in status.items()
-        if k not in _EXPECTED_SHIPPED_STATUS and v != "PAPER_ELIGIBLE"
-    }
+    unexpected = {k: v for k, v in status.items() if k not in _EXPECTED_SHIPPED_STATUS}
     assert unexpected == {}, f"statuses changed outside the pinned map: {unexpected}"
 
 
