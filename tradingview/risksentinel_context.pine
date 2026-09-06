@@ -379,7 +379,7 @@ else
 var string price_vs_pdh = "unknown"
 var string price_vs_pdl = "unknown"
 price_vs_pdh := na(pd_high) ? "unknown" : close > pd_high ? "above" : close < pd_high ? "below" : "at"
-price_vs_pdl := na(pd_low)  ? "unknown" : close > pd_low  ? "above" : close < pd_low  ? "below" : "at"
+price_vs_pdl := na(pd_low)  ? "unknown" : close > pd_low  ? "above" : close < pd_low ? "below" : "at"
 
 ema_9_above_21 = ema_fast > ema_slow
 
@@ -399,6 +399,10 @@ is_mes          = root_ticker == "MES" or str.contains(syminfo.ticker, "MES")
 is_mnq          = root_ticker == "MNQ" or str.contains(syminfo.ticker, "MNQ")
 min_target_pts  = is_mes or is_mnq ? 15.0 : 0.0
 max_stop_ticks  = is_mes ? 40.0 : is_mnq ? 80.0 : 40.0
+// Keep ORB breakout advisory coordinates identical to the backend's
+// risk_rules.yaml strategy.orb_stop_ticks contract. This is strategy-specific:
+// do not reuse it for 4HR Re-Trigger or other advisory brackets.
+orb_breakout_stop_ticks = is_mes ? 16.0 : is_mnq ? 48.0 : 8.0
 tick            = syminfo.mintick
 
 string signal_strategy = na
@@ -441,7 +445,7 @@ else if not na(orb_h) and not na(orb_l) and orb_status == "above" and trend_dir 
     signal_strategy := "orb_breakout"
     signal_direction := "LONG"
     signal_entry := orb_h + tick * 2
-    signal_stop  := math.max(orb_h - tick * 8, signal_entry - tick * max_stop_ticks)
+    signal_stop  := math.max(orb_h - tick * orb_breakout_stop_ticks, signal_entry - tick * max_stop_ticks)
     raw_target   := signal_entry + (signal_entry - signal_stop) * 2.2
 
 // ORB Breakout SHORT
@@ -449,7 +453,7 @@ else if not na(orb_h) and not na(orb_l) and orb_status == "below" and trend_dir 
     signal_strategy := "orb_breakout"
     signal_direction := "SHORT"
     signal_entry := orb_l - tick * 2
-    signal_stop  := math.min(orb_l + tick * 8, signal_entry + tick * max_stop_ticks)
+    signal_stop  := math.min(orb_l + tick * orb_breakout_stop_ticks, signal_entry + tick * max_stop_ticks)
     raw_target   := signal_entry - (signal_stop - signal_entry) * 2.2
 
 // 3. ORB Reclaim
