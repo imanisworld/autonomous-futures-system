@@ -282,6 +282,10 @@ def test_execution_env_reads_are_classified_for_proof_guard():
         "TRADOVATE_API_KEY_SECRET",
         "TRADOVATE_PASSWORD",
         "TRADOVATE_USERNAME",
+        # Account-routing guard (accounts[0] pin/fail-closed check): identifies
+        # which already-authenticated account an order may reach, never
+        # setup eligibility, sizing, entry/fill behavior, or exits.
+        "TRADOVATE_EXPECTED_ACCOUNT_ID",
     }
     classified = set(PROOF_CRITICAL_RUNTIME_OVERRIDES) | non_proof_runtime_env
 
