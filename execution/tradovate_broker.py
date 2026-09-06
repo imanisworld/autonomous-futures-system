@@ -372,6 +372,11 @@ class TradovateBroker(BrokerInterface):
         self._account_id: Optional[int] = None
         self._contract_cache: dict[str, int] = {}  # root symbol → contract ID
         self._contract_symbol_cache: dict[str, str] = {}  # root → front-month symbol (e.g. MESM6)
+        # root → the front-month symbol the roll calendar wanted when the ID was
+        # resolved. A cached ID is reused only while today's wanted symbol is
+        # still this one; crossing a roll boundary inside a long-running
+        # process invalidates it (2026-09-06: U6 stayed pinned after the roll).
+        self._contract_roll_key: dict[str, Optional[str]] = {}
         self._resolve_fail_count: int = 0          # consecutive resolve_position failures
         self._position_opened_at: Optional[float] = None  # time.time() when bracket placed
         self._last_price: dict[str, float] = {}   # root symbol → last bar close from TV webhook
@@ -900,21 +905,42 @@ class TradovateBroker(BrokerInterface):
 
     # ── Contract resolution ───────────────────────────────────────────────────
 
+    @staticmethod
+    def _trading_date() -> date:
+        """Today's date on the exchange's clock (New York) — what the roll calendar keys on."""
+        try:
+            return datetime.now(ZoneInfo("America/New_York")).date()
+        except Exception:
+            return datetime.utcnow().date()
+
     def _find_contract_id(self, instrument: str) -> int:
-        """Find the front-month contract ID for MES (or other CME micro). Cached."""
+        """Find the front-month contract ID for MES (or other CME micro).
+
+        Cached per root, but the cache is only trusted while the roll calendar
+        still wants the same front-month symbol it wanted when the ID was
+        resolved. A process that resolved MNQU6 on Sept 9 and is still running
+        on Sept 11 must re-resolve to MNQZ6, not keep routing to the expiring
+        contract.
+        """
         root = instrument.replace("1!", "").upper()
-        if root in self._contract_cache:
-            return self._contract_cache[root]
+        desired = _front_month_symbol(root, self._trading_date())
+        cached_id = self._contract_cache.get(root)
+        if cached_id is not None:
+            if self._contract_roll_key.get(root) == desired:
+                return cached_id
+            logger.warning(
+                "Contract roll: %s was resolved as %s (id=%s) but today's front month "
+                "is %s — dropping the cached contract and re-resolving",
+                root, self._contract_symbol_cache.get(root), cached_id, desired,
+            )
+            self._contract_cache.pop(root, None)
+            self._contract_symbol_cache.pop(root, None)
+            self._contract_roll_key.pop(root, None)
         # Cache miss — use /contract/suggest (find/search endpoints 404 on Tradovate REST).
         # Prefer the rolled front-month symbol (e.g. MESU6) over the nearest expiry
         # (l=1 returns the EXPIRING contract during roll week → thin book + stop
         # rejections). We ask for several and pick the active front month by name,
         # falling back to nearest-expiry if the computed symbol isn't listed.
-        try:
-            today = datetime.now(ZoneInfo("America/New_York")).date()
-        except Exception:
-            today = datetime.utcnow().date()
-        desired = _front_month_symbol(root, today)
 
         last_exc: Exception = RuntimeError("no attempts made")
         for attempt in range(3):
@@ -941,6 +967,7 @@ class TradovateBroker(BrokerInterface):
                             )
                     self._contract_cache[root] = int(chosen["id"])
                     self._contract_symbol_cache[root] = str(chosen.get("name") or root)
+                    self._contract_roll_key[root] = desired
                     logger.warning(
                         "Resolved %s → contract %s (id=%s)",
                         root, self._contract_symbol_cache[root], self._contract_cache[root],

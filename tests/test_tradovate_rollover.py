@@ -111,6 +111,86 @@ def test_resolved_front_month_symbol_preferred_and_routed(monkeypatch):
     assert b._contract_cache["MES"] == 2
 
 
+# ── one long-running broker instance crossing the roll boundary ──────────────
+#
+# Sept 2026 expiry is Fri 2026-09-18; the 8-day window opens Fri 2026-09-11.
+# Before the fix, _find_contract_id returned the cached ID before looking at
+# the calendar, so a process that resolved MNQU6 on Sept 9 kept routing MNQU6
+# through expiry. The cached ID is now trusted only while the calendar still
+# wants the symbol it was resolved for.
+
+_SUGGEST_MNQ = [
+    {"id": 11, "name": "MNQU6"},
+    {"id": 12, "name": "MNQZ6"},
+]
+
+
+def _stub_suggest(broker, monkeypatch, calls):
+    def fake_get(path, **k):
+        calls.append(path)
+        return list(_SUGGEST_MNQ)
+    monkeypatch.setattr(broker, "_get", fake_get)
+
+
+def test_same_broker_instance_rerolls_u6_to_z6_across_the_boundary(monkeypatch):
+    b = _broker(monkeypatch)
+    calls: list[str] = []
+    _stub_suggest(b, monkeypatch, calls)
+
+    monkeypatch.setattr(TradovateBroker, "_trading_date", staticmethod(lambda: date(2026, 9, 9)))
+    assert b._find_contract_id("MNQ") == 11
+    assert b._contract_symbol_cache["MNQ"] == "MNQU6"
+    assert len(calls) == 1
+
+    # Same day, same instance: cached, no second lookup.
+    assert b._find_contract_id("MNQ1!") == 11
+    assert len(calls) == 1
+
+    # Process is still alive on roll day: the cached U6 must be dropped.
+    monkeypatch.setattr(TradovateBroker, "_trading_date", staticmethod(lambda: date(2026, 9, 11)))
+    assert b._find_contract_id("MNQ") == 12
+    assert b._contract_symbol_cache["MNQ"] == "MNQZ6"
+    assert b._contract_cache["MNQ"] == 12
+    assert len(calls) == 2
+
+    # And Z6 is now the stable cached answer.
+    assert b._find_contract_id("MNQ") == 12
+    assert len(calls) == 2
+
+
+def test_rerolled_symbol_reaches_the_order_payload(monkeypatch):
+    b = _broker(monkeypatch)
+    calls: list[str] = []
+    _stub_suggest(b, monkeypatch, calls)
+    bodies: list[dict] = []
+    monkeypatch.setattr(b, "_post", lambda path, body, **kw: bodies.append(body) or {})
+    order = BracketOrder(
+        instrument="MNQ", direction="LONG", entry=20000.0,
+        stop=19988.0, target=20036.0, rr_ratio=3.0, strategy="orb_breakout",
+    )
+
+    monkeypatch.setattr(TradovateBroker, "_trading_date", staticmethod(lambda: date(2026, 9, 9)))
+    b.execute_bracket(order)
+    monkeypatch.setattr(TradovateBroker, "_trading_date", staticmethod(lambda: date(2026, 9, 11)))
+    TradovateBroker._reset_client_order_registry()  # second submit is a new day, not a duplicate
+    b.execute_bracket(order)
+
+    assert [body["symbol"] for body in bodies] == ["MNQU6", "MNQZ6"]
+
+
+def test_non_quarterly_root_stays_cached(monkeypatch):
+    # _front_month_symbol returns None for MCL on every date; None == None keeps
+    # the old resolve-once behavior — no per-lookup HTTP call for those roots.
+    b = _broker(monkeypatch)
+    calls: list[str] = []
+    monkeypatch.setattr(b, "_get", lambda path, **k: calls.append(path) or [{"id": 5, "name": "MCLV6"}])
+    monkeypatch.setattr(TradovateBroker, "_trading_date", staticmethod(lambda: date(2026, 9, 9)))
+    assert b._find_contract_id("MCL") == 5
+    monkeypatch.setattr(TradovateBroker, "_trading_date", staticmethod(lambda: date(2026, 9, 11)))
+    assert b._find_contract_id("MCL") == 5
+    assert len(calls) == 1
+
+
 def test_back_month_prohibited_classifies_liquidation_only():
     assert classify_provider_failure("BackMonthProhibited") == NO_FILL_LIQUIDATION_ONLY
     assert classify_provider_failure("Account is LiquidationOnly") == NO_FILL_LIQUIDATION_ONLY
