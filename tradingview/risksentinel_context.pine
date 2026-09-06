@@ -239,6 +239,11 @@ trend_str := bull_stack or bear_stack ? "STRONG" : "WEAK"
 // ─── NY ORB ───────────────────────────────────────────────────────────────────
 bars_needed = math.max(1, math.round(i_orb_min * 60 / timeframe.in_seconds()))
 in_ny  = not na(time(timeframe.period, i_ny_session, "America/New_York"))
+// Runtime/replay route the NY ORB only during the canonical 09:30-17:00 ET
+// New York session. Keep the range after the ORB collection window closes,
+// but expire it on the first observed bar outside that runtime session so a
+// prior-day NY range can never leak into Asian/London alert payloads.
+ny_runtime_active = not na(time(timeframe.period, "0930-1700", "America/New_York"))
 ny_start = in_ny and not in_ny[1]
 var float orb_h = na
 var float orb_l = na
@@ -256,10 +261,18 @@ else if in_ny and not orb_done
         orb_cnt += 1
     else
         orb_done := true
+if not ny_runtime_active and ny_runtime_active[1]
+    orb_h := na
+    orb_l := na
+    orb_cnt := 0
+    orb_done := false
 orb_status = orb_status_for(orb_h, orb_l)
 
 // ─── LONDON ORB ───────────────────────────────────────────────────────────────
 in_london    = not na(time(timeframe.period, i_london_session, "America/New_York"))
+// Runtime/replay route the London ORB through 09:30 ET; expire it as NY begins
+// so the previous London range cannot remain in later payloads.
+london_runtime_active = not na(time(timeframe.period, "0300-0930", "America/New_York"))
 london_start = in_london and not in_london[1]
 var float london_orb_h = na
 var float london_orb_l = na
@@ -277,6 +290,11 @@ else if in_london and not london_orb_done
         london_orb_cnt += 1
     else
         london_orb_done := true
+if not london_runtime_active and london_runtime_active[1]
+    london_orb_h := na
+    london_orb_l := na
+    london_orb_cnt := 0
+    london_orb_done := false
 london_orb_status = orb_status_for(london_orb_h, london_orb_l)
 
 // ─── MARKET CONDITION ─────────────────────────────────────────────────────────
@@ -579,7 +597,7 @@ msg := msg + "\"daily_direction\":"     + s2j(daily_direction)     + ","
 msg := msg + "\"four_hour_bar_type\":"  + s2j(four_hour_bar_type)  + ","
 msg := msg + "\"four_hour_direction\":" + s2j(four_hour_direction) + ","
 msg := msg + "\"one_hour_bar_type\":"   + s2j(one_hour_bar_type)   + ","
-msg := msg + "\"one_hour_direction\":"  + s2j(one_hour_direction)  + ","
+msg := msg + "\"one_hour_direction\":"  + s2j(one_hour_direction) + ","
 msg := msg + "\"ftfc_direction\":"      + s2j(ftfc_direction) + ","
 msg := msg + "\"ftfc_aligned\":"        + str.tostring(ftfc_aligned) + ","
 // Supply & Demand (auto-computed from pivot structure)
