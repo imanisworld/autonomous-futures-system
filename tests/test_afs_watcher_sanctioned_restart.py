@@ -65,12 +65,13 @@ def _old_baseline(*, release: dict | None | str = "old") -> dict:
 
 
 def _tick(tmp_path: Path, monkeypatch, *, baseline, props: str, cwd: str | None = "release",
-          pins="coherent", link_to: str | None = None):
+          pins="coherent", link_to: str | None = None, webhook_procs: int = 1):
     """Run `check_runtime` against a fully stubbed box and return (state, findings, tick).
 
     `cwd="release"` means the live pid runs from the verified release dir.
     `pins="coherent"` means `.env` names exactly the release this watcher verified.
     `link_to` redirects the release symlink to another directory (an unpinned promote).
+    `webhook_procs` != 1 raises `webhook_process_count`, a blocker found AFTER the baseline block.
     """
     release_dir = (tmp_path / "rel-new").resolve()
     release_dir.mkdir()
@@ -131,7 +132,7 @@ def _tick(tmp_path: Path, monkeypatch, *, baseline, props: str, cwd: str | None 
         if cmd[:2] == ["systemctl", "list-units"]:
             return 0, ""
         if cmd[:2] == ["pgrep", "-af"]:
-            return 0, f"{NEW_PID} uvicorn webhook.app\n"
+            return 0, "".join(f"{int(NEW_PID) + i} uvicorn webhook.app\n" for i in range(webhook_procs))
         if cmd and cmd[0] == "journalctl":
             return 0, ""
         raise AssertionError(f"unexpected command: {cmd}")
@@ -231,6 +232,8 @@ def test_crash_restart_still_blocks_and_is_never_adopted(tmp_path, monkeypatch):
         ("nrestarts_unreadable", {"props": _props(nrestarts="?")}, set()),
         ("pid_unchanged_but_timestamp_moved", {"props": _props(pid=OLD_PID)}, set()),
         ("timestamp_unchanged_but_pid_moved", {"props": _props(enter=OLD_ENTER)}, set()),
+        # found AFTER the baseline block — the decision must still see it
+        ("blocker_raised_later_in_the_tick", {"webhook_procs": 2}, {"webhook_process_count"}),
     ],
 )
 def test_mismatched_or_ambiguous_state_never_auto_adopts(tmp_path, monkeypatch, case, kwargs, also_blocked):
@@ -243,6 +246,33 @@ def test_mismatched_or_ambiguous_state_never_auto_adopts(tmp_path, monkeypatch, 
     assert state["baseline"]["ExecMainPID"] == OLD_PID, case
     assert "adopted_from" not in state["baseline"], case
     assert not (w.STATE_DIR / "events.jsonl").exists(), case
+
+
+def test_watcher_still_armed_on_the_old_release_blocks_not_adopts(tmp_path, monkeypatch):
+    """Promote happened (pins + link name the new release) but THIS watcher was not restarted yet."""
+    still_armed = {"commit": NEW_SHA, "fingerprint": NEW_FP, "release_dir": str((tmp_path / "rel-new").resolve())}
+    new_pins = {w.COMMIT_PIN: OLD_SHA, w.FINGERPRINT_PIN: OLD_FP, w.EPOCH_PIN: w.iso(EPOCH), w.EPOCH_PROOF_PIN: w.iso(EPOCH)}
+    state, findings, _ = _tick(tmp_path, monkeypatch, baseline=_old_baseline(release=still_armed),
+                               props=_props(), pins=new_pins, link_to="other",
+                               cwd=str((tmp_path / "rel-other").resolve()))
+
+    keys = _keys(findings)
+    assert {"unexpected_restart", "watcher_release_stale", "service_wrong_release"} <= keys, keys
+    assert state["baseline"]["ExecMainPID"] == OLD_PID
+
+
+def test_later_blocker_annotates_the_restart_instead_of_adopting(tmp_path, monkeypatch):
+    _, findings, _ = _tick(tmp_path, monkeypatch, baseline=_old_baseline(), props=_props(), webhook_procs=2)
+    [restart] = [b for b in findings.blocked() if b["key"] == "unexpected_restart"]
+    assert "webhook_process_count" in restart["detail"]["not_adopted"]
+
+
+@pytest.mark.parametrize("release", [{}, {"commit": NEW_SHA}, "not-a-dict"])
+def test_incomplete_release_identity_blocks_and_is_not_repaired(tmp_path, monkeypatch, release):
+    state, findings, _ = _tick(tmp_path, monkeypatch, baseline=_old_baseline(release=release), props=_props())
+    assert _keys(findings) == {"unexpected_restart"}
+    assert state["baseline"]["ExecMainPID"] == OLD_PID
+    assert state["baseline"].get("release") == release
 
 
 def test_baseline_without_release_identity_cannot_prove_a_deploy(tmp_path, monkeypatch):
@@ -274,6 +304,14 @@ def test_legacy_baseline_for_the_same_process_is_backfilled_not_blocked(tmp_path
     assert _keys(findings) == set()
     assert state["baseline"]["ExecMainPID"] == NEW_PID
     assert state["baseline"]["release"]["commit"] == NEW_SHA
+
+
+@pytest.mark.parametrize("kwargs", [{"cwd": "/root/afs-releases/somewhere-else"}, {"webhook_procs": 2}])
+def test_legacy_baseline_is_not_backfilled_on_a_dirty_tick(tmp_path, monkeypatch, kwargs):
+    legacy = {"ActiveEnterTimestamp": NEW_ENTER, "NRestarts": "0", "ExecMainPID": NEW_PID}
+    state, findings, _ = _tick(tmp_path, monkeypatch, baseline=legacy, props=_props(), **kwargs)
+    assert findings.blocked()
+    assert "release" not in state["baseline"]
 
 
 def test_legacy_baseline_is_not_backfilled_across_a_restart(tmp_path, monkeypatch):

@@ -23,7 +23,10 @@ does not survive a reboot.
 Restart detection and the sanctioned deploy. The watcher keeps a process
 `baseline` (pid, `ActiveEnterTimestamp`, `NRestarts`, and the release it was
 recorded against) in `state.json`. A new pid is adopted as the new baseline
-on its own ONLY when it is provably the release wrapper's restart: the tick
+on its own ONLY when it is provably the release wrapper's restart. The
+decision is taken as the LAST step of the runtime check, after every other
+finding of the tick is in (the provisional `unexpected_restart` BLOCK is
+raised the moment the restart is seen and only withdrawn on proof): the tick
 has no other BLOCKED finding, the `.env` pins are coherent and name the
 release this watcher verified at startup (commit, fingerprint, epoch), the
 release link and the live pid's `/proc/<pid>/cwd` are that release, the
@@ -32,10 +35,11 @@ under a DIFFERENT release. That last condition is the discriminator: a hand
 `systemctl restart futures-bot` on the same release still BLOCKS as
 `unexpected_restart`, a crash still BLOCKS as `service_crash_restart`, and
 anything ambiguous fails closed. Adoption is logged, written to
-`events.jsonl` as `REBASELINED`, and keeps the previous baseline under
-`adopted_from`. A baseline recorded before release tracking is stamped with
-the current release while its pid still matches, so the next deploy can be
-proven; across a restart it is never stamped.
+`events.jsonl` as `REBASELINED`, posted once to the Discord error route, and
+keeps the previous baseline under `adopted_from`. A baseline recorded before
+release tracking is stamped with the current release only on a clean tick
+while its pid still matches and its cwd is the verified release, so the next
+deploy can be proven; across a restart it is never stamped.
 
 `install_afs_watcher_service.sh` is a deploy action (copies these files to
 `/root/afs-shared/afs_watcher_src/`, installs and enables the systemd unit).
