@@ -1,210 +1,151 @@
 # Futures — Current State Handoff
 
-_As of 2026-09-07. This is the single current futures handoff. Do not recreate completed audits, restart repo cleanup, rerun settled strategy tests, or reopen closed evidence lanes unless new evidence proves a defect._
+_As of 2026-09-07. This is the current futures evidence handoff. Do not restart cleanup, rerun settled strategy diagnostics, or reinterpret raw standalone edge as executable proof._
 
 ## Verdict
 
-**PAPER ONLY / EVIDENCE WORK CONTINUES / 4HR MNQ GATE ABLATION IS THE NEXT TEST.**
+**PAPER ONLY / SEPT. 7 STRATEGY-DIAGNOSTIC SEQUENCE COMPLETE / NO STRATEGY OR GATE FIX JUSTIFIED.**
 
-The cleanup detour is closed. Transition-reclaim is settled as BROKEN. Inverse ORB has a fresh reproducible positive IOC audit but remains PROMISING BUT UNPROVEN. 4HR MNQ now has evidence that its underlying signal/bracket is profitable while the current production gates reject nearly the entire population; the next justified work is a one-gate-at-a-time ablation on that exact 81-candidate population.
-
-No strategy promotion, deployment, risk widening, or live execution is authorized by this handoff.
+The interrupted testing sequence is now complete through transition-reclaim, inverse ORB, 4HR MNQ, Miyagi MNQ, and 60M 3-2-2. The only confirmed software/risk defect found in this work was the separate `$150` daily-loss semantic issue, which was corrected locally. The strategy studies below do not justify weakening risk gates or changing strategy logic.
 
 ## Do not redo
 
-The following work is complete and should not be restarted:
+Completed and settled:
 
 - repository/branch/worktree cleanup audit;
-- old futures defect audit items already fixed on current main;
-- transition-reclaim long/short direction test;
-- transition-reclaim passive matched control;
-- transition-reclaim stop widening, time-exit, MAE/MFE, stop-first and session/half decomposition;
-- transition-reclaim 2×2 entry/exit runner matrix;
-- inverse-ORB canonical realistic-fill audit on the current reproducible population;
-- 4HR MNQ gate-attribution pass;
-- prior VWAP Hold IOC/runner historical evidence work.
+- transition-reclaim direction, matched-control, stop/time/MAE-MFE, IOC/market and runner studies;
+- inverse-ORB current reproducible IOC audit;
+- 4HR gate attribution, one-gate ablation, architecture audit, and full-engine trend-gate isolation;
+- Miyagi MNQ gate attribution;
+- 60M 3-2-2 gate attribution;
+- prior VWAP Hold historical IOC/runner work.
 
-## Sept. 7 strategy evidence
+## Sept. 7 strategy dispositions
 
-### 1. Transition-reclaim — BROKEN / CLOSED
+### Transition-reclaim — BROKEN / CLOSED
 
-The current executable bracket is **BROKEN**.
+- Current bracket is negative on MES and MNQ under realistic costs.
+- Mirrored direction does not rescue it.
+- IOC versus market entry makes essentially no difference.
+- Runner materially reduces losses but does not recover positive expectancy.
+- PR #475 was closed without merge; CI/reproducibility failure remains preserved.
 
-Final evidence:
+**Action:** stop testing/tuning transition-reclaim unless genuinely new evidence appears.
 
-- MES and MNQ both negative under the documented bracket;
-- both chronological halves negative;
-- every session negative in the costed decomposition;
-- gross P&L already negative before costs;
-- matched passive control outperformed the strategy on both instruments;
-- exact mirrored short direction did not rescue the population;
-- IOC versus market entry made essentially no difference;
-- runner exit materially reduced losses, especially MNQ, but did not recover positive expectancy.
+### Inverse ORB — PROMISING BUT UNPROVEN / WAIT
 
-MNQ exact #475 2×2 runner matrix, 1.0R activation / 0.5R trail / 1-tick slippage / $1.48 commission / pessimistic same-bar / 1 contract:
+Current reproducible population:
 
-| Entry | Exit | Net | PF | Expectancy | H1 | H2 |
-|---|---|---:|---:|---:|---:|---:|
-| IOC | Static | -$10,949.32 | 0.80 | -$3.33 | -$4,639.93 | -$6,309.39 |
-| IOC | Runner | -$4,636.77 | 0.94 | -$1.42 | +$221.99 | -$4,858.76 |
-| Market | Static | -$10,949.32 | 0.80 | -$3.33 | -$4,639.93 | -$6,309.39 |
-| Market | Runner | -$4,636.77 | 0.94 | -$1.42 | +$221.99 | -$4,858.76 |
+- 63 arms; fingerprint `f32b1b1d...19e2da2`;
+- 57 IOC fills / 57 resolved;
+- net after costs **+$1,026.64**;
+- PF **5.284**;
+- expectancy/fill **+$18.01**;
+- max DD **$55.90**;
+- H1 **+$546.08**; H2 **+$480.56**;
+- Asian **+$63.62**; London **+$179.90**; New York **+$783.12**.
 
-MES exact 415-row source cannot be fully replayed because the original `CME_MINI_MES1!, 5.csv` source is missing; the 405-candidate re-anchored canonical population reaches the same negative conclusion in every tested combination.
+The older documented n=111 population is not reproducible from current canonical journals and remains stale context only.
 
-PR #475 was closed without merge. Final BROKEN verdict and the CI failure remain preserved in history. Do not tune transition stops, entries, horizons, or runner parameters. Stop testing this strategy unless genuinely new external evidence appears.
+**Action:** no strategy change; continue natural forward evidence collection.
 
-### 2. Inverse ORB — PROMISING BUT UNPROVEN / WAIT
+### 4HR Re-Trigger MNQ — BROKEN FOR CURRENT EXECUTABLE FORM / HOLD
 
-Fresh current reproducible audit:
+The standalone 81-candidate population showed positive raw/bracket evidence, and the first one-gate ablation made trend routing look suspicious. Full-engine isolation disproved a viable routing fix.
 
-- population: 63 arms;
-- fingerprint: `f32b1b1d...19e2da2`;
-- IOC fills: 57/63;
-- resolved: 57;
-- net after costs: **+$1,026.64**;
-- PF: **5.284**;
-- expectancy/fill: **+$18.01**;
-- max drawdown: **$55.90**;
-- H1: **+$546.08**;
-- H2: **+$480.56**;
-- Asian: +$63.62;
-- London: +$179.90;
-- New York: +$783.12.
+Full-engine trend isolation on the same 81 candidates:
 
-Disposition remains **WAIT / PROMISING BUT UNPROVEN** because the older documented n=111 inverse population is not reproducible from the current canonical journals. The stale n=111 result is context only and cannot substitute for reproducible proof.
+| Arm | Result |
+|---|---|
+| Current | 1 attempt, 0 fills, `$0` |
+| Exempt market-condition only | 37 then fail `TREND_STRENGTH_BELOW_REQUIRED`; 1 attempt, 0 fills |
+| Exempt strong-trend only | identical to current; market-condition gate blocks first |
+| Exempt both | 28 fail `EMA_STACK_NOT_ALIGNED`; 2 attempts, 1 fill, 1 loss, **-$7.98**, PF 0.00 |
 
-Local evidence artifacts reported on 2026-09-07:
+The earlier positive `remove_trending` arm was not equivalent to full-engine behavior because downstream strong-trend and EMA-stack gates were not exposed.
 
-- `docs/inverse-orb-canonical-ioc-proof-2026-09-07.md`
-- `scripts/inverse_orb_canonical_ioc_proof_2026-09-07.json`
+**Action:** no routing fix, no gate loosening, no more 4HR work from this evidence path.
 
-Do not promote from this result alone. Continue natural forward evidence collection.
+### 12HR Miyagi MNQ — BROKEN FOR CURRENT SYSTEM RISK CONSTRAINTS / HOLD
 
-### 3. 4HR Re-Trigger MNQ — SIGNAL/BRACKET PROMISING; CURRENT GATING FAILS
+- canonical population: 8 candidates;
+- 8/8 fail `rr_below_minimum`;
+- 8/8 fail `stop_too_wide`;
+- 6/8 fail `MARKET_CONDITION_NOT_TRENDING`;
+- 0/8 structural survivors;
+- all candidates confluence A/A+;
+- diagnostic IOC ceiling at 1–3 adverse ticks: 5/8 fills, net **+$266.60 / +$263.60 / +$260.60**, PF **2.357 / 2.335 / 2.313**;
+- H1 negative at every cost tier; H2 positive.
 
-The prior `BROKEN FOR CURRENT EXECUTABLE FORM` label is now too coarse.
+The current engine has no executable `strat_12hr_miyagi` path; a full-engine replay would require inventing strategy logic.
 
-Current gate-attribution evidence on the 81-candidate MNQ population:
+**Action:** do not widen stops, lower R:R requirements, or invent an execution path to rescue it.
 
-- raw signal positive at all tested horizons;
-- documented bracket: **+$3,069.60, PF 1.774**;
-- structurally rejected candidates alone: **+$3,076.02, PF 1.797**;
-- 80/81 candidates rejected before execution;
-- 1 approved candidate, IOC no-fill;
-- IOC over all candidates: 44 fills, **+$1,731.86, PF 2.001**;
-- IOC over structural survivors: 2 fills, both losses, **-$37.46**.
+### 60M 3-2-2 First Live — BROKEN FOR CURRENT SYSTEM RISK CONSTRAINTS / HOLD
 
-First engine disposition:
+- frozen population: 34 candidates;
+- documented bracket evidence overall: **+$2,532.66**, PF **13.57**, H1/H2 positive;
+- 34/34 fail `rr_below_minimum`;
+- 34/34 fail `stop_too_wide`;
+- structural survivors: 0/34;
+- full engine with permissions neutralized: 26 `TREND_STRENGTH_BELOW_REQUIRED`, 5 `ENTRY_DETACHED_FROM_PRICE`, 1 `MARKET_CONDITION_NOT_TRADABLE`, 1 `WEAK_BAR_CLOSE`, 1 `RR_BELOW_MINIMUM`;
+- approved attempts: 0; IOC fills: 0.
 
-| Blocker | Count |
-|---|---:|
-| `MARKET_CONDITION_NOT_TRENDING` | 38 |
-| `RR_BELOW_MINIMUM` | 19 |
-| `stop_too_wide` | 11 |
-| `ENTRY_DETACHED_FROM_PRICE` | 8 |
-| `WEAK_BAR_CLOSE` | 4 |
-| IOC no-fill | 1 |
+The positive all-candidate IOC ceiling is diagnostic only because no candidate survives current risk architecture.
 
-Overlapping diagnostics:
+**Action:** no strategy/risk/config change. Do not weaken account controls to make 3-2-2 executable.
 
-- `stop_too_wide`: 75 candidates, +$3,180.98, PF 1.847;
-- `rr_below_minimum`: 61 candidates, +$1,253.70, PF 1.409;
-- `min_confluence_grade`: 12 candidates, -$573.76, PF 0.423;
-- `target_too_close`: 8 candidates, -$51.34, PF 0.609.
+### VWAP Hold MNQ NY — PROMISING BUT UNPROVEN
 
-Current interpretation:
+No historical rebuild is needed. Continue the already-running forward evidence campaign. Existing historical runner/IOC evidence remains context; do not recreate it.
 
-- the 4HR signal and documented bracket have evidence of edge;
-- the current production gating removes nearly the entire profitable population;
-- this does **not** authorize loosening risk controls yet;
-- the next justified test is a one-gate-at-a-time ablation on the exact same 81 candidates.
+## Fix policy from this evidence pass
 
-Local evidence artifacts reported on 2026-09-07:
+- Proven software/safety defect → fix it.
+- Strategy fails intentional risk controls → do not "fix" it.
+- Apparent architecture mismatch → isolate through the full engine before changing routing.
+- Raw positive bracket/IOC ceilings are not executable proof when structural survivors are zero.
 
-- `docs/4hr-mnq-gate-attribution-2026-09-07.md`
-- `scripts/four_hr_mnq_gate_attribution_2026-09-07.json`
+Applied here:
 
-### 4. VWAP Hold MNQ NY — PROMISING BUT UNPROVEN
+- `$150` daily-loss semantics: **real defect; local fix justified**.
+- Transition-reclaim: **no fix**.
+- Inverse ORB: **no fix yet**.
+- 4HR: **no gate/routing fix**.
+- Miyagi: **no fix**.
+- 3-2-2: **no fix**.
 
-No new historical rebuild is needed.
+## `$150` daily-loss semantic fix — local/uncommitted status
 
-Retained canonical context:
+Reported local change:
 
-- NY-only canonical population: n=107 armed, about 55 fills per exit mode;
-- IOC-close is canonical;
-- both chronological halves positive across the retained 1/2/3-tick exit matrix;
-- runner historically stronger than static in retained studies;
-- winner concentration and thin sample remain material concerns;
-- prior modified forward result (+$430.51 on 16 fills) and control result remain context, not causal proof.
+- `max_daily_loss` is an account-level floor and is no longer multiplied by proposed contracts;
+- a 2-contract proposal is rejected once realized daily loss reaches -$150;
+- contract sizing remains separate.
 
-Continue forward collection. Do not recreate the historical runner study.
-
-## Immediate next test
-
-**4HR MNQ one-gate-at-a-time ablation.**
-
-Use the exact same 81 candidates and unchanged fills/cost assumptions. Compare current gates against removing only one blocker at a time:
-
-1. market-condition/trending gate;
-2. R:R gate;
-3. stop-width gate;
-4. detached-entry gate;
-5. weak-close gate.
-
-No parameter sweep. No combinations yet. No strategy changes. No runtime changes. No deployment.
-
-Report for each ablation:
-
-- candidates surviving;
-- IOC fills;
-- net P&L;
-- PF;
-- expectancy;
-- H1/H2;
-- session split;
-- drawdown;
-- difference versus full current-gate baseline and all-candidate IOC baseline.
-
-The purpose is to identify whether one specific gate is destroying the edge or whether several gates interact. Only after this attribution should any rule change be considered.
-
-## Risk semantic fix — local/uncommitted
-
-The `$150` futures daily-loss semantic issue has been corrected locally:
-
-- `max_daily_loss` is account-level and no longer multiplied by proposed contracts;
-- a 2-contract setup is rejected once realized daily loss reaches -$150;
-- contract sizing remains governed separately.
-
-Reported local files changed:
+Files reported changed locally:
 
 - `risk/risk_engine.py`
 - `risk_rules.yaml`
 - `tests/test_risk_engine.py`
 
-Validation reported so far: 3 targeted tests passed. General pytest suite has not yet been run. These edits remain uncommitted on the already-dirty primary worktree. Therefore **do not describe this fix as merged/current-main until it is isolated, fully tested, and committed.**
+Validation reported: 3 targeted tests passed. General pytest has not yet been reported as run, and the edits were reported uncommitted on the already-dirty primary worktree. Do not call this current-main until isolated, fully tested, and committed.
 
-## Repo / PR status that still matters
+## Repo / hold items
 
-- #475: closed without merge; transition verdict BROKEN.
-- #463: deliberate HOLD until 2026-09-30. Do not retarget the existing stacked branch again. Rebuild only the intended runtime-memory-gate delta on then-current main after the hold.
-- #446: options-data-health proof, separate lane; do not mix it into futures work.
-- Repo cleanup: closed. Do not restart branch/worktree deletion without new provenance evidence.
-
-## Safety posture
-
-- Paper/demo only.
-- No live broker execution authorized.
-- No strategy promotion from historical results alone.
-- No widening stops or weakening gates merely to make a strategy pass.
-- No averaging down.
-- No deployment solely because evidence docs changed.
-- Missing/reproducibility gaps remain blockers to validation claims.
+- #475: closed without merge; transition BROKEN.
+- #463: deliberate HOLD until 2026-09-30; do not retarget the stacked branch again.
+- #446: options lane, separate from futures.
+- Repo cleanup: closed; do not restart without new provenance evidence.
 
 ## Source-of-truth note
 
-`docs/strategy-rules/Strategy_Inventory.md` predates the Sept. 7 transition, inverse-ORB, and 4HR evidence above. Until that inventory is explicitly reconciled, **this handoff controls for the Sept. 7 evidence delta**. Historical strategy docs remain useful for provenance but must not override this current evidence state.
+`docs/strategy-rules/Strategy_Inventory.md` predates this Sept. 7 evidence sequence. Until its next deliberate reconciliation, this handoff controls for the Sept. 7 evidence delta.
 
 ## Smallest safe next step
 
-Run the **4HR MNQ one-gate-at-a-time ablation** only. Then stop and classify the result before moving to Miyagi, 3-2-2, or any new strategy work.
+**No further strategy diagnostic is required from the interrupted test sequence.**
+
+1. Finish packaging the already-made `$150` daily-loss defect fix: isolate the intended diff, run the full regression suite, and commit it if clean.
+2. Continue the existing forward evidence campaigns for the still-promising lanes, especially inverse ORB and VWAP Hold.
+3. Otherwise stop changing futures strategy/risk logic and wait for new evidence or the Sept. 30 #463 hold date.
