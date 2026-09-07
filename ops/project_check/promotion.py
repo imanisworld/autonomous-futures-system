@@ -350,7 +350,7 @@ def build_promotion_report(
     )
 
     return {
-        "ok": evidence_error is None,
+        "ok": gate_pass,
         "gate_pass": gate_pass,
         "promotion_eligible": gate_pass,
         "routine": "promotion-proof-gate",
