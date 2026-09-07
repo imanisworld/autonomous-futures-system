@@ -5,7 +5,7 @@ description: "Decide against pinned, non-negotiable thresholds whether enough po
 
 # source-command-futures-forward-measurement-gate
 
-Use this skill when the user asks to run the migrated source command `futures-forward-measurement-gate`.
+Decide against pinned, non-negotiable thresholds whether enough post-2026-07-07 evidence has accumulated to trust forward measurement again. Use when someone proposes resuming forward measurement, so the call is never made informally or on a hand-picked sample.
 
 ## Command Template
 

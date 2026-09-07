@@ -5,7 +5,7 @@ description: "Review the current repo diff or latest commit for safety before co
 
 # source-command-futures-diff-review
 
-Use this skill when the user asks to run the migrated source command `futures-diff-review`.
+Review the current repo diff or latest commit for safety before commit, deploy, or push. Use as the pre-commit gate for futures changes; every changed hunk must be read in full, and live locks, broker routing, and risk gates must be confirmed untouched.
 
 ## Command Template
 

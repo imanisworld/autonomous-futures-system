@@ -5,7 +5,7 @@ description: "Assess whether each futures strategy actually has edge, using the 
 
 # source-command-futures-strategy-audit
 
-Use this skill when the user asks to run the migrated source command `futures-strategy-audit`.
+Assess whether each futures strategy actually has edge, using the honest baseline rather than the optimistic one. Use before promoting, trusting, or retiring a strategy; requires realistic fills, adequate sample size, and both per-fill and per-decision expectancy.
 
 ## Command Template
 

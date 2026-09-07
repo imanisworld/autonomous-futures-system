@@ -5,7 +5,7 @@ description: "Measure whether no-fills are killing edge or protecting the accoun
 
 # source-command-futures-fill-audit
 
-Use this skill when the user asks to run the migrated source command `futures-fill-audit`.
+Measure whether no-fills are killing edge or protecting the account from bad entries. Use to evaluate how well the IOC limit and slippage tolerance are tuned. Measurement only, and it authorizes no fill-behavior change on its own.
 
 ## Command Template
 

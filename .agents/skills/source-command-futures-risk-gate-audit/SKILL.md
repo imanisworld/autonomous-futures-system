@@ -5,7 +5,7 @@ description: "Check the journal for evidence that futures risk gates actually fi
 
 # source-command-futures-risk-gate-audit
 
-Use this skill when the user asks to run the migrated source command `futures-risk-gate-audit`.
+Check the journal for evidence that futures risk gates actually fired as configured, not merely that the code exists. Use to tell losing safely from losing because risk is loose. Read risk_rules.yaml fresh first, since several gates are intentionally disabled.
 
 ## Command Template
 

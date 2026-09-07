@@ -5,7 +5,7 @@ description: "Go/no-go check on whether the current repo state is safe to run in
 
 # source-command-futures-paper-readiness
 
-Use this skill when the user asks to run the migrated source command `futures-paper-readiness`.
+Go/no-go check on whether the current repo state is safe to run in paper or demo observation mode. Use before starting or continuing a paper run. It certifies nothing about live trading, which is out of scope.
 
 ## Command Template
 
