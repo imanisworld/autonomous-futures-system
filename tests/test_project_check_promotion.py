@@ -183,7 +183,7 @@ def test_gate_fails_when_blockers_exist_even_if_classification_is_promising(tmp_
         },
     )
     report = build_promotion_report(strategy="x", repo_root=tmp_path, evidence_path=evidence)
-    assert report["ok"] is True
+    assert report["ok"] is False
     assert report["gate_pass"] is False
     assert report["classification"]["effective_classification"] == "PROMISING BUT UNPROVEN"
 
