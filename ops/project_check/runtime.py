@@ -87,7 +87,28 @@ def active_lanes(rules: dict[str, Any] | None) -> dict[str, Any]:
             instrument: [r["strategy"] for r in rows if r["paper_eligible"]]
             for instrument, rows in lanes.items()
         },
+        "derived_lane_transforms": _derived_lane_transforms(),
     }
+
+
+# Derived paper lanes are switched on by environment, not risk_rules.yaml, so
+# a local run of this snapshot only sees them when the same env is exported.
+_DERIVED_LANE_ENV = {
+    "orb_breakout": ("inverse", "MNQ_ORB_BREAKOUT_INVERSE_MODE", "paper_sim"),
+}
+
+
+def _derived_lane_transforms() -> dict[str, dict[str, Any]]:
+    result: dict[str, dict[str, Any]] = {}
+    for concept, (transform, env_name, active_value) in _DERIVED_LANE_ENV.items():
+        mode = _env(env_name)
+        result[concept] = {
+            "transform": transform,
+            "env": env_name,
+            "mode": mode,
+            "active": mode == active_value,
+        }
+    return result
 
 
 # config/settings.py's two fill-model code paths use DIFFERENT fallback
