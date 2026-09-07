@@ -14,7 +14,7 @@ calendar's exchange-local times through the exchange timezone.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime, time, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Any, Iterable, Protocol
 from zoneinfo import ZoneInfo
 
@@ -29,10 +29,12 @@ __all__ = [
     "EXCHANGE_TIMEZONE",
     "REGULAR_CLOSE",
     "calendar_url",
+    "nyse_session_for",
 ]
 
 EXCHANGE_TIMEZONE = "America/New_York"
 REGULAR_CLOSE = time(16, 0)
+EARLY_CLOSE = time(13, 0)
 
 
 class SessionCalendarError(RuntimeError):
@@ -76,6 +78,79 @@ class StaticSessionCalendar:
 
     async def session_for(self, day: date) -> Session | None:
         return self.sessions.get(day)
+
+
+def _observed_fixed_holiday(year: int, month: int, day: int) -> date:
+    holiday = date(year, month, day)
+    if holiday.weekday() == 5:
+        return holiday - timedelta(days=1)
+    if holiday.weekday() == 6:
+        return holiday + timedelta(days=1)
+    return holiday
+
+
+def _easter_sunday(year: int) -> date:
+    """Return Gregorian Easter using the Meeus/Jones/Butcher algorithm."""
+    a = year % 19
+    b, c = divmod(year, 100)
+    d, e = divmod(b, 4)
+    f, g = divmod(b + 8, 25)
+    h = (19 * a + b - d - g + 15) % 30
+    i, k = divmod(c, 4)
+    l = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 22 * l) // 451
+    month, day = divmod(h + l - 7 * m + 114, 31)
+    return date(year, month, day + 1)
+
+
+def _nth_weekday(year: int, month: int, weekday: int, occurrence: int) -> date:
+    first = date(year, month, 1)
+    return first + timedelta(days=(weekday - first.weekday()) % 7 + 7 * (occurrence - 1))
+
+
+def _last_weekday(year: int, month: int, weekday: int) -> date:
+    next_month = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
+    candidate = next_month - timedelta(days=1)
+    return candidate - timedelta(days=(candidate.weekday() - weekday) % 7)
+
+
+def _nyse_closed_days(year: int) -> set[date]:
+    closed = {
+        _observed_fixed_holiday(year, 1, 1),
+        _nth_weekday(year, 1, 0, 3),
+        _nth_weekday(year, 2, 0, 3),
+        _easter_sunday(year) - timedelta(days=2),
+        _last_weekday(year, 5, 0),
+        _observed_fixed_holiday(year, 7, 4),
+        _nth_weekday(year, 9, 0, 1),
+        _nth_weekday(year, 11, 3, 4),
+        _observed_fixed_holiday(year, 12, 25),
+    }
+    if year >= 2022:
+        closed.add(_observed_fixed_holiday(year, 6, 19))
+    return closed
+
+
+def nyse_session_for(day: date) -> Session | None:
+    """Return the NYSE regular session, including holidays and early closes."""
+    if day.weekday() >= 5 or day in _nyse_closed_days(day.year):
+        return None
+    close = REGULAR_CLOSE
+    if day == _nth_weekday(day.year, 11, 3, 4) + timedelta(days=1):
+        close = EARLY_CLOSE
+    christmas = date(day.year, 12, 25)
+    christmas_eve = christmas - timedelta(days=2) if christmas.weekday() == 6 else christmas - timedelta(days=1)
+    if day == christmas_eve:
+        close = EARLY_CLOSE
+    independence = date(day.year, 7, 4)
+    independence_eve = independence - timedelta(days=2) if independence.weekday() == 6 else independence - timedelta(days=1)
+    if day == independence_eve:
+        close = EARLY_CLOSE
+    tz = ZoneInfo(EXCHANGE_TIMEZONE)
+    open_local = datetime.combine(day, time(9, 30), tzinfo=tz)
+    close_local = datetime.combine(day, close, tzinfo=tz)
+    return Session(day, open_local.astimezone(timezone.utc), close_local.astimezone(timezone.utc), close < REGULAR_CLOSE)
+
 
 
 def calendar_url(base_url: str) -> str:
