@@ -1,6 +1,6 @@
 ---
 name: "source-command-repo-hygiene-check"
-description: "Migrated source command `repo-hygiene-check`"
+description: "Read-only repository hygiene audit. Use to classify branches, worktrees, and files before any cleanup. It deletes nothing and prunes nothing; classification always precedes cleanup."
 ---
 
 # source-command-repo-hygiene-check

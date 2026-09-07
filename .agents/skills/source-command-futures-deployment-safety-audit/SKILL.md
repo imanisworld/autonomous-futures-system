@@ -1,6 +1,6 @@
 ---
 name: "source-command-futures-deployment-safety-audit"
-description: "Migrated source command `futures-deployment-safety-audit`"
+description: "Audit whether the deployed box is safe and running the exact reviewed commit. Use before or after a deploy to check deployed-vs-reviewed SHA drift, service health, kill-switch and env state, and any ride-along commit."
 ---
 
 # source-command-futures-deployment-safety-audit

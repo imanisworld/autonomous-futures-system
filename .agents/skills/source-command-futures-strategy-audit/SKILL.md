@@ -1,6 +1,6 @@
 ---
 name: "source-command-futures-strategy-audit"
-description: "Migrated source command `futures-strategy-audit`"
+description: "Assess whether each futures strategy actually has edge, using the honest baseline rather than the optimistic one. Use before promoting, trusting, or retiring a strategy; requires realistic fills, adequate sample size, and both per-fill and per-decision expectancy."
 ---
 
 # source-command-futures-strategy-audit

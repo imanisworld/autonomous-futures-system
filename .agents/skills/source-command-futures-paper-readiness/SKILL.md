@@ -1,6 +1,6 @@
 ---
 name: "source-command-futures-paper-readiness"
-description: "Migrated source command `futures-paper-readiness`"
+description: "Go/no-go check on whether the current repo state is safe to run in paper or demo observation mode. Use before starting or continuing a paper run. It certifies nothing about live trading, which is out of scope."
 ---
 
 # source-command-futures-paper-readiness

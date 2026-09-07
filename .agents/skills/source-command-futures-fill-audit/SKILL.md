@@ -1,6 +1,6 @@
 ---
 name: "source-command-futures-fill-audit"
-description: "Migrated source command `futures-fill-audit`"
+description: "Measure whether no-fills are killing edge or protecting the account from bad entries. Use to evaluate how well the IOC limit and slippage tolerance are tuned. Measurement only, and it authorizes no fill-behavior change on its own."
 ---
 
 # source-command-futures-fill-audit

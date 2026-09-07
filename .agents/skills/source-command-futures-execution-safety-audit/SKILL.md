@@ -1,6 +1,6 @@
 ---
 name: "source-command-futures-execution-safety-audit"
-description: "Migrated source command `futures-execution-safety-audit`"
+description: "Focused audit of the execution chokepoints between a risk-approved decision and a real broker order. Use after touching risk_engine, webhook runner, or the Tradovate broker, to re-verify live locks, broker and account routing, the daily-loss gate, and the working-order recheck."
 ---
 
 # source-command-futures-execution-safety-audit

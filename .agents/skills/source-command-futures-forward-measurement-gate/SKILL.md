@@ -1,6 +1,6 @@
 ---
 name: "source-command-futures-forward-measurement-gate"
-description: "Migrated source command `futures-forward-measurement-gate`"
+description: "Decide against pinned, non-negotiable thresholds whether enough post-2026-07-07 evidence has accumulated to trust forward measurement again. Use when someone proposes resuming forward measurement, so the call is never made informally or on a hand-picked sample."
 ---
 
 # source-command-futures-forward-measurement-gate

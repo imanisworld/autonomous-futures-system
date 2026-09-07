@@ -1,6 +1,6 @@
 ---
 name: "source-command-futures-diff-review"
-description: "Migrated source command `futures-diff-review`"
+description: "Review the current repo diff or latest commit for safety before commit, deploy, or push. Use as the pre-commit gate for futures changes; every changed hunk must be read in full, and live locks, broker routing, and risk gates must be confirmed untouched."
 ---
 
 # source-command-futures-diff-review

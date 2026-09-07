@@ -1,6 +1,6 @@
 ---
 name: "source-command-futures-proof-baseline-audit"
-description: "Migrated source command `futures-proof-baseline-audit`"
+description: "Audit whether the futures proof and measurement pipeline itself can be trusted, by independently reproducing the honest baseline from the current journals. Use before quoting any P&L, fill count, or edge number, since the strategy and fill audits inherit its doubt."
 ---
 
 # source-command-futures-proof-baseline-audit
