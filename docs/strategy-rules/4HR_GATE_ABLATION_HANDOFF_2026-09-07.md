@@ -1,125 +1,69 @@
-# 4HR Re-Trigger MNQ — Gate Ablation Handoff
+# 4HR Re-Trigger MNQ — Gate Ablation Closure
 
-_As of 2026-09-07. This supersedes the old Batch-1 continuation instructions for the current MNQ gate-diagnostic question. Historical 4HR handoff files remain provenance only._
+_As of 2026-09-07. This file now records the completed gate-ablation/architecture investigation. Do not use the prior ablation-only interpretation to justify a routing change._
 
-## Verdict
+## Final verdict
 
-**AUDIT ONLY / PROMISING SIGNAL-BRACKET / CURRENT GATING FAILS / NO RULE CHANGE YET.**
+**BROKEN FOR CURRENT EXECUTABLE FORM / HOLD / NO ROUTING FIX.**
 
-The current evidence no longer supports the blanket statement that 4HR MNQ itself is broken. The documented signal/bracket is profitable on the current 81-candidate population, while production gating removes almost all of that population before execution.
+The initial 81-candidate gate attribution and single-gate ablation showed positive standalone signal/bracket evidence and made the trend gate look like the primary edge-destroying blocker. That was not sufficient because the ablation did not expose all downstream full-engine gates.
 
-This is not authorization to loosen risk controls. The next task is attribution only.
+## Completed evidence sequence
 
-## Completed gate-attribution result
+### Gate attribution
 
-Population: 81 MNQ candidates.
-
-- raw signal positive at all tested horizons;
+- population: 81 MNQ candidates;
 - documented bracket: **+$3,069.60, PF 1.774**;
-- structurally rejected candidates alone: **+$3,076.02, PF 1.797**;
-- 80 candidates rejected before execution;
-- 1 approved candidate, IOC no-fill;
-- IOC over all candidates: 44 fills, **+$1,731.86, PF 2.001**;
-- IOC over structural survivors: 2 fills, both losses, **-$37.46**.
+- structurally rejected candidates: **+$3,076.02, PF 1.797**;
+- 80/81 rejected before execution;
+- all-candidate IOC: 44 fills, **+$1,731.86, PF 2.001**.
 
-### First engine disposition
+### One-gate ablation
 
-| Blocker | Count |
-|---|---:|
-| `MARKET_CONDITION_NOT_TRENDING` | 38 |
-| `RR_BELOW_MINIMUM` | 19 |
-| `stop_too_wide` | 11 |
-| `ENTRY_DETACHED_FROM_PRICE` | 8 |
-| `WEAK_BAR_CLOSE` | 4 |
-| IOC no-fill | 1 |
+| Arm | Candidates | Fills | Net | PF | H1 / H2 |
+|---|---:|---:|---:|---:|---:|
+| Current gates | 1 | 0 | $0.00 | n/a | $0 / $0 |
+| Remove trending | 43 | 17 | **+$1,560.82** | **4.993** | +$44.66 / +$1,516.16 |
+| Remove R:R | 20 | 9 | +$330.68 | 2.143 | -$214.92 / +$545.60 |
+| Remove stop width | 6 | 4 | -$98.42 | 0.000 | -$51.46 / -$46.96 |
+| Remove detached entry | 67 | 44 | **+$1,731.86** | **2.001** | +$283.92 / +$1,447.94 |
+| Remove weak close | 77 | 40 | +$1,289.80 | 1.746 | +$75.40 / +$1,214.40 |
 
-### Overlapping gate diagnostics
+### Architecture audit
 
-- `stop_too_wide`: 75 candidates, +$3,180.98, PF 1.847
-- `rr_below_minimum`: 61 candidates, +$1,253.70, PF 1.409
-- `min_confluence_grade`: 12 candidates, -$573.76, PF 0.423
-- `target_too_close`: 8 candidates, -$51.34, PF 0.609
+- canonical 4HR rules describe a reversal setup rather than a generic continuation strategy;
+- the global market-condition gate applies before setup dispatch;
+- MNQ `require_strong_trend=True` remains active downstream;
+- detached-entry remains a valid stale-bracket safety check;
+- no gate change was authorized from architecture inspection alone.
 
-## Current interpretation
+### Full-engine trend isolation — binding closure
 
-The evidence supports three statements only:
+| Arm | Result |
+|---|---|
+| Current | 1 attempt, 0 fills, `$0` |
+| Exempt market-condition only | 37 then fail `TREND_STRENGTH_BELOW_REQUIRED`; 1 attempt, 0 fills |
+| Exempt strong-trend only | identical to current; market-condition gate blocks first |
+| Exempt both | 28 fail `EMA_STACK_NOT_ALIGNED`; 2 attempts, 1 fill, 1 loss, **-$7.98**, PF 0.00 |
 
-1. The documented 4HR MNQ signal/bracket contains measurable edge on this population.
-2. Current production gating rejects almost all candidates before execution.
-3. Stop width and R:R are large overlapping rejection populations, but first-blocker counts show the trend gate is the largest immediate blocker.
+This full-engine result is binding. The positive `remove_trending` ablation was diagnostic but not executable because it did not expose the downstream strong-trend and EMA-stack gates.
 
-The evidence does **not** yet prove which single gate should be changed, because the diagnostics overlap and a candidate can fail several gates.
+## Decision
 
-## Next exact test — one gate at a time
+- Do not exempt 4HR from market-condition gating.
+- Do not exempt 4HR from strong-trend gating.
+- Do not loosen EMA-stack, R:R, stop-width, detached-entry, or weak-close gates.
+- Do not parameter-tune this 81-candidate population.
+- Do not reopen this route unless genuinely new evidence changes the executable picture.
 
-Use the **same exact 81 candidates** and unchanged execution assumptions.
+## Evidence artifact
 
-Run the baseline current gate stack, then five independent ablations:
+Reported local full-engine closure:
 
-1. disable only `MARKET_CONDITION_NOT_TRENDING`;
-2. disable only `RR_BELOW_MINIMUM`;
-3. disable only `stop_too_wide`;
-4. disable only `ENTRY_DETACHED_FROM_PRICE`;
-5. disable only `WEAK_BAR_CLOSE`.
+- `docs/4hr-mnq-trend-gate-isolation-2026-09-07.md`
 
-Do not alter thresholds. Do not remove multiple gates together. Do not change entry, stop, target, session, signal detection, costs, slippage, fill logic, or candidate population.
-
-## Execution assumptions
-
-Use the same assumptions as the completed gate-attribution audit so results are directly comparable:
-
-- IOC-faithful execution;
-- pessimistic same-bar resolution;
-- current commission/slippage assumptions from the audit;
-- one contract;
-- no lookahead;
-- same chronological ordering and sessions.
-
-## Required output per cell
-
-Report:
-
-- candidates admitted past structural gating;
-- IOC fills / no-fills;
-- net P&L;
-- PF;
-- expectancy per fill;
-- max drawdown;
-- H1 and H2;
-- Asian / London / New York split;
-- delta versus the full current-gate baseline;
-- delta versus IOC over all 81 candidates.
-
-Also report which previously rejected candidate IDs/timestamps become executable under each single-gate ablation. This is needed to detect overlap and to avoid mistaking count changes for independent causal effects.
-
-## Decision rule after the ablation
-
-- If one gate removal admits a robust positive population with both halves positive and materially improves execution without relying on concentration, classify that gate as a **candidate architecture defect** requiring a separate safety review before any code change.
-- If removing one gate does not recover robust execution, do not change it.
-- If only multi-gate combinations appear necessary, stop. That becomes a new strategy/risk-policy question and requires explicit authorization before testing combinations.
-
-## Do not do
-
-- no stop widening sweep;
-- no R:R threshold tuning;
-- no entry-distance tuning;
-- no runner experiment;
-- no session filtering;
-- no parameter search;
-- no strategy rewrite;
-- no config change;
-- no deployment;
-- no promotion.
-
-## Current local artifacts
-
-Reported on 2026-09-07:
-
-- `docs/4hr-mnq-gate-attribution-2026-09-07.md`
-- `scripts/four_hr_mnq_gate_attribution_2026-09-07.json`
-
-These artifacts were reported from the local worktree and are not assumed to exist on `main` until committed.
+Historical gate-attribution and ablation artifacts remain provenance only.
 
 ## Stop condition
 
-After the five single-gate cells are reported, stop and classify the evidence. Do not automatically proceed to Miyagi or another 4HR variant.
+**Met. 4HR MNQ gate investigation is closed. No code/configuration change is justified.**
