@@ -99,3 +99,64 @@ def test_short_prefix_cannot_match_a_longer_unrelated_sha(tmp_path, monkeypatch)
     known = w.known_release_shas(_releases(tmp_path))
     assert w.sha_is_known_release(PRIOR[:12], known) is True
     assert w.sha_is_known_release("ffffffffffff", known) is False
+
+
+# ── the durable history file ────────────────────────────────────────────────
+# The releases root is a ROLLING WINDOW, not a history: the deploy keeps only the
+# most recent few directories. On 2026-09-07 three promotes inside thirty minutes
+# pruned the 73bffb1 directory and this check went BLOCKED again, because the SHA
+# its rows carried was no longer on disk. The history file is never pruned.
+
+def test_history_file_supplies_a_pruned_release(tmp_path, monkeypatch):
+    """The exact regression: the SHA is gone from disk but present in history."""
+    monkeypatch.setattr(w, "RELEASE_SHA", LIVE)
+    monkeypatch.setattr(w, "RELEASE_HISTORY", tmp_path / "release_history.txt")
+    (tmp_path / "release_history.txt").write_text(
+        f"# promoted releases\n{PRIOR}\n{OLDER}\n", encoding="utf-8"
+    )
+    root = tmp_path / "afs-releases"
+    root.mkdir()
+    live = root / f"{LIVE[:12]}-20260907-184839"
+    live.mkdir()  # PRIOR deliberately absent from disk — pruned
+    known = w.known_release_shas(live)
+    assert PRIOR in known          # history stores the full SHA
+    assert w.sha_is_known_release(PRIOR, known) is True
+    assert w.sha_is_known_release(PRIOR[:12], known) is True
+
+
+def test_history_file_absent_is_not_an_error(tmp_path, monkeypatch):
+    monkeypatch.setattr(w, "RELEASE_HISTORY", tmp_path / "does_not_exist.txt")
+    assert w.release_history_shas(tmp_path / "does_not_exist.txt") == set()
+    assert w.known_release_shas(None) == set()
+
+
+def test_history_file_ignores_comments_blanks_and_junk(tmp_path):
+    f = tmp_path / "h.txt"
+    f.write_text(
+        f"# a comment\n\n{PRIOR}\n   \nnot-a-sha\nzz\n{OLDER}  20260907-181947\n",
+        encoding="utf-8",
+    )
+    got = w.release_history_shas(f)
+    assert got == {PRIOR, OLDER}
+
+
+def test_history_and_disk_are_unioned(tmp_path, monkeypatch):
+    monkeypatch.setattr(w, "RELEASE_SHA", LIVE)
+    hist = tmp_path / "h.txt"
+    hist.write_text(PRIOR + "\n", encoding="utf-8")
+    monkeypatch.setattr(w, "RELEASE_HISTORY", hist)
+    live = _releases(tmp_path)
+    known = w.known_release_shas(live)
+    assert PRIOR in known                          # from history
+    assert OLDER[:12] in known                     # from disk
+    assert NEVER_DEPLOYED[:12] not in known
+
+
+def test_history_file_cannot_whitelist_an_undeployed_sha_implicitly(tmp_path, monkeypatch):
+    """Only SHAs actually written to the history are accepted — no wildcards."""
+    monkeypatch.setattr(w, "RELEASE_SHA", LIVE)
+    hist = tmp_path / "h.txt"
+    hist.write_text(PRIOR + "\n", encoding="utf-8")
+    monkeypatch.setattr(w, "RELEASE_HISTORY", hist)
+    known = w.known_release_shas(None)
+    assert w.sha_is_known_release(NEVER_DEPLOYED, known) is False

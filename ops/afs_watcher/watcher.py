@@ -330,17 +330,54 @@ def sha256_bytes(b: bytes) -> str:
 
 
 HEX_DIGITS = "0123456789abcdef"
+RELEASE_HISTORY = Path("/root/afs-shared/release_history.txt")
+
+
+def _hex_sha(token: str) -> str:
+    """Normalise a token to a lowercase hex SHA, or empty if it is not one."""
+    head = token.strip().lower()
+    if len(head) >= 12 and all(c in HEX_DIGITS for c in head):
+        return head
+    return ""
+
+
+def release_history_shas(path: Path | None = None) -> set[str]:
+    """Commit SHAs from the durable history the deploy appends to at promote time.
+
+    The releases root is NOT a history: the deploy keeps only the most recent few
+    directories and prunes the rest, so a release drops off it after a couple of
+    promotes. This file is never pruned, which is what makes it the durable
+    record. Missing or unreadable is not an error - the directory scan still
+    covers releases promoted before this file existed.
+    """
+    out: set[str] = set()
+    target = path if path is not None else RELEASE_HISTORY
+    try:
+        raw = target.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return out
+    for line in raw.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        sha = _hex_sha(stripped.split()[0])
+        if sha:
+            out.add(sha)
+    return out
 
 
 def known_release_shas(release_dir: Path | None) -> set[str]:
-    """Commit SHAs this box has actually run, read from the release dirs on disk.
+    """Commit SHAs this box has run: the durable history plus what is still on disk.
 
-    This process is git-free at runtime, so "was this a real release?" cannot be
-    answered by ancestry. Every atomic deploy leaves an immutable directory named
-    <sha12>-<date>-<time> under the releases root (older deploys used the full
-    SHA), so those directory names ARE this box's release history.
+    Two sources, because neither alone is sufficient. This process is git-free at
+    runtime, so ancestry cannot answer "was this a real release?". The release
+    directories look like a history but are a ROLLING WINDOW - the deploy prunes
+    all but the most recent few - so relying on them alone re-broke this check
+    the moment three promotes happened in one evening. The history file is the
+    durable record; the directory scan still covers anything promoted before it
+    existed.
     """
-    out: set[str] = set()
+    out: set[str] = release_history_shas()
     if release_dir is None:
         return out
     try:
@@ -353,9 +390,9 @@ def known_release_shas(release_dir: Path | None) -> set[str]:
                 continue
         except OSError:
             continue
-        head = child.name.split("-", 1)[0].strip().lower()
-        if len(head) >= 12 and all(c in HEX_DIGITS for c in head):
-            out.add(head)
+        sha = _hex_sha(child.name.split("-", 1)[0])
+        if sha:
+            out.add(sha)
     return out
 
 
