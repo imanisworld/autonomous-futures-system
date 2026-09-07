@@ -1,6 +1,6 @@
 ---
 name: "source-command-futures-why-no-trade"
-description: "Migrated source command `futures-why-no-trade`"
+description: "Diagnose why the system did not trade, or missed an expected trade, for a specific bar, alert, or time window. Use for a single incident, citing a log line, journal row, or code path. Without cited evidence the verdict is INCONCLUSIVE."
 ---
 
 # source-command-futures-why-no-trade

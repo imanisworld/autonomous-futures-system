@@ -1,6 +1,6 @@
 ---
 name: "source-command-options-full-audit"
-description: "Migrated source command `options-full-audit`"
+description: "Whole-system read-only audit of the options subsystem. Use for a general options health check. It modifies no files, changes no config, and adds no execution path."
 ---
 
 # source-command-options-full-audit

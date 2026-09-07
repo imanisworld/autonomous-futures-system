@@ -1,6 +1,6 @@
 ---
 name: "source-command-options-risk-gate-audit"
-description: "Migrated source command `options-risk-gate-audit`"
+description: "Focused read-only audit of the options subsystem risk gate. Use to verify the options risk controls behave as configured, without modifying files, config, or execution."
 ---
 
 # source-command-options-risk-gate-audit

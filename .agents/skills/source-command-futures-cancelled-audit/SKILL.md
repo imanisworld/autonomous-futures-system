@@ -1,6 +1,6 @@
 ---
 name: "source-command-futures-cancelled-audit"
-description: "Migrated source command `futures-cancelled-audit`"
+description: "Verify that CANCELLED futures outcomes are genuine no-fills. Use when a no-fill count or CANCELLED label is about to be trusted as evidence, to re-check each decision-bar close against the live IOC cap instead of the journal label."
 ---
 
 # source-command-futures-cancelled-audit

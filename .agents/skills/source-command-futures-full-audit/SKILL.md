@@ -1,6 +1,6 @@
 ---
 name: "source-command-futures-full-audit"
-description: "Migrated source command `futures-full-audit`"
+description: "Comprehensive point-in-time audit of futures config, code, execution paths, and test health. Use for a general system health check; use futures-diff-review instead for a focused pre-commit review, and anything not directly inspected must be reported unverified."
 ---
 
 # source-command-futures-full-audit

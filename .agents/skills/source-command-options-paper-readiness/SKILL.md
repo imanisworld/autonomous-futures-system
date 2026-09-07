@@ -1,6 +1,6 @@
 ---
 name: "source-command-options-paper-readiness"
-description: "Migrated source command `options-paper-readiness`"
+description: "Read-only options paper-readiness audit. Use before relying on options scanner alerts, dry-run reviews, human-confirmed previews, or prepared order tickets."
 ---
 
 # source-command-options-paper-readiness

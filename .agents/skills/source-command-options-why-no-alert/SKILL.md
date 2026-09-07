@@ -1,6 +1,6 @@
 ---
 name: "source-command-options-why-no-alert"
-description: "Migrated source command `options-why-no-alert`"
+description: "Read-only diagnostic for when the options subsystem produced no alert, dry-run review, human-confirmed preview, or prepared order ticket. Use to find where in the pipeline the candidate was dropped."
 ---
 
 # source-command-options-why-no-alert

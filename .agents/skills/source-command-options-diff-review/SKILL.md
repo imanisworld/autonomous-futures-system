@@ -1,6 +1,6 @@
 ---
 name: "source-command-options-diff-review"
-description: "Migrated source command `options-diff-review`"
+description: "Read-only diff review scoped to the options subsystem, covering options_companion, options_manager, alert_ranker, and the GEX and Signa sources. Use before an options commit, PR, or merge. Any added broker, order, or execution path is a hard stop."
 ---
 
 # source-command-options-diff-review
