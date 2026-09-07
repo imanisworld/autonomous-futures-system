@@ -1,7 +1,7 @@
 {
  "meta": {
-  "generated": "2026-09-07T19:22:41+00:00",
-  "sha": "431154042f86ccd2ec1bd9b897286c896b6b1893",
+  "generated": "2026-09-07T22:42:15+00:00",
+  "sha": "c6dc835692b4483ea8e1130f7399039612b5cf13",
   "risk_rules_sha256": "0325eefe09c52f4f477824950f57d525294aa072c3cc9810a4c6d05e718072fb",
   "commission_round_trip": 1.48,
   "horizons_min": [
