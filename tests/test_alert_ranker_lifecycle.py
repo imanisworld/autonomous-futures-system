@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -19,6 +19,7 @@ from alert_ranker.config import ScannerConfig
 from alert_ranker.discord import DiscordAlerter
 from alert_ranker.lifecycle import classify_candidate, resolve_open_setup
 from alert_ranker.scanner import OptionsScanner
+from alert_ranker.session_calendar import nyse_session_for
 from alert_ranker.scorer import ScoreResult
 from alert_ranker.storage import ScanStorage
 from alert_ranker.tastytrade_client import MarketSnapshot
@@ -217,6 +218,33 @@ def test_provider_failure_leaves_candidate_open(tmp_path):
     market.price = None
     counts = asyncio.run(scanner.resolve_open_candidates(now=OPEN_TIME + timedelta(hours=1)))
     assert counts == {"checked": 1, "resolved": 0}
+    assert storage.get_shadow_setup(outcome.shadow_id).status == "OPEN"
+
+def test_nyse_calendar_closes_holidays_and_early_close_days(tmp_path):
+    scanner, _storage = make_scanner(tmp_path)
+
+    thanksgiving = nyse_session_for(date(2025, 11, 27))
+    friday_after = nyse_session_for(date(2025, 11, 28))
+    assert thanksgiving is None
+    assert friday_after is not None
+    assert friday_after.is_early_close is True
+    assert scanner.is_market_hours(datetime(2025, 11, 28, 12, 59, tzinfo=NY))
+    assert not scanner.is_market_hours(datetime(2025, 11, 28, 13, 0, tzinfo=NY))
+    assert scanner.is_market_hours(datetime(2026, 8, 5, 15, 59, tzinfo=NY))
+
+
+def test_scheduler_resolution_skips_outside_market_hours(tmp_path):
+    market = FakeMarketData(price=101.0)
+    scanner, storage = make_scanner(tmp_path, market)
+    outcome = scan(scanner, candidate_payload())
+
+    counts = asyncio.run(
+        scanner.resolve_open_candidates(now=OPEN_TIME.replace(hour=18), scheduled=True)
+    )
+
+    assert counts == {"checked": 0, "resolved": 0}
+    assert scanner.last_skip_reason == "outside_market_hours"
+    assert market.calls == 1
     assert storage.get_shadow_setup(outcome.shadow_id).status == "OPEN"
 
 

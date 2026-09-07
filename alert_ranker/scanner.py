@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import asdict, dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -13,6 +13,7 @@ from .config import ScannerConfig
 from .discord import AlertDecision, DiscordAlerter
 from .lifecycle import classify_candidate, open_candidate_fields, resolve_open_setup
 from .market_data import MarketDataClient, build_provider_capabilities
+from .session_calendar import EXCHANGE_TIMEZONE, nyse_session_for
 from .scorer import ScoreResult, is_ny_open, score_setup
 from .storage import ScanStorage
 from sources.signa_client import SignaClient
@@ -50,12 +51,14 @@ class OptionsScanner:
         self.last_skip_reason: str | None = None
 
     def is_market_hours(self, now: datetime | None = None) -> bool:
-        local = (now or datetime.now(ZoneInfo(self.config.timezone))).astimezone(
-            ZoneInfo(self.config.timezone)
+        exchange_now = (now or datetime.now(ZoneInfo(self.config.timezone))).astimezone(
+            ZoneInfo(EXCHANGE_TIMEZONE)
         )
-        if local.weekday() >= 5:
+        session = nyse_session_for(exchange_now.date())
+        if session is None:
             return False
-        return (local.hour > 9 or (local.hour == 9 and local.minute >= 30)) and local.hour < 16
+        current = exchange_now.astimezone(timezone.utc)
+        return session.open <= current < session.close
 
     async def scan_watchlist(
         self,
@@ -141,13 +144,24 @@ class OptionsScanner:
             result, decision.sent, suppression_reason, storage_id, shadow_id, shadow_reason
         )
 
-    async def resolve_open_candidates(self, now: datetime | None = None) -> dict[str, int]:
+    async def resolve_open_candidates(
+        self,
+        now: datetime | None = None,
+        *,
+        scheduled: bool = True,
+    ) -> dict[str, int]:
         """Resolve OPEN paper candidates against fresh underlying quotes.
 
         Provider failures leave rows OPEN — a candidate is never resolved on
         missing data (expiry is the only exception, which needs no quote).
+        Scheduled runs fail closed outside market hours; manual callers can
+        pass ``scheduled=False`` to resolve a backlog regardless of session
+        state.
         """
         now = now or datetime.now(ZoneInfo(self.config.timezone))
+        if scheduled and not self.is_market_hours(now):
+            self.last_skip_reason = "outside_market_hours"
+            return {"checked": 0, "resolved": 0}
         counts = {"checked": 0, "resolved": 0}
         prices: dict[str, float | None] = {}
         last_id = 0
