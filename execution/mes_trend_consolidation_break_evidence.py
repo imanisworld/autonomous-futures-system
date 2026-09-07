@@ -27,6 +27,7 @@ from context.market_context import MarketState
 from execution.broker_interface import BracketOrder
 from execution.mnq_strat_evidence import load_flatness_snapshot
 from execution.paper_broker import NextBarOHLC, PaperBroker, TICK_SIZE, TICK_VALUE
+from ops.watcher_memory_guard import read_critical_memory_block
 from execution.trailing import compute_trailed_stop
 from risk.risk_engine import RiskEngine
 from strategy.shadow_setups import evaluate_shadow_setups
@@ -276,6 +277,11 @@ def _candidate_event(
     if mode == "paper_sim" and flatness.get("confirmed") is not True:
         accepted = False
         reasons.append("STRUCTURAL_ISOLATION_UNCONFIRMED_FAIL_CLOSED")
+    if mode == "paper_sim":
+        _memory_block = read_critical_memory_block()
+        if _memory_block is not None:
+            accepted = False
+            reasons.append(str(_memory_block.get("code") or "MEMORY_CRITICAL"))
 
     paper_order_id = None
     pending_order = None

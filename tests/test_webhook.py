@@ -826,6 +826,41 @@ def test_runner_resolves_open_position_on_next_bar(config, tmp_path):
     assert r2["resolution"] == "WIN"
 
 
+def test_runner_resolves_open_position_while_memory_guard_is_critical(config, tmp_path, monkeypatch):
+    """
+    Memory-guard rejection is scoped to opening NEW paper positions. An
+    already-open position must keep resolving on the next bar even while the
+    afs-watcher reports CRITICAL — this is the "continue managing existing
+    positions" half of the memory-guard contract.
+    """
+    from webhook import runner
+    from webhook.runner import process_alert
+
+    log_dir = str(tmp_path / "logs")
+    today = date(2026, 5, 23)
+
+    p1 = _base_payload()
+    r1 = process_alert(p1, config=config, log_dir=log_dir, for_date=today)
+    if r1["decision"] != "TRADE" or r1["fill"] is None:
+        pytest.skip("Signal engine produced NO_TRADE on bar 1 — skip resolution test")
+
+    monkeypatch.setattr(
+        runner,
+        "read_critical_memory_block",
+        lambda: {"level": "CRITICAL", "code": "MEMORY_CRITICAL", "reason": "derived headroom exhausted"},
+    )
+    p2 = _base_payload(
+        timestamp="2026-05-23T14:35:00+00:00",
+        high=99999.0,
+        low=19475.0,
+        close=19580.0,
+    )
+    r2 = process_alert(p2, config=config, log_dir=log_dir, for_date=today)
+
+    assert r2["resolution"] == "WIN"
+    assert r2["decision"] != "BLOCKED_MEMORY_CRITICAL"
+
+
 def test_runner_blocks_when_open_position_does_not_resolve(config, tmp_path):
     """
     Bar 1 opens a trade. Bar 2 hits neither stop nor target, so the engine
