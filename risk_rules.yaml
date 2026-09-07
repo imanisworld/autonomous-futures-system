@@ -82,7 +82,7 @@ daily_limits:
   # to 9999 when this isolated lane concludes.
   max_trades_per_day: 3             # was 9999 (unlimited) for the isolated lane; originally 3
   max_consecutive_losses: 9999     # was 4 — tilt halt off (validator requires >=1)
-  max_daily_loss: 150              # KEPT — survival floor (10% of $1,500)
+  max_daily_loss: 150              # KEPT — base daily loss cap; scales × trade contracts (1c $150, 2c $300 …) so the balance-keyed ladder isn't halted by one normal loss. Hard survival floor is max_drawdown_percent.
   daily_profit_protect_threshold: 0 # off (was already 0)
   max_drawdown_percent: 0.20       # KEPT — survival floor (stop if 20% from peak)
   circuit_breaker_losses: 0        # was 2 — circuit breaker OFF
