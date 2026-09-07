@@ -5,7 +5,7 @@ description: "Audit whether the deployed box is safe and running the exact revie
 
 # source-command-futures-deployment-safety-audit
 
-Use this skill when the user asks to run the migrated source command `futures-deployment-safety-audit`.
+Audit whether the deployed box is safe and running the exact reviewed commit. Use before or after a deploy to check deployed-vs-reviewed SHA drift, service health, kill-switch and env state, and any ride-along commit.
 
 ## Command Template
 

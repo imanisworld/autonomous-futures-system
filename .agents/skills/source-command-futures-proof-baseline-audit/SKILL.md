@@ -5,7 +5,7 @@ description: "Audit whether the futures proof and measurement pipeline itself ca
 
 # source-command-futures-proof-baseline-audit
 
-Use this skill when the user asks to run the migrated source command `futures-proof-baseline-audit`.
+Audit whether the futures proof and measurement pipeline itself can be trusted, by independently reproducing the honest baseline from the current journals. Use before quoting any P&L, fill count, or edge number, since the strategy and fill audits inherit its doubt.
 
 ## Command Template
 

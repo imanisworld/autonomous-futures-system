@@ -5,7 +5,7 @@ description: "Focused read-only audit of the options subsystem risk gate. Use to
 
 # source-command-options-risk-gate-audit
 
-Use this skill when the user asks to run the migrated source command `options-risk-gate-audit`.
+Focused read-only audit of the options subsystem risk gate. Use to verify the options risk controls behave as configured, without modifying files, config, or execution.
 
 ## Command Template
 

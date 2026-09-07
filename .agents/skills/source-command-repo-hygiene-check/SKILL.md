@@ -5,7 +5,7 @@ description: "Read-only repository hygiene audit. Use to classify branches, work
 
 # source-command-repo-hygiene-check
 
-Use this skill when the user asks to run the migrated source command `repo-hygiene-check`.
+Read-only repository hygiene audit. Use to classify branches, worktrees, and files before any cleanup. It deletes nothing and prunes nothing; classification always precedes cleanup.
 
 ## Command Template
 

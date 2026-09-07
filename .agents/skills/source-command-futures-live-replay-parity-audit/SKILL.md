@@ -5,7 +5,7 @@ description: "Verify the replay engine and the live or demo path run the same st
 
 # source-command-futures-live-replay-parity-audit
 
-Use this skill when the user asks to run the migrated source command `futures-live-replay-parity-audit`.
+Verify the replay engine and the live or demo path run the same strategy logic and the same fill assumptions. Use when replay results look better than live, to catch a fill-model artifact rather than a real edge.
 
 ## Command Template
 

@@ -5,7 +5,7 @@ description: "Read-only diff review scoped to the options subsystem, covering op
 
 # source-command-options-diff-review
 
-Use this skill when the user asks to run the migrated source command `options-diff-review`.
+Read-only diff review scoped to the options subsystem, covering options_companion, options_manager, alert_ranker, and the GEX and Signa sources. Use before an options commit, PR, or merge. Any added broker, order, or execution path is a hard stop.
 
 ## Command Template
 

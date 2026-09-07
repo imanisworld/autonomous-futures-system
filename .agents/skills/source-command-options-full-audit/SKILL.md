@@ -5,7 +5,7 @@ description: "Whole-system read-only audit of the options subsystem. Use for a g
 
 # source-command-options-full-audit
 
-Use this skill when the user asks to run the migrated source command `options-full-audit`.
+Whole-system read-only audit of the options subsystem. Use for a general options health check. It modifies no files, changes no config, and adds no execution path.
 
 ## Command Template
 

@@ -5,7 +5,7 @@ description: "Verify that CANCELLED futures outcomes are genuine no-fills. Use w
 
 # source-command-futures-cancelled-audit
 
-Use this skill when the user asks to run the migrated source command `futures-cancelled-audit`.
+Verify that CANCELLED futures outcomes are genuine no-fills. Use when a no-fill count or CANCELLED label is about to be trusted as evidence, to re-check each decision-bar close against the live IOC cap instead of the journal label.
 
 ## Command Template
 

@@ -5,7 +5,7 @@ description: "Comprehensive point-in-time audit of futures config, code, executi
 
 # source-command-futures-full-audit
 
-Use this skill when the user asks to run the migrated source command `futures-full-audit`.
+Comprehensive point-in-time audit of futures config, code, execution paths, and test health. Use for a general system health check; use futures-diff-review instead for a focused pre-commit review, and anything not directly inspected must be reported unverified.
 
 ## Command Template
 

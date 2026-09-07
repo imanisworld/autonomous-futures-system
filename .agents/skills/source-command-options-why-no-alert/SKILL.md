@@ -5,7 +5,7 @@ description: "Read-only diagnostic for when the options subsystem produced no al
 
 # source-command-options-why-no-alert
 
-Use this skill when the user asks to run the migrated source command `options-why-no-alert`.
+Read-only diagnostic for when the options subsystem produced no alert, dry-run review, human-confirmed preview, or prepared order ticket. Use to find where in the pipeline the candidate was dropped.
 
 ## Command Template
 

@@ -5,7 +5,7 @@ description: "Diagnose why the system did not trade, or missed an expected trade
 
 # source-command-futures-why-no-trade
 
-Use this skill when the user asks to run the migrated source command `futures-why-no-trade`.
+Diagnose why the system did not trade, or missed an expected trade, for a specific bar, alert, or time window. Use for a single incident, citing a log line, journal row, or code path. Without cited evidence the verdict is INCONCLUSIVE.
 
 ## Command Template
 

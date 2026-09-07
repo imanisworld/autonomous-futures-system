@@ -5,7 +5,7 @@ description: "Read-only options paper-readiness audit. Use before relying on opt
 
 # source-command-options-paper-readiness
 
-Use this skill when the user asks to run the migrated source command `options-paper-readiness`.
+Read-only options paper-readiness audit. Use before relying on options scanner alerts, dry-run reviews, human-confirmed previews, or prepared order tickets.
 
 ## Command Template
 
