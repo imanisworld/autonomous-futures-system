@@ -329,6 +329,53 @@ def sha256_bytes(b: bytes) -> str:
     return hashlib.sha256(b).hexdigest()
 
 
+HEX_DIGITS = "0123456789abcdef"
+
+
+def known_release_shas(release_dir: Path | None) -> set[str]:
+    """Commit SHAs this box has actually run, read from the release dirs on disk.
+
+    This process is git-free at runtime, so "was this a real release?" cannot be
+    answered by ancestry. Every atomic deploy leaves an immutable directory named
+    <sha12>-<date>-<time> under the releases root (older deploys used the full
+    SHA), so those directory names ARE this box's release history.
+    """
+    out: set[str] = set()
+    if release_dir is None:
+        return out
+    try:
+        children = list(release_dir.parent.iterdir())
+    except OSError:
+        return out
+    for child in children:
+        try:
+            if not child.is_dir():
+                continue
+        except OSError:
+            continue
+        head = child.name.split("-", 1)[0].strip().lower()
+        if len(head) >= 12 and all(c in HEX_DIGITS for c in head):
+            out.add(head)
+    return out
+
+
+def sha_is_known_release(sha: str, known: set[str]) -> bool:
+    """True when `sha` is the live release, or one this box demonstrably ran.
+
+    Evidence stamped with an EARLIER release is honest evidence that predates the
+    current deploy, not a provenance defect - the previous rule compared every
+    post-epoch row against the live SHA alone, so any deploy retroactively marked
+    correctly-stamped rows bad. A SHA that was never deployed here is still a
+    real defect and still blocks.
+    """
+    s = str(sha).strip().lower()
+    if len(s) < 12:
+        return False
+    if RELEASE_SHA.startswith(s) or s.startswith(RELEASE_SHA[:12]):
+        return True
+    return any(s.startswith(k) or k.startswith(s) for k in known)
+
+
 # ── static self-check ────────────────────────────────────────────────────────
 def static_selfcheck() -> None:
     src = Path(__file__).read_text(encoding="utf-8")
@@ -1169,13 +1216,23 @@ def check_campaign(state: dict, f: Findings, tick: dict) -> None:
         s = str(r.get("generating_git_sha") or "MISSING")
         shas[s] = shas.get(s, 0) + 1
     camp["shas_all"] = shas
+    known_shas = known_release_shas(RELEASE_DIR)
+    camp["known_release_shas"] = len(known_shas)
     bad_sha = []
     for r in post:
         s = str(r.get("generating_git_sha") or "")
         if not s or not r.get("provenance_status"):
             bad_sha.append((r.get("candidate_id"), r.get("record_type"), "MISSING"))
-        elif not RELEASE_SHA.startswith(s) and not s.startswith(RELEASE_SHA[:12]):
+        elif not sha_is_known_release(s, known_shas):
             bad_sha.append((r.get("candidate_id"), r.get("record_type"), s))
+    post_shas = {
+        str(r.get("generating_git_sha")).strip().lower()[:12]
+        for r in post
+        if r.get("generating_git_sha")
+    }
+    if len(post_shas) > 1:
+        f.add("WARN", "post_epoch_spans_releases",
+              f"post-epoch evidence spans {len(post_shas)} releases: {sorted(post_shas)}")
     if bad_sha:
         f.add("BLOCKED", "post_epoch_wrong_sha", f"{len(bad_sha)} post-epoch row(s) with wrong/missing generating SHA", rows=bad_sha[:10])
     unexpected = sorted({(str(r.get("strategy")), str(r.get("variant"))) for r in rows} - set(EXPECTED_POPULATIONS))
