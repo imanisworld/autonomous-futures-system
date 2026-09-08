@@ -111,8 +111,6 @@ _STRATEGY_LABELS: dict[str, str] = {
     "continuation_pullback":     "continuation_pullback (VWAP Pullback)",
 }
 
-_DIVIDER = "━" * 23
-
 
 def _strategy_label(strategy: str) -> str:
     return _STRATEGY_LABELS.get(strategy, strategy)
@@ -284,29 +282,35 @@ def _format_message(payload: AlertPayload, result: dict) -> str:
     market_condition = context.get("market_condition") or "?"
 
     dir_icon = "🟢" if direction == "LONG" else "🔴"
+    contracts = fill.get("contracts")
 
     stop_label = (
-        f"  (-{abs(entry - stop):.2f} pts)" if entry is not None and stop is not None else ""
+        f" (-{abs(entry - stop):.2f})" if entry is not None and stop is not None else ""
     )
     target_label = (
-        f"  (+{abs(target - entry):.2f} pts)" if target is not None and entry is not None else ""
+        f" (+{abs(target - entry):.2f})" if target is not None and entry is not None else ""
     )
     rr_str = f"{rr:.1f}" if rr is not None else "?"
 
+    # Compact, options-lane-style layout: the same fields as before, grouped onto
+    # `·`-separated lines instead of a divider-wrapped aligned block. Every value
+    # the previous format carried is still here — this is presentation only.
     lines = [
         f"Vantage Point paper decision: {decision}",
-        f"{dir_icon} {grade} SETUP — {symbol} | Score: {score}/10",
-        _DIVIDER,
-        f"Direction : {direction}",
-        f"Strategy  : {_strategy_label(strategy)}",
-        f"Session   : {session_label}",
-        "",
-        f"Entry     : {entry}",
-        f"Stop      : {stop}{stop_label}",
-        f"Target    : {target}{target_label}",
-        f"R:R       : {rr_str}",
-        "",
+        f"{dir_icon} Futures OPEN — {symbol} {direction}",
+        f"{grade} SETUP · Score: {score}/10 · {_strategy_label(strategy)} · {session_label}",
+        f"Entry {_format_price(entry)} · Stop {_format_price(stop)}{stop_label} · "
+        f"Target {_format_price(target)}{target_label}",
     ]
+
+    size_bits = []
+    if contracts is not None:
+        size_bits.append(f"{contracts} contract" + ("s" if contracts != 1 else ""))
+    size_bits.append(f"R:R {rr_str}")
+    if risk:
+        size_bits.append(_risk_line(risk))
+    lines.append(" · ".join(size_bits))
+
     for f in factors:
         lines.append(f"✅ {f}")
     for p in penalties:
@@ -314,17 +318,14 @@ def _format_message(payload: AlertPayload, result: dict) -> str:
 
     if resolution:
         lines.append(f"Resolution: {resolution}")
-    if risk:
-        lines.append(_risk_line(risk))
 
-    lines.append(_DIVIDER)
-    ref_line = _reference_price_line(result.get("live_quote"))
-    if ref_line:
-        lines.append(ref_line)
     lines.append(
         f"Market: {market_condition} | Bar close: {_bar_close_label(payload, context)} | "
         f"Bar time: {_format_bar_time(payload.timestamp)}"
     )
+    ref_line = _reference_price_line(result.get("live_quote"))
+    if ref_line:
+        lines.append(ref_line)
 
     return "\n".join(prefix + lines)
 
