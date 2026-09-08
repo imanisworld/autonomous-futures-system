@@ -74,7 +74,15 @@ def _assess(name: str, orders: list[tuple[BracketOrder, float, dict]],
     invalid: list[dict] = []
     for order, market, meta in orders:
         fill = _ioc_fill(order, market, tolerance_ticks)
-        if fill.result == "CANCELLED":
+        # PaperBroker now REFUSES a fill that lands beyond its own bracket
+        # (ENTRY_BRACKET_INVALID_AT_FILL). That refusal is still a fill for the
+        # purposes of this read-across -- it is precisely the population being
+        # measured -- so it must not be skipped alongside a genuine adverse-side
+        # no-fill, which would silently report invalid_share 0.0 once the guard
+        # exists and make this survey read as "defect gone" rather than
+        # "defect now caught".
+        refused_by_guard = getattr(fill, "exit_reason", None) == "ENTRY_BRACKET_INVALID_AT_FILL"
+        if fill.result == "CANCELLED" and not refused_by_guard:
             continue
         filled += 1
         entry_px = float(fill.entry_price)
