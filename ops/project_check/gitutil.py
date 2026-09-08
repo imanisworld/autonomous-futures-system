@@ -561,6 +561,39 @@ def _patch_preserved_at_merge(root: Path, tip: str, merged: str, base_ref: str) 
     return branch_id == merge_id
 
 
+def _content_twin_on_other_origin_branch(
+    root: Path,
+    tip: str,
+    base_ref: str,
+    tips: dict[str, str],
+    own_ref: str,
+    remote_ref: str | None,
+) -> tuple[str | None, bool]:
+    """First pushed origin branch whose content already holds this tip's changes.
+
+    A branch that was rebased or re-created under a second name carries the same
+    work at a different SHA, so ``--contains`` reachability never finds it even
+    though the work is fully pushed. Compare content as a last resort, before
+    concluding a tip is unarchived unique evidence.
+
+    Returns ``(matching ref, some_comparison_failed)``. A failed comparison is
+    never reported as "no twin found": the caller must leave preservation
+    unproven rather than escalate on an unfinished check.
+    """
+    comparison_failed = False
+    for ref in sorted(tips):
+        if not ref.startswith("refs/remotes/origin/") or ref == own_ref or ref.endswith("/HEAD"):
+            continue
+        if remote_ref and ref == f"refs/remotes/{remote_ref}":
+            continue  # main is already covered by the caller's own comparison
+        match = _content_preserved(root, tip, tips[ref], base_ref)
+        if match is True:
+            return ref, comparison_failed
+        if match is None:
+            comparison_failed = True
+    return None, comparison_failed
+
+
 def unmerged_remote_branches_missing_archive_tag(root: Path) -> dict[str, Any]:
     """Preservation of committed local AND origin branch tips (legacy API name).
 
@@ -664,7 +697,18 @@ def unmerged_remote_branches_missing_archive_tag(root: Path) -> dict[str, Any]:
             elif equivalent is True:
                 row.update(classification="REDUNDANT", reason="all branch-changed paths equal main", preserved_by=[main_tip])
             elif equivalent is False and pr["status"] in {"CLOSED", "NO_PR_FOUND"}:
-                row.update(classification="UNARCHIVED UNIQUE EVIDENCE — BLOCKER", reason="tip has no preserving ref and changed paths differ from main; preserve evidence or review supersession before cleanup")
+                # Last resort before escalating: the same work may already be
+                # pushed under another branch name at a different SHA.
+                twin, twin_comparison_failed = _content_twin_on_other_origin_branch(
+                    root, tip, main_tip, tips, ref, remote_ref
+                )
+                row["content_twin_origin_ref"] = twin
+                if twin:
+                    row.update(classification="ARCHIVED / PRESERVED", reason="all branch-changed paths equal another origin branch", preserved_by=[twin])
+                elif twin_comparison_failed:
+                    row["reason"] = "content comparison against another origin branch could not be completed; preservation unverified"
+                else:
+                    row.update(classification="UNARCHIVED UNIQUE EVIDENCE — BLOCKER", reason="tip has no preserving ref and changed paths differ from main and from every other origin branch; preserve evidence or review supersession before cleanup")
             else:
                 row["reason"] = "active PR or content comparison requires review"
         if ref_sha(root, ref) != tip:
