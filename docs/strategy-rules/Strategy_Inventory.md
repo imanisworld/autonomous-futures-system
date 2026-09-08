@@ -253,6 +253,12 @@ Verdict taxonomy:
 > authorized/scoped to touch those two dimensions; see the full audit doc for
 > detail.
 
+- **Fill-geometry correction (2026-09-08, `docs/vwap-hold-reconciliation-2026-09-07.md` Finding 3):**
+  the 2026-07-26 arrival-close cells held fills beyond their own bracket
+  (23 of 55 NY fills, 46 of 146 blended); with `PaperBroker`'s #508 guard
+  applied they are −$70.62 (NY, 32 fills) and −$402.32 (blended, 100 fills).
+  The decision-bar NY cell has no invalid fills; −$326.92 / PF 0.49 stands.
+  Verdict unchanged: BROKEN — negative evidence.
 - Short-only by design
 - NY session only in practice today — not because `_try_vwap_hold` itself
   checks session, but because `risk_rules.yaml`'s global `allowed_sessions:

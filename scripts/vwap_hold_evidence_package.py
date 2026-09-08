@@ -33,12 +33,16 @@ from __future__ import annotations
 
 import json
 import statistics
+import os
 import sys
 from datetime import timedelta
 from pathlib import Path
 
-REPO = Path("/Users/djb.a.e/MAINVSCODE/autonomous-futures-system")
+REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
+# The journals and 5m corpus are gitignored; point AFS_DATA_REPO at a checkout
+# that has them when regenerating from a worktree or clone.
+DATA_REPO = Path(os.environ.get("AFS_DATA_REPO") or REPO)
 
 from scripts.vwap_hold_paired_fill_comparison import load_arms, load_bars  # noqa: E402
 from execution.broker_interface import BracketOrder  # noqa: E402
@@ -174,7 +178,14 @@ def resolve_via_broker(arm: dict, fill_price: float, fill_ts, bars: list[dict], 
     order = BracketOrder(instrument="MNQ", direction=arm["direction"], entry=fill_price,
                           stop=arm["stop"], target=arm["target"], rr_ratio=2.0,
                           strategy="vwap_hold", contracts=1)
-    broker.execute_bracket(order)
+    entry = broker.execute_bracket(order)
+    if entry.result == "CANCELLED":
+        # PaperBroker refused to open the position (since #508: a fill that
+        # lands beyond its own stop/target is ENTRY_BRACKET_INVALID_AT_FILL).
+        # That is a rejection and must stay one — never fall through to the
+        # bar walk, which would find no position and report OPEN / $0.
+        return {"outcome": "CANCELLED", "pnl": 0.0, "exit_reason": entry.exit_reason,
+                "resolving_ts": None, "no_fill_reason": entry.exit_reason}
     for b in bars:
         if b["ts"] <= fill_ts:
             continue
@@ -236,6 +247,7 @@ def cell_metrics(rows: list[dict], n_armed: int, cost_ticks: float) -> dict:
         "filled": sum(1 for r in rows if r["status"] == "FILLED"),
         "fill_rate": round(sum(1 for r in rows if r["status"] == "FILLED") / n_armed, 3),
         "resolved": len(resolved),
+        "invalid_at_fill": sum(1 for r in rows if r.get("exit_reason") == "ENTRY_BRACKET_INVALID_AT_FILL"),
         "wins": len(wins), "losses": len(losses),
         "win_rate": round(len(wins) / len(resolved), 3) if resolved else None,
         "gross_pnl": round(sum(gross), 2),

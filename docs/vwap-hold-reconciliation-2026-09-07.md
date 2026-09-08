@@ -42,12 +42,12 @@ Static exit, 2-tick cost, identical arms and exit engine:
 
 | Population | Fill reference | Filled | Net | PF | H1 / H2 |
 |---|---|---:|---:|---:|---|
-| NY-107 | arrival-bar **close** (2026-07-26 canonical) | 55 (51%) | **+$458.80** | 2.18 | +$174 / +$284 |
+| NY-107 | arrival-bar **close** (2026-07-26 canonical) | 55 (51%) | **+$458.80** — 23 of the 55 fills held beyond their own bracket; see Finding 3 | 2.18 | +$174 / +$284 |
 | NY-107 | arrival-bar **open** (package `ioc_open`) | 35 (33%) | −$143.92 | 0.74 | −$65 / −$79 |
 | NY-107 | **decision-bar close** (replay / production) | 35 (33%) | **−$326.92** | **0.49** | −$125 / −$202 |
-| All-348 | arrival-bar close | 146 (42%) | +$960.92 | 1.70 | +$834 / +$127 |
+| All-348 | arrival-bar close | 146 (42%) | +$960.92 — 46 invalid at fill; −$402.32 once refused (Finding 3) | 1.70 | +$834 / +$127 |
 | All-348 | arrival-bar open (committed `ioc_open` cell) | 105 (30%) | −$41.28 | 0.97 | H2 negative |
-| All-348 | decision-bar close | 105 (30%) | +$126.82 | 1.08 | +$546 / −$419 |
+| All-348 | decision-bar close | 105 (30%) | +$126.82 — 5 invalid at fill; −$441.98 once refused (Finding 3) | 1.08 | +$546 / −$419 |
 
 Runner exit is not a rescue: NY-107 under the decision-bar reference is −$3.26 / PF 1.00 on 35 fills, and its +$556 under `ioc_open` versus −$3 under decision-close — a few ticks of entry difference — shows how fragile a 0.5R trail on a 7-point stop is.
 
@@ -61,6 +61,38 @@ The 2026-07-26 operator decision that "`close` is canonical" was correct about p
 ## Verdict
 
 The raw predicate carries no direction (audit); the replay's detached-entry gate selects a weakly-positive subset (t ≤ 1.9) that is not NY-specific; and the one cell that passed every gate on 2026-07-26 passes only under a fill reference five minutes later than the order would exist. Under the reference the replay engine and production actually use, the canonical NY-only cell is **35 fills, −$326.92, PF 0.49, both halves negative** at 2 ticks — it fails honest fill and walk-forward.
+
+## Finding 3 (added 2026-09-08) — the arrival-close cells also held fills beyond their own bracket
+
+The package's `resolve_via_broker` opened every marketable IOC fill through
+`PaperBroker` with the arm's *original* stop/target, and — until this fix —
+ignored the broker's return value. Since #508 `PaperBroker` refuses a fill that
+lands beyond its own stop or target (`ENTRY_BRACKET_INVALID_AT_FILL`); the old
+helper then walked the bars against a position that did not exist and reported
+`OPEN / $0`. The helper now returns the broker's `CANCELLED` verdict and every
+cell reports `invalid_at_fill` on its own line, never blended into net.
+
+Re-generated on the same corpus and arms (static bracket, 2-tick cost convention):
+
+| Population | Fill reference | Filled | Invalid at fill | Resolved | Net | PF |
+|---|---|---:|---:|---:|---:|---:|
+| NY-107 | arrival-bar close | 55 | **23** | 32 | **−$70.62** | 0.82 |
+| NY-107 | decision-bar close | 35 | 0 | 35 | −$326.92 | 0.49 |
+| All-348 | arrival-bar close | 146 | **46** | 100 | **−$402.32** | 0.71 |
+| All-348 | decision-bar close | 105 | 5 | 100 | **−$441.98** | 0.72 |
+| Non-NY-241 | arrival-bar close | 91 | 23 | 68 | −$331.70 | 0.66 |
+| Rejected, all | arrival-bar close | 40 | 18 | 22 | −$11.60 | 0.96 |
+
+Every invalid row is a fill that ran past its own stop on the favourable side
+before the (late) arrival-close reference was taken — the same mechanism the
+inverse ORB decision-time replay documents. The NY decision-bar cell has **no**
+invalid fills, so Finding 2's −$326.92 / PF 0.49 stands unchanged; the
+arrival-close cells that used to look positive (+$458.80 NY, +$960.92 all) were
+carried by fills that could not be held. The all-session decision-close cell
+that read +$126.82 in the table above is **−$441.98** once its five invalid
+fills are refused. The runner-exit variants move the same way
+(NY-107 arrival-close runner: +$828.77 → +$299.35 on 32 fills, PF 1.80; not a
+rescue under the decision-bar reference, which is unchanged).
 
 Per the inventory taxonomy that is **BROKEN — negative evidence**, superseding PROMISING BUT UNPROVEN. The open exit-mode and sample-expansion items are moot. The `ioc_close` re-scoring doc and its JSON stay as provenance; their headline should be read as "arrival-bar-close reference", not as the production fill.
 

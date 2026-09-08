@@ -1,5 +1,5 @@
 {
- "generated": "2026-09-07T20:24:31.275544-04:00",
+ "generated": "2026-09-08T19:55:20.339204-04:00",
  "population_source": "logs/retest_baseline_off/MNQ",
  "bars": "data/replay_polygon_5m/MNQ (5m Polygon, 2024-07-02 .. 2026-06-26)",
  "fill_model": "package ioc_fill(field='close'): arrival = first 5m bar >= bar_ts+15m, limit-IOC at entry -/+ 32 ticks, zero entry slippage; costs 1.24 + ticks*0.50 at the metrics layer",
@@ -71,163 +71,166 @@
       "1_tick": {
        "armed": 348,
        "filled": 146,
-       "resolved": 146,
-       "net_pnl": 1033.92,
-       "profit_factor": 1.773,
-       "win_rate": 0.473,
-       "positive_both_halves": true,
-       "max_drawdown": 161.96
+       "resolved": 100,
+       "net_pnl": -352.32,
+       "profit_factor": 0.736,
+       "win_rate": 0.27,
+       "positive_both_halves": false,
+       "max_drawdown": 457.06
       },
       "2_tick": {
        "armed": 348,
        "filled": 146,
-       "resolved": 146,
-       "net_pnl": 960.92,
-       "profit_factor": 1.698,
-       "win_rate": 0.459,
-       "positive_both_halves": true,
-       "max_drawdown": 169.42
+       "resolved": 100,
+       "net_pnl": -402.32,
+       "profit_factor": 0.707,
+       "win_rate": 0.27,
+       "positive_both_halves": false,
+       "max_drawdown": 502.56
       },
       "3_tick": {
        "armed": 348,
        "filled": 146,
-       "resolved": 146,
-       "net_pnl": 887.92,
-       "profit_factor": 1.627,
-       "win_rate": 0.459,
-       "positive_both_halves": true,
-       "max_drawdown": 179.92
+       "resolved": 100,
+       "net_pnl": -452.32,
+       "profit_factor": 0.679,
+       "win_rate": 0.27,
+       "positive_both_halves": false,
+       "max_drawdown": 548.06
       }
      },
      "runner": {
       "1_tick": {
        "armed": 348,
        "filled": 146,
-       "resolved": 146,
-       "net_pnl": 1520.61,
-       "profit_factor": 2.235,
-       "win_rate": 0.527,
-       "positive_both_halves": true,
-       "max_drawdown": 181.28
+       "resolved": 100,
+       "net_pnl": 134.37,
+       "profit_factor": 1.109,
+       "win_rate": 0.35,
+       "positive_both_halves": false,
+       "max_drawdown": 312.09
       },
       "2_tick": {
        "armed": 348,
        "filled": 146,
-       "resolved": 146,
-       "net_pnl": 1447.61,
-       "profit_factor": 2.143,
-       "win_rate": 0.514,
-       "positive_both_halves": true,
-       "max_drawdown": 187.78
+       "resolved": 100,
+       "net_pnl": 84.37,
+       "profit_factor": 1.067,
+       "win_rate": 0.35,
+       "positive_both_halves": false,
+       "max_drawdown": 340.09
       },
       "3_tick": {
        "armed": 348,
        "filled": 146,
-       "resolved": 146,
-       "net_pnl": 1374.61,
-       "profit_factor": 2.056,
-       "win_rate": 0.514,
-       "positive_both_halves": true,
-       "max_drawdown": 194.28
+       "resolved": 100,
+       "net_pnl": 34.37,
+       "profit_factor": 1.027,
+       "win_rate": 0.35,
+       "positive_both_halves": false,
+       "max_drawdown": 368.09
       }
      },
      "partial_2ct_approx": {
       "1_tick": {
        "armed": 348,
        "filled": 146,
-       "resolved": 146,
-       "net_pnl": 2808.57,
-       "profit_factor": 2.188,
-       "win_rate": 0.493,
-       "positive_both_halves": true,
-       "max_drawdown": 320.62
+       "resolved": 100,
+       "net_pnl": -43.95,
+       "profit_factor": 0.981,
+       "win_rate": 0.29,
+       "positive_both_halves": false,
+       "max_drawdown": 588.01
       },
       "2_tick": {
        "armed": 348,
        "filled": 146,
-       "resolved": 146,
-       "net_pnl": 2735.57,
-       "profit_factor": 2.139,
-       "win_rate": 0.493,
-       "positive_both_halves": true,
-       "max_drawdown": 327.12
+       "resolved": 100,
+       "net_pnl": -93.95,
+       "profit_factor": 0.961,
+       "win_rate": 0.29,
+       "positive_both_halves": false,
+       "max_drawdown": 617.54
       },
       "3_tick": {
        "armed": 348,
        "filled": 146,
-       "resolved": 146,
-       "net_pnl": 2662.57,
-       "profit_factor": 2.092,
-       "win_rate": 0.493,
-       "positive_both_halves": true,
-       "max_drawdown": 333.62
+       "resolved": 100,
+       "net_pnl": -143.95,
+       "profit_factor": 0.941,
+       "win_rate": 0.29,
+       "positive_both_halves": false,
+       "max_drawdown": 648.54
       }
      }
     },
-    "cross_check": "EXACT MATCH on every field, every cell"
+    "cross_check": "MISMATCH FOUND \u2014 see 'mismatches'"
    },
    "static_2tick": {
+    "invalid_at_fill": 46,
     "armed": 348,
     "filled": 146,
     "fill_rate": 0.42,
-    "resolved": 146,
-    "net": 960.92,
-    "profit_factor": 1.698,
-    "win_rate": 0.459,
+    "resolved": 100,
+    "net": -402.32,
+    "profit_factor": 0.707,
+    "win_rate": 0.27,
     "h1_h2_by_trade_count": [
-     834.16,
-     126.76
+     -108.34,
+     -293.98
     ],
     "h1_h2_by_date_median": [
-     834.16,
-     126.76
+     -108.34,
+     -293.98
     ],
-    "date_median": "2025-05-20",
-    "months": 24,
-    "top3_month_share": 0.832,
-    "top5_winner_share": 0.592
+    "date_median": "2025-05-15",
+    "months": 20,
+    "top3_month_share": null,
+    "top5_winner_share": null
    },
    "runner_2tick": {
+    "invalid_at_fill": 46,
     "armed": 348,
     "filled": 146,
     "fill_rate": 0.42,
-    "resolved": 146,
-    "net": 1447.61,
-    "profit_factor": 2.143,
-    "win_rate": 0.514,
+    "resolved": 100,
+    "net": 84.37,
+    "profit_factor": 1.067,
+    "win_rate": 0.35,
     "h1_h2_by_trade_count": [
-     1316.78,
-     130.83
+     339.98,
+     -255.61
     ],
     "h1_h2_by_date_median": [
-     1316.78,
-     130.83
+     339.98,
+     -255.61
     ],
-    "date_median": "2025-05-20",
-    "months": 24,
-    "top3_month_share": 0.729,
-    "top5_winner_share": 0.493
+    "date_median": "2025-05-15",
+    "months": 20,
+    "top3_month_share": 6.079,
+    "top5_winner_share": 7.119
    },
    "static_2tick_same_bar_reference": {
+    "invalid_at_fill": 5,
     "armed": 348,
     "filled": 105,
     "fill_rate": 0.302,
-    "resolved": 105,
-    "net": 126.82,
-    "profit_factor": 1.08,
-    "win_rate": 0.371,
+    "resolved": 100,
+    "net": -441.98,
+    "profit_factor": 0.721,
+    "win_rate": 0.34,
     "h1_h2_by_trade_count": [
-     546.1,
-     -419.28
+     -37.46,
+     -404.52
     ],
     "h1_h2_by_date_median": [
-     546.1,
-     -419.28
+     -37.46,
+     -404.52
     ],
-    "date_median": "2025-06-17",
+    "date_median": "2025-07-08",
     "months": 24,
-    "top3_month_share": 5.995,
-    "top5_winner_share": 4.485
+    "top3_month_share": null,
+    "top5_winner_share": null
    }
   },
   {
@@ -282,143 +285,146 @@
       "1_tick": {
        "armed": 107,
        "filled": 55,
-       "resolved": 55,
-       "net_pnl": 486.3,
-       "profit_factor": 2.296,
-       "win_rate": 0.564,
-       "positive_both_halves": true,
-       "max_drawdown": 93.46
+       "resolved": 32,
+       "net_pnl": -54.62,
+       "profit_factor": 0.854,
+       "win_rate": 0.25,
+       "positive_both_halves": false,
+       "max_drawdown": 121.74
       },
       "2_tick": {
        "armed": 107,
        "filled": 55,
-       "resolved": 55,
-       "net_pnl": 458.8,
-       "profit_factor": 2.184,
-       "win_rate": 0.545,
-       "positive_both_halves": true,
-       "max_drawdown": 95.96
+       "resolved": 32,
+       "net_pnl": -70.62,
+       "profit_factor": 0.818,
+       "win_rate": 0.25,
+       "positive_both_halves": false,
+       "max_drawdown": 127.82
       },
       "3_tick": {
        "armed": 107,
        "filled": 55,
-       "resolved": 55,
-       "net_pnl": 431.3,
-       "profit_factor": 2.078,
-       "win_rate": 0.545,
-       "positive_both_halves": true,
-       "max_drawdown": 98.46
+       "resolved": 32,
+       "net_pnl": -86.62,
+       "profit_factor": 0.783,
+       "win_rate": 0.25,
+       "positive_both_halves": false,
+       "max_drawdown": 136.82
       }
      },
      "runner": {
       "1_tick": {
        "armed": 107,
        "filled": 55,
-       "resolved": 55,
-       "net_pnl": 856.27,
-       "profit_factor": 3.365,
-       "win_rate": 0.582,
-       "positive_both_halves": true,
-       "max_drawdown": 93.46
+       "resolved": 32,
+       "net_pnl": 315.35,
+       "profit_factor": 1.871,
+       "win_rate": 0.281,
+       "positive_both_halves": false,
+       "max_drawdown": 101.32
       },
       "2_tick": {
        "armed": 107,
        "filled": 55,
-       "resolved": 55,
-       "net_pnl": 828.77,
-       "profit_factor": 3.218,
-       "win_rate": 0.564,
-       "positive_both_halves": true,
-       "max_drawdown": 95.96
+       "resolved": 32,
+       "net_pnl": 299.35,
+       "profit_factor": 1.801,
+       "win_rate": 0.281,
+       "positive_both_halves": false,
+       "max_drawdown": 103.82
       },
       "3_tick": {
        "armed": 107,
        "filled": 55,
-       "resolved": 55,
-       "net_pnl": 801.27,
-       "profit_factor": 3.078,
-       "win_rate": 0.564,
-       "positive_both_halves": true,
-       "max_drawdown": 98.46
+       "resolved": 32,
+       "net_pnl": 283.35,
+       "profit_factor": 1.736,
+       "win_rate": 0.281,
+       "positive_both_halves": false,
+       "max_drawdown": 106.32
       }
      },
      "partial_2ct_approx": {
       "1_tick": {
        "armed": 107,
        "filled": 55,
-       "resolved": 55,
-       "net_pnl": 1438.27,
-       "profit_factor": 3.103,
-       "win_rate": 0.582,
+       "resolved": 32,
+       "net_pnl": 316.41,
+       "profit_factor": 1.463,
+       "win_rate": 0.281,
        "positive_both_halves": true,
-       "max_drawdown": 178.22
+       "max_drawdown": 194.5
       },
       "2_tick": {
        "armed": 107,
        "filled": 55,
-       "resolved": 55,
-       "net_pnl": 1410.77,
-       "profit_factor": 3.028,
-       "win_rate": 0.582,
+       "resolved": 32,
+       "net_pnl": 300.41,
+       "profit_factor": 1.432,
+       "win_rate": 0.281,
        "positive_both_halves": true,
-       "max_drawdown": 180.72
+       "max_drawdown": 198.0
       },
       "3_tick": {
        "armed": 107,
        "filled": 55,
-       "resolved": 55,
-       "net_pnl": 1383.27,
-       "profit_factor": 2.956,
-       "win_rate": 0.582,
+       "resolved": 32,
+       "net_pnl": 284.41,
+       "profit_factor": 1.402,
+       "win_rate": 0.281,
        "positive_both_halves": true,
-       "max_drawdown": 183.22
+       "max_drawdown": 201.5
       }
      }
     }
    },
    "static_2tick": {
+    "invalid_at_fill": 23,
     "armed": 107,
     "filled": 55,
     "fill_rate": 0.514,
-    "resolved": 55,
-    "net": 458.8,
-    "profit_factor": 2.184,
-    "win_rate": 0.545,
+    "resolved": 32,
+    "net": -70.62,
+    "profit_factor": 0.818,
+    "win_rate": 0.25,
     "h1_h2_by_trade_count": [
-     174.32,
-     284.48
+     -63.74,
+     -6.88
     ],
     "h1_h2_by_date_median": [
-     174.32,
-     284.48
+     -63.74,
+     -6.88
     ],
-    "date_median": "2025-06-30",
-    "months": 22,
-    "top3_month_share": 0.701,
-    "top5_winner_share": 0.536
+    "date_median": "2025-07-10",
+    "months": 17,
+    "top3_month_share": null,
+    "top5_winner_share": null
    },
    "runner_2tick": {
+    "invalid_at_fill": 23,
     "armed": 107,
     "filled": 55,
     "fill_rate": 0.514,
-    "resolved": 55,
-    "net": 828.77,
-    "profit_factor": 3.218,
-    "win_rate": 0.564,
+    "resolved": 32,
+    "net": 299.35,
+    "profit_factor": 1.801,
+    "win_rate": 0.281,
     "h1_h2_by_trade_count": [
-     556.54,
-     272.23
+     318.48,
+     -19.13
     ],
     "h1_h2_by_date_median": [
-     556.54,
-     272.23
+     318.48,
+     -19.13
     ],
-    "date_median": "2025-06-30",
-    "months": 22,
-    "top3_month_share": 0.62,
-    "top5_winner_share": 0.712
+    "date_median": "2025-07-10",
+    "months": 17,
+    "top3_month_share": 1.434,
+    "top5_winner_share": 1.944
    },
    "static_2tick_same_bar_reference": {
+    "invalid_at_fill": 0,
     "armed": 107,
     "filled": 35,
     "fill_rate": 0.327,
@@ -493,162 +499,165 @@
       "1_tick": {
        "armed": 241,
        "filled": 91,
-       "resolved": 91,
-       "net_pnl": 547.62,
-       "profit_factor": 1.569,
-       "win_rate": 0.418,
+       "resolved": 68,
+       "net_pnl": -297.7,
+       "profit_factor": 0.69,
+       "win_rate": 0.279,
        "positive_both_halves": false,
-       "max_drawdown": 307.62
+       "max_drawdown": 413.84
       },
       "2_tick": {
        "armed": 241,
        "filled": 91,
-       "resolved": 91,
-       "net_pnl": 502.12,
-       "profit_factor": 1.507,
-       "win_rate": 0.407,
+       "resolved": 68,
+       "net_pnl": -331.7,
+       "profit_factor": 0.663,
+       "win_rate": 0.279,
        "positive_both_halves": false,
-       "max_drawdown": 321.12
+       "max_drawdown": 433.84
       },
       "3_tick": {
        "armed": 241,
        "filled": 91,
-       "resolved": 91,
-       "net_pnl": 456.62,
-       "profit_factor": 1.449,
-       "win_rate": 0.407,
+       "resolved": 68,
+       "net_pnl": -365.7,
+       "profit_factor": 0.637,
+       "win_rate": 0.279,
        "positive_both_halves": false,
-       "max_drawdown": 342.78
+       "max_drawdown": 453.84
       }
      },
      "runner": {
       "1_tick": {
        "armed": 241,
        "filled": 91,
-       "resolved": 91,
-       "net_pnl": 664.34,
-       "profit_factor": 1.764,
-       "win_rate": 0.495,
+       "resolved": 68,
+       "net_pnl": -180.98,
+       "profit_factor": 0.791,
+       "win_rate": 0.382,
        "positive_both_halves": false,
-       "max_drawdown": 261.77
+       "max_drawdown": 359.91
       },
       "2_tick": {
        "armed": 241,
        "filled": 91,
-       "resolved": 91,
-       "net_pnl": 618.84,
-       "profit_factor": 1.693,
-       "win_rate": 0.484,
+       "resolved": 68,
+       "net_pnl": -214.98,
+       "profit_factor": 0.758,
+       "win_rate": 0.382,
        "positive_both_halves": false,
-       "max_drawdown": 284.93
+       "max_drawdown": 379.41
       },
       "3_tick": {
        "armed": 241,
        "filled": 91,
-       "resolved": 91,
-       "net_pnl": 573.34,
-       "profit_factor": 1.626,
-       "win_rate": 0.484,
+       "resolved": 68,
+       "net_pnl": -248.98,
+       "profit_factor": 0.726,
+       "win_rate": 0.382,
        "positive_both_halves": false,
-       "max_drawdown": 308.93
+       "max_drawdown": 398.91
       }
      },
      "partial_2ct_approx": {
       "1_tick": {
        "armed": 241,
        "filled": 91,
-       "resolved": 91,
-       "net_pnl": 1370.3,
-       "profit_factor": 1.816,
-       "win_rate": 0.44,
+       "resolved": 68,
+       "net_pnl": -360.36,
+       "profit_factor": 0.785,
+       "win_rate": 0.294,
        "positive_both_halves": false,
-       "max_drawdown": 521.91
+       "max_drawdown": 685.81
       },
       "2_tick": {
        "armed": 241,
        "filled": 91,
-       "resolved": 91,
-       "net_pnl": 1324.8,
-       "profit_factor": 1.777,
-       "win_rate": 0.44,
+       "resolved": 68,
+       "net_pnl": -394.36,
+       "profit_factor": 0.768,
+       "win_rate": 0.294,
        "positive_both_halves": false,
-       "max_drawdown": 535.41
+       "max_drawdown": 705.31
       },
       "3_tick": {
        "armed": 241,
        "filled": 91,
-       "resolved": 91,
-       "net_pnl": 1279.3,
-       "profit_factor": 1.739,
-       "win_rate": 0.44,
+       "resolved": 68,
+       "net_pnl": -428.36,
+       "profit_factor": 0.752,
+       "win_rate": 0.294,
        "positive_both_halves": false,
-       "max_drawdown": 548.91
+       "max_drawdown": 724.81
       }
      }
     }
    },
    "static_2tick": {
+    "invalid_at_fill": 23,
     "armed": 241,
     "filled": 91,
     "fill_rate": 0.378,
-    "resolved": 91,
-    "net": 502.12,
-    "profit_factor": 1.507,
-    "win_rate": 0.407,
+    "resolved": 68,
+    "net": -331.7,
+    "profit_factor": 0.663,
+    "win_rate": 0.279,
     "h1_h2_by_trade_count": [
-     684.6,
-     -182.48
+     -7.76,
+     -323.94
     ],
     "h1_h2_by_date_median": [
-     684.6,
-     -182.48
+     -7.76,
+     -323.94
     ],
     "date_median": "2025-04-15",
-    "months": 23,
-    "top3_month_share": 1.488,
-    "top5_winner_share": 1.133
+    "months": 19,
+    "top3_month_share": null,
+    "top5_winner_share": null
    },
    "runner_2tick": {
+    "invalid_at_fill": 23,
     "armed": 241,
     "filled": 91,
     "fill_rate": 0.378,
-    "resolved": 91,
-    "net": 618.84,
-    "profit_factor": 1.693,
-    "win_rate": 0.484,
+    "resolved": 68,
+    "net": -214.98,
+    "profit_factor": 0.758,
+    "win_rate": 0.382,
     "h1_h2_by_trade_count": [
-     727.8,
-     -108.96
+     35.44,
+     -250.42
     ],
     "h1_h2_by_date_median": [
-     727.8,
-     -108.96
+     35.44,
+     -250.42
     ],
     "date_median": "2025-04-15",
-    "months": 23,
-    "top3_month_share": 1.31,
-    "top5_winner_share": 0.919
+    "months": 19,
+    "top3_month_share": null,
+    "top5_winner_share": null
    },
    "static_2tick_same_bar_reference": {
+    "invalid_at_fill": 5,
     "armed": 241,
     "filled": 70,
     "fill_rate": 0.29,
-    "resolved": 70,
-    "net": 453.74,
-    "profit_factor": 1.479,
-    "win_rate": 0.429,
+    "resolved": 65,
+    "net": -115.06,
+    "profit_factor": 0.879,
+    "win_rate": 0.385,
     "h1_h2_by_trade_count": [
-     678.9,
-     -225.16
+     118.7,
+     -233.76
     ],
     "h1_h2_by_date_median": [
-     678.9,
-     -225.16
+     118.7,
+     -233.76
     ],
-    "date_median": "2025-05-30",
+    "date_median": "2025-06-17",
     "months": 23,
-    "top3_month_share": 1.706,
-    "top5_winner_share": 1.254
+    "top3_month_share": null,
+    "top5_winner_share": null
    }
   },
   {
@@ -705,162 +714,149 @@
       "1_tick": {
        "armed": 1609,
        "filled": 40,
-       "resolved": 40,
-       "net_pnl": 955.42,
-       "profit_factor": 4.81,
-       "win_rate": 0.625,
-       "positive_both_halves": true,
-       "max_drawdown": 72.22
+       "resolved": 22,
+       "net_pnl": -0.6,
+       "profit_factor": 0.998,
+       "win_rate": 0.318,
+       "positive_both_halves": false,
+       "max_drawdown": 101.06
       },
       "2_tick": {
        "armed": 1609,
        "filled": 40,
-       "resolved": 40,
-       "net_pnl": 935.42,
-       "profit_factor": 4.616,
-       "win_rate": 0.6,
-       "positive_both_halves": true,
-       "max_drawdown": 74.22
+       "resolved": 22,
+       "net_pnl": -11.6,
+       "profit_factor": 0.955,
+       "win_rate": 0.318,
+       "positive_both_halves": false,
+       "max_drawdown": 104.06
       },
       "3_tick": {
        "armed": 1609,
        "filled": 40,
-       "resolved": 40,
-       "net_pnl": 915.42,
-       "profit_factor": 4.433,
-       "win_rate": 0.6,
-       "positive_both_halves": true,
-       "max_drawdown": 76.22
+       "resolved": 22,
+       "net_pnl": -22.6,
+       "profit_factor": 0.915,
+       "win_rate": 0.318,
+       "positive_both_halves": false,
+       "max_drawdown": 107.06
       }
      },
      "runner": {
       "1_tick": {
        "armed": 1609,
        "filled": 40,
-       "resolved": 40,
-       "net_pnl": 1065.24,
-       "profit_factor": 5.248,
-       "win_rate": 0.625,
+       "resolved": 22,
+       "net_pnl": 109.22,
+       "profit_factor": 1.436,
+       "win_rate": 0.318,
        "positive_both_halves": true,
-       "max_drawdown": 72.22
+       "max_drawdown": 101.06
       },
       "2_tick": {
        "armed": 1609,
        "filled": 40,
-       "resolved": 40,
-       "net_pnl": 1045.24,
-       "profit_factor": 5.041,
-       "win_rate": 0.6,
+       "resolved": 22,
+       "net_pnl": 98.22,
+       "profit_factor": 1.38,
+       "win_rate": 0.318,
        "positive_both_halves": true,
-       "max_drawdown": 74.22
+       "max_drawdown": 104.06
       },
       "3_tick": {
        "armed": 1609,
        "filled": 40,
-       "resolved": 40,
-       "net_pnl": 1025.24,
-       "profit_factor": 4.844,
-       "win_rate": 0.6,
+       "resolved": 22,
+       "net_pnl": 87.22,
+       "profit_factor": 1.328,
+       "win_rate": 0.318,
        "positive_both_halves": true,
-       "max_drawdown": 76.22
+       "max_drawdown": 107.06
       }
      },
      "partial_2ct_approx": {
       "1_tick": {
        "armed": 1609,
        "filled": 40,
-       "resolved": 40,
-       "net_pnl": 2090.26,
-       "profit_factor": 5.396,
-       "win_rate": 0.625,
+       "resolved": 22,
+       "net_pnl": 146.9,
+       "profit_factor": 1.309,
+       "win_rate": 0.318,
        "positive_both_halves": true,
-       "max_drawdown": 137.48
+       "max_drawdown": 191.68
       },
       "2_tick": {
        "armed": 1609,
        "filled": 40,
-       "resolved": 40,
-       "net_pnl": 2070.26,
-       "profit_factor": 5.287,
-       "win_rate": 0.625,
+       "resolved": 22,
+       "net_pnl": 135.9,
+       "profit_factor": 1.281,
+       "win_rate": 0.318,
        "positive_both_halves": true,
-       "max_drawdown": 139.48
+       "max_drawdown": 194.68
       },
       "3_tick": {
        "armed": 1609,
        "filled": 40,
-       "resolved": 40,
-       "net_pnl": 2050.26,
-       "profit_factor": 5.18,
-       "win_rate": 0.625,
+       "resolved": 22,
+       "net_pnl": 124.9,
+       "profit_factor": 1.255,
+       "win_rate": 0.318,
        "positive_both_halves": true,
-       "max_drawdown": 141.48
+       "max_drawdown": 197.68
       }
      }
     }
    },
    "static_2tick": {
+    "invalid_at_fill": 18,
     "armed": 1609,
     "filled": 40,
     "fill_rate": 0.025,
-    "resolved": 40,
-    "net": 935.42,
-    "profit_factor": 4.616,
-    "win_rate": 0.6,
+    "resolved": 22,
+    "net": -11.6,
+    "profit_factor": 0.955,
+    "win_rate": 0.318,
     "h1_h2_by_trade_count": [
-     447.18,
-     488.24
+     -16.82,
+     5.22
     ],
     "h1_h2_by_date_median": [
-     447.18,
-     488.24
+     -16.82,
+     5.22
     ],
-    "date_median": "2025-05-30",
-    "months": 17,
-    "top3_month_share": 0.59,
-    "top5_winner_share": 0.585
+    "date_median": "2025-05-21",
+    "months": 14,
+    "top3_month_share": null,
+    "top5_winner_share": null
    },
    "runner_2tick": {
+    "invalid_at_fill": 18,
     "armed": 1609,
     "filled": 40,
     "fill_rate": 0.025,
-    "resolved": 40,
-    "net": 1045.24,
-    "profit_factor": 5.041,
-    "win_rate": 0.6,
+    "resolved": 22,
+    "net": 98.22,
+    "profit_factor": 1.38,
+    "win_rate": 0.318,
     "h1_h2_by_trade_count": [
-     467.75,
-     577.49
+     9.22,
+     89.0
     ],
     "h1_h2_by_date_median": [
-     467.75,
-     577.49
+     9.22,
+     89.0
     ],
-    "date_median": "2025-05-30",
-    "months": 17,
-    "top3_month_share": 0.549,
-    "top5_winner_share": 0.56
+    "date_median": "2025-05-21",
+    "months": 14,
+    "top3_month_share": 2.435,
+    "top5_winner_share": 3.38
    },
    "static_2tick_same_bar_reference": {
     "armed": 1609,
     "filled": 1,
-    "fill_rate": 0.001,
-    "resolved": 1,
-    "net": 12.04,
-    "profit_factor": null,
-    "win_rate": 1.0,
-    "h1_h2_by_trade_count": [
-     0,
-     12.04
-    ],
-    "h1_h2_by_date_median": [
-     0,
-     12.04
-    ],
-    "date_median": "2026-06-21",
-    "months": 1,
-    "top3_month_share": 1.0,
-    "top5_winner_share": 1.0
+    "resolved": 0,
+    "invalid_at_fill": 1
    }
   },
   {
@@ -915,146 +911,149 @@
       "1_tick": {
        "armed": 744,
        "filled": 25,
-       "resolved": 25,
-       "net_pnl": 710.44,
-       "profit_factor": 6.511,
-       "win_rate": 0.64,
-       "positive_both_halves": true,
-       "max_drawdown": 25.8
+       "resolved": 13,
+       "net_pnl": 19.78,
+       "profit_factor": 1.153,
+       "win_rate": 0.308,
+       "positive_both_halves": false,
+       "max_drawdown": 51.38
       },
       "2_tick": {
        "armed": 744,
        "filled": 25,
-       "resolved": 25,
-       "net_pnl": 697.94,
-       "profit_factor": 6.216,
-       "win_rate": 0.6,
-       "positive_both_halves": true,
-       "max_drawdown": 26.3
+       "resolved": 13,
+       "net_pnl": 13.28,
+       "profit_factor": 1.1,
+       "win_rate": 0.308,
+       "positive_both_halves": false,
+       "max_drawdown": 52.38
       },
       "3_tick": {
        "armed": 744,
        "filled": 25,
-       "resolved": 25,
-       "net_pnl": 685.44,
-       "profit_factor": 5.938,
-       "win_rate": 0.6,
-       "positive_both_halves": true,
-       "max_drawdown": 26.8
+       "resolved": 13,
+       "net_pnl": 6.78,
+       "profit_factor": 1.049,
+       "win_rate": 0.308,
+       "positive_both_halves": false,
+       "max_drawdown": 53.38
       }
      },
      "runner": {
       "1_tick": {
        "armed": 744,
        "filled": 25,
-       "resolved": 25,
-       "net_pnl": 797.11,
-       "profit_factor": 7.183,
-       "win_rate": 0.64,
-       "positive_both_halves": true,
-       "max_drawdown": 25.8
+       "resolved": 13,
+       "net_pnl": 106.45,
+       "profit_factor": 1.826,
+       "win_rate": 0.308,
+       "positive_both_halves": false,
+       "max_drawdown": 51.38
       },
       "2_tick": {
        "armed": 744,
        "filled": 25,
-       "resolved": 25,
-       "net_pnl": 784.61,
-       "profit_factor": 6.863,
-       "win_rate": 0.6,
-       "positive_both_halves": true,
-       "max_drawdown": 26.3
+       "resolved": 13,
+       "net_pnl": 99.95,
+       "profit_factor": 1.749,
+       "win_rate": 0.308,
+       "positive_both_halves": false,
+       "max_drawdown": 52.38
       },
       "3_tick": {
        "armed": 744,
        "filled": 25,
-       "resolved": 25,
-       "net_pnl": 772.11,
-       "profit_factor": 6.562,
-       "win_rate": 0.6,
-       "positive_both_halves": true,
-       "max_drawdown": 26.8
+       "resolved": 13,
+       "net_pnl": 93.45,
+       "profit_factor": 1.678,
+       "win_rate": 0.308,
+       "positive_both_halves": false,
+       "max_drawdown": 53.38
       }
      },
      "partial_2ct_approx": {
       "1_tick": {
        "armed": 744,
        "filled": 25,
-       "resolved": 25,
-       "net_pnl": 1551.05,
-       "profit_factor": 7.405,
-       "win_rate": 0.64,
-       "positive_both_halves": true,
-       "max_drawdown": 49.86
+       "resolved": 13,
+       "net_pnl": 148.85,
+       "profit_factor": 1.615,
+       "win_rate": 0.308,
+       "positive_both_halves": false,
+       "max_drawdown": 99.28
       },
       "2_tick": {
        "armed": 744,
        "filled": 25,
-       "resolved": 25,
-       "net_pnl": 1538.55,
-       "profit_factor": 7.237,
-       "win_rate": 0.64,
-       "positive_both_halves": true,
-       "max_drawdown": 50.36
+       "resolved": 13,
+       "net_pnl": 142.35,
+       "profit_factor": 1.577,
+       "win_rate": 0.308,
+       "positive_both_halves": false,
+       "max_drawdown": 100.28
       },
       "3_tick": {
        "armed": 744,
        "filled": 25,
-       "resolved": 25,
-       "net_pnl": 1526.05,
-       "profit_factor": 7.076,
-       "win_rate": 0.64,
-       "positive_both_halves": true,
-       "max_drawdown": 50.86
+       "resolved": 13,
+       "net_pnl": 135.85,
+       "profit_factor": 1.541,
+       "win_rate": 0.308,
+       "positive_both_halves": false,
+       "max_drawdown": 101.28
       }
      }
     }
    },
    "static_2tick": {
+    "invalid_at_fill": 12,
     "armed": 744,
     "filled": 25,
     "fill_rate": 0.034,
-    "resolved": 25,
-    "net": 697.94,
-    "profit_factor": 6.216,
-    "win_rate": 0.6,
+    "resolved": 13,
+    "net": 13.28,
+    "profit_factor": 1.1,
+    "win_rate": 0.308,
     "h1_h2_by_trade_count": [
-     423.82,
-     274.12
+     -20.26,
+     33.54
     ],
     "h1_h2_by_date_median": [
-     423.82,
-     274.12
+     -20.26,
+     33.54
     ],
-    "date_median": "2025-04-30",
-    "months": 12,
-    "top3_month_share": 0.677,
-    "top5_winner_share": 0.689
+    "date_median": "2025-08-18",
+    "months": 9,
+    "top3_month_share": 7.489,
+    "top5_winner_share": 11.047
    },
    "runner_2tick": {
+    "invalid_at_fill": 12,
     "armed": 744,
     "filled": 25,
     "fill_rate": 0.034,
-    "resolved": 25,
-    "net": 784.61,
-    "profit_factor": 6.863,
-    "win_rate": 0.6,
+    "resolved": 13,
+    "net": 99.95,
+    "profit_factor": 1.749,
+    "win_rate": 0.308,
     "h1_h2_by_trade_count": [
-     421.24,
-     363.37
+     -22.84,
+     122.79
     ],
     "h1_h2_by_date_median": [
-     421.24,
-     363.37
+     -22.84,
+     122.79
     ],
-    "date_median": "2025-04-30",
-    "months": 12,
-    "top3_month_share": 0.599,
-    "top5_winner_share": 0.706
+    "date_median": "2025-08-18",
+    "months": 9,
+    "top3_month_share": 1.865,
+    "top5_winner_share": 2.335
    },
    "static_2tick_same_bar_reference": {
     "armed": 744,
     "filled": 0,
-    "resolved": 0
+    "resolved": 0,
+    "invalid_at_fill": 0
    }
   },
   {
@@ -1110,162 +1109,149 @@
       "1_tick": {
        "armed": 865,
        "filled": 15,
-       "resolved": 15,
-       "net_pnl": 244.98,
-       "profit_factor": 3.01,
-       "win_rate": 0.6,
-       "positive_both_halves": true,
-       "max_drawdown": 65.22
+       "resolved": 9,
+       "net_pnl": -20.38,
+       "profit_factor": 0.833,
+       "win_rate": 0.333,
+       "positive_both_halves": false,
+       "max_drawdown": 67.34
       },
       "2_tick": {
        "armed": 865,
        "filled": 15,
-       "resolved": 15,
-       "net_pnl": 237.48,
-       "profit_factor": 2.902,
-       "win_rate": 0.6,
-       "positive_both_halves": true,
-       "max_drawdown": 67.22
+       "resolved": 9,
+       "net_pnl": -24.88,
+       "profit_factor": 0.801,
+       "win_rate": 0.333,
+       "positive_both_halves": false,
+       "max_drawdown": 68.84
       },
       "3_tick": {
        "armed": 865,
        "filled": 15,
-       "resolved": 15,
-       "net_pnl": 229.98,
-       "profit_factor": 2.799,
-       "win_rate": 0.6,
-       "positive_both_halves": true,
-       "max_drawdown": 69.22
+       "resolved": 9,
+       "net_pnl": -29.38,
+       "profit_factor": 0.77,
+       "win_rate": 0.333,
+       "positive_both_halves": false,
+       "max_drawdown": 70.34
       }
      },
      "runner": {
       "1_tick": {
        "armed": 865,
        "filled": 15,
-       "resolved": 15,
-       "net_pnl": 268.13,
-       "profit_factor": 3.2,
-       "win_rate": 0.6,
-       "positive_both_halves": true,
-       "max_drawdown": 65.22
+       "resolved": 9,
+       "net_pnl": 2.77,
+       "profit_factor": 1.023,
+       "win_rate": 0.333,
+       "positive_both_halves": false,
+       "max_drawdown": 67.34
       },
       "2_tick": {
        "armed": 865,
        "filled": 15,
-       "resolved": 15,
-       "net_pnl": 260.63,
-       "profit_factor": 3.087,
-       "win_rate": 0.6,
-       "positive_both_halves": true,
-       "max_drawdown": 67.22
+       "resolved": 9,
+       "net_pnl": -1.73,
+       "profit_factor": 0.986,
+       "win_rate": 0.333,
+       "positive_both_halves": false,
+       "max_drawdown": 68.84
       },
       "3_tick": {
        "armed": 865,
        "filled": 15,
-       "resolved": 15,
-       "net_pnl": 253.13,
-       "profit_factor": 2.98,
-       "win_rate": 0.6,
-       "positive_both_halves": true,
-       "max_drawdown": 69.22
+       "resolved": 9,
+       "net_pnl": -6.23,
+       "profit_factor": 0.951,
+       "win_rate": 0.333,
+       "positive_both_halves": false,
+       "max_drawdown": 70.34
       }
      },
      "partial_2ct_approx": {
       "1_tick": {
        "armed": 865,
        "filled": 15,
-       "resolved": 15,
-       "net_pnl": 539.21,
-       "profit_factor": 3.311,
-       "win_rate": 0.6,
-       "positive_both_halves": true,
-       "max_drawdown": 123.48
+       "resolved": 9,
+       "net_pnl": -1.95,
+       "profit_factor": 0.992,
+       "win_rate": 0.333,
+       "positive_both_halves": false,
+       "max_drawdown": 129.46
       },
       "2_tick": {
        "armed": 865,
        "filled": 15,
-       "resolved": 15,
-       "net_pnl": 531.71,
-       "profit_factor": 3.25,
-       "win_rate": 0.6,
-       "positive_both_halves": true,
-       "max_drawdown": 125.48
+       "resolved": 9,
+       "net_pnl": -6.45,
+       "profit_factor": 0.973,
+       "win_rate": 0.333,
+       "positive_both_halves": false,
+       "max_drawdown": 130.96
       },
       "3_tick": {
        "armed": 865,
        "filled": 15,
-       "resolved": 15,
-       "net_pnl": 524.21,
-       "profit_factor": 3.191,
-       "win_rate": 0.6,
-       "positive_both_halves": true,
-       "max_drawdown": 127.48
+       "resolved": 9,
+       "net_pnl": -10.95,
+       "profit_factor": 0.954,
+       "win_rate": 0.333,
+       "positive_both_halves": false,
+       "max_drawdown": 132.46
       }
      }
     }
    },
    "static_2tick": {
+    "invalid_at_fill": 6,
     "armed": 865,
     "filled": 15,
     "fill_rate": 0.017,
-    "resolved": 15,
-    "net": 237.48,
-    "profit_factor": 2.902,
-    "win_rate": 0.6,
+    "resolved": 9,
+    "net": -24.88,
+    "profit_factor": 0.801,
+    "win_rate": 0.333,
     "h1_h2_by_trade_count": [
-     32.76,
-     204.72
+     -30.68,
+     5.8
     ],
     "h1_h2_by_date_median": [
-     32.76,
-     204.72
+     -30.68,
+     5.8
     ],
-    "date_median": "2025-06-02",
-    "months": 9,
-    "top3_month_share": 0.841,
-    "top5_winner_share": 1.274
+    "date_median": "2025-04-30",
+    "months": 6,
+    "top3_month_share": null,
+    "top5_winner_share": null
    },
    "runner_2tick": {
+    "invalid_at_fill": 6,
     "armed": 865,
     "filled": 15,
     "fill_rate": 0.017,
-    "resolved": 15,
-    "net": 260.63,
-    "profit_factor": 3.087,
-    "win_rate": 0.6,
+    "resolved": 9,
+    "net": -1.73,
+    "profit_factor": 0.986,
+    "win_rate": 0.333,
     "h1_h2_by_trade_count": [
-     55.91,
-     204.72
+     21.62,
+     -23.35
     ],
     "h1_h2_by_date_median": [
-     55.91,
-     204.72
+     21.62,
+     -23.35
     ],
-    "date_median": "2025-06-02",
-    "months": 9,
-    "top3_month_share": 0.876,
-    "top5_winner_share": 1.316
+    "date_median": "2025-04-30",
+    "months": 6,
+    "top3_month_share": null,
+    "top5_winner_share": null
    },
    "static_2tick_same_bar_reference": {
     "armed": 865,
     "filled": 1,
-    "fill_rate": 0.001,
-    "resolved": 1,
-    "net": 12.04,
-    "profit_factor": null,
-    "win_rate": 1.0,
-    "h1_h2_by_trade_count": [
-     0,
-     12.04
-    ],
-    "h1_h2_by_date_median": [
-     0,
-     12.04
-    ],
-    "date_median": "2026-06-21",
-    "months": 1,
-    "top3_month_share": 1.0,
-    "top5_winner_share": 1.0
+    "resolved": 0,
+    "invalid_at_fill": 1
    }
   },
   {
@@ -1322,162 +1308,149 @@
       "1_tick": {
        "armed": 1268,
        "filled": 31,
-       "resolved": 31,
-       "net_pnl": 803.94,
-       "profit_factor": 5.886,
-       "win_rate": 0.677,
-       "positive_both_halves": true,
-       "max_drawdown": 72.22
+       "resolved": 15,
+       "net_pnl": 19.0,
+       "profit_factor": 1.115,
+       "win_rate": 0.333,
+       "positive_both_halves": false,
+       "max_drawdown": 90.3
       },
       "2_tick": {
        "armed": 1268,
        "filled": 31,
-       "resolved": 31,
-       "net_pnl": 788.44,
-       "profit_factor": 5.64,
-       "win_rate": 0.645,
-       "positive_both_halves": true,
-       "max_drawdown": 74.22
+       "resolved": 15,
+       "net_pnl": 11.5,
+       "profit_factor": 1.068,
+       "win_rate": 0.333,
+       "positive_both_halves": false,
+       "max_drawdown": 92.8
       },
       "3_tick": {
        "armed": 1268,
        "filled": 31,
-       "resolved": 31,
-       "net_pnl": 772.94,
-       "profit_factor": 5.406,
-       "win_rate": 0.645,
-       "positive_both_halves": true,
-       "max_drawdown": 76.22
+       "resolved": 15,
+       "net_pnl": 4.0,
+       "profit_factor": 1.023,
+       "win_rate": 0.333,
+       "positive_both_halves": false,
+       "max_drawdown": 95.3
       }
      },
      "runner": {
       "1_tick": {
        "armed": 1268,
        "filled": 31,
-       "resolved": 31,
-       "net_pnl": 874.82,
-       "profit_factor": 6.317,
-       "win_rate": 0.677,
-       "positive_both_halves": true,
-       "max_drawdown": 72.22
+       "resolved": 15,
+       "net_pnl": 89.88,
+       "profit_factor": 1.546,
+       "win_rate": 0.333,
+       "positive_both_halves": false,
+       "max_drawdown": 90.3
       },
       "2_tick": {
        "armed": 1268,
        "filled": 31,
-       "resolved": 31,
-       "net_pnl": 859.32,
-       "profit_factor": 6.057,
-       "win_rate": 0.645,
-       "positive_both_halves": true,
-       "max_drawdown": 74.22
+       "resolved": 15,
+       "net_pnl": 82.38,
+       "profit_factor": 1.486,
+       "win_rate": 0.333,
+       "positive_both_halves": false,
+       "max_drawdown": 92.8
       },
       "3_tick": {
        "armed": 1268,
        "filled": 31,
-       "resolved": 31,
-       "net_pnl": 843.82,
-       "profit_factor": 5.81,
-       "win_rate": 0.645,
-       "positive_both_halves": true,
-       "max_drawdown": 76.22
+       "resolved": 15,
+       "net_pnl": 74.88,
+       "profit_factor": 1.429,
+       "win_rate": 0.333,
+       "positive_both_halves": false,
+       "max_drawdown": 95.3
       }
      },
      "partial_2ct_approx": {
       "1_tick": {
        "armed": 1268,
        "filled": 31,
-       "resolved": 31,
-       "net_pnl": 1732.7,
-       "profit_factor": 6.559,
-       "win_rate": 0.677,
-       "positive_both_halves": true,
-       "max_drawdown": 137.48
+       "resolved": 15,
+       "net_pnl": 134.98,
+       "profit_factor": 1.433,
+       "win_rate": 0.333,
+       "positive_both_halves": false,
+       "max_drawdown": 171.9
       },
       "2_tick": {
        "armed": 1268,
        "filled": 31,
-       "resolved": 31,
-       "net_pnl": 1717.2,
-       "profit_factor": 6.423,
-       "win_rate": 0.677,
-       "positive_both_halves": true,
-       "max_drawdown": 139.48
+       "resolved": 15,
+       "net_pnl": 127.48,
+       "profit_factor": 1.403,
+       "win_rate": 0.333,
+       "positive_both_halves": false,
+       "max_drawdown": 174.4
       },
       "3_tick": {
        "armed": 1268,
        "filled": 31,
-       "resolved": 31,
-       "net_pnl": 1701.7,
-       "profit_factor": 6.29,
-       "win_rate": 0.677,
-       "positive_both_halves": true,
-       "max_drawdown": 141.48
+       "resolved": 15,
+       "net_pnl": 119.98,
+       "profit_factor": 1.373,
+       "win_rate": 0.333,
+       "positive_both_halves": false,
+       "max_drawdown": 176.9
       }
      }
     }
    },
    "static_2tick": {
+    "invalid_at_fill": 16,
     "armed": 1268,
     "filled": 31,
     "fill_rate": 0.024,
-    "resolved": 31,
-    "net": 788.44,
-    "profit_factor": 5.64,
-    "win_rate": 0.645,
+    "resolved": 15,
+    "net": 11.5,
+    "profit_factor": 1.068,
+    "win_rate": 0.333,
     "h1_h2_by_trade_count": [
-     414.54,
-     373.9
+     -21.76,
+     33.26
     ],
     "h1_h2_by_date_median": [
-     414.54,
-     373.9
+     -21.76,
+     33.26
     ],
     "date_median": "2025-04-30",
-    "months": 16,
-    "top3_month_share": 0.593,
-    "top5_winner_share": 0.616
+    "months": 12,
+    "top3_month_share": 10.367,
+    "top5_winner_share": 15.743
    },
    "runner_2tick": {
+    "invalid_at_fill": 16,
     "armed": 1268,
     "filled": 31,
     "fill_rate": 0.024,
-    "resolved": 31,
-    "net": 859.32,
-    "profit_factor": 6.057,
-    "win_rate": 0.645,
+    "resolved": 15,
+    "net": 82.38,
+    "profit_factor": 1.486,
+    "win_rate": 0.333,
     "h1_h2_by_trade_count": [
-     388.28,
-     471.04
+     -48.02,
+     130.4
     ],
     "h1_h2_by_date_median": [
-     388.28,
-     471.04
+     -48.02,
+     130.4
     ],
     "date_median": "2025-04-30",
-    "months": 16,
-    "top3_month_share": 0.602,
-    "top5_winner_share": 0.644
+    "months": 12,
+    "top3_month_share": 2.661,
+    "top5_winner_share": 3.058
    },
    "static_2tick_same_bar_reference": {
     "armed": 1268,
     "filled": 1,
-    "fill_rate": 0.001,
-    "resolved": 1,
-    "net": 12.04,
-    "profit_factor": null,
-    "win_rate": 1.0,
-    "h1_h2_by_trade_count": [
-     0,
-     12.04
-    ],
-    "h1_h2_by_date_median": [
-     0,
-     12.04
-    ],
-    "date_median": "2026-06-21",
-    "months": 1,
-    "top3_month_share": 1.0,
-    "top5_winner_share": 1.0
+    "resolved": 0,
+    "invalid_at_fill": 1
    }
   },
   {
@@ -1532,143 +1505,146 @@
       "1_tick": {
        "armed": 52,
        "filled": 22,
-       "resolved": 22,
-       "net_pnl": 283.94,
-       "profit_factor": 3.072,
-       "win_rate": 0.545,
-       "positive_both_halves": true,
-       "max_drawdown": 51.82
+       "resolved": 14,
+       "net_pnl": 33.08,
+       "profit_factor": 1.241,
+       "win_rate": 0.286,
+       "positive_both_halves": false,
+       "max_drawdown": 121.74
       },
       "2_tick": {
        "armed": 52,
        "filled": 22,
-       "resolved": 22,
-       "net_pnl": 272.94,
-       "profit_factor": 2.921,
-       "win_rate": 0.545,
-       "positive_both_halves": true,
-       "max_drawdown": 52.82
+       "resolved": 14,
+       "net_pnl": 26.08,
+       "profit_factor": 1.184,
+       "win_rate": 0.286,
+       "positive_both_halves": false,
+       "max_drawdown": 125.24
       },
       "3_tick": {
        "armed": 52,
        "filled": 22,
-       "resolved": 22,
-       "net_pnl": 261.94,
-       "profit_factor": 2.781,
-       "win_rate": 0.545,
+       "resolved": 14,
+       "net_pnl": 19.08,
+       "profit_factor": 1.13,
+       "win_rate": 0.286,
        "positive_both_halves": false,
-       "max_drawdown": 53.82
+       "max_drawdown": 128.74
       }
      },
      "runner": {
       "1_tick": {
        "armed": 52,
        "filled": 22,
-       "resolved": 22,
-       "net_pnl": 271.69,
-       "profit_factor": 3.196,
-       "win_rate": 0.591,
-       "positive_both_halves": true,
-       "max_drawdown": 51.82
+       "resolved": 14,
+       "net_pnl": 20.83,
+       "profit_factor": 1.168,
+       "win_rate": 0.357,
+       "positive_both_halves": false,
+       "max_drawdown": 101.32
       },
       "2_tick": {
        "armed": 52,
        "filled": 22,
-       "resolved": 22,
-       "net_pnl": 260.69,
-       "profit_factor": 3.033,
-       "win_rate": 0.591,
-       "positive_both_halves": true,
-       "max_drawdown": 52.82
+       "resolved": 14,
+       "net_pnl": 13.83,
+       "profit_factor": 1.108,
+       "win_rate": 0.357,
+       "positive_both_halves": false,
+       "max_drawdown": 103.82
       },
       "3_tick": {
        "armed": 52,
        "filled": 22,
-       "resolved": 22,
-       "net_pnl": 249.69,
-       "profit_factor": 2.881,
-       "win_rate": 0.591,
-       "positive_both_halves": true,
-       "max_drawdown": 53.82
+       "resolved": 14,
+       "net_pnl": 6.83,
+       "profit_factor": 1.051,
+       "win_rate": 0.357,
+       "positive_both_halves": false,
+       "max_drawdown": 106.32
       }
      },
      "partial_2ct_approx": {
       "1_tick": {
        "armed": 52,
        "filled": 22,
-       "resolved": 22,
-       "net_pnl": 593.91,
-       "profit_factor": 3.562,
-       "win_rate": 0.591,
-       "positive_both_halves": true,
-       "max_drawdown": 100.16
+       "resolved": 14,
+       "net_pnl": 78.27,
+       "profit_factor": 1.338,
+       "win_rate": 0.357,
+       "positive_both_halves": false,
+       "max_drawdown": 194.5
       },
       "2_tick": {
        "armed": 52,
        "filled": 22,
-       "resolved": 22,
-       "net_pnl": 582.91,
-       "profit_factor": 3.467,
-       "win_rate": 0.591,
-       "positive_both_halves": true,
-       "max_drawdown": 101.16
+       "resolved": 14,
+       "net_pnl": 71.27,
+       "profit_factor": 1.302,
+       "win_rate": 0.357,
+       "positive_both_halves": false,
+       "max_drawdown": 198.0
       },
       "3_tick": {
        "armed": 52,
        "filled": 22,
-       "resolved": 22,
-       "net_pnl": 571.91,
-       "profit_factor": 3.375,
-       "win_rate": 0.591,
-       "positive_both_halves": true,
-       "max_drawdown": 102.16
+       "resolved": 14,
+       "net_pnl": 64.27,
+       "profit_factor": 1.267,
+       "win_rate": 0.357,
+       "positive_both_halves": false,
+       "max_drawdown": 201.5
       }
      }
     }
    },
    "static_2tick": {
+    "invalid_at_fill": 8,
     "armed": 52,
     "filled": 22,
     "fill_rate": 0.423,
-    "resolved": 22,
-    "net": 272.94,
-    "profit_factor": 2.921,
-    "win_rate": 0.545,
+    "resolved": 14,
+    "net": 26.08,
+    "profit_factor": 1.184,
+    "win_rate": 0.286,
     "h1_h2_by_trade_count": [
-     269.56,
-     3.38
+     151.32,
+     -125.24
     ],
     "h1_h2_by_date_median": [
-     269.56,
-     3.38
+     151.32,
+     -125.24
     ],
-    "date_median": "2025-10-31",
-    "months": 10,
-    "top3_month_share": 1.07,
-    "top5_winner_share": 0.803
+    "date_median": "2025-10-15",
+    "months": 8,
+    "top3_month_share": 5.512,
+    "top5_winner_share": 6.447
    },
    "runner_2tick": {
+    "invalid_at_fill": 8,
     "armed": 52,
     "filled": 22,
     "fill_rate": 0.423,
-    "resolved": 22,
-    "net": 260.69,
-    "profit_factor": 3.033,
-    "win_rate": 0.591,
+    "resolved": 14,
+    "net": 13.83,
+    "profit_factor": 1.108,
+    "win_rate": 0.357,
     "h1_h2_by_trade_count": [
-     220.51,
-     40.18
+     102.27,
+     -88.44
     ],
     "h1_h2_by_date_median": [
-     220.51,
-     40.18
+     102.27,
+     -88.44
     ],
-    "date_median": "2025-10-31",
-    "months": 10,
-    "top3_month_share": 1.026,
-    "top5_winner_share": 0.853
+    "date_median": "2025-10-15",
+    "months": 8,
+    "top3_month_share": 9.395,
+    "top5_winner_share": 10.271
    },
    "static_2tick_same_bar_reference": {
+    "invalid_at_fill": 0,
     "armed": 52,
     "filled": 16,
     "fill_rate": 0.308,
@@ -1742,62 +1718,62 @@
       "1_tick": {
        "armed": 55,
        "filled": 33,
-       "resolved": 33,
-       "net_pnl": 202.36,
-       "profit_factor": 1.849,
-       "win_rate": 0.576,
-       "positive_both_halves": true,
-       "max_drawdown": 93.46
+       "resolved": 18,
+       "net_pnl": -87.7,
+       "profit_factor": 0.632,
+       "win_rate": 0.222,
+       "positive_both_halves": false,
+       "max_drawdown": 107.54
       },
       "2_tick": {
        "armed": 55,
        "filled": 33,
-       "resolved": 33,
-       "net_pnl": 185.86,
-       "profit_factor": 1.757,
-       "win_rate": 0.545,
-       "positive_both_halves": true,
-       "max_drawdown": 95.96
+       "resolved": 18,
+       "net_pnl": -96.7,
+       "profit_factor": 0.606,
+       "win_rate": 0.222,
+       "positive_both_halves": false,
+       "max_drawdown": 115.54
       },
       "3_tick": {
        "armed": 55,
        "filled": 33,
-       "resolved": 33,
-       "net_pnl": 169.36,
-       "profit_factor": 1.67,
-       "win_rate": 0.545,
-       "positive_both_halves": true,
-       "max_drawdown": 98.46
+       "resolved": 18,
+       "net_pnl": -105.7,
+       "profit_factor": 0.581,
+       "win_rate": 0.222,
+       "positive_both_halves": false,
+       "max_drawdown": 123.54
       }
      },
      "runner": {
       "1_tick": {
        "armed": 55,
        "filled": 33,
-       "resolved": 33,
-       "net_pnl": 584.58,
-       "profit_factor": 3.453,
-       "win_rate": 0.576,
+       "resolved": 18,
+       "net_pnl": 294.52,
+       "profit_factor": 2.236,
+       "win_rate": 0.222,
        "positive_both_halves": true,
        "max_drawdown": 93.46
       },
       "2_tick": {
        "armed": 55,
        "filled": 33,
-       "resolved": 33,
-       "net_pnl": 568.08,
-       "profit_factor": 3.315,
-       "win_rate": 0.545,
+       "resolved": 18,
+       "net_pnl": 285.52,
+       "profit_factor": 2.164,
+       "win_rate": 0.222,
        "positive_both_halves": true,
        "max_drawdown": 95.96
       },
       "3_tick": {
        "armed": 55,
        "filled": 33,
-       "resolved": 33,
-       "net_pnl": 551.58,
-       "profit_factor": 3.181,
-       "win_rate": 0.545,
+       "resolved": 18,
+       "net_pnl": 276.52,
+       "profit_factor": 2.096,
+       "win_rate": 0.222,
        "positive_both_halves": true,
        "max_drawdown": 98.46
       }
@@ -1806,30 +1782,30 @@
       "1_tick": {
        "armed": 55,
        "filled": 33,
-       "resolved": 33,
-       "net_pnl": 844.36,
-       "profit_factor": 2.867,
-       "win_rate": 0.576,
+       "resolved": 18,
+       "net_pnl": 238.14,
+       "profit_factor": 1.527,
+       "win_rate": 0.222,
        "positive_both_halves": true,
        "max_drawdown": 178.22
       },
       "2_tick": {
        "armed": 55,
        "filled": 33,
-       "resolved": 33,
-       "net_pnl": 827.86,
-       "profit_factor": 2.803,
-       "win_rate": 0.576,
+       "resolved": 18,
+       "net_pnl": 229.14,
+       "profit_factor": 1.499,
+       "win_rate": 0.222,
        "positive_both_halves": true,
        "max_drawdown": 180.72
       },
       "3_tick": {
        "armed": 55,
        "filled": 33,
-       "resolved": 33,
-       "net_pnl": 811.36,
-       "profit_factor": 2.74,
-       "win_rate": 0.576,
+       "resolved": 18,
+       "net_pnl": 220.14,
+       "profit_factor": 1.472,
+       "win_rate": 0.222,
        "positive_both_halves": true,
        "max_drawdown": 183.22
       }
@@ -1837,48 +1813,51 @@
     }
    },
    "static_2tick": {
+    "invalid_at_fill": 15,
     "armed": 55,
     "filled": 33,
     "fill_rate": 0.6,
-    "resolved": 33,
-    "net": 185.86,
-    "profit_factor": 1.757,
-    "win_rate": 0.545,
+    "resolved": 18,
+    "net": -96.7,
+    "profit_factor": 0.606,
+    "win_rate": 0.222,
     "h1_h2_by_trade_count": [
-     70.36,
-     115.5
+     -60.56,
+     -36.14
     ],
     "h1_h2_by_date_median": [
-     70.36,
-     115.5
+     -60.56,
+     -36.14
     ],
-    "date_median": "2025-02-12",
-    "months": 13,
-    "top3_month_share": 1.072,
-    "top5_winner_share": 1.241
+    "date_median": "2025-02-27",
+    "months": 10,
+    "top3_month_share": null,
+    "top5_winner_share": null
    },
    "runner_2tick": {
+    "invalid_at_fill": 15,
     "armed": 55,
     "filled": 33,
     "fill_rate": 0.6,
-    "resolved": 33,
-    "net": 568.08,
-    "profit_factor": 3.315,
-    "win_rate": 0.545,
+    "resolved": 18,
+    "net": 285.52,
+    "profit_factor": 2.164,
+    "win_rate": 0.222,
     "h1_h2_by_trade_count": [
-     217.86,
-     350.22
+     86.94,
+     198.58
     ],
     "h1_h2_by_date_median": [
-     217.86,
-     350.22
+     86.94,
+     198.58
     ],
-    "date_median": "2025-02-12",
-    "months": 13,
-    "top3_month_share": 0.905,
-    "top5_winner_share": 1.039
+    "date_median": "2025-02-27",
+    "months": 10,
+    "top3_month_share": 1.503,
+    "top5_winner_share": 1.859
    },
    "static_2tick_same_bar_reference": {
+    "invalid_at_fill": 0,
     "armed": 55,
     "filled": 19,
     "fill_rate": 0.345,
@@ -1954,143 +1933,146 @@
       "1_tick": {
        "armed": 146,
        "filled": 58,
-       "resolved": 58,
-       "net_pnl": 114.16,
-       "profit_factor": 1.191,
-       "win_rate": 0.414,
+       "resolved": 40,
+       "net_pnl": -273.28,
+       "profit_factor": 0.54,
+       "win_rate": 0.2,
        "positive_both_halves": false,
-       "max_drawdown": 120.4
+       "max_drawdown": 342.3
       },
       "2_tick": {
        "armed": 146,
        "filled": 58,
-       "resolved": 58,
-       "net_pnl": 85.16,
-       "profit_factor": 1.139,
-       "win_rate": 0.414,
+       "resolved": 40,
+       "net_pnl": -293.28,
+       "profit_factor": 0.519,
+       "win_rate": 0.2,
        "positive_both_halves": false,
-       "max_drawdown": 131.92
+       "max_drawdown": 359.3
       },
       "3_tick": {
        "armed": 146,
        "filled": 58,
-       "resolved": 58,
-       "net_pnl": 56.16,
-       "profit_factor": 1.089,
-       "win_rate": 0.414,
+       "resolved": 40,
+       "net_pnl": -313.28,
+       "profit_factor": 0.5,
+       "win_rate": 0.2,
        "positive_both_halves": false,
-       "max_drawdown": 147.42
+       "max_drawdown": 376.3
       }
      },
      "runner": {
       "1_tick": {
        "armed": 146,
        "filled": 58,
-       "resolved": 58,
-       "net_pnl": 156.48,
-       "profit_factor": 1.295,
-       "win_rate": 0.5,
-       "positive_both_halves": true,
-       "max_drawdown": 120.4
+       "resolved": 40,
+       "net_pnl": -230.96,
+       "profit_factor": 0.563,
+       "win_rate": 0.325,
+       "positive_both_halves": false,
+       "max_drawdown": 268.53
       },
       "2_tick": {
        "armed": 146,
        "filled": 58,
-       "resolved": 58,
-       "net_pnl": 127.48,
-       "profit_factor": 1.234,
-       "win_rate": 0.5,
-       "positive_both_halves": true,
-       "max_drawdown": 124.9
+       "resolved": 40,
+       "net_pnl": -250.96,
+       "profit_factor": 0.537,
+       "win_rate": 0.325,
+       "positive_both_halves": false,
+       "max_drawdown": 285.53
       },
       "3_tick": {
        "armed": 146,
        "filled": 58,
-       "resolved": 58,
-       "net_pnl": 98.48,
-       "profit_factor": 1.176,
-       "win_rate": 0.5,
-       "positive_both_halves": true,
-       "max_drawdown": 129.4
+       "resolved": 40,
+       "net_pnl": -270.96,
+       "profit_factor": 0.513,
+       "win_rate": 0.325,
+       "positive_both_halves": false,
+       "max_drawdown": 302.53
       }
      },
      "partial_2ct_approx": {
       "1_tick": {
        "armed": 146,
        "filled": 58,
-       "resolved": 58,
-       "net_pnl": 371.56,
-       "profit_factor": 1.363,
-       "win_rate": 0.448,
-       "positive_both_halves": true,
-       "max_drawdown": 225.14
+       "resolved": 40,
+       "net_pnl": -434.64,
+       "profit_factor": 0.575,
+       "win_rate": 0.25,
+       "positive_both_halves": false,
+       "max_drawdown": 554.88
       },
       "2_tick": {
        "armed": 146,
        "filled": 58,
-       "resolved": 58,
-       "net_pnl": 342.56,
-       "profit_factor": 1.329,
-       "win_rate": 0.448,
-       "positive_both_halves": true,
-       "max_drawdown": 229.64
+       "resolved": 40,
+       "net_pnl": -454.64,
+       "profit_factor": 0.562,
+       "win_rate": 0.25,
+       "positive_both_halves": false,
+       "max_drawdown": 568.67
       },
       "3_tick": {
        "armed": 146,
        "filled": 58,
-       "resolved": 58,
-       "net_pnl": 313.56,
-       "profit_factor": 1.297,
-       "win_rate": 0.448,
-       "positive_both_halves": true,
-       "max_drawdown": 234.14
+       "resolved": 40,
+       "net_pnl": -474.64,
+       "profit_factor": 0.549,
+       "win_rate": 0.25,
+       "positive_both_halves": false,
+       "max_drawdown": 585.67
       }
      }
     }
    },
    "static_2tick": {
+    "invalid_at_fill": 18,
     "armed": 146,
     "filled": 58,
     "fill_rate": 0.397,
-    "resolved": 58,
-    "net": 85.16,
-    "profit_factor": 1.139,
-    "win_rate": 0.414,
+    "resolved": 40,
+    "net": -293.28,
+    "profit_factor": 0.519,
+    "win_rate": 0.2,
     "h1_h2_by_trade_count": [
-     100.48,
-     -15.32
+     48.8,
+     -342.08
     ],
     "h1_h2_by_date_median": [
-     100.48,
-     -15.32
+     48.8,
+     -342.08
     ],
-    "date_median": "2025-11-27",
-    "months": 12,
-    "top3_month_share": 2.872,
-    "top5_winner_share": 2.573
+    "date_median": "2025-10-15",
+    "months": 10,
+    "top3_month_share": null,
+    "top5_winner_share": null
    },
    "runner_2tick": {
+    "invalid_at_fill": 18,
     "armed": 146,
     "filled": 58,
     "fill_rate": 0.397,
-    "resolved": 58,
-    "net": 127.48,
-    "profit_factor": 1.234,
-    "win_rate": 0.5,
+    "resolved": 40,
+    "net": -250.96,
+    "profit_factor": 0.537,
+    "win_rate": 0.325,
     "h1_h2_by_trade_count": [
-     66.16,
-     61.32
+     -11.71,
+     -239.25
     ],
     "h1_h2_by_date_median": [
-     66.16,
-     61.32
+     -11.71,
+     -239.25
     ],
-    "date_median": "2025-11-27",
-    "months": 12,
-    "top3_month_share": 1.775,
-    "top5_winner_share": 1.747
+    "date_median": "2025-10-15",
+    "months": 10,
+    "top3_month_share": null,
+    "top5_winner_share": null
    },
    "static_2tick_same_bar_reference": {
+    "invalid_at_fill": 0,
     "armed": 146,
     "filled": 45,
     "fill_rate": 0.308,
