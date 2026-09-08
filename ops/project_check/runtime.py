@@ -91,22 +91,28 @@ def active_lanes(rules: dict[str, Any] | None) -> dict[str, Any]:
     }
 
 
-# Derived paper lanes are switched on by environment, not risk_rules.yaml, so
-# a local run of this snapshot only sees them when the same env is exported.
+# Derived inverse execution is switched on by environment, not risk_rules.yaml,
+# so a local run of this snapshot only sees it when the same env is exported.
+# Both paper_sim and tradovate_demo execute the same frozen inverse transform;
+# the difference is execution venue, which is reported separately below.
 _DERIVED_LANE_ENV = {
-    "orb_breakout": ("inverse", "MNQ_ORB_BREAKOUT_INVERSE_MODE", "paper_sim"),
+    "orb_breakout": (
+        "inverse",
+        "MNQ_ORB_BREAKOUT_INVERSE_MODE",
+        {"paper_sim", "tradovate_demo"},
+    ),
 }
 
 
 def _derived_lane_transforms() -> dict[str, dict[str, Any]]:
     result: dict[str, dict[str, Any]] = {}
-    for concept, (transform, env_name, active_value) in _DERIVED_LANE_ENV.items():
+    for concept, (transform, env_name, active_values) in _DERIVED_LANE_ENV.items():
         mode = _env(env_name)
         result[concept] = {
             "transform": transform,
             "env": env_name,
             "mode": mode,
-            "active": mode == active_value,
+            "active": mode in active_values,
         }
     return result
 
