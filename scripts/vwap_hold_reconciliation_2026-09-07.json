@@ -1,0 +1,2116 @@
+{
+ "generated": "2026-09-07T20:24:31.275544-04:00",
+ "population_source": "logs/retest_baseline_off/MNQ",
+ "bars": "data/replay_polygon_5m/MNQ (5m Polygon, 2024-07-02 .. 2026-06-26)",
+ "fill_model": "package ioc_fill(field='close'): arrival = first 5m bar >= bar_ts+15m, limit-IOC at entry -/+ 32 ticks, zero entry slippage; costs 1.24 + ticks*0.50 at the metrics layer",
+ "direction_control": "entry at arrival-bar close +/- 1 adverse tick, exit at the close of the last 5m bar within 30/60/120 min and at the last bar of the day file, no stop, $1.48 round-turn",
+ "journal_rows": {
+  "total": 1957,
+  "approved": 348,
+  "rejected": 1609,
+  "approved_fingerprint": "18cbbc8427b8afc462b1145347125ae45bb2b6af97f4ef9f374a10565a96d880",
+  "rejected_failed_gates": {
+   "ENTRY_DETACHED_FROM_PRICE": 1268,
+   "ENTRY_DETACHED_FROM_PRICE + WEAK_BAR_CLOSE": 330,
+   "EMA_STACK_NOT_ALIGNED_SOFT + ENTRY_DETACHED_FROM_PRICE + WEAK_BAR_CLOSE": 8,
+   "EMA_STACK_NOT_ALIGNED_SOFT + ENTRY_DETACHED_FROM_PRICE": 3
+  }
+ },
+ "populations": [
+  {
+   "name": "approved_all_348",
+   "n": 348,
+   "sessions": {
+    "london": 145,
+    "asian": 96,
+    "new_york": 107
+   },
+   "direction_control": {
+    "n_with_data": 348,
+    "horizons": {
+     "30m": {
+      "n": 348,
+      "mean_net": 3.23,
+      "t_stat": 0.71,
+      "share_positive": 0.494,
+      "total_net": 1124.96
+     },
+     "60m": {
+      "n": 348,
+      "mean_net": 12.2,
+      "t_stat": 1.86,
+      "share_positive": 0.494,
+      "total_net": 4245.96
+     },
+     "120m": {
+      "n": 348,
+      "mean_net": 9.58,
+      "t_stat": 1.06,
+      "share_positive": 0.506,
+      "total_net": 3334.96
+     },
+     "EOD": {
+      "n": 348,
+      "mean_net": 9.86,
+      "t_stat": 0.38,
+      "share_positive": 0.443,
+      "total_net": 3430.46
+     }
+    },
+    "positive_horizons": "4/4",
+    "best_t_stat": 1.86
+   },
+   "ioc_close_package": {
+    "population": {
+     "n": 348,
+     "filled_ioc_close": 146,
+     "fill_rate_ioc_close": 0.4195
+    },
+    "cells": {
+     "static": {
+      "1_tick": {
+       "armed": 348,
+       "filled": 146,
+       "resolved": 146,
+       "net_pnl": 1033.92,
+       "profit_factor": 1.773,
+       "win_rate": 0.473,
+       "positive_both_halves": true,
+       "max_drawdown": 161.96
+      },
+      "2_tick": {
+       "armed": 348,
+       "filled": 146,
+       "resolved": 146,
+       "net_pnl": 960.92,
+       "profit_factor": 1.698,
+       "win_rate": 0.459,
+       "positive_both_halves": true,
+       "max_drawdown": 169.42
+      },
+      "3_tick": {
+       "armed": 348,
+       "filled": 146,
+       "resolved": 146,
+       "net_pnl": 887.92,
+       "profit_factor": 1.627,
+       "win_rate": 0.459,
+       "positive_both_halves": true,
+       "max_drawdown": 179.92
+      }
+     },
+     "runner": {
+      "1_tick": {
+       "armed": 348,
+       "filled": 146,
+       "resolved": 146,
+       "net_pnl": 1520.61,
+       "profit_factor": 2.235,
+       "win_rate": 0.527,
+       "positive_both_halves": true,
+       "max_drawdown": 181.28
+      },
+      "2_tick": {
+       "armed": 348,
+       "filled": 146,
+       "resolved": 146,
+       "net_pnl": 1447.61,
+       "profit_factor": 2.143,
+       "win_rate": 0.514,
+       "positive_both_halves": true,
+       "max_drawdown": 187.78
+      },
+      "3_tick": {
+       "armed": 348,
+       "filled": 146,
+       "resolved": 146,
+       "net_pnl": 1374.61,
+       "profit_factor": 2.056,
+       "win_rate": 0.514,
+       "positive_both_halves": true,
+       "max_drawdown": 194.28
+      }
+     },
+     "partial_2ct_approx": {
+      "1_tick": {
+       "armed": 348,
+       "filled": 146,
+       "resolved": 146,
+       "net_pnl": 2808.57,
+       "profit_factor": 2.188,
+       "win_rate": 0.493,
+       "positive_both_halves": true,
+       "max_drawdown": 320.62
+      },
+      "2_tick": {
+       "armed": 348,
+       "filled": 146,
+       "resolved": 146,
+       "net_pnl": 2735.57,
+       "profit_factor": 2.139,
+       "win_rate": 0.493,
+       "positive_both_halves": true,
+       "max_drawdown": 327.12
+      },
+      "3_tick": {
+       "armed": 348,
+       "filled": 146,
+       "resolved": 146,
+       "net_pnl": 2662.57,
+       "profit_factor": 2.092,
+       "win_rate": 0.493,
+       "positive_both_halves": true,
+       "max_drawdown": 333.62
+      }
+     }
+    },
+    "cross_check": "EXACT MATCH on every field, every cell"
+   },
+   "static_2tick": {
+    "armed": 348,
+    "filled": 146,
+    "fill_rate": 0.42,
+    "resolved": 146,
+    "net": 960.92,
+    "profit_factor": 1.698,
+    "win_rate": 0.459,
+    "h1_h2_by_trade_count": [
+     834.16,
+     126.76
+    ],
+    "h1_h2_by_date_median": [
+     834.16,
+     126.76
+    ],
+    "date_median": "2025-05-20",
+    "months": 24,
+    "top3_month_share": 0.832,
+    "top5_winner_share": 0.592
+   },
+   "runner_2tick": {
+    "armed": 348,
+    "filled": 146,
+    "fill_rate": 0.42,
+    "resolved": 146,
+    "net": 1447.61,
+    "profit_factor": 2.143,
+    "win_rate": 0.514,
+    "h1_h2_by_trade_count": [
+     1316.78,
+     130.83
+    ],
+    "h1_h2_by_date_median": [
+     1316.78,
+     130.83
+    ],
+    "date_median": "2025-05-20",
+    "months": 24,
+    "top3_month_share": 0.729,
+    "top5_winner_share": 0.493
+   },
+   "static_2tick_same_bar_reference": {
+    "armed": 348,
+    "filled": 105,
+    "fill_rate": 0.302,
+    "resolved": 105,
+    "net": 126.82,
+    "profit_factor": 1.08,
+    "win_rate": 0.371,
+    "h1_h2_by_trade_count": [
+     546.1,
+     -419.28
+    ],
+    "h1_h2_by_date_median": [
+     546.1,
+     -419.28
+    ],
+    "date_median": "2025-06-17",
+    "months": 24,
+    "top3_month_share": 5.995,
+    "top5_winner_share": 4.485
+   }
+  },
+  {
+   "name": "approved_ny_107",
+   "n": 107,
+   "sessions": {
+    "new_york": 107
+   },
+   "direction_control": {
+    "n_with_data": 107,
+    "horizons": {
+     "30m": {
+      "n": 107,
+      "mean_net": 1.72,
+      "t_stat": 0.15,
+      "share_positive": 0.477,
+      "total_net": 183.64
+     },
+     "60m": {
+      "n": 107,
+      "mean_net": 16.1,
+      "t_stat": 1.0,
+      "share_positive": 0.505,
+      "total_net": 1723.14
+     },
+     "120m": {
+      "n": 107,
+      "mean_net": 26.55,
+      "t_stat": 1.47,
+      "share_positive": 0.514,
+      "total_net": 2841.14
+     },
+     "EOD": {
+      "n": 107,
+      "mean_net": 19.09,
+      "t_stat": 0.67,
+      "share_positive": 0.449,
+      "total_net": 2042.64
+     }
+    },
+    "positive_horizons": "4/4",
+    "best_t_stat": 1.47
+   },
+   "ioc_close_package": {
+    "population": {
+     "n": 107,
+     "filled_ioc_close": 55,
+     "fill_rate_ioc_close": 0.514
+    },
+    "cells": {
+     "static": {
+      "1_tick": {
+       "armed": 107,
+       "filled": 55,
+       "resolved": 55,
+       "net_pnl": 486.3,
+       "profit_factor": 2.296,
+       "win_rate": 0.564,
+       "positive_both_halves": true,
+       "max_drawdown": 93.46
+      },
+      "2_tick": {
+       "armed": 107,
+       "filled": 55,
+       "resolved": 55,
+       "net_pnl": 458.8,
+       "profit_factor": 2.184,
+       "win_rate": 0.545,
+       "positive_both_halves": true,
+       "max_drawdown": 95.96
+      },
+      "3_tick": {
+       "armed": 107,
+       "filled": 55,
+       "resolved": 55,
+       "net_pnl": 431.3,
+       "profit_factor": 2.078,
+       "win_rate": 0.545,
+       "positive_both_halves": true,
+       "max_drawdown": 98.46
+      }
+     },
+     "runner": {
+      "1_tick": {
+       "armed": 107,
+       "filled": 55,
+       "resolved": 55,
+       "net_pnl": 856.27,
+       "profit_factor": 3.365,
+       "win_rate": 0.582,
+       "positive_both_halves": true,
+       "max_drawdown": 93.46
+      },
+      "2_tick": {
+       "armed": 107,
+       "filled": 55,
+       "resolved": 55,
+       "net_pnl": 828.77,
+       "profit_factor": 3.218,
+       "win_rate": 0.564,
+       "positive_both_halves": true,
+       "max_drawdown": 95.96
+      },
+      "3_tick": {
+       "armed": 107,
+       "filled": 55,
+       "resolved": 55,
+       "net_pnl": 801.27,
+       "profit_factor": 3.078,
+       "win_rate": 0.564,
+       "positive_both_halves": true,
+       "max_drawdown": 98.46
+      }
+     },
+     "partial_2ct_approx": {
+      "1_tick": {
+       "armed": 107,
+       "filled": 55,
+       "resolved": 55,
+       "net_pnl": 1438.27,
+       "profit_factor": 3.103,
+       "win_rate": 0.582,
+       "positive_both_halves": true,
+       "max_drawdown": 178.22
+      },
+      "2_tick": {
+       "armed": 107,
+       "filled": 55,
+       "resolved": 55,
+       "net_pnl": 1410.77,
+       "profit_factor": 3.028,
+       "win_rate": 0.582,
+       "positive_both_halves": true,
+       "max_drawdown": 180.72
+      },
+      "3_tick": {
+       "armed": 107,
+       "filled": 55,
+       "resolved": 55,
+       "net_pnl": 1383.27,
+       "profit_factor": 2.956,
+       "win_rate": 0.582,
+       "positive_both_halves": true,
+       "max_drawdown": 183.22
+      }
+     }
+    }
+   },
+   "static_2tick": {
+    "armed": 107,
+    "filled": 55,
+    "fill_rate": 0.514,
+    "resolved": 55,
+    "net": 458.8,
+    "profit_factor": 2.184,
+    "win_rate": 0.545,
+    "h1_h2_by_trade_count": [
+     174.32,
+     284.48
+    ],
+    "h1_h2_by_date_median": [
+     174.32,
+     284.48
+    ],
+    "date_median": "2025-06-30",
+    "months": 22,
+    "top3_month_share": 0.701,
+    "top5_winner_share": 0.536
+   },
+   "runner_2tick": {
+    "armed": 107,
+    "filled": 55,
+    "fill_rate": 0.514,
+    "resolved": 55,
+    "net": 828.77,
+    "profit_factor": 3.218,
+    "win_rate": 0.564,
+    "h1_h2_by_trade_count": [
+     556.54,
+     272.23
+    ],
+    "h1_h2_by_date_median": [
+     556.54,
+     272.23
+    ],
+    "date_median": "2025-06-30",
+    "months": 22,
+    "top3_month_share": 0.62,
+    "top5_winner_share": 0.712
+   },
+   "static_2tick_same_bar_reference": {
+    "armed": 107,
+    "filled": 35,
+    "fill_rate": 0.327,
+    "resolved": 35,
+    "net": -326.92,
+    "profit_factor": 0.486,
+    "win_rate": 0.257,
+    "h1_h2_by_trade_count": [
+     -124.56,
+     -202.36
+    ],
+    "h1_h2_by_date_median": [
+     -124.56,
+     -202.36
+    ],
+    "date_median": "2025-07-10",
+    "months": 17,
+    "top3_month_share": null,
+    "top5_winner_share": null
+   }
+  },
+  {
+   "name": "approved_non_ny_241",
+   "n": 241,
+   "sessions": {
+    "london": 145,
+    "asian": 96
+   },
+   "direction_control": {
+    "n_with_data": 241,
+    "horizons": {
+     "30m": {
+      "n": 241,
+      "mean_net": 3.91,
+      "t_stat": 0.92,
+      "share_positive": 0.502,
+      "total_net": 941.32
+     },
+     "60m": {
+      "n": 241,
+      "mean_net": 10.47,
+      "t_stat": 1.69,
+      "share_positive": 0.49,
+      "total_net": 2522.82
+     },
+     "120m": {
+      "n": 241,
+      "mean_net": 2.05,
+      "t_stat": 0.2,
+      "share_positive": 0.502,
+      "total_net": 493.82
+     },
+     "EOD": {
+      "n": 241,
+      "mean_net": 5.76,
+      "t_stat": 0.17,
+      "share_positive": 0.44,
+      "total_net": 1387.82
+     }
+    },
+    "positive_horizons": "4/4",
+    "best_t_stat": 1.69
+   },
+   "ioc_close_package": {
+    "population": {
+     "n": 241,
+     "filled_ioc_close": 91,
+     "fill_rate_ioc_close": 0.3776
+    },
+    "cells": {
+     "static": {
+      "1_tick": {
+       "armed": 241,
+       "filled": 91,
+       "resolved": 91,
+       "net_pnl": 547.62,
+       "profit_factor": 1.569,
+       "win_rate": 0.418,
+       "positive_both_halves": false,
+       "max_drawdown": 307.62
+      },
+      "2_tick": {
+       "armed": 241,
+       "filled": 91,
+       "resolved": 91,
+       "net_pnl": 502.12,
+       "profit_factor": 1.507,
+       "win_rate": 0.407,
+       "positive_both_halves": false,
+       "max_drawdown": 321.12
+      },
+      "3_tick": {
+       "armed": 241,
+       "filled": 91,
+       "resolved": 91,
+       "net_pnl": 456.62,
+       "profit_factor": 1.449,
+       "win_rate": 0.407,
+       "positive_both_halves": false,
+       "max_drawdown": 342.78
+      }
+     },
+     "runner": {
+      "1_tick": {
+       "armed": 241,
+       "filled": 91,
+       "resolved": 91,
+       "net_pnl": 664.34,
+       "profit_factor": 1.764,
+       "win_rate": 0.495,
+       "positive_both_halves": false,
+       "max_drawdown": 261.77
+      },
+      "2_tick": {
+       "armed": 241,
+       "filled": 91,
+       "resolved": 91,
+       "net_pnl": 618.84,
+       "profit_factor": 1.693,
+       "win_rate": 0.484,
+       "positive_both_halves": false,
+       "max_drawdown": 284.93
+      },
+      "3_tick": {
+       "armed": 241,
+       "filled": 91,
+       "resolved": 91,
+       "net_pnl": 573.34,
+       "profit_factor": 1.626,
+       "win_rate": 0.484,
+       "positive_both_halves": false,
+       "max_drawdown": 308.93
+      }
+     },
+     "partial_2ct_approx": {
+      "1_tick": {
+       "armed": 241,
+       "filled": 91,
+       "resolved": 91,
+       "net_pnl": 1370.3,
+       "profit_factor": 1.816,
+       "win_rate": 0.44,
+       "positive_both_halves": false,
+       "max_drawdown": 521.91
+      },
+      "2_tick": {
+       "armed": 241,
+       "filled": 91,
+       "resolved": 91,
+       "net_pnl": 1324.8,
+       "profit_factor": 1.777,
+       "win_rate": 0.44,
+       "positive_both_halves": false,
+       "max_drawdown": 535.41
+      },
+      "3_tick": {
+       "armed": 241,
+       "filled": 91,
+       "resolved": 91,
+       "net_pnl": 1279.3,
+       "profit_factor": 1.739,
+       "win_rate": 0.44,
+       "positive_both_halves": false,
+       "max_drawdown": 548.91
+      }
+     }
+    }
+   },
+   "static_2tick": {
+    "armed": 241,
+    "filled": 91,
+    "fill_rate": 0.378,
+    "resolved": 91,
+    "net": 502.12,
+    "profit_factor": 1.507,
+    "win_rate": 0.407,
+    "h1_h2_by_trade_count": [
+     684.6,
+     -182.48
+    ],
+    "h1_h2_by_date_median": [
+     684.6,
+     -182.48
+    ],
+    "date_median": "2025-04-15",
+    "months": 23,
+    "top3_month_share": 1.488,
+    "top5_winner_share": 1.133
+   },
+   "runner_2tick": {
+    "armed": 241,
+    "filled": 91,
+    "fill_rate": 0.378,
+    "resolved": 91,
+    "net": 618.84,
+    "profit_factor": 1.693,
+    "win_rate": 0.484,
+    "h1_h2_by_trade_count": [
+     727.8,
+     -108.96
+    ],
+    "h1_h2_by_date_median": [
+     727.8,
+     -108.96
+    ],
+    "date_median": "2025-04-15",
+    "months": 23,
+    "top3_month_share": 1.31,
+    "top5_winner_share": 0.919
+   },
+   "static_2tick_same_bar_reference": {
+    "armed": 241,
+    "filled": 70,
+    "fill_rate": 0.29,
+    "resolved": 70,
+    "net": 453.74,
+    "profit_factor": 1.479,
+    "win_rate": 0.429,
+    "h1_h2_by_trade_count": [
+     678.9,
+     -225.16
+    ],
+    "h1_h2_by_date_median": [
+     678.9,
+     -225.16
+    ],
+    "date_median": "2025-05-30",
+    "months": 23,
+    "top3_month_share": 1.706,
+    "top5_winner_share": 1.254
+   }
+  },
+  {
+   "name": "rejected_all",
+   "n": 1609,
+   "sessions": {
+    "new_york": 744,
+    "asian": 486,
+    "london": 379
+   },
+   "direction_control": {
+    "n_with_data": 1608,
+    "horizons": {
+     "30m": {
+      "n": 1608,
+      "mean_net": -1.58,
+      "t_stat": -0.5,
+      "share_positive": 0.473,
+      "total_net": -2537.34
+     },
+     "60m": {
+      "n": 1608,
+      "mean_net": -2.52,
+      "t_stat": -0.59,
+      "share_positive": 0.447,
+      "total_net": -4053.84
+     },
+     "120m": {
+      "n": 1608,
+      "mean_net": -6.45,
+      "t_stat": -1.05,
+      "share_positive": 0.447,
+      "total_net": -10377.34
+     },
+     "EOD": {
+      "n": 1608,
+      "mean_net": -28.6,
+      "t_stat": -1.8,
+      "share_positive": 0.443,
+      "total_net": -45988.84
+     }
+    },
+    "positive_horizons": "0/4",
+    "best_t_stat": -0.5
+   },
+   "ioc_close_package": {
+    "population": {
+     "n": 1609,
+     "filled_ioc_close": 40,
+     "fill_rate_ioc_close": 0.0249
+    },
+    "cells": {
+     "static": {
+      "1_tick": {
+       "armed": 1609,
+       "filled": 40,
+       "resolved": 40,
+       "net_pnl": 955.42,
+       "profit_factor": 4.81,
+       "win_rate": 0.625,
+       "positive_both_halves": true,
+       "max_drawdown": 72.22
+      },
+      "2_tick": {
+       "armed": 1609,
+       "filled": 40,
+       "resolved": 40,
+       "net_pnl": 935.42,
+       "profit_factor": 4.616,
+       "win_rate": 0.6,
+       "positive_both_halves": true,
+       "max_drawdown": 74.22
+      },
+      "3_tick": {
+       "armed": 1609,
+       "filled": 40,
+       "resolved": 40,
+       "net_pnl": 915.42,
+       "profit_factor": 4.433,
+       "win_rate": 0.6,
+       "positive_both_halves": true,
+       "max_drawdown": 76.22
+      }
+     },
+     "runner": {
+      "1_tick": {
+       "armed": 1609,
+       "filled": 40,
+       "resolved": 40,
+       "net_pnl": 1065.24,
+       "profit_factor": 5.248,
+       "win_rate": 0.625,
+       "positive_both_halves": true,
+       "max_drawdown": 72.22
+      },
+      "2_tick": {
+       "armed": 1609,
+       "filled": 40,
+       "resolved": 40,
+       "net_pnl": 1045.24,
+       "profit_factor": 5.041,
+       "win_rate": 0.6,
+       "positive_both_halves": true,
+       "max_drawdown": 74.22
+      },
+      "3_tick": {
+       "armed": 1609,
+       "filled": 40,
+       "resolved": 40,
+       "net_pnl": 1025.24,
+       "profit_factor": 4.844,
+       "win_rate": 0.6,
+       "positive_both_halves": true,
+       "max_drawdown": 76.22
+      }
+     },
+     "partial_2ct_approx": {
+      "1_tick": {
+       "armed": 1609,
+       "filled": 40,
+       "resolved": 40,
+       "net_pnl": 2090.26,
+       "profit_factor": 5.396,
+       "win_rate": 0.625,
+       "positive_both_halves": true,
+       "max_drawdown": 137.48
+      },
+      "2_tick": {
+       "armed": 1609,
+       "filled": 40,
+       "resolved": 40,
+       "net_pnl": 2070.26,
+       "profit_factor": 5.287,
+       "win_rate": 0.625,
+       "positive_both_halves": true,
+       "max_drawdown": 139.48
+      },
+      "3_tick": {
+       "armed": 1609,
+       "filled": 40,
+       "resolved": 40,
+       "net_pnl": 2050.26,
+       "profit_factor": 5.18,
+       "win_rate": 0.625,
+       "positive_both_halves": true,
+       "max_drawdown": 141.48
+      }
+     }
+    }
+   },
+   "static_2tick": {
+    "armed": 1609,
+    "filled": 40,
+    "fill_rate": 0.025,
+    "resolved": 40,
+    "net": 935.42,
+    "profit_factor": 4.616,
+    "win_rate": 0.6,
+    "h1_h2_by_trade_count": [
+     447.18,
+     488.24
+    ],
+    "h1_h2_by_date_median": [
+     447.18,
+     488.24
+    ],
+    "date_median": "2025-05-30",
+    "months": 17,
+    "top3_month_share": 0.59,
+    "top5_winner_share": 0.585
+   },
+   "runner_2tick": {
+    "armed": 1609,
+    "filled": 40,
+    "fill_rate": 0.025,
+    "resolved": 40,
+    "net": 1045.24,
+    "profit_factor": 5.041,
+    "win_rate": 0.6,
+    "h1_h2_by_trade_count": [
+     467.75,
+     577.49
+    ],
+    "h1_h2_by_date_median": [
+     467.75,
+     577.49
+    ],
+    "date_median": "2025-05-30",
+    "months": 17,
+    "top3_month_share": 0.549,
+    "top5_winner_share": 0.56
+   },
+   "static_2tick_same_bar_reference": {
+    "armed": 1609,
+    "filled": 1,
+    "fill_rate": 0.001,
+    "resolved": 1,
+    "net": 12.04,
+    "profit_factor": null,
+    "win_rate": 1.0,
+    "h1_h2_by_trade_count": [
+     0,
+     12.04
+    ],
+    "h1_h2_by_date_median": [
+     0,
+     12.04
+    ],
+    "date_median": "2026-06-21",
+    "months": 1,
+    "top3_month_share": 1.0,
+    "top5_winner_share": 1.0
+   }
+  },
+  {
+   "name": "rejected_ny",
+   "n": 744,
+   "sessions": {
+    "new_york": 744
+   },
+   "direction_control": {
+    "n_with_data": 743,
+    "horizons": {
+     "30m": {
+      "n": 743,
+      "mean_net": 1.37,
+      "t_stat": 0.25,
+      "share_positive": 0.482,
+      "total_net": 1020.86
+     },
+     "60m": {
+      "n": 743,
+      "mean_net": 2.67,
+      "t_stat": 0.36,
+      "share_positive": 0.467,
+      "total_net": 1980.86
+     },
+     "120m": {
+      "n": 743,
+      "mean_net": 11.13,
+      "t_stat": 1.12,
+      "share_positive": 0.491,
+      "total_net": 8272.86
+     },
+     "EOD": {
+      "n": 743,
+      "mean_net": 10.53,
+      "t_stat": 0.72,
+      "share_positive": 0.486,
+      "total_net": 7821.36
+     }
+    },
+    "positive_horizons": "4/4",
+    "best_t_stat": 1.12
+   },
+   "ioc_close_package": {
+    "population": {
+     "n": 744,
+     "filled_ioc_close": 25,
+     "fill_rate_ioc_close": 0.0336
+    },
+    "cells": {
+     "static": {
+      "1_tick": {
+       "armed": 744,
+       "filled": 25,
+       "resolved": 25,
+       "net_pnl": 710.44,
+       "profit_factor": 6.511,
+       "win_rate": 0.64,
+       "positive_both_halves": true,
+       "max_drawdown": 25.8
+      },
+      "2_tick": {
+       "armed": 744,
+       "filled": 25,
+       "resolved": 25,
+       "net_pnl": 697.94,
+       "profit_factor": 6.216,
+       "win_rate": 0.6,
+       "positive_both_halves": true,
+       "max_drawdown": 26.3
+      },
+      "3_tick": {
+       "armed": 744,
+       "filled": 25,
+       "resolved": 25,
+       "net_pnl": 685.44,
+       "profit_factor": 5.938,
+       "win_rate": 0.6,
+       "positive_both_halves": true,
+       "max_drawdown": 26.8
+      }
+     },
+     "runner": {
+      "1_tick": {
+       "armed": 744,
+       "filled": 25,
+       "resolved": 25,
+       "net_pnl": 797.11,
+       "profit_factor": 7.183,
+       "win_rate": 0.64,
+       "positive_both_halves": true,
+       "max_drawdown": 25.8
+      },
+      "2_tick": {
+       "armed": 744,
+       "filled": 25,
+       "resolved": 25,
+       "net_pnl": 784.61,
+       "profit_factor": 6.863,
+       "win_rate": 0.6,
+       "positive_both_halves": true,
+       "max_drawdown": 26.3
+      },
+      "3_tick": {
+       "armed": 744,
+       "filled": 25,
+       "resolved": 25,
+       "net_pnl": 772.11,
+       "profit_factor": 6.562,
+       "win_rate": 0.6,
+       "positive_both_halves": true,
+       "max_drawdown": 26.8
+      }
+     },
+     "partial_2ct_approx": {
+      "1_tick": {
+       "armed": 744,
+       "filled": 25,
+       "resolved": 25,
+       "net_pnl": 1551.05,
+       "profit_factor": 7.405,
+       "win_rate": 0.64,
+       "positive_both_halves": true,
+       "max_drawdown": 49.86
+      },
+      "2_tick": {
+       "armed": 744,
+       "filled": 25,
+       "resolved": 25,
+       "net_pnl": 1538.55,
+       "profit_factor": 7.237,
+       "win_rate": 0.64,
+       "positive_both_halves": true,
+       "max_drawdown": 50.36
+      },
+      "3_tick": {
+       "armed": 744,
+       "filled": 25,
+       "resolved": 25,
+       "net_pnl": 1526.05,
+       "profit_factor": 7.076,
+       "win_rate": 0.64,
+       "positive_both_halves": true,
+       "max_drawdown": 50.86
+      }
+     }
+    }
+   },
+   "static_2tick": {
+    "armed": 744,
+    "filled": 25,
+    "fill_rate": 0.034,
+    "resolved": 25,
+    "net": 697.94,
+    "profit_factor": 6.216,
+    "win_rate": 0.6,
+    "h1_h2_by_trade_count": [
+     423.82,
+     274.12
+    ],
+    "h1_h2_by_date_median": [
+     423.82,
+     274.12
+    ],
+    "date_median": "2025-04-30",
+    "months": 12,
+    "top3_month_share": 0.677,
+    "top5_winner_share": 0.689
+   },
+   "runner_2tick": {
+    "armed": 744,
+    "filled": 25,
+    "fill_rate": 0.034,
+    "resolved": 25,
+    "net": 784.61,
+    "profit_factor": 6.863,
+    "win_rate": 0.6,
+    "h1_h2_by_trade_count": [
+     421.24,
+     363.37
+    ],
+    "h1_h2_by_date_median": [
+     421.24,
+     363.37
+    ],
+    "date_median": "2025-04-30",
+    "months": 12,
+    "top3_month_share": 0.599,
+    "top5_winner_share": 0.706
+   },
+   "static_2tick_same_bar_reference": {
+    "armed": 744,
+    "filled": 0,
+    "resolved": 0
+   }
+  },
+  {
+   "name": "rejected_non_ny",
+   "n": 865,
+   "sessions": {
+    "asian": 486,
+    "london": 379
+   },
+   "direction_control": {
+    "n_with_data": 865,
+    "horizons": {
+     "30m": {
+      "n": 865,
+      "mean_net": -4.11,
+      "t_stat": -1.24,
+      "share_positive": 0.466,
+      "total_net": -3558.2
+     },
+     "60m": {
+      "n": 865,
+      "mean_net": -6.98,
+      "t_stat": -1.43,
+      "share_positive": 0.43,
+      "total_net": -6034.7
+     },
+     "120m": {
+      "n": 865,
+      "mean_net": -21.56,
+      "t_stat": -2.89,
+      "share_positive": 0.409,
+      "total_net": -18650.2
+     },
+     "EOD": {
+      "n": 865,
+      "mean_net": -62.21,
+      "t_stat": -2.33,
+      "share_positive": 0.407,
+      "total_net": -53810.2
+     }
+    },
+    "positive_horizons": "0/4",
+    "best_t_stat": -1.24
+   },
+   "ioc_close_package": {
+    "population": {
+     "n": 865,
+     "filled_ioc_close": 15,
+     "fill_rate_ioc_close": 0.0173
+    },
+    "cells": {
+     "static": {
+      "1_tick": {
+       "armed": 865,
+       "filled": 15,
+       "resolved": 15,
+       "net_pnl": 244.98,
+       "profit_factor": 3.01,
+       "win_rate": 0.6,
+       "positive_both_halves": true,
+       "max_drawdown": 65.22
+      },
+      "2_tick": {
+       "armed": 865,
+       "filled": 15,
+       "resolved": 15,
+       "net_pnl": 237.48,
+       "profit_factor": 2.902,
+       "win_rate": 0.6,
+       "positive_both_halves": true,
+       "max_drawdown": 67.22
+      },
+      "3_tick": {
+       "armed": 865,
+       "filled": 15,
+       "resolved": 15,
+       "net_pnl": 229.98,
+       "profit_factor": 2.799,
+       "win_rate": 0.6,
+       "positive_both_halves": true,
+       "max_drawdown": 69.22
+      }
+     },
+     "runner": {
+      "1_tick": {
+       "armed": 865,
+       "filled": 15,
+       "resolved": 15,
+       "net_pnl": 268.13,
+       "profit_factor": 3.2,
+       "win_rate": 0.6,
+       "positive_both_halves": true,
+       "max_drawdown": 65.22
+      },
+      "2_tick": {
+       "armed": 865,
+       "filled": 15,
+       "resolved": 15,
+       "net_pnl": 260.63,
+       "profit_factor": 3.087,
+       "win_rate": 0.6,
+       "positive_both_halves": true,
+       "max_drawdown": 67.22
+      },
+      "3_tick": {
+       "armed": 865,
+       "filled": 15,
+       "resolved": 15,
+       "net_pnl": 253.13,
+       "profit_factor": 2.98,
+       "win_rate": 0.6,
+       "positive_both_halves": true,
+       "max_drawdown": 69.22
+      }
+     },
+     "partial_2ct_approx": {
+      "1_tick": {
+       "armed": 865,
+       "filled": 15,
+       "resolved": 15,
+       "net_pnl": 539.21,
+       "profit_factor": 3.311,
+       "win_rate": 0.6,
+       "positive_both_halves": true,
+       "max_drawdown": 123.48
+      },
+      "2_tick": {
+       "armed": 865,
+       "filled": 15,
+       "resolved": 15,
+       "net_pnl": 531.71,
+       "profit_factor": 3.25,
+       "win_rate": 0.6,
+       "positive_both_halves": true,
+       "max_drawdown": 125.48
+      },
+      "3_tick": {
+       "armed": 865,
+       "filled": 15,
+       "resolved": 15,
+       "net_pnl": 524.21,
+       "profit_factor": 3.191,
+       "win_rate": 0.6,
+       "positive_both_halves": true,
+       "max_drawdown": 127.48
+      }
+     }
+    }
+   },
+   "static_2tick": {
+    "armed": 865,
+    "filled": 15,
+    "fill_rate": 0.017,
+    "resolved": 15,
+    "net": 237.48,
+    "profit_factor": 2.902,
+    "win_rate": 0.6,
+    "h1_h2_by_trade_count": [
+     32.76,
+     204.72
+    ],
+    "h1_h2_by_date_median": [
+     32.76,
+     204.72
+    ],
+    "date_median": "2025-06-02",
+    "months": 9,
+    "top3_month_share": 0.841,
+    "top5_winner_share": 1.274
+   },
+   "runner_2tick": {
+    "armed": 865,
+    "filled": 15,
+    "fill_rate": 0.017,
+    "resolved": 15,
+    "net": 260.63,
+    "profit_factor": 3.087,
+    "win_rate": 0.6,
+    "h1_h2_by_trade_count": [
+     55.91,
+     204.72
+    ],
+    "h1_h2_by_date_median": [
+     55.91,
+     204.72
+    ],
+    "date_median": "2025-06-02",
+    "months": 9,
+    "top3_month_share": 0.876,
+    "top5_winner_share": 1.316
+   },
+   "static_2tick_same_bar_reference": {
+    "armed": 865,
+    "filled": 1,
+    "fill_rate": 0.001,
+    "resolved": 1,
+    "net": 12.04,
+    "profit_factor": null,
+    "win_rate": 1.0,
+    "h1_h2_by_trade_count": [
+     0,
+     12.04
+    ],
+    "h1_h2_by_date_median": [
+     0,
+     12.04
+    ],
+    "date_median": "2026-06-21",
+    "months": 1,
+    "top3_month_share": 1.0,
+    "top5_winner_share": 1.0
+   }
+  },
+  {
+   "name": "rejected_detached_only",
+   "n": 1268,
+   "sessions": {
+    "new_york": 589,
+    "asian": 376,
+    "london": 303
+   },
+   "direction_control": {
+    "n_with_data": 1267,
+    "horizons": {
+     "30m": {
+      "n": 1267,
+      "mean_net": -2.62,
+      "t_stat": -0.75,
+      "share_positive": 0.47,
+      "total_net": -3320.66
+     },
+     "60m": {
+      "n": 1267,
+      "mean_net": -4.47,
+      "t_stat": -0.93,
+      "share_positive": 0.444,
+      "total_net": -5657.66
+     },
+     "120m": {
+      "n": 1267,
+      "mean_net": -13.71,
+      "t_stat": -1.98,
+      "share_positive": 0.44,
+      "total_net": -17376.66
+     },
+     "EOD": {
+      "n": 1267,
+      "mean_net": -31.25,
+      "t_stat": -1.74,
+      "share_positive": 0.443,
+      "total_net": -39596.16
+     }
+    },
+    "positive_horizons": "0/4",
+    "best_t_stat": -0.75
+   },
+   "ioc_close_package": {
+    "population": {
+     "n": 1268,
+     "filled_ioc_close": 31,
+     "fill_rate_ioc_close": 0.0244
+    },
+    "cells": {
+     "static": {
+      "1_tick": {
+       "armed": 1268,
+       "filled": 31,
+       "resolved": 31,
+       "net_pnl": 803.94,
+       "profit_factor": 5.886,
+       "win_rate": 0.677,
+       "positive_both_halves": true,
+       "max_drawdown": 72.22
+      },
+      "2_tick": {
+       "armed": 1268,
+       "filled": 31,
+       "resolved": 31,
+       "net_pnl": 788.44,
+       "profit_factor": 5.64,
+       "win_rate": 0.645,
+       "positive_both_halves": true,
+       "max_drawdown": 74.22
+      },
+      "3_tick": {
+       "armed": 1268,
+       "filled": 31,
+       "resolved": 31,
+       "net_pnl": 772.94,
+       "profit_factor": 5.406,
+       "win_rate": 0.645,
+       "positive_both_halves": true,
+       "max_drawdown": 76.22
+      }
+     },
+     "runner": {
+      "1_tick": {
+       "armed": 1268,
+       "filled": 31,
+       "resolved": 31,
+       "net_pnl": 874.82,
+       "profit_factor": 6.317,
+       "win_rate": 0.677,
+       "positive_both_halves": true,
+       "max_drawdown": 72.22
+      },
+      "2_tick": {
+       "armed": 1268,
+       "filled": 31,
+       "resolved": 31,
+       "net_pnl": 859.32,
+       "profit_factor": 6.057,
+       "win_rate": 0.645,
+       "positive_both_halves": true,
+       "max_drawdown": 74.22
+      },
+      "3_tick": {
+       "armed": 1268,
+       "filled": 31,
+       "resolved": 31,
+       "net_pnl": 843.82,
+       "profit_factor": 5.81,
+       "win_rate": 0.645,
+       "positive_both_halves": true,
+       "max_drawdown": 76.22
+      }
+     },
+     "partial_2ct_approx": {
+      "1_tick": {
+       "armed": 1268,
+       "filled": 31,
+       "resolved": 31,
+       "net_pnl": 1732.7,
+       "profit_factor": 6.559,
+       "win_rate": 0.677,
+       "positive_both_halves": true,
+       "max_drawdown": 137.48
+      },
+      "2_tick": {
+       "armed": 1268,
+       "filled": 31,
+       "resolved": 31,
+       "net_pnl": 1717.2,
+       "profit_factor": 6.423,
+       "win_rate": 0.677,
+       "positive_both_halves": true,
+       "max_drawdown": 139.48
+      },
+      "3_tick": {
+       "armed": 1268,
+       "filled": 31,
+       "resolved": 31,
+       "net_pnl": 1701.7,
+       "profit_factor": 6.29,
+       "win_rate": 0.677,
+       "positive_both_halves": true,
+       "max_drawdown": 141.48
+      }
+     }
+    }
+   },
+   "static_2tick": {
+    "armed": 1268,
+    "filled": 31,
+    "fill_rate": 0.024,
+    "resolved": 31,
+    "net": 788.44,
+    "profit_factor": 5.64,
+    "win_rate": 0.645,
+    "h1_h2_by_trade_count": [
+     414.54,
+     373.9
+    ],
+    "h1_h2_by_date_median": [
+     414.54,
+     373.9
+    ],
+    "date_median": "2025-04-30",
+    "months": 16,
+    "top3_month_share": 0.593,
+    "top5_winner_share": 0.616
+   },
+   "runner_2tick": {
+    "armed": 1268,
+    "filled": 31,
+    "fill_rate": 0.024,
+    "resolved": 31,
+    "net": 859.32,
+    "profit_factor": 6.057,
+    "win_rate": 0.645,
+    "h1_h2_by_trade_count": [
+     388.28,
+     471.04
+    ],
+    "h1_h2_by_date_median": [
+     388.28,
+     471.04
+    ],
+    "date_median": "2025-04-30",
+    "months": 16,
+    "top3_month_share": 0.602,
+    "top5_winner_share": 0.644
+   },
+   "static_2tick_same_bar_reference": {
+    "armed": 1268,
+    "filled": 1,
+    "fill_rate": 0.001,
+    "resolved": 1,
+    "net": 12.04,
+    "profit_factor": null,
+    "win_rate": 1.0,
+    "h1_h2_by_trade_count": [
+     0,
+     12.04
+    ],
+    "h1_h2_by_date_median": [
+     0,
+     12.04
+    ],
+    "date_median": "2026-06-21",
+    "months": 1,
+    "top3_month_share": 1.0,
+    "top5_winner_share": 1.0
+   }
+  },
+  {
+   "name": "approved_ny_audit_window_2025-07-24_to_2026-06-26",
+   "n": 52,
+   "sessions": {
+    "new_york": 52
+   },
+   "direction_control": {
+    "n_with_data": 52,
+    "horizons": {
+     "30m": {
+      "n": 52,
+      "mean_net": -10.69,
+      "t_stat": -0.68,
+      "share_positive": 0.442,
+      "total_net": -555.96
+     },
+     "60m": {
+      "n": 52,
+      "mean_net": 6.74,
+      "t_stat": 0.29,
+      "share_positive": 0.538,
+      "total_net": 350.54
+     },
+     "120m": {
+      "n": 52,
+      "mean_net": 35.99,
+      "t_stat": 1.36,
+      "share_positive": 0.596,
+      "total_net": 1871.54
+     },
+     "EOD": {
+      "n": 52,
+      "mean_net": -1.76,
+      "t_stat": -0.05,
+      "share_positive": 0.442,
+      "total_net": -91.46
+     }
+    },
+    "positive_horizons": "2/4",
+    "best_t_stat": 1.36
+   },
+   "ioc_close_package": {
+    "population": {
+     "n": 52,
+     "filled_ioc_close": 22,
+     "fill_rate_ioc_close": 0.4231
+    },
+    "cells": {
+     "static": {
+      "1_tick": {
+       "armed": 52,
+       "filled": 22,
+       "resolved": 22,
+       "net_pnl": 283.94,
+       "profit_factor": 3.072,
+       "win_rate": 0.545,
+       "positive_both_halves": true,
+       "max_drawdown": 51.82
+      },
+      "2_tick": {
+       "armed": 52,
+       "filled": 22,
+       "resolved": 22,
+       "net_pnl": 272.94,
+       "profit_factor": 2.921,
+       "win_rate": 0.545,
+       "positive_both_halves": true,
+       "max_drawdown": 52.82
+      },
+      "3_tick": {
+       "armed": 52,
+       "filled": 22,
+       "resolved": 22,
+       "net_pnl": 261.94,
+       "profit_factor": 2.781,
+       "win_rate": 0.545,
+       "positive_both_halves": false,
+       "max_drawdown": 53.82
+      }
+     },
+     "runner": {
+      "1_tick": {
+       "armed": 52,
+       "filled": 22,
+       "resolved": 22,
+       "net_pnl": 271.69,
+       "profit_factor": 3.196,
+       "win_rate": 0.591,
+       "positive_both_halves": true,
+       "max_drawdown": 51.82
+      },
+      "2_tick": {
+       "armed": 52,
+       "filled": 22,
+       "resolved": 22,
+       "net_pnl": 260.69,
+       "profit_factor": 3.033,
+       "win_rate": 0.591,
+       "positive_both_halves": true,
+       "max_drawdown": 52.82
+      },
+      "3_tick": {
+       "armed": 52,
+       "filled": 22,
+       "resolved": 22,
+       "net_pnl": 249.69,
+       "profit_factor": 2.881,
+       "win_rate": 0.591,
+       "positive_both_halves": true,
+       "max_drawdown": 53.82
+      }
+     },
+     "partial_2ct_approx": {
+      "1_tick": {
+       "armed": 52,
+       "filled": 22,
+       "resolved": 22,
+       "net_pnl": 593.91,
+       "profit_factor": 3.562,
+       "win_rate": 0.591,
+       "positive_both_halves": true,
+       "max_drawdown": 100.16
+      },
+      "2_tick": {
+       "armed": 52,
+       "filled": 22,
+       "resolved": 22,
+       "net_pnl": 582.91,
+       "profit_factor": 3.467,
+       "win_rate": 0.591,
+       "positive_both_halves": true,
+       "max_drawdown": 101.16
+      },
+      "3_tick": {
+       "armed": 52,
+       "filled": 22,
+       "resolved": 22,
+       "net_pnl": 571.91,
+       "profit_factor": 3.375,
+       "win_rate": 0.591,
+       "positive_both_halves": true,
+       "max_drawdown": 102.16
+      }
+     }
+    }
+   },
+   "static_2tick": {
+    "armed": 52,
+    "filled": 22,
+    "fill_rate": 0.423,
+    "resolved": 22,
+    "net": 272.94,
+    "profit_factor": 2.921,
+    "win_rate": 0.545,
+    "h1_h2_by_trade_count": [
+     269.56,
+     3.38
+    ],
+    "h1_h2_by_date_median": [
+     269.56,
+     3.38
+    ],
+    "date_median": "2025-10-31",
+    "months": 10,
+    "top3_month_share": 1.07,
+    "top5_winner_share": 0.803
+   },
+   "runner_2tick": {
+    "armed": 52,
+    "filled": 22,
+    "fill_rate": 0.423,
+    "resolved": 22,
+    "net": 260.69,
+    "profit_factor": 3.033,
+    "win_rate": 0.591,
+    "h1_h2_by_trade_count": [
+     220.51,
+     40.18
+    ],
+    "h1_h2_by_date_median": [
+     220.51,
+     40.18
+    ],
+    "date_median": "2025-10-31",
+    "months": 10,
+    "top3_month_share": 1.026,
+    "top5_winner_share": 0.853
+   },
+   "static_2tick_same_bar_reference": {
+    "armed": 52,
+    "filled": 16,
+    "fill_rate": 0.308,
+    "resolved": 16,
+    "net": -155.74,
+    "profit_factor": 0.478,
+    "win_rate": 0.25,
+    "h1_h2_by_trade_count": [
+     -36.16,
+     -119.58
+    ],
+    "h1_h2_by_date_median": [
+     -36.16,
+     -119.58
+    ],
+    "date_median": "2025-10-31",
+    "months": 9,
+    "top3_month_share": null,
+    "top5_winner_share": null
+   }
+  },
+  {
+   "name": "approved_ny_pre_audit_window",
+   "n": 55,
+   "sessions": {
+    "new_york": 55
+   },
+   "direction_control": {
+    "n_with_data": 55,
+    "horizons": {
+     "30m": {
+      "n": 55,
+      "mean_net": 13.45,
+      "t_stat": 0.85,
+      "share_positive": 0.509,
+      "total_net": 739.6
+     },
+     "60m": {
+      "n": 55,
+      "mean_net": 24.96,
+      "t_stat": 1.1,
+      "share_positive": 0.473,
+      "total_net": 1372.6
+     },
+     "120m": {
+      "n": 55,
+      "mean_net": 17.63,
+      "t_stat": 0.71,
+      "share_positive": 0.436,
+      "total_net": 969.6
+     },
+     "EOD": {
+      "n": 55,
+      "mean_net": 38.8,
+      "t_stat": 0.92,
+      "share_positive": 0.455,
+      "total_net": 2134.1
+     }
+    },
+    "positive_horizons": "4/4",
+    "best_t_stat": 1.1
+   },
+   "ioc_close_package": {
+    "population": {
+     "n": 55,
+     "filled_ioc_close": 33,
+     "fill_rate_ioc_close": 0.6
+    },
+    "cells": {
+     "static": {
+      "1_tick": {
+       "armed": 55,
+       "filled": 33,
+       "resolved": 33,
+       "net_pnl": 202.36,
+       "profit_factor": 1.849,
+       "win_rate": 0.576,
+       "positive_both_halves": true,
+       "max_drawdown": 93.46
+      },
+      "2_tick": {
+       "armed": 55,
+       "filled": 33,
+       "resolved": 33,
+       "net_pnl": 185.86,
+       "profit_factor": 1.757,
+       "win_rate": 0.545,
+       "positive_both_halves": true,
+       "max_drawdown": 95.96
+      },
+      "3_tick": {
+       "armed": 55,
+       "filled": 33,
+       "resolved": 33,
+       "net_pnl": 169.36,
+       "profit_factor": 1.67,
+       "win_rate": 0.545,
+       "positive_both_halves": true,
+       "max_drawdown": 98.46
+      }
+     },
+     "runner": {
+      "1_tick": {
+       "armed": 55,
+       "filled": 33,
+       "resolved": 33,
+       "net_pnl": 584.58,
+       "profit_factor": 3.453,
+       "win_rate": 0.576,
+       "positive_both_halves": true,
+       "max_drawdown": 93.46
+      },
+      "2_tick": {
+       "armed": 55,
+       "filled": 33,
+       "resolved": 33,
+       "net_pnl": 568.08,
+       "profit_factor": 3.315,
+       "win_rate": 0.545,
+       "positive_both_halves": true,
+       "max_drawdown": 95.96
+      },
+      "3_tick": {
+       "armed": 55,
+       "filled": 33,
+       "resolved": 33,
+       "net_pnl": 551.58,
+       "profit_factor": 3.181,
+       "win_rate": 0.545,
+       "positive_both_halves": true,
+       "max_drawdown": 98.46
+      }
+     },
+     "partial_2ct_approx": {
+      "1_tick": {
+       "armed": 55,
+       "filled": 33,
+       "resolved": 33,
+       "net_pnl": 844.36,
+       "profit_factor": 2.867,
+       "win_rate": 0.576,
+       "positive_both_halves": true,
+       "max_drawdown": 178.22
+      },
+      "2_tick": {
+       "armed": 55,
+       "filled": 33,
+       "resolved": 33,
+       "net_pnl": 827.86,
+       "profit_factor": 2.803,
+       "win_rate": 0.576,
+       "positive_both_halves": true,
+       "max_drawdown": 180.72
+      },
+      "3_tick": {
+       "armed": 55,
+       "filled": 33,
+       "resolved": 33,
+       "net_pnl": 811.36,
+       "profit_factor": 2.74,
+       "win_rate": 0.576,
+       "positive_both_halves": true,
+       "max_drawdown": 183.22
+      }
+     }
+    }
+   },
+   "static_2tick": {
+    "armed": 55,
+    "filled": 33,
+    "fill_rate": 0.6,
+    "resolved": 33,
+    "net": 185.86,
+    "profit_factor": 1.757,
+    "win_rate": 0.545,
+    "h1_h2_by_trade_count": [
+     70.36,
+     115.5
+    ],
+    "h1_h2_by_date_median": [
+     70.36,
+     115.5
+    ],
+    "date_median": "2025-02-12",
+    "months": 13,
+    "top3_month_share": 1.072,
+    "top5_winner_share": 1.241
+   },
+   "runner_2tick": {
+    "armed": 55,
+    "filled": 33,
+    "fill_rate": 0.6,
+    "resolved": 33,
+    "net": 568.08,
+    "profit_factor": 3.315,
+    "win_rate": 0.545,
+    "h1_h2_by_trade_count": [
+     217.86,
+     350.22
+    ],
+    "h1_h2_by_date_median": [
+     217.86,
+     350.22
+    ],
+    "date_median": "2025-02-12",
+    "months": 13,
+    "top3_month_share": 0.905,
+    "top5_winner_share": 1.039
+   },
+   "static_2tick_same_bar_reference": {
+    "armed": 55,
+    "filled": 19,
+    "fill_rate": 0.345,
+    "resolved": 19,
+    "net": -171.18,
+    "profit_factor": 0.494,
+    "win_rate": 0.263,
+    "h1_h2_by_trade_count": [
+     -104.58,
+     -66.6
+    ],
+    "h1_h2_by_date_median": [
+     -104.58,
+     -66.6
+    ],
+    "date_median": "2025-02-18",
+    "months": 9,
+    "top3_month_share": null,
+    "top5_winner_share": null
+   }
+  },
+  {
+   "name": "approved_all_audit_window",
+   "n": 146,
+   "sessions": {
+    "london": 60,
+    "new_york": 52,
+    "asian": 34
+   },
+   "direction_control": {
+    "n_with_data": 146,
+    "horizons": {
+     "30m": {
+      "n": 146,
+      "mean_net": -0.09,
+      "t_stat": -0.01,
+      "share_positive": 0.479,
+      "total_net": -13.08
+     },
+     "60m": {
+      "n": 146,
+      "mean_net": 9.51,
+      "t_stat": 0.9,
+      "share_positive": 0.507,
+      "total_net": 1388.92
+     },
+     "120m": {
+      "n": 146,
+      "mean_net": 19.32,
+      "t_stat": 1.14,
+      "share_positive": 0.548,
+      "total_net": 2820.92
+     },
+     "EOD": {
+      "n": 146,
+      "mean_net": 53.34,
+      "t_stat": 1.15,
+      "share_positive": 0.452,
+      "total_net": 7786.92
+     }
+    },
+    "positive_horizons": "3/4",
+    "best_t_stat": 1.15
+   },
+   "ioc_close_package": {
+    "population": {
+     "n": 146,
+     "filled_ioc_close": 58,
+     "fill_rate_ioc_close": 0.3973
+    },
+    "cells": {
+     "static": {
+      "1_tick": {
+       "armed": 146,
+       "filled": 58,
+       "resolved": 58,
+       "net_pnl": 114.16,
+       "profit_factor": 1.191,
+       "win_rate": 0.414,
+       "positive_both_halves": false,
+       "max_drawdown": 120.4
+      },
+      "2_tick": {
+       "armed": 146,
+       "filled": 58,
+       "resolved": 58,
+       "net_pnl": 85.16,
+       "profit_factor": 1.139,
+       "win_rate": 0.414,
+       "positive_both_halves": false,
+       "max_drawdown": 131.92
+      },
+      "3_tick": {
+       "armed": 146,
+       "filled": 58,
+       "resolved": 58,
+       "net_pnl": 56.16,
+       "profit_factor": 1.089,
+       "win_rate": 0.414,
+       "positive_both_halves": false,
+       "max_drawdown": 147.42
+      }
+     },
+     "runner": {
+      "1_tick": {
+       "armed": 146,
+       "filled": 58,
+       "resolved": 58,
+       "net_pnl": 156.48,
+       "profit_factor": 1.295,
+       "win_rate": 0.5,
+       "positive_both_halves": true,
+       "max_drawdown": 120.4
+      },
+      "2_tick": {
+       "armed": 146,
+       "filled": 58,
+       "resolved": 58,
+       "net_pnl": 127.48,
+       "profit_factor": 1.234,
+       "win_rate": 0.5,
+       "positive_both_halves": true,
+       "max_drawdown": 124.9
+      },
+      "3_tick": {
+       "armed": 146,
+       "filled": 58,
+       "resolved": 58,
+       "net_pnl": 98.48,
+       "profit_factor": 1.176,
+       "win_rate": 0.5,
+       "positive_both_halves": true,
+       "max_drawdown": 129.4
+      }
+     },
+     "partial_2ct_approx": {
+      "1_tick": {
+       "armed": 146,
+       "filled": 58,
+       "resolved": 58,
+       "net_pnl": 371.56,
+       "profit_factor": 1.363,
+       "win_rate": 0.448,
+       "positive_both_halves": true,
+       "max_drawdown": 225.14
+      },
+      "2_tick": {
+       "armed": 146,
+       "filled": 58,
+       "resolved": 58,
+       "net_pnl": 342.56,
+       "profit_factor": 1.329,
+       "win_rate": 0.448,
+       "positive_both_halves": true,
+       "max_drawdown": 229.64
+      },
+      "3_tick": {
+       "armed": 146,
+       "filled": 58,
+       "resolved": 58,
+       "net_pnl": 313.56,
+       "profit_factor": 1.297,
+       "win_rate": 0.448,
+       "positive_both_halves": true,
+       "max_drawdown": 234.14
+      }
+     }
+    }
+   },
+   "static_2tick": {
+    "armed": 146,
+    "filled": 58,
+    "fill_rate": 0.397,
+    "resolved": 58,
+    "net": 85.16,
+    "profit_factor": 1.139,
+    "win_rate": 0.414,
+    "h1_h2_by_trade_count": [
+     100.48,
+     -15.32
+    ],
+    "h1_h2_by_date_median": [
+     100.48,
+     -15.32
+    ],
+    "date_median": "2025-11-27",
+    "months": 12,
+    "top3_month_share": 2.872,
+    "top5_winner_share": 2.573
+   },
+   "runner_2tick": {
+    "armed": 146,
+    "filled": 58,
+    "fill_rate": 0.397,
+    "resolved": 58,
+    "net": 127.48,
+    "profit_factor": 1.234,
+    "win_rate": 0.5,
+    "h1_h2_by_trade_count": [
+     66.16,
+     61.32
+    ],
+    "h1_h2_by_date_median": [
+     66.16,
+     61.32
+    ],
+    "date_median": "2025-11-27",
+    "months": 12,
+    "top3_month_share": 1.775,
+    "top5_winner_share": 1.747
+   },
+   "static_2tick_same_bar_reference": {
+    "armed": 146,
+    "filled": 45,
+    "fill_rate": 0.308,
+    "resolved": 45,
+    "net": -305.04,
+    "profit_factor": 0.609,
+    "win_rate": 0.311,
+    "h1_h2_by_trade_count": [
+     -83.72,
+     -221.32
+    ],
+    "h1_h2_by_date_median": [
+     -83.72,
+     -221.32
+    ],
+    "date_median": "2025-11-06",
+    "months": 12,
+    "top3_month_share": null,
+    "top5_winner_share": null
+   }
+  }
+ ]
+}
