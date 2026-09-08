@@ -25,7 +25,10 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Optional
 
-from config.settings import SystemConfig, load_config, options_companion_sqlite_path
+from config.settings import (
+    ConfigError, SystemConfig, _validate_inverse_demo_route,
+    load_config, options_companion_sqlite_path,
+)
 from execution.broker_interface import BracketOrder, BrokerInterface
 from context.bar_history import BarHistory
 from context.structural_regime import (
@@ -123,7 +126,7 @@ from context.range_signal import (
 
 
 def _inverse_accounting_epoch_start(cfg: SystemConfig) -> Optional[datetime]:
-    if getattr(cfg, "mnq_orb_breakout_inverse_mode", "observe_only") != "paper_sim":
+    if getattr(cfg, "mnq_orb_breakout_inverse_mode", "observe_only") not in {"paper_sim", "tradovate_demo"}:
         return None
     raw = getattr(cfg, "mnq_orb_breakout_inverse_epoch_start", None)
     if not raw:
@@ -345,6 +348,21 @@ def _make_broker(
         logger.info("Using TradovateBroker (env=%s)", config.env)
         return TradovateBroker(config=config)
     return _paper_broker(starting_balance, cfg)
+
+
+def _inverse_demo_broker(cfg: SystemConfig, starting_balance: float) -> BrokerInterface:
+    from execution.tradovate_broker import TradovateBroker
+
+    expected = _validate_inverse_demo_route(cfg)
+    broker = _make_broker(starting_balance=starting_balance, cfg=cfg)
+    if (
+        not isinstance(broker, TradovateBroker)
+        or broker.config.env != "demo"
+        or broker.config.expected_account_id != expected
+        or broker.is_live
+    ):
+        raise ConfigError("inverse DEMO broker must resolve to the pinned Tradovate DEMO adapter")
+    return broker
 
 
 # Tick size per instrument root — used to align entry/stop/target to valid broker
@@ -1123,6 +1141,13 @@ def process_alert(
                     open_pos.get("instrument"), _open_pos_strategy
                 )
             )
+            _inverse_demo_position = bool(
+                isinstance(_breakout_inverse_audit, dict)
+                and _breakout_inverse_audit.get("paper_mode") == "tradovate_demo"
+                and is_mnq_orb_breakout_candidate(open_pos.get("instrument"), _open_pos_strategy)
+            )
+            if _inverse_demo_position and simulate:
+                raise ConfigError("cannot simulate resolution of a Tradovate-owned inverse position")
             _proof_paper_position = bool(
                 (
                     isinstance(_reclaim_proof_audit, dict)
@@ -1148,7 +1173,7 @@ def process_alert(
             # Tradovate resolver on a later bar.
             _using_tradovate_position = (
                 not simulate
-                and broker_type == "tradovate"
+                and (broker_type == "tradovate" or _inverse_demo_position)
                 and not _proof_paper_position
                 and not _inverse_paper_position
             )
@@ -1163,7 +1188,16 @@ def process_alert(
             if _using_tradovate_position:
                 from execution.tradovate_broker import TradovateBroker, TradovateConfig
                 from execution.broker_interface import Position as _Position
-                tv = TradovateBroker(config=TradovateConfig.from_env())
+                tv = (
+                    _inverse_demo_broker(cfg, cfg.position_sizing.starting_balance)
+                    if _inverse_demo_position
+                    else TradovateBroker(config=TradovateConfig.from_env())
+                )
+                if _inverse_demo_position:
+                    if _breakout_inverse_audit.get("expected_account_id") != tv.config.expected_account_id:
+                        raise ConfigError("inverse DEMO position account pin changed or is missing")
+                    if not tv._authenticate() or tv._verify_account_for_order():
+                        raise ConfigError("inverse DEMO position account cannot be verified")
                 tv._last_position = _Position(
                     instrument=open_pos["instrument"] or state.instrument,
                     direction=open_pos["direction"],
@@ -1184,7 +1218,10 @@ def process_alert(
                 # (never stalls on a non-dict ids.get()).
                 _restored_ids = open_pos.get("order_ids")
                 tv._last_order_ids = _restored_ids if isinstance(_restored_ids, dict) else None
-                fill = tv.resolve_position()
+                fill = (
+                    tv.resolve_position(strict_order_identity=True)
+                    if _inverse_demo_position else tv.resolve_position()
+                )
             elif same_instrument:
                 # Paper simulation: resolve against THIS bar's OHLC.
                 if _inverse_paper_position:
@@ -1401,6 +1438,7 @@ def process_alert(
             # position even if it errors.
             if (
                 _using_tradovate_position
+                and not _inverse_demo_position
                 and same_instrument
                 and fill is None
                 and open_pos.get("direction_role") != "COUNTERTREND_SCALP"
@@ -2138,14 +2176,20 @@ def process_alert(
         journal_entry["shadow_range_signal"] = _range_signal_dict
 
     # ── Step 4: Risk validation ───────────────────────────────────────────────
-    _inverse_paper_active = (
+    _inverse_active = (
         mnq_breakout_inverse_decision is not None
         and mnq_breakout_inverse_decision.apply_override
     )
+    _inverse_paper_active = bool(
+        _inverse_active and mnq_breakout_inverse_decision.force_paper_broker
+    )
+    _inverse_demo_active = bool(
+        _inverse_active and mnq_breakout_inverse_decision.mode == "tradovate_demo"
+    )
     _inverse_epoch_peak = None
-    if _inverse_paper_active:
+    if _inverse_active:
         if _inverse_epoch_start is None:
-            raise ValueError("inverse paper candidate has no accounting epoch start")
+            raise ValueError("inverse candidate has no accounting epoch start")
         journal_balance, _inverse_epoch_peak = journal.get_account_state_since(
             cfg.position_sizing.starting_balance,
             _inverse_epoch_start,
@@ -2169,6 +2213,11 @@ def process_alert(
                 "MNQ": ORB_INVERSE_MARKETABLE_TICKS
             },
         )
+    elif _inverse_demo_active:
+        if simulate:
+            raise ConfigError("inverse tradovate_demo cannot run with simulate=True; select paper_sim")
+        broker = _inverse_demo_broker(cfg, journal_balance)
+        mnq_breakout_inverse_audit["expected_account_id"] = broker.config.expected_account_id
     else:
         broker = (
             _paper_broker(journal_balance, cfg)
@@ -2176,7 +2225,7 @@ def process_alert(
             else _make_broker(starting_balance=journal_balance, cfg=cfg)
         )
     if (
-        not _inverse_paper_active
+        not _inverse_active
         and _active_mnq_proof_decision is not None
         and _active_mnq_proof_decision.apply_override
         and _active_mnq_proof_decision.force_paper_broker
@@ -2199,7 +2248,7 @@ def process_alert(
     daily_state.account_balance = account_balance
     daily_state.account_peak_balance = (
         _inverse_epoch_peak
-        if _inverse_paper_active
+        if _inverse_active
         else journal.get_account_peak_balance(
             cfg.position_sizing.starting_balance, today
         )
@@ -2677,6 +2726,7 @@ def process_alert(
         state.ohlc.close
         if (
             state.ohlc is not None
+            and isinstance(broker, PaperBroker)
             and mnq_breakout_inverse_decision is not None
             and mnq_breakout_inverse_decision.apply_override
         )
@@ -2688,6 +2738,22 @@ def process_alert(
         else _proof_market_px
     )
     _submit_ts = datetime.now(timezone.utc)
+    _inverse_submit_latch = None
+    if _inverse_demo_active:
+        from execution.inverse_demo_safety import reserve_submit
+        try:
+            _inverse_submit_latch = reserve_submit(log_dir, broker, order.client_order_id)
+        except Exception as exc:
+            reason = f"inverse_demo_pre_submit_blocked: {exc}"
+            result["decision"] = "ORDER_SUPPRESSED"
+            result["gate_reason"] = reason
+            journal.log_order_suppression(
+                instrument=state.instrument, session=state.session,
+                final_decision="ORDER_SUPPRESSED", gate_reason=reason,
+                strategy=order.strategy, client_order_id=order.client_order_id,
+                for_date=today,
+            )
+            return result
     fill = (
         broker.execute_bracket(order, market_price=_paper_market_px)
         if _paper_market_px is not None
@@ -2774,6 +2840,8 @@ def process_alert(
             client_order_id=order.client_order_id,
             execution_audit=getattr(fill, "execution_audit", None),
         )
+        if _inverse_submit_latch is not None and not broker._inverse_submit_uncertain:
+            _inverse_submit_latch.unlink()
         daily_state.has_open_position = False
         result["decision"] = "BLOCKED_EXECUTION_FAILED"
         result["fill"] = {
@@ -2911,10 +2979,16 @@ def process_alert(
                 session=state.session,
                 order_ids=_order_ids,
                 for_date=today,
-                stop=decision.setup.stop,
-                exit_mode=getattr(cfg, "exit_mode", "static"),
+                stop=order.stop if _inverse_active else decision.setup.stop,
+                exit_mode="static" if _inverse_active else getattr(cfg, "exit_mode", "static"),
                 client_order_id=order.client_order_id,
             )
+            if _inverse_submit_latch is not None and fill.exit_reason is None:
+                # Keep restart protection until both ownership and IDs persist.
+                from execution.inverse_demo_safety import release_journaled_submit
+                release_journaled_submit(
+                    _inverse_submit_latch, journal, today, order.client_order_id, _order_ids,
+                )
     except Exception as _exc:  # pragma: no cover - persistence must never break trading
         logger.warning("order-id persist skipped: %s", _exc)
 

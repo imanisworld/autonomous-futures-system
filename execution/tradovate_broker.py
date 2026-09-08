@@ -144,6 +144,40 @@ def _rr_preserving_entry_cap(order: BracketOrder, instrument: str) -> float:
     return round(snapped * tick, 4)
 
 
+def _inverse_ioc_entry_leg(order: BracketOrder) -> dict:
+    """Frozen inverse entry; post-fill validation retains the risk/R:R limits.
+
+    The canonical PaperBroker accepts at entry +/- eight ticks without an R:R
+    entry clamp. Keep this exception confined to the explicit inverse contract.
+    Reject off-grid levels rather than silently changing its static geometry.
+    """
+    if (
+        order.instrument.replace("1!", "").upper() != "MNQ"
+        or order.strategy != "orb_breakout"
+        or order.execution_model != "ioc_limit_static"
+        or order.direction not in {"LONG", "SHORT"}
+        or order.contracts != 1
+        or order.max_slippage_ticks != 8.0
+        or order.force_market_entry
+        or order.force_runner_exit
+        or not order.post_fill_validation_required
+    ):
+        raise ValueError("invalid frozen inverse IOC contract")
+    for price in (order.entry, order.stop, order.target):
+        if not math.isfinite(float(price)) or _round_to_tick(price, "MNQ") != price:
+            raise ValueError("inverse static bracket must be finite and on the MNQ tick grid")
+    if not (
+        order.stop < order.entry < order.target if order.direction == "LONG"
+        else order.target < order.entry < order.stop
+    ):
+        raise ValueError("invalid inverse bracket direction")
+    return {
+        "orderType": "Limit",
+        "price": float(order.entry) + (2.0 if order.direction == "LONG" else -2.0),
+        "timeInForce": "IOC",
+    }
+
+
 def _runner_live_enabled() -> bool:
     """Authoritative live exit contract with backward-compatible flag support."""
     mode = os.getenv("EXIT_MODE", "").strip().lower()
@@ -807,6 +841,8 @@ class TradovateBroker(BrokerInterface):
                 expected,
             )
             return "ACCOUNT_MISMATCH"
+        if self._account_id != expected:
+            return "ACCOUNT_MISMATCH"
         # get_account_balance() reads Tradovate's cash-balance snapshot
         # (totalCashValue/cashBalance/netLiq/balance/amount) — an account
         # cash/equity balance, NOT a computed margin/buying-power figure.
@@ -1005,6 +1041,24 @@ class TradovateBroker(BrokerInterface):
     def execute_bracket(self, order: BracketOrder) -> Fill:
         """Place entry market order with attached stop and target (OSO bracket)."""
         try:
+            inverse_ioc = order.execution_model == "ioc_limit_static"
+            self._inverse_submit_uncertain = False
+            inverse_leg = None
+            if inverse_ioc:
+                pin = os.getenv("TRADOVATE_EXPECTED_ACCOUNT_ID", "").strip()
+                if (
+                    self.config.env != "demo"
+                    or os.getenv("TRADOVATE_ENV", "").strip().lower() != "demo"
+                    or os.getenv("BROKER", "").strip().lower() != "tradovate"
+                    or os.getenv("LIVE_TRADING_ENABLED", "").strip().lower() != "false"
+                    or not pin.isascii() or not pin.isdecimal() or int(pin) <= 0
+                    or self.config.expected_account_id != int(pin)
+                ):
+                    return self._cancelled_fill(order, "INVERSE_DEMO_ROUTE_INVALID")
+                try:
+                    inverse_leg = _inverse_ioc_entry_leg(order)
+                except (TypeError, ValueError):
+                    return self._cancelled_fill(order, "INVERSE_IOC_CONTRACT_INVALID")
             # ── Safety: TRADOVATE_ENV=live requires explicit LIVE_TRADING_ENABLED=true ──
             if self.config.env == "live":
                 live_enabled = os.getenv("LIVE_TRADING_ENABLED", "false").strip().lower()
@@ -1026,7 +1080,7 @@ class TradovateBroker(BrokerInterface):
                 return self._cancelled_fill(order, "BROKER_NOT_READY")
 
             # ── Entry execution mode (demo/paper only beyond "legacy") ────────
-            exec_mode = _entry_execution_mode()
+            exec_mode = "ioc_limit" if inverse_ioc else _entry_execution_mode()
             if exec_mode not in ENTRY_EXECUTION_MODES:
                 logger.error(
                     "BLOCKED Tradovate order: unknown TRADOVATE_ENTRY_EXECUTION_MODE=%r "
@@ -1078,7 +1132,9 @@ class TradovateBroker(BrokerInterface):
             # the tolerance lookup entirely — a forced Market entry never rests
             # unfilled, sidestepping the IOC-limit no-fill bottleneck this proof
             # mode exists to test.
-            runner_live = _runner_live_enabled() or getattr(order, "force_runner_exit", False)
+            runner_live = not inverse_ioc and (
+                _runner_live_enabled() or getattr(order, "force_runner_exit", False)
+            )
             tick = _TICK_SIZE.get(root, 0.25)
             entry_leg = {"orderType": "Market"}
             limit_px = None
@@ -1094,7 +1150,10 @@ class TradovateBroker(BrokerInterface):
                     raw = min(raw, rr_cap) if order.direction == "LONG" else max(raw, rr_cap)
                 return _round_to_tick(raw, root)
 
-            if exec_mode in ("legacy", "ioc_limit"):
+            if inverse_ioc:
+                entry_leg = inverse_leg
+                limit_px = entry_leg["price"]
+            elif exec_mode in ("legacy", "ioc_limit"):
                 tol_ticks = 0.0 if getattr(order, "force_market_entry", False) else _entry_slippage_tolerance_ticks(root)
                 if exec_mode == "ioc_limit" and tol_ticks <= 0:
                     # Explicit ioc_limit selection with no tolerance configured
@@ -1238,6 +1297,8 @@ class TradovateBroker(BrokerInterface):
                 body["clOrdId"] = client_id
 
             try:
+                if inverse_ioc:
+                    self._inverse_submit_uncertain = True
                 result = self._post("/order/placeOSO", body)
             except Exception:
                 if client_id:
@@ -1250,6 +1311,7 @@ class TradovateBroker(BrokerInterface):
             # Detect API-level rejection — Tradovate returns errorText/failureReason on bad payloads
             error_text = result.get("errorText") or result.get("failureReason") or result.get("errorCode")
             if error_text:
+                self._inverse_submit_uncertain = False
                 logger.error(
                     "Tradovate placeOSO REJECTED: %s | instrument=%s dir=%s body=%s",
                     error_text, order.instrument, order.direction, body,
@@ -1306,7 +1368,15 @@ class TradovateBroker(BrokerInterface):
                     )
                 else:
                     status = self._entry_status(order_id)
+                if inverse_ioc and status in {"working", "unknown"}:
+                    # Cancel only the parent: it may fill while cancellation is
+                    # in flight, in which case its protective children must stay.
+                    self._cancel_oso(order_id)
+                    status = self._entry_status(order_id)
+                    if status not in {"filled", "dead"}:
+                        return self._cancelled_fill(order, "ENTRY_UNCONFIRMED", order_type="Limit")
                 if status == "dead":
+                    self._inverse_submit_uncertain = False
                     # IOC-cancelled / rejected → no fill; bracket children never armed.
                     logger.warning(
                         "%s entry NOT filled (status=dead) — no position opened. %s %s cap=%s",
@@ -1324,6 +1394,7 @@ class TradovateBroker(BrokerInterface):
                     # Safe: an unfilled entry means the children are inactive,
                     # so there is NO naked position to protect.
                     n = self._cancel_oso(order_id, target_id, stop_id)
+                    self._inverse_submit_uncertain = False
                     logger.warning(
                         "%s entry resting unfilled — OSO cancelled (n=%d), no position. %s %s cap=%s",
                         entry_leg.get("orderType"), n, root, order.direction, entry_px_desc,
@@ -1343,6 +1414,7 @@ class TradovateBroker(BrokerInterface):
                         order_id, target_id, stop_id, order,
                     )
                     if status == "dead":
+                        self._inverse_submit_uncertain = False
                         self._last_position = None
                         self._last_order_ids = None
                         return self._cancelled_fill(
@@ -1385,6 +1457,9 @@ class TradovateBroker(BrokerInterface):
                 "target": target_id,
                 "stop": stop_id,
             }
+            if inverse_ioc:
+                self._last_order_ids["contract_id"] = contract_id
+                self._last_order_ids["inverse_demo"] = True
             self._position_opened_at = time.time()
             self._resolve_fail_count = 0
 
@@ -1970,6 +2045,9 @@ class TradovateBroker(BrokerInterface):
 
     def flatten_position(self) -> dict:
         """Liquidate any open position at market, then cancel working orders."""
+        if (self._last_order_ids or {}).get("inverse_demo") is True:
+            from execution.inverse_demo_safety import flatten_owned_position
+            return flatten_owned_position(self)
         result: dict = {
             "cancelled_orders": False,
             "close_sent": False,
@@ -2287,7 +2365,7 @@ class TradovateBroker(BrokerInterface):
         except Exception as exc:
             logger.warning("orphan-position Discord alert failed: %s", exc)
 
-    def resolve_position(self) -> Optional[Fill]:
+    def resolve_position(self, *, strict_order_identity: bool = False) -> Optional[Fill]:
         """Check if a bracket child order (stop or target) has filled."""
         if not self._last_position or not self._last_position.open:
             return None
@@ -2302,10 +2380,24 @@ class TradovateBroker(BrokerInterface):
             # A live position on a different contract (e.g. MNQ open while we
             # resolve MES) must not read as "still open" for this one.
             try:
-                our_cid = self._find_contract_id(last.instrument)
+                our_cid = (
+                    (self._last_order_ids or {}).get("contract_id")
+                    if strict_order_identity else self._find_contract_id(last.instrument)
+                )
             except Exception:
                 our_cid = None
             positions = self._get("/position/list")
+            if strict_order_identity and (
+                our_cid is None or not isinstance(positions, list)
+                or any(
+                    not isinstance(p, dict) or "netPos" not in p
+                    or not math.isfinite(float(p["netPos"]))
+                    or (float(p["netPos"]) != 0 and p.get("contractId") is None)
+                    for p in positions
+                )
+            ):
+                logger.warning("inverse DEMO resolution: position state unverified; retaining ownership")
+                return None
             positions = positions if isinstance(positions, list) else []
             our_open = False
             for p in positions:
@@ -2376,6 +2468,9 @@ class TradovateBroker(BrokerInterface):
                     entry_fill_px = _wavg(entry_fills) if entry_fills else last.entry_price
 
             # ── Fallback: price-match against journaled target/stop ──
+            if strict_order_identity and exit_reason is None:
+                logger.warning("inverse DEMO resolution: exact exit fill unavailable; retaining ownership")
+                return None
             if exit_reason is None:
                 exit_fill = None
                 for f in ours:

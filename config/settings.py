@@ -483,7 +483,7 @@ class SystemConfig:
 
     # ── MNQ ORB Breakout inverse paper candidate (2026-07-27) ─────────────
     # Paper-only implementation of the preregistered fixed-one-contract
-    # inverse + eight-tick marketable IOC candidate. No demo/live mode exists.
+    # inverse + eight-tick marketable IOC candidate. Live is never valid.
     mnq_orb_breakout_inverse_mode: str = "observe_only"
     # UTC/offset-aware start of the isolated forward-accounting epoch. Required
     # whenever the inverse paper lane is active so unrelated historical journal
@@ -1089,20 +1089,20 @@ def _validate_config(config: SystemConfig) -> None:
             f"{sorted(_valid_mnq_proof_modes)} (got {config.mnq_orb_breakout_proof_mode!r}); "
             "'live' is never a valid value for this proof mode."
         )
-    _valid_inverse_modes = {"observe_only", "paper_sim"}
+    _valid_inverse_modes = {"observe_only", "paper_sim", "tradovate_demo"}
     if config.mnq_orb_breakout_inverse_mode not in _valid_inverse_modes:
         raise ConfigError(
             "MNQ_ORB_BREAKOUT_INVERSE_MODE must be one of "
             f"{sorted(_valid_inverse_modes)} "
             f"(got {config.mnq_orb_breakout_inverse_mode!r}); "
-            "this candidate is paper-only."
+            "this candidate permits paper or pinned DEMO only; never live."
         )
-    if config.mnq_orb_breakout_inverse_mode == "paper_sim":
+    if config.mnq_orb_breakout_inverse_mode in {"paper_sim", "tradovate_demo"}:
         _epoch_start = config.mnq_orb_breakout_inverse_epoch_start
         if not _epoch_start:
             raise ConfigError(
                 "MNQ_ORB_BREAKOUT_INVERSE_EPOCH_START is required when "
-                "MNQ_ORB_BREAKOUT_INVERSE_MODE=paper_sim."
+                "the inverse execution lane is active."
             )
         try:
             _parsed_epoch_start = datetime.fromisoformat(
@@ -1116,6 +1116,8 @@ def _validate_config(config: SystemConfig) -> None:
             raise ConfigError(
                 "MNQ_ORB_BREAKOUT_INVERSE_EPOCH_START must include a UTC offset."
             )
+    if config.mnq_orb_breakout_inverse_mode == "tradovate_demo":
+        _validate_inverse_demo_route(config)
     if (
         config.mnq_orb_breakout_inverse_mode != "observe_only"
         and config.mnq_orb_breakout_proof_mode != "observe_only"
@@ -1172,6 +1174,27 @@ def _validate_config(config: SystemConfig) -> None:
     if config.live_trading_enabled:
         # This should never be reached, but belt-and-suspenders
         raise LiveTradingBlockedError(source="post-parse validation")
+
+
+def _validate_inverse_demo_route(config: SystemConfig) -> int:
+    """Validate explicit DEMO routing, also when a caller supplies a config."""
+    if (
+        os.getenv("BROKER", "").strip().lower() != "tradovate"
+        or os.getenv("TRADOVATE_ENV", "").strip().lower() != "demo"
+        or os.getenv("LIVE_TRADING_ENABLED", "").strip().lower() != "false"
+        or config.live_trading_enabled
+        or config.paper_mode
+    ):
+        raise ConfigError(
+            "inverse tradovate_demo requires BROKER=tradovate, TRADOVATE_ENV=demo, "
+            "LIVE_TRADING_ENABLED=false and PAPER_MODE=false"
+        )
+    pin = os.getenv("TRADOVATE_EXPECTED_ACCOUNT_ID", "").strip()
+    if not pin.isascii() or not pin.isdecimal() or int(pin) <= 0:
+        raise ConfigError("inverse tradovate_demo requires a positive TRADOVATE_EXPECTED_ACCOUNT_ID")
+    if not config.working_order_recheck_enabled:
+        raise ConfigError("inverse tradovate_demo requires working_order_recheck_enabled")
+    return int(pin)
 
 
 def _env_bool(name: str, default: bool) -> bool:

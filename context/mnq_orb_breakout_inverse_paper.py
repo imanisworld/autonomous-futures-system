@@ -142,6 +142,7 @@ class PaperDecision:
             "force_paper_broker": self.force_paper_broker,
             "marketable_ticks": self.marketable_ticks,
             "contracts": self.contracts,
+            "comparison_commission_round_trip": 1.48,
             "dynamic_sizing_diagnostic_only": True,
             "source_setup": {
                 "direction": source_direction,
