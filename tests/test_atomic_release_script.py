@@ -137,11 +137,6 @@ def test_promotion_and_rollback_use_atomic_symlink_replacement():
     assert "current.previous" in text
 
 
-def test_build_cleanup_trap_captures_paths_before_function_returns():
-    text = SCRIPT.read_text()
-    assert "trap \"git worktree remove -f '$work'" in text
-
-
 def _render_remote_command(action: str) -> tuple[int, str]:
     """Render one action's remote command with the ssh transport stubbed.
 
@@ -191,3 +186,8 @@ def test_remote_commands_reach_ssh_as_a_single_argument():
         assert 'readlink -f "/proc/$pid/cwd"' in rendered
         # And what the box receives must be a valid shell script.
         subprocess.run(["bash", "-n"], input=rendered, text=True, check=True)
+
+
+def test_build_cleanup_trap_captures_paths_before_function_returns():
+    text = SCRIPT.read_text()
+    assert "trap \"git worktree remove -f '$work'" in text
