@@ -258,6 +258,45 @@ class PaperBroker(BrokerInterface):
         else:
             fill_entry = order.entry
 
+        # Structural bracket validity is NOT opt-in. A fill that lands beyond
+        # its own stop or target cannot be held: the stop sits between the fill
+        # and the target, so the position is guaranteed to "stop out" in profit
+        # with its label contradicting its P&L. The stop-market path has always
+        # refused this (see _activate_pending_stop_entry); the marketable-limit
+        # path reached here without the check, because the equivalent rule was
+        # gated behind post_fill_validation_required, which the derived paper
+        # lanes set to False. The tolerance bounds only the ADVERSE side, so on
+        # the favourable side the fill is the market however far it has run
+        # from a stale plan level -- which is where this actually bites.
+        if (
+            order.direction == "LONG" and not (order.stop < fill_entry < order.target)
+        ) or (
+            order.direction == "SHORT" and not (order.target < fill_entry < order.stop)
+        ):
+            return Fill(
+                instrument=order.instrument,
+                direction=order.direction,
+                contracts=contracts,
+                entry_price=fill_entry,
+                exit_price=None,
+                exit_reason="ENTRY_BRACKET_INVALID_AT_FILL",
+                result="CANCELLED",
+                pnl_ticks=0.0,
+                pnl_dollars=0.0,
+                no_fill_reason=classify_no_fill_reason("ENTRY_BRACKET_INVALID_AT_FILL"),
+                order_type=self._entry_fill_model,
+                paper_order_id=paper_order_id,
+                execution_audit={
+                    "entry_bracket_invalid_at_fill": {
+                        "fill_entry": fill_entry,
+                        "planned_entry": order.entry,
+                        "stop": order.stop,
+                        "target": order.target,
+                    },
+                    "failure_behavior": "simulated_reject_before_open",
+                },
+            )
+
         post_fill = validate_post_fill(order, fill_entry)
         if getattr(order, "post_fill_validation_required", False) and not post_fill.accepted:
             return Fill(
