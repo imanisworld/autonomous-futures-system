@@ -1,0 +1,98 @@
+{
+  "generated_for": "inverse ORB canonical 63-arm baseline",
+  "baseline_file": "inverse_orb_canonical_ioc_proof_2026-09-07.json",
+  "baseline_file_sha256": "033e6a4d186b3fe9862ac219bfa359486cd6e9166f4c5d229d22d1dce4f149ba",
+  "population_fingerprint": "f32b1b1d2fd5f5860d476b7c44f479d28abb8dc0445fccc21f8c7f27519e2da2",
+  "arms": 63,
+  "unfilled_arms": 6,
+  "refill_disagreements": 0,
+  "post_fill_failure_counts": {
+    "actual_rr_minimum": 38,
+    "stop_direction": 37
+  },
+  "cells": [
+    {
+      "cell": "rejected_by_post_fill_validation",
+      "n": 38,
+      "net": 1138.26,
+      "wins_by_pnl": 38,
+      "losses_by_pnl": 0,
+      "profit_factor": null,
+      "exit_reasons": {
+        "STOP_HIT": 37,
+        "TARGET_HIT": 1
+      },
+      "recorded_result_labels": {
+        "LOSS": 37,
+        "WIN": 1
+      },
+      "label_contradictions": 37,
+      "detachment_ticks_at_fill": {
+        "median": 91.5,
+        "min": 5.0,
+        "max": 294.0,
+        "share_beyond_tolerance": 0.974
+      }
+    },
+    {
+      "cell": "admitted_by_post_fill_validation",
+      "n": 19,
+      "net": -111.62,
+      "wins_by_pnl": 2,
+      "losses_by_pnl": 17,
+      "profit_factor": 0.53,
+      "exit_reasons": {
+        "STOP_HIT": 17,
+        "TARGET_HIT": 2
+      },
+      "recorded_result_labels": {
+        "LOSS": 17,
+        "WIN": 2
+      },
+      "label_contradictions": 0,
+      "detachment_ticks_at_fill": {
+        "median": 30.0,
+        "min": 0.0,
+        "max": 49.0,
+        "share_beyond_tolerance": 0.737
+      }
+    },
+    {
+      "cell": "all_filled_canonical_baseline",
+      "n": 57,
+      "net": 1026.64,
+      "wins_by_pnl": 40,
+      "losses_by_pnl": 17,
+      "profit_factor": 5.28,
+      "exit_reasons": {
+        "STOP_HIT": 54,
+        "TARGET_HIT": 3
+      },
+      "recorded_result_labels": {
+        "LOSS": 54,
+        "WIN": 3
+      },
+      "label_contradictions": 37,
+      "detachment_ticks_at_fill": {
+        "median": 76.0,
+        "min": 0.0,
+        "max": 294.0,
+        "share_beyond_tolerance": 0.895
+      }
+    }
+  ],
+  "admitted_halves": {
+    "h1_net": -119.82,
+    "h2_net": 8.2
+  },
+  "admitted_by_session": {
+    "asian": -3.98,
+    "london": -105.36,
+    "new_york": -2.28
+  },
+  "notes": [
+    "Every dollar is the canonical JSON's own `net`; nothing is re-priced.",
+    "Admissibility is the production validator's answer on the re-derived fill.",
+    "A rejected arm is one the DEMO lane would refuse to hold, because the fill landed on the wrong side of its own static stop."
+  ]
+}
