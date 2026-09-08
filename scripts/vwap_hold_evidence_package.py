@@ -66,10 +66,69 @@ def ioc_fill(arm: dict, bars: list[dict], field: str) -> dict:
     unmarketable = (market > limit_px) if long else (market < limit_px)
     if unmarketable:
         return {"status": "ENTRY_NOT_FILLED", "fill_price": None, "fill_ts": None,
-                "reference_price_field": field, "reference_price": market, "limit_px": limit_px}
+                "reference_price_field": field, "reference_price": market, "limit_px": limit_px,
+                **_reference_timing(arm, after, field)}
     fill_price = min(limit_px, market) if long else max(limit_px, market)
     return {"status": "FILLED", "fill_price": fill_price, "fill_ts": first["ts"],
-            "reference_price_field": field, "reference_price": market, "limit_px": limit_px}
+            "reference_price_field": field, "reference_price": market, "limit_px": limit_px,
+            **_reference_timing(arm, after, field)}
+
+
+DEFAULT_BAR_MINUTES = 5
+
+
+class LookaheadError(ValueError):
+    """The IOC reference price is not knowable at the decision time."""
+
+
+def _bar_minutes(after: list[dict]) -> int:
+    if len(after) >= 2:
+        delta = (after[1]["ts"] - after[0]["ts"]).total_seconds() / 60.0
+        if delta > 0:
+            return int(round(delta))
+    return DEFAULT_BAR_MINUTES
+
+
+def _reference_timing(arm: dict, after: list[dict], field: str) -> dict:
+    """When is the reference price actually known, relative to the decision?
+
+    'open' of the arrival bar is printed at the bar's timestamp; 'close' is not
+    known until the bar ends, one bar-length later. The reconciliation of
+    2026-09-07 (docs/vwap-hold-reconciliation-2026-09-07.md) found that an
+    arrival-bar 'close' reference on 5m bars is a 5-minute look-ahead against
+    the decision-bar close that replay/production use, and that it flipped the
+    sign of the NY-only cell. Every ioc_fill result now carries this so a
+    caller can refuse it (assert_decision_time_reference) instead of
+    discovering it after the study is written."""
+    first = after[0]
+    minutes = _bar_minutes(after)
+    reference_ts = first["ts"] if field == "open" else first["ts"] + timedelta(minutes=minutes)
+    lookahead = (reference_ts - arm["armed_at"]).total_seconds() / 60.0
+    return {"reference_ts": reference_ts, "lookahead_minutes": max(0.0, lookahead)}
+
+
+def assert_decision_time_reference(fill: dict, decision_ts=None) -> dict:
+    """Raise LookaheadError unless the fill's reference price was knowable at
+    decision_ts (default: the arm's armed_at already baked into the result).
+    Returns the fill unchanged so it can be used inline."""
+    if fill.get("status") == "NO_DATA":
+        return fill
+    reference_ts = fill.get("reference_ts")
+    if reference_ts is None:
+        raise LookaheadError("fill result carries no reference_ts; cannot verify the reference is decision-time")
+    # An explicit decision_ts overrides the arm's armed_at baked into the
+    # result (the reconciliation's same-bar path re-points armed_at at the
+    # signal bar, whose close IS the decision-bar close).
+    if decision_ts is not None:
+        late = (reference_ts - decision_ts).total_seconds() / 60.0
+    else:
+        late = fill.get("lookahead_minutes", 0.0)
+    if late > 0:
+        raise LookaheadError(
+            f"IOC reference '{fill.get('reference_price_field')}' is known {late:g} min after the decision "
+            f"(reference_ts={reference_ts.isoformat()}); use the decision-bar close or the arrival bar's open"
+        )
+    return fill
 
 
 def market_fill(arm: dict, bars: list[dict]) -> dict:
