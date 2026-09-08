@@ -140,3 +140,54 @@ def test_promotion_and_rollback_use_atomic_symlink_replacement():
 def test_build_cleanup_trap_captures_paths_before_function_returns():
     text = SCRIPT.read_text()
     assert "trap \"git worktree remove -f '$work'" in text
+
+
+def _render_remote_command(action: str) -> tuple[int, str]:
+    """Render one action's remote command with the ssh transport stubbed.
+
+    Returns (argument count, the command as a single string). The count is the
+    point: the command must reach ``remote`` — and therefore ssh — as ONE
+    argument, so the string the box executes is the string that was written.
+    """
+    repo_root = SCRIPT.parent.parent.resolve()
+    env = os.environ.copy()
+    env["AFS_BOX"] = "unused"
+    proc = subprocess.run(
+        [
+            "bash",
+            "-c",
+            f'''source "{SCRIPT.resolve()}"
+REF={"a" * 40}
+deploy_lock_acquire() {{ DEPLOY_LOCK_OWNER=stub; return 0; }}
+deploy_lock_release() {{ return 0; }}
+_promote_gate_check() {{ return 0; }}
+remote() {{ echo "ARGC=$#" >&2; printf '%s' "$1"; }}
+{action}_release
+''',
+        ],
+        cwd=repo_root,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    argc = int(re.search(r"ARGC=(\d+)", proc.stderr).group(1))
+    return argc, proc.stdout
+
+
+def test_remote_commands_reach_ssh_as_a_single_argument():
+    """Bare `"` inside a remote block silently breaks it into several words.
+
+    promote and rollback each built their command with unescaped double quotes
+    around the activation check, which terminated the outer quoting: the string
+    left the script as 6 arguments, ssh rejoined them with single spaces, and
+    every double-quoted value in that region arrived on the box UNQUOTED. It
+    reassembled into a valid script by luck, with no error to notice.
+    """
+    for action in ("promote", "rollback"):
+        argc, rendered = _render_remote_command(action)
+        assert argc == 1, f"{action} remote command split into {argc} arguments"
+        # The activation check must reach the box with its quoting intact.
+        assert 'test "$actual_cwd" = "$expected_cwd"' in rendered
+        assert 'readlink -f "/proc/$pid/cwd"' in rendered
+        # And what the box receives must be a valid shell script.
+        subprocess.run(["bash", "-n"], input=rendered, text=True, check=True)
