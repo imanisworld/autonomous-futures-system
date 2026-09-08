@@ -38,6 +38,10 @@ STRATEGY_NAME_ALIASES = {
     "60m 3-2-2 first live": "strat_322_first_live",
 }
 
+# Inventory rows whose name carries one of these words describe a lane that
+# executes a transform of its source concept rather than the concept itself.
+_DERIVED_LANE_WORDS = ("inverted", "inverse", "derived")
+
 _TABLE_ROW_RE = re.compile(r"^\|(.+)\|\s*$")
 
 
@@ -104,9 +108,9 @@ def _strategy_source_of_truth(*, repo_root: Path, rules_active_lanes: dict[str, 
     # Only explicit unsafe/retired classifications are automatic blockers when
     # that exact executable concept is active.
     unsafe_active_verdicts = {"BROKEN", "RETIRE", "UNSAFE"}
+    derived_lane_transforms = (rules_active_lanes or {}).get("derived_lane_transforms") or {}
 
-    findings: list[dict[str, Any]] = []
-    matched: list[dict[str, Any]] = []
+    resolved: list[tuple[dict[str, Any], str, str]] = []
     unmatched: list[dict[str, Any]] = []
     for row in rows:
         normalized = _normalize(row["name"])
@@ -124,9 +128,30 @@ def _strategy_source_of_truth(*, repo_root: Path, rules_active_lanes: dict[str, 
         if concept is None:
             unmatched.append(row)
             continue
+        resolved.append((row, concept, match_kind))
 
-        is_active_in_config = concept in active_concepts_any_instrument
+    def _is_unsafe(row: dict[str, Any]) -> bool:
         verdict = (row.get("verdict") or "").upper()
+        return any(v in verdict for v in unsafe_active_verdicts)
+
+    def _is_derived_row(row: dict[str, Any]) -> bool:
+        return any(word in _normalize(row["name"]) for word in _DERIVED_LANE_WORDS)
+
+    # A derived lane (e.g. the inverted ORB Breakout paper lane) executes a
+    # transform of its source concept, so the source concept must be enabled
+    # even when its own direct verdict is BROKEN. That is only exempt from the
+    # automatic finding when the inventory itself carries a non-unsafe derived
+    # row for the same concept -- the exemption is reported, never silent.
+    safe_derived_rows_by_concept: dict[str, list[str]] = {}
+    for row, concept, _ in resolved:
+        if _is_derived_row(row) and not _is_unsafe(row):
+            safe_derived_rows_by_concept.setdefault(concept, []).append(row["name"])
+
+    findings: list[dict[str, Any]] = []
+    matched: list[dict[str, Any]] = []
+    derived_notes: list[dict[str, Any]] = []
+    for row, concept, match_kind in resolved:
+        is_active_in_config = concept in active_concepts_any_instrument
         matched.append(
             {
                 "strategy": row["name"],
@@ -136,19 +161,43 @@ def _strategy_source_of_truth(*, repo_root: Path, rules_active_lanes: dict[str, 
                 "configured_active": is_active_in_config,
             }
         )
-        if is_active_in_config and any(v in verdict for v in unsafe_active_verdicts):
-            findings.append(
+        if not (is_active_in_config and _is_unsafe(row)):
+            continue
+        derived_rows = [] if _is_derived_row(row) else safe_derived_rows_by_concept.get(concept, [])
+        if derived_rows:
+            transform = derived_lane_transforms.get(concept) or {}
+            derived_notes.append(
                 {
                     "strategy": row["name"],
                     "concept_key": concept,
-                    "match_kind": match_kind,
                     "inventory_verdict": row.get("verdict"),
-                    "issue": (
-                        "explicitly classified BROKEN/RETIRE/UNSAFE in Strategy_Inventory.md "
-                        "but the exact concept is paper-eligible/enabled for at least one instrument"
+                    "derived_lane_rows": derived_rows,
+                    "runtime_transform": transform.get("transform"),
+                    "runtime_transform_mode": transform.get("mode"),
+                    "runtime_transform_verified": bool(transform.get("active")),
+                    "note": (
+                        "source concept of a non-unsafe derived lane; not a drift finding. "
+                        + (
+                            "Runtime confirms the derived transform is active."
+                            if transform.get("active")
+                            else f"Runtime transform NOT verified here -- confirm {transform.get('env') or 'the derived-lane mode'} on the box."
+                        )
                     ),
                 }
             )
+            continue
+        findings.append(
+            {
+                "strategy": row["name"],
+                "concept_key": concept,
+                "match_kind": match_kind,
+                "inventory_verdict": row.get("verdict"),
+                "issue": (
+                    "explicitly classified BROKEN/RETIRE/UNSAFE in Strategy_Inventory.md "
+                    "but the exact concept is paper-eligible/enabled for at least one instrument"
+                ),
+            }
+        )
 
     return {
         "checked": True,
@@ -156,11 +205,14 @@ def _strategy_source_of_truth(*, repo_root: Path, rules_active_lanes: dict[str, 
         "inventory_path": str(inventory_path),
         "inventory_row_count": len(rows),
         "drift_findings": findings,
+        "derived_lane_source_notes": derived_notes,
         "matched_inventory_rows": matched,
         "unmatched_inventory_rows": unmatched,
         "note": (
             "Evidence verdict and config enablement are reported separately. Only explicit "
-            "BROKEN/RETIRE/UNSAFE + active exact-concept combinations are automatic drift findings. "
+            "BROKEN/RETIRE/UNSAFE + active exact-concept combinations are automatic drift findings, "
+            "except a source concept whose only active use is a non-unsafe derived lane listed in "
+            "the inventory (reported under derived_lane_source_notes). "
             "Name matching is best-effort; unmatched rows are listed, never guessed."
         ),
     }

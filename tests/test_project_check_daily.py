@@ -102,6 +102,82 @@ def test_strategy_source_of_truth_flags_explicit_broken_concept_when_active(tmp_
     result = _strategy_source_of_truth(repo_root=tmp_path, rules_active_lanes=lanes)
     assert len(result["drift_findings"]) == 1
     assert "BROKEN/RETIRE/UNSAFE" in result["drift_findings"][0]["issue"]
+    assert result["derived_lane_source_notes"] == []
+
+
+def _write_inventory(tmp_path: Path, *rows: str) -> None:
+    inventory_dir = tmp_path / "docs" / "strategy-rules"
+    inventory_dir.mkdir(parents=True, exist_ok=True)
+    (inventory_dir / "Strategy_Inventory.md").write_text(
+        "\n".join(["## Master Table", "", "| Strategy | Verdict |", "|---|---|", *rows]),
+        encoding="utf-8",
+    )
+
+
+def test_broken_source_of_non_unsafe_derived_lane_is_noted_not_flagged(tmp_path: Path) -> None:
+    _write_inventory(
+        tmp_path,
+        "| ORB Breakout (MNQ) | **BROKEN — negative evidence** |",
+        "| ORB Breakout — inverted (MNQ evidence lane) | **PROMISING BUT UNPROVEN** |",
+    )
+    lanes = {"active_lane_summary": {"MNQ": ["orb_breakout"]}}
+    result = _strategy_source_of_truth(repo_root=tmp_path, rules_active_lanes=lanes)
+    assert result["drift_findings"] == []
+    assert len(result["derived_lane_source_notes"]) == 1
+    note = result["derived_lane_source_notes"][0]
+    assert note["strategy"] == "ORB Breakout (MNQ)"
+    assert note["derived_lane_rows"] == ["ORB Breakout — inverted (MNQ evidence lane)"]
+    assert note["runtime_transform_verified"] is False
+    assert "NOT verified" in note["note"]
+
+
+def test_derived_lane_note_reports_runtime_transform_when_active(tmp_path: Path) -> None:
+    _write_inventory(
+        tmp_path,
+        "| ORB Breakout (MNQ) | **BROKEN** |",
+        "| ORB Breakout — inverted (MNQ evidence lane) | **PROMISING BUT UNPROVEN** |",
+    )
+    lanes = {
+        "active_lane_summary": {"MNQ": ["orb_breakout"]},
+        "derived_lane_transforms": {
+            "orb_breakout": {"transform": "inverse", "env": "MNQ_ORB_BREAKOUT_INVERSE_MODE", "mode": "paper_sim", "active": True}
+        },
+    }
+    result = _strategy_source_of_truth(repo_root=tmp_path, rules_active_lanes=lanes)
+    assert result["drift_findings"] == []
+    note = result["derived_lane_source_notes"][0]
+    assert note["runtime_transform"] == "inverse"
+    assert note["runtime_transform_verified"] is True
+
+
+def test_broken_source_still_flagged_when_derived_lane_is_also_unsafe(tmp_path: Path) -> None:
+    _write_inventory(
+        tmp_path,
+        "| ORB Breakout (MNQ) | **BROKEN** |",
+        "| ORB Breakout — inverted (MNQ evidence lane) | **RETIRE** |",
+    )
+    lanes = {"active_lane_summary": {"MNQ": ["orb_breakout"]}}
+    result = _strategy_source_of_truth(repo_root=tmp_path, rules_active_lanes=lanes)
+    assert {f["strategy"] for f in result["drift_findings"]} == {
+        "ORB Breakout (MNQ)",
+        "ORB Breakout — inverted (MNQ evidence lane)",
+    }
+    assert result["derived_lane_source_notes"] == []
+
+
+def test_active_lanes_reports_derived_transform_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ops.project_check.runtime import active_lanes
+
+    rules = {
+        "instruments": {"allowed": ["MNQ"]},
+        "strategy": {"enabled_concepts": ["orb_breakout"]},
+        "strategy_permission_gate": {"enabled": True, "default_status": "SHADOW_ONLY", "strategy_status": {"orb_breakout": "PAPER_ELIGIBLE"}},
+    }
+    monkeypatch.delenv("MNQ_ORB_BREAKOUT_INVERSE_MODE", raising=False)
+    off = active_lanes(rules)["derived_lane_transforms"]["orb_breakout"]
+    assert off == {"transform": "inverse", "env": "MNQ_ORB_BREAKOUT_INVERSE_MODE", "mode": None, "active": False}
+    monkeypatch.setenv("MNQ_ORB_BREAKOUT_INVERSE_MODE", "paper_sim")
+    assert active_lanes(rules)["derived_lane_transforms"]["orb_breakout"]["active"] is True
 
 
 def test_strategy_source_of_truth_unmatched_rows_reported_not_dropped(tmp_path: Path) -> None:
