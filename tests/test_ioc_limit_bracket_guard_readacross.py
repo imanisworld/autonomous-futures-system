@@ -46,11 +46,19 @@ def test_bracket_valid_at_fill_matches_the_broker_rule(direction, fill, ok):
 # ── the asymmetry this document exists to report ─────────────────────────────
 
 
-def test_ioc_limit_fills_a_short_far_above_its_own_stop_without_complaint():
-    """The defect. Market 60 points above entry — well past the 50-tick stop."""
+def test_ioc_limit_now_refuses_a_short_filling_far_above_its_own_stop():
+    """The defect, now guarded. Market 60 points above entry — past the 50-tick
+    stop. This asserted `result == "OPEN"` while the ioc_limit path had no
+    bracket-validity check; PaperBroker now refuses it, matching the
+    stop-market path and the live leg's post-fill validation.
+
+    The measured *geometry* is unchanged and still asserted: the price would
+    still land beyond the stop. Only the outcome moved, from a booked position
+    to a refusal."""
     order = _short()
     fill = _broker("ioc_limit").execute_bracket(order, market_price=20060.0)
-    assert fill.result == "OPEN"
+    assert fill.result == "CANCELLED"
+    assert fill.exit_reason == "ENTRY_BRACKET_INVALID_AT_FILL"
     assert fill.entry_price > order.stop, "fill should land above the stop"
     assert not readacross.bracket_valid_at_fill("SHORT", float(fill.entry_price),
                                                 order.stop, order.target)
@@ -102,15 +110,18 @@ def test_a_normally_detached_fill_inside_the_stop_is_still_accepted():
 
 
 def test_tolerance_does_not_bound_the_favourable_side():
-    """Central claim: a tighter tolerance cannot prevent this."""
+    """Central claim, unchanged by the guard: a tighter tolerance cannot prevent
+    the fill landing past the stop. What the guard changes is only whether that
+    fill is allowed to open a position — at every tolerance it is now refused,
+    which is the point: the tolerance was never the lever."""
     order = _short()
     for tolerance in (4.0, 8.0, 32.0):
         broker = PaperBroker(starting_balance=100_000.0, slippage_ticks=1.0,
                              pessimistic_both_hit=True, entry_fill_model="ioc_limit",
                              entry_tolerance_ticks_by_root={"MNQ": tolerance})
         fill = broker.execute_bracket(_short(), market_price=20060.0)
-        assert fill.result == "OPEN"
         assert float(fill.entry_price) > order.stop
+        assert fill.exit_reason == "ENTRY_BRACKET_INVALID_AT_FILL"
 
 
 # ── the report ───────────────────────────────────────────────────────────────

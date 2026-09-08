@@ -458,17 +458,42 @@ def test_detached_candidate_still_rejected_in_observe_only(tmp_path):
     assert "ENTRY_DETACHED_FROM_PRICE" in (result.get("failed_gates") or [])
 
 
-def test_detached_candidate_trades_in_paper_sim_at_live_price(tmp_path):
-    """paper_sim: the detached candidate reaches TRADE and the paper fill is
-    the LIVE close (+ adverse slippage), never the stale anchor — mirroring
-    what Tradovate's force_market_entry Market order would actually do."""
+def test_detached_candidate_at_live_price_is_refused_when_bracket_invalid(tmp_path):
+    """paper_sim still prices the detached candidate at the LIVE close rather
+    than the stale anchor — but the resulting fill is now checked against its
+    own bracket before a position opens.
+
+    This case fills a LONG at 19540 against a plan whose target is 19523.5, so
+    the "entry" is already past the profit target: the position would book an
+    instant, unreal win. PaperBroker now refuses it as
+    ENTRY_BRACKET_INVALID_AT_FILL, matching what the live Tradovate leg does
+    via post-fill validation. Previously this asserted TRADE, which is the
+    defect (see docs/inverse-orb-baseline-post-fill-decomposition-2026-09-08.md).
+    """
+    today = date(2026, 5, 23)
+    cfg = replace(_config_with_breakout(tmp_path), mnq_orb_breakout_proof_mode="paper_sim")
+    result = process_alert(
+        _breakout_payload(timestamp="2026-05-23T15:00:00+00:00", close=19540.0, high=19545.0),
+        config=cfg, log_dir=cfg.log_dir, for_date=today,
+    )
+    # The blocked path reports status only; the exact reason
+    # (ENTRY_BRACKET_INVALID_AT_FILL) is pinned directly against PaperBroker in
+    # tests/test_paper_broker_bracket_guard_parity.py.
+    assert result["decision"] == "BLOCKED_EXECUTION_FAILED"
+    assert result["fill"]["status"] == "CANCELLED"
+
+
+def test_detached_candidate_still_fills_at_live_price_when_bracket_valid(tmp_path):
+    """The live-price carve-out itself is intact: a detached candidate whose
+    live fill still sits inside its own bracket trades, at the live close +
+    adverse slippage, never at the stale anchor."""
     import json
 
     today = date(2026, 5, 23)
     cfg = replace(_config_with_breakout(tmp_path), mnq_orb_breakout_proof_mode="paper_sim")
-    live_close = 19540.0
+    live_close = 19505.0  # detached from the 19498.5 anchor, still below target
     result = process_alert(
-        _breakout_payload(timestamp="2026-05-23T15:00:00+00:00", close=live_close, high=19545.0),
+        _breakout_payload(timestamp="2026-05-23T15:00:00+00:00", close=live_close, high=19510.0),
         config=cfg, log_dir=cfg.log_dir, for_date=today,
     )
     assert result["decision"] == "TRADE"

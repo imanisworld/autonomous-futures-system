@@ -487,18 +487,20 @@ def test_detached_candidate_rejected_in_observe_only(tmp_path):
     assert "ENTRY_DETACHED_FROM_PRICE" in (result.get("failed_gates") or [])
 
 
-def test_detached_candidate_trades_in_paper_sim_ny_at_live_price(tmp_path):
+def test_detached_candidate_at_live_price_is_refused_when_bracket_invalid(tmp_path):
+    """Same carve-out, same new limit as the orb_breakout proof lane: the fill
+    is priced at the LIVE close, but a fill that lands beyond its own bracket
+    no longer opens a position. Previously asserted TRADE."""
     today = date(2026, 5, 23)
     cfg = _gate_cfg(tmp_path, mnq_vwap_hold_proof_mode="paper_sim")
-    live_close = 19460.0
     result = process_alert(
-        _vwap_hold_payload(timestamp="2026-05-23T15:00:00+00:00", close=live_close, low=19455.0),
+        _vwap_hold_payload(timestamp="2026-05-23T15:00:00+00:00", close=19460.0, low=19455.0),
         config=cfg, log_dir=cfg.log_dir, for_date=today,
     )
-    assert result["decision"] == "TRADE"
-    tick = 0.25
-    expected_fill = live_close - float(getattr(cfg, "fill_slippage_ticks", 0.0) or 0.0) * tick
-    assert result["fill"]["entry"] == pytest.approx(expected_fill)
+    # Reason pinned against PaperBroker directly in
+    # tests/test_paper_broker_bracket_guard_parity.py.
+    assert result["decision"] == "BLOCKED_EXECUTION_FAILED"
+    assert result["fill"]["status"] == "CANCELLED"
 
 
 def test_detached_candidate_still_rejected_outside_ny_in_paper_sim(tmp_path):
