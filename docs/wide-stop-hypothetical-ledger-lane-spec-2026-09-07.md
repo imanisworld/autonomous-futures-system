@@ -1,6 +1,6 @@
 # Wide-stop family — hypothetical-ledger forward paper lane (lane config spec)
 
-Status: **DRAFT — awaiting operator approval of the decision items in §7. Nothing is built.**
+Status: **APPROVED 2026-09-07 — operator approved D1–D7 as recommended (see §7). Build authorized per §8; nothing is built yet.**
 
 Parent decision: Option B+ in
 `docs/wide-stop-day-strategy-policy-options-2026-09-07.md` (decided 2026-09-07).
@@ -159,9 +159,15 @@ sizing, not silently reset.
 
 ## 7. Operator decision items
 
-Each has a recommendation; the build waits on an explicit answer to each.
+**Operator decision (2026-09-07): all seven approved as recommended.** The
+"Recommendation" column below is therefore the approved configuration; the
+"Alternative" column is recorded only so the road not taken stays visible.
+D2's 10% daily floor is approved as deliberately looser, as a share of
+equity, than the real book's floor: the lane exists to test the family at a
+size where its stops are affordable, and a floor that trips after one normal
+loss would only reproduce the $1,500 result on a bigger number.
 
-| # | Decision | Recommendation | Alternative |
+| # | Decision | **Approved** (was: recommendation) | Alternative (not taken) |
 |---|---|---|---|
 | D1 | Two ledgers ($4k / $6k) vs one $6k ledger holding all three | **Two** — keeps the 5% thresholds separately testable | One $6k ledger; 4HR then runs with 5% = $300 headroom, which is looser than the memo's 4HR cell |
 | D2 | Daily loss floor per ledger | **2 × worst-case stop** ($400 / $600 = 10%) | 1 × worst-case ($200 / $300 = 5%): one max-loss halts the day, which is the same failure mode B+ was avoiding; or no daily floor, drawdown floor only |
@@ -194,5 +200,5 @@ Each has a recommendation; the build waits on an explicit answer to each.
 
 This spec does not authorize tuning any strategy, loosening any global risk
 rule, external broker routing, live trading, or promotion of any member. It
-authorizes nothing until the operator answers §7, and then only the paper lane
-described here.
+authorized nothing until the operator answered §7 (done 2026-09-07), and now
+authorizes only the paper lane described here.
