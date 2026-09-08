@@ -352,3 +352,83 @@ def test_closed_original_preserved_by_exact_head_replacement_merge(evidence_repo
     assert row["classification"] == "REDUNDANT"
     assert row["pr"]["headRefName"] == "merge/replacement"
     assert row["content_preserved_at_merge"] is True
+
+
+def _stale_base_squash_repo(repo: Path, monkeypatch) -> tuple[str, str]:
+    """Branch cut from an older base; another PR touches the same file first.
+
+    Mirrors the live shape of PR #498 (`claude/atomic-release-remote-quoting`):
+    cut from `ee2d0b1`, merged after #497 had already changed the same files, so
+    the merged content differs from the branch tip even though the squash
+    applied the branch's change verbatim.
+    """
+    shared = repo / "shared.txt"
+    shared.write_text("".join(f"line {n}\n" for n in range(1, 21)))
+    _git(repo, "add", "shared.txt")
+    _git(repo, "commit", "-qm", "shared baseline")
+    _git(repo, "update-ref", "refs/remotes/origin/main", "HEAD")
+
+    _git(repo, "checkout", "-q", "-b", "feature/evidence")
+    shared.write_text(shared.read_text().replace("line 20\n", "line 20 CHANGED BY BRANCH\n"))
+    _git(repo, "commit", "-qam", "branch edits the bottom")
+    tip = _sha(repo)
+    _git(repo, "update-ref", "refs/remotes/origin/feature/evidence", tip)
+
+    _git(repo, "checkout", "-q", "main")
+    shared.write_text(shared.read_text().replace("line 1\n", "line 1 CHANGED BY OTHER PR\n"))
+    _git(repo, "commit", "-qam", "an intervening PR lands on the same file")
+
+    _git(repo, "merge", "--squash", "feature/evidence")
+    _git(repo, "commit", "-qm", "squash merged PR")
+    merge = _sha(repo)
+    _git(repo, "update-ref", "refs/remotes/origin/main", "HEAD")
+    monkeypatch.setattr(gitutil, "open_prs", lambda *a, **kw: {
+        "available": True, "complete": True,
+        "prs": [{"state": "MERGED", "headRefName": "feature/evidence", "headRefOid": tip,
+                 "mergeCommit": {"oid": merge}, "isCrossRepository": False}],
+    })
+    return tip, merge
+
+
+def test_squash_merge_over_moved_base_is_preserved_by_patch_identity(repo: Path, monkeypatch) -> None:
+    tip, merge = _stale_base_squash_repo(repo, monkeypatch)
+    row = _branch_report(repo, "refs/remotes/origin/feature/evidence")
+    # Content equality alone cannot see this: the merge carries the other PR's
+    # edit to the same file, so both content checks legitimately say False.
+    assert row["content_equivalent_on_main"] is False
+    assert row["content_preserved_at_merge"] is False
+    assert row["patch_preserved_at_merge"] is True
+    assert row["classification"] == "REDUNDANT"
+    assert row["preserved_by"] == [merge]
+    assert gitutil._is_ancestor(repo, tip, _sha(repo)) is False
+
+
+def test_merge_that_did_not_apply_the_branch_patch_stays_unproven(repo: Path, monkeypatch) -> None:
+    tip, merge = _stale_base_squash_repo(repo, monkeypatch)
+    # Point the PR at a merge commit that changed the same path differently.
+    shared = repo / "shared.txt"
+    shared.write_text(shared.read_text().replace("line 10\n", "line 10 SOMETHING ELSE\n"))
+    _git(repo, "commit", "-qam", "unrelated later commit on the same path")
+    impostor = _sha(repo)
+    _git(repo, "update-ref", "refs/remotes/origin/main", "HEAD")
+    monkeypatch.setattr(gitutil, "open_prs", lambda *a, **kw: {
+        "available": True, "complete": True,
+        "prs": [{"state": "MERGED", "headRefName": "feature/evidence", "headRefOid": tip,
+                 "mergeCommit": {"oid": impostor}, "isCrossRepository": False}],
+    })
+    row = _branch_report(repo, "refs/remotes/origin/feature/evidence")
+    assert row["patch_preserved_at_merge"] is False
+    assert row["classification"] == "UNKNOWN"
+    assert row["cleanup_blocked"] is True
+    assert merge != impostor
+
+
+def test_patch_identity_helpers_stay_inside_the_read_only_allowlist(repo: Path) -> None:
+    assert gitutil._is_read_only_git_command(["patch-id", "--stable"]) is True
+    for banned in (["patch-id"], ["patch-id", "--stable", "--verbatim"], ["apply", "-"]):
+        assert gitutil._is_read_only_git_command(banned) is False
+    patch_shape = ["diff", "--no-ext-diff", "--no-textconv", "--no-color", "--patch", "HEAD"]
+    assert gitutil._is_read_only_git_command(patch_shape) is True
+    assert gitutil._is_read_only_git_command(["diff", "--patch", "HEAD"]) is False
+    with pytest.raises(ValueError):
+        gitutil.run_git_result(["patch-id"], cwd=repo, stdin_text="")
