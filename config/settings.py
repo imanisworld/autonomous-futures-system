@@ -491,6 +491,18 @@ class SystemConfig:
     # counts normally.
     mnq_orb_breakout_inverse_epoch_start: Optional[str] = None
 
+    # ── Wide-stop hypothetical-ledger paper lane (2026-09-07 spec, B+) ────
+    # Isolated $4,000 / $6,000 HYPOTHETICAL ledgers for the parked wide-stop
+    # family. Paper-only by construction: no demo or live value exists, and
+    # nothing in this lane is a promotion path. See
+    # docs/wide-stop-hypothetical-ledger-lane-spec-2026-09-07.md.
+    wide_stop_ledger_mode: str = "observe_only"
+    # UTC/offset-aware start of the lane's isolated accounting epoch. Required
+    # whenever the lane is active, so the hypothetical balances, peaks and
+    # daily state are reconstructed from that boundary and never inherit the
+    # real book's history.
+    wide_stop_ledger_epoch_start: Optional[str] = None
+
     # ── MNQ vwap_hold proof mode (strategy-restoration candidate #3,
     # 2026-07-14) ─────────────────────────────────────────────────────────
     # Same tri-state contract, scoped to MNQ + vwap_hold + new_york session
@@ -804,6 +816,12 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         ).strip().lower(),
         mnq_orb_breakout_inverse_epoch_start=(
             os.getenv("MNQ_ORB_BREAKOUT_INVERSE_EPOCH_START") or None
+        ),
+        wide_stop_ledger_mode=str(
+            os.getenv("WIDE_STOP_LEDGER_MODE", "observe_only") or "observe_only"
+        ).strip().lower(),
+        wide_stop_ledger_epoch_start=(
+            os.getenv("WIDE_STOP_LEDGER_EPOCH_START") or None
         ),
         mnq_vwap_hold_proof_mode=str(
             os.getenv("MNQ_VWAP_HOLD_PROOF_MODE", "observe_only") or "observe_only"
@@ -1124,6 +1142,7 @@ def _validate_config(config: SystemConfig) -> None:
             "MNQ_ORB_BREAKOUT_INVERSE_MODE and MNQ_ORB_BREAKOUT_PROOF_MODE "
             "cannot both be active; their execution semantics conflict."
         )
+    _validate_wide_stop_ledger(config)
     if config.mnq_vwap_hold_proof_mode not in _valid_mnq_proof_modes:
         raise ConfigError(
             "MNQ_VWAP_HOLD_PROOF_MODE must be one of "
@@ -1172,6 +1191,41 @@ def _validate_config(config: SystemConfig) -> None:
     if config.live_trading_enabled:
         # This should never be reached, but belt-and-suspenders
         raise LiveTradingBlockedError(source="post-parse validation")
+
+
+def _validate_wide_stop_ledger(config: SystemConfig) -> None:
+    """Fail closed on the wide-stop hypothetical-ledger lane's two variables.
+
+    The lane is paper-only by construction: `observe_only` and `paper_sim` are
+    the only values that exist, so a typo, a stale `demo`, or an optimistic
+    `live` stops the process rather than silently degrading to observe_only.
+    """
+    valid_modes = {"observe_only", "paper_sim"}
+    if config.wide_stop_ledger_mode not in valid_modes:
+        raise ConfigError(
+            "WIDE_STOP_LEDGER_MODE must be one of "
+            f"{sorted(valid_modes)} (got {config.wide_stop_ledger_mode!r}); "
+            "this lane is paper-only — no demo or live value exists."
+        )
+    if config.wide_stop_ledger_mode != "paper_sim":
+        return
+    epoch = config.wide_stop_ledger_epoch_start
+    if not epoch:
+        raise ConfigError(
+            "WIDE_STOP_LEDGER_EPOCH_START is required when "
+            "WIDE_STOP_LEDGER_MODE=paper_sim; without it the hypothetical "
+            "ledgers would inherit unrelated journal history."
+        )
+    try:
+        parsed = datetime.fromisoformat(str(epoch).replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ConfigError(
+            "WIDE_STOP_LEDGER_EPOCH_START must be an ISO-8601 timestamp."
+        ) from exc
+    if parsed.tzinfo is None:
+        raise ConfigError(
+            "WIDE_STOP_LEDGER_EPOCH_START must include a UTC offset."
+        )
 
 
 def _env_bool(name: str, default: bool) -> bool:
