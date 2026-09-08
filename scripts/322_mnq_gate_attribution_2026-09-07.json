@@ -1,0 +1,658 @@
+{
+ "meta": {
+  "generated": "2026-09-07T23:31:02+00:00",
+  "sha": "87acaa1b06e9bba885cf889c6599e1142ddd3247",
+  "risk_rules_sha256": "007f02ca40b5a7b7ce363fcf3c941b228346673fe69697a90294a092610fc2d3",
+  "commission_round_trip": 1.48,
+  "horizons_min": [
+   30,
+   60,
+   120
+  ],
+  "slippage_sweep": [
+   1.0,
+   2.0,
+   3.0
+  ],
+  "corpora": {
+   "replay_corpus_v1_5m_4hr_audit": {
+    "files": 1242,
+    "sha256": "2857c2ff3553f1a7a4dcede2b888fb19c447dd6f8c950d29ed598109d8685c8b"
+   }
+  },
+  "data_root": "data",
+  "candidates_file": "322_mnq_edge_full_candidates.jsonl.gz"
+ },
+ "lanes": [
+  {
+   "lane": "322_mnq",
+   "label": "60M 3-2-2 First Live MNQ",
+   "strategy": "strat_322_first_live",
+   "instrument": "MNQ",
+   "corpus": "replay_corpus_v1_5m_4hr_audit",
+   "timeframe": "5m",
+   "day_only": true,
+   "source": "state_machine_322",
+   "extraction_audit": {},
+   "corpus_range": [
+    "2024-07-02",
+    "2026-06-26"
+   ],
+   "walk_forward_boundary": "2025-05-01",
+   "A_raw": {
+    "candidates": 34,
+    "campaigns": 34,
+    "by_direction": {
+     "SHORT": 17,
+     "LONG": 17
+    },
+    "by_session": {
+     "new_york": 34
+    },
+    "first_date": "2024-08-02",
+    "last_date": "2026-06-11",
+    "stop_ticks": {
+     "median": 486.0,
+     "p90": 878.0,
+     "max": 1471.0,
+     "max_stop_ticks_cap": 120.0,
+     "share_over_cap": 1.0
+    },
+    "rr_median": 0.27
+   },
+   "B_time_exit_control": {
+    "entry": "next-bar open + 1 tick adverse, exit at horizon close - 1 tick, no stop",
+    "30m": {
+     "pts": {
+      "n": 34,
+      "mean": 27.2206,
+      "median": 3.0,
+      "hit_rate": 0.559,
+      "t_stat": 1.723,
+      "sum": 925.5,
+      "profit_factor": 2.63
+     },
+     "net_usd": {
+      "n": 34,
+      "mean": 52.9612,
+      "median": 4.52,
+      "hit_rate": 0.559,
+      "t_stat": 1.676,
+      "sum": 1800.68,
+      "profit_factor": 2.555
+     },
+     "mfe_pts_mean": 72.243,
+     "mae_pts_mean": 44.118
+    },
+    "60m": {
+     "pts": {
+      "n": 34,
+      "mean": 34.6103,
+      "median": 23.5,
+      "hit_rate": 0.588,
+      "t_stat": 1.816,
+      "sum": 1176.75,
+      "profit_factor": 2.436
+     },
+     "net_usd": {
+      "n": 34,
+      "mean": 67.7406,
+      "median": 45.52,
+      "hit_rate": 0.588,
+      "t_stat": 1.777,
+      "sum": 2303.18,
+      "profit_factor": 2.388
+     },
+     "mfe_pts_mean": 96.743,
+     "mae_pts_mean": 53.75
+    },
+    "120m": {
+     "pts": {
+      "n": 34,
+      "mean": 47.9706,
+      "median": 36.0,
+      "hit_rate": 0.588,
+      "t_stat": 2.058,
+      "sum": 1631.0,
+      "profit_factor": 2.817
+     },
+     "net_usd": {
+      "n": 34,
+      "mean": 94.4612,
+      "median": 70.52,
+      "hit_rate": 0.588,
+      "t_stat": 2.026,
+      "sum": 3211.68,
+      "profit_factor": 2.769
+     },
+     "mfe_pts_mean": 125.831,
+     "mae_pts_mean": 71.875
+    },
+    "EOD": {
+     "pts": {
+      "n": 33,
+      "mean": -4.0833,
+      "median": -24.0,
+      "hit_rate": 0.485,
+      "t_stat": -0.091,
+      "sum": -134.75,
+      "profit_factor": 0.955
+     },
+     "net_usd": {
+      "n": 33,
+      "mean": -9.6467,
+      "median": -49.48,
+      "hit_rate": 0.485,
+      "t_stat": -0.108,
+      "sum": -318.34,
+      "profit_factor": 0.947
+     },
+     "mfe_pts_mean": 170.909,
+     "mae_pts_mean": 146.5
+    }
+   },
+   "C_documented_bracket": {
+    "primary": "plan_fill",
+    "entry_style": "armed_trigger",
+    "plan_fill": {
+     "candidates": 34,
+     "skipped_position_open": 0,
+     "attempted": 34,
+     "filled": 33,
+     "fill_rate": 0.971,
+     "no_fill": 1,
+     "open": 0,
+     "eod_bar_missing": 0,
+     "exit_reasons": {
+      "TARGET_HIT": 31,
+      "DAY_ONLY_FLATTEN": 1,
+      "STOP_HIT": 1
+     },
+     "no_fill_reasons": {
+      "ENTRY_BRACKET_INVALID_AT_FILL": 1
+     },
+     "resolved": 33,
+     "wins": 32,
+     "win_rate": 0.97,
+     "net": 2532.66,
+     "expectancy": 76.75,
+     "profit_factor": 13.57,
+     "max_drawdown": 201.48,
+     "top5_concentration": 0.411,
+     "h1_net": 1383.34,
+     "h1_n": 17,
+     "h2_net": 1149.32,
+     "h2_n": 16,
+     "both_halves_positive": true
+    },
+    "resting_fill": {
+     "candidates": 34,
+     "skipped_position_open": 0,
+     "attempted": 34,
+     "filled": 20,
+     "fill_rate": 0.588,
+     "no_fill": 14,
+     "open": 0,
+     "eod_bar_missing": 0,
+     "exit_reasons": {
+      "TARGET_HIT": 19,
+      "DAY_ONLY_FLATTEN": 1
+     },
+     "no_fill_reasons": {
+      "ENTRY_BRACKET_INVALID_AT_FILL": 9,
+      "ENTRY_NOT_TRIGGERED": 5
+     },
+     "resolved": 20,
+     "wins": 20,
+     "win_rate": 1.0,
+     "net": 1886.4,
+     "expectancy": 94.32,
+     "profit_factor": "inf",
+     "max_drawdown": 0.0,
+     "top5_concentration": 0.498,
+     "h1_net": 941.68,
+     "h1_n": 9,
+     "h2_net": 944.72,
+     "h2_n": 11,
+     "both_halves_positive": true
+    },
+    "fill_assumption_delta_net": 646.26
+   },
+   "D1_structural_gates": {
+    "risk_rule_failures": {
+     "rr_below_minimum": 34,
+     "stop_too_wide": 34,
+     "target_too_close": 11,
+     "min_confluence_grade": 6
+    },
+    "signal_gate_failures": {
+     "ENTRY_DETACHED_FROM_PRICE": 9,
+     "MARKET_CONDITION_NOT_TRADABLE": 1
+    },
+    "confluence_grades": {
+     "A+": 22,
+     "WEAK": 4,
+     "C": 2,
+     "A": 5,
+     "B": 1
+    },
+    "market_conditions": {
+     "TRENDING": 7,
+     "RANGE_BOUND": 26,
+     "DEAD": 1
+    },
+    "survivors_risk_structural": 0,
+    "survivors_risk_plus_signal": 0,
+    "survivor_share_risk_structural": 0.0,
+    "survivor_share_risk_plus_signal": 0.0,
+    "bracket_pnl_of_risk_structural_survivors": {
+     "candidates": 0,
+     "skipped_position_open": 0,
+     "attempted": 0,
+     "filled": 0,
+     "fill_rate": null,
+     "no_fill": 0,
+     "open": 0,
+     "eod_bar_missing": 0,
+     "exit_reasons": {},
+     "no_fill_reasons": {},
+     "resolved": 0,
+     "wins": 0,
+     "win_rate": null,
+     "net": 0,
+     "expectancy": null,
+     "profit_factor": null,
+     "max_drawdown": 0.0,
+     "top5_concentration": null,
+     "h1_net": 0,
+     "h1_n": 0,
+     "h2_net": 0,
+     "h2_n": 0,
+     "both_halves_positive": null
+    },
+    "bracket_pnl_of_all_survivors": {
+     "candidates": 0,
+     "skipped_position_open": 0,
+     "attempted": 0,
+     "filled": 0,
+     "fill_rate": null,
+     "no_fill": 0,
+     "open": 0,
+     "eod_bar_missing": 0,
+     "exit_reasons": {},
+     "no_fill_reasons": {},
+     "resolved": 0,
+     "wins": 0,
+     "win_rate": null,
+     "net": 0,
+     "expectancy": null,
+     "profit_factor": null,
+     "max_drawdown": 0.0,
+     "top5_concentration": null,
+     "h1_net": 0,
+     "h1_n": 0,
+     "h2_net": 0,
+     "h2_n": 0,
+     "both_halves_positive": null
+    },
+    "bracket_pnl_of_structurally_rejected": {
+     "candidates": 34,
+     "skipped_position_open": 0,
+     "attempted": 34,
+     "filled": 33,
+     "fill_rate": 0.971,
+     "no_fill": 1,
+     "open": 0,
+     "eod_bar_missing": 0,
+     "exit_reasons": {
+      "TARGET_HIT": 31,
+      "DAY_ONLY_FLATTEN": 1,
+      "STOP_HIT": 1
+     },
+     "no_fill_reasons": {
+      "ENTRY_BRACKET_INVALID_AT_FILL": 1
+     },
+     "resolved": 33,
+     "wins": 32,
+     "win_rate": 0.97,
+     "net": 2532.66,
+     "expectancy": 76.75,
+     "profit_factor": 13.57,
+     "max_drawdown": 201.48,
+     "top5_concentration": 0.411,
+     "h1_net": 1383.34,
+     "h1_n": 17,
+     "h2_net": 1149.32,
+     "h2_n": 16,
+     "both_halves_positive": true
+    }
+   },
+   "D_engine": {
+    "floors_off": {
+     "status": "OK",
+     "config": {
+      "enabled_concepts": [
+       "strat_322_first_live"
+      ],
+      "expected_timeframe_minutes": 5,
+      "entry_fill_model": "ioc_limit",
+      "entry_tolerance_ticks_by_root": {
+       "MES": 16.0,
+       "MNQ": 32.0
+      },
+      "fill_slippage_ticks": 1.0,
+      "strategy_permission_gate_enabled": false,
+      "max_trades_per_day": 9999,
+      "max_drawdown_percent": 0.0,
+      "max_daily_loss": 1000000000.0,
+      "starting_balance": 1000000.0,
+      "require_trending_condition": true,
+      "max_stop_ticks": {
+       "MNQ": 120,
+       "MES": 60,
+       "NQ": 60,
+       "ES": 60,
+       "MGC": 0,
+       "MCL": 0
+      },
+      "min_rr_ratio": 2.0,
+      "min_confluence_grade": "B"
+     },
+     "dispositions": {
+      "SIGNAL:TREND_STRENGTH_BELOW_REQUIRED": 26,
+      "SIGNAL:ENTRY_DETACHED_FROM_PRICE": 5,
+      "SIGNAL:MARKET_CONDITION_NOT_TRADABLE": 1,
+      "SIGNAL:WEAK_BAR_CLOSE": 1,
+      "SIGNAL:RR_BELOW_MINIMUM": 1
+     },
+     "stages": {
+      "signal": 34
+     },
+     "approved_attempts": 0,
+     "ioc_filled": 0,
+     "filled_pnl": {
+      "resolved": 0,
+      "wins": 0,
+      "win_rate": null,
+      "net": 0,
+      "expectancy": null,
+      "profit_factor": null,
+      "max_drawdown": 0.0,
+      "top5_concentration": null,
+      "h1_net": 0,
+      "h1_n": 0,
+      "h2_net": 0,
+      "h2_n": 0,
+      "both_halves_positive": null
+     },
+     "engine_totals_unanchored": {
+      "order_attempts": 0,
+      "ioc_filled": 0,
+      "resolved": 0,
+      "net_after_commission": 0,
+      "first_drawdown_halt": null
+     },
+     "note": null
+    },
+    "frozen": {
+     "status": "OK",
+     "config": {
+      "enabled_concepts": [
+       "strat_322_first_live"
+      ],
+      "expected_timeframe_minutes": 5,
+      "entry_fill_model": "ioc_limit",
+      "entry_tolerance_ticks_by_root": {
+       "MES": 16.0,
+       "MNQ": 32.0
+      },
+      "fill_slippage_ticks": 1.0,
+      "strategy_permission_gate_enabled": false,
+      "max_trades_per_day": 9999,
+      "max_drawdown_percent": 0.2,
+      "max_daily_loss": 150.0,
+      "starting_balance": 1500.0,
+      "require_trending_condition": true,
+      "max_stop_ticks": {
+       "MNQ": 120,
+       "MES": 60,
+       "NQ": 60,
+       "ES": 60,
+       "MGC": 0,
+       "MCL": 0
+      },
+      "min_rr_ratio": 2.0,
+      "min_confluence_grade": "B"
+     },
+     "dispositions": {
+      "SIGNAL:TREND_STRENGTH_BELOW_REQUIRED": 26,
+      "SIGNAL:ENTRY_DETACHED_FROM_PRICE": 5,
+      "SIGNAL:MARKET_CONDITION_NOT_TRADABLE": 1,
+      "SIGNAL:WEAK_BAR_CLOSE": 1,
+      "SIGNAL:RR_BELOW_MINIMUM": 1
+     },
+     "stages": {
+      "signal": 34
+     },
+     "approved_attempts": 0,
+     "ioc_filled": 0,
+     "filled_pnl": {
+      "resolved": 0,
+      "wins": 0,
+      "win_rate": null,
+      "net": 0,
+      "expectancy": null,
+      "profit_factor": null,
+      "max_drawdown": 0.0,
+      "top5_concentration": null,
+      "h1_net": 0,
+      "h1_n": 0,
+      "h2_net": 0,
+      "h2_n": 0,
+      "both_halves_positive": null
+     },
+     "engine_totals_unanchored": {
+      "order_attempts": 0,
+      "ioc_filled": 0,
+      "resolved": 0,
+      "net_after_commission": 0,
+      "first_drawdown_halt": null
+     },
+     "note": null
+    }
+   },
+   "E_ioc_costs": {
+    "tolerance_ticks": 32.0,
+    "reference_price": "decision-bar close",
+    "1tick": {
+     "all_candidates": {
+      "candidates": 34,
+      "skipped_position_open": 0,
+      "attempted": 34,
+      "filled": 20,
+      "fill_rate": 0.588,
+      "no_fill": 14,
+      "open": 0,
+      "eod_bar_missing": 0,
+      "exit_reasons": {
+       "TARGET_HIT": 19,
+       "STOP_HIT": 1
+      },
+      "no_fill_reasons": {
+       "ENTRY_NOT_FILLED": 13,
+       "ENTRY_BRACKET_INVALID_AT_FILL": 1
+      },
+      "resolved": 20,
+      "wins": 19,
+      "win_rate": 0.95,
+      "net": 1859.4,
+      "expectancy": 92.97,
+      "profit_factor": 12.169,
+      "max_drawdown": 166.48,
+      "top5_concentration": 0.477,
+      "h1_net": 1068.68,
+      "h1_n": 9,
+      "h2_net": 790.72,
+      "h2_n": 11,
+      "both_halves_positive": true
+     },
+     "risk_structural_survivors": {
+      "candidates": 0,
+      "skipped_position_open": 0,
+      "attempted": 0,
+      "filled": 0,
+      "fill_rate": null,
+      "no_fill": 0,
+      "open": 0,
+      "eod_bar_missing": 0,
+      "exit_reasons": {},
+      "no_fill_reasons": {},
+      "resolved": 0,
+      "wins": 0,
+      "win_rate": null,
+      "net": 0,
+      "expectancy": null,
+      "profit_factor": null,
+      "max_drawdown": 0.0,
+      "top5_concentration": null,
+      "h1_net": 0,
+      "h1_n": 0,
+      "h2_net": 0,
+      "h2_n": 0,
+      "both_halves_positive": null
+     }
+    },
+    "2tick": {
+     "all_candidates": {
+      "candidates": 34,
+      "skipped_position_open": 0,
+      "attempted": 34,
+      "filled": 20,
+      "fill_rate": 0.588,
+      "no_fill": 14,
+      "open": 0,
+      "eod_bar_missing": 0,
+      "exit_reasons": {
+       "TARGET_HIT": 19,
+       "STOP_HIT": 1
+      },
+      "no_fill_reasons": {
+       "ENTRY_NOT_FILLED": 13,
+       "ENTRY_BRACKET_INVALID_AT_FILL": 1
+      },
+      "resolved": 20,
+      "wins": 19,
+      "win_rate": 0.95,
+      "net": 1848.9,
+      "expectancy": 92.45,
+      "profit_factor": 12.04,
+      "max_drawdown": 167.48,
+      "top5_concentration": 0.478,
+      "h1_net": 1064.18,
+      "h1_n": 9,
+      "h2_net": 784.72,
+      "h2_n": 11,
+      "both_halves_positive": true
+     },
+     "risk_structural_survivors": {
+      "candidates": 0,
+      "skipped_position_open": 0,
+      "attempted": 0,
+      "filled": 0,
+      "fill_rate": null,
+      "no_fill": 0,
+      "open": 0,
+      "eod_bar_missing": 0,
+      "exit_reasons": {},
+      "no_fill_reasons": {},
+      "resolved": 0,
+      "wins": 0,
+      "win_rate": null,
+      "net": 0,
+      "expectancy": null,
+      "profit_factor": null,
+      "max_drawdown": 0.0,
+      "top5_concentration": null,
+      "h1_net": 0,
+      "h1_n": 0,
+      "h2_net": 0,
+      "h2_n": 0,
+      "both_halves_positive": null
+     }
+    },
+    "3tick": {
+     "all_candidates": {
+      "candidates": 34,
+      "skipped_position_open": 0,
+      "attempted": 34,
+      "filled": 20,
+      "fill_rate": 0.588,
+      "no_fill": 14,
+      "open": 0,
+      "eod_bar_missing": 0,
+      "exit_reasons": {
+       "TARGET_HIT": 19,
+       "STOP_HIT": 1
+      },
+      "no_fill_reasons": {
+       "ENTRY_NOT_FILLED": 13,
+       "ENTRY_BRACKET_INVALID_AT_FILL": 1
+      },
+      "resolved": 20,
+      "wins": 19,
+      "win_rate": 0.95,
+      "net": 1838.4,
+      "expectancy": 91.92,
+      "profit_factor": 11.912,
+      "max_drawdown": 168.48,
+      "top5_concentration": 0.479,
+      "h1_net": 1059.68,
+      "h1_n": 9,
+      "h2_net": 778.72,
+      "h2_n": 11,
+      "both_halves_positive": true
+     },
+     "risk_structural_survivors": {
+      "candidates": 0,
+      "skipped_position_open": 0,
+      "attempted": 0,
+      "filled": 0,
+      "fill_rate": null,
+      "no_fill": 0,
+      "open": 0,
+      "eod_bar_missing": 0,
+      "exit_reasons": {},
+      "no_fill_reasons": {},
+      "resolved": 0,
+      "wins": 0,
+      "win_rate": null,
+      "net": 0,
+      "expectancy": null,
+      "profit_factor": null,
+      "max_drawdown": 0.0,
+      "top5_concentration": null,
+      "h1_net": 0,
+      "h1_n": 0,
+      "h2_net": 0,
+      "h2_n": 0,
+      "both_halves_positive": null
+     }
+    }
+   },
+   "verdict": {
+    "primary_failure_stage": "RISK_GATES_REMOVE_EDGE",
+    "flags": {
+     "signal_positive_majority_of_horizons": true,
+     "signal_positive_horizons": "3/4",
+     "signal_best_t_stat": 2.06,
+     "documented_bracket_positive": true,
+     "structural_survivor_share": 0.0,
+     "survivors_bracket_positive": false,
+     "ioc_1tick_positive": false,
+     "ioc_3tick_positive": false,
+     "ioc_fill_rate": 0.0
+    }
+   }
+  }
+ ]
+}
