@@ -2243,6 +2243,28 @@ def process_alert(
         confluence_grade=confluence.grade,
     )
     risk_result = risk_engine.validate(trade_setup, daily_state)
+
+    # ── Wide-stop hypothetical-ledger lane (observe-only by default) ──────
+    # Additive and isolated: reads/writes only its own journal, balance and
+    # PaperBroker on an explicitly HYPOTHETICAL $4k/$6k ledger, and cannot
+    # change `risk_result`, `broker`, `daily_state`, the real journal, or this
+    # decision. Returns None on the common path (lane off, or not a member).
+    # See docs/wide-stop-hypothetical-ledger-lane-spec-2026-09-07.md.
+    try:
+        from context.wide_stop_ledger_runtime import observe_candidate as _wide_stop_observe
+
+        _wide_stop_audit = _wide_stop_observe(
+            cfg=cfg,
+            setup=trade_setup,
+            global_risk_result=risk_result,
+            log_dir=log_dir,
+            for_date=today,
+            market_price=(state.ohlc.close if state.ohlc is not None else None),
+        )
+        if _wide_stop_audit is not None:
+            journal_entry["wide_stop_ledger"] = _wide_stop_audit
+    except Exception as _wide_stop_exc:  # pragma: no cover - research lane only
+        logger.warning("wide-stop ledger lane skipped: %s", _wide_stop_exc)
     if risk_result.approved and decision.setup.direction_role == "COUNTERTREND_SCALP":
         root = state.instrument.upper().rstrip("!1234567890HMUZ")
         tick_size = _TICK_SIZE_BY_ROOT.get(root, 0.25)

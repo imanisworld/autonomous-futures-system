@@ -1,0 +1,70 @@
+{
+  "purpose": "spec \u00a76 build step 1 \u2014 pre-registered offline expectation",
+  "entry_contract": {
+    "fill_model": "ioc_limit",
+    "marketable_ticks": 8.0,
+    "reference_price": "decision-bar close",
+    "adverse_slippage_ticks": 1.0,
+    "contracts": 1,
+    "exit": "documented static bracket, no runner",
+    "commission_round_trip": 1.24
+  },
+  "establishes": "entry-side admission and fill behaviour only",
+  "does_not_establish": [
+    "forward P&L \u2014 the exit expectation is the memo's committed bracket cell, unchanged",
+    "that IOC realises bracket P&L; the memo's guidance is roughly 55-75% of it"
+  ],
+  "ledgers": {
+    "wide_stop_4k": {
+      "ledger": "wide_stop_4k",
+      "starting_balance": 4000.0,
+      "family_stop_cap_ticks": 400.0,
+      "min_rr_ratio": 1.0,
+      "cell_size": 36,
+      "expected_cell_size": 36,
+      "cell_matches_memo": true,
+      "ioc_filled": 13,
+      "ioc_unmarketable": 21,
+      "invalid_at_fill": 2,
+      "invalid_at_fill_dates": [
+        "2026-01-08",
+        "2026-04-06"
+      ],
+      "fill_rate": 0.361,
+      "median_detachment_ticks": 56.0,
+      "max_detachment_ticks": 247.0,
+      "bracket_expectation": {
+        "lane": "4hr_mnq",
+        "admitted": 36,
+        "bracket_net": 3077.0,
+        "profit_factor": 3.13,
+        "h1": 1434.0,
+        "h2": 1643.0,
+        "losses_over_150": 2
+      }
+    },
+    "wide_stop_6k": {
+      "ledger": "wide_stop_6k",
+      "starting_balance": 6000.0,
+      "family_stop_cap_ticks": 600.0,
+      "min_rr_ratio": 0.0,
+      "cell_size": 24,
+      "expected_cell_size": 24,
+      "cell_matches_memo": true,
+      "ioc_filled": 12,
+      "ioc_unmarketable": 12,
+      "invalid_at_fill": 0,
+      "invalid_at_fill_dates": [],
+      "fill_rate": 0.5,
+      "median_detachment_ticks": 32.5,
+      "max_detachment_ticks": 74.0,
+      "bracket_expectation": {
+        "lane": "322_mnq",
+        "admitted": 24,
+        "bracket_net": 1790.0,
+        "profit_factor": 9.9,
+        "note": "PF is a 1-loss artifact; not evidence until >= 5 losses are observed"
+      }
+    }
+  }
+}
