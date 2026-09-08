@@ -54,7 +54,7 @@ Verdict taxonomy:
 | 60M 3-2-2 First Live | ✅ | ✅ | ✅ full-engine closure (#367) | ✅ 20/34 IOC fills, PF 12.2 (audit, = #340); ❌ 0/34 through production gates | ✅ bracket H1 +$1,383.34 / H2 +$1,149.32; IOC H1 +$1,068.68 / H2 +$790.72 | ✅ 3-tick PF 11.9 | n=34 — thin; winner concentration already flagged | `RISK_GATES_REMOVE_EDGE` — 34/34 over the cap (median stop 486 ticks), 34/34 under 2.0 R:R; engine rejects at `TREND_STRENGTH_BELOW_REQUIRED` (26) first | **BROKEN FOR CURRENT SYSTEM RISK CONSTRAINTS — signal and bracket real; PARKED below $6,000 equity (B+, 2026-09-07)** |
 | ORB Breakout — inverted (MNQ evidence lane) | ✅ | ✅ | ✅ | ✅ IOC | ✅ historical sub-period/session/direction checks | ✅ through +4 ticks (#364) | ⚠️ n=111 historical study — not reproducible from current journals (63 arms reproducible, see profile) | `BRACKET_DESTROYS_EDGE` on the ungated 680-candidate population (IOC −$177 / PF 0.86); gated engine subset positive (+$271–293, PF 1.6–2.0) — the gates are the selection | **PROMISING BUT UNPROVEN** |
 | MES 1-2-2 (`strat_122`) | ✅ | ✅ | ✅ executable audit (#373) | ✅ | ⚠️ executable subset thin | ✅ historical stress | 16/33 canonical candidates executable | not decomposed | **WAIT** |
-| VWAP Hold (MNQ NY) | ❌ entry definition unclear (stale — see 2026-07-26 audit note in profile below) | Partial | ❌ (stale — see profile) | ✅ ioc_close, production-matching (2026-07-26) | ✅ both halves, all 3 exits, NY-only ioc_close (2026-07-26) | ✅ 1-3 tick, NY-only ioc_close (2026-07-26) | ⚠️ n=107 armed / **~55 filled, NY-only** (canonical — session-filtered from the 348-arm blended pop, which is provenance-context only) — thin, clears the 30-min literal bar but not comfortably | `SIGNAL_NOT_DIRECTIONAL` on the all-session raw predicate (n=4,579; 1/4 horizons positive, best t=1.18); plan-fill artifact +$102.9k; must be reconciled with the NY-only ioc_close cell before any upgrade | **PROMISING BUT UNPROVEN — under reconciliation** (see profile) |
+| VWAP Hold (MNQ NY) | ✅ fully specified in `strategy/signal_engine.py` (`_try_vwap_hold`) | ✅ | ✅ replay-engine population reused (2026-09-07) | ❌ under the decision-bar IOC reference the replay/production use: NY-only 35/107 fills, −$326.92, PF 0.49 (2026-09-07). The 2026-07-26 ✅ was the arrival-bar close, 5 min after the order | ❌ both halves negative under the decision-bar reference (2026-09-07) | ❌ (moot — negative at 1 tick) | n=107 armed / 35 filled NY-only; 348 / 105 blended — the 55-fill figure counted 20 fills that exist only under the 5-minute look-ahead | `SIGNAL_NOT_DIRECTIONAL` on the raw predicate (n=4,579); detached-entry gate selects a weakly positive subset (t ≤ 1.9, not NY-specific); the NY cell's sign is a fill-reference artifact (`docs/vwap-hold-reconciliation-2026-09-07.md`) | **BROKEN — negative evidence** (downgraded from PROMISING BUT UNPROVEN 2026-09-07) |
 | VWAP Reclaim (MNQ NY) | ✅ cleanest of the 3 VWAP predicates | Partial | ✅ isolated, confirmed no leaks (2026-07-26) | ✅ ioc_limit (2026-07-26) | ❌ H2 negative (2026-07-26) | ❌ fails 3-tick (2026-07-26) | ⚠️ n=70 combined / n=21 MNQ thin (2026-07-26) | not decomposed | **WAIT** |
 | VWAP Rejection | ❌ | Partial | ❌ | ❌ | ❌ | ❌ | — | not decomposed | **BROKEN — unreachable predicate** |
 | ORB Breakout (MNQ) | ✅ | ✅ | ⚠️ Pine stop offset stale, see profile | ✅ isolated ioc_limit both exits (2026-07-26); audit: 11% IOC fill on n=710, PF 0.59 | ❌ H2 washout both exits (2026-07-26); audit resting-fill bracket H1/H2 both negative | ❌ fails 1-4 tick both exits (2026-07-26); audit 3-tick PF 0.55 | ⚠️ n=25 thin (2026-07-26); audit n=710 raw / 226 bracket-resolved — no longer thin, and negative | `SIGNAL_NOT_DIRECTIONAL` — 0/4 horizons positive; plan-fill artifact +$23.0k; frozen engine halts 2026-03-16 exactly as the 2026-07-26 closure recorded | **BROKEN — negative evidence** (upgraded from WAIT 2026-09-07) |
@@ -135,7 +135,30 @@ Verdict taxonomy:
 ---
 
 ### VWAP Hold — MNQ NY
-**Verdict: PROMISING BUT UNPROVEN — under reconciliation (2026-09-07)**
+**Verdict: BROKEN — negative evidence** (downgraded from PROMISING BUT UNPROVEN, 2026-09-07)
+
+> **Reconciliation (2026-09-07, `docs/vwap-hold-reconciliation-2026-09-07.md`,
+> `scripts/vwap_hold_reconciliation_2026-09-07.py`):** the 2026-07-26 NY-only
+> `ioc_close` cell was reproduced field-for-field from the committed package
+> code and JSON, then re-run with only the population and the fill reference
+> varied, on the same 5m corpus and the same exit engine. Three results:
+> (1) the replay's `ENTRY_DETACHED_FROM_PRICE` gate — which rejected 1,598 of
+> the 1,609 non-approved `vwap_hold` rows — is why the audit's ungated
+> predicate filled 6–8% and the approved arms 42–51%; it selects a weakly
+> positive subset (next-bar control t ≤ 1.9 on all 348) from a directionless
+> one, but that subset is **not NY-specific** (non-NY approved t 1.69 vs NY
+> 1.47). (2) Journal `bar_ts` is the 15m bar's open; the replay engine and
+> production fill at the **decision bar's close** (`replay/replay_engine.py:755`),
+> which is the arrival 5m bar's *open*. The package's canonical `ioc_close`
+> fills at that arrival bar's **close — five minutes after the IOC would have
+> been sent**. Under the decision-bar reference the NY-only static 2-tick cell
+> is **35 fills, −$326.92, PF 0.49, both halves negative** (arrival-close:
+> 55 fills, +$458.80, PF 2.18); the package's own `ioc_open` leg (−$143.92,
+> PF 0.74) already showed this. Runner under the honest reference: −$3.26 /
+> PF 1.00. (3) Neither the pre-2025-07 nor the audit-window period rescues it.
+> The 2026-07-26 "`close` is canonical" decision was right about production
+> and applied to the wrong bar. Exit-mode and sample-expansion items below are
+> moot; the notes are kept as provenance.
 
 > **Edge decomposition note (2026-09-07, #483):** the raw `_try_vwap_hold`
 > predicate, run over the full corrected 15-minute corpus with no session or
@@ -155,10 +178,9 @@ Verdict taxonomy:
 > selection work on a predicate that carries no direction on its own, or the
 > ~55-fill NY-only cell is the small-sample / winner-concentration effect its
 > own note already flags. Reconciling them (same corpus, same IOC reference,
-> NY-only vs all-session, gated vs raw) is now the blocking item for this
-> lane and is listed under Pending Research. Until then the verdict stays
-> PROMISING BUT UNPROVEN on the strength of the NY-only ioc_close cell, with
-> the audit result recorded as a material unresolved concern.
+> NY-only vs all-session, gated vs raw) was the blocking item for this lane —
+> **done 2026-09-07, see the reconciliation note above: the NY-only cell does
+> not survive the production-faithful fill reference.**
 
 > **IOC re-scoring note (2026-07-26, `VWAP_HOLD_IOC_CLOSE_RESCORING_2026-07-26.md`,
 > amended same day — see the NY-only correction note immediately below)**:
@@ -577,13 +599,13 @@ See `ICC_ICT_Research.md` for full breakdown.
 | Item | Blocking | Who |
 |---|---|---|
 | ~~VWAP hold IOC reference-price resolution~~ — **done 2026-07-26**, operator chose `close` as canonical; see `VWAP_HOLD_IOC_CLOSE_RESCORING_2026-07-26.md` | — | — |
-| VWAP hold exit-mode resolution (static vs runner vs partial_2ct_approx — separate from the IOC question above, still open) | VWAP hold canonical baseline | Operator decision |
-| VWAP hold NY-only sample expansion — canonical live-relevant sample is only ~55 filled trades (n=107 armed); runner exit's winner concentration (71.2% top-5, 2-tick) is a real robustness flag on this thin sample | VWAP hold upgrade past PROMISING BUT UNPROVEN | Claude Code (accumulate passively; no rule/detector change needed) |
+| ~~VWAP hold exit-mode resolution~~ — **moot 2026-09-07**: static −$326.92 / PF 0.49 and runner −$3.26 / PF 1.00 on the NY-only arms under the decision-bar fill reference; no exit mode has a positive cell to choose | — | — |
+| ~~VWAP hold NY-only sample expansion~~ — **moot 2026-09-07**: the ~55-fill cell included 20 fills that exist only under the 5-minute-late arrival-close reference; the honest cell is 35 fills and negative | — | — |
 | ~~4HR Re-Trigger honest fill replay~~ — **done 2026-09-07** (#483): 44/81 IOC fills, +$1,731.86 / PF 2.00, both halves positive, survives 3 ticks; edge is removed at the stop-cap / R:R gates, not at the fill | — | — |
 | ~~Miyagi walk-forward halves + slippage sensitivity~~ — **done 2026-09-07** (#483): MNQ bracket H1 −$56 / H2 +$582, 3-tick PF 2.31 on n=8; MES not directional. Sample too small for a verdict either way | — | — |
 | ~~Wide-stop / low-R:R day-strategy risk policy~~ — **decided 2026-09-07: Option B+** (`docs/wide-stop-day-strategy-policy-options-2026-09-07.md`). Global cap and R:R unchanged; 4HR MNQ / 3-2-2 / Miyagi MNQ parked as incompatible with the account size, not tradeable below $4,000 / $6,000 / $6,000 real equity; shadow journaling continues. Re-open criteria pre-registered: real equity ≥ threshold, or ≥ 40 IOC-filled forward 4HR trades with both halves positive and top-3-month concentration < 60%, or shadow n ≥ 120 (4HR) / ≥ 60 with ≥ 5 losses (3-2-2) | — | — |
 | **Hypothetical-ledger forward paper lane (B+)** — isolated paper account explicitly labeled hypothetical $4,000 (4HR) / $6,000 (3-2-2, Miyagi shadow member), 1 contract, family caps 400 / 600 ticks, 4HR R:R ≥ 1.0, IOC-real fills, own daily floor, **no promotion path**; every result reported as "hypothetical ledger", never blended with the $1,500 book | Forward IOC-real record for the re-open criteria | Claude Code (build), operator (approve lane config) |
-| **VWAP Hold reconciliation** — the raw predicate is not directional on the all-session corpus (n=4,579, +$102.9k plan-fill artifact, #483) while the NY-only ioc_close cell passes every gate on ~55 fills. Run both on the same corpus / IOC reference, NY-only vs all-session, gated vs raw, and determine whether the NY gating is selecting a real edge or the ~55-fill cell is the concentration effect its own note flags | VWAP Hold upgrade or downgrade | Claude Code |
+| ~~VWAP Hold reconciliation~~ — **done 2026-09-07** (`docs/vwap-hold-reconciliation-2026-09-07.md`): the detached-entry gate selects a weakly positive, non-NY-specific subset; the NY-only cell's positive sign came from filling at the arrival bar's close, 5 minutes after the decision-bar close that replay/production use; under the honest reference it is 35 fills, −$326.92, PF 0.49, both halves negative. Verdict → BROKEN — negative evidence | — | — |
 | **Inverse ORB population reproduction** — the n=111 / PF 2.39 historical population is not reproducible from current journals (63 arms reproducible, +$1,027 / PF 5.28). Locate or regenerate the 111-arm population, or formally re-baseline the lane on the 63 | Inverse ORB promotion past PROMISING BUT UNPROVEN | Claude Code |
 | 3-2-2 sample-size expansion (blocked pending new 5m MNQ data past 2026-06-26) — and moot for the executable form until the risk-policy item above is decided | Strategy verdict | Claude Code |
 | 4HR 1H stop backtest | Rules validation | External researcher |
