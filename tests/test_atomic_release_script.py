@@ -140,3 +140,31 @@ def test_promotion_and_rollback_use_atomic_symlink_replacement():
 def test_build_cleanup_trap_captures_paths_before_function_returns():
     text = SCRIPT.read_text()
     assert "trap \"git worktree remove -f '$work'" in text
+
+
+def test_promote_appends_durable_release_history_after_verification():
+    """Releases promoted here must land in the durable history file.
+
+    $RELEASES is pruned to a rolling window, so it is not a history. Only
+    afs-deploy.sh --release appended release_history.txt, which meant a release
+    promoted through this script could run and then have its directory evicted
+    with no on-box record of the SHA that was live.
+    """
+    text = SCRIPT.read_text()
+    promote = text.split("promote_release() {", 1)[1].split("rollback_release() {", 1)[0]
+
+    assert "release_history.txt" in promote
+    # Recorded only after activation and the post-activation integrity check
+    # pass, so the file lists releases that came up, never attempts.
+    assert promote.index("release_history.txt") > promote.index(
+        "-m ops.release_integrity --repo-root '$CURRENT'"
+    )
+    # Same rules as the afs-deploy.sh append: deduped, atomic, append-only.
+    assert "grep -q '^$sha" in promote
+    assert "$hist.tmp." in promote
+    assert "mv -f" in promote
+    # The record carries sha, UTC timestamp and release dir, like the other path.
+    assert "'%s %s %s\\n' '$sha'" in promote
+    assert "date -u +%Y-%m-%dT%H:%M:%SZ" in promote
+    # Nothing here may delete or rewrite existing rows.
+    assert "rm -f" not in promote.split("release_history.txt", 1)[1]

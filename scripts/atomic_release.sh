@@ -249,6 +249,22 @@ promote_release() {
     curl -fsS http://127.0.0.1:8000/health
     PYTHONPATH='$CURRENT' '$CURRENT/.venv/bin/python' \
       -m ops.release_integrity --repo-root '$CURRENT'
+    # Durable release history. \$RELEASES is pruned to a rolling window of the
+    # most recent few, so it is NOT a history: a release can be promoted, run,
+    # and then have its directory evicted, leaving no on-box record of the SHA
+    # that was live. afs-deploy.sh --release has appended here since 2026-09-07;
+    # this path did not, so releases promoted through this script (bare-SHA
+    # release dirs) went unrecorded -- including the one that was live on
+    # 2026-09-08. Same file, same format, same append-only/dedupe/atomic rules.
+    # Written only after activation and integrity verification have passed, so
+    # the file records releases that actually came up, never attempts.
+    hist='$SHARED/release_history.txt'
+    if ! grep -q '^$sha\b' \"\$hist\" 2>/dev/null; then
+      tmp=\"\$hist.tmp.\$\$\"
+      { cat \"\$hist\" 2>/dev/null; printf '%s %s %s\n' '$sha' \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" '$RELEASES/$sha'; } > \"\$tmp\"
+      mv -f \"\$tmp\" \"\$hist\"
+    fi
+    echo \"  release history: \$(grep -c . \"\$hist\" 2>/dev/null || echo 0) entries\"
   "
 }
 
