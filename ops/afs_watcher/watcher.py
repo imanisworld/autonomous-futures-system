@@ -1497,6 +1497,31 @@ def handle_memory_fixed_warnings(state: dict, findings: Findings, tick: dict) ->
                f"memory-fixed-warning:{key}:{iso(now_utc())[:13]}")
 
 
+def _blocked_discord_text(key: str) -> str:
+    """Render a compact operator message without changing the finding itself."""
+    release = RELEASE_SHA[:8]
+    messages = {
+        "watcher_release_stale": (
+            "**BLOCKED — Watcher needs restart**\n"
+            "New release is live, but the watcher is still tracking the previous release.\n"
+            "**Action:** Restart `afs-watcher` only."
+        ),
+        "unexpected_restart": (
+            "**BLOCKED — Unexpected futures-bot restart**\n"
+            "The bot restarted and no approved deployment explains it.\n"
+            "**Action:** Verify what restarted futures-bot before continuing."
+        ),
+    }
+    title = key.replace("_", " ").strip().capitalize()
+    body = messages.get(
+        key,
+        f"**BLOCKED — Watcher finding: {title}**\n"
+        "The watcher reported a blocked condition.\n"
+        "**Action:** Inspect the watcher snapshot before continuing.",
+    )
+    return f"{body}\n`code={key} | release={release} | service={SERVICE}`"
+
+
 def handle_blocked(state: dict, findings: Findings, tick: dict) -> None:
     blocked = findings.blocked()
     current = {b["key"]: b for b in blocked}
@@ -1521,9 +1546,7 @@ def handle_blocked(state: dict, findings: Findings, tick: dict) -> None:
         remind = (not last) or (now_utc() - _ts(last)).total_seconds() >= BLOCKED_REMINDER_S
         if remind:
             state["notified"].pop(f"blocked:{k}", None)
-            notify(state, "DISCORD_ROUTE_ERROR",
-                   f"BLOCKED {k}: {b['summary']} | smallest fix: {smallest_fix(k)} | snapshot: {state['blocked'][k]['snapshot']}",
-                   f"blocked:{k}")
+            notify(state, "DISCORD_ROUTE_ERROR", _blocked_discord_text(k), f"blocked:{k}")
             state["blocked_last_notified"][k] = iso(now_utc())
 
 
