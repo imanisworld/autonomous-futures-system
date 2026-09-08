@@ -1,6 +1,8 @@
 # PaperBroker's `ioc_limit` path has no bracket-validity guard — which lanes inherit it
 
-Status: **OPEN — a production defect is identified and quantified; no code change is made here.** Evidence only; no strategy, risk, replay, broker, config or deployment change. The fix is a runtime behaviour change under the 2026-09-30 evidence freeze and needs an operator ruling.
+Status: **CLOSED — the production path is already guarded upstream; the exposure is research-harness-side only.** Evidence only; no strategy, risk, replay, broker, config or deployment change, and none is recommended.
+
+> **Correction, 2026-09-08 (same day).** This note first read as "a production defect is identified" and recommended carrying the guard into `PaperBroker.ioc_limit` as a runtime fix pending an operator ruling on the freeze. **That recommendation was wrong and is withdrawn.** Measuring the blast radius showed the live path is already protected by `ENTRY_DETACHED_FROM_PRICE` one layer up, and that no committed replay evidence is affected. The defect is real, but it lives in research harnesses that bypass the signal engine, not in production. §"Measured blast radius" and §"Recommendation" below carry the corrected position; the mechanism sections above them were and remain accurate.
 
 Script: `scripts/ioc_limit_bracket_guard_readacross.py` → `scripts/ioc_limit_bracket_guard_readacross_2026-09-08.json`. Both inputs are committed artifacts (`scripts/edge_decomposition_audit_results_candidates.jsonl.gz`, `scripts/inverse_orb_canonical_ioc_proof_2026-09-07.json`), so it runs from a fresh clone and does not read the gitignored `data/replay_polygon_5m/`.
 
@@ -63,15 +65,35 @@ Scale of the gap in the D3-approved cell (4HR, R:R ≥ 1.0, family cap 400 ticks
 
 D4's choice of 8 ticks is unaffected and remains correct. The tolerance is simply not what governs this.
 
-## Recommended fix, not applied here
+## Measured blast radius — no committed replay evidence is affected
 
-Extend the existing guard from the `stop_market` branch to the `ioc_limit` branch of `PaperBroker.execute_bracket`, returning the same `ENTRY_BRACKET_INVALID_AT_FILL` cancellation. One place; closes it for the wide-stop lane, the inverse ORB lane, and anything else on `ioc_limit`; and removes the need for each research script to remember the rule independently.
+Script: `scripts/ioc_limit_guard_replay_log_survey.py` → `scripts/ioc_limit_guard_replay_log_survey_2026-09-08.json`. It pairs every `OUTCOME` row with the `TRADE` decision preceding it in the same journal and asks whether the recorded fill sits inside its own bracket. (It reads `logs/`, which is gitignored, so it does not run from a fresh clone — its output is committed so the result stays auditable.)
 
-Why it is not applied in this PR:
+**18,723 paired trades across 9 replay roots. 0 invalid at fill. 0 unattributable outcomes.** Of those, **6,845 are `ioc_limit`** runs — 1,183 + 252 + 2,982 + 2,428 across the four 622-day `ioc_limit` roots.
 
-1. It is a **runtime behaviour change** under the standing directive freezing such changes to 2026-09-30.
-2. It **changes historical paper results** anywhere `ioc_limit` was used — every affected cell would need re-scoring, not just re-running. That is an evidence-invalidation decision, not a bug fix to be slipped in.
+A zero is only worth anything if the check could have fired, so:
 
-Until it is ruled on, the mitigation in the spec is a build precondition (see §6), which costs nothing and blocks the mismatch at the point where it would matter.
+| Roots | Trades | Invalid | Fills deviating from plan | Max deviation |
+|---|---:|---:|---:|---:|
+| 4 × `ioc_limit` | 6,845 | 0 | 2,408 | **32 ticks** |
+| 5 × `market` | 11,878 | 0 | 11,878 | 1 tick |
 
-**What would close this:** either the guard is extended and the affected cells re-scored, or an explicit operator decision that `ioc_limit` fills are allowed to open invalid brackets — in which case every lane using it needs the label/P&L contradiction documented in its evidence, because "STOP_HIT" will not mean a loss.
+Fills do deviate — about a third of `ioc_limit` fills do — and the deviation caps at **exactly the configured 32-tick entry tolerance**, never beyond. The `market` roots cap at 1 tick, their slippage. So the check was live and simply never fired.
+
+## Why zero — the guard already exists, one layer up
+
+`strategy/signal_engine.py:1517` rejects a candidate as `ENTRY_DETACHED_FROM_PRICE` when its stop and target no longer straddle the live price. Its own comment states the purpose: *"this guard exists to stop a MARKET fill landing on the wrong side of an anchored bracket."* That is this defect, guarded at the signal layer rather than the broker layer. Far-detached candidates never reach `PaperBroker`, which is why the deviation ceiling is the tolerance.
+
+Two narrow carve-outs disable it — `proof_market_entry_active` (the MNQ orb_breakout **proof** lane) and `permission_gate_exception` (MNQ vwap_hold, new_york). **The inverse ORB lane receives neither:** `proof_market_entry_active` requires the proof mode to be active, and `config/settings.py:1123` forbids the proof and inverse modes being active simultaneously. So whenever the inverse lane runs, the straddle guard applies to it.
+
+**Consequence for the inverse ORB baseline.** Its +$1,026.64 is not merely an artifact of an unguarded fill model — it describes trades **production was structurally incapable of taking**, because the straddle gate would have rejected those candidates at decision time. The canonical proof reaches them only by taking already-approved source arms and filling the mirrored order against a later market price, which is a path the signal engine never executes. This strengthens the BROKEN verdict in `docs/inverse-orb-baseline-post-fill-decomposition-2026-09-08.md` rather than qualifying it.
+
+## Recommendation — do not change `PaperBroker`
+
+The earlier recommendation to carry the guard into the `ioc_limit` branch is **withdrawn**. There is no production exposure to close: the live path is guarded upstream, and no recorded replay result would move. Applying it would re-score the inverse ORB baseline for no safety gain, and would spend a freeze exception on defence-in-depth.
+
+The real gap is narrower and belongs to tooling: **a research harness that reproduces the fill model without also reproducing the gate that protects it will manufacture this artifact.** Two harnesses do reproduce the gate's effect correctly — `scripts/edge_decomposition_audit.py` via its own `_bracket_valid_at_fill`, and the DEMO wiring via post-fill validation. `inverse_orb_canonical_ioc_proof` did not, and produced a headline number that stood for a day.
+
+So the durable fix is a convention, not a code change: **any harness filling stored candidates outside the signal engine must assert bracket validity at fill, and report what it rejected.** The wide-stop spec precondition (§6) is exactly this applied to that lane's build-step-1 replay, and stands unchanged — a build-step replay is such a harness.
+
+**What would reopen the production question:** a new carve-out from `ENTRY_DETACHED_FROM_PRICE`, or a lane that submits an `ioc_limit` order without passing the signal engine's straddle check. Either would put the broker layer back on the hook, and the guard should then be added.

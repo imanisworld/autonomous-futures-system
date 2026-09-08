@@ -1,0 +1,158 @@
+{
+  "question": "Would adding ENTRY_BRACKET_INVALID_AT_FILL to PaperBroker's ioc_limit path change any recorded replay result?",
+  "input_dependency": "logs/ is gitignored; this does not run from a fresh clone",
+  "roots_surveyed": 9,
+  "total_paired_trades": 18723,
+  "total_invalid_at_fill": 0,
+  "total_unattributable_outcomes": 0,
+  "surveys": [
+    {
+      "root": "logs/replay_622d_ioc_limit_runner",
+      "journal_files": 1244,
+      "paired_trades": 1183,
+      "unattributable_outcomes": 0,
+      "invalid_at_fill": 0,
+      "pnl_all": -82.52,
+      "pnl_invalid_at_fill": 0.0,
+      "invalid_exit_reasons": {},
+      "detachment_ticks": {
+        "median": 0.0,
+        "max": 32.0,
+        "nonzero": 435,
+        "count": 1183
+      }
+    },
+    {
+      "root": "logs/replay_622d_ioc_limit_static",
+      "journal_files": 1244,
+      "paired_trades": 252,
+      "unattributable_outcomes": 0,
+      "invalid_at_fill": 0,
+      "pnl_all": -632.85,
+      "pnl_invalid_at_fill": 0.0,
+      "invalid_exit_reasons": {},
+      "detachment_ticks": {
+        "median": 0.0,
+        "max": 32.0,
+        "nonzero": 89,
+        "count": 252
+      }
+    },
+    {
+      "root": "logs/replay_622d_market_runner",
+      "journal_files": 1244,
+      "paired_trades": 2378,
+      "unattributable_outcomes": 0,
+      "invalid_at_fill": 0,
+      "pnl_all": 349867.86,
+      "pnl_invalid_at_fill": 0.0,
+      "invalid_exit_reasons": {},
+      "detachment_ticks": {
+        "median": 1.0,
+        "max": 1.0,
+        "nonzero": 2378,
+        "count": 2378
+      }
+    },
+    {
+      "root": "logs/replay_622d_market_static",
+      "journal_files": 1244,
+      "paired_trades": 2374,
+      "unattributable_outcomes": 0,
+      "invalid_at_fill": 0,
+      "pnl_all": 347449.92,
+      "pnl_invalid_at_fill": 0.0,
+      "invalid_exit_reasons": {},
+      "detachment_ticks": {
+        "median": 1.0,
+        "max": 1.0,
+        "nonzero": 2374,
+        "count": 2374
+      }
+    },
+    {
+      "root": "logs/replay_622d_nodd_ioc_limit_runner",
+      "journal_files": 1244,
+      "paired_trades": 2982,
+      "unattributable_outcomes": 0,
+      "invalid_at_fill": 0,
+      "pnl_all": 451.89,
+      "pnl_invalid_at_fill": 0.0,
+      "invalid_exit_reasons": {},
+      "detachment_ticks": {
+        "median": 0.0,
+        "max": 32.0,
+        "nonzero": 1038,
+        "count": 2982
+      }
+    },
+    {
+      "root": "logs/replay_622d_nodd_ioc_limit_static",
+      "journal_files": 1244,
+      "paired_trades": 2428,
+      "unattributable_outcomes": 0,
+      "invalid_at_fill": 0,
+      "pnl_all": -3073.19,
+      "pnl_invalid_at_fill": 0.0,
+      "invalid_exit_reasons": {},
+      "detachment_ticks": {
+        "median": 0.0,
+        "max": 32.0,
+        "nonzero": 846,
+        "count": 2428
+      }
+    },
+    {
+      "root": "logs/replay_622d_nodd_market_runner",
+      "journal_files": 1244,
+      "paired_trades": 2378,
+      "unattributable_outcomes": 0,
+      "invalid_at_fill": 0,
+      "pnl_all": 349867.86,
+      "pnl_invalid_at_fill": 0.0,
+      "invalid_exit_reasons": {},
+      "detachment_ticks": {
+        "median": 1.0,
+        "max": 1.0,
+        "nonzero": 2378,
+        "count": 2378
+      }
+    },
+    {
+      "root": "logs/replay_622d_nodd_market_static",
+      "journal_files": 1244,
+      "paired_trades": 2374,
+      "unattributable_outcomes": 0,
+      "invalid_at_fill": 0,
+      "pnl_all": 347449.92,
+      "pnl_invalid_at_fill": 0.0,
+      "invalid_exit_reasons": {},
+      "detachment_ticks": {
+        "median": 1.0,
+        "max": 1.0,
+        "nonzero": 2374,
+        "count": 2374
+      }
+    },
+    {
+      "root": "logs/retest_baseline_off",
+      "journal_files": 1244,
+      "paired_trades": 2374,
+      "unattributable_outcomes": 0,
+      "invalid_at_fill": 0,
+      "pnl_all": 347449.92,
+      "pnl_invalid_at_fill": 0.0,
+      "invalid_exit_reasons": {},
+      "detachment_ticks": {
+        "median": 1.0,
+        "max": 1.0,
+        "nonzero": 2374,
+        "count": 2374
+      }
+    }
+  ],
+  "interpretation": [
+    "A zero here is only meaningful alongside a nonzero detachment count: fills must actually deviate from the plan level for the check to bite.",
+    "Detachment capping at the configured entry tolerance is the signature of ENTRY_DETACHED_FROM_PRICE (strategy/signal_engine.py:1517) rejecting far-detached candidates before the broker ever sees them."
+  ]
+}

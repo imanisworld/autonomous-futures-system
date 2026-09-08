@@ -154,21 +154,32 @@ because `scripts/edge_decomposition_audit.py` applies its own
 `_bracket_valid_at_fill`; the exposure is at runtime, where the lane would book
 fills the offline expectation above excludes.
 
-The build must therefore, before the lane is enabled, either
+**Refined 2026-09-08 after measuring the blast radius — this is a harness
+requirement, not a broker change.** The live path is already protected one layer
+up: `strategy/signal_engine.py:1517` rejects a candidate as
+`ENTRY_DETACHED_FROM_PRICE` when its stop and target no longer straddle the
+live price, which is the same defect guarded at the signal layer. A survey of
+18,723 recorded replay trades (6,845 of them `ioc_limit`) found **zero**
+invalid-at-fill positions, with fill deviation capping at exactly the
+configured entry tolerance — the signature of that gate rejecting detached
+candidates upstream. The exposure is confined to harnesses that fill stored
+candidates *outside* the signal engine and so never apply it.
 
-1. carry the guard into the `ioc_limit` path (the fix that also closes it for
-   the inverse ORB lane — **operator ruling required**, it is a runtime
-   behaviour change under the 2026-09-30 freeze and it re-scores historical
-   `ioc_limit` cells), or
-2. enable post-fill validation for the lane so an invalid-bracket fill is
-   refused at the lane boundary, and assert the same rule in the build-step-1
-   replay so expectation and runtime agree.
+The build must therefore, before the lane is enabled:
 
-Whichever is chosen, the offline expectation and the forward record must be
-produced under the *same* rule, and the checkpoint below must report
-invalid-at-fill occurrences as their own line rather than blending them into
-net. This is a correctness precondition, not a sizing question, and it does not
-change D4: the tolerance value is not what governs it.
+1. **assert bracket validity at fill in the build-step-1 replay**, and report
+   what it rejected — that replay is exactly such a harness, and is where this
+   lane would otherwise manufacture the artifact; and
+2. keep the lane's runtime submission inside the signal engine's straddle
+   check, claiming **no carve-out** analogous to `proof_market_entry_active`.
+   If a carve-out ever becomes necessary, the broker-layer guard becomes
+   necessary with it and this precondition must be re-opened.
+
+The offline expectation and the forward record must be produced under the
+*same* rule, and the checkpoint below must report invalid-at-fill occurrences
+as their own line rather than blending them into net. This is a correctness
+precondition, not a sizing question, and it does not change D4: the tolerance
+value is not what governs it.
 
 **Forward review checkpoint:** the earlier of **2026-12-07** or **40
 IOC-filled 4HR trades** in `wide_stop_4k`. At that point report, per ledger:
