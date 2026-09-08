@@ -296,6 +296,60 @@ def test_strat_4hr_retrigger_observed_absent_without_strong_trend(fresh_market_s
     assert "strat_4hr_retrigger_observed" not in _strategies(state)
 
 
+def _failed_breakdown_sequence(state):
+    """Six range bars (19490-19510), a sweep bar through the range low that
+    closes back inside on expanded volume, and the current bar holding the
+    reclaim (set on state.ohlc)."""
+    bars = [
+        {"ts": f"2026-05-23T{h:02d}:{m:02d}:00+00:00", "open": 19500.0, "high": 19510.0,
+         "low": 19490.0 if i == 3 else 19495.0, "close": 19502.0, "volume": 1000}
+        for i, (h, m) in enumerate([(12, 30), (12, 45), (13, 0), (13, 15), (13, 30), (13, 45)])
+    ]
+    bars.append({"ts": "2026-05-23T14:00:00+00:00", "open": 19494.0, "high": 19500.0,
+                 "low": 19486.0, "close": 19492.0, "volume": 1400})
+    state.market_condition = "RANGE_BOUND"
+    state.ohlc.open = 19492.0
+    state.ohlc.high = 19498.0
+    state.ohlc.low = 19489.0
+    state.ohlc.close = 19496.0
+    return bars
+
+
+def test_failed_breakdown_reclaim_fires_on_swept_and_held_range_low(fresh_market_state):
+    state = copy.deepcopy(fresh_market_state)
+    bars = _failed_breakdown_sequence(state)
+
+    by_strategy = {c.strategy: c for c in evaluate_shadow_setups(state, recent_bars=bars)}
+    candidate = by_strategy["transition_failed_breakdown_reclaim"]
+
+    assert candidate.direction == "LONG"
+    assert candidate.entry == 19496.0            # hold-bar close
+    assert candidate.stop == 19485.5             # sweep low - 2 ticks
+    assert candidate.target == 19500.0           # range midpoint
+    assert candidate.risk_tier == "C"
+    assert candidate.size_multiplier == 0.25
+    assert "sweep_low=19486.00" in candidate.notes
+    assert "expansion=volume" in candidate.notes
+
+
+def test_failed_breakdown_reclaim_requires_range_or_transition_condition(fresh_market_state):
+    state = copy.deepcopy(fresh_market_state)
+    bars = _failed_breakdown_sequence(state)
+    state.market_condition = "TRENDING"
+
+    strategies = {c.strategy for c in evaluate_shadow_setups(state, recent_bars=bars)}
+    assert "transition_failed_breakdown_reclaim" not in strategies
+
+
+def test_failed_breakdown_reclaim_absent_when_hold_bar_loses_the_sweep_low(fresh_market_state):
+    state = copy.deepcopy(fresh_market_state)
+    bars = _failed_breakdown_sequence(state)
+    state.ohlc.low = 19485.0  # trades back through the sweep low: no held reclaim
+
+    strategies = {c.strategy for c in evaluate_shadow_setups(state, recent_bars=bars)}
+    assert "transition_failed_breakdown_reclaim" not in strategies
+
+
 def test_pdf_defined_312_is_journal_only_with_prior_bar_bracket(
     fresh_market_state,
 ):
