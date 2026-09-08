@@ -46,10 +46,14 @@ def _is_read_only_git_command(args: list[str]) -> bool:
     if command in {"rev-parse", "status", "for-each-ref", "rev-list", "merge-base"}:
         return True
     if command == "diff":
-        return args[1:4] in (
-            ["--no-ext-diff", "--no-textconv", "--quiet"],
-            ["--no-ext-diff", "--no-textconv", "--name-only"],
+        prefix = ["--no-ext-diff", "--no-textconv"]
+        return (
+            args[1:4] in ([*prefix, "--quiet"], [*prefix, "--name-only"])
+            or args[1:5] == [*prefix, "--no-color", "--patch"]
         ) and not any(arg.startswith(("--output", "--ext-diff", "--textconv")) for arg in args[4:])
+    if command == "patch-id":
+        # Hashes a diff supplied on stdin; touches no ref, index or working tree.
+        return args == ["patch-id", "--stable"]
     if command == "ls-remote":
         return args == ["ls-remote", "--heads", "origin", "refs/heads/main"]
     if command == "worktree":
@@ -72,7 +76,7 @@ def _is_read_only_git_command(args: list[str]) -> bool:
 
 
 def run_git_result(
-    args: list[str], *, cwd: Path, timeout: float = DEFAULT_TIMEOUT_S
+    args: list[str], *, cwd: Path, timeout: float = DEFAULT_TIMEOUT_S, stdin_text: str | None = None
 ) -> GitCommandResult:
     """Run one exact read-only Git command and retain its return code."""
     if not _is_read_only_git_command(args):
@@ -81,6 +85,7 @@ def run_git_result(
         result = subprocess.run(
             ["git", "--no-optional-locks", *args],
             cwd=str(cwd),
+            input=stdin_text,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -507,6 +512,55 @@ def _content_preserved(root: Path, tip: str, target: str, base_ref: str) -> bool
     return result.returncode == 0 if result.returncode in (0, 1) else None
 
 
+def _patch_identity(root: Path, diff_args: list[str]) -> str | None:
+    """Normalized identity of one diff, or None when it cannot be computed.
+
+    ``git patch-id --stable`` ignores hunk offsets and blob hashes, so the same
+    change rebased onto a different base still hashes the same.
+    """
+    patch, error = run_git(diff_args, cwd=root)
+    if error or not patch or not patch.strip():
+        return None
+    result = run_git_result(["patch-id", "--stable"], cwd=root, stdin_text=patch)
+    if result.returncode != 0:
+        return None
+    fields = result.stdout.split("\n", 1)[0].split()
+    return fields[0] if fields else None
+
+
+def _patch_preserved_at_merge(root: Path, tip: str, merged: str, base_ref: str) -> bool | None:
+    """Did the merge commit apply exactly this branch's patch?
+
+    File-content equality is the wrong test for a squash merge whose branch was
+    cut from an older base: another PR touching the same paths can land in
+    between, so the merged content legitimately differs from the branch tip
+    while the branch's own change is fully preserved. Compare the patches
+    instead. A conflict-resolved or partially-applied merge does not match, and
+    is left unproven rather than called preserved.
+    """
+    base, error = run_git(["merge-base", base_ref, tip], cwd=root)
+    if error or not base:
+        return None
+    paths, error = run_git(
+        ["diff", "--no-ext-diff", "--no-textconv", "--name-only", "-z", base.strip(), tip, "--"],
+        cwd=root,
+    )
+    if error or paths is None:
+        return None
+    changed = [p for p in paths.split("\0") if p]
+    if not changed:
+        return True
+    parent = ref_sha(root, f"{merged}^")
+    if parent is None:
+        return None
+    patch_prefix = ["diff", "--no-ext-diff", "--no-textconv", "--no-color", "--patch"]
+    branch_id = _patch_identity(root, [*patch_prefix, base.strip(), tip, "--", *changed])
+    merge_id = _patch_identity(root, [*patch_prefix, parent, merged, "--", *changed])
+    if branch_id is None or merge_id is None:
+        return None
+    return branch_id == merge_id
+
+
 def unmerged_remote_branches_missing_archive_tag(root: Path) -> dict[str, Any]:
     """Preservation of committed local AND origin branch tips (legacy API name).
 
@@ -590,8 +644,19 @@ def unmerged_remote_branches_missing_archive_tag(root: Path) -> dict[str, Any]:
                 merge_reachable = _is_ancestor(root, merged, main_tip) if merged else None
                 historical = _content_preserved(root, tip, merged, main_tip) if merge_reachable else None
                 row["content_preserved_at_merge"] = historical
+                # Only when content equality is inconclusive: a squash merge of a
+                # branch cut from an older base preserves the work as a patch, not
+                # as identical file content.
+                patch_match = (
+                    _patch_preserved_at_merge(root, tip, merged, main_tip)
+                    if merge_reachable is True and equivalent is not True and historical is not True
+                    else None
+                )
+                row["patch_preserved_at_merge"] = patch_match
                 if merge_reachable is True and (equivalent is True or historical is True):
                     row.update(classification="REDUNDANT", reason="matching MERGED PR and content preserved on main", preserved_by=[merged])
+                elif merge_reachable is True and patch_match is True:
+                    row.update(classification="REDUNDANT", reason="matching MERGED PR whose merge commit applied this branch's exact patch", preserved_by=[merged])
                 else:
                     row["reason"] = "MERGED PR alone is insufficient; main/content preservation is unverified"
             elif pr["status"] == "UNKNOWN":
