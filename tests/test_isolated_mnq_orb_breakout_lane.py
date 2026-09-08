@@ -1,13 +1,14 @@
 """Focused proof of the isolated MNQ ORB Breakout inverse forward-paper lane.
 
 Pins the shipped risk_rules.yaml (1.2.0) configuration that isolates the
-already-merged inverse lane (PR #364), plus the two runtime invariants the
-lane depends on: the inverse transform forces one contract + PaperBroker, and
-the inverse/legacy-proof modes stay mutually exclusive.
+already-merged inverse lane (PR #364), plus the runtime invariants the lane
+depends on: the inverse transform stays one-contract, paper_sim still forces
+PaperBroker, DEMO-only external routing is explicit, and the inverse/legacy-
+proof modes stay mutually exclusive.
 
 These assertions are intentionally strict. If any of them fails, the lane is
-no longer isolated and forward-paper evidence collected under it is not
-attributable to orb_breakout alone.
+no longer isolated and forward evidence collected under it is not attributable
+to orb_breakout alone.
 """
 from __future__ import annotations
 
@@ -169,7 +170,7 @@ def test_inverse_and_legacy_proof_modes_are_mutually_exclusive():
     with pytest.raises(ConfigError, match="cannot both be active"):
         _validate_config(both_active)
 
-    # The intended lane posture validates cleanly.
+    # The intended paper-lane posture validates cleanly.
     lane = dataclasses.replace(
         cfg,
         mnq_orb_breakout_inverse_mode="paper_sim",
@@ -179,10 +180,10 @@ def test_inverse_and_legacy_proof_modes_are_mutually_exclusive():
     _validate_config(lane)
 
 
-def test_inverse_mode_has_no_external_broker_value():
-    """paper_only by construction — 'tradovate_demo'/'live' are not valid."""
+def test_inverse_mode_allows_demo_but_never_live():
+    """The only external-broker value is explicit Tradovate DEMO; live is invalid."""
     from context.mnq_orb_breakout_inverse_paper import VALID_MODES
 
-    assert set(VALID_MODES) == {"observe_only", "paper_sim"}
-    assert "tradovate_demo" not in VALID_MODES
+    assert set(VALID_MODES) == {"observe_only", "paper_sim", "tradovate_demo"}
+    assert "tradovate_demo" in VALID_MODES
     assert "live" not in VALID_MODES
