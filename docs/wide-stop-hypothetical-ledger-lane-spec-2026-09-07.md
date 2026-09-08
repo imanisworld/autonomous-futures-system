@@ -137,6 +137,50 @@ measured against. The audit's un-capped 4HR IOC result (44/81 fills,
 +$1,731.86, PF 2.00) is the closest existing number and is **not** the
 capped-cell expectation.
 
+**Build precondition, added 2026-09-08 — the lane must not fill into an invalid
+bracket.** `PaperBroker` rejects an entry that fills beyond its own stop or
+target (`ENTRY_BRACKET_INVALID_AT_FILL`, `execution/paper_broker.py:395-398`)
+on its `stop_market` path **only**; its `ioc_limit` path applies no such check.
+The marketable tolerance bounds only the *adverse* side, so a plan level that
+has gone stale fills at the market on the favourable side, and once that
+distance exceeds the stop distance the static stop sits between the fill and
+the target — the position then "stops out" in profit and its label contradicts
+its P&L. Measured for this family at the D4 contract
+(`docs/ioc-limit-bracket-guard-readacross-2026-09-08.md`): **4HR 5 of 43 IOC
+fills invalid at fill (11.6%), +$175.60 of phantom P&L, of which 2 fills and
++$129.54 fall inside the D3-approved cell — ~4% of its +$3,077**; 3-2-2 and
+Miyagi are clean at 8 ticks. The evidence this spec rests on is *not* affected,
+because `scripts/edge_decomposition_audit.py` applies its own
+`_bracket_valid_at_fill`; the exposure is at runtime, where the lane would book
+fills the offline expectation above excludes.
+
+**Refined 2026-09-08 after measuring the blast radius — this is a harness
+requirement, not a broker change.** The live path is already protected one layer
+up: `strategy/signal_engine.py:1517` rejects a candidate as
+`ENTRY_DETACHED_FROM_PRICE` when its stop and target no longer straddle the
+live price, which is the same defect guarded at the signal layer. A survey of
+18,723 recorded replay trades (6,845 of them `ioc_limit`) found **zero**
+invalid-at-fill positions, with fill deviation capping at exactly the
+configured entry tolerance — the signature of that gate rejecting detached
+candidates upstream. The exposure is confined to harnesses that fill stored
+candidates *outside* the signal engine and so never apply it.
+
+The build must therefore, before the lane is enabled:
+
+1. **assert bracket validity at fill in the build-step-1 replay**, and report
+   what it rejected — that replay is exactly such a harness, and is where this
+   lane would otherwise manufacture the artifact; and
+2. keep the lane's runtime submission inside the signal engine's straddle
+   check, claiming **no carve-out** analogous to `proof_market_entry_active`.
+   If a carve-out ever becomes necessary, the broker-layer guard becomes
+   necessary with it and this precondition must be re-opened.
+
+The offline expectation and the forward record must be produced under the
+*same* rule, and the checkpoint below must report invalid-at-fill occurrences
+as their own line rather than blending them into net. This is a correctness
+precondition, not a sizing question, and it does not change D4: the tolerance
+value is not what governs it.
+
 **Forward review checkpoint:** the earlier of **2026-12-07** or **40
 IOC-filled 4HR trades** in `wide_stop_4k`. At that point report, per ledger:
 
@@ -144,7 +188,10 @@ IOC-filled 4HR trades** in `wide_stop_4k`. At that point report, per ledger:
 - H1 / H2 split by fill date, top-3-month share of net;
 - every candidate the lane admitted that the global engine rejected, with the
   rejecting gate, so the family cap's marginal contribution stays auditable;
-- for 3-2-2: losses observed (the PF 9.9 cell is not evidence until ≥ 5).
+- for 3-2-2: losses observed (the PF 9.9 cell is not evidence until ≥ 5);
+- **invalid-at-fill occurrences** (added 2026-09-08): fills whose bracket was
+  invalid at the fill price, reported as their own count and P&L line and never
+  blended into net — see the build precondition above.
 
 **Re-open trigger (memo criterion 2, unchanged):** ≥ 40 IOC-filled 4HR trades,
 both halves positive, top-3-month concentration < 60% of net. Meeting it
@@ -172,7 +219,7 @@ loss would only reproduce the $1,500 result on a bigger number.
 | D1 | Two ledgers ($4k / $6k) vs one $6k ledger holding all three | **Two** — keeps the 5% thresholds separately testable | One $6k ledger; 4HR then runs with 5% = $300 headroom, which is looser than the memo's 4HR cell |
 | D2 | Daily loss floor per ledger | **2 × worst-case stop** ($400 / $600 = 10%) | 1 × worst-case ($200 / $300 = 5%): one max-loss halts the day, which is the same failure mode B+ was avoiding; or no daily floor, drawdown floor only |
 | D3 | 4HR R:R floor | **≥ 1.0** (36-trade cell, PF 3.13, both halves) | none (63-trade cell, +$3,111, PF 2.22, 4 losses > $150) |
-| D4 | IOC marketable tolerance | **8 ticks**, matching the inverse ORB lane's frozen contract | the audit's 1/2/3-tick sensitivity ladder run as a diagnostic alongside |
+| D4 | IOC marketable tolerance | **8 ticks**, matching the inverse ORB lane's frozen contract — unchanged 2026-09-08; the tolerance is not what governs the invalid-bracket exposure in §6, since it bounds only the adverse side | the audit's 1/2/3-tick sensitivity ladder run as a diagnostic alongside |
 | D5 | Miyagi | **shadow member only** (cannot fill; not wired) | exclude entirely from the lane's journals |
 | D6 | Session restriction | **none beyond each strategy's own documented session rules** | NY-only, which none of the three strategies' rules specify |
 | D7 | Start date | **first demo release after the build merges**, epoch = that release's timestamp | backfill from a past epoch (rejected: a backfilled "forward" record is not forward) |

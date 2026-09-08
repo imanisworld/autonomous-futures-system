@@ -1,0 +1,522 @@
+{
+  "question": "Which lanes book an ioc_limit fill whose static bracket is invalid at that fill, because PaperBroker guards only its stop_market path?",
+  "tolerance_ticks": 8.0,
+  "slippage_ticks": 1.0,
+  "reference_price": "decision-bar close",
+  "guarded_path": "PaperBroker.stop_market \u2014 ENTRY_BRACKET_INVALID_AT_FILL",
+  "unguarded_path": "PaperBroker.ioc_limit \u2014 no bracket validity check",
+  "lanes": [
+    {
+      "lane": "4hr_mnq",
+      "candidates": 81,
+      "ioc_filled": 43,
+      "invalid_at_fill": 5,
+      "invalid_share": 0.116,
+      "median_detachment_ticks": 65.0,
+      "max_detachment_ticks": 358.0,
+      "phantom_pnl_total": 175.6,
+      "invalid_rows": [
+        {
+          "date": "2025-02-20",
+          "direction": "LONG",
+          "entry": 22219.75,
+          "fill": 22174.25,
+          "stop": 22187.25,
+          "detachment_ticks": 182,
+          "stop_distance_ticks": 130,
+          "rr": 0.9077,
+          "phantom_pnl_if_stop_hit": 24.52
+        },
+        {
+          "date": "2025-09-04",
+          "direction": "SHORT",
+          "entry": 23476.75,
+          "fill": 23535.25,
+          "stop": 23529.0,
+          "detachment_ticks": 234,
+          "stop_distance_ticks": 209,
+          "rr": 0.8517,
+          "phantom_pnl_if_stop_hit": 11.02
+        },
+        {
+          "date": "2025-11-05",
+          "direction": "LONG",
+          "entry": 25552.0,
+          "fill": 25502.25,
+          "stop": 25508.25,
+          "detachment_ticks": 199,
+          "stop_distance_ticks": 175,
+          "rr": 0.9371,
+          "phantom_pnl_if_stop_hit": 10.52
+        },
+        {
+          "date": "2026-01-08",
+          "direction": "LONG",
+          "entry": 25795.5,
+          "fill": 25706.0,
+          "stop": 25757.0,
+          "detachment_ticks": 358,
+          "stop_distance_ticks": 154,
+          "rr": 1.4221,
+          "phantom_pnl_if_stop_hit": 100.52
+        },
+        {
+          "date": "2026-04-06",
+          "direction": "SHORT",
+          "entry": 24264.0,
+          "fill": 24353.5,
+          "stop": 24338.25,
+          "detachment_ticks": 358,
+          "stop_distance_ticks": 297,
+          "rr": 3.8114,
+          "phantom_pnl_if_stop_hit": 29.02
+        }
+      ]
+    },
+    {
+      "lane": "322_mnq",
+      "candidates": 34,
+      "ioc_filled": 17,
+      "invalid_at_fill": 0,
+      "invalid_share": 0.0,
+      "median_detachment_ticks": 39.0,
+      "max_detachment_ticks": 211.0,
+      "phantom_pnl_total": 0,
+      "invalid_rows": []
+    },
+    {
+      "lane": "miyagi_mnq",
+      "candidates": 8,
+      "ioc_filled": 5,
+      "invalid_at_fill": 0,
+      "invalid_share": 0.0,
+      "median_detachment_ticks": 27.5,
+      "max_detachment_ticks": 175.0,
+      "phantom_pnl_total": 0,
+      "invalid_rows": []
+    },
+    {
+      "lane": "orb_breakout_inverse_mnq",
+      "candidates": 63,
+      "ioc_filled": 57,
+      "invalid_at_fill": 37,
+      "invalid_share": 0.649,
+      "median_detachment_ticks": 75.0,
+      "max_detachment_ticks": 293.0,
+      "phantom_pnl_total": 1106.24,
+      "invalid_rows": [
+        {
+          "date": "2024-08-13",
+          "direction": "SHORT",
+          "entry": 18891.75,
+          "fill": 18946.25,
+          "stop": 18904.25,
+          "detachment_ticks": 218,
+          "stop_distance_ticks": 50,
+          "rr": 2.2,
+          "phantom_pnl_if_stop_hit": 82.52
+        },
+        {
+          "date": "2024-08-26",
+          "direction": "SHORT",
+          "entry": 19765.0,
+          "fill": 19787.25,
+          "stop": 19777.5,
+          "detachment_ticks": 89,
+          "stop_distance_ticks": 50,
+          "rr": 2.2,
+          "phantom_pnl_if_stop_hit": 18.02
+        },
+        {
+          "date": "2024-08-29",
+          "direction": "SHORT",
+          "entry": 19610.5,
+          "fill": 19630.0,
+          "stop": 19623.0,
+          "detachment_ticks": 78,
+          "stop_distance_ticks": 50,
+          "rr": 2.2,
+          "phantom_pnl_if_stop_hit": 12.52
+        },
+        {
+          "date": "2024-09-05",
+          "direction": "SHORT",
+          "entry": 19033.5,
+          "fill": 19057.75,
+          "stop": 19046.0,
+          "detachment_ticks": 97,
+          "stop_distance_ticks": 50,
+          "rr": 2.2,
+          "phantom_pnl_if_stop_hit": 22.02
+        },
+        {
+          "date": "2024-09-06",
+          "direction": "LONG",
+          "entry": 18884.25,
+          "fill": 18858.5,
+          "stop": 18871.75,
+          "detachment_ticks": 103,
+          "stop_distance_ticks": 50,
+          "rr": 2.2,
+          "phantom_pnl_if_stop_hit": 25.02
+        },
+        {
+          "date": "2024-09-17",
+          "direction": "SHORT",
+          "entry": 19676.5,
+          "fill": 19693.75,
+          "stop": 19689.0,
+          "detachment_ticks": 69,
+          "stop_distance_ticks": 50,
+          "rr": 2.2,
+          "phantom_pnl_if_stop_hit": 8.02
+        },
+        {
+          "date": "2024-09-24",
+          "direction": "SHORT",
+          "entry": 20087.0,
+          "fill": 20104.75,
+          "stop": 20099.5,
+          "detachment_ticks": 71,
+          "stop_distance_ticks": 50,
+          "rr": 2.2,
+          "phantom_pnl_if_stop_hit": 9.02
+        },
+        {
+          "date": "2024-09-25",
+          "direction": "SHORT",
+          "entry": 20206.25,
+          "fill": 20240.25,
+          "stop": 20218.75,
+          "detachment_ticks": 136,
+          "stop_distance_ticks": 50,
+          "rr": 2.2,
+          "phantom_pnl_if_stop_hit": 41.52
+        },
+        {
+          "date": "2024-10-03",
+          "direction": "SHORT",
+          "entry": 20006.75,
+          "fill": 20028.0,
+          "stop": 20019.25,
+          "detachment_ticks": 85,
+          "stop_distance_ticks": 50,
+          "rr": 2.2,
+          "phantom_pnl_if_stop_hit": 16.02
+        },
+        {
+          "date": "2024-10-04",
+          "direction": "SHORT",
+          "entry": 20006.75,
+          "fill": 20022.5,
+          "stop": 20019.25,
+          "detachment_ticks": 63,
+          "stop_distance_ticks": 50,
+          "rr": 2.2,
+          "phantom_pnl_if_stop_hit": 5.02
+        },
+        {
+          "date": "2024-10-15",
+          "direction": "SHORT",
+          "entry": 20609.5,
+          "fill": 20628.25,
+          "stop": 20622.0,
+          "detachment_ticks": 75,
+          "stop_distance_ticks": 50,
+          "rr": 2.2,
+          "phantom_pnl_if_stop_hit": 11.02
+        },
+        {
+          "date": "2024-10-28",
+          "direction": "LONG",
+          "entry": 20556.0,
+          "fill": 20536.25,
+          "stop": 20543.5,
+          "detachment_ticks": 79,
+          "stop_distance_ticks": 50,
+          "rr": 2.2,
+          "phantom_pnl_if_stop_hit": 13.02
+        },
+        {
+          "date": "2024-11-05",
+          "direction": "SHORT",
+          "entry": 20243.5,
+          "fill": 20262.25,
+          "stop": 20256.0,
+          "detachment_ticks": 75,
+          "stop_distance_ticks": 50,
+          "rr": 2.2,
+          "phantom_pnl_if_stop_hit": 11.02
+        },
+        {
+          "date": "2025-02-11",
+          "direction": "LONG",
+          "entry": 21741.75,
+          "fill": 21705.75,
+          "stop": 21729.25,
+          "detachment_ticks": 144,
+          "stop_distance_ticks": 50,
+          "rr": 2.2,
+          "phantom_pnl_if_stop_hit": 45.52
+        },
+        {
+          "date": "2025-02-12",
+          "direction": "SHORT",
+          "entry": 21797.5,
+          "fill": 21822.0,
+          "stop": 21810.0,
+          "detachment_ticks": 98,
+          "stop_distance_ticks": 50,
+          "rr": 2.2,
+          "phantom_pnl_if_stop_hit": 22.52
+        },
+        {
+          "date": "2025-03-05",
+          "direction": "LONG",
+          "entry": 20312.5,
+          "fill": 20239.25,
+          "stop": 20300.0,
+          "detachment_ticks": 293,
+          "stop_distance_ticks": 50,
+          "rr": 2.2,
+          "phantom_pnl_if_stop_hit": 120.02
+        },
+        {
+          "date": "2025-03-17",
+          "direction": "SHORT",
+          "entry": 19808.5,
+          "fill": 19831.25,
+          "stop": 19821.0,
+          "detachment_ticks": 91,
+          "stop_distance_ticks": 50,
+          "rr": 2.2,
+          "phantom_pnl_if_stop_hit": 19.02
+        },
+        {
+          "date": "2025-04-17",
+          "direction": "LONG",
+          "entry": 18381.75,
+          "fill": 18350.0,
+          "stop": 18369.25,
+          "detachment_ticks": 127,
+          "stop_distance_ticks": 50,
+          "rr": 2.2,
+          "phantom_pnl_if_stop_hit": 37.02
+        },
+        {
+          "date": "2025-05-02",
+          "direction": "SHORT",
+          "entry": 20125.5,
+          "fill": 20148.75,
+          "stop": 20138.0,
+          "detachment_ticks": 93,
+          "stop_distance_ticks": 50,
+          "rr": 2.2,
+          "phantom_pnl_if_stop_hit": 20.02
+        },
+        {
+          "date": "2025-05-07",
+          "direction": "LONG",
+          "entry": 19865.5,
+          "fill": 19796.75,
+          "stop": 19853.0,
+          "detachment_ticks": 275,
+          "stop_distance_ticks": 50,
+          "rr": 2.2,
+          "phantom_pnl_if_stop_hit": 111.02
+        },
+        {
+          "date": "2025-05-27",
+          "direction": "SHORT",
+          "entry": 21308.25,
+          "fill": 21330.75,
+          "stop": 21320.75,
+          "detachment_ticks": 90,
+          "stop_distance_ticks": 50,
+          "rr": 2.2,
+          "phantom_pnl_if_stop_hit": 18.52
+        },
+        {
+          "date": "2025-06-12",
+          "direction": "SHORT",
+          "entry": 22025.25,
+          "fill": 22039.25,
+          "stop": 22037.75,
+          "detachment_ticks": 56,
+          "stop_distance_ticks": 50,
+          "rr": 2.2,
+          "phantom_pnl_if_stop_hit": 1.52
+        },
+        {
+          "date": "2025-06-16",
+          "direction": "SHORT",
+          "entry": 22009.25,
+          "fill": 22027.25,
+          "stop": 22021.75,
+          "detachment_ticks": 72,
+          "stop_distance_ticks": 50,
+          "rr": 2.2,
+          "phantom_pnl_if_stop_hit": 9.52
+        },
+        {
+          "date": "2025-07-07",
+          "direction": "LONG",
+          "entry": 22899.75,
+          "fill": 22871.75,
+          "stop": 22887.25,
+          "detachment_ticks": 112,
+          "stop_distance_ticks": 50,
+          "rr": 2.2,
+          "phantom_pnl_if_stop_hit": 29.52
+        },
+        {
+          "date": "2025-08-08",
+          "direction": "SHORT",
+          "entry": 23614.75,
+          "fill": 23656.0,
+          "stop": 23627.25,
+          "detachment_ticks": 165,
+          "stop_distance_ticks": 50,
+          "rr": 2.2,
+          "phantom_pnl_if_stop_hit": 56.02
+        },
+        {
+          "date": "2025-08-15",
+          "direction": "SHORT",
+          "entry": 23924.5,
+          "fill": 23942.75,
+          "stop": 23937.0,
+          "detachment_ticks": 73,
+          "stop_distance_ticks": 50,
+          "rr": 2.2,
+          "phantom_pnl_if_stop_hit": 10.02
+        },
+        {
+          "date": "2025-08-28",
+          "direction": "SHORT",
+          "entry": 23743.75,
+          "fill": 23773.25,
+          "stop": 23756.25,
+          "detachment_ticks": 118,
+          "stop_distance_ticks": 50,
+          "rr": 2.2,
+          "phantom_pnl_if_stop_hit": 32.52
+        },
+        {
+          "date": "2025-09-01",
+          "direction": "SHORT",
+          "entry": 23484.5,
+          "fill": 23504.25,
+          "stop": 23497.0,
+          "detachment_ticks": 79,
+          "stop_distance_ticks": 50,
+          "rr": 2.2,
+          "phantom_pnl_if_stop_hit": 13.02
+        },
+        {
+          "date": "2025-09-08",
+          "direction": "SHORT",
+          "entry": 23847.25,
+          "fill": 23861.75,
+          "stop": 23859.75,
+          "detachment_ticks": 58,
+          "stop_distance_ticks": 50,
+          "rr": 2.2,
+          "phantom_pnl_if_stop_hit": 2.52
+        },
+        {
+          "date": "2025-10-03",
+          "direction": "LONG",
+          "entry": 25113.25,
+          "fill": 25093.75,
+          "stop": 25100.75,
+          "detachment_ticks": 78,
+          "stop_distance_ticks": 50,
+          "rr": 2.2,
+          "phantom_pnl_if_stop_hit": 12.52
+        },
+        {
+          "date": "2025-12-08",
+          "direction": "SHORT",
+          "entry": 25778.25,
+          "fill": 25806.5,
+          "stop": 25790.75,
+          "detachment_ticks": 113,
+          "stop_distance_ticks": 50,
+          "rr": 2.2,
+          "phantom_pnl_if_stop_hit": 30.02
+        },
+        {
+          "date": "2026-01-23",
+          "direction": "LONG",
+          "entry": 25611.75,
+          "fill": 25589.25,
+          "stop": 25599.25,
+          "detachment_ticks": 90,
+          "stop_distance_ticks": 50,
+          "rr": 2.2,
+          "phantom_pnl_if_stop_hit": 18.52
+        },
+        {
+          "date": "2026-01-26",
+          "direction": "SHORT",
+          "entry": 25827.75,
+          "fill": 25858.75,
+          "stop": 25840.25,
+          "detachment_ticks": 124,
+          "stop_distance_ticks": 50,
+          "rr": 2.2,
+          "phantom_pnl_if_stop_hit": 35.52
+        },
+        {
+          "date": "2026-01-29",
+          "direction": "LONG",
+          "entry": 26213.0,
+          "fill": 26158.0,
+          "stop": 26200.5,
+          "detachment_ticks": 220,
+          "stop_distance_ticks": 50,
+          "rr": 2.2,
+          "phantom_pnl_if_stop_hit": 83.52
+        },
+        {
+          "date": "2026-03-09",
+          "direction": "SHORT",
+          "entry": 24526.5,
+          "fill": 24577.75,
+          "stop": 24539.0,
+          "detachment_ticks": 205,
+          "stop_distance_ticks": 50,
+          "rr": 2.2,
+          "phantom_pnl_if_stop_hit": 76.02
+        },
+        {
+          "date": "2026-04-21",
+          "direction": "SHORT",
+          "entry": 26826.5,
+          "fill": 26841.5,
+          "stop": 26839.0,
+          "detachment_ticks": 60,
+          "stop_distance_ticks": 50,
+          "rr": 2.2,
+          "phantom_pnl_if_stop_hit": 3.52
+        },
+        {
+          "date": "2026-05-13",
+          "direction": "SHORT",
+          "entry": 29286.25,
+          "fill": 29311.25,
+          "stop": 29298.75,
+          "detachment_ticks": 100,
+          "stop_distance_ticks": 50,
+          "rr": 2.2,
+          "phantom_pnl_if_stop_hit": 23.52
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "Severity scales with detachment relative to stop distance, not with the IOC tolerance: the tolerance bounds only the adverse side.",
+    "scripts/edge_decomposition_audit.py applies its own _bracket_valid_at_fill, so the audit cells these candidates come from already exclude these fills."
+  ]
+}
