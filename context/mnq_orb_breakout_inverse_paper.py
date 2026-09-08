@@ -1,14 +1,20 @@
-"""Paper-only runtime contract for the frozen MNQ ORB Breakout inverse.
+"""Runtime contract for the frozen MNQ ORB Breakout inverse lane.
 
 Research contract:
   - qualify and risk-check the existing ORB Breakout signal unchanged;
-  - immediately before PaperBroker execution, flip direction and mirror the
-    static stop/target distances around the unchanged planned entry;
+  - immediately before execution, flip direction and mirror the static
+    stop/target distances around the unchanged planned entry;
   - submit exactly one MNQ contract through an eight-tick marketable IOC;
   - record dynamic sizing only as a diagnostic.
 
-This module has no external-broker mode. Any invalid configuration fails back
-to observe_only here, while config.settings rejects it at process startup.
+Modes:
+  - observe_only: no inverse execution override;
+  - paper_sim: frozen inverse contract through an isolated PaperBroker;
+  - tradovate_demo: the SAME frozen inverse contract through the already-
+    configured Tradovate DEMO broker. It never permits live-money routing.
+
+Any invalid configuration fails back to observe_only here, while
+config.settings must reject it at process startup.
 """
 from __future__ import annotations
 
@@ -18,7 +24,7 @@ from typing import Optional
 
 from execution.broker_interface import BracketOrder
 
-VALID_MODES = ("observe_only", "paper_sim")
+VALID_MODES = ("observe_only", "paper_sim", "tradovate_demo")
 DEFAULT_MODE = "observe_only"
 MARKETABLE_TICKS = 8.0
 CONTRACTS = 1
@@ -74,7 +80,7 @@ def _mirror_prices(
 
 def mirror_order(source: BracketOrder) -> BracketOrder:
     if not is_candidate(source.instrument, source.strategy):
-        raise ValueError("inverse paper transform is MNQ orb_breakout only")
+        raise ValueError("inverse transform is MNQ orb_breakout only")
     mirrored = _mirror_prices(
         source.direction,
         source.entry,
@@ -89,6 +95,11 @@ def mirror_order(source: BracketOrder) -> BracketOrder:
         * 0.50
         * CONTRACTS
     )
+    # Do NOT override post_fill_validation_required here. The source order is
+    # built after broker selection: PaperBroker orders carry False; external
+    # Tradovate DEMO orders carry True. Preserving that value keeps the paper
+    # evidence contract unchanged while retaining the existing external-broker
+    # post-fill safety gate.
     return replace(
         source,
         direction=mirrored["direction"],
@@ -101,7 +112,6 @@ def mirror_order(source: BracketOrder) -> BracketOrder:
         execution_model="ioc_limit_static",
         max_dollar_risk=max_dollar_risk,
         max_slippage_ticks=MARKETABLE_TICKS,
-        post_fill_validation_required=False,
     )
 
 
@@ -149,19 +159,24 @@ class PaperDecision:
 
 def evaluate(cfg=None) -> PaperDecision:
     selected = mode(cfg)
-    active = selected == "paper_sim"
+    active = selected in {"paper_sim", "tradovate_demo"}
     epoch_start = getattr(cfg, "mnq_orb_breakout_inverse_epoch_start", None)
     return PaperDecision(
         mode=selected,
         epoch_start=str(epoch_start) if epoch_start else None,
         apply_override=active,
-        force_paper_broker=active,
+        force_paper_broker=selected == "paper_sim",
         marketable_ticks=MARKETABLE_TICKS,
         contracts=CONTRACTS,
         reason=(
             "paper_sim: inverse direction + mirrored static bracket + "
             "eight-tick marketable IOC + fixed one contract"
-            if active
-            else "observe_only: existing orb_breakout behavior unchanged"
+            if selected == "paper_sim"
+            else (
+                "tradovate_demo: same frozen inverse contract via configured "
+                "Tradovate DEMO broker; no live-money mode"
+                if selected == "tradovate_demo"
+                else "observe_only: existing orb_breakout behavior unchanged"
+            )
         ),
     )
