@@ -432,3 +432,72 @@ def test_patch_identity_helpers_stay_inside_the_read_only_allowlist(repo: Path) 
     assert gitutil._is_read_only_git_command(["diff", "--patch", "HEAD"]) is False
     with pytest.raises(ValueError):
         gitutil.run_git_result(["patch-id"], cwd=repo, stdin_text="")
+
+
+def _rebased_twin_repo(evidence_repo: Path) -> str:
+    """Push the same work twice: once as-is, once re-created at a different SHA.
+
+    Mirrors the live shape of `Codex/inverse-orb-demo-wiring` vs the pushed
+    `chatgpt/inverse-orb-tradovate-demo` (#500) -- identical content on every
+    changed path, neither tip an ancestor of the other.
+    """
+    repo = evidence_repo
+    tip = _sha(repo)
+    _git(repo, "checkout", "-q", "--detach", "main")
+    _git(repo, "checkout", "-q", tip, "--", "a.txt")
+    _git(repo, "commit", "-qam", "same work, re-created under another name")
+    twin = _sha(repo)
+    _git(repo, "update-ref", "refs/remotes/origin/chatgpt/same-work", twin)
+    _git(repo, "checkout", "-q", "feature/evidence")
+    assert twin != tip
+    return twin
+
+
+def test_unpushed_tip_preserved_by_content_twin_on_another_origin_branch(evidence_repo: Path) -> None:
+    twin = _rebased_twin_repo(evidence_repo)
+    row = _branch_report(evidence_repo)
+    # Reachability cannot see it: the twin is a different commit entirely.
+    assert gitutil._is_ancestor(evidence_repo, row["tip_sha"], twin) is False
+    assert row["content_equivalent_on_main"] is False
+    assert row["content_twin_origin_ref"] == "refs/remotes/origin/chatgpt/same-work"
+    assert row["classification"] == "ARCHIVED / PRESERVED"
+    assert row["preserved_by"] == ["refs/remotes/origin/chatgpt/same-work"]
+
+
+def test_twin_search_ignores_origin_branches_with_different_content(evidence_repo: Path) -> None:
+    _git(evidence_repo, "checkout", "-q", "--detach", "main")
+    (evidence_repo / "a.txt").write_text("some unrelated other branch\n")
+    _git(evidence_repo, "commit", "-qam", "unrelated origin branch")
+    _git(evidence_repo, "update-ref", "refs/remotes/origin/unrelated", _sha(evidence_repo))
+    _git(evidence_repo, "checkout", "-q", "feature/evidence")
+    row = _branch_report(evidence_repo)
+    assert row["content_twin_origin_ref"] is None
+    assert row["classification"] == "UNARCHIVED UNIQUE EVIDENCE — BLOCKER"
+    assert row["cleanup_blocked"] is True
+
+
+def test_failed_twin_comparison_is_unproven_not_a_blocker(evidence_repo: Path, monkeypatch) -> None:
+    _rebased_twin_repo(evidence_repo)
+    monkeypatch.setattr(gitutil, "_content_preserved", lambda root, tip, target, base_ref: (
+        False if target == base_ref else None
+    ))
+    row = _branch_report(evidence_repo)
+    assert row["content_twin_origin_ref"] is None
+    assert row["classification"] == "UNKNOWN"
+    assert "could not be completed" in row["reason"]
+    assert row["cleanup_blocked"] is True
+
+
+def test_twin_search_never_credits_main_or_the_branch_itself(evidence_repo: Path) -> None:
+    tip = _sha(evidence_repo)
+    _git(evidence_repo, "update-ref", "refs/remotes/origin/feature/evidence", tip)
+    tips = {
+        "refs/remotes/origin/main": _sha(evidence_repo, "refs/remotes/origin/main"),
+        "refs/remotes/origin/feature/evidence": tip,
+        "refs/remotes/origin/HEAD": tip,
+    }
+    twin, failed = gitutil._content_twin_on_other_origin_branch(
+        evidence_repo, tip, tips["refs/remotes/origin/main"], tips,
+        "refs/remotes/origin/feature/evidence", "origin/main",
+    )
+    assert (twin, failed) == (None, False)
