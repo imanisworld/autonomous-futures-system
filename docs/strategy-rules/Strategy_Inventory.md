@@ -52,7 +52,7 @@ Verdict taxonomy:
 | 4HR Re-Trigger (MES) | ✅ | ✅ | ✅ full-engine audit (#372) | ❌ 50/76 IOC fills but net −$346.50, PF 0.75 | ❌ bracket H2 −$634.99 | ❌ 3-tick PF 0.65 | n=76 / 7 production attempts / 4 fills | `RISK_GATES_REMOVE_EDGE` on the mechanical rule, but the signal is weak (bracket PF 1.07, IOC negative) — no edge to recover | **BROKEN / WAIT** |
 | 12HR Miyagi | ✅ | ✅ | ✅ causal-stop closure (#366) | ✅ MNQ 5/8 IOC fills PF 2.36 (audit); n/a in production — fails risk before fill | ❌ MNQ bracket H1 −$56.42 / H2 +$582.33 | ✅ MNQ 3-tick PF 2.31 | ❌ MNQ n=8, MES n=10 — far below any cell minimum | MNQ `RISK_GATES_REMOVE_EDGE` (t=2.67, bracket PF 2.85, 0/8 inside cap); MES `SIGNAL_NOT_DIRECTIONAL` (t=0.84) | **BROKEN FOR CURRENT SYSTEM RISK CONSTRAINTS; MNQ PARKED below $6,000 equity (B+, 2026-09-07)** |
 | 60M 3-2-2 First Live | ✅ | ✅ | ✅ full-engine closure (#367) | ✅ 20/34 IOC fills, PF 12.2 (audit, = #340); ❌ 0/34 through production gates | ✅ bracket H1 +$1,383.34 / H2 +$1,149.32; IOC H1 +$1,068.68 / H2 +$790.72 | ✅ 3-tick PF 11.9 | n=34 — thin; winner concentration already flagged | `RISK_GATES_REMOVE_EDGE` — 34/34 over the cap (median stop 486 ticks), 34/34 under 2.0 R:R; engine rejects at `TREND_STRENGTH_BELOW_REQUIRED` (26) first | **BROKEN FOR CURRENT SYSTEM RISK CONSTRAINTS — signal and bracket real; PARKED below $6,000 equity (B+, 2026-09-07)** |
-| ORB Breakout — inverted (MNQ evidence lane) | ✅ | ✅ | ✅ | ✅ IOC | ✅ historical sub-period/session/direction checks | ✅ through +4 ticks (#364) | ⚠️ n=111 historical study — not reproducible from current journals (63 arms reproducible, see profile) | `BRACKET_DESTROYS_EDGE` on the ungated 680-candidate population (IOC −$177 / PF 0.86); gated engine subset positive (+$271–293, PF 1.6–2.0) — the gates are the selection | **PROMISING BUT UNPROVEN** |
+| ORB Breakout — inverted (MNQ evidence lane) | ✅ | ✅ | ✅ | ✅ IOC (8-tick marketable tolerance, 1 adverse tick, pessimistic same-bar) | ✅ H1 +$546.08 / PF 5.88, H2 +$480.56 / PF 4.76 on the 63-arm canonical population (2026-09-07) | ✅ through +4 ticks (#364, n=111 study) | ⚠️ **canonical population re-baselined 2026-09-07 to the 63 reproducible journal arms** (fingerprint `f32b1b1d…2da2`, 57 fills, +$1,026.64, PF 5.28); the n=111 / PF 2.39 study is provenance only — below the 100+ preferred sample, all three sessions positive | `BRACKET_DESTROYS_EDGE` on the ungated 680-candidate population (IOC −$177 / PF 0.86); gated engine subset positive (+$271–293, PF 1.6–2.0) — the gates are the selection | **PROMISING BUT UNPROVEN** |
 | MES 1-2-2 (`strat_122`) | ✅ | ✅ | ✅ executable audit (#373) | ✅ | ⚠️ executable subset thin | ✅ historical stress | 16/33 canonical candidates executable | not decomposed | **WAIT** |
 | VWAP Hold (MNQ NY) | ✅ fully specified in `strategy/signal_engine.py` (`_try_vwap_hold`) | ✅ | ✅ replay-engine population reused (2026-09-07) | ❌ under the decision-bar IOC reference the replay/production use: NY-only 35/107 fills, −$326.92, PF 0.49 (2026-09-07). The 2026-07-26 ✅ was the arrival-bar close, 5 min after the order | ❌ both halves negative under the decision-bar reference (2026-09-07) | ❌ (moot — negative at 1 tick) | n=107 armed / 35 filled NY-only; 348 / 105 blended — the 55-fill figure counted 20 fills that exist only under the 5-minute look-ahead | `SIGNAL_NOT_DIRECTIONAL` on the raw predicate (n=4,579); detached-entry gate selects a weakly positive subset (t ≤ 1.9, not NY-specific); the NY cell's sign is a fill-reference artifact (`docs/vwap-hold-reconciliation-2026-09-07.md`) | **BROKEN — negative evidence** (downgraded from PROMISING BUT UNPROVEN 2026-09-07) |
 | VWAP Reclaim (MNQ NY) | ✅ cleanest of the 3 VWAP predicates | Partial | ✅ isolated, confirmed no leaks (2026-07-26) | ✅ ioc_limit (2026-07-26) | ❌ H2 negative (2026-07-26) | ❌ fails 3-tick (2026-07-26) | ⚠️ n=70 combined / n=21 MNQ thin (2026-07-26) | not decomposed | **WAIT** |
@@ -502,17 +502,26 @@ Verdict taxonomy:
 ---
 
 ### ORB Breakout — inverted (MNQ evidence lane)
-**Verdict: PROMISING BUT UNPROVEN** (unchanged 2026-09-07)
+**Verdict: PROMISING BUT UNPROVEN** (unchanged 2026-09-07; canonical population re-baselined)
 
 - The frozen inverse paper transform mirrors the source `orb_breakout`
   bracket (short where the source is long, stop/target mirrored), 8-tick IOC
   marketable tolerance, static exit; risk and confluence gates evaluate the
   *source* signal, only the broker order is mirrored.
-- Historical study n=111, +$745.72 / PF 2.392 (#364). **That population is
-  not reproducible from the current local canonical journals**: the same-day
-  canonical IOC proof (`logs/retest_baseline_off`, 2026-09-07) finds 63
-  approved `orb_breakout` arms, +$1,026.64 / PF 5.28, positive in both halves
-  and in all three sessions — a WAIT on population mismatch, not a failure.
+- **Canonical population (re-baselined 2026-09-07):** the 63 approved
+  `orb_breakout` `TRADE` rows in `logs/retest_baseline_off/MNQ`
+  (fingerprint `f32b1b1d2fd5f5860d476b7c44f479d28abb8dc0445fccc21f8c7f27519e2da2`,
+  first arm 2024-08-13, last 2026-05-13), replayed under the frozen inverse
+  contract in `docs/inverse-orb-canonical-ioc-proof-2026-09-07.md` /
+  `scripts/inverse_orb_canonical_ioc_proof_2026-09-07.json`: 57 fills,
+  **+$1,026.64, PF 5.28**, H1 +$546.08 / H2 +$480.56, Asian +$63.62 /
+  London +$179.90 / New York +$783.12, max DD $55.90. This is the population
+  any future comparison must reproduce.
+- The earlier n=111, +$745.72 / PF 2.392 study (#364) is **provenance only**:
+  it cannot be regenerated from the current canonical journals and is no
+  longer the reference for this row's cells. The lane is not promoted on the
+  re-baseline — 63 arms is below the 100+ preferred sample and the lane's
+  entire evidence lives in the gated set (next bullet).
 - **Edge decomposition (2026-09-07, #483):** on the *ungated* 680
   structurally admissible source candidates the inverted bracket is
   `BRACKET_DESTROYS_EDGE` (resting-fill PF 0.21; IOC 101 fills, −$176.98,
@@ -606,7 +615,7 @@ See `ICC_ICT_Research.md` for full breakdown.
 | ~~Wide-stop / low-R:R day-strategy risk policy~~ — **decided 2026-09-07: Option B+** (`docs/wide-stop-day-strategy-policy-options-2026-09-07.md`). Global cap and R:R unchanged; 4HR MNQ / 3-2-2 / Miyagi MNQ parked as incompatible with the account size, not tradeable below $4,000 / $6,000 / $6,000 real equity; shadow journaling continues. Re-open criteria pre-registered: real equity ≥ threshold, or ≥ 40 IOC-filled forward 4HR trades with both halves positive and top-3-month concentration < 60%, or shadow n ≥ 120 (4HR) / ≥ 60 with ≥ 5 losses (3-2-2) | — | — |
 | **Hypothetical-ledger forward paper lane (B+)** — isolated paper account explicitly labeled hypothetical $4,000 (4HR) / $6,000 (3-2-2, Miyagi shadow member), 1 contract, family caps 400 / 600 ticks, 4HR R:R ≥ 1.0, IOC-real fills, own daily floor, **no promotion path**; every result reported as "hypothetical ledger", never blended with the $1,500 book | Forward IOC-real record for the re-open criteria | Claude Code (build), operator (approve lane config) |
 | ~~VWAP Hold reconciliation~~ — **done 2026-09-07** (`docs/vwap-hold-reconciliation-2026-09-07.md`): the detached-entry gate selects a weakly positive, non-NY-specific subset; the NY-only cell's positive sign came from filling at the arrival bar's close, 5 minutes after the decision-bar close that replay/production use; under the honest reference it is 35 fills, −$326.92, PF 0.49, both halves negative. Verdict → BROKEN — negative evidence | — | — |
-| **Inverse ORB population reproduction** — the n=111 / PF 2.39 historical population is not reproducible from current journals (63 arms reproducible, +$1,027 / PF 5.28). Locate or regenerate the 111-arm population, or formally re-baseline the lane on the 63 | Inverse ORB promotion past PROMISING BUT UNPROVEN | Claude Code |
+| ~~Inverse ORB population reproduction~~ — **re-baselined 2026-09-07** on the 63 reproducible journal arms (`docs/inverse-orb-canonical-ioc-proof-2026-09-07.md`, +$1,026.64 / PF 5.28, both halves and all sessions positive); the n=111 study is provenance only. Remaining path past PROMISING BUT UNPROVEN is sample: the active forward-paper lane accumulates it | Inverse ORB promotion | Forward paper lane (passive) |
 | 3-2-2 sample-size expansion (blocked pending new 5m MNQ data past 2026-06-26) — and moot for the executable form until the risk-policy item above is decided | Strategy verdict | Claude Code |
 | 4HR 1H stop backtest | Rules validation | External researcher |
 | VWAP rejection Pine deployment sequencing (send `vwap_failed_reclaim`; fix stale `signal_strategy` branch at `.pine:443`) | VWAP rejection live eligibility | Operator decision (flagged in PR #321, still open) |
