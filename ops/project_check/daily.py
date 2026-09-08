@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from context import wide_stop_ledger_paper
 from ops.project_check import gitutil
 from ops.project_check.runtime import runtime_snapshot
 from ops.project_check.trade_chain import build_trade_chain_report
@@ -110,6 +111,24 @@ def _strategy_source_of_truth(*, repo_root: Path, rules_active_lanes: dict[str, 
     unsafe_active_verdicts = {"BROKEN", "RETIRE", "UNSAFE"}
     derived_lane_transforms = (rules_active_lanes or {}).get("derived_lane_transforms") or {}
 
+    # The wide-stop hypothetical-ledger lane (spec 2026-09-07). Its members are
+    # PARKED on account size, not broken, and the ledgers they fill on are
+    # explicitly not real equity — so a fill there is expected. The exemption is
+    # explicit and reported, never silent.
+    wide_stop_mode = (
+        ((rules_active_lanes or {}).get("wide_stop_ledger") or {}).get("mode")
+        or wide_stop_ledger_paper.mode()
+    )
+    wide_stop_ledger_active = wide_stop_mode == "paper_sim"
+    wide_stop_membership = {
+        strategy: {
+            "ledger": ledger.name,
+            "role": ("fill_eligible" if strategy in ledger.fill_eligible else "shadow_only"),
+        }
+        for ledger in wide_stop_ledger_paper.LEDGERS.values()
+        for strategy in ledger.members
+    }
+
     resolved: list[tuple[dict[str, Any], str, str]] = []
     unmatched: list[dict[str, Any]] = []
     for row in rows:
@@ -137,6 +156,19 @@ def _strategy_source_of_truth(*, repo_root: Path, rules_active_lanes: dict[str, 
     def _is_derived_row(row: dict[str, Any]) -> bool:
         return any(word in _normalize(row["name"]) for word in _DERIVED_LANE_WORDS)
 
+    def _is_parked_family_row(row: dict[str, Any]) -> bool:
+        """The wide-stop family's verdict form: real signal, parked on account size.
+
+        `BROKEN FOR CURRENT SYSTEM RISK CONSTRAINTS ... PARKED below $N equity`
+        is not the same claim as `BROKEN`. It says the strategy is incompatible
+        with the $1,500 book, which is precisely what the hypothetical-ledger
+        lane exists to test on a $4,000 / $6,000 ledger that is not real equity.
+        A fill there is expected, not drift. See
+        docs/wide-stop-hypothetical-ledger-lane-spec-2026-09-07.md §5.
+        """
+        verdict = (row.get("verdict") or "").upper()
+        return "CURRENT SYSTEM RISK CONSTRAINTS" in verdict and "PARKED" in verdict
+
     # A derived lane (e.g. the inverted ORB Breakout paper lane) executes a
     # transform of its source concept, so the source concept must be enabled
     # even when its own direct verdict is BROKEN. That is only exempt from the
@@ -150,6 +182,7 @@ def _strategy_source_of_truth(*, repo_root: Path, rules_active_lanes: dict[str, 
     findings: list[dict[str, Any]] = []
     matched: list[dict[str, Any]] = []
     derived_notes: list[dict[str, Any]] = []
+    hypothetical_notes: list[dict[str, Any]] = []
     for row, concept, match_kind in resolved:
         is_active_in_config = concept in active_concepts_any_instrument
         matched.append(
@@ -162,6 +195,23 @@ def _strategy_source_of_truth(*, repo_root: Path, rules_active_lanes: dict[str, 
             }
         )
         if not (is_active_in_config and _is_unsafe(row)):
+            continue
+        if _is_parked_family_row(row) and wide_stop_ledger_active:
+            hypothetical_notes.append(
+                {
+                    "strategy": row["name"],
+                    "concept_key": concept,
+                    "inventory_verdict": row.get("verdict"),
+                    "ledger": (wide_stop_membership.get(concept) or {}).get("ledger"),
+                    "role": (wide_stop_membership.get(concept) or {}).get("role"),
+                    "label": wide_stop_ledger_paper.LABEL,
+                    "note": (
+                        "parked on account size, active only on the hypothetical "
+                        f"{wide_stop_ledger_paper.LABEL} lane; expected, not a drift finding. "
+                        "Lane P&L is never blended with the real book."
+                    ),
+                }
+            )
             continue
         derived_rows = [] if _is_derived_row(row) else safe_derived_rows_by_concept.get(concept, [])
         if derived_rows:
@@ -206,6 +256,8 @@ def _strategy_source_of_truth(*, repo_root: Path, rules_active_lanes: dict[str, 
         "inventory_row_count": len(rows),
         "drift_findings": findings,
         "derived_lane_source_notes": derived_notes,
+        "hypothetical_ledger_notes": hypothetical_notes,
+        "wide_stop_ledger_mode": wide_stop_mode,
         "matched_inventory_rows": matched,
         "unmatched_inventory_rows": unmatched,
         "note": (
