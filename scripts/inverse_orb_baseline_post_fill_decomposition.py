@@ -129,7 +129,16 @@ def build_report() -> dict:
             continue
         inverse = mirror_order(_order_for(row))
         fill = _paper_fill(inverse, row["fill_market"])
-        if fill.result != "OPEN":
+        # PaperBroker now REFUSES a fill that lands beyond its own bracket
+        # (ENTRY_BRACKET_INVALID_AT_FILL, #508). That refusal IS the population
+        # this script exists to measure -- it is the broker agreeing with the
+        # decomposition, not disagreeing with the baseline. Counting it as a
+        # disagreement would invert this script's own control (0 -> 37) and
+        # collapse the rejected cell from 38 arms/+$1,138.26 to 1/+$50.52,
+        # i.e. it would report the artifact as gone the moment it was caught.
+        # A genuine no-fill (adverse side) is still a real disagreement.
+        refused_by_guard = getattr(fill, "exit_reason", None) == "ENTRY_BRACKET_INVALID_AT_FILL"
+        if fill.result != "OPEN" and not refused_by_guard:
             # The re-derived fill disagrees with the baseline's own status.
             disagreements += 1
             continue
