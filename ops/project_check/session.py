@@ -104,6 +104,7 @@ def build_session_start_report(*, cwd: str | Path | None = None) -> dict[str, An
             "current_worktree": current_wt,
             "all_worktrees": all_worktrees,
             "worktree_inventory_checked": bool(all_worktrees),
+            "worktrees_with_unverified_state": gitutil.unverified_worktree_states(all_worktrees),
             "dirty_tracked_files": status.get("dirty_tracked", []),
             "staged_files": status.get("staged", []),
             "untracked_files": status.get("untracked", []),

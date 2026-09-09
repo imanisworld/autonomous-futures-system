@@ -288,6 +288,9 @@ def _repo_hygiene(root: Path) -> dict[str, Any]:
     unverified: list[str] = []
     if not all_worktrees:
         unverified.append("worktree inventory could not be enumerated")
+    worktrees_unverified = gitutil.unverified_worktree_states(all_worktrees)
+    for detail in worktrees_unverified:
+        unverified.append(f"worktree dirty state could not be determined -- {detail}")
     if not stash_inventory["checked"]:
         unverified.append(f"stash inventory could not be enumerated: {stash_inventory['reason']}")
     if not branch_inventory["checked"]:
@@ -305,6 +308,7 @@ def _repo_hygiene(root: Path) -> dict[str, Any]:
         "untracked_files": status.get("untracked", []),
         "worktrees": all_worktrees,
         "worktree_inventory_checked": bool(all_worktrees),
+        "worktrees_with_unverified_state": worktrees_unverified,
         "stash_count": len(stashes) if stash_inventory["checked"] else None,
         "stashes": stashes,
         "stash_enumeration": {"checked": stash_inventory["checked"], "reason": stash_inventory["reason"]},

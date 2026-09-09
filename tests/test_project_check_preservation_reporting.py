@@ -115,6 +115,83 @@ def test_daily_has_no_preservation_blocker_when_everything_enumerates(repo: Path
     assert [b["code"] for b in blockers] == []
 
 
+def _add_linked_worktree(repo: Path) -> Path:
+    side = repo.parent / "side"
+    _git(repo, "worktree", "add", "-q", "-b", "side", str(side))
+    return side
+
+
+def _unknown_dirty_state_for(monkeypatch, name: str, reason: str) -> None:
+    """Make exactly one linked worktree's dirty state undeterminable."""
+    real = gitutil.worktree_dirty
+    monkeypatch.setattr(
+        gitutil,
+        "worktree_dirty",
+        lambda path: {"checked": False, "reason": reason}
+        if Path(path).name == name
+        else real(path),
+    )
+
+
+def test_every_worktree_reports_its_own_tracked_staged_untracked_state(repo: Path) -> None:
+    """Dirty state is per worktree, not just the one the routine runs in."""
+    side = _add_linked_worktree(repo)
+    (side / "a.txt").write_text("changed\n")
+    (side / "new.txt").write_text("evidence\n")
+    _git(side, "add", "new.txt")
+    (side / "loose.txt").write_text("loose\n")
+
+    rows = {Path(w["path"]).name: w["dirty_status"] for w in _repo_hygiene(repo)["worktrees"]}
+    assert set(rows) == {"repo", "side"}
+    assert rows["side"]["checked"] is True and rows["side"]["dirty"] is True
+    assert rows["side"]["dirty_tracked"] == ["a.txt"]
+    assert rows["side"]["staged"] == ["new.txt"]
+    assert rows["side"]["untracked"] == ["loose.txt"]
+    assert rows["repo"]["dirty"] is False
+
+
+def test_daily_escalates_a_worktree_whose_dirty_state_is_unknown(repo: Path, monkeypatch) -> None:
+    """An enumerated worktree is not an inspected one.
+
+    Another session moving HEAD under a linked worktree drops that row's dirty
+    status. Before this regression the row was reported as UNKNOWN but daily
+    reconciliation still returned zero blockers -- a preservation routine
+    reading "clean" over a worktree whose tracked/staged state it never saw.
+    """
+    _add_linked_worktree(repo)
+    assert _repo_hygiene(repo)["worktrees_with_unverified_state"] == []
+    _unknown_dirty_state_for(monkeypatch, "side", "HEAD changed during inspection")
+
+    hygiene = _repo_hygiene(repo)
+    assert any(
+        "side" in entry and "HEAD changed during inspection" in entry
+        for entry in hygiene["worktrees_with_unverified_state"]
+    )
+    assert any(
+        "worktree dirty state could not be determined" in reason
+        for reason in hygiene["unverified_enumerations"]
+    )
+    blockers = _overall_blockers(
+        hygiene=hygiene,
+        runtime={"live_box_drift": {"status": "ok"}, "risk_rules_load_error": None},
+        strategy_drift={"checked": True, "drift_findings": []},
+        trade_chain={"status": "PASS"},
+    )
+    assert any(b["code"] == "REPO_PRESERVATION_UNVERIFIED" for b in blockers)
+
+
+def test_session_start_names_worktrees_whose_dirty_state_is_unknown(repo: Path, monkeypatch) -> None:
+    _add_linked_worktree(repo)
+    assert build_session_start_report(cwd=repo)["repo"]["worktrees_with_unverified_state"] == []
+    _unknown_dirty_state_for(monkeypatch, "side", "path is not the registered worktree root")
+
+    reported = build_session_start_report(cwd=repo)["repo"]
+    assert any(
+        "side" in entry and "path is not the registered worktree root" in entry
+        for entry in reported["worktrees_with_unverified_state"]
+    )
+
+
 @pytest.fixture
 def evidence_repo(repo: Path, monkeypatch) -> Path:
     _git(repo, "update-ref", "refs/remotes/origin/main", "HEAD")
