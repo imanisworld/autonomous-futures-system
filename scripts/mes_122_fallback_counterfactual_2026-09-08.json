@@ -1,0 +1,61 @@
+{
+  "control_current_executable": {
+    "n": 16,
+    "wins": 5,
+    "losses": 11,
+    "net": 120.0,
+    "profit_factor": 1.421053,
+    "h1_net": 11.25,
+    "h2_net": 108.75,
+    "max_drawdown": 121.25
+  },
+  "entry_detached_fallback_only": {
+    "recovered_count": 4,
+    "recovered_net": 402.5,
+    "recovered_rows": [
+      {"date": "2025-10-24", "pnl": 97.5, "winning_setup_strategy": "orb_reclaim"},
+      {"date": "2026-02-20", "pnl": 80.0, "winning_setup_strategy": "vwap_hold"},
+      {"date": "2026-03-13", "pnl": 150.0, "winning_setup_strategy": "vwap_hold"},
+      {"date": "2026-03-26", "pnl": 75.0, "winning_setup_strategy": "vwap_hold"}
+    ],
+    "metrics": {
+      "n": 20,
+      "wins": 9,
+      "losses": 11,
+      "net": 522.5,
+      "profit_factor": 2.833333,
+      "h1_net": 82.5,
+      "h2_net": 440.0,
+      "max_drawdown": 121.25
+    }
+  },
+  "permission_blocked_only_diagnostic": {
+    "recovered_count": 3,
+    "recovered_net": 30.0,
+    "metrics": {
+      "n": 19,
+      "wins": 6,
+      "losses": 13,
+      "net": 150.0,
+      "profit_factor": 1.434783,
+      "h1_net": 82.5,
+      "h2_net": 67.5,
+      "max_drawdown": 121.25
+    }
+  },
+  "all_preemptions_diagnostic": {
+    "recovered_count": 7,
+    "recovered_net": 432.5,
+    "metrics": {
+      "n": 23,
+      "wins": 10,
+      "losses": 13,
+      "net": 552.5,
+      "profit_factor": 2.601449,
+      "h1_net": 165.0,
+      "h2_net": 387.5,
+      "max_drawdown": 121.25
+    }
+  },
+  "verdict": "PROMISING REPAIR HYPOTHESIS ONLY — full-engine replay required before any behavior change"
+}
