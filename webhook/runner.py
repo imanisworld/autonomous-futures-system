@@ -459,6 +459,31 @@ def process_alert(
     # were built for). Default True so a missing flag fails safe (never live).
     simulate = bool(getattr(cfg, "paper_mode", True))
 
+    # ── Isolated MES 1-2-2 forward-paper evidence lane ────────────────────────
+    # Additive observer, in its OWN error boundary, running BEFORE the real
+    # book's own gates because MES is deliberately parked in the shipped
+    # `instruments.allowed` and would otherwise return NO_TRADE above every
+    # point this could be hooked. The lane re-evaluates the alert on its own
+    # isolated config copy (PaperBroker forced, `strat_122` the only enabled
+    # concept), writes only to its own journal root, and can neither reach an
+    # external broker nor mutate anything the real book reads. Inactive by
+    # default; `mes_122_paper_lane.observe_alert` returns None on every
+    # non-lane path, including the lane's own re-entrant call.
+    try:
+        from context import mes_122_paper_lane as _mes122
+
+        _mes_122_audit = _mes122.observe_alert(
+            payload, cfg=cfg, log_dir=log_dir, for_date=for_date
+        )
+        if _mes_122_audit is not None:
+            logger.info(
+                "mes_122 paper lane: %s (ledger %s)",
+                _mes_122_audit.get("lane_result"),
+                (_mes_122_audit.get("ledger_status") or {}).get("realistic_balance"),
+            )
+    except Exception as _exc:  # never let an evidence lane break the real book
+        logger.warning("mes_122 paper lane hook skipped: %s", _exc)
+
     # ── Step 0: Data-quality gate ─────────────────────────────────────────────
     quality_error = _check_payload_quality(payload, cfg)
     if quality_error:

@@ -25,6 +25,12 @@ PROOF_CRITICAL_RUNTIME_OVERRIDES = (
     "TRADOVATE_ENV",
     "WIDE_STOP_LEDGER_MODE",
     "WIDE_STOP_LEDGER_EPOCH_START",
+    # Isolated MES 15m 1-2-2 forward-paper evidence lane. Paper-only by
+    # construction, but proof-critical: the mode decides whether the lane
+    # collects at all, and the epoch decides which journal history its
+    # realistic-ledger drawdown halt is measured from.
+    "MES_122_PAPER_MODE",
+    "MES_122_PAPER_EPOCH_START",
     "STARTING_BALANCE",
     "REQUIRE_TRENDING_CONDITION",
     "VWAP_ENTRY_MAX_DISTANCE_TICKS",

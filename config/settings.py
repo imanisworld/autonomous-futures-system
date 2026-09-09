@@ -491,6 +491,17 @@ class SystemConfig:
     # counts normally.
     mnq_orb_breakout_inverse_epoch_start: Optional[str] = None
 
+    # ── MES 15m 1-2-2 isolated forward-paper evidence lane (2026-09-09) ────
+    # Paper-only by construction: the lane pins `paper_mode=True` on its own
+    # config copy, so it can never reach an external broker whatever `BROKER`
+    # is set to. `observe_only` (default) means the lane does not run at all.
+    # See context/mes_122_paper_lane.py and docs/mes-122-paper-collection-lane.md.
+    mes_122_paper_mode: str = "observe_only"
+    # UTC/offset-aware start of the lane's isolated accounting epoch. Required
+    # whenever the lane is active, so unrelated historical journal P&L cannot
+    # trip its drawdown halt while every loss inside the epoch counts normally.
+    mes_122_paper_epoch_start: Optional[str] = None
+
     # ── Wide-stop hypothetical-ledger paper lane (2026-09-07 spec, B+) ────
     # Isolated $4,000 / $6,000 HYPOTHETICAL ledgers for the parked wide-stop
     # family. Paper-only by construction: no demo or live value exists, and
@@ -817,6 +828,10 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         mnq_orb_breakout_inverse_epoch_start=(
             os.getenv("MNQ_ORB_BREAKOUT_INVERSE_EPOCH_START") or None
         ),
+        mes_122_paper_mode=str(
+            os.getenv("MES_122_PAPER_MODE", "observe_only") or "observe_only"
+        ).strip().lower(),
+        mes_122_paper_epoch_start=(os.getenv("MES_122_PAPER_EPOCH_START") or None),
         wide_stop_ledger_mode=str(
             os.getenv("WIDE_STOP_LEDGER_MODE", "observe_only") or "observe_only"
         ).strip().lower(),
@@ -1134,6 +1149,29 @@ def _validate_config(config: SystemConfig) -> None:
             raise ConfigError(
                 "MNQ_ORB_BREAKOUT_INVERSE_EPOCH_START must include a UTC offset."
             )
+    _valid_mes_122_modes = {"observe_only", "paper_sim"}
+    if config.mes_122_paper_mode not in _valid_mes_122_modes:
+        raise ConfigError(
+            "MES_122_PAPER_MODE must be one of "
+            f"{sorted(_valid_mes_122_modes)} (got {config.mes_122_paper_mode!r}); "
+            "this lane is paper-only."
+        )
+    if config.mes_122_paper_mode == "paper_sim":
+        _mes_epoch = config.mes_122_paper_epoch_start
+        if not _mes_epoch:
+            raise ConfigError(
+                "MES_122_PAPER_EPOCH_START is required when MES_122_PAPER_MODE=paper_sim."
+            )
+        try:
+            _parsed_mes_epoch = datetime.fromisoformat(
+                str(_mes_epoch).replace("Z", "+00:00")
+            )
+        except ValueError as exc:
+            raise ConfigError(
+                "MES_122_PAPER_EPOCH_START must be an ISO-8601 timestamp."
+            ) from exc
+        if _parsed_mes_epoch.tzinfo is None:
+            raise ConfigError("MES_122_PAPER_EPOCH_START must include a UTC offset.")
     if (
         config.mnq_orb_breakout_inverse_mode != "observe_only"
         and config.mnq_orb_breakout_proof_mode != "observe_only"
