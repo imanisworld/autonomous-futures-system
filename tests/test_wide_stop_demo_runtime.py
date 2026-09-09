@@ -36,8 +36,6 @@ def _demo_env(monkeypatch):
         "BROKER": "tradovate",
         "TRADOVATE_ENV": "demo",
         "TRADOVATE_EXPECTED_ACCOUNT_ID": "12345",
-        "TRADOVATE_ENTRY_EXECUTION_MODE": "ioc_limit",
-        "ENTRY_SLIPPAGE_TOLERANCE_TICKS_MNQ": "8",
         "FIVE_MIN_FEED_ENABLED": "true",
         "LIVE_TRADING_ENABLED": "false",
     }
@@ -163,14 +161,23 @@ def _patch_candidate(monkeypatch, strategy=FOUR_HR):
 def test_demo_requires_all_safety_pins(monkeypatch):
     _demo_env(monkeypatch)
     assert execution.demo_config_errors(_cfg()) == []
-    monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS_MNQ", "32")
-    assert "mnq_ioc_tolerance_not_8_ticks" in execution.demo_config_errors(_cfg())
-    monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS_MNQ", "8")
     monkeypatch.delenv(execution.ROUTE_PROOF_PIN_ENV)
     assert "wide_stop_execution_route_not_proof_pinned" in execution.demo_config_errors(_cfg())
     monkeypatch.setenv(execution.ROUTE_PROOF_PIN_ENV, execution.DEMO_ROUTE)
     monkeypatch.setenv("TRADOVATE_ENV", "live")
     assert "tradovate_env_not_demo" in execution.demo_config_errors(_cfg())
+
+
+def test_demo_config_does_not_require_the_shared_global_execution_env(monkeypatch):
+    # TRADOVATE_ENTRY_EXECUTION_MODE / ENTRY_SLIPPAGE_TOLERANCE_TICKS_MNQ are
+    # process-wide and may already be pinned for a different Tradovate
+    # strategy sharing this box (e.g. "legacy" / 32 ticks for inverse-ORB).
+    # The demo route must not require them to match its own 8-tick ioc_limit
+    # pin — it enforces that via BracketOrder overrides instead.
+    _demo_env(monkeypatch)
+    monkeypatch.setenv("TRADOVATE_ENTRY_EXECUTION_MODE", "legacy")
+    monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS_MNQ", "32")
+    assert execution.demo_config_errors(_cfg()) == []
 
 
 def test_demo_submits_one_contract_with_strategy_caps_and_postfill_guard(tmp_path, monkeypatch):
@@ -187,6 +194,8 @@ def test_demo_submits_one_contract_with_strategy_caps_and_postfill_guard(tmp_pat
     assert broker.last_order.max_dollar_risk == 150.0
     assert broker.last_order.max_slippage_ticks == 8.0
     assert broker.last_order.post_fill_validation_required is True
+    assert broker.last_order.entry_execution_mode_override == "ioc_limit"
+    assert broker.last_order.entry_slippage_tolerance_ticks_override == 8.0
     state = demo_state.load_state(_root(tmp_path), DAY)
     assert demo_state.confirmed_fills(state) == 1
     assert state["position"] is not None

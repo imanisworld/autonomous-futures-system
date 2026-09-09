@@ -6,7 +6,6 @@ Paper remains the default. Tradovate demo is an explicit, proof-pinned route for
 from __future__ import annotations
 
 import os
-from typing import Optional
 
 ROUTE_ENV = "WIDE_STOP_LEDGER_EXECUTION_ROUTE"
 ROUTE_PROOF_PIN_ENV = "EXPECTED_PROOF_WIDE_STOP_LEDGER_EXECUTION_ROUTE"
@@ -15,6 +14,12 @@ DEMO_ROUTE = "tradovate_demo"
 DEFAULT_ROUTE = PAPER_ROUTE
 VALID_ROUTES = (PAPER_ROUTE, DEMO_ROUTE)
 FROZEN_MNQ_IOC_TICKS = 8.0
+# The demo route pins its own entry construction via BracketOrder overrides
+# (see context/wide_stop_demo_runtime_core.py), not via the process-wide
+# TRADOVATE_ENTRY_EXECUTION_MODE env var — that env var is shared with any
+# other Tradovate strategy this same process runs and must not be forced to
+# match this route's requirement.
+DEMO_ENTRY_EXECUTION_MODE = "ioc_limit"
 
 
 def route() -> str:
@@ -27,18 +32,6 @@ def _bool_env(name: str, default: bool = False) -> bool:
     if raw is None:
         return bool(default)
     return raw.strip().lower() in {"1", "true", "yes"}
-
-
-def _mnq_tolerance() -> Optional[float]:
-    raw = os.getenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS_MNQ")
-    if raw is None:
-        raw = os.getenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS")
-    if raw is None or not str(raw).strip():
-        return None
-    try:
-        return float(raw)
-    except (TypeError, ValueError):
-        return None
 
 
 def demo_config_errors(cfg=None) -> list[str]:
@@ -63,11 +56,6 @@ def demo_config_errors(cfg=None) -> list[str]:
     account_pin = str(os.getenv("TRADOVATE_EXPECTED_ACCOUNT_ID", "")).strip()
     if not account_pin or not account_pin.lstrip("-").isdigit():
         errors.append("tradovate_expected_account_id_missing_or_invalid")
-    if str(os.getenv("TRADOVATE_ENTRY_EXECUTION_MODE", "legacy")).strip().lower() != "ioc_limit":
-        errors.append("tradovate_entry_execution_mode_not_ioc_limit")
-    tolerance = _mnq_tolerance()
-    if tolerance is None or abs(tolerance - FROZEN_MNQ_IOC_TICKS) > 1e-9:
-        errors.append("mnq_ioc_tolerance_not_8_ticks")
     if not _bool_env("FIVE_MIN_FEED_ENABLED", False):
         errors.append("five_min_feed_not_enabled")
     return errors

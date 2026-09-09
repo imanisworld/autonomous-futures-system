@@ -222,6 +222,54 @@ def test_marketable_limit_zero_ticks_fails_closed(monkeypatch):
     assert cap["calls"] == 0
 
 
+# ── 2b: per-order override takes precedence over the shared global env ──────
+
+def test_order_level_override_ignores_conflicting_global_env(monkeypatch):
+    # A different strategy sharing this process has TRADOVATE_ENTRY_EXECUTION_MODE
+    # pinned to "legacy" with no tolerance configured. An order carrying its own
+    # override must still build an IOC limit at its own tolerance, unaffected.
+    b = _broker(monkeypatch)
+    cap = _capture_body(monkeypatch, b)
+    b.execute_bracket(
+        _long_order(
+            entry_execution_mode_override="ioc_limit",
+            entry_slippage_tolerance_ticks_override=8.0,
+        )
+    )
+    assert cap["body"]["orderType"] == "Limit"
+    assert cap["body"]["price"] == 7561.5  # 7559.5 + 8 ticks (0.25 each)
+    assert cap["body"]["timeInForce"] == "IOC"
+
+
+def test_no_override_is_fully_unaffected_by_the_new_fields(monkeypatch):
+    # Default (None, None) on every existing caller must reproduce the exact
+    # legacy behavior — this is the regression guard for adding the override.
+    monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS", "2")
+    b = _broker(monkeypatch)
+    cap = _capture_body(monkeypatch, b)
+    b.execute_bracket(_long_order())
+    assert cap["body"]["orderType"] == "Limit"
+    assert cap["body"]["price"] == 7560.0
+    assert cap["body"]["timeInForce"] == "IOC"
+
+
+def test_override_mode_still_hard_blocked_in_live(monkeypatch):
+    monkeypatch.setenv("LIVE_TRADING_ENABLED", "true")
+    b = _broker(monkeypatch, env="live")
+    import execution.live_preflight as preflight
+    monkeypatch.setattr(preflight, "live_order_ready", lambda: True)
+    cap = _capture_body(monkeypatch, b)
+    fill = b.execute_bracket(
+        _long_order(
+            entry_execution_mode_override="ioc_limit",
+            entry_slippage_tolerance_ticks_override=8.0,
+        )
+    )
+    assert fill.result == "CANCELLED"
+    assert fill.exit_reason == "EXECUTION_MODE_NOT_ALLOWED_LIVE"
+    assert cap["calls"] == 0
+
+
 # ── 4-5: stop_market / stop_limit ────────────────────────────────────────────
 
 def test_stop_market_long_payload(monkeypatch):

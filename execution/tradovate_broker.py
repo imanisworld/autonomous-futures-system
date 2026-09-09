@@ -1026,7 +1026,15 @@ class TradovateBroker(BrokerInterface):
                 return self._cancelled_fill(order, "BROKER_NOT_READY")
 
             # ── Entry execution mode (demo/paper only beyond "legacy") ────────
-            exec_mode = _entry_execution_mode()
+            # An order-level override (e.g. the isolated wide-stop demo lane)
+            # takes precedence over the process-wide env var so that lane can
+            # pin its own mode without altering any other strategy sharing
+            # this same TradovateBroker process.
+            exec_mode = (
+                str(order.entry_execution_mode_override).strip().lower()
+                if getattr(order, "entry_execution_mode_override", None)
+                else _entry_execution_mode()
+            )
             if exec_mode not in ENTRY_EXECUTION_MODES:
                 logger.error(
                     "BLOCKED Tradovate order: unknown TRADOVATE_ENTRY_EXECUTION_MODE=%r "
@@ -1095,7 +1103,13 @@ class TradovateBroker(BrokerInterface):
                 return _round_to_tick(raw, root)
 
             if exec_mode in ("legacy", "ioc_limit"):
-                tol_ticks = 0.0 if getattr(order, "force_market_entry", False) else _entry_slippage_tolerance_ticks(root)
+                tol_override = getattr(order, "entry_slippage_tolerance_ticks_override", None)
+                if getattr(order, "force_market_entry", False):
+                    tol_ticks = 0.0
+                elif tol_override is not None:
+                    tol_ticks = max(0.0, float(tol_override))
+                else:
+                    tol_ticks = _entry_slippage_tolerance_ticks(root)
                 if exec_mode == "ioc_limit" and tol_ticks <= 0:
                     # Explicit ioc_limit selection with no tolerance configured
                     # would silently degrade to a Market entry — refuse instead.
