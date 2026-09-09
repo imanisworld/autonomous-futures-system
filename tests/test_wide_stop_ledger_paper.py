@@ -201,6 +201,13 @@ def test_a_low_rr_322_candidate_is_admitted_because_its_floor_is_disabled(real_b
     assert _engine_rejection(lane_cfg, setup) is None
 
 
+def test_a_301_tick_4hr_candidate_is_rejected_by_the_lane(real_book):
+    """Operator amendment 2026-09-08: wide_stop_4k is capped at 300 ticks."""
+    setup = _setup(FOUR_HR, stop_ticks=301.0, rr=1.4)
+    lane_cfg = lane.lane_config(real_book, lane.LEDGERS["wide_stop_4k"])
+    assert _engine_rejection(lane_cfg, setup) == "stop_too_wide"
+
+
 def test_a_700_tick_322_candidate_is_rejected_by_both(real_book):
     """Spec §8: the family cap is a cap, not a removal."""
     setup = _setup(THREE_TWO_TWO, stop_ticks=700.0, rr=1.0)
@@ -217,14 +224,14 @@ def test_lane_config_leaves_the_global_config_untouched(real_book):
     assert real_book.max_stop_ticks == before_caps
     assert real_book.min_rr_ratio == before_rr
     assert lane_cfg.max_stop_ticks is not real_book.max_stop_ticks
-    assert lane_cfg.max_stop_ticks["MNQ"] == 400.0
+    assert lane_cfg.max_stop_ticks["MNQ"] == 300.0
     assert lane_cfg.min_rr_ratio == 1.0
 
 
 def test_lane_config_carries_the_lane_scoped_floors(real_book):
     four_k = lane.lane_config(real_book, lane.LEDGERS["wide_stop_4k"])
     six_k = lane.lane_config(real_book, lane.LEDGERS["wide_stop_6k"])
-    assert (four_k.max_daily_loss, four_k.max_drawdown_percent) == (400.0, 0.20)
+    assert (four_k.max_daily_loss, four_k.max_drawdown_percent) == (300.0, 0.20)
     assert (six_k.max_daily_loss, six_k.max_drawdown_percent) == (600.0, 0.20)
     assert real_book.max_daily_loss == 150.0
 
@@ -294,8 +301,8 @@ def test_the_two_ledgers_do_not_share_a_journal_root(tmp_path):
     assert four.parent != tmp_path
 
 
-def test_ledger_worst_case_matches_the_memo():
-    assert lane.LEDGERS["wide_stop_4k"].worst_case_stop_dollars == 200.0
+def test_ledger_worst_case_matches_the_amended_cap():
+    assert lane.LEDGERS["wide_stop_4k"].worst_case_stop_dollars == 150.0
     assert lane.LEDGERS["wide_stop_6k"].worst_case_stop_dollars == 300.0
 
 
