@@ -31,6 +31,13 @@ def bar(hour: int, minute: int, *, high: float, low: float, open_: float | None 
     )
 
 
+def pin_v1_env(monkeypatch) -> None:
+    monkeypatch.setenv("OPTIONS_PAPER_V1_COLLECTION_ENABLED", "true")
+    monkeypatch.setenv("OPTIONS_MANAGER_MAX_AGGREGATE_OPEN_RISK_DOLLARS", "1000")
+    monkeypatch.setenv("OPTIONS_MANAGER_RISK_MIN_DTE_DAYS", "14")
+    monkeypatch.setenv("OPTIONS_COMPANION_ENABLED", "false")
+
+
 def test_observer_candidate_preserves_mechanical_212_without_promoting_trade():
     prior = [
         bar(13, 30, high=10.0, low=8.0),
@@ -180,7 +187,7 @@ def test_same_snapshot_stop_and_target_is_labeled_ambiguous_pessimistically():
 
 
 def test_v1_preflight_blocks_scheduled_collection_when_bar_context_is_off(monkeypatch):
-    monkeypatch.setenv("OPTIONS_PAPER_V1_COLLECTION_ENABLED", "true")
+    pin_v1_env(monkeypatch)
 
     class Base:
         def __init__(self):
@@ -202,6 +209,28 @@ def test_v1_preflight_blocks_scheduled_collection_when_bar_context_is_off(monkey
     assert result == []
     assert scanner.last_skip_reason == "v1_requires_bar_context"
     assert scanner.called is False
+
+
+def test_v1_preflight_rejects_policy_pin_mismatch(monkeypatch):
+    pin_v1_env(monkeypatch)
+    monkeypatch.setenv("OPTIONS_MANAGER_MAX_AGGREGATE_OPEN_RISK_DOLLARS", "750")
+
+    class Base:
+        def __init__(self):
+            self.config = SimpleNamespace(
+                bar_context_enabled=True,
+                bar_context_configured=True,
+                market_data_configured=True,
+            )
+            self.last_skip_reason = None
+
+        async def scan_watchlist(self, *, source="scheduled", context=None, now=None):
+            return ["should-not-run"]
+
+    Scanner = build_v1_runtime_preflight(Base)
+    scanner = Scanner()
+    assert asyncio.run(scanner.scan_watchlist(source="scheduled")) == []
+    assert scanner.last_skip_reason == "v1_manager_aggregate_risk_mismatch"
 
 
 def test_v1_preflight_is_inert_outside_explicit_collection_mode(monkeypatch):
