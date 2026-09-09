@@ -370,11 +370,19 @@ class ScanStorage:
         *,
         ticker: str | None = None,
     ) -> ShadowJournalSummary:
-        # Aggregate in SQL: the journal can hold thousands of rows and this is
-        # polled by the dashboard, so it must never materialise every row's
-        # JSON blobs in memory (that was the scanner's largest allocation).
-        where = "WHERE ticker = ?" if ticker else ""
-        params: tuple[Any, ...] = (ticker.upper(),) if ticker else ()
+        # The dashboard summary is ACTIVE-campaign performance only. Observer
+        # counterfactuals stay queryable in the same append-only journal but are
+        # excluded here so rejected-filter experiments cannot inflate/deflate
+        # the active win rate or P&L.
+        active_clause = (
+            "instr(selected_contract_json, '\"paper_evidence_lane\": \"COUNTERFACTUAL\"') = 0"
+        )
+        if ticker:
+            where = f"WHERE ticker = ? AND {active_clause}"
+            params: tuple[Any, ...] = (ticker.upper(),)
+        else:
+            where = f"WHERE {active_clause}"
+            params = ()
         status_counts: dict[str, int] = {}
         pnl_dollars = 0.0
         pnl_percent_values = []
@@ -384,9 +392,7 @@ class ScanStorage:
                 params,
             ):
                 status_counts[row["status"]] = int(row["n"])
-            resolved_where = (
-                f"{where} AND status != 'OPEN'" if where else "WHERE status != 'OPEN'"
-            )
+            resolved_where = f"{where} AND status != 'OPEN'"
             for row in conn.execute(
                 f"SELECT outcome_json FROM options_shadow_journal {resolved_where}",
                 params,

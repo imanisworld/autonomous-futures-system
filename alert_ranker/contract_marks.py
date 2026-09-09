@@ -130,11 +130,12 @@ def contract_marks(storage, shadow_id: int, *, limit: int = 500) -> list[dict[st
 
 
 def aggregate_open_planned_risk(storage) -> float:
-    """Sum V1 planned risk on currently OPEN shadow rows.
+    """Sum planned risk only for ACTIVE V1 OPEN rows.
 
-    Missing/non-numeric risk on a V1 OPEN row is treated as an infinite-risk
-    condition by returning ``float('inf')``.  A damaged row must never make the
-    portfolio look safer than it is.
+    COUNTERFACTUAL observer rows deliberately model trades that filters rejected;
+    they never reserve the active $1,000 budget. Missing/non-numeric risk on an
+    active V1 OPEN row is still treated as infinite risk so damaged state cannot
+    make the portfolio look safer than it is.
     """
     total = 0.0
     last_id = 0
@@ -146,6 +147,11 @@ def aggregate_open_planned_risk(storage) -> float:
             last_id = setup.id
             contract = setup.selected_contract or {}
             if contract.get("paper_policy_id") != "OPTIONS_PAPER_V1":
+                continue
+            if (
+                contract.get("paper_evidence_lane") == "COUNTERFACTUAL"
+                or contract.get("risk_budget_consumed") is False
+            ):
                 continue
             try:
                 risk = float(contract["planned_risk_dollars"])
