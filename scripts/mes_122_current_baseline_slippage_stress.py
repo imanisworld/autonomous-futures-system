@@ -6,11 +6,14 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import json
+import sys
 import tempfile
 from pathlib import Path
 
-from scripts.mes_122_controlled_one_variable_tests import (
-    REPO,
+REPO = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO))
+
+from scripts.mes_122_controlled_one_variable_tests import (  # noqa: E402
     _compare_months,
     _fixed_one_contract_config,
     _run_pass,
