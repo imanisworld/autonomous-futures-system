@@ -128,7 +128,7 @@ class BrokerInterface(ABC):
         Execute a bracket order. Paper brokers simulate; live brokers send real orders.
 
         Args:
-            order: Complete bracket order with entry + stop + target.
+            order: Complete bracket order with entry, stop, target.
 
         Returns:
             Fill with result and P&L.
