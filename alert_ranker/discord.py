@@ -9,6 +9,7 @@ from typing import Any
 import httpx
 
 from .config import ScannerConfig
+from .paper_v1 import MAX_SANITY_DTE, POLICY_ID, dte_for
 from .scorer import ScoreResult
 from .storage import ScanStorage
 
@@ -47,6 +48,9 @@ class DiscordAlerter:
             # "score_below_threshold" for those cases makes a dead data feed
             # indistinguishable from a quiet market.
             return AlertDecision(False, result.reason or "score_below_threshold")
+        sanity_reason = _contract_sanity_reason(result, now)
+        if sanity_reason:
+            return AlertDecision(False, sanity_reason)
         if not self.config.discord_webhook_url:
             return AlertDecision(False, "discord_not_configured")
         if self.storage.recent_alert_exists(
@@ -170,14 +174,20 @@ def _alert_description(result: ScoreResult, side: str, state: str) -> str:
 def _contract_text(result: ScoreResult, side: str) -> str:
     raw = result.raw
     contract = raw.get("contract")
+    dte = raw.get("dte")
+    dte_suffix = (
+        f" · {dte} DTE"
+        if raw.get("paper_policy_id") == POLICY_ID and dte not in (None, "")
+        else ""
+    )
     if contract:
-        return str(contract)
+        return f"{contract}{dte_suffix}"
     strike = raw.get("strike")
     expiry = raw.get("expiry") or raw.get("expiration")
     if strike and expiry:
-        return f"{result.ticker} ${strike} {side.title()} - {expiry}"
+        return f"{result.ticker} ${strike} {side.title()} - {expiry}{dte_suffix}"
     if strike:
-        return f"{result.ticker} ${strike} {side.title()}"
+        return f"{result.ticker} ${strike} {side.title()}{dte_suffix}"
     return "N/A"
 
 
@@ -219,6 +229,16 @@ def _risk_text(result: ScoreResult) -> str:
     raw = result.raw
     if not _mechanically_triggered(result):
         return "No entry. Wait for mechanical TRIGGERED setup and canonical contract/risk proof."
+    if raw.get("paper_policy_id") == POLICY_ID and raw.get("paper_policy_status") == "VALID":
+        planned = _money_text(raw.get("planned_risk_dollars"))
+        premium_stop = _money_text(raw.get("premium_stop"))
+        projected = _money_text(raw.get("projected_aggregate_open_planned_risk"))
+        warning = raw.get("paper_policy_warnings") or []
+        warning_text = f" · {'/'.join(str(item) for item in warning)}" if warning else ""
+        return (
+            f"{POLICY_ID} · planned risk {planned} · premium stop {premium_stop} · "
+            f"projected aggregate risk {projected}{warning_text}"
+        )
     risk = raw.get("risk")
     if risk:
         return str(risk)
@@ -338,3 +358,15 @@ def _signa_text(result: ScoreResult) -> str:
     if raw.get("signa_cached") is True:
         parts.append("cached")
     return " · ".join(parts)
+
+
+def _contract_sanity_reason(result: ScoreResult, now: datetime | None) -> str:
+    raw = result.raw
+    expiry = raw.get("expiry") or raw.get("expiration")
+    if not expiry:
+        return ""
+    stamp = now or datetime.now()
+    dte = dte_for(expiry, stamp)
+    if dte is None or dte < 0 or dte > MAX_SANITY_DTE:
+        return "DATA_INVALID:expiration_out_of_range"
+    return ""

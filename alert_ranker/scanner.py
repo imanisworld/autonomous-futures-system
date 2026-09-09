@@ -10,9 +10,19 @@ from zoneinfo import ZoneInfo
 
 from .bar_context import BarContextBuilder
 from .config import ScannerConfig
+from .contract_marks import aggregate_open_planned_risk, record_contract_mark
 from .discord import AlertDecision, DiscordAlerter
 from .lifecycle import classify_candidate, open_candidate_fields, resolve_open_setup
 from .market_data import MarketDataClient, build_provider_capabilities
+from .paper_v1 import (
+    MAX_AGGREGATE_OPEN_RISK_DOLLARS,
+    MAX_TRADE_RISK_DOLLARS,
+    POLICY_ID,
+    build_v1_contract_fields,
+    choose_contract,
+    choose_expiration,
+    data_invalid,
+)
 from .session_calendar import EXCHANGE_TIMEZONE, nyse_session_for
 from .scorer import ScoreResult, is_ny_open, score_setup
 from .storage import ScanStorage
@@ -88,7 +98,16 @@ class OptionsScanner:
     ) -> ScanOutcome:
         now = now or datetime.now(ZoneInfo(self.config.timezone))
         normalized = await self._build_normalized_data(ticker, context or {}, now)
+
+        # Direction is needed to choose CALL vs PUT.  Score once from underlying
+        # structure, resolve the exact V1 chain contract, then rescore so the
+        # persisted/raw/Discord object contains the real contract facts.
+        preliminary = score_setup(normalized, now=now)
+        normalized = await self._apply_paper_v1_contract(
+            ticker, normalized, preliminary.direction, now
+        )
         result = score_setup(normalized, now=now)
+
         # The gate runs BEFORE the send, not as a relabel afterwards: an
         # unproven setup must not reach Discord at all, and a structural
         # failure is the more specific truth than "score below threshold" --
@@ -134,6 +153,28 @@ class OptionsScanner:
                     selected_contract=selected,
                     timestamp=now,
                 )
+                if result.raw.get("paper_policy_id") == POLICY_ID:
+                    record_contract_mark(
+                        self.storage,
+                        shadow_id=shadow_id,
+                        option_symbol=str(result.raw.get("contract") or ""),
+                        timestamp=now,
+                        bid=_float_or_none(result.raw.get("option_bid")),
+                        ask=_float_or_none(result.raw.get("option_ask")),
+                        mid=_mid_from_raw(result.raw),
+                        volume=_float_or_none(result.raw.get("option_volume")),
+                        open_interest=_float_or_none(result.raw.get("open_interest")),
+                        delta=_float_or_none(result.raw.get("delta")),
+                        gamma=_float_or_none(result.raw.get("gamma")),
+                        theta=_float_or_none(result.raw.get("theta")),
+                        implied_volatility=_float_or_none(result.raw.get("implied_volatility")),
+                        quote_timestamp=(
+                            str(result.raw.get("option_quote_timestamp"))
+                            if result.raw.get("option_quote_timestamp")
+                            else None
+                        ),
+                        raw={"event": "ENTRY", "basis": "ASK", "policy_id": POLICY_ID},
+                    )
         elif not classification.reason.startswith("provider_error"):
             shadow_reason = "not_a_candidate:" + ",".join(classification.missing)
 
@@ -144,19 +185,118 @@ class OptionsScanner:
             result, decision.sent, suppression_reason, storage_id, shadow_id, shadow_reason
         )
 
+    async def _apply_paper_v1_contract(
+        self,
+        ticker: str,
+        normalized: dict[str, Any],
+        direction: str,
+        now: datetime,
+    ) -> dict[str, Any]:
+        """Replace caller/fixture contract fields with a current chain contract.
+
+        V1 only applies to mechanically TRIGGERED setups.  Watching/forming
+        observations remain observations and do not spend option-chain calls.
+        A triggered setup with missing/invalid chain, quote, setup or risk facts
+        becomes DATA_INVALID and cannot alert or open a paper row.
+        """
+        if str(normalized.get("setup_status") or "").upper() != "TRIGGERED":
+            return normalized
+
+        data = _clear_external_contract_fields(normalized)
+        data["paper_policy_id"] = POLICY_ID
+        if direction not in {"LONG", "SHORT"}:
+            data.update(data_invalid("direction_unknown"))
+            return data
+
+        invalidation = (
+            normalized.get("underlying_invalidation")
+            or normalized.get("invalidation")
+            or normalized.get("stop")
+            or normalized.get("stop_level")
+        )
+        target_1 = normalized.get("target_1") or normalized.get("target")
+        if invalidation in (None, ""):
+            data.update(data_invalid("underlying_invalidation_missing"))
+            return data
+        if target_1 in (None, ""):
+            data.update(data_invalid("target_missing"))
+            return data
+
+        fetch_expirations = getattr(self.market_data, "fetch_option_expirations", None)
+        fetch_chain = getattr(self.market_data, "fetch_option_chain", None)
+        if not callable(fetch_expirations) or not callable(fetch_chain):
+            data.update(data_invalid("option_chain_provider_unavailable"))
+            return data
+
+        try:
+            expirations = await fetch_expirations(ticker)
+        except Exception as exc:  # noqa: BLE001 - fail closed, keep scan alive
+            data.update(data_invalid(f"expiration_fetch_error:{type(exc).__name__}"))
+            return data
+        expiry_decision = choose_expiration(expirations, now)
+        if not expiry_decision.valid or expiry_decision.expiry is None:
+            data.update(data_invalid(expiry_decision.reason or "expiration_invalid"))
+            return data
+
+        try:
+            chain = await fetch_chain(ticker, expiry_decision.expiry.expiration)
+        except Exception as exc:  # noqa: BLE001
+            data.update(data_invalid(f"chain_fetch_error:{type(exc).__name__}"))
+            return data
+        if getattr(chain, "error", None):
+            data.update(data_invalid(f"chain_error:{chain.error}"))
+            return data
+        if str(getattr(chain, "expiration", "") or "")[:10] != expiry_decision.expiry.expiration:
+            data.update(data_invalid("chain_expiration_mismatch"))
+            return data
+
+        side = "CALL" if direction == "LONG" else "PUT"
+        contracts = getattr(chain, "calls", ()) if side == "CALL" else getattr(chain, "puts", ())
+        contract_decision = choose_contract(
+            contracts,
+            option_type=side,
+            underlying_price=_float_or_none(normalized.get("price")),
+        )
+        if not contract_decision.valid or contract_decision.contract is None:
+            data.update(data_invalid(contract_decision.reason or "contract_invalid"))
+            return data
+
+        aggregate_risk = aggregate_open_planned_risk(self.storage)
+        if aggregate_risk == float("inf"):
+            data.update(data_invalid("open_risk_state_invalid"))
+            return data
+        fields, reason = build_v1_contract_fields(
+            expiry=expiry_decision.expiry,
+            contract=contract_decision.contract,
+            underlying_invalidation=invalidation,
+            target_1=target_1,
+            aggregate_open_risk=aggregate_risk,
+        )
+        if fields is None:
+            data.update(data_invalid(reason or "risk_invalid"))
+            return data
+
+        data.update(fields)
+        # Preserve the underlying setup levels under the legacy aliases consumed
+        # by the lifecycle resolver and Discord renderer.
+        data["stop"] = _float_or_none(invalidation)
+        data["target"] = _float_or_none(target_1)
+        data["target_1"] = _float_or_none(target_1)
+        return data
+
     async def resolve_open_candidates(
         self,
         now: datetime | None = None,
         *,
         scheduled: bool = True,
     ) -> dict[str, int]:
-        """Resolve OPEN paper candidates against fresh underlying quotes.
+        """Resolve OPEN paper candidates against fresh underlying and option quotes.
 
-        Provider failures leave rows OPEN — a candidate is never resolved on
-        missing data (expiry is the only exception, which needs no quote).
-        Scheduled runs fail closed outside market hours; manual callers can
-        pass ``scheduled=False`` to resolve a backlog regardless of session
-        state.
+        Legacy rows keep their original underlying-only resolver.  V1 rows are
+        re-priced from the exact option symbol and expiry every cycle; every mark
+        is appended to ``options_contract_marks`` before any resolution decision.
+        Provider failures leave rows OPEN.  Scheduled runs fail closed outside
+        market hours.
         """
         now = now or datetime.now(ZoneInfo(self.config.timezone))
         if scheduled and not self.is_market_hours(now):
@@ -164,6 +304,7 @@ class OptionsScanner:
             return {"checked": 0, "resolved": 0}
         counts = {"checked": 0, "resolved": 0}
         prices: dict[str, float | None] = {}
+        chain_cache: dict[tuple[str, str], Any] = {}
         last_id = 0
         while True:
             batch = self.storage.open_setups_after(last_id)
@@ -176,18 +317,173 @@ class OptionsScanner:
                 if ticker not in prices:
                     snapshot = await self.market_data.fetch_market_snapshot(ticker)
                     prices[ticker] = None if snapshot.error else snapshot.price
-                resolution = resolve_open_setup(
-                    direction=setup.direction,
-                    contract=setup.selected_contract,
-                    underlying_price=prices[ticker],
-                    now=now,
-                )
+
+                if setup.selected_contract.get("paper_policy_id") == POLICY_ID:
+                    resolution = await self._resolve_v1_candidate(
+                        setup, prices[ticker], now, chain_cache
+                    )
+                else:
+                    resolution = resolve_open_setup(
+                        direction=setup.direction,
+                        contract=setup.selected_contract,
+                        underlying_price=prices[ticker],
+                        now=now,
+                    )
                 if resolution is None:
                     continue
                 status, outcome = resolution
                 self.storage.update_shadow_outcome(setup.id, status=status, outcome=outcome)
                 counts["resolved"] += 1
         return counts
+
+    async def _resolve_v1_candidate(
+        self,
+        setup,
+        underlying_price: float | None,
+        now: datetime,
+        chain_cache: dict[tuple[str, str], Any],
+    ) -> tuple[str, dict[str, Any]] | None:
+        contract = setup.selected_contract
+        symbol = str(contract.get("contract") or contract.get("contract_key") or "")
+        expiry = str(contract.get("expiry") or contract.get("expiration") or "")[:10]
+        fetch_chain = getattr(self.market_data, "fetch_option_chain", None)
+        if not symbol or not expiry or not callable(fetch_chain):
+            return None
+
+        key = (setup.ticker, expiry)
+        if key not in chain_cache:
+            try:
+                chain_cache[key] = await fetch_chain(setup.ticker, expiry)
+            except Exception as exc:  # noqa: BLE001
+                chain_cache[key] = exc
+        chain = chain_cache[key]
+        if isinstance(chain, Exception):
+            record_contract_mark(
+                self.storage,
+                shadow_id=setup.id,
+                option_symbol=symbol,
+                timestamp=now,
+                error=f"chain_fetch_error:{type(chain).__name__}",
+            )
+            return resolve_open_setup(
+                direction=setup.direction,
+                contract=contract,
+                underlying_price=None,
+                now=now,
+            )
+        if getattr(chain, "error", None):
+            record_contract_mark(
+                self.storage,
+                shadow_id=setup.id,
+                option_symbol=symbol,
+                timestamp=now,
+                error=f"chain_error:{chain.error}",
+            )
+            return resolve_open_setup(
+                direction=setup.direction,
+                contract=contract,
+                underlying_price=None,
+                now=now,
+            )
+
+        quote = None
+        for candidate in (*getattr(chain, "calls", ()), *getattr(chain, "puts", ())):
+            if str(getattr(candidate, "symbol", "") or "") == symbol:
+                quote = candidate
+                break
+        if quote is None:
+            record_contract_mark(
+                self.storage,
+                shadow_id=setup.id,
+                option_symbol=symbol,
+                timestamp=now,
+                error="contract_not_found",
+            )
+            return resolve_open_setup(
+                direction=setup.direction,
+                contract=contract,
+                underlying_price=None,
+                now=now,
+            )
+
+        bid = _float_or_none(getattr(quote, "bid", None))
+        ask = _float_or_none(getattr(quote, "ask", None))
+        mid = _float_or_none(getattr(quote, "mid", None))
+        entry = _float_or_none(contract.get("entry_quote") or contract.get("option_mark"))
+        premium_stop = _float_or_none(contract.get("premium_stop"))
+        adverse_percent = None
+        if entry and bid is not None:
+            adverse_percent = round(max(0.0, ((entry - bid) / entry) * 100.0), 4)
+
+        record_contract_mark(
+            self.storage,
+            shadow_id=setup.id,
+            option_symbol=symbol,
+            timestamp=now,
+            bid=bid,
+            ask=ask,
+            mid=mid,
+            volume=_float_or_none(getattr(quote, "volume", None)),
+            open_interest=_float_or_none(getattr(quote, "open_interest", None)),
+            delta=_float_or_none(getattr(quote, "delta", None)),
+            gamma=_float_or_none(getattr(quote, "gamma", None)),
+            theta=_float_or_none(getattr(quote, "theta", None)),
+            implied_volatility=_float_or_none(getattr(quote, "implied_volatility", None)),
+            quote_timestamp=(
+                str(getattr(quote, "quote_timestamp", ""))
+                if getattr(quote, "quote_timestamp", None)
+                else None
+            ),
+            raw={
+                "event": "MARK",
+                "policy_id": POLICY_ID,
+                "adverse_premium_percent": adverse_percent,
+                "reassessment_band_reached": bool(
+                    adverse_percent is not None and adverse_percent >= 20.0
+                ),
+            },
+        )
+
+        # A missing executable bid is critical data for a long-premium exit;
+        # leave the row OPEN rather than inventing a mark.
+        if bid is None or bid <= 0:
+            return None
+
+        if premium_stop is not None and bid <= premium_stop:
+            return (
+                "LOSS",
+                {
+                    "closed_reason": "premium_stop_hit",
+                    "resolved_at": now.isoformat(),
+                    "exit_mark": bid,
+                    "option_bid_at_resolution": bid,
+                    "option_ask_at_resolution": ask,
+                    "adverse_premium_percent": adverse_percent,
+                    "underlying_price_at_resolution": underlying_price,
+                    "cost_model": contract.get("cost_model"),
+                },
+            )
+
+        underlying_resolution = resolve_open_setup(
+            direction=setup.direction,
+            contract=contract,
+            underlying_price=underlying_price,
+            now=now,
+        )
+        if underlying_resolution is None:
+            return None
+        status, outcome = underlying_resolution
+        enriched = dict(outcome)
+        enriched.update(
+            {
+                "exit_mark": bid,
+                "option_bid_at_resolution": bid,
+                "option_ask_at_resolution": ask,
+                "adverse_premium_percent": adverse_percent,
+                "cost_model": contract.get("cost_model"),
+            }
+        )
+        return status, enriched
 
     def _causal_lane_active(self) -> bool:
         """Whether this scanner is meant to be running on causal structure.
@@ -202,29 +498,27 @@ class OptionsScanner:
         )
 
     def _structural_gate(self, normalized: dict[str, Any]) -> str:
-        """Reason this scan may not alert, or ``""`` when it may.
+        """Reason this scan may not alert, or ``""`` when it may."""
+        if self._causal_lane_active():
+            if "bar_context_available" not in normalized:
+                return "setup_proof_missing"
+            if not normalized.get("bar_context_available"):
+                return str(normalized.get("bar_context_reason") or "bar_context_unavailable")
+            status = normalized.get("setup_status")
+            if not status:
+                return "setup_proof_missing"
+            if status != "TRIGGERED":
+                return str(
+                    normalized.get("setup_suppression_reason") or f"no_setup:{str(status).lower()}"
+                )
 
-        With the lane off, the previous behaviour is preserved untouched. With
-        the lane on, a generic alert requires a TRIGGERED verdict from the
-        shared setup authority -- for every source, including a webhook that
-        supplied its own VWAP, EMA20 and pattern. Caller-supplied values may
-        still win precedence for scoring and display; they never stand in for
-        mechanical proof. And telemetry that is simply absent is not
-        permission: it fails closed as ``setup_proof_missing``.
-        """
-        if not self._causal_lane_active():
-            return ""
-        if "bar_context_available" not in normalized:
-            return "setup_proof_missing"
-        if not normalized.get("bar_context_available"):
-            return str(normalized.get("bar_context_reason") or "bar_context_unavailable")
-        status = normalized.get("setup_status")
-        if not status:
-            return "setup_proof_missing"
-        if status != "TRIGGERED":
-            return str(
-                normalized.get("setup_suppression_reason") or f"no_setup:{str(status).lower()}"
-            )
+        if str(normalized.get("setup_status") or "").upper() == "TRIGGERED":
+            if normalized.get("paper_policy_id") != POLICY_ID:
+                return "DATA_INVALID:paper_policy_missing"
+            if normalized.get("paper_policy_status") != "VALID":
+                return "DATA_INVALID:" + str(
+                    normalized.get("paper_policy_reason") or "contract_or_risk_invalid"
+                )
         return ""
 
     async def _build_normalized_data(
@@ -274,6 +568,8 @@ class OptionsScanner:
         for key in (
             "alert_state",
             "status",
+            "setup_status",
+            "setup_suppression_reason",
             "contract",
             "strike",
             "expiry",
@@ -281,6 +577,7 @@ class OptionsScanner:
             "stop",
             "stop_level",
             "invalidation",
+            "underlying_invalidation",
             "target",
             "target_1",
             "target_2",
@@ -293,6 +590,7 @@ class OptionsScanner:
             "risk_cap",
             "max_loss",
             "risk_dollars",
+            "premium_stop",
             "why",
             "why_forming",
             "edge",
@@ -463,6 +761,12 @@ class OptionsScanner:
             "tastytrade_configured": self.config.tastytrade_configured,
             "signa_api_enabled": self.config.signa_api_enabled,
             "signa_api_key_configured": self.config.signa_api_key_configured,
+            "paper_policy": {
+                "id": POLICY_ID,
+                "max_trade_planned_risk": MAX_TRADE_RISK_DOLLARS,
+                "max_aggregate_open_planned_risk": MAX_AGGREGATE_OPEN_RISK_DOLLARS,
+                "aggregate_open_planned_risk": aggregate_open_planned_risk(self.storage),
+            },
             "latest": latest,
             "scans": scans,
             "signa": signa,
@@ -481,6 +785,38 @@ class OptionsScanner:
         return status
 
 
+def _clear_external_contract_fields(raw: dict[str, Any]) -> dict[str, Any]:
+    data = dict(raw)
+    for key in (
+        "contract",
+        "strike",
+        "expiry",
+        "expiration",
+        "option_type",
+        "option_mark",
+        "option_bid",
+        "option_ask",
+        "option_volume",
+        "open_interest",
+        "option_open_interest",
+        "oi",
+        "dte",
+        "days_to_expiration",
+        "premium_stop",
+        "planned_risk_dollars",
+        "risk_cap",
+        "risk_dollars",
+        "max_loss",
+        "delta",
+        "gamma",
+        "theta",
+        "implied_volatility",
+        "option_quote_timestamp",
+    ):
+        data.pop(key, None)
+    return data
+
+
 def _provider_snapshot(raw: dict[str, Any]) -> dict[str, Any]:
     return {
         "provider": raw.get("market_data_provider"),
@@ -490,7 +826,43 @@ def _provider_snapshot(raw: dict[str, Any]) -> dict[str, Any]:
 
 
 def _selected_contract(raw: dict[str, Any]) -> dict[str, Any]:
-    keys = ("contract", "strike", "expiry", "expiration", "option_type", "option_mark", "dte")
+    keys = (
+        "paper_policy_id",
+        "paper_policy_status",
+        "paper_policy_warnings",
+        "contract",
+        "strike",
+        "expiry",
+        "expiration",
+        "option_type",
+        "option_mark",
+        "option_bid",
+        "option_ask",
+        "option_volume",
+        "open_interest",
+        "dte",
+        "dte_bucket",
+        "spread_percent",
+        "delta",
+        "gamma",
+        "theta",
+        "implied_volatility",
+        "option_quote_timestamp",
+        "premium_stop",
+        "premium_stop_adverse_percent",
+        "planned_risk_dollars",
+        "risk_cap",
+        "contracts",
+        "aggregate_open_planned_risk_before",
+        "projected_aggregate_open_planned_risk",
+        "max_trade_planned_risk",
+        "max_aggregate_open_planned_risk",
+        "cost_model",
+        "underlying_invalidation",
+        "stop",
+        "target",
+        "target_1",
+    )
     return {key: raw[key] for key in keys if raw.get(key) not in (None, "")}
 
 
@@ -500,3 +872,18 @@ def _shadow_setup_inputs(raw: dict[str, Any]) -> dict[str, Any]:
     # retains `signa_raw_payload` for reconstruction.
     omitted = {"market_data_raw", "tastytrade_raw", "signa_raw_payload"}
     return {key: value for key, value in raw.items() if key not in omitted}
+
+
+def _float_or_none(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _mid_from_raw(raw: dict[str, Any]) -> float | None:
+    bid = _float_or_none(raw.get("option_bid"))
+    ask = _float_or_none(raw.get("option_ask"))
+    if bid is None or ask is None:
+        return None
+    return round((bid + ask) / 2.0, 4)
