@@ -1,36 +1,19 @@
 """Canonical forward collector for the isolated wide-stop hypothetical ledgers.
 
-This module closes two gaps in the original wide-stop lane:
-
-1. the active book can keep ``strat_4hr_retrigger`` / ``strat_322_first_live``
-   out of ``enabled_concepts`` while this observer still evaluates their exact
-   canonical 5-minute-native state machines; and
-2. an IOC fill is persisted and resolved causally on later 5-minute bars, so
-   the lane produces outcome evidence rather than entry-side evidence only.
-
-Safety contract:
-- paper_sim only; no Tradovate/live mode exists;
-- the active config is copied, never mutated;
-- only the lane-authorized family stop cap and R:R floor differ;
-- strategy permission is opened only inside the isolated DecisionEngine copy;
-- one hypothetical position per ledger, max three FILLED entries per day;
-- all state/journal files live under ``logs/hypothetical_ledger/<ledger>``;
-- 4HR and 3-2-2 use the existing pure canonical state machines, not a copied
-  detector;
-- stop/target resolution is through the real PaperBroker with pessimistic
-  same-bar handling; both strategies use the canonical day-only 15:55 ET
-  flatten if still open.
-
-Nothing in this module can submit to an external broker or alter the caller's
-real decision/risk/account state.
+The active book may keep 4HR Re-Trigger and 3-2-2 parked while this observer
+runs their existing canonical 5-minute state machines on an isolated config
+copy. Hypothetical fills are persisted and resolved on later 5-minute bars via
+PaperBroker. Nothing here can route to an external broker or mutate the real
+book's decision, journal, balance, or risk state.
 """
 from __future__ import annotations
 
 import copy
 import json
-import logging
 import os
 import tempfile
+import threading
+from contextlib import contextmanager
 from datetime import date, datetime, time
 from pathlib import Path
 from typing import Any, Optional
@@ -53,13 +36,18 @@ from strategy.four_hr_retrigger import advance_4hr_retrigger
 from strategy.signal_engine import DecisionEngine
 from strategy.strat_322_first_live import advance_strat_322_first_live
 
-logger = logging.getLogger(__name__)
+try:
+    import fcntl
+except ImportError:  # pragma: no cover
+    fcntl = None
+
 ET = ZoneInfo("America/New_York")
 MAX_SEEN = 500
 MAX_FILLED_PER_DAY = 3
 FOUR_HR = "strat_4hr_retrigger"
 THREE_TWO_TWO = "strat_322_first_live"
 _NATIVE = (FOUR_HR, THREE_TWO_TWO)
+_LOCAL_LOCK = threading.Lock()
 
 
 def _root(value: object) -> str:
@@ -79,9 +67,8 @@ def _empty_state() -> dict[str, Any]:
 
 
 def _load_state(log_dir: str | Path, ledger: contract.Ledger) -> dict[str, Any]:
-    path = _state_path(log_dir, ledger)
     try:
-        raw = json.loads(path.read_text())
+        raw = json.loads(_state_path(log_dir, ledger).read_text())
     except (FileNotFoundError, json.JSONDecodeError, OSError):
         return _empty_state()
     if not isinstance(raw, dict):
@@ -106,6 +93,22 @@ def _save_state(log_dir: str | Path, ledger: contract.Ledger, state: dict[str, A
     finally:
         if os.path.exists(tmp_name):
             os.unlink(tmp_name)
+
+
+@contextmanager
+def _collector_lock(log_dir: str | Path):
+    """Serialize state/journal lifecycle across duplicate webhook workers."""
+    path = Path(log_dir) / contract.JOURNAL_ROOT / ".forward_collector.lock"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with _LOCAL_LOCK:
+        with path.open("a") as handle:
+            if fcntl is not None:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                if fcntl is not None:
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
 def _trading_date(current_ts: datetime, for_date: Optional[date]) -> date:
@@ -140,9 +143,7 @@ def _candidate_metrics(candidate: dict[str, Any]) -> tuple[float, float]:
     target = float(candidate["target"])
     risk = abs(entry - stop)
     reward = abs(target - entry)
-    rr = reward / risk if risk > 0 else 0.0
-    stop_ticks = risk / 0.25
-    return stop_ticks, rr
+    return risk / 0.25, reward / risk if risk > 0 else 0.0
 
 
 def _base_audit(
@@ -170,19 +171,13 @@ def _base_audit(
 
 
 def _mark_seen(state: dict[str, Any], key: str) -> None:
-    if key in state["seen"]:
-        return
-    state["seen"].append(key)
-    state["seen"] = state["seen"][-MAX_SEEN:]
+    if key not in state["seen"]:
+        state["seen"].append(key)
+        state["seen"] = state["seen"][-MAX_SEEN:]
 
 
 def _isolated_config(cfg, ledger: contract.Ledger, strategy: str):
-    """Copy config and open only this member inside the observer.
-
-    ``contract.lane_config`` applies the two authorized family changes. The
-    strategy permission/enablement edits below exist only on this copy so the
-    parked strategy can be evaluated without entering active ranking.
-    """
+    """Copy config; open only this parked member inside the observer."""
     isolated = contract.lane_config(cfg, ledger)
     isolated.enabled_concepts = [strategy]
     statuses = dict(getattr(cfg, "strategy_status", {}) or {})
@@ -217,12 +212,7 @@ def _prior_machine_state(
     current_ts: datetime,
     instrument: str,
 ) -> dict:
-    """Reconstruct the state immediately BEFORE ``current_ts`` causally.
-
-    Only current-day bars beginning at the strategy's establishment boundary
-    need to be advanced. Each canonical state machine independently filters the
-    supplied history to bars whose close was already knowable at that step.
-    """
+    """Reconstruct state immediately before current_ts using arrived bars only."""
     advance = advance_4hr_retrigger if strategy == FOUR_HR else advance_strat_322_first_live
     start = _window_start(strategy)
     day = current_ts.astimezone(ET).date()
@@ -239,7 +229,7 @@ def _prior_machine_state(
             continue
         ordered.append((parsed, raw))
     ordered.sort(key=lambda item: item[0])
-    for ts, _ in ordered:
+    for ts, _raw in ordered:
         persisted, _candidate = advance(
             bars_5m=bars_5m,
             current_bar_ts=ts,
@@ -250,18 +240,9 @@ def _prior_machine_state(
 
 
 def _evaluate_canonical_candidate(
-    *,
-    payload,
-    cfg,
-    bars_5m: list[dict],
-    strategy: str,
+    *, payload, cfg, bars_5m: list[dict], strategy: str
 ):
-    """Run one parked strategy through its normal DecisionEngine gates.
-
-    The detector and state transition are the same production functions. The
-    only differences are the lane's pre-approved R:R floor and the isolated
-    permission/enablement copy. Returns ``(decision, state, candidate)``.
-    """
+    """Run the parked strategy through its normal DecisionEngine signal gates."""
     from webhook.state_builder import build_market_state
 
     current_ts = _parse_dt(str(payload.timestamp))
@@ -369,6 +350,14 @@ def _position_record(
     }
 
 
+def _economic_result(net_pnl: float) -> str:
+    if net_pnl > 0:
+        return "WIN"
+    if net_pnl < 0:
+        return "LOSS"
+    return "BREAKEVEN"
+
+
 def _resolve_one_position(
     *, cfg, ledger: contract.Ledger, log_dir, for_date, current_ts: datetime, bar: dict[str, float]
 ) -> Optional[dict[str, Any]]:
@@ -381,16 +370,14 @@ def _resolve_one_position(
         state["position"] = None
         _save_state(log_dir, ledger, state)
         return None
-    # Entry exists at the signal bar close. Never resolve against price action
-    # from that same bar; the next 5m bar opens exactly at entry_time.
+    # The signal bar closes at entry_time. Never resolve against that bar's
+    # earlier OHLC; the next 5-minute bar starts at entry_time.
     if current_ts < entry_time:
         return None
 
     current_day = current_ts.astimezone(ET).date()
     entry_day = entry_time.astimezone(ET).date()
     if current_day > entry_day or is_after_eod_close(current_ts):
-        # The 15:55 bar was missing, so no defensible day-only exit price exists.
-        # Fail closed rather than carry a day strategy overnight.
         audit = contract.evaluate(cfg).audit(
             instrument=contract.INSTRUMENT,
             strategy=str(position.get("strategy") or ""),
@@ -444,19 +431,25 @@ def _resolve_one_position(
     if fill is None:
         return None
 
-    gross = float(fill.pnl_dollars or 0.0)
-    net = gross - float(contract.COMMISSION_ROUND_TRIP)
+    gross = round(float(fill.pnl_dollars or 0.0), 2)
+    net = round(gross - float(contract.COMMISSION_ROUND_TRIP), 2)
+    economic_result = _economic_result(net)
+    # Journal the ECONOMIC result and NET P&L. RiskEngine drawdown/daily-loss
+    # reconstruction reads OUTCOME.pnl_dollars, so putting gross here would
+    # systematically understate drawdown and overstate account balance.
     journal.log_outcome(
         instrument=fill.instrument,
         session=str(position.get("session") or "new_york"),
-        result=fill.result,
+        result=economic_result,
         entry_price=fill.entry_price,
         exit_price=fill.exit_price,
         exit_reason=fill.exit_reason,
         pnl_ticks=fill.pnl_ticks,
-        pnl_dollars=gross,
+        pnl_dollars=net,
         contracts=fill.contracts,
         for_date=for_date,
+        strategy=str(position.get("strategy") or ""),
+        signal_timestamp=str(position.get("entry_time") or ""),
         paper_order_id=getattr(fill, "paper_order_id", None),
     )
     audit = contract.evaluate(cfg).audit(
@@ -469,14 +462,15 @@ def _resolve_one_position(
         candidate_key=position.get("candidate_key"),
         collector="wide_stop_forward_v1",
         collector_event="OUTCOME",
-        outcome_result=fill.result,
+        broker_result=fill.result,
+        outcome_result=economic_result,
         exit_reason=fill.exit_reason,
         entry_price=fill.entry_price,
         exit_price=fill.exit_price,
         pnl_ticks=fill.pnl_ticks,
-        gross_pnl_dollars=round(gross, 2),
+        gross_pnl_dollars=gross,
         commission_round_trip=contract.COMMISSION_ROUND_TRIP,
-        net_pnl_dollars=round(net, 2),
+        net_pnl_dollars=net,
         valid_outcome=True,
         promotion_path=False,
     )
@@ -486,31 +480,12 @@ def _resolve_one_position(
     return audit
 
 
-def process_five_min_bar(
-    *,
-    payload,
-    cfg,
-    bars_5m: list[dict],
-    log_dir: str | Path,
-    for_date: Optional[date] = None,
+def _process_five_min_bar_locked(
+    *, payload, cfg, bars_5m: list[dict], log_dir: str | Path, for_date: Optional[date]
 ) -> list[dict[str, Any]]:
-    """Resolve prior positions, then observe canonical candidates on this 5m bar.
-
-    Returns audit rows for visibility/tests. Fail-soft behavior belongs to the
-    caller (`context.five_min_feed.record_five_min`); this function raises on a
-    malformed active configuration so that caller can log the evidence failure
-    without affecting ingestion.
-    """
-    if not contract.evaluate(cfg).active:
-        return []
-    if _root(getattr(payload, "ticker", None)) != contract.INSTRUMENT:
-        return []
     current_ts = _parse_dt(str(getattr(payload, "timestamp", "") or ""))
     if current_ts is None:
         return []
-    if _epoch(cfg) is None:
-        raise ValueError("wide-stop forward collector active without a valid epoch start")
-
     day = _trading_date(current_ts, for_date)
     bar = {
         "high": float(payload.high),
@@ -519,8 +494,8 @@ def process_five_min_bar(
     }
     events: list[dict[str, Any]] = []
 
-    # Resolve first. A position opened by the previous 5m close is eligible on
-    # this bar; a newly-created position below cannot see this bar's earlier OHLC.
+    # Resolve first. A position opened at the prior bar close can resolve on
+    # this bar; a position opened below cannot see this bar's earlier OHLC.
     for ledger in contract.LEDGERS.values():
         resolved = _resolve_one_position(
             cfg=cfg,
@@ -568,7 +543,11 @@ def process_five_min_bar(
                 for_date=for_date,
                 lane_result="REJECTED_UPSTREAM",
                 failed_rule=failed,
-                reason=(decision.reason if decision is not None else "isolated signal evaluation unavailable"),
+                reason=(
+                    decision.reason
+                    if decision is not None
+                    else "isolated signal evaluation unavailable"
+                ),
             )
             _save_state(log_dir, ledger, lane_state)
             events.append(audit)
@@ -590,6 +569,7 @@ def process_five_min_bar(
             _save_state(log_dir, ledger, lane_state)
             events.append(audit)
             continue
+
         if int(lane_state.get("filled_count") or 0) >= MAX_FILLED_PER_DAY:
             audit = _record_block(
                 cfg=cfg,
@@ -601,7 +581,10 @@ def process_five_min_bar(
                 for_date=for_date,
                 lane_result="BLOCKED_MAX_TRADES",
                 failed_rule="max_trades_per_day",
-                reason=f"hypothetical ledger already has {MAX_FILLED_PER_DAY} filled trades today",
+                reason=(
+                    f"hypothetical ledger already has {MAX_FILLED_PER_DAY} "
+                    "filled trades today"
+                ),
             )
             _save_state(log_dir, ledger, lane_state)
             events.append(audit)
@@ -642,3 +625,32 @@ def process_five_min_bar(
         events.append(audit)
 
     return events
+
+
+def process_five_min_bar(
+    *,
+    payload,
+    cfg,
+    bars_5m: list[dict],
+    log_dir: str | Path,
+    for_date: Optional[date] = None,
+) -> list[dict[str, Any]]:
+    """Resolve prior positions, then observe canonical candidates on one 5m bar."""
+    if not contract.evaluate(cfg).active:
+        return []
+    if _root(getattr(payload, "ticker", None)) != contract.INSTRUMENT:
+        return []
+    current_ts = _parse_dt(str(getattr(payload, "timestamp", "") or ""))
+    if current_ts is None:
+        return []
+    if _epoch(cfg) is None:
+        raise ValueError("wide-stop forward collector active without a valid epoch start")
+
+    with _collector_lock(log_dir):
+        return _process_five_min_bar_locked(
+            payload=payload,
+            cfg=cfg,
+            bars_5m=bars_5m,
+            log_dir=log_dir,
+            for_date=for_date,
+        )
