@@ -1,5 +1,8 @@
 # Inverse ORB canonical IOC proof
 
+> **RETIRED / INVALID EVIDENCE (2026-09-08).** The fill reference here is the open of the 5m bar at `bar_ts + 20m`, one bar after the decision candle completes, and 37 of the 57 fills are held beyond their own mirrored stop. Corrected decision-time replay through the production PaperBroker: 63 arms → 41 `ENTRY_BRACKET_INVALID_AT_FILL` → 22 fills, +$29.44, PF 1.14, H2 negative — see `docs/inverse-orb-decision-time-replay-2026-09-08.md`. Retained as provenance only; do not cite the numbers below as evidence.
+
+
 Status: **WAIT — population mismatch prevents promotion of the result**.
 
 This audit replays the currently available journaled MNQ `orb_breakout` arms
