@@ -1,153 +1,137 @@
 # Futures — Current State Handoff
 
-_As of 2026-09-06. This is the single current futures handoff. Do not recreate completed audits, redo merged fixes, or reopen strategy work unless new evidence proves a defect._
+_As of 2026-09-09 for repository/evidence state. This is the single current futures handoff. Runtime/VPS facts are not silently refreshed by this document; verify the box separately before making deployment claims. Do not recreate completed audits, redo merged fixes, or reopen strategy work unless new evidence proves a defect._
 
 ## Verdict
 
-**PAPER ONLY / COLLECTION CONTINUES / NO IMMEDIATE REPAIR REQUIRED.**
+**HOLD / OBSERVATION ONLY. NO STRATEGY REWRITE IS JUSTIFIED.**
 
-The current futures system is not fully strategy-validated, but the active paper collection/runtime lane has no newly confirmed blocker from the latest audit. Recent work closed the Pine ORB parity defects, the 5-minute-native replay routing parity defect, reduced VPS memory pressure, and merged the Tradovate exact-account routing guard into the repository. The remaining Tradovate step is operational activation later, not more development.
+The important September finding is no longer “we just need more evidence on every lane.” The standardized edge-decomposition work showed that different strategy families fail for different reasons. Several earlier positive baselines were also retired after decision-time fill/bracket corrections. The correct response is to preserve the proven diagnoses and stop rerunning the same tests.
 
-## Current repo vs deployed runtime
+`docs/strategy-rules/Strategy_Inventory.md` is the evidence source of truth. `docs/edge-decomposition-audit-2026-09-07.md` is the standardized decomposition source for the lanes it covers.
 
-- Repository `main`: `95d1eb8621f1df70c12334f8c013695d17fa39ff` (`95d1eb86`) after merged PR #472.
-- Running `futures-bot` remains on the previously proven deployed release `73bffb1`; do not assume repo `main` changes are on the bot until a separate pinned deploy is performed.
-- The watcher-only #466 rollout did not redeploy `futures-bot`.
-- Latest verified bot state from the current maintenance pass: service healthy, health endpoint 200, no restart/crash-loop issue reported.
-- Evidence epoch remains the current paper-collection epoch; do not create a new epoch merely because `main` advanced.
+## Strategy isolation protocol — completed work vs future work
 
-## Completed September fixes — do not redo
+For any strategy we are actively evaluating, isolate six questions:
 
-### Pine / TradingView
+1. **Signal / timeframe** — does the raw pattern carry directional information, and does the same setup behave differently by timeframe?
+2. **Entry** — is the fill causal and realistically obtainable, or is the apparent edge coming from entering at a price only known after the move?
+3. **Stop** — is the documented stop compatible with normal adverse movement, or is the risk architecture rejecting/forcing geometry that destroys the setup?
+4. **Target / exit** — does the setup support its documented target/holding period, or is the bracket/hold converting useful drift into losses?
+5. **Filters** — do session/trend/confluence/risk gates add value or remove the profitable population?
+6. **Execution realism** — does the result survive honest fills, pessimistic same-bar handling, commission, adverse slippage, full-engine ordering and position/risk constraints?
 
-PR #467 — stale ORB bracket state:
+### What is already done — do not rerun
 
-- Fixed Pine carrying an old NY ORB bracket after the canonical runtime/replay ORB had expired/reset.
-- Pine reset/expiry now follows the canonical ORB lifecycle instead of leaving the prior bracket alive until the next open.
-- No entry, target, filter, risk, or broker behavior was tuned.
+The 2026-09-07 edge-decomposition audit already pushed the core audited lanes through a standardized waterfall:
 
-PR #468 — ORB stop parity:
+- raw signal
+- 30/60/120-minute and EOD time-exit controls
+- documented bracket
+- plan-price vs honest resting-fill comparison where applicable
+- path-independent structural risk gates
+- isolated full engine with floors off and frozen
+- IOC at decision-bar close with 1/2/3-tick adverse slippage
+- commission
+- pessimistic same-bar resolution
+- chronological-half checks where applicable
 
-- Fixed Pine `orb_breakout` advisory stop offsets to match backend `risk_rules.yaml`.
-- MNQ ORB stop offset: 48 ticks.
-- MES ORB stop offset: 16 ticks.
-- 4HR Re-Trigger and other strategy brackets were intentionally left unchanged.
-- Current-main CI passed before merge.
+That already answers most of the six-part framework for **4HR Re-Trigger, 60M 3-2-2 First Live, Miyagi, ORB Reclaim, ORB Breakout, VWAP Hold, and transition failed-breakdown reclaim**. Do not rerun the same decomposition because a later conversation asks the question again.
 
-Operational TradingView refresh is complete:
+What it does **not** prove universally:
 
-- Latest `tradingview/risksentinel_context.pine` was copied into TradingView after #467/#468.
-- Script was saved/compiled.
-- Active alert was recreated so TradingView uses the updated Pine snapshot.
-- No VPS deploy is required for those Pine-only fixes.
+- it is not a same-pattern-across-every-timeframe study;
+- it is not a full MAE/MFE-derived stop sweep for every strategy;
+- it is not a target-multiple optimization sweep for every strategy;
+- lanes marked `not decomposed` in the Strategy Inventory remain not decomposed unless a separate strategy-specific study already settles the needed question.
 
-### CHOPPY live/replay parity
+Only run additional isolation work when it answers a genuinely unresolved question for a strategy that still has a plausible path forward. Do not spend time decomposing a retired/unreachable/clearly negative strategy merely for completeness.
 
-Already fixed on current repo code before this maintenance pass. The explicit replay regression populates `window_direction` and proves the effective-condition parity behavior. No new CHOPPY patch was made. Do not reopen it without a new reproducible failure.
+## What the completed decomposition proved
 
-### 5-minute-native replay routing parity
+### Close-confirmed level predicates
 
-PR #472 fixed the remaining replay-state mismatch for the direct 5-minute-native strategies.
+ORB Reclaim, source ORB Breakout and VWAP Hold do not have an execution/risk-gate problem hiding a strong signal. Their raw directional information is weak/negative and the old positive results were heavily affected by unrealistic/detached fill assumptions. The risk gates generally admitted most candidates and the admitted sets were still negative.
 
-- Live already sets `state.canonical_4hr_only = True` for direct 5-minute requests when `strat_4hr_retrigger` or `strat_322_first_live` is enabled.
-- Replay already populated the same `bar_history_5m`, but previously left `canonical_4hr_only` false.
-- Replay now sets canonical mode per candle only when the replay contract explicitly declares `expected_timeframe_minutes == 5`, one of the two 5m-native strategies is enabled, and the current candle itself is tagged 5m.
-- Normal 15m replay is explicitly protected from flag leakage.
-- Focused regressions cover both 4HR Re-Trigger and 3-2-2 First Live plus 15m/incidental-5m negative controls.
-- Current-main merge-candidate CI: **4664 passed, 6 skipped, 0 failures**.
+**Action: do not “fix” these by loosening gates or changing stops.** A materially changed entry rule is a new strategy variant and requires a new preregistered population.
 
-This repair changes replay/evidence tooling only. It does not make either strategy validated and does not justify loosening their existing evidence classifications.
+### Armed-trigger Strat day strategies
 
-### Tradovate exact account routing — repository fix complete
+4HR Re-Trigger MNQ, 60M 3-2-2 First Live, and Miyagi MNQ showed real directional/bracket behavior in the historical studies, but their natural stop/R:R geometry is incompatible with the current account/risk policy. The global stop cap/R:R floor removes nearly all of the population.
 
-PR #374 was refreshed onto current main, re-audited, tested, and merged as `48037967`.
+**Action: keep the global risk policy unchanged. These families remain parked under the previously adopted wide-stop policy decision; do not rewrite the detector or force them through current-account risk.**
 
-The merged guard:
+### Transition failed-breakdown reclaim
 
-- adds optional `TRADOVATE_EXPECTED_ACCOUNT_ID`;
-- searches the full Tradovate `/account/list` for the exact pinned id rather than trusting `accounts[0]`;
-- uses the same selector in normal account resolution and the reliability heartbeat;
-- fails closed if the pinned account is absent, duplicated/ambiguous, unresolved, or malformed;
-- fails closed before order submission if the pinned account balance cannot be verified as positive;
-- adds the account-routing cancellations to the existing no-fill taxonomy.
+The raw signal had only weak positive drift and the documented fixed bracket turned it negative. It also conflicts with the current trend/R:R/confluence architecture.
 
-Current-main merge-candidate CI for that repair: **4660 passed, 6 skipped, 0 failures**.
+**Action: parked/broken under the documented form. Do not keep retesting long vs short to search for a rescue.**
 
-**Important:** this code is merged but not yet deployed to the running bot, and `TRADOVATE_EXPECTED_ACCOUNT_ID` is not yet set on the VPS. That is intentionally deferred. No Tradovate reconnect, credential recreation, or account setup is required. Later, read the bot's existing intended demo account id from the VPS/Tradovate account list, pin that same id, deploy the already-merged code, and verify it. Do not guess an account id.
+## Decision-time execution corrections — September 8
 
-## VPS memory / IB Gateway
+Two important earlier positive claims are retired:
 
-The earlier VPS memory pressure was real, but the current maintenance pass removed the largest unnecessary resident process from the active box state.
+- **Inverse ORB:** the old positive IOC baseline used fills whose geometry was invalid at the correct decision-time reference. Correct decision-time replay produced 63 attempts, 41 invalid-at-fill, 22 admissible fills, about **+$29.44 / PF 1.14**, with **H2 negative**. The earlier +$1k-class headline is not valid edge evidence. Current verdict: **BROKEN — negative/insufficient evidence; no edge claim.**
+- **VWAP Hold:** the old positive arrival-close result used a later price reference. At the decision-close reference the NY cell is negative (35 fills, about **-$326.92 / PF 0.49**) and both halves are negative. Current verdict: **BROKEN — negative evidence.**
 
-IB Gateway status now:
+The PaperBroker bracket guard/read-across work exists specifically so fills beyond their own stop/target are rejected rather than credited as evidence. Do not bypass that guard to recover an old result.
 
-- `ibgateway` container is stopped/exited.
-- Container restart policy is `no`, so Docker daemon restarts or host reboots will not automatically bring it back.
-- Container and image were preserved; this was not an uninstall.
-- `futures-bot` was not touched by the stop/restart-policy change.
+## Current strategy evidence classifications
 
-Observed memory improvement after stopping IB Gateway:
+Use the Strategy Inventory for the full table. The important active/known rows are:
 
-- RAM used: about 957 MB -> 651 MB.
-- RAM available: about 957 MB -> 1262 MB.
-- Swap used: about 914 MB -> 726 MB.
+- ORB Reclaim current/first_cross — **BROKEN — negative evidence**
+- ORB Reclaim V4-R — **WAIT**; not separately decomposed, but same close-confirmed family; do not promote from aggregate P&L alone
+- 4HR Re-Trigger MNQ — **BROKEN FOR CURRENT SYSTEM RISK CONSTRAINTS / PARKED below the adopted equity threshold**
+- 4HR Re-Trigger MES — **BROKEN / WAIT**
+- 12HR Miyagi — **BROKEN FOR CURRENT SYSTEM RISK CONSTRAINTS; MNQ parked**
+- 60M 3-2-2 First Live — **BROKEN FOR CURRENT SYSTEM RISK CONSTRAINTS; parked**
+- ORB Breakout inverted — **BROKEN — corrected decision-time evidence does not support the old edge claim**
+- VWAP Hold MNQ NY — **BROKEN — negative corrected evidence**
+- MES `strat_122` — **WAIT; not decomposed**
+- VWAP Reclaim — **WAIT; not decomposed**
+- VWAP Rejection — **BROKEN — unreachable predicate**
+- Transition failed-breakdown reclaim — **BROKEN under documented bracket**
 
-Do not recreate the prior IB dependency audit or restart the container unless a real consumer is identified later.
+A strategy marked `not decomposed` does not automatically need another audit. First ask whether it has enough credible signal/evidence to justify the work.
 
-## Watcher state
+## Filters / stop / target rule going forward
 
-The current watcher work is already deployed and should not be rewritten.
+Do not optimize a failing lane by changing several variables at once. If new evidence creates a credible rescue hypothesis, change **one family of assumptions at a time** and version it as a new strategy population:
 
-- #466 is watcher-only and includes release-identity/rebaseline handling.
-- Watcher remained healthy after the IB Gateway change; latest reported tick in this pass was OK with nothing blocked and no warnings.
-- The next real futures release should provide the natural proof of the watcher self-rebaseline path. That is a proof item, not a reason for another watcher code change now.
+- signal/timeframe variant
+- entry variant
+- stop variant
+- target/exit variant
+- filter variant
+- execution model variant
 
-## Strategy evidence classifications
-
-`docs/strategy-rules/Strategy_Inventory.md` remains the evidence source of truth.
-
-These are evidence outcomes, not software bugs to "fix" by weakening risk or tuning rules:
-
-- ORB Reclaim current/first_cross — **BROKEN — negative evidence**.
-- ORB Reclaim V4-R — **WAIT**.
-- 4HR Re-Trigger MNQ — **BROKEN FOR CURRENT EXECUTABLE FORM**.
-- 4HR Re-Trigger MES — **BROKEN / WAIT**.
-- 12HR Miyagi — **BROKEN FOR CURRENT SYSTEM RISK CONSTRAINTS**.
-- 60M 3-2-2 First Live — **BROKEN FOR CURRENT SYSTEM RISK CONSTRAINTS**.
-- ORB Breakout inverted evidence lane — **PROMISING BUT UNPROVEN**.
-- VWAP Hold MNQ NY — **PROMISING BUT UNPROVEN**.
-- MES `strat_122` — **WAIT**.
-
-Do not widen stops, loosen risk gates, or change entry/target/filter logic to make the broken forms pass. A changed strategy is a new variant and requires preregistration and new evidence.
+The old population remains frozen for comparison. No retroactive relabeling.
 
 ## Current safety posture
 
-- Paper only.
-- No live broker execution is authorized.
-- Active isolated futures lane remains MNQ-first.
-- Max 3 trades/day for the isolated lane.
-- Daily loss and drawdown survival controls remain in force.
-- No averaging down.
-- Bracket/stop requirements remain in force.
-- Do not fabricate signals, force traffic, or tune strategy parameters to manufacture evidence.
-- Do not deploy merely because repository `main` moved.
+- paper/demo evidence only
+- no averaging down
+- no missing stop/target/invalidation
+- full-engine and broker safety guards remain authoritative
+- one-position/risk constraints remain part of realistic execution evidence
+- do not fabricate signals or force traffic
+- do not tune parameters because the current P&L is uncomfortable
+- do not infer deployed VPS state from repository `main`; box state requires separate proof
 
-## Open items that are NOT current defects
+## Repo/runtime boundary
 
-- Tradovate account pin activation on the VPS — later operational step; repo code already fixed.
-- Watcher self-rebaseline proof — wait for the next real pinned release.
-- First-bars check — intentionally unscheduled/deferred; do not recreate an automation for it unless explicitly requested.
-- PR #463 memory-entry/deploy gate — deliberate HOLD/policy item; do not merge just because memory is currently healthier.
-- Options-lane PRs/evidence are separate from this futures handoff; do not mix their work into futures maintenance.
+Repository evidence has advanced materially since the prior 2026-09-06 handoff. The earlier handoff's VPS/release SHA references were point-in-time facts, not permanent truth. This refresh intentionally does not claim a new deployed futures SHA or current service state without a fresh box-side read.
+
+Options work is separate. See `docs/options-current-state-handoff.md` for the frozen `OPTIONS_PAPER_V1` collection and its own post-sample isolation plan.
 
 ## Smallest safe next step
 
-**Stop changing futures code for now and continue natural paper evidence collection.**
+**Do not run another blanket futures strategy audit.**
 
-When a real futures deployment is next justified, separately:
+For futures, continue only the already-approved observation/evidence lanes and run a new isolation study only when a specific unresolved strategy question has both:
 
-1. read/confirm the existing intended Tradovate demo account id;
-2. set `TRADOVATE_EXPECTED_ACCOUNT_ID` to that exact id;
-3. deploy the exact reviewed commit through the normal pinned release path;
-4. verify paper/demo mode, exact account routing, watcher rebaseline, health, and first natural post-deploy evidence;
-5. stop again unless new evidence proves another defect.
+1. a credible hypothesis that has not already been tested; and
+2. enough independent evidence to justify the study.
+
+Otherwise the correct action is **WAIT / PARKED / BROKEN as already classified.**
