@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 
-# ─── Common Types ────────────────────────────────────────────────────────────
+# ─── Common Types ──────────────────────────────────────────────────────────────
 
 @dataclass
 class BracketOrder:
@@ -42,6 +42,11 @@ class BracketOrder:
     max_dollar_risk: Optional[float] = None
     max_stop_ticks: Optional[float] = None
     max_slippage_ticks: Optional[float] = None
+    # Optional entry-placement tolerance for one isolated order. None preserves
+    # the broker's existing env/config lookup exactly. Evidence/demo lanes can
+    # pin a preregistered IOC tolerance without changing every other order on
+    # the account.
+    entry_tolerance_ticks_override: Optional[float] = None
     execution_model: str = "anchored_structure"
     post_fill_validation_required: bool = False
     # Deterministic client order identity (Tradovate clOrdId), derived from the
@@ -76,7 +81,7 @@ class Fill:
     pnl_dollars: Optional[float]
     # Diagnostic-only fields for CANCELLED/no-fill outcomes. Never read by
     # execution/risk logic — populated best-effort, None when unknown. See
-    # execution/no_fill_taxonomy.py for the no_fill_reason bucket meanings.
+    # execution/no_fill_taxonomy.py for no_fill_reason bucket meanings.
     no_fill_reason: Optional[str] = None
     order_type: Optional[str] = None
     # Internal simulator order identifier. Real broker order ids remain in the
