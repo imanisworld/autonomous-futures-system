@@ -1,9 +1,13 @@
 """Focused governance proof for the retired MNQ ORB Breakout inverse lane.
 
-The implementation and observation scaffolding remain in the repository, but
-shipped risk_rules.yaml must no longer permit orb_breakout execution after the
-2026-09-08 evidence retirement. The historical inverse runtime invariants stay
-pinned so the preserved code cannot silently drift while parked.
+Pins the shipped risk_rules.yaml (1.2.1) configuration after the inverse/base
+ORB Breakout evidence retirement, plus the runtime invariants preserved for the
+parked implementation: the inverse transform forces one contract + PaperBroker,
+and the inverse/legacy-proof modes stay mutually exclusive.
+
+These assertions are intentionally strict. If any of them fails, the retired
+lane may have become executable again or its preserved safety scaffolding may
+have drifted.
 """
 from __future__ import annotations
 
@@ -61,6 +65,9 @@ def test_max_trades_per_day_is_three():
 
 
 def test_vwap_hold_and_pdh_reclaim_demotions_preserved_as_governance_records():
+    """Their SHADOW_ONLY status is evidence-based and independent of this lane;
+    it must survive as an explicit record, not silently vanish into the
+    default."""
     status = _shipped_rules()["strategy_permission_gate"]["strategy_status"]
     assert status["vwap_hold"] == "SHADOW_ONLY"
     assert status["pdh_reclaim"] == "SHADOW_ONLY"
@@ -73,6 +80,8 @@ def test_risk_rules_version_bumped():
 # ─── Shutdown guarantee ────────────────────────────────────────────────────────
 
 def test_no_enabled_concept_can_execute_on_mnq():
+    """The retired concept stays available for provenance/observation but is
+    blocked independently by permission status and the instrument-disable map."""
     cfg = load_config("risk_rules.yaml")
     disabled = set(cfg.disabled_concepts_per_instrument.get("MNQ", []))
     executable = [
@@ -108,12 +117,12 @@ def test_paper_sim_forces_one_contract_and_internal_paper_broker():
         stop=19980.0,
         target=20040.0,
         rr_ratio=2.0,
-        contracts=7,
+        contracts=7,          # deliberately not 1
         strategy="orb_breakout",
     )
     mirrored = mirror_order(source)
-    assert mirrored.contracts == 1
-    assert mirrored.direction == "SHORT"
+    assert mirrored.contracts == 1, "inverse transform must force exactly one contract"
+    assert mirrored.direction == "SHORT", "inverse transform must flip direction"
 
 
 def test_inverse_transform_rejects_non_mnq_orb_breakout_orders():
@@ -139,6 +148,9 @@ def test_inverse_transform_rejects_non_mnq_orb_breakout_orders():
 
 
 def test_inverse_and_legacy_proof_modes_are_mutually_exclusive():
+    """Their execution semantics conflict (legacy = market entry + runner exit;
+    inverse = mirrored static bracket + IOC), so config validation must reject
+    both being active at once even while the lane is parked."""
     import dataclasses
     from config.settings import _validate_config
 
@@ -153,6 +165,8 @@ def test_inverse_and_legacy_proof_modes_are_mutually_exclusive():
     with pytest.raises(ConfigError, match="cannot both be active"):
         _validate_config(both_active)
 
+    # The preserved module still validates in its historical paper-sim shape;
+    # shipped strategy gates above are what prevent execution.
     parked_lane = dataclasses.replace(
         cfg,
         mnq_orb_breakout_inverse_mode="paper_sim",
@@ -163,6 +177,7 @@ def test_inverse_and_legacy_proof_modes_are_mutually_exclusive():
 
 
 def test_inverse_mode_has_no_external_broker_value():
+    """Paper-only by construction — tradovate_demo/live are not valid modes."""
     from context.mnq_orb_breakout_inverse_paper import VALID_MODES
 
     assert set(VALID_MODES) == {"observe_only", "paper_sim"}
