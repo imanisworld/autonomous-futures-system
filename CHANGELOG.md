@@ -8,6 +8,28 @@ Types: `Added`, `Changed`, `Fixed`, `Removed`, `Security`, `Rulebook`
 
 ---
 
+## [1.8.1] 2026-09-08
+
+Safety/config-only entry. `risk_rules.yaml` bumped to internal `1.2.1`.
+No signal, bracket, fill-model, sizing, broker, or deployment logic changed.
+
+### Rulebook
+- **`orb_breakout` execution disabled after its base and inverse evidence were
+  retired as BROKEN.** The concept remains in `enabled_concepts` so its code and
+  observation/provenance path are preserved, but it is now
+  `strategy_status: SHADOW_ONLY` and explicitly listed under
+  `disabled_concepts_per_instrument.MNQ`. Those are independent gates: the
+  shipped active executable futures-strategy set is now empty, and removing
+  either one alone does not silently restore paper execution.
+- This does **not** delete the inverse-ORB implementation or its DEMO-adapter
+  branch. Those remain historical/reusable scaffolding. Re-enabling execution
+  requires fresh validated evidence and an explicit future configuration
+  decision.
+- Repo/config change only. No VPS deploy, restart, broker action, or order
+  submission is part of this entry.
+
+---
+
 ## [1.8.0] 2026-07-28
 
 Config + test-only entry. `risk_rules.yaml` bumped to its own internal
@@ -235,7 +257,7 @@ Several gating/resolution bugs surfaced and were fixed, plus a `/status` perf pa
   - `LIMITED_AUTONOMOUS_FUTURES_SPEC.md` — component technical specification
   - `risk_rules.yaml` — runtime risk configuration
   - `market_state.schema.json` — JSON schema for market state input
-  - `decision_output.schema.json` — JSON schema for decision output
+  - `decision_output.schema.json` — decision output schema
   - `RUNBOOK.md` — operational procedures
   - `CHANGELOG.md` — this file
   - `.env.example` — environment variable template
