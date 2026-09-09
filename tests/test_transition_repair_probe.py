@@ -30,13 +30,13 @@ def _eligible_rows(lane):
     return rows
 
 
-def _row(direction="LONG", close=200.0):
+def _row(direction="LONG", close=200.0, planned_entry=None):
     decision = audit._dt("2026-05-04T15:05:00+00:00")
     return {
         "bar_ts": decision.isoformat(),
         "date": "2026-05-04",
         "direction": direction,
-        "entry": close,
+        "entry": close if planned_entry is None else planned_entry,
         "gates": {"decision_close": close},
         "control": {"30m": {"exit_bar_ts": (decision + timedelta(minutes=30)).isoformat()}},
     }
@@ -53,12 +53,36 @@ def _bars(*, final_close=210.0, stop_hit=False):
     return out
 
 
-def test_all_committed_eligible_transition_entries_equal_decision_close():
+def test_committed_transition_rows_have_inputs_needed_for_decision_close_ioc():
+    saw_nonzero_delta = False
     for lane in LANES:
         rows = _eligible_rows(lane)
         assert rows, lane
         for row in rows:
-            assert float(row["entry"]) == pytest.approx(float(row["gates"]["decision_close"]))
+            assert row.get("entry") is not None
+            assert (row.get("gates") or {}).get("decision_close") is not None
+            delta = float(row["gates"]["decision_close"]) - float(row["entry"])
+            saw_nonzero_delta = saw_nonzero_delta or abs(delta) > 1e-12
+            # The helper must classify every committed candidate as either a
+            # valid IOC fill or a real IOC cancellation; mismatch is not an error.
+            assert audit.planned_ioc_fill(row)["status"] in {"FILLED", "NO_FILL"}
+    # Regression for the CI-discovered fact: do not collapse planned entry into
+    # decision close. At least one committed candidate differs.
+    assert saw_nonzero_delta
+
+
+def test_ioc_uses_market_close_when_plan_differs_but_is_within_tolerance():
+    entry = audit.planned_ioc_fill(_row(close=200.0, planned_entry=199.75))
+    assert entry["status"] == "FILLED"
+    assert entry["fill"] == pytest.approx(200.25)
+    assert entry["planned_entry"] == pytest.approx(199.75)
+    assert entry["decision_close"] == pytest.approx(200.0)
+
+
+def test_ioc_cancels_when_market_is_beyond_long_cap():
+    entry = audit.planned_ioc_fill(_row(close=210.0, planned_entry=200.0))
+    assert entry["status"] == "NO_FILL"
+    assert entry["reason"] == "ENTRY_NOT_FILLED"
 
 
 def test_decision_close_ioc_time_exit_math():
@@ -77,7 +101,13 @@ def test_decision_close_ioc_stop_is_pessimistic_and_slipped():
     assert result["net"] == pytest.approx(-202.48)
 
 
-def test_missing_raw_bar_fails_closed():
+def test_no_fill_does_not_require_forward_bars():
+    result = audit.resolve_one(_row(close=210.0, planned_entry=200.0), {})
+    assert result["result"] == "NO_FILL"
+    assert result["net"] is None
+
+
+def test_missing_raw_bar_fails_closed_after_fill():
     bars = _bars()
     missing = audit._dt("2026-05-04T15:20:00+00:00")
     bars.pop(missing)
