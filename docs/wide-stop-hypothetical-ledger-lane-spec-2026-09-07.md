@@ -75,7 +75,12 @@ contract):
 - **Exit:** the strategy's documented static bracket. No runner, no breakeven
   transform, no time-exit substitution.
 - **Costs:** $1.24 round-turn commission plus the frozen slippage, at the
-  metrics layer, exactly as the audit's stage E.
+  metrics layer (`context/wide_stop_ledger_paper.py::COMMISSION_ROUND_TRIP`,
+  the 3-2-2 honest-fill replay's convention). **Note (corrected 2026-09-08):
+  this is not "exactly as the audit's stage E"** — `scripts/edge_decomposition_audit.py`
+  charges $1.48. The $0.24-per-trade gap is immaterial to any cell here, but a
+  comparison of this ledger against a stage E cell must state which convention
+  each side used.
 - **Candidate flow:** the lane consumes the *same* candidates the global
   `RiskEngine` sees and evaluates them under a lane-scoped copy of the risk
   rules with the two family overrides above. It never modifies the global
