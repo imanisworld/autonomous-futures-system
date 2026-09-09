@@ -331,6 +331,7 @@ def data_invalid(reason: str) -> dict[str, Any]:
 
 
 EXCHANGE_TIMEZONE = "America/New_York"
+ACTIVE_LANE = "ACTIVE"
 _RTH_OPEN_MINUTES = 9 * 60 + 30
 _RTH_HOUR_MINUTES = 60
 _RTH_BLOCK_MINUTES = 240
@@ -367,6 +368,59 @@ def episode_bucket(timeframe: str | None, moment: datetime) -> str:
     return f"{label or '30M'}:{day}:{local.hour:02d}:{half:02d}"
 
 
-def episode_key(candidate_key: str, timeframe: str | None, moment: datetime) -> str:
-    """Identity of one evidence episode: a candidate within one of its own bars."""
-    return f"{candidate_key}@{episode_bucket(timeframe, moment)}"
+def _canonical_trigger(trigger: object) -> str:
+    try:
+        value = float(trigger)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return "NA"
+    if value != value:  # NaN
+        return "NA"
+    return f"{value:.4f}"
+
+
+def setup_episode_key(
+    *,
+    ticker: str,
+    lane: str | None,
+    timeframe: str | None,
+    setup_type: str | None,
+    direction: str | None,
+    trigger: object,
+    moment: datetime,
+    legacy_candidate_key: str | None = None,
+) -> str:
+    """Identity of one evidence episode: the UNDERLYING setup within one of its
+    own bars.
+
+    The selected option contract is deliberately NOT part of this identity.
+    Delta-targeted contract selection drifts with the underlying (2026-09-09:
+    the same AAPL Daily 2-2-2 continuation, same trigger 314.90, same trading
+    date, was journalled twice as 305P then 310P), so a contract-keyed episode
+    re-counts one setup every time the strike moves.  The contract-specific
+    candidate key stays on the row for exact-contract tracking and requotes.
+
+    The evidence lane stays in the key so an ACTIVE setup can never be deduped
+    against a COUNTERFACTUAL observation of the same structure.
+
+    Legacy candidates (webhook payloads carrying no ``setup_type`` and no
+    ``setup_timeframe``) have no underlying-setup identity to key on, so they
+    keep the contract-keyed candidate identity they always had.  Every V1
+    population carries all three setup fields and never takes this branch.
+    """
+    label_timeframe = str(timeframe or "").strip().upper()
+    label_setup = str(setup_type or "").strip().upper()
+    if not label_timeframe and not label_setup and legacy_candidate_key:
+        return (
+            f"{str(ticker or '').strip().upper() or 'UNSPECIFIED'}|"
+            f"{str(lane or ACTIVE_LANE).strip().upper()}|LEGACY|{legacy_candidate_key}"
+            f"@{episode_bucket(timeframe, moment)}"
+        )
+    parts = (
+        str(ticker or "").strip().upper() or "UNSPECIFIED",
+        str(lane or ACTIVE_LANE).strip().upper(),
+        str(timeframe or "").strip().upper() or "UNSPECIFIED",
+        str(setup_type or "").strip().upper() or "UNSPECIFIED",
+        str(direction or "").strip().upper() or "UNSPECIFIED",
+        _canonical_trigger(trigger),
+    )
+    return "|".join(parts) + f"@{episode_bucket(timeframe, moment)}"

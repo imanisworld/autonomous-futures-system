@@ -33,7 +33,7 @@ from .paper_v1 import (
     choose_contract,
     choose_expiration,
     data_invalid,
-    episode_key,
+    setup_episode_key,
 )
 from .scanner_legacy import (
     ScanOutcome,
@@ -510,8 +510,15 @@ def build_v1_evidence_hardening(base_cls):
 
             base_key = _candidate_identity(classification.contract_key, result.raw)
             candidate_key = f"{base_key}|{COUNTERFACTUAL_LANE}"
-            episode = episode_key(
-                candidate_key, result.raw.get("setup_timeframe"), now
+            episode = setup_episode_key(
+                ticker=result.ticker,
+                lane=COUNTERFACTUAL_LANE,
+                timeframe=result.raw.get("setup_timeframe"),
+                setup_type=result.raw.get("setup_type"),
+                direction=result.direction,
+                trigger=result.raw.get("setup_entry_trigger"),
+                moment=now,
+                legacy_candidate_key=candidate_key,
             )
             duplicate = self.storage.find_open_duplicate(result.ticker, candidate_key)
             if duplicate is not None:
