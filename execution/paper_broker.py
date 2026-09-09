@@ -531,6 +531,21 @@ class PaperBroker(BrokerInterface):
         if self._runner_mode and pos.quantity == 1:
             return self._resolve_runner(next_bar, pos, tick, tick_val)
 
+        slip = self._slippage_ticks * tick
+
+        # Static stop orders are stop-market orders. If the next observed bar
+        # OPENS through an already-resting stop (e.g. an overnight/weekend
+        # gap), the stop cannot be assumed to have filled at the stale stop
+        # price — price the exit from the actual opening gap instead, ahead
+        # of same-bar target/breakeven logic, since the opening gap is
+        # causally first.
+        gap_stop_hit = False
+        if next_bar.open is not None:
+            if pos.direction == "LONG":
+                gap_stop_hit = float(next_bar.open) <= pos.stop
+            elif pos.direction == "SHORT":
+                gap_stop_hit = float(next_bar.open) >= pos.stop
+
         target_hit = False
         stop_hit = False
         breakeven_hit = False
@@ -565,13 +580,19 @@ class PaperBroker(BrokerInterface):
         else:
             original_stop_hit = next_bar.high >= pos.stop
 
-        slip = self._slippage_ticks * tick
-
         # When a single bar straddles BOTH the original stop and the target,
         # intrabar order is unknowable. pessimistic_both_hit=True resolves it as
         # a full stop loss (worst case), bypassing the breakeven trail; False
         # keeps the legacy optimistic target-priority.
-        if target_hit and original_stop_hit and self._pessimistic_both_hit:
+        if gap_stop_hit:
+            exit_price = (
+                float(next_bar.open) - slip
+                if pos.direction == "LONG"
+                else float(next_bar.open) + slip
+            )
+            exit_reason = "STOP_GAP"
+            result = "LOSS"
+        elif target_hit and original_stop_hit and self._pessimistic_both_hit:
             exit_price = (pos.stop - slip) if pos.direction == "LONG" else (pos.stop + slip)
             exit_reason = "STOP_HIT"
             result = "LOSS"

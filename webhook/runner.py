@@ -1266,7 +1266,7 @@ def process_alert(
                     except Exception as _exc:  # never break resolution
                         logger.debug("runner max-fav reconstruct skipped: %s", _exc)
                 fill = broker.resolve_position(
-                    NextBarOHLC(high=payload.high, low=payload.low)
+                    NextBarOHLC(open=payload.open, high=payload.high, low=payload.low)
                 )
             else:
                 # Different-instrument bar (e.g. MES bar while an MNQ position is
@@ -1468,7 +1468,15 @@ def process_alert(
                 instrument_root = (open_pos.get("instrument") or state.instrument or "").upper().rstrip("!1234567890HMUZ")
                 mismatch_threshold = _STALE_PRICE_MISMATCH_THRESHOLD.get(instrument_root, 0.05)
                 is_price_mismatch = price_ratio > mismatch_threshold
-                is_timed_out = position_age_hours > 8.0
+                # strat_122 is a swing-capable paper strategy under evidence
+                # collection: replay carries its OPEN positions across day and
+                # weekend boundaries, so an age-only 8h paper flatten would make
+                # forward-paper evidence incomparable with replay evidence. Every
+                # other strategy keeps its existing 8h stale timeout; the
+                # price-scale mismatch safety close still applies to strat_122.
+                is_timed_out = (
+                    position_age_hours > 8.0 and _open_pos_strategy != STRAT_122
+                )
                 is_stale = is_price_mismatch or is_timed_out
 
                 if is_stale:

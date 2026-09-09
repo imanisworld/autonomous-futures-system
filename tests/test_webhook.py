@@ -1026,6 +1026,55 @@ def test_runner_force_closes_friday_position_on_monday(config, tmp_path):
     assert JournalLogger(log_dir=log_dir).get_daily_state(friday).has_open_position is False
 
 
+def test_runner_does_not_timeout_strat_122_swing_position(config, tmp_path):
+    """strat_122 is a swing-capable paper strategy: an open position older than
+    8 hours must NOT be force-closed on age alone (unlike every other strategy,
+    see test_runner_force_closes_stale_previous_day_position above)."""
+    from journal.journal_logger import JournalLogger
+    from webhook.runner import process_alert
+
+    log_dir = str(tmp_path / "logs")
+    yesterday = date(2026, 5, 22)
+    today = date(2026, 5, 23)
+    journal = JournalLogger(log_dir=log_dir)
+    journal._append({
+        "ts": f"{yesterday.isoformat()}T17:55:00+00:00",  # >8h old by today's bar
+        "instrument": "MNQ",
+        "session": "new_york",
+        "decision": "TRADE",
+        "reason": "strat_122 swing carry test",
+        "market_condition": "TRENDING",
+        "setup": {
+            "direction": "LONG",
+            "entry": 19500.0,
+            "stop": 19460.0,
+            "target": 19580.0,
+            "rr_ratio": 2.0,
+            "strategy": "strat_122",
+            "notes": None,
+            "contracts": 1,
+        },
+        "risk_check": {"result": "APPROVED", "failed_rule": None, "reason": None},
+        "outcome": None,
+    }, yesterday)
+
+    result = process_alert(
+        _base_payload(
+            timestamp="2026-05-23T14:30:00+00:00",
+            high=19520.0,
+            low=19480.0,
+            close=19505.0,
+        ),
+        config=config,
+        log_dir=log_dir,
+        for_date=today,
+    )
+
+    assert result["resolution"] != "FORCE_CLOSE_SESSION_TIMEOUT"
+    assert result["decision"] == "BLOCKED_OPEN_POSITION"
+    assert JournalLogger(log_dir=log_dir).get_daily_state(yesterday).has_open_position is True
+
+
 # ─── runner: daily limit blocks ──────────────────────────────────────────────
 
 def test_runner_blocks_when_max_trades_reached(config, tmp_path):
