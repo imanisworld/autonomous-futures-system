@@ -4,8 +4,12 @@ from context import wide_stop_execution as execution
 from context import wide_stop_ledger_paper as wide
 
 
-def test_campaign_has_no_route_other_than_internal_paper_sim():
-    assert execution.VALID_ROUTES == ("paper_sim",)
+def test_campaign_has_no_route_other_than_paper_sim_or_explicit_tradovate_demo():
+    # paper_sim remains the only default/internal route; tradovate_demo is the
+    # explicit, proof-pinned, fail-closed external route added for the 4HR /
+    # 3-2-2 demo hardening lane. Any other value must still be rejected.
+    assert execution.VALID_ROUTES == ("paper_sim", "tradovate_demo")
+    assert execution.DEFAULT_ROUTE == "paper_sim"
 
 
 def test_4hr_and_322_capital_contracts_are_pinned():
