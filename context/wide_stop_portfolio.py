@@ -1,16 +1,21 @@
-"""Shared portfolio safety for the 4HR / 3-2-2 MNQ evidence lanes.
+"""Shared portfolio safety for the MNQ evidence campaign.
 
-Per-strategy journals remain separate for attribution, but admission is shared.
-This module is intentionally conservative:
-- max two PaperBroker positions across the day-strategy family;
-- max three daily execution slots across the family;
-- max $450 combined planned open risk (the already-approved $150 + $300 caps);
+Per-strategy journals remain separate for attribution, but daily admission is
+shared across 4HR Re-Trigger, 60M 3-2-2, and the PaperBroker-only Daily 2-2
+collector. This module is intentionally conservative:
+- max three daily execution slots across the three evidence lanes;
+- max two PaperBroker/demo positions across the 4HR + 3-2-2 day family;
+- max $450 combined planned open risk for 4HR + 3-2-2 (the already-approved
+  $150 + $300 caps); Daily 2-2 keeps its own separate paper-only risk contract;
 - an external-demo slot is reserved *before* broker submission. A crash or
   ambiguous submission leaves that reservation in place, so restart can miss a
-  trade but can never silently admit a fourth one.
+  trade but can never silently admit a fourth one;
+- legacy 4HR/3-2-2 per-ledger counters are treated as a conservative floor on
+  the shared counter. Enabling this code mid-day therefore cannot reset already
+  recorded fills to zero.
 
-Daily 2-2 is deliberately not part of this module. It remains a separate
-PaperBroker-only swing ledger and has no Tradovate-demo route here.
+Daily 2-2 has no Tradovate-demo route. It participates only in the shared daily
+three-entry cap.
 """
 from __future__ import annotations
 
@@ -94,6 +99,37 @@ def _day_state(log_dir: str | Path, day: date) -> dict[str, Any]:
     return state
 
 
+def _state_file(log_dir: str | Path, ledger: contract.Ledger, filename: str) -> dict[str, Any]:
+    path = contract.journal_dir(log_dir, ledger) / filename
+    try:
+        raw = json.loads(path.read_text())
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return {}
+    return raw if isinstance(raw, dict) else {}
+
+
+def legacy_filled_floor(log_dir: str | Path, day: date) -> int:
+    """Conservative same-day floor from pre-shared-counter paper state.
+
+    The two legacy ledgers historically counted fills independently. Summing
+    their same-day counts is the safest migration interpretation: over-counting
+    can only suppress evidence; under-counting could admit a fourth trade.
+    Values are capped at the campaign maximum because anything >=3 has the same
+    admission consequence.
+    """
+    key = day.isoformat()
+    total = 0
+    for ledger in contract.LEDGERS.values():
+        state = _state_file(log_dir, ledger, _PAPER_STATE)
+        if state.get("filled_date") != key:
+            continue
+        try:
+            total += max(0, int(state.get("filled_count") or 0))
+        except (TypeError, ValueError):
+            return MAX_FILLS_PER_DAY
+    return min(MAX_FILLS_PER_DAY, total)
+
+
 def reserve_daily_slot(
     log_dir: str | Path,
     day: date,
@@ -101,17 +137,13 @@ def reserve_daily_slot(
     *,
     route: str,
 ) -> tuple[bool, str]:
-    """Persist one conservative daily slot before an execution attempt.
-
-    Existing reservations are never treated as free. This is the crash/ambiguous
-    submit guard: uncertainty consumes capacity until the trading date rolls.
-    """
+    """Persist one conservative daily slot before an execution attempt."""
     state = _day_state(log_dir, day)
     key = str(candidate_key)
     slots = state["slots"]
     if key in slots:
         return False, f"slot_already_{slots[key]['status']}"
-    if len(slots) >= MAX_FILLS_PER_DAY:
+    if max(len(slots), legacy_filled_floor(log_dir, day)) >= MAX_FILLS_PER_DAY:
         return False, "portfolio_max_trades_per_day"
     slots[key] = {"status": "reserved", "route": str(route)}
     save_state(log_dir, state)
@@ -119,12 +151,7 @@ def reserve_daily_slot(
 
 
 def confirm_daily_slot(log_dir: str | Path, day: date, candidate_key: str) -> int:
-    """Mark a reserved slot as a confirmed fill.
-
-    If the reservation file was unexpectedly lost after a real fill, record the
-    confirmed fill anyway rather than hiding the breach. Subsequent admission
-    remains blocked by the resulting slot count.
-    """
+    """Mark a reserved slot as a confirmed fill."""
     state = _day_state(log_dir, day)
     key = str(candidate_key)
     slot = state["slots"].get(key)
@@ -150,7 +177,10 @@ def release_daily_slot(log_dir: str | Path, day: date, candidate_key: str) -> bo
 
 def confirmed_fill_count(log_dir: str | Path, day: date) -> int:
     state = _day_state(log_dir, day)
-    return sum(1 for slot in state["slots"].values() if slot.get("status") == "confirmed")
+    confirmed = sum(
+        1 for slot in state["slots"].values() if slot.get("status") == "confirmed"
+    )
+    return max(confirmed, legacy_filled_floor(log_dir, day))
 
 
 def reserved_count(log_dir: str | Path, day: date, *, route: Optional[str] = None) -> int:
@@ -164,20 +194,11 @@ def reserved_count(log_dir: str | Path, day: date, *, route: Optional[str] = Non
 
 
 def daily_slots_used(log_dir: str | Path, day: date) -> int:
-    return len(_day_state(log_dir, day)["slots"])
-
-
-def _state_file(log_dir: str | Path, ledger: contract.Ledger, filename: str) -> dict[str, Any]:
-    path = contract.journal_dir(log_dir, ledger) / filename
-    try:
-        raw = json.loads(path.read_text())
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
-        return {}
-    return raw if isinstance(raw, dict) else {}
+    return max(len(_day_state(log_dir, day)["slots"]), legacy_filled_floor(log_dir, day))
 
 
 def open_positions(log_dir: str | Path) -> list[dict[str, Any]]:
-    """Return day-strategy paper/demo positions; stale route state still blocks."""
+    """Return 4HR/3-2-2 paper/demo positions; stale route state still blocks."""
     out: list[dict[str, Any]] = []
     for ledger in contract.LEDGERS.values():
         for filename, route in ((_PAPER_STATE, "paper_sim"), (_DEMO_STATE, "tradovate_demo")):
@@ -233,6 +254,7 @@ def admission_snapshot(log_dir: str | Path, day: date) -> dict[str, Any]:
         "confirmed_fills_today": confirmed_fill_count(log_dir, day),
         "reserved_slots_today": reserved_count(log_dir, day),
         "daily_slots_used": daily_slots_used(log_dir, day),
+        "legacy_filled_floor": legacy_filled_floor(log_dir, day),
         "max_fills_per_day": MAX_FILLS_PER_DAY,
         "combined_open_risk_dollars": round(
             sum(planned_risk_dollars(row) for row in positions), 2
