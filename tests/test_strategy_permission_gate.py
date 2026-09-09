@@ -138,10 +138,10 @@ def test_validate_config_rejects_invalid_strategy_status_value(config):
 
 
 def test_shipped_risk_rules_enables_gate_and_demotes_vwap_hold():
-    """Isolated MNQ orb_breakout lane (risk_rules 1.2.0): the gate stays on and
-    vwap_hold stays explicitly demoted; orb_reclaim is no longer listed at all,
-    so it falls back to default_status=SHADOW_ONLY rather than being an
-    explicit PAPER_ELIGIBLE entry."""
+    """Retired MNQ orb_breakout posture (risk_rules 1.2.1): the gate stays on,
+    vwap_hold remains explicitly demoted, and orb_breakout is now SHADOW_ONLY
+    after its evidence retirement. orb_reclaim remains absent and inherits the
+    fail-closed default."""
     import yaml
     from pathlib import Path
     rules = yaml.safe_load(Path("risk_rules.yaml").read_text())
@@ -149,9 +149,7 @@ def test_shipped_risk_rules_enables_gate_and_demotes_vwap_hold():
     assert gate["enabled"] is True
     assert gate["default_status"] == "SHADOW_ONLY"
     assert gate["strategy_status"]["vwap_hold"] == "SHADOW_ONLY"
-    # orb_breakout is the ONLY explicitly paper-eligible strategy in the lane.
-    assert gate["strategy_status"]["orb_breakout"] == "PAPER_ELIGIBLE"
-    # orb_reclaim is deliberately absent -> inherits SHADOW_ONLY.
+    assert gate["strategy_status"]["orb_breakout"] == "SHADOW_ONLY"
     assert "orb_reclaim" not in gate["strategy_status"]
 
 
@@ -162,6 +160,8 @@ def test_shipped_risk_rules_loads_via_load_config():
     cfg = load_config("risk_rules.yaml")
     assert cfg.strategy_permission_gate_enabled is True
     assert cfg.strategy_status["vwap_hold"] == "SHADOW_ONLY"
+    assert cfg.strategy_status["orb_breakout"] == "SHADOW_ONLY"
+    assert "orb_breakout" in cfg.disabled_concepts_per_instrument.get("MNQ", [])
 
 
 # ─── MNQ pdh_reclaim demotion (2026-07-16, operator-approved) ────────────────
@@ -170,14 +170,12 @@ def test_shipped_risk_rules_loads_via_load_config():
 # so MNQ candidates journal as blocked WITH an explicit reason (the vwap_hold
 # pattern) instead of silently vanishing (the instrument-disable pattern).
 
-# Isolated MNQ orb_breakout lane (risk_rules 1.2.0): the shipped map is now
-# EXACTLY these three entries. orb_breakout is the only paper-eligible
-# strategy; vwap_hold and pdh_reclaim stay listed as explicit SHADOW_ONLY
-# historical governance records (their demotions are evidence-based and
-# independent of this lane). Every other strategy is absent and therefore
-# inherits default_status=SHADOW_ONLY.
+# Retired MNQ orb_breakout posture (risk_rules 1.2.1): the shipped map remains
+# EXACTLY these three explicit governance records. All three are SHADOW_ONLY;
+# orb_breakout is additionally instrument-disabled on MNQ. Every other strategy
+# is absent and therefore inherits default_status=SHADOW_ONLY.
 _EXPECTED_SHIPPED_STATUS = {
-    "orb_breakout": "PAPER_ELIGIBLE",
+    "orb_breakout": "SHADOW_ONLY",
     "vwap_hold": "SHADOW_ONLY",
     "pdh_reclaim": "SHADOW_ONLY",
 }
@@ -185,13 +183,7 @@ _EXPECTED_SHIPPED_STATUS = {
 
 def test_shipped_risk_rules_demotes_pdh_reclaim_and_changes_nothing_else():
     """Every status the shipped yaml assigns is pinned here — a change to ANY
-    strategy's permission (not just pdh_reclaim's) fails this test.
-
-    Stricter than the pre-1.2.0 version: the shipped map must match the pinned
-    map EXACTLY. Previously an added strategy was tolerated as long as it was
-    PAPER_ELIGIBLE; during the isolated lane no such silent addition is
-    allowed, because a newly paper-eligible strategy would break the lane's
-    isolation guarantee."""
+    strategy's permission (not just pdh_reclaim's) fails this test."""
     import yaml
     from pathlib import Path
     status = yaml.safe_load(Path("risk_rules.yaml").read_text())[
@@ -238,7 +230,6 @@ def test_mnq_pdh_reclaim_blocked_with_explicit_reason_under_shipped_statuses(
     assert decision.decision == "NO_TRADE"
     assert "STRATEGY_NOT_PAPER_ELIGIBLE" in decision.failed_gates
     assert "pdh_reclaim" in decision.reason and "not paper-eligible" in decision.reason
-    # the otherwise-qualified setup is preserved on the row (observation evidence)
     assert decision.setup is not None and decision.setup.strategy == "pdh_reclaim"
 
 
@@ -261,5 +252,4 @@ def test_mes_pdh_reclaim_still_skipped_upstream_unchanged(config, fresh_market_s
     state.instrument = "MES"
     decision = engine.evaluate(state, DailyState())
     assert decision.decision == "NO_TRADE"
-    # blocked upstream of the permission gate: no permission-gate reason present
     assert "STRATEGY_NOT_PAPER_ELIGIBLE" not in (decision.failed_gates or [])
