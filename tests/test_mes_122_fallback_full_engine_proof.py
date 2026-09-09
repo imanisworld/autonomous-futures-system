@@ -1,4 +1,44 @@
-from scripts.mes_122_fallback_full_engine_proof import _classify, _metrics
+from scripts.mes_122_fallback_full_engine_proof import (
+    _classify,
+    _frozen_373_config,
+    _metrics,
+)
+
+
+def test_frozen_373_config_materializes_without_missing_snapshot_keys():
+    cfg = _frozen_373_config()
+    assert cfg.allowed_instruments == ["MES", "MNQ"]
+    assert cfg.required_instruments == ["MES", "MNQ"]
+    assert cfg.max_trades_per_day == 9999
+    assert cfg.enabled_concepts == [
+        "orb_breakout",
+        "orb_reclaim",
+        "orb_rejection",
+        "vwap_reclaim",
+        "vwap_rejection",
+        "vwap_hold",
+        "pdh_reclaim",
+        "pdl_reclaim",
+        "strat_4hr_retrigger",
+        "strat_322_first_live",
+        "strat_122",
+    ]
+    assert cfg.disabled_concepts_per_instrument == {
+        "MES": [
+            "vwap_reclaim",
+            "pdl_reclaim",
+            "orb_breakout",
+            "orb_rejection",
+            "vwap_rejection",
+            "pdh_reclaim",
+            "strat_4hr_retrigger",
+            "strat_322_first_live",
+        ],
+        "MNQ": ["strat_122"],
+    }
+    assert cfg.strategy_status["strat_122"] == "PAPER_ELIGIBLE"
+    assert cfg.strategy_status["vwap_hold"] == "SHADOW_ONLY"
+    assert cfg.strategy_fallback_enabled is False
 
 
 def test_metrics_use_broker_outcome_not_historical_known_pnl():
