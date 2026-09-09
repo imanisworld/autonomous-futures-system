@@ -37,6 +37,10 @@ def _demo_env(monkeypatch):
         "TRADOVATE_ENV": "demo",
         "TRADOVATE_EXPECTED_ACCOUNT_ID": "12345",
         "FIVE_MIN_FEED_ENABLED": "true",
+        # Lane-local execution permission (both required). Independent of the
+        # box-wide SCHEDULE_MODE, which stays always_on_shadow in production.
+        execution.DEMO_EXECUTION_ENABLED_ENV: "true",
+        execution.DEMO_EXECUTION_PROOF_PIN_ENV: "true",
         "LIVE_TRADING_ENABLED": "false",
     }
     for name, value in pins.items():
@@ -345,3 +349,78 @@ def test_live_broker_object_is_rejected_even_if_env_pins_say_demo(tmp_path, monk
 def test_daily_22_has_no_demo_candidate_path():
     assert set(collector._NATIVE) == {FOUR_HR, THREE_TWO_TWO}
     assert "daily_22_continuation" not in collector._NATIVE
+
+
+# ── lane-local execution permission (never the box-wide SCHEDULE_MODE) ───────
+
+def test_lane_is_disarmed_by_default_and_needs_both_flag_and_pin(monkeypatch):
+    for name in (execution.DEMO_EXECUTION_ENABLED_ENV, execution.DEMO_EXECUTION_PROOF_PIN_ENV):
+        monkeypatch.delenv(name, raising=False)
+    assert execution.demo_execution_armed() is False
+    assert execution.demo_lane_schedule_mode() == "always_on_shadow"
+    # flag alone is not enough
+    monkeypatch.setenv(execution.DEMO_EXECUTION_ENABLED_ENV, "true")
+    assert execution.demo_execution_armed() is False
+    # pin alone is not enough
+    monkeypatch.delenv(execution.DEMO_EXECUTION_ENABLED_ENV)
+    monkeypatch.setenv(execution.DEMO_EXECUTION_PROOF_PIN_ENV, "true")
+    assert execution.demo_execution_armed() is False
+    # both together arm it
+    monkeypatch.setenv(execution.DEMO_EXECUTION_ENABLED_ENV, "true")
+    assert execution.demo_execution_armed() is True
+    assert execution.demo_lane_schedule_mode() == "current"
+
+
+def test_lane_permission_ignores_box_wide_schedule_mode(tmp_path, monkeypatch):
+    """always_on_shadow on the box must neither arm nor block this lane."""
+    _demo_env(monkeypatch)
+    _patch_candidate(monkeypatch, FOUR_HR)
+    cfg = _cfg()
+    cfg.schedule_mode = "always_on_shadow"  # the production box posture
+    broker = _FakeBroker()
+    demo.process_demo_five_min_bar(
+        payload=_payload(), cfg=cfg, bars_5m=[], log_dir=tmp_path,
+        for_date=DAY, broker_factory=lambda: broker,
+    )
+    assert broker.execute_calls == 1  # lane-local permission governs, not cfg
+
+
+def test_disarmed_lane_places_no_order_and_journals_the_block(tmp_path, monkeypatch):
+    _demo_env(monkeypatch)
+    monkeypatch.delenv(execution.DEMO_EXECUTION_ENABLED_ENV)
+    _patch_candidate(monkeypatch, FOUR_HR)
+    broker = _FakeBroker()
+    events = demo.process_demo_five_min_bar(
+        payload=_payload(), cfg=_cfg(), bars_5m=[], log_dir=tmp_path,
+        for_date=DAY, broker_factory=lambda: broker,
+    )
+    assert broker.execute_calls == 0
+    assert any(row.get("lane_failed_rule") == "execution_gate" for row in events)
+
+
+def test_session_outside_lane_allowlist_is_refused(tmp_path, monkeypatch):
+    _demo_env(monkeypatch)
+    monkeypatch.setenv(execution.DEMO_SESSIONS_ENV, "london")  # setup is new_york
+    _patch_candidate(monkeypatch, FOUR_HR)
+    broker = _FakeBroker()
+    events = demo.process_demo_five_min_bar(
+        payload=_payload(), cfg=_cfg(), bars_5m=[], log_dir=tmp_path,
+        for_date=DAY, broker_factory=lambda: broker,
+    )
+    assert broker.execute_calls == 0
+    assert any(row.get("lane_failed_rule") == "demo_session_not_allowed" for row in events)
+
+
+def test_operator_session_hold_still_blocks_an_armed_lane(tmp_path, monkeypatch):
+    """The lane allowlist narrows; it can never override the operator's hold."""
+    _demo_env(monkeypatch)
+    _patch_candidate(monkeypatch, FOUR_HR)
+    cfg = _cfg()
+    cfg.demo_execution_hold_sessions = ["new_york"]
+    broker = _FakeBroker()
+    events = demo.process_demo_five_min_bar(
+        payload=_payload(), cfg=cfg, bars_5m=[], log_dir=tmp_path,
+        for_date=DAY, broker_factory=lambda: broker,
+    )
+    assert broker.execute_calls == 0
+    assert any(row.get("lane_failed_rule") == "execution_gate" for row in events)
