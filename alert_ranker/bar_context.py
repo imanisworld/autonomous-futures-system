@@ -14,9 +14,9 @@ Two rules are load-bearing and easy to erode by accident:
 
 * **A candle type is not a setup.** Candle and sequence classification are
   reported as context under their own names. The actionable ``pattern`` field
-  is populated only from a TRIGGERED verdict of the shared setup authority --
-  never from a bare candle type, which would let an ordinary candle plus
-  VWAP/EMA alignment reach the alert threshold with no setup behind it.
+  is populated only after the shared authority has confirmed a real sequence
+  and the scanner-level target/SPY/QQQ/HTF proof has completed. A bare candle
+  type can never become an actionable pattern.
 * **Every session used in a calculation must be complete**, not just today's.
   EMA20, previous-candle continuity and the reconstructed daily candle all
   read historical sessions, so a whole missing trading day or one absent
@@ -50,6 +50,7 @@ from .causal_bars import (
 )
 from .session_calendar import EXCHANGE_TIMEZONE, SessionCalendar, SessionCalendarError, Session
 from .setup_authority import SetupVerdict, evaluate_setup
+from .setup_proof import complete_setup_proof
 
 __all__ = [
     "SymbolContext",
@@ -99,6 +100,11 @@ class SymbolContext:
     hourly_candle_type: str | None = None
     daily_candle_type: str | None = None
     daily_session_date: str | None = None
+    # Real prior completed higher-timeframe levels. These are evidence inputs
+    # only; target selection still happens in setup_proof and fails closed when
+    # fewer than two valid levels exist on the correct side of entry.
+    setup_resistance_levels: tuple[float, ...] = ()
+    setup_support_levels: tuple[float, ...] = ()
     # Which session failed the completeness check, and by how many bars.
     incomplete_session_date: str | None = None
     missing_bar_count: int = 0
@@ -166,6 +172,8 @@ class MarketContext:
                     "strat_sequence": symbol.strat_sequence,
                     "hourly_candle_type": symbol.hourly_candle_type,
                     "daily_candle_type": symbol.daily_candle_type,
+                    "setup_resistance_levels": list(symbol.setup_resistance_levels),
+                    "setup_support_levels": list(symbol.setup_support_levels),
                     "incomplete_session_date": symbol.incomplete_session_date,
                     "missing_bar_count": symbol.missing_bar_count,
                     "setup_status": symbol.setup_status,
@@ -185,16 +193,24 @@ class MarketContext:
                         "timeframe": symbol.timeframe,
                     }
                 )
-                # `pattern` is the field the scorer credits. Only a TRIGGERED
-                # verdict of the setup authority may fill it. A bare candle
-                # type never does: that is how an ordinary candle would score
-                # as though a setup had been confirmed.
-                if symbol.setup_status == "TRIGGERED" and symbol.strat_sequence:
-                    fields["pattern"] = symbol.strat_sequence
         if self.spy is not None:
             fields["spy_context"] = self.spy.to_dict()
         if self.qqq is not None:
             fields["qqq_context"] = self.qqq.to_dict()
+
+        # The shared strategy authority deliberately stops a real 2-1-2 at
+        # missing_target_1 because it has no market/level data. This layer has
+        # those causal facts, so it may complete that proof -- but only through
+        # the pure fail-closed rule in setup_proof. Ordinary candles return no
+        # override and therefore can never be promoted by VWAP/EMA alone.
+        if self.ticker is not None:
+            fields.update(
+                complete_setup_proof(
+                    self.ticker.to_dict(),
+                    self.spy.to_dict() if self.spy is not None else None,
+                    self.qqq.to_dict() if self.qqq is not None else None,
+                )
+            )
         return fields
 
 
@@ -453,6 +469,20 @@ class BarContextBuilder:
             daily_type = classify_last_bar(candles).get("candle_type")
             daily_date = prior_sessions[-1][0].isoformat()
 
+        # Targets are previous completed higher-timeframe levels only. Prior
+        # completed daily highs/lows plus completed hourly highs/lows are
+        # collected as facts; setup_proof later chooses the nearest two on the
+        # correct side of entry. The newest hourly candle is omitted because it
+        # can contain the breakout bar itself and therefore is not a prior
+        # target at decision time.
+        prior_hourly = hourly[:-1] if hourly else []
+        resistance_levels = tuple(
+            sorted({float(bar.high) for bar in (*candles, *prior_hourly)})
+        )
+        support_levels = tuple(
+            sorted({float(bar.low) for bar in (*candles, *prior_hourly)})
+        )
+
         return SymbolContext(
             available=True,
             reason="",
@@ -472,6 +502,8 @@ class BarContextBuilder:
             hourly_candle_type=hourly_strat.get("candle_type"),
             daily_candle_type=daily_type,
             daily_session_date=daily_date,
+            setup_resistance_levels=resistance_levels,
+            setup_support_levels=support_levels,
             setup_status=verdict.status,
             setup_reason_code=verdict.reason_code,
             setup_direction=verdict.direction,
