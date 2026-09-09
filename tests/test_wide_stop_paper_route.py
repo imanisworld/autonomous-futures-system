@@ -1,4 +1,4 @@
-"""Safety tests for the three-strategy paper-only router."""
+"""Safety tests for the paper router plus explicit Tradovate demo selector."""
 from __future__ import annotations
 
 import inspect
@@ -9,20 +9,22 @@ from context import wide_stop_execution as execution
 from context import wide_stop_forward_router as router
 
 
-def test_execution_selector_rejects_any_non_paper_route(monkeypatch):
+def test_execution_selector_allows_only_paper_or_explicit_demo(monkeypatch):
     monkeypatch.delenv(execution.ROUTE_ENV, raising=False)
     assert execution.route() == "paper_sim"
-    assert execution.VALID_ROUTES == ("paper_sim",)
-    for value in ("tradovate_demo", "live", "tradovate", "unknown"):
+    assert execution.VALID_ROUTES == ("paper_sim", "tradovate_demo")
+    monkeypatch.setenv(execution.ROUTE_ENV, "tradovate_demo")
+    assert execution.route() == "tradovate_demo"
+    for value in ("live", "tradovate", "unknown"):
         monkeypatch.setenv(execution.ROUTE_ENV, value)
         assert execution.route() == "disabled"
 
 
-def test_five_min_campaign_hook_contains_no_external_broker_route():
+def test_five_min_campaign_hook_routes_demo_only_through_isolated_runtime():
     source = inspect.getsource(five_min_feed.record_five_min)
-    assert "wide_stop_demo_runtime" not in source
-    assert "process_demo_five_min_bar" not in source
-    assert "tradovate_demo" not in source
+    assert "wide_stop_demo_runtime" in source
+    assert "process_demo_five_min_bar" in source
+    assert "tradovate_demo" in source
     assert "process_paper_five_min_bar" in source
 
 
