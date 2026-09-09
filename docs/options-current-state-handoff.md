@@ -1,215 +1,176 @@
 # Options — Current State Handoff
 
-_As of 2026-09-09. This is the current options evidence handoff. Do not recreate completed scanner/risk work, do not tune Policy V1 during collection, and do not treat a functioning scanner as proof of strategy edge._
+_As of 2026-09-09. Do not recreate completed scanner/risk work, do not tune Policy V1 during collection, and do not treat a functioning scanner as proof of strategy edge._
 
 ## Verdict
 
 **ADVISORY / PAPER EVIDENCE ONLY. PIPELINE BUILT. STRATEGY EDGE NOT YET PROVEN.**
 
-PR #533 established the frozen `OPTIONS_PAPER_V1` multi-setup collector. PR #536 adds the evidence hardening required before deployment: rejected-filter counterfactuals, 1H/4H observation cohorts, ambiguity telemetry, active-vs-counterfactual summary separation, and a fail-closed V1 runtime preflight. No broker execution is added.
+Completed evidence plumbing now includes:
 
-## Current Policy V1 — frozen during this test
+- PR #533 — independent multi-setup Strat collection;
+- PR #536 — rejected-filter counterfactuals, 1H/4H_RTH observer cohorts, ambiguity telemetry, active/counterfactual separation, and fail-closed V1 runtime preflight;
+- PR #540 — $1,500 / $2,500 / $5,000 bankroll, drawdown, and swing replay;
+- PR #541 — append-only MAE/MFE, entry-extension, friction-stress, evidence-quality, and sample-confidence diagnostics.
+
+No broker execution is added by this work.
+
+## Frozen `OPTIONS_PAPER_V1` policy
 
 - max planned risk per active paper trade: **$300**
 - max aggregate active planned risk: **$1,000**
 - no hard position-count cap; aggregate planned risk controls exposure
 - preferred DTE: **45+**
 - 14–44 DTE: allowed and tagged `DTE_EXCEPTION`
-- <14 DTE / weeklies: excluded from the V1 population
-- planned risk: `(entry premium - premium stop) × 100 × contracts`
+- <14 DTE / weeklies: excluded
 - entry basis: ask
 - premium stop: **25% adverse from entry premium**
-- underlying invalidation and premium stop are both required
+- underlying invalidation required
 - no averaging down
-- Signa is observational context only
-- GEX is optional context; missing GEX is not a strategy rejection
-- missing critical setup/quote/risk data fails closed as `DATA_INVALID`
+- Signa observational only
+- GEX optional context
+- missing critical setup/quote/risk data => `DATA_INVALID`
 
-Any change to these rules creates a new policy version and a separate evidence population.
-
-The generic manual `options_manager` contract-quality surface is not the V1 evidence authority. The V1 collector itself hard-rejects <14 DTE. A manual `dte_exceptional` override must not be used to inject short-DTE rows into this campaign. Runtime V1 preflight also requires the manager policy pins `OPTIONS_MANAGER_MAX_AGGREGATE_OPEN_RISK_DOLLARS=1000` and `OPTIONS_MANAGER_RISK_MIN_DTE_DAYS=14`, and requires the old `options_companion` lane to remain disabled.
-
-## Bankroll / drawdown evaluation — separate from frozen trade policy
-
-The first evidence campaign must also answer whether the strategy is practical at the account size the operator actually wants to use. This is **analysis only** and does not change which V1 trades are collected.
-
-Evaluate the same ACTIVE V1 evidence through parallel cash-only long-option account scenarios:
-
-- **$1,500** starting balance — initial test bankroll
-- **$2,500** starting balance — intermediate comparison
-- **$5,000** starting balance — current maximum allocation ceiling if the demo proves itself
-
-The **$5,000 figure is an allocation ceiling, not an acceptable drawdown**.
-
-The account-equity analyzer uses conservative executable accounting:
-
-- entry debit at the recorded **ask**
-- open positions marked to the recorded **bid**
-- exits at the recorded **bid**
-- unrealized P&L is included in equity/drawdown, not hidden until close
-- long calls/puts are treated as cash-funded premium positions; a scenario that cannot fund an otherwise valid entry records a capital block rather than assuming margin
-- counterfactual rows are excluded from account P&L because they were never active paper positions
-- same-timestamp entry is processed before exit for conservative cash sufficiency
-- the existing V1 cost model remains `entry_at_ask_exit_at_bid_no_commission`; realistic fee sensitivity can be added to analysis later without altering the collected signal population
-
-Track at minimum for each bankroll:
-
-- ending equity and total return
-- realized and unrealized P&L
-- peak-to-trough drawdown in dollars and percent
-- lowest equity
-- longest time underwater
-- maximum simultaneous capital deployed
-- maximum simultaneous planned risk
-- maximum open positions
-- trades blocked only because that bankroll lacked available cash
-- minimum observed starting cash needed to fund every active entry
-
-### Swing / overnight accounting
-
-Swing positions remain open risk until they actually close. The analyzer therefore also preserves:
-
-- number of trades held across at least one market date
-- total position-nights
-- maximum simultaneous overnight positions
-- worst observed option-premium gap from the prior session's last bid to the next session's first bid
-- open-position unrealized P&L in the equity curve
-
-This lets the demo answer whether the system works economically at $1,500 or whether it needs more capital, without changing setup rules to force a desired answer.
+Any change to those rules creates a separate policy/evidence population.
 
 ## Active strategy populations
-
-Independent setup/timeframe identity is preserved so one population cannot erase another even when two setups choose the same option contract.
 
 - **30m 2-1-2 continuation**
 - **Daily 2-1-2 continuation**
 - **Daily 2-2-2 continuation**
 - **Daily 2-2-2 reversal**
-- **Daily 3-2 developing** — WATCH only until actionable
+- **Daily 3-2 developing** — WATCH only
 - **Daily 3-2-2 continuation**
 - **Daily 3-2-2 reversal**
 
-Daily entries are mechanical previous-candle high/low breaks. Underlying invalidation is the opposite side of the previous Daily candle. Daily targets use already-completed prior-session levels. Existing market-alignment proof remains the active promotion gate; missing higher-order trade proof keeps user-facing alerts fail-closed while paper evidence can still be journaled.
+Daily actionability remains mechanical: previous-candle high/low break, with the opposite side as underlying invalidation. Existing market-alignment proof remains the active promotion gate.
 
 ## Counterfactual / timeframe observation populations
 
-PR #536 fixes the survivor-bias problem in filter analysis. A mechanically valid signal that a market/target filter rejects is no longer simply lost.
+Mechanically valid signals rejected by filters are preserved instead of disappearing. Counterfactual rows:
 
-Counterfactual rows:
+- never send Discord alerts;
+- never consume the active $1,000 aggregate-risk budget;
+- use the same real-chain contract quality where enough facts exist;
+- re-quote the exact selected option contract;
+- remain distinct from ACTIVE rows;
+- are excluded from active dashboard P&L/win rate.
 
-- never send Discord alerts
-- never consume the active **$1,000** aggregate-risk budget
-- use the same real-chain contract selection and per-trade quality rules when enough setup facts exist
-- re-quote the exact selected option contract through resolution
-- carry `paper_evidence_lane=COUNTERFACTUAL` and `risk_budget_consumed=false`
-- remain distinct from an active row for the same contract/setup so an observer cannot dedupe a later active candidate
-- are excluded from the normal dashboard win-rate/P&L summary
+Observer populations include rejected 30m/Daily signals plus **1H** and explicit session-anchored **4H_RTH** Strat observations. `4H_RTH` is not presented as a native/vendor 4H candle.
 
-Collected observer populations include:
+## Bankroll / drawdown evaluation
 
-- mechanically confirmed **30m** signals rejected before active promotion
-- mechanically confirmed **Daily** signals rejected by market/target proof
-- **1H** Strat observations
-- **4H_RTH** Strat observations
+The same ACTIVE V1 evidence is replayed through cash-only long-option account scenarios:
 
-`4H_RTH` is explicitly defined from the causal 30m source as regular-session blocks anchored to the session open. Completed sessions retain the shortened final RTH block. It is deliberately labeled `4H_RTH` rather than pretending to be a native/vendor 4H candle whose construction has not been validated.
+- **$1,500** — initial test bankroll
+- **$2,500** — intermediate comparison
+- **$5,000** — current maximum allocation ceiling if the demo proves itself
 
-## Strategy isolation protocol — what we will measure
+**$5,000 is an allocation ceiling, not an acceptable drawdown.**
 
-Do **not** immediately tune these dimensions. First collect the frozen V1 population. Then isolate each strategy with the same questions:
+The account replay uses ask entry, bid mark-to-market/exit, includes unrealized P&L, treats long options as cash-funded, records trades blocked by insufficient available cash, and excludes counterfactual rows from account P&L.
 
-1. **Signal / timeframe** — does the pattern itself predict direction, and how does the same setup behave on 30m, 1H, 4H_RTH and Daily where comparable?
-2. **Entry** — is the entry too early, too late, or already extended when filled?
-3. **Stop** — does the planned stop sit inside normal adverse excursion for that setup?
-4. **Target / exit** — are target geometry or hold duration mismatched to the timeframe?
-5. **Filters** — which market/trend/regime/context filters add value, remove value, or merely reduce sample? Compare active vs counterfactual cohorts rather than only survivors.
-6. **Execution realism** — does the edge survive executable bid/ask, spread, realistic costs, snapshot/path ambiguity, pessimistic handling, and aggregate-open-risk constraints?
+It measures ending equity, return, realized/unrealized P&L, peak-to-trough drawdown, lowest equity, time underwater, max capital deployed, max planned risk, max open positions, capital-only blocks, and minimum observed starting cash needed to fund every active entry.
 
-### Status of that isolation work
+Swing positions remain open risk until they close. Overnight metrics include held-over trades, position-nights, max simultaneous overnight positions, worst observed overnight premium gap, and unrealized P&L in the equity curve.
 
-**Not complete yet.** That is intentional: the collector is being made capable of answering these questions before the first V1 evidence epoch is started. No edge result should be manufactured from an empty/new population.
+## Diagnostic evidence now collected
 
-Historical underlying bars can test price-action behavior, but they cannot fully reconstruct historical option-chain selection, spreads, IV, DTE, Greeks, and executable premium exits. The forward collector exists specifically to preserve those facts so the later study is contract-realistic rather than an underlying-price proxy.
+PR #541 adds a separate append-only diagnostics table and read-only report. It does **not** change which trades V1 takes.
 
-The first useful comparisons after sample accumulation are:
+For each V1 row it records/reports:
 
-- 30m vs 1H vs 4H_RTH vs Daily setup behavior where setup definitions overlap
-- Daily 2-2-2 continuation vs reversal
-- Daily 3-2-2 continuation vs reversal
-- active-filter survivors vs rejected-filter counterfactuals
-- 45+ DTE vs 14–44 DTE
-- premium-stop-based planned risk vs realized adverse premium movement
-- Signa aligned/opposed/missing as observational cohorts
-- GEX available/unavailable/regime cohorts, without turning GEX into a hard gate mid-test
-- $1,500 vs $2,500 vs $5,000 bankroll feasibility and drawdown
-- intraday vs overnight/swing drawdown contribution
+- **option MAE/MFE** from the executable bid path relative to ask entry;
+- **underlying MAE/MFE** from scheduled underlying snapshots;
+- **directional entry extension** beyond the mechanical Strat trigger;
+- quote age and maximum observation gap;
+- missing Greeks/IV, provider errors, sparse marks, stale quotes, and ambiguity flags;
+- ACTIVE vs COUNTERFACTUAL lane identity;
+- hold duration and event-risk state when known;
+- evidence quality `HIGH / MEDIUM / LOW`.
+
+Entry extension is signed and directional:
+
+- LONG = `entry_underlying - trigger`
+- SHORT = `trigger - entry_underlying`
+
+Positive means the recorded entry was already beyond the mechanical trigger.
+
+The diagnostic report also applies analysis-only friction overlays to the same recorded trade:
+
+1. `RECORDED_EXECUTABLE` — ask entry / bid exit, no added fee;
+2. `FEE_STRESS_065` — subtract $0.65 per contract per leg;
+3. `FEE_065_PLUS_1C_SLIPPAGE` — same fee stress plus $0.01/share adverse slippage on both legs.
+
+The stress scenarios are sensitivity assumptions, not claims about the actual broker fee schedule, and never overwrite canonical V1 outcomes.
+
+Per setup/timeframe/lane summary includes sample count, win rate + 95% Wilson interval, expectancy + approximate 95% interval, profit factor, sequential closed-trade drawdown, friction totals, evidence-quality counts, and median MAE/MFE/entry extension.
+
+Sample labels are descriptive only:
+
+- `<20` priced closed rows: `INSUFFICIENT`
+- `20–49`: `EARLY`
+- `50+`: `REVIEWABLE`
+
+`REVIEWABLE` is not the same as proven.
+
+Full definitions and CLI: `docs/options-v1-diagnostics.md`.
+
+## Strategy isolation protocol
+
+After enough trustworthy rows exist, isolate every strategy with the same questions:
+
+1. **Signal / timeframe** — does the pattern itself predict direction; 30m vs 1H vs 4H_RTH vs Daily where comparable?
+2. **Entry** — are fills too early, too late, or extended beyond trigger?
+3. **Stop** — is the 25% premium stop inside normal MAE?
+4. **Target / exit** — does MFE show winners are held too long or targets mismatched to timeframe?
+5. **Filters** — compare ACTIVE survivors against COUNTERFACTUAL rejected signals.
+6. **Execution realism** — ask/bid path, spreads, fee/slippage stress, ambiguity, and account-risk constraints.
+
+Do not tune these dimensions from a handful of observations. Diagnose first; any rule change becomes a separate evidence cohort.
 
 ## Lifecycle / execution evidence
 
-The exact selected option contract is re-quoted on the scheduled resolver cadence. Every resolution now states that the path between snapshots is not directly observed.
+The exact selected option contract is re-quoted on the scheduled resolver cadence. Intra-interval path is explicitly treated as unobserved.
 
-If premium-stop and underlying-target conditions are both true on the same observed snapshot, the row is not allowed to masquerade as a clean loss. It is tagged:
+If premium stop and underlying target are both true on the same observed snapshot, accounting remains pessimistic but the row is tagged:
 
 - `resolution_ambiguity=AMBIGUOUS`
 - `pessimistic_status=LOSS`
 - `pessimistic_resolution_used=true`
 
-Accounting remains pessimistic, while later execution studies can explicitly include/exclude the ambiguous cohort.
-
-## Evidence required on every usable candidate
-
-Preserve at minimum:
-
-- setup type and timeframe
-- active vs counterfactual evidence lane
-- original filter/suppression reason
-- direction
-- DTE bucket
-- expiration / strike / exact contract
-- entry premium, bid, ask and spread
-- premium stop
-- planned dollar risk
-- whether risk budget was consumed
-- underlying invalidation
-- target 1 / target 2
-- contract marks through resolution
-- ambiguity/path telemetry
-- realized outcome and realistic costs
-- Signa state
-- GEX state
-- policy id
+Later studies can include/exclude that cohort explicitly.
 
 ## What is already done — do not redo
 
-- scanner/advisory plumbing
-- scheduled scan + SQLite persistence
-- real-chain contract selection and `OPTIONS_PAPER_V1` risk validation
-- 2099/far-future contract sanity protection
-- premium-stop-based risk accounting
-- aggregate active-risk accounting
-- Signa observational rather than hard strategy authority
-- GEX optional context
+- scanner/advisory plumbing and SQLite persistence
+- real-chain contract selection
+- 2099/far-future expiration sanity protection
+- frozen premium-stop and active aggregate-risk accounting
 - causal setup proof and fail-closed alerting
-- #533 independent multi-setup Daily collection
-- #536 counterfactual/filter evidence plumbing
-- #536 1H and 4H_RTH observer cohorts
-- #536 active-vs-counterfactual risk/summary separation
-- #536 snapshot-path ambiguity telemetry
-- #536 explicit V1 scheduled runtime preflight
-- V1 account-equity replay for **$1,500 / $2,500 / $5,000** bankroll scenarios, including unrealized equity and swing/overnight exposure
+- independent Daily multi-setup collection
+- counterfactual/filter evidence plumbing
+- 1H / 4H_RTH observer cohorts
+- active/counterfactual risk and dashboard separation
+- snapshot-path ambiguity telemetry
+- V1 scheduled runtime preflight
+- $1,500 / $2,500 / $5,000 bankroll + drawdown + swing replay
+- MAE/MFE + entry extension + friction stress + evidence-quality diagnostics
 
-Do not reopen these because there are not yet enough winners/lossers. Missing strategy evidence is a collection problem, not proof of an implementation defect.
+Missing strategy evidence is now primarily a **collection problem**, not a reason to keep adding strategy rules before the first epoch.
 
 ## Smallest safe next step
 
 Use `docs/options-paper-v1-deployment-checklist.md`.
 
-1. Deploy the reviewed current `main` through the normal options deployment path.
-2. Set the explicit V1 runtime pins, including `OPTIONS_PAPER_V1_COLLECTION_ENABLED=true`, causal bar context, `$1,000` manager aggregate-risk pin, 14-day manager minimum DTE, and `OPTIONS_COMPANION_ENABLED=false`.
-3. Run one normal market-hours smoke proof covering active and counterfactual identity, real contract selection, exact-contract marks, active-risk separation, dashboard-summary separation, ambiguity telemetry, Discord suppression/alert behavior, and no order path.
-4. Run the bankroll/drawdown report against the smoke database and confirm the $1,500 / $2,500 / $5,000 scenarios can read the same V1 rows and exact marks without changing collector state.
-5. Record the deployed commit SHA + smoke timestamp as the V1 evidence epoch.
-6. Collect natural candidates without tuning the frozen rules.
-7. Review both strategy decomposition and bankroll/drawdown evidence only when the sample is large enough to say something useful.
+1. Deploy reviewed current `main` through the normal options deployment path.
+2. Set the V1 runtime pins, including causal context, $1,000 manager aggregate-risk pin, 14-day minimum DTE, and old companion disabled.
+3. Run one market-hours smoke proving active/counterfactual identity, real contract selection/re-quotes, risk separation, ambiguity telemetry, diagnostics snapshots, Discord behavior, and no order path.
+4. Run both read-only reports against the smoke DB:
+   - `alert_ranker.account_equity`
+   - `alert_ranker.v1_diagnostics`
+5. Record deployed SHA + smoke timestamp as the V1 evidence epoch.
+6. Collect natural candidates without tuning V1.
+7. Review strategy decomposition and bankroll/drawdown only after the sample is trustworthy enough.
 
 **No optimization during collection. No proof, no trade.**
