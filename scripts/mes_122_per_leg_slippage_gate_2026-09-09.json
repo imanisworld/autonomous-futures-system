@@ -1,0 +1,6633 @@
+{
+  "design": {
+    "instrument": "MES",
+    "strategy": "strat_122",
+    "corpus": "/Users/djb.a.e/MAINVSCODE/autonomous-futures-system/.claude/worktrees/mes-122-slippage-gate/data/replay_corpus_v1_market_condition_fixed",
+    "contracts": 1,
+    "starting_balance": 1500.0,
+    "commission_round_trip": 1.48,
+    "pessimistic_same_bar": true,
+    "gap_aware_stop_fills": true,
+    "breakeven_at_1r": false,
+    "runner_mode": false,
+    "entry_slippage": "N ticks adverse applied to the causal entry, then the bracket re-validated with PaperBroker._activate_pending_stop_entry's own rule",
+    "exit_slippage": "N ticks adverse on same-bar force_resolve() exits; ordinary stop exits keep the broker's existing market-order slippage; resting LIMIT target exits fill clean unless strict_target_exits",
+    "strategy_parameters_changed": false,
+    "evidence_only": true
+  },
+  "levels": {
+    "merged_baseline": {
+      "entry_slippage_ticks": 0,
+      "added_same_bar_exit_slippage_ticks": 0,
+      "broker_market_exit_slippage_ticks": 1.0,
+      "strict_target_exits": false,
+      "decision_census": {
+        "TRADE": 40,
+        "RISK_REJECTED": 14
+      },
+      "candidates_trade_decisions": 40,
+      "fills": 40,
+      "bracket_invalid_at_fill": 0,
+      "other_cancelled": 0,
+      "unresolved_at_corpus_end": 0,
+      "metrics": {
+        "trades": 40,
+        "wins": 11,
+        "losses": 29,
+        "breakeven": 0,
+        "net_after_commission": 90.8,
+        "profit_factor": 1.104019,
+        "h1_after_commission": -80.85,
+        "h2_after_commission": 171.65,
+        "closed_trade_max_drawdown": 219.11
+      },
+      "mtm": {
+        "max_mtm_drawdown": 219.11,
+        "max_mtm_drawdown_point": {
+          "ts": "2026-02-16T13:00:00+00:00",
+          "equity": 1369.94,
+          "peak": 1589.05,
+          "drawdown": 219.11,
+          "trade_date": "2026-02-16",
+          "kind": "close"
+        },
+        "worst_per_trade_mae": {
+          "trade_date": "2026-07-10",
+          "direction": "LONG",
+          "mae_dollars": -196.25,
+          "mae_ts": "2026-07-10T14:30:00+00:00"
+        },
+        "longest_hold": {
+          "trade_date": "2026-06-19",
+          "hold_hours": 55.75,
+          "exit_ts": "2026-06-21T22:00:00+00:00"
+        },
+        "overnight_holds": 2,
+        "weekend_holds": 2,
+        "final_balance": 1590.8,
+        "walk_vs_engine_mismatches": []
+      },
+      "rows": [
+        {
+          "bar_ts": "2025-07-25T03:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6418.5,
+          "stop": 6416.0,
+          "target": 6433.5,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -13.75
+        },
+        {
+          "bar_ts": "2025-07-29T09:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6438.0,
+          "stop": 6435.25,
+          "target": 6453.0,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -15.0
+        },
+        {
+          "bar_ts": "2025-09-04T12:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6468.75,
+          "stop": 6462.75,
+          "target": 6483.75,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -31.25
+        },
+        {
+          "bar_ts": "2025-09-05T08:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6524.25,
+          "stop": 6520.5,
+          "target": 6539.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -20.0
+        },
+        {
+          "bar_ts": "2025-09-09T18:45:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6517.25,
+          "stop": 6513.5,
+          "target": 6532.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -20.0
+        },
+        {
+          "bar_ts": "2025-09-10T06:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6538.25,
+          "stop": 6535.5,
+          "target": 6553.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -15.0
+        },
+        {
+          "bar_ts": "2025-09-16T05:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6684.75,
+          "stop": 6683.5,
+          "target": 6699.75,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -7.5
+        },
+        {
+          "bar_ts": "2025-09-17T16:00:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6657.25,
+          "stop": 6661.75,
+          "target": 6642.25,
+          "result": "LOSS",
+          "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+          "pnl_dollars": -22.5
+        },
+        {
+          "bar_ts": "2025-10-01T07:45:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6684.0,
+          "stop": 6690.5,
+          "target": 6669.0,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -33.75
+        },
+        {
+          "bar_ts": "2025-10-01T13:30:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6712.5,
+          "stop": 6705.25,
+          "target": 6727.5,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT_SAME_BAR",
+          "pnl_dollars": 72.5
+        },
+        {
+          "bar_ts": "2025-10-06T17:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6790.25,
+          "stop": 6785.75,
+          "target": 6805.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -23.75
+        },
+        {
+          "bar_ts": "2025-10-08T09:30:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6772.0,
+          "stop": 6768.0,
+          "target": 6787.0,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -21.25
+        },
+        {
+          "bar_ts": "2025-10-16T07:45:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6725.0,
+          "stop": 6718.0,
+          "target": 6740.0,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 75.0
+        },
+        {
+          "bar_ts": "2025-10-24T12:30:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6798.25,
+          "stop": 6788.5,
+          "target": 6817.75,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT_SAME_BAR",
+          "pnl_dollars": 97.5
+        },
+        {
+          "bar_ts": "2025-10-30T15:30:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6900.5,
+          "stop": 6909.5,
+          "target": 6882.5,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 90.0
+        },
+        {
+          "bar_ts": "2025-11-13T07:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6891.0,
+          "stop": 6886.5,
+          "target": 6906.0,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -23.75
+        },
+        {
+          "bar_ts": "2025-11-27T14:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6829.25,
+          "stop": 6825.75,
+          "target": 6844.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -18.75
+        },
+        {
+          "bar_ts": "2025-12-01T14:15:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6815.5,
+          "stop": 6823.0,
+          "target": 6800.5,
+          "result": "LOSS",
+          "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+          "pnl_dollars": -37.5
+        },
+        {
+          "bar_ts": "2025-12-03T16:45:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6846.25,
+          "stop": 6859.5,
+          "target": 6819.75,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -67.5
+        },
+        {
+          "bar_ts": "2025-12-05T05:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6880.5,
+          "stop": 6877.75,
+          "target": 6895.5,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -15.0
+        },
+        {
+          "bar_ts": "2025-12-17T07:45:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6864.5,
+          "stop": 6859.5,
+          "target": 6879.5,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -26.25
+        },
+        {
+          "bar_ts": "2026-02-16T12:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6877.25,
+          "stop": 6873.5,
+          "target": 6892.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -20.0
+        },
+        {
+          "bar_ts": "2026-02-20T13:30:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6869.5,
+          "stop": 6877.5,
+          "target": 6853.5,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT_SAME_BAR",
+          "pnl_dollars": 80.0
+        },
+        {
+          "bar_ts": "2026-03-13T16:45:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6700.5,
+          "stop": 6715.5,
+          "target": 6670.5,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 150.0
+        },
+        {
+          "bar_ts": "2026-03-16T13:30:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6749.5,
+          "stop": 6743.0,
+          "target": 6764.5,
+          "result": "LOSS",
+          "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+          "pnl_dollars": -32.5
+        },
+        {
+          "bar_ts": "2026-03-17T12:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6750.5,
+          "stop": 6741.5,
+          "target": 6768.5,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 90.0
+        },
+        {
+          "bar_ts": "2026-03-18T08:45:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6807.0,
+          "stop": 6802.25,
+          "target": 6822.0,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -25.0
+        },
+        {
+          "bar_ts": "2026-03-26T11:15:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6591.25,
+          "stop": 6598.75,
+          "target": 6576.25,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 75.0
+        },
+        {
+          "bar_ts": "2026-03-30T12:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6454.0,
+          "stop": 6443.75,
+          "target": 6474.5,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -52.5
+        },
+        {
+          "bar_ts": "2026-04-06T02:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6616.0,
+          "stop": 6606.75,
+          "target": 6634.5,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 92.5
+        },
+        {
+          "bar_ts": "2026-04-06T19:45:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6647.0,
+          "stop": 6641.75,
+          "target": 6662.0,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -27.5
+        },
+        {
+          "bar_ts": "2026-04-09T05:00:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6808.25,
+          "stop": 6811.25,
+          "target": 6793.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -16.25
+        },
+        {
+          "bar_ts": "2026-04-15T16:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 7037.0,
+          "stop": 7029.75,
+          "target": 7052.0,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -37.5
+        },
+        {
+          "bar_ts": "2026-04-24T10:00:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 7141.75,
+          "stop": 7146.75,
+          "target": 7126.75,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -26.25
+        },
+        {
+          "bar_ts": "2026-05-05T15:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 7281.25,
+          "stop": 7273.0,
+          "target": 7297.75,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 82.5
+        },
+        {
+          "bar_ts": "2026-05-29T09:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 7586.75,
+          "stop": 7582.0,
+          "target": 7601.75,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 75.0
+        },
+        {
+          "bar_ts": "2026-06-03T13:30:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 7605.0,
+          "stop": 7609.25,
+          "target": 7590.0,
+          "result": "LOSS",
+          "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+          "pnl_dollars": -21.25
+        },
+        {
+          "bar_ts": "2026-06-19T14:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 7560.25,
+          "stop": 7554.0,
+          "target": 7575.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_GAP",
+          "pnl_dollars": -83.75
+        },
+        {
+          "bar_ts": "2026-07-09T05:45:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 7545.25,
+          "stop": 7535.75,
+          "target": 7564.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -48.75
+        },
+        {
+          "bar_ts": "2026-07-10T13:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 7591.5,
+          "stop": 7586.5,
+          "target": 7606.5,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -26.25
+        }
+      ],
+      "bracket_invalid_rows": []
+    },
+    "1t_per_leg": {
+      "entry_slippage_ticks": 1,
+      "added_same_bar_exit_slippage_ticks": 1,
+      "broker_market_exit_slippage_ticks": 1,
+      "strict_target_exits": false,
+      "decision_census": {
+        "TRADE": 40,
+        "RISK_REJECTED": 14
+      },
+      "candidates_trade_decisions": 40,
+      "fills": 40,
+      "bracket_invalid_at_fill": 0,
+      "other_cancelled": 0,
+      "unresolved_at_corpus_end": 0,
+      "metrics": {
+        "trades": 40,
+        "wins": 11,
+        "losses": 29,
+        "breakeven": 0,
+        "net_after_commission": 32.05,
+        "profit_factor": 1.035059,
+        "h1_after_commission": -110.85,
+        "h2_after_commission": 142.9,
+        "closed_trade_max_drawdown": 229.11
+      },
+      "mtm": {
+        "max_mtm_drawdown": 229.11,
+        "max_mtm_drawdown_point": {
+          "ts": "2026-02-16T13:00:00+00:00",
+          "equity": 1337.44,
+          "peak": 1566.55,
+          "drawdown": 229.11,
+          "trade_date": "2026-02-16",
+          "kind": "close"
+        },
+        "worst_per_trade_mae": {
+          "trade_date": "2026-07-10",
+          "direction": "LONG",
+          "mae_dollars": -197.5,
+          "mae_ts": "2026-07-10T14:30:00+00:00"
+        },
+        "longest_hold": {
+          "trade_date": "2026-06-19",
+          "hold_hours": 55.75,
+          "exit_ts": "2026-06-21T22:00:00+00:00"
+        },
+        "overnight_holds": 2,
+        "weekend_holds": 2,
+        "final_balance": 1532.05,
+        "walk_vs_engine_mismatches": []
+      },
+      "rows": [
+        {
+          "bar_ts": "2025-07-25T03:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6418.5,
+          "stop": 6416.0,
+          "target": 6433.5,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -15.0
+        },
+        {
+          "bar_ts": "2025-07-29T09:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6438.0,
+          "stop": 6435.25,
+          "target": 6453.0,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -16.25
+        },
+        {
+          "bar_ts": "2025-09-04T12:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6468.75,
+          "stop": 6462.75,
+          "target": 6483.75,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -32.5
+        },
+        {
+          "bar_ts": "2025-09-05T08:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6524.25,
+          "stop": 6520.5,
+          "target": 6539.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -21.25
+        },
+        {
+          "bar_ts": "2025-09-09T18:45:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6517.25,
+          "stop": 6513.5,
+          "target": 6532.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -21.25
+        },
+        {
+          "bar_ts": "2025-09-10T06:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6538.25,
+          "stop": 6535.5,
+          "target": 6553.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -16.25
+        },
+        {
+          "bar_ts": "2025-09-16T05:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6684.75,
+          "stop": 6683.5,
+          "target": 6699.75,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -8.75
+        },
+        {
+          "bar_ts": "2025-09-17T16:00:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6657.25,
+          "stop": 6661.75,
+          "target": 6642.25,
+          "result": "LOSS",
+          "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+          "pnl_dollars": -25.0
+        },
+        {
+          "bar_ts": "2025-10-01T07:45:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6684.0,
+          "stop": 6690.5,
+          "target": 6669.0,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -35.0
+        },
+        {
+          "bar_ts": "2025-10-01T13:30:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6712.5,
+          "stop": 6705.25,
+          "target": 6727.5,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT_SAME_BAR",
+          "pnl_dollars": 70.0
+        },
+        {
+          "bar_ts": "2025-10-06T17:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6790.25,
+          "stop": 6785.75,
+          "target": 6805.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -25.0
+        },
+        {
+          "bar_ts": "2025-10-08T09:30:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6772.0,
+          "stop": 6768.0,
+          "target": 6787.0,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -22.5
+        },
+        {
+          "bar_ts": "2025-10-16T07:45:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6725.0,
+          "stop": 6718.0,
+          "target": 6740.0,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 73.75
+        },
+        {
+          "bar_ts": "2025-10-24T12:30:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6798.25,
+          "stop": 6788.5,
+          "target": 6817.75,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT_SAME_BAR",
+          "pnl_dollars": 95.0
+        },
+        {
+          "bar_ts": "2025-10-30T15:30:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6900.5,
+          "stop": 6909.5,
+          "target": 6882.5,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 88.75
+        },
+        {
+          "bar_ts": "2025-11-13T07:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6891.0,
+          "stop": 6886.5,
+          "target": 6906.0,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -25.0
+        },
+        {
+          "bar_ts": "2025-11-27T14:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6829.25,
+          "stop": 6825.75,
+          "target": 6844.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -20.0
+        },
+        {
+          "bar_ts": "2025-12-01T14:15:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6815.5,
+          "stop": 6823.0,
+          "target": 6800.5,
+          "result": "LOSS",
+          "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+          "pnl_dollars": -40.0
+        },
+        {
+          "bar_ts": "2025-12-03T16:45:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6846.25,
+          "stop": 6859.5,
+          "target": 6819.75,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -68.75
+        },
+        {
+          "bar_ts": "2025-12-05T05:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6880.5,
+          "stop": 6877.75,
+          "target": 6895.5,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -16.25
+        },
+        {
+          "bar_ts": "2025-12-17T07:45:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6864.5,
+          "stop": 6859.5,
+          "target": 6879.5,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -27.5
+        },
+        {
+          "bar_ts": "2026-02-16T12:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6877.25,
+          "stop": 6873.5,
+          "target": 6892.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -21.25
+        },
+        {
+          "bar_ts": "2026-02-20T13:30:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6869.5,
+          "stop": 6877.5,
+          "target": 6853.5,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT_SAME_BAR",
+          "pnl_dollars": 77.5
+        },
+        {
+          "bar_ts": "2026-03-13T16:45:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6700.5,
+          "stop": 6715.5,
+          "target": 6670.5,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 148.75
+        },
+        {
+          "bar_ts": "2026-03-16T13:30:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6749.5,
+          "stop": 6743.0,
+          "target": 6764.5,
+          "result": "LOSS",
+          "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+          "pnl_dollars": -35.0
+        },
+        {
+          "bar_ts": "2026-03-17T12:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6750.5,
+          "stop": 6741.5,
+          "target": 6768.5,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 88.75
+        },
+        {
+          "bar_ts": "2026-03-18T08:45:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6807.0,
+          "stop": 6802.25,
+          "target": 6822.0,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -26.25
+        },
+        {
+          "bar_ts": "2026-03-26T11:15:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6591.25,
+          "stop": 6598.75,
+          "target": 6576.25,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 73.75
+        },
+        {
+          "bar_ts": "2026-03-30T12:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6454.0,
+          "stop": 6443.75,
+          "target": 6474.5,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -53.75
+        },
+        {
+          "bar_ts": "2026-04-06T02:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6616.0,
+          "stop": 6606.75,
+          "target": 6634.5,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 91.25
+        },
+        {
+          "bar_ts": "2026-04-06T19:45:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6647.0,
+          "stop": 6641.75,
+          "target": 6662.0,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -28.75
+        },
+        {
+          "bar_ts": "2026-04-09T05:00:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6808.25,
+          "stop": 6811.25,
+          "target": 6793.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -17.5
+        },
+        {
+          "bar_ts": "2026-04-15T16:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 7037.0,
+          "stop": 7029.75,
+          "target": 7052.0,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -38.75
+        },
+        {
+          "bar_ts": "2026-04-24T10:00:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 7141.75,
+          "stop": 7146.75,
+          "target": 7126.75,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -27.5
+        },
+        {
+          "bar_ts": "2026-05-05T15:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 7281.25,
+          "stop": 7273.0,
+          "target": 7297.75,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 81.25
+        },
+        {
+          "bar_ts": "2026-05-29T09:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 7586.75,
+          "stop": 7582.0,
+          "target": 7601.75,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 73.75
+        },
+        {
+          "bar_ts": "2026-06-03T13:30:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 7605.0,
+          "stop": 7609.25,
+          "target": 7590.0,
+          "result": "LOSS",
+          "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+          "pnl_dollars": -23.75
+        },
+        {
+          "bar_ts": "2026-06-19T14:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 7560.25,
+          "stop": 7554.0,
+          "target": 7575.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_GAP",
+          "pnl_dollars": -85.0
+        },
+        {
+          "bar_ts": "2026-07-09T05:45:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 7545.25,
+          "stop": 7535.75,
+          "target": 7564.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -50.0
+        },
+        {
+          "bar_ts": "2026-07-10T13:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 7591.5,
+          "stop": 7586.5,
+          "target": 7606.5,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -27.5
+        }
+      ],
+      "bracket_invalid_rows": []
+    },
+    "2t_per_leg": {
+      "entry_slippage_ticks": 2,
+      "added_same_bar_exit_slippage_ticks": 2,
+      "broker_market_exit_slippage_ticks": 2,
+      "strict_target_exits": false,
+      "decision_census": {
+        "TRADE": 40,
+        "RISK_REJECTED": 14
+      },
+      "candidates_trade_decisions": 40,
+      "fills": 40,
+      "bracket_invalid_at_fill": 0,
+      "other_cancelled": 0,
+      "unresolved_at_corpus_end": 0,
+      "metrics": {
+        "trades": 40,
+        "wins": 11,
+        "losses": 29,
+        "breakeven": 0,
+        "net_after_commission": -57.95,
+        "profit_factor": 0.941267,
+        "h1_after_commission": -158.35,
+        "h2_after_commission": 100.4,
+        "closed_trade_max_drawdown": 246.61
+      },
+      "mtm": {
+        "max_mtm_drawdown": 246.61,
+        "max_mtm_drawdown_point": {
+          "ts": "2026-02-16T13:00:00+00:00",
+          "equity": 1284.94,
+          "peak": 1531.55,
+          "drawdown": 246.61,
+          "trade_date": "2026-02-16",
+          "kind": "close"
+        },
+        "worst_per_trade_mae": {
+          "trade_date": "2026-07-10",
+          "direction": "LONG",
+          "mae_dollars": -198.75,
+          "mae_ts": "2026-07-10T14:30:00+00:00"
+        },
+        "longest_hold": {
+          "trade_date": "2026-06-19",
+          "hold_hours": 55.75,
+          "exit_ts": "2026-06-21T22:00:00+00:00"
+        },
+        "overnight_holds": 2,
+        "weekend_holds": 2,
+        "final_balance": 1442.05,
+        "walk_vs_engine_mismatches": []
+      },
+      "rows": [
+        {
+          "bar_ts": "2025-07-25T03:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6418.5,
+          "stop": 6416.0,
+          "target": 6433.5,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -17.5
+        },
+        {
+          "bar_ts": "2025-07-29T09:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6438.0,
+          "stop": 6435.25,
+          "target": 6453.0,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -18.75
+        },
+        {
+          "bar_ts": "2025-09-04T12:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6468.75,
+          "stop": 6462.75,
+          "target": 6483.75,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -35.0
+        },
+        {
+          "bar_ts": "2025-09-05T08:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6524.25,
+          "stop": 6520.5,
+          "target": 6539.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -23.75
+        },
+        {
+          "bar_ts": "2025-09-09T18:45:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6517.25,
+          "stop": 6513.5,
+          "target": 6532.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -23.75
+        },
+        {
+          "bar_ts": "2025-09-10T06:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6538.25,
+          "stop": 6535.5,
+          "target": 6553.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -18.75
+        },
+        {
+          "bar_ts": "2025-09-16T05:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6684.75,
+          "stop": 6683.5,
+          "target": 6699.75,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -11.25
+        },
+        {
+          "bar_ts": "2025-09-17T16:00:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6657.25,
+          "stop": 6661.75,
+          "target": 6642.25,
+          "result": "LOSS",
+          "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+          "pnl_dollars": -27.5
+        },
+        {
+          "bar_ts": "2025-10-01T07:45:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6684.0,
+          "stop": 6690.5,
+          "target": 6669.0,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -37.5
+        },
+        {
+          "bar_ts": "2025-10-01T13:30:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6712.5,
+          "stop": 6705.25,
+          "target": 6727.5,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT_SAME_BAR",
+          "pnl_dollars": 67.5
+        },
+        {
+          "bar_ts": "2025-10-06T17:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6790.25,
+          "stop": 6785.75,
+          "target": 6805.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -27.5
+        },
+        {
+          "bar_ts": "2025-10-08T09:30:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6772.0,
+          "stop": 6768.0,
+          "target": 6787.0,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -25.0
+        },
+        {
+          "bar_ts": "2025-10-16T07:45:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6725.0,
+          "stop": 6718.0,
+          "target": 6740.0,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 72.5
+        },
+        {
+          "bar_ts": "2025-10-24T12:30:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6798.25,
+          "stop": 6788.5,
+          "target": 6817.75,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT_SAME_BAR",
+          "pnl_dollars": 92.5
+        },
+        {
+          "bar_ts": "2025-10-30T15:30:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6900.5,
+          "stop": 6909.5,
+          "target": 6882.5,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 87.5
+        },
+        {
+          "bar_ts": "2025-11-13T07:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6891.0,
+          "stop": 6886.5,
+          "target": 6906.0,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -27.5
+        },
+        {
+          "bar_ts": "2025-11-27T14:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6829.25,
+          "stop": 6825.75,
+          "target": 6844.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -22.5
+        },
+        {
+          "bar_ts": "2025-12-01T14:15:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6815.5,
+          "stop": 6823.0,
+          "target": 6800.5,
+          "result": "LOSS",
+          "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+          "pnl_dollars": -42.5
+        },
+        {
+          "bar_ts": "2025-12-03T16:45:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6846.25,
+          "stop": 6859.5,
+          "target": 6819.75,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -71.25
+        },
+        {
+          "bar_ts": "2025-12-05T05:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6880.5,
+          "stop": 6877.75,
+          "target": 6895.5,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -18.75
+        },
+        {
+          "bar_ts": "2025-12-17T07:45:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6864.5,
+          "stop": 6859.5,
+          "target": 6879.5,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -30.0
+        },
+        {
+          "bar_ts": "2026-02-16T12:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6877.25,
+          "stop": 6873.5,
+          "target": 6892.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -23.75
+        },
+        {
+          "bar_ts": "2026-02-20T13:30:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6869.5,
+          "stop": 6877.5,
+          "target": 6853.5,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT_SAME_BAR",
+          "pnl_dollars": 75.0
+        },
+        {
+          "bar_ts": "2026-03-13T16:45:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6700.5,
+          "stop": 6715.5,
+          "target": 6670.5,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 147.5
+        },
+        {
+          "bar_ts": "2026-03-16T13:30:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6749.5,
+          "stop": 6743.0,
+          "target": 6764.5,
+          "result": "LOSS",
+          "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+          "pnl_dollars": -37.5
+        },
+        {
+          "bar_ts": "2026-03-17T12:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6750.5,
+          "stop": 6741.5,
+          "target": 6768.5,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 87.5
+        },
+        {
+          "bar_ts": "2026-03-18T08:45:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6807.0,
+          "stop": 6802.25,
+          "target": 6822.0,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -28.75
+        },
+        {
+          "bar_ts": "2026-03-26T11:15:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6591.25,
+          "stop": 6598.75,
+          "target": 6576.25,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 72.5
+        },
+        {
+          "bar_ts": "2026-03-30T12:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6454.0,
+          "stop": 6443.75,
+          "target": 6474.5,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -56.25
+        },
+        {
+          "bar_ts": "2026-04-06T02:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6616.0,
+          "stop": 6606.75,
+          "target": 6634.5,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 90.0
+        },
+        {
+          "bar_ts": "2026-04-06T19:45:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6647.0,
+          "stop": 6641.75,
+          "target": 6662.0,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -31.25
+        },
+        {
+          "bar_ts": "2026-04-09T05:00:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6808.25,
+          "stop": 6811.25,
+          "target": 6793.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -20.0
+        },
+        {
+          "bar_ts": "2026-04-15T16:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 7037.0,
+          "stop": 7029.75,
+          "target": 7052.0,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -41.25
+        },
+        {
+          "bar_ts": "2026-04-24T10:00:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 7141.75,
+          "stop": 7146.75,
+          "target": 7126.75,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -30.0
+        },
+        {
+          "bar_ts": "2026-05-05T15:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 7281.25,
+          "stop": 7273.0,
+          "target": 7297.75,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 80.0
+        },
+        {
+          "bar_ts": "2026-05-29T09:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 7586.75,
+          "stop": 7582.0,
+          "target": 7601.75,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 72.5
+        },
+        {
+          "bar_ts": "2026-06-03T13:30:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 7605.0,
+          "stop": 7609.25,
+          "target": 7590.0,
+          "result": "LOSS",
+          "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+          "pnl_dollars": -26.25
+        },
+        {
+          "bar_ts": "2026-06-19T14:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 7560.25,
+          "stop": 7554.0,
+          "target": 7575.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_GAP",
+          "pnl_dollars": -87.5
+        },
+        {
+          "bar_ts": "2026-07-09T05:45:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 7545.25,
+          "stop": 7535.75,
+          "target": 7564.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -52.5
+        },
+        {
+          "bar_ts": "2026-07-10T13:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 7591.5,
+          "stop": 7586.5,
+          "target": 7606.5,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -30.0
+        }
+      ],
+      "bracket_invalid_rows": []
+    },
+    "3t_per_leg": {
+      "entry_slippage_ticks": 3,
+      "added_same_bar_exit_slippage_ticks": 3,
+      "broker_market_exit_slippage_ticks": 3,
+      "strict_target_exits": false,
+      "decision_census": {
+        "TRADE": 40,
+        "RISK_REJECTED": 14
+      },
+      "candidates_trade_decisions": 40,
+      "fills": 40,
+      "bracket_invalid_at_fill": 0,
+      "other_cancelled": 0,
+      "unresolved_at_corpus_end": 0,
+      "metrics": {
+        "trades": 40,
+        "wins": 11,
+        "losses": 29,
+        "breakeven": 0,
+        "net_after_commission": -147.95,
+        "profit_factor": 0.860315,
+        "h1_after_commission": -205.85,
+        "h2_after_commission": 57.9,
+        "closed_trade_max_drawdown": 267.56
+      },
+      "mtm": {
+        "max_mtm_drawdown": 270.06,
+        "max_mtm_drawdown_point": {
+          "ts": "2026-02-16T13:00:00+00:00",
+          "equity": 1232.44,
+          "peak": 1502.5,
+          "drawdown": 270.06,
+          "trade_date": "2026-02-16",
+          "kind": "close"
+        },
+        "worst_per_trade_mae": {
+          "trade_date": "2026-07-10",
+          "direction": "LONG",
+          "mae_dollars": -200.0,
+          "mae_ts": "2026-07-10T14:30:00+00:00"
+        },
+        "longest_hold": {
+          "trade_date": "2026-06-19",
+          "hold_hours": 55.75,
+          "exit_ts": "2026-06-21T22:00:00+00:00"
+        },
+        "overnight_holds": 2,
+        "weekend_holds": 2,
+        "final_balance": 1352.05,
+        "walk_vs_engine_mismatches": []
+      },
+      "rows": [
+        {
+          "bar_ts": "2025-07-25T03:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6418.5,
+          "stop": 6416.0,
+          "target": 6433.5,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -20.0
+        },
+        {
+          "bar_ts": "2025-07-29T09:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6438.0,
+          "stop": 6435.25,
+          "target": 6453.0,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -21.25
+        },
+        {
+          "bar_ts": "2025-09-04T12:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6468.75,
+          "stop": 6462.75,
+          "target": 6483.75,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -37.5
+        },
+        {
+          "bar_ts": "2025-09-05T08:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6524.25,
+          "stop": 6520.5,
+          "target": 6539.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -26.25
+        },
+        {
+          "bar_ts": "2025-09-09T18:45:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6517.25,
+          "stop": 6513.5,
+          "target": 6532.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -26.25
+        },
+        {
+          "bar_ts": "2025-09-10T06:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6538.25,
+          "stop": 6535.5,
+          "target": 6553.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -21.25
+        },
+        {
+          "bar_ts": "2025-09-16T05:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6684.75,
+          "stop": 6683.5,
+          "target": 6699.75,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -13.75
+        },
+        {
+          "bar_ts": "2025-09-17T16:00:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6657.25,
+          "stop": 6661.75,
+          "target": 6642.25,
+          "result": "LOSS",
+          "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+          "pnl_dollars": -30.0
+        },
+        {
+          "bar_ts": "2025-10-01T07:45:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6684.0,
+          "stop": 6690.5,
+          "target": 6669.0,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -40.0
+        },
+        {
+          "bar_ts": "2025-10-01T13:30:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6712.5,
+          "stop": 6705.25,
+          "target": 6727.5,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT_SAME_BAR",
+          "pnl_dollars": 65.0
+        },
+        {
+          "bar_ts": "2025-10-06T17:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6790.25,
+          "stop": 6785.75,
+          "target": 6805.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -30.0
+        },
+        {
+          "bar_ts": "2025-10-08T09:30:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6772.0,
+          "stop": 6768.0,
+          "target": 6787.0,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -27.5
+        },
+        {
+          "bar_ts": "2025-10-16T07:45:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6725.0,
+          "stop": 6718.0,
+          "target": 6740.0,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 71.25
+        },
+        {
+          "bar_ts": "2025-10-24T12:30:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6798.25,
+          "stop": 6788.5,
+          "target": 6817.75,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT_SAME_BAR",
+          "pnl_dollars": 90.0
+        },
+        {
+          "bar_ts": "2025-10-30T15:30:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6900.5,
+          "stop": 6909.5,
+          "target": 6882.5,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 86.25
+        },
+        {
+          "bar_ts": "2025-11-13T07:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6891.0,
+          "stop": 6886.5,
+          "target": 6906.0,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -30.0
+        },
+        {
+          "bar_ts": "2025-11-27T14:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6829.25,
+          "stop": 6825.75,
+          "target": 6844.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -25.0
+        },
+        {
+          "bar_ts": "2025-12-01T14:15:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6815.5,
+          "stop": 6823.0,
+          "target": 6800.5,
+          "result": "LOSS",
+          "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+          "pnl_dollars": -45.0
+        },
+        {
+          "bar_ts": "2025-12-03T16:45:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6846.25,
+          "stop": 6859.5,
+          "target": 6819.75,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -73.75
+        },
+        {
+          "bar_ts": "2025-12-05T05:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6880.5,
+          "stop": 6877.75,
+          "target": 6895.5,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -21.25
+        },
+        {
+          "bar_ts": "2025-12-17T07:45:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6864.5,
+          "stop": 6859.5,
+          "target": 6879.5,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -32.5
+        },
+        {
+          "bar_ts": "2026-02-16T12:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6877.25,
+          "stop": 6873.5,
+          "target": 6892.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -26.25
+        },
+        {
+          "bar_ts": "2026-02-20T13:30:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6869.5,
+          "stop": 6877.5,
+          "target": 6853.5,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT_SAME_BAR",
+          "pnl_dollars": 72.5
+        },
+        {
+          "bar_ts": "2026-03-13T16:45:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6700.5,
+          "stop": 6715.5,
+          "target": 6670.5,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 146.25
+        },
+        {
+          "bar_ts": "2026-03-16T13:30:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6749.5,
+          "stop": 6743.0,
+          "target": 6764.5,
+          "result": "LOSS",
+          "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+          "pnl_dollars": -40.0
+        },
+        {
+          "bar_ts": "2026-03-17T12:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6750.5,
+          "stop": 6741.5,
+          "target": 6768.5,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 86.25
+        },
+        {
+          "bar_ts": "2026-03-18T08:45:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6807.0,
+          "stop": 6802.25,
+          "target": 6822.0,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -31.25
+        },
+        {
+          "bar_ts": "2026-03-26T11:15:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6591.25,
+          "stop": 6598.75,
+          "target": 6576.25,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 71.25
+        },
+        {
+          "bar_ts": "2026-03-30T12:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6454.0,
+          "stop": 6443.75,
+          "target": 6474.5,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -58.75
+        },
+        {
+          "bar_ts": "2026-04-06T02:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6616.0,
+          "stop": 6606.75,
+          "target": 6634.5,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 88.75
+        },
+        {
+          "bar_ts": "2026-04-06T19:45:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6647.0,
+          "stop": 6641.75,
+          "target": 6662.0,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -33.75
+        },
+        {
+          "bar_ts": "2026-04-09T05:00:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6808.25,
+          "stop": 6811.25,
+          "target": 6793.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -22.5
+        },
+        {
+          "bar_ts": "2026-04-15T16:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 7037.0,
+          "stop": 7029.75,
+          "target": 7052.0,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -43.75
+        },
+        {
+          "bar_ts": "2026-04-24T10:00:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 7141.75,
+          "stop": 7146.75,
+          "target": 7126.75,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -32.5
+        },
+        {
+          "bar_ts": "2026-05-05T15:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 7281.25,
+          "stop": 7273.0,
+          "target": 7297.75,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 78.75
+        },
+        {
+          "bar_ts": "2026-05-29T09:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 7586.75,
+          "stop": 7582.0,
+          "target": 7601.75,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 71.25
+        },
+        {
+          "bar_ts": "2026-06-03T13:30:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 7605.0,
+          "stop": 7609.25,
+          "target": 7590.0,
+          "result": "LOSS",
+          "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+          "pnl_dollars": -28.75
+        },
+        {
+          "bar_ts": "2026-06-19T14:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 7560.25,
+          "stop": 7554.0,
+          "target": 7575.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_GAP",
+          "pnl_dollars": -90.0
+        },
+        {
+          "bar_ts": "2026-07-09T05:45:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 7545.25,
+          "stop": 7535.75,
+          "target": 7564.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -55.0
+        },
+        {
+          "bar_ts": "2026-07-10T13:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 7591.5,
+          "stop": 7586.5,
+          "target": 7606.5,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -32.5
+        }
+      ],
+      "bracket_invalid_rows": []
+    },
+    "1t_per_leg_strict_target_exits": {
+      "entry_slippage_ticks": 1,
+      "added_same_bar_exit_slippage_ticks": 1,
+      "broker_market_exit_slippage_ticks": 1,
+      "strict_target_exits": true,
+      "decision_census": {
+        "TRADE": 40,
+        "RISK_REJECTED": 14
+      },
+      "candidates_trade_decisions": 40,
+      "fills": 40,
+      "bracket_invalid_at_fill": 0,
+      "other_cancelled": 0,
+      "unresolved_at_corpus_end": 0,
+      "metrics": {
+        "trades": 40,
+        "wins": 11,
+        "losses": 29,
+        "breakeven": 0,
+        "net_after_commission": 22.05,
+        "profit_factor": 1.02412,
+        "h1_after_commission": -113.35,
+        "h2_after_commission": 135.4,
+        "closed_trade_max_drawdown": 229.11
+      },
+      "mtm": {
+        "max_mtm_drawdown": 229.11,
+        "max_mtm_drawdown_point": {
+          "ts": "2026-02-16T13:00:00+00:00",
+          "equity": 1334.94,
+          "peak": 1564.05,
+          "drawdown": 229.11,
+          "trade_date": "2026-02-16",
+          "kind": "close"
+        },
+        "worst_per_trade_mae": {
+          "trade_date": "2026-07-10",
+          "direction": "LONG",
+          "mae_dollars": -197.5,
+          "mae_ts": "2026-07-10T14:30:00+00:00"
+        },
+        "longest_hold": {
+          "trade_date": "2026-06-19",
+          "hold_hours": 55.75,
+          "exit_ts": "2026-06-21T22:00:00+00:00"
+        },
+        "overnight_holds": 2,
+        "weekend_holds": 2,
+        "final_balance": 1522.05,
+        "walk_vs_engine_mismatches": []
+      },
+      "rows": [
+        {
+          "bar_ts": "2025-07-25T03:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6418.5,
+          "stop": 6416.0,
+          "target": 6433.5,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -15.0
+        },
+        {
+          "bar_ts": "2025-07-29T09:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6438.0,
+          "stop": 6435.25,
+          "target": 6453.0,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -16.25
+        },
+        {
+          "bar_ts": "2025-09-04T12:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6468.75,
+          "stop": 6462.75,
+          "target": 6483.75,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -32.5
+        },
+        {
+          "bar_ts": "2025-09-05T08:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6524.25,
+          "stop": 6520.5,
+          "target": 6539.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -21.25
+        },
+        {
+          "bar_ts": "2025-09-09T18:45:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6517.25,
+          "stop": 6513.5,
+          "target": 6532.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -21.25
+        },
+        {
+          "bar_ts": "2025-09-10T06:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6538.25,
+          "stop": 6535.5,
+          "target": 6553.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -16.25
+        },
+        {
+          "bar_ts": "2025-09-16T05:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6684.75,
+          "stop": 6683.5,
+          "target": 6699.75,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -8.75
+        },
+        {
+          "bar_ts": "2025-09-17T16:00:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6657.25,
+          "stop": 6661.75,
+          "target": 6642.25,
+          "result": "LOSS",
+          "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+          "pnl_dollars": -25.0
+        },
+        {
+          "bar_ts": "2025-10-01T07:45:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6684.0,
+          "stop": 6690.5,
+          "target": 6669.0,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -35.0
+        },
+        {
+          "bar_ts": "2025-10-01T13:30:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6712.5,
+          "stop": 6705.25,
+          "target": 6727.5,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT_SAME_BAR",
+          "pnl_dollars": 70.0
+        },
+        {
+          "bar_ts": "2025-10-06T17:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6790.25,
+          "stop": 6785.75,
+          "target": 6805.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -25.0
+        },
+        {
+          "bar_ts": "2025-10-08T09:30:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6772.0,
+          "stop": 6768.0,
+          "target": 6787.0,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -22.5
+        },
+        {
+          "bar_ts": "2025-10-16T07:45:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6725.0,
+          "stop": 6718.0,
+          "target": 6740.0,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 72.5
+        },
+        {
+          "bar_ts": "2025-10-24T12:30:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6798.25,
+          "stop": 6788.5,
+          "target": 6817.75,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT_SAME_BAR",
+          "pnl_dollars": 95.0
+        },
+        {
+          "bar_ts": "2025-10-30T15:30:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6900.5,
+          "stop": 6909.5,
+          "target": 6882.5,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 87.5
+        },
+        {
+          "bar_ts": "2025-11-13T07:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6891.0,
+          "stop": 6886.5,
+          "target": 6906.0,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -25.0
+        },
+        {
+          "bar_ts": "2025-11-27T14:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6829.25,
+          "stop": 6825.75,
+          "target": 6844.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -20.0
+        },
+        {
+          "bar_ts": "2025-12-01T14:15:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6815.5,
+          "stop": 6823.0,
+          "target": 6800.5,
+          "result": "LOSS",
+          "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+          "pnl_dollars": -40.0
+        },
+        {
+          "bar_ts": "2025-12-03T16:45:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6846.25,
+          "stop": 6859.5,
+          "target": 6819.75,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -68.75
+        },
+        {
+          "bar_ts": "2025-12-05T05:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6880.5,
+          "stop": 6877.75,
+          "target": 6895.5,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -16.25
+        },
+        {
+          "bar_ts": "2025-12-17T07:45:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6864.5,
+          "stop": 6859.5,
+          "target": 6879.5,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -27.5
+        },
+        {
+          "bar_ts": "2026-02-16T12:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6877.25,
+          "stop": 6873.5,
+          "target": 6892.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -21.25
+        },
+        {
+          "bar_ts": "2026-02-20T13:30:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6869.5,
+          "stop": 6877.5,
+          "target": 6853.5,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT_SAME_BAR",
+          "pnl_dollars": 77.5
+        },
+        {
+          "bar_ts": "2026-03-13T16:45:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6700.5,
+          "stop": 6715.5,
+          "target": 6670.5,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 147.5
+        },
+        {
+          "bar_ts": "2026-03-16T13:30:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6749.5,
+          "stop": 6743.0,
+          "target": 6764.5,
+          "result": "LOSS",
+          "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+          "pnl_dollars": -35.0
+        },
+        {
+          "bar_ts": "2026-03-17T12:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6750.5,
+          "stop": 6741.5,
+          "target": 6768.5,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 87.5
+        },
+        {
+          "bar_ts": "2026-03-18T08:45:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6807.0,
+          "stop": 6802.25,
+          "target": 6822.0,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -26.25
+        },
+        {
+          "bar_ts": "2026-03-26T11:15:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6591.25,
+          "stop": 6598.75,
+          "target": 6576.25,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 72.5
+        },
+        {
+          "bar_ts": "2026-03-30T12:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6454.0,
+          "stop": 6443.75,
+          "target": 6474.5,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -53.75
+        },
+        {
+          "bar_ts": "2026-04-06T02:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6616.0,
+          "stop": 6606.75,
+          "target": 6634.5,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 90.0
+        },
+        {
+          "bar_ts": "2026-04-06T19:45:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6647.0,
+          "stop": 6641.75,
+          "target": 6662.0,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -28.75
+        },
+        {
+          "bar_ts": "2026-04-09T05:00:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6808.25,
+          "stop": 6811.25,
+          "target": 6793.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -17.5
+        },
+        {
+          "bar_ts": "2026-04-15T16:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 7037.0,
+          "stop": 7029.75,
+          "target": 7052.0,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -38.75
+        },
+        {
+          "bar_ts": "2026-04-24T10:00:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 7141.75,
+          "stop": 7146.75,
+          "target": 7126.75,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -27.5
+        },
+        {
+          "bar_ts": "2026-05-05T15:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 7281.25,
+          "stop": 7273.0,
+          "target": 7297.75,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 80.0
+        },
+        {
+          "bar_ts": "2026-05-29T09:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 7586.75,
+          "stop": 7582.0,
+          "target": 7601.75,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 72.5
+        },
+        {
+          "bar_ts": "2026-06-03T13:30:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 7605.0,
+          "stop": 7609.25,
+          "target": 7590.0,
+          "result": "LOSS",
+          "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+          "pnl_dollars": -23.75
+        },
+        {
+          "bar_ts": "2026-06-19T14:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 7560.25,
+          "stop": 7554.0,
+          "target": 7575.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_GAP",
+          "pnl_dollars": -85.0
+        },
+        {
+          "bar_ts": "2026-07-09T05:45:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 7545.25,
+          "stop": 7535.75,
+          "target": 7564.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -50.0
+        },
+        {
+          "bar_ts": "2026-07-10T13:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 7591.5,
+          "stop": 7586.5,
+          "target": 7606.5,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -27.5
+        }
+      ],
+      "bracket_invalid_rows": []
+    },
+    "2t_per_leg_strict_target_exits": {
+      "entry_slippage_ticks": 2,
+      "added_same_bar_exit_slippage_ticks": 2,
+      "broker_market_exit_slippage_ticks": 2,
+      "strict_target_exits": true,
+      "decision_census": {
+        "TRADE": 40,
+        "RISK_REJECTED": 14
+      },
+      "candidates_trade_decisions": 40,
+      "fills": 40,
+      "bracket_invalid_at_fill": 0,
+      "other_cancelled": 0,
+      "unresolved_at_corpus_end": 0,
+      "metrics": {
+        "trades": 40,
+        "wins": 11,
+        "losses": 29,
+        "breakeven": 0,
+        "net_after_commission": -77.95,
+        "profit_factor": 0.920997,
+        "h1_after_commission": -163.35,
+        "h2_after_commission": 85.4,
+        "closed_trade_max_drawdown": 246.61
+      },
+      "mtm": {
+        "max_mtm_drawdown": 246.61,
+        "max_mtm_drawdown_point": {
+          "ts": "2026-02-16T13:00:00+00:00",
+          "equity": 1279.94,
+          "peak": 1526.55,
+          "drawdown": 246.61,
+          "trade_date": "2026-02-16",
+          "kind": "close"
+        },
+        "worst_per_trade_mae": {
+          "trade_date": "2026-07-10",
+          "direction": "LONG",
+          "mae_dollars": -198.75,
+          "mae_ts": "2026-07-10T14:30:00+00:00"
+        },
+        "longest_hold": {
+          "trade_date": "2026-06-19",
+          "hold_hours": 55.75,
+          "exit_ts": "2026-06-21T22:00:00+00:00"
+        },
+        "overnight_holds": 2,
+        "weekend_holds": 2,
+        "final_balance": 1422.05,
+        "walk_vs_engine_mismatches": []
+      },
+      "rows": [
+        {
+          "bar_ts": "2025-07-25T03:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6418.5,
+          "stop": 6416.0,
+          "target": 6433.5,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -17.5
+        },
+        {
+          "bar_ts": "2025-07-29T09:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6438.0,
+          "stop": 6435.25,
+          "target": 6453.0,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -18.75
+        },
+        {
+          "bar_ts": "2025-09-04T12:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6468.75,
+          "stop": 6462.75,
+          "target": 6483.75,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -35.0
+        },
+        {
+          "bar_ts": "2025-09-05T08:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6524.25,
+          "stop": 6520.5,
+          "target": 6539.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -23.75
+        },
+        {
+          "bar_ts": "2025-09-09T18:45:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6517.25,
+          "stop": 6513.5,
+          "target": 6532.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -23.75
+        },
+        {
+          "bar_ts": "2025-09-10T06:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6538.25,
+          "stop": 6535.5,
+          "target": 6553.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -18.75
+        },
+        {
+          "bar_ts": "2025-09-16T05:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6684.75,
+          "stop": 6683.5,
+          "target": 6699.75,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -11.25
+        },
+        {
+          "bar_ts": "2025-09-17T16:00:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6657.25,
+          "stop": 6661.75,
+          "target": 6642.25,
+          "result": "LOSS",
+          "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+          "pnl_dollars": -27.5
+        },
+        {
+          "bar_ts": "2025-10-01T07:45:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6684.0,
+          "stop": 6690.5,
+          "target": 6669.0,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -37.5
+        },
+        {
+          "bar_ts": "2025-10-01T13:30:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6712.5,
+          "stop": 6705.25,
+          "target": 6727.5,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT_SAME_BAR",
+          "pnl_dollars": 67.5
+        },
+        {
+          "bar_ts": "2025-10-06T17:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6790.25,
+          "stop": 6785.75,
+          "target": 6805.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -27.5
+        },
+        {
+          "bar_ts": "2025-10-08T09:30:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6772.0,
+          "stop": 6768.0,
+          "target": 6787.0,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -25.0
+        },
+        {
+          "bar_ts": "2025-10-16T07:45:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6725.0,
+          "stop": 6718.0,
+          "target": 6740.0,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 70.0
+        },
+        {
+          "bar_ts": "2025-10-24T12:30:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6798.25,
+          "stop": 6788.5,
+          "target": 6817.75,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT_SAME_BAR",
+          "pnl_dollars": 92.5
+        },
+        {
+          "bar_ts": "2025-10-30T15:30:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6900.5,
+          "stop": 6909.5,
+          "target": 6882.5,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 85.0
+        },
+        {
+          "bar_ts": "2025-11-13T07:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6891.0,
+          "stop": 6886.5,
+          "target": 6906.0,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -27.5
+        },
+        {
+          "bar_ts": "2025-11-27T14:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6829.25,
+          "stop": 6825.75,
+          "target": 6844.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -22.5
+        },
+        {
+          "bar_ts": "2025-12-01T14:15:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6815.5,
+          "stop": 6823.0,
+          "target": 6800.5,
+          "result": "LOSS",
+          "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+          "pnl_dollars": -42.5
+        },
+        {
+          "bar_ts": "2025-12-03T16:45:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6846.25,
+          "stop": 6859.5,
+          "target": 6819.75,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -71.25
+        },
+        {
+          "bar_ts": "2025-12-05T05:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6880.5,
+          "stop": 6877.75,
+          "target": 6895.5,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -18.75
+        },
+        {
+          "bar_ts": "2025-12-17T07:45:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6864.5,
+          "stop": 6859.5,
+          "target": 6879.5,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -30.0
+        },
+        {
+          "bar_ts": "2026-02-16T12:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6877.25,
+          "stop": 6873.5,
+          "target": 6892.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -23.75
+        },
+        {
+          "bar_ts": "2026-02-20T13:30:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6869.5,
+          "stop": 6877.5,
+          "target": 6853.5,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT_SAME_BAR",
+          "pnl_dollars": 75.0
+        },
+        {
+          "bar_ts": "2026-03-13T16:45:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6700.5,
+          "stop": 6715.5,
+          "target": 6670.5,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 145.0
+        },
+        {
+          "bar_ts": "2026-03-16T13:30:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6749.5,
+          "stop": 6743.0,
+          "target": 6764.5,
+          "result": "LOSS",
+          "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+          "pnl_dollars": -37.5
+        },
+        {
+          "bar_ts": "2026-03-17T12:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6750.5,
+          "stop": 6741.5,
+          "target": 6768.5,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 85.0
+        },
+        {
+          "bar_ts": "2026-03-18T08:45:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6807.0,
+          "stop": 6802.25,
+          "target": 6822.0,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -28.75
+        },
+        {
+          "bar_ts": "2026-03-26T11:15:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6591.25,
+          "stop": 6598.75,
+          "target": 6576.25,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 70.0
+        },
+        {
+          "bar_ts": "2026-03-30T12:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6454.0,
+          "stop": 6443.75,
+          "target": 6474.5,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -56.25
+        },
+        {
+          "bar_ts": "2026-04-06T02:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6616.0,
+          "stop": 6606.75,
+          "target": 6634.5,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 87.5
+        },
+        {
+          "bar_ts": "2026-04-06T19:45:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6647.0,
+          "stop": 6641.75,
+          "target": 6662.0,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -31.25
+        },
+        {
+          "bar_ts": "2026-04-09T05:00:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6808.25,
+          "stop": 6811.25,
+          "target": 6793.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -20.0
+        },
+        {
+          "bar_ts": "2026-04-15T16:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 7037.0,
+          "stop": 7029.75,
+          "target": 7052.0,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -41.25
+        },
+        {
+          "bar_ts": "2026-04-24T10:00:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 7141.75,
+          "stop": 7146.75,
+          "target": 7126.75,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -30.0
+        },
+        {
+          "bar_ts": "2026-05-05T15:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 7281.25,
+          "stop": 7273.0,
+          "target": 7297.75,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 77.5
+        },
+        {
+          "bar_ts": "2026-05-29T09:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 7586.75,
+          "stop": 7582.0,
+          "target": 7601.75,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 70.0
+        },
+        {
+          "bar_ts": "2026-06-03T13:30:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 7605.0,
+          "stop": 7609.25,
+          "target": 7590.0,
+          "result": "LOSS",
+          "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+          "pnl_dollars": -26.25
+        },
+        {
+          "bar_ts": "2026-06-19T14:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 7560.25,
+          "stop": 7554.0,
+          "target": 7575.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_GAP",
+          "pnl_dollars": -87.5
+        },
+        {
+          "bar_ts": "2026-07-09T05:45:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 7545.25,
+          "stop": 7535.75,
+          "target": 7564.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -52.5
+        },
+        {
+          "bar_ts": "2026-07-10T13:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 7591.5,
+          "stop": 7586.5,
+          "target": 7606.5,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -30.0
+        }
+      ],
+      "bracket_invalid_rows": []
+    },
+    "3t_per_leg_strict_target_exits": {
+      "entry_slippage_ticks": 3,
+      "added_same_bar_exit_slippage_ticks": 3,
+      "broker_market_exit_slippage_ticks": 3,
+      "strict_target_exits": true,
+      "decision_census": {
+        "TRADE": 40,
+        "RISK_REJECTED": 14
+      },
+      "candidates_trade_decisions": 40,
+      "fills": 40,
+      "bracket_invalid_at_fill": 0,
+      "other_cancelled": 0,
+      "unresolved_at_corpus_end": 0,
+      "metrics": {
+        "trades": 40,
+        "wins": 11,
+        "losses": 29,
+        "breakeven": 0,
+        "net_after_commission": -177.95,
+        "profit_factor": 0.831991,
+        "h1_after_commission": -213.35,
+        "h2_after_commission": 35.4,
+        "closed_trade_max_drawdown": 275.06
+      },
+      "mtm": {
+        "max_mtm_drawdown": 277.56,
+        "max_mtm_drawdown_point": {
+          "ts": "2026-02-16T13:00:00+00:00",
+          "equity": 1224.94,
+          "peak": 1502.5,
+          "drawdown": 277.56,
+          "trade_date": "2026-02-16",
+          "kind": "close"
+        },
+        "worst_per_trade_mae": {
+          "trade_date": "2026-07-10",
+          "direction": "LONG",
+          "mae_dollars": -200.0,
+          "mae_ts": "2026-07-10T14:30:00+00:00"
+        },
+        "longest_hold": {
+          "trade_date": "2026-06-19",
+          "hold_hours": 55.75,
+          "exit_ts": "2026-06-21T22:00:00+00:00"
+        },
+        "overnight_holds": 2,
+        "weekend_holds": 2,
+        "final_balance": 1322.05,
+        "walk_vs_engine_mismatches": []
+      },
+      "rows": [
+        {
+          "bar_ts": "2025-07-25T03:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6418.5,
+          "stop": 6416.0,
+          "target": 6433.5,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -20.0
+        },
+        {
+          "bar_ts": "2025-07-29T09:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6438.0,
+          "stop": 6435.25,
+          "target": 6453.0,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -21.25
+        },
+        {
+          "bar_ts": "2025-09-04T12:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6468.75,
+          "stop": 6462.75,
+          "target": 6483.75,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -37.5
+        },
+        {
+          "bar_ts": "2025-09-05T08:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6524.25,
+          "stop": 6520.5,
+          "target": 6539.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -26.25
+        },
+        {
+          "bar_ts": "2025-09-09T18:45:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6517.25,
+          "stop": 6513.5,
+          "target": 6532.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -26.25
+        },
+        {
+          "bar_ts": "2025-09-10T06:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6538.25,
+          "stop": 6535.5,
+          "target": 6553.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -21.25
+        },
+        {
+          "bar_ts": "2025-09-16T05:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6684.75,
+          "stop": 6683.5,
+          "target": 6699.75,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -13.75
+        },
+        {
+          "bar_ts": "2025-09-17T16:00:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6657.25,
+          "stop": 6661.75,
+          "target": 6642.25,
+          "result": "LOSS",
+          "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+          "pnl_dollars": -30.0
+        },
+        {
+          "bar_ts": "2025-10-01T07:45:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6684.0,
+          "stop": 6690.5,
+          "target": 6669.0,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -40.0
+        },
+        {
+          "bar_ts": "2025-10-01T13:30:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6712.5,
+          "stop": 6705.25,
+          "target": 6727.5,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT_SAME_BAR",
+          "pnl_dollars": 65.0
+        },
+        {
+          "bar_ts": "2025-10-06T17:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6790.25,
+          "stop": 6785.75,
+          "target": 6805.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -30.0
+        },
+        {
+          "bar_ts": "2025-10-08T09:30:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6772.0,
+          "stop": 6768.0,
+          "target": 6787.0,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -27.5
+        },
+        {
+          "bar_ts": "2025-10-16T07:45:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6725.0,
+          "stop": 6718.0,
+          "target": 6740.0,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 67.5
+        },
+        {
+          "bar_ts": "2025-10-24T12:30:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6798.25,
+          "stop": 6788.5,
+          "target": 6817.75,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT_SAME_BAR",
+          "pnl_dollars": 90.0
+        },
+        {
+          "bar_ts": "2025-10-30T15:30:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6900.5,
+          "stop": 6909.5,
+          "target": 6882.5,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 82.5
+        },
+        {
+          "bar_ts": "2025-11-13T07:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6891.0,
+          "stop": 6886.5,
+          "target": 6906.0,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -30.0
+        },
+        {
+          "bar_ts": "2025-11-27T14:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6829.25,
+          "stop": 6825.75,
+          "target": 6844.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -25.0
+        },
+        {
+          "bar_ts": "2025-12-01T14:15:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6815.5,
+          "stop": 6823.0,
+          "target": 6800.5,
+          "result": "LOSS",
+          "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+          "pnl_dollars": -45.0
+        },
+        {
+          "bar_ts": "2025-12-03T16:45:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6846.25,
+          "stop": 6859.5,
+          "target": 6819.75,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -73.75
+        },
+        {
+          "bar_ts": "2025-12-05T05:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6880.5,
+          "stop": 6877.75,
+          "target": 6895.5,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -21.25
+        },
+        {
+          "bar_ts": "2025-12-17T07:45:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6864.5,
+          "stop": 6859.5,
+          "target": 6879.5,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -32.5
+        },
+        {
+          "bar_ts": "2026-02-16T12:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6877.25,
+          "stop": 6873.5,
+          "target": 6892.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -26.25
+        },
+        {
+          "bar_ts": "2026-02-20T13:30:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6869.5,
+          "stop": 6877.5,
+          "target": 6853.5,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT_SAME_BAR",
+          "pnl_dollars": 72.5
+        },
+        {
+          "bar_ts": "2026-03-13T16:45:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6700.5,
+          "stop": 6715.5,
+          "target": 6670.5,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 142.5
+        },
+        {
+          "bar_ts": "2026-03-16T13:30:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6749.5,
+          "stop": 6743.0,
+          "target": 6764.5,
+          "result": "LOSS",
+          "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+          "pnl_dollars": -40.0
+        },
+        {
+          "bar_ts": "2026-03-17T12:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6750.5,
+          "stop": 6741.5,
+          "target": 6768.5,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 82.5
+        },
+        {
+          "bar_ts": "2026-03-18T08:45:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6807.0,
+          "stop": 6802.25,
+          "target": 6822.0,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -31.25
+        },
+        {
+          "bar_ts": "2026-03-26T11:15:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6591.25,
+          "stop": 6598.75,
+          "target": 6576.25,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 67.5
+        },
+        {
+          "bar_ts": "2026-03-30T12:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6454.0,
+          "stop": 6443.75,
+          "target": 6474.5,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -58.75
+        },
+        {
+          "bar_ts": "2026-04-06T02:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6616.0,
+          "stop": 6606.75,
+          "target": 6634.5,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 85.0
+        },
+        {
+          "bar_ts": "2026-04-06T19:45:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 6647.0,
+          "stop": 6641.75,
+          "target": 6662.0,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -33.75
+        },
+        {
+          "bar_ts": "2026-04-09T05:00:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 6808.25,
+          "stop": 6811.25,
+          "target": 6793.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -22.5
+        },
+        {
+          "bar_ts": "2026-04-15T16:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 7037.0,
+          "stop": 7029.75,
+          "target": 7052.0,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -43.75
+        },
+        {
+          "bar_ts": "2026-04-24T10:00:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 7141.75,
+          "stop": 7146.75,
+          "target": 7126.75,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -32.5
+        },
+        {
+          "bar_ts": "2026-05-05T15:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 7281.25,
+          "stop": 7273.0,
+          "target": 7297.75,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 75.0
+        },
+        {
+          "bar_ts": "2026-05-29T09:00:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 7586.75,
+          "stop": 7582.0,
+          "target": 7601.75,
+          "result": "WIN",
+          "exit_reason": "TARGET_HIT",
+          "pnl_dollars": 67.5
+        },
+        {
+          "bar_ts": "2026-06-03T13:30:00+00:00",
+          "direction": "SHORT",
+          "entry_requested": 7605.0,
+          "stop": 7609.25,
+          "target": 7590.0,
+          "result": "LOSS",
+          "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+          "pnl_dollars": -28.75
+        },
+        {
+          "bar_ts": "2026-06-19T14:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 7560.25,
+          "stop": 7554.0,
+          "target": 7575.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_GAP",
+          "pnl_dollars": -90.0
+        },
+        {
+          "bar_ts": "2026-07-09T05:45:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 7545.25,
+          "stop": 7535.75,
+          "target": 7564.25,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -55.0
+        },
+        {
+          "bar_ts": "2026-07-10T13:15:00+00:00",
+          "direction": "LONG",
+          "entry_requested": 7591.5,
+          "stop": 7586.5,
+          "target": 7606.5,
+          "result": "LOSS",
+          "exit_reason": "STOP_HIT",
+          "pnl_dollars": -32.5
+        }
+      ],
+      "bracket_invalid_rows": []
+    }
+  },
+  "diffs_vs_merged_baseline": {
+    "1t_per_leg": {
+      "disappeared": [],
+      "appeared": [],
+      "changed": [
+        {
+          "bar_ts": "2025-07-25T03:00:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -13.75
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -15.0
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2025-07-29T09:00:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -15.0
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -16.25
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2025-09-04T12:00:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -31.25
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -32.5
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2025-09-05T08:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -20.0
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -21.25
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2025-09-09T18:45:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -20.0
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -21.25
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2025-09-10T06:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -15.0
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -16.25
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2025-09-16T05:00:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -7.5
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -8.75
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2025-09-17T16:00:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+            "pnl_dollars": -22.5
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+            "pnl_dollars": -25.0
+          },
+          "delta_dollars": -2.5
+        },
+        {
+          "bar_ts": "2025-10-01T07:45:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -33.75
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -35.0
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2025-10-01T13:30:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT_SAME_BAR",
+            "pnl_dollars": 72.5
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT_SAME_BAR",
+            "pnl_dollars": 70.0
+          },
+          "delta_dollars": -2.5
+        },
+        {
+          "bar_ts": "2025-10-06T17:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -23.75
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -25.0
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2025-10-08T09:30:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -21.25
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -22.5
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2025-10-16T07:45:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 75.0
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 73.75
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2025-10-24T12:30:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT_SAME_BAR",
+            "pnl_dollars": 97.5
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT_SAME_BAR",
+            "pnl_dollars": 95.0
+          },
+          "delta_dollars": -2.5
+        },
+        {
+          "bar_ts": "2025-10-30T15:30:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 90.0
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 88.75
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2025-11-13T07:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -23.75
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -25.0
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2025-11-27T14:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -18.75
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -20.0
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2025-12-01T14:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+            "pnl_dollars": -37.5
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+            "pnl_dollars": -40.0
+          },
+          "delta_dollars": -2.5
+        },
+        {
+          "bar_ts": "2025-12-03T16:45:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -67.5
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -68.75
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2025-12-05T05:00:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -15.0
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -16.25
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2025-12-17T07:45:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -26.25
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -27.5
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2026-02-16T12:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -20.0
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -21.25
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2026-02-20T13:30:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT_SAME_BAR",
+            "pnl_dollars": 80.0
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT_SAME_BAR",
+            "pnl_dollars": 77.5
+          },
+          "delta_dollars": -2.5
+        },
+        {
+          "bar_ts": "2026-03-13T16:45:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 150.0
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 148.75
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2026-03-16T13:30:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+            "pnl_dollars": -32.5
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+            "pnl_dollars": -35.0
+          },
+          "delta_dollars": -2.5
+        },
+        {
+          "bar_ts": "2026-03-17T12:00:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 90.0
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 88.75
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2026-03-18T08:45:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -25.0
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -26.25
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2026-03-26T11:15:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 75.0
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 73.75
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2026-03-30T12:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -52.5
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -53.75
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2026-04-06T02:00:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 92.5
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 91.25
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2026-04-06T19:45:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -27.5
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -28.75
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2026-04-09T05:00:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -16.25
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -17.5
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2026-04-15T16:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -37.5
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -38.75
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2026-04-24T10:00:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -26.25
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -27.5
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2026-05-05T15:00:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 82.5
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 81.25
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2026-05-29T09:00:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 75.0
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 73.75
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2026-06-03T13:30:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+            "pnl_dollars": -21.25
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+            "pnl_dollars": -23.75
+          },
+          "delta_dollars": -2.5
+        },
+        {
+          "bar_ts": "2026-06-19T14:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_GAP",
+            "pnl_dollars": -83.75
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_GAP",
+            "pnl_dollars": -85.0
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2026-07-09T05:45:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -48.75
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -50.0
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2026-07-10T13:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -26.25
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -27.5
+          },
+          "delta_dollars": -1.25
+        }
+      ],
+      "counts": {
+        "disappeared": 0,
+        "appeared": 0,
+        "changed": 40
+      }
+    },
+    "2t_per_leg": {
+      "disappeared": [],
+      "appeared": [],
+      "changed": [
+        {
+          "bar_ts": "2025-07-25T03:00:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -13.75
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -17.5
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2025-07-29T09:00:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -15.0
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -18.75
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2025-09-04T12:00:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -31.25
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -35.0
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2025-09-05T08:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -20.0
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -23.75
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2025-09-09T18:45:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -20.0
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -23.75
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2025-09-10T06:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -15.0
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -18.75
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2025-09-16T05:00:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -7.5
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -11.25
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2025-09-17T16:00:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+            "pnl_dollars": -22.5
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+            "pnl_dollars": -27.5
+          },
+          "delta_dollars": -5.0
+        },
+        {
+          "bar_ts": "2025-10-01T07:45:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -33.75
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -37.5
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2025-10-01T13:30:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT_SAME_BAR",
+            "pnl_dollars": 72.5
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT_SAME_BAR",
+            "pnl_dollars": 67.5
+          },
+          "delta_dollars": -5.0
+        },
+        {
+          "bar_ts": "2025-10-06T17:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -23.75
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -27.5
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2025-10-08T09:30:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -21.25
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -25.0
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2025-10-16T07:45:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 75.0
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 72.5
+          },
+          "delta_dollars": -2.5
+        },
+        {
+          "bar_ts": "2025-10-24T12:30:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT_SAME_BAR",
+            "pnl_dollars": 97.5
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT_SAME_BAR",
+            "pnl_dollars": 92.5
+          },
+          "delta_dollars": -5.0
+        },
+        {
+          "bar_ts": "2025-10-30T15:30:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 90.0
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 87.5
+          },
+          "delta_dollars": -2.5
+        },
+        {
+          "bar_ts": "2025-11-13T07:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -23.75
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -27.5
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2025-11-27T14:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -18.75
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -22.5
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2025-12-01T14:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+            "pnl_dollars": -37.5
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+            "pnl_dollars": -42.5
+          },
+          "delta_dollars": -5.0
+        },
+        {
+          "bar_ts": "2025-12-03T16:45:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -67.5
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -71.25
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2025-12-05T05:00:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -15.0
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -18.75
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2025-12-17T07:45:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -26.25
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -30.0
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2026-02-16T12:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -20.0
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -23.75
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2026-02-20T13:30:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT_SAME_BAR",
+            "pnl_dollars": 80.0
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT_SAME_BAR",
+            "pnl_dollars": 75.0
+          },
+          "delta_dollars": -5.0
+        },
+        {
+          "bar_ts": "2026-03-13T16:45:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 150.0
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 147.5
+          },
+          "delta_dollars": -2.5
+        },
+        {
+          "bar_ts": "2026-03-16T13:30:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+            "pnl_dollars": -32.5
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+            "pnl_dollars": -37.5
+          },
+          "delta_dollars": -5.0
+        },
+        {
+          "bar_ts": "2026-03-17T12:00:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 90.0
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 87.5
+          },
+          "delta_dollars": -2.5
+        },
+        {
+          "bar_ts": "2026-03-18T08:45:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -25.0
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -28.75
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2026-03-26T11:15:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 75.0
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 72.5
+          },
+          "delta_dollars": -2.5
+        },
+        {
+          "bar_ts": "2026-03-30T12:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -52.5
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -56.25
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2026-04-06T02:00:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 92.5
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 90.0
+          },
+          "delta_dollars": -2.5
+        },
+        {
+          "bar_ts": "2026-04-06T19:45:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -27.5
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -31.25
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2026-04-09T05:00:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -16.25
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -20.0
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2026-04-15T16:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -37.5
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -41.25
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2026-04-24T10:00:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -26.25
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -30.0
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2026-05-05T15:00:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 82.5
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 80.0
+          },
+          "delta_dollars": -2.5
+        },
+        {
+          "bar_ts": "2026-05-29T09:00:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 75.0
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 72.5
+          },
+          "delta_dollars": -2.5
+        },
+        {
+          "bar_ts": "2026-06-03T13:30:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+            "pnl_dollars": -21.25
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+            "pnl_dollars": -26.25
+          },
+          "delta_dollars": -5.0
+        },
+        {
+          "bar_ts": "2026-06-19T14:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_GAP",
+            "pnl_dollars": -83.75
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_GAP",
+            "pnl_dollars": -87.5
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2026-07-09T05:45:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -48.75
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -52.5
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2026-07-10T13:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -26.25
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -30.0
+          },
+          "delta_dollars": -3.75
+        }
+      ],
+      "counts": {
+        "disappeared": 0,
+        "appeared": 0,
+        "changed": 40
+      }
+    },
+    "3t_per_leg": {
+      "disappeared": [],
+      "appeared": [],
+      "changed": [
+        {
+          "bar_ts": "2025-07-25T03:00:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -13.75
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -20.0
+          },
+          "delta_dollars": -6.25
+        },
+        {
+          "bar_ts": "2025-07-29T09:00:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -15.0
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -21.25
+          },
+          "delta_dollars": -6.25
+        },
+        {
+          "bar_ts": "2025-09-04T12:00:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -31.25
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -37.5
+          },
+          "delta_dollars": -6.25
+        },
+        {
+          "bar_ts": "2025-09-05T08:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -20.0
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -26.25
+          },
+          "delta_dollars": -6.25
+        },
+        {
+          "bar_ts": "2025-09-09T18:45:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -20.0
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -26.25
+          },
+          "delta_dollars": -6.25
+        },
+        {
+          "bar_ts": "2025-09-10T06:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -15.0
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -21.25
+          },
+          "delta_dollars": -6.25
+        },
+        {
+          "bar_ts": "2025-09-16T05:00:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -7.5
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -13.75
+          },
+          "delta_dollars": -6.25
+        },
+        {
+          "bar_ts": "2025-09-17T16:00:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+            "pnl_dollars": -22.5
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+            "pnl_dollars": -30.0
+          },
+          "delta_dollars": -7.5
+        },
+        {
+          "bar_ts": "2025-10-01T07:45:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -33.75
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -40.0
+          },
+          "delta_dollars": -6.25
+        },
+        {
+          "bar_ts": "2025-10-01T13:30:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT_SAME_BAR",
+            "pnl_dollars": 72.5
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT_SAME_BAR",
+            "pnl_dollars": 65.0
+          },
+          "delta_dollars": -7.5
+        },
+        {
+          "bar_ts": "2025-10-06T17:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -23.75
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -30.0
+          },
+          "delta_dollars": -6.25
+        },
+        {
+          "bar_ts": "2025-10-08T09:30:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -21.25
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -27.5
+          },
+          "delta_dollars": -6.25
+        },
+        {
+          "bar_ts": "2025-10-16T07:45:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 75.0
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 71.25
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2025-10-24T12:30:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT_SAME_BAR",
+            "pnl_dollars": 97.5
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT_SAME_BAR",
+            "pnl_dollars": 90.0
+          },
+          "delta_dollars": -7.5
+        },
+        {
+          "bar_ts": "2025-10-30T15:30:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 90.0
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 86.25
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2025-11-13T07:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -23.75
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -30.0
+          },
+          "delta_dollars": -6.25
+        },
+        {
+          "bar_ts": "2025-11-27T14:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -18.75
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -25.0
+          },
+          "delta_dollars": -6.25
+        },
+        {
+          "bar_ts": "2025-12-01T14:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+            "pnl_dollars": -37.5
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+            "pnl_dollars": -45.0
+          },
+          "delta_dollars": -7.5
+        },
+        {
+          "bar_ts": "2025-12-03T16:45:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -67.5
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -73.75
+          },
+          "delta_dollars": -6.25
+        },
+        {
+          "bar_ts": "2025-12-05T05:00:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -15.0
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -21.25
+          },
+          "delta_dollars": -6.25
+        },
+        {
+          "bar_ts": "2025-12-17T07:45:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -26.25
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -32.5
+          },
+          "delta_dollars": -6.25
+        },
+        {
+          "bar_ts": "2026-02-16T12:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -20.0
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -26.25
+          },
+          "delta_dollars": -6.25
+        },
+        {
+          "bar_ts": "2026-02-20T13:30:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT_SAME_BAR",
+            "pnl_dollars": 80.0
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT_SAME_BAR",
+            "pnl_dollars": 72.5
+          },
+          "delta_dollars": -7.5
+        },
+        {
+          "bar_ts": "2026-03-13T16:45:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 150.0
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 146.25
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2026-03-16T13:30:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+            "pnl_dollars": -32.5
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+            "pnl_dollars": -40.0
+          },
+          "delta_dollars": -7.5
+        },
+        {
+          "bar_ts": "2026-03-17T12:00:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 90.0
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 86.25
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2026-03-18T08:45:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -25.0
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -31.25
+          },
+          "delta_dollars": -6.25
+        },
+        {
+          "bar_ts": "2026-03-26T11:15:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 75.0
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 71.25
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2026-03-30T12:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -52.5
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -58.75
+          },
+          "delta_dollars": -6.25
+        },
+        {
+          "bar_ts": "2026-04-06T02:00:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 92.5
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 88.75
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2026-04-06T19:45:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -27.5
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -33.75
+          },
+          "delta_dollars": -6.25
+        },
+        {
+          "bar_ts": "2026-04-09T05:00:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -16.25
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -22.5
+          },
+          "delta_dollars": -6.25
+        },
+        {
+          "bar_ts": "2026-04-15T16:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -37.5
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -43.75
+          },
+          "delta_dollars": -6.25
+        },
+        {
+          "bar_ts": "2026-04-24T10:00:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -26.25
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -32.5
+          },
+          "delta_dollars": -6.25
+        },
+        {
+          "bar_ts": "2026-05-05T15:00:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 82.5
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 78.75
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2026-05-29T09:00:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 75.0
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 71.25
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2026-06-03T13:30:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+            "pnl_dollars": -21.25
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+            "pnl_dollars": -28.75
+          },
+          "delta_dollars": -7.5
+        },
+        {
+          "bar_ts": "2026-06-19T14:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_GAP",
+            "pnl_dollars": -83.75
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_GAP",
+            "pnl_dollars": -90.0
+          },
+          "delta_dollars": -6.25
+        },
+        {
+          "bar_ts": "2026-07-09T05:45:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -48.75
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -55.0
+          },
+          "delta_dollars": -6.25
+        },
+        {
+          "bar_ts": "2026-07-10T13:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -26.25
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -32.5
+          },
+          "delta_dollars": -6.25
+        }
+      ],
+      "counts": {
+        "disappeared": 0,
+        "appeared": 0,
+        "changed": 40
+      }
+    },
+    "1t_per_leg_strict_target_exits": {
+      "disappeared": [],
+      "appeared": [],
+      "changed": [
+        {
+          "bar_ts": "2025-07-25T03:00:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -13.75
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -15.0
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2025-07-29T09:00:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -15.0
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -16.25
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2025-09-04T12:00:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -31.25
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -32.5
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2025-09-05T08:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -20.0
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -21.25
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2025-09-09T18:45:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -20.0
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -21.25
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2025-09-10T06:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -15.0
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -16.25
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2025-09-16T05:00:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -7.5
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -8.75
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2025-09-17T16:00:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+            "pnl_dollars": -22.5
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+            "pnl_dollars": -25.0
+          },
+          "delta_dollars": -2.5
+        },
+        {
+          "bar_ts": "2025-10-01T07:45:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -33.75
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -35.0
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2025-10-01T13:30:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT_SAME_BAR",
+            "pnl_dollars": 72.5
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT_SAME_BAR",
+            "pnl_dollars": 70.0
+          },
+          "delta_dollars": -2.5
+        },
+        {
+          "bar_ts": "2025-10-06T17:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -23.75
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -25.0
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2025-10-08T09:30:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -21.25
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -22.5
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2025-10-16T07:45:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 75.0
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 72.5
+          },
+          "delta_dollars": -2.5
+        },
+        {
+          "bar_ts": "2025-10-24T12:30:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT_SAME_BAR",
+            "pnl_dollars": 97.5
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT_SAME_BAR",
+            "pnl_dollars": 95.0
+          },
+          "delta_dollars": -2.5
+        },
+        {
+          "bar_ts": "2025-10-30T15:30:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 90.0
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 87.5
+          },
+          "delta_dollars": -2.5
+        },
+        {
+          "bar_ts": "2025-11-13T07:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -23.75
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -25.0
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2025-11-27T14:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -18.75
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -20.0
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2025-12-01T14:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+            "pnl_dollars": -37.5
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+            "pnl_dollars": -40.0
+          },
+          "delta_dollars": -2.5
+        },
+        {
+          "bar_ts": "2025-12-03T16:45:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -67.5
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -68.75
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2025-12-05T05:00:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -15.0
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -16.25
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2025-12-17T07:45:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -26.25
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -27.5
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2026-02-16T12:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -20.0
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -21.25
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2026-02-20T13:30:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT_SAME_BAR",
+            "pnl_dollars": 80.0
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT_SAME_BAR",
+            "pnl_dollars": 77.5
+          },
+          "delta_dollars": -2.5
+        },
+        {
+          "bar_ts": "2026-03-13T16:45:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 150.0
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 147.5
+          },
+          "delta_dollars": -2.5
+        },
+        {
+          "bar_ts": "2026-03-16T13:30:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+            "pnl_dollars": -32.5
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+            "pnl_dollars": -35.0
+          },
+          "delta_dollars": -2.5
+        },
+        {
+          "bar_ts": "2026-03-17T12:00:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 90.0
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 87.5
+          },
+          "delta_dollars": -2.5
+        },
+        {
+          "bar_ts": "2026-03-18T08:45:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -25.0
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -26.25
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2026-03-26T11:15:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 75.0
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 72.5
+          },
+          "delta_dollars": -2.5
+        },
+        {
+          "bar_ts": "2026-03-30T12:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -52.5
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -53.75
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2026-04-06T02:00:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 92.5
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 90.0
+          },
+          "delta_dollars": -2.5
+        },
+        {
+          "bar_ts": "2026-04-06T19:45:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -27.5
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -28.75
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2026-04-09T05:00:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -16.25
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -17.5
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2026-04-15T16:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -37.5
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -38.75
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2026-04-24T10:00:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -26.25
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -27.5
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2026-05-05T15:00:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 82.5
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 80.0
+          },
+          "delta_dollars": -2.5
+        },
+        {
+          "bar_ts": "2026-05-29T09:00:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 75.0
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 72.5
+          },
+          "delta_dollars": -2.5
+        },
+        {
+          "bar_ts": "2026-06-03T13:30:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+            "pnl_dollars": -21.25
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+            "pnl_dollars": -23.75
+          },
+          "delta_dollars": -2.5
+        },
+        {
+          "bar_ts": "2026-06-19T14:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_GAP",
+            "pnl_dollars": -83.75
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_GAP",
+            "pnl_dollars": -85.0
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2026-07-09T05:45:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -48.75
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -50.0
+          },
+          "delta_dollars": -1.25
+        },
+        {
+          "bar_ts": "2026-07-10T13:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -26.25
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -27.5
+          },
+          "delta_dollars": -1.25
+        }
+      ],
+      "counts": {
+        "disappeared": 0,
+        "appeared": 0,
+        "changed": 40
+      }
+    },
+    "2t_per_leg_strict_target_exits": {
+      "disappeared": [],
+      "appeared": [],
+      "changed": [
+        {
+          "bar_ts": "2025-07-25T03:00:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -13.75
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -17.5
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2025-07-29T09:00:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -15.0
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -18.75
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2025-09-04T12:00:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -31.25
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -35.0
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2025-09-05T08:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -20.0
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -23.75
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2025-09-09T18:45:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -20.0
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -23.75
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2025-09-10T06:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -15.0
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -18.75
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2025-09-16T05:00:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -7.5
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -11.25
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2025-09-17T16:00:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+            "pnl_dollars": -22.5
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+            "pnl_dollars": -27.5
+          },
+          "delta_dollars": -5.0
+        },
+        {
+          "bar_ts": "2025-10-01T07:45:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -33.75
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -37.5
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2025-10-01T13:30:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT_SAME_BAR",
+            "pnl_dollars": 72.5
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT_SAME_BAR",
+            "pnl_dollars": 67.5
+          },
+          "delta_dollars": -5.0
+        },
+        {
+          "bar_ts": "2025-10-06T17:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -23.75
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -27.5
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2025-10-08T09:30:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -21.25
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -25.0
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2025-10-16T07:45:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 75.0
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 70.0
+          },
+          "delta_dollars": -5.0
+        },
+        {
+          "bar_ts": "2025-10-24T12:30:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT_SAME_BAR",
+            "pnl_dollars": 97.5
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT_SAME_BAR",
+            "pnl_dollars": 92.5
+          },
+          "delta_dollars": -5.0
+        },
+        {
+          "bar_ts": "2025-10-30T15:30:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 90.0
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 85.0
+          },
+          "delta_dollars": -5.0
+        },
+        {
+          "bar_ts": "2025-11-13T07:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -23.75
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -27.5
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2025-11-27T14:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -18.75
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -22.5
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2025-12-01T14:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+            "pnl_dollars": -37.5
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+            "pnl_dollars": -42.5
+          },
+          "delta_dollars": -5.0
+        },
+        {
+          "bar_ts": "2025-12-03T16:45:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -67.5
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -71.25
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2025-12-05T05:00:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -15.0
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -18.75
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2025-12-17T07:45:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -26.25
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -30.0
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2026-02-16T12:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -20.0
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -23.75
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2026-02-20T13:30:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT_SAME_BAR",
+            "pnl_dollars": 80.0
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT_SAME_BAR",
+            "pnl_dollars": 75.0
+          },
+          "delta_dollars": -5.0
+        },
+        {
+          "bar_ts": "2026-03-13T16:45:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 150.0
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 145.0
+          },
+          "delta_dollars": -5.0
+        },
+        {
+          "bar_ts": "2026-03-16T13:30:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+            "pnl_dollars": -32.5
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+            "pnl_dollars": -37.5
+          },
+          "delta_dollars": -5.0
+        },
+        {
+          "bar_ts": "2026-03-17T12:00:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 90.0
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 85.0
+          },
+          "delta_dollars": -5.0
+        },
+        {
+          "bar_ts": "2026-03-18T08:45:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -25.0
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -28.75
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2026-03-26T11:15:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 75.0
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 70.0
+          },
+          "delta_dollars": -5.0
+        },
+        {
+          "bar_ts": "2026-03-30T12:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -52.5
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -56.25
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2026-04-06T02:00:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 92.5
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 87.5
+          },
+          "delta_dollars": -5.0
+        },
+        {
+          "bar_ts": "2026-04-06T19:45:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -27.5
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -31.25
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2026-04-09T05:00:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -16.25
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -20.0
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2026-04-15T16:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -37.5
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -41.25
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2026-04-24T10:00:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -26.25
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -30.0
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2026-05-05T15:00:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 82.5
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 77.5
+          },
+          "delta_dollars": -5.0
+        },
+        {
+          "bar_ts": "2026-05-29T09:00:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 75.0
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 70.0
+          },
+          "delta_dollars": -5.0
+        },
+        {
+          "bar_ts": "2026-06-03T13:30:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+            "pnl_dollars": -21.25
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+            "pnl_dollars": -26.25
+          },
+          "delta_dollars": -5.0
+        },
+        {
+          "bar_ts": "2026-06-19T14:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_GAP",
+            "pnl_dollars": -83.75
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_GAP",
+            "pnl_dollars": -87.5
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2026-07-09T05:45:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -48.75
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -52.5
+          },
+          "delta_dollars": -3.75
+        },
+        {
+          "bar_ts": "2026-07-10T13:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -26.25
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -30.0
+          },
+          "delta_dollars": -3.75
+        }
+      ],
+      "counts": {
+        "disappeared": 0,
+        "appeared": 0,
+        "changed": 40
+      }
+    },
+    "3t_per_leg_strict_target_exits": {
+      "disappeared": [],
+      "appeared": [],
+      "changed": [
+        {
+          "bar_ts": "2025-07-25T03:00:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -13.75
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -20.0
+          },
+          "delta_dollars": -6.25
+        },
+        {
+          "bar_ts": "2025-07-29T09:00:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -15.0
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -21.25
+          },
+          "delta_dollars": -6.25
+        },
+        {
+          "bar_ts": "2025-09-04T12:00:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -31.25
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -37.5
+          },
+          "delta_dollars": -6.25
+        },
+        {
+          "bar_ts": "2025-09-05T08:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -20.0
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -26.25
+          },
+          "delta_dollars": -6.25
+        },
+        {
+          "bar_ts": "2025-09-09T18:45:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -20.0
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -26.25
+          },
+          "delta_dollars": -6.25
+        },
+        {
+          "bar_ts": "2025-09-10T06:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -15.0
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -21.25
+          },
+          "delta_dollars": -6.25
+        },
+        {
+          "bar_ts": "2025-09-16T05:00:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -7.5
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -13.75
+          },
+          "delta_dollars": -6.25
+        },
+        {
+          "bar_ts": "2025-09-17T16:00:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+            "pnl_dollars": -22.5
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+            "pnl_dollars": -30.0
+          },
+          "delta_dollars": -7.5
+        },
+        {
+          "bar_ts": "2025-10-01T07:45:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -33.75
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -40.0
+          },
+          "delta_dollars": -6.25
+        },
+        {
+          "bar_ts": "2025-10-01T13:30:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT_SAME_BAR",
+            "pnl_dollars": 72.5
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT_SAME_BAR",
+            "pnl_dollars": 65.0
+          },
+          "delta_dollars": -7.5
+        },
+        {
+          "bar_ts": "2025-10-06T17:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -23.75
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -30.0
+          },
+          "delta_dollars": -6.25
+        },
+        {
+          "bar_ts": "2025-10-08T09:30:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -21.25
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -27.5
+          },
+          "delta_dollars": -6.25
+        },
+        {
+          "bar_ts": "2025-10-16T07:45:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 75.0
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 67.5
+          },
+          "delta_dollars": -7.5
+        },
+        {
+          "bar_ts": "2025-10-24T12:30:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT_SAME_BAR",
+            "pnl_dollars": 97.5
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT_SAME_BAR",
+            "pnl_dollars": 90.0
+          },
+          "delta_dollars": -7.5
+        },
+        {
+          "bar_ts": "2025-10-30T15:30:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 90.0
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 82.5
+          },
+          "delta_dollars": -7.5
+        },
+        {
+          "bar_ts": "2025-11-13T07:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -23.75
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -30.0
+          },
+          "delta_dollars": -6.25
+        },
+        {
+          "bar_ts": "2025-11-27T14:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -18.75
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -25.0
+          },
+          "delta_dollars": -6.25
+        },
+        {
+          "bar_ts": "2025-12-01T14:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+            "pnl_dollars": -37.5
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+            "pnl_dollars": -45.0
+          },
+          "delta_dollars": -7.5
+        },
+        {
+          "bar_ts": "2025-12-03T16:45:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -67.5
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -73.75
+          },
+          "delta_dollars": -6.25
+        },
+        {
+          "bar_ts": "2025-12-05T05:00:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -15.0
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -21.25
+          },
+          "delta_dollars": -6.25
+        },
+        {
+          "bar_ts": "2025-12-17T07:45:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -26.25
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -32.5
+          },
+          "delta_dollars": -6.25
+        },
+        {
+          "bar_ts": "2026-02-16T12:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -20.0
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -26.25
+          },
+          "delta_dollars": -6.25
+        },
+        {
+          "bar_ts": "2026-02-20T13:30:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT_SAME_BAR",
+            "pnl_dollars": 80.0
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT_SAME_BAR",
+            "pnl_dollars": 72.5
+          },
+          "delta_dollars": -7.5
+        },
+        {
+          "bar_ts": "2026-03-13T16:45:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 150.0
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 142.5
+          },
+          "delta_dollars": -7.5
+        },
+        {
+          "bar_ts": "2026-03-16T13:30:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+            "pnl_dollars": -32.5
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+            "pnl_dollars": -40.0
+          },
+          "delta_dollars": -7.5
+        },
+        {
+          "bar_ts": "2026-03-17T12:00:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 90.0
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 82.5
+          },
+          "delta_dollars": -7.5
+        },
+        {
+          "bar_ts": "2026-03-18T08:45:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -25.0
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -31.25
+          },
+          "delta_dollars": -6.25
+        },
+        {
+          "bar_ts": "2026-03-26T11:15:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 75.0
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 67.5
+          },
+          "delta_dollars": -7.5
+        },
+        {
+          "bar_ts": "2026-03-30T12:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -52.5
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -58.75
+          },
+          "delta_dollars": -6.25
+        },
+        {
+          "bar_ts": "2026-04-06T02:00:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 92.5
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 85.0
+          },
+          "delta_dollars": -7.5
+        },
+        {
+          "bar_ts": "2026-04-06T19:45:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -27.5
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -33.75
+          },
+          "delta_dollars": -6.25
+        },
+        {
+          "bar_ts": "2026-04-09T05:00:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -16.25
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -22.5
+          },
+          "delta_dollars": -6.25
+        },
+        {
+          "bar_ts": "2026-04-15T16:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -37.5
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -43.75
+          },
+          "delta_dollars": -6.25
+        },
+        {
+          "bar_ts": "2026-04-24T10:00:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -26.25
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -32.5
+          },
+          "delta_dollars": -6.25
+        },
+        {
+          "bar_ts": "2026-05-05T15:00:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 82.5
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 75.0
+          },
+          "delta_dollars": -7.5
+        },
+        {
+          "bar_ts": "2026-05-29T09:00:00+00:00",
+          "baseline": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 75.0
+          },
+          "variant": {
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "pnl_dollars": 67.5
+          },
+          "delta_dollars": -7.5
+        },
+        {
+          "bar_ts": "2026-06-03T13:30:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+            "pnl_dollars": -21.25
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+            "pnl_dollars": -28.75
+          },
+          "delta_dollars": -7.5
+        },
+        {
+          "bar_ts": "2026-06-19T14:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_GAP",
+            "pnl_dollars": -83.75
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_GAP",
+            "pnl_dollars": -90.0
+          },
+          "delta_dollars": -6.25
+        },
+        {
+          "bar_ts": "2026-07-09T05:45:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -48.75
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -55.0
+          },
+          "delta_dollars": -6.25
+        },
+        {
+          "bar_ts": "2026-07-10T13:15:00+00:00",
+          "baseline": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -26.25
+          },
+          "variant": {
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "pnl_dollars": -32.5
+          },
+          "delta_dollars": -6.25
+        }
+      ],
+      "counts": {
+        "disappeared": 0,
+        "appeared": 0,
+        "changed": 40
+      }
+    }
+  }
+}
