@@ -15,8 +15,8 @@ import pytest
 
 CANDIDATES = Path("scripts/edge_decomposition_audit_results_candidates.jsonl.gz")
 LANES = ("transition_mnq", "transition_mnq_audit")
-# 1 MNQ tick = $0.50. 300 ticks = $150 before commission.
-STOP_TICKS = (60, 80, 100, 120, 160, 200, 240, 300)
+# 1 MNQ tick = $0.50. Grid is capped at $300 risk / 600 ticks.
+STOP_TICKS = (60, 80, 100, 120, 160, 200, 240, 300, 400, 500, 600)
 TICK_SIZE = 0.25
 DOLLARS_PER_POINT = 2.0
 ROUND_TURN_COMMISSION = 1.48
@@ -54,14 +54,7 @@ def summarize(vals):
 
 
 def stop_only_30m(rs, stop_ticks):
-    """Stop first if 30m MAE reaches the fixed cap; otherwise exit at 30m.
-
-    MAE is already measured over the same decision-time 30m control window, so
-    a touch of the stop threshold means the protective stop would have fired
-    before the timed exit. Stopped rows are charged the fixed stop distance plus
-    the same $1.48 round-turn commission used by the audit. This is conservative
-    with respect to stop triggering and does not credit any target.
-    """
+    """Stop first if 30m MAE reaches the fixed cap; otherwise exit at 30m."""
     stop_points = stop_ticks * TICK_SIZE
     stop_net = -(stop_points * DOLLARS_PER_POINT) - ROUND_TURN_COMMISSION
     vals = []
