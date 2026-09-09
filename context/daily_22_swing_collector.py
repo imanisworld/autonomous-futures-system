@@ -16,6 +16,8 @@ Safety contract:
 - one adverse tick per entry/stop exit, $1.48 round-turn commission;
 - pessimistic same-bar stop/target handling through PaperBroker;
 - 20%/25% drawdown warnings; hard paper halt at 30% from ledger peak;
+- shared campaign cap: max three filled entries/day across Daily 2-2 + 4HR +
+  60M 3-2-2. This does not impose an artificial one-fill/day cap on 4HR/3-2-2;
 - no EOD flatten: this is intentionally a multi-day swing evidence lane;
 - no external broker, no promotion path, no active-book mutation.
 
@@ -37,6 +39,7 @@ from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
 from context import wide_stop_ledger_paper as wide_contract
+from context import wide_stop_portfolio as portfolio
 from context.bar_history import _parse_dt
 from execution.broker_interface import BracketOrder
 from execution.paper_broker import NextBarOHLC, PaperBroker
@@ -238,7 +241,6 @@ def _candidate_for_current_bar(bars_5m: list[dict], current_ts: datetime) -> Opt
     if first_break is None:
         return None
     trigger_bar, current_type = first_break
-    # Never backfill a trigger discovered before this webhook invocation.
     if trigger_bar["ts"] != current_ts:
         return None
     if current_type != previous_type:
@@ -550,6 +552,32 @@ def process_five_min_bar(
             _save_state(log_dir, state)
             return events
 
+        campaign_day = for_date or _trading_day(current_ts) or current_ts.astimezone(ET).date()
+        if portfolio.daily_slots_used(log_dir, campaign_day) >= portfolio.MAX_FILLS_PER_DAY:
+            row.update(
+                lane_result="BLOCKED",
+                lane_failed_rule="GLOBAL_MAX_TRADES_PER_DAY",
+                portfolio=portfolio.admission_snapshot(log_dir, campaign_day),
+            )
+            _journal(log_dir, row)
+            events.append(row)
+            _save_state(log_dir, state)
+            return events
+        reserved, reserve_reason = portfolio.reserve_daily_slot(
+            log_dir, campaign_day, key, route="daily_22_paper"
+        )
+        if not reserved:
+            row.update(
+                lane_result="BLOCKED",
+                lane_failed_rule="GLOBAL_MAX_TRADES_PER_DAY",
+                lane_reason=reserve_reason,
+                portfolio=portfolio.admission_snapshot(log_dir, campaign_day),
+            )
+            _journal(log_dir, row)
+            events.append(row)
+            _save_state(log_dir, state)
+            return events
+
         broker = _broker(float(state["balance"]))
         fill = broker.execute_bracket(
             BracketOrder(
@@ -571,6 +599,7 @@ def process_five_min_bar(
             fill_paper_order_id=getattr(fill, "paper_order_id", None),
         )
         if fill.result == "OPEN":
+            portfolio.confirm_daily_slot(log_dir, campaign_day, key)
             close_time = current_ts + timedelta(minutes=5)
             state["position"] = {
                 "candidate_key": key,
@@ -588,7 +617,9 @@ def process_five_min_bar(
             }
             row["lane_result"] = "OPEN"
         else:
+            portfolio.release_daily_slot(log_dir, campaign_day, key)
             row["lane_result"] = "CANCELLED"
+        row["portfolio"] = portfolio.admission_snapshot(log_dir, campaign_day)
         _journal(log_dir, row)
         events.append(row)
         _save_state(log_dir, state)
