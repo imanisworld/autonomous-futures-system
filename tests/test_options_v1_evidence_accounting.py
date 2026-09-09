@@ -52,14 +52,50 @@ def test_each_timeframe_buckets_on_its_own_bar():
     at = datetime(2026, 9, 9, 14, 20, tzinfo=timezone.utc)  # 10:20 ET
     assert episode_bucket("1D", at) == "1D:2026-09-09"
     assert episode_bucket("4H_RTH", at) == "4H_RTH:2026-09-09:0"
-    assert episode_bucket("1H", at) == "1H:2026-09-09:10"
+    assert episode_bucket("1H", at) == "1H:2026-09-09:0"  # 9:30-10:30 ET block
     assert episode_bucket("30m", at) == "30M:2026-09-09:10:00"
-    # 30m grid advances on the half hour, the 1H/4H buckets do not.
+    # 30m grid advances on the half hour; the 4H bucket does not, and the 1H
+    # bucket advances at 10:30 ET (session-anchored), not at the clock hour.
     later = datetime(2026, 9, 9, 14, 45, tzinfo=timezone.utc)
     assert episode_bucket("30m", later) == "30M:2026-09-09:10:30"
-    assert episode_bucket("1H", later) == "1H:2026-09-09:10"
+    assert episode_bucket("1H", later) == "1H:2026-09-09:1"  # 10:30-11:30 ET block
     # An unmapped timeframe keeps its own label so it cannot collide.
     assert episode_bucket("8H", at).startswith("8H:")
+
+
+def _et(hour: int, minute: int) -> datetime:
+    """2026-09-09 (EDT, UTC-4) wall-clock ET -> aware UTC datetime."""
+    return datetime(2026, 9, 9, hour + 4, minute, 7, tzinfo=timezone.utc)
+
+
+def test_1h_episode_is_anchored_to_the_rth_open_not_the_clock_hour():
+    """_timeframe_series builds 1H evidence candles from session.open in
+    one-hour spans (9:30-10:30, 10:30-11:30, ...).  The episode bucket must use
+    the same anchor, or a setup at 10:00 is a second episode inside the 9:30
+    candle and a genuinely new 10:30 setup is suppressed until 11:00."""
+    first_candle = {episode_bucket("1H", _et(9, m)) for m in range(30, 60)}
+    first_candle |= {episode_bucket("1H", _et(10, m)) for m in range(0, 30)}
+    assert first_candle == {"1H:2026-09-09:0"}, "9:30-10:29 ET is ONE 1H episode"
+
+    assert episode_bucket("1H", _et(10, 29)) == "1H:2026-09-09:0"
+    assert episode_bucket("1H", _et(10, 30)) == "1H:2026-09-09:1"
+    assert episode_bucket("1H", _et(10, 29)) != episode_bucket("1H", _et(10, 30)), (
+        "10:29 and 10:30 ET belong to different 1H candles"
+    )
+    # 10:00 stays inside the 9:30 candle: the clock-hour boundary is NOT an edge.
+    assert episode_bucket("1H", _et(9, 59)) == episode_bucket("1H", _et(10, 0))
+    # Later blocks keep the 9:30 anchor.
+    assert episode_bucket("1H", _et(11, 29)) == "1H:2026-09-09:1"
+    assert episode_bucket("1H", _et(11, 30)) == "1H:2026-09-09:2"
+    assert episode_bucket("1H", _et(15, 30)) == "1H:2026-09-09:6"  # final shortened 15:30-16:00 block
+    # Pre-open ticks never share a bucket with the first RTH candle.
+    assert episode_bucket("1H", _et(9, 29)) == "1H:2026-09-09:-1"
+
+
+def test_1h_episode_key_dedupes_exactly_one_candle():
+    inside = {episode_key(CANDIDATE, "1H", _et(10, m)) for m in (0, 5, 10, 20, 25, 29)}
+    assert len(inside) == 1
+    assert episode_key(CANDIDATE, "1H", _et(10, 30)) not in inside
 
 
 def test_episode_duplicate_lookup_ignores_status(tmp_path):

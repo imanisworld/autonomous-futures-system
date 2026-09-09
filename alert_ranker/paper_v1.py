@@ -332,6 +332,7 @@ def data_invalid(reason: str) -> dict[str, Any]:
 
 EXCHANGE_TIMEZONE = "America/New_York"
 _RTH_OPEN_MINUTES = 9 * 60 + 30
+_RTH_HOUR_MINUTES = 60
 _RTH_BLOCK_MINUTES = 240
 
 
@@ -353,7 +354,13 @@ def episode_bucket(timeframe: str | None, moment: datetime) -> str:
         block = offset // _RTH_BLOCK_MINUTES if offset >= 0 else -1
         return f"4H_RTH:{day}:{block}"
     if label == "1H":
-        return f"1H:{day}:{local.hour:02d}"
+        # 1H evidence candles are built by _timeframe_series anchored to the
+        # RTH session open (9:30-10:30, 10:30-11:30, ...), never to the clock
+        # hour.  Bucket the same way or one setup straddles two candles and a
+        # genuinely new 10:30 setup is suppressed until 11:00.
+        offset = (local.hour * 60 + local.minute) - _RTH_OPEN_MINUTES
+        block = offset // _RTH_HOUR_MINUTES if offset >= 0 else -1
+        return f"1H:{day}:{block}"
     # 30m and any unmapped timeframe fall back to the 30m grid.  The label stays
     # in the key so two unmapped timeframes can never share an episode.
     half = 0 if local.minute < 30 else 30
