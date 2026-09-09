@@ -27,7 +27,7 @@ from .contract_marks import record_contract_mark
 from .daily_strat import DAILY_TIMEFRAME, evaluate_daily_setup
 from .discord import AlertDecision
 from .lifecycle import classify_candidate, open_candidate_fields
-from .paper_v1 import POLICY_ID
+from .paper_v1 import POLICY_ID, episode_key
 from .scorer import score_setup
 from .session_calendar import SessionCalendarError
 
@@ -491,14 +491,23 @@ def build_multisetup_scanner(base_cls):
                 shadow_reason = f"suppressed:{gate}"
             elif classification.is_open_eligible:
                 candidate_key = _candidate_identity(classification.contract_key, result.raw)
+                episode = episode_key(
+                    candidate_key, result.raw.get("setup_timeframe"), now
+                )
                 duplicate = self.storage.find_open_duplicate(result.ticker, candidate_key)
+                episode_duplicate = self.storage.find_episode_duplicate(
+                    result.ticker, episode
+                )
                 if duplicate is not None:
                     shadow_reason = f"duplicate_open:{duplicate}"
+                elif episode_duplicate is not None:
+                    shadow_reason = f"duplicate_episode:{episode_duplicate}"
                 else:
                     selected = _selected_contract(result.raw)
                     selected.update(open_candidate_fields(result.raw, classification.contract_key))
                     selected["option_contract_key"] = classification.contract_key
                     selected["contract_key"] = candidate_key
+                    selected["episode_key"] = episode
                     if candidate_key != classification.contract_key:
                         selected["candidate_key"] = candidate_key
                     if result.raw.get("setup_type"):

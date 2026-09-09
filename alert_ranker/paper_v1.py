@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from math import isfinite
 from typing import Any, Iterable
+from zoneinfo import ZoneInfo
 
 POLICY_ID = "OPTIONS_PAPER_V1"
 MAX_TRADE_RISK_DOLLARS = 300.0
@@ -327,3 +328,38 @@ def data_invalid(reason: str) -> dict[str, Any]:
         "paper_policy_status": "DATA_INVALID",
         "paper_policy_reason": reason,
     }
+
+
+EXCHANGE_TIMEZONE = "America/New_York"
+_RTH_OPEN_MINUTES = 9 * 60 + 30
+_RTH_BLOCK_MINUTES = 240
+
+
+def episode_bucket(timeframe: str | None, moment: datetime) -> str:
+    """Bucket a scan timestamp into one bar of the setup's OWN timeframe.
+
+    Evidence accounting rule: one distinct setup is one evidence episode.  The
+    scanner re-evaluates every interval, so without this bucket a setup that
+    stays valid across a bar is journalled once per tick and inflates ``n`` by
+    the scan rate rather than by the number of distinct setups.
+    """
+    local = moment.astimezone(ZoneInfo(EXCHANGE_TIMEZONE))
+    label = str(timeframe or "").strip().upper()
+    day = local.date().isoformat()
+    if label == "1D":
+        return f"1D:{day}"
+    if label == "4H_RTH":
+        offset = (local.hour * 60 + local.minute) - _RTH_OPEN_MINUTES
+        block = offset // _RTH_BLOCK_MINUTES if offset >= 0 else -1
+        return f"4H_RTH:{day}:{block}"
+    if label == "1H":
+        return f"1H:{day}:{local.hour:02d}"
+    # 30m and any unmapped timeframe fall back to the 30m grid.  The label stays
+    # in the key so two unmapped timeframes can never share an episode.
+    half = 0 if local.minute < 30 else 30
+    return f"{label or '30M'}:{day}:{local.hour:02d}:{half:02d}"
+
+
+def episode_key(candidate_key: str, timeframe: str | None, moment: datetime) -> str:
+    """Identity of one evidence episode: a candidate within one of its own bars."""
+    return f"{candidate_key}@{episode_bucket(timeframe, moment)}"

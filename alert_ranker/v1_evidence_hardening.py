@@ -33,6 +33,7 @@ from .paper_v1 import (
     choose_contract,
     choose_expiration,
     data_invalid,
+    episode_key,
 )
 from .scanner_legacy import (
     ScanOutcome,
@@ -509,6 +510,9 @@ def build_v1_evidence_hardening(base_cls):
 
             base_key = _candidate_identity(classification.contract_key, result.raw)
             candidate_key = f"{base_key}|{COUNTERFACTUAL_LANE}"
+            episode = episode_key(
+                candidate_key, result.raw.get("setup_timeframe"), now
+            )
             duplicate = self.storage.find_open_duplicate(result.ticker, candidate_key)
             if duplicate is not None:
                 return ScanOutcome(
@@ -519,12 +523,25 @@ def build_v1_evidence_hardening(base_cls):
                     0,
                     f"counterfactual_duplicate_open:{duplicate}",
                 )
+            episode_duplicate = self.storage.find_episode_duplicate(
+                result.ticker, episode
+            )
+            if episode_duplicate is not None:
+                return ScanOutcome(
+                    result,
+                    outcome.alert_sent,
+                    outcome.alert_suppression_reason,
+                    outcome.storage_id,
+                    0,
+                    f"counterfactual_duplicate_episode:{episode_duplicate}",
+                )
 
             selected = _selected_contract(result.raw)
             selected.update(open_candidate_fields(result.raw, classification.contract_key))
             selected["option_contract_key"] = classification.contract_key
             selected["contract_key"] = candidate_key
             selected["candidate_key"] = candidate_key
+            selected["episode_key"] = episode
             selected["paper_evidence_lane"] = COUNTERFACTUAL_LANE
             selected["risk_budget_consumed"] = False
             selected["setup_type"] = result.raw.get("setup_type")
