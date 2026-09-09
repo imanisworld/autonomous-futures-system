@@ -4,9 +4,11 @@ This options-only extension preserves the existing 30m 2-1-2 lane and adds
 Daily 2-1-2 continuation, 2-2-2 continuation/reversal, 3-2 developing WATCH,
 and 3-2-2 continuation/reversal as separate evidence populations.
 
-The builder fetches causal bars once per ticker, then every independent setup
-candidate flows through the exact same frozen OPTIONS_PAPER_V1 contract/risk
-policy.  No broker/order capability is added.
+The legacy per-ticker ScanOutcome remains authoritative for API compatibility.
+Daily observations are additional journal rows only; they never overwrite a
+caller-supplied pattern or turn an ordinary 30m candle into a setup.  Every
+triggered Daily candidate still flows through the exact same frozen
+OPTIONS_PAPER_V1 contract/risk policy.  No broker/order capability is added.
 """
 
 from __future__ import annotations
@@ -71,9 +73,12 @@ _EXTRA_CONTEXT_KEYS = _CANDIDATE_SPECIFIC_KEYS | {
 
 
 def _candidate_identity(contract_key: str, raw: dict[str, Any]) -> str:
-    setup_type = str(raw.get("setup_type") or "UNSPECIFIED").upper()
-    timeframe = str(raw.get("setup_timeframe") or raw.get("timeframe") or "UNSPECIFIED").upper()
-    return f"{contract_key}|{timeframe}|{setup_type}"
+    """Identity for independent setup populations, legacy-compatible when absent."""
+    setup_type = str(raw.get("setup_type") or "").strip().upper()
+    timeframe = str(raw.get("setup_timeframe") or "").strip().upper()
+    if not setup_type and not timeframe:
+        return contract_key
+    return f"{contract_key}|{timeframe or 'UNSPECIFIED'}|{setup_type or 'UNSPECIFIED'}"
 
 
 def _long_short(direction: str | None) -> str | None:
@@ -89,12 +94,11 @@ def _paper_candidate_id(setup_type: str, timeframe: str) -> str:
 
 
 def build_multisetup_scanner(base_cls):
-    """Return an OptionsScanner subclass that persists all emitted candidates."""
+    """Return an OptionsScanner subclass that adds Daily evidence collection."""
     # Imported here after scanner.py has defined these helpers. scanner.py
     # installs this subclass at module end, so there is no circular read of a
     # half-defined OptionsScanner.
     from .scanner import (
-        ScanOutcome,
         _float_or_none,
         _mid_from_raw,
         _provider_snapshot,
@@ -111,7 +115,7 @@ def build_multisetup_scanner(base_cls):
             return data
 
         async def _fetch_bar_context(self, ticker: str, now: datetime) -> dict[str, Any]:
-            """Build original 30m proof plus Daily candidates from one bar fetch."""
+            """Build original 30m proof plus Daily telemetry from one bar fetch."""
             if not self._causal_lane_active():
                 return {}
             if self.bar_context is None:
@@ -203,11 +207,23 @@ def build_multisetup_scanner(base_cls):
                     **base,
                 )
                 fields = market_context.to_scanner_fields()
-                candidates: list[dict[str, Any]] = []
+
+                # Tag the pre-existing 30m candidate without changing its
+                # status/pattern/result. This makes setup/timeframe analysis
+                # possible while retaining the exact old API semantics.
+                if (
+                    not reason
+                    and ticker_context.setup_status == "TRIGGERED"
+                    and ticker_context.setup_proof_status == "VALID"
+                ):
+                    fields["setup_type"] = "STRAT_212_CONTINUATION"
+                    fields["setup_timeframe"] = "30m"
+                    fields["paper_candidate_id"] = _paper_candidate_id(
+                        "STRAT_212_CONTINUATION", "30m"
+                    )
+
+                daily_candidates: list[dict[str, Any]] = []
                 if not reason:
-                    thirty = self._thirty_minute_candidate(ticker_context)
-                    if thirty is not None:
-                        candidates.append(thirty)
                     daily = self._daily_candidate_from_raw(
                         builder,
                         raw.get(symbol, []),
@@ -219,9 +235,9 @@ def build_multisetup_scanner(base_cls):
                         qqq,
                     )
                     if daily is not None:
-                        candidates.append(daily)
-                fields["paper_setup_candidates"] = candidates
-                fields["paper_setup_candidate_count"] = len(candidates)
+                        daily_candidates.append(daily)
+                fields["paper_setup_candidates"] = daily_candidates
+                fields["paper_setup_candidate_count"] = len(daily_candidates)
                 return fields
             except SessionCalendarError as exc:
                 return {
@@ -241,43 +257,6 @@ def build_multisetup_scanner(base_cls):
                     "bar_context_available": False,
                     "bar_context_reason": f"bar_context_error:{type(exc).__name__}",
                 }
-
-        @staticmethod
-        def _thirty_minute_candidate(ticker_context) -> dict[str, Any] | None:
-            if not (
-                ticker_context.setup_status == "TRIGGERED"
-                and ticker_context.setup_proof_status == "VALID"
-                and ticker_context.setup_direction in {"CALL", "PUT"}
-            ):
-                return None
-            return {
-                "paper_candidate_id": _paper_candidate_id(
-                    "STRAT_212_CONTINUATION", "30m"
-                ),
-                "setup_type": "STRAT_212_CONTINUATION",
-                "setup_timeframe": "30m",
-                "timeframe": "30m",
-                "pattern": ticker_context.strat_sequence or "strat_212",
-                "strat_sequence": ticker_context.strat_sequence or "strat_212",
-                "direction": _long_short(ticker_context.setup_direction),
-                "setup_status": "TRIGGERED",
-                "setup_reason_code": ticker_context.setup_reason_code,
-                "setup_direction": ticker_context.setup_direction,
-                "setup_entry_trigger": ticker_context.setup_entry_trigger,
-                "underlying_invalidation": ticker_context.setup_invalidation,
-                "stop": ticker_context.setup_invalidation,
-                "target": ticker_context.setup_target_1,
-                "target_1": ticker_context.setup_target_1,
-                "target_2": ticker_context.setup_target_2,
-                "setup_rr_1": ticker_context.setup_rr_1,
-                "setup_rr_2": ticker_context.setup_rr_2,
-                "setup_market_status": ticker_context.setup_market_status,
-                "setup_market_reason": ticker_context.setup_market_reason,
-                "setup_proof_status": ticker_context.setup_proof_status,
-                "trade_proof_status": ticker_context.trade_proof_status,
-                "trade_proof_reason": ticker_context.trade_proof_reason,
-                "setup_suppression_reason": None,
-            }
 
         def _daily_candidate_from_raw(
             self,
@@ -442,34 +421,35 @@ def build_multisetup_scanner(base_cls):
             context: dict[str, Any] | None = None,
             now=None,
         ):
+            """Return the legacy result; persist Daily observations additionally."""
             now = now or datetime.now(ZoneInfo(self.config.timezone))
             normalized = await self._build_normalized_data(ticker, context or {}, now)
-            raw_candidates = normalized.get("paper_setup_candidates")
-            candidates = (
-                [item for item in raw_candidates if isinstance(item, dict)]
-                if isinstance(raw_candidates, list)
-                else []
-            )
-            if not candidates:
-                return await self._process_normalized_candidate(
-                    ticker, normalized, source=source, now=now
-                )
+            daily_candidates = normalized.get("paper_setup_candidates")
 
-            outcomes = []
-            total = len(candidates)
-            for index, candidate in enumerate(candidates, start=1):
-                data = self._overlay_candidate(normalized, candidate)
-                data["paper_setup_candidate_index"] = index
-                data["paper_setup_candidate_count"] = total
-                outcomes.append(
+            # Process the legacy 30m/caller-supplied lane exactly once and keep
+            # its result as the API return value.  Extra Daily scans must not
+            # rewrite the visible pattern/status of an existing caller.
+            primary = await self._process_normalized_candidate(
+                ticker,
+                {key: value for key, value in normalized.items() if key != "paper_setup_candidates"},
+                source=source,
+                now=now,
+            )
+
+            if isinstance(daily_candidates, list):
+                for index, candidate in enumerate(daily_candidates, start=1):
+                    if not isinstance(candidate, dict):
+                        continue
+                    data = self._overlay_candidate(normalized, candidate)
+                    data["paper_setup_candidate_index"] = index
+                    data["paper_setup_candidate_count"] = len(daily_candidates)
                     await self._process_normalized_candidate(
-                        ticker, data, source=source, now=now
+                        ticker,
+                        data,
+                        source=f"{source}:daily",
+                        now=now,
                     )
-                )
-            for outcome in outcomes:
-                if str(outcome.result.raw.get("setup_status") or "").upper() == "TRIGGERED":
-                    return outcome
-            return outcomes[0]
+            return primary
 
         @staticmethod
         def _overlay_candidate(base: dict[str, Any], candidate: dict[str, Any]) -> dict[str, Any]:
@@ -482,6 +462,8 @@ def build_multisetup_scanner(base_cls):
             return data
 
         async def _process_normalized_candidate(self, ticker, normalized, *, source, now):
+            from .scanner import ScanOutcome
+
             preliminary = score_setup(normalized, now=now)
             normalized = await self._apply_paper_v1_contract(
                 ticker, normalized, preliminary.direction, now
@@ -517,9 +499,12 @@ def build_multisetup_scanner(base_cls):
                     selected.update(open_candidate_fields(result.raw, classification.contract_key))
                     selected["option_contract_key"] = classification.contract_key
                     selected["contract_key"] = candidate_key
-                    selected["candidate_key"] = candidate_key
-                    selected["setup_type"] = result.raw.get("setup_type")
-                    selected["setup_timeframe"] = result.raw.get("setup_timeframe")
+                    if candidate_key != classification.contract_key:
+                        selected["candidate_key"] = candidate_key
+                    if result.raw.get("setup_type"):
+                        selected["setup_type"] = result.raw.get("setup_type")
+                    if result.raw.get("setup_timeframe"):
+                        selected["setup_timeframe"] = result.raw.get("setup_timeframe")
                     shadow_id = self.storage.record_shadow_setup(
                         result,
                         scan_id=storage_id,
