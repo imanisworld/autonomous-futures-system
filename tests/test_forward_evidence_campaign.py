@@ -67,8 +67,6 @@ def test_bar_open_episode_boundaries_and_representative_pair():
     assert event("2026-08-13T14:35:00+00:00") == episode
     assert event("2026-08-13T14:40:00+00:00") == episode
     assert event("2026-08-13T14:45:00+00:00") != episode
-    # Representative 5m early bar and canonical 15m bar are both bar-open
-    # timestamps belonging to the 14:30 market episode.
     assert event("2026-08-13T14:35:00+00:00") == event("2026-08-13T14:30:00+00:00")
 
 
@@ -239,8 +237,6 @@ def test_resting_entry_and_target_same_bar_is_not_an_unproven_win(direction):
 
 @pytest.mark.parametrize("direction", ["LONG", "SHORT"])
 def test_fill_bar_open_proves_target_before_entry_and_cannot_create_win(direction):
-    # Opening beyond the target proves the target price existed before a later
-    # move back to the resting entry. The earlier target is not an earned exit.
     bar = (
         {**_bar("2026-08-13T14:35:00+00:00", 102.5, 99.5), "open": 102.25}
         if direction == "LONG"
@@ -334,8 +330,6 @@ def test_canonical_fixed_position_resolves_later_without_requiring_fill_bar_in_h
         original_target=102.0 if direction == "LONG" else 98.0,
     )
     assert open_campaign_position(tmp_path, record)
-    # Target is also touched on the fill bar. That unsequenced touch must not
-    # emit a WIN; a later, independently observed target touch must resolve it.
     fill = (
         _bar("2026-08-13T14:35:00+00:00", 102.5, 99.5)
         if direction == "LONG"
@@ -418,7 +412,7 @@ def test_report_has_true_event_id_pair_taxonomy_and_duplicate_protection(tmp_pat
     rows += [c5, m5, _outcome(c5, "LOSS", -2.0)]
     c6, m6 = candidate("event-modified-resolved", "control"), candidate("event-modified-resolved", "modified")
     rows += [c6, m6, _outcome(m6, "WIN", 3.0)]
-    rows.append(deepcopy(c1))  # exact duplicate row cannot inflate either population
+    rows.append(deepcopy(c1))
     duplicate_arm = deepcopy(c1)
     duplicate_arm["candidate_id"] = "malformed-second-id-for-same-event-arm"
     rows.append(duplicate_arm)
@@ -504,8 +498,6 @@ def test_thirty_filled_economic_outcomes_satisfy_review_gate(tmp_path):
         candidate = _record(
             event_id=f"filled-{index}", signal_timestamp=_campaign_timestamp(index)
         )
-        # A filled terminal timeout/expiry with retained P&L is economic
-        # evidence just like W/L/BE and must count toward the preregistered gate.
         terminal = "EXPIRED" if index == 29 else ("WIN" if index % 2 == 0 else "LOSS")
         gross = 0.0 if terminal == "EXPIRED" else (10.0 if terminal == "WIN" else -5.0)
         rows.extend([candidate, _outcome(candidate, terminal, gross)])
@@ -521,13 +513,14 @@ def test_thirty_filled_economic_outcomes_satisfy_review_gate(tmp_path):
     assert population["classification_if_not_eligible"] is None
 
 
-def test_risk_rules_keep_only_mnq_orb_breakout_executable():
+def test_risk_rules_keep_orb_breakout_observable_but_not_executable():
     from config.settings import load_config
 
     cfg = load_config("risk_rules.yaml")
     assert cfg.allowed_instruments == ["MNQ"]
     assert cfg.enabled_concepts == ["orb_breakout"]
-    assert cfg.strategy_status["orb_breakout"] == "PAPER_ELIGIBLE"
+    assert cfg.strategy_status["orb_breakout"] == "SHADOW_ONLY"
+    assert "orb_breakout" in cfg.disabled_concepts_per_instrument.get("MNQ", [])
     assert cfg.strategy_status["vwap_hold"] == "SHADOW_ONLY"
 
 
