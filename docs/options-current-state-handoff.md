@@ -1,176 +1,212 @@
 # Options — Current State Handoff
 
-_As of 2026-09-09. Do not recreate completed scanner/risk work, do not tune Policy V1 during collection, and do not treat a functioning scanner as proof of strategy edge._
+_As of 2026-09-09. This is the single current-state authority for the options lane._
 
-## Verdict
+Historical dated notes and old/closed PRs are provenance only. They do not override this file. Operational deployment proof lives in `docs/options-paper-v1-deployment-checklist.md`; diagnostic definitions live in `docs/options-v1-diagnostics.md`.
 
-**ADVISORY / PAPER EVIDENCE ONLY. PIPELINE BUILT. STRATEGY EDGE NOT YET PROVEN.**
+## Current verdict
 
-Completed evidence plumbing now includes:
+**BUILD READY / DEPLOYMENT NOT YET PROVEN / V1 EVIDENCE EPOCH NOT STARTED / STRATEGY EDGE NOT PROVEN.**
 
-- PR #533 — independent multi-setup Strat collection;
-- PR #536 — rejected-filter counterfactuals, 1H/4H_RTH observer cohorts, ambiguity telemetry, active/counterfactual separation, and fail-closed V1 runtime preflight;
-- PR #540 — $1,500 / $2,500 / $5,000 bankroll, drawdown, and swing replay;
-- PR #541 — append-only MAE/MFE, entry-extension, friction-stress, evidence-quality, and sample-confidence diagnostics.
+Options-ready baseline on `main`: **`9d008a0dcdcb69270d80b663c678b4522f27ebb6`**.
 
-No broker execution is added by this work.
+Final CI for that baseline: **4,921 passed / 7 skipped / 2 warnings**.
 
-## Frozen `OPTIONS_PAPER_V1` policy
+Do not claim the VPS is on this SHA until box-side deployment and the market-hours smoke prove it.
 
-- max planned risk per active paper trade: **$300**
-- max aggregate active planned risk: **$1,000**
-- no hard position-count cap; aggregate planned risk controls exposure
-- preferred DTE: **45+**
-- 14–44 DTE: allowed and tagged `DTE_EXCEPTION`
-- <14 DTE / weeklies: excluded
-- entry basis: ask
-- premium stop: **25% adverse from entry premium**
-- underlying invalidation required
-- no averaging down
-- Signa observational only
-- GEX optional context
-- missing critical setup/quote/risk data => `DATA_INVALID`
+## What is built
 
-Any change to those rules creates a separate policy/evidence population.
+The current V1 path includes:
 
-## Active strategy populations
+- real option-chain contract selection and exact-contract re-quotes;
+- causal Strat setup proof;
+- independent setup/timeframe populations;
+- active vs rejected-filter counterfactual evidence;
+- 1H and explicit `4H_RTH` observer cohorts;
+- fail-closed runtime preflight;
+- snapshot-path ambiguity telemetry;
+- bankroll/drawdown/swing replay for $1,500 / $2,500 / $5,000;
+- option + underlying MAE/MFE;
+- entry-extension telemetry;
+- fee/slippage stress overlays;
+- evidence-quality and sample-confidence reporting.
+
+Relevant merged work: #520, #526, #533, #536, #540, #541.
+
+No broker auto-entry/order execution was added by this work.
+
+## Frozen `OPTIONS_PAPER_V1` trade policy
+
+- max planned risk per ACTIVE paper trade: **$300**;
+- max aggregate ACTIVE planned risk: **$1,000**;
+- no hard position-count cap; aggregate planned risk controls exposure;
+- preferred DTE: **45+**;
+- 14–44 DTE allowed with `DTE_EXCEPTION`;
+- <14 DTE / weeklies excluded from V1;
+- entry basis: **ask**;
+- premium stop: **25% adverse from entry premium**;
+- underlying invalidation required;
+- no averaging down;
+- Signa is observational only;
+- GEX is optional context;
+- missing critical setup/quote/risk data => `DATA_INVALID`.
+
+Do not tune these rules during the first evidence epoch. A rule change creates a new policy/cohort.
+
+## Strategy populations
+
+### ACTIVE paper candidates
 
 - **30m 2-1-2 continuation**
 - **Daily 2-1-2 continuation**
 - **Daily 2-2-2 continuation**
 - **Daily 2-2-2 reversal**
-- **Daily 3-2 developing** — WATCH only
 - **Daily 3-2-2 continuation**
 - **Daily 3-2-2 reversal**
+- **Daily 3-2 developing** — WATCH only until actionable
 
-Daily actionability remains mechanical: previous-candle high/low break, with the opposite side as underlying invalidation. Existing market-alignment proof remains the active promotion gate.
+Daily actionability is mechanical: previous-candle high/low break, with the opposite side as underlying invalidation.
 
-## Counterfactual / timeframe observation populations
+### COUNTERFACTUAL / observation evidence
 
-Mechanically valid signals rejected by filters are preserved instead of disappearing. Counterfactual rows:
+Mechanically valid signals rejected by promotion filters are preserved rather than discarded. These rows:
 
-- never send Discord alerts;
-- never consume the active $1,000 aggregate-risk budget;
-- use the same real-chain contract quality where enough facts exist;
-- re-quote the exact selected option contract;
-- remain distinct from ACTIVE rows;
-- are excluded from active dashboard P&L/win rate.
+- never alert;
+- never consume the ACTIVE $1,000 risk budget;
+- remain distinct from ACTIVE candidates;
+- use real-chain contract evidence when enough facts exist;
+- re-quote the exact selected contract;
+- are excluded from ACTIVE dashboard P&L/win rate.
 
-Observer populations include rejected 30m/Daily signals plus **1H** and explicit session-anchored **4H_RTH** Strat observations. `4H_RTH` is not presented as a native/vendor 4H candle.
+Observer cohorts include rejected 30m/Daily signals plus **1H** and **`4H_RTH`** Strat observations. `4H_RTH` is session-anchored from causal 30m bars and must not be described as a native/vendor 4H candle.
 
-## Bankroll / drawdown evaluation
+## What every usable trade should preserve
 
-The same ACTIVE V1 evidence is replayed through cash-only long-option account scenarios:
+At minimum:
 
-- **$1,500** — initial test bankroll
-- **$2,500** — intermediate comparison
-- **$5,000** — current maximum allocation ceiling if the demo proves itself
+- setup type + timeframe + direction;
+- ACTIVE vs COUNTERFACTUAL lane;
+- original filter/suppression reason;
+- mechanical trigger, underlying invalidation, targets;
+- exact expiration / strike / option symbol;
+- DTE and DTE bucket;
+- entry ask/bid, spread, volume, OI;
+- Greeks/IV when actually supplied;
+- premium stop + planned dollar risk;
+- exact-contract marks through resolution;
+- underlying snapshots through resolution;
+- Signa/GEX state;
+- ambiguity/path metadata;
+- outcome and friction views;
+- policy id.
+
+Missing evidence is flagged; it is not invented.
+
+## Diagnostics we will use to isolate each strategy
+
+After enough trustworthy observations exist, answer these six questions separately:
+
+1. **Signal / timeframe** — does the pattern itself predict direction; 30m vs 1H vs `4H_RTH` vs Daily where comparable?
+2. **Entry** — are fills late/extended beyond the mechanical trigger?
+3. **Stop** — is the 25% premium stop inside normal adverse excursion?
+4. **Target / exit** — does MFE show targets/hold times are mismatched to the timeframe?
+5. **Filters** — compare ACTIVE survivors with COUNTERFACTUAL rejected signals.
+6. **Execution realism** — ask/bid path, spreads, friction stress, ambiguity, capital constraints, and swings.
+
+The diagnostics report preserves:
+
+- option MAE/MFE from executable bid marks relative to ask entry;
+- underlying MAE/MFE from scheduled underlying snapshots;
+- directional entry extension;
+- quote age / observation gaps;
+- missing Greeks/IV / provider errors;
+- ambiguity flags;
+- `HIGH / MEDIUM / LOW` evidence quality;
+- sample count, win-rate interval, expectancy interval, profit factor, and drawdown.
+
+Sample labels are reporting labels only:
+
+- `<20` priced closed rows: `INSUFFICIENT`;
+- `20–49`: `EARLY`;
+- `50+`: `REVIEWABLE`.
+
+`REVIEWABLE` does not mean proven.
+
+### Friction views
+
+The canonical recorded fill view stays ask-entry / bid-exit. Analysis also reports:
+
+1. `RECORDED_EXECUTABLE` — ask entry / bid exit, no added fee;
+2. `FEE_STRESS_065` — $0.65 per contract per leg stress;
+3. `FEE_065_PLUS_1C_SLIPPAGE` — same fee stress + $0.01/share adverse slippage on both legs.
+
+These are sensitivity overlays only; they never rewrite the recorded V1 trade.
+
+## Bankroll, drawdown, and swing study
+
+Replay the same ACTIVE trade sequence through cash-only long-option accounts at:
+
+- **$1,500** — starting test bankroll;
+- **$2,500** — intermediate comparison;
+- **$5,000** — current maximum allocation ceiling if evidence earns it.
 
 **$5,000 is an allocation ceiling, not an acceptable drawdown.**
 
-The account replay uses ask entry, bid mark-to-market/exit, includes unrealized P&L, treats long options as cash-funded, records trades blocked by insufficient available cash, and excludes counterfactual rows from account P&L.
+Measure ending equity, realized + unrealized P&L, peak-to-trough drawdown $/%, lowest equity, time underwater, max capital deployed, max planned risk, max concurrent positions, cash-only blocked trades, and minimum observed starting cash needed to fund the full sequence.
 
-It measures ending equity, return, realized/unrealized P&L, peak-to-trough drawdown, lowest equity, time underwater, max capital deployed, max planned risk, max open positions, capital-only blocks, and minimum observed starting cash needed to fund every active entry.
+Swing positions remain open risk until closed. Track overnight holds, position-nights, max simultaneous overnight positions, observed overnight premium gaps, and open-position unrealized P&L.
 
-Swing positions remain open risk until they close. Overnight metrics include held-over trades, position-nights, max simultaneous overnight positions, worst observed overnight premium gap, and unrealized P&L in the equity curve.
+Do not change trade rules merely to make a smaller bankroll look better.
 
-## Diagnostic evidence now collected
+## Resolution realism
 
-PR #541 adds a separate append-only diagnostics table and read-only report. It does **not** change which trades V1 takes.
+The selected contract is re-quoted on the scheduled resolver cadence. The path between snapshots is not assumed known.
 
-For each V1 row it records/reports:
-
-- **option MAE/MFE** from the executable bid path relative to ask entry;
-- **underlying MAE/MFE** from scheduled underlying snapshots;
-- **directional entry extension** beyond the mechanical Strat trigger;
-- quote age and maximum observation gap;
-- missing Greeks/IV, provider errors, sparse marks, stale quotes, and ambiguity flags;
-- ACTIVE vs COUNTERFACTUAL lane identity;
-- hold duration and event-risk state when known;
-- evidence quality `HIGH / MEDIUM / LOW`.
-
-Entry extension is signed and directional:
-
-- LONG = `entry_underlying - trigger`
-- SHORT = `trigger - entry_underlying`
-
-Positive means the recorded entry was already beyond the mechanical trigger.
-
-The diagnostic report also applies analysis-only friction overlays to the same recorded trade:
-
-1. `RECORDED_EXECUTABLE` — ask entry / bid exit, no added fee;
-2. `FEE_STRESS_065` — subtract $0.65 per contract per leg;
-3. `FEE_065_PLUS_1C_SLIPPAGE` — same fee stress plus $0.01/share adverse slippage on both legs.
-
-The stress scenarios are sensitivity assumptions, not claims about the actual broker fee schedule, and never overwrite canonical V1 outcomes.
-
-Per setup/timeframe/lane summary includes sample count, win rate + 95% Wilson interval, expectancy + approximate 95% interval, profit factor, sequential closed-trade drawdown, friction totals, evidence-quality counts, and median MAE/MFE/entry extension.
-
-Sample labels are descriptive only:
-
-- `<20` priced closed rows: `INSUFFICIENT`
-- `20–49`: `EARLY`
-- `50+`: `REVIEWABLE`
-
-`REVIEWABLE` is not the same as proven.
-
-Full definitions and CLI: `docs/options-v1-diagnostics.md`.
-
-## Strategy isolation protocol
-
-After enough trustworthy rows exist, isolate every strategy with the same questions:
-
-1. **Signal / timeframe** — does the pattern itself predict direction; 30m vs 1H vs 4H_RTH vs Daily where comparable?
-2. **Entry** — are fills too early, too late, or extended beyond trigger?
-3. **Stop** — is the 25% premium stop inside normal MAE?
-4. **Target / exit** — does MFE show winners are held too long or targets mismatched to timeframe?
-5. **Filters** — compare ACTIVE survivors against COUNTERFACTUAL rejected signals.
-6. **Execution realism** — ask/bid path, spreads, fee/slippage stress, ambiguity, and account-risk constraints.
-
-Do not tune these dimensions from a handful of observations. Diagnose first; any rule change becomes a separate evidence cohort.
-
-## Lifecycle / execution evidence
-
-The exact selected option contract is re-quoted on the scheduled resolver cadence. Intra-interval path is explicitly treated as unobserved.
-
-If premium stop and underlying target are both true on the same observed snapshot, accounting remains pessimistic but the row is tagged:
+If premium stop and underlying target are both true on the same observed snapshot, keep pessimistic accounting but label the row explicitly:
 
 - `resolution_ambiguity=AMBIGUOUS`
 - `pessimistic_status=LOSS`
 - `pessimistic_resolution_used=true`
 
-Later studies can include/exclude that cohort explicitly.
+Later analysis can include/exclude the ambiguous cohort explicitly.
 
-## What is already done — do not redo
+## Retired / superseded options clutter
 
-- scanner/advisory plumbing and SQLite persistence
-- real-chain contract selection
-- 2099/far-future expiration sanity protection
-- frozen premium-stop and active aggregate-risk accounting
-- causal setup proof and fail-closed alerting
-- independent Daily multi-setup collection
-- counterfactual/filter evidence plumbing
-- 1H / 4H_RTH observer cohorts
-- active/counterfactual risk and dashboard separation
-- snapshot-path ambiguity telemetry
-- V1 scheduled runtime preflight
-- $1,500 / $2,500 / $5,000 bankroll + drawdown + swing replay
-- MAE/MFE + entry extension + friction stress + evidence-quality diagnostics
+- **`options_companion` is not the V1 collector. Keep it disabled with `OPTIONS_COMPANION_ENABLED=false`.** Its old short-DTE/stop logic must not leak into this campaign.
+- The generic/manual `options_manager` exception surface is not V1 evidence authority. It must not be used to inject <14 DTE rows.
+- **PR #446 (`claude/options-data-health`) is superseded for the current V1 path and is not a deployment prerequisite.** It targeted the older standalone data-health / companion-provider path. Any future provider-health defect should be fixed narrowly in the active `alert_ranker` provider/collector rather than reviving that stale branch.
+- Historical options PRs/docs remain provenance only. Do not merge/reopen them merely because they contain an older version of a now-completed idea.
 
-Missing strategy evidence is now primarily a **collection problem**, not a reason to keep adding strategy rules before the first epoch.
+## Completed — do not redo without new evidence
 
-## Smallest safe next step
+- scanner/advisory plumbing + SQLite persistence;
+- real-chain contract selection;
+- 2099/far-future expiration protection;
+- premium-stop + ACTIVE aggregate-risk accounting;
+- causal setup proof + fail-closed alerting;
+- multi-setup Daily collection;
+- rejected-filter counterfactual collection;
+- 1H / `4H_RTH` observer cohorts;
+- ACTIVE/counterfactual risk + dashboard separation;
+- resolution ambiguity telemetry;
+- V1 runtime preflight;
+- bankroll/drawdown/swing replay;
+- MAE/MFE, entry extension, friction stress, and evidence-quality diagnostics.
+
+The remaining uncertainty is primarily **operational proof + strategy evidence**, not another speculative feature build.
+
+## Next action
 
 Use `docs/options-paper-v1-deployment-checklist.md`.
 
-1. Deploy reviewed current `main` through the normal options deployment path.
-2. Set the V1 runtime pins, including causal context, $1,000 manager aggregate-risk pin, 14-day minimum DTE, and old companion disabled.
-3. Run one market-hours smoke proving active/counterfactual identity, real contract selection/re-quotes, risk separation, ambiguity telemetry, diagnostics snapshots, Discord behavior, and no order path.
-4. Run both read-only reports against the smoke DB:
-   - `alert_ranker.account_equity`
-   - `alert_ranker.v1_diagnostics`
+1. Deploy current reviewed `main` through the normal options deployment path.
+2. Verify the explicit V1 runtime pins and keep old companion disabled.
+3. Run one normal market-hours smoke.
+4. Run both read-only smoke reports:
+   - `python -m alert_ranker.account_equity ...`
+   - `python -m alert_ranker.v1_diagnostics ...`
 5. Record deployed SHA + smoke timestamp as the V1 evidence epoch.
 6. Collect natural candidates without tuning V1.
-7. Review strategy decomposition and bankroll/drawdown only after the sample is trustworthy enough.
+7. Diagnose signal/timeframe → entry → stop → target/exit → filters → execution realism once samples are useful.
 
-**No optimization during collection. No proof, no trade.**
+**No proof, no trade. No optimization before evidence.**
