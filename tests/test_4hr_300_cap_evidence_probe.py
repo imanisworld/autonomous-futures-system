@@ -28,11 +28,6 @@ def _metrics(cap: float) -> dict:
             rows.append(row)
 
     rows.sort(key=lambda r: (r.get("date", ""), r.get("bar_ts", "")))
-    if not rows:
-        return {"cap": cap, "rows": 0}
-    if "bracket" not in rows[0]:
-        return {"cap": cap, "rows": len(rows), "row_keys": sorted(rows[0].keys())}
-
     resolved = [r for r in rows if (r.get("bracket") or {}).get("status") == "RESOLVED"]
     nets = [float(r["bracket"]["net"]) for r in resolved]
     grosses = [float(r["bracket"]["gross"]) for r in resolved]
@@ -40,7 +35,6 @@ def _metrics(cap: float) -> dict:
     gl_net = -sum(v for v in nets if v < 0)
     gp_gross = sum(v for v in grosses if v > 0)
     gl_gross = -sum(v for v in grosses if v < 0)
-
     mid = len(resolved) // 2
     h1 = resolved[:mid]
     h2 = resolved[mid:]
@@ -48,7 +42,6 @@ def _metrics(cap: float) -> dict:
         "cap": cap,
         "admitted": len(rows),
         "resolved": len(resolved),
-        "dates": [r["date"] for r in rows],
         "net": round(sum(nets), 2),
         "gross": round(sum(grosses), 2),
         "pf_net": round(gp_net / gl_net, 6) if gl_net else None,
@@ -64,5 +57,15 @@ def _metrics(cap: float) -> dict:
 
 
 def test_emit_4hr_300_cap_evidence():
-    report = {"cap400": _metrics(400.0), "cap300": _metrics(300.0)}
+    from scripts.wide_stop_ledger_offline_expectation import build_report
+
+    ioc = build_report()["ledgers"]["wide_stop_4k"]
+    # Keep only measured entry-side fields; bracket_expectation still contains
+    # the old 400-tick memo values until this probe is converted into real pins.
+    ioc_measured = {k: v for k, v in ioc.items() if k != "bracket_expectation"}
+    report = {
+        "cap400": _metrics(400.0),
+        "cap300": _metrics(300.0),
+        "ioc300": ioc_measured,
+    }
     pytest.fail("EVIDENCE_PROBE=" + json.dumps(report, sort_keys=True))
