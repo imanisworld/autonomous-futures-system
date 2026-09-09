@@ -1,4 +1,7 @@
 import dataclasses
+import subprocess
+import sys
+from pathlib import Path
 
 from scripts.mes_122_controlled_one_variable_tests import _fixed_one_contract_config
 from scripts.mes_122_current_baseline_slippage_stress import SLIPPAGE_TICKS
@@ -16,3 +19,17 @@ def test_slippage_stress_keeps_strategy_and_sizing_frozen():
         assert cfg.position_sizing == base.position_sizing
         assert cfg.max_contracts_hard_cap == 1
         assert cfg.enabled_concepts == base.enabled_concepts
+
+
+def test_slippage_runner_can_be_executed_directly_from_outside_repo(tmp_path):
+    repo = Path(__file__).resolve().parent.parent
+    script = repo / "scripts" / "mes_122_current_baseline_slippage_stress.py"
+    completed = subprocess.run(
+        [sys.executable, str(script), "--help"],
+        cwd=tmp_path,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert "usage:" in completed.stdout.lower()
