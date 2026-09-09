@@ -1,35 +1,41 @@
 """Causal market context for the options advisory scanner.
 
 Composes a session calendar, a bar provider and the shared setup authority
-into the structural inputs the scanner has been missing: session VWAP, EMA20,
-Strat candle classification, the prior candle's high and low, and a mechanical
-setup verdict, for the scanned ticker and for SPY and QQQ under the same rules.
+into the structural inputs the scanner needs: session VWAP, EMA20, Strat
+candle classification, mechanical setup levels, causal structure targets, and
+SPY/QQQ plus higher-timeframe alignment.
 
 Every failure mode produces an explicit reason and an unavailable context.
 Nothing here substitutes a default, falls back to a single-venue feed, or
 carries a partially-built bar into a decision: a scan with no trustworthy
 structure must WAIT, and must say why it waited.
 
-Two rules are load-bearing and easy to erode by accident:
+Three rules are load-bearing:
 
-* **A candle type is not a setup.** Candle and sequence classification are
-  reported as context under their own names. The actionable ``pattern`` field
-  is populated only from a TRIGGERED verdict of the shared setup authority --
-  never from a bare candle type, which would let an ordinary candle plus
-  VWAP/EMA alignment reach the alert threshold with no setup behind it.
+* **A candle type is not a setup.** Candle and sequence classification remain
+  context. The shared setup authority must first confirm the mechanical 2-1-2
+  sequence and break before this module may promote anything.
+* **Paper-evidence promotion is not trade approval.** A mechanically confirmed
+  2-1-2 may be promoted to ``TRIGGERED`` for OPTIONS_PAPER_V1 evidence only
+  after causal targets and SPY/QQQ + 1h/daily alignment are proven. The row is
+  explicitly tagged ``trade_proof_status=INCOMPLETE`` because this data source
+  does not prove event risk or flip context; Discord must therefore remain
+  blocked until a separate authority proves those facts.
 * **Every session used in a calculation must be complete**, not just today's.
-  EMA20, previous-candle continuity and the reconstructed daily candle all
-  read historical sessions, so a whole missing trading day or one absent
-  30-minute bar in a prior session fails the context closed rather than being
-  silently bridged.
+  EMA20, previous-candle continuity, target levels and reconstructed daily
+  candles all read historical sessions, so a missing trading day or absent
+  30-minute bar fails the context closed rather than being silently bridged.
 """
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Sequence
 from zoneinfo import ZoneInfo
+
+from options_manager.levels import LevelFinderInputs, find_targets
+from strategy.strat_classifier import TWO_DOWN, TWO_UP
 
 from .bar_provider import CONSOLIDATED_FEED, BarProvider, BarProviderError
 from .causal_bars import (
@@ -111,6 +117,25 @@ class SymbolContext:
     setup_invalidation: float | None = None
     setup_sequence_confirmed: bool = False
     setup_suppression_reason: str | None = None
+    # Causal target proof. These are derived only from structure known before
+    # the breakout bar: the setup's directional parent plus prior session
+    # extrema. No current-breakout high and no future bar can become a target.
+    setup_target_1: float | None = None
+    setup_target_2: float | None = None
+    setup_rr_1: float | None = None
+    setup_rr_2: float | None = None
+    setup_target_reason: str | None = None
+    setup_resistance_levels: tuple[float, ...] = ()
+    setup_support_levels: tuple[float, ...] = ()
+    # Evidence-level market proof. This is deliberately narrower than a trade
+    # approval: SPY/QQQ trend plus ticker 1h/daily continuity only.
+    setup_market_status: str | None = None
+    setup_market_reason: str | None = None
+    setup_proof_status: str | None = None
+    # Event-risk and flip authorities do not exist in this causal bar source.
+    # The field is explicit so downstream user-facing alerting fails closed.
+    trade_proof_status: str | None = None
+    trade_proof_reason: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -173,8 +198,21 @@ class MarketContext:
                     "setup_direction": symbol.setup_direction,
                     "setup_entry_trigger": symbol.setup_entry_trigger,
                     "setup_invalidation": symbol.setup_invalidation,
+                    "underlying_invalidation": symbol.setup_invalidation,
                     "setup_sequence_confirmed": symbol.setup_sequence_confirmed,
                     "setup_suppression_reason": symbol.setup_suppression_reason,
+                    "target_1": symbol.setup_target_1,
+                    "target_2": symbol.setup_target_2,
+                    "setup_rr_1": symbol.setup_rr_1,
+                    "setup_rr_2": symbol.setup_rr_2,
+                    "setup_target_reason": symbol.setup_target_reason,
+                    "setup_resistance_levels": list(symbol.setup_resistance_levels),
+                    "setup_support_levels": list(symbol.setup_support_levels),
+                    "setup_market_status": symbol.setup_market_status,
+                    "setup_market_reason": symbol.setup_market_reason,
+                    "setup_proof_status": symbol.setup_proof_status,
+                    "trade_proof_status": symbol.trade_proof_status,
+                    "trade_proof_reason": symbol.trade_proof_reason,
                 }
             )
             if symbol.available:
@@ -185,10 +223,11 @@ class MarketContext:
                         "timeframe": symbol.timeframe,
                     }
                 )
-                # `pattern` is the field the scorer credits. Only a TRIGGERED
-                # verdict of the setup authority may fill it. A bare candle
-                # type never does: that is how an ordinary candle would score
-                # as though a setup had been confirmed.
+                # `pattern` is the field the scorer credits. It is emitted only
+                # after a shared-authority-confirmed 2-1-2 has passed the
+                # evidence bridge's causal target and market proof. It is still
+                # not trade permission: trade_proof_status remains separately
+                # fail-closed until event/flip proof exists.
                 if symbol.setup_status == "TRIGGERED" and symbol.strat_sequence:
                     fields["pattern"] = symbol.strat_sequence
         if self.spy is not None:
@@ -285,6 +324,9 @@ class BarContextBuilder:
             reason = "missing_context:spy"
         elif self.require_index_context and qqq is not None and not qqq.available:
             reason = "missing_context:qqq"
+
+        if not reason:
+            ticker_context = self._promote_paper_evidence_setup(ticker_context, spy, qqq)
 
         return MarketContext(
             available=not reason,
@@ -427,6 +469,35 @@ class BarContextBuilder:
 
         strat = classify_last_bar(regular)
         verdict = self._setup_verdict(symbol, regular, latest)
+        target_1 = None
+        target_2 = None
+        rr_1 = None
+        rr_2 = None
+        target_reason = None
+        resistance_levels: tuple[float, ...] = ()
+        support_levels: tuple[float, ...] = ()
+        if verdict.sequence_confirmed and verdict.entry_trigger is not None and verdict.invalidation is not None:
+            resistance_levels, support_levels = self._causal_structure_levels(regular)
+            if verdict.direction not in {"CALL", "PUT"}:
+                target_reason = "direction_unresolved"
+            else:
+                target_result = find_targets(
+                    LevelFinderInputs(
+                        direction=verdict.direction,
+                        entry=verdict.entry_trigger,
+                        underlying_invalidation=verdict.invalidation,
+                        resistance_levels=resistance_levels,
+                        support_levels=support_levels,
+                    )
+                )
+                if target_result.status == "VALID":
+                    target_1 = target_result.target_1
+                    target_2 = target_result.target_2
+                    rr_1 = target_result.rr_1
+                    rr_2 = target_result.rr_2
+                    target_reason = target_result.reason_code
+                else:
+                    target_reason = target_result.reason_code
 
         # Session-aligned hourly candles, rebuilt from the session's own bars
         # so the opening hour cannot inherit pre-market range the way a
@@ -479,13 +550,136 @@ class BarContextBuilder:
             setup_invalidation=verdict.invalidation,
             setup_sequence_confirmed=verdict.sequence_confirmed,
             setup_suppression_reason=verdict.suppression_reason or None,
+            setup_target_1=target_1,
+            setup_target_2=target_2,
+            setup_rr_1=rr_1,
+            setup_rr_2=rr_2,
+            setup_target_reason=target_reason,
+            setup_resistance_levels=resistance_levels,
+            setup_support_levels=support_levels,
             **base,
+        )
+
+    def _causal_structure_levels(
+        self, bars: Sequence[Bar]
+    ) -> tuple[tuple[float, ...], tuple[float, ...]]:
+        """Strong, already-known structure levels for target selection.
+
+        The breakout bar and its inside trigger bar are excluded. The opening
+        directional bar of the 2-1-2 is already known at entry and is retained,
+        because its high/low is a legitimate Strat target/support reference.
+        Earlier history is reduced to regular-session daily extrema so every
+        30-minute wiggle does not become a fake target.
+        """
+        if len(bars) < 3:
+            return (), ()
+        known = list(bars[:-2])
+        if not known:
+            return (), ()
+        tz = ZoneInfo(self.exchange_timezone)
+        by_day: dict[date, list[Bar]] = {}
+        for bar in known:
+            by_day.setdefault(bar.start_utc.astimezone(tz).date(), []).append(bar)
+        resistance = {max(day_bars, key=lambda item: item.high).high for day_bars in by_day.values()}
+        support = {min(day_bars, key=lambda item: item.low).low for day_bars in by_day.values()}
+        directional = bars[-3]
+        resistance.add(directional.high)
+        support.add(directional.low)
+        return tuple(sorted(resistance)), tuple(sorted(support, reverse=True))
+
+    @staticmethod
+    def _trend(context: SymbolContext | None) -> str | None:
+        if (
+            context is None
+            or not context.available
+            or context.close is None
+            or context.vwap is None
+            or context.ema20 is None
+        ):
+            return None
+        if context.close > context.vwap and context.close > context.ema20:
+            return "bullish"
+        if context.close < context.vwap and context.close < context.ema20:
+            return "bearish"
+        return "neutral"
+
+    def _promote_paper_evidence_setup(
+        self,
+        ticker: SymbolContext,
+        spy: SymbolContext | None,
+        qqq: SymbolContext | None,
+    ) -> SymbolContext:
+        """Promote only a proven evidence candidate, never a trade approval.
+
+        The shared strategy authority has already confirmed the exact 2-1-2
+        sequence and breakout when ``sequence_confirmed`` is true and its first
+        missing proof is ``missing_target_1``. We then require two causal
+        structure targets, SPY and QQQ aligned with the direction, and matching
+        1h + prior completed daily Strat direction. Contract/risk proof occurs
+        later in OPTIONS_PAPER_V1. Event-risk and flip proof are intentionally
+        absent here, so the resulting row remains blocked from Discord.
+        """
+        if not ticker.setup_sequence_confirmed:
+            return ticker
+        if ticker.setup_reason_code != "missing_target_1":
+            return ticker
+        if ticker.setup_direction not in {"CALL", "PUT"}:
+            return replace(
+                ticker,
+                setup_proof_status="INVALID",
+                setup_market_status="INVALID",
+                setup_market_reason="direction_unresolved",
+            )
+        if ticker.setup_target_1 is None or ticker.setup_target_2 is None:
+            # Preserve the shared authority's original suppression reason. The
+            # target finder reason is already available separately as telemetry;
+            # changing the canonical reason would rewrite old PR-C semantics.
+            return replace(
+                ticker,
+                setup_proof_status="INCOMPLETE",
+                setup_market_status="UNRESOLVED",
+            )
+
+        desired_trend = "bullish" if ticker.setup_direction == "CALL" else "bearish"
+        desired_candle = TWO_UP if ticker.setup_direction == "CALL" else TWO_DOWN
+        spy_trend = self._trend(spy)
+        qqq_trend = self._trend(qqq)
+        market_reason = (
+            f"spy={spy_trend or 'missing'};qqq={qqq_trend or 'missing'};"
+            f"hourly={ticker.hourly_candle_type or 'missing'};"
+            f"daily={ticker.daily_candle_type or 'missing'}"
+        )
+        market_aligned = (
+            spy_trend == desired_trend
+            and qqq_trend == desired_trend
+            and ticker.hourly_candle_type == desired_candle
+            and ticker.daily_candle_type == desired_candle
+        )
+        if not market_aligned:
+            return replace(
+                ticker,
+                setup_proof_status="INCOMPLETE",
+                setup_market_status="NOT_ALIGNED",
+                setup_market_reason=market_reason,
+                setup_suppression_reason="setup_proof_incomplete:market_not_aligned",
+            )
+
+        return replace(
+            ticker,
+            setup_status="TRIGGERED",
+            setup_reason_code="paper_evidence_setup_proven",
+            setup_suppression_reason=None,
+            setup_market_status="VALID",
+            setup_market_reason=market_reason,
+            setup_proof_status="VALID",
+            trade_proof_status="INCOMPLETE",
+            trade_proof_reason="event_risk_unavailable;flip_context_unavailable",
         )
 
     def _setup_verdict(
         self, symbol: str, bars: Sequence[Bar], latest: Bar
     ) -> SetupVerdict:
-        """Delegate the setup question to the shared strategy authority."""
+        """Delegate the mechanical setup question to the shared authority."""
         return evaluate_setup(
             bars, ticker=symbol, timestamp=latest.start_utc.isoformat()
         )

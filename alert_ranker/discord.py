@@ -42,6 +42,13 @@ class DiscordAlerter:
             await self._client.aclose()
 
     async def send_if_eligible(self, result: ScoreResult, now: datetime | None = None) -> AlertDecision:
+        trade_proof_reason = _trade_proof_block_reason(result)
+        if trade_proof_reason:
+            # Paper evidence is allowed to continue collecting after the causal
+            # setup bridge proves structure/targets/market alignment. User-facing
+            # alerts are stricter: an explicit incomplete trade-proof marker can
+            # never be overridden by scanner score, Signa, or contract quality.
+            return AlertDecision(False, trade_proof_reason)
         if result.score < self.config.alert_threshold:
             # The scorer already knows why it could not score (missing feed
             # inputs, against_vwap, against_trend). Reporting
@@ -126,6 +133,15 @@ def build_discord_payload(result: ScoreResult) -> dict[str, Any]:
             }
         ]
     }
+
+
+def _trade_proof_block_reason(result: ScoreResult) -> str:
+    raw = result.raw
+    status = str(raw.get("trade_proof_status") or "").strip().upper()
+    if not status or status == "VALID":
+        return ""
+    reason = str(raw.get("trade_proof_reason") or "unspecified").strip()
+    return f"trade_proof_{status.lower()}:{reason}"
 
 
 def _mechanically_triggered(result: ScoreResult) -> bool:
