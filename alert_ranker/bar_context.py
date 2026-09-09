@@ -198,6 +198,7 @@ class MarketContext:
                     "setup_direction": symbol.setup_direction,
                     "setup_entry_trigger": symbol.setup_entry_trigger,
                     "setup_invalidation": symbol.setup_invalidation,
+                    "underlying_invalidation": symbol.setup_invalidation,
                     "setup_sequence_confirmed": symbol.setup_sequence_confirmed,
                     "setup_suppression_reason": symbol.setup_suppression_reason,
                     "target_1": symbol.setup_target_1,
@@ -477,23 +478,26 @@ class BarContextBuilder:
         support_levels: tuple[float, ...] = ()
         if verdict.sequence_confirmed and verdict.entry_trigger is not None and verdict.invalidation is not None:
             resistance_levels, support_levels = self._causal_structure_levels(regular)
-            target_result = find_targets(
-                LevelFinderInputs(
-                    direction=verdict.direction or "CALL",
-                    entry=verdict.entry_trigger,
-                    underlying_invalidation=verdict.invalidation,
-                    resistance_levels=resistance_levels,
-                    support_levels=support_levels,
-                )
-            )
-            if target_result.status == "VALID":
-                target_1 = target_result.target_1
-                target_2 = target_result.target_2
-                rr_1 = target_result.rr_1
-                rr_2 = target_result.rr_2
-                target_reason = target_result.reason_code
+            if verdict.direction not in {"CALL", "PUT"}:
+                target_reason = "direction_unresolved"
             else:
-                target_reason = target_result.reason_code
+                target_result = find_targets(
+                    LevelFinderInputs(
+                        direction=verdict.direction,
+                        entry=verdict.entry_trigger,
+                        underlying_invalidation=verdict.invalidation,
+                        resistance_levels=resistance_levels,
+                        support_levels=support_levels,
+                    )
+                )
+                if target_result.status == "VALID":
+                    target_1 = target_result.target_1
+                    target_2 = target_result.target_2
+                    rr_1 = target_result.rr_1
+                    rr_2 = target_result.rr_2
+                    target_reason = target_result.reason_code
+                else:
+                    target_reason = target_result.reason_code
 
         # Session-aligned hourly candles, rebuilt from the session's own bars
         # so the opening hour cannot inherit pre-market range the way a
@@ -627,13 +631,13 @@ class BarContextBuilder:
                 setup_market_reason="direction_unresolved",
             )
         if ticker.setup_target_1 is None or ticker.setup_target_2 is None:
+            # Preserve the shared authority's original suppression reason. The
+            # target finder reason is already available separately as telemetry;
+            # changing the canonical reason would rewrite old PR-C semantics.
             return replace(
                 ticker,
                 setup_proof_status="INCOMPLETE",
                 setup_market_status="UNRESOLVED",
-                setup_suppression_reason=(
-                    f"setup_proof_incomplete:target_finder_{ticker.setup_target_reason or 'missing'}"
-                ),
             )
 
         desired_trend = "bullish" if ticker.setup_direction == "CALL" else "bearish"
