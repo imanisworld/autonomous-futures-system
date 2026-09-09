@@ -1,7 +1,15 @@
 """Fail-closed execution selector for the wide-stop evidence campaign.
 
-Paper remains the default. Tradovate demo is an explicit, proof-pinned route for
-4HR Re-Trigger and 60M 3-2-2 only. Daily 2-2 is never demo-eligible here.
+Paper collection is unconditional and always runs. Tradovate demo is an
+explicit, proof-pinned lane that runs ADDITIVELY alongside paper for 4HR
+Re-Trigger and 60M 3-2-2 only. Daily 2-2 is never demo-eligible here.
+
+The demo lane carries its own LANE-LOCAL execution permission so it never
+depends on — and can never be enabled by — the box-wide ``SCHEDULE_MODE``.
+It still goes through ``adaptive.execution_gate.order_placement_allowed``,
+the single execution chokepoint; only the *schedule mode fed to that gate*
+is lane-local. Unarmed, the lane resolves to ``always_on_shadow`` and the
+gate refuses every order.
 """
 from __future__ import annotations
 
@@ -21,6 +29,18 @@ FROZEN_MNQ_IOC_TICKS = 8.0
 # match this route's requirement.
 DEMO_ENTRY_EXECUTION_MODE = "ioc_limit"
 
+# Lane-local execution permission. Deliberately NOT the box-wide SCHEDULE_MODE:
+# arming this lane must never re-arm order placement for any other strategy in
+# this process, and changing the box posture must never silently arm this lane.
+DEMO_EXECUTION_ENABLED_ENV = "WIDE_STOP_DEMO_EXECUTION_ENABLED"
+DEMO_EXECUTION_PROOF_PIN_ENV = "EXPECTED_PROOF_WIDE_STOP_DEMO_EXECUTION_ENABLED"
+DEMO_SESSIONS_ENV = "WIDE_STOP_DEMO_SESSIONS"
+DEFAULT_DEMO_SESSIONS = ("new_york",)
+# Fed to order_placement_allowed() as the lane's own schedule mode. Unarmed the
+# lane is shadow — the gate's own "no orders, ever" branch does the refusing.
+DEMO_ARMED_SCHEDULE_MODE = "current"
+DEMO_DISARMED_SCHEDULE_MODE = "always_on_shadow"
+
 
 def route() -> str:
     raw = str(os.getenv(ROUTE_ENV, DEFAULT_ROUTE) or DEFAULT_ROUTE).strip().lower()
@@ -32,6 +52,34 @@ def _bool_env(name: str, default: bool = False) -> bool:
     if raw is None:
         return bool(default)
     return raw.strip().lower() in {"1", "true", "yes"}
+
+
+def demo_execution_armed() -> bool:
+    """True only when the lane is explicitly armed AND proof-pinned.
+
+    Both the flag and its matching pin are required, so a single stray env var
+    can never arm external-broker execution.
+    """
+    if not _bool_env(DEMO_EXECUTION_ENABLED_ENV, False):
+        return False
+    return _bool_env(DEMO_EXECUTION_PROOF_PIN_ENV, False)
+
+
+def demo_lane_schedule_mode() -> str:
+    """The lane's OWN schedule mode for the execution gate. Never reads SCHEDULE_MODE."""
+    return DEMO_ARMED_SCHEDULE_MODE if demo_execution_armed() else DEMO_DISARMED_SCHEDULE_MODE
+
+
+def demo_sessions() -> tuple[str, ...]:
+    """Lane-local session allowlist. Narrows the global gate, never widens it."""
+    raw = os.getenv(DEMO_SESSIONS_ENV)
+    if raw is None or not str(raw).strip():
+        return DEFAULT_DEMO_SESSIONS
+    return tuple(s.strip().lower() for s in str(raw).split(",") if s.strip())
+
+
+def demo_session_allowed(session) -> bool:
+    return str(session or "").strip().lower() in demo_sessions()
 
 
 def demo_config_errors(cfg=None) -> list[str]:

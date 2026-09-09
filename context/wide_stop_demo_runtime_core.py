@@ -554,8 +554,27 @@ def process_demo_five_min_bar(
                 events.append(audit)
                 continue
 
+            # Lane-local session allowlist first: it can only NARROW what the
+            # global gate would permit, never widen it.
+            if not execution.demo_session_allowed(setup.session):
+                audit = _journal_block(
+                    cfg=cfg, ledger=ledger, strategy=strategy, candidate=candidate,
+                    key=key, log_dir=log_dir, for_date=for_date, state=state,
+                    failed_rule="demo_session_not_allowed",
+                    reason=(
+                        f"session '{setup.session}' is not in the demo lane allowlist "
+                        f"{list(execution.demo_sessions())}"
+                    ),
+                )
+                demo_state.save_state(log_dir, state)
+                events.append(audit)
+                continue
+
+            # Still the single execution chokepoint — only the schedule mode is
+            # lane-local, so the box-wide SCHEDULE_MODE neither arms nor blocks
+            # this lane, and the operator's session hold still applies.
             allowed, placement_reason = order_placement_allowed(
-                schedule_mode=getattr(cfg, "schedule_mode", "current"),
+                schedule_mode=execution.demo_lane_schedule_mode(),
                 session=setup.session,
                 live_trading_enabled=False,
                 paper_eligible_sessions=getattr(cfg, "paper_eligible_sessions", ()),

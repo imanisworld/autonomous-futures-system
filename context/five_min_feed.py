@@ -230,11 +230,13 @@ def retest_triggered(
 
 
 def record_five_min(payload, log_dir: str, for_date=None) -> dict:
-    """Append one 5M bar-close and feed the explicitly selected wide-stop route.
+    """Append one 5M bar-close and feed the wide-stop lanes.
 
-    The ordinary 5M arm/retest lane is unchanged. Wide-stop processing is
-    additive and fail-soft. `paper_sim` is the default route; Tradovate demo
-    requires the separate fail-closed route contract in wide_stop_execution.
+    The ordinary 5M arm/retest lane is unchanged. Paper collection is
+    unconditional and runs first — it is the authoritative campaign and the
+    only path that reaches Daily 2-2. The Tradovate demo lane runs additively
+    afterwards when separately armed, in its own error boundary, so a demo
+    failure can never stop paper from processing the same bar.
     """
     record = _history(log_dir).record(
         _root(payload.ticker),
@@ -254,24 +256,37 @@ def record_five_min(payload, log_dir: str, for_date=None) -> dict:
     ):
         try:
             from config.settings import load_config
-            from context.wide_stop_execution import route
+            from context.wide_stop_execution import DEMO_ROUTE, route
 
             cfg = load_config()
             bars = _history(log_dir).recent(
                 "MNQ", 3000, for_date=for_date, lookback_days=10
             )
-            selected = route()
-            if selected == "paper_sim":
-                from context.wide_stop_forward_router import process_paper_five_min_bar
+        except Exception:  # noqa: BLE001 — evidence must never break 5m ingestion
+            logger.warning("wide-stop lane setup failed closed", exc_info=True)
+            return record
 
-                process_paper_five_min_bar(
-                    payload=payload,
-                    cfg=cfg,
-                    bars_5m=bars,
-                    log_dir=log_dir,
-                    for_date=for_date,
-                )
-            elif selected == "tradovate_demo":
+        # Paper collection is UNCONDITIONAL and runs FIRST. It is the
+        # authoritative campaign (and the only path that reaches Daily 2-2),
+        # so it must process every bar regardless of the demo lane's state.
+        try:
+            from context.wide_stop_forward_router import process_paper_five_min_bar
+
+            process_paper_five_min_bar(
+                payload=payload,
+                cfg=cfg,
+                bars_5m=bars,
+                log_dir=log_dir,
+                for_date=for_date,
+            )
+        except Exception:  # noqa: BLE001 — evidence must never break 5m ingestion
+            logger.warning("wide-stop paper collection failed closed", exc_info=True)
+
+        # Tradovate demo is ADDITIVE and strictly secondary: separately armed,
+        # isolated storage, and its own try/except so a demo failure can never
+        # suppress the paper collection above for the same bar.
+        if route() == DEMO_ROUTE:
+            try:
                 from context.wide_stop_demo_runtime import process_demo_five_min_bar
 
                 process_demo_five_min_bar(
@@ -281,12 +296,8 @@ def record_five_min(payload, log_dir: str, for_date=None) -> dict:
                     log_dir=log_dir,
                     for_date=for_date,
                 )
-            else:
-                logger.error(
-                    "wide-stop execution route is invalid/disabled; no lane action taken"
-                )
-        except Exception:  # noqa: BLE001 — evidence/demo must never break 5m ingestion
-            logger.warning("wide-stop forward route failed closed", exc_info=True)
+            except Exception:  # noqa: BLE001 — demo must never break paper or ingestion
+                logger.warning("wide-stop demo lane failed closed", exc_info=True)
     return record
 
 
