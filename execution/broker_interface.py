@@ -44,6 +44,14 @@ class BracketOrder:
     max_slippage_ticks: Optional[float] = None
     execution_model: str = "anchored_structure"
     post_fill_validation_required: bool = False
+    # Per-order overrides for a route that must not depend on the process-wide
+    # TRADOVATE_ENTRY_EXECUTION_MODE / ENTRY_SLIPPAGE_TOLERANCE_TICKS_* env
+    # vars (e.g. the isolated wide-stop demo lane), since those env vars are
+    # shared with whatever other Tradovate strategy this process also runs.
+    # None (default) means "no override" — every existing caller keeps reading
+    # the global env exactly as before.
+    entry_execution_mode_override: Optional[str] = None
+    entry_slippage_tolerance_ticks_override: Optional[float] = None
     # Deterministic client order identity (Tradovate clOrdId), derived from the
     # originating signal/event identity by the caller. Optional — brokers that
     # support it use it for submit idempotency; PaperBroker/replay ignore it.
