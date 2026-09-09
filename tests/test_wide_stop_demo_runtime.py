@@ -23,6 +23,10 @@ FOUR_HR = collector.FOUR_HR
 THREE_TWO_TWO = collector.THREE_TWO_TWO
 
 
+def _root(tmp_path):
+    return demo.isolated_log_dir(tmp_path)
+
+
 def _demo_env(monkeypatch):
     pins = {
         execution.ROUTE_ENV: execution.DEMO_ROUTE,
@@ -153,7 +157,7 @@ def _patch_candidate(monkeypatch, strategy=FOUR_HR):
         collector, "_lane_daily_state",
         lambda *args, **kwargs: DailyState(account_balance=5_000, account_peak_balance=5_000),
     )
-    monkeypatch.setattr(demo, "RiskEngine", _AlwaysApproveRisk)
+    monkeypatch.setattr(demo._core, "RiskEngine", _AlwaysApproveRisk)
 
 
 def test_demo_requires_all_safety_pins(monkeypatch):
@@ -183,11 +187,26 @@ def test_demo_submits_one_contract_with_strategy_caps_and_postfill_guard(tmp_pat
     assert broker.last_order.max_dollar_risk == 150.0
     assert broker.last_order.max_slippage_ticks == 8.0
     assert broker.last_order.post_fill_validation_required is True
-    state = demo_state.load_state(tmp_path, DAY)
+    state = demo_state.load_state(_root(tmp_path), DAY)
     assert demo_state.confirmed_fills(state) == 1
     assert state["position"] is not None
     assert state["pending"] is None
     assert any(row.get("fill_status") == "OPEN" for row in events)
+
+
+def test_demo_storage_is_separate_from_paper_ledger(tmp_path, monkeypatch):
+    _demo_env(monkeypatch)
+    _patch_candidate(monkeypatch, FOUR_HR)
+    broker = _FakeBroker()
+    demo.process_demo_five_min_bar(
+        payload=_payload(), cfg=_cfg(), bars_5m=[], log_dir=tmp_path,
+        for_date=DAY, broker_factory=lambda: broker,
+    )
+    ledger = contract.ledger_for("MNQ", FOUR_HR)
+    assert demo_state.state_path(_root(tmp_path)).exists()
+    assert not (contract.journal_dir(tmp_path, ledger) / "journal.jsonl").exists()
+    isolated_ledger = contract.journal_dir(_root(tmp_path), ledger)
+    assert isolated_ledger.exists()
 
 
 def test_ambiguous_submit_consumes_slot_and_blocks_retry(tmp_path, monkeypatch):
@@ -203,7 +222,7 @@ def test_ambiguous_submit_consumes_slot_and_blocks_retry(tmp_path, monkeypatch):
         payload=_payload(), cfg=_cfg(), bars_5m=[], log_dir=tmp_path,
         for_date=DAY, broker_factory=lambda: first,
     )
-    state = demo_state.load_state(tmp_path, DAY)
+    state = demo_state.load_state(_root(tmp_path), DAY)
     assert state["pending"] is not None
     assert demo_state.reserved_slots(state) == 1
     assert demo_state.confirmed_fills(state) == 0
@@ -214,7 +233,7 @@ def test_ambiguous_submit_consumes_slot_and_blocks_retry(tmp_path, monkeypatch):
         log_dir=tmp_path, for_date=DAY, broker_factory=lambda: second,
     )
     assert second.execute_calls == 0
-    assert demo_state.reserved_slots(demo_state.load_state(tmp_path, DAY)) == 1
+    assert demo_state.reserved_slots(demo_state.load_state(_root(tmp_path), DAY)) == 1
 
 
 def test_definite_ioc_no_fill_releases_slot(tmp_path, monkeypatch):
@@ -230,12 +249,12 @@ def test_definite_ioc_no_fill_releases_slot(tmp_path, monkeypatch):
         payload=_payload(), cfg=_cfg(), bars_5m=[], log_dir=tmp_path,
         for_date=DAY, broker_factory=lambda: broker,
     )
-    state = demo_state.load_state(tmp_path, DAY)
+    state = demo_state.load_state(_root(tmp_path), DAY)
     assert demo_state.slots_used(state) == 0
     assert state["pending"] is None
 
 
-def test_three_slots_block_a_fourth_demo_trade(tmp_path):
+def test_three_slots_block_a_fourth_demo_trade():
     state = demo_state.empty_state(DAY)
     for i in range(3):
         ok, _ = demo_state.reserve_slot(state, f"candidate-{i}", FOUR_HR)
@@ -248,6 +267,7 @@ def test_three_slots_block_a_fourth_demo_trade(tmp_path):
 
 def test_pending_state_recovers_confirmed_mnq_position_after_restart(tmp_path, monkeypatch):
     _demo_env(monkeypatch)
+    root = _root(tmp_path)
     state = demo_state.empty_state(DAY)
     key = "crash-candidate"
     state["pending"] = {
@@ -260,30 +280,31 @@ def test_pending_state_recovers_confirmed_mnq_position_after_restart(tmp_path, m
         "trading_date": DAY.isoformat(),
     }
     demo_state.reserve_slot(state, key, FOUR_HR)
-    demo_state.save_state(tmp_path, state)
+    demo_state.save_state(root, state)
     broker_position = Position(
         instrument="MNQ", direction="LONG", entry_price=20_000.25,
         stop=19_950.0, target=20_070.0, quantity=1, open=True,
     )
     broker = _FakeBroker(snapshot_confirmed=True, snapshot_position=broker_position)
     event = demo._pending_reconcile(
-        cfg=_cfg(), log_dir=tmp_path, for_date=DAY, day=DAY,
+        cfg=_cfg(), log_dir=root, for_date=DAY, day=DAY,
         state=state, broker_factory=lambda: broker,
     )
     assert event is not None
     assert event["lane_result"] == "RECOVERED_PENDING_POSITION"
-    restored = demo_state.load_state(tmp_path, DAY)
+    restored = demo_state.load_state(root, DAY)
     assert restored["pending"] is None
     assert restored["position"]["entry"] == 20_000.25
     assert demo_state.confirmed_fills(restored) == 1
 
 
 def test_corrupt_existing_demo_state_fails_closed(tmp_path):
-    path = demo_state.state_path(tmp_path)
+    root = _root(tmp_path)
+    path = demo_state.state_path(root)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("{bad-json")
     with pytest.raises(demo_state.DemoStateError):
-        demo_state.load_state(tmp_path, DAY)
+        demo_state.load_state(root, DAY)
 
 
 def test_eod_broad_flatten_refuses_unexpected_working_order():
