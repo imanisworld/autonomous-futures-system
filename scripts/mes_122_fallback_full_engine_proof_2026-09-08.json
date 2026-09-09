@@ -1,0 +1,2021 @@
+{
+  "corpus": "/Users/djb.a.e/MAINVSCODE/autonomous-futures-system/data/replay_corpus_v1_market_condition_fixed",
+  "control_config_source": "PR #373 head d06d885b + committed source snapshot",
+  "canonical_candidates": 33,
+  "reproduction_mismatches": [
+    {
+      "date": "2026-03-13",
+      "direction": "SHORT",
+      "reason": "MISSING_IN_ISOLATED_RERUN"
+    },
+    {
+      "date": "2026-03-16",
+      "direction": "LONG",
+      "reason": "MISSING_IN_ISOLATED_RERUN"
+    },
+    {
+      "date": "2026-03-17",
+      "direction": "LONG",
+      "reason": "MISSING_IN_ISOLATED_RERUN"
+    },
+    {
+      "date": "2026-03-18",
+      "direction": "LONG",
+      "reason": "MISSING_IN_ISOLATED_RERUN"
+    },
+    {
+      "date": "2026-03-26",
+      "direction": "SHORT",
+      "reason": "MISSING_IN_ISOLATED_RERUN"
+    },
+    {
+      "date": "2026-03-30",
+      "direction": "LONG",
+      "reason": "MISSING_IN_ISOLATED_RERUN"
+    },
+    {
+      "date": "2026-04-06",
+      "direction": "LONG",
+      "reason": "MISSING_IN_ISOLATED_RERUN"
+    },
+    {
+      "date": "2026-04-09",
+      "direction": "SHORT",
+      "reason": "MISSING_IN_ISOLATED_RERUN"
+    },
+    {
+      "date": "2026-04-15",
+      "direction": "LONG",
+      "reason": "MISSING_IN_ISOLATED_RERUN"
+    },
+    {
+      "date": "2026-04-24",
+      "direction": "SHORT",
+      "reason": "MISSING_IN_ISOLATED_RERUN"
+    },
+    {
+      "date": "2026-05-05",
+      "direction": "LONG",
+      "reason": "MISSING_IN_ISOLATED_RERUN"
+    },
+    {
+      "date": "2026-05-29",
+      "direction": "LONG",
+      "reason": "MISSING_IN_ISOLATED_RERUN"
+    },
+    {
+      "date": "2026-06-03",
+      "direction": "SHORT",
+      "reason": "MISSING_IN_ISOLATED_RERUN"
+    },
+    {
+      "date": "2026-06-19",
+      "direction": "LONG",
+      "reason": "MISSING_IN_ISOLATED_RERUN"
+    }
+  ],
+  "targets": {
+    "2025-10-24T12:30:00+00:00": {
+      "winner": "orb_reclaim",
+      "known_pnl": 97.5
+    },
+    "2026-02-20T13:30:00+00:00": {
+      "winner": "vwap_hold",
+      "known_pnl": 80.0
+    },
+    "2026-03-13T16:45:00+00:00": {
+      "winner": "vwap_hold",
+      "known_pnl": 150.0
+    },
+    "2026-03-26T11:15:00+00:00": {
+      "winner": "vwap_hold",
+      "known_pnl": 75.0
+    }
+  },
+  "target_control": {
+    "2025-10-24T12:30:00+00:00": {
+      "classification": "PREEMPTED_BY_OTHER_STRATEGY",
+      "winning_setup_strategy": "orb_reclaim",
+      "decision": "NO_TRADE",
+      "failed_gates": [
+        "ENTRY_DETACHED_FROM_PRICE"
+      ]
+    },
+    "2026-02-20T13:30:00+00:00": {
+      "classification": "PREEMPTED_BY_OTHER_STRATEGY",
+      "winning_setup_strategy": "vwap_hold",
+      "decision": "NO_TRADE",
+      "failed_gates": [
+        "ENTRY_DETACHED_FROM_PRICE"
+      ]
+    },
+    "2026-03-13T16:45:00+00:00": {
+      "classification": "PREEMPTED_BY_OTHER_STRATEGY",
+      "winning_setup_strategy": "vwap_hold",
+      "decision": "NO_TRADE",
+      "failed_gates": [
+        "ENTRY_DETACHED_FROM_PRICE"
+      ]
+    },
+    "2026-03-26T11:15:00+00:00": {
+      "classification": "PREEMPTED_BY_OTHER_STRATEGY",
+      "winning_setup_strategy": "vwap_hold",
+      "decision": "NO_TRADE",
+      "failed_gates": [
+        "ENTRY_DETACHED_FROM_PRICE"
+      ]
+    }
+  },
+  "target_treatment": {
+    "2025-10-24T12:30:00+00:00": {
+      "classification": "PREEMPTED_BY_OTHER_STRATEGY",
+      "winning_setup_strategy": "orb_reclaim",
+      "decision": "NO_TRADE",
+      "failed_gates": [
+        "ENTRY_DETACHED_FROM_PRICE"
+      ]
+    },
+    "2026-02-20T13:30:00+00:00": {
+      "classification": "TRADE_RESOLVED",
+      "strategy": "strat_122",
+      "direction": "SHORT",
+      "entry": 6869.5,
+      "stop": 6877.5,
+      "target": 6853.5,
+      "rr_ratio": 2.0,
+      "paper_order_id": "PAPER-c3ad80fe2e70453282d65f8caa318e0b",
+      "result": "WIN",
+      "exit_reason": "TARGET_HIT_SAME_BAR",
+      "pnl_dollars": 240.0
+    },
+    "2026-03-13T16:45:00+00:00": {
+      "classification": "TRADE_RESOLVED",
+      "strategy": "strat_122",
+      "direction": "SHORT",
+      "entry": 6700.5,
+      "stop": 6715.5,
+      "target": 6670.5,
+      "rr_ratio": 2.0,
+      "paper_order_id": "PAPER-2536582c78cf411eac7530ce166c5413",
+      "result": "WIN",
+      "exit_reason": "TARGET_HIT",
+      "pnl_dollars": 450.0
+    },
+    "2026-03-26T11:15:00+00:00": {
+      "classification": "TRADE_RESOLVED",
+      "strategy": "strat_122",
+      "direction": "SHORT",
+      "entry": 6591.25,
+      "stop": 6598.75,
+      "target": 6576.25,
+      "rr_ratio": 2.0,
+      "paper_order_id": "PAPER-87473001b7224bb4929003716d9369f1",
+      "result": "WIN",
+      "exit_reason": "TARGET_HIT",
+      "pnl_dollars": 300.0
+    }
+  },
+  "control": {
+    "trades": 9,
+    "wins": 2,
+    "losses": 7,
+    "net": -81.25,
+    "profit_factor": 0.73251,
+    "h1": 161.25,
+    "h2": -242.5,
+    "max_drawdown": 242.5,
+    "trade_dates": [
+      "2025-09-05",
+      "2025-10-01",
+      "2025-10-08",
+      "2025-10-16",
+      "2025-11-13",
+      "2025-11-27",
+      "2025-12-01",
+      "2025-12-05",
+      "2025-12-17"
+    ]
+  },
+  "treatment": {
+    "trades": 10,
+    "wins": 3,
+    "losses": 7,
+    "net": 158.75,
+    "profit_factor": 1.522634,
+    "h1": 113.75,
+    "h2": 45.0,
+    "max_drawdown": 242.5,
+    "trade_dates": [
+      "2025-09-05",
+      "2025-10-01",
+      "2025-10-08",
+      "2025-10-16",
+      "2025-11-13",
+      "2025-11-27",
+      "2025-12-01",
+      "2025-12-05",
+      "2025-12-17",
+      "2026-02-20"
+    ]
+  },
+  "expected_control": {
+    "trades": 16,
+    "wins": 5,
+    "losses": 11,
+    "net": 120.0,
+    "profit_factor": 1.421053,
+    "h1": 11.25,
+    "h2": 108.75,
+    "max_drawdown": 121.25
+  },
+  "expected_treatment": {
+    "trades": 20,
+    "wins": 9,
+    "losses": 11,
+    "net": 522.5,
+    "profit_factor": 2.833333,
+    "h1": 82.5,
+    "h2": 440.0,
+    "max_drawdown": 121.25
+  },
+  "control_reproduced": false,
+  "treatment_matches_counterfactual": false,
+  "all_four_targets_recovered": false,
+  "target_outcomes_match_canonical": false,
+  "canonical_changes": [
+    {
+      "bar_ts": "2026-02-20T13:30:00+00:00",
+      "date": "2026-02-20",
+      "control": {
+        "classification": "PREEMPTED_BY_OTHER_STRATEGY",
+        "winning_setup_strategy": "vwap_hold",
+        "decision": "NO_TRADE",
+        "failed_gates": [
+          "ENTRY_DETACHED_FROM_PRICE"
+        ]
+      },
+      "treatment": {
+        "classification": "TRADE_RESOLVED",
+        "strategy": "strat_122",
+        "direction": "SHORT",
+        "entry": 6869.5,
+        "stop": 6877.5,
+        "target": 6853.5,
+        "rr_ratio": 2.0,
+        "paper_order_id": "PAPER-c3ad80fe2e70453282d65f8caa318e0b",
+        "result": "WIN",
+        "exit_reason": "TARGET_HIT_SAME_BAR",
+        "pnl_dollars": 240.0
+      }
+    }
+  ],
+  "non_target_canonical_changes": [],
+  "all_changed_bar_count": 61,
+  "changed_bars": [
+    {
+      "bar_ts": "2026-02-20T13:30:00+00:00",
+      "control": [
+        "NO_TRADE",
+        "vwap_hold",
+        "SHORT",
+        [
+          "ENTRY_DETACHED_FROM_PRICE"
+        ],
+        null,
+        null
+      ],
+      "treatment": [
+        "TRADE",
+        "strat_122",
+        "SHORT",
+        [],
+        "WIN",
+        240.0
+      ]
+    },
+    {
+      "bar_ts": "2026-02-20T13:45:00+00:00",
+      "control": [
+        "NO_TRADE",
+        "vwap_hold",
+        "SHORT",
+        [
+          "WEAK_BAR_CLOSE",
+          "STRATEGY_NOT_PAPER_ELIGIBLE"
+        ],
+        null,
+        null
+      ],
+      "treatment": [
+        "NO_TRADE",
+        null,
+        null,
+        [
+          "WEAK_BAR_CLOSE"
+        ],
+        null,
+        null
+      ]
+    },
+    {
+      "bar_ts": "2026-02-20T14:15:00+00:00",
+      "control": [
+        "NO_TRADE",
+        "vwap_hold",
+        "SHORT",
+        [
+          "WEAK_BAR_CLOSE",
+          "STRATEGY_NOT_PAPER_ELIGIBLE"
+        ],
+        null,
+        null
+      ],
+      "treatment": [
+        "NO_TRADE",
+        null,
+        null,
+        [
+          "WEAK_BAR_CLOSE"
+        ],
+        null,
+        null
+      ]
+    },
+    {
+      "bar_ts": "2026-03-13T16:45:00+00:00",
+      "control": [
+        "NO_TRADE",
+        "vwap_hold",
+        "SHORT",
+        [
+          "ENTRY_DETACHED_FROM_PRICE"
+        ],
+        null,
+        null
+      ],
+      "treatment": [
+        "TRADE",
+        "strat_122",
+        "SHORT",
+        [],
+        "WIN",
+        450.0
+      ]
+    },
+    {
+      "bar_ts": "2026-03-13T17:00:00+00:00",
+      "control": [
+        "NO_TRADE",
+        null,
+        null,
+        [
+          "MARKET_CONDITION_NOT_TRENDING"
+        ],
+        null,
+        null
+      ],
+      "treatment": [
+        "WAIT",
+        null,
+        null,
+        [],
+        null,
+        null
+      ]
+    },
+    {
+      "bar_ts": "2026-03-13T17:15:00+00:00",
+      "control": [
+        "NO_TRADE",
+        null,
+        null,
+        [
+          "MARKET_CONDITION_NOT_TRENDING"
+        ],
+        null,
+        null
+      ],
+      "treatment": [
+        "WAIT",
+        null,
+        null,
+        [],
+        null,
+        null
+      ]
+    },
+    {
+      "bar_ts": "2026-03-13T17:30:00+00:00",
+      "control": [
+        "NO_TRADE",
+        null,
+        null,
+        [
+          "MARKET_CONDITION_NOT_TRENDING"
+        ],
+        null,
+        null
+      ],
+      "treatment": [
+        "WAIT",
+        null,
+        null,
+        [],
+        null,
+        null
+      ]
+    },
+    {
+      "bar_ts": "2026-03-13T17:45:00+00:00",
+      "control": [
+        "NO_TRADE",
+        "vwap_hold",
+        "SHORT",
+        [
+          "ENTRY_DETACHED_FROM_PRICE"
+        ],
+        null,
+        null
+      ],
+      "treatment": [
+        "WAIT",
+        null,
+        null,
+        [],
+        null,
+        null
+      ]
+    },
+    {
+      "bar_ts": "2026-03-13T18:00:00+00:00",
+      "control": [
+        "NO_TRADE",
+        null,
+        null,
+        [
+          "WEAK_BAR_CLOSE"
+        ],
+        null,
+        null
+      ],
+      "treatment": [
+        "WAIT",
+        null,
+        null,
+        [],
+        null,
+        null
+      ]
+    },
+    {
+      "bar_ts": "2026-03-13T18:15:00+00:00",
+      "control": [
+        "NO_TRADE",
+        null,
+        null,
+        [
+          "MARKET_CONDITION_NOT_TRENDING"
+        ],
+        null,
+        null
+      ],
+      "treatment": [
+        "WAIT",
+        null,
+        null,
+        [],
+        null,
+        null
+      ]
+    },
+    {
+      "bar_ts": "2026-03-13T18:30:00+00:00",
+      "control": [
+        "NO_TRADE",
+        null,
+        null,
+        [
+          "MARKET_CONDITION_NOT_TRADABLE"
+        ],
+        null,
+        null
+      ],
+      "treatment": [
+        "WAIT",
+        null,
+        null,
+        [],
+        null,
+        null
+      ]
+    },
+    {
+      "bar_ts": "2026-03-13T18:45:00+00:00",
+      "control": [
+        "NO_TRADE",
+        null,
+        null,
+        [
+          "MARKET_CONDITION_NOT_TRENDING"
+        ],
+        null,
+        null
+      ],
+      "treatment": [
+        "WAIT",
+        null,
+        null,
+        [],
+        null,
+        null
+      ]
+    },
+    {
+      "bar_ts": "2026-03-13T19:00:00+00:00",
+      "control": [
+        "NO_TRADE",
+        null,
+        null,
+        [
+          "MARKET_CONDITION_NOT_TRENDING"
+        ],
+        null,
+        null
+      ],
+      "treatment": [
+        "WAIT",
+        null,
+        null,
+        [],
+        null,
+        null
+      ]
+    },
+    {
+      "bar_ts": "2026-03-13T19:15:00+00:00",
+      "control": [
+        "NO_TRADE",
+        null,
+        null,
+        [
+          "MARKET_CONDITION_NOT_TRENDING"
+        ],
+        null,
+        null
+      ],
+      "treatment": [
+        "WAIT",
+        null,
+        null,
+        [],
+        null,
+        null
+      ]
+    },
+    {
+      "bar_ts": "2026-03-13T19:30:00+00:00",
+      "control": [
+        "NO_TRADE",
+        "vwap_hold",
+        "SHORT",
+        [
+          "ENTRY_DETACHED_FROM_PRICE"
+        ],
+        null,
+        null
+      ],
+      "treatment": [
+        "WAIT",
+        null,
+        null,
+        [],
+        null,
+        null
+      ]
+    },
+    {
+      "bar_ts": "2026-03-13T19:45:00+00:00",
+      "control": [
+        "NO_TRADE",
+        null,
+        null,
+        [
+          "WEAK_BAR_CLOSE"
+        ],
+        null,
+        null
+      ],
+      "treatment": [
+        "WAIT",
+        null,
+        null,
+        [],
+        null,
+        null
+      ]
+    },
+    {
+      "bar_ts": "2026-03-13T20:00:00+00:00",
+      "control": [
+        "NO_TRADE",
+        null,
+        null,
+        [
+          "MARKET_CONDITION_NOT_TRENDING"
+        ],
+        null,
+        null
+      ],
+      "treatment": [
+        "WAIT",
+        null,
+        null,
+        [],
+        null,
+        null
+      ]
+    },
+    {
+      "bar_ts": "2026-03-13T20:15:00+00:00",
+      "control": [
+        "NO_TRADE",
+        null,
+        null,
+        [
+          "MARKET_CONDITION_NOT_TRADABLE"
+        ],
+        null,
+        null
+      ],
+      "treatment": [
+        "WAIT",
+        null,
+        null,
+        [],
+        null,
+        null
+      ]
+    },
+    {
+      "bar_ts": "2026-03-13T20:30:00+00:00",
+      "control": [
+        "NO_TRADE",
+        null,
+        null,
+        [
+          "MARKET_CONDITION_NOT_TRADABLE"
+        ],
+        null,
+        null
+      ],
+      "treatment": [
+        "WAIT",
+        null,
+        null,
+        [],
+        null,
+        null
+      ]
+    },
+    {
+      "bar_ts": "2026-03-13T20:45:00+00:00",
+      "control": [
+        "NO_TRADE",
+        null,
+        null,
+        [
+          "MARKET_CONDITION_NOT_TRADABLE"
+        ],
+        null,
+        null
+      ],
+      "treatment": [
+        "WAIT",
+        null,
+        null,
+        [],
+        null,
+        null
+      ]
+    },
+    {
+      "bar_ts": "2026-03-15T22:00:00+00:00",
+      "control": [
+        "NO_TRADE",
+        null,
+        null,
+        [],
+        null,
+        null
+      ],
+      "treatment": [
+        null,
+        null,
+        null,
+        [],
+        null,
+        null
+      ]
+    },
+    {
+      "bar_ts": "2026-03-16T10:45:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "WIN",
+        371.25
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "WIN",
+        495.0
+      ]
+    },
+    {
+      "bar_ts": "2026-03-16T13:45:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -157.5
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -210.0
+      ]
+    },
+    {
+      "bar_ts": "2026-03-16T15:15:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -157.5
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -210.0
+      ]
+    },
+    {
+      "bar_ts": "2026-03-16T19:00:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [
+          "WEAK_BAR_CLOSE"
+        ],
+        "LOSS",
+        -157.5
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [
+          "WEAK_BAR_CLOSE"
+        ],
+        "LOSS",
+        -210.0
+      ]
+    },
+    {
+      "bar_ts": "2026-03-18T08:45:00+00:00",
+      "control": [
+        "TRADE",
+        "strat_122",
+        "LONG",
+        [],
+        "LOSS",
+        -75.0
+      ],
+      "treatment": [
+        "TRADE",
+        "strat_122",
+        "LONG",
+        [],
+        "LOSS",
+        -100.0
+      ]
+    },
+    {
+      "bar_ts": "2026-03-23T13:45:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -157.5
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -210.0
+      ]
+    },
+    {
+      "bar_ts": "2026-03-26T11:15:00+00:00",
+      "control": [
+        "NO_TRADE",
+        "vwap_hold",
+        "SHORT",
+        [
+          "ENTRY_DETACHED_FROM_PRICE"
+        ],
+        null,
+        null
+      ],
+      "treatment": [
+        "TRADE",
+        "strat_122",
+        "SHORT",
+        [],
+        "WIN",
+        300.0
+      ]
+    },
+    {
+      "bar_ts": "2026-03-26T11:30:00+00:00",
+      "control": [
+        "NO_TRADE",
+        "vwap_hold",
+        "SHORT",
+        [
+          "ENTRY_DETACHED_FROM_PRICE"
+        ],
+        null,
+        null
+      ],
+      "treatment": [
+        null,
+        null,
+        null,
+        [],
+        null,
+        null
+      ]
+    },
+    {
+      "bar_ts": "2026-03-26T11:45:00+00:00",
+      "control": [
+        "NO_TRADE",
+        "vwap_hold",
+        "SHORT",
+        [
+          "ENTRY_DETACHED_FROM_PRICE"
+        ],
+        null,
+        null
+      ],
+      "treatment": [
+        null,
+        null,
+        null,
+        [],
+        null,
+        null
+      ]
+    },
+    {
+      "bar_ts": "2026-03-26T12:00:00+00:00",
+      "control": [
+        "NO_TRADE",
+        null,
+        null,
+        [
+          "MARKET_CONDITION_NOT_TRENDING"
+        ],
+        null,
+        null
+      ],
+      "treatment": [
+        null,
+        null,
+        null,
+        [],
+        null,
+        null
+      ]
+    },
+    {
+      "bar_ts": "2026-03-26T12:30:00+00:00",
+      "control": [
+        "NO_TRADE",
+        "vwap_hold",
+        "SHORT",
+        [
+          "ENTRY_DETACHED_FROM_PRICE"
+        ],
+        null,
+        null
+      ],
+      "treatment": [
+        "NO_TRADE",
+        null,
+        null,
+        [],
+        null,
+        null
+      ]
+    },
+    {
+      "bar_ts": "2026-03-26T16:30:00+00:00",
+      "control": [
+        "NO_TRADE",
+        "vwap_hold",
+        "SHORT",
+        [
+          "WEAK_BAR_CLOSE",
+          "ENTRY_DETACHED_FROM_PRICE"
+        ],
+        null,
+        null
+      ],
+      "treatment": [
+        "NO_TRADE",
+        null,
+        null,
+        [
+          "WEAK_BAR_CLOSE"
+        ],
+        null,
+        null
+      ]
+    },
+    {
+      "bar_ts": "2026-03-26T17:15:00+00:00",
+      "control": [
+        "NO_TRADE",
+        "vwap_hold",
+        "SHORT",
+        [
+          "ENTRY_DETACHED_FROM_PRICE"
+        ],
+        null,
+        null
+      ],
+      "treatment": [
+        "NO_TRADE",
+        null,
+        null,
+        [],
+        null,
+        null
+      ]
+    },
+    {
+      "bar_ts": "2026-03-26T17:45:00+00:00",
+      "control": [
+        "NO_TRADE",
+        "vwap_hold",
+        "SHORT",
+        [
+          "ENTRY_DETACHED_FROM_PRICE"
+        ],
+        null,
+        null
+      ],
+      "treatment": [
+        "NO_TRADE",
+        null,
+        null,
+        [],
+        null,
+        null
+      ]
+    },
+    {
+      "bar_ts": "2026-03-26T19:00:00+00:00",
+      "control": [
+        "NO_TRADE",
+        "vwap_hold",
+        "SHORT",
+        [
+          "ENTRY_DETACHED_FROM_PRICE"
+        ],
+        null,
+        null
+      ],
+      "treatment": [
+        "NO_TRADE",
+        null,
+        null,
+        [],
+        null,
+        null
+      ]
+    },
+    {
+      "bar_ts": "2026-03-26T19:45:00+00:00",
+      "control": [
+        "NO_TRADE",
+        "vwap_hold",
+        "SHORT",
+        [
+          "ENTRY_DETACHED_FROM_PRICE"
+        ],
+        null,
+        null
+      ],
+      "treatment": [
+        "NO_TRADE",
+        null,
+        null,
+        [],
+        null,
+        null
+      ]
+    },
+    {
+      "bar_ts": "2026-03-30T12:15:00+00:00",
+      "control": [
+        "TRADE",
+        "strat_122",
+        "LONG",
+        [],
+        "LOSS",
+        -157.5
+      ],
+      "treatment": [
+        "TRADE",
+        "strat_122",
+        "LONG",
+        [],
+        "LOSS",
+        -210.0
+      ]
+    },
+    {
+      "bar_ts": "2026-03-31T07:30:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -157.5
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -210.0
+      ]
+    },
+    {
+      "bar_ts": "2026-03-31T11:00:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "WIN",
+        371.25
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "WIN",
+        495.0
+      ]
+    },
+    {
+      "bar_ts": "2026-03-31T13:45:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -157.5
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -210.0
+      ]
+    },
+    {
+      "bar_ts": "2026-03-31T15:00:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -157.5
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -210.0
+      ]
+    },
+    {
+      "bar_ts": "2026-03-31T16:00:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "WIN",
+        371.25
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "WIN",
+        495.0
+      ]
+    },
+    {
+      "bar_ts": "2026-04-01T11:30:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -157.5
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -210.0
+      ]
+    },
+    {
+      "bar_ts": "2026-04-01T12:30:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -157.5
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -210.0
+      ]
+    },
+    {
+      "bar_ts": "2026-04-01T14:45:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "WIN",
+        371.25
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "WIN",
+        495.0
+      ]
+    },
+    {
+      "bar_ts": "2026-04-06T02:00:00+00:00",
+      "control": [
+        "TRADE",
+        "strat_122",
+        "LONG",
+        [],
+        "WIN",
+        277.5
+      ],
+      "treatment": [
+        "TRADE",
+        "strat_122",
+        "LONG",
+        [],
+        "WIN",
+        370.0
+      ]
+    },
+    {
+      "bar_ts": "2026-04-09T05:00:00+00:00",
+      "control": [
+        "TRADE",
+        "strat_122",
+        "SHORT",
+        [
+          "WEAK_BAR_CLOSE"
+        ],
+        "LOSS",
+        -48.75
+      ],
+      "treatment": [
+        "TRADE",
+        "strat_122",
+        "SHORT",
+        [
+          "WEAK_BAR_CLOSE"
+        ],
+        "LOSS",
+        -65.0
+      ]
+    },
+    {
+      "bar_ts": "2026-04-09T15:15:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [
+          "WEAK_BAR_CLOSE"
+        ],
+        "WIN",
+        371.25
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [
+          "WEAK_BAR_CLOSE"
+        ],
+        "WIN",
+        495.0
+      ]
+    },
+    {
+      "bar_ts": "2026-04-20T10:00:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -175.0
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -218.75
+      ]
+    },
+    {
+      "bar_ts": "2026-04-20T13:45:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -210.0
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -262.5
+      ]
+    },
+    {
+      "bar_ts": "2026-04-22T07:30:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -120.0
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -150.0
+      ]
+    },
+    {
+      "bar_ts": "2026-04-22T12:00:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -120.0
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -150.0
+      ]
+    },
+    {
+      "bar_ts": "2026-04-22T13:15:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -120.0
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -150.0
+      ]
+    },
+    {
+      "bar_ts": "2026-04-27T17:15:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -210.0
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -262.5
+      ]
+    },
+    {
+      "bar_ts": "2026-04-30T16:00:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "WIN",
+        495.0
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "WIN",
+        618.75
+      ]
+    },
+    {
+      "bar_ts": "2026-05-01T12:00:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "WIN",
+        320.0
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "WIN",
+        400.0
+      ]
+    },
+    {
+      "bar_ts": "2026-05-01T13:45:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -210.0
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -262.5
+      ]
+    },
+    {
+      "bar_ts": "2026-05-04T07:15:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -210.0
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -262.5
+      ]
+    },
+    {
+      "bar_ts": "2026-05-05T08:00:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "WIN",
+        332.5
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "WIN",
+        415.62
+      ]
+    },
+    {
+      "bar_ts": "2026-05-05T13:45:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "WIN",
+        495.0
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "WIN",
+        618.75
+      ]
+    }
+  ],
+  "collateral_non_strat122_trade_changes": [
+    {
+      "bar_ts": "2026-03-16T10:45:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "WIN",
+        371.25
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "WIN",
+        495.0
+      ]
+    },
+    {
+      "bar_ts": "2026-03-16T13:45:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -157.5
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -210.0
+      ]
+    },
+    {
+      "bar_ts": "2026-03-16T15:15:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -157.5
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -210.0
+      ]
+    },
+    {
+      "bar_ts": "2026-03-16T19:00:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [
+          "WEAK_BAR_CLOSE"
+        ],
+        "LOSS",
+        -157.5
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [
+          "WEAK_BAR_CLOSE"
+        ],
+        "LOSS",
+        -210.0
+      ]
+    },
+    {
+      "bar_ts": "2026-03-23T13:45:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -157.5
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -210.0
+      ]
+    },
+    {
+      "bar_ts": "2026-03-31T07:30:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -157.5
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -210.0
+      ]
+    },
+    {
+      "bar_ts": "2026-03-31T11:00:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "WIN",
+        371.25
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "WIN",
+        495.0
+      ]
+    },
+    {
+      "bar_ts": "2026-03-31T13:45:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -157.5
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -210.0
+      ]
+    },
+    {
+      "bar_ts": "2026-03-31T15:00:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -157.5
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -210.0
+      ]
+    },
+    {
+      "bar_ts": "2026-03-31T16:00:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "WIN",
+        371.25
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "WIN",
+        495.0
+      ]
+    },
+    {
+      "bar_ts": "2026-04-01T11:30:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -157.5
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -210.0
+      ]
+    },
+    {
+      "bar_ts": "2026-04-01T12:30:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -157.5
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -210.0
+      ]
+    },
+    {
+      "bar_ts": "2026-04-01T14:45:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "WIN",
+        371.25
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "WIN",
+        495.0
+      ]
+    },
+    {
+      "bar_ts": "2026-04-09T15:15:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [
+          "WEAK_BAR_CLOSE"
+        ],
+        "WIN",
+        371.25
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [
+          "WEAK_BAR_CLOSE"
+        ],
+        "WIN",
+        495.0
+      ]
+    },
+    {
+      "bar_ts": "2026-04-20T10:00:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -175.0
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -218.75
+      ]
+    },
+    {
+      "bar_ts": "2026-04-20T13:45:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -210.0
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -262.5
+      ]
+    },
+    {
+      "bar_ts": "2026-04-22T07:30:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -120.0
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -150.0
+      ]
+    },
+    {
+      "bar_ts": "2026-04-22T12:00:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -120.0
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -150.0
+      ]
+    },
+    {
+      "bar_ts": "2026-04-22T13:15:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -120.0
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -150.0
+      ]
+    },
+    {
+      "bar_ts": "2026-04-27T17:15:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -210.0
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -262.5
+      ]
+    },
+    {
+      "bar_ts": "2026-04-30T16:00:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "WIN",
+        495.0
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "WIN",
+        618.75
+      ]
+    },
+    {
+      "bar_ts": "2026-05-01T12:00:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "WIN",
+        320.0
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "WIN",
+        400.0
+      ]
+    },
+    {
+      "bar_ts": "2026-05-01T13:45:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -210.0
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -262.5
+      ]
+    },
+    {
+      "bar_ts": "2026-05-04T07:15:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -210.0
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "LOSS",
+        -262.5
+      ]
+    },
+    {
+      "bar_ts": "2026-05-05T08:00:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "WIN",
+        332.5
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "WIN",
+        415.62
+      ]
+    },
+    {
+      "bar_ts": "2026-05-05T13:45:00+00:00",
+      "control": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "WIN",
+        495.0
+      ],
+      "treatment": [
+        "TRADE",
+        "orb_reclaim",
+        "LONG",
+        [],
+        "WIN",
+        618.75
+      ]
+    }
+  ],
+  "proof_pass": false
+}
