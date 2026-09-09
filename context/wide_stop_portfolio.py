@@ -22,6 +22,8 @@ MAX_OPEN_POSITIONS = 2
 MAX_FILLS_PER_DAY = 3
 PORTFOLIO_DIR = "portfolio"
 STATE_FILENAME = "portfolio_state.json"
+_PAPER_STATE = "forward_collector_state.json"
+_DEMO_STATE = "demo_collector_state.json"
 
 
 def portfolio_dir(log_dir: str | Path) -> Path:
@@ -85,8 +87,8 @@ def register_fill(log_dir: str | Path, day: date) -> int:
     return int(state["filled_count"])
 
 
-def _ledger_state(log_dir: str | Path, ledger: contract.Ledger) -> dict[str, Any]:
-    path = contract.journal_dir(log_dir, ledger) / "forward_collector_state.json"
+def _state_file(log_dir: str | Path, ledger: contract.Ledger, filename: str) -> dict[str, Any]:
+    path = contract.journal_dir(log_dir, ledger) / filename
     try:
         raw = json.loads(path.read_text())
     except (FileNotFoundError, json.JSONDecodeError, OSError):
@@ -95,13 +97,16 @@ def _ledger_state(log_dir: str | Path, ledger: contract.Ledger) -> dict[str, Any
 
 
 def open_positions(log_dir: str | Path) -> list[dict[str, Any]]:
+    """Open paper/demo positions. A stale open from either route blocks route-switching."""
     out: list[dict[str, Any]] = []
     for ledger in contract.LEDGERS.values():
-        position = _ledger_state(log_dir, ledger).get("position")
-        if isinstance(position, dict):
-            row = dict(position)
-            row["ledger"] = ledger.name
-            out.append(row)
+        for filename, route in ((_PAPER_STATE, "paper_sim"), (_DEMO_STATE, "tradovate_demo")):
+            position = _state_file(log_dir, ledger, filename).get("position")
+            if isinstance(position, dict):
+                row = dict(position)
+                row["ledger"] = ledger.name
+                row["execution_route"] = route
+                out.append(row)
     return out
 
 
@@ -114,7 +119,7 @@ def same_instrument_open(log_dir: str | Path, instrument: str) -> bool:
 
 
 def planned_risk_dollars(position: dict[str, Any]) -> float:
-    """Static stop risk for one MNQ position, using its actual stored entry."""
+    """Static stop risk for one micro position, using its actual stored entry."""
     root = str(position.get("instrument") or "").upper().replace("1!", "")
     point_value = {"MNQ": 2.0, "MES": 5.0}.get(root, 0.0)
     entry = float(position.get("entry") or position.get("planned_entry") or 0.0)
