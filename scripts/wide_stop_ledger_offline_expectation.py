@@ -3,24 +3,27 @@
 
 Spec §6 requires a written expectation, computed BEFORE the lane starts, so the
 forward record is measured against something fixed rather than tuned after the
-fact. It replays the D3-approved cells through the production `ioc_limit` entry
-at the frozen contract (8 ticks, 1 adverse tick, decision-bar close):
+fact. It replays the approved/amended cells through the production `ioc_limit`
+entry at the frozen contract (8 ticks, 1 adverse tick, decision-bar close):
 
-  wide_stop_4k  4HR MNQ,   stop <= 400 ticks and R:R >= 1.0
+  wide_stop_4k  4HR MNQ,   stop <= 300 ticks and R:R >= 1.0
   wide_stop_6k  3-2-2 MNQ, stop <= 600 ticks, no R:R floor
+
+The 4HR cap was reduced from 400 to 300 ticks by operator instruction on
+2026-09-08. The replacement historical cell was recomputed from the committed
+candidate artifact before merge: 32 trades, +$1,901.14 net, PF 2.313, with both
+chronological halves positive (+$1,164.82 / +$736.32).
 
 **Scope, stated rather than implied.** This establishes the *entry* side —
 which candidates the lane admits, which fill under the frozen IOC, at what
 price, and which are refused because the fill lands outside its own bracket.
-It does NOT re-derive forward P&L: the exit expectation is the memo's committed
-bracket cell, carried here unchanged, and the memo's own guidance is that IOC
-realises roughly 55-75% of bracket P&L. Reporting a fresh P&L number here would
-imply a precision this input cannot support.
+It does NOT establish forward P&L: the exit expectation is the committed
+historical bracket cell, and the forward lane still has to earn its own record.
 
 Per the §6 build precondition, invalid-at-fill outcomes are counted as their
 own line and never blended into the expectation. Since #508 `PaperBroker`
-refuses those fills on every entry path, so this reports what the broker
-already enforces rather than re-implementing the rule.
+refuses those fills on every entry path, this reports what the broker already
+enforces rather than re-implementing the rule.
 
 Input is `scripts/edge_decomposition_audit_results_candidates.jsonl.gz`, a
 committed artifact — this runs from a fresh clone and reads no gitignored bars.
@@ -44,12 +47,15 @@ CANDIDATES = Path(__file__).with_name("edge_decomposition_audit_results_candidat
 TICK = 0.25
 SLIPPAGE_TICKS = 1.0
 
-#: The memo's committed bracket cells, carried unchanged as the exit
-#: expectation. `docs/wide-stop-day-strategy-policy-options-2026-09-07.md`.
+#: Historical bracket cells used as the exit-side expectation. The 4HR cell
+#: was recomputed from the committed candidate artifact after the operator's
+#: 2026-09-08 cap reduction; 3-2-2 is unchanged.
 BRACKET_CELLS = {
     "wide_stop_4k": {
-        "lane": "4hr_mnq", "admitted": 36, "bracket_net": 3077.0, "profit_factor": 3.13,
-        "h1": 1434.0, "h2": 1643.0, "losses_over_150": 2,
+        "lane": "4hr_mnq", "admitted": 32, "bracket_net": 1901.14,
+        "profit_factor": 2.313232, "h1": 1164.82, "h2": 736.32,
+        "losses_over_150": 2,
+        "note": "300-tick operator amendment; prior 400-tick cell was 36 trades / +$3,076.72 / PF 3.125",
     },
     "wide_stop_6k": {
         "lane": "322_mnq", "admitted": 24, "bracket_net": 1790.0, "profit_factor": 9.9,
@@ -59,7 +65,7 @@ BRACKET_CELLS = {
 
 
 def _cell_members(lane: str, ledger: contract.Ledger) -> list[dict]:
-    """The candidates the family caps admit — the D3 cell."""
+    """The candidates the family caps admit."""
     rows = []
     with gzip.open(CANDIDATES, "rt") as stream:
         for line in stream:
@@ -152,10 +158,10 @@ def build_report() -> dict:
             "exit": "documented static bracket, no runner",
             "commission_round_trip": contract.COMMISSION_ROUND_TRIP,
         },
-        "establishes": "entry-side admission and fill behaviour only",
+        "establishes": "entry-side admission and fill behaviour plus a fixed historical bracket benchmark",
         "does_not_establish": [
-            "forward P&L — the exit expectation is the memo's committed bracket cell, unchanged",
-            "that IOC realises bracket P&L; the memo's guidance is roughly 55-75% of it",
+            "forward P&L — the historical bracket cell is a benchmark, not forward evidence",
+            "that IOC realises historical bracket P&L",
         ],
         "ledgers": ledgers,
     }

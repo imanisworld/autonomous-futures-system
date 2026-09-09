@@ -9,38 +9,39 @@
     "exit": "documented static bracket, no runner",
     "commission_round_trip": 1.24
   },
-  "establishes": "entry-side admission and fill behaviour only",
+  "establishes": "entry-side admission and fill behaviour plus a fixed historical bracket benchmark",
   "does_not_establish": [
-    "forward P&L \u2014 the exit expectation is the memo's committed bracket cell, unchanged",
-    "that IOC realises bracket P&L; the memo's guidance is roughly 55-75% of it"
+    "forward P&L \u2014 the historical bracket cell is a benchmark, not forward evidence",
+    "that IOC realises historical bracket P&L"
   ],
   "ledgers": {
     "wide_stop_4k": {
       "ledger": "wide_stop_4k",
       "starting_balance": 4000.0,
-      "family_stop_cap_ticks": 400.0,
+      "family_stop_cap_ticks": 300.0,
       "min_rr_ratio": 1.0,
-      "cell_size": 36,
-      "expected_cell_size": 36,
+      "cell_size": 32,
+      "expected_cell_size": 32,
       "cell_matches_memo": true,
-      "ioc_filled": 13,
-      "ioc_unmarketable": 21,
+      "ioc_filled": 11,
+      "ioc_unmarketable": 19,
       "invalid_at_fill": 2,
       "invalid_at_fill_dates": [
         "2026-01-08",
         "2026-04-06"
       ],
-      "fill_rate": 0.361,
-      "median_detachment_ticks": 56.0,
+      "fill_rate": 0.344,
+      "median_detachment_ticks": 51.0,
       "max_detachment_ticks": 247.0,
       "bracket_expectation": {
         "lane": "4hr_mnq",
-        "admitted": 36,
-        "bracket_net": 3077.0,
-        "profit_factor": 3.13,
-        "h1": 1434.0,
-        "h2": 1643.0,
-        "losses_over_150": 2
+        "admitted": 32,
+        "bracket_net": 1901.14,
+        "profit_factor": 2.313232,
+        "h1": 1164.82,
+        "h2": 736.32,
+        "losses_over_150": 2,
+        "note": "300-tick operator amendment; prior 400-tick cell was 36 trades / +$3,076.72 / PF 3.125"
       }
     },
     "wide_stop_6k": {
