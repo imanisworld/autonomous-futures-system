@@ -4,9 +4,10 @@
 Counterfactual under test (MNQ only):
 - existing transition_failed_breakdown_reclaim candidates
 - session == new_york
-- decision-close IOC entry
+- decision-close IOC entry using the candidate's planned entry as the limit anchor
+- 32-tick MNQ IOC tolerance
 - 1 adverse tick on entry
-- 400-tick planned protective stop (100 MNQ points)
+- 400-tick planned protective stop from the candidate's planned entry
 - 1 adverse tick on stop exit
 - otherwise flatten 30 minutes after the decision, with 1 adverse exit tick
 - $1.48 round-turn commission
@@ -23,7 +24,6 @@ from __future__ import annotations
 import argparse
 import gzip
 import json
-import math
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -82,34 +82,63 @@ def load_bars(data_root: Path, corpus: str) -> dict[datetime, dict[str, Any]]:
                 if not line.strip():
                     continue
                 bar = json.loads(line)
-                ts = _dt(bar["timestamp"])
-                out[ts] = bar
+                out[_dt(bar["timestamp"])] = bar
     return out
 
 
-def _planned_ioc_fill(row: dict[str, Any]) -> tuple[float, float, int]:
+def planned_ioc_fill(row: dict[str, Any]) -> dict[str, Any]:
+    """Mirror PaperBroker's decision-close IOC entry math for one candidate.
+
+    The candidate's planned entry and the market's decision close are separate
+    inputs. A mismatch is normal and must not be rewritten away. The IOC either
+    fills at the decision-close market plus adverse slippage, bounded by the
+    candidate-derived limit, or cancels when the market lies beyond that cap.
+    """
     direction = str(row["direction"]).upper()
+    if direction not in {"LONG", "SHORT"}:
+        raise ValueError(f"invalid direction {direction!r}")
     sign = 1 if direction == "LONG" else -1
     plan_entry = float(row["entry"])
-    decision_close = float((row.get("gates") or {}).get("decision_close"))
-    if not math.isclose(plan_entry, decision_close, abs_tol=1e-9):
-        raise ValueError(
-            f"entry/decision-close mismatch at {row['bar_ts']}: "
-            f"entry={plan_entry} close={decision_close}"
-        )
+    decision_close_raw = (row.get("gates") or {}).get("decision_close")
+    if decision_close_raw is None:
+        raise ValueError(f"missing decision_close at {row.get('bar_ts')}")
+    market = float(decision_close_raw)
     tol = IOC_TOLERANCE_TICKS * TICK_SIZE
-    market = decision_close
+    slip = ENTRY_SLIPPAGE_TICKS * TICK_SIZE
+
     if direction == "LONG":
         limit_px = plan_entry + tol
         if market > limit_px:
-            raise ValueError("unexpected IOC no-fill: market above long limit")
-        fill = min(limit_px, market + ENTRY_SLIPPAGE_TICKS * TICK_SIZE)
+            return {
+                "status": "NO_FILL",
+                "reason": "ENTRY_NOT_FILLED",
+                "planned_entry": plan_entry,
+                "decision_close": market,
+                "limit": limit_px,
+                "sign": sign,
+            }
+        fill = min(limit_px, market + slip)
     else:
         limit_px = plan_entry - tol
         if market < limit_px:
-            raise ValueError("unexpected IOC no-fill: market below short limit")
-        fill = max(limit_px, market - ENTRY_SLIPPAGE_TICKS * TICK_SIZE)
-    return fill, plan_entry, sign
+            return {
+                "status": "NO_FILL",
+                "reason": "ENTRY_NOT_FILLED",
+                "planned_entry": plan_entry,
+                "decision_close": market,
+                "limit": limit_px,
+                "sign": sign,
+            }
+        fill = max(limit_px, market - slip)
+
+    return {
+        "status": "FILLED",
+        "fill": fill,
+        "planned_entry": plan_entry,
+        "decision_close": market,
+        "limit": limit_px,
+        "sign": sign,
+    }
 
 
 def resolve_one(row: dict[str, Any], bars: dict[datetime, dict[str, Any]]) -> dict[str, Any]:
@@ -122,10 +151,27 @@ def resolve_one(row: dict[str, Any], bars: dict[datetime, dict[str, Any]]) -> di
             f"artifact={exit_ts.isoformat()} expected={expected_exit.isoformat()}"
         )
 
-    fill, plan_entry, sign = _planned_ioc_fill(row)
-    # Planned stop stays 400 ticks from the signal's decision-close entry.
-    # With 1-tick adverse entry + 1-tick adverse stop fill, realized worst loss
-    # is 402 ticks before commission. We report that rather than hiding it.
+    entry = planned_ioc_fill(row)
+    if entry["status"] == "NO_FILL":
+        return {
+            "result": "NO_FILL",
+            "exit_reason": entry["reason"],
+            "entry": None,
+            "planned_entry": entry["planned_entry"],
+            "decision_close": entry["decision_close"],
+            "limit": entry["limit"],
+            "stop": None,
+            "exit": None,
+            "exit_ts": decision_ts.isoformat(),
+            "net": None,
+        }
+
+    fill = float(entry["fill"])
+    plan_entry = float(entry["planned_entry"])
+    sign = int(entry["sign"])
+    # This is the actual pre-registered bracket semantics for this probe: the
+    # protective stop is 400 ticks from the candidate's planned entry, not
+    # silently re-anchored to the realized IOC fill.
     stop = plan_entry - sign * STOP_TICKS * TICK_SIZE
 
     path: list[tuple[datetime, dict[str, Any]]] = []
@@ -148,6 +194,8 @@ def resolve_one(row: dict[str, Any], bars: dict[datetime, dict[str, Any]]) -> di
                 "exit_reason": "STOP_HIT",
                 "entry": fill,
                 "planned_entry": plan_entry,
+                "decision_close": entry["decision_close"],
+                "limit": entry["limit"],
                 "stop": stop,
                 "exit": exit_px,
                 "exit_ts": ts.isoformat(),
@@ -163,6 +211,8 @@ def resolve_one(row: dict[str, Any], bars: dict[datetime, dict[str, Any]]) -> di
         "exit_reason": "TIME_30M",
         "entry": fill,
         "planned_entry": plan_entry,
+        "decision_close": entry["decision_close"],
+        "limit": entry["limit"],
         "stop": stop,
         "exit": exit_px,
         "exit_ts": path[-1][0].isoformat(),
@@ -171,9 +221,15 @@ def resolve_one(row: dict[str, Any], bars: dict[datetime, dict[str, Any]]) -> di
 
 
 def stats(trades: list[dict[str, Any]]) -> dict[str, Any]:
-    vals = [float(t["net"]) for t in trades]
+    fills = [t for t in trades if t.get("net") is not None]
+    vals = [float(t["net"]) for t in fills]
     if not vals:
-        return {"n": 0}
+        return {
+            "attempts": len(trades),
+            "fills": 0,
+            "no_fills": sum(t.get("result") == "NO_FILL" for t in trades),
+            "n": 0,
+        }
     gp = sum(v for v in vals if v > 0)
     gl = -sum(v for v in vals if v < 0)
     mid = len(vals) // 2
@@ -183,6 +239,9 @@ def stats(trades: list[dict[str, Any]]) -> dict[str, Any]:
         peak = max(peak, equity)
         max_dd = max(max_dd, peak - equity)
     return {
+        "attempts": len(trades),
+        "fills": len(fills),
+        "no_fills": sum(t.get("result") == "NO_FILL" for t in trades),
         "n": len(vals),
         "wins": sum(v > 0 for v in vals),
         "losses": sum(v < 0 for v in vals),
@@ -192,31 +251,34 @@ def stats(trades: list[dict[str, Any]]) -> dict[str, Any]:
         "h2": round(sum(vals[mid:]), 2),
         "worst": round(min(vals), 2),
         "max_drawdown": round(max_dd, 2),
-        "stop_losses": sum(t["exit_reason"] == "STOP_HIT" for t in trades),
+        "stop_losses": sum(t["exit_reason"] == "STOP_HIT" for t in fills),
     }
 
 
 def run_lane(rows: list[dict[str, Any]], bars: dict[datetime, dict[str, Any]]) -> dict[str, Any]:
-    all_trades: list[dict[str, Any]] = []
+    all_attempts: list[dict[str, Any]] = []
     sequential: list[dict[str, Any]] = []
     skipped = Counter()
     busy_until: datetime | None = None
     day_count: dict[str, int] = defaultdict(int)
 
-    # Resolve every row first. Any missing bar aborts the audit instead of
-    # silently reducing the sample.
+    # Resolve every eligible candidate first. Any required raw bar missing from
+    # a FILLED attempt aborts the audit instead of silently reducing the sample.
     resolved: list[tuple[dict[str, Any], dict[str, Any]]] = []
     for row in rows:
         trade = resolve_one(row, bars)
         trade["bar_ts"] = row["bar_ts"]
         trade["date"] = row.get("date")
-        all_trades.append(trade)
+        all_attempts.append(trade)
         resolved.append((row, trade))
 
     for row, trade in resolved:
         decision_ts = _dt(row["bar_ts"])
         if busy_until is not None and decision_ts <= busy_until:
             skipped["POSITION_ALREADY_OPEN"] += 1
+            continue
+        if trade["result"] == "NO_FILL":
+            sequential.append(trade)
             continue
         day = str(row.get("date") or decision_ts.date().isoformat())
         if day_count[day] >= MAX_TRADES_PER_DAY:
@@ -226,16 +288,25 @@ def run_lane(rows: list[dict[str, Any]], bars: dict[datetime, dict[str, Any]]) -
         day_count[day] += 1
         busy_until = _dt(trade["exit_ts"])
 
+    plan_close_deltas_ticks = [
+        round((float(r["gates"]["decision_close"]) - float(r["entry"])) / TICK_SIZE, 4)
+        for r in rows
+    ]
     return {
         "eligible_candidates": len(rows),
-        "all_candidates_diagnostic": stats(all_trades),
+        "plan_to_decision_close_delta_ticks": {
+            "min": min(plan_close_deltas_ticks),
+            "max": max(plan_close_deltas_ticks),
+            "nonzero": sum(v != 0 for v in plan_close_deltas_ticks),
+        },
+        "all_candidates_diagnostic": stats(all_attempts),
         "sequential_max1_max3day": stats(sequential),
         "skipped": dict(skipped),
         "planned_stop_ticks": STOP_TICKS,
         "planned_stop_risk_dollars": round(STOP_TICKS * 0.50, 2),
-        "realized_full_stop_loss_after_slippage_and_commission": round(
-            -((STOP_TICKS + ENTRY_SLIPPAGE_TICKS + EXIT_SLIPPAGE_TICKS) * 0.50) - COMMISSION,
-            2,
+        "note": (
+            "realized stop loss varies slightly with plan-to-market IOC entry delta; "
+            "the report's worst trade is binding rather than a hard-coded $200 assumption"
         ),
     }
 
@@ -252,10 +323,10 @@ def main() -> int:
         "model": {
             "instrument": "MNQ",
             "session": "new_york",
-            "entry": "decision-close IOC",
+            "entry": "planned-entry anchored limit IOC evaluated at decision close",
             "ioc_tolerance_ticks": IOC_TOLERANCE_TICKS,
             "entry_slippage_ticks": ENTRY_SLIPPAGE_TICKS,
-            "stop_ticks": STOP_TICKS,
+            "stop_ticks_from_planned_entry": STOP_TICKS,
             "exit": "30m max hold or protective stop, whichever occurs first",
             "exit_slippage_ticks": EXIT_SLIPPAGE_TICKS,
             "commission_round_trip": COMMISSION,
