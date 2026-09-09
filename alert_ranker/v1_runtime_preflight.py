@@ -2,11 +2,22 @@
 
 from __future__ import annotations
 
+import os
+
+
+def _v1_collection_enabled() -> bool:
+    return os.getenv("OPTIONS_PAPER_V1_COLLECTION_ENABLED", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
 
 def build_v1_runtime_preflight(base_cls):
     class V1RuntimePreflightScanner(base_cls):
         async def scan_watchlist(self, *, source="scheduled", context=None, now=None):
-            if source == "scheduled":
+            if source == "scheduled" and _v1_collection_enabled():
                 if not getattr(self.config, "bar_context_enabled", False):
                     self.last_skip_reason = "v1_requires_bar_context"
                     return []
