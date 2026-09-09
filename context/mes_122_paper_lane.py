@@ -41,7 +41,7 @@ import copy
 import dataclasses
 import logging
 import os
-from datetime import date as _date, datetime, timezone
+from datetime import date as _date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -253,6 +253,35 @@ def ledger_state(outcomes: list[dict]) -> dict[str, Any]:
     }
 
 
+CARRY_LOOKBACK_DAYS = 7
+
+
+def _find_open_position(journal, for_date: Optional[_date]):
+    """Locate a still-open lane position, mirroring the runner's carry lookup.
+
+    `webhook/runner.py:876-885` checks today and then walks back up to 7 calendar
+    days so a Friday->Monday swing is still found. This lane is explicitly
+    evaluating swing holds, so the observer has to search the same way — checking
+    only `for_date` reports `open: False` for a position that is genuinely open
+    and that the engine will still resolve.
+
+    Returns (position, date_it_was_opened_on) or (None, None).
+    """
+    today = for_date or _date.today()
+    if journal.get_daily_state(today).has_open_position:
+        position = journal.get_open_position(today)
+        if position:
+            return position, today
+    for days_back in range(1, CARRY_LOOKBACK_DAYS + 1):
+        candidate = today - timedelta(days=days_back)
+        if not journal.get_daily_state(candidate).has_open_position:
+            continue
+        position = journal.get_open_position(candidate)
+        if position:
+            return position, candidate
+    return None, None
+
+
 def open_position_exposure(cfg, log_dir, *, mark_price, for_date: Optional[_date] = None) -> dict[str, Any]:
     """OBSERVATIONAL swing risk for a lane position that is still open.
 
@@ -277,15 +306,13 @@ def open_position_exposure(cfg, log_dir, *, mark_price, for_date: Optional[_date
     }
     try:
         journal = JournalLogger(log_dir=str(journal_dir(log_dir)))
-        daily = journal.get_daily_state(for_date)
-        if not getattr(daily, "has_open_position", False):
-            return out
-        position = journal.get_open_position(for_date)
+        position, opened_on = _find_open_position(journal, for_date)
     except Exception as exc:  # pragma: no cover - observability must never raise
         out["error"] = str(exc)
         return out
     if not position:
         return out
+    out["open_position_date"] = opened_on.isoformat() if opened_on else None
 
     setup = position.get("setup") or position
     direction = str(setup.get("direction") or position.get("direction") or "")

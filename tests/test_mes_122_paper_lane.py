@@ -1,7 +1,7 @@
 """Contract and isolation invariants for the MES 15m 1-2-2 forward-paper lane."""
 import dataclasses
 import json
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 
@@ -487,3 +487,79 @@ def test_open_position_exposure_never_halts_the_lane(config, tmp_path):
     )
     assert exposure["exceeds_halt_threshold_observational"] is True
     assert lane.ledger_status(_active(config), tmp_path, day)["halted"] is False
+
+
+# ────────────────── swing observer must find CARRIED positions ───────────────
+#
+# Regression for the second review blocker: open_position_exposure() checked only
+# `for_date`, but webhook/runner.py:876-885 walks back up to 7 calendar days so a
+# Friday->Monday carry is still found. A genuinely open weekend swing therefore
+# reported `open: False`, defeating the swing-risk visibility this lane exists to
+# provide.
+
+FRIDAY = date(2026, 5, 22)
+MONDAY = date(2026, 5, 25)
+
+
+def test_exposure_finds_a_friday_position_still_open_on_monday(config, tmp_path):
+    _seed_lane_open_trade(tmp_path, FRIDAY, entry=6800.0)
+
+    exposure = lane.open_position_exposure(
+        _active(config), tmp_path, mark_price=6780.0, for_date=MONDAY
+    )
+
+    assert exposure["open"] is True, "weekend carry reported as flat"
+    assert exposure["open_position_date"] == FRIDAY.isoformat()
+    assert exposure["direction"] == "LONG"
+    assert exposure["entry"] == 6800.0
+    # 20 points against a LONG = 80 ticks x $1.25
+    assert exposure["unrealized_dollars_raw"] == -100.0
+    # closed balance ($1,500, nothing resolved yet) + unrealized − entry tick paid
+    assert exposure["realistic_mtm_equity"] == round(1_500.0 - 100.0 - 1.25, 2)
+    assert exposure["open_position_mtm_drawdown_percent"] > 0
+
+
+def test_exposure_carry_lookback_matches_the_runners_seven_days(config, tmp_path):
+    assert lane.CARRY_LOOKBACK_DAYS == 7
+    # 7 days back is still found; 8 is outside the window, exactly like the runner.
+    _seed_lane_open_trade(tmp_path, FRIDAY, entry=6800.0)
+    inside = lane.open_position_exposure(
+        _active(config), tmp_path, mark_price=6800.0,
+        for_date=FRIDAY + timedelta(days=7),
+    )
+    outside = lane.open_position_exposure(
+        _active(config), tmp_path, mark_price=6800.0,
+        for_date=FRIDAY + timedelta(days=8),
+    )
+    assert inside["open"] is True
+    assert outside["open"] is False
+
+
+def test_weekend_swing_resolves_on_monday_and_the_ledger_counts_it(config, tmp_path):
+    """End to end: open Friday, still visible Monday, resolve Monday, exposure
+    goes flat and the realistic closed-trade ledger picks the outcome up."""
+    from webhook.runner import process_alert
+
+    _seed_lane_open_trade(tmp_path, FRIDAY, entry=6800.0, stop=6790.0, target=6820.0)
+
+    before = lane.open_position_exposure(
+        _active(config), tmp_path, mark_price=6795.0, for_date=MONDAY
+    )
+    assert before["open"] is True
+    assert _lane_resolved(config, tmp_path, MONDAY)["resolved_trades"] == 0
+
+    # Monday bar trades through the stop: the carried position resolves.
+    process_alert(
+        _mes_payload(timestamp="2026-05-25T14:30:00+00:00",
+                     open=6795.0, high=6798.0, low=6780.0, close=6788.0),
+        config=_active(config), log_dir=str(tmp_path), for_date=MONDAY,
+    )
+
+    after = lane.open_position_exposure(
+        _active(config), tmp_path, mark_price=6788.0, for_date=MONDAY
+    )
+    assert after["open"] is False, "exposure still reports open after resolution"
+
+    status = _lane_resolved(config, tmp_path, MONDAY)
+    assert status["resolved_trades"] == 1, "weekend swing outcome missed by the ledger"
+    assert status["realistic_balance"] < 1_500.0

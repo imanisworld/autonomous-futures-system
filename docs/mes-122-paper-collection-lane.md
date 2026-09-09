@@ -114,6 +114,12 @@ mark-to-market (`drawdown_basis: "closed_trade_realistic"`) — the same distinc
 lane bar: raw unrealized dollars, the entry tick already incurred,
 `realistic_mtm_equity`, and `open_position_mtm_drawdown_percent`.
 
+The observer mirrors the runner's carry lookup — it checks the current date and
+then walks back up to 7 calendar days (`webhook/runner.py:876-885`), so a
+Friday→Monday swing that is genuinely still open is reported as open rather than
+flat, and `open_position_date` records which day it was opened on. Checking only
+the current date defeated the very visibility this exists for.
+
 That exposure is **observational only** — it never halts or force-closes. The 30% halt
 remains on the closed-trade realistic ledger, as specified. A test asserts a deep
 unrealized excursion sets `exceeds_halt_threshold_observational` while leaving
@@ -152,7 +158,7 @@ automatically.
 - `webhook/runner.py` — one additive hook in its own error boundary, plus `strategy=` metadata on the two outcome paths that omitted it
 - `config/settings.py` — `mes_122_paper_mode` / `mes_122_paper_epoch_start` + validation
 - `ops/live_box_guard.py` — both vars registered as proof-critical
-- `tests/test_mes_122_paper_lane.py` — 34 tests: pinned contract, isolation, no-Tradovate,
+- `tests/test_mes_122_paper_lane.py` — 37 tests: pinned contract, isolation, no-Tradovate,
   realistic-ledger arithmetic, every-outcome-path coverage, timeframe pin, swing exposure,
-  halt driven by the closed-trade realistic ledger, config validation
+  weekend-carry visibility, halt driven by the closed-trade realistic ledger, config validation
 - this doc
