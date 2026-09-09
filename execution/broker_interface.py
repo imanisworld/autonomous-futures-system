@@ -42,11 +42,6 @@ class BracketOrder:
     max_dollar_risk: Optional[float] = None
     max_stop_ticks: Optional[float] = None
     max_slippage_ticks: Optional[float] = None
-    # Optional entry-placement tolerance for one isolated order. None preserves
-    # the broker's existing env/config lookup exactly. Evidence/demo lanes can
-    # pin a preregistered IOC tolerance without changing every other order on
-    # the account.
-    entry_tolerance_ticks_override: Optional[float] = None
     execution_model: str = "anchored_structure"
     post_fill_validation_required: bool = False
     # Deterministic client order identity (Tradovate clOrdId), derived from the
