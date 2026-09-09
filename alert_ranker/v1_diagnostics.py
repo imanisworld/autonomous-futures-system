@@ -581,11 +581,25 @@ def trade_diagnostic(storage: ScanStorage, row: dict[str, Any]) -> dict[str, Any
         or "EVENT_RISK_UNKNOWN"
     )
 
+    friction = _friction_scenarios(
+        entry_ask=entry_ask,
+        exit_bid=exit_bid,
+        contracts=contracts,
+    )
     result = {
         "shadow_id": row["id"],
         "ticker": row["ticker"],
         "direction": _normalize_direction(row["direction"]),
+        # `status` in options_shadow_journal records WHICH UNDERLYING EVENT closed
+        # the episode (target touched / stop touched).  It is not a financial
+        # result: a `WIN` row can and does carry negative option P&L.  Both are
+        # published under unambiguous names so no consumer can read one as the
+        # other, and `financial_outcome` is derived from recorded P&L only.
         "status": row["status"],
+        "underlying_target_event": row["status"],
+        "financial_outcome": _financial_outcome(
+            friction.get("RECORDED_EXECUTABLE"), row["status"]
+        ),
         "setup_type": setup_type,
         "timeframe": timeframe,
         "paper_evidence_lane": row["lane"],
@@ -606,11 +620,7 @@ def trade_diagnostic(storage: ScanStorage, row: dict[str, Any]) -> dict[str, Any
         "hold_minutes": hold_minutes,
         "event_risk_state": event_risk,
         "resolution_ambiguity": outcome.get("resolution_ambiguity"),
-        "friction_pnl_dollars": _friction_scenarios(
-            entry_ask=entry_ask,
-            exit_bid=exit_bid,
-            contracts=contracts,
-        ),
+        "friction_pnl_dollars": friction,
     }
     result.update(option_excursion)
     result.update(underlying_excursion)
@@ -652,6 +662,19 @@ def _max_trade_sequence_drawdown(values: list[float]) -> float:
         peak = max(peak, equity)
         max_dd = max(max_dd, peak - equity)
     return round(max_dd, 2)
+
+
+def _financial_outcome(recorded_pnl: float | None, status: str | None) -> str:
+    """Financial result derived from recorded P&L, never from the journal label."""
+    if str(status or "OPEN").upper() == "OPEN":
+        return "OPEN"
+    if recorded_pnl is None:
+        return "UNPRICED"
+    if recorded_pnl > 0:
+        return "PROFIT"
+    if recorded_pnl < 0:
+        return "LOSS"
+    return "BREAKEVEN"
 
 
 def sample_status(n: int) -> str:
@@ -709,23 +732,46 @@ def strategy_summary(trades: list[dict[str, Any]]) -> list[dict[str, Any]]:
             grade: sum(1 for row in rows if row.get("evidence_quality") == grade)
             for grade in ("HIGH", "MEDIUM", "LOW")
         }
+        # Counterfactual/observation rows are NOT a trade population.  They never
+        # reserved risk and were never eligible to be taken, so scoring them as
+        # trades manufactures an edge out of observations.  Their observational
+        # value (MAE/MFE, entry extension, evidence quality) is kept intact; every
+        # trade-outcome metric is suppressed rather than computed.
+        is_trade_population = lane != COUNTERFACTUAL_LANE
         summaries.append(
             {
                 "paper_evidence_lane": lane,
                 "setup_type": setup_type,
                 "timeframe": timeframe,
-                "n_total": len(rows),
-                "n_closed_priced": len(recorded),
-                "sample_status": sample_status(len(recorded)),
-                "wins": wins,
-                "losses": losses,
-                "win_rate_percent": round((wins / len(recorded)) * 100.0, 2) if recorded else None,
-                "win_rate_95ci_percent": [win_low, win_high],
-                "expectancy_dollars_per_trade": round(statistics.mean(recorded), 2) if recorded else None,
-                "expectancy_95ci_dollars": [mean_low, mean_high],
-                "profit_factor": profit_factor,
-                "trade_sequence_max_drawdown_dollars": _max_trade_sequence_drawdown(recorded),
-                "friction_total_pnl_dollars": friction_totals,
+                "is_trade_population": is_trade_population,
+                "trade_metrics_suppressed_reason": (
+                    None if is_trade_population else "COUNTERFACTUAL_NOT_A_TRADE_POPULATION"
+                ),
+                "n_observations": len(rows),
+                "n_total": len(rows) if is_trade_population else None,
+                "n_closed_priced": len(recorded) if is_trade_population else None,
+                "sample_status": (
+                    sample_status(len(recorded)) if is_trade_population else "NOT_A_TRADE_POPULATION"
+                ),
+                "wins": wins if is_trade_population else None,
+                "losses": losses if is_trade_population else None,
+                "win_rate_percent": (
+                    round((wins / len(recorded)) * 100.0, 2)
+                    if is_trade_population and recorded
+                    else None
+                ),
+                "win_rate_95ci_percent": [win_low, win_high] if is_trade_population else None,
+                "expectancy_dollars_per_trade": (
+                    round(statistics.mean(recorded), 2)
+                    if is_trade_population and recorded
+                    else None
+                ),
+                "expectancy_95ci_dollars": [mean_low, mean_high] if is_trade_population else None,
+                "profit_factor": profit_factor if is_trade_population else None,
+                "trade_sequence_max_drawdown_dollars": (
+                    _max_trade_sequence_drawdown(recorded) if is_trade_population else None
+                ),
+                "friction_total_pnl_dollars": friction_totals if is_trade_population else None,
                 "quality_counts": quality_counts,
                 "median_option_mae_percent": _median_present(rows, "option_mae_percent"),
                 "median_option_mfe_percent": _median_present(rows, "option_mfe_percent"),

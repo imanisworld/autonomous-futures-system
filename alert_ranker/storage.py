@@ -446,6 +446,28 @@ class ScanStorage:
             ).fetchone()
         return int(row["id"]) if row else None
 
+    def find_episode_duplicate(self, ticker: str, episode_key: str) -> int | None:
+        """Find any row already journalled for this evidence episode.
+
+        Unlike ``find_open_duplicate`` this deliberately ignores ``status``.  A
+        V1 episode is routinely resolved on the very next scan tick, so an
+        OPEN-only guard never fires and the same setup is re-journalled once per
+        tick.  One episode is one row whether it is still open or already closed.
+        """
+        if not episode_key:
+            return None
+        needle = json.dumps({"episode_key": episode_key}, sort_keys=True)[1:-1]
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT id FROM options_shadow_journal
+                WHERE ticker = ? AND selected_contract_json LIKE ?
+                ORDER BY id DESC LIMIT 1
+                """,
+                (ticker.upper(), f"%{needle}%"),
+            ).fetchone()
+        return int(row["id"]) if row else None
+
     def open_setups_after(self, after_id: int, limit: int = 500) -> list[StoredShadowSetup]:
         with self._connect() as conn:
             rows = conn.execute(
