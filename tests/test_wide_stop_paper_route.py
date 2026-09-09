@@ -1,8 +1,10 @@
 """Safety tests for the three-strategy paper-only router."""
 from __future__ import annotations
 
+import inspect
 from types import SimpleNamespace
 
+from context import five_min_feed
 from context import wide_stop_execution as execution
 from context import wide_stop_forward_router as router
 
@@ -14,6 +16,14 @@ def test_execution_selector_rejects_any_non_paper_route(monkeypatch):
     for value in ("tradovate_demo", "live", "tradovate", "unknown"):
         monkeypatch.setenv(execution.ROUTE_ENV, value)
         assert execution.route() == "disabled"
+
+
+def test_five_min_campaign_hook_contains_no_external_broker_route():
+    source = inspect.getsource(five_min_feed.record_five_min)
+    assert "wide_stop_demo_runtime" not in source
+    assert "process_demo_five_min_bar" not in source
+    assert "tradovate_demo" not in source
+    assert "process_paper_five_min_bar" in source
 
 
 def test_router_caps_day_strategy_copy_without_mutating_real_config(monkeypatch, tmp_path):
