@@ -499,6 +499,7 @@ def build_multisetup_scanner(base_cls):
                     direction=result.direction,
                     trigger=result.raw.get("setup_entry_trigger"),
                     moment=now,
+                    legacy_candidate_key=candidate_key,
                 )
                 duplicate = self.storage.find_open_duplicate(result.ticker, candidate_key)
                 episode_duplicate = self.storage.find_episode_duplicate(

@@ -518,6 +518,7 @@ def build_v1_evidence_hardening(base_cls):
                 direction=result.direction,
                 trigger=result.raw.get("setup_entry_trigger"),
                 moment=now,
+                legacy_candidate_key=candidate_key,
             )
             duplicate = self.storage.find_open_duplicate(result.ticker, candidate_key)
             if duplicate is not None:

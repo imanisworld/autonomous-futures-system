@@ -237,6 +237,25 @@ def test_replay_rows_9161_and_9162_collapse_to_one_episode(tmp_path):
     ) is None
 
 
+def test_legacy_candidate_without_setup_identity_keeps_contract_identity():
+    """A webhook candidate with no setup_type/setup_timeframe has no underlying
+    setup to key on; it keeps the contract-keyed identity it always had.  V1
+    populations always carry the setup fields and never take this branch."""
+    at = datetime(2026, 9, 9, 14, 20, tzinfo=timezone.utc)
+    a = setup_episode_key(ticker="SPY", lane=None, timeframe=None, setup_type=None,
+                          direction="LONG", trigger=None, moment=at,
+                          legacy_candidate_key="SPY990116C00505000")
+    b = setup_episode_key(ticker="SPY", lane=None, timeframe=None, setup_type=None,
+                          direction="LONG", trigger=None, moment=at,
+                          legacy_candidate_key="SPY990116C00510000")
+    assert a != b and "|LEGACY|" in a
+    # With setup identity present, the legacy key is ignored and the contract drops out.
+    c = setup_episode_key(ticker="AAPL", lane="COUNTERFACTUAL", timeframe="1D",
+                          setup_type="DAILY_222_CONTINUATION", direction="SHORT",
+                          trigger=314.9, moment=at, legacy_candidate_key="AAPL261120P00305000|1D|X")
+    assert c == _row_key({**ROW_9161, "moment": at}) and "P00305000" not in c
+
+
 # --- defects 2 and 3: counterfactuals are not trades, status is not P&L -----
 
 def _trade(lane: str, status: str, recorded_pnl: float) -> dict:

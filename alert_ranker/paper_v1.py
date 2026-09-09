@@ -387,6 +387,7 @@ def setup_episode_key(
     direction: str | None,
     trigger: object,
     moment: datetime,
+    legacy_candidate_key: str | None = None,
 ) -> str:
     """Identity of one evidence episode: the UNDERLYING setup within one of its
     own bars.
@@ -400,7 +401,20 @@ def setup_episode_key(
 
     The evidence lane stays in the key so an ACTIVE setup can never be deduped
     against a COUNTERFACTUAL observation of the same structure.
+
+    Legacy candidates (webhook payloads carrying no ``setup_type`` and no
+    ``setup_timeframe``) have no underlying-setup identity to key on, so they
+    keep the contract-keyed candidate identity they always had.  Every V1
+    population carries all three setup fields and never takes this branch.
     """
+    label_timeframe = str(timeframe or "").strip().upper()
+    label_setup = str(setup_type or "").strip().upper()
+    if not label_timeframe and not label_setup and legacy_candidate_key:
+        return (
+            f"{str(ticker or '').strip().upper() or 'UNSPECIFIED'}|"
+            f"{str(lane or ACTIVE_LANE).strip().upper()}|LEGACY|{legacy_candidate_key}"
+            f"@{episode_bucket(timeframe, moment)}"
+        )
     parts = (
         str(ticker or "").strip().upper() or "UNSPECIFIED",
         str(lane or ACTIVE_LANE).strip().upper(),
