@@ -89,13 +89,15 @@ No campaign code may:
 
 ## Execution route
 
-The approved route is **PaperBroker only**.
+Paper collection (**PaperBroker**) is unconditional and always runs first, in its own error boundary.
 
-`context/wide_stop_execution.py` is the route authority. Its valid route set is only `paper_sim`; stale values such as `tradovate_demo`, `tradovate`, or `live` resolve to disabled/no action.
+`context/wide_stop_execution.py` is the route authority. Since #549/#551/#552 its valid route set is `paper_sim` (default) **and** `tradovate_demo`; any other value (`tradovate`, `live`, typos) resolves to `disabled`, which no longer suppresses paper collection.
 
-The old external-broker branch/import was removed from the 5-minute campaign hook. Regression tests pin both the route selector and the absence of the old demo-runtime hook.
+`tradovate_demo` is an explicit, proof-pinned lane (`WIDE_STOP_LEDGER_EXECUTION_ROUTE` + `EXPECTED_PROOF_WIDE_STOP_LEDGER_EXECUTION_ROUTE`) that runs **additively** alongside paper for 4HR Re-Trigger and 60M 3-2-2 only. Daily 2-2 is never demo-eligible. Placing demo orders additionally requires the lane-local pair `WIDE_STOP_DEMO_EXECUTION_ENABLED` + `EXPECTED_PROOF_WIDE_STOP_DEMO_EXECUTION_ENABLED` and a session in `WIDE_STOP_DEMO_SESSIONS`; the route pair alone invokes the lane but permits no orders. The demo lane feeds its own lane-local schedule mode to `adaptive.execution_gate.order_placement_allowed` and never reads the box-wide `SCHEDULE_MODE`. Demo evidence is journaled under its own root, isolated from paper evidence.
 
-Any future external-broker route is a separate proposal requiring a new audit. It is not part of this campaign.
+Regression tests pin the route selector, the paper/demo coexistence in the 5-minute hook, and the demo journal isolation.
+
+Any route beyond these two is a separate proposal requiring a new audit.
 
 ## What remains least certain
 
@@ -123,7 +125,7 @@ Forward outcomes depend on the sequence of completed 5-minute bars. If bars are 
 
 - #545 merged to `main`: `9caaaa3e2fbe5cb6ff20941229e3498794bcb6de`
 - final merge-ref CI: **4,952 passed, 7 skipped**
-- only valid campaign execution route: `paper_sim`
+- only valid campaign execution route at #545: `paper_sim` (the additive `tradovate_demo` lane arrived later via #549/#551/#552 — see Execution route)
 - no external-broker runtime file in the #545 diff
 - no `risk_rules.yaml` change
 - Daily state-integrity guard present
@@ -137,7 +139,7 @@ Before the paper campaign is enabled on the box, verify on the exact release bei
 
 1. deployed release SHA is the intended `main` commit or a reviewed descendant containing #545;
 2. `LIVE_TRADING_ENABLED=false` in effective runtime configuration;
-3. campaign route resolves to **`paper_sim`** only;
+3. campaign route resolves to **`paper_sim`** (paper-only collection) or, if the demo lane is intended, **`tradovate_demo`** with all four demo keys set and `demo_config_errors()` empty;
 4. `WIDE_STOP_LEDGER_MODE=paper_sim` is explicitly set;
 5. `WIDE_STOP_LEDGER_EPOCH_START` is a fresh offset-aware timestamp;
 6. `FIVE_MIN_FEED_ENABLED=true` and the MNQ 5-minute stream is actually arriving;
