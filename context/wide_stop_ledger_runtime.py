@@ -66,6 +66,7 @@ def observe_candidate(
     for_date: Optional[_date] = None,
     market_price: Optional[float] = None,
     schedule_mode: Optional[str] = None,
+    candidate_key: Optional[str] = None,
 ) -> Optional[dict]:
     """Evaluate one candidate on its hypothetical ledger. Returns an audit dict.
 
@@ -73,6 +74,9 @@ def observe_candidate(
     the overwhelmingly common path, so the real book pays almost nothing for
     this. Any failure is caught and reported in the audit: a research lane must
     never be able to break the real book's decision.
+
+    ``candidate_key`` is optional forward-collector identity only. It is written
+    into this lane's own audit row and has no execution authority.
     """
     decision = contract.evaluate(cfg)
     if not decision.active:
@@ -89,6 +93,8 @@ def observe_candidate(
         stop_ticks=round(stop_ticks, 1),
         rr_ratio=float(setup.rr_ratio),
     )
+    if candidate_key:
+        audit["candidate_key"] = str(candidate_key)
 
     global_approved = bool(getattr(global_risk_result, "approved", False))
     global_rule = getattr(global_risk_result, "failed_rule", None)
@@ -182,6 +188,7 @@ def _evaluate_on_ledger(
         fill_status=fill.result,
         fill_price=fill.entry_price if fill.result == "OPEN" else None,
         fill_reason=fill.exit_reason,
+        fill_paper_order_id=getattr(fill, "paper_order_id", None),
         # #508 refuses a fill beyond its own bracket. Counting it separately is
         # the §6 checkpoint requirement: never blended into net.
         invalid_at_fill=(fill.exit_reason == "ENTRY_BRACKET_INVALID_AT_FILL"),

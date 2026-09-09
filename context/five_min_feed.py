@@ -18,9 +18,10 @@ deliberately enabled.
 """
 from __future__ import annotations
 
+import json
+import logging
 import os
 import re
-import json
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import List, Optional
@@ -33,6 +34,7 @@ FIVE_MIN_MINUTES = 5
 ARM_TTL_MINUTES = 20
 MAX_TRIGGER_DISTANCE_TICKS = 1
 _TICK_SIZE = {"MES": 0.25, "MNQ": 0.25, "MGC": 0.1, "MCL": 0.01}
+logger = logging.getLogger(__name__)
 
 
 def five_min_enabled() -> bool:
@@ -214,7 +216,7 @@ def retest_triggered(
 ) -> bool:
     """Pure close-confirmed retest predicate shared by live and replay.
 
-    The caller must supply only a completed 5-minute bar.  Keeping time/arm
+    The caller must supply only a completed 5-minute bar. Keeping time/arm
     lifecycle outside this predicate makes causal replay straightforward and
     prevents a research implementation from drifting away from live behavior.
     """
@@ -228,11 +230,16 @@ def retest_triggered(
 
 
 def record_five_min(payload, log_dir: str, for_date=None) -> dict:
-    """Append one 5M bar-close to the dedicated lane. Returns the stored record.
+    """Append one 5M bar-close and feed the paper-only evidence campaign.
 
-    Idempotent on the last timestamp (BarHistory.record dedupes resends).
+    The ordinary 5M arm/retest lane is unchanged. When the isolated wide-stop
+    evidence mode is explicitly ``paper_sim``, MNQ bars are offered to the
+    paper-only forward router. Any non-paper route value is disabled by
+    ``context.wide_stop_execution``. Evidence failures are fail-soft with
+    respect to market-data ingestion: the bar is still stored, while the
+    campaign takes no action for that invocation.
     """
-    return _history(log_dir).record(
+    record = _history(log_dir).record(
         _root(payload.ticker),
         ts=payload.timestamp,
         open=payload.open,
@@ -243,6 +250,35 @@ def record_five_min(payload, log_dir: str, for_date=None) -> dict:
         timeframe="5m",
         for_date=for_date,
     )
+    if (
+        _root(payload.ticker) == "MNQ"
+        and os.getenv("WIDE_STOP_LEDGER_MODE", "observe_only").strip().lower()
+        == "paper_sim"
+    ):
+        try:
+            from config.settings import load_config
+            from context.wide_stop_execution import route
+
+            if route() != "paper_sim":
+                logger.error("wide-stop paper route disabled; no campaign action taken")
+                return record
+
+            from context.wide_stop_forward_router import process_paper_five_min_bar
+
+            cfg = load_config()
+            bars = _history(log_dir).recent(
+                "MNQ", 3000, for_date=for_date, lookback_days=10
+            )
+            process_paper_five_min_bar(
+                payload=payload,
+                cfg=cfg,
+                bars_5m=bars,
+                log_dir=log_dir,
+                for_date=for_date,
+            )
+        except Exception:  # noqa: BLE001 — evidence must never break 5m ingestion
+            logger.warning("wide-stop paper collection failed closed", exc_info=True)
+    return record
 
 
 def recent_five_min(
