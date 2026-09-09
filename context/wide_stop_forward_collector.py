@@ -5,6 +5,11 @@ runs their existing canonical 5-minute state machines on an isolated config
 copy. Hypothetical fills are persisted and resolved on later 5-minute bars via
 PaperBroker. Nothing here can route to an external broker or mutate the real
 book's decision, journal, balance, or risk state.
+
+Shared family admission is enforced through ``wide_stop_portfolio``: at most two
+PaperBroker positions, at most three daily execution slots total across 4HR and
+3-2-2, and at most $450 combined planned open risk. The legacy per-ledger
+three-fill counter remains as a secondary fail-closed guard.
 """
 from __future__ import annotations
 
@@ -20,6 +25,7 @@ from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
 from context import wide_stop_ledger_paper as contract
+from context import wide_stop_portfolio as portfolio
 from context.bar_history import _parse_dt
 from context.wide_stop_ledger_runtime import (
     _epoch,
@@ -320,6 +326,7 @@ def _record_block(
         lane_failed_rule=failed_rule,
         lane_reason=reason,
         fill_status=None,
+        portfolio=portfolio.admission_snapshot(log_dir, for_date or date.today()),
     )
     _journal(log_dir, ledger, audit, for_date)
     return audit
@@ -370,8 +377,6 @@ def _resolve_one_position(
         state["position"] = None
         _save_state(log_dir, ledger, state)
         return None
-    # The signal bar closes at entry_time. Never resolve against that bar's
-    # earlier OHLC; the next 5-minute bar starts at entry_time.
     if current_ts < entry_time:
         return None
 
@@ -434,9 +439,6 @@ def _resolve_one_position(
     gross = round(float(fill.pnl_dollars or 0.0), 2)
     net = round(gross - float(contract.COMMISSION_ROUND_TRIP), 2)
     economic_result = _economic_result(net)
-    # Journal the ECONOMIC result and NET P&L. RiskEngine drawdown/daily-loss
-    # reconstruction reads OUTCOME.pnl_dollars, so putting gross here would
-    # systematically understate drawdown and overstate account balance.
     journal.log_outcome(
         instrument=fill.instrument,
         session=str(position.get("session") or "new_york"),
@@ -449,6 +451,22 @@ def _resolve_one_position(
         contracts=fill.contracts,
         for_date=for_date,
         strategy=str(position.get("strategy") or ""),
+        signal_timestamp=str(position.get("entry_time") or ""),
+        paper_order_id=getattr(fill, "paper_order_id", None),
+    )
+    portfolio.record_outcome(
+        log_dir=log_dir,
+        for_date=for_date,
+        instrument=fill.instrument,
+        session=str(position.get("session") or "new_york"),
+        strategy=str(position.get("strategy") or ""),
+        result=economic_result,
+        entry_price=fill.entry_price,
+        exit_price=fill.exit_price,
+        exit_reason=str(fill.exit_reason or "UNKNOWN"),
+        pnl_ticks=float(fill.pnl_ticks or 0.0),
+        net_pnl_dollars=net,
+        contracts=fill.contracts,
         signal_timestamp=str(position.get("entry_time") or ""),
         paper_order_id=getattr(fill, "paper_order_id", None),
     )
@@ -494,8 +512,6 @@ def _process_five_min_bar_locked(
     }
     events: list[dict[str, Any]] = []
 
-    # Resolve first. A position opened at the prior bar close can resolve on
-    # this bar; a position opened below cannot see this bar's earlier OHLC.
     for ledger in contract.LEDGERS.values():
         resolved = _resolve_one_position(
             cfg=cfg,
@@ -582,9 +598,32 @@ def _process_five_min_bar_locked(
                 lane_result="BLOCKED_MAX_TRADES",
                 failed_rule="max_trades_per_day",
                 reason=(
-                    f"hypothetical ledger already has {MAX_FILLED_PER_DAY} "
-                    "filled trades today"
+                    f"hypothetical ledger already has {MAX_FILLED_PER_DAY} filled trades today"
                 ),
+            )
+            _save_state(log_dir, ledger, lane_state)
+            events.append(audit)
+            continue
+
+        snap = portfolio.admission_snapshot(log_dir, day)
+        if snap["open_positions"] >= portfolio.MAX_OPEN_POSITIONS:
+            audit = _record_block(
+                cfg=cfg, ledger=ledger, strategy=strategy, candidate=candidate, key=key,
+                log_dir=log_dir, for_date=for_date,
+                lane_result="BLOCKED_PORTFOLIO_OPEN_POSITIONS",
+                failed_rule="portfolio_max_open_positions",
+                reason=f"day-strategy family already has {portfolio.MAX_OPEN_POSITIONS} open positions",
+            )
+            _save_state(log_dir, ledger, lane_state)
+            events.append(audit)
+            continue
+        if snap["daily_slots_used"] >= portfolio.MAX_FILLS_PER_DAY:
+            audit = _record_block(
+                cfg=cfg, ledger=ledger, strategy=strategy, candidate=candidate, key=key,
+                log_dir=log_dir, for_date=for_date,
+                lane_result="BLOCKED_PORTFOLIO_MAX_TRADES",
+                failed_rule="portfolio_max_trades_per_day",
+                reason=f"day-strategy family already uses {portfolio.MAX_FILLS_PER_DAY} daily slots",
             )
             _save_state(log_dir, ledger, lane_state)
             events.append(audit)
@@ -596,6 +635,50 @@ def _process_five_min_bar_locked(
             config=cfg,
             schedule_mode=getattr(cfg, "schedule_mode", "current"),
         ).validate(setup, lane_daily)
+
+        overridable = bool(global_risk.approved) or contract.global_rejection_is_overridable(
+            global_risk.failed_rule
+        )
+        if overridable:
+            proposed_risk = portfolio.risk_dollars(
+                instrument=setup.instrument,
+                entry=setup.entry,
+                stop=setup.stop,
+                contracts=contract.CONTRACTS,
+            )
+            risk_ok, combined = portfolio.proposed_risk_allowed(log_dir, proposed_risk)
+            if not risk_ok:
+                audit = _record_block(
+                    cfg=cfg, ledger=ledger, strategy=strategy, candidate=candidate, key=key,
+                    log_dir=log_dir, for_date=for_date,
+                    lane_result="BLOCKED_PORTFOLIO_RISK",
+                    failed_rule="portfolio_combined_open_risk",
+                    reason=(
+                        f"combined planned risk ${combined:.2f} exceeds "
+                        f"${portfolio.MAX_COMBINED_OPEN_RISK_DOLLARS:.2f}"
+                    ),
+                )
+                _save_state(log_dir, ledger, lane_state)
+                events.append(audit)
+                continue
+
+            reserved, reserve_reason = portfolio.reserve_daily_slot(
+                log_dir, day, key, route="paper_sim"
+            )
+            if not reserved:
+                audit = _record_block(
+                    cfg=cfg, ledger=ledger, strategy=strategy, candidate=candidate, key=key,
+                    log_dir=log_dir, for_date=for_date,
+                    lane_result="BLOCKED_PORTFOLIO_MAX_TRADES",
+                    failed_rule="portfolio_daily_slot",
+                    reason=reserve_reason,
+                )
+                _save_state(log_dir, ledger, lane_state)
+                events.append(audit)
+                continue
+        else:
+            reserved = False
+
         audit = observe_candidate(
             cfg=cfg,
             setup=setup,
@@ -607,11 +690,15 @@ def _process_five_min_bar_locked(
             candidate_key=key,
         )
         if audit is None:
+            if reserved:
+                portfolio.release_daily_slot(log_dir, day, key)
             _save_state(log_dir, ledger, lane_state)
             continue
         audit["collector"] = "wide_stop_forward_v1"
         audit["collector_event"] = "CANDIDATE"
         if audit.get("fill_status") == "OPEN" and audit.get("fill_price") is not None:
+            if reserved:
+                portfolio.confirm_daily_slot(log_dir, day, key)
             lane_state["position"] = _position_record(
                 strategy=strategy,
                 setup=setup,
@@ -621,7 +708,12 @@ def _process_five_min_bar_locked(
             )
             lane_state["filled_count"] = int(lane_state.get("filled_count") or 0) + 1
             lane_state["filled_date"] = day.isoformat()
+        elif reserved:
+            # PaperBroker is local/deterministic: a non-OPEN result cannot hide an
+            # external fill, so the slot is safe to release.
+            portfolio.release_daily_slot(log_dir, day, key)
         _save_state(log_dir, ledger, lane_state)
+        audit["portfolio"] = portfolio.admission_snapshot(log_dir, day)
         events.append(audit)
 
     return events
