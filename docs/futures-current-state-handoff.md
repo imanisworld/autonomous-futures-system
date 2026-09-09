@@ -1,137 +1,174 @@
 # Futures — Current State Handoff
 
-_As of 2026-09-09 for repository/evidence state. This is the single current futures handoff. Runtime/VPS facts are not silently refreshed by this document; verify the box separately before making deployment claims. Do not recreate completed audits, redo merged fixes, or reopen strategy work unless new evidence proves a defect._
+_As of 2026-09-09. This is the single current futures handoff. Historical audit docs remain evidence records, but they do not override this file. Repository state is not proof of VPS/deployment state; verify the box separately before claiming anything is running._
 
 ## Verdict
 
-**HOLD / OBSERVATION ONLY. NO STRATEGY REWRITE IS JUSTIFIED.**
+**PAPER ONLY / FORWARD EVIDENCE COLLECTION. NO LIVE OR EXTERNAL-BROKER EXECUTION IS APPROVED.**
 
-The important September finding is no longer “we just need more evidence on every lane.” The standardized edge-decomposition work showed that different strategy families fail for different reasons. Several earlier positive baselines were also retired after decision-time fill/bracket corrections. The correct response is to preserve the proven diagnoses and stop rerunning the same tests.
+Core rule: **No proof, no run.**
 
-`docs/strategy-rules/Strategy_Inventory.md` is the evidence source of truth. `docs/edge-decomposition-audit-2026-09-07.md` is the standardized decomposition source for the lanes it covers.
+The current task is not another blanket strategy audit. Three MNQ strategy families have enough isolated evidence to justify forward **PaperBroker** collection under their own risk contracts. They are not validated for live capital and must not be forced through the real book's current risk settings.
 
-## Strategy isolation protocol — completed work vs future work
+## Current paper campaign
 
-For any strategy we are actively evaluating, isolate six questions:
+### 1. MNQ 4HR Re-Trigger
 
-1. **Signal / timeframe** — does the raw pattern carry directional information, and does the same setup behave differently by timeframe?
-2. **Entry** — is the fill causal and realistically obtainable, or is the apparent edge coming from entering at a price only known after the move?
-3. **Stop** — is the documented stop compatible with normal adverse movement, or is the risk architecture rejecting/forcing geometry that destroys the setup?
-4. **Target / exit** — does the setup support its documented target/holding period, or is the bracket/hold converting useful drift into losses?
-5. **Filters** — do session/trend/confluence/risk gates add value or remove the profitable population?
-6. **Execution realism** — does the result survive honest fills, pessimistic same-bar handling, commission, adverse slippage, full-engine ordering and position/risk constraints?
-
-### What is already done — do not rerun
-
-The 2026-09-07 edge-decomposition audit already pushed the core audited lanes through a standardized waterfall:
-
-- raw signal
-- 30/60/120-minute and EOD time-exit controls
-- documented bracket
-- plan-price vs honest resting-fill comparison where applicable
-- path-independent structural risk gates
-- isolated full engine with floors off and frozen
-- IOC at decision-bar close with 1/2/3-tick adverse slippage
-- commission
+- status: **PROMISING BUT UNPROVEN / PAPER EVIDENCE**
+- canonical strategy detector; do not rewrite
+- 1 MNQ contract
+- isolated hypothetical starting ledger: **$4,000**
+- maximum planned stop: **300 ticks / $150**
+- minimum planned R:R: **1.0**
+- static documented bracket
+- decision-time **8-tick IOC** admission
 - pessimistic same-bar resolution
-- chronological-half checks where applicable
+- no promotion path
 
-That already answers most of the six-part framework for **4HR Re-Trigger, 60M 3-2-2 First Live, Miyagi, ORB Reclaim, ORB Breakout, VWAP Hold, and transition failed-breakdown reclaim**. Do not rerun the same decomposition because a later conversation asks the question again.
+### 2. MNQ 60M 3-2-2 First Live
 
-What it does **not** prove universally:
+- status: **PROMISING BUT UNPROVEN / PAPER EVIDENCE**
+- canonical First Live detector; do not replace with generic 3-2-2 research logic
+- 1 MNQ contract
+- simulated starting capital: **$5,000 maximum**
+- maximum planned stop: **600 ticks / $300**
+- strategy-scoped R:R floor remains disabled for this evidence contract
+- static documented bracket
+- decision-time **8-tick IOC** admission
+- pessimistic same-bar resolution
+- no promotion path
 
-- it is not a same-pattern-across-every-timeframe study;
-- it is not a full MAE/MFE-derived stop sweep for every strategy;
-- it is not a target-multiple optimization sweep for every strategy;
-- lanes marked `not decomposed` in the Strategy Inventory remain not decomposed unless a separate strategy-specific study already settles the needed question.
+The internal journal key `wide_stop_6k` is retained only for historical path continuity. **Its current simulated starting balance is $5,000. The name is not permission to assume $6,000 of capital.**
 
-Only run additional isolation work when it answers a genuinely unresolved question for a strategy that still has a plausible path forward. Do not spend time decomposing a retired/unreachable/clearly negative strategy merely for completeness.
+### 3. MNQ Daily 2-2 continuation
 
-## What the completed decomposition proved
+- status: **PROMISING BUT UNPROVEN / PAPER EVIDENCE**
+- Daily timeframe; causal first break only
+- 1 MNQ contract
+- isolated hypothetical starting ledger: **$5,000**
+- natural prior-Daily-range stop; no stop tightening
+- fixed **2R** target
+- decision-time **8-tick IOC** admission
+- 1 adverse entry tick
+- actual fill R:R must remain **>= 2.0**
+- actual fill-to-stop planned risk must remain **<= $1,750**
+- one Daily swing position at a time
+- positions may remain open across sessions; no day-strategy EOD flatten
+- $1.48 round-turn commission
+- pessimistic same-bar handling
+- 20% and 25% drawdown warnings
+- **30% hard paper halt**
+- no external broker and no promotion path
 
-### Close-confirmed level predicates
+Preregistered frozen-corpus IOC result used to justify forward paper collection:
 
-ORB Reclaim, source ORB Breakout and VWAP Hold do not have an execution/risk-gate problem hiding a strong signal. Their raw directional information is weak/negative and the old positive results were heavily affected by unrealistic/detached fill assumptions. The risk gates generally admitted most candidates and the admitted sets were still negative.
+- 34 non-overlapping trades
+- net **+$13,885.18**
+- PF **2.02**
+- H1 positive / H2 positive
+- 2024, 2025 and 2026 positive
+- max historical drawdown **25.15%**
+- the 30% hard halt was not reached
 
-**Action: do not “fix” these by loosening gates or changing stops.** A materially changed entry rule is a new strategy variant and requires a new preregistered population.
+This is paper evidence, not a live-capital claim.
 
-### Armed-trigger Strat day strategies
+## Campaign-wide safety boundary
 
-4HR Re-Trigger MNQ, 60M 3-2-2 First Live, and Miyagi MNQ showed real directional/bracket behavior in the historical studies, but their natural stop/R:R geometry is incompatible with the current account/risk policy. The global stop cap/R:R floor removes nearly all of the population.
+The paper router must enforce a maximum of **3 new fills per trading day across this campaign**. The isolated day-strategy config is capped at one 4HR fill and one 3-2-2 fill; Daily uses one causal first-break opportunity and one open swing maximum. The real/global risk configuration remains untouched.
 
-**Action: keep the global risk policy unchanged. These families remain parked under the previously adopted wide-stop policy decision; do not rewrite the detector or force them through current-account risk.**
+No campaign code may:
 
-### Transition failed-breakdown reclaim
+- change `risk_rules.yaml` to make these strategies fit the real book;
+- add the parked strategies to the active real-book `enabled_concepts`;
+- submit to Tradovate or any other external broker;
+- reuse a live/demo broker adapter as a shortcut for evidence collection;
+- average down, omit the stop, or invent missing fills/outcomes;
+- convert paper results into a promotion decision automatically.
 
-The raw signal had only weak positive drift and the documented fixed bracket turned it negative. It also conflicts with the current trend/R:R/confluence architecture.
+## Execution route
 
-**Action: parked/broken under the documented form. Do not keep retesting long vs short to search for a rescue.**
+The approved route is **PaperBroker only**.
 
-## Decision-time execution corrections — September 8
+`context/wide_stop_execution.py` is the route authority for this campaign. Its valid route set is only `paper_sim`; stale values such as `tradovate_demo`, `tradovate`, or `live` must resolve to disabled/no action.
 
-Two important earlier positive claims are retired:
+Any branch or PR that adds an external-broker route is a separate proposal and requires a new audit. It is not part of this campaign.
 
-- **Inverse ORB:** the old positive IOC baseline used fills whose geometry was invalid at the correct decision-time reference. Correct decision-time replay produced 63 attempts, 41 invalid-at-fill, 22 admissible fills, about **+$29.44 / PF 1.14**, with **H2 negative**. The earlier +$1k-class headline is not valid edge evidence. Current verdict: **BROKEN — negative/insufficient evidence; no edge claim.**
-- **VWAP Hold:** the old positive arrival-close result used a later price reference. At the decision-close reference the NY cell is negative (35 fills, about **-$326.92 / PF 0.49**) and both halves are negative. Current verdict: **BROKEN — negative evidence.**
+## What I am least confident about
 
-The PaperBroker bracket guard/read-across work exists specifically so fills beyond their own stop/target are rejected rather than credited as evidence. Do not bypass that guard to recover an old result.
+These are the current uncertainties that matter most:
 
-## Current strategy evidence classifications
+### A. The three ledgers are not one proven $5k portfolio
 
-Use the Strategy Inventory for the full table. The important active/known rows are:
+4HR uses a $4k isolated ledger; 3-2-2 and Daily each use their own $5k evidence ledger. That proves strategy-level survival under those assumptions. It **does not** prove all three can share one real $5,000 account simultaneously, because combined open risk, cross-strategy loss clustering and combined drawdown have not been established.
 
-- ORB Reclaim current/first_cross — **BROKEN — negative evidence**
-- ORB Reclaim V4-R — **WAIT**; not separately decomposed, but same close-confirmed family; do not promote from aggregate P&L alone
-- 4HR Re-Trigger MNQ — **BROKEN FOR CURRENT SYSTEM RISK CONSTRAINTS / PARKED below the adopted equity threshold**
-- 4HR Re-Trigger MES — **BROKEN / WAIT**
-- 12HR Miyagi — **BROKEN FOR CURRENT SYSTEM RISK CONSTRAINTS; MNQ parked**
-- 60M 3-2-2 First Live — **BROKEN FOR CURRENT SYSTEM RISK CONSTRAINTS; parked**
-- ORB Breakout inverted — **BROKEN — corrected decision-time evidence does not support the old edge claim**
-- VWAP Hold MNQ NY — **BROKEN — negative corrected evidence**
-- MES `strat_122` — **WAIT; not decomposed**
-- VWAP Reclaim — **WAIT; not decomposed**
-- VWAP Rejection — **BROKEN — unreachable predicate**
-- Transition failed-breakdown reclaim — **BROKEN under documented bracket**
+**Mitigation now:** do not aggregate the three paper balances or call this a unified $5k portfolio. Keep attribution separate. A future combined-capital study must use chronological signals and one shared balance/risk state; do not infer it from separate ledgers.
 
-A strategy marked `not decomposed` does not automatically need another audit. First ask whether it has enough credible signal/evidence to justify the work.
+### B. Daily multi-day state recovery
 
-## Filters / stop / target rule going forward
+Daily can hold overnight. Its persisted swing state therefore becomes proof-critical across restarts/deploys. A missing state file is valid only for a genuinely new epoch. A malformed, unreadable or wrong-epoch existing state must not be interpreted as safely flat.
 
-Do not optimize a failing lane by changing several variables at once. If new evidence creates a credible rescue hypothesis, change **one family of assumptions at a time** and version it as a new strategy population:
+**Required behavior:** fail closed; do not invent a fresh balance, do not erase a possible open swing, and do not admit another Daily entry until state integrity is restored.
 
-- signal/timeframe variant
-- entry variant
-- stop variant
-- target/exit variant
-- filter variant
-- execution model variant
+### C. Five-minute feed completeness
 
-The old population remains frozen for comparison. No retroactive relabeling.
+Forward outcomes depend on the sequence of completed 5-minute bars. If bars are missing while a position is exposed, the system cannot safely infer that neither stop nor target was touched during the gap.
 
-## Current safety posture
+**Mitigation now:** forward evidence with a known material feed gap is invalid/unresolved, not a win/loss. Do not repair missing path data with later OHLC, MAE summaries, or optimistic assumptions.
 
-- paper/demo evidence only
-- no averaging down
-- no missing stop/target/invalidation
-- full-engine and broker safety guards remain authoritative
-- one-position/risk constraints remain part of realistic execution evidence
-- do not fabricate signals or force traffic
-- do not tune parameters because the current P&L is uncomfortable
-- do not infer deployed VPS state from repository `main`; box state requires separate proof
+## Activation gates — all required
 
-## Repo/runtime boundary
+Before the paper campaign is enabled on the box, verify all of the following on the exact release being deployed:
 
-Repository evidence has advanced materially since the prior 2026-09-06 handoff. The earlier handoff's VPS/release SHA references were point-in-time facts, not permanent truth. This refresh intentionally does not claim a new deployed futures SHA or current service state without a fresh box-side read.
+1. PR/commit CI is green.
+2. `LIVE_TRADING_ENABLED=false` remains true in effective runtime configuration.
+3. campaign route resolves to **`paper_sim`** only.
+4. `WIDE_STOP_LEDGER_MODE=paper_sim` is explicitly set.
+5. `WIDE_STOP_LEDGER_EPOCH_START` is a fresh offset-aware timestamp.
+6. `FIVE_MIN_FEED_ENABLED=true` and the MNQ 5-minute stream is actually arriving.
+7. proof-critical environment pins match the release.
+8. no stale paper position/state exists from a prior accounting epoch.
+9. the real strategy book and `risk_rules.yaml` are unchanged by campaign activation.
+10. the paper journals/state directories are writable and isolated from the real book.
 
-Options work is separate. See `docs/options-current-state-handoff.md` for the frozen `OPTIONS_PAPER_V1` collection and its own post-sample isolation plan.
+Missing proof on any item means **do not enable the campaign**.
 
-## Smallest safe next step
+## Other strategy status — do not confuse with this campaign
 
-**Do not run another blanket futures strategy audit.**
+- **12HR Miyagi:** shadow/research only; no fills.
+- **Inverse ORB:** old positive headline retired after decision-time/bracket-geometry correction; do not revive from the invalid baseline.
+- **VWAP Hold:** corrected decision-time evidence negative; no promotion.
+- **Transition reclaim:** separate repair investigation; not part of these three lanes.
+- **MES 1-2-2:** separate evidence/root-cause investigation; not part of these three lanes.
+- **ORB Reclaim / source ORB Breakout:** negative/weak corrected evidence; not part of this campaign.
 
-For futures, continue only the already-approved observation/evidence lanes and run a new isolation study only when a specific unresolved strategy question has both:
+## Superseded work / cleanup
 
-1. a credible hypothesis that has not already been tested; and
-2. enough independent evidence to justify the study.
+The following should not be used as current execution authority:
 
-Otherwise the correct action is **WAIT / PARKED / BROKEN as already classified.**
+- PR **#538** — superseded; external-broker work appeared on the branch and it was closed unmerged.
+- PR **#543** — superseded if its branch contains post-green external-broker commits; the clean paper campaign must be based on the last proven PaperBroker-only state instead.
+- PR **#527** — initial Daily STRAT baseline harness; superseded by the completed Daily isolation/IOC evidence used above.
+- PR **#534** — earlier handoff refresh; superseded by this file.
+- PR **#539** — Daily cross-check documentation; its evidence remains historical, but this file is the current operational handoff.
+- PR **#476** — September 7 handoff; historical only.
+
+Do not delete historical evidence files merely because they are old. Close/label superseded PRs and keep Git history as the audit trail.
+
+## Do not touch
+
+- canonical 4HR detector/formula
+- canonical 60M 3-2-2 First Live detector/formula
+- Daily 2-2 stop/target/filter bundle without a new preregistered one-variable study
+- global `risk_rules.yaml` merely to make these paper lanes pass
+- real-book enabled strategy list
+- bracket-validity guard
+- pessimistic same-bar handling
+
+## Safe next step
+
+1. Finish the state-integrity and stale-route cleanup on the clean PaperBroker-only branch.
+2. Require a fresh green CI run.
+3. Review the final diff for **zero external-broker execution files/routes**.
+4. Only then merge the paper collector.
+5. Separately verify VPS release/env/5-minute feed/epoch pins before enabling collection.
+6. Collect forward evidence. Do not promote based on backtest results alone.
