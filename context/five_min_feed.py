@@ -18,9 +18,10 @@ deliberately enabled.
 """
 from __future__ import annotations
 
+import json
+import logging
 import os
 import re
-import json
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import List, Optional
@@ -33,6 +34,7 @@ FIVE_MIN_MINUTES = 5
 ARM_TTL_MINUTES = 20
 MAX_TRIGGER_DISTANCE_TICKS = 1
 _TICK_SIZE = {"MES": 0.25, "MNQ": 0.25, "MGC": 0.1, "MCL": 0.01}
+logger = logging.getLogger(__name__)
 
 
 def five_min_enabled() -> bool:
@@ -231,8 +233,14 @@ def record_five_min(payload, log_dir: str, for_date=None) -> dict:
     """Append one 5M bar-close to the dedicated lane. Returns the stored record.
 
     Idempotent on the last timestamp (BarHistory.record dedupes resends).
+
+    When the already-reviewed wide-stop lane is explicitly ``paper_sim``, the
+    stored MNQ bar is also offered to its isolated forward collector. That
+    collector owns only hypothetical state under ``hypothetical_ledger/`` and
+    cannot alter the normal 5M arm/retest path. The hook is fail-soft; storage
+    succeeds even if research evidence collection fails.
     """
-    return _history(log_dir).record(
+    record = _history(log_dir).record(
         _root(payload.ticker),
         ts=payload.timestamp,
         open=payload.open,
@@ -243,6 +251,27 @@ def record_five_min(payload, log_dir: str, for_date=None) -> dict:
         timeframe="5m",
         for_date=for_date,
     )
+    if (
+        _root(payload.ticker) == "MNQ"
+        and os.getenv("WIDE_STOP_LEDGER_MODE", "observe_only").strip().lower()
+        == "paper_sim"
+    ):
+        try:
+            from config.settings import load_config
+            from context.wide_stop_forward_collector import process_five_min_bar
+
+            process_five_min_bar(
+                payload=payload,
+                cfg=load_config(),
+                bars_5m=_history(log_dir).recent(
+                    "MNQ", 3000, for_date=for_date, lookback_days=10
+                ),
+                log_dir=log_dir,
+                for_date=for_date,
+            )
+        except Exception:  # noqa: BLE001 — evidence must never break 5m ingestion
+            logger.warning("wide-stop forward collection failed", exc_info=True)
+    return record
 
 
 def recent_five_min(
