@@ -6,33 +6,29 @@ _As of 2026-09-09. This is the single current futures handoff. Do not recreate c
 
 **PAPER ONLY / STRATEGY FAILURE-MODE AUDIT ACTIVE / NO DEPLOYMENT CHANGE.**
 
-The futures infrastructure remains in the paper-only posture. The current strategy question is no longer simply “which historical rows were negative?” The active research task is to determine whether each STRAT family is failing because of the **timeframe, entry, stop, target, filter, or execution contract** before classifying the family itself as broken.
-
-No runtime, risk configuration, broker route, deployment, or strategy enablement is authorized by the evidence below.
+The current research task is to determine whether each strategy family is failing because of the **timeframe, entry, stop, target, filter, or execution contract** before classifying the family itself as broken. No runtime, risk configuration, broker route, deployment, or strategy enablement is authorized by the evidence below.
 
 ## Repository / runtime checkpoint
 
-- Repository `main` at this handoff update: `febb7bb2d03428a1854dc4da08310db05e9643b8` after PR #532.
-- The deployed bot/runtime was **not revalidated during this strategy research pass**. Do not infer that repository `main` is deployed.
+- Repository `main` at this handoff refresh: `febb7bb2d03428a1854dc4da08310db05e9643b8` after PR #532.
+- The deployed bot/runtime was **not revalidated during this research pass**. Do not infer that current `main` is deployed.
 - Previously completed Pine parity, replay routing, watcher, memory-pressure, and Tradovate exact-account-routing repairs remain completed work. Do not redo them without a new reproducible defect.
-- Existing paper safety posture remains unchanged.
+- Current paper safety posture remains unchanged.
 
-## New research corpus available
+## Research corpus now available
 
-The previously gitignored 5-minute Polygon corpus is now available for research:
+The previously gitignored Polygon 5-minute corpus is available for the strategy audit:
 
-- MNQ: 621 trading-day files, about 140,115 deduplicated 5-minute rows.
-- MES: 621 trading-day files, about 140,111 deduplicated 5-minute rows.
+- MNQ: 621 files, about 140,115 deduplicated 5-minute rows.
+- MES: 621 files, about 140,111 deduplicated 5-minute rows.
 - Coverage spans the existing 2024-2026 replay population.
 
-This removes the prior blocker that prevented the Daily STRAT baseline from being run outside the local checkout.
+## Causal research contract
 
-## Causal STRAT research contract
-
-The current independent failure-mode study uses:
+The current independent study uses:
 
 - completed prior timeframe bars only;
-- causal first-side boundary break for the forming STRAT bar;
+- causal **first prior-range side broken** to identify the forming STRAT bar;
 - ambiguous same-5m dual-side breaks fail closed;
 - prior-bar break entry one tick beyond the boundary;
 - opposite side of the prior bar as the untouched structural stop baseline;
@@ -41,33 +37,41 @@ The current independent failure-mode study uses:
 - one position at a time per research lane;
 - 1 adverse tick on market entry and stop fills;
 - target as a resting limit fill;
-- pessimistic stop-first resolution when OHLC cannot establish intrabar order;
+- pessimistic stop-first treatment when OHLC cannot establish intrabar order;
 - $1.48 round-turn commission;
-- H1/H2 and calendar-month stability checks;
+- multi-bar/multi-day resolution where the timeframe requires it;
+- H1/H2, month, year, drawdown, slippage, and outlier checks;
 - no lookahead from the final OHLC of a still-forming Daily/4H/60m bar.
 
-### Required repair order
+### One-variable failure-mode order
 
-For a weak or blocked strategy, change **one variable at a time**:
+For a weak or blocked strategy:
 
-1. baseline;
-2. stop;
-3. target;
-4. entry;
-5. filter;
-6. timeframe;
-7. slippage / execution stress on any surviving variant.
+1. reproduce the baseline;
+2. change stop only;
+3. change target only;
+4. change entry only;
+5. change filter only;
+6. change timeframe only;
+7. stress any survivor for slippage, concentration, and period stability.
 
-Do not call a family broken merely because the current stop cap, target, filter, or timeframe makes it lose. A changed variant must still survive multiple periods before it can be retained.
+A family is not BROKEN merely because one implementation loses. A changed variant is retained only if it improves results without losing multi-period stability.
 
-## Current STRAT evidence — new causal study
+## Critical 4H alignment correction
+
+An initial independent 4H study grouped 4H bars relative to the 18:00 ET session. That reconstruction matched the replay corpus's stored `four_hour_bar_type` only about 52% of the time and is **invalid evidence**.
+
+The repository's actual Polygon replay converter builds 240-minute bars in **fixed UTC-aligned buckets** (`start = (ts // width) * width`). Reconstructing 4H bars that way matches the stored replay `four_hour_bar_type` **100% on both MNQ and MES** in the checked corpus.
+
+Therefore **all session-aligned 4H P&L numbers are discarded**. Only the corrected fixed-UTC 4H results below may be used.
+
+## Current STRAT evidence
 
 ### MNQ Daily 2-2 continuation — PROMISING BUT UNPROVEN
 
-Untouched structural Daily bracket, one-position lane:
+Untouched Daily structural bracket, one-position lane:
 
-- 46 resolved trades;
-- 22 wins / 24 losses;
+- 46 resolved trades; 22 wins / 24 losses;
 - net **+$21,712.42**;
 - PF **2.01**;
 - H1 **+$9,834.46 / PF 1.84**;
@@ -75,18 +79,21 @@ Untouched structural Daily bracket, one-position lane:
 - 13 positive months / 7 negative months;
 - positive in 2024, 2025, and 2026.
 
+Outlier removal remains positive:
+
+- remove largest winner: about **+$18.1k**;
+- remove top 3 winners: about **+$12.0k**;
+- remove top 5 winners: about **+$6.9k**.
+
 Failure-mode finding:
 
-- median original stop is about **1,412 ticks**;
+- median original stop about **1,412 ticks**;
 - **0/211** candidates fit the current MNQ 120-tick stop cap;
-- 120-, 300-, 500-, 800-, and 1,000-tick stop-only caps fail to preserve positive H1/H2 simultaneously.
+- 120-, 300-, 500-, 800-, and 1,000-tick stop-only caps do not preserve positive H1/H2 simultaneously.
 
-**Interpretation:** the signal population is not currently disproven. The binding problem is the **Daily stop/risk architecture**. Do not tighten the stop merely to force system compatibility; every tested tighter cap damaged stability.
+**Interpretation:** the signal population is not currently disproven. The binding problem is the **Daily stop/risk architecture**. Tightening the stop simply to fit the current cap destroys stability.
 
-Important sequence slice:
-
-- the same-direction **2-2-2 continuation** slice is not the source of this edge; its standalone Daily baseline is negative on both MNQ and MES under the current contract.
-- Treat 2-2-2 continuation as its own failure-mode question before discarding or promoting it.
+The same-direction **2-2-2 continuation** slice is negative/unstable on both MNQ and MES and is not the source of the broader MNQ Daily 2-2 continuation edge.
 
 ### MES Daily 3-2 — PROMISING BUT FRAGILE
 
@@ -106,107 +113,124 @@ Stop-only change to the current MES 60-tick cap:
 - H1 **+$2,151.29 / PF 2.15**;
 - H2 **+$928.56 / PF 1.46**.
 
-Slippage stress with that same 60-tick stop remains positive through 4 adverse ticks:
+That same 60-tick variant remains positive through 4 adverse slippage ticks: about **+$2,873.60 / PF 1.71** at 4 ticks.
 
-- 1 tick: **+$3,079.85 / PF 1.79**;
-- 2 ticks: **+$3,011.10 / PF 1.76**;
-- 3 ticks: **+$2,942.35 / PF 1.73**;
-- 4 ticks: **+$2,873.60 / PF 1.71**.
+However the edge is highly concentrated:
 
-**Major fragility:** only 5 of 23 active months are positive and the largest winner is about 66% of total net profit. Therefore this is **not validated** despite surviving the cap/slippage tests. The next work is concentration/outlier robustness, not strategy promotion.
+- only 5 of 23 active months are positive;
+- largest winner is about 66% of full-period net;
+- removing the top 2 winners makes the result negative;
+- removing the top 3 makes it more negative.
 
-### 4H 2-2 reversal — PROMISING BUT UNPROVEN
+**Interpretation:** positive but too outlier-dependent to validate. The next work is causal context decomposition / outlier robustness, not promotion.
 
-The 4H timeframe is materially stronger and more stable than the Daily implementation, especially on MES.
+### MNQ 4H 2-2 reversal — PROMISING BUT UNPROVEN
 
-MNQ, untouched 4H structural bracket:
+These are the **corrected fixed-UTC 4H results**.
 
-- 261 resolved;
-- **+$11,856.72 / PF 1.27**;
-- H1 and H2 positive.
+Untouched structural bracket:
 
-MNQ stop-only 500-tick cap:
+- 256 resolved;
+- net **+$8,494.62**;
+- PF **1.20**;
+- H1 **+$7,187.06 / PF 1.41**;
+- H2 **+$1,307.56 / PF 1.05**.
 
-- 299 resolved;
-- **+$9,612.98 / PF 1.23**;
-- H1 **+$4,861.48 / PF 1.23**;
-- H2 **+$4,751.50 / PF 1.22**;
-- remains **+$9,038.48 / PF 1.21** at 4 adverse ticks;
-- 13 positive months / 11 negative months.
+The current MNQ 120-tick cap destroys the edge:
 
-The current MNQ 120-tick cap makes the same 4H population negative. A 300-tick cap is positive in both halves but weaker; 500 ticks is materially stronger in this independent study.
+- **-$1,790.70 / PF 0.91**;
+- H1 negative.
 
-MES, untouched 4H structural bracket:
+A broad stop-only plateau from roughly **300 to 800 ticks** stays positive in both halves rather than relying on one magic setting. Examples:
 
-- 263 resolved;
-- **+$9,755.76 / PF 1.43**;
-- H1 and H2 positive.
+- 300 ticks: **+$9,867.48 / PF 1.31**;
+- 400 ticks: **+$13,416.52 / PF 1.39**;
+- 500 ticks: **+$10,411.80 / PF 1.28**;
+- 600 ticks: **+$11,270.78 / PF 1.29**;
+- 800 ticks: **+$9,419.04 / PF 1.23**.
 
-MES stop-only 120-tick cap:
+Those representative variants remain positive through 4 adverse slippage ticks.
 
-- 297 resolved;
-- **+$6,887.94 / PF 1.31**;
-- H1 **+$5,385.96 / PF 1.51**;
-- H2 **+$1,501.98 / PF 1.13**;
-- remains **+$5,915.21 / PF 1.25** at 4 adverse ticks;
-- 17 positive months / 7 negative months.
+At 400 ticks:
 
-The current MES 60-tick cap is only weakly positive overall and has a negative half, so it fails the stability screen.
+- 16 positive / 8 negative months;
+- 2024 slightly negative, 2025 and 2026 positive;
+- removing the top 5 winners still leaves about **+$6.2k**.
 
-**Interpretation:** do not classify “2-2 reversal” as globally broken. The evidence says **timeframe and stop width materially change the result**. 4H deserves continued robustness work; no runtime change follows from this research result.
+At 600 ticks:
 
-### Daily 2-2 reversal / 2-2-2 reversal slice — mixed, not ready
+- 16 positive / 8 negative months;
+- 2024, 2025, and 2026 are positive;
+- removing the top 5 winners still leaves about **+$4.1k**.
 
-MNQ Daily generic 2-2 reversal baseline is only marginal:
+**Interpretation:** the 4H signal is promising and the current 120-tick cap is a clear blocker, but selecting a single cap from this same sample would be post-hoc optimization. The broad plateau should be preregistered and confirmed, not tuned to the best cell.
+
+### MES 4H 2-2 reversal — WAIT / NO REPAIR FOUND
+
+The earlier claim that MES 4H 2-2 reversal was positive came from the invalid session-aligned reconstruction and is withdrawn.
+
+Correct fixed-UTC baseline:
+
+- 273 resolved;
+- net **-$1,142.79**;
+- PF **0.95**;
+- H1 slightly positive;
+- H2 **-$1,611.51 / PF 0.88**.
+
+Stop-only caps from 60 through 600 ticks remain negative overall or unstable. No corrected 4H stop width tested rescues MES.
+
+**Interpretation:** 4H does **not** rescue MES 2-2 reversal. Combined with the negative Daily result and weak other timeframe evidence, MES 2-2 reversal is moving toward rejection, but remains WAIT until the predefined matrix is completely reproduced/documented.
+
+### Daily 2-2 reversal — mixed by instrument
+
+MNQ Daily generic 2-2 reversal:
 
 - 48 resolved;
 - **+$3,084.96 / PF 1.13**;
 - H1 barely positive, H2 positive;
-- drawdown about **$9,331.50**.
+- drawdown about **$9.3k**.
 
-Entry confirmation did not improve it. Tested tighter stop caps damage later-period stability. A relative-volume >=0.8 filter improves the independent baseline to **+$5,179.84 / PF 1.26** with both halves positive, but this remains a filter hypothesis, not an approved strategy.
+Entry confirmation does not improve it. Tighter stop caps damage later-period stability. A relative-volume >=0.8 filter improves the independent baseline to about **+$5,179.84 / PF 1.26** with both halves positive, but this is a filter hypothesis requiring independent confirmation.
 
-MES Daily 2-2 reversal baseline is negative:
+MES Daily generic 2-2 reversal:
 
 - 42 resolved;
 - **-$2,955.91 / PF 0.78**;
-- H2 strongly negative.
+- H2 strongly negative;
+- stop-only, target-only, entry-confirmation, and tested existing-context filters do not produce a stable repair.
 
-Stop-only, target-only, entry-confirmation, and the tested existing-context filters do not produce a stable Daily MES repair. The same pattern is materially stronger on 4H, so **Daily timeframe is part of the MES failure mode**.
+The directional-two-back 2-2-2 reversal slice maps into this canonical generic 2-2 reversal population and is not independently promoted.
 
-The directional-two-back 2-2-2 reversal slice maps into this generic canonical 2-2 reversal population in the current classifier; it is not independently promoted.
+### MNQ Daily 3-2 — WAIT / WALK-FORWARD UNSTABLE
 
-### Daily MNQ 3-2 — WAIT / REGIME-UNSTABLE
-
-- baseline: **-$3,843.88 / PF 0.84**;
+- baseline **-$3,843.88 / PF 0.84**;
 - H1 positive, H2 strongly negative;
-- stop-only variants can create positive full-period totals but H2 remains negative;
-- 1R and 1.5R target-only variants become positive overall but H2 remains negative;
+- some stop-only or 1R/1.5R target-only variants make the full-period total positive, but **H2 remains negative**;
 - entry confirmation does not improve it;
-- TREND/FTFC/relative-volume filters tested so far do not rescue H2;
-- 4H is negative and 60m is approximately flat/unstable under the same pattern contract.
+- tested TREND/FTFC/relative-volume filters do not rescue H2;
+- alternate timeframe checks so far do not produce a stable replacement.
 
-**Interpretation:** no stable repair has been found yet. This is much closer to a genuine rejection than the families above, but keep it WAIT until the predefined failure-mode matrix is fully documented and reproduced.
+**Interpretation:** no stable repair has been found. This is close to rejection but remains WAIT until the matrix is fully reproduced.
 
 ### Daily 3-2-2 reversal — WAIT / SAMPLE + WALK-FORWARD PROBLEM
 
-Daily MNQ:
+MNQ Daily:
 
 - 17 resolved;
 - **+$1,341.34 / PF 1.15**;
 - H1 negative, H2 positive.
 
-Daily MES:
+MES Daily:
 
 - 15 resolved;
 - **+$1,547.80 / PF 1.38**;
 - H1 negative, H2 positive.
 
-Stop, target, and entry variants do not remove the Daily half-to-half instability. Sample size is also too small.
+Stop, target, and entry variants do not remove the basic Daily half-to-half instability, and samples are too small.
 
-### MNQ 60m 3-2-2 reversal — PROMISING RESEARCH CONFIRMATION, NOT A NEW DEPLOYMENT CLAIM
+### MNQ 60m 3-2-2 reversal — PROMISING BUT UNPROVEN
 
-Independent causal 60m evidence supports the existing conclusion that this family should not be discarded solely because the current MNQ 120-tick cap is too tight.
+Independent causal 60m evidence supports the existing wide-stop-family conclusion.
 
 Untouched structural bracket:
 
@@ -214,56 +238,69 @@ Untouched structural bracket:
 - **+$7,403.68 / PF 1.24**;
 - both halves positive.
 
-Stop-only 500-tick cap:
+The current MNQ 120-tick cap makes the population negative: about **-$5,974.82 / PF 0.64**.
 
-- 291 resolved;
-- **+$9,879.32 / PF 1.37**;
+A broad stop-only plateau, rather than one isolated cap, is positive. Representative results:
+
+- 300 ticks: about **+$3.1k / PF 1.12**;
+- 400 ticks: about **+$6.5k / PF 1.24**;
+- 500 ticks: **+$9,879.32 / PF 1.37**;
+- 600 ticks: about **+$10.1k / PF 1.37**;
+- 800 ticks: about **+$8.5k / PF 1.30**.
+
+At 500 ticks:
+
 - H1 **+$4,848.90 / PF 1.37**;
 - H2 **+$5,030.42 / PF 1.37**;
-- remains **+$9,221.32 / PF 1.34** at 4 adverse ticks;
-- 17 positive months / 7 negative months.
+- 4-tick slippage still **+$9,221.32 / PF 1.34**;
+- 17 positive / 7 negative months;
+- 2024, 2025, and 2026 all positive;
+- removing the top 5 winners still leaves about **+$4.5k**.
 
-300 ticks is also positive in both halves but materially weaker. The current 120-tick cap is negative.
-
-This corroborates the existing wide-stop 60M 3-2-2 research direction; it does **not** supersede the dedicated engine-parity/IOC evidence or authorize a cap change.
+**Interpretation:** the current 120-tick cap is a clear mismatch for this family. This corroborates the dedicated 60M 3-2-2 wide-stop research; it does **not** supersede its engine-parity/IOC evidence or authorize a config change.
 
 MES 60m 3-2-2 does not show the same stability because H2 is negative.
 
-## Existing non-STRAT evidence — preserve prior classifications unless new causal evidence supersedes them
+## Existing non-STRAT evidence — preserve latest family-specific audits
 
 - ORB Reclaim current/first_cross — negative historical evidence.
 - ORB Reclaim V4-R — WAIT.
 - Inverse ORB / VWAP evidence with invalid bracket geometry must not be used as execution proof.
-- 4HR Re-Trigger, Miyagi, and dedicated 60M 3-2-2 work should be interpreted by their latest family-specific audit artifacts, not by stale broad labels from the September 6 handoff.
-- MES `strat_122` has separate current-engine research on main; do not duplicate that lane inside this Daily audit.
+- 4HR Re-Trigger, Miyagi, and dedicated 60M 3-2-2 work should be interpreted by their latest family-specific audit artifacts, not stale broad labels from the September 6 handoff.
+- MES `strat_122` has separate current-engine research on `main`; do not duplicate that lane inside this audit.
 
 ## Current safety posture
 
 - Paper only.
 - No broker/deployment behavior change from this handoff.
 - Max 3 trades/day remains the currently configured isolated-lane cap.
-- One open position at a time remains the current global position rule.
+- One open position at a time remains the current global rule.
 - No averaging down.
 - Bracket/stop requirements remain in force.
 - No optimistic same-bar fills.
 - Do not tune several variables together and call the result evidence.
-- Do not promote a result that depends on one period, one outlier, or a tiny sample.
+- Do not promote a result dependent on one period, one outlier, or a tiny sample.
 
 ## Research tooling status
 
-Draft PR #527 (`chatgpt/daily-strat-failure-mode-baseline`) is **research only** and must not be merged for execution.
+Draft PR #527 (`chatgpt/daily-strat-failure-mode-baseline`) is **research only** and is not yet trustworthy as the canonical evidence runner.
 
-Its first CI run exposed a test-code defect: the test compared the returned `StratContext` object directly with a string instead of checking `.strat_sequence`. The classifier itself returned the expected `strat_22_continuation`. Fix that test before treating #527 as CI-clean.
+Three defects were identified before merge:
 
-The current independent corpus results above were produced from the uploaded 5-minute corpus; they should be committed as evidence only after the harness/test contract is corrected and reproduced.
+1. its first CI test compares a returned `StratContext` object directly to a string instead of checking `.strat_sequence`;
+2. its candidate detector independently searches both boundaries and can mislabel a later opposite-side break as another setup instead of assigning the forming STRAT bar from the first boundary broken;
+3. its Daily resolver stops at the end of the trigger session, while a Daily structural stop/2R target can require multi-day resolution and the lane must enforce one-position-at-a-time across that horizon.
+
+The independent uploaded-corpus results above therefore remain **research evidence pending reproduction through a corrected #527-style harness**. Do not merge #527 merely to make CI green.
 
 ## Smallest safe next step
 
-Continue the strategy audit, not the runtime:
+Continue the audit, not the runtime:
 
-1. fix #527's test assertion and the causal first-side pattern labeling in the research harness;
-2. reproduce the uploaded-corpus results with the corrected harness;
-3. stress **4H 2-2 reversal**, **MNQ Daily 2-2 continuation**, and **MNQ 60m 3-2-2** for month/outlier/risk concentration without changing another strategy variable;
-4. stress **MES Daily 3-2** specifically for winner concentration because its P&L is carried by very few wins;
-5. finish the one-variable matrix for the weak Daily families before assigning BROKEN;
-6. make no strategy/runtime/config change unless a surviving variant passes the same causal and multi-period evidence contract.
+1. correct #527's causal pattern identification, multi-day resolution, one-position lane, and test assertion;
+2. reproduce the uploaded-corpus Daily results with the corrected harness;
+3. preregister broad stop ranges rather than selecting the best historical cell for **MNQ 4H 2-2 reversal** and **MNQ 60m 3-2-2**;
+4. investigate **MNQ Daily 2-2 continuation** with diagnostics that explain why winners require such wide structural adverse excursion before changing another variable;
+5. decompose **MES Daily 3-2** winner concentration before deciding whether a causal filter exists or the apparent edge is just outlier dependence;
+6. finish the weak-family matrix before assigning BROKEN;
+7. make no runtime/config change unless a surviving variant passes the same causal, realistic-fill, and multi-period contract.
