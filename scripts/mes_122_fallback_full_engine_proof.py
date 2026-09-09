@@ -3,18 +3,24 @@
 
 Evidence only. No runtime/config file is changed.
 
-The proof reuses PR #373's exact shape:
+The proof reuses PR #373's exact experiment shape while running on current
+engine/broker code:
   1. isolated #337 reproduction to anchor the 33 canonical MES strat_122 rows;
-  2. current production-config control through ReplayEngine -> DecisionEngine ->
-     RiskEngine -> PaperBroker;
-  3. the same production run with fallback enabled ONLY on four pre-registered
-     bars where #373 proved the higher-ranked setup failed exactly
-     ENTRY_DETACHED_FROM_PRICE.
+  2. the frozen PR #373 production configuration through ReplayEngine ->
+     DecisionEngine -> RiskEngine -> PaperBroker;
+  3. the same frozen configuration with fallback enabled ONLY on four
+     pre-registered bars where #373 proved the higher-ranked setup failed
+     exactly ENTRY_DETACHED_FROM_PRICE.
 
-Unlike the lightweight counterfactual, this script scores only the OUTCOME rows
-written by ReplayEngine/PaperBroker and joins them back to their TRADE decision
-by paper_order_id. Historical `known_pnl` is used only to prove the isolated
-#337 reproduction; it is never used to score control or treatment.
+The control configuration is deliberately frozen. The repository's shipped
+risk_rules.yaml changed after #373 (most importantly, the isolated ORB posture
+removed MES and strat_122 from the executable universe), so using today's
+shipped config would not reproduce the historical 16-trade control and would
+answer a different question.
+
+Control/treatment P&L comes only from OUTCOME rows written by the current
+ReplayEngine/PaperBroker, joined back to TRADE decisions by paper_order_id.
+Historical `known_pnl` is used only to prove the isolated #337 reproduction.
 
 The 313-day corpus is gitignored. Set AFS_122_CORPUS to the checkout containing
 `data/replay_corpus_v1_market_condition_fixed`, or place that directory at the
@@ -47,6 +53,37 @@ CORPUS = Path(
     or (REPO / "data" / "replay_corpus_v1_market_condition_fixed")
 )
 KNOWN_TRADES = REPO / "scripts" / "strat_212_122_canonical_evidence_raw_trades.jsonl"
+SOURCE_SNAPSHOT = REPO / "scripts" / "mes_122_fallback_counterfactual_source_2026-09-08.json"
+
+# PR #373 head d06d885b422192757746ddcce3e24661c615f09c.
+# The enabled/disabled lists are also independently stored in SOURCE_SNAPSHOT.
+FROZEN_373_PERMISSION_STATUS = {
+    "orb_breakout": "PAPER_ELIGIBLE",
+    "orb_reclaim": "PAPER_ELIGIBLE",
+    "orb_rejection": "PAPER_ELIGIBLE",
+    "orb_false_break_fade": "PAPER_ELIGIBLE",
+    "vwap_hold": "SHADOW_ONLY",
+    "vwap_reclaim": "PAPER_ELIGIBLE",
+    "vwap_rejection": "PAPER_ELIGIBLE",
+    "pdh_reclaim": "SHADOW_ONLY",
+    "pdl_reclaim": "PAPER_ELIGIBLE",
+    "strat_212": "PAPER_ELIGIBLE",
+    "strat_122": "PAPER_ELIGIBLE",
+    "strat_122_observed": "PAPER_ELIGIBLE",
+    "strat_122_pullback": "PAPER_ELIGIBLE",
+    "strat_inside_break": "PAPER_ELIGIBLE",
+    "strat_outside_continuation": "PAPER_ELIGIBLE",
+    "strat_4hr_retrigger": "PAPER_ELIGIBLE",
+    "strat_4hr_retrigger_observed": "PAPER_ELIGIBLE",
+    "strat_322_first_live": "PAPER_ELIGIBLE",
+    "continuation_pullback": "PAPER_ELIGIBLE",
+    "ema_pullback_trend": "PAPER_ELIGIBLE",
+    "gap_fill": "PAPER_ELIGIBLE",
+    "ovn_high_sweep_reclaim": "PAPER_ELIGIBLE",
+    "ovn_low_sweep_reclaim": "PAPER_ELIGIBLE",
+    "impulse_first_pullback_observed": "PAPER_ELIGIBLE",
+    "trend_consolidation_break_observed": "PAPER_ELIGIBLE",
+}
 
 # Frozen from PR #373. No other bar is eligible for treatment.
 TARGETS: dict[str, dict[str, Any]] = {
@@ -93,6 +130,41 @@ def _load_known_mes_122() -> list[dict]:
         if row.get("instrument") == INSTRUMENT and row.get("strategy") == STRATEGY
     ]
     return sorted(rows, key=lambda r: (r["date"], r["direction"]))
+
+
+def _frozen_373_config():
+    """Materialize #373's production posture on current code.
+
+    Only configuration that materially changed after #373 is frozen here. If
+    current engine/risk/broker behavior changes the old control, the proof must
+    fail rather than recreating old code.
+    """
+    base = load_config()
+    snapshot = json.loads(SOURCE_SNAPSHOT.read_text(encoding="utf-8"))["production_config"]
+    cfg = dataclasses.replace(
+        base,
+        allowed_instruments=["MES", "MNQ"],
+        required_instruments=["MES", "MNQ"],
+        max_trades_per_day=9999,
+        enabled_concepts=list(snapshot["enabled_concepts"]),
+        disabled_concepts_per_instrument={
+            key: list(value)
+            for key, value in snapshot["disabled_concepts_per_instrument"].items()
+        },
+        strategy_permission_gate_enabled=True,
+        strategy_permission_default_status="SHADOW_ONLY",
+        strategy_status=dict(FROZEN_373_PERMISSION_STATUS),
+        strategy_fallback_enabled=False,
+    )
+    if cfg.enabled_concepts != snapshot["enabled_concepts"]:
+        raise RuntimeError("#373 enabled_concepts snapshot mismatch")
+    if cfg.disabled_concepts_per_instrument != snapshot["disabled_concepts_per_instrument"]:
+        raise RuntimeError("#373 disabled_concepts_per_instrument snapshot mismatch")
+    if cfg.strategy_status.get("strat_122") != "PAPER_ELIGIBLE":
+        raise RuntimeError("#373 control must keep strat_122 paper-eligible")
+    if cfg.strategy_status.get("vwap_hold") != "SHADOW_ONLY":
+        raise RuntimeError("#373 control must keep vwap_hold shadow-only")
+    return cfg
 
 
 def _utc_iso(dt) -> str:
@@ -355,11 +427,9 @@ def run_proof(out_path: Path) -> dict[str, Any]:
     if len(known) != 33:
         raise RuntimeError(f"canonical MES strat_122 population drifted: expected 33, got {len(known)}")
 
-    base = load_config()
-    if getattr(base, "strategy_fallback_enabled", False):
-        raise RuntimeError("production control unexpectedly has strategy_fallback_enabled=True")
+    control_cfg = _frozen_373_config()
     isolated_cfg = dataclasses.replace(
-        base,
+        control_cfg,
         enabled_concepts=["strat_212", "strat_122"],
         disabled_concepts_per_instrument={},
     )
@@ -368,8 +438,8 @@ def run_proof(out_path: Path) -> dict[str, Any]:
         root = Path(tmp)
         print("[pass 1] isolated #337 reproduction", flush=True)
         isolated = _run(isolated_cfg, root / "isolated", treatment=False)
-        print("[pass 2] production control", flush=True)
-        control = _run(base, root / "control", treatment=False)
+        print("[pass 2] frozen #373 production control", flush=True)
+        control = _run(control_cfg, root / "control", treatment=False)
 
         target_control: dict[str, Any] = {}
         for bar_ts, expected in TARGETS.items():
@@ -382,8 +452,8 @@ def run_proof(out_path: Path) -> dict[str, Any]:
             if "ENTRY_DETACHED_FROM_PRICE" not in cls.get("failed_gates", []):
                 raise RuntimeError(f"target {bar_ts} is no longer an ENTRY_DETACHED failure: {cls}")
 
-        print("[pass 3] scoped treatment", flush=True)
-        treatment = _run(base, root / "treatment", treatment=True)
+        print("[pass 3] frozen #373 config + scoped treatment", flush=True)
+        treatment = _run(control_cfg, root / "treatment", treatment=True)
 
     rows, reproduction_mismatches = _anchor_rows(known, isolated, control, treatment)
     control_metrics = _metrics(rows, "control")
@@ -443,6 +513,7 @@ def run_proof(out_path: Path) -> dict[str, Any]:
 
     report = {
         "corpus": str(CORPUS),
+        "control_config_source": "PR #373 head d06d885b + committed source snapshot",
         "canonical_candidates": len(known),
         "reproduction_mismatches": reproduction_mismatches,
         "targets": TARGETS,
