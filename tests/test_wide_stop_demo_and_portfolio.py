@@ -39,6 +39,7 @@ def _demo_env(monkeypatch):
         execution.ROUTE_ENV: execution.DEMO_ROUTE,
         execution.ROUTE_PROOF_PIN_ENV: execution.DEMO_ROUTE,
         "WIDE_STOP_LEDGER_MODE": "paper_sim",
+        "WIDE_STOP_LEDGER_EPOCH_START": EPOCH,
         "BROKER": "tradovate",
         "TRADOVATE_ENV": "demo",
         "TRADOVATE_EXPECTED_ACCOUNT_ID": "12345",
