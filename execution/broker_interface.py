@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 
-# ─── Common Types ──────────────────────────────────────────────────────────────
+# ─── Common Types ────────────────────────────────────────────────────────────
 
 @dataclass
 class BracketOrder:
@@ -76,7 +76,7 @@ class Fill:
     pnl_dollars: Optional[float]
     # Diagnostic-only fields for CANCELLED/no-fill outcomes. Never read by
     # execution/risk logic — populated best-effort, None when unknown. See
-    # execution/no_fill_taxonomy.py for no_fill_reason bucket meanings.
+    # execution/no_fill_taxonomy.py for the no_fill_reason bucket meanings.
     no_fill_reason: Optional[str] = None
     order_type: Optional[str] = None
     # Internal simulator order identifier. Real broker order ids remain in the
@@ -128,7 +128,7 @@ class BrokerInterface(ABC):
         Execute a bracket order. Paper brokers simulate; live brokers send real orders.
 
         Args:
-            order: Complete bracket order with entry, stop, target.
+            order: Complete bracket order with entry + stop + target.
 
         Returns:
             Fill with result and P&L.
