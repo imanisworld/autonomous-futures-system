@@ -165,15 +165,6 @@ def _run_pass(
         for i, path in enumerate(files, 1):
             date_hint = path.stem.replace(f"{INSTRUMENT}_", "")
             engine.run(path, review_date=date_hint)
-            journal_path = log_dir / f"journal_{date_hint}.jsonl"
-            for entry in _json_lines(journal_path):
-                if entry.get("bar_ts"):
-                    decisions[str(entry["bar_ts"])] = entry
-                if entry.get("type") == "OUTCOME":
-                    outcome = entry.get("outcome") or {}
-                    order_id = outcome.get("paper_order_id")
-                    if order_id:
-                        outcomes[str(order_id)] = outcome
 
             carried = getattr(engine, "_carried_positions", {}) or {}
             if carried:
@@ -188,6 +179,23 @@ def _run_pass(
     finally:
         replay_module.DecisionEngine = old_decision_cls
         signal_module.advance_strat_212_122 = old_advance
+
+    # Read the journals only AFTER every day has been replayed. ReplayEngine
+    # writes a carried trade's OUTCOME row into the journal of its SIGNAL date
+    # (replay/replay_engine.py, for_date=_carried["journal_date"]) when the
+    # trade resolves on a later day file. Reading journal_{date} right after
+    # engine.run(date) — inside the loop — therefore missed those late OUTCOME
+    # rows and classified the trade TRADE_UNRESOLVED (same defect fixed in
+    # scripts/mes_122_fallback_full_engine_proof.py, PR #537).
+    for journal_path in sorted(log_dir.glob("journal_*.jsonl")):
+        for entry in _json_lines(journal_path):
+            if entry.get("bar_ts"):
+                decisions[str(entry["bar_ts"])] = entry
+            if entry.get("type") == "OUTCOME":
+                outcome = entry.get("outcome") or {}
+                order_id = outcome.get("paper_order_id")
+                if order_id:
+                    outcomes[str(order_id)] = outcome
 
     return {
         "decisions": decisions,

@@ -1,0 +1,355 @@
+{
+  "window": {
+    "start": "2026-07-24",
+    "end": "2026-09-08",
+    "days": 40
+  },
+  "corpus": "/private/tmp/claude-501/-Users-djb-a-e-MAINVSCODE-autonomous-futures-system/1ed75603-981f-4a09-a859-4dab04636125/scratchpad/oos_corpus",
+  "config_source": "scripts.mes_122_fallback_full_engine_proof._frozen_373_config (unchanged)",
+  "isolated_classes": {
+    "STRAT_122_RISK_REJECTED": 1,
+    "TRADE_RESOLVED": 3
+  },
+  "control_classes": {
+    "STRAT_122_RISK_REJECTED": 1,
+    "TRADE_RESOLVED": 1
+  },
+  "isolated_metrics": {
+    "trades": 3,
+    "wins": 1,
+    "losses": 2,
+    "net": 35.0,
+    "profit_factor": 1.636364,
+    "h1": 90.0,
+    "h2": -55.0,
+    "max_drawdown": 55.0,
+    "trade_dates": [
+      "2026-08-18",
+      "2026-08-31",
+      "2026-09-04"
+    ]
+  },
+  "control_metrics": {
+    "trades": 1,
+    "wins": 0,
+    "losses": 1,
+    "net": -7.5,
+    "profit_factor": null,
+    "h1": 0,
+    "h2": -7.5,
+    "max_drawdown": 7.5,
+    "trade_dates": [
+      "2026-09-04"
+    ]
+  },
+  "isolated_rows": [
+    {
+      "bar_ts": "2026-08-11T13:15:00+00:00",
+      "date": "2026-08-11",
+      "classification": "STRAT_122_RISK_REJECTED",
+      "decision": "RISK_REJECTED",
+      "failed_gates": [
+        "min_confluence_grade"
+      ]
+    },
+    {
+      "bar_ts": "2026-08-18T14:45:00+00:00",
+      "date": "2026-08-18",
+      "classification": "TRADE_RESOLVED",
+      "strategy": "strat_122",
+      "direction": "SHORT",
+      "entry": 7723.5,
+      "stop": 7732.5,
+      "target": 7705.5,
+      "rr_ratio": 2.0,
+      "paper_order_id": "PAPER-ccda293e589b4e48bb85dffe359aa9f5",
+      "result": "WIN",
+      "exit_reason": "TARGET_HIT",
+      "pnl_dollars": 90.0
+    },
+    {
+      "bar_ts": "2026-08-31T02:15:00+00:00",
+      "date": "2026-08-31",
+      "classification": "TRADE_RESOLVED",
+      "strategy": "strat_122",
+      "direction": "SHORT",
+      "entry": 7687.5,
+      "stop": 7696.75,
+      "target": 7669.0,
+      "rr_ratio": 2.0,
+      "paper_order_id": "PAPER-875072f35f55439fa1a1fc130c913e84",
+      "result": "LOSS",
+      "exit_reason": "STOP_HIT",
+      "pnl_dollars": -47.5
+    },
+    {
+      "bar_ts": "2026-09-04T04:00:00+00:00",
+      "date": "2026-09-04",
+      "classification": "TRADE_RESOLVED",
+      "strategy": "strat_122",
+      "direction": "LONG",
+      "entry": 7758.5,
+      "stop": 7757.0,
+      "target": 7773.5,
+      "rr_ratio": 10.0,
+      "paper_order_id": "PAPER-fee0cd4cc39d48e7be2f04bd655446cd",
+      "result": "LOSS",
+      "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+      "pnl_dollars": -7.5
+    }
+  ],
+  "control_rows": [
+    {
+      "bar_ts": "2026-08-11T13:15:00+00:00",
+      "date": "2026-08-11",
+      "classification": "STRAT_122_RISK_REJECTED",
+      "decision": "RISK_REJECTED",
+      "failed_gates": [
+        "min_confluence_grade"
+      ]
+    },
+    {
+      "bar_ts": "2026-09-04T04:00:00+00:00",
+      "date": "2026-09-04",
+      "classification": "TRADE_RESOLVED",
+      "strategy": "strat_122",
+      "direction": "LONG",
+      "entry": 7758.5,
+      "stop": 7757.0,
+      "target": 7773.5,
+      "rr_ratio": 10.0,
+      "paper_order_id": "PAPER-8cb6499390914d4fb14529e95e1a06de",
+      "result": "LOSS",
+      "exit_reason": "OUTSIDE_AFTER_TRIGGER",
+      "pnl_dollars": -7.5
+    }
+  ],
+  "preempted_in_control": [
+    {
+      "bar_ts": "2026-08-18T14:45:00+00:00",
+      "isolated": {
+        "bar_ts": "2026-08-18T14:45:00+00:00",
+        "date": "2026-08-18",
+        "classification": "TRADE_RESOLVED",
+        "strategy": "strat_122",
+        "direction": "SHORT",
+        "entry": 7723.5,
+        "stop": 7732.5,
+        "target": 7705.5,
+        "rr_ratio": 2.0,
+        "paper_order_id": "PAPER-ccda293e589b4e48bb85dffe359aa9f5",
+        "result": "WIN",
+        "exit_reason": "TARGET_HIT",
+        "pnl_dollars": 90.0
+      },
+      "control": {
+        "classification": "PREEMPTED_BY_OTHER_STRATEGY",
+        "winning_setup_strategy": "vwap_hold",
+        "decision": "NO_TRADE",
+        "failed_gates": [
+          "STRATEGY_NOT_PAPER_ELIGIBLE"
+        ]
+      }
+    },
+    {
+      "bar_ts": "2026-08-31T02:15:00+00:00",
+      "isolated": {
+        "bar_ts": "2026-08-31T02:15:00+00:00",
+        "date": "2026-08-31",
+        "classification": "TRADE_RESOLVED",
+        "strategy": "strat_122",
+        "direction": "SHORT",
+        "entry": 7687.5,
+        "stop": 7696.75,
+        "target": 7669.0,
+        "rr_ratio": 2.0,
+        "paper_order_id": "PAPER-875072f35f55439fa1a1fc130c913e84",
+        "result": "LOSS",
+        "exit_reason": "STOP_HIT",
+        "pnl_dollars": -47.5
+      },
+      "control": {
+        "classification": "PREEMPTED_BY_OTHER_STRATEGY",
+        "winning_setup_strategy": "vwap_hold",
+        "decision": "NO_TRADE",
+        "failed_gates": [
+          "STRATEGY_NOT_PAPER_ELIGIBLE"
+        ]
+      }
+    }
+  ],
+  "control_all_TRADE_decisions": [
+    [
+      "2026-07-24T11:45:00+00:00",
+      "orb_reclaim",
+      "TRADE"
+    ],
+    [
+      "2026-07-27T08:30:00+00:00",
+      "orb_reclaim",
+      "TRADE"
+    ],
+    [
+      "2026-07-28T15:15:00+00:00",
+      "orb_reclaim",
+      "TRADE"
+    ],
+    [
+      "2026-07-29T09:45:00+00:00",
+      "orb_reclaim",
+      "TRADE"
+    ],
+    [
+      "2026-07-30T13:45:00+00:00",
+      "orb_reclaim",
+      "TRADE"
+    ],
+    [
+      "2026-07-30T15:45:00+00:00",
+      "orb_reclaim",
+      "TRADE"
+    ],
+    [
+      "2026-07-31T08:00:00+00:00",
+      "orb_reclaim",
+      "TRADE"
+    ],
+    [
+      "2026-07-31T19:15:00+00:00",
+      "orb_reclaim",
+      "TRADE"
+    ],
+    [
+      "2026-08-03T11:15:00+00:00",
+      "orb_reclaim",
+      "TRADE"
+    ],
+    [
+      "2026-08-03T13:45:00+00:00",
+      "orb_reclaim",
+      "TRADE"
+    ],
+    [
+      "2026-08-04T11:15:00+00:00",
+      "orb_reclaim",
+      "TRADE"
+    ],
+    [
+      "2026-08-04T13:45:00+00:00",
+      "orb_reclaim",
+      "TRADE"
+    ],
+    [
+      "2026-08-05T12:00:00+00:00",
+      "orb_reclaim",
+      "TRADE"
+    ],
+    [
+      "2026-08-07T14:15:00+00:00",
+      "orb_reclaim",
+      "TRADE"
+    ],
+    [
+      "2026-08-07T19:00:00+00:00",
+      "orb_reclaim",
+      "TRADE"
+    ],
+    [
+      "2026-08-10T10:15:00+00:00",
+      "orb_reclaim",
+      "TRADE"
+    ],
+    [
+      "2026-08-13T07:30:00+00:00",
+      "orb_reclaim",
+      "TRADE"
+    ],
+    [
+      "2026-08-13T13:45:00+00:00",
+      "orb_reclaim",
+      "TRADE"
+    ],
+    [
+      "2026-08-17T10:15:00+00:00",
+      "orb_reclaim",
+      "TRADE"
+    ],
+    [
+      "2026-08-19T14:30:00+00:00",
+      "orb_reclaim",
+      "TRADE"
+    ],
+    [
+      "2026-08-21T15:30:00+00:00",
+      "orb_reclaim",
+      "TRADE"
+    ],
+    [
+      "2026-08-21T19:30:00+00:00",
+      "orb_reclaim",
+      "TRADE"
+    ],
+    [
+      "2026-08-25T08:30:00+00:00",
+      "orb_reclaim",
+      "TRADE"
+    ],
+    [
+      "2026-08-26T11:00:00+00:00",
+      "orb_reclaim",
+      "TRADE"
+    ],
+    [
+      "2026-08-26T13:45:00+00:00",
+      "orb_reclaim",
+      "TRADE"
+    ],
+    [
+      "2026-08-26T19:00:00+00:00",
+      "orb_reclaim",
+      "TRADE"
+    ],
+    [
+      "2026-08-27T08:00:00+00:00",
+      "orb_reclaim",
+      "TRADE"
+    ],
+    [
+      "2026-08-28T12:00:00+00:00",
+      "orb_reclaim",
+      "TRADE"
+    ],
+    [
+      "2026-08-28T14:30:00+00:00",
+      "orb_reclaim",
+      "TRADE"
+    ],
+    [
+      "2026-09-02T13:45:00+00:00",
+      "orb_reclaim",
+      "TRADE"
+    ],
+    [
+      "2026-09-03T07:30:00+00:00",
+      "orb_reclaim",
+      "TRADE"
+    ],
+    [
+      "2026-09-03T12:30:00+00:00",
+      "orb_reclaim",
+      "TRADE"
+    ],
+    [
+      "2026-09-03T15:00:00+00:00",
+      "orb_reclaim",
+      "TRADE"
+    ],
+    [
+      "2026-09-04T04:00:00+00:00",
+      "strat_122",
+      "TRADE"
+    ]
+  ],
+  "decision_bars_isolated": 2845,
+  "decision_bars_control": 2757
+}
