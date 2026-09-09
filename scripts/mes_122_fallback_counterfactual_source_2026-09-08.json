@@ -9,6 +9,36 @@
     "preempted_count": 7,
     "blocked_no_engine_decision_count": 10
   },
+  "production_config": {
+    "enabled_concepts": [
+      "orb_breakout",
+      "orb_reclaim",
+      "orb_rejection",
+      "vwap_reclaim",
+      "vwap_rejection",
+      "vwap_hold",
+      "pdh_reclaim",
+      "pdl_reclaim",
+      "strat_4hr_retrigger",
+      "strat_322_first_live",
+      "strat_122"
+    ],
+    "disabled_concepts_per_instrument": {
+      "MES": [
+        "vwap_reclaim",
+        "pdl_reclaim",
+        "orb_breakout",
+        "orb_rejection",
+        "vwap_rejection",
+        "pdh_reclaim",
+        "strat_4hr_retrigger",
+        "strat_322_first_live"
+      ],
+      "MNQ": [
+        "strat_122"
+      ]
+    }
+  },
   "executable_rows": [
     {"date": "2025-09-05", "pnl": -20.0},
     {"date": "2025-10-01", "pnl": 72.5},
