@@ -17,6 +17,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any, Optional
 
+from context.daily_22_state_integrity import assert_state_integrity
 from context.daily_22_swing_collector import process_five_min_bar as process_daily_22
 from context.wide_stop_forward_collector import process_five_min_bar as process_wide_stop
 
@@ -29,7 +30,14 @@ def process_paper_five_min_bar(
     log_dir: str | Path,
     for_date: Optional[date] = None,
 ) -> list[dict[str, Any]]:
-    """Feed one completed MNQ 5m bar to paper-only evidence collectors."""
+    """Feed one completed MNQ 5m bar to paper-only evidence collectors.
+
+    Daily multi-day state is proof-critical. A malformed, unreadable,
+    wrong-epoch, or unexpectedly missing persisted state raises before the Daily
+    collector can reset itself or admit a second swing. The outer 5-minute feed
+    catches the error and leaves market-data ingestion alive while the Daily lane
+    fails closed.
+    """
     events: list[dict[str, Any]] = []
 
     # Safety overlay only on the isolated copy. With one possible Daily first
@@ -46,6 +54,8 @@ def process_paper_five_min_bar(
             for_date=for_date,
         )
     )
+
+    assert_state_integrity(log_dir, cfg)
     events.extend(
         process_daily_22(
             payload=payload,
