@@ -175,7 +175,11 @@ def _contract_text(result: ScoreResult, side: str) -> str:
     raw = result.raw
     contract = raw.get("contract")
     dte = raw.get("dte")
-    dte_suffix = f" · {dte} DTE" if dte not in (None, "") else ""
+    dte_suffix = (
+        f" · {dte} DTE"
+        if raw.get("paper_policy_id") == POLICY_ID and dte not in (None, "")
+        else ""
+    )
     if contract:
         return f"{contract}{dte_suffix}"
     strike = raw.get("strike")
