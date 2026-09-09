@@ -369,6 +369,23 @@ def worktree_inventory(root: Path) -> list[dict[str, Any]]:
     return entries
 
 
+def unverified_worktree_states(inventory: list[dict[str, Any]]) -> list[str]:
+    """Rows of ``worktree_inventory`` whose dirty state could not be determined.
+
+    An enumerated worktree is not the same thing as an inspected one. A linked
+    worktree that moved HEAD mid-check, or whose path is no longer a readable
+    registered root, leaves its tracked/staged/untracked state unknown -- and an
+    unknown state must never read as clean in a preservation routine, exactly as
+    for stashes, archive tags and branch listings.
+    """
+    unverified: list[str] = []
+    for row in inventory:
+        status = row.get("dirty_status") or {}
+        if not status.get("checked"):
+            unverified.append(f"{row.get('path')}: {status.get('reason') or 'not checked'}")
+    return unverified
+
+
 def _listing(root: Path, args: list[str]) -> tuple[list[str] | None, str | None]:
     """Split a read-only listing into lines, keeping "command failed" distinct
     from "nothing to list".
