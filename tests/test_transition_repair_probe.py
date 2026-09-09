@@ -1,26 +1,25 @@
 """Temporary evidence-only Transition repair probe. Intentionally fails CI.
 
-Tests only broad, pre-trade-known filters and max-hold exits on the committed
-edge-decomposition candidate artifact. No runtime/config/strategy code changes.
+Tests the strongest broad repair lead from the first pass:
+MNQ + New York session + stop-only protection + 30-minute maximum hold.
+No target is used in this counterfactual because the documented fixed bracket
+is the diagnosed failure stage. No runtime/config/strategy code changes.
 """
 from __future__ import annotations
 
 import gzip
 import json
-from datetime import datetime
 from pathlib import Path
 
 import pytest
 
 CANDIDATES = Path("scripts/edge_decomposition_audit_results_candidates.jsonl.gz")
-LANES = ("transition_mnq", "transition_mnq_audit", "transition_mes_audit")
-HORIZONS = ("30m", "60m", "120m", "EOD")
-
-
-def _dt(value):
-    if not value:
-        return None
-    return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+LANES = ("transition_mnq", "transition_mnq_audit")
+# 1 MNQ tick = $0.50. 300 ticks = $150 before commission.
+STOP_TICKS = (60, 80, 100, 120, 160, 200, 240, 300)
+TICK_SIZE = 0.25
+DOLLARS_PER_POINT = 2.0
+ROUND_TURN_COMMISSION = 1.48
 
 
 def rows(lane):
@@ -28,13 +27,14 @@ def rows(lane):
     with gzip.open(CANDIDATES, "rt") as f:
         for line in f:
             r = json.loads(line)
-            if r.get("lane") == lane:
-                out.append(r)
+            if r.get("lane") == lane and r.get("instrument") == "MNQ" and r.get("session") == "new_york":
+                c = (r.get("control") or {}).get("30m") or {}
+                if c.get("net") is not None and c.get("mae_pts") is not None:
+                    out.append(r)
     return sorted(out, key=lambda r: (r.get("date", ""), r.get("bar_ts", "")))
 
 
-def _summ(vals):
-    vals = [float(v) for v in vals if v is not None]
+def summarize(vals):
     if not vals:
         return {"n": 0}
     gp = sum(v for v in vals if v > 0)
@@ -53,76 +53,44 @@ def _summ(vals):
     }
 
 
-def bracket_summary(rs):
+def stop_only_30m(rs, stop_ticks):
+    """Stop first if 30m MAE reaches the fixed cap; otherwise exit at 30m.
+
+    MAE is already measured over the same decision-time 30m control window, so
+    a touch of the stop threshold means the protective stop would have fired
+    before the timed exit. Stopped rows are charged the fixed stop distance plus
+    the same $1.48 round-turn commission used by the audit. This is conservative
+    with respect to stop triggering and does not credit any target.
+    """
+    stop_points = stop_ticks * TICK_SIZE
+    stop_net = -(stop_points * DOLLARS_PER_POINT) - ROUND_TURN_COMMISSION
     vals = []
+    stopped = 0
     for r in rs:
-        b = r.get("bracket") or {}
-        if b.get("status") == "RESOLVED" and b.get("net") is not None:
-            vals.append(float(b["net"]))
-    return _summ(vals)
-
-
-def control_summary(rs):
-    out = {}
-    for h in HORIZONS:
-        vals = []
-        for r in rs:
-            c = (r.get("control") or {}).get(h)
-            if c and c.get("net") is not None:
-                vals.append(float(c["net"]))
-        out[h] = _summ(vals)
-    return out
-
-
-def hybrid_summary(rs):
-    """Protective bracket OR max-hold exit, whichever is first."""
-    out = {}
-    for h in HORIZONS:
-        vals = []
-        bracket_first = time_first = 0
-        for r in rs:
-            b = r.get("bracket") or {}
-            c = (r.get("control") or {}).get(h) or {}
-            if b.get("status") != "RESOLVED" or b.get("net") is None or c.get("net") is None:
-                continue
-            bt, ct = _dt(b.get("exit_bar_ts")), _dt(c.get("exit_bar_ts"))
-            if bt is not None and ct is not None and bt <= ct:
-                vals.append(float(b["net"])); bracket_first += 1
-            else:
-                vals.append(float(c["net"])); time_first += 1
-        out[h] = {**_summ(vals), "bracket_first": bracket_first, "time_first": time_first}
-    return out
-
-
-def _bucket(rs, keyfunc):
-    buckets = {}
-    for r in rs:
-        key = str(keyfunc(r) or "UNKNOWN")
-        buckets.setdefault(key, []).append(r)
+        c = r["control"]["30m"]
+        mae = float(c["mae_pts"])
+        if mae >= stop_points:
+            vals.append(stop_net)
+            stopped += 1
+        else:
+            vals.append(float(c["net"]))
     return {
-        k: {
-            "bracket": bracket_summary(v),
-            "control": control_summary(v),
-            "hybrid": hybrid_summary(v),
-        }
-        for k, v in sorted(buckets.items())
+        **summarize(vals),
+        "stop_ticks": stop_ticks,
+        "stop_points": stop_points,
+        "max_stop_risk_dollars": round(stop_ticks * 0.50, 2),
+        "stopped": stopped,
+        "stop_rate": round(stopped / len(vals), 4) if vals else None,
     }
 
 
-def test_emit_transition_repair_probe():
+def test_emit_transition_stop_grid():
     report = {}
     for lane in LANES:
         rs = rows(lane)
+        baseline = summarize([float(r["control"]["30m"]["net"]) for r in rs])
         report[lane] = {
-            "n": len(rs),
-            "sample_keys": sorted(rs[0].keys()) if rs else [],
-            "all": {
-                "bracket": bracket_summary(rs),
-                "control": control_summary(rs),
-                "hybrid": hybrid_summary(rs),
-            },
-            "by_session": _bucket(rs, lambda r: r.get("session")),
-            "by_condition": _bucket(rs, lambda r: (r.get("gates") or {}).get("market_condition")),
-            "by_grade": _bucket(rs, lambda r: (r.get("gates") or {}).get("confluence_grade")),
+            "ny_30m_baseline_no_stop": baseline,
+            "stop_grid": {str(t): stop_only_30m(rs, t) for t in STOP_TICKS},
         }
-    pytest.fail("TRANSITION_REPAIR_PROBE=" + json.dumps(report, sort_keys=True))
+    pytest.fail("TRANSITION_STOP_GRID=" + json.dumps(report, sort_keys=True))
