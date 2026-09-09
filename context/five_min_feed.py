@@ -216,7 +216,7 @@ def retest_triggered(
 ) -> bool:
     """Pure close-confirmed retest predicate shared by live and replay.
 
-    The caller must supply only a completed 5-minute bar.  Keeping time/arm
+    The caller must supply only a completed 5-minute bar. Keeping time/arm
     lifecycle outside this predicate makes causal replay straightforward and
     prevents a research implementation from drifting away from live behavior.
     """
@@ -230,11 +230,14 @@ def retest_triggered(
 
 
 def record_five_min(payload, log_dir: str, for_date=None) -> dict:
-    """Append one 5M bar-close and feed the explicitly selected wide-stop route.
+    """Append one 5M bar-close and feed the paper-only evidence campaign.
 
-    The ordinary 5M arm/retest lane is unchanged. Wide-stop processing is
-    additive and fail-soft. `paper_sim` is the default route; Tradovate demo
-    requires the separate fail-closed route contract in wide_stop_execution.
+    The ordinary 5M arm/retest lane is unchanged. When the isolated wide-stop
+    evidence mode is explicitly ``paper_sim``, MNQ bars are offered to the
+    paper-only forward router. Any non-paper route value is disabled by
+    ``context.wide_stop_execution``. Evidence failures are fail-soft with
+    respect to market-data ingestion: the bar is still stored, while the
+    campaign takes no action for that invocation.
     """
     record = _history(log_dir).record(
         _root(payload.ticker),
@@ -256,37 +259,25 @@ def record_five_min(payload, log_dir: str, for_date=None) -> dict:
             from config.settings import load_config
             from context.wide_stop_execution import route
 
+            if route() != "paper_sim":
+                logger.error("wide-stop paper route disabled; no campaign action taken")
+                return record
+
+            from context.wide_stop_forward_router import process_paper_five_min_bar
+
             cfg = load_config()
             bars = _history(log_dir).recent(
                 "MNQ", 3000, for_date=for_date, lookback_days=10
             )
-            selected = route()
-            if selected == "paper_sim":
-                from context.wide_stop_forward_router import process_paper_five_min_bar
-
-                process_paper_five_min_bar(
-                    payload=payload,
-                    cfg=cfg,
-                    bars_5m=bars,
-                    log_dir=log_dir,
-                    for_date=for_date,
-                )
-            elif selected == "tradovate_demo":
-                from context.wide_stop_demo_runtime import process_demo_five_min_bar
-
-                process_demo_five_min_bar(
-                    payload=payload,
-                    cfg=cfg,
-                    bars_5m=bars,
-                    log_dir=log_dir,
-                    for_date=for_date,
-                )
-            else:
-                logger.error(
-                    "wide-stop execution route is invalid/disabled; no lane action taken"
-                )
-        except Exception:  # noqa: BLE001 — evidence/demo must never break 5m ingestion
-            logger.warning("wide-stop forward route failed closed", exc_info=True)
+            process_paper_five_min_bar(
+                payload=payload,
+                cfg=cfg,
+                bars_5m=bars,
+                log_dir=log_dir,
+                for_date=for_date,
+            )
+        except Exception:  # noqa: BLE001 — evidence must never break 5m ingestion
+            logger.warning("wide-stop paper collection failed closed", exc_info=True)
     return record
 
 
