@@ -29,6 +29,54 @@ Any change to these rules creates a new policy version and a separate evidence p
 
 The generic manual `options_manager` contract-quality surface is not the V1 evidence authority. The V1 collector itself hard-rejects <14 DTE. A manual `dte_exceptional` override must not be used to inject short-DTE rows into this campaign. Runtime V1 preflight also requires the manager policy pins `OPTIONS_MANAGER_MAX_AGGREGATE_OPEN_RISK_DOLLARS=1000` and `OPTIONS_MANAGER_RISK_MIN_DTE_DAYS=14`, and requires the old `options_companion` lane to remain disabled.
 
+## Bankroll / drawdown evaluation — separate from frozen trade policy
+
+The first evidence campaign must also answer whether the strategy is practical at the account size the operator actually wants to use. This is **analysis only** and does not change which V1 trades are collected.
+
+Evaluate the same ACTIVE V1 evidence through parallel cash-only long-option account scenarios:
+
+- **$1,500** starting balance — initial test bankroll
+- **$2,500** starting balance — intermediate comparison
+- **$5,000** starting balance — current maximum allocation ceiling if the demo proves itself
+
+The **$5,000 figure is an allocation ceiling, not an acceptable drawdown**.
+
+The account-equity analyzer uses conservative executable accounting:
+
+- entry debit at the recorded **ask**
+- open positions marked to the recorded **bid**
+- exits at the recorded **bid**
+- unrealized P&L is included in equity/drawdown, not hidden until close
+- long calls/puts are treated as cash-funded premium positions; a scenario that cannot fund an otherwise valid entry records a capital block rather than assuming margin
+- counterfactual rows are excluded from account P&L because they were never active paper positions
+- same-timestamp entry is processed before exit for conservative cash sufficiency
+- the existing V1 cost model remains `entry_at_ask_exit_at_bid_no_commission`; realistic fee sensitivity can be added to analysis later without altering the collected signal population
+
+Track at minimum for each bankroll:
+
+- ending equity and total return
+- realized and unrealized P&L
+- peak-to-trough drawdown in dollars and percent
+- lowest equity
+- longest time underwater
+- maximum simultaneous capital deployed
+- maximum simultaneous planned risk
+- maximum open positions
+- trades blocked only because that bankroll lacked available cash
+- minimum observed starting cash needed to fund every active entry
+
+### Swing / overnight accounting
+
+Swing positions remain open risk until they actually close. The analyzer therefore also preserves:
+
+- number of trades held across at least one market date
+- total position-nights
+- maximum simultaneous overnight positions
+- worst observed option-premium gap from the prior session's last bid to the next session's first bid
+- open-position unrealized P&L in the equity curve
+
+This lets the demo answer whether the system works economically at $1,500 or whether it needs more capital, without changing setup rules to force a desired answer.
+
 ## Active strategy populations
 
 Independent setup/timeframe identity is preserved so one population cannot erase another even when two setups choose the same option contract.
@@ -93,6 +141,8 @@ The first useful comparisons after sample accumulation are:
 - premium-stop-based planned risk vs realized adverse premium movement
 - Signa aligned/opposed/missing as observational cohorts
 - GEX available/unavailable/regime cohorts, without turning GEX into a hard gate mid-test
+- $1,500 vs $2,500 vs $5,000 bankroll feasibility and drawdown
+- intraday vs overnight/swing drawdown contribution
 
 ## Lifecycle / execution evidence
 
@@ -146,6 +196,7 @@ Preserve at minimum:
 - #536 active-vs-counterfactual risk/summary separation
 - #536 snapshot-path ambiguity telemetry
 - #536 explicit V1 scheduled runtime preflight
+- V1 account-equity replay for **$1,500 / $2,500 / $5,000** bankroll scenarios, including unrealized equity and swing/overnight exposure
 
 Do not reopen these because there are not yet enough winners/lossers. Missing strategy evidence is a collection problem, not proof of an implementation defect.
 
@@ -153,12 +204,12 @@ Do not reopen these because there are not yet enough winners/lossers. Missing st
 
 Use `docs/options-paper-v1-deployment-checklist.md`.
 
-1. Merge the reviewed #536 only with green CI.
-2. Deploy the resulting current `main` through the normal options deployment path.
-3. Set the explicit V1 runtime pins, including `OPTIONS_PAPER_V1_COLLECTION_ENABLED=true`, causal bar context, `$1,000` manager aggregate-risk pin, 14-day manager minimum DTE, and `OPTIONS_COMPANION_ENABLED=false`.
-4. Run one normal market-hours smoke proof covering active and counterfactual identity, real contract selection, exact-contract marks, active-risk separation, dashboard-summary separation, ambiguity telemetry, Discord suppression/alert behavior, and no order path.
+1. Deploy the reviewed current `main` through the normal options deployment path.
+2. Set the explicit V1 runtime pins, including `OPTIONS_PAPER_V1_COLLECTION_ENABLED=true`, causal bar context, `$1,000` manager aggregate-risk pin, 14-day manager minimum DTE, and `OPTIONS_COMPANION_ENABLED=false`.
+3. Run one normal market-hours smoke proof covering active and counterfactual identity, real contract selection, exact-contract marks, active-risk separation, dashboard-summary separation, ambiguity telemetry, Discord suppression/alert behavior, and no order path.
+4. Run the bankroll/drawdown report against the smoke database and confirm the $1,500 / $2,500 / $5,000 scenarios can read the same V1 rows and exact marks without changing collector state.
 5. Record the deployed commit SHA + smoke timestamp as the V1 evidence epoch.
 6. Collect natural candidates without tuning the frozen rules.
-7. Run the six-part isolation study only when each comparison has enough trustworthy observations to say something useful.
+7. Review both strategy decomposition and bankroll/drawdown evidence only when the sample is large enough to say something useful.
 
 **No optimization during collection. No proof, no trade.**
