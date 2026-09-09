@@ -1,0 +1,39 @@
+{
+  "provenance": {
+    "source_pr": 373,
+    "source_artifact": "scripts/mes_122_executable_parity_audit_results.json",
+    "source_blob_sha": "799073955c093a1ff8a5ffc428cb7834f6d2897e",
+    "source_snapshot_commit": "d06d885b422192757746ddcce3e24661c615f09c",
+    "known_candidate_count": 33,
+    "executable_count": 16,
+    "preempted_count": 7,
+    "blocked_no_engine_decision_count": 10
+  },
+  "executable_rows": [
+    {"date": "2025-09-05", "pnl": -20.0},
+    {"date": "2025-10-01", "pnl": 72.5},
+    {"date": "2025-10-08", "pnl": -21.25},
+    {"date": "2025-10-16", "pnl": 75.0},
+    {"date": "2025-11-13", "pnl": -23.75},
+    {"date": "2025-11-27", "pnl": -18.75},
+    {"date": "2025-12-01", "pnl": -37.5},
+    {"date": "2025-12-05", "pnl": -15.0},
+    {"date": "2025-12-17", "pnl": -26.25},
+    {"date": "2026-03-17", "pnl": 90.0},
+    {"date": "2026-03-30", "pnl": -52.5},
+    {"date": "2026-04-06", "pnl": 92.5},
+    {"date": "2026-04-09", "pnl": -16.25},
+    {"date": "2026-05-29", "pnl": 75.0},
+    {"date": "2026-06-03", "pnl": -21.25},
+    {"date": "2026-06-19", "pnl": -32.5}
+  ],
+  "preempted_rows": [
+    {"date": "2025-10-01", "pnl": -33.75, "winning_setup_strategy": "vwap_hold", "failed_gates": ["WEAK_BAR_CLOSE", "STRATEGY_NOT_PAPER_ELIGIBLE"]},
+    {"date": "2025-10-24", "pnl": 97.5, "winning_setup_strategy": "orb_reclaim", "failed_gates": ["ENTRY_DETACHED_FROM_PRICE"]},
+    {"date": "2025-10-30", "pnl": 90.0, "winning_setup_strategy": "vwap_hold", "failed_gates": ["STRATEGY_NOT_PAPER_ELIGIBLE"]},
+    {"date": "2026-02-20", "pnl": 80.0, "winning_setup_strategy": "vwap_hold", "failed_gates": ["ENTRY_DETACHED_FROM_PRICE"]},
+    {"date": "2026-03-13", "pnl": 150.0, "winning_setup_strategy": "vwap_hold", "failed_gates": ["ENTRY_DETACHED_FROM_PRICE"]},
+    {"date": "2026-03-26", "pnl": 75.0, "winning_setup_strategy": "vwap_hold", "failed_gates": ["ENTRY_DETACHED_FROM_PRICE"]},
+    {"date": "2026-04-24", "pnl": -26.25, "winning_setup_strategy": "vwap_hold", "failed_gates": ["WEAK_BAR_CLOSE", "STRATEGY_NOT_PAPER_ELIGIBLE"]}
+  ]
+}

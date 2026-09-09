@@ -1,0 +1,573 @@
+#!/usr/bin/env python3
+"""Full-engine proof for the MES strat_122 ENTRY_DETACHED fallback hypothesis.
+
+Evidence only. No runtime/config file is changed.
+
+The proof reuses PR #373's exact experiment shape while running on current
+engine/broker code:
+  1. isolated #337 reproduction to anchor the 33 canonical MES strat_122 rows;
+  2. the frozen PR #373 production configuration through ReplayEngine ->
+     DecisionEngine -> RiskEngine -> PaperBroker;
+  3. the same frozen configuration with fallback enabled ONLY on four
+     pre-registered bars where #373 proved the higher-ranked setup failed
+     exactly ENTRY_DETACHED_FROM_PRICE.
+
+The control configuration is deliberately frozen. The repository's shipped
+risk_rules.yaml changed after #373 (most importantly, the isolated ORB posture
+removed MES and strat_122 from the executable universe), so using today's
+shipped config would not reproduce the historical 16-trade control and would
+answer a different question.
+
+Control/treatment P&L comes only from OUTCOME rows written by the current
+ReplayEngine/PaperBroker, joined back to TRADE decisions by paper_order_id.
+Historical `known_pnl` is used only to prove the isolated #337 reproduction.
+
+The 313-day corpus is gitignored. Set AFS_122_CORPUS to the checkout containing
+`data/replay_corpus_v1_market_condition_fixed`, or place that directory at the
+normal repository path.
+"""
+from __future__ import annotations
+
+import argparse
+import dataclasses
+import json
+import os
+import sys
+import tempfile
+from datetime import timezone
+from pathlib import Path
+from typing import Any, Optional
+
+REPO = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO))
+
+from config.settings import load_config  # noqa: E402
+import replay.replay_engine as replay_module  # noqa: E402
+from replay.replay_engine import ReplayEngine  # noqa: E402
+from strategy.signal_engine import DecisionEngine as BaseDecisionEngine  # noqa: E402
+
+INSTRUMENT = "MES"
+STRATEGY = "strat_122"
+CORPUS = Path(
+    os.environ.get("AFS_122_CORPUS")
+    or (REPO / "data" / "replay_corpus_v1_market_condition_fixed")
+)
+KNOWN_TRADES = REPO / "scripts" / "strat_212_122_canonical_evidence_raw_trades.jsonl"
+SOURCE_SNAPSHOT = REPO / "scripts" / "mes_122_fallback_counterfactual_source_2026-09-08.json"
+
+# PR #373 head d06d885b422192757746ddcce3e24661c615f09c.
+# The enabled/disabled lists are also independently stored in SOURCE_SNAPSHOT.
+FROZEN_373_PERMISSION_STATUS = {
+    "orb_breakout": "PAPER_ELIGIBLE",
+    "orb_reclaim": "PAPER_ELIGIBLE",
+    "orb_rejection": "PAPER_ELIGIBLE",
+    "orb_false_break_fade": "PAPER_ELIGIBLE",
+    "vwap_hold": "SHADOW_ONLY",
+    "vwap_reclaim": "PAPER_ELIGIBLE",
+    "vwap_rejection": "PAPER_ELIGIBLE",
+    "pdh_reclaim": "SHADOW_ONLY",
+    "pdl_reclaim": "PAPER_ELIGIBLE",
+    "strat_212": "PAPER_ELIGIBLE",
+    "strat_122": "PAPER_ELIGIBLE",
+    "strat_122_observed": "PAPER_ELIGIBLE",
+    "strat_122_pullback": "PAPER_ELIGIBLE",
+    "strat_inside_break": "PAPER_ELIGIBLE",
+    "strat_outside_continuation": "PAPER_ELIGIBLE",
+    "strat_4hr_retrigger": "PAPER_ELIGIBLE",
+    "strat_4hr_retrigger_observed": "PAPER_ELIGIBLE",
+    "strat_322_first_live": "PAPER_ELIGIBLE",
+    "continuation_pullback": "PAPER_ELIGIBLE",
+    "ema_pullback_trend": "PAPER_ELIGIBLE",
+    "gap_fill": "PAPER_ELIGIBLE",
+    "ovn_high_sweep_reclaim": "PAPER_ELIGIBLE",
+    "ovn_low_sweep_reclaim": "PAPER_ELIGIBLE",
+    "impulse_first_pullback_observed": "PAPER_ELIGIBLE",
+    "trend_consolidation_break_observed": "PAPER_ELIGIBLE",
+}
+
+# Frozen from PR #373. No other bar is eligible for treatment.
+TARGETS: dict[str, dict[str, Any]] = {
+    "2025-10-24T12:30:00+00:00": {"winner": "orb_reclaim", "known_pnl": 97.50},
+    "2026-02-20T13:30:00+00:00": {"winner": "vwap_hold", "known_pnl": 80.00},
+    "2026-03-13T16:45:00+00:00": {"winner": "vwap_hold", "known_pnl": 150.00},
+    "2026-03-26T11:15:00+00:00": {"winner": "vwap_hold", "known_pnl": 75.00},
+}
+
+EXPECTED_CONTROL = {
+    "trades": 16,
+    "wins": 5,
+    "losses": 11,
+    "net": 120.00,
+    "profit_factor": 1.421053,
+    "h1": 11.25,
+    "h2": 108.75,
+    "max_drawdown": 121.25,
+}
+EXPECTED_TREATMENT = {
+    "trades": 20,
+    "wins": 9,
+    "losses": 11,
+    "net": 522.50,
+    "profit_factor": 2.833333,
+    "h1": 82.50,
+    "h2": 440.00,
+    "max_drawdown": 121.25,
+}
+
+
+def _json_lines(path: Path):
+    if not path.exists():
+        return
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            yield json.loads(line)
+
+
+def _load_known_mes_122() -> list[dict]:
+    rows = [
+        row
+        for row in _json_lines(KNOWN_TRADES)
+        if row.get("instrument") == INSTRUMENT and row.get("strategy") == STRATEGY
+    ]
+    return sorted(rows, key=lambda r: (r["date"], r["direction"]))
+
+
+def _frozen_373_config():
+    """Materialize #373's production posture on current code.
+
+    Only configuration that materially changed after #373 is frozen here. If
+    current engine/risk/broker behavior changes the old control, the proof must
+    fail rather than recreating old code.
+    """
+    base = load_config()
+    snapshot = json.loads(SOURCE_SNAPSHOT.read_text(encoding="utf-8"))["production_config"]
+    cfg = dataclasses.replace(
+        base,
+        allowed_instruments=["MES", "MNQ"],
+        required_instruments=["MES", "MNQ"],
+        max_trades_per_day=9999,
+        enabled_concepts=list(snapshot["enabled_concepts"]),
+        disabled_concepts_per_instrument={
+            key: list(value)
+            for key, value in snapshot["disabled_concepts_per_instrument"].items()
+        },
+        strategy_permission_gate_enabled=True,
+        strategy_permission_default_status="SHADOW_ONLY",
+        strategy_status=dict(FROZEN_373_PERMISSION_STATUS),
+        strategy_fallback_enabled=False,
+    )
+    if cfg.enabled_concepts != snapshot["enabled_concepts"]:
+        raise RuntimeError("#373 enabled_concepts snapshot mismatch")
+    if cfg.disabled_concepts_per_instrument != snapshot["disabled_concepts_per_instrument"]:
+        raise RuntimeError("#373 disabled_concepts_per_instrument snapshot mismatch")
+    if cfg.strategy_status.get("strat_122") != "PAPER_ELIGIBLE":
+        raise RuntimeError("#373 control must keep strat_122 paper-eligible")
+    if cfg.strategy_status.get("vwap_hold") != "SHADOW_ONLY":
+        raise RuntimeError("#373 control must keep vwap_hold shadow-only")
+    return cfg
+
+
+def _utc_iso(dt) -> str:
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc).isoformat()
+
+
+class ScopedFallbackDecisionEngine(BaseDecisionEngine):
+    """Treatment-only engine: flip the existing fallback switch on four bars."""
+
+    def evaluate(self, state, daily_state):  # type: ignore[override]
+        bar_ts = _utc_iso(state.timestamp)
+        if state.instrument != INSTRUMENT or bar_ts not in TARGETS:
+            return super().evaluate(state, daily_state)
+
+        original = self.config
+        if getattr(original, "strategy_fallback_enabled", False):
+            raise RuntimeError("control config unexpectedly has global strategy fallback enabled")
+        self.config = dataclasses.replace(original, strategy_fallback_enabled=True)
+        try:
+            return super().evaluate(state, daily_state)
+        finally:
+            self.config = original
+
+
+def _run(config, log_dir: Path, *, treatment: bool) -> dict[str, dict]:
+    candle_dir = CORPUS / INSTRUMENT
+    files = sorted(candle_dir.glob(f"{INSTRUMENT}_*.jsonl"))
+    if not files:
+        raise RuntimeError(
+            f"no corpus files found in {candle_dir}; set AFS_122_CORPUS to the "
+            "checkout containing replay_corpus_v1_market_condition_fixed"
+        )
+
+    log_dir.mkdir(parents=True, exist_ok=True)
+    original_cls = replay_module.DecisionEngine
+    replay_module.DecisionEngine = ScopedFallbackDecisionEngine if treatment else BaseDecisionEngine
+    decisions: dict[str, dict] = {}
+    outcomes: dict[str, dict] = {}
+    try:
+        engine = ReplayEngine(config=config, log_dir=str(log_dir))
+        for i, path in enumerate(files, 1):
+            date_hint = path.stem.replace(f"{INSTRUMENT}_", "")
+            engine.run(path, review_date=date_hint)
+            journal_path = log_dir / f"journal_{date_hint}.jsonl"
+            for entry in _json_lines(journal_path):
+                if entry.get("bar_ts"):
+                    decisions[str(entry["bar_ts"])] = entry
+                if entry.get("type") == "OUTCOME":
+                    outcome = entry.get("outcome") or {}
+                    order_id = outcome.get("paper_order_id")
+                    if order_id:
+                        outcomes[str(order_id)] = outcome
+            if i % 50 == 0 or i == len(files):
+                print(
+                    f"[{'treatment' if treatment else 'control'}] {i}/{len(files)} days",
+                    flush=True,
+                )
+    finally:
+        replay_module.DecisionEngine = original_cls
+    return {"decisions": decisions, "outcomes": outcomes}
+
+
+def _decision(run: dict[str, dict], bar_ts: str) -> Optional[dict]:
+    return run["decisions"].get(bar_ts)
+
+
+def _classify(run: dict[str, dict], bar_ts: str) -> dict[str, Any]:
+    entry = _decision(run, bar_ts)
+    if entry is None:
+        return {"classification": "NO_ENGINE_DECISION_AT_BAR"}
+
+    setup = entry.get("setup") or {}
+    decision = entry.get("decision")
+    setup_strategy = setup.get("strategy")
+    if setup_strategy == STRATEGY:
+        if decision != "TRADE":
+            return {
+                "classification": f"STRAT_122_{decision}",
+                "decision": decision,
+                "failed_gates": entry.get("failed_gates") or [],
+            }
+
+        order_id = entry.get("paper_order_id")
+        outcome = run["outcomes"].get(str(order_id)) if order_id else None
+        base = {
+            "strategy": STRATEGY,
+            "direction": setup.get("direction"),
+            "entry": setup.get("entry"),
+            "stop": setup.get("stop"),
+            "target": setup.get("target"),
+            "rr_ratio": setup.get("rr_ratio"),
+            "paper_order_id": order_id,
+        }
+        if outcome is None:
+            return {"classification": "TRADE_UNRESOLVED", **base}
+        result = outcome.get("result")
+        if result == "CANCELLED":
+            return {
+                "classification": "TRADE_CANCELLED",
+                **base,
+                "result": result,
+                "exit_reason": outcome.get("exit_reason"),
+                "pnl_dollars": float(outcome.get("pnl_dollars") or 0.0),
+            }
+        if result not in {"WIN", "LOSS", "BREAKEVEN"}:
+            return {"classification": "TRADE_UNKNOWN_OUTCOME", **base, "result": result}
+        return {
+            "classification": "TRADE_RESOLVED",
+            **base,
+            "result": result,
+            "exit_reason": outcome.get("exit_reason"),
+            "pnl_dollars": float(outcome.get("pnl_dollars") or 0.0),
+        }
+
+    return {
+        "classification": "PREEMPTED_BY_OTHER_STRATEGY" if setup_strategy else "NO_SETUP_AT_BAR",
+        "winning_setup_strategy": setup_strategy,
+        "decision": decision,
+        "failed_gates": entry.get("failed_gates") or [],
+    }
+
+
+def _bar_signature(run: dict[str, dict], bar_ts: str) -> tuple:
+    entry = _decision(run, bar_ts)
+    if entry is None:
+        return (None, None, None, (), None, None)
+    setup = entry.get("setup") or {}
+    order_id = entry.get("paper_order_id")
+    outcome = run["outcomes"].get(str(order_id)) if order_id else None
+    return (
+        entry.get("decision"),
+        setup.get("strategy"),
+        setup.get("direction"),
+        tuple(entry.get("failed_gates") or []),
+        (outcome or {}).get("result"),
+        round(float((outcome or {}).get("pnl_dollars") or 0.0), 6) if outcome else None,
+    )
+
+
+def _class_signature(row: dict[str, Any]) -> tuple:
+    return (
+        row.get("classification"),
+        row.get("strategy"),
+        row.get("direction"),
+        row.get("result"),
+        round(float(row.get("pnl_dollars") or 0.0), 6)
+        if row.get("pnl_dollars") is not None
+        else None,
+        row.get("entry"),
+        row.get("stop"),
+        row.get("target"),
+    )
+
+
+def _metrics(rows: list[dict], key: str) -> dict[str, Any]:
+    trades = [row for row in rows if row[key]["classification"] == "TRADE_RESOLVED"]
+    pnls = [float(row[key]["pnl_dollars"]) for row in trades]
+    wins = [p for p in pnls if p > 0]
+    losses = [p for p in pnls if p < 0]
+    mid = len(pnls) // 2
+    eq = peak = max_dd = 0.0
+    for pnl in pnls:
+        eq += pnl
+        peak = max(peak, eq)
+        max_dd = max(max_dd, peak - eq)
+    return {
+        "trades": len(trades),
+        "wins": len(wins),
+        "losses": len(losses),
+        "net": round(sum(pnls), 2),
+        "profit_factor": round(sum(wins) / abs(sum(losses)), 6) if wins and losses else None,
+        "h1": round(sum(pnls[:mid]), 2),
+        "h2": round(sum(pnls[mid:]), 2),
+        "max_drawdown": round(max_dd, 2),
+        "trade_dates": [row["date"] for row in trades],
+    }
+
+
+def _matches(actual: dict, expected: dict) -> bool:
+    for key, value in expected.items():
+        if isinstance(value, float):
+            if actual.get(key) is None or abs(float(actual[key]) - value) > 1e-5:
+                return False
+        elif actual.get(key) != value:
+            return False
+    return True
+
+
+def _anchor_rows(
+    known: list[dict],
+    isolated: dict[str, dict],
+    control: dict[str, dict],
+    treatment: dict[str, dict],
+) -> tuple[list[dict], list[dict]]:
+    iso_by_date: dict[str, list[tuple[str, dict]]] = {}
+    for bar_ts, entry in sorted(isolated["decisions"].items()):
+        setup = entry.get("setup") or {}
+        if setup.get("strategy") == STRATEGY and entry.get("decision") == "TRADE":
+            iso_by_date.setdefault(bar_ts[:10], []).append((bar_ts, entry))
+
+    consumed: dict[str, set[str]] = {}
+    rows: list[dict] = []
+    reproduction_mismatches: list[dict] = []
+    for known_trade in known:
+        date = known_trade["date"]
+        candidates = iso_by_date.get(date, [])
+        used = consumed.setdefault(date, set())
+        match = next(
+            (
+                (bar_ts, entry)
+                for bar_ts, entry in candidates
+                if bar_ts not in used
+                and (entry.get("setup") or {}).get("direction") == known_trade["direction"]
+            ),
+            None,
+        )
+        if match is None:
+            reproduction_mismatches.append({
+                "date": date,
+                "direction": known_trade["direction"],
+                "reason": "MISSING_IN_ISOLATED_RERUN",
+            })
+            continue
+
+        bar_ts, _ = match
+        used.add(bar_ts)
+        iso_cls = _classify(isolated, bar_ts)
+        expected_result = known_trade["result"]
+        expected_pnl = float(known_trade["pnl"])
+        if (
+            iso_cls.get("classification") != "TRADE_RESOLVED"
+            or iso_cls.get("result") != expected_result
+            or abs(float(iso_cls.get("pnl_dollars") or 0.0) - expected_pnl) > 1e-6
+        ):
+            reproduction_mismatches.append({
+                "date": date,
+                "bar_ts": bar_ts,
+                "expected_result": expected_result,
+                "expected_pnl": expected_pnl,
+                "isolated": iso_cls,
+            })
+
+        rows.append({
+            "date": date,
+            "bar_ts": bar_ts,
+            "known_direction": known_trade["direction"],
+            "known_result": expected_result,
+            "known_pnl": expected_pnl,
+            "isolated": iso_cls,
+            "control": _classify(control, bar_ts),
+            "treatment": _classify(treatment, bar_ts),
+        })
+    return rows, reproduction_mismatches
+
+
+def run_proof(out_path: Path) -> dict[str, Any]:
+    known = _load_known_mes_122()
+    if len(known) != 33:
+        raise RuntimeError(f"canonical MES strat_122 population drifted: expected 33, got {len(known)}")
+
+    control_cfg = _frozen_373_config()
+    isolated_cfg = dataclasses.replace(
+        control_cfg,
+        enabled_concepts=["strat_212", "strat_122"],
+        disabled_concepts_per_instrument={},
+    )
+
+    with tempfile.TemporaryDirectory(prefix="mes122_full_engine_") as tmp:
+        root = Path(tmp)
+        print("[pass 1] isolated #337 reproduction", flush=True)
+        isolated = _run(isolated_cfg, root / "isolated", treatment=False)
+        print("[pass 2] frozen #373 production control", flush=True)
+        control = _run(control_cfg, root / "control", treatment=False)
+
+        target_control: dict[str, Any] = {}
+        for bar_ts, expected in TARGETS.items():
+            cls = _classify(control, bar_ts)
+            target_control[bar_ts] = cls
+            if cls.get("classification") != "PREEMPTED_BY_OTHER_STRATEGY":
+                raise RuntimeError(f"target {bar_ts} no longer preempted in control: {cls}")
+            if cls.get("winning_setup_strategy") != expected["winner"]:
+                raise RuntimeError(f"target {bar_ts} winner drifted: {cls}")
+            if "ENTRY_DETACHED_FROM_PRICE" not in cls.get("failed_gates", []):
+                raise RuntimeError(f"target {bar_ts} is no longer an ENTRY_DETACHED failure: {cls}")
+
+        print("[pass 3] frozen #373 config + scoped treatment", flush=True)
+        treatment = _run(control_cfg, root / "treatment", treatment=True)
+
+    rows, reproduction_mismatches = _anchor_rows(known, isolated, control, treatment)
+    control_metrics = _metrics(rows, "control")
+    treatment_metrics = _metrics(rows, "treatment")
+
+    target_treatment = {bar_ts: _classify(treatment, bar_ts) for bar_ts in TARGETS}
+    targets_recovered = all(
+        cls.get("classification") == "TRADE_RESOLVED"
+        and cls.get("strategy") == STRATEGY
+        for cls in target_treatment.values()
+    )
+    target_outcomes_match_canonical = all(
+        target_treatment[bar_ts].get("result") == "WIN"
+        and abs(
+            float(target_treatment[bar_ts].get("pnl_dollars") or 0.0)
+            - float(expected["known_pnl"])
+        )
+        <= 1e-6
+        for bar_ts, expected in TARGETS.items()
+    )
+
+    canonical_changes = [
+        {
+            "bar_ts": row["bar_ts"],
+            "date": row["date"],
+            "control": row["control"],
+            "treatment": row["treatment"],
+        }
+        for row in rows
+        if _class_signature(row["control"]) != _class_signature(row["treatment"])
+    ]
+    non_target_canonical_changes = [
+        row for row in canonical_changes if row["bar_ts"] not in TARGETS
+    ]
+
+    changed_bars: list[dict] = []
+    collateral_trade_changes: list[dict] = []
+    all_bar_ts = sorted(set(control["decisions"]) | set(treatment["decisions"]))
+    for bar_ts in all_bar_ts:
+        c_sig = _bar_signature(control, bar_ts)
+        t_sig = _bar_signature(treatment, bar_ts)
+        if c_sig == t_sig:
+            continue
+        c = _decision(control, bar_ts)
+        t = _decision(treatment, bar_ts)
+        row = {"bar_ts": bar_ts, "control": c_sig, "treatment": t_sig}
+        changed_bars.append(row)
+        c_setup = (c or {}).get("setup") or {}
+        t_setup = (t or {}).get("setup") or {}
+        c_trade = (c or {}).get("decision") == "TRADE"
+        t_trade = (t or {}).get("decision") == "TRADE"
+        if (
+            (c_trade and c_setup.get("strategy") != STRATEGY)
+            or (t_trade and t_setup.get("strategy") != STRATEGY)
+        ):
+            collateral_trade_changes.append(row)
+
+    report = {
+        "corpus": str(CORPUS),
+        "control_config_source": "PR #373 head d06d885b + committed source snapshot",
+        "canonical_candidates": len(known),
+        "reproduction_mismatches": reproduction_mismatches,
+        "targets": TARGETS,
+        "target_control": target_control,
+        "target_treatment": target_treatment,
+        "control": control_metrics,
+        "treatment": treatment_metrics,
+        "expected_control": EXPECTED_CONTROL,
+        "expected_treatment": EXPECTED_TREATMENT,
+        "control_reproduced": _matches(control_metrics, EXPECTED_CONTROL),
+        "treatment_matches_counterfactual": _matches(treatment_metrics, EXPECTED_TREATMENT),
+        "all_four_targets_recovered": targets_recovered,
+        "target_outcomes_match_canonical": target_outcomes_match_canonical,
+        "canonical_changes": canonical_changes,
+        "non_target_canonical_changes": non_target_canonical_changes,
+        "all_changed_bar_count": len(changed_bars),
+        "changed_bars": changed_bars,
+        "collateral_non_strat122_trade_changes": collateral_trade_changes,
+    }
+    report["proof_pass"] = bool(
+        not reproduction_mismatches
+        and report["control_reproduced"]
+        and report["all_four_targets_recovered"]
+        and report["target_outcomes_match_canonical"]
+        and report["treatment_matches_counterfactual"]
+        and not report["non_target_canonical_changes"]
+        and not report["collateral_non_strat122_trade_changes"]
+    )
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(json.dumps(report, indent=2, default=str) + "\n", encoding="utf-8")
+    print(json.dumps({
+        "control": control_metrics,
+        "treatment": treatment_metrics,
+        "proof_pass": report["proof_pass"],
+        "reproduction_mismatches": len(reproduction_mismatches),
+        "non_target_canonical_changes": len(non_target_canonical_changes),
+        "collateral_non_strat122_trade_changes": len(collateral_trade_changes),
+    }, indent=2))
+    print(f"wrote {out_path}")
+    return report
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--out",
+        type=Path,
+        default=REPO / "scripts" / "mes_122_fallback_full_engine_proof_2026-09-08.json",
+    )
+    args = parser.parse_args()
+    run_proof(args.out)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
