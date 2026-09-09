@@ -63,8 +63,8 @@ def test_committed_transition_rows_have_inputs_needed_for_decision_close_ioc():
             assert (row.get("gates") or {}).get("decision_close") is not None
             delta = float(row["gates"]["decision_close"]) - float(row["entry"])
             saw_nonzero_delta = saw_nonzero_delta or abs(delta) > 1e-12
-            # The helper must classify every committed candidate as either a
-            # valid IOC fill or a real IOC cancellation; mismatch is not an error.
+            # The helper runs the real PaperBroker IOC opening, so every row is
+            # either a valid fill or a genuine cancellation/rejection.
             assert audit.planned_ioc_fill(row)["status"] in {"FILLED", "NO_FILL"}
     # Regression for the CI-discovered fact: do not collapse planned entry into
     # decision close. At least one committed candidate differs.
@@ -83,6 +83,15 @@ def test_ioc_cancels_when_market_is_beyond_long_cap():
     entry = audit.planned_ioc_fill(_row(close=210.0, planned_entry=200.0))
     assert entry["status"] == "NO_FILL"
     assert entry["reason"] == "ENTRY_NOT_FILLED"
+
+
+def test_ioc_rejects_favourable_fill_that_lands_beyond_its_stop():
+    # A long IOC may fill arbitrarily better than its limit. If that favourable
+    # market is already below the planned stop, the bracket is structurally
+    # invalid and must be rejected rather than booked as a fantasy trade.
+    entry = audit.planned_ioc_fill(_row(close=90.0, planned_entry=200.0))
+    assert entry["status"] == "NO_FILL"
+    assert entry["reason"] == "ENTRY_BRACKET_INVALID_AT_FILL"
 
 
 def test_decision_close_ioc_time_exit_math():
