@@ -152,15 +152,19 @@ def per_trade_static(arms: list[dict], exit_mode: str, cost_ticks: int, *, refer
             rows.append({**arm, "outcome": "NO_FILL", "pnl_net": None})
             continue
         res = resolve_via_broker(arm, fr["fill_price"], fr["fill_ts"], bars, exit_mode)
-        rows.append({**arm, "outcome": res["outcome"], "pnl_net": (res["pnl"] - cost) if res["outcome"] in {"WIN", "LOSS", "BREAKEVEN"} else None})
+        rows.append({**arm, "outcome": res["outcome"], "exit_reason": res.get("exit_reason"),
+                     "pnl_net": (res["pnl"] - cost) if res["outcome"] in {"WIN", "LOSS", "BREAKEVEN"} else None})
     return rows
 
 
 def summarize_trades(rows: list[dict]) -> dict:
     filled = [r for r in rows if r["outcome"] != "NO_FILL"]
     resolved = [r for r in rows if r["pnl_net"] is not None]
+    # Marketable IOC fills the broker refused to hold (ENTRY_BRACKET_INVALID_AT_FILL,
+    # #508). Reported on their own line, never blended into net.
+    invalid_at_fill = sum(1 for r in rows if r.get("exit_reason") == "ENTRY_BRACKET_INVALID_AT_FILL")
     if not resolved:
-        return {"armed": len(rows), "filled": len(filled), "resolved": 0}
+        return {"armed": len(rows), "filled": len(filled), "resolved": 0, "invalid_at_fill": invalid_at_fill}
     net = [r["pnl_net"] for r in resolved]
     gw = sum(v for v in net if v > 0); gl = -sum(v for v in net if v <= 0)
     dates = [r["signal_dt"] for r in resolved]
@@ -174,7 +178,7 @@ def summarize_trades(rows: list[dict]) -> dict:
     winners = sorted((v for v in net if v > 0), reverse=True)
     total = sum(net)
     return {
-        "armed": len(rows), "filled": len(filled), "fill_rate": round(len(filled) / len(rows), 3) if rows else None,
+        "invalid_at_fill": invalid_at_fill, "armed": len(rows), "filled": len(filled), "fill_rate": round(len(filled) / len(rows), 3) if rows else None,
         "resolved": len(resolved), "net": round(total, 2), "profit_factor": round(gw / gl, 3) if gl else None,
         "win_rate": round(sum(1 for v in net if v > 0) / len(net), 3),
         "h1_h2_by_trade_count": [round(sum(net[:mid_n]), 2), round(sum(net[mid_n:]), 2)],
@@ -215,7 +219,7 @@ def main() -> None:
 
     report = {
         "generated": datetime.now().astimezone().isoformat(),
-        "population_source": str(JOURNALS.relative_to(REPO)),
+        "population_source": "logs/retest_baseline_off/MNQ",
         "bars": "data/replay_polygon_5m/MNQ (5m Polygon, 2024-07-02 .. 2026-06-26)",
         "fill_model": "package ioc_fill(field='close'): arrival = first 5m bar >= bar_ts+15m, limit-IOC at entry -/+ 32 ticks, zero entry slippage; costs 1.24 + ticks*0.50 at the metrics layer",
         "direction_control": "entry at arrival-bar close +/- 1 adverse tick, exit at the close of the last 5m bar within 30/60/120 min and at the last bar of the day file, no stop, $1.48 round-turn",

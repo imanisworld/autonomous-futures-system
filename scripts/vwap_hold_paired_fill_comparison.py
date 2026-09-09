@@ -32,12 +32,14 @@ from __future__ import annotations
 import hashlib
 import json
 import statistics
+import os
 import sys
 from datetime import timedelta
 from pathlib import Path
 
-REPO = Path("/Users/djb.a.e/MAINVSCODE/autonomous-futures-system")
+REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
+DATA_REPO = Path(os.environ.get("AFS_DATA_REPO") or REPO)  # journals + 5m corpus are gitignored
 
 from context.bar_history import _parse_dt  # noqa: E402
 from execution.broker_interface import BracketOrder  # noqa: E402
@@ -49,8 +51,8 @@ COMMISSION_RT = 1.24
 SLIPPAGE_TICKS_RT = 2.0
 COST_RT = COMMISSION_RT + SLIPPAGE_TICKS_RT * TICK_VALUE_MNQ  # $2.24
 IOC_TOL_TICKS = 32.0  # live pin ENTRY_SLIPPAGE_TOLERANCE_TICKS_MNQ
-JOURNALS = REPO / "logs/retest_baseline_off/MNQ"
-FINE_ROOT = REPO / "data/replay_polygon_5m"
+JOURNALS = DATA_REPO / "logs/retest_baseline_off/MNQ"
+FINE_ROOT = DATA_REPO / "data/replay_polygon_5m"
 
 
 def load_arms() -> list[dict]:
