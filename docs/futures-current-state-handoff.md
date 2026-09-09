@@ -8,9 +8,16 @@ _As of 2026-09-09. This is the single current futures handoff. Historical audit 
 
 Core rule: **No proof, no run.**
 
-PR **#545** is merged to `main` as commit **`9caaaa3e2fbe5cb6ff20941229e3498794bcb6de`**. Its final merge-ref CI passed **4,952 tests, 7 skipped**. The repository now contains the clean PaperBroker-only three-lane collector, Daily persisted-state integrity guard, and this authoritative handoff.
+PR **#545** is merged to `main` as commit **`9caaaa3e2fbe5cb6ff20941229e3498794bcb6de`**. Its final merge-ref CI passed **4,952 tests, 7 skipped**. The repository contains the clean PaperBroker-only MNQ three-lane collector, Daily persisted-state integrity guard, and this authoritative handoff.
 
-**Nothing is claimed active on the VPS yet.** Deployment/environment/feed/epoch verification is the remaining activation gate.
+**Both paper campaigns are now ACTIVE on the VPS.** Verified live on 2026-09-09:
+
+- deployed release: **`08dd40a43505c97f9e021c7cdbf895613c46b524`** (contains #545, #547, #549, #551, #552, #553, #554, #555), promoted via `scripts/atomic_release.sh build/verify/promote`;
+- **MNQ three-lane campaign** (#545): `WIDE_STOP_LEDGER_MODE=paper_sim`, epoch **`2026-09-09T04:21:04Z`**;
+- **MES 15m 1-2-2 lane** (#555): `MES_122_PAPER_MODE=paper_sim`, epoch **`2026-09-09T06:12:55Z`**;
+- `LIVE_TRADING_ENABLED=false`, `SCHEDULE_MODE=always_on_shadow`, zero external-broker orders placed.
+
+Repository state is still not proof of box state — re-verify the box (`/proc/<pid>/cwd`, `/proc/<pid>/environ`) before asserting anything is running.
 
 ## Current paper campaign
 
@@ -74,9 +81,43 @@ Preregistered frozen-corpus IOC result used to justify forward paper collection:
 
 This is paper evidence, not a live-capital claim.
 
+### 4. MES 15m 1-2-2 (isolated lane, added 2026-09-09 by #555)
+
+- status: **PROMISING BUT UNPROVEN / PAPER EVIDENCE**
+- canonical `strat_212_122` detector; do not retune entry, stop, target or filters
+- MES only, **15m only** (`expected_timeframe_minutes=15` pinned in the lane config, not inherited)
+- 1 MES contract; all sizing ladders and win-streak scaling off
+- isolated hypothetical starting ledger: **$1,500**
+- original structural stop, fixed **2R** target, static exit, no breakeven trail, no runner
+- swing holds allowed across sessions and weekends
+- one open position at a time
+- gap-aware stop fills; pessimistic same-bar handling
+- $1.48 round-turn commission
+- 20% / 25% drawdown warnings, **30% hard paper halt**
+- no promotion path
+
+**Judge this lane on its realistic ledger, not raw PaperBroker P&L.** PR #553 proved that
+`strat_122` never routes through the broker's entry-fill machinery — `replay_engine.py` and
+`webhook/runner.py` both open it via `restore_position()` at the causal entry, which applies no
+adverse slippage, and same-bar `pre_resolved` trades exit via `force_resolve()` at the exact
+structural price. Forward paper inherits that same optimism. The lane therefore charges, for
+accounting: one adverse tick on every entry, one more on same-bar exits, plus commission.
+`realistic_balance`, the warnings and the 30% halt all run off that ledger;
+`raw_paper_balance_diagnostic_only` is kept for diagnostics and never drives the halt.
+
+Preregistered in-sample result used to justify forward collection, at a genuine **1 adverse tick
+per leg** (313-day corpus, 40 trades, 11W/29L): net **+$32.05**, PF **1.035**, max MTM drawdown
+**$229.11**, population stable (0 bracket-invalid, 0 disappeared). At 2 ticks per leg it is
+**negative** (−$57.95). The older **+$90.80 / PF 1.104** figure is the unslipped-entry number and
+is **retired as a realism headline**; the still older 38-trade / +$27.51 result is superseded
+outright. PF 1.035 sits far inside the null band (p95 1.94) — this is a thin candidate under
+observation, not an established edge.
+
 ## Campaign-wide safety boundary
 
-The paper router enforces a maximum of **3 new fills per trading day across this campaign**. The isolated day-strategy config is capped at one 4HR fill and one 3-2-2 fill; Daily uses one causal first-break opportunity and one open swing maximum. The real/global risk configuration remains untouched.
+The 5-minute paper router enforces a maximum of **3 new fills per trading day across the MNQ three-lane campaign**. The isolated day-strategy config is capped at one 4HR fill and one 3-2-2 fill; Daily uses one causal first-break opportunity and one open swing maximum. The real/global risk configuration remains untouched.
+
+The **MES 1-2-2 lane is not under that router or that 3-fill cap** — it is a separate observer on the 15-minute webhook path, bounded instead by one open position at a time plus every ordinary gate evaluated against its own isolated config.
 
 No campaign code may:
 
@@ -97,15 +138,17 @@ Paper collection (**PaperBroker**) is unconditional and always runs first, in it
 
 Regression tests pin the route selector, the paper/demo coexistence in the 5-minute hook, and the demo journal isolation.
 
+The **MES 1-2-2 lane has no route of its own and cannot acquire one.** It re-evaluates MES alerts on an isolated config *copy* that pins `paper_mode=True`; `webhook/runner.py` derives `simulate` from that, which selects `_paper_broker()` for execution and forces `_using_tradovate_position` False for the position's whole lifecycle. That holds regardless of the box's `BROKER` (currently `tradovate`) or `SCHEDULE_MODE`. A regression test asserts the non-paper broker constructor is never called even with `BROKER=tradovate`. The lane writes only to `logs/hypothetical_ledger/mes_122_1500`.
+
 Any route beyond these two is a separate proposal requiring a new audit.
 
 ## What remains least certain
 
-### A. The three ledgers are not one proven $5k portfolio
+### A. The three MNQ ledgers are not one proven $5k portfolio
 
 4HR uses a $4k isolated ledger; 3-2-2 and Daily each use their own $5k evidence ledger. This proves strategy-level survival under those assumptions. It **does not** prove all three can share one real $5,000 account simultaneously, because combined open risk, cross-strategy loss clustering, and combined drawdown have not been established.
 
-**Current mitigation:** keep attribution and balances separate. Do not aggregate the three paper balances or call this a unified $5k portfolio. Any future shared-capital study must replay the three chronological signal streams through one balance/risk state.
+**Current mitigation:** keep attribution and balances separate. Do not aggregate the three paper balances or call this a unified $5k portfolio. Any future shared-capital study must replay the three chronological signal streams through one balance/risk state. The MES 1-2-2 lane's $1,500 ledger is separate again and must not be pooled with these either.
 
 ### B. Daily multi-day restart/deploy behavior
 
@@ -121,6 +164,22 @@ Forward outcomes depend on the sequence of completed 5-minute bars. If bars are 
 
 **Current mitigation:** a known material feed gap makes the affected outcome invalid/unresolved. Do not repair missing path data with later OHLC, MAE summaries, or optimistic assumptions. Complete automated exchange/session gap detection remains a forward-monitoring item.
 
+### D. Whether MES 1-2-2 has an edge at all
+
+At a realistic 1 adverse tick per leg the in-sample result is **+$32.05 / PF 1.035** over 40
+trades, and **2 ticks per leg is negative**. PF 1.035 is far inside the null band (p95 1.94), and
+n=40 cannot separate that from noise in either direction. The out-of-sample window was n=3
+isolated / n=1 control — far too small to validate anything.
+
+What #553 did settle is that this is no longer a *simulator* question: the population is stable
+under realistic execution cost (0 bracket-invalid, 0 trades disappeared, no outcome flips at 1-3
+ticks), and replay and forward paper share the same fill treatment. What remains open is simply
+whether the edge exists.
+
+**Current mitigation:** forward paper only, fixed 1 MES, no scaling, no parameter changes during
+the epoch, judged on the realistic ledger, with a 30% hard halt. A materially larger independent
+sample is required before the word "validated" is used.
+
 ## Repository verification completed
 
 - #545 merged to `main`: `9caaaa3e2fbe5cb6ff20941229e3498794bcb6de`
@@ -132,10 +191,13 @@ Forward outcomes depend on the sequence of completed 5-minute bars. If bars are 
 - capital/role regression tests present
 - Miyagi remains shadow-only
 - superseded handoff/Daily PRs closed while Git history was retained
+- **#547** paper/replay parity (gap-aware stop pricing; MES-only `strat_122` 8h swing exemption) merged `4112fe3`
+- **#553** per-leg execution-realism gate merged `dae11f1` — evidence only, no runtime file touched
+- **#555** isolated MES 1-2-2 lane merged `08dd40a` — no `risk_rules.yaml`, `instruments.allowed` or `enabled_concepts` change; ships off by default
 
-## VPS activation gates — all required
+## VPS activation gates — verified at activation, and required again for any re-activation
 
-Before the paper campaign is enabled on the box, verify on the exact release being deployed:
+Both campaigns cleared these on 2026-09-09 (MNQ at `04:21:04Z`, MES 1-2-2 at `06:12:55Z`). Re-verify every item on the exact release being deployed before any future enable, re-enable, or epoch reset:
 
 1. deployed release SHA is the intended `main` commit or a reviewed descendant containing #545;
 2. `LIVE_TRADING_ENABLED=false` in effective runtime configuration;
@@ -150,13 +212,27 @@ Before the paper campaign is enabled on the box, verify on the exact release bei
 
 Missing proof on any item means **do not enable the campaign**.
 
-## Other strategy status — separate from this campaign
+For the MES 1-2-2 lane specifically, items 4-6 read: `MES_122_PAPER_MODE=paper_sim`;
+`MES_122_PAPER_EPOCH_START` a fresh offset-aware timestamp (the lane fails closed without one, and
+a naive timestamp is rejected at config load); MES 15-minute alerts actually arriving. Both
+variables are in `PROOF_CRITICAL_RUNTIME_OVERRIDES`, so each needs its matching
+`EXPECTED_PROOF_*` pin — an active but unpinned proof-critical override makes the box
+irreproducible and degrades the box guard.
+
+What was verified live at MES activation: lane `paper_sim` and active; epoch matching exactly;
+realistic balance $1,500 with 0 resolved trades; journal writing under
+`logs/hypothetical_ledger/mes_122_1500`; MES 15m alerts reaching the lane and producing genuine
+gated decisions; 1 MES contract; no Tradovate route; real-book decisions byte-identical before and
+after (MES still `NO_TRADE "not in allowed universe"`, real config unchanged at
+`allowed_instruments=['MNQ']` / `enabled_concepts=['orb_breakout']`); the MNQ lanes' persisted
+state byte-identical across the restart.
+
+## Other strategy status — outside the four active lanes
 
 - **12HR Miyagi:** shadow/research only; no fills.
 - **Inverse ORB:** old positive headline retired after decision-time/bracket-geometry correction; do not revive from the invalid baseline.
 - **VWAP Hold:** corrected decision-time evidence negative; no promotion.
-- **Transition reclaim:** separate repair investigation; not part of these three lanes.
-- **MES 1-2-2:** separate evidence/root-cause investigation; not part of these three lanes.
+- **Transition reclaim:** separate repair investigation; not part of these four lanes.
 - **ORB Reclaim / source ORB Breakout:** negative/weak corrected evidence; not part of this campaign.
 
 ## Superseded / historical PRs
@@ -170,7 +246,7 @@ These are not current execution authority:
 - **#539** — Daily cross-check documentation; historical evidence only; closed.
 - **#476** — September 7 handoff; historical only; closed.
 
-Do not delete historical evidence files merely because they are old. Closed PRs and Git history remain the audit trail. Separate active investigations such as Transition and MES 1-2-2 remain open because they are not duplicates of this campaign.
+Do not delete historical evidence files merely because they are old. Closed PRs and Git history remain the audit trail. Transition reclaim remains a separate open investigation because it is not a duplicate of this campaign. MES 1-2-2 is no longer separate — it is lane 4 above.
 
 ## Do not touch
 
@@ -179,17 +255,25 @@ Do not delete historical evidence files merely because they are old. Closed PRs 
 - Daily 2-2 stop/target/filter bundle without a new preregistered one-variable study
 - global `risk_rules.yaml` merely to make these paper lanes pass
 - real-book enabled strategy list
+- canonical `strat_212_122` detector and the MES 1-2-2 entry/stop/2R-target bundle
 - bracket-validity guard
 - pessimistic same-bar handling
 
 ## Safe next step
 
-**Repository work for this paper campaign is complete.**
+**Repository work is complete and both campaigns are collecting.** The remaining work is
+observation, not building.
 
 Next:
 
-1. verify the exact VPS release and all activation gates above;
-2. enable only the PaperBroker campaign after those checks pass;
-3. collect forward evidence, specifically watching restart/state integrity and 5-minute feed completeness;
-4. keep the three ledgers separate until a chronological shared-$5k portfolio study proves otherwise;
-5. do not promote based on historical/backtest results alone.
+1. let forward evidence accumulate; change nothing about strategy, sizing, stops, targets, filters
+   or routes during an epoch;
+2. watch restart/state integrity and 5-minute feed completeness for the MNQ lanes, and
+   overnight/weekend carry behaviour for the two swing lanes (Daily 2-2 and MES 1-2-2);
+3. judge MES 1-2-2 on its realistic 1-tick-per-leg ledger, never raw PaperBroker P&L; treat its
+   $229.11 historical max MTM drawdown as a review reference, not a guaranteed limit;
+4. keep every ledger separate — the three MNQ ledgers are not one proven $5k portfolio, and the
+   MES $1,500 ledger is separate again;
+5. do not promote based on historical/backtest results alone, and never convert paper results into
+   a promotion decision automatically;
+6. re-verify the box rather than trusting this file: a remembered SHA is not evidence.

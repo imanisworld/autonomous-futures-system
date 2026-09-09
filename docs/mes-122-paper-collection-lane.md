@@ -1,8 +1,9 @@
 # MES 15m 1-2-2 — isolated forward-paper collection lane (2026-09-09)
 
-**This PR does not start collection.** It adds the lane, off by default
-(`MES_122_PAPER_MODE=observe_only`). Activation is a separate, explicit box step,
-listed at the end.
+**LIVE since 2026-09-09.** The lane is activated on the box and collecting on epoch
+**`2026-09-09T06:12:55Z`**, release `08dd40a43505c97f9e021c7cdbf895613c46b524`. It still ships
+*off* by default (`MES_122_PAPER_MODE=observe_only`); activation is the explicit box step recorded
+at the end of this file.
 
 Approved after PR #553's per-leg execution-realism gate: at a genuine 1 adverse tick
 per leg the corrected 40-trade population is **+$32.05 / PF 1.035**, population stable
@@ -128,9 +129,25 @@ unrealized excursion sets `exceeds_halt_threshold_observational` while leaving
 Historical reference: max MTM drawdown at 1 tick per leg was **$229.11**. That is a
 reference, not a guaranteed limit — crossing it is a review event.
 
-## Activation — NOT done by this PR
+## Activation — done 2026-09-09
 
-Nothing collects until these are set on the box and the service is restarted:
+Performed on the box after promoting `08dd40a`: appended the four lines below to
+`/root/afs-shared/.env` (backup at `.env.bak-pre-mes122-20260909T061255Z`), restarted
+`futures-bot`, then restarted `afs-watcher` as every release requires.
+
+```
+MES_122_PAPER_MODE=paper_sim
+EXPECTED_PROOF_MES_122_PAPER_MODE=paper_sim
+MES_122_PAPER_EPOCH_START=2026-09-09T06:12:55Z
+EXPECTED_PROOF_MES_122_PAPER_EPOCH_START=2026-09-09T06:12:55Z
+```
+
+Verified live: lane `paper_sim`/active, epoch matching, realistic balance $1,500, 0 resolved
+trades, 1 MES contract, timeframe 15 pinned, journal writing under
+`logs/hypothetical_ledger/mes_122_1500`, MES 15m alerts reaching the lane, no Tradovate route, and
+the real book byte-identical before and after.
+
+For any future re-activation or epoch reset, the same steps apply:
 
 1. `MES_122_PAPER_MODE=paper_sim`
 2. `MES_122_PAPER_EPOCH_START=<fresh offset-aware UTC timestamp>` (required; the lane
