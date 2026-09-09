@@ -1,6 +1,10 @@
 # Options Paper V1 — Deployment / Evidence Start Gate
 
-This checklist is the final gate before the first `OPTIONS_PAPER_V1` evidence epoch is counted. It is options-only and does not authorize broker execution.
+This is the operational gate for starting the first `OPTIONS_PAPER_V1` evidence epoch. Current-state authority is `docs/options-current-state-handoff.md`.
+
+Options-ready baseline: **`9d008a0dcdcb69270d80b663c678b4522f27ebb6`** with **4,921 passed / 7 skipped / 2 warnings**. If `main` advances before deployment, verify the deployed commit still contains this options baseline and has green CI.
+
+**Current state: deployment not yet proven; evidence epoch not started.**
 
 ## Required runtime mode
 
@@ -18,15 +22,17 @@ OPTIONS_MANAGER_RISK_MIN_DTE_DAYS=14
 OPTIONS_COMPANION_ENABLED=false
 ```
 
-The box must have valid read-only option-market-data credentials/account pin and valid Alpaca data/calendar credentials for causal SIP bar context. Secrets stay in the box environment.
+The box must have valid read-only option-market-data credentials/account pin and valid Alpaca data/calendar credentials for causal SIP bar context. Secrets stay on the box.
 
-Scheduled V1 collection fails closed when required causal/contract data or policy pins are missing.
+Scheduled V1 collection must fail closed when required causal/contract data or policy pins are missing.
 
-## Frozen V1 policy
+Old PR #446 / `claude/options-data-health` is **not** a prerequisite for this V1 deployment. Do not revive the old companion/data-health path to satisfy this checklist; fix any newly proven provider defect in the active `alert_ranker` path.
 
-- max planned risk per active paper trade: **$300**
-- max aggregate active planned risk: **$1,000**
-- no position-count cap
+## Frozen V1 policy to verify
+
+- max planned risk per ACTIVE paper trade: **$300**
+- max aggregate ACTIVE planned risk: **$1,000**
+- no hard position-count cap
 - 45+ DTE preferred
 - 14–44 DTE allowed with `DTE_EXCEPTION`
 - <14 DTE excluded
@@ -34,12 +40,14 @@ Scheduled V1 collection fails closed when required causal/contract data or polic
 - 25% adverse premium stop
 - underlying invalidation required
 - Signa observational only
-- GEX optional context
+- GEX optional
 - low liquidity / wide spread / missing critical quote data fails closed
 
-Do not use a generic/manual `dte_exceptional` override to inject <14 DTE rows into this campaign.
+Do not use generic/manual exceptions to inject <14 DTE rows into V1.
 
-## Active populations
+## Populations expected
+
+ACTIVE:
 
 - 30m 2-1-2 continuation
 - Daily 2-1-2 continuation
@@ -47,27 +55,42 @@ Do not use a generic/manual `dte_exceptional` override to inject <14 DTE rows in
 - Daily 3-2-2 continuation / reversal
 - Daily 3-2 developing — WATCH only
 
-## Counterfactual / observation populations
-
-These rows never alert and never consume the active $1,000 risk budget:
+COUNTERFACTUAL / observation:
 
 - mechanically valid 30m/Daily signals rejected by market/target filters
 - 1H Strat observations
 - `4H_RTH` Strat observations built from session-anchored causal 30m bars
 
-They remain separate from ACTIVE P&L and risk accounting.
+Counterfactual rows must never alert, reserve ACTIVE risk, or enter ACTIVE dashboard P&L.
 
-## Bankroll / drawdown study
+## Market-hours smoke proof
 
-Replay the same ACTIVE V1 rows through cash-only long-option scenarios:
+Do not start the evidence epoch until one normal-session smoke proves all of the following on the deployed release:
 
-- **$1,500** starting balance
-- **$2,500** starting balance
-- **$5,000** starting balance / current maximum allocation ceiling
+1. deployed SHA is recorded and matches the intended reviewed release;
+2. scheduled scan runs with V1 preflight satisfied;
+3. fresh causal 30m bars and SPY/QQQ context are present;
+4. setup/timeframe identity is correct;
+5. selected expiration is sane and follows 45+ / 14–44 policy;
+6. selected strike/right exists in the returned chain;
+7. bid/ask, spread, volume, and open interest pass quality checks;
+8. planned risk math and ACTIVE aggregate risk are correct;
+9. ACTIVE and COUNTERFACTUAL rows are distinct and cannot dedupe each other;
+10. COUNTERFACTUAL rows do not consume ACTIVE risk;
+11. entry contract mark is written to SQLite;
+12. the exact same option symbol is re-quoted on the next resolver cycle;
+13. ACTIVE dashboard summary excludes counterfactual outcomes;
+14. Discord sends/suppresses according to the existing trade-proof gate;
+15. no order/broker path is reachable from the scanner;
+16. an `options_v1_diagnostic_snapshots` ENTRY row is written;
+17. the next resolver cycle writes a diagnostic MARK/RESOLUTION snapshot with underlying price + latest option quote;
+18. entry trigger + underlying entry price are present so entry extension is computable;
+19. quote timestamp/age and actual Greeks/IV presence or absence are visible;
+20. ambiguity/path metadata is preserved rather than guessed.
 
-The $5,000 figure is **not** an acceptable drawdown.
+## Read-only smoke reports
 
-Run:
+### Bankroll / drawdown / swing
 
 ```bash
 python -m alert_ranker.account_equity \
@@ -76,69 +99,44 @@ python -m alert_ranker.account_equity \
   --capital-ceiling 5000
 ```
 
-The report must use ask entry, bid mark-to-market/exit, include unrealized P&L, exclude counterfactual rows from account P&L, record capital-only blocks, and preserve overnight/swing exposure.
+Confirm all three scenarios read the same ACTIVE V1 rows without changing collector state and report:
 
-## Diagnostic evidence study
+- realized + unrealized equity;
+- peak-to-trough drawdown $/%;
+- capital deployed + planned risk;
+- capital-only blocked trades;
+- minimum observed cash needed to fund the sequence;
+- overnight holds / position-nights / max overnight positions / observed overnight premium gaps.
 
-Run:
+The **$5,000 value is an allocation ceiling, not an acceptable drawdown**.
+
+### Strategy diagnostics
 
 ```bash
 python -m alert_ranker.v1_diagnostics logs/options_scanner.sqlite \
   --output logs/options_v1_diagnostics.json
 ```
 
-The diagnostic report must be read-only and must preserve:
+Confirm the report reads the same smoke data without mutation and exposes:
 
-- option MAE/MFE;
-- underlying MAE/MFE;
-- directional entry extension beyond the mechanical trigger;
-- quote age and observation gaps;
-- missing Greeks/IV and provider errors;
-- resolution/path ambiguity;
+- option + underlying MAE/MFE;
+- directional entry extension;
+- quote age + observation gaps;
+- missing Greeks/IV + provider errors;
+- ambiguity flags;
 - evidence quality (`HIGH/MEDIUM/LOW`);
 - ACTIVE vs COUNTERFACTUAL identity;
 - setup/timeframe sample counts and uncertainty ranges;
-- recorded executable P&L plus analysis-only friction stresses.
+- all three friction views: recorded executable, fee stress, fee + 1c/share slippage stress.
 
-Friction overlays are sensitivity tests only:
+## Evidence epoch start
 
-1. recorded ask-entry / bid-exit;
-2. +$0.65 per contract per leg fee stress;
-3. same fee stress + $0.01/share adverse slippage on both legs.
+Only after the smoke and both reports pass:
 
-They never overwrite canonical V1 outcomes.
+1. record deployed commit SHA;
+2. record smoke timestamp;
+3. mark that pair as the V1 evidence epoch;
+4. collect natural candidates without changing setup, DTE, stop, target, filter, or risk rules;
+5. any later rule change creates a new policy/evidence cohort.
 
-## Lifecycle / ambiguity rule
-
-The exact selected option contract is re-quoted on the scheduled resolver cadence. Each resolution records that the path between snapshots is not directly observed.
-
-If premium stop and underlying target are both true on the same observed snapshot, the row is explicitly tagged ambiguous and pessimistically counted as a loss while preserving the ambiguity metadata.
-
-## Market-hours smoke proof
-
-Do not start the evidence epoch until one normal-session smoke proves all of the following on the deployed release:
-
-1. scheduled scan runs with V1 preflight satisfied;
-2. fresh causal 30m bars and SPY/QQQ context are present;
-3. setup/timeframe identity is correct;
-4. selected expiration is sane and follows 45+ / 14–44 policy;
-5. selected strike/right exists in the returned chain;
-6. bid/ask, spread, volume, and open interest pass quality checks;
-7. planned risk math and active aggregate risk are correct;
-8. active and counterfactual rows are distinct and cannot dedupe each other;
-9. counterfactual rows do not consume aggregate active risk;
-10. entry contract mark is written to SQLite;
-11. the exact same option symbol is re-quoted on the next resolver cycle;
-12. active dashboard summary excludes counterfactual outcomes;
-13. Discord sends/suppresses according to the existing trade-proof gate;
-14. no order/broker path is reachable from the scanner;
-15. an `options_v1_diagnostic_snapshots` ENTRY row is written for the shadow setup;
-16. the next resolver cycle writes a diagnostic MARK/RESOLUTION snapshot with underlying price + latest option quote;
-17. entry trigger and underlying entry price are present so entry extension is computable;
-18. quote timestamp/age and Greeks/IV presence are visible in diagnostics;
-19. `alert_ranker.account_equity` reads the smoke rows/marks without mutating collector state;
-20. the $1,500 / $2,500 / $5,000 replay reports equity, drawdown, capital, risk, blocks, and swing metrics;
-21. `alert_ranker.v1_diagnostics` reads the same smoke data without mutating collector state;
-22. the diagnostic report shows MAE/MFE, entry extension, quality flags, and all three friction views.
-
-After this passes, record the deployed commit SHA and smoke timestamp as the V1 evidence epoch. From that point forward, do not tune setup, DTE, stop, target, filter, or risk rules inside the same population. A rule change creates a new policy version and evidence cohort.
+**No proof, no trade.**
