@@ -7,7 +7,7 @@
 # incrementing the version and updating CHANGELOG.md.
 # ============================================================
 
-version: "1.2.0"
+version: "1.2.1"
 
 # ─── Trading Mode ────────────────────────────────────────────
 trading_mode:
@@ -324,11 +324,14 @@ execution_safety:
 # UNCOMMENTED at SHADOW_ONLY below because that demotion is a real,
 # evidence-based classification independent of this isolated lane (see their
 # own comments) — not something to "restore" when the lane concludes.
+# 2026-09-08: inverse/base ORB Breakout evidence is retired as BROKEN. Keep
+# orb_breakout code enabled for provenance/observation, but it is no longer
+# permitted to execute; MNQ is also instrument-disabled below as a second gate.
 strategy_permission_gate:
   enabled: true
   default_status: SHADOW_ONLY
   strategy_status:
-    orb_breakout: PAPER_ELIGIBLE
+    orb_breakout: SHADOW_ONLY
     # orb_reclaim: PAPER_ELIGIBLE
     # orb_rejection: PAPER_ELIGIBLE
     # orb_false_break_fade: PAPER_ELIGIBLE
@@ -500,6 +503,10 @@ strategy:
       # relying solely on the code-level guard.
       - strat_322_first_live
     MNQ:
+      # 2026-09-08: ORB Breakout base and inverse evidence retired BROKEN.
+      # Keep the concept enabled for provenance/observation, but block it from
+      # this instrument so the active executable set is empty.
+      - orb_breakout
       # 2026-07-27: strat_122 re-enabled ABOVE in enabled_concepts for MES only
       # (PR #337 evidence: MES122 PROMISING BUT UNPROVEN). The SAME PR's MNQ122
       # cell was WAIT (insufficient/negative evidence) -- explicitly excluded
@@ -574,11 +581,11 @@ options_trading:
   session_windows:
     new_york:
       - start: "09:35"
-        end: "11:30"
+        end:   "11:30"
         allow: true
         note: "Opening drive after first 5 minutes"
       - start: "13:00"
-        end: "15:30"
+        end:   "15:30"
         allow: true
         note: "Afternoon continuation window"
       - default: false
