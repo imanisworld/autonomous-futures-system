@@ -1026,29 +1026,19 @@ def test_runner_force_closes_friday_position_on_monday(config, tmp_path):
     assert JournalLogger(log_dir=log_dir).get_daily_state(friday).has_open_position is False
 
 
-def test_runner_does_not_timeout_strat_122_swing_position(config, tmp_path):
-    """strat_122 is a swing-capable paper strategy: an open position older than
-    8 hours must NOT be force-closed on age alone (unlike every other strategy,
-    see test_runner_force_closes_stale_previous_day_position above)."""
-    from journal.journal_logger import JournalLogger
-    from webhook.runner import process_alert
-
-    log_dir = str(tmp_path / "logs")
-    yesterday = date(2026, 5, 22)
-    today = date(2026, 5, 23)
-    journal = JournalLogger(log_dir=log_dir)
+def _seed_strat_122_position(journal, for_date, *, instrument="MES", entry=6800.0, stop=6790.0, target=6820.0):
     journal._append({
-        "ts": f"{yesterday.isoformat()}T17:55:00+00:00",  # >8h old by today's bar
-        "instrument": "MNQ",
+        "ts": f"{for_date.isoformat()}T17:55:00+00:00",  # >8h old by the next day's bar
+        "instrument": instrument,
         "session": "new_york",
         "decision": "TRADE",
         "reason": "strat_122 swing carry test",
         "market_condition": "TRENDING",
         "setup": {
             "direction": "LONG",
-            "entry": 19500.0,
-            "stop": 19460.0,
-            "target": 19580.0,
+            "entry": entry,
+            "stop": stop,
+            "target": target,
             "rr_ratio": 2.0,
             "strategy": "strat_122",
             "notes": None,
@@ -1056,7 +1046,55 @@ def test_runner_does_not_timeout_strat_122_swing_position(config, tmp_path):
         },
         "risk_check": {"result": "APPROVED", "failed_rule": None, "reason": None},
         "outcome": None,
-    }, yesterday)
+    }, for_date)
+
+
+def test_runner_does_not_timeout_mes_strat_122_swing_position(config, tmp_path):
+    """MES strat_122 is the one swing-capable paper strategy/instrument pair
+    under evidence collection: an open position older than 8 hours must NOT
+    be force-closed on age alone."""
+    from journal.journal_logger import JournalLogger
+    from webhook.runner import process_alert
+
+    log_dir = str(tmp_path / "logs")
+    yesterday = date(2026, 5, 22)
+    today = date(2026, 5, 23)
+    journal = JournalLogger(log_dir=log_dir)
+    _seed_strat_122_position(journal, yesterday, instrument="MES")
+
+    result = process_alert(
+        _base_payload(
+            ticker="MES1!",
+            timestamp="2026-05-23T14:30:00+00:00",
+            high=6810.0,
+            low=6795.0,
+            close=6803.0,
+        ),
+        config=config,
+        log_dir=log_dir,
+        for_date=today,
+    )
+
+    assert result["resolution"] != "FORCE_CLOSE_SESSION_TIMEOUT"
+    assert result["decision"] == "BLOCKED_OPEN_POSITION"
+    assert JournalLogger(log_dir=log_dir).get_daily_state(yesterday).has_open_position is True
+
+
+def test_runner_still_times_out_mnq_strat_122(config, tmp_path):
+    """The MES strat_122 swing exemption is scoped to MES only: MNQ strat_122
+    must keep the ordinary 8h stale-position timeout, exactly like every other
+    instrument/strategy pair (see test_runner_force_closes_stale_previous_day_position
+    for a non-strat_122 example)."""
+    from journal.journal_logger import JournalLogger
+    from webhook.runner import process_alert
+
+    log_dir = str(tmp_path / "logs")
+    yesterday = date(2026, 5, 22)
+    today = date(2026, 5, 23)
+    journal = JournalLogger(log_dir=log_dir)
+    _seed_strat_122_position(
+        journal, yesterday, instrument="MNQ", entry=19500.0, stop=19460.0, target=19580.0
+    )
 
     result = process_alert(
         _base_payload(
@@ -1070,9 +1108,45 @@ def test_runner_does_not_timeout_strat_122_swing_position(config, tmp_path):
         for_date=today,
     )
 
-    assert result["resolution"] != "FORCE_CLOSE_SESSION_TIMEOUT"
-    assert result["decision"] == "BLOCKED_OPEN_POSITION"
-    assert JournalLogger(log_dir=log_dir).get_daily_state(yesterday).has_open_position is True
+    assert result["resolution"] == "FORCE_CLOSE_SESSION_TIMEOUT"
+    assert result["decision"] != "BLOCKED_OPEN_POSITION"
+    assert JournalLogger(log_dir=log_dir).get_daily_state(yesterday).has_open_position is False
+
+
+def test_runner_price_mismatch_still_force_closes_mes_strat_122(config, tmp_path):
+    """The price-scale-mismatch safety close is unconditional and must still
+    apply to MES strat_122 even though it is exempt from the age-only 8h
+    timeout. Stop/target are deliberately far from entry (a stand-in for a
+    stale/wrong-scale recorded position) so the bar's high/low stay inside the
+    bracket -- resolve_position() returns None -- and only the mismatch check
+    can decide the outcome, isolating it from ordinary stop/target logic."""
+    from journal.journal_logger import JournalLogger
+    from webhook.runner import process_alert
+
+    log_dir = str(tmp_path / "logs")
+    yesterday = date(2026, 5, 22)
+    today = date(2026, 5, 23)
+    journal = JournalLogger(log_dir=log_dir)
+    _seed_strat_122_position(
+        journal, yesterday, instrument="MES", entry=6800.0, stop=100.0, target=25000.0
+    )
+
+    result = process_alert(
+        _base_payload(
+            ticker="MES1!",
+            timestamp="2026-05-23T14:30:00+00:00",
+            high=7300.0,
+            low=7200.0,
+            close=7250.0,  # >5% away from entry 6800.0, but inside [stop, target]
+        ),
+        config=config,
+        log_dir=log_dir,
+        for_date=today,
+    )
+
+    assert result["resolution"] == "FORCE_CLOSE_PRICE_MISMATCH"
+    assert result["decision"] != "BLOCKED_OPEN_POSITION"
+    assert JournalLogger(log_dir=log_dir).get_daily_state(yesterday).has_open_position is False
 
 
 # ─── runner: daily limit blocks ──────────────────────────────────────────────
