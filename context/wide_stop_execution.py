@@ -14,6 +14,7 @@ import os
 from typing import Optional
 
 ROUTE_ENV = "WIDE_STOP_LEDGER_EXECUTION_ROUTE"
+ROUTE_PROOF_PIN_ENV = "EXPECTED_PROOF_WIDE_STOP_LEDGER_EXECUTION_ROUTE"
 VALID_ROUTES = ("paper_sim", "tradovate_demo")
 DEFAULT_ROUTE = "paper_sim"
 DEMO_ROUTE = "tradovate_demo"
@@ -47,9 +48,16 @@ def _mnq_entry_tolerance() -> Optional[float]:
 def demo_config_errors(cfg=None) -> list[str]:
     """Return every reason the wide-stop route may NOT submit to Tradovate demo."""
     errors: list[str] = []
-    if route() != DEMO_ROUTE:
+    selected = route()
+    if selected != DEMO_ROUTE:
         errors.append("route_not_tradovate_demo")
         return errors
+
+    # The route itself must be explicitly proof-pinned. This keeps the selector
+    # reproducible even before it is folded into the global live-box guard list.
+    expected_route = str(os.getenv(ROUTE_PROOF_PIN_ENV, "")).strip().lower()
+    if expected_route != selected:
+        errors.append("wide_stop_execution_route_not_proof_pinned")
 
     # The existing evidence mode/epoch stays mandatory. We deliberately do not
     # overload it with broker semantics so paper remains the fail-safe default.
