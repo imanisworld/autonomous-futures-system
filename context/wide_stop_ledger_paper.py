@@ -1,19 +1,18 @@
 """Paper-only runtime contract for the wide-stop hypothetical-ledger lane.
 
 Implements `docs/wide-stop-hypothetical-ledger-lane-spec-2026-09-07.md`
-(approved 2026-09-07, D1-D7; 4HR cap amended 2026-09-08; 3-2-2
-forward ledger capped at the operator's $5,000 ceiling 2026-09-09). The lane
-produces a forward IOC-real record for three day strategies the $1,500 book's
+(approved 2026-09-07, D1-D7; 4HR cap amended 2026-09-08; 3-2-2 forward
+capital capped at the operator's $5,000 ceiling 2026-09-09). The lane produces
+a forward IOC-real record for three day strategies the $1,500 book's
 `max_stop_ticks` / `min_rr_ratio` reject 95-100% of the time.
 
 Contract, in one place:
   - isolated hypothetical ledgers, each with its own balance, peak, daily state
     and journal root; the real book is never read or written;
-  - `wide_stop_4k` remains the 4HR forward ledger;
-  - `wide_stop_5k` is the current 3-2-2 forward ledger and never assumes more
-    than the operator's $5,000 capital ceiling;
-  - legacy `wide_stop_6k` is retained only for historical/shadow Miyagi evidence
-    and is not fill-eligible;
+  - `wide_stop_4k` remains the 4HR forward ledger at $4,000;
+  - `wide_stop_6k` is retained as the historical 3-2-2/Miyagi journal identifier
+    for evidence continuity, but its current simulated starting balance is
+    **$5,000**, never $6,000;
   - the global `RiskEngine` and `risk_rules.yaml` are untouched — the lane
     evaluates a *copy* of the config with exactly two gates overlaid, plus its
     own lane-scoped daily-loss and drawdown floors;
@@ -21,11 +20,13 @@ Contract, in one place:
     gates is rejected by the lane too;
   - one contract, always; production `ioc_limit` at eight ticks (D4); the
     strategy's documented static bracket; no runner, no breakeven, no time exit;
+  - Miyagi remains shadow-only and cannot fill;
   - **no promotion path.** Nothing here makes any member eligible on the real
     book.
 
-This module has no demo or live mode. Any invalid configuration falls back to
-observe_only here, while `config.settings` rejects it at process startup.
+This module has no live or external-broker mode. Any invalid configuration
+falls back to observe_only here, while `config.settings` rejects it at process
+startup.
 """
 from __future__ import annotations
 
@@ -89,26 +90,18 @@ LEDGERS: dict[str, Ledger] = {
         fill_eligible=("strat_4hr_retrigger",),
         shadow_only=(),
     ),
-    "wide_stop_5k": Ledger(
-        name="wide_stop_5k",
+    # Historical identifier retained to keep one continuous journal path. The
+    # old name does NOT authorize $6k of capital; the current ledger is $5k.
+    "wide_stop_6k": Ledger(
+        name="wide_stop_6k",
         starting_balance=5_000.0,
         max_stop_ticks=600.0,
         min_rr_ratio=0.0,              # disabled; 3-2-2 median R:R is 0.24
-        daily_loss_limit=600.0,        # 2 x worst case ($300)
+        daily_loss_limit=600.0,        # 2 x worst case ($300), D2
         max_drawdown_percent=0.20,
         fill_eligible=("strat_322_first_live",),
-        shadow_only=(),
-    ),
-    "wide_stop_6k": Ledger(
-        name="wide_stop_6k",
-        starting_balance=6_000.0,
-        max_stop_ticks=600.0,
-        min_rr_ratio=0.0,
-        daily_loss_limit=600.0,
-        max_drawdown_percent=0.20,
-        fill_eligible=(),
-        # Historical D5 contract retained for continuity only. Miyagi remains
-        # a research detector and cannot fill this or any other lane.
+        # D5: research detector only, never wired into signal_engine, so the
+        # lane cannot fill it. Journaled with the family caps recorded.
         shadow_only=("strat_12hr_miyagi",),
     ),
 }
@@ -274,8 +267,8 @@ def evaluate(cfg=None) -> LedgerDecision:
         contracts=CONTRACTS,
         marketable_ticks=MARKETABLE_TICKS,
         reason=(
-            "paper_sim: isolated hypothetical $4k/$5k forward ledgers; legacy "
-            "$6k shadow ledger; family stop caps 300/600 ticks, one contract, "
+            "paper_sim: isolated hypothetical $4k/$5k ledgers (legacy 6k journal "
+            "identifier retained), family stop caps 300/600 ticks, one contract, "
             "eight-tick marketable IOC, static bracket, no promotion path"
             if active
             else "observe_only: no lane ledger, no lane fills, real book unchanged"
