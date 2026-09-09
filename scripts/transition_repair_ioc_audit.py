@@ -5,6 +5,7 @@ Counterfactual under test (MNQ only):
 - existing transition_failed_breakdown_reclaim candidates
 - session == new_york
 - decision-close IOC entry using the candidate's planned entry as the limit anchor
+- real PaperBroker IOC fill / structural bracket-validity behavior
 - 32-tick MNQ IOC tolerance
 - 1 adverse tick on entry
 - 400-tick planned protective stop from the candidate's planned entry
@@ -29,6 +30,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from execution.broker_interface import BracketOrder
+from execution.paper_broker import PaperBroker
+
 CANDIDATE_FILE = Path("scripts/edge_decomposition_audit_results_candidates.jsonl.gz")
 LANE_CORPUS = {
     "transition_mnq": "replay_polygon_5m",
@@ -40,6 +44,9 @@ IOC_TOLERANCE_TICKS = 32.0
 ENTRY_SLIPPAGE_TICKS = 1.0
 EXIT_SLIPPAGE_TICKS = 1.0
 STOP_TICKS = 400.0
+# Only supplies PaperBroker's required complete bracket. It is deliberately so
+# distant that this probe has no economic target; the actual exit is stop/30m.
+DUMMY_TARGET_TICKS = 100_000.0
 COMMISSION = 1.48
 MAX_TRADES_PER_DAY = 3
 BAR_MINUTES = 5
@@ -87,12 +94,13 @@ def load_bars(data_root: Path, corpus: str) -> dict[datetime, dict[str, Any]]:
 
 
 def planned_ioc_fill(row: dict[str, Any]) -> dict[str, Any]:
-    """Mirror PaperBroker's decision-close IOC entry math for one candidate.
+    """Open one candidate through the real PaperBroker IOC path.
 
-    The candidate's planned entry and the market's decision close are separate
-    inputs. A mismatch is normal and must not be rewritten away. The IOC either
-    fills at the decision-close market plus adverse slippage, bounded by the
-    candidate-derived limit, or cancels when the market lies beyond that cap.
+    Planned entry and decision-close market are intentionally separate. This
+    preserves genuine IOC cancellations and, critically, PaperBroker's
+    structural bracket-validity rejection when a marketable fill lands beyond
+    its own stop/target. That guard is non-negotiable after the inverse-ORB
+    forensic finding.
     """
     direction = str(row["direction"]).upper()
     if direction not in {"LONG", "SHORT"}:
@@ -103,41 +111,56 @@ def planned_ioc_fill(row: dict[str, Any]) -> dict[str, Any]:
     if decision_close_raw is None:
         raise ValueError(f"missing decision_close at {row.get('bar_ts')}")
     market = float(decision_close_raw)
-    tol = IOC_TOLERANCE_TICKS * TICK_SIZE
-    slip = ENTRY_SLIPPAGE_TICKS * TICK_SIZE
+    stop = plan_entry - sign * STOP_TICKS * TICK_SIZE
+    target = plan_entry + sign * DUMMY_TARGET_TICKS * TICK_SIZE
+    limit_px = plan_entry + sign * IOC_TOLERANCE_TICKS * TICK_SIZE
 
-    if direction == "LONG":
-        limit_px = plan_entry + tol
-        if market > limit_px:
-            return {
-                "status": "NO_FILL",
-                "reason": "ENTRY_NOT_FILLED",
-                "planned_entry": plan_entry,
-                "decision_close": market,
-                "limit": limit_px,
-                "sign": sign,
-            }
-        fill = min(limit_px, market + slip)
-    else:
-        limit_px = plan_entry - tol
-        if market < limit_px:
-            return {
-                "status": "NO_FILL",
-                "reason": "ENTRY_NOT_FILLED",
-                "planned_entry": plan_entry,
-                "decision_close": market,
-                "limit": limit_px,
-                "sign": sign,
-            }
-        fill = max(limit_px, market - slip)
-
+    broker = PaperBroker(
+        starting_balance=100_000.0,
+        slippage_ticks=ENTRY_SLIPPAGE_TICKS,
+        pessimistic_both_hit=True,
+        entry_fill_model="ioc_limit",
+        entry_tolerance_ticks_by_root={"MNQ": IOC_TOLERANCE_TICKS},
+    )
+    opened = broker.execute_bracket(
+        BracketOrder(
+            instrument="MNQ",
+            direction=direction,
+            entry=plan_entry,
+            stop=stop,
+            target=target,
+            rr_ratio=DUMMY_TARGET_TICKS / STOP_TICKS,
+            strategy=str(row.get("strategy") or "transition_failed_breakdown_reclaim"),
+            contracts=1,
+            min_rr_ratio=0.0,
+            post_fill_validation_required=False,
+        ),
+        market_price=market,
+    )
+    if opened.result == "CANCELLED":
+        return {
+            "status": "NO_FILL",
+            "reason": opened.exit_reason or "ENTRY_NOT_FILLED",
+            "planned_entry": plan_entry,
+            "decision_close": market,
+            "limit": limit_px,
+            "stop": stop,
+            "target": target,
+            "sign": sign,
+            "execution_audit": opened.execution_audit,
+        }
+    if opened.result != "OPEN":
+        raise RuntimeError(f"unexpected PaperBroker IOC result {opened.result!r}")
     return {
         "status": "FILLED",
-        "fill": fill,
+        "fill": float(opened.entry_price),
         "planned_entry": plan_entry,
         "decision_close": market,
         "limit": limit_px,
+        "stop": stop,
+        "target": target,
         "sign": sign,
+        "execution_audit": opened.execution_audit,
     }
 
 
@@ -160,7 +183,7 @@ def resolve_one(row: dict[str, Any], bars: dict[datetime, dict[str, Any]]) -> di
             "planned_entry": entry["planned_entry"],
             "decision_close": entry["decision_close"],
             "limit": entry["limit"],
-            "stop": None,
+            "stop": entry["stop"],
             "exit": None,
             "exit_ts": decision_ts.isoformat(),
             "net": None,
@@ -169,10 +192,7 @@ def resolve_one(row: dict[str, Any], bars: dict[datetime, dict[str, Any]]) -> di
     fill = float(entry["fill"])
     plan_entry = float(entry["planned_entry"])
     sign = int(entry["sign"])
-    # This is the actual pre-registered bracket semantics for this probe: the
-    # protective stop is 400 ticks from the candidate's planned entry, not
-    # silently re-anchored to the realized IOC fill.
-    stop = plan_entry - sign * STOP_TICKS * TICK_SIZE
+    stop = float(entry["stop"])
 
     path: list[tuple[datetime, dict[str, Any]]] = []
     for step in range(1, HOLD_MINUTES // BAR_MINUTES + 1):
@@ -182,6 +202,9 @@ def resolve_one(row: dict[str, Any], bars: dict[datetime, dict[str, Any]]) -> di
             raise KeyError(f"missing required 5m bar {ts.isoformat()} for {row['bar_ts']}")
         path.append((ts, bar))
 
+    # With no economic target in this variant, a stop touch is the only intrabar
+    # terminal condition. The stop fill is one adverse tick, matching the shared
+    # PaperBroker slippage convention.
     for ts, bar in path:
         high = float(bar["high"])
         low = float(bar["low"])
@@ -223,11 +246,15 @@ def resolve_one(row: dict[str, Any], bars: dict[datetime, dict[str, Any]]) -> di
 def stats(trades: list[dict[str, Any]]) -> dict[str, Any]:
     fills = [t for t in trades if t.get("net") is not None]
     vals = [float(t["net"]) for t in fills]
+    no_fill_reasons = Counter(
+        str(t.get("exit_reason") or "UNKNOWN") for t in trades if t.get("result") == "NO_FILL"
+    )
     if not vals:
         return {
             "attempts": len(trades),
             "fills": 0,
             "no_fills": sum(t.get("result") == "NO_FILL" for t in trades),
+            "no_fill_reasons": dict(no_fill_reasons),
             "n": 0,
         }
     gp = sum(v for v in vals if v > 0)
@@ -242,6 +269,7 @@ def stats(trades: list[dict[str, Any]]) -> dict[str, Any]:
         "attempts": len(trades),
         "fills": len(fills),
         "no_fills": sum(t.get("result") == "NO_FILL" for t in trades),
+        "no_fill_reasons": dict(no_fill_reasons),
         "n": len(vals),
         "wins": sum(v > 0 for v in vals),
         "losses": sum(v < 0 for v in vals),
@@ -323,7 +351,7 @@ def main() -> int:
         "model": {
             "instrument": "MNQ",
             "session": "new_york",
-            "entry": "planned-entry anchored limit IOC evaluated at decision close",
+            "entry": "real PaperBroker ioc_limit at decision-close market, planned-entry anchored limit",
             "ioc_tolerance_ticks": IOC_TOLERANCE_TICKS,
             "entry_slippage_ticks": ENTRY_SLIPPAGE_TICKS,
             "stop_ticks_from_planned_entry": STOP_TICKS,
@@ -332,6 +360,7 @@ def main() -> int:
             "commission_round_trip": COMMISSION,
             "max_open_positions": 1,
             "max_trades_per_day": MAX_TRADES_PER_DAY,
+            "pessimistic_structural_bracket_validity": True,
             "global_max_stop_ticks_unchanged": 120,
         },
         "lanes": {},
