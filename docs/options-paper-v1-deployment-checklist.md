@@ -41,6 +41,29 @@ The box must also have valid read-only Public market-data credentials/account pi
 
 The generic manual `options_manager` contract-quality surface is not the V1 evidence authority. V1 rows are admitted only by the scanner's `OPTIONS_PAPER_V1` policy; do not use a manual `dte_exceptional` override to inject <14 DTE rows into this campaign.
 
+## Bankroll / drawdown study
+
+Do not alter V1 entry/stop/target rules to fit an account size. Instead replay the same ACTIVE V1 evidence through these cash-only long-option scenarios:
+
+- **$1,500** starting balance
+- **$2,500** starting balance
+- **$5,000** starting balance
+
+The **$5,000 figure is the current maximum allocation ceiling, not an acceptable drawdown**.
+
+Run the read-only report with:
+
+```bash
+python -m alert_ranker.account_equity \
+  --db logs/options_scanner.sqlite \
+  --balances 1500,2500,5000 \
+  --capital-ceiling 5000
+```
+
+The report must use ask entry, bid mark-to-market/exit, include unrealized P&L, exclude counterfactual rows from account P&L, and treat insufficient cash as a scenario funding block rather than assuming margin.
+
+For swing exposure, preserve overnight holds, total position-nights, max simultaneous overnight positions, and the worst observed prior-session-last-bid to next-session-first-bid premium gap.
+
 ## Populations
 
 ### Active paper populations
@@ -90,6 +113,8 @@ Do not start the evidence epoch until one normal-session smoke proves all of the
 11. the exact same option symbol is re-quoted on the next resolver cycle;
 12. active dashboard summary excludes counterfactual outcomes;
 13. Discord sends or suppresses exactly according to the existing trade-proof gate;
-14. no order/broker path is reachable from the scanner.
+14. no order/broker path is reachable from the scanner;
+15. `alert_ranker.account_equity` can read the smoke row/marks without writing collector state;
+16. the $1,500 / $2,500 / $5,000 report includes realized + unrealized equity, drawdown, capital deployed, planned risk, capital-block counts, and swing/overnight metrics.
 
 After this passes, record the deployed commit SHA and smoke timestamp as the V1 evidence epoch. From that point forward, do not tune setup, DTE, stop, target, filter or risk rules inside the same population. A rule change creates a new policy version and evidence cohort.
