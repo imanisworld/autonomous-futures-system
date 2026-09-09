@@ -95,6 +95,52 @@ Use the Strategy Inventory for the full table. The important active/known rows a
 
 A strategy marked `not decomposed` does not automatically need another audit. First ask whether it has enough credible signal/evidence to justify the work.
 
+## September 9 Daily/HTF STRAT cross-check — research only
+
+The uploaded 621-day MNQ/MES 5-minute corpus was used to test whether broad STRAT patterns were being discarded because of timeframe, entry, stop, target, filter, or execution assumptions. These are **new research variants**, not retroactive proof for an existing executable strategy.
+
+### What survived the cross-check
+
+**MNQ Daily 2-2 continuation — PROMISING SIGNAL / NOT CURRENT-ACCOUNT TRADEABLE.**
+
+After using a causal Daily construction, 5-minute decision-close fills, pessimistic same-bar handling, commission/slippage, one position at a time, strict current-style pre-setup context, actual fill-based R:R >= 2.0, target distance >= 15 points, data-gap sensitivity, and outlier checks:
+
+- 33 resolved trades;
+- net about **+$17.2k / PF 2.32**;
+- H1 about **+$6.3k / PF 2.01**;
+- H2 about **+$10.9k / PF 2.61**;
+- 2024, 2025 and 2026 are all positive;
+- removing the top five winners still leaves about **+$2.5k**;
+- the untouched structural version survives 1–8 adverse entry/stop slippage ticks.
+
+However, the required stop is not compatible with the current $1,500 account:
+
+- current MNQ stop cap is 120 ticks; the surviving structural population does not fit it;
+- stop widths in the strict/R:R-passing set are roughly 619 ticks minimum, 1,370 ticks median, 2,441 ticks p90, 4,160 ticks maximum;
+- that is roughly **$309.50 minimum / $685 median / $1,220.50 p90 / $2,080 maximum planned stop risk per one MNQ contract**, before commission/slippage;
+- a stop-only sweep from 120 through 1,800 ticks does not produce a robust current-account-safe replacement; the original structural stop is materially stronger than the tightened variants;
+- a $1,500 / 20% drawdown survival simulation halts the untouched structural lane after two trades because a normal full-stop loss is too large for the account.
+
+This is the clearest new example of **signal evidence surviving while risk architecture makes the implementation untradeable**. Do not loosen the global cap from this study. A future Daily 2-2 paper concept would need its own explicit account/risk policy and full live/replay implementation parity.
+
+### What was downgraded after the cross-check
+
+**MNQ 4H generic 2-2 reversal — WAIT / UNPROVEN RESEARCH VARIANT.**
+
+The correct 4H construction is the repository's fixed-UTC 240-minute bucket; that reconstruction matches stored replay HTF typing. Raw results can look positive, but after decision-close execution, strict pre-setup context, actual fill-based R:R, stop-only sweeps, year stability and outlier removal, **no tested stop width is robust across both halves + all years + outlier removal**. The current 120-tick cap is approximately flat with H1 negative, and the $1,500 account survival floor also blocks the wider variants. Do not treat this as a clean rescue.
+
+**Generic MNQ 60m 3-2-2 — SEPARATE RESEARCH VARIANT ONLY.**
+
+The generic all-session 60m 3→2→2 study is **not** the executable `strat_322_first_live`. The executable strategy is the specific 7AM/8AM/9AM setup with a 10:00–11:00 ET first-live trigger, 9AM stop and 8AM target. Therefore the generic research P&L must not be cited as validation of 60M 3-2-2 First Live. The dedicated First Live evidence in the Strategy Inventory remains authoritative.
+
+**MES Daily 3-2 — PROMISING RAW SIGNAL / NOT CURRENT-SYSTEM COMPATIBLE.**
+
+The first Daily 3-2 study used the wrong adaptation for the current detector. The current `strat_outside_continuation` formula builds its bracket from the completed directional signal bar (entry beyond its high/low, stop six ticks beyond the opposite side, 2R), not from the prior outside bar. Re-running a causal Daily adaptation with that formula and next-reopen IOC-style fills leaves a positive raw MES population, but about 95% of resolved trades exceed the current 60-tick MES stop cap. Under the current 60-tick cap plus a strict current-style pre-setup gate, only two trades survive in this corpus and both lose. This is not a current-system-ready edge and has no live/replay parity implementation yet.
+
+### Additional parity caveat
+
+The current system's expected webhook timeframe remains 15 minutes. These Daily/4H generic studies are therefore **research populations, not executable-parity populations**. Do not promote them merely because the underlying classifier logic is timeframe-agnostic. A future higher-timeframe strategy requires a preregistered detector/execution contract and explicit replay/live parity proof.
+
 ## Filters / stop / target rule going forward
 
 Do not optimize a failing lane by changing several variables at once. If new evidence creates a credible rescue hypothesis, change **one family of assumptions at a time** and version it as a new strategy population:
@@ -133,5 +179,7 @@ For futures, continue only the already-approved observation/evidence lanes and r
 
 1. a credible hypothesis that has not already been tested; and
 2. enough independent evidence to justify the study.
+
+For the new Daily/HTF research specifically, the only justified follow-up is to preregister a separate Daily 2-2 continuation research contract **if** there is a risk model that can fit the account without changing several strategy variables at once. Until then it remains research-only/parked.
 
 Otherwise the correct action is **WAIT / PARKED / BROKEN as already classified.**
