@@ -27,7 +27,7 @@ from .contract_marks import record_contract_mark
 from .daily_strat import DAILY_TIMEFRAME, evaluate_daily_setup
 from .discord import AlertDecision
 from .lifecycle import classify_candidate, open_candidate_fields
-from .paper_v1 import POLICY_ID, episode_key
+from .paper_v1 import ACTIVE_LANE, POLICY_ID, setup_episode_key
 from .scorer import score_setup
 from .session_calendar import SessionCalendarError
 
@@ -491,8 +491,14 @@ def build_multisetup_scanner(base_cls):
                 shadow_reason = f"suppressed:{gate}"
             elif classification.is_open_eligible:
                 candidate_key = _candidate_identity(classification.contract_key, result.raw)
-                episode = episode_key(
-                    candidate_key, result.raw.get("setup_timeframe"), now
+                episode = setup_episode_key(
+                    ticker=result.ticker,
+                    lane=result.raw.get("paper_evidence_lane") or ACTIVE_LANE,
+                    timeframe=result.raw.get("setup_timeframe"),
+                    setup_type=result.raw.get("setup_type"),
+                    direction=result.direction,
+                    trigger=result.raw.get("setup_entry_trigger"),
+                    moment=now,
                 )
                 duplicate = self.storage.find_open_duplicate(result.ticker, candidate_key)
                 episode_duplicate = self.storage.find_episode_duplicate(
