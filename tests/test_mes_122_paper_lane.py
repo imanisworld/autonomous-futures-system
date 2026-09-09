@@ -159,7 +159,7 @@ def test_halt_is_driven_by_the_realistic_ledger():
     # must still halt the lane.
     losses = [_outcome(-45.0) for _ in range(10)]
     state = lane.ledger_state(losses)
-    assert state["realistic_max_drawdown_percent"] > lane.MAX_DRAWDOWN
+    assert state["realistic_closed_trade_drawdown_percent"] > lane.MAX_DRAWDOWN
     assert state["halted"] is True
 
 
@@ -304,3 +304,186 @@ def test_lane_never_constructs_a_non_paper_broker(config, tmp_path, monkeypatch)
     monkeypatch.setattr(runner, "_make_broker", _fail)
     runner.process_alert(_mes_payload(), config=_active(config), log_dir=str(tmp_path),
                          for_date=date(2026, 5, 23))
+
+
+# ──────────────── ledger counts EVERY outcome path, not just same-bar ────────
+#
+# Regression for the blocker found in review of #555: `_lane_outcomes()` filters
+# on the OUTCOME row's strategy, but the normal `fill is not None` resolution and
+# the stale/price-mismatch force-close both used to journal without one, so the
+# realistic ledger silently ignored ordinary later-bar wins and losses while
+# still counting same-bar outcomes. Balance, warnings and the 30% halt were
+# therefore untrustworthy. `strategy=_open_pos_strategy` is now passed on both
+# paths (metadata only; fill behavior unchanged).
+
+
+def _seed_lane_open_trade(log_dir, for_date, *, entry=6800.0, stop=6790.0, target=6820.0,
+                          direction="LONG"):
+    """An OPEN MES strat_122 trade in the lane's own journal."""
+    from journal.journal_logger import JournalLogger
+
+    journal = JournalLogger(log_dir=str(lane.journal_dir(log_dir)))
+    journal._append({
+        "ts": f"{for_date.isoformat()}T14:00:00+00:00",
+        "instrument": "MES",
+        "session": "new_york",
+        "decision": "TRADE",
+        "reason": "lane ledger regression",
+        "market_condition": "TRENDING",
+        "setup": {
+            "direction": direction, "entry": entry, "stop": stop, "target": target,
+            "rr_ratio": 2.0, "strategy": "strat_122", "notes": None, "contracts": 1,
+        },
+        "risk_check": {"result": "APPROVED", "failed_rule": None, "reason": None},
+        "outcome": None,
+    }, for_date)
+    return journal
+
+
+def _lane_resolved(config, tmp_path, for_date):
+    return lane.ledger_status(_active(config), tmp_path, for_date)
+
+
+def test_normal_later_bar_resolution_is_counted_by_the_realistic_ledger(config, tmp_path):
+    """The blocker: an ordinary stop/target resolution must reach the ledger."""
+    from webhook.runner import process_alert
+
+    day = date(2026, 5, 22)
+    nextday = date(2026, 5, 23)
+    _seed_lane_open_trade(tmp_path, day)
+    assert _lane_resolved(config, tmp_path, nextday)["resolved_trades"] == 0
+
+    # A later bar that trades through the stop resolves the position normally.
+    process_alert(
+        _mes_payload(timestamp="2026-05-23T14:30:00+00:00",
+                     open=6795.0, high=6798.0, low=6780.0, close=6788.0),
+        config=_active(config), log_dir=str(tmp_path), for_date=nextday,
+    )
+
+    status = _lane_resolved(config, tmp_path, nextday)
+    assert status["resolved_trades"] == 1, "normal resolution was skipped by the ledger"
+
+
+def test_realistic_balance_charges_one_entry_tick_and_commission_on_a_normal_close(
+    config, tmp_path
+):
+    from journal.journal_logger import JournalLogger
+    from webhook.runner import process_alert
+
+    day = date(2026, 5, 22)
+    nextday = date(2026, 5, 23)
+    _seed_lane_open_trade(tmp_path, day)
+    process_alert(
+        _mes_payload(timestamp="2026-05-23T14:30:00+00:00",
+                     open=6795.0, high=6798.0, low=6780.0, close=6788.0),
+        config=_active(config), log_dir=str(tmp_path), for_date=nextday,
+    )
+
+    outcomes = [
+        json.loads(line)["outcome"]
+        for path in lane.journal_dir(tmp_path).glob("journal_*.jsonl")
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip() and json.loads(line).get("type") == "OUTCOME"
+    ]
+    assert len(outcomes) == 1
+    raw = float(outcomes[0]["pnl_dollars"])
+    assert lane.is_same_bar_resolved(outcomes[0]) is False
+
+    status = _lane_resolved(config, tmp_path, nextday)
+    # raw − 1 adverse entry tick ($1.25) − $1.48 commission
+    assert status["realistic_balance"] == round(1_500.0 + raw - 1.25 - 1.48, 2)
+    assert status["raw_paper_balance_diagnostic_only"] == round(1_500.0 + raw, 2)
+    _ = JournalLogger
+
+
+def test_price_mismatch_force_close_is_counted_by_the_realistic_ledger(config, tmp_path):
+    """The other unstrategied path: a force-close must reach the ledger too."""
+    from webhook.runner import process_alert
+
+    day = date(2026, 5, 22)
+    nextday = date(2026, 5, 23)
+    # Deliberately wide bracket so stop/target cannot resolve it; only the
+    # price-scale mismatch safety close can decide the outcome.
+    _seed_lane_open_trade(tmp_path, day, entry=6800.0, stop=100.0, target=25000.0)
+
+    process_alert(
+        _mes_payload(timestamp="2026-05-23T14:30:00+00:00",
+                     open=7250.0, high=7300.0, low=7200.0, close=7250.0),
+        config=_active(config), log_dir=str(tmp_path), for_date=nextday,
+    )
+
+    # The force-close happens inside the LANE's own evaluation (its journal), not
+    # the real book's — so assert on the lane's outcome row and its ledger.
+    outcomes = [
+        json.loads(line)["outcome"]
+        for path in lane.journal_dir(tmp_path).glob("journal_*.jsonl")
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip() and json.loads(line).get("type") == "OUTCOME"
+    ]
+    assert len(outcomes) == 1
+    assert outcomes[0]["exit_reason"] == "FORCE_CLOSE_PRICE_MISMATCH"
+    assert outcomes[0]["strategy"] == "strat_122", "force-close outcome lost its strategy"
+
+    status = _lane_resolved(config, tmp_path, nextday)
+    assert status["resolved_trades"] == 1, "force-close was skipped by the ledger"
+
+
+def test_same_bar_outcome_still_counts_and_costs_two_ticks():
+    """Unchanged behavior: the same-bar path already carried its strategy."""
+    same_bar = _outcome(0.0, same_bar=True)
+    assert lane.is_same_bar_resolved(same_bar) is True
+    state = lane.ledger_state([same_bar])
+    assert state["resolved_trades"] == 1
+    assert state["realistic_balance"] == round(1_500.0 - 2.50 - 1.48, 2)
+
+
+# ──────────────────────── timeframe pin + swing visibility ───────────────────
+
+
+def test_lane_config_pins_the_15m_decision_timeframe(config):
+    lane_cfg = lane.lane_config(config)
+    assert lane.TIMEFRAME_MINUTES == 15
+    assert lane_cfg.expected_timeframe_minutes == 15
+
+
+def test_closed_trade_drawdown_is_not_labelled_mark_to_market():
+    state = lane.ledger_state([_outcome(-100.0)])
+    assert state["drawdown_basis"] == "closed_trade_realistic"
+    assert "realistic_closed_trade_drawdown_percent" in state
+    assert "max_mtm_drawdown" not in state
+
+
+def test_open_position_exposure_is_reported_and_observational(config, tmp_path):
+    day = date(2026, 5, 22)
+    _seed_lane_open_trade(tmp_path, day, entry=6800.0)
+
+    # Marked 20 points against a LONG: -80 ticks x $1.25 = -$100.00
+    exposure = lane.open_position_exposure(
+        _active(config), tmp_path, mark_price=6780.0, for_date=day
+    )
+    assert exposure["open"] is True
+    assert exposure["basis"] == "observational_only"
+    assert exposure["unrealized_dollars_raw"] == -100.0
+    # closed balance ($1,500, no closes yet) + unrealized - the entry tick already paid
+    assert exposure["realistic_mtm_equity"] == round(1_500.0 - 100.0 - 1.25, 2)
+    assert exposure["open_position_mtm_drawdown_percent"] > 0
+
+
+def test_open_position_exposure_is_flat_when_nothing_is_open(config, tmp_path):
+    exposure = lane.open_position_exposure(
+        _active(config), tmp_path, mark_price=6800.0, for_date=date(2026, 5, 22)
+    )
+    assert exposure["open"] is False
+    assert exposure["basis"] == "observational_only"
+
+
+def test_open_position_exposure_never_halts_the_lane(config, tmp_path):
+    """Swing exposure is visibility only: a deep unrealized excursion must not
+    halt the lane, which halts on the CLOSED-trade realistic ledger alone."""
+    day = date(2026, 5, 22)
+    _seed_lane_open_trade(tmp_path, day, entry=6800.0)
+    exposure = lane.open_position_exposure(
+        _active(config), tmp_path, mark_price=6300.0, for_date=day
+    )
+    assert exposure["exceeds_halt_threshold_observational"] is True
+    assert lane.ledger_status(_active(config), tmp_path, day)["halted"] is False

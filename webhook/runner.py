@@ -1536,6 +1536,10 @@ def process_alert(
                         contracts=contracts,
                         for_date=open_position_date,
                         paper_order_id=open_pos.get("paper_order_id"),
+                        # Metadata only. Without it an OUTCOME row carries no
+                        # strategy and per-strategy evidence readers (e.g. the
+                        # MES 1-2-2 lane ledger) silently skip this close.
+                        strategy=_open_pos_strategy,
                     )
                     result["resolution"] = f"FORCE_CLOSE_{reason}"
                     daily_state.has_open_position = False
@@ -1570,6 +1574,10 @@ def process_alert(
                     for_date=open_position_date,
                     paper_order_id=getattr(fill, "paper_order_id", None),
                     client_order_id=open_pos.get("client_order_id"),
+                    # Metadata only. Without it an OUTCOME row carries no
+                    # strategy and per-strategy evidence readers (e.g. the
+                    # MES 1-2-2 lane ledger) silently skip this resolution.
+                    strategy=_open_pos_strategy,
                 )
                 result["resolution"] = fill.result
                 if fill.result in {"WIN", "LOSS"}:

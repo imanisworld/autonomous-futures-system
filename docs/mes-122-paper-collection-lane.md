@@ -13,7 +13,7 @@ evidence only — not validation, not a promotion path.
 
 | | |
 |---|---|
-| instrument / strategy | MES only, 15m `strat_122` only |
+| instrument / strategy | MES only, 15m `strat_122` only (`expected_timeframe_minutes=15` pinned in the lane config, not inherited) |
 | contracts | fixed 1, all sizing and win-streak scaling off |
 | starting balance | $1,500 |
 | swings | allowed across sessions/weekends (the merged MES `strat_122` 8h stale-timeout exemption applies) |
@@ -91,9 +91,33 @@ everything that matters:
   twice;
 - **−$1.48** round-turn commission.
 
-`realistic_balance`, `realistic_max_drawdown_percent`, the 20%/25% warnings and the
-30% hard halt are all computed from that ledger.
+`realistic_balance`, `realistic_closed_trade_drawdown_percent`, the 20%/25% warnings
+and the 30% hard halt are all computed from that ledger.
 `raw_paper_balance_diagnostic_only` is reported alongside and never drives the halt.
+
+**Every outcome path feeds the ledger** — fixed in review of this PR. The ledger
+selects a lane's own OUTCOME rows by `strategy`, but the normal later-bar resolution
+and the stale/price-mismatch force-close both journalled without one, so only same-bar
+outcomes were being counted; balance, warnings and the halt were untrustworthy.
+`strategy=_open_pos_strategy` is now passed on both paths (metadata only — fill
+behavior is unchanged), and three regression tests cover normal resolution, the
+realistic-balance arithmetic on a normal close, and a price-mismatch force-close. All
+three fail without the fix.
+
+### Closed-trade vs open-position drawdown
+
+`realistic_closed_trade_drawdown_percent` walks **resolved outcomes only** and never
+marks an open position bar by bar, so it is deliberately **not** labelled
+mark-to-market (`drawdown_basis: "closed_trade_realistic"`) — the same distinction
+#547 had to correct. Since this campaign is explicitly evaluating swing holds,
+`open_position_exposure()` reports the live unrealized excursion separately on every
+lane bar: raw unrealized dollars, the entry tick already incurred,
+`realistic_mtm_equity`, and `open_position_mtm_drawdown_percent`.
+
+That exposure is **observational only** — it never halts or force-closes. The 30% halt
+remains on the closed-trade realistic ledger, as specified. A test asserts a deep
+unrealized excursion sets `exceeds_halt_threshold_observational` while leaving
+`halted` False.
 
 Historical reference: max MTM drawdown at 1 tick per leg was **$229.11**. That is a
 reference, not a guaranteed limit — crossing it is a review event.
@@ -124,10 +148,11 @@ automatically.
 
 ## Files
 
-- `context/mes_122_paper_lane.py` — the lane (config isolation, realistic ledger, observer)
-- `webhook/runner.py` — one additive hook in its own error boundary
+- `context/mes_122_paper_lane.py` — the lane (config isolation, realistic ledger, open-position swing exposure, observer)
+- `webhook/runner.py` — one additive hook in its own error boundary, plus `strategy=` metadata on the two outcome paths that omitted it
 - `config/settings.py` — `mes_122_paper_mode` / `mes_122_paper_epoch_start` + validation
 - `ops/live_box_guard.py` — both vars registered as proof-critical
-- `tests/test_mes_122_paper_lane.py` — 25 tests: pinned contract, isolation, no-Tradovate,
-  realistic-ledger arithmetic, halt driven by the realistic ledger, config validation
+- `tests/test_mes_122_paper_lane.py` — 34 tests: pinned contract, isolation, no-Tradovate,
+  realistic-ledger arithmetic, every-outcome-path coverage, timeframe pin, swing exposure,
+  halt driven by the closed-trade realistic ledger, config validation
 - this doc

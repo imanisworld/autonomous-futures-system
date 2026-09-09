@@ -49,6 +49,7 @@ logger = logging.getLogger(__name__)
 
 INSTRUMENT = "MES"
 STRATEGY = "strat_122"
+TIMEFRAME_MINUTES = 15
 LEDGER_NAME = "mes_122_1500"
 LABEL = "hypothetical_mes_122"
 
@@ -154,6 +155,11 @@ def lane_config(cfg):
         "paper_mode": True,
         "allowed_instruments": [INSTRUMENT],
         "required_instruments": [INSTRUMENT],
+        # The campaign contract is MES / 15m / strat_122 only. Pin the
+        # timeframe explicitly rather than inheriting whatever the parent
+        # process is running, so the lane cannot silently collect on another
+        # decision timeframe.
+        "expected_timeframe_minutes": TIMEFRAME_MINUTES,
         "enabled_concepts": [STRATEGY],
         "disabled_concepts_per_instrument": {},
         "strategy_permission_gate_enabled": True,
@@ -231,15 +237,85 @@ def ledger_state(outcomes: list[dict]) -> dict[str, Any]:
     return {
         "ledger": LEDGER_NAME,
         "basis": "realistic_1_tick_per_leg",
+        # CLOSED-TRADE basis: this walks resolved outcomes only and never marks an
+        # open position bar by bar, so it is NOT full mark-to-market drawdown (the
+        # same distinction PR #547 had to correct). Open-position swing exposure is
+        # reported separately by `open_position_exposure()`.
+        "drawdown_basis": "closed_trade_realistic",
         "resolved_trades": counted,
         "realistic_balance": balance,
         "realistic_peak": peak,
-        "realistic_max_drawdown_percent": round(max_dd_pct, 6),
+        "realistic_closed_trade_drawdown_percent": round(max_dd_pct, 6),
         "raw_paper_balance_diagnostic_only": raw_balance,
         "warning_drawdown": warn,
         "halted": max_dd_pct >= MAX_DRAWDOWN,
         "halt_threshold": MAX_DRAWDOWN,
     }
+
+
+def open_position_exposure(cfg, log_dir, *, mark_price, for_date: Optional[_date] = None) -> dict[str, Any]:
+    """OBSERVATIONAL swing risk for a lane position that is still open.
+
+    This campaign is explicitly evaluating swing holds, so the unrealized
+    excursion of an open position has to be visible rather than hidden until the
+    trade closes. Nothing here halts, force-closes or otherwise changes behavior:
+    it is reported alongside the closed-trade ledger so forward swing risk can be
+    measured.
+
+    The mark is `realistic_balance` (closed trades) + raw unrealized at
+    `mark_price`, minus the entry tick that has already been incurred on the open
+    trade. Round-turn commission is NOT charged here — it books at exit.
+    """
+    from journal.journal_logger import JournalLogger
+
+    status = ledger_status(cfg, log_dir, for_date)
+    out: dict[str, Any] = {
+        "open": False,
+        "basis": "observational_only",
+        "note": "reported for swing-risk visibility; never halts or force-closes",
+        "realistic_closed_balance": status["realistic_balance"],
+    }
+    try:
+        journal = JournalLogger(log_dir=str(journal_dir(log_dir)))
+        daily = journal.get_daily_state(for_date)
+        if not getattr(daily, "has_open_position", False):
+            return out
+        position = journal.get_open_position(for_date)
+    except Exception as exc:  # pragma: no cover - observability must never raise
+        out["error"] = str(exc)
+        return out
+    if not position:
+        return out
+
+    setup = position.get("setup") or position
+    direction = str(setup.get("direction") or position.get("direction") or "")
+    entry = setup.get("entry", position.get("entry"))
+    if direction not in {"LONG", "SHORT"} or entry is None or mark_price is None:
+        return out
+
+    entry = float(entry)
+    ticks = (float(mark_price) - entry) / TICK
+    if direction == "SHORT":
+        ticks = -ticks
+    unrealized_raw = round(ticks * TICK_VALUE * CONTRACTS, 2)
+    entry_cost = ENTRY_SLIP_TICKS * TICK_VALUE * CONTRACTS
+    mtm_equity = round(status["realistic_balance"] + unrealized_raw - entry_cost, 2)
+    peak = max(status["realistic_peak"], mtm_equity)
+    dd_pct = round((peak - mtm_equity) / peak, 6) if peak > 0 else 0.0
+    out.update(
+        open=True,
+        direction=direction,
+        entry=entry,
+        stop=setup.get("stop"),
+        target=setup.get("target"),
+        mark_price=float(mark_price),
+        unrealized_dollars_raw=unrealized_raw,
+        entry_slippage_already_incurred=round(entry_cost, 2),
+        realistic_mtm_equity=mtm_equity,
+        open_position_mtm_drawdown_percent=dd_pct,
+        exceeds_halt_threshold_observational=dd_pct >= MAX_DRAWDOWN,
+    )
+    return out
 
 
 def _lane_outcomes(log_dir, cfg, for_date: Optional[_date]) -> list[dict]:
@@ -337,6 +413,11 @@ def observe_alert(payload, *, cfg, log_dir, for_date: Optional[_date] = None) ->
             lane_fill=result.get("fill"),
         )
         audit["ledger_status_after"] = ledger_status(cfg, log_dir, for_date)
+        # Swing-risk visibility: an open position's unrealized excursion is
+        # otherwise invisible until it closes. Observational only.
+        audit["open_position_exposure"] = open_position_exposure(
+            cfg, log_dir, mark_price=getattr(payload, "close", None), for_date=for_date
+        )
         return audit
     except Exception as exc:  # pragma: no cover - never break the real book
         logger.warning("mes_122 paper lane skipped: %s", exc)
