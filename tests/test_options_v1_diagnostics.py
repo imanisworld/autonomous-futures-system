@@ -1,10 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
-
-import pytest
 
 from alert_ranker.contract_marks import record_contract_mark
 from alert_ranker.storage import ScanStorage
@@ -240,8 +239,7 @@ def test_sample_status_labels_are_reporting_only():
     assert sample_status(50) == "REVIEWABLE"
 
 
-@pytest.mark.asyncio
-async def test_scanner_wrapper_records_entry_and_resolver_snapshots(tmp_path):
+def test_scanner_wrapper_records_entry_and_resolver_snapshots(tmp_path):
     storage = ScanStorage(tmp_path / "wrapper.sqlite")
     now = datetime(2026, 9, 9, 14, 0, tzinfo=timezone.utc)
 
@@ -271,42 +269,45 @@ async def test_scanner_wrapper_records_entry_and_resolver_snapshots(tmp_path):
             )
             return None
 
-    Wrapped = build_v1_diagnostics_capture(Base)
-    scanner = Wrapped()
-    await scanner._process_normalized_candidate(
-        "SPY",
-        {
-            "paper_policy_id": "OPTIONS_PAPER_V1",
-            "price": 100.5,
-            "setup_entry_trigger": 100.0,
-            "option_bid": 1.9,
-            "option_ask": 2.0,
-            "option_quote_timestamp": now.isoformat(),
-            "delta": 0.4,
-            "gamma": 0.02,
-            "theta": -0.03,
-            "implied_volatility": 0.25,
-            "setup_type": "DAILY_212_CONTINUATION",
-            "setup_timeframe": "DAILY",
-        },
-        source="scheduled",
-        now=now,
-    )
-    setup = SimpleNamespace(
-        id=7,
-        selected_contract={
-            "paper_policy_id": "OPTIONS_PAPER_V1",
-            "setup_type": "DAILY_212_CONTINUATION",
-            "setup_timeframe": "DAILY",
-        },
-        setup_inputs={"setup_entry_trigger": 100.0},
-    )
-    await scanner._resolve_v1_candidate(
-        setup,
-        101.0,
-        now + timedelta(minutes=5),
-        {},
-    )
+    async def run_case():
+        Wrapped = build_v1_diagnostics_capture(Base)
+        scanner = Wrapped()
+        await scanner._process_normalized_candidate(
+            "SPY",
+            {
+                "paper_policy_id": "OPTIONS_PAPER_V1",
+                "price": 100.5,
+                "setup_entry_trigger": 100.0,
+                "option_bid": 1.9,
+                "option_ask": 2.0,
+                "option_quote_timestamp": now.isoformat(),
+                "delta": 0.4,
+                "gamma": 0.02,
+                "theta": -0.03,
+                "implied_volatility": 0.25,
+                "setup_type": "DAILY_212_CONTINUATION",
+                "setup_timeframe": "DAILY",
+            },
+            source="scheduled",
+            now=now,
+        )
+        setup = SimpleNamespace(
+            id=7,
+            selected_contract={
+                "paper_policy_id": "OPTIONS_PAPER_V1",
+                "setup_type": "DAILY_212_CONTINUATION",
+                "setup_timeframe": "DAILY",
+            },
+            setup_inputs={"setup_entry_trigger": 100.0},
+        )
+        await scanner._resolve_v1_candidate(
+            setup,
+            101.0,
+            now + timedelta(minutes=5),
+            {},
+        )
+
+    asyncio.run(run_case())
     snapshots = diagnostic_snapshots(storage, 7)
     assert [item.event for item in snapshots] == ["ENTRY", "MARK"]
     assert snapshots[0].underlying_price == 100.5
