@@ -10,6 +10,8 @@ Core rule: **No proof, no run.**
 
 The current task is not another blanket strategy audit. Three MNQ strategy families have enough isolated evidence to justify forward **PaperBroker** collection under their own risk contracts. They are not validated for live capital and must not be forced through the real book's current risk settings.
 
+The current clean implementation/review PR is **#545**. Earlier campaign/handoff PRs listed below are superseded or historical.
+
 ## Current paper campaign
 
 ### 1. MNQ 4HR Re-Trigger
@@ -89,7 +91,9 @@ No campaign code may:
 
 The approved route is **PaperBroker only**.
 
-`context/wide_stop_execution.py` is the route authority for this campaign. Its valid route set is only `paper_sim`; stale values such as `tradovate_demo`, `tradovate`, or `live` must resolve to disabled/no action.
+`context/wide_stop_execution.py` is the route authority for this campaign. Its valid route set is only `paper_sim`; stale values such as `tradovate_demo`, `tradovate`, or `live` resolve to disabled/no action.
+
+The dead external-broker branch/import was removed from the 5-minute campaign hook. Regression tests now pin both the route selector and the absence of the old demo-runtime hook.
 
 Any branch or PR that adds an external-broker route is a separate proposal and requires a new audit. It is not part of this campaign.
 
@@ -105,15 +109,17 @@ These are the current uncertainties that matter most:
 
 ### B. Daily multi-day state recovery
 
-Daily can hold overnight. Its persisted swing state therefore becomes proof-critical across restarts/deploys. A missing state file is valid only for a genuinely new epoch. A malformed, unreadable or wrong-epoch existing state must not be interpreted as safely flat.
+Daily can hold overnight. Its persisted swing state is proof-critical across restarts/deploys.
 
-**Required behavior:** fail closed; do not invent a fresh balance, do not erase a possible open swing, and do not admit another Daily entry until state integrity is restored.
+**Mitigation implemented in #545:** `context/daily_22_state_integrity.py` runs before the Daily collector. A malformed, unreadable, wrong-epoch, impossible-bracket, or unexpectedly missing state with existing evidence fails closed instead of being interpreted as a fresh $5k flat ledger. This prevents silent balance reset and a second simulated swing after ambiguous state loss.
+
+What remains unproven is real forward restart/deploy behavior on the box. That must be observed rather than inferred from unit tests.
 
 ### C. Five-minute feed completeness
 
 Forward outcomes depend on the sequence of completed 5-minute bars. If bars are missing while a position is exposed, the system cannot safely infer that neither stop nor target was touched during the gap.
 
-**Mitigation now:** forward evidence with a known material feed gap is invalid/unresolved, not a win/loss. Do not repair missing path data with later OHLC, MAE summaries, or optimistic assumptions.
+**Mitigation now:** forward evidence with a known material feed gap is invalid/unresolved, not a win/loss. Do not repair missing path data with later OHLC, MAE summaries, or optimistic assumptions. Automated detection of every exchange/session gap is not yet proven, so feed completeness remains a forward-monitoring item.
 
 ## Activation gates — all required
 
@@ -143,16 +149,18 @@ Missing proof on any item means **do not enable the campaign**.
 
 ## Superseded work / cleanup
 
-The following should not be used as current execution authority:
+The following are closed/superseded or historical and must not be used as current execution authority:
 
-- PR **#538** — superseded; external-broker work appeared on the branch and it was closed unmerged.
-- PR **#543** — superseded if its branch contains post-green external-broker commits; the clean paper campaign must be based on the last proven PaperBroker-only state instead.
-- PR **#527** — initial Daily STRAT baseline harness; superseded by the completed Daily isolation/IOC evidence used above.
-- PR **#534** — earlier handoff refresh; superseded by this file.
-- PR **#539** — Daily cross-check documentation; its evidence remains historical, but this file is the current operational handoff.
-- PR **#476** — September 7 handoff; historical only.
+- PR **#538** — superseded; external-broker work appeared on the branch; closed unmerged.
+- PR **#543** — superseded by #545 after post-green external-broker commits reappeared on its branch; closed unmerged.
+- PR **#527** — initial Daily STRAT baseline harness; superseded by completed Daily isolation/IOC evidence; closed.
+- PR **#534** — earlier handoff refresh; superseded by this file; closed.
+- PR **#539** — Daily cross-check documentation; evidence remains historical; closed.
+- PR **#476** — September 7 handoff; historical only; closed.
 
-Do not delete historical evidence files merely because they are old. Close/label superseded PRs and keep Git history as the audit trail.
+Do not delete historical evidence files merely because they are old. Closed PRs and Git history remain the audit trail.
+
+Separate active investigations such as Transition and MES 1-2-2 were intentionally left open; they are not duplicates of this campaign.
 
 ## Do not touch
 
@@ -166,9 +174,9 @@ Do not delete historical evidence files merely because they are old. Close/label
 
 ## Safe next step
 
-1. Finish the state-integrity and stale-route cleanup on the clean PaperBroker-only branch.
-2. Require a fresh green CI run.
-3. Review the final diff for **zero external-broker execution files/routes**.
-4. Only then merge the paper collector.
-5. Separately verify VPS release/env/5-minute feed/epoch pins before enabling collection.
-6. Collect forward evidence. Do not promote based on backtest results alone.
+1. Require a fresh green CI run on the final #545 cleanup head.
+2. Review the final diff for **zero external-broker execution files/routes**.
+3. Only then merge the paper collector.
+4. Separately verify VPS release/env/5-minute feed/epoch pins before enabling collection.
+5. Collect forward evidence, including restart/state and feed-completeness observations.
+6. Do not promote based on backtest results alone.
