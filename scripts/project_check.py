@@ -68,6 +68,19 @@ def _preservation_headline(preservation: dict) -> str:
     )
 
 
+def _main_sync(relationship: dict) -> str:
+    """Render local-main vs origin-main with BOTH directions, never just the label.
+
+    A two-sided divergence (ahead AND behind) must stay visible as such in the
+    text summary; the label alone would let "DIVERGED" read like a plain BEHIND.
+    """
+    state = relationship.get("state", "UNKNOWN")
+    ahead, behind = relationship.get("ahead"), relationship.get("behind")
+    if ahead is None or behind is None:
+        return f"{state} ({relationship.get('reason') or 'ahead/behind counts unavailable'})"
+    return f"{state} (ahead {ahead}, behind {behind})"
+
+
 def _archive_proof(row: dict) -> str:
     """Show the SHA evidence behind a preservation verdict, not just the verdict.
 
@@ -145,7 +158,7 @@ def _cmd_session_start(args: argparse.Namespace) -> int:
     print(f"  repo root:            {repo['repo_root']}")
     print(f"  current branch:       {repo['current_branch']}")
     print(f"  HEAD sha:             {repo['head_sha']}")
-    print(f"  local main vs origin: {repo['local_main_relationship']['state']}")
+    print(f"  local main vs origin: {_main_sync(repo['local_main_relationship'])}")
     print(f"  upstream:             {repo['upstream']}")
     print(f"  dirty tracked files:  {len(repo['dirty_tracked_files'])}")
     print(f"  staged files:         {len(repo['staged_files'])}")
@@ -236,7 +249,7 @@ def _cmd_daily(args: argparse.Namespace) -> int:
     for blocker in report["overall_blockers"]:
         print(f"    BLOCKER {blocker['code']}: {blocker['detail']}")
     hy = report["repo_reconciliation"]
-    print(f"  branch: {hy['current_branch']}  main sync: {hy['local_main_relationship']['state']}")
+    print(f"  branch: {hy['current_branch']}  main sync: {_main_sync(hy['local_main_relationship'])}")
     print(f"  dirty files: {len(hy['dirty_tracked_files'])}  worktrees: {len(hy['worktrees'])}  stashes: {_count(hy['stash_count'])}")
     ep = hy["evidence_preservation"]["closed_unmerged_branches_missing_archive_tag"]
     print(_preservation_headline(ep))
