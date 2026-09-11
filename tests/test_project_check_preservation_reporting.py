@@ -17,7 +17,7 @@ import pytest
 from ops.project_check import gitutil
 from ops.project_check.daily import _overall_blockers, _repo_hygiene
 from ops.project_check.session import build_session_start_report
-from scripts.project_check import _archive_proof, _count, _preservation_headline
+from scripts.project_check import _archive_proof, _count, _main_sync, _preservation_headline
 
 
 def _git(root: Path, *args: str) -> None:
@@ -260,3 +260,12 @@ def test_preservation_headline_never_reports_zero_blockers_when_unchecked() -> N
     assert "UNKNOWN" in unchecked and "0" not in unchecked
     checked = _preservation_headline({"checked": True, "flagged": [{}], "unknown": []})
     assert "unpreserved branch blockers: 1; unknown: 0" in checked
+
+
+def test_main_sync_line_keeps_both_directions_of_a_divergence() -> None:
+    diverged = _main_sync({"state": "DIVERGED", "ahead": 3, "behind": 5, "reason": None})
+    assert diverged == "DIVERGED (ahead 3, behind 5)"
+    behind = _main_sync({"state": "BEHIND", "ahead": 0, "behind": 5, "reason": None})
+    assert behind == "BEHIND (ahead 0, behind 5)"
+    unknown = _main_sync({"state": "UNKNOWN", "ahead": None, "behind": None, "reason": "rev-list failed"})
+    assert unknown == "UNKNOWN (rev-list failed)"
