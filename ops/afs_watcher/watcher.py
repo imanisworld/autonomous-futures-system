@@ -475,7 +475,7 @@ def notify(state: dict, route: str, text: str, dedupe_key: str) -> None:
     if not url or not url.startswith("https://discord.com/api/webhooks/"):
         log(f"NOTIFY(unavailable route {route}) {text}")
         return
-    body = json.dumps({"content": f"{NOTIFY_PREFIX} {text}"[:1900]}).encode("utf-8")
+    body = json.dumps({"content": f"{text}\n-# {NOTIFY_PREFIX}"[:1900]}).encode("utf-8")
     try:
         req = urllib.request.Request(url, data=body, method="POST",
                                      headers={"Content-Type": "application/json", "User-Agent": "afs-watcher-readonly"})
@@ -1493,33 +1493,92 @@ def handle_memory_fixed_warnings(state: dict, findings: Findings, tick: dict) ->
             "summary": warning["summary"], "snapshot": str(snap),
         }, sort_keys=True) + "\n")
         notify(state, MEMORY_WARNING_ROUTE,
-               f"WARNING {key}: {warning['summary']} | smallest fix: {smallest_fix(key)} | diagnostics: {snap}",
+               _finding_discord_text("WARNING", key, warning, str(snap)),
                f"memory-fixed-warning:{key}:{iso(now_utc())[:13]}")
 
 
-def _blocked_discord_text(key: str) -> str:
-    """Render a compact operator message without changing the finding itself."""
-    release = RELEASE_SHA[:8]
-    messages = {
-        "watcher_release_stale": (
-            "**BLOCKED — Watcher needs restart**\n"
-            "New release is live, but the watcher is still tracking the previous release.\n"
-            "**Action:** Restart `afs-watcher` only."
-        ),
-        "unexpected_restart": (
-            "**BLOCKED — Unexpected futures-bot restart**\n"
-            "The bot restarted and no approved deployment explains it.\n"
-            "**Action:** Verify what restarted futures-bot before continuing."
-        ),
-    }
-    title = key.replace("_", " ").strip().capitalize()
-    body = messages.get(
-        key,
-        f"**BLOCKED — Watcher finding: {title}**\n"
-        "The watcher reported a blocked condition.\n"
-        "**Action:** Inspect the watcher snapshot before continuing.",
-    )
-    return f"{body}\n`code={key} | release={release} | service={SERVICE}`"
+# Plain-English titles for finding keys (prefix match). Anything not listed falls
+# back to the key with underscores turned into spaces.
+_FINDING_TITLES = {
+    "watcher_release_stale": "Watcher needs restart",
+    "unexpected_restart": "Unexpected futures-bot restart",
+    "unexpected_deploy": "Unexpected deploy",
+    "service_not_active": "futures-bot is not running",
+    "service_crash_restart": "futures-bot crashed and restarted",
+    "service_traceback": "Bot logged a traceback",
+    "alert_non200": "Webhook post rejected",
+    "webhook_process_count": "Wrong number of webhook processes",
+    "journal_not_advancing": "Journal stopped growing",
+    "evidence_write_error": "Evidence write failed",
+    "unexpected_broker_position": "Unexpected broker position",
+    "post_epoch_wrong_sha": "Evidence rows from the wrong release",
+    "post_epoch_spans_releases": "Post-epoch evidence spans several releases",
+    "orb_reclaim_unpaired": "orb_reclaim pairing defect",
+    "deploy_candidate_running": "Leftover deploy verifier still running",
+    "feed_alarm_stale": "Feed-gap alarm is stale",
+    "oom_kill_new": "Kernel OOM-killed a process",
+    "memory_rss_growth_critical": "futures-bot memory growing fast",
+    "memory_rss_critical": "futures-bot memory near OOM level",
+    "memory_avail_critical": "Box nearly out of memory",
+    "memory_rss_growth": "futures-bot memory rising",
+    "swap_pressure_critical": "Heavy swap paging",
+    "swap_pressure_warning": "Kernel is paging to swap",
+    "swap_used_critical": "Swap nearly exhausted",
+    "swap_used_warning": "Swap filling up",
+    "swap_inactive": "Swap is off",
+    "swap_not_persistent": "Swap missing from fstab",
+}
+
+# A one-sentence explanation for the findings whose summary is too terse to read cold.
+_FINDING_EXPLAIN = {
+    "watcher_release_stale": "New release is live, but the watcher is still tracking the previous release.",
+    "unexpected_restart": "The bot restarted and no approved deployment explains it.",
+}
+
+
+def _finding_title(key: str) -> str:
+    for prefix, title in _FINDING_TITLES.items():
+        if key.startswith(prefix):
+            return title
+    return key.replace("_", " ").strip().capitalize()
+
+
+def _finding_discord_text(level: str, key: str, finding: dict | None = None, snapshot: str | None = None) -> str:
+    """Render one finding for a human reading Discord on a phone: headline first,
+    the specific evidence next, then what to check. Never changes the finding."""
+    icon = "🛑" if level == "BLOCKED" else "⚠️"
+    lines = [f"{icon} **{level} — {_finding_title(key)}**"]
+    explain = _FINDING_EXPLAIN.get(key)
+    summary = (finding or {}).get("summary")
+    if explain:
+        lines.append(explain)
+    elif summary:
+        lines.append(str(summary))
+    detail = (finding or {}).get("detail") or {}
+    samples = detail.get("samples") or []
+    if samples:
+        # the first offending log line is usually the whole answer (who / what / status)
+        lines.append(f"↳ `{str(samples[0]).strip()[-160:]}`")
+    action = smallest_fix(key)
+    if action.startswith("operator: "):
+        action = action[len("operator: "):]
+    lines.append(f"**What to check:** {action}")
+    if snapshot:
+        lines.append(f"Snapshot: `{snapshot}`")
+    lines.append(f"`code={key} | release={RELEASE_SHA[:8]} | service={SERVICE}`")
+    return "\n".join(lines)
+
+
+def _blocked_discord_text(key: str, finding: dict | None = None, snapshot: str | None = None) -> str:
+    return _finding_discord_text("BLOCKED", key, finding, snapshot)
+
+
+def _cleared_discord_text(key: str, first_utc: str | None) -> str:
+    since = ""
+    if first_utc:
+        mins = int((now_utc() - _ts(first_utc)).total_seconds() // 60)
+        since = f" (was blocked {mins} min)"
+    return f"✅ **cleared — {_finding_title(key)}**{since}\n`code={key} | release={RELEASE_SHA[:8]}`"
 
 
 def handle_blocked(state: dict, findings: Findings, tick: dict) -> None:
@@ -1529,9 +1588,11 @@ def handle_blocked(state: dict, findings: Findings, tick: dict) -> None:
     cleared = [k for k in state["blocked"] if k not in current]
     for k in cleared:
         log(f"BLOCKED cleared: {k}")
-        state["blocked"].pop(k, None)
+        was = state["blocked"].pop(k, None) or {}
         state["blocked_last_notified"].pop(k, None)
         state["notified"].pop(f"blocked:{k}", None)
+        notify(state, "DISCORD_ROUTE_ERROR", _cleared_discord_text(k, was.get("first_utc")),
+               f"blocked-cleared:{k}:{iso(now_utc())}")
     if not blocked:
         return
     snap = None
@@ -1546,12 +1607,14 @@ def handle_blocked(state: dict, findings: Findings, tick: dict) -> None:
         remind = (not last) or (now_utc() - _ts(last)).total_seconds() >= BLOCKED_REMINDER_S
         if remind:
             state["notified"].pop(f"blocked:{k}", None)
-            notify(state, "DISCORD_ROUTE_ERROR", _blocked_discord_text(k), f"blocked:{k}")
+            notify(state, "DISCORD_ROUTE_ERROR",
+                   _blocked_discord_text(k, b, state["blocked"][k].get("snapshot")), f"blocked:{k}")
             state["blocked_last_notified"][k] = iso(now_utc())
 
 
 def smallest_fix(key: str) -> str:
     m = {
+        "watcher_release_stale": "operator: restart `afs-watcher` only — the bot is fine, the watcher is pinned to the old release",
         "unexpected_deploy": "operator: confirm the deploy was intended; re-arm the watcher on the new release (no auto-fix)",
         "service_not_active": "operator: inspect `journalctl -u futures-bot`; restart only by operator decision",
         "unexpected_restart": "operator: confirm who restarted futures-bot — a sanctioned --release re-baselines on its own, and this restart could not be tied to one (see not_adopted); re-baseline by hand only if intended",
@@ -1686,7 +1749,23 @@ def maybe_daily(state: dict, tick: dict, findings: Findings) -> None:
         summary += " — discrepancies: " + "; ".join(disc)
     state_append(EVENTS_FILE, json.dumps({"utc": iso(now_utc()), "kind": "DAILY", "key": key, "verdict": verdict, "discrepancies": disc}, sort_keys=True) + "\n")
     log(f"DAILY {summary}")
-    notify(state, "DISCORD_ROUTE_ERROR" if disc else "DISCORD_ROUTE_DAILY_REPORT", summary + f" | file: {DAILY_DIR / (key + '.json')}", f"daily:{key}")
+    notify(state, "DISCORD_ROUTE_ERROR" if disc else "DISCORD_ROUTE_DAILY_REPORT",
+           _daily_discord_text(verdict, key, posts, rep["campaign_rows_after_epoch"], pops, disc, str(DAILY_DIR / (key + ".json"))),
+           f"daily:{key}")
+
+
+def _daily_discord_text(verdict: str, day: str, posts: dict, rows_after_epoch, pops: dict, disc: list, path: str) -> str:
+    icon = "✅" if verdict == "DAILY PASS" else "🛑"
+    total = sum(posts.values()) if posts else 0
+    non200 = {k: v for k, v in posts.items() if k != "200"}
+    posts_line = f"Webhook posts: {total}" + (" (all 200)" if total and not non200 else (f" — rejected: {non200}" if non200 else ""))
+    lines = [f"{icon} **{verdict} {day}**", posts_line, f"Post-epoch campaign rows: {rows_after_epoch}"]
+    for k, v in pops.items():
+        lines.append(f"• {k}: {v['candidates']} cand · {v['resolved_filled_economic']} filled · {v['distinct_trading_days']} days")
+    for d in disc:
+        lines.append(f"⚠️ {d}")
+    lines.append(f"File: `{path}`")
+    return "\n".join(lines)
 
 
 # ── interim two-week audit ───────────────────────────────────────────────────
