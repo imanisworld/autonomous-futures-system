@@ -117,3 +117,30 @@ class TestLoadRoutes:
         for name in ("signa", "daily_report", "deployment"):
             assert name in routes
             assert routes[name].required is False
+
+
+class TestDictBodies:
+    def test_dict_message_is_passed_through_to_transport(self):
+        calls = []
+        r = DiscordRouter(
+            routes=_routes(), env={"DISCORD_ROUTE_ERROR": "https://x.invalid"},
+            transport=lambda url, msg: calls.append((url, msg)),
+        )
+        body = {"embeds": [{"title": "t"}]}
+        assert r.send("error", body) is True
+        assert calls == [("https://x.invalid", body)]
+
+    def test_default_transport_wraps_str_and_passes_dict(self, monkeypatch):
+        import notifications.discord_router as mod
+        import types, sys
+        posted = []
+
+        class _Resp:
+            def raise_for_status(self):
+                pass
+
+        fake = types.SimpleNamespace(post=lambda url, json, timeout: posted.append(json) or _Resp())
+        monkeypatch.setitem(sys.modules, "httpx", fake)
+        mod._default_transport("https://x.invalid", "hello")
+        mod._default_transport("https://x.invalid", {"embeds": []})
+        assert posted == [{"content": "hello"}, {"embeds": []}]
