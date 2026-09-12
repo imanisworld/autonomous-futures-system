@@ -37,10 +37,11 @@ class ProbeRequest:
 def build_probe_requests(symbol: str, timeframe: str) -> tuple[ProbeRequest, ...]:
     """Return the fixed read-only endpoint allowlist.
 
-    Founding/Early accounts are documented as having the Individual intelligence
-    surfaces plus congressional endpoints. We deliberately probe both documented
-    dark-pool forms and both raw/aggregated Congress forms so the account itself
-    can settle which contracts are live. No broker endpoint is ever included.
+    Signa's current pricing/developer pages say Founder/Early accounts retain
+    Individual rights, while the API-reference plan labels are not fully
+    consistent. The probe therefore treats the account's real HTTP responses as
+    the entitlement authority. We deliberately probe both documented dark-pool
+    forms and both raw/aggregated Congress forms. No broker endpoint is included.
     """
     symbol = symbol.strip().upper()
     timeframe = timeframe.strip() or DEFAULT_TIMEFRAME
@@ -148,13 +149,15 @@ def probe_signa_capabilities(
             http.close()
 
     return {
-        "probe": "signa_capability_probe_v2",
+        "probe": "signa_capability_probe_v3",
         "observed_at": datetime.now(timezone.utc).isoformat(),
         "base_url": base_url.rstrip("/"),
         "symbol": symbol.strip().upper(),
         "timeframe": timeframe,
         "results": results,
         "notes": {
+            "founding": "Public pricing/developer pages say Founder/Early retain Individual rights; actual endpoint responses decide this audit.",
+            "docs": "Public Signa plan labels are internally inconsistent, so no endpoint is assumed available until the key proves it.",
             "gex": "Signa advertises GEX access, but the current public reference does not document a standalone GEX endpoint; do not guess one.",
             "safety": "read-only GET allowlist; no strategy, risk, broker, order, or execution integration",
         },
