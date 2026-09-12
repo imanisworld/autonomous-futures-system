@@ -11,6 +11,7 @@ import httpx
 from .config import ScannerConfig
 from .paper_v1 import MAX_SANITY_DTE, POLICY_ID, dte_for
 from .scorer import ScoreResult
+from .signa_v2_display import render_signa_v2
 from .storage import ScanStorage
 
 
@@ -345,6 +346,9 @@ def _premium_value_text(result: ScoreResult) -> str:
 
 def _signa_text(result: ScoreResult) -> str:
     raw = result.raw
+    v2 = render_signa_v2(raw)
+    if v2 != "N/A":
+        return v2
     grade = raw.get("signa_grade")
     score = raw.get("signa_score")
     direction = raw.get("signa_daily_direction") or raw.get("signa_direction")
