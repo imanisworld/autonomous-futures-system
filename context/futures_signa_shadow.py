@@ -35,6 +35,11 @@ EVIDENCE_FILENAME = "futures_signa_shadow.jsonl"
 PROXY_SYMBOL = {"MNQ": "QQQ", "MES": "SPY"}
 SUPPORTED_TIMEFRAMES = {"1h", "1d"}
 
+# One process-local client so SignaV2Client's per-(symbol,timeframe) TTL cache
+# survives across webhook bars. Constructing a new client per decision would
+# silently defeat the cache and could consume the shared account quota.
+_shared_client: SignaV2Client | None = None
+
 
 def enabled_from_env(env: Mapping[str, str] | None = None) -> bool:
     source = os.environ if env is None else env
@@ -59,6 +64,14 @@ def timeframe_from_env(env: Mapping[str, str] | None = None) -> str | None:
 
 def evidence_path(log_dir: str | Path) -> Path:
     return Path(log_dir) / EVIDENCE_FILENAME
+
+
+def default_client() -> SignaV2Client:
+    """Return the process-local read-only client/cache."""
+    global _shared_client
+    if _shared_client is None:
+        _shared_client = SignaV2Client()
+    return _shared_client
 
 
 def append_futures_signa_shadow(
@@ -121,7 +134,7 @@ def append_futures_signa_shadow(
         _append(log_dir, row, for_date=for_date)
         return row
 
-    signa = client or SignaV2Client()
+    signa = client if client is not None else default_client()
     try:
         observation = signa.fetch_action_card(proxy, signa_timeframe)
         fields = observation.telemetry_fields()
