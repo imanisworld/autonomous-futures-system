@@ -605,10 +605,10 @@ def _handle_alert_blocking(payload: AlertPayload) -> None:
                 logger.warning("live_quote attach failed: %s", exc)
         try:
             from notifications.discord_router import DiscordRouter as _DR
-            from notifications.discord_notifier import _format_message as _fmt
+            from notifications.discord_notifier import build_signal_body as _body
             _router = _DR()
             if _router.is_enabled("signal") and result.get("decision") in _config.discord_notify_decisions:
-                _router.send("signal", _fmt(payload, result))
+                _router.send("signal", _body(payload, result))
             else:
                 notify_discord(payload=payload, result=result, config=_config)
         except Exception as _disc_exc:

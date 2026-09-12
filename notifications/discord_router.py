@@ -78,10 +78,12 @@ def load_routes(path: str | os.PathLike[str] | None = None) -> dict[str, Route]:
     return routes
 
 
-def _default_transport(url: str, message: str) -> None:
+def _default_transport(url: str, message: "str | dict") -> None:
     import httpx
 
-    response = httpx.post(url, json={"content": message}, timeout=5)
+    # A dict is a ready-made webhook body (e.g. an embed card); a string is plain content.
+    body = message if isinstance(message, dict) else {"content": message}
+    response = httpx.post(url, json=body, timeout=5)
     response.raise_for_status()
 
 
@@ -133,8 +135,8 @@ class DiscordRouter:
             )
 
     # ── Delivery ─────────────────────────────────────────────────────────────
-    def send(self, route_name: str, message: str, metadata: Optional[dict] = None) -> bool:
-        """Deliver a message to a logical route.
+    def send(self, route_name: str, message: "str | dict", metadata: Optional[dict] = None) -> bool:
+        """Deliver a message (plain text, or a dict webhook body such as an embed) to a logical route.
 
         Returns:
             True  — message delivered.
