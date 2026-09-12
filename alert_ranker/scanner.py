@@ -6,6 +6,10 @@ for compatibility, then installs the options-only multi-setup paper collector,
 default-off Signa v2 observation enrichment, V1 evidence hardening,
 fail-closed scheduled-collection preflight, and append-only diagnostics
 capture. No futures or broker execution code is imported here.
+
+The Signa v2 wrapper is inert unless ``OPTIONS_SIGNA_V2_OBSERVE_ENABLED`` is
+explicitly enabled. Even then it appends namespaced telemetry only; scoring and
+trade authority remain unchanged.
 """
 
 from . import scanner_legacy as _legacy
