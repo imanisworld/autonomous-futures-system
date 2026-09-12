@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import sqlite3
+from datetime import datetime, timezone
 from types import SimpleNamespace
 
 from alert_ranker.scorer import score_setup
 from alert_ranker.signa_v2_observer import build_signa_v2_observer
+from alert_ranker.storage import ScanStorage
 from sources.signa_observation import SignaActionCardObservation
 
 
@@ -109,6 +113,35 @@ def test_v2_telemetry_cannot_change_scanner_score() -> None:
     assert scored_v2.direction == scored_base.direction
     assert scored_v2.components["signa"] == 0
     assert scored_base.components["signa"] == 0
+
+
+def test_v2_telemetry_persists_via_existing_raw_json_storage(tmp_path) -> None:
+    client = FakeV2Client()
+    Scanner = build_signa_v2_observer(BaseScanner)
+    scanner = Scanner(
+        _cfg(signa_v2_observe_enabled=True, signa_v2_timeframe="1d"),
+        signa_v2_client=client,
+    )
+    data = asyncio.run(scanner._build_normalized_data("AAPL", {}, None))
+    result = score_setup(data)
+    db_path = tmp_path / "options_scanner.sqlite"
+    storage = ScanStorage(db_path)
+
+    storage.record_scan(
+        result,
+        source="test",
+        alert_sent=False,
+        alert_suppression_reason="test_only",
+        timestamp=datetime(2026, 9, 12, 14, 0, tzinfo=timezone.utc),
+    )
+
+    with sqlite3.connect(db_path) as conn:
+        raw_json = conn.execute("SELECT raw_json FROM scans ORDER BY id DESC LIMIT 1").fetchone()[0]
+    stored = json.loads(raw_json)
+    assert stored["signa_v2_ok"] is True
+    assert stored["signa_v2_grade"] == "A"
+    assert stored["signa_v2_confidence"] == 88.0
+    assert stored["signa_v2_component_scores"]["flow"] == 92.0
 
 
 def test_v2_observer_fails_soft() -> None:
