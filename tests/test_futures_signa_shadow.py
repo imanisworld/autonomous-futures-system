@@ -4,6 +4,7 @@ import ast
 import json
 from pathlib import Path
 
+import context.futures_signa_shadow as shadow_module
 from context.futures_signa_shadow import (
     append_futures_signa_shadow,
     direction_relation,
@@ -152,6 +153,25 @@ def test_provider_failure_fails_soft_and_records_error(tmp_path) -> None:
     assert result["signa_v2_ok"] is False
     assert result["signa_v2_error"] == "RuntimeError"
     assert result["decision"] == "NO_TRADE"
+
+
+def test_default_client_is_process_local(monkeypatch) -> None:
+    created = []
+
+    class FakeSignaClient:
+        pass
+
+    def factory():
+        value = FakeSignaClient()
+        created.append(value)
+        return value
+
+    monkeypatch.setattr(shadow_module, "_shared_client", None)
+    monkeypatch.setattr(shadow_module, "SignaV2Client", factory)
+    first = shadow_module.default_client()
+    second = shadow_module.default_client()
+    assert first is second
+    assert created == [first]
 
 
 def test_timeframe_has_no_default_and_only_probe_scope_is_allowed() -> None:
