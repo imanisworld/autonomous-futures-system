@@ -9,6 +9,7 @@ migrated to this client.
 from __future__ import annotations
 
 import os
+from dataclasses import replace
 from datetime import datetime, timezone
 
 import httpx
@@ -72,12 +73,10 @@ class SignaV2Client:
             payload = response.json()
             observation = parse_action_card(payload, retrieved_at=retrieved_at)
             if observation.symbol is None or observation.timeframe is None:
-                return SignaActionCardObservation(
-                    **{
-                        **observation.__dict__,
-                        "symbol": observation.symbol or symbol,
-                        "timeframe": observation.timeframe or timeframe,
-                    }
+                return replace(
+                    observation,
+                    symbol=observation.symbol or symbol,
+                    timeframe=observation.timeframe or timeframe,
                 )
             return observation
         except httpx.HTTPStatusError as exc:
