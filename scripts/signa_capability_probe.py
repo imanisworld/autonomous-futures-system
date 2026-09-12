@@ -35,6 +35,13 @@ class ProbeRequest:
 
 
 def build_probe_requests(symbol: str, timeframe: str) -> tuple[ProbeRequest, ...]:
+    """Return the fixed read-only endpoint allowlist.
+
+    Founding/Early accounts are documented as having the Individual intelligence
+    surfaces plus congressional endpoints. We deliberately probe both documented
+    dark-pool forms and both raw/aggregated Congress forms so the account itself
+    can settle which contracts are live. No broker endpoint is ever included.
+    """
     symbol = symbol.strip().upper()
     timeframe = timeframe.strip() or DEFAULT_TIMEFRAME
     return (
@@ -45,9 +52,12 @@ def build_probe_requests(symbol: str, timeframe: str) -> tuple[ProbeRequest, ...
         ProbeRequest("analysis", "/api/v1/analysis", {"sym": symbol}),
         ProbeRequest("earnings", "/api/v1/earnings", {"symbol": symbol}),
         ProbeRequest("options_flow", f"/api/options-flow/{symbol}", {}),
-        ProbeRequest("darkpool", f"/api/options-flow/darkpool/{symbol}", {}),
+        ProbeRequest("darkpool_symbol", f"/api/options-flow/darkpool/{symbol}", {}),
+        ProbeRequest("darkpool_prints", "/api/darkpool/prints", {"ticker": symbol}),
         ProbeRequest("market_tide", "/api/options-flow/tide", {}),
         ProbeRequest("political_trades", "/api/v1/political-trades", {"ticker": symbol, "limit": 5}),
+        ProbeRequest("congress_raw", "/api/congress/trades", {"ticker": symbol, "limit": 5}),
+        ProbeRequest("congress_aggregate", "/api/options-flow/congress", {"ticker": symbol}),
     )
 
 
@@ -138,14 +148,14 @@ def probe_signa_capabilities(
             http.close()
 
     return {
-        "probe": "signa_capability_probe_v1",
+        "probe": "signa_capability_probe_v2",
         "observed_at": datetime.now(timezone.utc).isoformat(),
         "base_url": base_url.rstrip("/"),
         "symbol": symbol.strip().upper(),
         "timeframe": timeframe,
         "results": results,
         "notes": {
-            "gex": "Signa currently advertises GEX access, but the public API reference does not document a standalone GEX endpoint; do not guess one.",
+            "gex": "Signa advertises GEX access, but the current public reference does not document a standalone GEX endpoint; do not guess one.",
             "safety": "read-only GET allowlist; no strategy, risk, broker, order, or execution integration",
         },
     }
