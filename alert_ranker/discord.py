@@ -11,6 +11,7 @@ import httpx
 from .config import ScannerConfig
 from .paper_v1 import MAX_SANITY_DTE, POLICY_ID, dte_for
 from .scorer import ScoreResult
+from .signa_v2_display import render_signa_v2
 from .storage import ScanStorage
 
 
@@ -344,7 +345,22 @@ def _premium_value_text(result: ScoreResult) -> str:
 
 
 def _signa_text(result: ScoreResult) -> str:
+    """Legacy Signa line first, v2 observation on its own line when present.
+
+    Both surfaces stay visible during the comparison period; v2 never
+    replaces the legacy context it is being evaluated against.
+    """
     raw = result.raw
+    legacy = _legacy_signa_text(raw)
+    v2 = render_signa_v2(raw)
+    if v2 == "N/A":
+        return legacy
+    if legacy == "N/A":
+        return v2
+    return f"{legacy}\n{v2}"
+
+
+def _legacy_signa_text(raw: dict) -> str:
     grade = raw.get("signa_grade")
     score = raw.get("signa_score")
     direction = raw.get("signa_daily_direction") or raw.get("signa_direction")
