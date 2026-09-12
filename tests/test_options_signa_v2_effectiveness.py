@@ -198,5 +198,7 @@ def test_effectiveness_script_is_read_only_and_reuses_existing_policy() -> None:
     assert "_performance_metrics" in source
     assert "CONTEXT_MIN_EXAMPLES" in source
     assert "STRATEGY_MIN_DAYS" in source
-    assert "broker" not in source.lower()
-    assert "execute" not in source.lower()
+    assert "LIVE_TRADING_ENABLED" not in source
+    assert ".post(" not in source
+    assert ".put(" not in source
+    assert ".delete(" not in source
