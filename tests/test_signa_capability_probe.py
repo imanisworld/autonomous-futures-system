@@ -16,6 +16,22 @@ from scripts.signa_capability_probe import (
 def test_probe_request_allowlist_is_get_only_and_non_execution() -> None:
     requests = build_probe_requests("AAPL", "1d")
     assert requests
+    names = {request.name for request in requests}
+    assert {
+        "health",
+        "quote",
+        "signal_current",
+        "signal_legacy",
+        "analysis",
+        "earnings",
+        "options_flow",
+        "darkpool_symbol",
+        "darkpool_prints",
+        "market_tide",
+        "political_trades",
+        "congress_raw",
+        "congress_aggregate",
+    }.issubset(names)
     for request in requests:
         assert request.path.startswith("/api/")
         assert "/broker/" not in request.path
@@ -57,7 +73,11 @@ def test_response_shape_never_copies_provider_values() -> None:
     assert "185.9" not in text
     assert "190.0" not in text
     assert shape["success"] == "bool"
-    assert shape["data"]["signal"] == "dict"
+    assert shape["data"]["signal"] == {
+        "confidence": "int",
+        "symbol": "str",
+        "targets": "list",
+    }
 
 
 def test_probe_reports_entitlement_without_dumping_raw_payloads() -> None:
