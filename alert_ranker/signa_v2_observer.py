@@ -62,10 +62,13 @@ def build_signa_v2_observer(base_cls):
             timeframe = signa_v2_timeframe(self.config)
             client = self._signa_v2_client
             if client is None:
+                # Build once and keep it: the client's per-(symbol, timeframe)
+                # TTL cache only helps if it outlives a single scan.
                 client = SignaV2Client(
                     base_url=getattr(self.config, "signa_base_url", "https://app.getsigna.ai"),
                     timeout=getattr(self.config, "signa_timeout_seconds", 3.0),
                 )
+                self._signa_v2_client = client
 
             try:
                 observation = await asyncio.to_thread(client.fetch_action_card, symbol, timeframe)

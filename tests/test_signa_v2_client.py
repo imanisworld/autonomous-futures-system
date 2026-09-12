@@ -118,3 +118,115 @@ def test_v2_client_has_no_trading_runtime_imports_or_mutating_http_calls() -> No
     assert ".delete(" not in source
     assert "LIVE_TRADING_ENABLED" not in source
     assert "SIGNA_GATE_ENFORCED" not in source
+
+
+def _card(symbol: str, timeframe: str) -> dict:
+    return {
+        "success": True,
+        "data_as_of": "2026-09-12T02:00:35.366+00:00",
+        "data": {
+            "signal": {
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "direction": "NEUTRAL",
+                "grade": "F",
+                "score": 40,
+                "targets": [1.0],
+            }
+        },
+    }
+
+
+class _Clock:
+    def __init__(self) -> None:
+        self.now = 1000.0
+
+    def __call__(self) -> float:
+        return self.now
+
+
+def _counting_client(seen: list[httpx.Request], status: int = 200) -> httpx.Client:
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        if status != 200:
+            return httpx.Response(status, json={"error": "x"})
+        symbol = request.url.path.rsplit("/", 1)[-1]
+        return httpx.Response(200, json=_card(symbol, request.url.params.get("timeframe", "1d")))
+
+    return httpx.Client(base_url="https://app.getsigna.ai", transport=httpx.MockTransport(handler))
+
+
+def test_v2_client_serves_one_provider_call_per_symbol_timeframe_within_ttl() -> None:
+    seen: list[httpx.Request] = []
+    clock = _Clock()
+    http = _counting_client(seen)
+    try:
+        client = SignaV2Client(api_key="k", client=http, cache_ttl_seconds=1800, clock=clock)
+        first = client.fetch_action_card("AAPL", "1d")
+        clock.now += 300  # one scanner interval later
+        second = client.fetch_action_card("AAPL", "1d")
+        clock.now += 300
+        third = client.fetch_action_card("aapl", "1d")
+    finally:
+        http.close()
+
+    assert len(seen) == 1
+    assert first.cached is False
+    assert second.cached is True and third.cached is True
+    # Provenance is the ORIGINAL retrieval, not the cache read.
+    assert second.retrieved_at == first.retrieved_at
+    assert second.telemetry_fields()["signa_v2_cached"] is True
+    assert first.telemetry_fields()["signa_v2_cached"] is False
+
+
+def test_v2_client_refetches_after_ttl_and_keys_cache_by_symbol_and_timeframe() -> None:
+    seen: list[httpx.Request] = []
+    clock = _Clock()
+    http = _counting_client(seen)
+    try:
+        client = SignaV2Client(api_key="k", client=http, cache_ttl_seconds=1800, clock=clock)
+        client.fetch_action_card("AAPL", "1d")
+        client.fetch_action_card("AAPL", "1h")  # different timeframe -> separate entry
+        client.fetch_action_card("NVDA", "1d")  # different symbol -> separate entry
+        assert len(seen) == 3
+        clock.now += 1800  # exactly TTL -> expired
+        refreshed = client.fetch_action_card("AAPL", "1d")
+    finally:
+        http.close()
+
+    assert len(seen) == 4
+    assert refreshed.cached is False
+
+
+def test_v2_client_never_caches_failures() -> None:
+    seen: list[httpx.Request] = []
+    http = _counting_client(seen, status=429)
+    try:
+        client = SignaV2Client(api_key="k", client=http, cache_ttl_seconds=1800)
+        first = client.fetch_action_card("AAPL", "1d")
+        second = client.fetch_action_card("AAPL", "1d")
+    finally:
+        http.close()
+
+    assert first.ok is False and first.error == "http_429"
+    assert second.cached is False
+    assert len(seen) == 2
+
+
+def test_v2_client_ttl_zero_disables_cache_and_env_sets_default(monkeypatch) -> None:
+    seen: list[httpx.Request] = []
+    http = _counting_client(seen)
+    try:
+        client = SignaV2Client(api_key="k", client=http, cache_ttl_seconds=0)
+        client.fetch_action_card("AAPL", "1d")
+        client.fetch_action_card("AAPL", "1d")
+    finally:
+        http.close()
+    assert len(seen) == 2
+
+    monkeypatch.delenv("OPTIONS_SIGNA_V2_CACHE_TTL_SECONDS", raising=False)
+    assert SignaV2Client(api_key="k").cache_ttl_seconds == 1800.0
+    monkeypatch.setenv("OPTIONS_SIGNA_V2_CACHE_TTL_SECONDS", "600")
+    assert SignaV2Client(api_key="k").cache_ttl_seconds == 600.0
+    monkeypatch.setenv("OPTIONS_SIGNA_V2_CACHE_TTL_SECONDS", "garbage")
+    assert SignaV2Client(api_key="k").cache_ttl_seconds == 1800.0

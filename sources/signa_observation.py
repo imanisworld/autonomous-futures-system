@@ -35,6 +35,7 @@ class SignaActionCardObservation:
     server_time: str | None = None
     data_as_of: str | None = None
     retrieved_at: str | None = None
+    cached: bool = False
     error: str | None = None
     raw: dict[str, Any] | None = None
 
@@ -59,6 +60,7 @@ class SignaActionCardObservation:
             "signa_v2_server_time": self.server_time,
             "signa_v2_data_as_of": self.data_as_of,
             "signa_v2_retrieved_at": self.retrieved_at,
+            "signa_v2_cached": self.cached,
             "signa_v2_error": self.error,
         }
 

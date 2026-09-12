@@ -159,3 +159,28 @@ def test_v2_observer_fails_soft() -> None:
     assert data["signa_v2_ok"] is False
     assert data["signa_v2_error"] == "RuntimeError"
     assert data["price"] == 105.0
+
+
+def test_v2_observer_reuses_one_client_across_scans(monkeypatch) -> None:
+    """The client's TTL cache is only useful if the observer keeps the client."""
+    from sources import signa_v2_client as client_module
+
+    built = []
+
+    class CountingClient(FakeV2Client):
+        def __init__(self, *args, **kwargs):
+            super().__init__()
+            built.append(self)
+
+    monkeypatch.setattr(client_module, "SignaV2Client", CountingClient)
+    monkeypatch.setattr("alert_ranker.signa_v2_observer.SignaV2Client", CountingClient)
+
+    Scanner = build_signa_v2_observer(BaseScanner)
+    scanner = Scanner(_cfg(signa_v2_observe_enabled=True))
+    asyncio.run(scanner._build_normalized_data("AAPL", {}, None))
+    asyncio.run(scanner._build_normalized_data("AAPL", {}, None))
+    asyncio.run(scanner._build_normalized_data("NVDA", {}, None))
+
+    assert len(built) == 1
+    assert built[0].calls == [("AAPL", "1d"), ("AAPL", "1d"), ("NVDA", "1d")]
+    assert scanner._signa_v2_client is built[0]
