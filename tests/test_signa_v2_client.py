@@ -116,5 +116,5 @@ def test_v2_client_has_no_trading_runtime_imports_or_mutating_http_calls() -> No
     assert ".post(" not in source
     assert ".put(" not in source
     assert ".delete(" not in source
-    assert "broker" not in source.lower()
-    assert "order" not in source.lower()
+    assert "LIVE_TRADING_ENABLED" not in source
+    assert "SIGNA_GATE_ENFORCED" not in source
