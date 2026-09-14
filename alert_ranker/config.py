@@ -121,6 +121,15 @@ class ScannerConfig:
     # still available from the live price per unit of risk. Price already past
     # the target or the stop is always refused; 0 disables only the ratio floor.
     paper_v1_min_remaining_rr: float = 1.0
+    # Daily paper lane (2026-09-14 operator rulings):
+    # - target floor: prior-day levels closer than this many R from the trigger
+    #   are skipped when choosing target_1/target_2 (0 or negative = off);
+    # - the session-hourly 2U/2D confirmation is no longer required for the
+    #   Daily lane (it cannot exist before ~11:46 ET, which is what made every
+    #   gap-through day a late entry). SPY/QQQ trend alignment still is. Set the
+    #   flag to restore the old hourly requirement.
+    paper_v1_daily_min_target_rr: float = 1.0
+    paper_v1_daily_require_hourly_alignment: bool = False
 
     @property
     def rh_configured(self) -> bool:
@@ -230,6 +239,12 @@ def load_config(environ: Iterable[tuple[str, str]] | None = None) -> ScannerConf
         sip_delay_buffer_seconds=_as_int(env.get("OPTIONS_SIP_DELAY_BUFFER_SECONDS"), 960),
         paper_v1_min_remaining_rr=_as_non_negative_float(
             env.get("OPTIONS_PAPER_V1_MIN_REMAINING_RR"), 1.0
+        ),
+        paper_v1_daily_min_target_rr=_as_non_negative_float(
+            env.get("OPTIONS_PAPER_V1_DAILY_MIN_TARGET_RR"), 1.0
+        ),
+        paper_v1_daily_require_hourly_alignment=_as_bool(
+            env.get("OPTIONS_PAPER_V1_DAILY_REQUIRE_HOURLY"), False
         ),
         alpaca_trading_base_url=env.get(
             "ALPACA_ENDPOINT", "https://paper-api.alpaca.markets"
