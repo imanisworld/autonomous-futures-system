@@ -15,6 +15,8 @@ from .discord import AlertDecision, DiscordAlerter
 from .lifecycle import classify_candidate, open_candidate_fields, resolve_open_setup
 from .market_data import MarketDataClient, build_provider_capabilities
 from .paper_v1 import (
+    DEFAULT_MIN_REMAINING_RR,
+    ENTRY_LATE_STATUS,
     MAX_AGGREGATE_OPEN_RISK_DOLLARS,
     MAX_TRADE_RISK_DOLLARS,
     POLICY_ID,
@@ -22,6 +24,9 @@ from .paper_v1 import (
     choose_contract,
     choose_expiration,
     data_invalid,
+    entry_late,
+    entry_late_reason,
+    remaining_reward_to_risk,
 )
 from .session_calendar import EXCHANGE_TIMEZONE, nyse_session_for
 from .scorer import ScoreResult, is_ny_open, score_setup
@@ -220,6 +225,23 @@ class OptionsScanner:
             return data
         if target_1 in (None, ""):
             data.update(data_invalid("target_missing"))
+            return data
+
+        # Late-entry guard: refuse before any option-chain call when the live
+        # price has already consumed the setup (see paper_v1.entry_late_reason).
+        live_price = _float_or_none(normalized.get("price"))
+        data["paper_entry_remaining_rr"] = remaining_reward_to_risk(
+            direction, live_price, _float_or_none(invalidation), _float_or_none(target_1)
+        )
+        late_reason = entry_late_reason(
+            direction,
+            live_price,
+            _float_or_none(invalidation),
+            _float_or_none(target_1),
+            getattr(self.config, "paper_v1_min_remaining_rr", DEFAULT_MIN_REMAINING_RR),
+        )
+        if late_reason:
+            data.update(entry_late(late_reason))
             return data
 
         fetch_expirations = getattr(self.market_data, "fetch_option_expirations", None)
@@ -515,6 +537,8 @@ class OptionsScanner:
         if str(normalized.get("setup_status") or "").upper() == "TRIGGERED":
             if normalized.get("paper_policy_id") != POLICY_ID:
                 return "DATA_INVALID:paper_policy_missing"
+            if normalized.get("paper_policy_status") == ENTRY_LATE_STATUS:
+                return "ENTRY_LATE:" + str(normalized.get("paper_policy_reason") or "late")
             if normalized.get("paper_policy_status") != "VALID":
                 return "DATA_INVALID:" + str(
                     normalized.get("paper_policy_reason") or "contract_or_risk_invalid"
@@ -830,6 +854,7 @@ def _selected_contract(raw: dict[str, Any]) -> dict[str, Any]:
         "paper_policy_id",
         "paper_policy_status",
         "paper_policy_warnings",
+        "paper_entry_remaining_rr",
         "contract",
         "strike",
         "expiry",

@@ -330,6 +330,84 @@ def data_invalid(reason: str) -> dict[str, Any]:
     }
 
 
+# Late-entry guard (2026-09-14). The Daily lane evaluates its trigger at the
+# 5-minute scan, so a daily setup that has already run is otherwise entered at
+# market with its own target behind it and "hits" on the next snapshot (rows
+# 9170/9171 on 2026-09-11: AAPL entered 5.88 above target, WIN label, -$70).
+# The guard measures the reward still available from the LIVE price, not from
+# the trigger, and refuses the ACTIVE paper entry when price is already past
+# the target, past the stop, or leaves less than ``min_rr`` reward per unit of
+# risk. It never touches the setup verdict, targets, risk sizing or the
+# counterfactual lane -- a refused row is a scan row with an ENTRY_LATE reason.
+ENTRY_LATE_STATUS = "ENTRY_LATE"
+DEFAULT_MIN_REMAINING_RR = 1.0
+
+
+def remaining_reward_to_risk(
+    direction: str,
+    price: float | None,
+    stop: float | None,
+    target: float | None,
+) -> float | None:
+    """Reward/risk still available from ``price``; None when undefined.
+
+    Negative reward means price is already past the target. Zero or negative
+    risk means price is already at or through the stop, which is reported as
+    None because the ratio has no meaning there.
+    """
+    if price is None or stop is None or target is None:
+        return None
+    side = str(direction or "").upper()
+    if side == "LONG":
+        reward = target - price
+        risk = price - stop
+    elif side == "SHORT":
+        reward = price - target
+        risk = stop - price
+    else:
+        return None
+    if risk <= 0:
+        return None
+    return reward / risk
+
+
+def entry_late_reason(
+    direction: str,
+    price: float | None,
+    stop: float | None,
+    target: float | None,
+    min_rr: float = DEFAULT_MIN_REMAINING_RR,
+) -> str | None:
+    """Reason the ACTIVE paper entry must be refused, or None when it may open.
+
+    Missing price/levels return None: those cases already fail closed in the
+    contract and risk steps, and this guard must not invent a new failure mode.
+    """
+    if price is None or stop is None or target is None:
+        return None
+    side = str(direction or "").upper()
+    if side not in {"LONG", "SHORT"}:
+        return None
+    if (side == "LONG" and price >= target) or (side == "SHORT" and price <= target):
+        return "price_past_target"
+    if (side == "LONG" and price <= stop) or (side == "SHORT" and price >= stop):
+        return "price_past_stop"
+    rr = remaining_reward_to_risk(side, price, stop, target)
+    if rr is None:
+        return "price_past_stop"
+    if min_rr > 0 and rr < min_rr:
+        return f"remaining_rr_{rr:.2f}_below_{min_rr:.2f}"
+    return None
+
+
+def entry_late(reason: str) -> dict[str, Any]:
+    return {
+        "paper_policy_id": POLICY_ID,
+        "paper_policy_status": ENTRY_LATE_STATUS,
+        "paper_policy_reason": reason,
+    }
+
+
 EXCHANGE_TIMEZONE = "America/New_York"
 ACTIVE_LANE = "ACTIVE"
 _RTH_OPEN_MINUTES = 9 * 60 + 30
