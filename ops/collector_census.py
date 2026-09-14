@@ -55,6 +55,17 @@ ABSENT = "ABSENT"
 # a market-hours gap or a weekend can still explain the silence.
 DEAD_MULTIPLE = 4
 
+# Isolated hypothetical-ledger lanes (context/wide_stop_ledger_paper.JOURNAL_ROOT).
+LEDGER_ROOT = "hypothetical_ledger"
+HYPOTHETICAL_LANES: tuple[tuple[str, str, str], ...] = (
+    # (lane, state file, kind)  kind: "swing_state" | "forward_state" | "lane_journal"
+    ("daily_22_5k", "swing_state.json", "swing_state"),
+    ("wide_stop_4k", "forward_collector_state.json", "forward_state"),
+    ("wide_stop_6k", "forward_collector_state.json", "forward_state"),
+    ("mes_122_1500", "", "lane_journal"),
+)
+LANE_JOURNAL_LOOKBACK_FILES = 8  # >= the runner's 7-calendar-day carry lookup
+
 
 @dataclass(frozen=True)
 class Collector:
@@ -77,6 +88,30 @@ COLLECTORS: tuple[Collector, ...] = (
     Collector("bars MES", "daily_jsonl", "bars_MES_{date}.jsonl", 30),
     Collector("strategy context", "jsonl", "strategy_context_observations.jsonl", 30),
     Collector("feed gap alarm", "file", "feed_gap_alarm_state.json", 15),
+    # --- 5-minute feed + hypothetical-ledger lane heartbeats -------------
+    # Every MNQ paper lane (Daily 2-2, wide-stop 4HR, wide-stop 3-2-2) resolves
+    # on the 5-MINUTE stream under logs/tf5m/, not the 15m bars above. These
+    # three files are heartbeats, not candidate files: the 5m bar file grows on
+    # every MNQ 5m alert, the Daily 2-2 collector rewrites swing_state.json on
+    # every MNQ 5m bar it processes (position open or flat), and the MES 1-2-2
+    # lane journals a BAR_CLAIM + decision on every MES 15m bar. The wide-stop
+    # ledgers have NO heartbeat file (state is written only on candidates) and
+    # are reported through hypothetical_lane_positions() instead.
+    Collector("bars MNQ 5m", "daily_jsonl", "tf5m/bars_MNQ_{date}.jsonl", 30),
+    Collector(
+        "daily_22 swing state",
+        "file",
+        f"{LEDGER_ROOT}/daily_22_5k/swing_state.json",
+        30,
+        note="rewritten on every MNQ 5m bar while WIDE_STOP_LEDGER_MODE=paper_sim",
+    ),
+    Collector(
+        "mes_122 lane journal",
+        "daily_jsonl",
+        f"{LEDGER_ROOT}/mes_122_1500/journal_{{date}}.jsonl",
+        30,
+        note="BAR_CLAIM + decision on every MES 15m bar while MES_122_PAPER_MODE=paper_sim",
+    ),
     # --- event-driven futures strategy evidence -------------------------
     # Do not assign wall-clock DEAD thresholds to candidate-driven files.
     # MNQ Strat / MES lane health is owned by ops.evidence_lane_health, which
@@ -303,6 +338,127 @@ def campaign_arms(log_dir: Path, now: datetime) -> dict[str, Any]:
     return {"configured": configured, "unexpected": unexpected}
 
 
+def _read_json(path: Path) -> dict[str, Any] | None:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def _position_summary(position: Any) -> dict[str, Any] | None:
+    if not isinstance(position, dict):
+        return None
+    keys = ("strategy", "direction", "entry", "stop", "target", "entry_time", "paper_order_id", "candidate_key")
+    return {key: position.get(key) for key in keys if position.get(key) is not None}
+
+
+def _mes_lane_open_position(lane_dir: Path) -> tuple[dict[str, Any] | None, datetime | None]:
+    """Open strat_122 position from the lane's own journal_*.jsonl, and the newest row ts.
+
+    Mirrors the runner's identity: a TRADE row with an APPROVED risk check opens a
+    paper_order_id; an OUTCOME row carrying the same paper_order_id closes it. Only
+    the last few day files are read (the runner's carry lookup is 7 calendar days).
+    """
+    paths = sorted(lane_dir.glob("journal_*.jsonl"))[-LANE_JOURNAL_LOOKBACK_FILES:]
+    open_trades: dict[str, dict[str, Any]] = {}
+    newest: datetime | None = None
+    for path in paths:
+        try:
+            lines = path.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            continue
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                row = json.loads(line)
+            except ValueError:
+                continue
+            if not isinstance(row, dict):
+                continue
+            stamp = _parse_ts(row.get("ts"))
+            if stamp and (newest is None or stamp > newest):
+                newest = stamp
+            if row.get("decision") == "TRADE" and (row.get("risk_check") or {}).get("result") == "APPROVED":
+                order_id = str(row.get("paper_order_id") or "")
+                setup = row.get("setup") if isinstance(row.get("setup"), dict) else {}
+                if order_id:
+                    open_trades[order_id] = {**setup, "paper_order_id": order_id, "entry_time": row.get("ts")}
+            elif row.get("type") == "OUTCOME":
+                order_id = str((row.get("outcome") or {}).get("paper_order_id") or "")
+                open_trades.pop(order_id, None)
+    if not open_trades:
+        return None, newest
+    # One open position at a time by contract; report the most recent if not.
+    last_id = list(open_trades)[-1]
+    return _position_summary(open_trades[last_id]), newest
+
+
+def hypothetical_lane_positions(log_dir: Path, now: datetime | None = None) -> dict[str, Any]:
+    """Read-only inventory of the isolated hypothetical-ledger lanes.
+
+    Answers, per lane: does its directory exist yet (they are created lazily), is a
+    paper position OPEN right now, when was the lane's state/journal last touched,
+    and -- the safety question -- is a position exposed while the 5-minute MNQ bar
+    stream (which every MNQ lane resolves on) has gone quiet. `bars_stale` is a
+    plain age test with no market-hours logic; the caller decides whether the
+    market is open. Never writes.
+    """
+    now = now or _now()
+    root = log_dir / LEDGER_ROOT
+    five_min_bar = _last_jsonl_timestamp(log_dir / "tf5m" / f"bars_MNQ_{now.strftime('%Y-%m-%d')}.jsonl")
+    five_min_age = _age_minutes(five_min_bar, now) if five_min_bar else None
+    lanes: dict[str, Any] = {}
+    for lane, state_name, kind in HYPOTHETICAL_LANES:
+        lane_dir = root / lane
+        entry: dict[str, Any] = {
+            "lane": lane,
+            "exists": lane_dir.is_dir(),
+            "kind": kind,
+            "open_position": None,
+            "state_path": str(lane_dir / state_name) if state_name else None,
+            "state_last": None,
+            "state_age_minutes": None,
+            "heartbeat": {
+                "swing_state": "state file rewritten on every MNQ 5m bar",
+                "forward_state": "none: state written only on candidate events",
+                "lane_journal": "lane journal row on every MES 15m bar",
+            }[kind],
+            "halted": None,
+            "epoch": None,
+        }
+        if kind == "swing_state":
+            data = _read_json(lane_dir / state_name) or {}
+            entry["open_position"] = _position_summary(data.get("position"))
+            entry["halted"] = data.get("halted")
+            entry["epoch"] = data.get("epoch")
+            last = _mtime(lane_dir / state_name)
+        elif kind == "forward_state":
+            data = _read_json(lane_dir / state_name) or {}
+            entry["open_position"] = _position_summary(data.get("position"))
+            entry["filled_count"] = data.get("filled_count")
+            entry["filled_date"] = data.get("filled_date")
+            last = _mtime(lane_dir / state_name)
+        else:
+            entry["open_position"], last = _mes_lane_open_position(lane_dir)
+        entry["state_last"] = last.isoformat() if last else None
+        entry["state_age_minutes"] = round(_age_minutes(last, now), 1) if last else None
+        lanes[lane] = entry
+    open_lanes = [name for name, row in lanes.items() if row["open_position"]]
+    mnq_open = [name for name in open_lanes if name != "mes_122_1500"]
+    return {
+        "five_min_bar_last": five_min_bar.isoformat() if five_min_bar else None,
+        "five_min_bar_age_minutes": None if five_min_age is None else round(five_min_age, 1),
+        "lanes": lanes,
+        "open_positions": open_lanes,
+        "mnq_position_exposed_without_fresh_5m_bars": bool(mnq_open) and (
+            five_min_age is None or five_min_age > 30
+        ),
+    }
+
+
 def build_census(log_dir: Path, now: datetime | None = None) -> dict[str, Any]:
     now = now or _now()
     results = [check(c, log_dir, now) for c in COLLECTORS]
@@ -314,6 +470,7 @@ def build_census(log_dir: Path, now: datetime | None = None) -> dict[str, Any]:
         "log_dir": str(log_dir),
         "collectors": results,
         "campaign_arms": campaign_arms(log_dir, now),
+        "hypothetical_lanes": hypothetical_lane_positions(log_dir, now),
         "counts": counts,
         "dead": [r["name"] for r in results if r["status"] in {DEAD, ABSENT}],
     }
@@ -350,6 +507,26 @@ def format_census(census: dict[str, Any]) -> str:
         for arm, entry in sorted(unexpected_arms.items()):
             idle = "never" if entry["idle_hours"] is None else f"{entry['idle_hours']:.0f}h idle"
             lines.append(f"  {arm:<28} candidates={entry['count']:<4} {idle}")
+
+    lanes = census.get("hypothetical_lanes") or {}
+    if lanes:
+        lines += ["", "hypothetical-ledger lanes:"]
+        for name, row in sorted((lanes.get("lanes") or {}).items()):
+            if not row.get("exists"):
+                lines.append(f"  {name:<28} directory not created yet (lazy; no candidate so far)")
+                continue
+            pos = row.get("open_position") or {}
+            state = "never" if row.get("state_age_minutes") is None else f"{row['state_age_minutes']:.0f}m"
+            held = (
+                f"OPEN {pos.get('direction')} @ {pos.get('entry')} since {pos.get('entry_time')}"
+                if pos else "flat"
+            )
+            lines.append(f"  {name:<28} {held:<50} state {state}")
+        age = lanes.get("five_min_bar_age_minutes")
+        lines.append(
+            f"  5m MNQ bar age: {'never' if age is None else f'{age:.0f}m'}"
+            + ("  ** MNQ POSITION EXPOSED WITHOUT FRESH 5m BARS **" if lanes.get("mnq_position_exposed_without_fresh_5m_bars") else "")
+        )
 
     summary = ", ".join(f"{k}={v}" for k, v in sorted(census["counts"].items()))
     lines += ["", f"summary: {summary}"]
