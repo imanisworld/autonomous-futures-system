@@ -94,6 +94,11 @@ def test_config_default_and_env_override(monkeypatch):
     assert load_config().paper_v1_min_remaining_rr == 1.0
     monkeypatch.setenv("OPTIONS_PAPER_V1_MIN_REMAINING_RR", "1.5")
     assert load_config().paper_v1_min_remaining_rr == 1.5
+    # Explicit 0 must mean "ratio floor OFF", not "use the default".
+    monkeypatch.setenv("OPTIONS_PAPER_V1_MIN_REMAINING_RR", "0")
+    assert load_config().paper_v1_min_remaining_rr == 0.0
+    monkeypatch.setenv("OPTIONS_PAPER_V1_MIN_REMAINING_RR", "-2")
+    assert load_config().paper_v1_min_remaining_rr == 1.0
 
 
 # --- the two recorded rows replayed through the real scanner ---------------

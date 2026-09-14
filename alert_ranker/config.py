@@ -28,6 +28,15 @@ def _as_float(value: str | None, default: float) -> float:
     return parsed if parsed > 0 else default
 
 
+def _as_non_negative_float(value: str | None, default: float) -> float:
+    """Like _as_float, but an explicit 0 is a valid value (it means OFF)."""
+    try:
+        parsed = float(value if value not in (None, "") else "x")
+    except ValueError:
+        return default
+    return parsed if parsed >= 0 else default
+
+
 def _symbol_map(value: str | None) -> dict[str, str]:
     mapping = {
         "SPXW": "SPY",
@@ -219,7 +228,9 @@ def load_config(environ: Iterable[tuple[str, str]] | None = None) -> ScannerConf
         bar_context_timeframe=env.get("OPTIONS_BAR_CONTEXT_TIMEFRAME", "30Min").strip(),
         bar_context_lookback_days=_as_int(env.get("OPTIONS_BAR_CONTEXT_LOOKBACK_DAYS"), 10),
         sip_delay_buffer_seconds=_as_int(env.get("OPTIONS_SIP_DELAY_BUFFER_SECONDS"), 960),
-        paper_v1_min_remaining_rr=_as_float(env.get("OPTIONS_PAPER_V1_MIN_REMAINING_RR"), 1.0),
+        paper_v1_min_remaining_rr=_as_non_negative_float(
+            env.get("OPTIONS_PAPER_V1_MIN_REMAINING_RR"), 1.0
+        ),
         alpaca_trading_base_url=env.get(
             "ALPACA_ENDPOINT", "https://paper-api.alpaca.markets"
         ).strip().rstrip("/"),
