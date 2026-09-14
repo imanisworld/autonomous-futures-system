@@ -322,6 +322,9 @@ def build_multisetup_scanner(base_cls):
                 and verdict.entry_trigger is not None
                 and verdict.invalidation is not None
             ):
+                floor = float(
+                    getattr(self.config, "paper_v1_daily_min_target_rr", 0.0) or 0.0
+                )
                 target_result = find_targets(
                     LevelFinderInputs(
                         direction=verdict.direction,
@@ -329,6 +332,7 @@ def build_multisetup_scanner(base_cls):
                         underlying_invalidation=verdict.invalidation,
                         resistance_levels=resistance,
                         support_levels=support,
+                        min_target_rr=floor if floor > 0 else None,
                     )
                 )
                 target_reason = target_result.reason_code
@@ -348,10 +352,17 @@ def build_multisetup_scanner(base_cls):
                 f"hourly={ticker_context.hourly_candle_type or 'missing'}"
             )
             targets_valid = target_1 is not None and target_2 is not None
+            # The session-hourly candle is rebuilt from two completed session
+            # hours, so it cannot exist before ~11:46 ET (with the SIP delay).
+            # Requiring it turned every gap-through day into a late entry
+            # (2026-09-11 rows 9170/9171). SPY/QQQ trend alignment stays.
+            hourly_ok = (
+                ticker_context.hourly_candle_type == desired_candle
+                if getattr(self.config, "paper_v1_daily_require_hourly_alignment", False)
+                else True
+            )
             market_aligned = (
-                spy_trend == desired_trend
-                and qqq_trend == desired_trend
-                and ticker_context.hourly_candle_type == desired_candle
+                spy_trend == desired_trend and qqq_trend == desired_trend and hourly_ok
             )
 
             common = {

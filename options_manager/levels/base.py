@@ -37,6 +37,11 @@ class LevelFinderInputs:
     gamma_support: Optional[float] = None
     min_rr_threshold: Optional[float] = None
     min_distance_to_target: Optional[float] = None
+    # Levels closer than this many R (reward / |entry - invalidation|) are
+    # SKIPPED, not failed: target_1/target_2 become the nearest levels at or
+    # beyond the floor. Distinct from min_rr_threshold, which fails the whole
+    # result when the nearest level is too close. None = no skipping.
+    min_target_rr: Optional[float] = None
 
 
 @dataclass(kw_only=True)

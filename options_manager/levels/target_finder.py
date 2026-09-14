@@ -73,13 +73,34 @@ def find_targets(inputs: LevelFinderInputs) -> TargetFinderResult:
             (level for level in candidate_levels if level < entry), reverse=True
         )
 
+    skipped_below_floor = 0
+    floor = inputs.min_target_rr
+    if floor is not None and risk_amount > 0:
+        before = len(valid_levels)
+        valid_levels = [
+            level for level in valid_levels if abs(level - entry) / risk_amount >= floor
+        ]
+        skipped_below_floor = before - len(valid_levels)
+
     if not valid_levels:
+        if skipped_below_floor:
+            return _invalid(
+                "no_target_1_at_min_rr",
+                f"{skipped_below_floor} level(s) on the correct side of entry, all "
+                f"closer than {floor}R; no target at or beyond the floor",
+            )
         return _invalid(
             "no_target_1", "no valid level found on the correct side of entry"
         )
     target_1 = valid_levels[0]
 
     if len(valid_levels) < 2:
+        if skipped_below_floor:
+            return _invalid(
+                "no_target_2_at_min_rr",
+                f"only one level at or beyond {floor}R ({skipped_below_floor} "
+                "nearer level(s) skipped)",
+            )
         return _invalid(
             "no_target_2", "only one valid level found on the correct side of entry"
         )
@@ -120,9 +141,15 @@ def find_targets(inputs: LevelFinderInputs) -> TargetFinderResult:
             f"rr_1 {rr_1} is below minimum {inputs.min_rr_threshold}",
         )
 
+    warnings = (
+        [f"skipped_{skipped_below_floor}_level(s)_below_{floor}R"]
+        if skipped_below_floor
+        else []
+    )
     return TargetFinderResult(
         status="VALID",
         reason_code="valid_targets",
+        warnings=warnings,
         target_1=target_1,
         target_2=target_2,
         distance_to_target_1=distance_to_target_1,
