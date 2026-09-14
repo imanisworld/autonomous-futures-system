@@ -24,7 +24,7 @@ DEST=/root/afs-shared/afs_watcher_src
 UNIT=/etc/systemd/system/afs-watcher.service
 
 mkdir -p "$DEST"
-cp -f "$SRC_DIR"/watcher.py "$SRC_DIR"/watcher_memory_guard.py \
+cp -f "$SRC_DIR"/watcher.py "$SRC_DIR"/watcher_memory_guard.py "$SRC_DIR"/watcher_triage.py \
       "$SRC_DIR"/run_ro.sh "$SRC_DIR"/supervisor.sh \
       "$SRC_DIR"/bootstrap_tmp_state.sh "$DEST/"
 chmod 700 "$DEST"/*.sh
