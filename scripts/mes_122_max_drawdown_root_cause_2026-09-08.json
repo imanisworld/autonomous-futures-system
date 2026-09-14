@@ -1,0 +1,134 @@
+{
+  "question": "Why does the isolated #337 reproduction pass on current code RISK_REJECT 14/33 canonical MES strat_122 rows (all from 2026-03-13) with max_drawdown, when PR #373 reproduced 33/33?",
+  "gate_facts": {
+    "risk_engine._check_max_drawdown": "byte-identical to PR #373 head d06d885b (git diff shows no drawdown/peak/balance lines changed)",
+    "max_drawdown_percent": "0.20 at d06d885b and at HEAD (risk_rules.yaml)",
+    "peak_reference": "daily_state.account_peak_balance is never set on the replay path (only webhook/runner.py and context/wide_stop_ledger_runtime.py set it), so peak = max(balance, position_sizing.starting_balance=1500). In replay the rule is an absolute floor: balance < $1,200 blocks every entry, and because blocked entries cannot change the balance the state is absorbing.",
+    "balance_carry": "ReplayEngine._rolling_balance carries the PaperBroker balance across day files; introduced 2026-05-31 (2261c9d), present at #373 and used identically by #373's strat_122_executable_parity_audit.py (one engine, engine.run per day)."
+  },
+  "experiments_isolated_pass_313_days": {
+    "A_gate_off_max_drawdown_percent_0": {
+      "strat_122_known_rows_found": "33/33",
+      "result_and_pnl_identical": "33/33",
+      "outcomes": 297,
+      "net": -781.25,
+      "contracts": {
+        "1": 291,
+        "2": 6
+      }
+    },
+    "B_position_sizing_disabled": {
+      "note": "NOT a clean lever: sizing falls back to 6 contracts, gate fires from 2025-08-04; discard",
+      "strat_122_found": "2/33"
+    },
+    "C_starting_balance_5000": {
+      "note": "NOT a clean lever: balance-keyed ladder sizes 3 contracts; 33/33 rows found but 0/33 pnl match; gate first fires 2026-07-05",
+      "strat_122_found": "33/33"
+    }
+  },
+  "equity_path_decomposition_vs_canonical_337_rows": {
+    "canonical_MES_212_plus_122": {
+      "trades": 258,
+      "net": -313.75,
+      "min_balance": 1186.25,
+      "first_below_1200": "2026-07-07 (after the last canonical strat_122 row, 2026-06-19)"
+    },
+    "current_gate_off": {
+      "trades": 297,
+      "net": -781.25,
+      "matched_to_canonical": 258,
+      "identical_pnl": 250,
+      "different_pnl": 8,
+      "different_pnl_delta": 138.75,
+      "canonical_only": 0,
+      "current_only": 39,
+      "current_only_net": -606.25,
+      "min_balance": 718.75,
+      "first_below_1200": "2026-03-09"
+    },
+    "counterfactual_floors": {
+      "current_minus_the_39_extra_trades": {
+        "min_balance": 1325.0,
+        "first_below_1200": null
+      },
+      "current_with_2_contract_trades_scaled_to_1": {
+        "min_balance": 918.75,
+        "first_below_1200": "2026-06-29"
+      },
+      "matched_trades_only_with_canonical_pnl": {
+        "min_balance": 1186.25,
+        "first_below_1200": "2026-07-07"
+      }
+    },
+    "conclusion": "The 39 extra trades (36 strat_212, 3 strat_122; net -$606.25) are the sole sufficient cause. Remove them and the balance never reaches the $1,200 floor. The 8 changed fills and the six 2-contract fills only move the crossing date."
+  },
+  "bisect_of_the_extra_trades": {
+    "window": "84dc739 (#423, 2026-09-01) .. d5b1ec0 (#470, 2026-09-06)",
+    "results": {
+      "d5b1ec0": {
+        "extras": 39,
+        "trades": 297,
+        "net": -781.25,
+        "first_below_1200": "2026-03-09"
+      },
+      "0df7fc8": {
+        "extras": 12,
+        "trades": 270,
+        "net": -507.5,
+        "first_below_1200": "2026-07-07"
+      },
+      "73bffb1": {
+        "extras": 39,
+        "trades": 297,
+        "net": -781.25,
+        "first_below_1200": "2026-03-09"
+      },
+      "5961cd9": {
+        "extras": 12,
+        "trades": 270,
+        "net": -507.5,
+        "first_below_1200": "2026-07-07"
+      },
+      "9201b36": {
+        "extras": 12,
+        "trades": 270,
+        "net": -507.5,
+        "first_below_1200": "2026-07-07"
+      }
+    },
+    "pre_window_points": {
+      "84dc739~1": 12,
+      "84dc739 (#423)": 12,
+      "95d1eb8~1": 39,
+      "95d1eb8 (#472)": 39,
+      "8e9c0a2~1 (pre-#508)": 39,
+      "HEAD": 39
+    },
+    "first_bad": "73bffb1  2026-09-05  Stop orb_breakout firing on a stale or already-broken ORB (#464)",
+    "last_good": "9201b36  2026-09-05  (#452)",
+    "hunk_isolation": "73bffb1 with ONLY the six-line replay block (elif candle.session != new_york: orb_high/low = candle.high/low; orb_status = undefined) removed reproduces the pre-#464 population exactly (270 trades, 12 extras, 258/258 identical). The previous_bar_high/low additions are not consumed by strategy/strat_212_122.py and play no role.",
+    "pre_464_residual_extras": "12 extra trades (1 strat_122, net -$193.75) exist before #464 relative to the #337 rows; they do not reach the floor before 2026-07-07 and are not root-caused here."
+  },
+  "mechanism": {
+    "code": "strategy/signal_engine.py: after any TRADE, if state.orb.status is above/below the engine sets daily_state.orb_break_long/short_played (~793-796); on later bars with the same status every strategy not in _ORB_CONTINUATION_EXEMPT is skipped (~1681-1711), including strat_212 and strat_122.",
+    "before_464": "Replay built MarketState for Asian-session bars from the PERSISTED prior-day New York ORB, so orb.status was a stale above/below for hours. The first trade of the day (Asian/London) set the played flag against that stale range, and every later 2-1-2/1-2-2 candidate that day, in London AND New York, was silently skipped.",
+    "after_464": "Outside New York the replay ORB is undefined (mirroring webhook/state_builder.py, which #464 changed the same way for live). The flag is no longer set by stale ranges, so those candidates fire.",
+    "evidence": "27 bars are TRADE in 73bffb1 and NO_TRADE (No qualifying setup found; candidate_audit empty) in 9201b36. 25/27 had an earlier same-UTC-day TRADE in the good run (asian 7, london 12, new_york 6). 2/27 had none and are left unexplained.",
+    "unexplained_two_bars": {
+      "2025-09-17T10:30:00+00:00": {
+        "prev_utc_day_trades_after_21Z": [],
+        "prev_utc_day_trades_any": 2,
+        "good_failed_gates": [],
+        "good_reason": "No qualifying setup found in current market structure."
+      },
+      "2026-06-29T08:00:00+00:00": {
+        "prev_utc_day_trades_after_21Z": [],
+        "prev_utc_day_trades_any": 0,
+        "good_failed_gates": [],
+        "good_reason": "No qualifying setup found in current market structure."
+      }
+    }
+  },
+  "implication": "The #337 canonical population (258 MES trades incl. the 33 strat_122 rows) and everything derived from it, including #373's 16-trade/+$120 control and #514's +$522.50 counterfactual, were generated while a stale prior-day ORB range was suppressing 2-1-2/1-2-2 candidates after the first trade of the day. Current code (post-#464, live and replay in parity) does not suppress them; the extra 36 strat_212 trades lose $606.25, the carried balance crosses the $1,200 absolute floor on 2026-03-09, and the absorbing max_drawdown gate then blocks every later strat_122 row. The harness fails closed as designed. EXPECTED_CONTROL/EXPECTED_TREATMENT cannot be reproduced on current code without disabling the gate (A) or restoring the pre-#464 suppression, and neither is a legitimate control.",
+  "not_changed": "No runtime, config, risk, strategy, or replay code was modified. All experiments ran in throwaway detached worktrees under the session scratchpad, since removed."
+}
