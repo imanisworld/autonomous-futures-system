@@ -210,15 +210,6 @@ def _run(config, log_dir: Path, *, treatment: bool) -> dict[str, dict]:
         for i, path in enumerate(files, 1):
             date_hint = path.stem.replace(f"{INSTRUMENT}_", "")
             engine.run(path, review_date=date_hint)
-            journal_path = log_dir / f"journal_{date_hint}.jsonl"
-            for entry in _json_lines(journal_path):
-                if entry.get("bar_ts"):
-                    decisions[str(entry["bar_ts"])] = entry
-                if entry.get("type") == "OUTCOME":
-                    outcome = entry.get("outcome") or {}
-                    order_id = outcome.get("paper_order_id")
-                    if order_id:
-                        outcomes[str(order_id)] = outcome
             if i % 50 == 0 or i == len(files):
                 print(
                     f"[{'treatment' if treatment else 'control'}] {i}/{len(files)} days",
@@ -226,6 +217,21 @@ def _run(config, log_dir: Path, *, treatment: bool) -> dict[str, dict]:
                 )
     finally:
         replay_module.DecisionEngine = original_cls
+    # Read the journals only AFTER every day has been replayed. ReplayEngine
+    # writes a carried trade's OUTCOME row into the journal of its SIGNAL date
+    # (replay/replay_engine.py, for_date=_carried["journal_date"]) when the
+    # trade resolves on a later day file. Reading journal_{date} right after
+    # engine.run(date) therefore missed those late OUTCOME rows and classified
+    # the trade TRADE_UNRESOLVED (confirmed out of sample on 2026-08-18).
+    for journal_path in sorted(log_dir.glob("journal_*.jsonl")):
+        for entry in _json_lines(journal_path):
+            if entry.get("bar_ts"):
+                decisions[str(entry["bar_ts"])] = entry
+            if entry.get("type") == "OUTCOME":
+                outcome = entry.get("outcome") or {}
+                order_id = outcome.get("paper_order_id")
+                if order_id:
+                    outcomes[str(order_id)] = outcome
     return {"decisions": decisions, "outcomes": outcomes}
 
 

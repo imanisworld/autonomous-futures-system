@@ -1,0 +1,138 @@
+{
+  "purpose": "Baseline (HEAD 8372edd, journal read inside the day loop) vs fixed (journals re-read after the loop). Same corpus, same code, same config; .env present or absent gives byte-identical metrics.",
+  "corpus": "/Users/djb.a.e/MAINVSCODE/autonomous-futures-system/data/replay_corpus_v1_market_condition_fixed",
+  "days": 313,
+  "passes": 3,
+  "baseline": {
+    "control": {
+      "trades": 9,
+      "wins": 2,
+      "losses": 7,
+      "net": -81.25,
+      "profit_factor": 0.73251,
+      "h1": 161.25,
+      "h2": -242.5,
+      "max_drawdown": 242.5
+    },
+    "treatment": {
+      "trades": 10,
+      "wins": 3,
+      "losses": 7,
+      "net": 158.75,
+      "profit_factor": 1.522634,
+      "h1": 113.75,
+      "h2": 45.0,
+      "max_drawdown": 242.5
+    },
+    "reproduction_mismatches": 14,
+    "all_changed_bar_count": 60,
+    "collateral_non_strat122_trade_changes": 25,
+    "target_treatment": {
+      "2025-10-24T12:30:00+00:00": [
+        "PREEMPTED_BY_OTHER_STRATEGY",
+        null,
+        null
+      ],
+      "2026-02-20T13:30:00+00:00": [
+        "TRADE_RESOLVED",
+        "WIN",
+        240.0
+      ],
+      "2026-03-13T16:45:00+00:00": [
+        "TRADE_UNRESOLVED",
+        null,
+        null
+      ],
+      "2026-03-26T11:15:00+00:00": [
+        "TRADE_RESOLVED",
+        "WIN",
+        300.0
+      ]
+    },
+    "proof_pass": false
+  },
+  "fixed": {
+    "control": {
+      "trades": 9,
+      "wins": 2,
+      "losses": 7,
+      "net": -81.25,
+      "profit_factor": 0.73251,
+      "h1": 161.25,
+      "h2": -242.5,
+      "max_drawdown": 242.5
+    },
+    "treatment": {
+      "trades": 10,
+      "wins": 3,
+      "losses": 7,
+      "net": 158.75,
+      "profit_factor": 1.522634,
+      "h1": 113.75,
+      "h2": 45.0,
+      "max_drawdown": 242.5
+    },
+    "reproduction_mismatches": 14,
+    "all_changed_bar_count": 61,
+    "collateral_non_strat122_trade_changes": 26,
+    "target_treatment": {
+      "2025-10-24T12:30:00+00:00": [
+        "PREEMPTED_BY_OTHER_STRATEGY",
+        null,
+        null
+      ],
+      "2026-02-20T13:30:00+00:00": [
+        "TRADE_RESOLVED",
+        "WIN",
+        240.0
+      ],
+      "2026-03-13T16:45:00+00:00": [
+        "TRADE_RESOLVED",
+        "WIN",
+        450.0
+      ],
+      "2026-03-26T11:15:00+00:00": [
+        "TRADE_RESOLVED",
+        "WIN",
+        300.0
+      ]
+    },
+    "proof_pass": false
+  },
+  "rows_changed_by_fix": [
+    {
+      "bar_ts": "2026-03-13T16:45:00+00:00",
+      "what": "treatment strat_122 SHORT: TRADE_UNRESOLVED -> TRADE_RESOLVED WIN +450.00 (OUTCOME written into journal_2026-03-13 on a later day; the in-sample instance of the defect)"
+    },
+    {
+      "bar_ts": "2026-04-27T17:15:00+00:00",
+      "what": "orb_reclaim LONG in BOTH control and treatment: late OUTCOME now read; control LOSS -210.00 vs treatment LOSS -262.50, so a previously masked collateral divergence is now counted (25 -> 26)"
+    }
+  ],
+  "expected_control": {
+    "trades": 16,
+    "wins": 5,
+    "losses": 11,
+    "net": 120.0,
+    "profit_factor": 1.421053,
+    "h1": 11.25,
+    "h2": 108.75,
+    "max_drawdown": 121.25
+  },
+  "expected_treatment": {
+    "trades": 20,
+    "wins": 9,
+    "losses": 11,
+    "net": 522.5,
+    "profit_factor": 2.833333,
+    "h1": 82.5,
+    "h2": 440.0,
+    "max_drawdown": 121.25
+  },
+  "expected_never_reproduced_by_harness": "PR #514 body: 'Important: full replay has NOT run yet'. Neither baseline nor fixed matches EXPECTED_*; the fix does not move the canonical-row metrics at all.",
+  "why_baseline_fails": {
+    "isolated_pass": "14 of 33 canonical MES strat_122 rows (every row from 2026-03-13 onward) are RISK_REJECTED by the max_drawdown gate: 'Account drawdown 22.0% exceeds max 20.0% from peak $1,500.00'. They are therefore MISSING_IN_ISOLATED_RERUN and never enter the anchored row set, so control/treatment metrics are computed on 19 rows, not 33.",
+    "sizing": "isolated pass fills 1 contract (2026-02-20 strat_122 = +80.00, equals canonical). Production-config control/treatment passes fill the same targets at 3x/4x (+240, +450, +300), i.e. equity-dependent sizing on current code differs from the #337/#373 era.",
+    "note": "Both are current-code drift vs the #373-era control, which the harness is designed to fail closed on. Not caused by, and not fixed by, the journal-read change."
+  }
+}
