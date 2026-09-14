@@ -1149,6 +1149,37 @@ def _newest_mtime(paths) -> float:
     return best
 
 
+def _newest_bar_ts(paths) -> datetime | None:
+    """Timestamp of the last complete bar ROW in the newest bar file (content, not mtime).
+
+    Used to establish the causal condition "a bar has actually arrived after the
+    pinned epoch" before a missing lane file may be called a defect. A campaign
+    that is fresh (pinned, but no eligible bar processed yet) has nothing to
+    show and must stay quiet.
+    """
+    files = sorted(paths)
+    if not files:
+        return None
+    for path in reversed(files):
+        try:
+            tail = read_prod_bytes_tail(Path(path), 65536)
+        except Exception:  # noqa: BLE001
+            continue
+        for line in reversed(tail.split(b"\n")):
+            if not line.strip():
+                continue
+            try:
+                row = json.loads(line)
+            except Exception:  # noqa: BLE001
+                continue
+            if isinstance(row, dict):
+                stamp = _ts(row.get("ts") or row.get("timestamp"))
+                if stamp is not None:
+                    return stamp
+        break
+    return None
+
+
 def _lane_json(path: Path) -> dict | None:
     try:
         data = json.loads(read_prod_text(path))
@@ -1227,6 +1258,8 @@ def check_lanes(state: dict, f: Findings, tick: dict) -> None:
     newest_5m = _newest_mtime(FIVE_MIN_DIR.glob("bars_MNQ_*.jsonl")) if FIVE_MIN_DIR.is_dir() else 0.0
     lanes["newest_15m_mnq_bar_mtime"] = iso(datetime.fromtimestamp(newest_15m, timezone.utc)) if newest_15m else None
     lanes["newest_5m_mnq_bar_mtime"] = iso(datetime.fromtimestamp(newest_5m, timezone.utc)) if newest_5m else None
+    newest_mes_15m_mtime = _newest_mtime(LOG_DIR.glob("bars_MES_*.jsonl"))
+    lanes["newest_mes_15m_bar_mtime"] = iso(datetime.fromtimestamp(newest_mes_15m_mtime, timezone.utc)) if newest_mes_15m_mtime else None
     five_min_stalled = False
     if wide_active:
         if not newest_5m:
@@ -1282,6 +1315,22 @@ def check_lanes(state: dict, f: Findings, tick: dict) -> None:
                           f"5m MNQ bars keep arriving but swing_state.json has not been touched for "
                           f"{int((newest_5m - st_m) // 60)} min — the Daily 2-2 collector is not running on them")
 
+    elif wide_active:
+        # No swing_state.json. The Daily collector writes it on the FIRST MNQ 5m
+        # bar it processes after the epoch (flat or not), so its absence is a
+        # defect only once such a bar demonstrably exists. Before that the
+        # campaign is merely fresh.
+        pin_dt = _ts(lanes["wide_stop_epoch_pin"])
+        bar_ts = _newest_bar_ts(FIVE_MIN_DIR.glob("bars_MNQ_*.jsonl")) if FIVE_MIN_DIR.is_dir() else None
+        d22["newest_5m_bar_ts"] = iso(bar_ts)
+        if pin_dt is not None and bar_ts is not None and bar_ts > pin_dt:
+            f.add("BLOCKED", "daily_22_state_missing_while_feed_active",
+                  f"{WIDE_STOP_MODE_PIN}=paper_sim, an MNQ 5m bar at {iso(bar_ts)} arrived after the pinned epoch "
+                  f"{lanes['wide_stop_epoch_pin']}, but {d22_state_path} does not exist — the Daily 2-2 collector is not "
+                  "processing bars (or its state was removed)")
+        else:
+            d22["fresh_campaign"] = True
+
     # Wide-stop ledgers: created lazily, state written only on candidates (no heartbeat).
     for name in ("wide_stop_4k", "wide_stop_6k"):
         ldir = LEDGER_DIR / name
@@ -1303,7 +1352,9 @@ def check_lanes(state: dict, f: Findings, tick: dict) -> None:
     mes_dir = LEDGER_DIR / "mes_122_1500"
     mes = {"exists": mes_dir.is_dir(), "journal_mtime": None, "open_position": None}
     inventory["mes_122_1500"] = mes
-    if mes_dir.is_dir():
+    mes_journals = sorted(mes_dir.glob("journal_*.jsonl")) if mes_dir.is_dir() else []
+    mes["journal_files"] = len(mes_journals)
+    if mes_journals:
         position, newest_lane = _mes_lane_open_position(mes_dir)
         mes["open_position"] = position
         mes["journal_mtime"] = iso(datetime.fromtimestamp(newest_lane, timezone.utc)) if newest_lane else None
@@ -1315,7 +1366,21 @@ def check_lanes(state: dict, f: Findings, tick: dict) -> None:
                   f"a MES 15m bar arrived {int((newest_mes_15m - newest_lane) // 60)} min after the MES 1-2-2 "
                   "lane journal last grew — the lane is not evaluating MES alerts")
     elif mes_active:
-        f.add("WARN", "mes_122_lane_dir_missing", f"{MES_122_MODE_PIN}=paper_sim but {mes_dir} does not exist yet")
+        # The lane journals a BAR_CLAIM + decision on the first MES 15m bar after
+        # its epoch. Absence is a defect only once such a bar demonstrably exists
+        # in the box's own MES bar history; before that the lane is merely fresh.
+        pin_dt = _ts(lanes["mes_122_epoch_pin"])
+        bar_ts = _newest_bar_ts(LOG_DIR.glob("bars_MES_*.jsonl"))
+        mes["newest_mes_15m_bar_ts"] = iso(bar_ts)
+        what = f"{mes_dir} does not exist" if not mes_dir.is_dir() else f"{mes_dir} has no journal_*.jsonl"
+        if pin_dt is not None and bar_ts is not None and bar_ts > pin_dt:
+            f.add("BLOCKED", "mes_122_lane_missing_while_feed_active",
+                  f"{MES_122_MODE_PIN}=paper_sim, a MES 15m bar at {iso(bar_ts)} arrived after the pinned epoch "
+                  f"{lanes['mes_122_epoch_pin']}, but {what} — the MES 1-2-2 lane is not evaluating MES alerts")
+        else:
+            mes["fresh_campaign"] = True
+            f.add("WARN", "mes_122_lane_dir_missing",
+                  f"{MES_122_MODE_PIN}=paper_sim but {what} yet (no eligible post-epoch MES bar seen; fresh campaign)")
 
     lanes["open_positions"] = open_positions
     for name in open_positions:
@@ -1740,6 +1805,8 @@ _FINDING_TITLES = {
     "daily_22_halted": "Daily 2-2 ledger hit its hard halt",
     "mes_122_lane_stalled": "MES 1-2-2 lane stopped evaluating bars",
     "hypothetical_position_exposed_stale_bars": "Open paper position with no fresh bars",
+    "daily_22_state_missing_while_feed_active": "Daily 2-2 state missing while 5m bars flow",
+    "mes_122_lane_missing_while_feed_active": "MES 1-2-2 lane missing while MES bars flow",
 }
 
 # A one-sentence explanation for the findings whose summary is too terse to read cold.
@@ -1860,6 +1927,8 @@ def smallest_fix(key: str) -> str:
         "daily_22_halted": "operator: hard paper halt reached — evidence collection for this ledger is over; no automatic reset",
         "mes_122_lane_stalled": "operator: read the service log for `mes_122 paper lane hook skipped` lines",
         "hypothetical_position_exposed_stale_bars": "operator: a paper position cannot be resolved without bars — restore the 5m feed; never infer the outcome from later OHLC",
+        "daily_22_state_missing_while_feed_active": "operator: post-epoch MNQ 5m bars exist but swing_state.json does not — check the service log for the 5m hook failing closed; never recreate the state by hand",
+        "mes_122_lane_missing_while_feed_active": "operator: post-epoch MES 15m bars exist but the MES 1-2-2 lane wrote nothing — check `mes_122 paper lane hook skipped` in the service log",
     }
     for k, v in m.items():
         if key.startswith(k):
@@ -1925,8 +1994,11 @@ def maybe_daily(state: dict, tick: dict, findings: Findings) -> None:
         census = json.loads(out)
         rep["census"] = [{k: c.get(k) for k in ("name", "status", "age_minutes", "last")} for c in census.get("collectors", [])]
         for c in census.get("collectors", []):
-            if c.get("name") in ("futures journal", "bars MNQ", "bars MES", "strategy context", "feed gap alarm") + LANE_CENSUS_NAMES and c.get("status") != "FRESH":
+            if c.get("name") in ("futures journal", "bars MNQ", "bars MES", "strategy context", "feed gap alarm") and c.get("status") != "FRESH":
                 disc.append(f"collector '{c.get('name')}' is {c.get('status')} (age {c.get('age_minutes')} min)")
+        lane_disc, lane_skipped = _lane_census_discrepancies(census.get("collectors", []), tick.get("lanes") or {}, now_et.date())
+        disc.extend(lane_disc)
+        rep["lane_census_skipped_no_bar_today"] = lane_skipped
         rep["hypothetical_lanes"] = census.get("hypothetical_lanes")
     except Exception as exc:  # noqa: BLE001
         rep["census"] = {"error": f"rc={rc} {out[-300:]} {exc}"}
@@ -1978,6 +2050,33 @@ def maybe_daily(state: dict, tick: dict, findings: Findings) -> None:
     notify(state, "DISCORD_ROUTE_ERROR" if disc else "DISCORD_ROUTE_DAILY_REPORT",
            _daily_discord_text(verdict, key, posts, rep["campaign_rows_after_epoch"], pops, disc, str(DAILY_DIR / (key + ".json")), tick.get("lanes")),
            f"daily:{key}")
+
+
+# Which bar stream proves each lane heartbeat could have moved today. A lane file
+# is only allowed to count as a DAILY discrepancy when its own stream delivered a
+# bar during the ET day being reconciled — a holiday or a closed session leaves
+# every lane file legitimately untouched and must not read as a failure.
+LANE_CENSUS_STREAM = {
+    "bars MNQ 5m": "newest_5m_mnq_bar_mtime",
+    "daily_22 swing state": "newest_5m_mnq_bar_mtime",
+    "mes_122 lane journal": "newest_mes_15m_bar_mtime",
+}
+
+
+def _lane_census_discrepancies(collectors: list, lanes: dict, et_day: date) -> tuple[list[str], list[str]]:
+    """Lane census rows that are real discrepancies today, and those skipped (no bar today)."""
+    disc: list[str] = []
+    skipped: list[str] = []
+    for c in collectors:
+        name = c.get("name")
+        if name not in LANE_CENSUS_NAMES or c.get("status") == "FRESH":
+            continue
+        stamp = _ts(lanes.get(LANE_CENSUS_STREAM.get(name, "")))
+        if stamp is None or stamp.astimezone(ET).date() != et_day:
+            skipped.append(f"{name}: {c.get('status')} but its bar stream delivered nothing on {et_day} (market closed / fresh)")
+            continue
+        disc.append(f"collector '{name}' is {c.get('status')} (age {c.get('age_minutes')} min) while its bar stream was active today")
+    return disc, skipped
 
 
 def _daily_discord_text(verdict: str, day: str, posts: dict, rows_after_epoch, pops: dict, disc: list, path: str, lanes: dict | None = None) -> str:
