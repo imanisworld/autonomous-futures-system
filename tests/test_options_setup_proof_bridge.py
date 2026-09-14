@@ -143,7 +143,11 @@ class PaperMarketData:
     last_error = None
 
     async def fetch_market_snapshot(self, ticker: str) -> MarketSnapshot:
-        return MarketSnapshot(ticker.upper(), price=129.4, volume=1_000_000)
+        # 128.5 sits between the 128.2 invalidation and the 129.0 target_1
+        # (remaining reward/risk 0.5/0.3 = 1.67). The original 129.4 was
+        # already past target_1 -- exactly the late entry the ACTIVE-lane
+        # guard now refuses -- and only ever "passed" because nothing checked.
+        return MarketSnapshot(ticker.upper(), price=128.5, volume=1_000_000)
 
     async def fetch_option_expirations(self, ticker: str) -> list[str]:
         return ["2026-10-23", "2026-11-20"]
