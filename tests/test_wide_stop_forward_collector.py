@@ -150,7 +150,7 @@ def test_open_position_resolves_through_real_paperbroker_and_charges_commission(
         log_dir=tmp_path,
         for_date=DAY,
         current_ts=datetime(2026, 9, 8, 14, 5, tzinfo=timezone.utc),
-        bar={"high": 20_011.0, "low": 20_000.0, "close": 20_008.0},
+        bar={"open": 20_001.0, "high": 20_011.0, "low": 20_000.0, "close": 20_008.0},
     )
 
     assert outcome is not None
@@ -177,13 +177,111 @@ def test_same_bar_stop_and_target_resolves_pessimistically_as_loss(tmp_path):
         log_dir=tmp_path,
         for_date=DAY,
         current_ts=datetime(2026, 9, 8, 14, 5, tzinfo=timezone.utc),
-        bar={"high": 20_011.0, "low": 19_989.0, "close": 20_000.0},
+        bar={"open": 20_001.0, "high": 20_011.0, "low": 19_989.0, "close": 20_000.0},
     )
 
     assert outcome is not None
     assert outcome["outcome_result"] == "LOSS"
     assert outcome["exit_reason"] == "STOP_HIT"
     assert outcome["gross_pnl_dollars"] < 0
+
+
+def test_long_stop_gap_is_priced_from_the_bar_open_not_the_stop_level(tmp_path):
+    """A bar that OPENS below a resting LONG stop fills at the open (minus the
+    adverse tick), not at the stale stop price — PaperBroker's STOP_GAP path,
+    which needs the bar open the collector previously did not pass."""
+    cfg = _cfg()
+    ledger = contract.LEDGERS["wide_stop_4k"]
+    state = _empty_state()
+    state["position"] = _position(stop=19_990.0, target=20_010.0)
+    _save_state(tmp_path, ledger, state)
+
+    outcome = _resolve_one_position(
+        cfg=cfg,
+        ledger=ledger,
+        log_dir=tmp_path,
+        for_date=DAY,
+        current_ts=datetime(2026, 9, 8, 14, 5, tzinfo=timezone.utc),
+        bar={"open": 19_980.0, "high": 19_985.0, "low": 19_975.0, "close": 19_982.0},
+    )
+
+    assert outcome is not None
+    assert outcome["outcome_result"] == "LOSS"
+    assert outcome["exit_reason"] == "STOP_GAP"
+    assert outcome["exit_price"] == 19_979.75  # open − 1 adverse tick, NOT stop − tick
+    assert outcome["exit_price"] < 19_990.0 - 0.25
+    assert _load_state(tmp_path, ledger)["position"] is None
+
+
+def test_short_stop_gap_is_priced_from_the_bar_open_not_the_stop_level(tmp_path):
+    cfg = _cfg()
+    ledger = contract.LEDGERS["wide_stop_4k"]
+    state = _empty_state()
+    position = _position(stop=20_010.0, target=19_990.0)
+    position["direction"] = "SHORT"
+    state["position"] = position
+    _save_state(tmp_path, ledger, state)
+
+    outcome = _resolve_one_position(
+        cfg=cfg,
+        ledger=ledger,
+        log_dir=tmp_path,
+        for_date=DAY,
+        current_ts=datetime(2026, 9, 8, 14, 5, tzinfo=timezone.utc),
+        bar={"open": 20_020.0, "high": 20_025.0, "low": 20_015.0, "close": 20_018.0},
+    )
+
+    assert outcome is not None
+    assert outcome["outcome_result"] == "LOSS"
+    assert outcome["exit_reason"] == "STOP_GAP"
+    assert outcome["exit_price"] == 20_020.25  # open + 1 adverse tick, NOT stop + tick
+    assert outcome["exit_price"] > 20_010.0 + 0.25
+    assert _load_state(tmp_path, ledger)["position"] is None
+
+
+def test_ordinary_stop_hit_without_gap_is_unchanged(tmp_path):
+    """Open inside the bracket: the stop is a normal stop-market at stop − tick."""
+    cfg = _cfg()
+    ledger = contract.LEDGERS["wide_stop_4k"]
+    state = _empty_state()
+    state["position"] = _position(stop=19_990.0, target=20_010.0)
+    _save_state(tmp_path, ledger, state)
+
+    outcome = _resolve_one_position(
+        cfg=cfg,
+        ledger=ledger,
+        log_dir=tmp_path,
+        for_date=DAY,
+        current_ts=datetime(2026, 9, 8, 14, 5, tzinfo=timezone.utc),
+        bar={"open": 20_001.0, "high": 20_003.0, "low": 19_988.0, "close": 19_995.0},
+    )
+
+    assert outcome is not None
+    assert outcome["outcome_result"] == "LOSS"
+    assert outcome["exit_reason"] == "STOP_HIT"
+    assert outcome["exit_price"] == 19_989.75
+
+
+def test_process_five_min_bar_passes_payload_open_to_resolver(tmp_path, monkeypatch):
+    """The webhook path must forward payload.open, otherwise the gap pricing above
+    can never fire in production."""
+    import context.wide_stop_forward_collector as collector
+
+    seen = {}
+
+    def _capture(*, cfg, ledger, log_dir, for_date, current_ts, bar):
+        seen["bar"] = bar
+        return None
+
+    monkeypatch.setattr(collector, "_resolve_one_position", _capture)
+    monkeypatch.setattr(
+        collector, "_evaluate_canonical_candidate", lambda **kwargs: (None, None, None)
+    )
+    payload = _payload()
+    payload.open = 19_980.0
+    process_five_min_bar(payload=payload, cfg=_cfg(), bars_5m=[], log_dir=tmp_path, for_date=DAY)
+
+    assert seen["bar"] == {"open": 19_980.0, "high": 20_011.0, "low": 20_000.0, "close": 20_008.0}
 
 
 def test_missing_1555_eod_bar_fails_closed_without_inventing_pnl(tmp_path):
@@ -199,7 +297,7 @@ def test_missing_1555_eod_bar_fails_closed_without_inventing_pnl(tmp_path):
         log_dir=tmp_path,
         for_date=DAY,
         current_ts=datetime(2026, 9, 8, 20, 0, tzinfo=timezone.utc),  # 16:00 ET
-        bar={"high": 20_005.0, "low": 19_995.0, "close": 20_001.0},
+        bar={"open": 20_001.0, "high": 20_005.0, "low": 19_995.0, "close": 20_001.0},
     )
 
     assert outcome is not None
