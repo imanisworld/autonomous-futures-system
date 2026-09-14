@@ -1861,6 +1861,164 @@ def _cleared_discord_text(key: str, first_utc: str | None) -> str:
     return f"✅ **cleared — {_finding_title(key)}**{since}\n`code={key} | release={RELEASE_SHA[:8]}`"
 
 
+# ── ACTION REQUIRED cards ────────────────────────────────────────────────────
+# 2026-09-14: a 5h20m TradingView webhook outage (401s) left the Daily 2-2 paper
+# short un-evaluable.  The watcher detected it (feed_MNQ_stale / feed_MES_stale
+# BLOCKED at 16:51Z / 17:06Z, cleared 22:01Z) and posted every transition, but the
+# posts read like routine telemetry and nobody acted for five hours.  Findings that
+# need a human NOW are therefore rendered as a small fixed card that looks nothing
+# like the informational stream.  This layer only changes Discord text: it never
+# adds, removes or re-grades a finding, and the watcher stays read-only.
+#
+# Whitelist (operator ruling 09-15): feed stale while exposure exists, broker/auth
+# ambiguity, unresolved order state, release-integrity failure, or a critical
+# BLOCKED condition on the bot process itself.  Everything else keeps the plain
+# BLOCKED/cleared text.
+_ACTION_ALWAYS_PREFIXES = (
+    "service_not_active", "service_crash_restart", "unexpected_restart", "unexpected_deploy",
+    "webhook_process_count", "oom_kill_new",                       # bot process
+    "unexpected_broker_position", "tradovate_",                    # broker / auth / order state
+    "post_epoch_wrong_sha", "history_rewritten", "file_shrank",    # release / evidence integrity
+    "daily_22_state_unreadable", "daily_22_halted",                # lane state integrity
+)
+# Only ACTION REQUIRED when a paper/demo position is open (otherwise informational).
+_ACTION_IF_EXPOSED_PREFIXES = (
+    "feed_", "five_min_feed_", "alert_non200", "journal_not_advancing", "hypothetical_position_exposed",
+)
+_LANE_LABELS = {"daily_22_5k": "Daily 2-2", "mes_122_1500": "MES 1-2-2", "wide_stop_6k": "4HR/3-2-2", "wide_stop_4k": "4HR/3-2-2"}
+# Which open lanes a finding key actually exposes (feed_MES_* does not expose an MNQ lane).
+_LANE_INSTRUMENT = {"mes_122_1500": "MES"}
+
+
+def _open_lane_positions(tick: dict | None) -> list[tuple[str, dict]]:
+    lanes = (tick or {}).get("lanes") or {}
+    inv = lanes.get("inventory") or {}
+    out = []
+    for name in lanes.get("open_positions") or []:
+        pos = (inv.get(name) or {}).get("open_position") or {}
+        out.append((name, pos))
+    return out
+
+
+def _exposed_lanes_for(key: str, tick: dict | None) -> list[tuple[str, dict]]:
+    """Open lane positions that this finding leaves un-evaluable."""
+    positions = _open_lane_positions(tick)
+    m = re.match(r"feed_([A-Z]+)_", key)
+    if m:
+        inst = m.group(1)
+        positions = [(n, p) for n, p in positions if _LANE_INSTRUMENT.get(n, "MNQ") == inst]
+    elif key.startswith("five_min_feed_"):
+        positions = [(n, p) for n, p in positions if _LANE_INSTRUMENT.get(n, "MNQ") == "MNQ"]
+    return positions
+
+
+def action_required(key: str, tick: dict | None) -> bool:
+    """True when this finding warrants an ACTION REQUIRED card (never alters the finding)."""
+    if key.startswith(_ACTION_ALWAYS_PREFIXES):
+        return True
+    if key.startswith(_ACTION_IF_EXPOSED_PREFIXES):
+        return bool(_exposed_lanes_for(key, tick))
+    return False
+
+
+def _exposure_line(key: str, tick: dict | None) -> str:
+    lanes = _exposed_lanes_for(key, tick) if key.startswith(_ACTION_IF_EXPOSED_PREFIXES) else _open_lane_positions(tick)
+    if not lanes:
+        return "no open paper/demo position"
+    parts = []
+    for name, pos in lanes:
+        label = _LANE_LABELS.get(name, name)
+        direction = str(pos.get("direction") or "position").upper()
+        parts.append(f"{label} paper {direction} is OPEN" + (f" @ {pos.get('entry')}" if pos.get("entry") is not None else ""))
+    return "; ".join(parts)
+
+
+def _bar_age_minutes(inst: str, tick: dict | None) -> int | None:
+    lanes = (tick or {}).get("lanes") or {}
+    ts = lanes.get("newest_5m_mnq_bar_mtime") if inst == "MNQ" else lanes.get("newest_mes_15m_bar_mtime")
+    if not ts and inst == "MNQ":
+        ts = lanes.get("newest_15m_mnq_bar_mtime")
+    d = _ts(ts)
+    return int((now_utc() - d).total_seconds() // 60) if d else None
+
+
+def _action_headline_problem_impact(key: str, finding: dict | None, tick: dict | None) -> tuple[str, str, str]:
+    summary = str((finding or {}).get("summary") or "").strip()
+    m = re.match(r"feed_([A-Z]+)_", key)
+    if m:
+        inst = m.group(1)
+        age = _bar_age_minutes(inst, tick)
+        problem = f"No {inst} bars for {age} min" if age is not None else f"{inst} bar feed is stale"
+        return (f"{inst} FEED STALE", problem, "Stop/target cannot be evaluated while feed is down")
+    if key.startswith("five_min_feed_"):
+        age = _bar_age_minutes("MNQ", tick)
+        problem = f"No MNQ 5m bars for {age} min while 15m bars keep arriving" if age is not None else "MNQ 5m stream stopped while 15m continues"
+        return ("MNQ 5M FEED STALLED", problem, "Every MNQ paper lane resolves on 5m bars — stop/target cannot be evaluated")
+    if key.startswith("alert_non200"):
+        return ("WEBHOOK POSTS REJECTED", summary or "TradingView posts are being rejected by the bot", "Bars are not reaching the decision engine; open positions are not being evaluated")
+    if key.startswith("journal_not_advancing"):
+        return ("JOURNAL STOPPED", summary or "A 15m bar arrived but the journal did not grow", "The bot is receiving bars but not processing them")
+    if key.startswith("hypothetical_position_exposed"):
+        return ("POSITION EXPOSED TO STALE BARS", summary, "Stop/target cannot be resolved; do not assume neither was touched")
+    if key.startswith(("service_not_active", "service_crash_restart")):
+        return (_finding_title(key).upper(), summary or "futures-bot is down", "Nothing is being evaluated; any open position is unmanaged")
+    if key.startswith(("unexpected_restart", "unexpected_deploy", "webhook_process_count")):
+        return (_finding_title(key).upper(), summary, "Runtime identity is uncertain; evidence and position state may not be what you think")
+    if key.startswith(("unexpected_broker_position", "tradovate_")):
+        return (_finding_title(key).upper(), summary or "Broker state does not match what the bot believes", "Broker/order state is ambiguous — verify the account by hand before anything else")
+    if key.startswith(("post_epoch_wrong_sha", "history_rewritten", "file_shrank")):
+        return (_finding_title(key).upper(), summary, "Evidence integrity is compromised until reconciled")
+    if key.startswith("daily_22_"):
+        return (_finding_title(key).upper(), summary, "The Daily 2-2 lane fails closed until its state is repaired")
+    return (_finding_title(key).upper(), summary, "Operator judgement needed")
+
+
+def _et_clock(utc_iso: str | None) -> str:
+    d = _ts(utc_iso) or now_utc()
+    return d.astimezone(ET).strftime("%-I:%M %p ET")
+
+
+def _action_card_text(key: str, finding: dict | None, tick: dict | None, first_utc: str | None) -> str:
+    headline, problem, impact = _action_headline_problem_impact(key, finding, tick)
+    do_now = smallest_fix(key)
+    if do_now.startswith("operator: "):
+        do_now = do_now[len("operator: "):]
+    if key.startswith("feed_") or key.startswith("alert_non200"):
+        do_now = "Check TradingView alerts / webhook delivery"
+    return "\n".join([
+        f"🛑 **ACTION REQUIRED — {headline}**",
+        f"**Exposure:** {_exposure_line(key, tick)}",
+        f"**Problem:** {problem}",
+        f"**Impact:** {impact}",
+        f"**Do now:** {do_now}",
+        f"**Since:** {_et_clock(first_utc)}",
+        f"`{key} · read-only`",
+    ])
+
+
+def _resolved_card_text(key: str, first_utc: str | None, tick: dict | None) -> str:
+    mins = None
+    if first_utc and _ts(first_utc):
+        mins = int((now_utc() - _ts(first_utc)).total_seconds() // 60)
+    m = re.match(r"feed_([A-Z]+)_", key)
+    if m:
+        headline = f"{m.group(1)} FEED RECOVERED"
+        body = f"Bars flowing again after {mins} min." if mins is not None else "Bars flowing again."
+    elif key.startswith("five_min_feed_"):
+        headline = "MNQ 5M FEED RECOVERED"
+        body = f"5m bars flowing again after {mins} min." if mins is not None else "5m bars flowing again."
+    else:
+        headline = f"{_finding_title(key).upper()} CLEARED"
+        body = f"Condition cleared after {mins} min." if mins is not None else "Condition cleared."
+    lines = [f"✅ **RESOLVED — {headline}**", body]
+    exposed = _exposed_lanes_for(key, tick) if key.startswith(_ACTION_IF_EXPOSED_PREFIXES) else _open_lane_positions(tick)
+    for name, pos in exposed:
+        lines.append(f"{_LANE_LABELS.get(name, name)} paper position remains OPEN"
+                     + (f" ({str(pos.get('direction') or '').upper()} @ {pos.get('entry')})." if pos.get("entry") is not None else "."))
+    lines.append(f"`{key} · read-only`")
+    return "\n".join(lines)
+
+
 def handle_blocked(state: dict, findings: Findings, tick: dict) -> None:
     blocked = findings.blocked()
     current = {b["key"]: b for b in blocked}
@@ -1871,8 +2029,10 @@ def handle_blocked(state: dict, findings: Findings, tick: dict) -> None:
         was = state["blocked"].pop(k, None) or {}
         state["blocked_last_notified"].pop(k, None)
         state["notified"].pop(f"blocked:{k}", None)
-        notify(state, "DISCORD_ROUTE_ERROR", _cleared_discord_text(k, was.get("first_utc")),
-               f"blocked-cleared:{k}:{iso(now_utc())}")
+        # a condition raised as an ACTION REQUIRED card is resolved as one too
+        text = (_resolved_card_text(k, was.get("first_utc"), tick) if was.get("action_required")
+                else _cleared_discord_text(k, was.get("first_utc")))
+        notify(state, "DISCORD_ROUTE_ERROR", text, f"blocked-cleared:{k}:{iso(now_utc())}")
     if not blocked:
         return
     snap = None
@@ -1880,15 +2040,23 @@ def handle_blocked(state: dict, findings: Findings, tick: dict) -> None:
         snap = capture_snapshot("BLOCKED_" + "_".join(new_keys)[:40], tick, findings)
     for k, b in current.items():
         if k not in state["blocked"]:
-            state["blocked"][k] = {"first_utc": iso(now_utc()), "summary": b["summary"], "snapshot": str(snap) if snap else None}
+            state["blocked"][k] = {"first_utc": iso(now_utc()), "summary": b["summary"], "snapshot": str(snap) if snap else None,
+                                   "action_required": action_required(k, tick)}
             state_append(EVENTS_FILE, json.dumps({"utc": iso(now_utc()), "kind": "BLOCKED", "key": k, "summary": b["summary"], "detail": b["detail"], "snapshot": str(snap) if snap else None}, sort_keys=True, default=str) + "\n")
             log(f"BLOCKED {k}: {b['summary']} (snapshot {snap})")
+        rec = state["blocked"][k]
+        # exposure can appear after the condition was first raised (feed dies, then a
+        # lane opens on the last bar): promote to a card once, never demote.
+        if not rec.get("action_required") and action_required(k, tick):
+            rec["action_required"] = True
+            state["blocked_last_notified"].pop(k, None)
         last = state["blocked_last_notified"].get(k)
         remind = (not last) or (now_utc() - _ts(last)).total_seconds() >= BLOCKED_REMINDER_S
         if remind:
             state["notified"].pop(f"blocked:{k}", None)
-            notify(state, "DISCORD_ROUTE_ERROR",
-                   _blocked_discord_text(k, b, state["blocked"][k].get("snapshot")), f"blocked:{k}")
+            text = (_action_card_text(k, b, tick, rec.get("first_utc")) if rec.get("action_required")
+                    else _blocked_discord_text(k, b, rec.get("snapshot")))
+            notify(state, "DISCORD_ROUTE_ERROR", text, f"blocked:{k}")
             state["blocked_last_notified"][k] = iso(now_utc())
 
 
