@@ -10,4 +10,6 @@ SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 STATE="${AFS_WATCHER_TMP_STATE:-/tmp/afs_watcher}"
 mkdir -p "$STATE"
 cp -f "$SRC/watcher.py" "$SRC/watcher_memory_guard.py" "$SRC/run_ro.sh" "$STATE/"
+# optional read-only advisory lane (watcher imports it defensively; absent = disabled)
+[ -f "$SRC/watcher_triage.py" ] && cp -f "$SRC/watcher_triage.py" "$STATE/"
 chmod 700 "$STATE/run_ro.sh"

@@ -37,6 +37,10 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from watcher_memory_guard import MemoryReading, evaluate_memory, sample_process_memory
+try:
+    import watcher_triage  # optional read-only advisory lane; a missing copy must never stop the watcher
+except ImportError:  # pragma: no cover — exercised only by a partial install
+    watcher_triage = None
 
 # ── fixed facts ──────────────────────────────────────────────────────────────
 RELEASE_LINK = Path("/root/autonomous-futures-system")
@@ -2058,6 +2062,35 @@ def handle_blocked(state: dict, findings: Findings, tick: dict) -> None:
                     else _blocked_discord_text(k, b, rec.get("snapshot")))
             notify(state, "DISCORD_ROUTE_ERROR", text, f"blocked:{k}")
             state["blocked_last_notified"][k] = iso(now_utc())
+            if rec.get("action_required"):
+                _maybe_triage(state, k, b, tick, rec.get("first_utc"))
+
+
+def _recent_events(n: int = 8) -> list[dict]:
+    """Last n rows of the watcher's own events file (its state, under /tmp) — never production."""
+    try:
+        lines = EVENTS_FILE.read_text(encoding="utf-8").splitlines()[-n:]
+        return [json.loads(l) for l in lines if l.strip()]
+    except Exception:  # noqa: BLE001
+        return []
+
+
+def _maybe_triage(state: dict, key: str, finding: dict, tick: dict, first_utc: str | None) -> None:
+    """Read-only LLM advisory for an ACTION REQUIRED condition (watcher_triage).
+
+    Runs AFTER the Discord card is posted, once per raise, only when the operator
+    has configured a key; every failure is a log line. Zero authority anywhere."""
+    if watcher_triage is None:
+        return
+    try:
+        headline = _action_headline_problem_impact(key, finding, tick)[0]
+        watcher_triage.maybe_triage(
+            key=key, finding=finding, tick=tick, state=state, first_utc=first_utc, headline=headline,
+            release_sha=RELEASE_SHA, service=SERVICE, now=now_utc(),
+            env_value=_env_value, notify=notify, log=log, recent_events=_recent_events(),
+        )
+    except Exception as exc:  # noqa: BLE001 — advisory lane must never break the tick
+        log(f"TRIAGE FAILED {key}: {type(exc).__name__}: {exc}")
 
 
 def smallest_fix(key: str) -> str:
