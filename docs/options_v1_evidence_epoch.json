@@ -1,0 +1,39 @@
+{
+  "policy_id": "OPTIONS_PAPER_V1",
+  "cohort": "V1-EPOCH-1",
+  "deployed_sha": "899a524aad82a66c80ba832ea5601430bdac7355",
+  "release_dir": "/root/afs-releases/899a524aad82-20260914-203217",
+  "release_live_at": "2026-09-15T00:32:37Z",
+  "scanner_restart_at": "2026-09-15T00:32:56Z",
+  "smoke_passed_at": "2026-09-15T16:50:00Z",
+  "epoch_start": "2026-09-15T16:50:00Z",
+  "epoch_rule": "deployed SHA + successful market-hours smoke timestamp; never the restart time",
+  "cohort_boundary": {
+    "scans_first_id": 20972,
+    "scans_last_excluded_id": 20971,
+    "options_shadow_journal_first_id": 9192,
+    "options_shadow_journal_last_excluded_id": 9191,
+    "episode_blocks_before_epoch": 2,
+    "note": "rows with timestamp < epoch_start are pre-epoch telemetry only and are excluded from the official forward-evidence cohort"
+  },
+  "rules_in_force": {
+    "late_entry_guard": "PR #570 - refuse ACTIVE entry when live price is past target_1, past invalidation, or leaves < OPTIONS_PAPER_V1_MIN_REMAINING_RR (default 1.0) reward per unit of risk",
+    "daily_lane_entry_timing": "PR #571 - session-hourly 2U/2D confirmation not required (OPTIONS_PAPER_V1_DAILY_REQUIRE_HOURLY=false); SPY/QQQ trend alignment still required",
+    "daily_lane_target_floor": "PR #571 - prior-day levels closer than OPTIONS_PAPER_V1_DAILY_MIN_TARGET_RR (default 1.0) R from the trigger are skipped; no level beyond the floor -> counterfactual only, no synthetic target",
+    "entry_late_episode_block": "PR #575 - an episode refused ENTRY_LATE at its first actionable opportunity can never become ACTIVE; the refusal is preserved as a COUNTERFACTUAL observer row (no ACTIVE risk, no alert); a new trigger level or a new episode bucket is a new episode",
+    "canonical_bar": "30Min completed bars with the SIP delay buffer (960 s); scans every 5 minutes; live quote evaluated for remaining reward/risk",
+    "risk": "max $300 planned risk per trade, $1,000 aggregate ACTIVE; 45+ DTE (14-44 exception); companion OFF",
+    "signa": "observational only, scorer contribution 0, OPTIONS_SIGNA_V2_TIMEFRAME=1h"
+  },
+  "smoke_evidence": {
+    "rows_inspected": "scans 20497-21010 (13:32:57Z-16:47:57Z)",
+    "first_live_exercise": "NVDA 30m STRAT_212_CONTINUATION SHORT trigger 211.98: 16:17:57Z refused remaining_rr_0.60_below_1.00 -> COUNTERFACTUAL (no liquid contract), block recorded; 16:22/16:27 episode_blocked_after_entry_late with no chain call; bucket roll at 16:32:57Z -> new episode, refused 0.36R, second block",
+    "active_rows": 0,
+    "alerts_sent": 0,
+    "tracebacks": 0,
+    "signa_v2_timeframe_1h_rows": "all",
+    "scorer_signa_component_zero_rows": "all",
+    "not_exercised_today": "checklist items needing an ACTIVE row (contract selection through diagnostic snapshots) - unchanged code proven on the 2026-09-09/10 smokes"
+  },
+  "cohort_change_rule": "any later change to setup, DTE, stop, target, filter, guard, floor, block, or risk rules starts a new cohort with a new epoch"
+}

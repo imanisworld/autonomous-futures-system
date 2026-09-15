@@ -4,7 +4,17 @@ This is the operational gate for starting the first `OPTIONS_PAPER_V1` evidence 
 
 Options-ready baseline: **`9d008a0dcdcb69270d80b663c678b4522f27ebb6`** with **4,921 passed / 7 skipped / 2 warnings**. If `main` advances before deployment, verify the deployed commit still contains this options baseline and has green CI.
 
-**Current state: deployment not yet proven; evidence epoch not started.**
+**Current state (2026-09-15): DEPLOYED and PROVEN. V1 evidence epoch RECORDED.**
+
+| | |
+|---|---|
+| Deployed SHA | `899a524aad82a66c80ba832ea5601430bdac7355` (live 2026-09-15T00:32:37Z) |
+| Smoke passed | 2026-09-15T16:50:00Z (first live exercise of the entry rules verified) |
+| **Evidence epoch** | **`899a524` + 2026-09-15T16:50:00Z** — cohort `V1-EPOCH-1` |
+| Cohort boundary | `scans.id >= 20972`, `options_shadow_journal.id >= 9192`; earlier rows are pre-epoch telemetry only |
+| Machine-readable | `docs/options_v1_evidence_epoch.json` |
+
+Rules in force for this cohort: late-entry guard (#570), Daily-lane entry timing + 1R target floor (#571), ENTRY_LATE episode block with counterfactual preservation (#575). Any change to them starts a new cohort.
 
 ## Required runtime mode
 
