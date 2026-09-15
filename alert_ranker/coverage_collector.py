@@ -22,19 +22,29 @@ Fail-closed contract
   files are written once per session, the ledger is a JSONL that is only ever
   appended to.  A tainted daily file is moved aside, never deleted.
 * The V1 scanner database is refused by name and by schema.
+* Every evidence record carries the exact source commit.  Under
+  ``require_pinned`` that commit must come from an immutable release manifest
+  in the tree being executed, never from a mutable working directory.
+* A daily outcome file is bound to the observer run that produced it (run id,
+  raw event count, reducer episode count).  A repaired observer dataset
+  therefore invalidates the older outcome file instead of coexisting with it.
+* Catch-up: without ``--date`` every settled, uncollected session since the
+  collection start is a candidate, oldest first, stopping at the first failure.
 """
 
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
-from dataclasses import dataclass, field, fields
+import subprocess
+from dataclasses import asdict, dataclass, field, fields
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterable, Sequence
 from zoneinfo import ZoneInfo
 
-from alert_ranker.coverage_episodes import REDUCER_VERSION
+from alert_ranker.coverage_episodes import REDUCER_VERSION, reduce_events
 from alert_ranker.coverage_observer import OBSERVER_VERSION
 from alert_ranker.coverage_outcomes import OUTCOME_VERSION, EpisodeOutcome, PathView
 from alert_ranker.session_calendar import EXCHANGE_TIMEZONE, Session, nyse_session_for
@@ -53,8 +63,15 @@ __all__ = [
     "CollectorError",
     "CoverageCheck",
     "OutcomesCheck",
+    "SourceProvenance",
+    "source_provenance",
     "resolve_target",
+    "settled_sessions",
     "sessions_between",
+    "OutcomeBinding",
+    "binding_path",
+    "reduced_episode_count",
+    "write_binding",
     "refuse_v1_database",
     "observer_completion",
     "outcomes_completion",
@@ -79,6 +96,8 @@ DEFAULT_ALLOW_UNOBSERVABLE: tuple[str, ...] = ("SQ", "VIX")
 DEFAULT_COLLECTION_START = date(2026, 9, 9)
 INDEX_SYMBOLS = ("SPY", "QQQ")
 LATEST_LOOKBACK_DAYS = 10
+RELEASE_MANIFEST = "release_manifest.json"
+_SHA40 = re.compile(r"^[0-9a-f]{40}$")
 V1_DATABASE_NAMES = ("options_scanner.sqlite",)
 V1_TABLES = ("scans", "options_shadow_journal", "alerts")
 
@@ -155,6 +174,76 @@ def sessions_between(start: date, end: date, *, session_for: SessionLookup = nys
             out.append(session)
         cursor += timedelta(days=1)
     return out
+
+
+def settled_sessions(
+    now: datetime,
+    start: date,
+    *,
+    session_for: SessionLookup = nyse_session_for,
+    settle: timedelta = SETTLE_AFTER_CLOSE,
+) -> list[Session]:
+    """Every session from ``start`` whose close + ``settle`` has passed, oldest first."""
+    if now.tzinfo is None:
+        raise CollectorError("now_naive", "now must be timezone-aware")
+    return [s for s in sessions_between(start, _exchange_date(now), session_for=session_for) if now >= s.close + settle]
+
+
+
+# --------------------------------------------------------------------------- #
+# provenance
+# --------------------------------------------------------------------------- #
+
+
+@dataclass(frozen=True)
+class SourceProvenance:
+    """Exactly which code produced a record."""
+
+    sha: str
+    provenance: str  # release_manifest | working_tree
+    root: str
+    dirty: bool = False
+    manifest_fingerprint: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+def source_provenance(root: Path, *, require_pinned: bool = False) -> SourceProvenance:
+    """The commit that ``root`` was built from.
+
+    Pinned: ``<root>/release_manifest.json`` (written into an immutable release
+    tree at build time) names the commit, and the release directory itself is
+    named after that commit.  Unpinned: ``git rev-parse HEAD`` of a working
+    tree, labelled as such with its dirty flag — allowed for local runs only;
+    ``require_pinned`` (the systemd unit) fails closed on it.
+    """
+    root = Path(root).resolve()
+    manifest = root / RELEASE_MANIFEST
+    if manifest.exists():
+        try:
+            payload = json.loads(manifest.read_text())
+        except ValueError as exc:
+            raise CollectorError("release_manifest_unreadable", f"{manifest}: {exc}") from exc
+        repo = payload.get("repo") if isinstance(payload, dict) else None
+        sha = str((repo or {}).get("commit") or "")
+        if not _SHA40.match(sha):
+            raise CollectorError("release_manifest_no_commit", str(manifest))
+        if bool((repo or {}).get("dirty")):
+            raise CollectorError("release_manifest_dirty", f"{manifest} was built from a dirty tree")
+        if require_pinned and root.name != sha:
+            raise CollectorError("release_dir_not_pinned", f"{root} is not named after commit {sha}")
+        return SourceProvenance(sha=sha, provenance="release_manifest", root=str(root), dirty=False, manifest_fingerprint=payload.get("fingerprint_sha256"))
+    if require_pinned:
+        raise CollectorError("provenance_unpinned", f"no {RELEASE_MANIFEST} in {root}; refusing to run from a working tree")
+    try:
+        sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, text=True, capture_output=True, check=True).stdout.strip()
+        status = subprocess.run(["git", "status", "--porcelain", "--untracked-files=no"], cwd=root, text=True, capture_output=True, check=True).stdout
+    except (OSError, subprocess.CalledProcessError) as exc:
+        raise CollectorError("provenance_unavailable", f"{root}: {exc}") from exc
+    if not _SHA40.match(sha):
+        raise CollectorError("provenance_unavailable", f"unexpected HEAD {sha!r}")
+    return SourceProvenance(sha=sha, provenance="working_tree", root=str(root), dirty=bool(status.strip()))
 
 
 # --------------------------------------------------------------------------- #
@@ -318,8 +407,70 @@ def aggregate_stem(aggregate_dir: Path, date_from: date, date_to: date) -> Path:
     return aggregate_dir / f"outcomes_{date_from.isoformat()}_{date_to.isoformat()}"
 
 
-def outcomes_completion(daily_dir: Path, session_date: date) -> OutcomesCheck:
-    """Is the one-session outcome study for ``session_date`` present and untainted?"""
+@dataclass(frozen=True)
+class OutcomeBinding:
+    """Ties one daily outcome file to the observer state that produced it."""
+
+    session_date: str
+    observer_version: str
+    observer_run_id: int
+    observer_ran_at: str
+    raw_events: int
+    reducer_version: str
+    reducer_episodes: int
+    outcome_version: str
+    outcome_episodes: int
+    source_sha: str
+    collector_version: str
+    written_at: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+def binding_path(daily_dir: Path, session_date: date) -> Path:
+    return daily_outcome_stem(daily_dir, session_date).with_suffix(".binding.json")
+
+
+def reduced_episode_count(sqlite_path: Path, session_date: date) -> int:
+    """Episodes the ep-v0.1 reducer produces from the stored events of one session (local, no provider)."""
+    if not sqlite_path.exists():
+        return 0
+    conn = sqlite3.connect(f"file:{sqlite_path}?mode=ro", uri=True)
+    try:
+        if "coverage_events" not in _tables(conn):
+            return 0
+        rows = conn.execute(
+            "SELECT row_json FROM coverage_events WHERE observer_version=? AND session_date=? ORDER BY symbol, bar_start",
+            (OBSERVER_VERSION, session_date.isoformat()),
+        ).fetchall()
+    finally:
+        conn.close()
+    return len(reduce_events([json.loads(r[0]) for r in rows]))
+
+
+def write_binding(daily_dir: Path, session_date: date, coverage: CoverageCheck, reducer_episodes: int, outcome_episodes: int, source: SourceProvenance) -> OutcomeBinding:
+    if coverage.run_id is None or coverage.ran_at is None:
+        raise CollectorError("binding_without_observer_run", session_date.isoformat())
+    binding = OutcomeBinding(
+        session_date=session_date.isoformat(), observer_version=OBSERVER_VERSION, observer_run_id=coverage.run_id, observer_ran_at=coverage.ran_at,
+        raw_events=coverage.events, reducer_version=REDUCER_VERSION, reducer_episodes=reducer_episodes, outcome_version=OUTCOME_VERSION,
+        outcome_episodes=outcome_episodes, source_sha=source.sha, collector_version=COLLECTOR_VERSION, written_at=datetime.now(timezone.utc).isoformat(),
+    )
+    binding_path(daily_dir, session_date).write_text(json.dumps(binding.to_dict(), indent=1, sort_keys=True))
+    return binding
+
+
+def outcomes_completion(daily_dir: Path, session_date: date, coverage: CoverageCheck | None = None, reducer_episodes: int | None = None) -> OutcomesCheck:
+    """Is the one-session outcome study for ``session_date`` present, untainted and bound to the current observer state?
+
+    With ``coverage`` (the current observer check) the binding sidecar must
+    name the same observer run id and raw event count, the daily summary's
+    ``raw_events`` must equal it, and with ``reducer_episodes`` the stored
+    episode count must equal what the reducer produces from the stored events
+    now.  Any mismatch means the observer dataset moved after the outcomes
+    were measured, and the file is treated as incomplete.
+    """
     stem = daily_outcome_stem(daily_dir, session_date)
     check = OutcomesCheck(ok=False)
     json_path = stem.with_suffix(".json")
@@ -354,6 +505,33 @@ def outcomes_completion(daily_dir: Path, session_date: date) -> OutcomesCheck:
         sibling = stem.with_suffix(suffix)
         if not sibling.exists() or sibling.stat().st_size == 0:
             check.problems.append(f"missing_output:{sibling.name}")
+
+    if coverage is not None:
+        bind_file = binding_path(daily_dir, session_date)
+        if not bind_file.exists():
+            check.problems.append("no_binding")
+        else:
+            try:
+                bound = json.loads(bind_file.read_text())
+            except ValueError:
+                bound = None
+            if not isinstance(bound, dict):
+                check.problems.append("binding_unparseable")
+            else:
+                if bound.get("observer_run_id") != coverage.run_id:
+                    check.problems.append(f"binding_observer_run:{bound.get('observer_run_id')}!={coverage.run_id}")
+                if bound.get("raw_events") != coverage.events:
+                    check.problems.append(f"binding_raw_events:{bound.get('raw_events')}!={coverage.events}")
+                if bound.get("observer_version") != OBSERVER_VERSION or bound.get("outcome_version") != OUTCOME_VERSION:
+                    check.problems.append("binding_version")
+                if bound.get("outcome_episodes") != check.episodes:
+                    check.problems.append(f"binding_outcome_episodes:{bound.get('outcome_episodes')}!={check.episodes}")
+                if reducer_episodes is not None and bound.get("reducer_episodes") != reducer_episodes:
+                    check.problems.append(f"binding_reducer_episodes:{bound.get('reducer_episodes')}!={reducer_episodes}")
+        if summary.get("raw_events") != coverage.events:
+            check.problems.append(f"daily_raw_events:{summary.get('raw_events')}!={coverage.events}")
+    if reducer_episodes is not None and check.episodes != reducer_episodes:
+        check.problems.append(f"episodes_vs_reducer:{check.episodes}!={reducer_episodes}")
     check.ok = not check.problems
     return check
 
@@ -386,10 +564,11 @@ def read_ledger(path: Path) -> list[dict[str, Any]]:
     return out
 
 
-def base_record(session: Session | None, status: str, **extra: Any) -> dict[str, Any]:
+def base_record(session: Session | None, status: str, source: SourceProvenance | None = None, **extra: Any) -> dict[str, Any]:
     record: dict[str, Any] = {
         "collector_id": COLLECTOR_ID,
         "collector_version": COLLECTOR_VERSION,
+        "source": source.to_dict() if source else None,
         "observer_version": OBSERVER_VERSION,
         "reducer_version": REDUCER_VERSION,
         "outcome_version": OUTCOME_VERSION,

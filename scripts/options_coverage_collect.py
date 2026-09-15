@@ -1,24 +1,30 @@
 """After-close options coverage collector — the daily oneshot.
 
-    python scripts/options_coverage_collect.py                       # newest settled session
+    python scripts/options_coverage_collect.py                       # every settled, uncollected session (oldest first)
     python scripts/options_coverage_collect.py --date 2026-09-16     # one explicit session
     python scripts/options_coverage_collect.py --plan                # resolve + report, run nothing
 
-Runs, for exactly ONE newly completed session, the three read-only coverage
-scripts as subprocesses and verifies each of them:
+For each candidate session the three read-only coverage scripts run as
+subprocesses and are verified:
 
     1. observer   scripts/options_coverage_observer.py --date D      (provider fetch → observer sqlite)
     2. outcomes   scripts/options_coverage_outcomes.py --from D --to D --out <data>/daily
+                  + a binding sidecar tying the daily file to the observer run/event/episode counts
+    then, once:
     3. aggregate  scripts/options_coverage_episodes.py --from F --to D --json <data>/aggregate/…
                   + a LOCAL roll-up of every stored one-session outcome file (no provider call)
 
-Then appends one line to ``<data>/ledger.jsonl``.  Idempotent: a session whose
-observer evidence and daily outcome file are already complete is not fetched
-again.  Append-only: nothing under ``<data>`` is deleted or rewritten except
-that a tainted daily file is moved aside before a retry.
+Every ledger line carries the exact source commit.  Under ``--require-pinned``
+(the systemd unit) that commit must come from the release manifest of the
+immutable tree being executed.  Idempotent: a session whose observer evidence
+and bound daily outcome file are complete is not fetched again.  Append-only:
+nothing under ``<data>`` is deleted or rewritten except that a tainted daily
+file is moved aside before a retry.  Catch-up: after downtime every settled
+uncollected session since the collection start is processed oldest → newest,
+stopping at the first failure.
 
 Deliberately absent: git, systemctl, the V1 scanner database, Discord/alerts,
-any promotion or policy logic.  Not installed on the box by this change.
+any promotion or policy logic.
 """
 
 from __future__ import annotations
@@ -30,7 +36,7 @@ import os
 import subprocess
 import sys
 import time
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Sequence
 
@@ -49,6 +55,7 @@ from alert_ranker.coverage_collector import (  # noqa: E402
     STATUS_FAILED,
     STATUS_SKIPPED,
     CollectorError,
+    SourceProvenance,
     aggregate_stem,
     append_ledger,
     base_record,
@@ -57,9 +64,13 @@ from alert_ranker.coverage_collector import (  # noqa: E402
     observer_completion,
     outcomes_completion,
     provider_error_lines,
+    reduced_episode_count,
     refuse_v1_database,
     resolve_target,
     sessions_between,
+    settled_sessions,
+    source_provenance,
+    write_binding,
 )
 from alert_ranker.coverage_outcomes import summarize_outcomes  # noqa: E402
 from alert_ranker.session_calendar import AlpacaSessionCalendar, Session, SessionCalendarError  # noqa: E402
@@ -70,6 +81,7 @@ DEFAULT_DATA_DIR = ROOT / "logs" / "coverage_collector"
 OBSERVER_SCRIPT = ROOT / "scripts" / "options_coverage_observer.py"
 EPISODES_SCRIPT = ROOT / "scripts" / "options_coverage_episodes.py"
 OUTCOMES_SCRIPT = ROOT / "scripts" / "options_coverage_outcomes.py"
+DEFAULT_MAX_SESSIONS = 10
 
 EXIT_OK = 0
 EXIT_FAILED = 1
@@ -98,9 +110,11 @@ class Collector:
         collection_start: date,
         allow_unobservable: Sequence[str],
         pause_seconds: float,
+        source: SourceProvenance,
         runner: Runner = subprocess_runner,
         python: str = sys.executable,
         calendar_check: bool = True,
+        max_sessions: int = DEFAULT_MAX_SESSIONS,
         sleep: Callable[[float], None] = time.sleep,
         now: datetime | None = None,
     ) -> None:
@@ -110,15 +124,20 @@ class Collector:
         self.collection_start = collection_start
         self.allow_unobservable = tuple(allow_unobservable)
         self.pause_seconds = pause_seconds
+        self.source = source
         self.runner = runner
         self.python = python
         self.calendar_check = calendar_check
+        self.max_sessions = max_sessions
         self.sleep = sleep
         self.now = now or datetime.now(timezone.utc)
         self.daily_dir = data_dir / "daily"
         self.aggregate_dir = data_dir / "aggregate"
         self.runs_dir = data_dir / "runs"
         self.ledger_path = data_dir / "ledger.jsonl"
+        self._reset_session_state()
+
+    def _reset_session_state(self) -> None:
         self.steps: dict[str, str] = {}
         self.outputs: list[str] = []
         self.logs: list[str] = []
@@ -152,6 +171,23 @@ class Collector:
             "--sqlite", str(self.sqlite_path),
             "--json", str(self.aggregate_dir / f"episodes_{self.collection_start.isoformat()}_{session.date.isoformat()}.json"),
         ]
+
+    # ------------------------------------------------------------------ #
+    # completeness
+    # ------------------------------------------------------------------ #
+
+    def status_of(self, session: Session, universe: Sequence[str]) -> tuple[Any, Any, int]:
+        """(observer check, outcomes check bound to it, reducer episode count) for one session."""
+        coverage = observer_completion(self.sqlite_path, session.date, universe, self.allow_unobservable)
+        reducer = reduced_episode_count(self.sqlite_path, session.date) if coverage.ok else 0
+        outcomes = outcomes_completion(self.daily_dir, session.date, coverage if coverage.ok else None, reducer if coverage.ok else None)
+        return coverage, outcomes, reducer
+
+    def candidates(self, universe: Sequence[str]) -> tuple[list[Session], list[Session]]:
+        """(settled sessions since the collection start, those not yet complete) — oldest first."""
+        settled = settled_sessions(self.now, self.collection_start)
+        pending = [s for s in settled if not (lambda c, o, _r: c.ok and o.ok)(*self.status_of(s, universe))]
+        return settled, pending
 
     # ------------------------------------------------------------------ #
     # steps
@@ -202,11 +238,11 @@ class Collector:
         self.steps["calendar"] = "confirmed"
         return session
 
-    def collect_observer(self, session: Session, universe: Sequence[str]) -> dict[str, Any]:
+    def collect_observer(self, session: Session, universe: Sequence[str]) -> Any:
         before = observer_completion(self.sqlite_path, session.date, universe, self.allow_unobservable)
         if before.ok:
             self.steps["observer"] = "already_complete"
-            return before.to_dict()
+            return before
         text = self._run(self.observer_cmd(session), self._log_path(session, "observer"), "observer")
         errors = provider_error_lines(text)
         if errors:
@@ -215,30 +251,36 @@ class Collector:
         if not after.ok:
             raise CollectorError("observer_coverage_incomplete", "; ".join(after.problems))
         self.steps["observer"] = "ran"
-        return after.to_dict()
+        return after
 
-    def collect_outcomes(self, session: Session) -> dict[str, Any]:
-        before = outcomes_completion(self.daily_dir, session.date)
+    def collect_outcomes(self, session: Session, coverage: Any) -> Any:
+        reducer = reduced_episode_count(self.sqlite_path, session.date)
+        before = outcomes_completion(self.daily_dir, session.date, coverage, reducer)
         if before.ok:
             self.steps["outcomes"] = "already_complete"
-            return before.to_dict()
+            return before
         stem = daily_outcome_stem(self.daily_dir, session.date)
         if stem.with_suffix(".json").exists():
-            # Tainted or partial: keep it (append-only), move it out of the way.
+            # Tainted, partial or bound to an earlier observer run: keep it (append-only), move it out of the way.
             stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-            for suffix in (".json", ".csv", ".md"):
+            for suffix in (".json", ".csv", ".md", ".binding.json"):
                 path = stem.with_suffix(suffix)
                 if path.exists():
                     path.rename(path.with_name(f"{path.name}.tainted.{stamp}"))
             self.steps["outcomes_tainted_moved"] = stamp
+            self.steps["outcomes_rerun_reason"] = "; ".join(before.problems)[:300]
         self._run(self.outcomes_cmd(session), self._log_path(session, "outcomes"), "outcomes")
-        after = outcomes_completion(self.daily_dir, session.date)
+        unbound = outcomes_completion(self.daily_dir, session.date, None, reducer)
+        if not unbound.ok:
+            raise CollectorError("outcomes_incomplete", "; ".join(unbound.problems))
+        write_binding(self.daily_dir, session.date, coverage, reducer, unbound.episodes, self.source)
+        after = outcomes_completion(self.daily_dir, session.date, coverage, reducer)
         if not after.ok:
-            raise CollectorError("outcomes_incomplete", "; ".join(after.problems))
-        for suffix in (".json", ".csv", ".md"):
+            raise CollectorError("outcomes_binding_failed", "; ".join(after.problems))
+        for suffix in (".json", ".csv", ".md", ".binding.json"):
             self.outputs.append(str(stem.with_suffix(suffix)))
         self.steps["outcomes"] = "ran"
-        return after.to_dict()
+        return after
 
     def aggregate(self, session: Session) -> dict[str, Any]:
         self.aggregate_dir.mkdir(parents=True, exist_ok=True)
@@ -261,7 +303,10 @@ class Collector:
         summary["sessions_present"], summary["sessions_missing"] = present, missing
         summary["generated_at"] = datetime.now(timezone.utc).isoformat()
         summary["provider_errors"] = {}
-        summary["aggregated_by"] = {"collector_id": COLLECTOR_ID, "collector_version": COLLECTOR_VERSION, "source": "stored daily outcome files; no provider call"}
+        summary["aggregated_by"] = {
+            "collector_id": COLLECTOR_ID, "collector_version": COLLECTOR_VERSION, "source": self.source.to_dict(),
+            "method": "stored daily outcome files; no provider call",
+        }
         stem = aggregate_stem(self.aggregate_dir, self.collection_start, session.date)
         stem.with_suffix(".json").write_text(json.dumps({"summary": summary, "episodes": [o.to_row() for o in outcomes]}, indent=1, sort_keys=True))
         write_markdown(stem.with_suffix(".md"), summary, summary["date_from"], summary["date_to"], {})
@@ -273,83 +318,110 @@ class Collector:
         self.steps["aggregate"] = "ran"
         return {"sessions_present": present, "sessions_missing": missing, "episodes": len(outcomes), "clean": summary["total"]["clean_episodes"]}
 
-    def gap_sessions(self, session: Session, universe: Sequence[str]) -> list[str]:
-        """Sessions between the collection start and the target with no observer run (reported, never backfilled here)."""
-        gaps: list[str] = []
-        for earlier in sessions_between(self.collection_start, session.date - timedelta(days=1)):
-            if not observer_completion(self.sqlite_path, earlier.date, universe, self.allow_unobservable).ok:
-                gaps.append(earlier.date.isoformat())
-        return gaps
-
     # ------------------------------------------------------------------ #
     # orchestration
     # ------------------------------------------------------------------ #
+
+    def _record(self, session: Session | None, status: str, **extra: Any) -> dict[str, Any]:
+        record = base_record(session, status, self.source, **extra)
+        append_ledger(self.ledger_path, record)
+        return record
+
+    def collect_session(self, session: Session, universe: Sequence[str]) -> str:
+        """Collect one session end to end. Returns the ledger status. Raises CollectorError on any failure."""
+        self._reset_session_state()
+        coverage_before, outcomes_before, _ = self.status_of(session, universe)
+        if coverage_before.ok and outcomes_before.ok:
+            self._record(session, STATUS_ALREADY_COLLECTED, coverage=coverage_before.to_dict(), outcomes=outcomes_before.to_dict())
+            print(f"{STATUS_ALREADY_COLLECTED}: {session.date} observer run {coverage_before.run_id}, {outcomes_before.episodes} episodes")
+            return STATUS_ALREADY_COLLECTED
+        if self.authoritative_session(session) is None:
+            self._record(session, STATUS_SKIPPED, reason="broker_calendar_closed")
+            print(f"{STATUS_SKIPPED}: broker calendar reports no session on {session.date}")
+            return STATUS_SKIPPED
+        api_key, secret_key = resolve_alpaca_credentials()
+        if not api_key or not secret_key:
+            raise CollectorError("credentials_missing", "ALPACA_API_KEY/ALPACA_KEY + secret not set")
+        started = datetime.now(timezone.utc)
+        self._record(session, "STARTED", started_at=started.isoformat(), observer_before=coverage_before.to_dict(), outcomes_before=outcomes_before.to_dict())
+        coverage = self.collect_observer(session, universe)
+        if self.steps.get("observer") == "ran" and self.pause_seconds > 0:
+            self.sleep(self.pause_seconds)
+        outcomes = self.collect_outcomes(session, coverage)
+        self._record(
+            session, STATUS_DONE, started_at=started.isoformat(), finished_at=datetime.now(timezone.utc).isoformat(),
+            steps=dict(self.steps), coverage=coverage.to_dict(), outcomes=outcomes.to_dict(), outputs=list(self.outputs), logs=list(self.logs),
+        )
+        print(f"{STATUS_DONE}: {session.date} observable {coverage.observable}/{coverage.requested} events {coverage.events}; episodes {outcomes.episodes} (clean {outcomes.clean})")
+        return STATUS_DONE
 
     def run(self, explicit: date | None, *, plan_only: bool = False) -> int:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         session: Session | None = None
         try:
-            session = resolve_target(self.now, explicit)
-            if session is None:
-                record = base_record(None, STATUS_SKIPPED, reason="no_session", requested_date=explicit.isoformat() if explicit else None)
-                if not plan_only:
-                    append_ledger(self.ledger_path, record)
-                print(f"{STATUS_SKIPPED}: {explicit} is not a session (weekend/holiday)")
-                return EXIT_OK
-
             refuse_v1_database(self.sqlite_path)
             universe = load_universe(self.universe_path)
             if not universe:
                 raise CollectorError("universe_empty", str(self.universe_path))
 
-            observer_before = observer_completion(self.sqlite_path, session.date, universe, self.allow_unobservable)
-            outcomes_before = outcomes_completion(self.daily_dir, session.date)
-            aggregate_json = aggregate_stem(self.aggregate_dir, self.collection_start, session.date).with_suffix(".json")
-            already = observer_before.ok and outcomes_before.ok and aggregate_json.exists()
+            if explicit is not None:
+                session = resolve_target(self.now, explicit)
+                if session is None:
+                    if not plan_only:
+                        self._record(None, STATUS_SKIPPED, reason="no_session", requested_date=explicit.isoformat())
+                    print(f"{STATUS_SKIPPED}: {explicit} is not a session (weekend/holiday)")
+                    return EXIT_OK
+                settled, targets = [session], [session]
+                newest = session
+            else:
+                settled, targets = self.candidates(universe)
+                if not settled:
+                    raise CollectorError("no_settled_session", f"nothing settled since {self.collection_start} as of {self.now.isoformat()}")
+                newest = settled[-1]
+            deferred = targets[self.max_sessions:]
+            targets = targets[: self.max_sessions]
+
             if plan_only:
+                plan = []
+                for s in targets:
+                    c, o, r = self.status_of(s, universe)
+                    plan.append({"session_date": s.date.isoformat(), "close": s.close.isoformat(), "early_close": s.is_early_close,
+                                 "observer": c.to_dict(), "outcomes": o.to_dict(), "reducer_episodes": r,
+                                 "commands": [self.observer_cmd(s), self.outcomes_cmd(s)]})
                 print(json.dumps({
-                    "session_date": session.date.isoformat(), "close": session.close.isoformat(), "early_close": session.is_early_close,
-                    "observer": observer_before.to_dict(), "outcomes": outcomes_before.to_dict(), "aggregate_exists": aggregate_json.exists(),
-                    "would": "skip" if already else "collect", "commands": [self.observer_cmd(session), self.outcomes_cmd(session), self.episodes_cmd(session)],
+                    "source": self.source.to_dict(), "settled_since_start": [s.date.isoformat() for s in settled],
+                    "would_collect": plan, "deferred_beyond_max_sessions": [s.date.isoformat() for s in deferred],
+                    "aggregate": {"exists": aggregate_stem(self.aggregate_dir, self.collection_start, newest.date).with_suffix(".json").exists(), "command": self.episodes_cmd(newest)},
                 }, indent=1, sort_keys=True))
                 return EXIT_OK
-            if already:
-                record = base_record(session, STATUS_ALREADY_COLLECTED, coverage=observer_before.to_dict(), outcomes=outcomes_before.to_dict())
-                append_ledger(self.ledger_path, record)
-                print(f"{STATUS_ALREADY_COLLECTED}: {session.date} observer run {observer_before.run_id}, {outcomes_before.episodes} episodes")
-                return EXIT_OK
 
-            if self.authoritative_session(session) is None:
-                record = base_record(session, STATUS_SKIPPED, reason="broker_calendar_closed")
-                append_ledger(self.ledger_path, record)
-                print(f"{STATUS_SKIPPED}: broker calendar reports no session on {session.date}")
-                return EXIT_OK
+            if not targets:
+                session = newest
+                self.collect_session(newest, universe)  # records ALREADY_COLLECTED
+            else:
+                collected = []
+                for session in targets:
+                    status = self.collect_session(session, universe)
+                    if status == STATUS_DONE:
+                        collected.append(session.date.isoformat())
+                if deferred:
+                    print(f"deferred beyond --max-sessions {self.max_sessions}: {[s.date.isoformat() for s in deferred]}; rerun to continue")
+                    self._record(None, "DEFERRED", sessions=[s.date.isoformat() for s in deferred], collected=collected)
+                    return EXIT_OK
 
-            api_key, secret_key = resolve_alpaca_credentials()
-            if not observer_before.ok or not outcomes_before.ok:
-                if not api_key or not secret_key:
-                    raise CollectorError("credentials_missing", "ALPACA_API_KEY/ALPACA_KEY + secret not set")
-
-            started = datetime.now(timezone.utc)
-            append_ledger(self.ledger_path, base_record(session, "STARTED", started_at=started.isoformat(), gap_sessions=self.gap_sessions(session, universe)))
-            coverage = self.collect_observer(session, universe)
-            if self.steps.get("observer") == "ran" and self.pause_seconds > 0:
-                self.sleep(self.pause_seconds)
-            outcomes = self.collect_outcomes(session)
-            aggregate = self.aggregate(session)
-            record = base_record(
-                session, STATUS_DONE, started_at=started.isoformat(), finished_at=datetime.now(timezone.utc).isoformat(),
-                steps=self.steps, coverage=coverage, outcomes=outcomes, aggregate=aggregate, outputs=self.outputs, logs=self.logs,
-            )
-            append_ledger(self.ledger_path, record)
-            print(f"{STATUS_DONE}: {session.date} observable {coverage['observable']}/{coverage['requested']} events {coverage['events']}; "
-                  f"episodes {outcomes['episodes']} (clean {outcomes['clean']}); aggregate {aggregate['episodes']} episodes over {len(aggregate['sessions_present'])} sessions"
-                  + (f"; sessions without daily outcomes: {aggregate['sessions_missing']}" if aggregate["sessions_missing"] else ""))
+            aggregate_json = aggregate_stem(self.aggregate_dir, self.collection_start, newest.date).with_suffix(".json")
+            _, newest_outcomes, _ = self.status_of(newest, universe)
+            if newest_outcomes.ok and (targets or not aggregate_json.exists()):
+                session = newest
+                self._reset_session_state()
+                aggregate = self.aggregate(newest)
+                self._record(newest, "AGGREGATED", steps=dict(self.steps), aggregate=aggregate, outputs=list(self.outputs), logs=list(self.logs))
+                print(f"AGGREGATED: {aggregate['episodes']} episodes over {len(aggregate['sessions_present'])} sessions {self.collection_start}..{newest.date}"
+                      + (f"; sessions without daily outcomes: {aggregate['sessions_missing']}" if aggregate["sessions_missing"] else ""))
             return EXIT_OK
         except CollectorError as exc:
-            record = base_record(session, STATUS_FAILED, reason=exc.reason, detail=exc.detail, steps=self.steps, outputs=self.outputs, logs=self.logs)
             if not plan_only:
-                append_ledger(self.ledger_path, record)
+                self._record(session, STATUS_FAILED, reason=exc.reason, detail=exc.detail, steps=dict(self.steps), outputs=list(self.outputs), logs=list(self.logs))
             print(f"{STATUS_FAILED}: {exc.reason}: {exc.detail}", file=sys.stderr)
             return EXIT_FAILED
 
@@ -370,30 +442,39 @@ def build_collector(args: argparse.Namespace, **overrides: Any) -> Collector:
         allow_unobservable=_parse_symbols(args.allow_unobservable if args.allow_unobservable is not None else env.get("OPTIONS_COVERAGE_ALLOW_UNOBSERVABLE")),
         pause_seconds=args.pause_seconds,
         calendar_check=not args.no_calendar_check,
+        max_sessions=args.max_sessions,
         now=datetime.fromisoformat(args.now) if args.now else None,
     )
     kwargs.update(overrides)
+    if "source" not in kwargs:
+        kwargs["source"] = source_provenance(ROOT, require_pinned=args.require_pinned)
     return Collector(**kwargs)
 
 
 def main(argv: Sequence[str] | None = None, **overrides: Any) -> int:
     parser = argparse.ArgumentParser(description="After-close options coverage collector (read-only evidence oneshot)")
-    parser.add_argument("--date", help="Session YYYY-MM-DD to collect (default: newest settled session)")
-    parser.add_argument("--from", dest="collection_start", help="First session of the aggregate range (default: 2026-09-09 or OPTIONS_COVERAGE_FROM)")
+    parser.add_argument("--date", help="Session YYYY-MM-DD to collect (default: every settled, uncollected session since --from, oldest first)")
+    parser.add_argument("--from", dest="collection_start", help="First session of the collection (default: 2026-09-09 or OPTIONS_COVERAGE_FROM)")
     parser.add_argument("--data-dir", help="Collector data dir (default: logs/coverage_collector or OPTIONS_COVERAGE_DATA_DIR)")
     parser.add_argument("--sqlite", help="Observer sqlite (default: logs/options_coverage_observer.sqlite or OPTIONS_COVERAGE_SQLITE_PATH)")
     parser.add_argument("--universe", help="Universe CSV (default: research/coverage/options_watchlist_150.csv)")
     parser.add_argument("--allow-unobservable", help="Comma list of universe symbols allowed to have no bars (default: SQ,VIX or OPTIONS_COVERAGE_ALLOW_UNOBSERVABLE)")
     parser.add_argument("--pause-seconds", type=float, default=15.0, help="Pause between the observer and outcome fetches (provider rate limit)")
+    parser.add_argument("--max-sessions", type=int, default=DEFAULT_MAX_SESSIONS, help="Catch-up cap per run; the rest is deferred to the next run")
     parser.add_argument("--no-calendar-check", action="store_true", help="Skip the broker calendar cross-check")
-    parser.add_argument("--plan", action="store_true", help="Resolve the target and report what would run; run nothing, write nothing")
+    parser.add_argument("--require-pinned", action="store_true", help="Refuse to run unless this tree carries a release manifest naming its commit (systemd unit)")
+    parser.add_argument("--plan", action="store_true", help="Resolve the targets and report what would run; run nothing, write nothing")
     parser.add_argument("--now", help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     try:
         explicit = date.fromisoformat(args.date) if args.date else None
     except ValueError:
         parser.error(f"--date must be YYYY-MM-DD, got {args.date!r}")
-    collector = build_collector(args, **overrides)
+    try:
+        collector = build_collector(args, **overrides)
+    except CollectorError as exc:
+        print(f"{STATUS_FAILED}: {exc.reason}: {exc.detail}", file=sys.stderr)
+        return EXIT_FAILED
 
     lock_path = collector.data_dir / ".collector.lock"
     collector.data_dir.mkdir(parents=True, exist_ok=True)
