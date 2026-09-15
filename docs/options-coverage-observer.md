@@ -101,3 +101,24 @@ R:R quality flags are reported, never clipped: `structural_risk_tiny`
 (risk < 0.1% of price), `first_sight_denominator_small` (first-sight risk
 < 10% of structural risk), `remaining_rr_implausible:*` (non-finite or
 |R| > 20). Rejection reasons are kept per rule, in gate order, uncollapsed.
+
+## Episode outcome study (`out-v0.1`) — read-only research
+
+`scripts/options_coverage_outcomes.py --from D1 --to D2 [--out DIR]` measures
+causal forward movement for every deduped episode, same regular session only
+(`UNRESOLVED_AT_CLOSE` otherwise; nothing carries overnight). Two entry views
+are always computed and never substituted: **mechanical** (entry at the
+trigger, path from the first 5m bar inside the breakout 30m bar that crossed
+it) and **first sight** (entry at the observer's stored first-sight price,
+path strictly after that tick). `blind_window_extension_r` = directional move
+from trigger to first-sight price ÷ structural risk. 5m bars are used only to
+resolve the path — never to discover or redefine a setup. Intrabar ordering is
+never assumed: target and stop in one 5m bar → `AMBIGUOUS` (bar preserved);
+trigger and stop in the cross bar → `trigger_path_ambiguous`; thresholds are
+not credited in the invalidation bar. Both stored geometries are evaluated;
+R is normalised so favourable is positive with structural risk as the
+denominator for both views. Cohorts: orthogonal flags plus a mutually
+exclusive gate-stage bucket (UNSUPPORTED_FAMILY → TARGET_GEOMETRY_REJECTED →
+MARKET_ALIGNMENT_REJECTED → LATE_AT_FIRST_SIGHT → WOULD_OTHERWISE_QUALIFY).
+Outputs JSON + CSV + Markdown under `logs/coverage_outcomes/` (gitignored).
+Identity `OPTIONS_COVERAGE_OUTCOMES / out-v0.1`. Not a promotion study.
