@@ -110,6 +110,24 @@ class ScanStorage:
                 "CREATE INDEX IF NOT EXISTS idx_options_shadow_journal_scan "
                 "ON options_shadow_journal (scan_id, ticker, timestamp)"
             )
+            # Episodes whose first actionable ACTIVE entry was refused
+            # ENTRY_LATE. Once here, the episode can never become ACTIVE; a
+            # new mechanical trigger (different trigger level or episode
+            # bucket) is a new episode key and is unaffected. Kept as its own
+            # table so the block survives restarts and does not depend on
+            # whether the counterfactual pricing produced a journal row.
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS options_episode_blocks (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ticker TEXT NOT NULL,
+                    episode_key TEXT NOT NULL UNIQUE,
+                    reason TEXT NOT NULL,
+                    blocked_at TEXT NOT NULL,
+                    scan_id INTEGER
+                )
+                """
+            )
 
     def record_scan(
         self,
@@ -445,6 +463,40 @@ class ScanStorage:
                 (ticker.upper(), f"%{needle}%"),
             ).fetchone()
         return int(row["id"]) if row else None
+
+    def block_episode(
+        self,
+        ticker: str,
+        episode_key: str,
+        reason: str,
+        *,
+        blocked_at: datetime | None = None,
+        scan_id: int | None = None,
+    ) -> None:
+        """Record that this ACTIVE episode was refused at its first opportunity."""
+        if not episode_key:
+            return
+        stamp = (blocked_at or datetime.now(timezone.utc)).astimezone(timezone.utc).isoformat()
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO options_episode_blocks
+                    (ticker, episode_key, reason, blocked_at, scan_id)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (ticker.upper(), episode_key, reason, stamp, scan_id),
+            )
+
+    def episode_block(self, ticker: str, episode_key: str) -> str | None:
+        """Reason this ACTIVE episode is blocked, or None when it may open."""
+        if not episode_key:
+            return None
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT reason FROM options_episode_blocks WHERE ticker = ? AND episode_key = ?",
+                (ticker.upper(), episode_key),
+            ).fetchone()
+        return str(row[0]) if row else None
 
     def find_episode_duplicate(self, ticker: str, episode_key: str) -> int | None:
         """Find any row already journalled for this evidence episode.
