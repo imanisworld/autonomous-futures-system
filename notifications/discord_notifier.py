@@ -51,7 +51,7 @@ def notify_discord(
     if not _should_notify(result, config.discord_notify_decisions):
         return NotificationResult(sent=False, reason="decision_filtered")
 
-    body = json.dumps({"content": _format_message(payload, result)}).encode("utf-8")
+    body = json.dumps(build_signal_body(payload, result)).encode("utf-8")
     headers = {"Content-Type": "application/json"}
     sender = transport or _post_json
 
@@ -213,6 +213,116 @@ def _decision_reason_line(result: dict) -> Optional[str]:
         if failed:
             reason = ", ".join(str(item) for item in failed)
     return f"Why: {reason}" if reason else None
+
+
+# Embed colours (Discord decimal RGB), matching the options scanner card.
+_COLOR_LONG = 3066993      # green
+_COLOR_SHORT = 15158332    # red
+_COLOR_NEUTRAL = 9807270   # grey — NO_TRADE / rejected / unknown
+_SESSION_LABELS = {"new_york": "New York Open", "london": "London", "asian": "Asian"}
+
+
+def _session_label(session: str) -> str:
+    return _SESSION_LABELS.get(session, session.replace("_", " ").title())
+
+
+def _field(name: str, value, inline: bool = True) -> Optional[dict]:
+    if value is None or value == "" or value == "?":
+        return None
+    return {"name": name, "value": str(value)[:1024], "inline": inline}
+
+
+def build_signal_embed(payload: AlertPayload, result: dict) -> dict:
+    """The futures decision as a Discord embed card — same shape as the options
+    scanner card (title / description / inline fields / footer). Presentation
+    only: every value comes from the already-made decision in ``result``; nothing
+    here can place, queue, or retry an order.
+    """
+    decision = result.get("decision") or "UNKNOWN"
+    context = result.get("context") or {}
+    risk = result.get("risk") or {}
+    fill = result.get("fill") or {}
+    confluence = result.get("confluence") or {}
+    resolution = result.get("resolution")
+    symbol = context.get("instrument") or payload.ticker
+    session = context.get("session") or "unknown_session"
+    ref_line = _reference_price_line(result.get("live_quote"))
+    ref_value = ref_line.split(": ", 1)[1] if ref_line else None
+
+    fields: list[Optional[dict]] = []
+    if decision == "TRADE":
+        direction = fill.get("direction", "?")
+        entry, stop, target = fill.get("entry"), fill.get("stop"), fill.get("target")
+        rr = fill.get("rr_ratio")
+        contracts = fill.get("contracts")
+        score = confluence.get("score", 0)
+        grade = confluence.get("grade", "?")
+        icon = "🟢" if direction == "LONG" else "🔴"
+        color = _COLOR_LONG if direction == "LONG" else _COLOR_SHORT
+        title = f"{icon} {symbol} {direction} — PAPER TRADE"
+        description = (
+            f"**{grade} SETUP · Score {score}/10** · "
+            f"{_strategy_label(fill.get('strategy', '?'))} · {_session_label(session)}"
+        )
+        stop_delta = f" (-{abs(entry - stop):.2f})" if entry is not None and stop is not None else ""
+        target_delta = f" (+{abs(target - entry):.2f})" if target is not None and entry is not None else ""
+        fields += [
+            _field("Entry", _format_price(entry)),
+            _field("Stop", f"{_format_price(stop)}{stop_delta}"),
+            _field("Target", f"{_format_price(target)}{target_delta}"),
+            _field("R:R", f"{rr:.1f}" if rr is not None else None),
+            _field("Contracts", contracts),
+            _field("Risk", _risk_line(risk).replace("Risk: ", "", 1) if risk else None),
+            _field("Market", context.get("market_condition")),
+            _field("Bar close", _bar_close_label(payload, context)),
+            _field("Bar time", _format_bar_time(payload.timestamp)),
+            _field("Reference price", ref_value),
+        ]
+        factors: list = confluence.get("factors") or []
+        penalties: list = confluence.get("penalties") or []
+        if factors or penalties:
+            fields.append(_field(
+                "Confluence",
+                "\n".join([f"✅ {f}" for f in factors] + [f"⚠️ {p}" for p in penalties]),
+                inline=False,
+            ))
+    else:
+        color = _COLOR_NEUTRAL
+        icon = "⛔" if "REJECT" in decision else "⚪"
+        title = f"{icon} {symbol} — {decision.replace('_', ' ')}"
+        reason_line = _decision_reason_line(result)
+        description = reason_line.split(": ", 1)[1] if reason_line else f"{_session_label(session)} · no paper trade"
+        fields += [
+            _field("Session", _session_label(session)),
+            _field("Bar close", _bar_close_label(payload, context)),
+            _field("Bar time", _format_bar_time(payload.timestamp)),
+            _field("Reference price", ref_value),
+            _field("Risk", _risk_line(risk).replace("Risk: ", "", 1) if risk else None, inline=False),
+        ]
+        candidate = result.get("candidate")
+        if candidate:
+            fields.append(_field("Almost traded", _candidate_line(candidate).replace("⚠️ Almost traded — ", "", 1), inline=False))
+
+    if resolution:
+        fields.append(_field("Resolution", resolution, inline=False))
+
+    return {
+        "title": title[:256],
+        "description": description[:4096],
+        "color": color,
+        "fields": [f for f in fields if f][:25],
+        "footer": {"text": f"Vantage Point paper decision · {decision} · paper only, no live orders"},
+    }
+
+
+def build_signal_body(payload: AlertPayload, result: dict) -> dict:
+    """The JSON body posted to the Discord webhook: the embed card, plus a plain
+    ``content`` banner only for smoke tests so a synthetic preview can never be
+    mistaken for a journaled decision."""
+    body: dict = {"embeds": [build_signal_embed(payload, result)]}
+    if result.get("smoke_test"):
+        body["content"] = "DISCORD SMOKE TEST - NOT A JOURNALED TRADE\nSynthetic notification preview only."
+    return body
 
 
 def _format_message(payload: AlertPayload, result: dict) -> str:

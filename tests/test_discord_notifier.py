@@ -113,8 +113,10 @@ def test_discord_notification_sends_paper_decision(config):
     assert result.sent is True
     assert sent["url"] == "https://discord.example/webhook"
     assert sent["headers"]["Content-Type"] == "application/json"
-    assert "Vantage Point paper decision: TRADE" in sent["body"]["content"]
-    assert "MNQ" in sent["body"]["content"]
+    embed = sent["body"]["embeds"][0]
+    assert embed["title"] == "🟢 MNQ LONG — PAPER TRADE"
+    assert "TRADE" in embed["footer"]["text"]
+    assert "content" not in sent["body"]  # banner is smoke-test only
 
 
 def test_smoke_test_payload_is_synthetic_paper_decision():
@@ -284,3 +286,95 @@ def test_non_trade_alert_falls_back_to_failed_gates():
     result["failed_gates"] = ["ENTRY_DETACHED_FROM_PRICE"]
     msg = _format_message(_payload(), result)
     assert "Why: ENTRY_DETACHED_FROM_PRICE" in msg
+
+
+# ── embed card (options-scanner-style) ───────────────────────────────────────
+def _fields(embed: dict) -> dict:
+    return {f["name"]: f["value"] for f in embed["fields"]}
+
+
+def test_trade_embed_mirrors_the_options_card_shape():
+    from notifications.discord_notifier import build_signal_embed
+
+    result = _result()
+    result["confluence"] = {"score": 9, "grade": "A+", "factors": ["VWAP aligned (+2)"], "penalties": ["Late entry (-1)"]}
+    result["live_quote"] = {"status": "fresh", "price": 19506.0, "age_seconds": 2}
+    embed = build_signal_embed(_payload(), result)
+
+    assert embed["title"] == "🟢 MNQ LONG — PAPER TRADE"
+    assert embed["description"] == "**A+ SETUP · Score 9/10** · orb_reclaim (ORB High Reclaim) · New York Open"
+    assert embed["color"] == 3066993
+    f = _fields(embed)
+    assert f["Entry"] == "19505.25"
+    assert f["Stop"] == "19495.25 (-10.00)"
+    assert f["Target"] == "19525.25 (+20.00)"
+    assert f["R:R"] == "2.0"
+    assert f["Contracts"] == "1"
+    assert f["Risk"] == "APPROVED"
+    assert f["Market"] == "TRENDING"
+    assert f["Bar close"] == "19505.25"
+    assert f["Bar time"] == "2026-05-23 10:30 AM ET"
+    assert f["Reference price"] == "19506.00 (live · fresh)"
+    assert f["Confluence"] == "✅ VWAP aligned (+2)\n⚠️ Late entry (-1)"
+    assert embed["footer"]["text"] == "Vantage Point paper decision · TRADE · paper only, no live orders"
+    assert all(len(x["value"]) <= 1024 for x in embed["fields"]) and len(embed["fields"]) <= 25
+
+
+def test_short_trade_embed_is_red():
+    from notifications.discord_notifier import build_signal_embed
+
+    result = _result()
+    result["fill"]["direction"] = "SHORT"
+    embed = build_signal_embed(_payload(), result)
+    assert embed["title"] == "🔴 MNQ SHORT — PAPER TRADE"
+    assert embed["color"] == 15158332
+
+
+def test_rejected_embed_states_reason_and_near_miss():
+    from notifications.discord_notifier import build_signal_embed
+
+    result = _result("RISK_REJECTED")
+    result["risk"] = {"result": "REJECTED", "reason": "Account drawdown 24.6% exceeds max 20.0%"}
+    result["candidate"] = {"direction": "LONG", "symbol": "MNQ", "entry": 29470.75, "stop": 29468.25, "target": 29485.75, "blocking_gate": "MAX_DRAWDOWN"}
+    embed = build_signal_embed(_payload(), result)
+
+    assert embed["title"] == "⛔ MNQ — RISK REJECTED"
+    assert embed["color"] == 9807270
+    f = _fields(embed)
+    assert f["Risk"] == "REJECTED — Account drawdown 24.6% exceeds max 20.0%"
+    assert f["Almost traded"] == "🟢 MNQ LONG 29470.75 / stop 29468.25 / target 29485.75 · skipped: max drawdown"
+    assert "Entry" not in f and "Confluence" not in f
+
+
+def test_no_trade_embed_uses_gate_reason_as_description():
+    from notifications.discord_notifier import build_signal_embed
+
+    result = _result("NO_TRADE")
+    result.pop("fill")
+    result["gate_reason"] = "no qualifying setup"
+    embed = build_signal_embed(_payload(), result)
+    assert embed["title"] == "⚪ MNQ — NO TRADE"
+    assert embed["description"] == "no qualifying setup"
+    assert "Almost traded" not in _fields(embed)
+
+
+def test_smoke_test_body_carries_the_banner_as_content():
+    from notifications.discord_notifier import build_signal_body
+
+    payload, result = smoke_test_payload()
+    body = build_signal_body(payload, result)
+    assert body["content"].startswith("DISCORD SMOKE TEST - NOT A JOURNALED TRADE")
+    assert body["embeds"][0]["title"] == "🟢 MNQ LONG — PAPER TRADE"
+
+    body = build_signal_body(_payload(), _result())
+    assert "content" not in body
+
+
+def test_embed_never_contains_order_or_broker_fields():
+    """The card is a read of the decision; nothing execution-shaped leaks in."""
+    from notifications.discord_notifier import build_signal_body
+
+    payload, result = smoke_test_payload()
+    text = json.dumps(build_signal_body(payload, result)).lower()
+    for token in ("order_id", "account", "tradovate", "placeorder", "broker"):
+        assert token not in text
