@@ -1,0 +1,23 @@
+[Unit]
+Description=AFS options coverage collector (read-only evidence; after-close oneshot, one session per run)
+# Network only. Deliberately NOT ordered with futures-bot / the options scanner:
+# this unit never touches them, never pulls git, never restarts anything.
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/root/autonomous-futures-system
+# Provides ALPACA_KEY/ALPACA_SECRET (data feed) and ALPACA_ENDPOINT (calendar cross-check) only.
+EnvironmentFile=/root/afs-shared/.env
+# Paths are passed explicitly so nothing in .env (e.g. the V1 OPTIONS_SQLITE_PATH) can redirect them.
+# Evidence lives OUTSIDE the release tree so it survives releases.
+ExecStart=/root/autonomous-futures-system/.venv/bin/python /root/autonomous-futures-system/scripts/options_coverage_collect.py \
+    --sqlite /root/afs-shared/coverage/options_coverage_observer.sqlite \
+    --data-dir /root/afs-shared/coverage
+TimeoutStartSec=45min
+Nice=10
+NoNewPrivileges=true
+PrivateTmp=true
+StandardOutput=journal
+StandardError=journal

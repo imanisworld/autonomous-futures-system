@@ -122,3 +122,61 @@ exclusive gate-stage bucket (UNSUPPORTED_FAMILY → TARGET_GEOMETRY_REJECTED →
 MARKET_ALIGNMENT_REJECTED → LATE_AT_FIRST_SIGHT → WOULD_OTHERWISE_QUALIFY).
 Outputs JSON + CSV + Markdown under `logs/coverage_outcomes/` (gitignored).
 Identity `OPTIONS_COVERAGE_OUTCOMES / out-v0.1`. Not a promotion study.
+
+## After-close collector (`col-v0.1`) — isolated oneshot + timer
+
+`scripts/options_coverage_collect.py` runs the three read-only scripts above
+for **exactly one newly completed session** and verifies each step. It is the
+daily routine that was run by hand after each close, made idempotent,
+append-only and fail-closed. Identity `OPTIONS_COVERAGE_COLLECTOR / col-v0.1`.
+
+```
+python scripts/options_coverage_collect.py                    # newest settled session
+python scripts/options_coverage_collect.py --date 2026-09-16  # one explicit session (backfill)
+python scripts/options_coverage_collect.py --plan             # resolve + report only; runs and writes nothing
+```
+
+**Which session.** The target is the newest session (static NYSE calendar:
+holidays, weekends and 13:00 ET early closes) whose close + 30 min has passed.
+An explicit `--date` that has not settled fails closed; a weekend or holiday
+is `SKIPPED` (exit 0). When credentials are present the broker's read-only
+calendar is cross-checked: no session there → `SKIPPED` (unscheduled
+closure); a different close → `FAILED calendar_mismatch` (the observer
+windows bars on the static close). Only that one session is fetched; older
+gaps are reported in the ledger, never backfilled automatically.
+
+**Steps.** (1) observer `--date D` → observer sqlite; (2) outcomes
+`--from D --to D` → `<data>/daily/outcomes_D_D.{json,csv,md}`;
+(3) aggregate: episode reducer `--from F --to D` → `<data>/aggregate/episodes_F_D.json`
+plus a **local** roll-up of every stored daily outcome file →
+`<data>/aggregate/outcomes_F_D.{json,md}` (no provider call; sessions without
+a daily file are listed in `sessions_missing`). `F` defaults to 2026-09-09.
+
+**Fail closed** (`FAILED`, exit 1, reason in the ledger): missing
+credentials, non-zero exit, any `provider error:` line from the observer,
+a universe symbol without a row, an unobservable symbol not on the allow-list
+(`--allow-unobservable`, default `SQ,VIX`), SPY or QQQ unobservable, zero
+events, provider errors or zero episodes in the daily file, or any missing
+output. The observer sqlite path is refused if it is the V1 scanner database
+by name or by schema.
+
+**Idempotent, append-only.** A session whose observer evidence and daily
+file are already complete is `ALREADY_COLLECTED` without any fetch. The
+observer's own `INSERT OR REPLACE` keys make a retry safe. Nothing under
+`<data>` is deleted; a tainted daily file is renamed `*.tainted.<ts>` before a
+retry. Every attempt appends one line to `<data>/ledger.jsonl`
+(`STARTED`/`DONE`/`ALREADY_COLLECTED`/`SKIPPED`/`FAILED`) and each subprocess
+gets a fresh log under `<data>/runs/<D>/`. A file lock prevents overlap.
+
+**Not in this lane.** No `git pull`, no service restarts, no V1 database
+access, no alerts, no promotion or policy logic — the collector's commands
+are the three scripts and nothing else (asserted by tests).
+
+**systemd (not installed).** `deploy/systemd/afs-coverage-collector.{service,timer}`:
+a `Type=oneshot` unit fired `Mon..Fri 16:35 America/New_York`
+(`Persistent=true`, so a missed firing runs at next boot and the collector
+resolves the right session itself). Evidence paths are passed explicitly on
+`ExecStart` (`/root/afs-shared/coverage/…`, outside the release tree) so
+nothing in `.env` can redirect them; `.env` supplies only the Alpaca data
+credentials and endpoint. Installation on the box is a separate, reviewed
+step.
