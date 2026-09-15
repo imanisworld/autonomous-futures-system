@@ -209,6 +209,9 @@ WIDE_STOP_EPOCH_PIN = "WIDE_STOP_LEDGER_EPOCH_START"
 MES_122_MODE_PIN = "MES_122_PAPER_MODE"
 MES_122_EPOCH_PIN = "MES_122_PAPER_EPOCH_START"
 LANE_CENSUS_NAMES = ("bars MNQ 5m", "daily_22 swing state", "mes_122 lane journal")
+# Existing lane semantics: Daily 2-2 is explicitly a swing ledger and may carry
+# a paper position beyond the New York close. This does not create a hold limit.
+EXPECTED_OVERNIGHT_LANES = {"daily_22_5k"}
 MEMORY_HISTORY_SAMPLES = 7
 MEMORY_WARNING_ROUTE = "DISCORD_ROUTE_ERROR"
 
@@ -1722,8 +1725,14 @@ def capture_snapshot(reason: str, tick: dict, findings: Findings) -> Path:
 def handle_memory_warning(state: dict, findings: Findings, tick: dict) -> None:
     warning = next((row for row in findings.warns() if row["key"] == "memory_warning"), None)
     if warning is None:
-        if (state.get("memory_warning") or {}).get("active"):
+        previous = state.get("memory_warning") or {}
+        if previous.get("active"):
             log("memory WARNING cleared after derived headroom returned healthy")
+            notify(
+                state, MEMORY_WARNING_ROUTE,
+                _memory_discord_text("RECOVERED", "memory_warning", previous, tick),
+                f"memory-recovered:memory_warning:{iso(now_utc())}",
+            )
         state["memory_warning"] = {"active": False}
         return
     current = state.get("memory_warning") or {}
@@ -1740,7 +1749,7 @@ def handle_memory_warning(state: dict, findings: Findings, tick: dict) -> None:
     }, sort_keys=True) + "\n")
     notify(
         state, MEMORY_WARNING_ROUTE,
-        f"WARNING memory_warning: {warning['summary']} | diagnostics: {snap}",
+        _memory_discord_text("WARNING", "memory_warning", warning, tick, str(snap)),
         f"memory-warning:{iso(now_utc())[:13]}",
     )
 
@@ -1756,6 +1765,11 @@ def handle_memory_fixed_warnings(state: dict, findings: Findings, tick: dict) ->
     for key in list(active):
         if key not in present and active[key].get("active"):
             log(f"memory WARNING cleared: {key}")
+            notify(
+                state, MEMORY_WARNING_ROUTE,
+                _memory_discord_text("RECOVERED", key, active[key], tick),
+                f"memory-fixed-recovered:{key}:{iso(now_utc())}",
+            )
             active[key] = {"active": False}
     for key, warning in present.items():
         if (active.get(key) or {}).get("active"):
@@ -1767,7 +1781,7 @@ def handle_memory_fixed_warnings(state: dict, findings: Findings, tick: dict) ->
             "summary": warning["summary"], "snapshot": str(snap),
         }, sort_keys=True) + "\n")
         notify(state, MEMORY_WARNING_ROUTE,
-               _finding_discord_text("WARNING", key, warning, str(snap)),
+               _memory_discord_text("WARNING", key, warning, tick, str(snap)),
                f"memory-fixed-warning:{key}:{iso(now_utc())[:13]}")
 
 
@@ -1820,6 +1834,53 @@ _FINDING_EXPLAIN = {
 }
 
 
+def _largest_rss_process() -> tuple[str, float] | None:
+    """Return the current largest RSS process for display only; fail open."""
+    rc, out = run(["ps", "-eo", "comm=,rss=", "--sort=-rss"], timeout=10)
+    if rc != 0:
+        return None
+    for line in out.splitlines():
+        parts = line.rsplit(None, 1)
+        if len(parts) != 2:
+            continue
+        try:
+            return parts[0], round(int(parts[1]) / 1024, 1)
+        except ValueError:
+            continue
+    return None
+
+
+def _memory_discord_text(status: str, key: str, finding: dict | None, tick: dict,
+                         snapshot: str | None = None) -> str:
+    """Present already-collected memory evidence without changing alert logic."""
+    mem = tick.get("memory_fixed") or {}
+    swap_in = mem.get("swapin_mb_since_last_tick")
+    swap_out = mem.get("swapout_mb_since_last_tick")
+    paging_known = swap_in is not None and swap_out is not None
+    paging_active = paging_known and (float(swap_in) + float(swap_out) > 0)
+    recovered = status == "RECOVERED"
+    largest = _largest_rss_process()
+    lines = [
+        f"{'✅' if recovered else '⚠️'} **STATUS: {status}**",
+        f"**ISSUE:** {_finding_title(key)}",
+        ("**CURRENT STATE:** Earlier pressure triggered the warning; current memory pressure is clear."
+         if recovered else f"**CURRENT STATE:** {str((finding or {}).get('summary') or 'Memory pressure is active.')}"),
+        "**KEY EVIDENCE:**",
+        f"• RAM available: {mem.get('avail_mb', 'unknown')} MiB",
+        f"• Swap used: {mem.get('swap_used_mb', 'unknown')} MiB",
+        (f"• Active paging: {'YES' if paging_active else 'NO'} ({swap_in} MiB in / {swap_out} MiB out)"
+         if paging_known else "• Active paging: unknown"),
+        f"• futures-bot RSS: {mem.get('rss_mb', 'unknown')} MiB",
+        (f"• Largest RSS: {largest[0]} {largest[1]} MiB" if largest else "• Largest RSS: unavailable"),
+        ("**ACTION:** None — continue monitoring."
+         if recovered else f"**ACTION:** {smallest_fix(key).removeprefix('operator: ')}"),
+    ]
+    if snapshot:
+        lines.append(f"-# Snapshot: `{snapshot}`")
+    lines.append(f"-# `{key} · {SERVICE} · release {RELEASE_SHA[:8]}`")
+    return "\n".join(lines)
+
+
 def _finding_title(key: str) -> str:
     for prefix, title in _FINDING_TITLES.items():
         if key.startswith(prefix):
@@ -1830,14 +1891,17 @@ def _finding_title(key: str) -> str:
 def _finding_discord_text(level: str, key: str, finding: dict | None = None, snapshot: str | None = None) -> str:
     """Render one finding for a human reading Discord on a phone: headline first,
     the specific evidence next, then what to check. Never changes the finding."""
-    icon = "🛑" if level == "BLOCKED" else "⚠️"
-    lines = [f"{icon} **{level} — {_finding_title(key)}**"]
+    status = "CRITICAL" if level == "BLOCKED" else level
+    icon = "🛑" if status == "CRITICAL" else "⚠️"
+    lines = [f"{icon} **STATUS: {status}**", f"**ISSUE:** {_finding_title(key)}"]
     explain = _FINDING_EXPLAIN.get(key)
     summary = (finding or {}).get("summary")
     if explain:
-        lines.append(explain)
+        lines.append(f"**CURRENT STATE:** {explain}")
     elif summary:
-        lines.append(str(summary))
+        lines.append(f"**CURRENT STATE:** {summary}")
+    else:
+        lines.append("**CURRENT STATE:** Condition is active.")
     detail = (finding or {}).get("detail") or {}
     samples = detail.get("samples") or []
     if samples:
@@ -1846,10 +1910,10 @@ def _finding_discord_text(level: str, key: str, finding: dict | None = None, sna
     action = smallest_fix(key)
     if action.startswith("operator: "):
         action = action[len("operator: "):]
-    lines.append(f"**What to check:** {action}")
+    lines.append(f"**ACTION:** {action}")
     if snapshot:
-        lines.append(f"Snapshot: `{snapshot}`")
-    lines.append(f"`code={key} | release={RELEASE_SHA[:8]} | service={SERVICE}`")
+        lines.append(f"-# Snapshot: `{snapshot}`")
+    lines.append(f"-# `{key} · {SERVICE} · release {RELEASE_SHA[:8]}`")
     return "\n".join(lines)
 
 
@@ -1857,12 +1921,20 @@ def _blocked_discord_text(key: str, finding: dict | None = None, snapshot: str |
     return _finding_discord_text("BLOCKED", key, finding, snapshot)
 
 
-def _cleared_discord_text(key: str, first_utc: str | None) -> str:
+def _cleared_discord_text(key: str, first_utc: str | None, tick: dict | None = None) -> str:
     since = ""
     if first_utc:
         mins = int((now_utc() - _ts(first_utc)).total_seconds() // 60)
         since = f" (was blocked {mins} min)"
-    return f"✅ **cleared — {_finding_title(key)}**{since}\n`code={key} | release={RELEASE_SHA[:8]}`"
+    if key.startswith(("memory_", "swap_", "oom_")):
+        return _memory_discord_text("RECOVERED", key, None, tick or {})
+    return "\n".join([
+        "✅ **STATUS: RECOVERED**",
+        f"**ISSUE:** {_finding_title(key)}",
+        f"**CURRENT STATE:** Condition cleared{since}.",
+        "**ACTION:** None — continue monitoring.",
+        f"-# `{key} · {SERVICE} · release {RELEASE_SHA[:8]}`",
+    ])
 
 
 # ── ACTION REQUIRED cards ────────────────────────────────────────────────────
@@ -2035,7 +2107,7 @@ def handle_blocked(state: dict, findings: Findings, tick: dict) -> None:
         state["notified"].pop(f"blocked:{k}", None)
         # a condition raised as an ACTION REQUIRED card is resolved as one too
         text = (_resolved_card_text(k, was.get("first_utc"), tick) if was.get("action_required")
-                else _cleared_discord_text(k, was.get("first_utc")))
+                else _cleared_discord_text(k, was.get("first_utc"), tick))
         notify(state, "DISCORD_ROUTE_ERROR", text, f"blocked-cleared:{k}:{iso(now_utc())}")
     if not blocked:
         return
@@ -2225,10 +2297,9 @@ def maybe_daily(state: dict, tick: dict, findings: Findings) -> None:
     rep["campaign"] = tick.get("campaign", {}).get("populations")
     rep["campaign_rows_after_epoch"] = tick.get("campaign", {}).get("rows_after_epoch")
     rep["lanes"] = tick.get("lanes")
-    for name in (tick.get("lanes") or {}).get("open_positions") or []:
-        pos = ((tick.get("lanes") or {}).get("inventory") or {}).get(name, {}).get("open_position") or {}
-        disc.append(f"hypothetical lane {name} holds an OPEN paper position after New York close: "
-                    f"{pos.get('direction')} @ {pos.get('entry')} since {pos.get('entry_time')} (swing lanes may hold; verify bars are flowing)")
+    expected_after_close, after_close_disc = _after_close_position_status(tick.get("lanes") or {})
+    rep["expected_open_positions_after_close"] = expected_after_close
+    disc.extend(after_close_disc)
     rep["open_blockers"] = dict(state["blocked"])
     if state["blocked"]:
         disc.append(f"open BLOCKED conditions: {sorted(state['blocked'])}")
@@ -2264,6 +2335,23 @@ LANE_CENSUS_STREAM = {
 }
 
 
+def _after_close_position_status(lanes: dict) -> tuple[list[dict], list[str]]:
+    """Classify existing lane positions using only established lane semantics."""
+    expected: list[dict] = []
+    discrepancies: list[str] = []
+    inventory = lanes.get("inventory") or {}
+    for name in lanes.get("open_positions") or []:
+        pos = (inventory.get(name) or {}).get("open_position") or {}
+        if name in EXPECTED_OVERNIGHT_LANES:
+            expected.append({"lane": name, "position": pos})
+        else:
+            discrepancies.append(
+                f"hypothetical lane {name} holds an OPEN paper position after New York close: "
+                f"{pos.get('direction')} @ {pos.get('entry')} since {pos.get('entry_time')}"
+            )
+    return expected, discrepancies
+
+
 def _lane_census_discrepancies(collectors: list, lanes: dict, et_day: date) -> tuple[list[str], list[str]]:
     """Lane census rows that are real discrepancies today, and those skipped (no bar today)."""
     disc: list[str] = []
@@ -2285,19 +2373,47 @@ def _daily_discord_text(verdict: str, day: str, posts: dict, rows_after_epoch, p
     total = sum(posts.values()) if posts else 0
     non200 = {k: v for k, v in posts.items() if k != "200"}
     posts_line = f"Webhook posts: {total}" + (" (all 200)" if total and not non200 else (f" — rejected: {non200}" if non200 else ""))
-    lines = [f"{icon} **{verdict} {day}**", posts_line, f"Post-epoch campaign rows: {rows_after_epoch}"]
-    for k, v in pops.items():
-        lines.append(f"• {k}: {v['candidates']} cand · {v['resolved_filled_economic']} filled · {v['distinct_trading_days']} days")
+    status = "HEALTHY" if verdict == "DAILY PASS" else "CRITICAL"
+    lines = [f"{icon} **STATUS: {status}**", "**ISSUE:** Daily watcher reconciliation",
+             f"**CURRENT STATE:** {verdict} for {day}", "**KEY EVIDENCE:**", f"• {posts_line}",
+             f"• Post-epoch campaign rows: {rows_after_epoch}"]
+    reporting = sum(f"{strategy}/{variant}" in pops for strategy, variant in EXPECTED_POPULATIONS)
+    lines.append(f"• Forward campaign: {reporting}/{len(EXPECTED_POPULATIONS)} arms reporting")
+    for strategy, variant in EXPECTED_POPULATIONS:
+        key = f"{strategy}/{variant}"
+        value = pops.get(key)
+        if value is None:
+            lines.append(f"  • {key}: MISSING")
+            continue
+        candidates = value.get("candidates", 0)
+        filled = value.get("resolved_filled_economic", 0)
+        days = value.get("distinct_trading_days", 0)
+        state = "0 candidates" if candidates == 0 else "OK"
+        lines.append(f"  • {key}: {state} · {candidates} cand · {filled} filled · {days} days")
+    paired = [pops.get(f"{strategy}/{variant}", {}) for strategy, variant in EXPECTED_POPULATIONS if variant in {"control", "modified"}]
+    gate_days = min((p.get("distinct_trading_days", 0) for p in paired), default=0)
+    gate_filled = min((p.get("resolved_filled_economic", 0) for p in paired), default=0)
+    lines.append(f"• Gate: {gate_days}/{GATE_MIN_DAYS} days · {gate_filled}/{GATE_MIN_FILLED} resolved filled per control/modified arm")
     for d in disc:
         lines.append(f"⚠️ {d}")
     if lanes:
         for name, row in sorted((lanes.get("inventory") or {}).items()):
             pos = row.get("open_position") or {}
-            lines.append(
-                f"• lane {name}: " + (f"OPEN {pos.get('direction')} @ {pos.get('entry')}" if pos else ("flat" if row.get("exists") else "no directory yet"))
-            )
-        lines.append(f"5m feed stalled: {lanes.get('five_min_feed_stalled')}")
-    lines.append(f"File: `{path}`")
+            if pos:
+                expected = name in EXPECTED_OVERNIGHT_LANES
+                instrument = "MES" if name == "mes_122_1500" else "MNQ"
+                lines.append(f"• {_LANE_LABELS.get(name, name)} · {instrument} · {pos.get('direction')} @ {pos.get('entry')} · "
+                             f"OPEN · overnight {'EXPECTED' if expected else 'NOT EXPECTED'}")
+        newest = lanes.get("newest_5m_mnq_bar_mtime")
+        stamp = _ts(newest)
+        age = int((now_utc() - stamp).total_seconds() // 60) if stamp else None
+        feed = "STALE" if lanes.get("five_min_feed_stalled") else "HEALTHY"
+        lines.extend([f"• Feed: {feed}", f"• Newest 5m bar: {newest or 'unavailable'}",
+                      f"• Bar age: {age if age is not None else 'unknown'} min"])
+        if feed == "STALE":
+            lines.append(f"• Threshold: {LANE_STALL_MIN} min (existing lane-stall threshold)")
+    lines.append("**ACTION:** None — continue monitoring." if not disc else "**ACTION:** Review the listed active problems.")
+    lines.append(f"-# File: `{path}`")
     return "\n".join(lines)
 
 
