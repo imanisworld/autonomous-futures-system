@@ -8,19 +8,25 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import math
+import threading
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
 from execution.entry_refresh_shadow import resolve_shadow_position
+from config.futures_contracts import contract_economics
+from execution.evidence_identity import (
+    CAMPAIGN_ID, SCHEMA_VERSION, LEGACY_EPOCH, population_key, state_key,
+    configured_populations,
+)
 
 try:
     import fcntl
 except ImportError:  # pragma: no cover
     fcntl = None
 
-CAMPAIGN_ID = "forward_ab_2026_08_v1"
-SCHEMA_VERSION = "1.0.0"
 EVIDENCE_FILENAME = f"{CAMPAIGN_ID}.jsonl"
 STATE_FILENAME = f"{CAMPAIGN_ID}_state.json"
 ENV_NAME = "FORWARD_EVIDENCE_CAMPAIGN"
@@ -90,9 +96,12 @@ def _episode_timestamp(signal_timestamp: str) -> str:
 
 
 def stable_event_id(
-    *, instrument: str, strategy: str, direction: str, signal_timestamp: str
+    *, instrument: str, strategy: str, direction: str, signal_timestamp: str,
+    evidence_epoch: str = LEGACY_EPOCH,
 ) -> str:
     raw = "|".join((CAMPAIGN_ID, instrument.upper(), strategy, direction, _episode_timestamp(signal_timestamp)))
+    if instrument != "MNQ" or evidence_epoch != LEGACY_EPOCH:
+        raw = json.dumps([raw, instrument, evidence_epoch], separators=(",", ":"))
     return "fab-evt-" + hashlib.sha256(raw.encode()).hexdigest()[:24]
 
 
@@ -102,13 +111,15 @@ def stable_candidate_id(event_id: str, variant: str, source_timeframe: str) -> s
 
 
 def validate_record(record: dict[str, Any]) -> None:
-    missing = sorted(REQUIRED_FIELDS - record.keys())
+    missing = sorted((REQUIRED_FIELDS - {"instrument"}) - record.keys())
     if missing:
         raise EvidenceValidationError(f"missing campaign evidence fields: {', '.join(missing)}")
     if record["campaign_id"] != CAMPAIGN_ID or record["evidence_schema_version"] != SCHEMA_VERSION:
         raise EvidenceValidationError("wrong campaign/schema identity")
-    if record["instrument"] != "MNQ":
-        raise EvidenceValidationError("campaign evidence is MNQ-only")
+    try:
+        population_key(record)
+    except ValueError as exc:
+        raise EvidenceValidationError(str(exc)) from exc
     if record["variant"] not in {"control", "modified", "observer"}:
         raise EvidenceValidationError("invalid campaign variant")
     if not isinstance(record["failed_gates"], list):
@@ -121,6 +132,8 @@ def append_record(log_dir: str | Path, record: dict[str, Any]) -> bool:
     validate_record(record)
     if not campaign_enabled():
         return False
+    if population_key(record) not in configured_populations():
+        raise EvidenceValidationError("unconfigured evidence population")
     path = Path(log_dir) / EVIDENCE_FILENAME
     path.parent.mkdir(parents=True, exist_ok=True)
     full = {"observed_at": datetime.now(timezone.utc).isoformat(), **record}
@@ -147,11 +160,13 @@ def candidate_record(
     reject_reason: Optional[str] = None, fillable_state: str = "ARMED",
     hypothetical_fill_price: Optional[float] = None,
     terminal_state: str = "OPEN", event_id: Optional[str] = None,
+    instrument: str = "MNQ", evidence_epoch: Optional[str] = None,
+    commission_dollars: Optional[float] = None, slippage_ticks: Optional[float] = None,
 ) -> dict[str, Any]:
     signal_timestamp = _iso(signal_timestamp)
     event_id = event_id or stable_event_id(
-        instrument="MNQ", strategy=strategy, direction=direction,
-        signal_timestamp=signal_timestamp,
+        instrument=instrument, strategy=strategy, direction=direction,
+        signal_timestamp=signal_timestamp, evidence_epoch=evidence_epoch or LEGACY_EPOCH,
     )
     sha, provenance = generating_sha()
     record = {
@@ -160,7 +175,7 @@ def candidate_record(
         "record_type": "CANDIDATE",
         "event_id": event_id,
         "candidate_id": stable_candidate_id(event_id, variant, source_timeframe),
-        "instrument": "MNQ",
+        "instrument": instrument,
         "strategy": strategy,
         "variant": variant,
         "direction": direction,
@@ -195,12 +210,24 @@ def candidate_record(
         "generating_git_sha": sha,
         "provenance_status": provenance,
     }
+    if evidence_epoch is not None:
+        record["evidence_epoch"] = evidence_epoch
+    population = population_key(record)
+    if population[1] != "MNQ" or population[3] != LEGACY_EPOCH:
+        # Scope even caller-supplied event IDs. Costs must be supplied explicitly;
+        # geometry-only evidence cannot silently inherit the MNQ cost contract.
+        raw = json.dumps([population, record["candidate_id"]], separators=(",", ":"))
+        record["candidate_id"] = "fab-cand-" + hashlib.sha256(raw.encode()).hexdigest()[:24]
+        record["commission_assumption_dollars"] = commission_dollars
+        record["slippage_assumption_ticks"] = slippage_ticks
     validate_record(record)
     return record
 
 
 def outcome_record(position: dict, outcome: dict[str, Any]) -> dict[str, Any]:
     base = dict(position["campaign_record"])
+    validate_record(base)
+    _, instrument, _, _ = population_key(base)
     signal_sha = base.get("generating_git_sha")
     outcome_sha, outcome_provenance = generating_sha()
     exit_price = outcome.get("exit_price")
@@ -209,8 +236,13 @@ def outcome_record(position: dict, outcome: dict[str, Any]) -> dict[str, Any]:
     net = None
     if exit_price is not None and entry is not None:
         points = (float(exit_price) - float(entry)) * (1 if base["direction"] == "LONG" else -1)
-        gross = round((points / TICK_SIZE) * TICK_VALUE, 2)
-        net = round(gross - COMMISSION_DOLLARS - (SLIPPAGE_TICKS * TICK_VALUE), 2)
+        tick, tick_value = contract_economics(instrument)
+        commission = base.get("commission_assumption_dollars")
+        slippage = base.get("slippage_assumption_ticks")
+        if not all(isinstance(v, (int, float)) and math.isfinite(v) and v >= 0 for v in (commission, slippage)):
+            raise EvidenceValidationError("explicit finite commission and slippage required for economic outcome")
+        gross = round((points / tick) * tick_value, 2)
+        net = round(gross - commission - (slippage * tick_value), 2)
     result = str(outcome.get("result") or "EXPIRED")
     terminal = "EXPIRED" if result in {"TIMEOUT", "NO_FILL", "EXPIRED"} else result
     base.update({
@@ -238,12 +270,16 @@ def _state_path(log_dir: str | Path) -> Path:
 def _load_state(log_dir: str | Path) -> dict:
     try:
         raw = json.loads(_state_path(log_dir).read_text())
-    except (OSError, ValueError):
-        raw = {}
-    return {
-        "positions": raw.get("positions", {}) if isinstance(raw.get("positions"), dict) else {},
-        "seen_candidate_ids": raw.get("seen_candidate_ids", []) if isinstance(raw.get("seen_candidate_ids"), list) else [],
-    }
+    except FileNotFoundError:
+        return {"positions": {}, "seen_candidate_ids": []}
+    if not isinstance(raw, dict) or not isinstance(raw.get("positions"), dict) or not isinstance(raw.get("seen_candidate_ids"), list):
+        raise EvidenceValidationError("invalid campaign state; refusing reset")
+    for key, position in raw["positions"].items():
+        record = position["campaign_record"]
+        validate_record(record)
+        if key != state_key(record):
+            raise EvidenceValidationError("position key does not match population identity")
+    return raw
 
 
 def _save_state(log_dir: str | Path, state: dict) -> None:
@@ -254,18 +290,44 @@ def _save_state(log_dir: str | Path, state: dict) -> None:
     tmp.replace(path)
 
 
+_STATE_LOCK = threading.RLock()
+
+
+@contextmanager
+def _state_lock(log_dir):
+    path = Path(log_dir) / (STATE_FILENAME + ".lock")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with _STATE_LOCK, path.open("a") as handle:
+        if fcntl is not None:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            if fcntl is not None:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
 def open_campaign_position(log_dir: str | Path, record: dict[str, Any]) -> bool:
+    validate_record(record)
+    if not campaign_enabled():
+        return False
+    if population_key(record) not in configured_populations():
+        raise EvidenceValidationError("unconfigured evidence population")
+    with _state_lock(log_dir):
+        return _open_campaign_position(log_dir, record)
+
+
+def _open_campaign_position(log_dir: str | Path, record: dict[str, Any]) -> bool:
     """Persist one hypothetical position; dedupe by deterministic candidate ID."""
     validate_record(record)
     if not campaign_enabled():
         return False
     state = _load_state(log_dir)
-    candidate_id = record["candidate_id"]
+    candidate_id = state_key(record)
     if candidate_id in state["seen_candidate_ids"]:
         return False
     if any(
-        p.get("campaign_record", {}).get("strategy") == record["strategy"]
-        and p.get("campaign_record", {}).get("variant") == record["variant"]
+        population_key(p["campaign_record"]) == population_key(record)
         for p in state["positions"].values()
     ):
         return False
@@ -437,16 +499,37 @@ def record_canonical_candidates(log_dir: str | Path, state_obj, candidates: Iter
 def resolve_canonical_positions(
     log_dir: str | Path, *, instrument: str, bars: list[dict], current_bar_ts: str,
     activation_r: float = 1.0, trail_r: float = 0.5,
+    evidence_epoch: str = LEGACY_EPOCH,
+) -> list[dict]:
+    if not campaign_enabled():
+        return []
+    if not any(key[1] == instrument and key[3] == evidence_epoch for key in configured_populations()):
+        return []
+    # The caller supplies an instrument-specific history. Reject contradictory
+    # bar tags instead of resolving another instrument/epoch's position.
+    for bar in bars:
+        if bar.get("instrument", instrument) != instrument or bar.get("evidence_epoch", evidence_epoch) != evidence_epoch:
+            raise EvidenceValidationError("bar population mismatch")
+    with _state_lock(log_dir):
+        return _resolve_canonical_positions(
+            log_dir, instrument=instrument, bars=bars, current_bar_ts=current_bar_ts,
+            activation_r=activation_r, trail_r=trail_r, evidence_epoch=evidence_epoch,
+        )
+
+
+def _resolve_canonical_positions(
+    log_dir: str | Path, *, instrument: str, bars: list[dict], current_bar_ts: str,
+    activation_r: float = 1.0, trail_r: float = 0.5,
+    evidence_epoch: str = LEGACY_EPOCH,
 ) -> list[dict]:
     """Resolve retained canonical positions using only bars after signal/fill."""
-    if not campaign_enabled() or instrument != "MNQ":
-        return []
     state = _load_state(log_dir)
     resolved = []
     changed = False
     for candidate_id, position in list(state["positions"].items()):
         record = position.get("campaign_record", {})
-        if record.get("instrument") != instrument:
+        key = population_key(record)
+        if key[1] != instrument or key[3] != evidence_epoch or key not in configured_populations():
             continue
         signal_ts = str(position.get("signal_ts") or "")
         forward = [b for b in bars if str(b.get("ts") or "") > signal_ts and str(b.get("ts") or "") <= current_bar_ts]

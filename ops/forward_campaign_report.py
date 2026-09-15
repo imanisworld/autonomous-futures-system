@@ -3,44 +3,30 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from collections import Counter
 from pathlib import Path
 from typing import Any, Iterable
 
-from execution.forward_evidence_campaign import (
-    CAMPAIGN_ID,
-    COMMISSION_DOLLARS,
-    EVIDENCE_FILENAME,
-    TICK_VALUE,
+from execution.forward_evidence_campaign import CAMPAIGN_ID, EVIDENCE_FILENAME
+from execution.evidence_identity import (
+    configured_populations, population_key, record_key, LEGACY_EPOCH, PopulationKey,
 )
+from config.futures_contracts import contract_economics
 
 COST_TIERS = (1, 2, 3)
 PAIR_VARIANTS = ("control", "modified")
-_CAMPAIGN_CONFIG_PATH = Path(__file__).resolve().parents[1] / "config" / "forward_evidence_campaign.json"
-
-
-def _configured_population_keys() -> tuple[tuple[str, str], ...]:
-    config = json.loads(_CAMPAIGN_CONFIG_PATH.read_text(encoding="utf-8"))
-    if config.get("campaign_id") != CAMPAIGN_ID:
-        raise RuntimeError(
-            f"campaign config id {config.get('campaign_id')!r} does not match {CAMPAIGN_ID!r}"
-        )
-    populations = config.get("populations") or []
-    return tuple((str(row["strategy"]), str(row["variant"])) for row in populations)
-
-
-CONFIGURED_POPULATIONS = _configured_population_keys()
 
 
 def _dedupe_rows(
     rows: list[dict[str, Any]],
-) -> tuple[dict[str, dict[str, Any]], int, list[str]]:
+) -> tuple[dict[tuple[PopulationKey, str], dict[str, Any]], int, list[str]]:
     """First-wins dedupe that distinguishes identical retries from conflicts."""
-    unique: dict[str, dict[str, Any]] = {}
+    unique: dict[tuple[PopulationKey, str], dict[str, Any]] = {}
     identical_duplicates = 0
     conflicting_ids: set[str] = set()
     for row in rows:
-        candidate_id = str(row.get("candidate_id"))
+        candidate_id = record_key(row)
         prior = unique.get(candidate_id)
         if prior is None:
             unique[candidate_id] = row
@@ -48,7 +34,7 @@ def _dedupe_rows(
         if row == prior:
             identical_duplicates += 1
         else:
-            conflicting_ids.add(candidate_id)
+            conflicting_ids.add(str(row["candidate_id"]))
     return unique, identical_duplicates, sorted(conflicting_ids)
 
 
@@ -61,7 +47,7 @@ def _rows(path: Path) -> list[dict[str, Any]]:
             row = json.loads(line)
         except (ValueError, TypeError):
             continue
-        if row.get("campaign_id") == CAMPAIGN_ID:
+        if isinstance(row, dict) and row.get("campaign_id") == CAMPAIGN_ID:
             result.append(row)
     return result
 
@@ -83,19 +69,28 @@ def _profit_factor(values: list[float]) -> float | str | None:
     return "INF" if profits else None
 
 
-def _cost_metrics(rows: Iterable[dict[str, Any]], ticks: int) -> dict[str, Any]:
+def _cost_metrics(rows: Iterable[dict[str, Any]], ticks: int, population: PopulationKey | None = None) -> dict[str, Any]:
     ordered = sorted(
         (row for row in rows if row.get("gross_pnl_dollars") is not None),
         key=lambda row: str(row.get("exit_timestamp") or ""),
     )
     gross = [float(row["gross_pnl_dollars"]) for row in ordered]
-    cost = COMMISSION_DOLLARS + ticks * TICK_VALUE
-    net = [round(value - cost, 2) for value in gross]
+    commissions = [row.get("commission_assumption_dollars") for row in ordered]
+    if any(not isinstance(v, (int, float)) or not math.isfinite(v) or v < 0 for v in commissions):
+        return {"available": False, "reason": "MISSING_COMMISSION_PROOF"}
+    costs = [commission + ticks * contract_economics(population_key(row)[1])[1]
+             for row, commission in zip(ordered, commissions)]
+    net = [round(value - cost, 2) for value, cost in zip(gross, costs)]
+    commission = commissions[0] if commissions and len(set(commissions)) == 1 else None
+    cost = costs[0] if costs and len(set(costs)) == 1 else None
+    if not ordered and population is not None and population[1] == "MNQ" and population[3] == LEGACY_EPOCH:
+        # The frozen legacy campaign proves these costs even before any fill.
+        commission, cost = 1.48, 1.48 + ticks * 0.50
     signs = Counter("W" if value > 0 else "L" if value < 0 else "BE" for value in net)
     return {
         "round_trip_slippage_ticks": ticks,
-        "commission_dollars": COMMISSION_DOLLARS,
-        "per_trade_cost_dollars": round(cost, 2),
+        "commission_dollars": commission,
+        "per_trade_cost_dollars": round(cost, 2) if cost is not None else None,
         "trades_with_gross_pnl": len(gross),
         "gross_pnl_dollars": round(sum(gross), 2),
         "net_pnl_dollars": round(sum(net), 2),
@@ -108,13 +103,13 @@ def _cost_metrics(rows: Iterable[dict[str, Any]], ticks: int) -> dict[str, Any]:
     }
 
 
-def _cost_sensitivity(rows: Iterable[dict[str, Any]]) -> dict[str, Any]:
+def _cost_sensitivity(rows: Iterable[dict[str, Any]], population: PopulationKey | None = None) -> dict[str, Any]:
     retained = list(rows)
-    return {f"{ticks}_rt_tick": _cost_metrics(retained, ticks) for ticks in COST_TIERS}
+    return {f"{ticks}_rt_tick": _cost_metrics(retained, ticks, population) for ticks in COST_TIERS}
 
 
 def _terminal(candidate: dict[str, Any], outcomes: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
-    outcome = outcomes.get(str(candidate.get("candidate_id")))
+    outcome = outcomes.get(record_key(candidate))
     if outcome is not None:
         return outcome
     if str(candidate.get("terminal_state") or "OPEN") != "OPEN":
@@ -136,7 +131,11 @@ def _is_resolved_filled_economic_outcome(row: dict[str, Any]) -> bool:
     return (
         row.get("fillable_state") == "FILLED"
         and str(row.get("terminal_state") or "OPEN") != "OPEN"
-        and row.get("gross_pnl_dollars") is not None
+        and isinstance(row.get("gross_pnl_dollars"), (int, float))
+        and math.isfinite(row["gross_pnl_dollars"])
+        and all(isinstance(row.get(field), (int, float))
+                and math.isfinite(row[field]) and row[field] >= 0
+                for field in ("commission_assumption_dollars", "slippage_assumption_ticks"))
     )
 
 
@@ -145,13 +144,14 @@ def _all_arm_population(
     variant: str,
     cells: list[dict[str, Any]],
     outcomes: dict[str, dict[str, Any]],
+    population: PopulationKey | None = None,
 ) -> dict[str, Any]:
-    cell_outcomes = [outcomes[row["candidate_id"]] for row in cells if row["candidate_id"] in outcomes]
+    cell_outcomes = [outcomes[record_key(row)] for row in cells if record_key(row) in outcomes]
     terminal = Counter(str(row.get("terminal_state") or "UNKNOWN") for row in cell_outcomes)
     rejected = sum(row.get("terminal_state") == "REJECTED" for row in cells)
     no_fill = sum(row.get("fillable_state") == "NO_FILL" for row in cell_outcomes)
     open_count = sum(
-        row.get("terminal_state") == "OPEN" and row["candidate_id"] not in outcomes
+        row.get("terminal_state") == "OPEN" and record_key(row) not in outcomes
         for row in cells
     )
     wins, losses, breakevens = terminal["WIN"], terminal["LOSS"], terminal["BREAKEVEN"]
@@ -174,6 +174,7 @@ def _all_arm_population(
         "strategy": strategy,
         "variant": variant,
         "candidates": len(cells),
+        "fills": sum(_is_filled(_terminal(row, outcomes) or row) for row in cells),
         "rejected": rejected,
         "no_fill": no_fill,
         "open": open_count,
@@ -191,7 +192,7 @@ def _all_arm_population(
         "max_drawdown_dollars": _max_drawdown(net_values),
         "average_mfe_points": _average(cell_outcomes, "mfe_points"),
         "average_mae_points": _average(cell_outcomes, "mae_points"),
-        "cost_sensitivity": _cost_sensitivity(cell_outcomes),
+        "cost_sensitivity": _cost_sensitivity(cell_outcomes, population),
         "reject_reasons": dict(Counter(str(row.get("reject_reason")) for row in cells if row.get("reject_reason"))),
         "sessions": dict(Counter(str(row.get("session")) for row in cells)),
         "regimes": dict(Counter(str(row.get("regime")) for row in cells)),
@@ -276,15 +277,16 @@ def _matched_pair_report(
     modified_net = [float(pair[1]["net_pnl_dollars"]) for pair in stored_net_pairs]
     deltas = [round(modified - control, 2) for control, modified in zip(control_net, modified_net)]
     tier_metrics = {}
+    population = population_key(candidates[0]) if candidates else None
     for ticks in COST_TIERS:
-        control_tier = _cost_metrics((pair[0] for pair in pnl_pairs), ticks)
-        modified_tier = _cost_metrics((pair[1] for pair in pnl_pairs), ticks)
+        control_tier = _cost_metrics((pair[0] for pair in pnl_pairs), ticks, population)
+        modified_tier = _cost_metrics((pair[1] for pair in pnl_pairs), ticks, population)
         tier_metrics[f"{ticks}_rt_tick"] = {
             "control": control_tier,
             "modified": modified_tier,
-            "modified_minus_control_net_pnl_dollars": round(
+            "modified_minus_control_net_pnl_dollars": (round(
                 modified_tier["net_pnl_dollars"] - control_tier["net_pnl_dollars"], 2
-            ),
+            ) if "net_pnl_dollars" in modified_tier and "net_pnl_dollars" in control_tier else None),
         }
     return {
         "strategy": strategy,
@@ -323,47 +325,52 @@ def _matched_pair_report(
     }
 
 
-def build_report(path: str | Path) -> dict[str, Any]:
-    rows = _rows(Path(path))
+def build_report(path: str | Path, *, populations=None) -> dict[str, Any]:
+    raw_rows = _rows(Path(path))
+    rows = []
+    invalid_identity_rows = 0
+    for row in raw_rows:
+        try:
+            record_key(row)
+        except ValueError:
+            invalid_identity_rows += 1
+            continue
+        rows.append(row)
     candidate_rows = [row for row in rows if row.get("record_type") == "CANDIDATE"]
     outcome_rows = [row for row in rows if row.get("record_type") == "OUTCOME"]
     candidates, identical_candidate_duplicates, conflicting_candidate_ids = _dedupe_rows(candidate_rows)
     outcomes, identical_outcome_duplicates, conflicting_outcome_ids = _dedupe_rows(outcome_rows)
 
-    configured_keys = list(CONFIGURED_POPULATIONS)
+    configured_keys = list(configured_populations() if populations is None else populations)
     configured_set = set(configured_keys)
-    observed_keys = {
-        (str(row.get("strategy")), str(row.get("variant")))
-        for row in candidates.values()
-    }
+    observed_keys = {population_key(row) for row in candidates.values()}
     unexpected_keys = sorted(observed_keys - configured_set)
 
-    populations = [
-        _all_arm_population(
-            strategy,
-            variant,
-            [
-                row for row in candidates.values()
-                if (str(row.get("strategy")), str(row.get("variant"))) == (strategy, variant)
-            ],
-            outcomes,
+    def population_report(key):
+        strategy, instrument, variant, epoch = key
+        cells = [row for row in candidates.values() if population_key(row) == key]
+        cell_outcomes = [row for row in outcomes.values() if population_key(row) == key]
+        result = _all_arm_population(strategy, variant, cells, outcomes, key)
+        result.update(
+            instrument=instrument, evidence_epoch=epoch,
+            newest_evidence_timestamp=max((str(row.get("observed_at")) for row in rows
+                                       if population_key(row) == key and row.get("observed_at")), default=None),
+            newest_data_timestamp=max((str(row["data_timestamp"]) for row in rows
+                                      if population_key(row) == key and row.get("data_timestamp")), default=None),
+            newest_candidate_timestamp=max((str(row["signal_timestamp"]) for row in cells
+                                            if row.get("signal_timestamp")), default=None),
+            newest_outcome_timestamp=max((str(row["exit_timestamp"]) for row in cell_outcomes
+                                          if row.get("exit_timestamp")), default=None),
         )
-        for strategy, variant in configured_keys
-    ]
-    unexpected_populations = [
-        _all_arm_population(
-            strategy,
-            variant,
-            [
-                row for row in candidates.values()
-                if (str(row.get("strategy")), str(row.get("variant"))) == (strategy, variant)
-            ],
-            outcomes,
-        )
-        for strategy, variant in unexpected_keys
-    ]
+        if key not in configured_set:
+            result["review_eligible"] = False
+            result["review_blockers"] = ["UNCONFIGURED_POPULATION"]
+        return result
 
-    evidence_integrity_ok = not conflicting_candidate_ids and not conflicting_outcome_ids
+    populations = [population_report(key) for key in configured_keys]
+    unexpected_populations = [population_report(key) for key in unexpected_keys]
+
+    evidence_integrity_ok = not conflicting_candidate_ids and not conflicting_outcome_ids and not invalid_identity_rows
     if not evidence_integrity_ok:
         for population in populations + unexpected_populations:
             population["review_eligible"] = False
@@ -371,7 +378,7 @@ def build_report(path: str | Path) -> dict[str, Any]:
             population["classification_if_not_eligible"] = "WAIT / PROMISING BUT UNPROVEN"
 
     pair_strategies = sorted({
-        str(row.get("strategy")) for row in candidates.values()
+        (population_key(row)[0], population_key(row)[1], population_key(row)[3]) for row in candidates.values()
         if row.get("variant") in PAIR_VARIANTS
     })
     timestamps = [str(row.get("observed_at")) for row in rows if row.get("observed_at")]
@@ -396,13 +403,20 @@ def build_report(path: str | Path) -> dict[str, Any]:
         "configured_population_count": len(configured_keys),
         "populations": populations,
         "unexpected_populations": unexpected_populations,
+        "invalid_identity_rows": invalid_identity_rows,
         "matched_pairs": [
-            _matched_pair_report(
-                strategy,
-                [row for row in candidates.values() if row.get("strategy") == strategy],
-                outcomes,
-            )
-            for strategy in pair_strategies
+            {
+                **_matched_pair_report(
+                    strategy,
+                    [row for row in candidates.values()
+                     if (population_key(row)[0], population_key(row)[1], population_key(row)[3])
+                     == (strategy, instrument, epoch)],
+                    outcomes,
+                ),
+                "instrument": instrument,
+                "evidence_epoch": epoch,
+            }
+            for strategy, instrument, epoch in pair_strategies
         ],
         "review_gate": {
             "minimum_trading_days": 20,

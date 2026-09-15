@@ -34,25 +34,8 @@ from execution.post_fill_validation import validate_post_fill
 from execution.trailing import compute_trailed_stop
 
 
-# ─── Tick Values (approximate, Phase 1 simplified) ────────────────────────────
-
-TICK_SIZE = {
-    "MNQ": 0.25,
-    "MES": 0.25,
-    "ES": 0.25,
-    "NQ": 0.25,
-    "MGC": 0.10,
-    "MCL": 0.01,
-}
-
-TICK_VALUE = {
-    "MNQ": 0.50,   # $0.50/tick
-    "MES": 1.25,   # $1.25/tick
-    "ES": 12.50,   # $12.50/tick
-    "NQ": 5.00,    # $5.00/tick
-    "MGC": 10.00,  # $10.00/tick
-    "MCL": 10.00,  # $10.00/tick
-}
+# Price metadata is not broker or strategy eligibility.
+from config.futures_contracts import TICK_SIZE, TICK_VALUE, contract_economics
 
 
 @dataclass
@@ -134,7 +117,7 @@ class PaperBroker(BrokerInterface):
         self._active_order_id: Optional[str] = None
 
     def _entry_tolerance_ticks(self, instrument: str) -> float:
-        root = "".join(ch for ch in str(instrument or "").upper() if ch.isalpha())[:3]
+        root = instrument  # exact canonical root; M2K contains a meaningful digit
         try:
             return max(0.0, float(self._entry_tol_by_root.get(root, self._entry_tol_default)))
         except (TypeError, ValueError):
@@ -195,6 +178,7 @@ class PaperBroker(BrokerInterface):
                 "Call resolve_position() first."
             )
 
+        tick, _ = contract_economics(order.instrument)
         paper_order_id = paper_order_id or f"PAPER-{uuid4().hex}"
 
         contracts = max(1, int(order.contracts or 1))
@@ -216,7 +200,6 @@ class PaperBroker(BrokerInterface):
 
         # Entry is a MARKET order — apply adverse slippage. LONG fills higher,
         # SHORT fills lower. Stop/target stay at their ordered (resting) prices.
-        tick = TICK_SIZE.get(order.instrument, 0.25)
         slip = self._slippage_ticks * tick
         if self._entry_fill_model == "ioc_limit":
             if market_price is None:
@@ -508,6 +491,8 @@ class PaperBroker(BrokerInterface):
         Multi-contract positions hold the full position until target or stop is hit.
         No partial exits, no 1R management for 2+ contracts.
         """
+        if self._position is None and self._pending_stop_entry is None:
+            return None
         instrument = (
             self._position.instrument
             if self._position is not None
@@ -515,8 +500,7 @@ class PaperBroker(BrokerInterface):
             if self._pending_stop_entry is not None
             else ""
         )
-        tick = TICK_SIZE.get(instrument, 0.25)
-        tick_val = TICK_VALUE.get(instrument, 1.0)
+        tick, tick_val = contract_economics(instrument)
 
         pending_result = self._activate_pending_stop_entry(next_bar, tick)
         if pending_result is not None:
@@ -662,6 +646,7 @@ class PaperBroker(BrokerInterface):
             raise RuntimeError(
                 "PaperBroker.restore_position: a position is already loaded."
             )
+        contract_economics(instrument)
         self._position = Position(
             instrument=instrument,
             direction=direction,
@@ -692,6 +677,7 @@ class PaperBroker(BrokerInterface):
                 "PaperBroker.restore_pending_stop_entry: a position/order is "
                 "already loaded."
             )
+        contract_economics(order.instrument)
         self._pending_stop_entry = _PendingStopMarketEntry(
             order=order,
             contracts=max(1, int(contracts or 1)),
@@ -737,8 +723,7 @@ class PaperBroker(BrokerInterface):
 
         pos = self._position
         instrument = pos.instrument
-        tick = TICK_SIZE.get(instrument, 0.25)
-        tick_val = TICK_VALUE.get(instrument, 1.0)
+        tick, tick_val = contract_economics(instrument)
 
         if pos.direction == "LONG":
             pnl_ticks = (exit_price - pos.entry_price) / tick
