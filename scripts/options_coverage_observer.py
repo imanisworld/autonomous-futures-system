@@ -148,23 +148,47 @@ def _chunks(items: Sequence[str], size: int) -> Iterable[Sequence[str]]:
         yield items[start : start + size]
 
 
+RATE_LIMIT_BACKOFF_SECONDS = (2.0, 5.0, 10.0, 20.0)
+
+
+async def _fetch_chunk(provider: AlpacaBarProvider, chunk: Sequence[str], timeframe, start: datetime, end: datetime, errors: dict[str, str]) -> dict[str, list[Bar]]:
+    """One batch, retried on 429 and re-issued without dead tickers.
+
+    The provider refuses a whole batch when any requested symbol returns no
+    bars (``missing_symbol``), so the dead tickers are recorded and the batch
+    is re-issued without them -- one extra call, not one call per symbol,
+    which is what tripped the provider's rate limit.
+    """
+    symbols = list(chunk)
+    for _ in range(4):
+        if not symbols:
+            return {}
+        try:
+            return await provider.fetch_bars(symbols, timeframe, start, end)
+        except BarProviderError as exc:
+            if exc.reason == "missing_symbol":
+                dead = [s.strip().upper() for s in exc.detail.split(",") if s.strip()]
+                for symbol in dead:
+                    errors[symbol] = f"{exc.reason}:{symbol}"
+                symbols = [s for s in symbols if s not in dead]
+                continue
+            if exc.reason == "provider_error" and "429" in exc.detail:
+                delay = RATE_LIMIT_BACKOFF_SECONDS[min(_, len(RATE_LIMIT_BACKOFF_SECONDS) - 1)]
+                await asyncio.sleep(delay)
+                continue
+            for symbol in symbols:
+                errors[symbol] = f"{exc.reason}:{exc.detail}"[:120]
+            return {}
+    for symbol in symbols:
+        errors[symbol] = "provider_error:rate_limited_after_retries"
+    return {}
+
+
 async def fetch_all(provider: AlpacaBarProvider, symbols: Sequence[str], timeframe, start: datetime, end: datetime) -> tuple[dict[str, list[Bar]], dict[str, str]]:
     bars: dict[str, list[Bar]] = {}
     errors: dict[str, str] = {}
     for chunk in _chunks(list(symbols), FETCH_BATCH):
-        try:
-            got = await provider.fetch_bars(chunk, timeframe, start, end)
-            bars.update(got)
-        except BarProviderError as exc:
-            # A batch failure hides which symbol was at fault; retry singly so
-            # one bad ticker cannot blank the whole batch.
-            for symbol in chunk:
-                try:
-                    bars.update(await provider.fetch_bars([symbol], timeframe, start, end))
-                except BarProviderError as single:
-                    errors[symbol] = f"{single.reason}:{single.detail}"[:120]
-            if not errors:
-                errors["__batch__"] = f"{exc.reason}:{exc.detail}"[:120]
+        bars.update(await _fetch_chunk(provider, chunk, timeframe, start, end, errors))
     return bars, errors
 
 
