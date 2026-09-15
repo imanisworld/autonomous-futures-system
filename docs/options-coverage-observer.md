@@ -84,3 +84,20 @@ after the close during collection.
 15m/5m detection (provider/session semantics to be proven separately),
 reclaim / break-retest / PDH-PDL / VWAP-reclaim families, any promotion
 decision.
+
+## Episode reducer (`ep-v0.1`) — read-only
+
+`scripts/options_coverage_episodes.py --from D1 --to D2 [--json out]` reduces raw
+bar-events into episodes with one structural rule: **contiguous 30m bars, same
+symbol, session, family and direction = one episode.** Contiguity is the
+identity — the later bar's "previous bar" *is* the earlier event's breakout
+bar, so it is the same directional run, not a new mechanical trigger. A gap, a
+family change or a direction change starts a new episode. Episode fields are
+the FIRST event's (first mechanical opportunity, as V1 defines an episode);
+`n_events` preserves the raw count. `direction_runs` (contiguous, same
+direction, any family) is reported as a stricter denominator only.
+
+R:R quality flags are reported, never clipped: `structural_risk_tiny`
+(risk < 0.1% of price), `first_sight_denominator_small` (first-sight risk
+< 10% of structural risk), `remaining_rr_implausible:*` (non-finite or
+|R| > 20). Rejection reasons are kept per rule, in gate order, uncollapsed.
