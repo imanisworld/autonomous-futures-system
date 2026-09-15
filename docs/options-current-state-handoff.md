@@ -1,14 +1,16 @@
 # Options — Current State Handoff
 
-_As of 2026-09-09. This is the single current-state authority for the options lane._
+_As of 2026-09-15. This is the single current-state authority for the options lane._
 
 Historical dated notes and old/closed PRs are provenance only. They do not override this file. Operational deployment proof lives in `docs/options-paper-v1-deployment-checklist.md`; diagnostic definitions live in `docs/options-v1-diagnostics.md`.
 
 ## Current verdict
 
-**BUILD READY / DEPLOYMENT NOT YET PROVEN / V1 EVIDENCE EPOCH NOT STARTED / STRATEGY EDGE NOT PROVEN.**
+**DEPLOYED / SMOKE PROVEN / V1 EVIDENCE EPOCH RECORDED (`899a524` + 2026-09-15T16:50:00Z, cohort `V1-EPOCH-1`) / STRATEGY EDGE NOT PROVEN.**
 
-Options-ready baseline on `main`: **`9d008a0dcdcb69270d80b663c678b4522f27ebb6`**.
+Epoch record: `docs/options_v1_evidence_epoch.json`. Rows before the epoch timestamp are pre-epoch telemetry, not cohort evidence. Rules in force: #570 late-entry guard, #571 Daily-lane timing + 1R target floor, #575 ENTRY_LATE episode block (counterfactual preservation). Any rule change starts a new cohort.
+
+Deployed baseline on `main` and on the box: **`899a524aad82a66c80ba832ea5601430bdac7355`** (release dir `899a524aad82-20260914-203217`).
 
 Final CI for that baseline: **4,921 passed / 7 skipped / 2 warnings**.
 
