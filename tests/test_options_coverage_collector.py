@@ -23,6 +23,7 @@ from alert_ranker.coverage_collector import (
     append_ledger,
     binding_path,
     daily_outcome_stem,
+    daily_provenance,
     load_daily_outcomes,
     observer_completion,
     outcome_from_row,
@@ -35,6 +36,7 @@ from alert_ranker.coverage_collector import (
     sessions_between,
     settled_sessions,
     source_provenance,
+    stamp_reducer_aggregate,
     write_binding,
 )
 from alert_ranker.coverage_episodes import REDUCER_VERSION, Episode
@@ -51,7 +53,10 @@ SETTLED = SESSION.close + SETTLE_AFTER_CLOSE + timedelta(minutes=1)
 UNIVERSE = ["AAPL", "NVDA", "SQ"]
 ROOT = Path(__file__).resolve().parents[1]
 SHA = "a" * 40
-SOURCE = SourceProvenance(sha=SHA, provenance="release_manifest", root="/pinned/" + SHA)
+FINGERPRINT = "f" * 64
+SOURCE = SourceProvenance(sha=SHA, provenance="release_manifest", root="/pinned/" + SHA, manifest_fingerprint=FINGERPRINT)
+SHA_B = "b" * 40
+SOURCE_B = SourceProvenance(sha=SHA_B, provenance="release_manifest", root="/pinned/" + SHA_B, manifest_fingerprint="e" * 64)
 
 
 # --------------------------------------------------------------------------- #
@@ -135,7 +140,7 @@ def real_outcome(day: date):
     return measure_episode(ep, session.open, session.close, bars)
 
 
-def write_daily(daily_dir: Path, day: date, *, provider_errors: dict | None = None, outcomes=None, raw_events: int = 3, bind: Path | None = None) -> Path:
+def write_daily(daily_dir: Path, day: date, *, provider_errors: dict | None = None, outcomes=None, raw_events: int = 3, bind: Path | None = None, source: SourceProvenance = SOURCE) -> Path:
     """A one-session outcome file as the out-v0.1 script writes it; ``bind=<sqlite>`` also writes the collector's binding sidecar."""
     daily_dir.mkdir(parents=True, exist_ok=True)
     outcomes = [real_outcome(day)] if outcomes is None else outcomes
@@ -147,15 +152,15 @@ def write_daily(daily_dir: Path, day: date, *, provider_errors: dict | None = No
     stem.with_suffix(".md").write_text("# outcomes\n")
     if bind is not None:
         coverage = observer_completion(bind, day, UNIVERSE, ("SQ",))
-        write_binding(daily_dir, day, coverage, reduced_episode_count(bind, day), len(outcomes), SOURCE)
+        write_binding(daily_dir, day, coverage, reduced_episode_count(bind, day), len(outcomes), source)
     return stem
 
 
-def seed_complete(sqlite_path: Path, daily_dir: Path, day: date) -> None:
+def seed_complete(sqlite_path: Path, daily_dir: Path, day: date, source: SourceProvenance = SOURCE) -> None:
     """Observer evidence + a daily file bound to it: what a finished session looks like on disk."""
     seed_observer(sqlite_path, day, symbols=GOOD_SYMBOLS)
     n = reduced_episode_count(sqlite_path, day)
-    write_daily(daily_dir, day, outcomes=[real_outcome(day)] * n, raw_events=3, bind=sqlite_path)
+    write_daily(daily_dir, day, outcomes=[real_outcome(day)] * n, raw_events=3, bind=sqlite_path, source=source)
 
 
 class FakeRunner:
@@ -316,11 +321,14 @@ def test_outcome_row_round_trip_and_local_rollup(tmp_path):
     assert rebuilt == outcome
     assert summarize_outcomes([rebuilt]) == summarize_outcomes([outcome])
     daily = tmp_path / "daily"
-    write_daily(daily, DAY)
+    db = tmp_path / "obs.sqlite"
+    seed_observer(db, DAY, symbols=GOOD_SYMBOLS)
+    write_daily(daily, DAY, bind=db)
     sessions = sessions_between(date(2026, 9, 15), DAY)
-    outcomes, present, missing, errors = load_daily_outcomes(daily, sessions)
+    outcomes, present, missing, errors, provenance = load_daily_outcomes(daily, sessions)
     assert (present, missing, errors) == ([DAY.isoformat()], ["2026-09-15"], {})
     assert [o.symbol for o in outcomes] == ["AAPL"]
+    assert provenance[DAY.isoformat()]["source_sha"] == SHA and provenance[DAY.isoformat()]["manifest_fingerprint"] == FINGERPRINT
     with pytest.raises(CollectorError):
         outcome_from_row({"symbol": "X"})
 
@@ -536,6 +544,111 @@ def test_v1_database_path_is_refused(tmp_path, creds):
     assert cli.main([], runner=runner, **kw) == 1
     assert runner.calls == []
     assert read_ledger(kw["data_dir"] / "ledger.jsonl")[-1]["reason"] == "v1_database_refused"
+
+
+# --------------------------------------------------------------------------- #
+# aggregate provenance
+# --------------------------------------------------------------------------- #
+
+
+def test_reducer_aggregate_is_self_describing(tmp_path, creds):
+    kw = make_cli_args(tmp_path)
+    assert cli.main([], runner=FakeRunner(kw["sqlite_path"], kw["data_dir"] / "daily"), **kw) == 0
+    payload = json.loads((kw["data_dir"] / "aggregate" / f"episodes_{DAY}_{DAY}.json").read_text())
+    assert set(payload) == {"summary", "episodes", "provenance"}  # ep-v0.1 content untouched, one block added
+    prov = payload["provenance"]
+    assert prov["source"]["sha"] == SHA and prov["source"]["provenance"] == "release_manifest" and prov["source"]["manifest_fingerprint"] == FINGERPRINT
+    assert prov["collector_id"] == COLLECTOR_ID and prov["collector_version"] == COLLECTOR_VERSION
+    assert prov["reducer_version"] == REDUCER_VERSION and prov["observer_version"] == OBSERVER_VERSION
+    assert (prov["date_from"], prov["date_to"], prov["episodes"]) == (DAY.isoformat(), DAY.isoformat(), 0)
+    # the roll-up points back at it with the same block
+    rollup = json.loads((kw["data_dir"] / "aggregate" / f"outcomes_{DAY}_{DAY}.json").read_text())
+    assert rollup["summary"]["reducer_aggregate"]["provenance"]["source"]["sha"] == SHA
+    ledger = read_ledger(kw["data_dir"] / "ledger.jsonl")
+    assert ledger[-1]["aggregate"]["constituent_source_shas"] == [SHA]
+
+
+def test_stamp_reducer_aggregate_fails_closed_on_bad_file(tmp_path):
+    bad = tmp_path / "episodes.json"
+    bad.write_text("{not json")
+    with pytest.raises(CollectorError) as exc:
+        stamp_reducer_aggregate(bad, SOURCE, DAY, DAY)
+    assert exc.value.reason == "aggregate_unparseable"
+    bad.write_text(json.dumps({"summary": {}}))
+    with pytest.raises(CollectorError) as exc:
+        stamp_reducer_aggregate(bad, SOURCE, DAY, DAY)
+    assert exc.value.reason == "aggregate_malformed"
+
+
+def test_cumulative_aggregate_preserves_per_session_provenance_across_shas(tmp_path, creds):
+    # 09-14 and 09-15 were collected by an earlier commit (SHA_B); today's run (SOURCE) adds 09-16 and rolls up all three.
+    kw = make_cli_args(tmp_path, collection_start=date(2026, 9, 14))
+    daily = kw["data_dir"] / "daily"
+    seed_complete(kw["sqlite_path"], daily, date(2026, 9, 14), source=SOURCE_B)
+    seed_complete(kw["sqlite_path"], daily, date(2026, 9, 15), source=SOURCE_B)
+    assert cli.main([], runner=FakeRunner(kw["sqlite_path"], daily), **kw) == 0
+    rollup = json.loads((kw["data_dir"] / "aggregate" / "outcomes_2026-09-14_2026-09-16.json").read_text())["summary"]
+    assert rollup["aggregated_by"]["source"]["sha"] == SHA  # who assembled the roll-up
+    assert rollup["constituent_source_shas"] == sorted([SHA, SHA_B])  # not "everything is the current SHA"
+    per = rollup["sessions_provenance"]
+    assert [(d, p["source_sha"], p["manifest_fingerprint"], p["collector_version"]) for d, p in sorted(per.items())] == [
+        ("2026-09-14", SHA_B, "e" * 64, COLLECTOR_VERSION),
+        ("2026-09-15", SHA_B, "e" * 64, COLLECTOR_VERSION),
+        ("2026-09-16", SHA, FINGERPRINT, COLLECTOR_VERSION),
+    ]
+    for d, p in per.items():
+        assert p["session_date"] == d and p["observer_run_id"] >= 1 and p["raw_events"] == 3 and p["reducer_episodes"] == 3 and p["outcome_episodes"] == 3
+        assert p["outcome_version"] == OUTCOME_VERSION and p["observer_version"] == OBSERVER_VERSION and p["reducer_version"] == REDUCER_VERSION
+    # the earlier files are untouched: still bound to SHA_B on disk
+    assert json.loads(binding_path(daily, date(2026, 9, 14)).read_text())["source_sha"] == SHA_B
+
+
+def test_daily_file_without_valid_provenance_is_rejected_from_aggregate(tmp_path, creds):
+    kw = make_cli_args(tmp_path, collection_start=date(2026, 9, 15))
+    daily = kw["data_dir"] / "daily"
+    seed_complete(kw["sqlite_path"], daily, date(2026, 9, 15))
+    seed_complete(kw["sqlite_path"], daily, DAY)
+    sessions = sessions_between(date(2026, 9, 15), DAY)
+    # missing sidecar
+    binding_path(daily, date(2026, 9, 15)).unlink()
+    with pytest.raises(CollectorError) as exc:
+        load_daily_outcomes(daily, sessions)
+    assert exc.value.reason == "daily_provenance_missing" and "2026-09-15" in exc.value.detail
+    # sidecar present but the sha is not a commit
+    bad = json.loads(binding_path(daily, DAY).read_text())
+    bad["source_sha"] = "working-copy"
+    binding_path(daily, date(2026, 9, 15)).write_text(json.dumps(bad | {"session_date": "2026-09-15"}))
+    with pytest.raises(CollectorError) as exc:
+        daily_provenance(daily, date(2026, 9, 15))
+    assert exc.value.reason == "daily_provenance_invalid"
+    # sidecar for the wrong session
+    good = json.loads(binding_path(daily, DAY).read_text())
+    binding_path(daily, date(2026, 9, 15)).write_text(json.dumps(good))
+    with pytest.raises(CollectorError) as exc:
+        daily_provenance(daily, date(2026, 9, 15))
+    assert exc.value.reason == "daily_provenance_invalid" and "is for 2026-09-16" in exc.value.detail
+    # a missing field fails too
+    binding_path(daily, date(2026, 9, 15)).write_text(json.dumps({k: v for k, v in (good | {"session_date": "2026-09-15"}).items() if k != "manifest_fingerprint"}))
+    with pytest.raises(CollectorError) as exc:
+        daily_provenance(daily, date(2026, 9, 15))
+    assert "manifest_fingerprint" in exc.value.detail
+    # A missing sidecar makes the session incomplete, so catch-up re-measures and re-binds it (logged, never silent).
+    binding_path(daily, date(2026, 9, 15)).unlink()
+    runner = FakeRunner(kw["sqlite_path"], daily)
+    assert cli.main([], runner=runner, **kw) == 0
+    assert [(Path(c[1]).name, c[c.index("--to") + 1]) for c in runner.calls if "--to" in c][0] == ("options_coverage_outcomes.py", "2026-09-15")
+    assert "no_binding" in [r for r in read_ledger(kw["data_dir"] / "ledger.jsonl") if r["status"] == STATUS_DONE][-1]["steps"]["outcomes_rerun_reason"]
+    # A sidecar that passes the completeness check but names no real commit: the aggregate fails closed, nothing is included, no roll-up.
+    bound = json.loads(binding_path(daily, date(2026, 9, 15)).read_text())
+    binding_path(daily, date(2026, 9, 15)).write_text(json.dumps(bound | {"source_sha": "working-copy"}))
+    for f in (kw["data_dir"] / "aggregate").iterdir():
+        f.unlink()
+    runner = FakeRunner(kw["sqlite_path"], daily)
+    assert cli.main([], runner=runner, **kw) == 1
+    assert [Path(c[1]).name for c in runner.calls] == ["options_coverage_episodes.py"]  # nothing re-fetched, the roll-up refused
+    last = read_ledger(kw["data_dir"] / "ledger.jsonl")[-1]
+    assert last["status"] == STATUS_FAILED and last["reason"] == "daily_provenance_invalid" and "working-copy" in last["detail"]
+    assert not (kw["data_dir"] / "aggregate" / "outcomes_2026-09-15_2026-09-16.json").exists()
 
 
 # --------------------------------------------------------------------------- #

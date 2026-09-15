@@ -81,7 +81,9 @@ __all__ = [
     "append_ledger",
     "read_ledger",
     "outcome_from_row",
+    "daily_provenance",
     "load_daily_outcomes",
+    "stamp_reducer_aggregate",
 ]
 
 COLLECTOR_ID = "OPTIONS_COVERAGE_COLLECTOR"
@@ -421,6 +423,8 @@ class OutcomeBinding:
     outcome_version: str
     outcome_episodes: int
     source_sha: str
+    source_provenance: str
+    manifest_fingerprint: str | None
     collector_version: str
     written_at: str
 
@@ -455,7 +459,8 @@ def write_binding(daily_dir: Path, session_date: date, coverage: CoverageCheck, 
     binding = OutcomeBinding(
         session_date=session_date.isoformat(), observer_version=OBSERVER_VERSION, observer_run_id=coverage.run_id, observer_ran_at=coverage.ran_at,
         raw_events=coverage.events, reducer_version=REDUCER_VERSION, reducer_episodes=reducer_episodes, outcome_version=OUTCOME_VERSION,
-        outcome_episodes=outcome_episodes, source_sha=source.sha, collector_version=COLLECTOR_VERSION, written_at=datetime.now(timezone.utc).isoformat(),
+        outcome_episodes=outcome_episodes, source_sha=source.sha, source_provenance=source.provenance, manifest_fingerprint=source.manifest_fingerprint,
+        collector_version=COLLECTOR_VERSION, written_at=datetime.now(timezone.utc).isoformat(),
     )
     binding_path(daily_dir, session_date).write_text(json.dumps(binding.to_dict(), indent=1, sort_keys=True))
     return binding
@@ -601,26 +606,90 @@ def outcome_from_row(row: dict[str, Any]) -> EpisodeOutcome:
     return EpisodeOutcome(views=views, **data)
 
 
-def load_daily_outcomes(daily_dir: Path, sessions: Sequence[Session]) -> tuple[list[EpisodeOutcome], list[str], list[str], dict[str, str]]:
+_BINDING_PROVENANCE_FIELDS = ("session_date", "observer_version", "observer_run_id", "observer_ran_at", "raw_events", "reducer_version", "reducer_episodes", "outcome_version", "outcome_episodes", "source_sha", "source_provenance", "manifest_fingerprint", "collector_version", "written_at")
+
+
+def daily_provenance(daily_dir: Path, session_date: date) -> dict[str, Any]:
+    """The immutable provenance of one stored daily outcome file, read from its binding sidecar.
+
+    Fails closed when the sidecar is missing, unparseable, for another session,
+    or lacks a well-formed 40-hex ``source_sha`` — a daily file with unknown
+    origin is never folded into an aggregate.
+    """
+    day = session_date.isoformat()
+    path = binding_path(daily_dir, session_date)
+    if not path.exists():
+        raise CollectorError("daily_provenance_missing", f"{day}: no {path.name}")
+    try:
+        bound = json.loads(path.read_text())
+    except ValueError as exc:
+        raise CollectorError("daily_provenance_invalid", f"{day}: {path.name} unparseable: {exc}") from exc
+    if not isinstance(bound, dict):
+        raise CollectorError("daily_provenance_invalid", f"{day}: {path.name} is not an object")
+    missing = [k for k in _BINDING_PROVENANCE_FIELDS if k not in bound]
+    if missing:
+        raise CollectorError("daily_provenance_invalid", f"{day}: {path.name} missing {missing}")
+    if bound.get("session_date") != day:
+        raise CollectorError("daily_provenance_invalid", f"{day}: {path.name} is for {bound.get('session_date')}")
+    if not isinstance(bound.get("source_sha"), str) or not _SHA40.match(bound["source_sha"]):
+        raise CollectorError("daily_provenance_invalid", f"{day}: source_sha {bound.get('source_sha')!r} is not a commit")
+    return {k: bound[k] for k in _BINDING_PROVENANCE_FIELDS}
+
+
+def load_daily_outcomes(daily_dir: Path, sessions: Sequence[Session]) -> tuple[list[EpisodeOutcome], list[str], list[str], dict[str, str], dict[str, dict[str, Any]]]:
     """Load every stored one-session outcome file for ``sessions``.
 
-    Returns ``(outcomes, present_dates, missing_dates, provider_errors)``.
-    A present file is used as stored; a session without a file is reported,
-    not fabricated.
+    Returns ``(outcomes, present_dates, missing_dates, provider_errors,
+    provenance_by_session)``.  A present file is used as stored and MUST carry
+    a valid binding sidecar (see :func:`daily_provenance`); a session without
+    a file is reported, not fabricated.
     """
     outcomes: list[EpisodeOutcome] = []
     present: list[str] = []
     missing: list[str] = []
     errors: dict[str, str] = {}
+    provenance: dict[str, dict[str, Any]] = {}
     for session in sessions:
         json_path = daily_outcome_stem(daily_dir, session.date).with_suffix(".json")
         if not json_path.exists():
             missing.append(session.date.isoformat())
             continue
+        provenance[session.date.isoformat()] = daily_provenance(daily_dir, session.date)
         payload = json.loads(json_path.read_text())
         for key, value in (payload.get("summary", {}).get("provider_errors") or {}).items():
             errors[str(key)] = str(value)
         for row in payload.get("episodes", []):
             outcomes.append(outcome_from_row(row))
         present.append(session.date.isoformat())
-    return outcomes, present, missing, errors
+    return outcomes, present, missing, errors, provenance
+
+
+def stamp_reducer_aggregate(path: Path, source: SourceProvenance, date_from: date, date_to: date) -> dict[str, Any]:
+    """Make the reducer's ``episodes_<from>_<to>.json`` self-describing.
+
+    The ep-v0.1 script writes ``{summary, answers, episodes}`` and nothing
+    about who ran it; the collector adds a top-level ``provenance`` block with
+    the exact source commit, how it was established, the release manifest
+    fingerprint and every lane version, so the file stands on its own without
+    the ledger or the filename.
+    """
+    try:
+        payload = json.loads(path.read_text())
+    except ValueError as exc:
+        raise CollectorError("aggregate_unparseable", f"{path}: {exc}") from exc
+    if not isinstance(payload, dict) or "episodes" not in payload:
+        raise CollectorError("aggregate_malformed", str(path))
+    block = {
+        "source": source.to_dict(),
+        "collector_id": COLLECTOR_ID,
+        "collector_version": COLLECTOR_VERSION,
+        "reducer_version": REDUCER_VERSION,
+        "observer_version": OBSERVER_VERSION,
+        "date_from": date_from.isoformat(),
+        "date_to": date_to.isoformat(),
+        "episodes": len(payload.get("episodes") or []),
+        "stamped_at": datetime.now(timezone.utc).isoformat(),
+    }
+    payload["provenance"] = block
+    path.write_text(json.dumps(payload, indent=1, sort_keys=True))
+    return block

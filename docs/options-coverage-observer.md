@@ -162,8 +162,17 @@ event count) and its episode count equals what the reducer produces from the
 stored events now. A repaired or re-run observer dataset therefore invalidates
 the older outcome file: it is moved aside as `*.tainted.<ts>` and re-measured.
 
-**Provenance.** Every ledger line and both aggregate summaries carry the exact
-source commit. Under `--require-pinned` (the systemd unit) the commit must come
+**Provenance.** Every ledger line carries the exact source commit. The
+reducer aggregate `episodes_F_D.json` is self-describing: the collector adds a
+top-level `provenance` block (source sha, how it was established, release
+manifest fingerprint, collector/reducer/observer versions, range, episode
+count) to the ep-v0.1 payload. The cumulative roll-up records who assembled it
+(`aggregated_by.source`) **and** which commit produced each constituent daily
+file (`sessions_provenance`, keyed by session, copied from each binding
+sidecar; `constituent_source_shas` lists the distinct commits). A daily file
+whose sidecar is missing, malformed, for another session, or names no real
+commit is refused from the roll-up (`daily_provenance_missing` /
+`daily_provenance_invalid`), never silently included. Under `--require-pinned` (the systemd unit) the commit must come
 from `release_manifest.json` inside the immutable tree being executed, and that
 tree's directory must be named after the commit; a working tree is refused. Off
 the box, a working tree is allowed and labelled `working_tree` with its dirty flag.

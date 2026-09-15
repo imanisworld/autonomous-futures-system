@@ -70,6 +70,7 @@ from alert_ranker.coverage_collector import (  # noqa: E402
     sessions_between,
     settled_sessions,
     source_provenance,
+    stamp_reducer_aggregate,
     write_binding,
 )
 from alert_ranker.coverage_outcomes import summarize_outcomes  # noqa: E402
@@ -289,10 +290,11 @@ class Collector:
         self._run(episodes_cmd, self._log_path(session, "episodes"), "episodes")
         if not episodes_json.exists() or episodes_json.stat().st_size == 0:
             raise CollectorError("aggregate_missing_output", str(episodes_json))
+        reducer_provenance = stamp_reducer_aggregate(episodes_json, self.source, self.collection_start, session.date)
         self.outputs.append(str(episodes_json))
 
         sessions = sessions_between(self.collection_start, session.date)
-        outcomes, present, missing, errors = load_daily_outcomes(self.daily_dir, sessions)
+        outcomes, present, missing, errors, provenance = load_daily_outcomes(self.daily_dir, sessions)
         if errors:
             raise CollectorError("aggregate_tainted_daily", json.dumps(errors)[:400])
         if session.date.isoformat() not in present:
@@ -303,10 +305,14 @@ class Collector:
         summary["sessions_present"], summary["sessions_missing"] = present, missing
         summary["generated_at"] = datetime.now(timezone.utc).isoformat()
         summary["provider_errors"] = {}
+        # The roll-up was assembled by THIS commit, but each daily file keeps the commit that produced it.
         summary["aggregated_by"] = {
             "collector_id": COLLECTOR_ID, "collector_version": COLLECTOR_VERSION, "source": self.source.to_dict(),
             "method": "stored daily outcome files; no provider call",
         }
+        summary["sessions_provenance"] = provenance
+        summary["constituent_source_shas"] = sorted({p["source_sha"] for p in provenance.values()})
+        summary["reducer_aggregate"] = {"path": str(episodes_json), "provenance": reducer_provenance}
         stem = aggregate_stem(self.aggregate_dir, self.collection_start, session.date)
         stem.with_suffix(".json").write_text(json.dumps({"summary": summary, "episodes": [o.to_row() for o in outcomes]}, indent=1, sort_keys=True))
         write_markdown(stem.with_suffix(".md"), summary, summary["date_from"], summary["date_to"], {})
@@ -316,7 +322,8 @@ class Collector:
                 raise CollectorError("aggregate_missing_output", str(path))
             self.outputs.append(str(path))
         self.steps["aggregate"] = "ran"
-        return {"sessions_present": present, "sessions_missing": missing, "episodes": len(outcomes), "clean": summary["total"]["clean_episodes"]}
+        return {"sessions_present": present, "sessions_missing": missing, "episodes": len(outcomes), "clean": summary["total"]["clean_episodes"],
+                "constituent_source_shas": summary["constituent_source_shas"], "sessions_provenance": provenance}
 
     # ------------------------------------------------------------------ #
     # orchestration
