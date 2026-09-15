@@ -187,8 +187,8 @@ class TestLongResolution:
         [
             ("MNQ", 0.50),
             ("MES", 1.25),
-            ("MGC", 10.00),
-            ("MCL", 10.00),
+            ("MGC", 1.00),
+            ("MCL", 1.00),
         ],
     )
     def test_tick_value_per_instrument(self, broker, instrument, tick_value):

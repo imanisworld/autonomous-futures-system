@@ -8,12 +8,7 @@ from typing import Optional
 from execution.broker_interface import BracketOrder
 
 
-TICK_SIZE = {
-    "MNQ": 0.25, "MES": 0.25, "ES": 0.25, "NQ": 0.25, "MGC": 0.10, "MCL": 0.01,
-}
-TICK_VALUE = {
-    "MNQ": 0.50, "MES": 1.25, "ES": 12.50, "NQ": 5.00, "MGC": 1.00, "MCL": 1.00,
-}
+from config.futures_contracts import TICK_SIZE, TICK_VALUE, contract_economics
 
 # These strategies derive their brackets from market structure before broker
 # submission. A worse fill must not move either protective level after the fact.
@@ -72,8 +67,7 @@ class PostFillValidation:
 def validate_post_fill(order: BracketOrder, actual_entry: float) -> PostFillValidation:
     """Recalculate the approved bracket from the broker's actual fill price."""
     root = str(order.instrument or "").replace("1!", "").upper()
-    tick = TICK_SIZE.get(root, 0.25)
-    tick_value = TICK_VALUE.get(root, 1.25)
+    tick, tick_value = contract_economics(root)
     requested = float(order.entry)
     actual = float(actual_entry)
     stop = float(order.stop)

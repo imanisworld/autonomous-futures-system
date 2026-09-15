@@ -46,7 +46,7 @@ _UTC = ZoneInfo("UTC")
 
 # Root ticker symbols the system trades, sorted longest-first.
 _KNOWN_INSTRUMENTS: tuple[str, ...] = tuple(
-    sorted(("MNQ", "MES", "MGC", "MCL"), key=len, reverse=True)
+    sorted(("MNQ", "MES", "MGC", "MCL", "M2K", "MBT"), key=len, reverse=True)
 )
 
 # A real futures contract suffix: a CME month code (F G H J K M N Q U V X Z)
