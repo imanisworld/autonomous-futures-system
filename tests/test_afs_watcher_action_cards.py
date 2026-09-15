@@ -140,11 +140,11 @@ def test_feed_stale_without_exposure_keeps_the_plain_blocked_text(monkeypatch):
     findings.add("BLOCKED", "feed_MNQ_stale", FEED_MNQ["summary"])
 
     raised = _run(monkeypatch, state, findings, _tick(()))
-    assert raised[0][1].startswith("🛑 **BLOCKED — Feed mnq stale**")
+    assert raised[0][1].startswith("🛑 **STATUS: CRITICAL**\n**ISSUE:** Feed mnq stale")
     assert state["blocked"]["feed_MNQ_stale"]["action_required"] is False
 
     cleared = _run(monkeypatch, state, w.Findings(), _tick(()))
-    assert cleared[0][1].startswith("✅ **cleared — Feed mnq stale**")
+    assert cleared[0][1].startswith("✅ **STATUS: RECOVERED**\n**ISSUE:** Feed mnq stale")
 
 
 def test_exposure_appearing_later_promotes_to_a_card_once(monkeypatch):
@@ -153,7 +153,7 @@ def test_exposure_appearing_later_promotes_to_a_card_once(monkeypatch):
     findings.add("BLOCKED", "feed_MNQ_stale", FEED_MNQ["summary"])
 
     first = _run(monkeypatch, state, findings, _tick(()))
-    assert first[0][1].startswith("🛑 **BLOCKED —")
+    assert first[0][1].startswith("🛑 **STATUS: CRITICAL**")
     # lane opens while the feed is still stale: re-notify immediately as a card
     second = _run(monkeypatch, state, findings, _tick(("daily_22_5k",)))
     assert len(second) == 1 and second[0][1].startswith("🛑 **ACTION REQUIRED —")

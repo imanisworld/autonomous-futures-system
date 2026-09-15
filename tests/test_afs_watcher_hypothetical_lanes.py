@@ -110,6 +110,27 @@ def test_open_swing_with_fresh_bars_is_recorded_not_blocked(tmp_path, monkeypatc
     assert any(k.startswith("hypothetical_position_open:daily_22_5k") for k in state["events_seen"])
 
 
+def test_expected_overnight_swing_is_informational_after_close():
+    lanes = {"open_positions": ["daily_22_5k"], "inventory": {"daily_22_5k": {
+        "open_position": {"direction": "SHORT", "entry": 29338.25,
+                          "entry_time": "2026-09-10T11:10:00+00:00"}
+    }}}
+    expected, discrepancies = w._after_close_position_status(lanes)
+    assert expected == [{"lane": "daily_22_5k", "position": lanes["inventory"]["daily_22_5k"]["open_position"]}]
+    assert discrepancies == []
+
+
+def test_non_swing_after_close_position_still_escalates():
+    lanes = {"open_positions": ["mes_122_1500"], "inventory": {"mes_122_1500": {
+        "open_position": {"direction": "LONG", "entry": 6500.0,
+                          "entry_time": "2026-09-15T19:00:00+00:00"}
+    }}}
+    expected, discrepancies = w._after_close_position_status(lanes)
+    assert expected == []
+    assert len(discrepancies) == 1
+    assert "mes_122_1500" in discrepancies[0]
+
+
 def test_five_min_stall_while_15m_continues_blocks_and_flags_exposure(tmp_path, monkeypatch):
     _, findings, tick = _setup(tmp_path, monkeypatch, five_min_at=NOW - timedelta(minutes=50),
                                fifteen_min_at=NOW - timedelta(minutes=5),
