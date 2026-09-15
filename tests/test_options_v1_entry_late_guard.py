@@ -217,32 +217,44 @@ def _run(tmp_path: Path, row: dict, price: float | None = None, **cfg_overrides)
 
 
 @pytest.mark.parametrize("row", [ROW_9170, ROW_9171], ids=["9170_AAPL", "9171_SPY"])
-def test_recorded_late_entries_are_refused_before_any_chain_call(tmp_path, row):
+def test_recorded_late_entries_never_open_active_and_become_counterfactual_evidence(tmp_path, row):
+    # Operator ruling 2026-09-14: a late entry is refused for the ACTIVE lane
+    # and the episode is preserved as COUNTERFACTUAL evidence (priced from
+    # the real chain, no ACTIVE risk, no alert) so the filter stays measurable.
     outcome, storage, market = _run(tmp_path, row)
     raw = outcome.result.raw
 
-    # The setup verdict itself is untouched: still TRIGGERED, still proven.
-    assert raw["setup_status"] == "TRIGGERED"
+    # The setup verdict itself is untouched: still mechanically triggered.
+    assert raw["mechanical_signal_status"] == "TRIGGERED"
     assert raw["setup_proof_status"] == "VALID"
     assert raw["target_1"] == row["context"]["target_1"]
     assert raw["stop"] == row["context"]["stop"]
 
-    # The ACTIVE paper entry is refused, with the reason on the row.
-    assert raw["paper_policy_id"] == POLICY_ID
-    assert raw["paper_policy_status"] == ENTRY_LATE_STATUS
-    assert raw["paper_policy_reason"] == "price_past_target"
+    # ACTIVE entry refused, reason preserved on the row; the row is now an
+    # observer, not a trade.
+    assert raw["entry_late_reason"] == "price_past_target"
+    assert raw["counterfactual_filter_reason"] == "ENTRY_LATE:price_past_target"
+    assert raw["paper_evidence_lane"] == "COUNTERFACTUAL"
+    assert raw["risk_budget_consumed"] is False
     assert raw["paper_entry_remaining_rr"] < 0
+    assert raw["setup_status"] == "OBSERVE"
 
-    # No option chain was fetched, no contract selected, no risk consumed.
-    assert market.chain_calls == 0
-    assert "contract" not in raw or raw.get("contract") in (None, "")
-    assert raw.get("planned_risk_dollars") in (None, 0, 0.0)
-
-    # No alert, no shadow row, and the suppression reason names the guard.
+    # No alert. The only chain fetch is the counterfactual pricing.
     assert outcome.alert_sent is False
-    assert outcome.shadow_id == 0
-    assert outcome.alert_suppression_reason == "ENTRY_LATE:price_past_target"
-    assert storage.open_setups_after(0) == []
+    assert outcome.alert_suppression_reason == "entry_late_counterfactual_only:price_past_target"
+    assert market.chain_calls > 0
+
+    # One COUNTERFACTUAL journal row, none in the ACTIVE lane, no ACTIVE risk.
+    assert outcome.shadow_id > 0
+    stored = storage.get_shadow_setup(outcome.shadow_id)
+    assert stored.selected_contract["paper_evidence_lane"] == "COUNTERFACTUAL"
+    assert stored.selected_contract["risk_budget_consumed"] is False
+    assert stored.selected_contract["counterfactual_filter_reason"] == "ENTRY_LATE:price_past_target"
+    assert "|COUNTERFACTUAL|" in stored.selected_contract["episode_key"]
+    assert "|ACTIVE|" in stored.selected_contract["entry_late_active_episode_key"]
+
+    # And the ACTIVE episode is now blocked for good.
+    assert storage.episode_block(row["ticker"], stored.selected_contract["entry_late_active_episode_key"]) == "ENTRY_LATE:price_past_target"
 
 
 @pytest.mark.parametrize(
@@ -278,12 +290,16 @@ def test_same_setups_open_normally_when_price_still_offers_the_reward(tmp_path, 
 def test_recorded_rows_fail_the_ratio_floor_even_at_their_own_trigger(tmp_path, row, expected):
     # Both recorded setups offered under 0.25 reward per unit of risk at the
     # trigger itself (setup_rr_1 0.16 / 0.24 in the journal). With price at
-    # the trigger the guard refuses on the ratio, not on the target.
-    outcome, _, market = _run(tmp_path, row, price=row["context"]["setup_entry_trigger"])
+    # the trigger the guard refuses on the ratio, not on the target -- and
+    # the refusal is kept as counterfactual evidence like any other.
+    outcome, storage, _ = _run(tmp_path, row, price=row["context"]["setup_entry_trigger"])
     raw = outcome.result.raw
-    assert raw["paper_policy_status"] == ENTRY_LATE_STATUS
-    assert raw["paper_policy_reason"] == expected
-    assert market.chain_calls == 0
+    assert raw["entry_late_reason"] == expected
+    assert raw["paper_evidence_lane"] == "COUNTERFACTUAL"
+    assert raw["risk_budget_consumed"] is False
+    assert outcome.alert_sent is False
+    assert outcome.shadow_id > 0
+    assert storage.get_shadow_setup(outcome.shadow_id).selected_contract["risk_budget_consumed"] is False
 
 
 def test_ratio_floor_is_operator_configurable(tmp_path):
@@ -296,19 +312,15 @@ def test_ratio_floor_is_operator_configurable(tmp_path):
 def test_counterfactual_lane_is_not_gated_by_the_guard(tmp_path):
     """Counterfactual rows exist to keep the rejected population observable.
 
-    The guard lives only on the ACTIVE path (base ``_apply_paper_v1_contract``).
-    The hardened scanner's counterfactual branch never calls it, so a
-    counterfactual observer row with price already past target is still
-    priced and recorded exactly as before.
+    The guard lives only on the ACTIVE path. A counterfactual observer row
+    with price already past target is still priced and recorded exactly as
+    before, and is never blocked or converted.
     """
-    from alert_ranker.v1_evidence_hardening import build_v1_evidence_hardening
-
     config = _cfg(tmp_path)
     storage = ScanStorage(config.sqlite_path)
     symbol, strike, bid, ask = ROW_9170["market"]
     market = _Market(ROW_9170["price"], symbol, strike, bid, ask)
-    scanner_cls = build_v1_evidence_hardening(OptionsScanner)
-    scanner = scanner_cls(config, market, storage, DiscordAlerter(config, storage))
+    scanner = OptionsScanner(config, market, storage, DiscordAlerter(config, storage))
 
     normalized = {
         **ROW_9170["context"],
@@ -320,14 +332,14 @@ def test_counterfactual_lane_is_not_gated_by_the_guard(tmp_path):
     assert data["paper_evidence_lane"] == "COUNTERFACTUAL"
     assert data["paper_policy_status"] == "VALID"
     assert data["risk_budget_consumed"] is False
+    assert "entry_late_reason" not in data
     assert market.chain_calls > 0
 
-    # And the ACTIVE path on the very same hardened scanner still refuses it.
+    # The ACTIVE path on the very same scanner refuses it and converts it.
     market.chain_calls = 0
     active = dict(normalized)
     active.pop("counterfactual_observer")
     data = asyncio.run(scanner._apply_paper_v1_contract("AAPL", active, "LONG", NOW))
-    assert data["paper_policy_status"] == ENTRY_LATE_STATUS
-    assert data["paper_policy_reason"] == "price_past_target"
-    assert "paper_evidence_lane" not in data
-    assert market.chain_calls == 0
+    assert data["entry_late_reason"] == "price_past_target"
+    assert data["paper_evidence_lane"] == "COUNTERFACTUAL"
+    assert data["risk_budget_consumed"] is False

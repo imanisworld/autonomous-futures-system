@@ -521,6 +521,14 @@ class OptionsScanner:
 
     def _structural_gate(self, normalized: dict[str, Any]) -> str:
         """Reason this scan may not alert, or ``""`` when it may."""
+        # Counterfactual observer rows are evidence, never alerts or ACTIVE
+        # entries -- regardless of whether the causal lane is switched on.
+        # (With the lane off, an OBSERVE row used to fall through to the
+        # Discord eligibility check and the ACTIVE journal path.)
+        if normalized.get("counterfactual_observer"):
+            return str(
+                normalized.get("setup_suppression_reason") or "counterfactual_observer_only"
+            )
         if self._causal_lane_active():
             if "bar_context_available" not in normalized:
                 return "setup_proof_missing"
@@ -855,6 +863,8 @@ def _selected_contract(raw: dict[str, Any]) -> dict[str, Any]:
         "paper_policy_status",
         "paper_policy_warnings",
         "paper_entry_remaining_rr",
+        "entry_late_reason",
+        "entry_late_active_episode_key",
         "contract",
         "strike",
         "expiry",

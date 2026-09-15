@@ -400,6 +400,9 @@ def entry_late_reason(
     return None
 
 
+EPISODE_BLOCKED_REASON = "episode_blocked_after_entry_late"
+
+
 def entry_late(reason: str) -> dict[str, Any]:
     return {
         "paper_policy_id": POLICY_ID,

@@ -28,11 +28,15 @@ from .daily_strat import evaluate_daily_setup
 from .lifecycle import classify_candidate, open_candidate_fields
 from .multisetup_scanner import _candidate_identity
 from .paper_v1 import (
+    ACTIVE_LANE,
+    ENTRY_LATE_STATUS,
+    EPISODE_BLOCKED_REASON,
     POLICY_ID,
     build_v1_contract_fields,
     choose_contract,
     choose_expiration,
     data_invalid,
+    entry_late,
     setup_episode_key,
 )
 from .scanner_legacy import (
@@ -399,13 +403,77 @@ def build_v1_evidence_hardening(base_cls):
                     )
             return primary
 
+        def _active_episode_key(self, ticker, normalized, direction, now):
+            """The ACTIVE-lane episode identity this row would open under."""
+            if str(normalized.get("setup_status") or "").upper() != "TRIGGERED":
+                return None
+            if direction not in {"LONG", "SHORT"}:
+                return None
+            return setup_episode_key(
+                ticker=ticker,
+                lane=ACTIVE_LANE,
+                timeframe=normalized.get("setup_timeframe"),
+                setup_type=normalized.get("setup_type"),
+                direction=direction,
+                trigger=normalized.get("setup_entry_trigger"),
+                moment=now,
+            )
+
         async def _apply_paper_v1_contract(self, ticker, normalized, direction, now):
             if not normalized.get("counterfactual_observer"):
+                # Operator ruling 2026-09-14: an episode refused ENTRY_LATE at its
+                # first actionable opportunity can never become ACTIVE later,
+                # however price moves. Only a new mechanical trigger (a new
+                # episode key) may open. Checked BEFORE the guard and any chain
+                # call, so a blocked episode costs nothing and cannot alert.
+                episode = self._active_episode_key(ticker, normalized, direction, now)
+                if episode and self.storage.episode_block(ticker, episode):
+                    data = _clear_external_contract_fields(normalized)
+                    data.update(entry_late(EPISODE_BLOCKED_REASON))
+                    data["blocked_active_episode_key"] = episode
+                    return data
+
                 data = await super()._apply_paper_v1_contract(ticker, normalized, direction, now)
                 if data.get("paper_policy_status") == "VALID":
                     data.setdefault("paper_evidence_lane", ACTIVE_LANE)
                     data.setdefault("risk_budget_consumed", True)
-                return data
+                    return data
+                if data.get("paper_policy_status") != ENTRY_LATE_STATUS or not episode:
+                    return data
+
+                # First ENTRY_LATE for this episode: block it durably, then keep
+                # it as counterfactual evidence (priced from the real chain, no
+                # ACTIVE risk, no alert) so the filter's effect stays measurable.
+                reason = str(data.get("paper_policy_reason") or "late")
+                self.storage.block_episode(ticker, episode, f"ENTRY_LATE:{reason}", blocked_at=now)
+                observer = dict(normalized)
+                observer.update(
+                    {
+                        "setup_status": "OBSERVE",
+                        "mechanical_signal_status": "TRIGGERED",
+                        "counterfactual_observer": True,
+                        "paper_evidence_lane": COUNTERFACTUAL_LANE,
+                        "counterfactual_filter_reason": f"ENTRY_LATE:{reason}",
+                        "setup_suppression_reason": f"entry_late_counterfactual_only:{reason}",
+                        "entry_late_reason": reason,
+                        "entry_late_active_episode_key": episode,
+                        "paper_entry_remaining_rr": data.get("paper_entry_remaining_rr"),
+                    }
+                )
+                priced = await self._apply_paper_v1_contract(ticker, observer, direction, now)
+                for key in (
+                    "setup_status",
+                    "mechanical_signal_status",
+                    "counterfactual_observer",
+                    "paper_evidence_lane",
+                    "counterfactual_filter_reason",
+                    "setup_suppression_reason",
+                    "entry_late_reason",
+                    "entry_late_active_episode_key",
+                    "paper_entry_remaining_rr",
+                ):
+                    priced[key] = observer[key]
+                return priced
 
             data = _clear_external_contract_fields(normalized)
             data["paper_policy_id"] = POLICY_ID
@@ -496,7 +564,8 @@ def build_v1_evidence_hardening(base_cls):
             outcome = await super()._process_normalized_candidate(
                 ticker, normalized, source=source, now=now
             )
-            if not normalized.get("counterfactual_observer") or outcome.shadow_id:
+            converted = outcome.result.raw.get("counterfactual_observer")
+            if not (normalized.get("counterfactual_observer") or converted) or outcome.shadow_id:
                 return outcome
 
             result = outcome.result
