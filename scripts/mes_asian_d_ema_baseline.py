@@ -1,36 +1,13 @@
 #!/usr/bin/env python3
 """Offline MES Asian D+EMA baseline producer for the precursor audit.
 
-This is a narrow portability adapter around the proven #593 MNQ missed-opportunity
-producer. It does not change the MNQ producer and does not create a new strategy.
-It reuses the same journal/shadow-candidate population, bar-cohort definition,
-EMA-direction alignment, candidate dedupe identity, observation-day semantics,
-and pessimistic resolver, but pins the contract to MES economics.
+Narrow portability adapter around the proven #593 MNQ missed-opportunity
+producer. It reuses the same D0/D+EMA predicate, shadow-candidate dedupe,
+observation-day semantics, and pessimistic resolver while pinning MES contract
+economics and the repo-proven MES IOC tolerance.
 
-Canonical population emitted here:
-- instrument: MES
-- timeframe: 15m decision rows
-- session: asian only
-- bar cohort: D = Pine market_condition is not TRENDING AND repo structural
-  condition is not STRUCTURAL_TREND_UP/DOWN
-- candidate direction must match the existing trend/EMA direction
-- candidate geometry is copied unchanged from the source shadow candidate
-
-Execution simulation is research-only and mirrors the preserved producer:
-- IOC tolerance: 16 MES ticks = 4.0 points
-- one tick adverse entry slippage
-- one tick adverse stop slippage
-- clean target
-- pessimistic stop on the fill bar
-- filled-but-unresolved positions are EXPIRED and excluded from terminal P&L
-- no commission is invented
-
-Outputs:
-- --out: every selected D+EMA candidate, including NO_FILL / EXPIRED
-- --precursor-out: terminal WIN/LOSS rows normalized for PR #596
-- --manifest-out: hashes, assumptions, counts, and input provenance
-
-No broker, webhook runner, service, environment, deployment, or VPS path is used.
+Research only. No broker, webhook runner, service, env mutation, deployment, or
+VPS path is called.
 """
 from __future__ import annotations
 
@@ -48,7 +25,11 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from config.futures_contracts import contract_economics, point_value  # noqa: E402
+from config.futures_contracts import (  # noqa: E402
+    contract_economics,
+    contract_root,
+    point_value,
+)
 from scripts import mnq_missed_opportunity_producer as core  # noqa: E402
 
 INSTRUMENT = "MES"
@@ -57,11 +38,12 @@ TIMEFRAME_MINUTES = core.TIMEFRAME_MINUTES
 IOC_TOLERANCE_TICKS = 16.0
 IOC_TOLERANCE_POINTS = 4.0
 SLIPPAGE_TICKS = 1.0
-PRODUCER_VERSION = "1.0.0"
+PRODUCER_VERSION = "1.1.0"
 TERMINAL_RESULTS = frozenset(core.TERMINAL_RESULTS)
 NO_FILL = "NO_FILL"
 EXPIRED = "EXPIRED"
 SOURCE_VARIANT = "D0_D_EMA"
+PARENT_HEAD = "22a96b34fdfd4470014d708ba84d4588f9c74cdf"
 
 TICK, TICK_VALUE = contract_economics(INSTRUMENT)
 POINT_VALUE = point_value(INSTRUMENT)
@@ -84,6 +66,31 @@ class StudyInputs:
     journal_parse_skips: int
 
 
+def _bar_files(data_dir: Path) -> tuple[Path, ...]:
+    """Accept #593 archive shape and canonical polygon_to_replay MES day files."""
+    paths: set[Path] = set(data_dir.glob("bars_MES_*.jsonl"))
+    paths.update(data_dir.glob("MES_*.jsonl"))
+    return tuple(sorted(paths))
+
+
+def _normalized_bar(path: Path, row: dict[str, Any]) -> dict[str, Any] | None:
+    if not core._timeframe_is_15(row.get("timeframe")):
+        return None
+    row_instrument = row.get("instrument")
+    if row_instrument not in (None, ""):
+        root = contract_root(row_instrument)
+        if root != INSTRUMENT:
+            raise core.StudyError(
+                f"{path}: MES bar archive contains instrument {row_instrument!r}"
+            )
+    ts = str(row.get("ts") or row.get("timestamp") or "").strip()
+    if not ts:
+        raise core.StudyError(f"{path}: 15m bar missing ts/timestamp")
+    normalized = dict(row)
+    normalized["ts"] = ts
+    return normalized
+
+
 def discover_inputs(
     data_dir: Path,
     *,
@@ -91,24 +98,25 @@ def discover_inputs(
     end_date: date,
     allow_journal_parse_skips: bool = False,
 ) -> StudyInputs:
-    """MES-generalized copy of #593 input discovery; never substitutes MNQ files."""
     if end_date < start_date:
         raise core.StudyError("end date precedes start date")
 
-    bar_files = tuple(sorted(data_dir.glob("bars_MES_*.jsonl")))
+    bar_files = _bar_files(data_dir)
     all_journals = tuple(sorted(data_dir.glob("journal_*.jsonl")))
-    dated_journals: list[Path] = []
+    journal_files: list[Path] = []
     for path in all_journals:
         try:
             file_date = core._journal_file_date(path)
         except core.StudyError:
             continue
         if start_date <= file_date <= end_date:
-            dated_journals.append(path)
-    journal_files = tuple(dated_journals)
+            journal_files.append(path)
 
     if not bar_files:
-        raise core.StudyError(f"no bars_MES_*.jsonl files found in {data_dir}")
+        raise core.StudyError(
+            f"no MES 15m replay files found in {data_dir}; expected "
+            "bars_MES_*.jsonl or MES_*.jsonl"
+        )
     if not journal_files:
         raise core.StudyError(
             f"no journal files found in {data_dir} for "
@@ -119,20 +127,14 @@ def discover_inputs(
     for path in bar_files:
         file_rows, _ = core._json_lines(path, skip_invalid=False)
         for row in file_rows:
-            if not core._timeframe_is_15(row.get("timeframe")):
+            normalized = _normalized_bar(path, row)
+            if normalized is None:
                 continue
-            row_instrument = row.get("instrument")
-            if row_instrument not in (None, "", INSTRUMENT):
-                raise core.StudyError(
-                    f"{path}: MES bar archive contains instrument {row_instrument!r}"
-                )
-            ts = str(row.get("ts") or "").strip()
-            if not ts:
-                raise core.StudyError(f"{path}: 15m bar missing ts")
+            ts = normalized["ts"]
             existing = bars.get(ts)
-            if existing is not None and existing != row:
+            if existing is not None and existing != normalized:
                 raise core.StudyError(f"conflicting duplicate 15m bar timestamp {ts}")
-            bars[ts] = row
+            bars[ts] = normalized
     if not bars:
         raise core.StudyError("no MES 15m bars found")
 
@@ -154,15 +156,13 @@ def discover_inputs(
             journals.append(row)
     if not journals:
         raise core.StudyError("no qualifying MES 15m journal decision rows found")
-    if skipped and not allow_journal_parse_skips:
-        raise core.StudyError("journal parse skips present without explicit permission")
 
     return StudyInputs(
         bars=bars,
         bar_timestamps=tuple(sorted(bars)),
         journal_rows=tuple(journals),
         bar_files=bar_files,
-        journal_files=journal_files,
+        journal_files=tuple(journal_files),
         journal_parse_skips=skipped,
     )
 
@@ -180,10 +180,14 @@ def build_records(inputs: StudyInputs) -> tuple[list[dict[str, Any]], dict[str, 
         if ts not in inputs.bars:
             skipped_missing_bar += 1
             continue
+
         pine = context.get("market_condition")
         structural = str(context.get("structural_market_condition") or "")
         structural_direction = context.get("structural_direction")
-        structural_trend = structural in {"STRUCTURAL_TREND_UP", "STRUCTURAL_TREND_DOWN"}
+        structural_trend = structural in {
+            "STRUCTURAL_TREND_UP",
+            "STRUCTURAL_TREND_DOWN",
+        }
         bar_cohort = (
             "C"
             if pine == "TRENDING" and structural_trend
@@ -302,41 +306,17 @@ def resolve_ioc(
             continue
         if direction == "LONG":
             if open_px > entry + IOC_TOLERANCE_POINTS:
-                return {
-                    "result": NO_FILL,
-                    "exit_reason": "IOC_GAP_BEYOND_TOLERANCE",
-                    "bars_seen": index + 1,
-                    "pnl_r": None,
-                    "pnl_dollars": None,
-                    "mae_r": None,
-                    "mfe_r": None,
-                }
+                return _no_fill("IOC_GAP_BEYOND_TOLERANCE", index + 1)
             fill_price = max(entry, open_px) + slippage
         else:
             if open_px < entry - IOC_TOLERANCE_POINTS:
-                return {
-                    "result": NO_FILL,
-                    "exit_reason": "IOC_GAP_BEYOND_TOLERANCE",
-                    "bars_seen": index + 1,
-                    "pnl_r": None,
-                    "pnl_dollars": None,
-                    "mae_r": None,
-                    "mfe_r": None,
-                }
+                return _no_fill("IOC_GAP_BEYOND_TOLERANCE", index + 1)
             fill_price = min(entry, open_px) - slippage
         fill_index = index
         break
 
     if fill_price is None or fill_index is None:
-        return {
-            "result": NO_FILL,
-            "exit_reason": "NEVER_TOUCHED",
-            "bars_seen": len(forward),
-            "pnl_r": None,
-            "pnl_dollars": None,
-            "mae_r": None,
-            "mfe_r": None,
-        }
+        return _no_fill("NEVER_TOUCHED", len(forward))
 
     pending = {
         "record": {
@@ -354,17 +334,16 @@ def resolve_ioc(
     }
 
     fill_bar = forward[fill_index]
-    fill_bar_stop = (
+    stop_on_fill = (
         float(fill_bar["low"]) <= stop
         if direction == "LONG"
         else float(fill_bar["high"]) >= stop
     )
-    if fill_bar_stop:
+    if stop_on_fill:
         result = "LOSS"
-        exit_reason = "STOP_HIT_ON_FILL_BAR"
+        reason = "STOP_HIT_ON_FILL_BAR"
         bars_seen = 1
-        mae_r = None
-        mfe_r = None
+        mae_r = mfe_r = None
         exit_price = stop - slippage if direction == "LONG" else stop + slippage
     else:
         outcome = core._resolve_one(pending, forward[fill_index + 1 :])
@@ -379,7 +358,7 @@ def resolve_ioc(
                 "mfe_r": pending["mfe_points"] / risk,
             }
         result = str(outcome["result"])
-        exit_reason = str(outcome["exit_reason"])
+        reason = str(outcome["exit_reason"])
         bars_seen = int(outcome["bars_seen"]) + 1
         mae_r = outcome.get("mae_r")
         mfe_r = outcome.get("mfe_r")
@@ -394,7 +373,7 @@ def resolve_ioc(
     points = exit_price - fill_price if direction == "LONG" else fill_price - exit_price
     return {
         "result": result,
-        "exit_reason": exit_reason,
+        "exit_reason": reason,
         "bars_seen": bars_seen,
         "pnl_r": points / risk,
         "pnl_dollars": points / TICK * TICK_VALUE,
@@ -403,6 +382,25 @@ def resolve_ioc(
         "fill_price": fill_price,
         "exit_price": exit_price,
     }
+
+
+def _no_fill(reason: str, bars_seen: int) -> dict[str, Any]:
+    return {
+        "result": NO_FILL,
+        "exit_reason": reason,
+        "bars_seen": bars_seen,
+        "pnl_r": None,
+        "pnl_dollars": None,
+        "mae_r": None,
+        "mfe_r": None,
+    }
+
+
+def _d0_predicate() -> Any:
+    matches = [predicate for name, predicate in core._variants() if name == "D0"]
+    if len(matches) != 1:
+        raise core.StudyError("#593 D0 predicate missing or ambiguous")
+    return matches[0]
 
 
 def _candidate_id(record: dict[str, Any], candidate: dict[str, Any]) -> str:
@@ -419,20 +417,12 @@ def _candidate_id(record: dict[str, Any], candidate: dict[str, Any]) -> str:
     return f"MES-D-EMA-{hashlib.sha256(raw.encode()).hexdigest()[:20]}"
 
 
-def _d0_predicate() -> Any:
-    matches = [predicate for name, predicate in core._variants() if name == "D0"]
-    if len(matches) != 1:
-        raise core.StudyError("#593 D0 predicate missing or ambiguous")
-    return matches[0]
-
-
 def produce_baseline(
     records: Iterable[dict[str, Any]],
     *,
     bars: dict[str, dict[str, Any]],
     bar_timestamps: Iterable[str],
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
-    """Select only Asian D+EMA and emit full + terminal precursor rows."""
     predicate = _d0_predicate()
     picks = [
         (record, candidate)
@@ -460,6 +450,7 @@ def produce_baseline(
         if result not in TERMINAL_RESULTS | {NO_FILL, EXPIRED}:
             raise core.StudyError(f"unsupported outcome result {result!r}")
         counts[result] += 1
+
         cid = _candidate_id(record, candidate)
         if cid in seen_ids:
             raise core.StudyError(f"duplicate canonical candidate id {cid}")
@@ -498,10 +489,24 @@ def produce_baseline(
             "outcome_label": result if terminal else None,
             "entry_filled": entry_filled,
             "filled": terminal,
-            "baseline_pnl_dollars": float(outcome["pnl_dollars"]) if terminal else None,
-            "pnl_r": float(outcome["pnl_r"]) if terminal and outcome.get("pnl_r") is not None else None,
-            "mae_r": float(outcome["mae_r"]) if entry_filled and outcome.get("mae_r") is not None else None,
-            "mfe_r": float(outcome["mfe_r"]) if entry_filled and outcome.get("mfe_r") is not None else None,
+            "baseline_pnl_dollars": (
+                float(outcome["pnl_dollars"]) if terminal else None
+            ),
+            "pnl_r": (
+                float(outcome["pnl_r"])
+                if terminal and outcome.get("pnl_r") is not None
+                else None
+            ),
+            "mae_r": (
+                float(outcome["mae_r"])
+                if entry_filled and outcome.get("mae_r") is not None
+                else None
+            ),
+            "mfe_r": (
+                float(outcome["mfe_r"])
+                if entry_filled and outcome.get("mfe_r") is not None
+                else None
+            ),
             "exit_reason": outcome.get("exit_reason"),
             "bars_seen": outcome.get("bars_seen"),
             "source_variant": SOURCE_VARIANT,
@@ -543,12 +548,13 @@ def produce_baseline(
                     "baseline_stop_ticks": planned_risk / TICK,
                     "target_r": abs(target - entry) / planned_risk,
                     "source_variant": SOURCE_VARIANT,
-                    "source_file": "mes_asian_d_ema_baseline.jsonl",
                 }
             )
 
     if not precursor_rows:
-        raise core.StudyError("MES Asian D+EMA selected candidates produced no terminal WIN/LOSS rows")
+        raise core.StudyError(
+            "MES Asian D+EMA selected candidates produced no terminal WIN/LOSS rows"
+        )
 
     summary = {
         "selected_candidates": len(full_rows),
@@ -565,10 +571,6 @@ def produce_baseline(
     ):
         raise core.StudyError("baseline population does not reconcile")
     return full_rows, precursor_rows, summary
-
-
-def _write_jsonl(path: Path, rows: Iterable[dict[str, Any]]) -> str:
-    return core.write_jsonl(path, rows)
 
 
 def _build_manifest(
@@ -589,7 +591,7 @@ def _build_manifest(
         "producer_version": PRODUCER_VERSION,
         "source_logic": {
             "parent_pr": 593,
-            "parent_head": "22a96b34fdfd4470014d708ba84d4588f9c74cdf",
+            "parent_head": PARENT_HEAD,
             "predicate": "D0: bar_cohort D and candidate direction == EMA direction",
             "session": SESSION,
             "candidate_geometry": "unchanged source shadow candidate",
@@ -613,6 +615,10 @@ def _build_manifest(
             "expired_policy": "count_separately_exclude_from_terminal_performance",
             "commission_assumption_dollars": None,
         },
+        "accepted_bar_input_shapes": [
+            "bars_MES_*.jsonl with ts",
+            "polygon_to_replay MES_*.jsonl with timestamp",
+        ],
         "journal_parse_skips": inputs.journal_parse_skips,
         "record_summary": record_summary,
         "population_summary": population_summary,
@@ -641,7 +647,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--data-dir",
         required=True,
-        help="Proven snapshot containing bars_MES_*.jsonl and journal_*.jsonl",
+        help=(
+            "Proven snapshot containing canonical MES 15m replay candles "
+            "(MES_*.jsonl or bars_MES_*.jsonl) and journal_*.jsonl"
+        ),
     )
     parser.add_argument("--start-date", required=True, help="Inclusive YYYY-MM-DD")
     parser.add_argument("--end-date", required=True, help="Inclusive YYYY-MM-DD")
@@ -676,8 +685,8 @@ def main(argv: list[str] | None = None) -> int:
         )
         full_out = Path(args.out)
         precursor_out = Path(args.precursor_out)
-        full_sha = _write_jsonl(full_out, full_rows)
-        precursor_sha = _write_jsonl(precursor_out, precursor_rows)
+        full_sha = core.write_jsonl(full_out, full_rows)
+        precursor_sha = core.write_jsonl(precursor_out, precursor_rows)
         manifest = _build_manifest(
             inputs,
             start_date=start_date,
