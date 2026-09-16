@@ -27,10 +27,21 @@ import subprocess
 import sys
 import urllib.request
 from collections import Counter
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
+
+NY_TZ = ZoneInfo("America/New_York")
+RTH_CLOSE = time(16, 0)
+# Collectors whose silence is by design; never raised as attention.
+EXPECTED_QUIET = {
+    "options companion": "disabled by design (OPTIONS_COMPANION_ENABLED=false)",
+}
+# Collectors that only advance during regular trading hours; judged against the
+# session close of the report window, not against the wall clock at 17:10 ET.
+SESSION_BOUND = {"options scans"}
 
 FUTURES_ENV = "DISCORD_ROUTE_PAPER_COLLECTION_FUTURES"
 OPTIONS_ENV = "DISCORD_ROUTE_PAPER_COLLECTION_OPTIONS"
@@ -75,29 +86,45 @@ def _futures_rows(log_dir: Path, start: date, end: date) -> list[dict[str, Any]]
 
 
 def summarize_futures(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Count what the futures journal actually writes.
+
+    Three row shapes share the file: decision rows (``decision`` set, no
+    ``type``), ``type=BAR_CLAIM`` bar claims, and ``type=SHADOW_OUTCOME`` rows
+    that carry ``strategy``/``lane`` and a nested ``shadow_outcome.result``.
+    Shadow outcomes are paper resolutions of observed setups — not fills.
+    """
+    row_types: Counter[str] = Counter()
     decisions: Counter[str] = Counter()
-    outcomes: Counter[str] = Counter()
-    strategies: Counter[str] = Counter()
+    shadow_results: Counter[str] = Counter()
+    shadow_strategies: Counter[str] = Counter()
+    shadow_lanes: Counter[str] = Counter()
     instruments: Counter[str] = Counter()
     for row in rows:
+        row_type = row.get("type") or ("DECISION" if row.get("decision") else "OTHER")
+        row_types[str(row_type)] += 1
         decision = row.get("decision")
         if decision:
             decisions[str(decision)] += 1
-        if row.get("type") == "OUTCOME" or row.get("record_type") == "OUTCOME":
-            outcome = row.get("outcome") if isinstance(row.get("outcome"), dict) else row
-            result = outcome.get("result") if isinstance(outcome, dict) else None
-            outcomes[str(result or "UNKNOWN")] += 1
-        strategy = row.get("strategy") or row.get("setup_type")
-        if strategy:
-            strategies[str(strategy)] += 1
+        if row_type == "SHADOW_OUTCOME":
+            shadow = row.get("shadow_outcome")
+            result = shadow.get("result") if isinstance(shadow, dict) else None
+            shadow_results[str(result or "UNKNOWN")] += 1
+            strategy = row.get("strategy")
+            if strategy:
+                shadow_strategies[str(strategy)] += 1
+            lane = row.get("lane")
+            if lane:
+                shadow_lanes[str(lane)] += 1
         instrument = row.get("instrument") or row.get("ticker")
         if instrument:
             instruments[str(instrument)] += 1
     return {
         "rows": len(rows),
+        "row_types": dict(row_types),
         "decisions": dict(decisions),
-        "outcomes": dict(outcomes),
-        "strategies": dict(strategies),
+        "shadow_outcomes": dict(shadow_results),
+        "shadow_strategies": dict(shadow_strategies),
+        "shadow_lanes": dict(shadow_lanes),
         "instruments": dict(instruments),
     }
 
@@ -197,28 +224,68 @@ def run_collector_census(log_dir: Path) -> dict[str, Any]:
     return {"status": "ERROR", "error": "unexpected_payload", "exit_code": proc.returncode}
 
 
-def _census_lines(census: dict[str, Any], *, options: bool) -> list[str]:
+def _session_close_utc(session: date) -> datetime:
+    return datetime.combine(session, RTH_CLOSE, tzinfo=NY_TZ).astimezone(timezone.utc)
+
+
+def _parse_ts(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+def _effective_status(item: dict[str, Any], *, session_end: date) -> tuple[str, str]:
+    """Return (status, note) after applying reporting-time context.
+
+    The census is a wall-clock freshness test. At 17:10 ET the market has been
+    closed for over an hour, so a session-bound collector is judged against the
+    session close instead; a collector that is quiet by design is reported as
+    such rather than raised as attention.
+    """
+    name = str(item.get("name") or "")
+    status = str(item.get("status") or "UNKNOWN")
+    if name in EXPECTED_QUIET:
+        return "QUIET_BY_DESIGN", EXPECTED_QUIET[name]
+    if name in SESSION_BOUND and status in {"STALE", "DEAD"}:
+        last = _parse_ts(item.get("last"))
+        limit = item.get("limit_minutes")
+        if last is not None and isinstance(limit, (int, float)):
+            close = _session_close_utc(session_end)
+            if close - timedelta(minutes=float(limit)) <= last <= close + timedelta(minutes=float(limit)):
+                return "FRESH_AT_CLOSE", f"last {last.astimezone(NY_TZ).strftime('%H:%M')} ET vs close"
+            return status, f"last {last.astimezone(NY_TZ).strftime('%Y-%m-%d %H:%M')} ET, not within {int(limit)} min of close"
+    return status, ""
+
+
+def _census_lines(census: dict[str, Any], *, options: bool, session_end: date) -> list[str]:
     collectors = census.get("collectors")
     if not isinstance(collectors, list):
         return [f"collector census: {census.get('status', 'UNKNOWN')}"]
-    chosen: list[dict[str, Any]] = []
+    chosen: list[tuple[str, str, str]] = []
     for item in collectors:
         if not isinstance(item, dict):
             continue
         name = str(item.get("name") or "")
         is_options = name.startswith("options ")
-        if is_options == options:
-            chosen.append(item)
+        if is_options != options:
+            continue
+        status, note = _effective_status(item, session_end=session_end)
+        chosen.append((name, status, note))
     if not chosen:
         return ["collector census: no matching collectors"]
-    counts = Counter(str(i.get("status") or "UNKNOWN") for i in chosen)
-    bad = [str(i.get("name")) for i in chosen if i.get("status") in {"STALE", "DEAD", "ABSENT"}]
+    counts = Counter(status for _, status, _ in chosen)
+    bad = [f"{name} ({note})" if note else name for name, status, note in chosen if status in {"STALE", "DEAD", "ABSENT"}]
     line = "collector health: " + " · ".join(f"{k} {v}" for k, v in sorted(counts.items()))
     if bad:
         line += " · attention: " + ", ".join(bad[:8])
         if len(bad) > 8:
             line += f" (+{len(bad) - 8} more)"
-    return [line]
+    quiet = [f"{name}: {note}" for name, status, note in chosen if status in {"QUIET_BY_DESIGN", "FRESH_AT_CLOSE"} and note]
+    return [line] + [f"census context: {q}" for q in quiet]
 
 
 def _top(counter: dict[str, int], limit: int = 5) -> str:
@@ -235,12 +302,13 @@ def format_futures_report(
     title = "EOD" if period == "eod" else "EOW"
     lines = [
         f"**FUTURES PAPER COLLECTION — {title}** {start.isoformat()}" + ("" if start == end else f" → {end.isoformat()}"),
-        f"journal rows: **{summary['rows']}**",
+        f"journal rows: **{summary['rows']}** ({_top(summary.get('row_types') or {}, limit=4)})",
         f"decisions: {_top(summary['decisions'])}",
-        f"outcomes: {_top(summary['outcomes'])}",
-        f"strategies seen: {_top(summary['strategies'])}",
+        f"shadow outcomes (paper resolutions of observed setups, not fills): {_top(summary.get('shadow_outcomes') or {})}",
+        f"shadow strategies resolved: {_top(summary.get('shadow_strategies') or {})}",
+        f"shadow lanes: {_top(summary.get('shadow_lanes') or {})}",
         f"instruments seen: {_top(summary['instruments'])}",
-        *_census_lines(census, options=False),
+        *_census_lines(census, options=False, session_end=end),
     ]
     if summary["rows"] == 0:
         lines.append("⚠️ zero futures journal rows in the report window")
@@ -260,8 +328,8 @@ def format_options_report(
         f"scanner DB: {summary.get('status', 'UNKNOWN')}",
         f"scans: **{scans.get('rows', 'unknown')}** ({scans.get('status', 'UNKNOWN')})",
         f"shadow journal: **{journal.get('rows', 'unknown')}** ({journal.get('status', 'UNKNOWN')})",
-        f"journal statuses: {_top(journal.get('status_counts') or {})}",
-        *_census_lines(census, options=True),
+        f"shadow-journal status field counts (row status, NOT option P&L outcomes): {_top(journal.get('status_counts') or {})}",
+        *_census_lines(census, options=True, session_end=end),
     ]
     if scans.get("rows") == 0:
         lines.append("⚠️ zero option scans in the report window")
