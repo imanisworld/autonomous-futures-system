@@ -33,11 +33,12 @@ The project does **not** currently have proof sufficient to call the trading sys
 
 The main active evidence questions are:
 
-1. whether the MNQ Asian D+EMA result is robust enough for the isolated forward paper cohort proposed in draft PR #595;
+1. whether the MNQ Asian D+EMA forward-paper lane in draft #595 survives its independent audit and separate runtime/deployment proof; its latest follow-up closed the historical population-delta concern but did not authorize activation;
 2. where useful market moves are being lost in the current signal pipeline — missing inputs, detector blindness, gate/classification suppression, or execution-only rejection;
-3. whether matched pre-signal differences seen in research-only work (#593/#594/#596) repeat across adequate independent samples without threshold tuning;
-4. whether MES independently reproduces any D+EMA edge under the same realistic IOC methodology rather than merely echoing MNQ;
-5. current box facts: deployed SHA, environment pins, feed health, campaign counts/outcomes, Discord route activation, and broker state.
+3. whether the broad pre-signal precursor differences studied in #596 repeat across adequate independent samples without threshold tuning;
+4. whether MES independently reproduces the D+EMA population under canonical IOC methodology: draft #598 now exists to generate that canonical MES cohort, with separate July–August and September runs plus roll-seam quarantine required before the MES leg of #596 can proceed;
+5. whether BOS/MSS structure in #594 shows repeatable directional information in the preserved MNQ multi-month corpus; #594 remains a separate event study, not a strategy and not an automatic dependency of #596;
+6. current box facts: deployed SHA, environment pins, feed health, campaign counts/outcomes, Discord route activation, positions/orders, and broker state.
 
 ## Current posture
 
