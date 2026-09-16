@@ -277,6 +277,23 @@ def provider_error_lines(text: str) -> list[str]:
     return [line.strip() for line in text.splitlines() if "provider error:" in line]
 
 
+_MISSING_SYMBOL_LINE = re.compile(r"provider error:\s*([A-Z0-9.\-]+):\s*missing_symbol:")
+
+
+def split_provider_errors(lines: Iterable[str], allow_unobservable: Iterable[str] = DEFAULT_ALLOW_UNOBSERVABLE) -> tuple[list[str], list[str]]:
+    """(fatal, tolerated). The observer reports a dead ticker as
+    ``provider error: SQ: missing_symbol:SQ``; for a symbol on the unobservable
+    allow-list that is the expected, recorded state (the completeness check
+    still requires its ``coverage_symbols`` row), not a provider failure.
+    Every other provider error line stays fatal."""
+    allowed = {s.strip().upper() for s in allow_unobservable if s.strip()}
+    fatal, tolerated = [], []
+    for line in lines:
+        m = _MISSING_SYMBOL_LINE.search(line)
+        (tolerated if m and m.group(1).upper() in allowed else fatal).append(line)
+    return fatal, tolerated
+
+
 # --------------------------------------------------------------------------- #
 # completion checks
 # --------------------------------------------------------------------------- #
@@ -300,6 +317,9 @@ class CoverageCheck:
     # complete, so the next run re-observes it instead of skipping it.
     pricing_required: int = 0
     unpriced: int = 0
+    # Earlier coverage_runs rows for the same session (oldest first). A session
+    # with prior runs was re-observed; the collector records that as a repair.
+    prior_runs: list[dict[str, Any]] = field(default_factory=list)
     problems: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
@@ -316,6 +336,7 @@ class CoverageCheck:
             "index_context": dict(self.index_context),
             "pricing_required": self.pricing_required,
             "unpriced": self.unpriced,
+            "prior_runs": [dict(r) for r in self.prior_runs],
             "problems": list(self.problems),
         }
 
@@ -360,6 +381,13 @@ def observer_completion(
             check.problems.append("no_observer_run")
             return check
         check.run_id, check.ran_at = int(run[0]), str(run[1])
+        check.prior_runs = [
+            {"run_id": int(r[0]), "ran_at": str(r[1]), "events": int(r[2] or 0)}
+            for r in conn.execute(
+                "SELECT id, ran_at, events FROM coverage_runs WHERE observer_version=? AND session_date=? AND id<? ORDER BY id",
+                (OBSERVER_VERSION, day, check.run_id),
+            ).fetchall()
+        ]
         try:
             funnel = json.loads(run[2] or "{}")
         except ValueError:

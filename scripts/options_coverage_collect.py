@@ -64,6 +64,7 @@ from alert_ranker.coverage_collector import (  # noqa: E402
     observer_completion,
     outcomes_completion,
     provider_error_lines,
+    split_provider_errors,
     reduced_episode_count,
     refuse_v1_database,
     resolve_target,
@@ -240,27 +241,38 @@ class Collector:
         self.steps["calendar"] = "confirmed"
         return session
 
+    def _note_repair(self, coverage: Any, before: Any | None = None) -> None:
+        """A session whose observer ran more than once was repaired: the first run
+        observed it prospectively, a later run re-priced/re-wrote it under the same
+        frozen rules. Derived from the observer's own run history, so it survives a
+        collector failure between the re-observation and the DONE line."""
+        if not coverage.prior_runs:
+            return
+        last = coverage.prior_runs[-1]
+        self.observer_repair = {
+            "prior_run_id": last["run_id"], "prior_ran_at": last["ran_at"], "prior_events": last["events"],
+            "prior_runs": [dict(r) for r in coverage.prior_runs],
+            "prior_problems": list(before.problems) if before is not None and before.run_id == last["run_id"] else [],
+            "repaired_run_id": coverage.run_id, "repaired_ran_at": coverage.ran_at,
+            "note": "session observed prospectively by the earlier run; outcome pricing repaired later under unchanged cov/ep/out rules",
+        }
+
     def collect_observer(self, session: Session, universe: Sequence[str]) -> Any:
         before = observer_completion(self.sqlite_path, session.date, universe, self.allow_unobservable)
         if before.ok:
             self.steps["observer"] = "already_complete"
+            self._note_repair(before)
             return before
-        if before.run_id is not None:
-            # An earlier observer run exists but is incomplete (e.g. events stored
-            # without first-sight prices). Re-observing REPLACES its rows under the
-            # same frozen rules; the repair is recorded, never hidden.
-            self.observer_repair = {
-                "prior_run_id": before.run_id, "prior_ran_at": before.ran_at, "prior_events": before.events,
-                "prior_problems": list(before.problems), "repaired_at": datetime.now(timezone.utc).isoformat(),
-                "note": "session observed prospectively by the earlier run; outcome pricing repaired later under unchanged cov/ep/out rules",
-            }
         text = self._run(self.observer_cmd(session), self._log_path(session, "observer"), "observer")
-        errors = provider_error_lines(text)
-        if errors:
-            raise CollectorError("observer_provider_errors", "; ".join(errors)[:400])
+        fatal, tolerated = split_provider_errors(provider_error_lines(text), self.allow_unobservable)
+        if tolerated:
+            self.steps["observer_unobservable_tolerated"] = "; ".join(tolerated)[:300]
+        if fatal:
+            raise CollectorError("observer_provider_errors", "; ".join(fatal)[:400])
         after = observer_completion(self.sqlite_path, session.date, universe, self.allow_unobservable)
         if not after.ok:
             raise CollectorError("observer_coverage_incomplete", "; ".join(after.problems))
+        self._note_repair(after, before)
         self.steps["observer"] = "repaired" if self.observer_repair else "ran"
         return after
 
