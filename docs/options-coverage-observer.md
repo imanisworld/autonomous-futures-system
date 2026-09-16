@@ -220,3 +220,39 @@ evidence paths passed explicitly under `/root/afs-shared/coverage/`). It never
 touches `/root/autonomous-futures-system`, `/root/afs-releases`, `futures-bot`,
 the scanner or the watcher. Moving the collector to a newer commit is a new
 `build` + `activate`, never a `git pull`.
+
+## Findings so far and the pre-registered prospective step (2026-09-16)
+
+Rulings and numbers live in `docs/options-current-state-handoff.md` (section
+"Coverage evidence lane and read-only audits"). The short version:
+
+- **Partitions.** Sessions 2026-09-09 to 2026-09-15 are the retrospective
+  partition (five sessions, 7,071 events, 6,196 episodes, 4,840 clean). They
+  were used to generate hypotheses and are frozen. Every session the collector
+  adds from 2026-09-16 on is the prospective partition. Never merge the two;
+  never re-score the retrospective tables after looking at prospective data.
+- **Retrospective result (20-symbol V1 universe, first-sight view, opening
+  bars excluded).** 2-1-2 reversal and 1-2-2 show roughly +12 pp ≥1R over a
+  matched baseline of other families at the same symbol, direction and clock
+  bucket. 2-2-2 continuation, 2-2-2 reversal, outside bar and 2-2 continuation
+  show no excess. 3-1-2, 3-2-2 and inside break are too small to say.
+  Mechanical numbers on the 13:30 opening bar are a gap artifact and are not
+  evidence.
+- **First prospective session (2026-09-16).** Collected after the
+  entitlement-timing failure and repaired under unchanged rules (binding
+  sidecar carries `observer_repair`); 1,219 episodes, 977 clean, 0 unpriced.
+  2-1-2 reversal 10 episodes, 1-2-2 15 episodes: both `INSUFFICIENT
+  PROSPECTIVE SAMPLE`. Unattended collection is not yet proven; the first
+  clean timer firing is expected 2026-09-17 20:45Z.
+- **Prospective rule, fixed before any prospective session existed.** For
+  2-1-2 reversal and 1-2-2 (inside break counted passively): `PERSISTING
+  POSSIBLE SIGNAL` needs ≥30 prospective episodes over ≥3 sessions, both
+  directions, and an ex-opening first-sight excess ≥ +5 pp; otherwise
+  `NO LONGER SHOWING EXCESS` or `INSUFFICIENT PROSPECTIVE SAMPLE`. Any change
+  in the collector's pinned commit, the `cov`/`ep`/`out` versions, the
+  first-sight delay, or session completeness stops the analysis as
+  `METHODOLOGY / DATA BLOCKED`. The analysis reuses the stored aggregate
+  output; it adds no lane, timer, detector or threshold.
+- **What this lane may never output:** validated, production-ready, approved,
+  trade. Promotion of any family is a separate operator decision that would
+  start with a new V1 cohort, not with this lane.
