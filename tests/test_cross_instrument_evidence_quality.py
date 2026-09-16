@@ -62,21 +62,46 @@ def _row(root="M2K", signal=None, exit_ts=None, *, sha=SHA):
     }
 
 
-def test_complete_m2k_continuous_window_is_quality_eligible_off_roll(tmp_path):
-    # Eight complete 15m dependencies exist at/before the 15:00 signal, plus
-    # the 15:15 terminal bar. Startup samples with a shorter reconstructed
-    # detector window are deliberately blocked by a separate regression below.
+def test_complete_m2k_dated_contract_window_is_quality_eligible(tmp_path):
+    # Exact dated-contract provenance can qualify when the full detector and
+    # terminal window are otherwise complete.
     for hour, minute in (
         (13, 15), (13, 30), (13, 45), (14, 0), (14, 15),
         (14, 30), (14, 45), (15, 0), (15, 15),
     ):
-        _record(tmp_path, "M2K", _ts(hour, minute), "M2K1!")
+        _record(tmp_path, "M2K", _ts(hour, minute), "M2QU6")
     quality = assess_evidence_row(_row(), tmp_path)
     assert quality["eligible"] is True
     assert quality["status"] == VALID
     assert quality["continuity"]["missing_expected_bars"] == []
     assert quality["roll"]["status"] == VALID
     assert quality["code_provenance"]["detector_dependency_count"] == 8
+
+
+def test_continuous_m2k_window_spanning_observed_2026_09_14_roll_fails_closed(tmp_path):
+    # The saved live-feed check observed the M2K continuous switch at
+    # 2026-09-14 22:00Z, later than the repo's historical roll convention.
+    # A continuous ticker cannot prove which dated contract supplied the bars,
+    # so this complete window must remain roll-provenance unknown rather than
+    # receiving false-clean credit.
+    roll_day = date(2026, 9, 14)
+    for hour, minute in (
+        (19, 0), (19, 15), (19, 30), (19, 45),
+        (20, 0), (20, 15), (20, 30), (20, 45),
+        (22, 0), (22, 15), (22, 30),
+    ):
+        _record(tmp_path, "M2K", _ts(hour, minute, roll_day), "M2K1!")
+    row = _row(
+        signal=_ts(20, 45, roll_day),
+        exit_ts=_ts(22, 30, roll_day),
+    )
+    quality = assess_evidence_row(row, tmp_path)
+    assert quality["continuity"]["missing_expected_bars"] == []
+    assert quality["code_provenance"]["detector_dependency_count"] == 8
+    assert quality["eligible"] is False
+    assert quality["roll"]["status"] == ROLL_PROVENANCE_UNKNOWN
+    assert quality["roll"]["continuous_contract_identity_proven"] is False
+    assert ROLL_PROVENANCE_UNKNOWN in quality["issues"]
 
 
 def test_startup_sample_with_incomplete_reconstructed_detector_window_is_blocked(tmp_path):
