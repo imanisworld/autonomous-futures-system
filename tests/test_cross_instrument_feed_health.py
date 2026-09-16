@@ -10,6 +10,8 @@ from context.bar_history import BarHistory
 from execution import cross_instrument_observation as cio
 from ops.cross_instrument_feed_health import build_feed_health
 from scripts import feed_watchdog as fw
+from webhook.payload import AlertPayload
+from webhook.observation_transport import observe_collection_only_alert
 
 EPOCH = "feed-health-epoch"
 NOW = datetime(2026, 9, 14, 14, 0, tzinfo=timezone.utc)  # Monday 10:00 ET
@@ -73,6 +75,27 @@ def _write_transport(tmp_path: Path, root: str, *, bar_ts: str, ok: bool, record
 
 def _cfg(tmp_path: Path):
     return SimpleNamespace(log_dir=str(tmp_path), expected_timeframe_minutes=15, discord_webhook_url="x")
+
+
+def _m2k_payload(ts: str) -> AlertPayload:
+    return AlertPayload(
+        ticker="M2K1!",
+        timestamp=ts,
+        timeframe="15",
+        open=2300.0,
+        high=2305.0,
+        low=2295.0,
+        close=2302.0,
+        volume=1000,
+        avg_volume=900,
+        vwap=2298.0,
+        market_condition="TRENDING",
+        trend_direction="UP",
+        trend_strength="MODERATE",
+        previous_day_high=2320.0,
+        previous_day_low=2280.0,
+        previous_day_close=2299.0,
+    )
 
 
 def test_success_requires_seen_bar_and_matching_15m_bar_history(tmp_path, monkeypatch):
@@ -142,6 +165,31 @@ def test_newer_failed_15m_transport_fails_health_immediately(tmp_path, monkeypat
     assert row["transport_ok"] is False
     assert row["last_error"] == "synthetic detector failure"
     assert health["transport_error_instruments"] == ["M2K"]
+    assert health["ready_to_trust_collection_feed"] is False
+
+
+def test_real_transport_failure_persists_error_consumed_by_health_gate(tmp_path, monkeypatch):
+    _arm(monkeypatch)
+    import webhook.observation_transport as transport
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("forced state-builder failure")
+
+    monkeypatch.setattr(transport, "build_market_state", boom)
+    out = observe_collection_only_alert(
+        _m2k_payload(NOW.isoformat()),
+        log_dir=str(tmp_path),
+    )
+    assert out["observation"]["transport_ok"] is False
+    assert out["observation"]["bar_recorded"] is False
+    assert "forced state-builder failure" in out["observation"]["error"]
+
+    health = build_feed_health(tmp_path, now=NOW)
+    row = health["instruments"]["M2K"]
+    assert row["status"] == "TRANSPORT_ERROR"
+    assert row["transport_ok"] is False
+    assert row["last_error"] == "forced state-builder failure"
+    assert "M2K" in health["transport_error_instruments"]
     assert health["ready_to_trust_collection_feed"] is False
 
 
