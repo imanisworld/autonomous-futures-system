@@ -1,6 +1,6 @@
 # Futures — Current State Handoff
 
-_As of 2026-09-09. This is the single current futures handoff. Historical audit docs remain evidence records, but they do not override this file. Repository state is not proof of VPS/deployment state; verify the box separately before claiming anything is running._
+_As of 2026-09-16 (evening, post-#595 activation). This is the single current futures handoff. Historical audit docs remain evidence records, but they do not override this file. Repository state is not proof of VPS/deployment state; verify the box separately before claiming anything is running._
 
 ## Verdict
 
@@ -10,12 +10,30 @@ Core rule: **No proof, no run.**
 
 PR **#545** is merged to `main` as commit **`9caaaa3e2fbe5cb6ff20941229e3498794bcb6de`**. Its final merge-ref CI passed **4,952 tests, 7 skipped**. The repository contains the clean PaperBroker-only MNQ three-lane collector, Daily persisted-state integrity guard, and this authoritative handoff.
 
-**Both paper campaigns are now ACTIVE on the VPS.** Verified live on 2026-09-09:
+**Four paper collections are now ACTIVE on the VPS** (two campaigns since 2026-09-09, two more
+added 2026-09-16). Verified live on 2026-09-16:
 
-- deployed release: **`08dd40a43505c97f9e021c7cdbf895613c46b524`** (contains #545, #547, #549, #551, #552, #553, #554, #555), promoted via `scripts/atomic_release.sh build/verify/promote`;
-- **MNQ three-lane campaign** (#545): `WIDE_STOP_LEDGER_MODE=paper_sim`, epoch **`2026-09-09T04:21:04Z`**;
-- **MES 15m 1-2-2 lane** (#555): `MES_122_PAPER_MODE=paper_sim`, epoch **`2026-09-09T06:12:55Z`**;
-- `LIVE_TRADING_ENABLED=false`, `SCHEDULE_MODE=always_on_shadow`, zero external-broker orders placed.
+- deployed release: **`8fd8b215063c83428fa15028ae76f0e7f6d25a8e`** (`main` at #595; the same release
+  also carried #589, #590, #591 and the #582–#588 cross-instrument foundation);
+- **MNQ three-lane campaign** (#545): `WIDE_STOP_LEDGER_MODE=paper_sim`, epoch **`2026-09-09T04:21:04Z`** — unchanged across every later restart;
+- **MES 15m 1-2-2 lane** (#555): `MES_122_PAPER_MODE=paper_sim`, epoch **`2026-09-09T06:12:55Z`** — unchanged;
+- **Cross-instrument observation campaign** (#582–#588, armed 2026-09-16 12:17Z):
+  `CROSS_INSTRUMENT_OBSERVATION=cross_instrument_observation_v1`, epoch
+  **`62546883+2026-09-16T12:17:19Z`**; collection-only, the added roots are non-executable by
+  construction (see section 6);
+- **MNQ Asia D+EMA forward paper cohort** (#595, activated 2026-09-16 18:48Z under a one-time
+  operator waiver of the September 30 freeze): `ASIA_D_EMA_PAPER_MODE=paper_sim`, epoch
+  **`2026-09-16T22:00:00Z`** (Day 1 = the Asian session of the night of 09-16/17), campaign id
+  `asia_d_ema_2026_09_v1` (see section 5);
+- `LIVE_TRADING_ENABLED=false`, `SCHEDULE_MODE=always_on_shadow`, `EXIT_MODE=static`, zero
+  external-broker orders placed; the real-book decision stream and both 09-09 campaigns were
+  proven byte-for-byte preserved across the 09-16 activation (env delta = the two Asia keys plus
+  their proof pins and the release fingerprint; no evidence file shrank; one ~7 s restart gap
+  between bars, no bar missed).
+
+The **September 30 no-release / no-restart restriction is back in force** after the #595
+activation. Everything below that is not one of these four collections is either research-only,
+default-OFF in the repository, or explicitly HOLD.
 
 Repository state is still not proof of box state — re-verify the box (`/proc/<pid>/cwd`, `/proc/<pid>/environ`) before asserting anything is running.
 
@@ -113,11 +131,80 @@ is **retired as a realism headline**; the still older 38-trade / +$27.51 result 
 outright. PF 1.035 sits far inside the null band (p95 1.94) — this is a thin candidate under
 observation, not an established edge.
 
+### 5. MNQ Asia-session D+EMA forward paper cohort (isolated lane, added 2026-09-16 by #595)
+
+- status: **PROMISING BUT UNPROVEN / PAPER EVIDENCE** — an MNQ-specific, still-unproven effect
+  pending prospective evidence
+- module `context/asia_d_ema_paper_cohort.py`; hooked in `webhook/runner.py` after the MNQ Strat
+  evidence leg, on authoritative MNQ **15m** bars only, in its own error boundary
+- definition reproduces the archived offline producer **exactly** (parity test against 70 archived
+  candidate rows in `tests/fixtures/asia_d_ema_parity.json`, fixture provenance hashed):
+  candidate source = the runner's shadow candidates; cohort D = payload `market_condition !=
+  TRENDING` AND structural condition not a structural trend; EMA alignment = candidate direction
+  equals the payload trend direction; scope = MNQ, `session == "asian"`, strategies
+  `ema_pullback_trend` and `strat_22_continuation_observed` only; persistent-geometry dedupe per
+  observation day
+- fill = canonical PaperBroker `ioc_limit` once at the decision-bar close, 1 adverse tick, 32-tick
+  MNQ tolerance, pessimistic both-hit, original **1.0R** bracket, no breakeven, no runner;
+  economics from `config/futures_contracts.contract_economics("MNQ")`
+- resolution on strictly later 15m bars of the same CME observation day; an open position at the
+  18:00 ET roll is **EXPIRED**, never carried
+- **one open position at a time**; same-bar ties resolved in fixed (strategy, direction) order;
+  a candidate arriving while busy is journaled `CANDIDATE_SKIPPED_BUSY`
+- the ET hour of the decision bar is **logged, never filtered** (the 18–19 ET vs 20–02 ET split is
+  a pre-registered secondary hypothesis, not a rule)
+- crash-safe, idempotent persistence: write-ahead `pending_events` in `state.json`, deterministic
+  `event_id`, recovery replays only non-durable events (fault-injection tests)
+- writes only `logs/asia_d_ema_cohort/{evidence.jsonl,state.json}`; no broker interface lookup,
+  no order route, no drawdown ledger — this cohort is an evidence stream, not a capital claim
+- default **OFF** (`asia_d_ema_paper_mode="off"`); only the exact token `paper_sim` plus an
+  offset-aware epoch activates it, anything else fails closed at config load
+
+Historical basis (Asia-only audit of the archived D+EMA counterfactual, 2026-09-16): the
+uncapped Asia population's PF 1.34 was ~5x stacked exposure; collapsed to one position the
+07-13..08-31 stream is 107 trades / PF 1.46, robust to costs and to both halves, but the edge lives
+in `ema_pullback_trend` + `strat_22_continuation` only and September collapsed flat. PF 1.46 sits
+**inside the null band (p95 1.94)** — this is a narrowed, unproven candidate under prospective
+observation. A population-delta proof showed the lane's broader input population adds exactly one
+bar and zero candidates versus the offline producer; the two-strategy one-position streams are
+identical in every field.
+
+**Binding hypothesis wording (2026-09-16 ruling):** "MNQ Asian-session historical D+EMA cohort,
+reproduced exactly; structural non-trend is frequently unevaluable during Asia because structural
+history resets across the scheduled maintenance break." The structural clause of cohort D is
+`INSUFFICIENT_DATA` for ~75% of Asian-session bars by design (the 45-minute contiguity rule in
+`context/structural_regime.py` restarts its warm-up at the 17:00–18:00 ET break), so in Asia the
+cohort is in practice mostly the non-TRENDING + EMA-alignment condition. Parity with the archive is
+intact; the caveat is on the *claim*, not the code. Any break-aware structural analysis is a
+separate diagnostic and must not change this lane's definition mid-epoch.
+
+**MES replication: REJECTED (2026-09-16).** The same methodology on a preserved MES 5m corpus
+(2026-06-22..09-16) found Asian, London and New York all BROKEN after the one-position collapse.
+Cross-instrument transfer failed; MNQ Asia therefore has no MES replication. Never combine MNQ and
+MES results, and do not search MES for another filter.
+
+Review gate: **30 resolved trades over at least 10 observation days**, no pooling with the
+historical stream, no pooling with any other campaign, one-position stream only.
+
+### 6. Cross-instrument observation campaign (collection-only, armed 2026-09-16)
+
+Not a trading lane. `cross_instrument_observation_v1` (#582–#588, #590–#591) records per-population
+evidence for the added roots (M2K, MGC, MCL, MBT) alongside MNQ/MES under one epoch, with
+continuity/roll/provenance quality gates. The added roots have no executable path: campaign-OFF
+routing is pinned fail-closed (#587) and the roots are collection-only in the webhook transport.
+Judge nothing from it yet; the feed-health CLI reads the epoch from the environment, so pass
+`--epoch` explicitly when running it by hand.
+
 ## Campaign-wide safety boundary
 
 The 5-minute paper router enforces a maximum of **3 new fills per trading day across the MNQ three-lane campaign**. The isolated day-strategy config is capped at one 4HR fill and one 3-2-2 fill; Daily uses one causal first-break opportunity and one open swing maximum. The real/global risk configuration remains untouched.
 
 The **MES 1-2-2 lane is not under that router or that 3-fill cap** — it is a separate observer on the 15-minute webhook path, bounded instead by one open position at a time plus every ordinary gate evaluated against its own isolated config.
+
+The **Asia D+EMA cohort is likewise outside the router and the cap** — it is bounded by its own
+one-open-position rule and the same-observation-day horizon, and it holds no ledger, so there is
+no drawdown halt to trip; the stop conditions are operational (feed loss, state/evidence
+disagreement, any sign of a broker route), not P&L-based.
 
 No campaign code may:
 
@@ -139,6 +226,11 @@ Paper collection (**PaperBroker**) is unconditional and always runs first, in it
 Regression tests pin the route selector, the paper/demo coexistence in the 5-minute hook, and the demo journal isolation.
 
 The **MES 1-2-2 lane has no route of its own and cannot acquire one.** It re-evaluates MES alerts on an isolated config *copy* that pins `paper_mode=True`; `webhook/runner.py` derives `simulate` from that, which selects `_paper_broker()` for execution and forces `_using_tradovate_position` False for the position's whole lifecycle. That holds regardless of the box's `BROKER` (currently `tradovate`) or `SCHEDULE_MODE`. A regression test asserts the non-paper broker constructor is never called even with `BROKER=tradovate`. The lane writes only to `logs/hypothetical_ledger/mes_122_1500`.
+
+The **Asia D+EMA cohort has no route either**: the only execution object in its module is
+`execution.paper_broker.PaperBroker`; there is no broker-interface lookup and no Tradovate
+import, and the runner hook passes nothing that could reach one (asserted by an AST import/call
+test). The cross-instrument roots are collection-only and cannot acquire a route without a new PR.
 
 Any route beyond these two is a separate proposal requiring a new audit.
 
@@ -180,6 +272,31 @@ whether the edge exists.
 the epoch, judged on the realistic ledger, with a 30% hard halt. A materially larger independent
 sample is required before the word "validated" is used.
 
+### E. Whether the MNQ Asia D+EMA effect exists at all
+
+The historical one-position stream (PF 1.46, 107 trades) is inside the null band, the edge is
+concentrated in two strategies, September was flat, and the MES replication failed outright. The
+cohort exists to answer this prospectively under the exact archived definition; nothing about it
+may be retuned during the epoch, and the ET-hour split stays a logged secondary hypothesis.
+
+### F. Structural regime is mostly blind during Asia by design
+
+`INSUFFICIENT_DATA` covers ~34% of post-feature MNQ 15m rows, 100% of 18–21 ET and ~75% of the
+Asian session, because structural history is cut at the last >45-minute gap and the 17:00–18:00 ET
+maintenance break resets the warm-up every day. Zero data defects were found — this is a design
+limitation, not an outage. It caveats every Asia-session claim that leans on the structural clause
+(cohort D included) and it is **not** a reason to change the detector during collection.
+
+### G. The MNQ 15m executable set is empty on purpose
+
+Since #376 (2026-07-28) isolated the real book to `orb_breakout` and #517 (2026-09-08) retired
+`orb_breakout`, no strategy is executable on MNQ 15m; every remaining family is observation-only.
+The 2026-09-16 boundary audit found nothing disconnected and zero defects — the five executable
+cases in the corpus were all `ENTRY_DETACHED_FROM_PRICE` as specified. **Ruling: HOLD this posture;
+do not reverse #376.** Coverage audits of the 2026-07..09 corpus show the first loss of coverage is
+"no aligned detector before the move" (67%) and "observation-only family" (23%), not gating —
+so widening gates is not the lever, and no strategy promotion is authorized from these audits.
+
 ## Repository verification completed
 
 - #545 merged to `main`: `9caaaa3e2fbe5cb6ff20941229e3498794bcb6de`
@@ -194,6 +311,9 @@ sample is required before the word "validated" is used.
 - **#547** paper/replay parity (gap-aware stop pricing; MES-only `strat_122` 8h swing exemption) merged `4112fe3`
 - **#553** per-leg execution-realism gate merged `dae11f1` — evidence only, no runtime file touched
 - **#555** isolated MES 1-2-2 lane merged `08dd40a` — no `risk_rules.yaml`, `instruments.allowed` or `enabled_concepts` change; ships off by default
+- **#582–#588** cross-instrument foundation, portability, observation transport, quality gates and fail-closed OFF routing merged; deployed OFF as `6254688` on 2026-09-16, armed by env the same day
+- **#589** deterministic staleness fixtures; **#590** Discord observation route (optional, inert until its route is configured); **#591** failure/safety alerts on the error route
+- **#595** Asia D+EMA forward paper cohort merged `8fd8b21` — six files, all additive (`context/asia_d_ema_paper_cohort.py`, `config/settings.py`, `webhook/runner.py`, `ops/live_box_guard.py`, one test module, one fixture); no `risk_rules.yaml`, `instruments.allowed` or `enabled_concepts` change; ships off by default
 
 ## VPS activation gates — verified at activation, and required again for any re-activation
 
@@ -219,6 +339,19 @@ variables are in `PROOF_CRITICAL_RUNTIME_OVERRIDES`, so each needs its matching
 `EXPECTED_PROOF_*` pin — an active but unpinned proof-critical override makes the box
 irreproducible and degrades the box guard.
 
+For the Asia D+EMA cohort, items 4-6 read: `ASIA_D_EMA_PAPER_MODE=paper_sim` exactly;
+`ASIA_D_EMA_PAPER_EPOCH_START` an offset-aware timestamp (missing or naive → config load fails
+closed); authoritative MNQ 15-minute bars actually arriving. Both variables are in
+`PROOF_CRITICAL_RUNTIME_OVERRIDES` and need their matching `EXPECTED_PROOF_*` pins. Before any
+re-activation or epoch reset also confirm `logs/asia_d_ema_cohort/state.json` carries no position
+or pending events from the prior epoch.
+
+What was verified live at Asia D+EMA activation (2026-09-16): deployed release = `main` at #595;
+release switch performed inside a post-15m-bar window, so no authoritative bar fell into the
+restart gap; first post-restart 15m bar processed by the new release created `state.json` with
+`campaign_id=asia_d_ema_2026_09_v1`, no position and no pending events; every other campaign's
+epoch and state unchanged; real-book decision stream unchanged; no external-broker order anywhere.
+
 What was verified live at MES activation: lane `paper_sim` and active; epoch matching exactly;
 realistic balance $1,500 with 0 resolved trades; journal writing under
 `logs/hypothetical_ledger/mes_122_1500`; MES 15m alerts reaching the lane and producing genuine
@@ -233,7 +366,10 @@ state byte-identical across the restart.
 - **Inverse ORB:** old positive headline retired after decision-time/bracket-geometry correction; do not revive from the invalid baseline.
 - **VWAP Hold:** corrected decision-time evidence negative; no promotion.
 - **Transition reclaim:** separate repair investigation; not part of these four lanes.
-- **ORB Reclaim / source ORB Breakout:** negative/weak corrected evidence; not part of this campaign.
+- **ORB Reclaim / source ORB Breakout:** negative/weak corrected evidence; not part of this campaign. `orb_breakout` retired from the real book by #517, leaving the MNQ 15m executable set empty on purpose (section G).
+- **MES D+EMA (Asian/London/New York):** REJECTED 2026-09-16 — no forward cohort; the MES precursor investigation is closed (HOLD / PAPER ONLY, representation hypothesis promising but unproven). Not another retrospective filter search.
+- **BOS/MSS (#594):** HOLD; separate research question, not scheduled.
+- **Shadow families in `strategy/shadow_setups.py`:** observation-only by design; they reach the journal and evidence files, never the DecisionEngine.
 
 ## Superseded / historical PRs
 
@@ -246,7 +382,9 @@ These are not current execution authority:
 - **#539** — Daily cross-check documentation; historical evidence only; closed.
 - **#476** — September 7 handoff; historical only; closed.
 
-Do not delete historical evidence files merely because they are old. Closed PRs and Git history remain the audit trail. Transition reclaim remains a separate open investigation because it is not a duplicate of this campaign. MES 1-2-2 is no longer separate — it is lane 4 above.
+- **#596 / #598** — MES D+EMA precursor-audit and real-data reproduction branches; evidence only, ruled HOLD / PAPER ONLY; their preserved artifacts and checksums stay untouched.
+
+Do not delete historical evidence files merely because they are old. Closed PRs and Git history remain the audit trail. Transition reclaim remains a separate open investigation because it is not a duplicate of this campaign. MES 1-2-2 is no longer separate — it is lane 4 above; the Asia D+EMA cohort is lane 5.
 
 ## Do not touch
 
@@ -258,11 +396,15 @@ Do not delete historical evidence files merely because they are old. Closed PRs 
 - canonical `strat_212_122` detector and the MES 1-2-2 entry/stop/2R-target bundle
 - bracket-validity guard
 - pessimistic same-bar handling
+- the Asia D+EMA cohort definition, strategy pair, 1.0R bracket, one-position rule and same-day horizon during its epoch (parity with the archived producer is the point of the lane)
+- `context/structural_regime.py` contiguity/warm-up rule while any Asia-session evidence is being collected
+- the #376 real-book isolation (HOLD; reversal is a separate ruling)
 
 ## Safe next step
 
-**Repository work is complete and both campaigns are collecting.** The remaining work is
-observation, not building.
+**Repository work is complete and all four collections are collecting.** The remaining work is
+observation, not building. No `.env`, release, restart, runner, strategy or gate change before
+2026-09-30 (the #595 activation was a one-time, explicitly waived exception).
 
 Next:
 
@@ -276,4 +418,9 @@ Next:
    MES $1,500 ledger is separate again;
 5. do not promote based on historical/backtest results alone, and never convert paper results into
    a promotion decision automatically;
-6. re-verify the box rather than trusting this file: a remembered SHA is not evidence.
+6. re-verify the box rather than trusting this file: a remembered SHA is not evidence;
+7. review the Asia D+EMA cohort only at its gate (30 resolved / 10 days), on its own
+   one-position stream, never pooled with the historical audit, the MNQ three-lane ledgers or MES;
+   until then Day-N summaries are status, not evidence;
+8. treat the cross-instrument campaign as feed/evidence-quality proof for now; no population there
+   is a strategy candidate.

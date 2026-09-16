@@ -1,5 +1,9 @@
 # Futures — Validated vs. Unvalidated (Current Status)
 
+> **Superseded for current status (2026-09-16):** the authoritative current-state document is
+> `docs/futures-current-state-handoff.md`. This file is retained as the 2026-07-08 evidence snapshot;
+> nothing below has been re-verified since that date.
+
 _As of 2026-07-08. Read-only status doc — separates what has been proven
 from what has not, so nobody over- or under-claims where the system
 actually stands. Not a proof artifact itself; see the linked evidence for
