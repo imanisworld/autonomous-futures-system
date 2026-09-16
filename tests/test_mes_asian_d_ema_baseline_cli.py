@@ -11,6 +11,15 @@ def _journal_row():
     return {
         "instrument": "MES",
         "decision": "NO_TRADE",
+        "shadow_candidates": [
+            {
+                "strategy": "demo",
+                "direction": "LONG",
+                "entry": 100.0,
+                "stop": 95.0,
+                "target": 110.0,
+            }
+        ],
         "context": {
             "timeframe": "15",
             "timestamp": "2026-09-01T23:00:00+00:00",
@@ -19,15 +28,6 @@ def _journal_row():
             "structural_market_condition": "STRUCTURAL_RANGE",
             "structural_direction": None,
             "trend": {"direction": "UP", "strength": "STRONG"},
-            "shadow_candidates": [
-                {
-                    "strategy": "demo",
-                    "direction": "LONG",
-                    "entry": 100.0,
-                    "stop": 95.0,
-                    "target": 110.0,
-                }
-            ],
         },
     }
 
