@@ -27,13 +27,14 @@ from pathlib import Path
 from typing import List, Optional
 
 from context.bar_history import BarHistory, _parse_dt
+from config.futures_contracts import optional_tick_size
 
 # Subdirectory under the journal dir that isolates the 5M lane from 15M bars.
 FIVE_MIN_LANE = "tf5m"
 FIVE_MIN_MINUTES = 5
 ARM_TTL_MINUTES = 20
 MAX_TRIGGER_DISTANCE_TICKS = 1
-_TICK_SIZE = {"MES": 0.25, "MNQ": 0.25, "MGC": 0.1, "MCL": 0.01}
+# Tick size comes ONLY from config/futures_contracts.py (None = no metadata).
 logger = logging.getLogger(__name__)
 
 
@@ -187,7 +188,13 @@ def triggered_armed_setup(
     try:
         entry = float(setup["entry"])
         direction = str(setup["direction"]).upper()
-        tick = _TICK_SIZE.get(_root(payload.ticker), 0.25)
+        tick = optional_tick_size(_root(payload.ticker))
+        if tick is None:
+            logger.warning(
+                "5M retest skipped: no contract metadata for %s (refusing 0.25 fallback)",
+                payload.ticker,
+            )
+            return None
         triggered = retest_triggered(
             direction=direction,
             entry=entry,

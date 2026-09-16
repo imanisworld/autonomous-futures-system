@@ -103,7 +103,12 @@ from execution.mnq_strat_evidence import process_mnq_strat_evidence
 from execution.mes_trend_consolidation_break_evidence import (
     process_mes_trend_consolidation_break_evidence,
 )
-from execution.paper_broker import TICK_SIZE, NextBarOHLC, PaperBroker
+from execution.paper_broker import NextBarOHLC, PaperBroker
+from config.futures_contracts import (
+    contract_root as _contract_root,
+    round_to_tick as _contract_round_to_tick,
+    symbol_economics as _symbol_economics,
+)
 from journal.journal_logger import JournalLogger
 from risk.risk_engine import DailyState, RiskEngine, RiskResult, TradeSetup
 from strategy.confluence_scorer import score_setup as _score_setup
@@ -143,15 +148,9 @@ _RANGE_BREAK_ARM = _RangeBreakArmState()
 
 logger = logging.getLogger(__name__)
 
-# ── Tick values ($ per tick, 0.25-point ticks) ────────────────────────────────
-_TICK_VALUES: dict[str, float] = {
-    "MES": 1.25,   # $5/pt × 0.25pt/tick
-    "ES":  12.50,  # $50/pt
-    "MNQ": 0.50,   # $2/pt × 0.25pt/tick
-    "NQ":  5.00,   # $20/pt
-    "MGC": 1.00,   # $10/troy oz × 0.10pt/tick
-    "MCL": 1.00,
-}
+# ── Contract economics ───────────────────────────────────────────────────────
+# Tick size / tick value come ONLY from config/futures_contracts.py. Unknown
+# roots raise (fail closed) instead of inheriting MES/MNQ economics.
 
 # Maximum price deviation from entry before a position is considered stale
 # (as a fraction of entry price). Equity index futures trade in a narrow
@@ -167,8 +166,11 @@ _STALE_PRICE_MISMATCH_THRESHOLD: dict[str, float] = {
 }
 
 def _tick_value_for(instrument: str) -> float:
-    root = (instrument or "").upper().rstrip("!1234567890HMUZ")
-    return _TICK_VALUES.get(root, 1.25)
+    return _symbol_economics(instrument)[1]
+
+
+def _tick_size_for(instrument: str) -> float:
+    return _symbol_economics(instrument)[0]
 
 
 def _record_candidate_audit(
@@ -350,15 +352,10 @@ def _make_broker(
 # Tick size per instrument root — used to align entry/stop/target to valid broker
 # prices. A non-tick price (e.g. 30342.1613) is rejected or silently re-rounded by
 # Tradovate, which also breaks exit reconciliation against the bracket prices.
-_TICK_SIZE_BY_ROOT = {"MES": 0.25, "ES": 0.25, "MNQ": 0.25, "NQ": 0.25, "MGC": 0.1, "MCL": 0.01}
-
-
 def _round_to_tick(price: Optional[float], instrument: str) -> Optional[float]:
     if price is None:
         return None
-    root = (instrument or "").upper().rstrip("!1234567890HMUZ")
-    tick = _TICK_SIZE_BY_ROOT.get(root, 0.25)
-    return round(round(float(price) / tick) * tick, 4)
+    return _contract_round_to_tick(price, instrument)
 
 
 def _candidate_snapshot(
@@ -1512,8 +1509,7 @@ def process_alert(
                     direction = open_pos.get("direction", "LONG")
                     contracts = int(open_pos.get("contracts", 1))
                     # Compute realistic P&L at current close vs entry
-                    tick_size = 0.25
-                    tick_value = _tick_value_for(open_pos.get("instrument") or state.instrument)
+                    tick_size, tick_value = _symbol_economics(open_pos.get("instrument") or state.instrument)
                     raw_ticks = (payload.close - entry_price) / tick_size
                     signed_ticks = raw_ticks if direction == "LONG" else -raw_ticks
                     pnl_dollars = round(signed_ticks * tick_value * contracts, 2)
@@ -1920,8 +1916,7 @@ def process_alert(
             )
         if _er_candidate is not None:
             try:
-                _er_root = (state.instrument or "").upper().replace("1!", "")
-                _er_tick = TICK_SIZE.get(_er_root, 0.25)
+                _er_tick = _tick_size_for(state.instrument)
                 _er_live_price = float(state.ohlc.close) if state.ohlc else float(_er_candidate["entry"])
                 _er_decision = refresh_detached_entry(
                     direction=_er_candidate["direction"],
@@ -2310,9 +2305,8 @@ def process_alert(
     except Exception as _wide_stop_exc:  # pragma: no cover - research lane only
         logger.warning("wide-stop ledger lane skipped: %s", _wide_stop_exc)
     if risk_result.approved and decision.setup.direction_role == "COUNTERTREND_SCALP":
-        root = state.instrument.upper().rstrip("!1234567890HMUZ")
-        tick_size = _TICK_SIZE_BY_ROOT.get(root, 0.25)
-        tick_value = _tick_value_for(root)
+        root = _contract_root(state.instrument) or state.instrument
+        tick_size, tick_value = _symbol_economics(root)
         stop_ticks = abs(float(entry_px) - float(stop_px)) / tick_size
         planned_risk = stop_ticks * tick_value
         normal_budget = (
@@ -2565,7 +2559,7 @@ def process_alert(
         min_rr_ratio=float(getattr(cfg, "min_rr_ratio", 2.0)),
         max_dollar_risk=(
             (
-                abs(float(entry_px) - float(stop_px)) / _TICK_SIZE_BY_ROOT.get(state.instrument, 0.25)
+                abs(float(entry_px) - float(stop_px)) / _tick_size_for(state.instrument)
                 + float((getattr(cfg, "entry_tolerance_ticks_by_root", {}) or {}).get(state.instrument, 0) or 0)
             )
             * _tick_value_for(state.instrument)
@@ -3200,8 +3194,7 @@ def _notify_trade_closed(
     else:
         icon, label = "⚪", "BREAKEVEN"
     sign = "+" if pnl >= 0 else "-"
-    root = (fill.instrument or "").upper().rstrip("!1234567890HMUZ")
-    points = abs(ticks) * _TICK_SIZE_BY_ROOT.get(root, 0.25)
+    points = abs(ticks) * _tick_size_for(fill.instrument)
     points_sign = "+" if ticks >= 0 else "-"
     day_sign = "+" if day_pnl_dollars >= 0 else "-"
     reason = fill.exit_reason or "CLOSED"

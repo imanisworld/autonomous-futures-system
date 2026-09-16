@@ -6,33 +6,23 @@ BOTH the live path (`webhook.runner.process_alert`) and the replay path
 decision -> risk -> resolve pipeline; keeping the stop math here means a change
 can never silently diverge between live and backtest (a recurring failure mode).
 
-The tick table matches `execution.paper_broker.TICK_SIZE` and the former
-`webhook.runner._TICK_SIZE_BY_ROOT` (verified identical), so this is a faithful
-extraction — the resulting stop is byte-identical to the prior inline blocks.
+Tick sizes come ONLY from ``config/futures_contracts.py``. An unknown root
+raises instead of inheriting a 0.25 tick, so live and replay can never round a
+new instrument's stop onto the wrong grid.
 """
 
 from __future__ import annotations
 
 from typing import Any, Mapping
 
-# Canonical tick size per instrument root.
-_TICK_SIZE: dict[str, float] = {
-    "MNQ": 0.25,
-    "MES": 0.25,
-    "ES": 0.25,
-    "NQ": 0.25,
-    "MGC": 0.1,
-    "MCL": 0.01,
-}
+from config.futures_contracts import round_to_tick as _round_to_tick
 
-
-def _root(instrument: str) -> str:
-    return (instrument or "").upper().rstrip("!1234567890HMUZ")
+__all__ = ["apply_stop_multiplier", "round_to_tick"]
 
 
 def round_to_tick(price: float, instrument: str) -> float:
-    tick = _TICK_SIZE.get(_root(instrument), 0.25)
-    return round(round(price / tick) * tick, 4)
+    """Round to the contract tick grid; raises ``UnsupportedContractError`` on unknown roots."""
+    return _round_to_tick(price, instrument)
 
 
 def apply_stop_multiplier(

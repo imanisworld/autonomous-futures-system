@@ -14,6 +14,7 @@ from statistics import median
 from typing import Any
 
 from context.bar_history import _parse_dt
+from config.futures_contracts import optional_tick_size
 
 TREND_UP = "STRUCTURAL_TREND_UP"
 TREND_DOWN = "STRUCTURAL_TREND_DOWN"
@@ -22,7 +23,7 @@ RANGE_DEAD = "STRUCTURAL_RANGE_DEAD"
 TRANSITION = "STRUCTURAL_TRANSITION"
 INSUFFICIENT = "INSUFFICIENT_DATA"
 
-_TICK_SIZE = {"MES": 0.25, "MNQ": 0.25}
+# Tick size comes ONLY from config/futures_contracts.py (None = no metadata).
 
 
 @dataclass(frozen=True)
@@ -66,7 +67,7 @@ def classify_structural_regime(
     are present, which keeps every emitted classification causal.
     """
     clean = _clean_contiguous_tail(bars[-lookback:])
-    tick = _TICK_SIZE.get(instrument.upper(), 0.25)
+    tick = optional_tick_size(instrument)
     base = {
         "pivot_width": pivot_width,
         "lookback_bars": len(clean),
@@ -84,6 +85,8 @@ def classify_structural_regime(
         "active_range_trigger": None,
         "bar_gap_detected": len(clean) < len(bars[-lookback:]),
     }
+    if tick is None:
+        return StructuralRegime(INSUFFICIENT, None, "no contract metadata for instrument", base)
     if len(clean) < max(10, (pivot_width * 2) + 4):
         return StructuralRegime(INSUFFICIENT, None, "not enough contiguous completed bars", base)
 

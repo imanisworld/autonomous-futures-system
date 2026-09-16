@@ -14,6 +14,11 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from context.market_context import MarketState
+from config.futures_contracts import (
+    TICK_SIZE as CONTRACT_TICK_SIZE,
+    optional_tick_size,
+    tick_size as contract_tick_size,
+)
 from risk.risk_engine import RiskEngine
 
 
@@ -83,7 +88,7 @@ def resolve_shadow_candidate(
     continues on later bars. This matches the isolated forward-campaign
     resolver in ``execution/forward_evidence_campaign.py``.
     """
-    tick = TICK_SIZE.get(instrument, 0.25)
+    tick = contract_tick_size(instrument)  # raises on unknown roots; never 0.25
     is_long = candidate.direction == "LONG"
     entry = candidate.entry
     stop = candidate.stop
@@ -159,14 +164,8 @@ def resolve_shadow_candidate(
     )
 
 
-TICK_SIZE = {
-    "MNQ": 0.25,
-    "MES": 0.25,
-    "ES": 0.25,
-    "NQ": 0.25,
-    "MGC": 0.10,
-    "MCL": 0.01,
-}
+# Price units come ONLY from config/futures_contracts.py.
+TICK_SIZE = CONTRACT_TICK_SIZE
 
 
 RISK_MATRIX = {
@@ -213,7 +212,13 @@ def evaluate_shadow_setups(
     recent_bars: list[dict] | None = None,
     config=None,
 ) -> list[ShadowSetupCandidate]:
-    """Return all shadow-only setup candidates visible on this bar."""
+    """Return all shadow-only setup candidates visible on this bar.
+
+    An instrument without proven contract metadata yields NO candidates: an
+    observation lane may skip, but it may never fabricate geometry.
+    """
+    if optional_tick_size(state.instrument) is None:
+        return []
     candidates = [
         _missing_strat_family(state),
         _strat_122_pullback(state),
@@ -587,7 +592,9 @@ def _strat_4hr_retrigger_observed(state: MarketState) -> ShadowSetupCandidate | 
     trend = state.trend
     vol_rel = state.volume.relative
     tick = _tick(state)
-    max_ticks = _FOURHR_MAX_STOP_TICKS.get(state.instrument, 80)
+    max_ticks = _FOURHR_MAX_STOP_TICKS.get(state.instrument)
+    if not max_ticks:
+        return None  # no 4HR stop-cap policy for this instrument: no observation
 
     # LONG: ORB high reclaimed, STRONG uptrend, price above VWAP, volume confirms.
     if (
@@ -648,7 +655,8 @@ def _strat_4hr_retrigger_observed(state: MarketState) -> ShadowSetupCandidate | 
 
 
 def _tick(state: MarketState) -> float:
-    return TICK_SIZE.get(state.instrument, 0.25)
+    """Canonical tick size; raises on unknown roots (evaluate_shadow_setups gates first)."""
+    return contract_tick_size(state.instrument)
 
 
 def _candidate(

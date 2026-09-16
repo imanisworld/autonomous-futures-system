@@ -173,6 +173,8 @@ def shadow_rows(paths: Iterable[Path]) -> list[dict]:
                     "lane": record.get("lane") or "unknown",
                     "strategy": record.get("strategy") or "unknown",
                     "instrument": record.get("instrument"),
+                    "evidence_epoch": record.get("evidence_epoch"),
+                    "variant": record.get("variant"),
                     "result": so.get("result"),
                     "pnl_ticks": so.get("pnl_ticks"),
                     "date": _date_of(path),
@@ -227,13 +229,22 @@ def _bucket_real(rows: list[dict]) -> list[dict]:
     return out
 
 
+SHADOW_PARTITION_KEY = ("lane", "strategy", "instrument", "evidence_epoch", "variant")
+
+
 def _bucket_shadow(rows: list[dict]) -> list[dict]:
+    """One bucket per (lane, strategy, instrument, evidence_epoch, variant).
+
+    Instruments and epochs are NEVER pooled: 15 MGC + 15 M2K outcomes must
+    show as two 15-row populations, not one 30-row lane.
+    """
     grouped: dict[tuple, list[dict]] = defaultdict(list)
     for row in rows:
-        grouped[(row["lane"], row["strategy"])].append(row)
+        grouped[tuple(row.get(field) for field in SHADOW_PARTITION_KEY)].append(row)
 
     out = []
-    for (lane, strategy), group in sorted(grouped.items()):
+    for key, group in sorted(grouped.items(), key=lambda item: tuple(str(v) for v in item[0])):
+        lane, strategy, instrument, evidence_epoch, variant = key
         wins = [r for r in group if r["result"] == "WIN"]
         losses = [r for r in group if r["result"] == "LOSS"]
         no_fill = [r for r in group if r["result"] == "NO_FILL"]
@@ -246,7 +257,9 @@ def _bucket_shadow(rows: list[dict]) -> list[dict]:
             {
                 "lane": lane,
                 "strategy": strategy,
-                "instrument": None,
+                "instrument": instrument,
+                "evidence_epoch": evidence_epoch,
+                "variant": variant,
                 "class": LANE_CLASS.get(strategy, "UNKNOWN"),
                 "resolved": len(group),
                 "wins": len(wins),
@@ -324,6 +337,7 @@ def build_evidence_report(
         "box_release": box_release,
         "real_trades_by_strategy": _bucket_real(real),
         "shadow_by_lane_strategy": _bucket_shadow(shadow),
+        "shadow_partition_key": list(SHADOW_PARTITION_KEY),
         "mes_orb_reclaim": mes_orb_reclaim_section(real),
         "lane_classification": dict(LANE_CLASS),
     }

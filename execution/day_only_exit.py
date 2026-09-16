@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 
 from execution.broker_interface import Fill
 from execution.paper_broker import PaperBroker
+from config.futures_contracts import contract_economics, contract_root
 
 
 EASTERN = ZoneInfo("America/New_York")
@@ -17,8 +18,7 @@ BROKER_FLAT_FILL_PRICE_MISSING = "BROKER_FLAT_FILL_PRICE_MISSING"
 DAY_ONLY_STRATEGIES = frozenset({"strat_4hr_retrigger", "strat_322_first_live"})
 _EOD_BAR_START = time(15, 55)
 _FALLBACK_START = time(16, 0)
-_TICK_SIZE = {"MNQ": 0.25, "MES": 0.25}
-_TICK_VALUE = {"MNQ": 0.50, "MES": 1.25}
+# Tick size / value come ONLY from config/futures_contracts.py (fail closed).
 
 
 def strategy_is_day_only(strategy: object) -> bool:
@@ -84,10 +84,7 @@ def classify_result(direction: object, entry_price: float, exit_price: float) ->
 
 def instrument_root(value: object) -> str:
     symbol = str(value or "").strip().upper().replace("1!", "")
-    for root in ("MNQ", "MES"):
-        if symbol.startswith(root):
-            return root
-    return symbol
+    return contract_root(symbol) or symbol
 
 
 def positions_agree(journal_position: Mapping, broker_position: object) -> tuple[bool, str]:
@@ -119,8 +116,7 @@ def build_day_only_fill(position: Mapping, exit_price: float) -> Fill:
     entry_price = float(position["entry"])
     price = float(exit_price)
     contracts = max(1, int(position.get("contracts") or 1))
-    tick_size = _TICK_SIZE.get(root, 0.25)
-    tick_value = _TICK_VALUE.get(root, 1.0)
+    tick_size, tick_value = contract_economics(root)
     signed_move = price - entry_price if direction == "LONG" else entry_price - price
     pnl_ticks = signed_move / tick_size
     return Fill(

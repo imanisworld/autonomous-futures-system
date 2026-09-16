@@ -36,7 +36,7 @@ from strategy.signal_engine import DecisionEngine
 from strategy.confluence_scorer import score_setup as _score_setup
 from risk.risk_engine import RiskEngine, TradeSetup, DailyState
 from execution.paper_broker import NextBarOHLC, PaperBroker
-from execution.post_fill_validation import TICK_SIZE as EXEC_TICK_SIZE, TICK_VALUE as EXEC_TICK_VALUE
+from config.futures_contracts import contract_economics as _contract_economics
 from journal.journal_logger import JournalLogger
 
 
@@ -233,14 +233,14 @@ def main() -> int:
                 max_dollar_risk=(
                     (
                         abs(float(setup.entry) - float(setup.stop))
-                        / EXEC_TICK_SIZE.get(state.instrument, 0.25)
+                        / _contract_economics(state.instrument)[0]
                         + float(
                             (getattr(config, "entry_tolerance_ticks_by_root", {}) or {}).get(
                                 state.instrument, 0
                             ) or 0
                         )
                     )
-                    * EXEC_TICK_VALUE.get(state.instrument, 1.25)
+                    * _contract_economics(state.instrument)[1]
                     * contracts
                 ),
                 max_stop_ticks=float((getattr(config, "max_stop_ticks", {}) or {}).get(state.instrument, 0) or 0) or None,

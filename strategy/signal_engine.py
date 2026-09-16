@@ -21,6 +21,7 @@ from zoneinfo import ZoneInfo
 _log = logging.getLogger(__name__)
 
 from config.settings import SystemConfig, load_config
+from config.futures_contracts import TICK_SIZE as CONTRACT_TICK_SIZE, optional_tick_size
 from context.market_context import MarketState
 from risk.risk_engine import RiskEngine, TradeSetup, DailyState
 from strategy.gex_gate import evaluate_gex
@@ -223,12 +224,9 @@ class DecisionEngine:
         "MCL": 40,
     }
 
-    TICK_SIZE = {
-        "MNQ": 0.25,
-        "MES": 0.25,
-        "MGC": 0.10,
-        "MCL": 0.01,
-    }
+    # Contract price units come ONLY from config/futures_contracts.py. The
+    # engine never fabricates a tick size for an unknown root (see _tick_size).
+    TICK_SIZE = CONTRACT_TICK_SIZE
 
     # Ranked-selection research weights. These are deliberately opt-in via
     # strategy_selection_mode="ranked" and do not affect first-match/live default.
@@ -245,6 +243,28 @@ class DecisionEngine:
         # always-on modes bypass them (used by the read-only shadow generator).
         self.schedule_mode = schedule_mode or getattr(self.config, "schedule_mode", "current")
         self._enforce_schedule = self.schedule_mode == "current"
+
+    @classmethod
+    def _tick_size(cls, instrument: str) -> float:
+        """Canonical tick size; raises on unknown roots (never a 0.25 fallback).
+
+        ``evaluate`` already refuses instruments without metadata, so a raise
+        here means a caller bypassed that gate with an unsupported root.
+        """
+        try:
+            return cls.TICK_SIZE[instrument]
+        except KeyError as exc:
+            raise ValueError(f"no contract metadata for instrument {instrument!r}") from exc
+
+    @classmethod
+    def _max_orb_stop_ticks(cls, instrument: str):
+        """ORB stop-cap policy for this instrument, or None when no policy exists.
+
+        Instruments without an explicit entry get NO ORB setup rather than
+        another instrument's cap. Strategy policy is never inferred from
+        price metadata.
+        """
+        return cls.MAX_ORB_STOP_TICKS.get(instrument)
 
     def evaluate(self, state: MarketState, daily_state: DailyState) -> DecisionOutput:
         """
@@ -310,6 +330,17 @@ class DecisionEngine:
                 session=state.session,
                 decision="NO_TRADE",
                 reason=f"Instrument '{state.instrument}' is not in allowed universe.",
+            )
+        if optional_tick_size(state.instrument) is None:
+            return DecisionOutput(
+                timestamp=now,
+                instrument=state.instrument,
+                session=state.session,
+                decision="NO_TRADE",
+                reason=(
+                    f"Instrument '{state.instrument}' has no proven contract metadata "
+                    "(tick size/value); refusing to fabricate geometry."
+                ),
             )
 
         # ── Session window gate ───────────────────────────────────────────────
@@ -1374,8 +1405,12 @@ class DecisionEngine:
 
         # Range check (tight range = choppy)
         bar_range = state.ohlc.high - state.ohlc.low
-        tick_size = self.TICK_SIZE.get(state.instrument, 0.25)
-        min_ticks = self.MIN_STOP_TICKS.get(state.instrument, 4)
+        tick_size = self._tick_size(state.instrument)
+        min_ticks = self.MIN_STOP_TICKS.get(state.instrument)
+        if min_ticks is None:
+            # No per-instrument bracket policy exists: fail closed rather than
+            # borrow another instrument's minimum.
+            return "CHOPPY"
         if bar_range < (tick_size * min_ticks * 2):
             return "CHOPPY"
 
@@ -1852,7 +1887,7 @@ class DecisionEngine:
         close = state.ohlc.close if state.ohlc else None
         if close is None:
             return setup
-        tick = self.TICK_SIZE.get(state.instrument, 0.25)
+        tick = self._tick_size(state.instrument)
         risk = abs(setup.entry - setup.stop)
         reward = abs(setup.target - setup.entry)
         if risk <= 0 or reward <= 0:
@@ -1944,8 +1979,10 @@ class DecisionEngine:
         prev_low = state.previous_bar_low
         prev_high = state.previous_bar_high
 
-        tick = self.TICK_SIZE.get(state.instrument, 0.25)
-        max_stop_ticks = self.MAX_ORB_STOP_TICKS.get(state.instrument, 80)
+        tick = self._tick_size(state.instrument)
+        max_stop_ticks = self._max_orb_stop_ticks(state.instrument)
+        if max_stop_ticks is None:
+            return None
         # Stop offset beyond the ORB boundary (#3). Legacy default = 8 ticks, which
         # places the stop only ~10 ticks from entry — noise-width. Widen per
         # instrument via config.orb_stop_ticks (validated on replay).
@@ -2030,10 +2067,13 @@ class DecisionEngine:
         if state.vwap.price_vs_vwap != "above":
             return None
 
-        tick = self.TICK_SIZE.get(state.instrument, 0.25)
+        tick = self._tick_size(state.instrument)
         entry = state.orb.high + (tick * 2)
         orb_stop = state.orb.low - (tick * 4)
-        max_stop = entry - (tick * self.MAX_ORB_STOP_TICKS.get(state.instrument, 80))
+        max_stop_ticks = self._max_orb_stop_ticks(state.instrument)
+        if max_stop_ticks is None:
+            return None
+        max_stop = entry - (tick * max_stop_ticks)
         stop = max(orb_stop, max_stop)
         risk = entry - stop
         if risk <= 0:
@@ -2059,10 +2099,13 @@ class DecisionEngine:
         if state.orb.status != "rejected_high":
             return None
 
-        tick = self.TICK_SIZE.get(state.instrument, 0.25)
+        tick = self._tick_size(state.instrument)
         entry = state.orb.high - (tick * 2)
         orb_stop = state.orb.high + (tick * 6)
-        max_stop = entry + (tick * self.MAX_ORB_STOP_TICKS.get(state.instrument, 80))
+        max_stop_ticks = self._max_orb_stop_ticks(state.instrument)
+        if max_stop_ticks is None:
+            return None
+        max_stop = entry + (tick * max_stop_ticks)
         stop = min(orb_stop, max_stop)
         risk = stop - entry
         if risk <= 0:
@@ -2093,7 +2136,7 @@ class DecisionEngine:
             return False
         if not (state.vwap and state.vwap.value and state.ohlc):
             return False
-        tick = self.TICK_SIZE.get(state.instrument, 0.25)
+        tick = self._tick_size(state.instrument)
         return abs(state.ohlc.close - state.vwap.value) > max_ticks * tick
 
     def _try_vwap_reclaim(self, state: MarketState) -> Optional[SetupDetail]:
@@ -2109,7 +2152,7 @@ class DecisionEngine:
         if self._vwap_entry_out_of_range(state):
             return None
 
-        tick = self.TICK_SIZE.get(state.instrument, 0.25)
+        tick = self._tick_size(state.instrument)
         entry = state.vwap.value + (tick * 2)
         stop = state.vwap.value - (tick * 28)   # 7 pts below VWAP
         risk = entry - stop
@@ -2171,7 +2214,7 @@ class DecisionEngine:
             if not has_bearish_structure:
                 return None
 
-        tick = self.TICK_SIZE.get(state.instrument, 0.25)
+        tick = self._tick_size(state.instrument)
         entry = state.vwap.value - (tick * 2)
         stop = state.vwap.value + (tick * 28)   # 7 pts above VWAP
         risk = stop - entry
@@ -2234,7 +2277,7 @@ class DecisionEngine:
             if not has_bearish_structure:
                 return None
 
-        tick = self.TICK_SIZE.get(state.instrument, 0.25)
+        tick = self._tick_size(state.instrument)
         entry = state.vwap.value - (tick * 2)       # just below VWAP
         stop = state.vwap.value + (tick * 20)        # above the failed reclaim high
         risk = stop - entry
@@ -2269,7 +2312,7 @@ class DecisionEngine:
         if state.vwap.price_vs_vwap != "above":
             return None
 
-        tick = self.TICK_SIZE.get(state.instrument, 0.25)
+        tick = self._tick_size(state.instrument)
         entry = state.previous_day.high + (tick * 2)
         stop = state.previous_day.high - (tick * 26)  # 6.5 pts below PDH
         risk = entry - stop
@@ -2301,7 +2344,7 @@ class DecisionEngine:
         if state.vwap.price_vs_vwap != "below":
             return None
 
-        tick = self.TICK_SIZE.get(state.instrument, 0.25)
+        tick = self._tick_size(state.instrument)
         entry = state.previous_day.low - (tick * 2)
         stop = state.previous_day.low + (tick * 26)  # 6.5 pts above PDL
         risk = stop - entry
@@ -2455,7 +2498,7 @@ class DecisionEngine:
         if direction == "SHORT" and state.vwap.price_vs_vwap not in ("below", "at"):
             return None
 
-        tick = self.TICK_SIZE.get(state.instrument, 0.25)
+        tick = self._tick_size(state.instrument)
         if direction == "LONG":
             entry = state.ohlc.high + tick
             stop  = state.ohlc.low  - (tick * 4)
@@ -2511,7 +2554,7 @@ class DecisionEngine:
         if state.volume.relative and state.volume.relative < 0.8:
             return None
 
-        tick = self.TICK_SIZE.get(state.instrument, 0.25)
+        tick = self._tick_size(state.instrument)
         if direction == "LONG":
             entry = state.ohlc.high + tick
             stop  = state.ohlc.low  - (tick * 6)   # wider: outside bar had large range
@@ -2644,7 +2687,7 @@ class DecisionEngine:
             current_open=state.ohlc.open,
             current_high=state.ohlc.high,
             current_low=state.ohlc.low,
-            tick_size=self.TICK_SIZE.get(state.instrument, 0.25),
+            tick_size=self._tick_size(state.instrument),
             trading_date=state.timestamp.date().isoformat(),
             persisted_state=daily_state.strat_212_122_state.get(state.instrument, {}),
         )
@@ -2720,7 +2763,7 @@ class DecisionEngine:
         if state.trend.strength not in ("STRONG", "MODERATE"):
             return None
 
-        tick = self.TICK_SIZE.get(state.instrument, 0.25)
+        tick = self._tick_size(state.instrument)
         proximity = tick * self._PULLBACK_PROXIMITY_TICKS
         close = state.ohlc.close
         vwap = state.vwap.value
