@@ -1,21 +1,93 @@
 {
   "policy_id": "OPTIONS_PAPER_V1",
-  "cohort": "V1-EPOCH-1",
-  "deployed_sha": "899a524aad82a66c80ba832ea5601430bdac7355",
-  "release_dir": "/root/afs-releases/899a524aad82-20260914-203217",
-  "release_live_at": "2026-09-15T00:32:37Z",
-  "scanner_restart_at": "2026-09-15T00:32:56Z",
-  "smoke_passed_at": "2026-09-15T16:50:00Z",
-  "epoch_start": "2026-09-15T16:50:00Z",
-  "epoch_rule": "deployed SHA + successful market-hours smoke timestamp; never the restart time",
-  "cohort_boundary": {
-    "scans_first_id": 20972,
-    "scans_last_excluded_id": 20971,
-    "options_shadow_journal_first_id": 9192,
-    "options_shadow_journal_last_excluded_id": 9191,
-    "episode_blocks_before_epoch": 2,
-    "note": "rows with timestamp < epoch_start are pre-epoch telemetry only and are excluded from the official forward-evidence cohort"
+  "cohort": "V1-EPOCH-2",
+  "reason": "UNIVERSE_EXPANSION_6_TO_20",
+  "deployed_sha": "62546883dfffcf2c900bd632aa762d340a9d7956",
+  "release_dir": "/root/afs-releases/62546883dfff-20260916-062925",
+  "release_live_at": "2026-09-16T10:29:43Z",
+  "scanner_restart_at": "2026-09-16T16:42:45Z",
+  "first_clean_rth_cycle_at": "2026-09-16T16:47:46.550854Z",
+  "epoch_start": "2026-09-16T16:47:46.550854Z",
+  "epoch_rule": "deployed SHA + first clean market-hours cycle timestamp on the new universe; never the restart time",
+  "universe": {
+    "previous": ["AAPL", "MSFT", "NVDA", "TSLA", "SPY", "QQQ"],
+    "current": ["AAPL", "MSFT", "NVDA", "TSLA", "SPY", "QQQ", "AMZN", "GOOGL", "PLTR", "INTC", "IWM", "TLT", "JPM", "BAC", "COIN", "XOM", "MRK", "WMT", "NFLX", "GE"],
+    "config_path": "OPTIONS_SCANNER_WATCHLIST in /root/afs-shared/.env (only line changed; backup /root/afs-shared/.deploy-bak/pre-watchlist20-20260916T164245Z/)",
+    "selection_note": "contract viability is evaluated every cycle by the unchanged V1 policy; the eight symbols with no V1-valid contract at the 14:21Z census were deliberately kept because viability moved intraday between the 13:38Z and 14:21Z snapshots"
   },
+  "unchanged_from_epoch_1": [
+    "setup families and setup authority",
+    "targets, entry rules, premium stop, underlying invalidation",
+    "max $300 planned risk per trade, $1,000 aggregate ACTIVE risk",
+    "DTE policy, 5-minute cadence, contract selection logic",
+    "Signa authority (observational only, scorer contribution 0)",
+    "Discord eligibility, broker/execution capability (advisory only, provider read-only)",
+    "futures services and coverage collector untouched"
+  ],
+  "deployed_sha_note": "the scanner restart loaded release 62546883 because the shared release symlink had been moved by a futures deployment (#588) earlier the same day; 899a524..62546883 adds only alert_ranker/coverage_* modules that the scanner never imports and the venv is byte-identical, so scanner behaviour equals epoch 1 while the deployed SHA differs",
+  "cohort_boundary": {
+    "scans_first_id": 21898,
+    "scans_last_excluded_id": 21897,
+    "options_shadow_journal_first_id": 9207,
+    "options_shadow_journal_last_excluded_id": 9206,
+    "open_rows_carried_across_boundary": "journal 9187, 9188, 9194, 9197 (ACTIVE SPY 1D, $296), 9203, 9205 were OPEN before the boundary and are resolved from the database by resolve_open_candidates; their outcomes belong to epoch 1",
+    "note": "rows with timestamp < epoch_start are epoch-1 (six-symbol) evidence; rows at or after it are epoch-2 (20-symbol) evidence"
+  },
+  "activation_proof": {
+    "preflight_source_sha": "684bbf0620be46cbf89b8ebd78130022b9b83a8e",
+    "credentials": "isolated second Public secret (same account as production, verified) and second Signa key; production scanner stayed on set 1 throughout",
+    "core_capacity": "20/20 normalized-data builds in 24.9 s (p50 1.0 s, p95 2.0 s, max 4.0 s), 0 rate limits, 0 timeouts, 0 missing bars (14:19Z)",
+    "full_path_with_signa": "93.0 s, +68 s Signa increment; 3 legacy-Signa ReadTimeouts (3 s budget) which production's own six-symbol cycles were already showing on 29 of 60 rows that morning",
+    "contract_census": "20/20 chains in 7.3 s, 0 operational failures; V1-valid both sides NVDA, PLTR, INTC, IWM, TLT, NFLX; one side SPY, AMZN, GOOGL, JPM, COIN, MRK; none AAPL, MSFT, TSLA, QQQ, BAC, XOM, WMT, GE (14:21Z snapshot)",
+    "production_control": "six-symbol cycles at 14:17Z and 14:22Z completed 6/6 at 300 s cadence with no provider errors, 429s, missing bars, or restarts",
+    "legacy_signa_authority_audit": "scorer signa component fixed 0; no branch on signa_error/grade/score in scan, journal, or Discord eligibility paths at 899a524; SignaClient returns ok=False on any HTTP error within the 3 s timeout",
+    "first_live_cycles": "16:47:46Z: scans 21898-21945, 20/20 in 80 s insertion span, 0 market_data_error, 0 missing bars, bar context 20/20, 1 legacy Signa timeout (INTC), Signa v2 20/20; 16:52:46Z: 20/20 in 68 s, cadence gap 300 s, 0 errors, 7 legacy Signa timeouts; journal 9207-9213 written in the first cycle (ACTIVE IWM 1D $150 and MRK 1D $142.5; aggregate ACTIVE $588.5 of $1,000)",
+    "evidence_files": "box /root/afs-preflight/out-20260916/ (valid 14:19Z run) and /root/afs-preflight/out-20260916-1338-prebar/ (pre-bar run, archived); sidecar v1-preflight-20.provenance.json carries sha256 of scripts, modules and reports"
+  },
+  "fail_rule": "if the 20-symbol universe stops finishing inside the 5-minute cadence or provider/rate/data failures appear, add no symbols and revert to the last proven universe by restoring the backed-up watchlist line",
+  "cohort_change_rule": "any later change to setup, DTE, stop, target, filter, guard, floor, block, risk rules, or the universe starts a new cohort with a new epoch",
+  "previous_epochs": [
+    {
+      "policy_id": "OPTIONS_PAPER_V1",
+      "cohort": "V1-EPOCH-1",
+      "deployed_sha": "899a524aad82a66c80ba832ea5601430bdac7355",
+      "release_dir": "/root/afs-releases/899a524aad82-20260914-203217",
+      "release_live_at": "2026-09-15T00:32:37Z",
+      "scanner_restart_at": "2026-09-15T00:32:56Z",
+      "smoke_passed_at": "2026-09-15T16:50:00Z",
+      "epoch_start": "2026-09-15T16:50:00Z",
+      "epoch_end": "2026-09-16T16:47:46.550854Z",
+      "epoch_rule": "deployed SHA + successful market-hours smoke timestamp; never the restart time",
+      "cohort_boundary": {
+        "scans_first_id": 20972,
+        "scans_last_excluded_id": 20971,
+        "options_shadow_journal_first_id": 9192,
+        "options_shadow_journal_last_excluded_id": 9191,
+        "episode_blocks_before_epoch": 2,
+        "note": "rows with timestamp < epoch_start are pre-epoch telemetry only and are excluded from the official forward-evidence cohort"
+      },
+      "rules_in_force": {
+        "late_entry_guard": "PR #570 - refuse ACTIVE entry when live price is past target_1, past invalidation, or leaves < OPTIONS_PAPER_V1_MIN_REMAINING_RR (default 1.0) reward per unit of risk",
+        "daily_lane_entry_timing": "PR #571 - session-hourly 2U/2D confirmation not required (OPTIONS_PAPER_V1_DAILY_REQUIRE_HOURLY=false); SPY/QQQ trend alignment still required",
+        "daily_lane_target_floor": "PR #571 - prior-day levels closer than OPTIONS_PAPER_V1_DAILY_MIN_TARGET_RR (default 1.0) R from the trigger are skipped; no level beyond the floor -> counterfactual only, no synthetic target",
+        "entry_late_episode_block": "PR #575 - an episode refused ENTRY_LATE at its first actionable opportunity can never become ACTIVE; the refusal is preserved as a COUNTERFACTUAL observer row (no ACTIVE risk, no alert); a new trigger level or a new episode bucket is a new episode",
+        "canonical_bar": "30Min completed bars with the SIP delay buffer (960 s); scans every 5 minutes; live quote evaluated for remaining reward/risk",
+        "risk": "max $300 planned risk per trade, $1,000 aggregate ACTIVE; 45+ DTE (14-44 exception); companion OFF",
+        "signa": "observational only, scorer contribution 0, OPTIONS_SIGNA_V2_TIMEFRAME=1h"
+      },
+      "smoke_evidence": {
+        "rows_inspected": "scans 20497-21010 (13:32:57Z-16:47:57Z)",
+        "first_live_exercise": "NVDA 30m STRAT_212_CONTINUATION SHORT trigger 211.98: 16:17:57Z refused remaining_rr_0.60_below_1.00 -> COUNTERFACTUAL (no liquid contract), block recorded; 16:22/16:27 episode_blocked_after_entry_late with no chain call; bucket roll at 16:32:57Z -> new episode, refused 0.36R, second block",
+        "active_rows": 0,
+        "alerts_sent": 0,
+        "tracebacks": 0,
+        "signa_v2_timeframe_1h_rows": "all",
+        "scorer_signa_component_zero_rows": "all",
+        "not_exercised_today": "checklist items needing an ACTIVE row (contract selection through diagnostic snapshots) - unchanged code proven on the 2026-09-09/10 smokes"
+      },
+      "cohort_change_rule": "any later change to setup, DTE, stop, target, filter, guard, floor, block, or risk rules starts a new cohort with a new epoch"
+    }
+  ],
   "rules_in_force": {
     "late_entry_guard": "PR #570 - refuse ACTIVE entry when live price is past target_1, past invalidation, or leaves < OPTIONS_PAPER_V1_MIN_REMAINING_RR (default 1.0) reward per unit of risk",
     "daily_lane_entry_timing": "PR #571 - session-hourly 2U/2D confirmation not required (OPTIONS_PAPER_V1_DAILY_REQUIRE_HOURLY=false); SPY/QQQ trend alignment still required",
@@ -24,16 +96,5 @@
     "canonical_bar": "30Min completed bars with the SIP delay buffer (960 s); scans every 5 minutes; live quote evaluated for remaining reward/risk",
     "risk": "max $300 planned risk per trade, $1,000 aggregate ACTIVE; 45+ DTE (14-44 exception); companion OFF",
     "signa": "observational only, scorer contribution 0, OPTIONS_SIGNA_V2_TIMEFRAME=1h"
-  },
-  "smoke_evidence": {
-    "rows_inspected": "scans 20497-21010 (13:32:57Z-16:47:57Z)",
-    "first_live_exercise": "NVDA 30m STRAT_212_CONTINUATION SHORT trigger 211.98: 16:17:57Z refused remaining_rr_0.60_below_1.00 -> COUNTERFACTUAL (no liquid contract), block recorded; 16:22/16:27 episode_blocked_after_entry_late with no chain call; bucket roll at 16:32:57Z -> new episode, refused 0.36R, second block",
-    "active_rows": 0,
-    "alerts_sent": 0,
-    "tracebacks": 0,
-    "signa_v2_timeframe_1h_rows": "all",
-    "scorer_signa_component_zero_rows": "all",
-    "not_exercised_today": "checklist items needing an ACTIVE row (contract selection through diagnostic snapshots) - unchanged code proven on the 2026-09-09/10 smokes"
-  },
-  "cohort_change_rule": "any later change to setup, DTE, stop, target, filter, guard, floor, block, or risk rules starts a new cohort with a new epoch"
+  }
 }

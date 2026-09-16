@@ -8,7 +8,7 @@ Historical dated notes and old/closed PRs are provenance only. They do not overr
 
 **DEPLOYED / SMOKE PROVEN / V1 EVIDENCE EPOCH RECORDED (`899a524` + 2026-09-15T16:50:00Z, cohort `V1-EPOCH-1`) / STRATEGY EDGE NOT PROVEN.**
 
-Epoch record: `docs/options_v1_evidence_epoch.json`. Rows before the epoch timestamp are pre-epoch telemetry, not cohort evidence. Rules in force: #570 late-entry guard, #571 Daily-lane timing + 1R target floor, #575 ENTRY_LATE episode block (counterfactual preservation). Any rule change starts a new cohort.
+Epoch record: `docs/options_v1_evidence_epoch.json`. **Cohort `V1-EPOCH-2` (`UNIVERSE_EXPANSION_6_TO_20`) started 2026-09-16T16:47:46Z** on the first clean RTH cycle after the watchlist grew from 6 to 20 symbols (deployed release `62546883`, scanner code identical to `899a524`; rules, risk, cadence and Signa authority unchanged). `V1-EPOCH-1` (six symbols, 2026-09-15T16:50:00Z to 2026-09-16T16:47:46Z) is retained inside the record. Rows before an epoch's start belong to the previous cohort, not to it. Rules in force: #570 late-entry guard, #571 Daily-lane timing + 1R target floor, #575 ENTRY_LATE episode block (counterfactual preservation). Any rule change starts a new cohort.
 
 Deployed baseline on `main` and on the box: **`899a524aad82a66c80ba832ea5601430bdac7355`** (release dir `899a524aad82-20260914-203217`).
 
