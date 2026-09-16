@@ -1034,6 +1034,15 @@ def process_alert(
                 "campaign_id": _cio.CAMPAIGN_ID, "observation_only": True,
                 "written": _cio_summary.get("written", 0), "outcomes_resolved": len(_cio_resolved),
             }
+            # Campaign-specific informational notice on the optional
+            # "observation" Discord route. The MNQ/MES strategy "signal" route
+            # below is untouched; this is a side effect of the evidence write.
+            try:
+                from notifications.observation_notifier import notify_observation
+
+                notify_observation(list(_cio_summary.get("events") or []) + list(_cio_resolved))
+            except Exception:  # noqa: BLE001
+                logger.warning("observation Discord notification failed", exc_info=True)
         except Exception:  # noqa: BLE001 — observation evidence must fail soft
             logger.warning("cross-instrument observation skipped", exc_info=True)
 
