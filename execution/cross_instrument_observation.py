@@ -703,8 +703,14 @@ def resolve_pending(
                 continue
             row = {**rec, "record_type": "OUTCOME", "resolved_at_bar_ts": current_bar_ts, **outcome}
             population_key(row)
-            _append_evidence(log_dir, row)
-            resolved.append(row)
+            # The evidence file is the record of truth and is idempotent by
+            # (record_type, candidate_id). If the OUTCOME row already exists
+            # (e.g. a crash after the append but before the state save left
+            # stale pending state), the pending entry is still cleared but the
+            # row is NOT reported as newly resolved — so callers/notifiers
+            # never see the same outcome twice.
+            if _append_evidence(log_dir, row):
+                resolved.append(row)
             del campaign_state["pending"][cid]
             changed = True
         if changed:

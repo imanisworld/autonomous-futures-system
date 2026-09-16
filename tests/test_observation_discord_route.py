@@ -232,3 +232,57 @@ def test_mnq_campaign_leg_uses_observation_route_not_signal(tmp_path, config, ar
         assert "cross_instrument_observation" in out
     assert capture_router and all(u == "https://obs.invalid/route" for u, _ in capture_router)
     assert all(m.startswith("MNQ — OBSERVATION ONLY — ") for _, m in capture_router)
+
+
+# ── 6. idempotence: an already-persisted OUTCOME with stale pending state ────
+
+def test_stale_pending_with_persisted_outcome_is_cleared_without_duplicate_event(tmp_path, armed, monkeypatch, capture_router):
+    """Simulates a crash between the OUTCOME append and the state save: the
+    evidence file already holds the OUTCOME row but the candidate is still in
+    ``pending``. resolve_pending must clear the pending entry, must NOT append
+    a second OUTCOME row, must NOT return it as newly resolved, and therefore
+    must NOT notify Discord again."""
+    monkeypatch.setenv("DISCORD_ROUTE_OBSERVATION", "https://obs.invalid/route")
+    signal_ts = _ts(15, 0)
+    record = {
+        "evidence_schema_version": cio.SCHEMA_VERSION, "campaign_id": cio.CAMPAIGN_ID,
+        "record_type": "CANDIDATE", "candidate_id": "stale-pending-1", "strategy": "strat_212",
+        "instrument": "M2K", "variant": "observer", "evidence_epoch": EPOCH,
+        "collection_mode": cio.STRUCTURAL_OUTCOME, "direction": "LONG", "signal_timestamp": signal_ts,
+        "trading_date": cio.observation_day("M2K", signal_ts).isoformat(),
+        "observation_date": cio.observation_day("M2K", signal_ts).isoformat(),
+        "source_timeframe": "15", "entry": 100.0, "stop": 99.0, "target": 105.0,
+    }
+    pending = {"record": record, "filled": True, "fill_ts": signal_ts, "mae_points": 0.0, "mfe_points": 0.0, "bars_seen": 0}
+    # Persist CANDIDATE and an already-resolved OUTCOME (as a prior run would have).
+    assert cio._append_evidence(tmp_path, record) is True
+    outcome_row = {**record, "record_type": "OUTCOME", "resolved_at_bar_ts": _ts(15, 15),
+                   "result": "WIN", "exit_reason": "TARGET_HIT", "exit_price": 105.0, "exit_timestamp": _ts(15, 15),
+                   "pnl_r": 5.0}
+    assert cio._append_evidence(tmp_path, outcome_row) is True
+    # Stale state: pending never cleared (crash before _save_state).
+    state = {"campaign_id": cio.CAMPAIGN_ID, "pending": {record["candidate_id"]: pending},
+             "seen_candidate_ids": [record["candidate_id"]], "seen_bars": [], "strat_212_122": {}}
+    (tmp_path / cio.STATE_FILENAME).write_text(json.dumps(state), encoding="utf-8")
+    # A forward bar that resolves the bracket again.
+    from context.bar_history import BarHistory
+    BarHistory(log_dir=str(tmp_path)).record("M2K", ts=_ts(15, 15), open=100, high=106, low=100, close=105, timeframe="15")
+
+    resolved = cio.resolve_pending(tmp_path, instrument="M2K", bars=[], current_bar_ts=_ts(15, 15))
+
+    assert resolved == []                                                        # not reported twice
+    rows = cio.read_evidence(tmp_path)
+    assert sum(1 for r in rows if r["record_type"] == "OUTCOME" and r["candidate_id"] == "stale-pending-1") == 1
+    assert json.loads((tmp_path / cio.STATE_FILENAME).read_text())["pending"] == {}  # stale entry cleared
+    assert obs.notify_observation(resolved) == 0 and capture_router == []             # no duplicate notification
+    # Control: a genuinely new outcome still resolves, is returned once, and notifies once.
+    fresh = {**record, "candidate_id": "fresh-1", "signal_timestamp": _ts(15, 15), "entry": 100.0, "stop": 99.0, "target": 105.5}
+    assert cio._append_evidence(tmp_path, fresh) is True
+    state["pending"] = {"fresh-1": {"record": fresh, "filled": True, "fill_ts": _ts(15, 15), "mae_points": 0.0, "mfe_points": 0.0, "bars_seen": 0}}
+    (tmp_path / cio.STATE_FILENAME).write_text(json.dumps(state), encoding="utf-8")
+    BarHistory(log_dir=str(tmp_path)).record("M2K", ts=_ts(15, 30), open=105, high=107, low=104, close=106, timeframe="15")
+    resolved = cio.resolve_pending(tmp_path, instrument="M2K", bars=[], current_bar_ts=_ts(15, 30))
+    assert [r["candidate_id"] for r in resolved] == ["fresh-1"]
+    assert obs.notify_observation(resolved) == 1 and len(capture_router) == 1
+    assert capture_router[0][1].startswith("M2K — OBSERVATION ONLY — strat_212 LONG outcome WIN")
+    assert cio.resolve_pending(tmp_path, instrument="M2K", bars=[], current_bar_ts=_ts(15, 45)) == []  # nothing left
