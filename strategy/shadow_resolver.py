@@ -47,6 +47,24 @@ LOOKBACK_DAYS = 4
 _MAX_DAY_BARS = 500
 
 
+def _population_fields(*sources: Any) -> tuple[Optional[str], Optional[str]]:
+    """(evidence_epoch, variant) from the first source that carries each.
+
+    Candidate-level fields win over row-level ones. Legacy rows carry neither
+    and resolve with (None, None) — their identity and keys are unchanged.
+    """
+    epoch: Optional[str] = None
+    variant: Optional[str] = None
+    for src in sources:
+        if not isinstance(src, dict):
+            continue
+        if epoch is None and src.get("evidence_epoch"):
+            epoch = str(src["evidence_epoch"])
+        if variant is None and src.get("variant"):
+            variant = str(src["variant"])
+    return epoch, variant
+
+
 def _candidate_key(
     lane: str,
     instrument: str,
@@ -54,8 +72,17 @@ def _candidate_key(
     strategy: str,
     direction: str,
     entry: float,
+    evidence_epoch: Optional[str] = None,
+    variant: Optional[str] = None,
 ) -> str:
-    return f"{lane}|{instrument}|{bar_ts}|{strategy}|{direction}|{entry}"
+    """Resolver identity. Epoch/variant are appended ONLY when present so
+    every legacy key (and every already-journaled SHADOW_OUTCOME) still
+    matches byte-for-byte; two populations that differ only by epoch or
+    variant can never suppress each other's resolution."""
+    key = f"{lane}|{instrument}|{bar_ts}|{strategy}|{direction}|{entry}"
+    if evidence_epoch is not None or variant is not None:
+        key += f"|epoch={evidence_epoch}|variant={variant}"
+    return key
 
 
 def _pending_from_row(row: dict, instrument: str) -> list[dict]:
@@ -72,7 +99,9 @@ def _pending_from_row(row: dict, instrument: str) -> list[dict]:
         for cand in raw_candidates:
             parsed = _bracket(cand, "strategy")
             if parsed:
-                out.append({"lane": "shadow_setups", "bar_ts": bar_ts, **parsed})
+                epoch, variant = _population_fields(cand, row)
+                out.append({"lane": "shadow_setups", "bar_ts": bar_ts, **parsed,
+                            "evidence_epoch": epoch, "variant": variant})
 
     # NO_TRADE rows journal `range_signal`; TRADE rows journal the same dict as
     # `shadow_range_signal` — one lane, first present key wins.
@@ -81,7 +110,9 @@ def _pending_from_row(row: dict, instrument: str) -> list[dict]:
         if isinstance(range_signal, dict):
             parsed = _range_bracket(range_signal)
             if parsed:
-                out.append({"lane": "range_signal", "bar_ts": bar_ts, **parsed})
+                epoch, variant = _population_fields(range_signal, row)
+                out.append({"lane": "range_signal", "bar_ts": bar_ts, **parsed,
+                            "evidence_epoch": epoch, "variant": variant})
             break
     return out
 
@@ -178,6 +209,8 @@ def resolve_pending_shadow_outcomes(
             cand["strategy"],
             cand["direction"],
             cand["entry"],
+            cand.get("evidence_epoch"),
+            cand.get("variant"),
         )
         if key in resolved_keys:
             continue
@@ -227,6 +260,8 @@ def resolve_pending_shadow_outcomes(
             "lane": cand["lane"],
             "instrument": instrument,
             "strategy": cand["strategy"],
+            "evidence_epoch": cand.get("evidence_epoch"),
+            "variant": cand.get("variant"),
             "direction": cand["direction"],
             "entry": cand["entry"],
             "stop": cand["stop"],

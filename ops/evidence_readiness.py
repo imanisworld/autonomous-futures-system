@@ -86,7 +86,11 @@ def build_evidence_readiness(
                 _population(
                     "range_signal",
                     str(((entry.get("range_signal") or entry.get("shadow_range_signal") or {}).get("signal_type")) or "range_signal").lower(),
-                    entry.get("instrument"), entry.get("evidence_epoch"), None,
+                    entry.get("instrument"),
+                    ((entry.get("range_signal") or entry.get("shadow_range_signal") or {}).get("evidence_epoch")
+                     or entry.get("evidence_epoch")),
+                    ((entry.get("range_signal") or entry.get("shadow_range_signal") or {}).get("variant")
+                     or entry.get("variant")),
                 )
                 for entry in range_rows
             ],
@@ -105,8 +109,11 @@ def build_evidence_readiness(
             [entry for entry, _ in shadow_candidates],
             observation_count=len(shadow_candidates),
             observation_populations=[
+                # Candidate-level epoch/variant win over row-level, exactly as the
+                # live resolver (strategy/shadow_resolver.py::_population_fields) keys them.
                 _population("shadow_setups", candidate.get("strategy"), entry.get("instrument"),
-                            entry.get("evidence_epoch"), candidate.get("variant"))
+                            candidate.get("evidence_epoch") or entry.get("evidence_epoch"),
+                            candidate.get("variant") or entry.get("variant"))
                 for entry, candidate in shadow_candidates
             ],
             malformed=sum(

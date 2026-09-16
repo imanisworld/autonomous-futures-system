@@ -140,6 +140,17 @@ its own, and `ready_populations` names it. Lane-level totals remain as
 informational counts with `pooled_gate: false`. Legacy MNQ rows (no epoch /
 variant) keep their shape. Raw journals are not rewritten; thresholds unchanged.
 
+The live resolver (`strategy/shadow_resolver.py`) now carries the same identity
+end to end: `evidence_epoch` / `variant` are read from the candidate (falling
+back to the journal row), appended to `candidate_key` **only when present** (so
+every legacy key and every already-journaled `SHADOW_OUTCOME` still matches
+byte-for-byte), and written onto the `SHADOW_OUTCOME` row. Two candidates that
+differ only by epoch or variant resolve independently and can never suppress
+each other. Readiness reads observation epoch/variant from the candidate first,
+exactly as the resolver does. An end-to-end regression covers candidate →
+resolver → outcome → report/readiness for two epochs plus a legacy row, and
+15 × (epoch-A + epoch-B) = 30 pooled terminal outcomes staying INSUFFICIENT.
+
 ## Remaining blockers before any population-creation PR
 
 1. `execution/tradovate_broker.py` fallbacks (real-book route only; MNQ-only today).
