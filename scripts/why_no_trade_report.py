@@ -161,7 +161,7 @@ def build_report(rows: Iterable[dict[str, Any]]) -> dict[str, Any]:
             if strategy:
                 strategies[str(strategy)] += 1
         setup = bar.get("selected_setup")
-        # DecisionEngine candidate_audit normally already includes the selected
+        # The persisted candidate audit normally already includes the selected
         # setup. Only use the setup itself as a fallback when no candidate rows
         # were journaled, otherwise this summary would double-count it.
         if not bar["candidates"] and isinstance(setup, dict) and setup.get("strategy"):
