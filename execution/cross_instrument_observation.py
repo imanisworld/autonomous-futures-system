@@ -319,10 +319,25 @@ def read_evidence(log_dir: str | Path) -> list[dict]:
 
 
 def generating_sha() -> tuple[Optional[str], str]:
+    """Release SHA that produced this evidence row, with its provenance.
+
+    Same precedence as ``execution.forward_evidence_campaign.generating_sha``:
+    environment first, then the release manifest written by the sanctioned
+    release process (``release_manifest.json`` ``repo.commit`` in the process
+    cwd or the release root). When neither proves a SHA this fails CLOSED as
+    ``(None, "unknown")`` so the evidence-quality gate blocks the row.
+    """
     for name in ("AFS_RELEASE_SHA", "RELEASE_SHA", "GIT_SHA"):
         value = os.getenv(name, "").strip()
         if value:
             return value, f"environment:{name}"
+    for path in (Path.cwd() / "release_manifest.json", Path(__file__).resolve().parents[1] / "release_manifest.json"):
+        try:
+            value = json.loads(path.read_text(encoding="utf-8")).get("repo", {}).get("commit")
+        except (OSError, ValueError, TypeError, AttributeError):
+            continue
+        if isinstance(value, str) and value.strip():
+            return value.strip(), f"manifest:{path.name}"
     return None, "unknown"
 
 
