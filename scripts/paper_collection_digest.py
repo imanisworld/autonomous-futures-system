@@ -9,7 +9,7 @@ Runs as an EXTERNAL systemd oneshot on the box — never inside the trading
 service, so scheduling it requires no service restart.  Units live in
 deploy/systemd/ (afs-paper-collection-daily / -weekly) and use
 ``OnCalendar=... America/New_York`` exactly like afs-coverage-collector, so DST
-needs no re-pinning: daily Mon-Fri 17:15 ET (after the 16:35 ET options
+needs no re-pinning: daily Mon-Fri 17:15 ET (after the 16:45 ET options
 coverage collector and the 17:00 ET CME pause), weekly Friday 17:25 ET.
 Runbook: docs/paper-collection-digest.md.  Paths are passed explicitly on the
 command line so nothing in .env can redirect them.

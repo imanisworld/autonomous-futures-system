@@ -317,7 +317,7 @@ def test_systemd_units_use_new_york_calendar_after_the_collector():
     assert "OnCalendar=Mon..Fri *-*-* 17:15:00 America/New_York" in daily
     assert "OnCalendar=Fri *-*-* 17:25:00 America/New_York" in weekly
     collector = (root / "afs-coverage-collector.timer").read_text()
-    assert "16:35:00 America/New_York" in collector  # digest fires after the collector
+    assert "16:45:00 America/New_York" in collector  # #606 contract; the digest fires after it
     for name in ("afs-paper-collection-daily.service", "afs-paper-collection-weekly.service"):
         text = (root / name).read_text()
         assert "scripts.paper_collection_digest" in text and "--post" in text

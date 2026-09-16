@@ -48,7 +48,7 @@ so the first run cannot claim historical rows were "collected today". The digest
 
 `deploy/systemd/`:
 
-- `afs-paper-collection-daily.timer` — Mon–Fri 17:15 America/New_York (after the 16:35 ET options
+- `afs-paper-collection-daily.timer` — Mon–Fri 17:15 America/New_York (after the 16:45 ET options
   coverage collector and the 17:00 ET CME pause). The service runs futures then options.
 - `afs-paper-collection-weekly.timer` — Friday 17:25 America/New_York.
 

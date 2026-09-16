@@ -2,7 +2,7 @@
 Description=Run the AFS daily paper collection digest after both collections have settled (weekdays)
 
 [Timer]
-# 17:15 ET: after the 16:35 ET options coverage collector (afs-coverage-collector.timer,
+# 17:15 ET: after the 16:45 ET options coverage collector (afs-coverage-collector.timer,
 # 45-min budget but normally minutes) and after the 17:00 ET CME equity-futures pause,
 # so both sides have persisted their end-of-day evidence. Same America/New_York
 # calendar as the collector, so DST never needs a re-pin.
