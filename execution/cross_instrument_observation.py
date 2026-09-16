@@ -127,10 +127,12 @@ def observation_day(instrument: str, timestamp: object, *, for_date: Optional[da
     Globex equity/metals/energy products use the CME-style 18:00 ET trading-day
     boundary: bars at/after the reopen belong to the following trading date.
     MBT is 24/7 in 2026, so its observation horizon uses the ET calendar date.
-    ``for_date`` remains an explicit test/replay override.
+
+    ``for_date`` is accepted for call compatibility only. Evidence identity is
+    derived from the bar timestamp itself so a caller's UTC ``date.today()``
+    cannot split a live overnight sequence at midnight UTC.
     """
-    if for_date is not None:
-        return for_date
+    _ = for_date
     dt = _parse_timestamp(timestamp)
     if dt is None:
         raise ObservationError(f"invalid observation timestamp {timestamp!r}")
@@ -160,11 +162,7 @@ def load_config() -> dict:
 
 
 def configured_populations(epoch: Optional[str] = None) -> tuple[dict, ...]:
-    """Every configured population as a dict with its full identity.
-
-    ``evidence_epoch`` is the active epoch (or None when the campaign is not
-    armed, so zero-count enumeration still works before activation).
-    """
+    """Every configured population as a dict with its full identity."""
     config = load_config()
     epoch = epoch if epoch is not None else evidence_epoch()
     modes = set(config.get("collection_modes") or {})
@@ -179,7 +177,7 @@ def configured_populations(epoch: Optional[str] = None) -> tuple[dict, ...]:
         for instrument in row["instruments"]:
             if instrument not in OBSERVATION_UNIVERSE:
                 raise ObservationError(f"{instrument!r} is outside the observation universe")
-            contract_economics(instrument)  # proven metadata or raise
+            contract_economics(instrument)
             key = (strategy, instrument, variant)
             if key in seen:
                 raise ObservationError(f"duplicate population {key}")
@@ -274,12 +272,7 @@ def _evidence_identity(record: dict) -> Optional[tuple[str, str]]:
 
 
 def _append_evidence(log_dir: str | Path, record: dict) -> bool:
-    """Append one row exactly once by (record_type, candidate_id).
-
-    Evidence is written before mutable state, so a process crash can lose the
-    state save after the durable append. Replaying that bar must reconstruct
-    state without appending a second row or inflating readiness counts.
-    """
+    """Append one row exactly once by (record_type, candidate_id)."""
     path = Path(log_dir) / EVIDENCE_FILENAME
     path.parent.mkdir(parents=True, exist_ok=True)
     full = {"observed_at": datetime.now(timezone.utc).isoformat(), **record}
@@ -358,7 +351,6 @@ def _strat_212_122_candidate(
     trading_date: str,
     epoch: str,
 ) -> Optional[dict]:
-    """Canonical 2-1-2 / 1-2-2 detector: pure, tick-size-driven, no policy table."""
     from strategy.strat_212_122 import advance_strat_212_122
 
     strat = getattr(state_obj, "strat", None)
@@ -412,17 +404,12 @@ def observe_bar(
         return {"enabled": False, "written": 0}
     tf_minutes = normalize_timeframe_minutes(timeframe)
     if tf_minutes != DECISION_TIMEFRAME_MINUTES:
-        return {
-            "enabled": True,
-            "written": 0,
-            "skipped": "unsupported observation timeframe",
-            "timeframe_minutes": tf_minutes,
-        }
+        return {"enabled": True, "written": 0, "skipped": "unsupported observation timeframe", "timeframe_minutes": tf_minutes}
     instrument = contract_root(getattr(state_obj, "instrument", None))
     if instrument not in OBSERVATION_UNIVERSE:
         return {"enabled": True, "written": 0, "skipped": "outside observation universe"}
     bar_ts = state_obj.timestamp.isoformat()
-    trading_date = observation_day(instrument, state_obj.timestamp, for_date=for_date).isoformat()
+    trading_date = observation_day(instrument, state_obj.timestamp).isoformat()
     epoch = evidence_epoch()
     if epoch is None:
         return {"enabled": False, "written": 0}
@@ -532,7 +519,6 @@ def observe_bar(
 # ── resolution (structural populations only) ─────────────────────────────────
 
 def _resolve_one(pending: dict, forward: list[dict]) -> Optional[dict]:
-    """Walk forward bars (strictly after the signal bar, same observation day)."""
     rec = pending["record"]
     is_long = rec["direction"] == "LONG"
     entry, stop, target = rec["entry"], rec["stop"], rec["target"]
@@ -613,7 +599,26 @@ def resolve_pending(
     epoch = evidence_epoch()
     if epoch is None:
         return []
-    today = observation_day(instrument, current_bar_ts, for_date=for_date).isoformat()
+    current_dt = _parse_timestamp(current_bar_ts)
+    if current_dt is None:
+        return []
+    today = observation_day(instrument, current_dt).isoformat()
+
+    # Callers historically passed a one-UTC-day BarHistory window. Around 00:00Z
+    # that omits the prior 23:45Z bar even though the CME session is continuous.
+    # Prefer a two-file canonical history when available; explicit ``bars`` stay
+    # as a fallback for isolated tests and callers without BarHistory files.
+    try:
+        from context.bar_history import BarHistory
+
+        canonical = BarHistory(log_dir=str(log_dir)).recent(
+            instrument, 500, for_date=current_dt.date(), lookback_days=2
+        )
+        if canonical:
+            bars = canonical
+    except Exception:
+        pass
+
     resolved: list[dict] = []
     with _state_lock(log_dir):
         campaign_state = _load_state(log_dir)
