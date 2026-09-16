@@ -159,6 +159,7 @@ def observe_collection_only_alert(
             volume=state.volume.current_bar if state.volume else None,
             timeframe="15",
             for_date=for_date,
+            source_ticker=clean.ticker,
         )
         bar_recorded = True
         # Two UTC files are required around midnight. Filter explicitly because
