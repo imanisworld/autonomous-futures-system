@@ -29,6 +29,7 @@ from alert_ranker.coverage_collector import (
     outcome_from_row,
     outcomes_completion,
     provider_error_lines,
+    split_provider_errors,
     read_ledger,
     reduced_episode_count,
     refuse_v1_database,
@@ -306,6 +307,21 @@ def test_provider_error_lines():
     assert provider_error_lines("all fine\n") == []
 
 
+def test_allow_listed_missing_symbol_is_tolerated_everything_else_is_fatal():
+    """2026-09-16 21:03Z: the observer reported the two dead tickers as provider errors and the
+    collector failed although both are on its own unobservable allow-list."""
+    lines = [
+        "provider error: SQ: missing_symbol:SQ",
+        "provider error: VIX: missing_symbol:VIX",
+        "provider error: AAPL: 5Min:provider_entitlement:{\"message\":\"subscription does not permit querying recent SIP data\"}",
+        "provider error: NVDA: missing_symbol:NVDA",
+    ]
+    fatal, tolerated = split_provider_errors(lines, ("SQ", "VIX"))
+    assert tolerated == lines[:2]
+    assert fatal == lines[2:]
+    assert split_provider_errors(lines[:2], ())[0] == lines[:2]  # no allow-list → still fatal
+
+
 def test_ledger_is_append_only(tmp_path):
     path = tmp_path / "ledger.jsonl"
     append_ledger(path, {"a": 1})
@@ -442,6 +458,10 @@ def test_repaired_observer_dataset_invalidates_bound_daily_file(tmp_path, creds)
     done = [r for r in read_ledger(kw["data_dir"] / "ledger.jsonl") if r["status"] == STATUS_DONE][-1]
     assert done["steps"]["observer"] == "already_complete" and "outcomes_tainted_moved" in done["steps"]
     assert "binding_observer_run" in done["steps"]["outcomes_rerun_reason"]
+    # The observer ran twice for this session (run history) → the repair is recorded even
+    # though THIS collector run did not re-observe (what 2026-09-16 looks like on the box).
+    assert done["observer_repair"]["prior_run_id"] == 1 and done["observer_repair"]["repaired_run_id"] == coverage.run_id
+    assert json.loads(binding_path(daily, DAY).read_text())["observer_repair"]["prior_run_id"] == 1
     assert sum(1 for p in daily.iterdir() if ".tainted." in p.name) == 4  # json, csv, md, binding kept
     fresh = json.loads(binding_path(daily, DAY).read_text())
     assert fresh["observer_run_id"] == coverage.run_id and fresh["raw_events"] == 4 and fresh["reducer_episodes"] == 4
@@ -495,6 +515,15 @@ def test_provider_error_in_observer_output_fails_closed(tmp_path, creds):
     runner = FakeRunner(kw["sqlite_path"], kw["data_dir"] / "daily", observer_stdout="  provider error: NVDA: provider_error:429\n")
     assert cli.main([], runner=runner, **kw) == 1
     assert read_ledger(kw["data_dir"] / "ledger.jsonl")[-1]["reason"] == "observer_provider_errors"
+
+
+def test_allow_listed_dead_ticker_lines_do_not_fail_the_run(tmp_path, creds):
+    kw = make_cli_args(tmp_path)  # allow_unobservable=("SQ",)
+    runner = FakeRunner(kw["sqlite_path"], kw["data_dir"] / "daily", observer_stdout="  provider error: SQ: missing_symbol:SQ\n")
+    assert cli.main([], runner=runner, **kw) == 0
+    done = [r for r in read_ledger(kw["data_dir"] / "ledger.jsonl") if r["status"] == STATUS_DONE][-1]
+    assert done["steps"]["observer"] == "ran" and "SQ: missing_symbol" in done["steps"]["observer_unobservable_tolerated"]
+    assert done["observer_repair"] is None
 
 
 def test_subprocess_failure_fails_closed(tmp_path, creds):
