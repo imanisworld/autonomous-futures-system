@@ -149,16 +149,15 @@ def discover_inputs(
             if normalized is None:
                 continue
             ts = normalized["ts"]
-            existing = bars.get(ts)
-            if existing is not None and existing != normalized:
-                raise core.StudyError(f"conflicting duplicate 15m bar timestamp {ts}")
+            if ts in bars:
+                raise core.StudyError(f"duplicate MES 15m bar timestamp {ts}")
             bars[ts] = normalized
     if not bars:
         raise core.StudyError("no MES 15m bars found")
 
     journals: list[dict[str, Any]] = []
     skipped = 0
-    seen_journal_identity: dict[tuple[Any, ...], dict[str, Any]] = {}
+    seen_journal_identity: set[tuple[Any, ...]] = set()
     for path in journal_files:
         file_rows, file_skips = core._json_lines(
             path, skip_invalid=allow_journal_parse_skips
@@ -177,12 +176,10 @@ def discover_inputs(
                 row.get("decision"),
                 row.get("instrument"),
             )
-            existing = seen_journal_identity.get(identity)
-            if existing is not None and existing != row:
-                raise core.StudyError(f"conflicting duplicate MES journal row {identity}")
-            if existing is None:
-                seen_journal_identity[identity] = row
-                journals.append(row)
+            if identity in seen_journal_identity:
+                raise core.StudyError(f"duplicate MES journal row {identity}")
+            seen_journal_identity.add(identity)
+            journals.append(row)
     if not journals:
         raise core.StudyError("no qualifying MES 15m journal decision rows found")
 
