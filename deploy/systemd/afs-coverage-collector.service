@@ -1,0 +1,27 @@
+[Unit]
+Description=AFS options coverage collector (read-only evidence; after-close oneshot; pinned coverage release)
+# Network only. Deliberately NOT ordered with futures-bot / the options scanner:
+# this unit never touches them, never pulls git, never restarts anything.
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Runs from its OWN pinned, immutable release under afs-shared/coverage — never from the
+# production tree (/root/autonomous-futures-system) — so it cannot silently change when
+# production is released. Activated by deploy/coverage/install_coverage_release.sh.
+WorkingDirectory=/root/afs-shared/coverage/current
+# Provides ALPACA_KEY/ALPACA_SECRET (data feed) and ALPACA_ENDPOINT (calendar cross-check) only.
+EnvironmentFile=/root/afs-shared/.env
+# Paths are passed explicitly so nothing in .env (e.g. the V1 OPTIONS_SQLITE_PATH) can redirect them.
+# --require-pinned refuses to run unless the tree carries a release manifest naming its commit.
+ExecStart=/root/afs-shared/coverage/current/.venv/bin/python /root/afs-shared/coverage/current/scripts/options_coverage_collect.py \
+    --require-pinned \
+    --sqlite /root/afs-shared/coverage/options_coverage_observer.sqlite \
+    --data-dir /root/afs-shared/coverage
+TimeoutStartSec=45min
+Nice=10
+NoNewPrivileges=true
+PrivateTmp=true
+StandardOutput=journal
+StandardError=journal

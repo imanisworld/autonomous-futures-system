@@ -122,3 +122,88 @@ exclusive gate-stage bucket (UNSUPPORTED_FAMILY → TARGET_GEOMETRY_REJECTED →
 MARKET_ALIGNMENT_REJECTED → LATE_AT_FIRST_SIGHT → WOULD_OTHERWISE_QUALIFY).
 Outputs JSON + CSV + Markdown under `logs/coverage_outcomes/` (gitignored).
 Identity `OPTIONS_COVERAGE_OUTCOMES / out-v0.1`. Not a promotion study.
+
+## After-close collector (`col-v0.1`) — isolated, pinned oneshot + timer
+
+`scripts/options_coverage_collect.py` runs the three read-only scripts above
+for every **newly completed session** and verifies each step. It is the daily
+routine that was run by hand after each close, made idempotent, append-only,
+fail-closed and self-recovering. Identity `OPTIONS_COVERAGE_COLLECTOR / col-v0.1`.
+
+```
+python scripts/options_coverage_collect.py                    # every settled, uncollected session since --from, oldest first
+python scripts/options_coverage_collect.py --date 2026-09-16  # one explicit session
+python scripts/options_coverage_collect.py --plan             # resolve + report only; runs and writes nothing
+```
+
+**Which sessions.** Candidates are every session from the collection start
+(`--from`, default 2026-09-09) whose close + 30 min has passed (static NYSE
+calendar: holidays, weekends and 13:00 ET early closes) and whose evidence is
+not yet complete. They run oldest → newest and stop at the first failure, so a
+box that misses several closes catches up by itself on the next firing;
+`--max-sessions` (default 10) caps one run and defers the rest with a
+`DEFERRED` ledger line. An explicit `--date` that has not settled fails closed;
+a weekend or holiday is `SKIPPED` (exit 0). With credentials the broker's
+read-only calendar is cross-checked per session: no session there → `SKIPPED`
+(unscheduled closure); a different close → `FAILED calendar_mismatch`.
+
+**Steps per session.** (1) observer `--date D` → observer sqlite; (2) outcomes
+`--from D --to D` → `<data>/daily/outcomes_D_D.{json,csv,md}` plus a
+**binding** sidecar `outcomes_D_D.binding.json` naming the observer run id,
+raw event count, reducer episode count, outcome episode count and source
+commit. Then once per run: (3) episode reducer `--from F --to D` →
+`<data>/aggregate/episodes_F_D.json` and a **local** roll-up of every stored
+daily outcome file → `<data>/aggregate/outcomes_F_D.{json,md}` (no provider
+call; sessions without a daily file are listed in `sessions_missing`).
+
+**Complete means bound.** A daily file counts as complete only when its
+binding matches the *current* observer state for that date (latest run id,
+event count) and its episode count equals what the reducer produces from the
+stored events now. A repaired or re-run observer dataset therefore invalidates
+the older outcome file: it is moved aside as `*.tainted.<ts>` and re-measured.
+
+**Provenance.** Every ledger line carries the exact source commit. The
+reducer aggregate `episodes_F_D.json` is self-describing: the collector adds a
+top-level `provenance` block (source sha, how it was established, release
+manifest fingerprint, collector/reducer/observer versions, range, episode
+count) to the ep-v0.1 payload. The cumulative roll-up records who assembled it
+(`aggregated_by.source`) **and** which commit produced each constituent daily
+file (`sessions_provenance`, keyed by session, copied from each binding
+sidecar; `constituent_source_shas` lists the distinct commits). A daily file
+whose sidecar is missing, malformed, for another session, or names no real
+commit is refused from the roll-up (`daily_provenance_missing` /
+`daily_provenance_invalid`), never silently included. Under `--require-pinned` (the systemd unit) the commit must come
+from `release_manifest.json` inside the immutable tree being executed, and that
+tree's directory must be named after the commit; a working tree is refused. Off
+the box, a working tree is allowed and labelled `working_tree` with its dirty flag.
+
+**Fail closed** (`FAILED`, exit 1, reason in the ledger): missing
+credentials, non-zero exit, any `provider error:` line from the observer,
+a universe symbol without a row, an unobservable symbol not on the allow-list
+(`--allow-unobservable`, default `SQ,VIX`), SPY or QQQ unobservable, zero
+events, provider errors or zero episodes in the daily file, a binding
+mismatch that survives re-measurement, or any missing output. The observer
+sqlite path is refused if it is the V1 scanner database by name or by schema.
+
+**Idempotent, append-only.** A complete session is `ALREADY_COLLECTED` without
+any fetch. The observer's own `INSERT OR REPLACE` keys make a retry safe.
+Nothing under `<data>` is deleted. Every attempt appends lines to
+`<data>/ledger.jsonl` (`STARTED`/`DONE`/`ALREADY_COLLECTED`/`SKIPPED`/`FAILED`/
+`DEFERRED`/`AGGREGATED`) and each subprocess gets a fresh log under
+`<data>/runs/<D>/`. A file lock prevents overlap.
+
+**Not in this lane.** No `git pull`, no service restarts, no V1 database
+access, no alerts, no promotion or policy logic — the collector's commands
+are the three scripts and nothing else (asserted by tests).
+
+**Pinned install (not performed by this change).** The collector never runs
+from the production tree. `deploy/coverage/install_coverage_release.sh build <sha>`
+stages an immutable copy of exactly that commit (own `.venv`, `release_manifest.json`,
+`chmod a-w`) under `/root/afs-shared/coverage/releases/<sha>`; `activate <sha>`
+points `/root/afs-shared/coverage/current` at it and installs
+`deploy/systemd/afs-coverage-collector.{service,timer}` (`Type=oneshot`,
+`Mon..Fri 16:35 America/New_York`, `Persistent=true`, `--require-pinned`,
+evidence paths passed explicitly under `/root/afs-shared/coverage/`). It never
+touches `/root/autonomous-futures-system`, `/root/afs-releases`, `futures-bot`,
+the scanner or the watcher. Moving the collector to a newer commit is a new
+`build` + `activate`, never a `git pull`.
