@@ -128,9 +128,10 @@ def test_unexpected_structural_authority_is_visible_not_silently_normalized():
     assert build_report([row])["summary"]["unexpected_structural_authority_true"] == 1
 
 
-def test_risk_rejection_becomes_primary_rejection_when_no_decision_gate():
+def test_risk_rejection_is_primary_over_earlier_diagnostic_gate():
     row = _row(
-        failed_gates=[],
+        decision="RISK_REJECTED",
+        failed_gates=["NON_BLOCKING_DIAGNOSTIC"],
         risk_check={"result": "REJECTED", "failed_rule": "max_daily_loss", "reason": "cap"},
     )
     assert decision_bar(row)["primary_rejection"] == "max_daily_loss"
