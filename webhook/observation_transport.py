@@ -19,7 +19,7 @@ from typing import Optional
 
 from config.futures_contracts import contract_root
 from context.bar_history import BarHistory
-from context.five_min_feed import is_five_min, record_five_min
+from context.five_min_feed import is_five_min, normalize_minutes, record_five_min
 from execution import cross_instrument_observation as cio
 from webhook.payload import AlertPayload
 from webhook.state_builder import build_market_state
@@ -77,13 +77,30 @@ def observe_collection_only_alert(
     ``decision == "OBSERVATION_ONLY"``; never raises into the caller."""
     root = contract_root(payload.ticker)
     if root is None or not cio.is_collection_only(root):
-        return _result(payload, root, skipped="not a collection-only root")
+        return _result(payload, root, skipped="not a collection-only root", transport_ok=False, bar_recorded=False)
 
     clean, ignored = strip_pine_advisory(payload)
+    if not cio.campaign_enabled():
+        return _result(
+            clean, root, skipped="campaign disabled", transport_ok=True, bar_recorded=False,
+            pine_advisory_ignored=ignored,
+        )
+
+    tf_minutes = normalize_minutes(clean.timeframe)
     try:
         if is_five_min(clean.timeframe):
             record_five_min(clean, log_dir, for_date=for_date)
-            return _result(clean, root, lane="5m_feed", bar_recorded=True, pine_advisory_ignored=ignored)
+            return _result(
+                clean, root, lane="5m_feed", timeframe_minutes=5, bar_recorded=True,
+                transport_ok=True, pine_advisory_ignored=ignored,
+            )
+        if tf_minutes != cio.DECISION_TIMEFRAME_MINUTES:
+            return _result(
+                clean, root, lane="unsupported_timeframe", timeframe_minutes=tf_minutes,
+                bar_recorded=False, transport_ok=False,
+                error=f"cross-instrument observation requires 15m bars, got {clean.timeframe!r}",
+                pine_advisory_ignored=ignored,
+            )
 
         state = build_market_state(clean)
         bar_hist = BarHistory(log_dir=log_dir)
@@ -92,11 +109,13 @@ def observe_collection_only_alert(
             ts=clean.timestamp,
             open=state.ohlc.open, high=state.ohlc.high, low=state.ohlc.low, close=state.ohlc.close,
             volume=state.volume.current_bar if state.volume else None,
-            timeframe=state.ohlc.timeframe,
+            timeframe="15",
             for_date=for_date,
         )
-        recent_bars = bar_hist.recent(root, 8, for_date=for_date)
-        history = bar_hist.recent(root, 500, for_date=for_date, lookback_days=1)
+        # Two UTC files are required around midnight; the campaign itself uses
+        # a product-aware observation day rather than UTC date prefixes.
+        recent_bars = bar_hist.recent(root, 8, for_date=for_date, lookback_days=2)
+        history = bar_hist.recent(root, 500, for_date=for_date, lookback_days=2)
         resolved = cio.resolve_pending(
             log_dir, instrument=root, bars=history,
             current_bar_ts=state.timestamp.isoformat(), for_date=for_date,
@@ -112,16 +131,21 @@ def observe_collection_only_alert(
         ]
         summary = cio.observe_bar(
             log_dir, state, candidates,
-            timeframe=str(clean.timeframe), for_date=for_date, source="observation_transport",
+            timeframe="15", for_date=for_date, source="observation_transport",
             pine_advisory_ignored=ignored,
         )
-        out = _result(clean, root, lane="15m_observation", bar_recorded=True,
-                      candidates_evaluated=len(candidates), outcomes_resolved=len(resolved),
-                      pine_advisory_ignored=ignored, **summary)
+        out = _result(
+            clean, root, lane="15m_observation", timeframe_minutes=15, bar_recorded=True,
+            transport_ok=True, candidates_evaluated=len(candidates), outcomes_resolved=len(resolved),
+            pine_advisory_ignored=ignored, **summary,
+        )
         out["session"] = state.session
         out["context"] = {"instrument": root, "session": state.session, "timestamp": state.timestamp.isoformat(),
                           "close": float(state.ohlc.close), "timeframe": state.ohlc.timeframe}
         return out
     except Exception as exc:  # noqa: BLE001 — observation must never raise into ingestion
         logger.warning("observation transport failed for %s: %s", payload.ticker, exc, exc_info=True)
-        return _result(clean, root, error=str(exc), pine_advisory_ignored=ignored)
+        return _result(
+            clean, root, error=str(exc), transport_ok=False, bar_recorded=False,
+            timeframe_minutes=tf_minutes, pine_advisory_ignored=ignored,
+        )
