@@ -102,13 +102,16 @@ class BarHistory:
         timeframe: Optional[str] = None,
         for_date: Optional[date] = None,
         source: Optional[str] = None,
+        source_ticker: Optional[str] = None,
     ) -> dict:
         """Append one bar-close record. Idempotent on the LAST timestamp: if the
         most recent stored bar for this instrument/day has the same ts (a resend),
         it is NOT appended again. Returns the stored record.
 
         `source` marks bars that did NOT arrive via live ingestion (e.g.
-        "polygon" backfill); live bars omit it.
+        "polygon" backfill); live bars omit it. `source_ticker` preserves the
+        exact contract/continuous symbol that produced a live bar so evidence
+        quality can detect roll contamination without changing price logic.
         """
         d = for_date or _ts_date(ts)
         self.log_dir.mkdir(parents=True, exist_ok=True)
@@ -124,6 +127,8 @@ class BarHistory:
         }
         if source:
             rec["source"] = source
+        if source_ticker:
+            rec["source_ticker"] = str(source_ticker)
         existing = self._read_bars(path)
         if existing and existing[-1].get("ts") == rec["ts"]:
             return existing[-1]
@@ -169,6 +174,9 @@ class BarHistory:
                 "timeframe": b.get("timeframe"),
                 "source": source,
             }
+            source_ticker = b.get("source_ticker") or b.get("ticker")
+            if source_ticker:
+                rec["source_ticker"] = str(source_ticker)
             added.append(rec)
         if not added:
             return 0
