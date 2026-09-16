@@ -7,6 +7,31 @@ import subprocess
 import sys
 
 
+def _journal_row():
+    return {
+        "instrument": "MES",
+        "decision": "NO_TRADE",
+        "context": {
+            "timeframe": "15",
+            "timestamp": "2026-09-01T23:00:00+00:00",
+            "session": "asian",
+            "market_condition": "RANGE_BOUND",
+            "structural_market_condition": "STRUCTURAL_RANGE",
+            "structural_direction": None,
+            "trend": {"direction": "UP", "strength": "STRONG"},
+            "shadow_candidates": [
+                {
+                    "strategy": "demo",
+                    "direction": "LONG",
+                    "entry": 100.0,
+                    "stop": 95.0,
+                    "target": 110.0,
+                }
+            ],
+        },
+    }
+
+
 def _write_fixture(data_dir: Path) -> None:
     bars = [
         {
@@ -40,29 +65,47 @@ def _write_fixture(data_dir: Path) -> None:
     (data_dir / "bars_MES_fixture.jsonl").write_text(
         "\n".join(json.dumps(row) for row in bars) + "\n"
     )
-    journal = {
-        "instrument": "MES",
-        "decision": "NO_TRADE",
-        "context": {
-            "timeframe": "15",
+    (data_dir / "journal_2026-09-01.jsonl").write_text(
+        json.dumps(_journal_row()) + "\n"
+    )
+
+
+def _write_canonical_polygon_fixture(data_dir: Path) -> None:
+    bars = [
+        {
+            "instrument": "MES",
+            "timeframe": "15m",
             "timestamp": "2026-09-01T23:00:00+00:00",
-            "session": "asian",
-            "market_condition": "RANGE_BOUND",
-            "structural_market_condition": "STRUCTURAL_RANGE",
-            "structural_direction": None,
-            "trend": {"direction": "UP", "strength": "STRONG"},
-            "shadow_candidates": [
-                {
-                    "strategy": "demo",
-                    "direction": "LONG",
-                    "entry": 100.0,
-                    "stop": 95.0,
-                    "target": 110.0,
-                }
-            ],
+            "open": 99.0,
+            "high": 101.0,
+            "low": 98.0,
+            "close": 100.0,
         },
-    }
-    (data_dir / "journal_2026-09-01.jsonl").write_text(json.dumps(journal) + "\n")
+        {
+            "instrument": "MES",
+            "timeframe": "15m",
+            "timestamp": "2026-09-01T23:15:00+00:00",
+            "open": 100.0,
+            "high": 102.0,
+            "low": 99.0,
+            "close": 101.0,
+        },
+        {
+            "instrument": "MES",
+            "timeframe": "15m",
+            "timestamp": "2026-09-01T23:30:00+00:00",
+            "open": 101.0,
+            "high": 111.0,
+            "low": 100.0,
+            "close": 110.0,
+        },
+    ]
+    (data_dir / "MES_2026-09-01.jsonl").write_text(
+        "\n".join(json.dumps(row) for row in bars) + "\n"
+    )
+    (data_dir / "journal_2026-09-01.jsonl").write_text(
+        json.dumps(_journal_row()) + "\n"
+    )
 
 
 def _run(repo: Path, data_dir: Path, out_dir: Path) -> subprocess.CompletedProcess[str]:
@@ -136,6 +179,30 @@ def test_direct_cli_without_pythonpath_is_deterministic(tmp_path):
     assert m1["fill_assumptions"]["ioc_tolerance_ticks"] == 16.0
     assert m1["fill_assumptions"]["ioc_tolerance_points"] == 4.0
     assert m1["journal_parse_skips"] == 0
+
+
+def test_cli_accepts_canonical_polygon_replay_filename_and_timestamp_field(tmp_path):
+    repo = Path(__file__).resolve().parents[1]
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    _write_canonical_polygon_fixture(data_dir)
+
+    out = tmp_path / "out"
+    _run(repo, data_dir, out)
+
+    baseline = [json.loads(line) for line in (out / "baseline.jsonl").read_text().splitlines()]
+    manifest = json.loads((out / "manifest.json").read_text())
+    assert len(baseline) == 1
+    assert baseline[0]["signal_ts"] == "2026-09-01T23:00:00+00:00"
+    assert baseline[0]["result"] == "WIN"
+    assert any(
+        entry["path"].endswith("MES_2026-09-01.jsonl")
+        for entry in manifest["inputs"]["bars"]
+    )
+    assert manifest["accepted_bar_input_shapes"] == [
+        "bars_MES_*.jsonl with ts",
+        "polygon_to_replay MES_*.jsonl with timestamp",
+    ]
 
 
 def test_cli_refuses_permissive_parse_behavior_by_default(tmp_path):
