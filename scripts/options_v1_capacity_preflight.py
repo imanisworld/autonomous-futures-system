@@ -74,6 +74,58 @@ class _SnapshotOnlyMarketData:
         return await self.delegate.fetch_market_snapshot(ticker)
 
 
+class _RecordingBarProvider:
+    """Preserve transport failure detail the production scanner intentionally compresses.
+
+    ``multisetup_scanner`` turns a ``BarProviderError`` into a stable reason
+    such as ``provider_error`` / ``provider_unavailable``.  That is correct for
+    trading telemetry, but a capacity audit needs the underlying ``HTTP 429``
+    or ``ReadTimeout`` detail.  This wrapper records the exception and re-raises
+    it unchanged, so scanner behavior is identical while the preflight can
+    classify rate limits/timeouts accurately.
+    """
+
+    def __init__(self, delegate: Any):
+        self.delegate = delegate
+        self.feed = getattr(delegate, "feed", "")
+        self.last_reason: str | None = None
+        self.last_detail: str | None = None
+
+    def reset(self) -> None:
+        self.last_reason = None
+        self.last_detail = None
+
+    async def fetch_bars(self, symbols, timeframe, start, end):
+        self.reset()
+        try:
+            return await self.delegate.fetch_bars(symbols, timeframe, start, end)
+        except Exception as exc:
+            self.last_reason = str(getattr(exc, "reason", type(exc).__name__) or type(exc).__name__)
+            self.last_detail = str(getattr(exc, "detail", "") or exc)
+            raise
+
+
+class _CapacityScannerView:
+    """Add preflight-only bar transport detail to normalized scanner telemetry."""
+
+    def __init__(self, scanner: Any, bar_provider: _RecordingBarProvider):
+        self.scanner = scanner
+        self.bar_provider = bar_provider
+
+    async def _build_normalized_data(self, ticker: str, context: dict[str, Any], now: datetime):
+        self.bar_provider.reset()
+        data = await self.scanner._build_normalized_data(ticker, context, now)
+        if self.bar_provider.last_reason:
+            enriched = dict(data)
+            existing = str(enriched.get("bar_context_reason") or "")
+            transport = self.bar_provider.last_reason
+            if self.bar_provider.last_detail:
+                transport += f":{self.bar_provider.last_detail}"
+            enriched["bar_context_reason"] = "|".join(part for part in (existing, transport) if part)
+            return enriched
+        return data
+
+
 
 def _git_source() -> dict[str, Any]:
     def run(*args: str) -> str:
@@ -145,19 +197,25 @@ async def _run() -> tuple[int, dict[str, Any]]:
     # Capacity proof must represent a scheduled live cycle, not a stale after-
     # hours quote path.  The scanner method is calendar-aware and read-only.
     async with create_market_data_client(cfg) as provider:
+        bar_context = create_bar_context(cfg)
+        if bar_context is None:  # defensive: preconditions above should catch this
+            base.update({"verdict": "FAIL", "reasons": ["bar_context_unconfigured"], "report": None})
+            return 1, base
+        bar_probe = _RecordingBarProvider(bar_context.provider)
+        bar_context.provider = bar_probe
         scanner = OptionsScanner(
             cfg,
             _SnapshotOnlyMarketData(provider),
             _ForbiddenSideEffect("storage"),
             _ForbiddenSideEffect("discord"),
-            bar_context=create_bar_context(cfg),
+            bar_context=bar_context,
         )
         if not scanner.is_market_hours(now):
             base.update({"verdict": "FAIL", "reasons": ["outside_market_hours"], "report": None})
             return 1, base
 
         report = await run_serial_capacity_preflight(
-            scanner,
+            _CapacityScannerView(scanner, bar_probe),
             tickers,
             now=now,
             interval_seconds=float(cfg.interval_minutes * 60),
