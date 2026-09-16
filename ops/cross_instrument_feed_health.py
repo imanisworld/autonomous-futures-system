@@ -30,9 +30,21 @@ from execution.cross_instrument_observation import (  # noqa: E402
     normalize_timeframe_minutes,
 )
 
+_TRANSPORT_PREFIX = "cross_instrument_observation_v1_transport_"
+_COLLECTION_ONLY = {"M2K", "MGC", "MCL", "MBT"}
+
 
 def _load_state(log_dir: str | Path) -> dict:
     path = Path(log_dir) / STATE_FILENAME
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return raw if isinstance(raw, dict) else {}
+
+
+def _load_transport_status(log_dir: str | Path, instrument: str) -> dict:
+    path = Path(log_dir) / f"{_TRANSPORT_PREFIX}{instrument}.json"
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
@@ -81,9 +93,10 @@ def build_feed_health(
 ) -> dict:
     """Return per-instrument 15m campaign-processing proof.
 
-    `transport_ok` means observe_bar completed far enough to persist its epoch-
-    scoped seen-bar key. `bar_recorded` independently verifies that exact 15m bar
-    exists in BarHistory. Both are required for `proven_15m`.
+    A root is healthy only when its active-epoch campaign seen-bar is backed by
+    the exact 15m BarHistory row. For collection-only roots, the latest explicit
+    15m transport attempt is also authoritative: a newer failed attempt flips
+    health to TRANSPORT_ERROR immediately instead of waiting for staleness.
     """
     now = now or datetime.now(timezone.utc)
     if now.tzinfo is None:
@@ -110,12 +123,33 @@ def build_feed_health(
     instruments: dict[str, dict] = {}
     missing: list[str] = []
     stale: list[str] = []
+    transport_errors: list[str] = []
     for instrument in OBSERVATION_UNIVERSE:
         bar_ts = latest.get(instrument)
         last_dt = _parse_dt(bar_ts) if bar_ts else None
-        transport_ok = last_dt is not None
         bar_recorded = bool(bar_ts) and _matching_recorded_bar(log_dir, instrument, bar_ts)
-        proven = transport_ok and bar_recorded
+        proven = last_dt is not None and bar_recorded
+
+        marker = _load_transport_status(log_dir, instrument) if instrument in _COLLECTION_ONLY else {}
+        marker_epoch = marker.get("evidence_epoch")
+        marker_tf = normalize_timeframe_minutes(marker.get("timeframe_minutes"))
+        marker_dt = _parse_dt(marker.get("bar_ts"))
+        marker_applies = bool(
+            marker
+            and active_epoch
+            and marker_epoch == active_epoch
+            and marker_tf == DECISION_TIMEFRAME_MINUTES
+            and marker_dt is not None
+        )
+        latest_attempt_ok = None if not marker_applies else bool(marker.get("transport_ok"))
+        latest_attempt_recorded = None if not marker_applies else bool(marker.get("bar_recorded"))
+        last_error = str(marker.get("last_error")) if marker_applies and marker.get("last_error") else None
+        newer_failed_attempt = bool(
+            marker_applies
+            and latest_attempt_ok is False
+            and (last_dt is None or (marker_dt is not None and marker_dt >= last_dt))
+        )
+
         age = int((now - last_dt).total_seconds()) if last_dt is not None else None
         session_active = product_session_active(instrument, now)
         is_stale = bool(session_active) and (not proven or age is None or age > stale_after_seconds)
@@ -123,7 +157,16 @@ def build_feed_health(
             missing.append(instrument)
         if is_stale:
             stale.append(instrument)
-        if not transport_ok:
+        if newer_failed_attempt:
+            transport_errors.append(instrument)
+
+        # `transport_ok` is strict for roots with an explicit marker. MNQ/MES do
+        # not traverse webhook.observation_transport, so their proof is inferred
+        # from successful active-epoch seen-bar persistence + BarHistory.
+        transport_ok = (not newer_failed_attempt) and (proven if not marker_applies else bool(latest_attempt_ok))
+        if newer_failed_attempt:
+            status = "TRANSPORT_ERROR"
+        elif last_dt is None:
             status = "UNPROVEN"
         elif not bar_recorded:
             status = "BAR_HISTORY_MISSING"
@@ -143,22 +186,29 @@ def build_feed_health(
             "transport_ok": transport_ok,
             "bar_recorded": bar_recorded,
             "proven_15m": proven,
+            "latest_15m_attempt_ts": marker_dt.isoformat() if marker_applies and marker_dt else None,
+            "latest_15m_attempt_transport_ok": latest_attempt_ok,
+            "latest_15m_attempt_bar_recorded": latest_attempt_recorded,
+            "last_error": last_error,
             "session_active": session_active,
             "product": product_of(instrument),
-            "collection_only": instrument in {"M2K", "MGC", "MCL", "MBT"},
+            "collection_only": instrument in _COLLECTION_ONLY,
         }
 
+    all_proven = not missing and active_epoch is not None
+    active_healthy = not stale and not transport_errors
     return {
         "campaign_enabled": campaign_enabled(),
         "evidence_epoch": active_epoch,
-        "authority": "campaign_seen_bar_plus_matching_15m_bar_history",
+        "authority": "campaign_seen_bar_plus_matching_15m_bar_history_plus_latest_transport_attempt",
         "receipt_freshness_is_not_authoritative": True,
         "instruments": instruments,
         "unproven_instruments": missing,
         "stale_active_instruments": stale,
-        "all_instruments_proven_once": not missing and active_epoch is not None,
-        "active_instruments_healthy": not stale,
-        "ready_to_trust_collection_feed": bool(active_epoch) and not missing and not stale,
+        "transport_error_instruments": transport_errors,
+        "all_instruments_proven_once": all_proven,
+        "active_instruments_healthy": active_healthy,
+        "ready_to_trust_collection_feed": bool(active_epoch) and all_proven and active_healthy,
         "note": (
             "This is an evidence-feed gate only. It never grants strategy, risk, broker, or execution eligibility."
         ),
@@ -182,7 +232,8 @@ def main(argv=None) -> int:
         for root, row in report["instruments"].items():
             print(
                 f"{root:4s} {row['status']:20s} last15={row['last_successful_15m_bar_ts']} "
-                f"transport_ok={row['transport_ok']} bar_recorded={row['bar_recorded']}"
+                f"transport_ok={row['transport_ok']} bar_recorded={row['bar_recorded']} "
+                f"last_error={row['last_error']}"
             )
     return 0 if report["ready_to_trust_collection_feed"] else 2
 
