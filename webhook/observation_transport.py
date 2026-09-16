@@ -66,6 +66,11 @@ def _result(payload: AlertPayload, root: Optional[str], **extra) -> dict:
     }
 
 
+def _only_15m(bars: list[dict]) -> list[dict]:
+    """Campaign detectors/resolvers may consume only explicitly tagged 15m bars."""
+    return [b for b in bars if normalize_minutes(b.get("timeframe")) == cio.DECISION_TIMEFRAME_MINUTES]
+
+
 def observe_collection_only_alert(
     payload: AlertPayload,
     *,
@@ -112,10 +117,12 @@ def observe_collection_only_alert(
             timeframe="15",
             for_date=for_date,
         )
-        # Two UTC files are required around midnight; the campaign itself uses
-        # a product-aware observation day rather than UTC date prefixes.
-        recent_bars = bar_hist.recent(root, 8, for_date=for_date, lookback_days=2)
-        history = bar_hist.recent(root, 500, for_date=for_date, lookback_days=2)
+        # Two UTC files are required around midnight. Filter explicitly because
+        # BarHistory is an instrument store, not a timeframe-partitioned store.
+        # A 5m/native-strategy bar must never influence a 15m campaign detector
+        # or resolve a 15m structural outcome.
+        recent_bars = _only_15m(bar_hist.recent(root, 32, for_date=for_date, lookback_days=2))[-8:]
+        history = _only_15m(bar_hist.recent(root, 1200, for_date=for_date, lookback_days=2))[-500:]
         resolved = cio.resolve_pending(
             log_dir, instrument=root, bars=history,
             current_bar_ts=state.timestamp.isoformat(), for_date=for_date,
