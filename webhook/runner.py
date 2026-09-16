@@ -2839,8 +2839,8 @@ def process_alert(
             logger.error("ORDER FAILED: %s %s — %s", order.instrument, order.direction, fill.result)
             if os.getenv("BROKER", "paper").strip().lower() == "tradovate":
                 try:
-                    from notifications.discord_notifier import send_discord_alert
-                    send_discord_alert(
+                    from notifications.discord_notifier import send_operational_alert
+                    send_operational_alert(
                         cfg,
                         "EXECUTION SAFETY: Tradovate order did not remain open. "
                         f"Reason: {getattr(fill, 'exit_reason', None) or fill.result}. "
@@ -2921,8 +2921,8 @@ def process_alert(
         )
         if _requires_order_ids and os.getenv("BROKER", "paper").strip().lower() == "tradovate":
             try:
-                from notifications.discord_notifier import send_discord_alert
-                send_discord_alert(
+                from notifications.discord_notifier import send_operational_alert
+                send_operational_alert(
                     cfg,
                     "LIVE ORDER BLOCKED: broker reported OPEN but returned no order ids. "
                     "Position NOT marked open (fail-closed) — verify in Tradovate. "

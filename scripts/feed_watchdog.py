@@ -37,7 +37,7 @@ from execution.cross_instrument_observation import (  # noqa: E402
     STATE_FILENAME as OBSERVATION_STATE_FILENAME,
     campaign_enabled as observation_campaign_enabled,
 )
-from notifications.discord_notifier import NotificationResult, send_discord_alert  # noqa: E402
+from notifications.discord_notifier import NotificationResult, send_operational_alert  # noqa: E402
 from ops.cross_instrument_feed_health import build_feed_health  # noqa: E402
 
 logger = logging.getLogger("feed_watchdog")
@@ -196,7 +196,10 @@ def _write_state(path: Path, state: dict) -> None:
         logger.warning("could not write watchdog state: %s", exc)
 
 
-def run(now: datetime | None = None, send=send_discord_alert, config=None) -> dict:
+def run(now: datetime | None = None, send=send_operational_alert, config=None) -> dict:
+    """Stale/missing/transport alerts and their recoveries are FAILURE events:
+    they go to the Discord ``error`` route (legacy webhook only as fallback),
+    never to heartbeat. ``send`` is injectable for tests/dry-run."""
     cfg = config or load_config()
     now = now or datetime.now(timezone.utc)
     log_dir = Path(cfg.log_dir)
