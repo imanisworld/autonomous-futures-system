@@ -55,12 +55,15 @@ def test_aggregates_with_producer_defined_halves_and_order():
     assert report["sample_split_source"] == "input.sample_half"
     assert report["performance_order_source"] == "input.sequence"
     assert report["timestamp_role"] == "provenance_only"
-    assert report["performance_basis"] == "gross_before_hypothetical_costs"
+    assert report["performance_basis"] == "terminal_gross_before_hypothetical_costs"
     assert report["commission_configured"] is False
 
     a = report["cohorts"]["A"]
     assert a["candidates"] == 4
     assert a["fills"] == 3
+    assert a["terminal_fills"] == 3
+    assert a["expired_open"] == 0
+    assert a["entry_filled_total"] == 3
     assert a["no_fills"] == 1
     assert a["fill_rate_percent"] == 75.0
     assert a["win_rate_percent"] == pytest.approx(33.33)
@@ -103,7 +106,7 @@ def test_validation_fails_closed_on_missing_or_ambiguous_provenance():
         validate_rows([_row(ts="2026-09-01T10:00:00")])
     with pytest.raises(ValueError, match="filled must be boolean"):
         validate_rows([_row(filled=1)])
-    with pytest.raises(ValueError, match="filled row requires pnl_dollars"):
+    with pytest.raises(ValueError, match="filled row without result requires pnl_dollars"):
         validate_rows([_row(pnl_dollars=None)])
     with pytest.raises(ValueError, match="no-fill row must not carry pnl_dollars"):
         validate_rows([_row(filled=False, pnl_dollars=5.0)])
@@ -139,6 +142,9 @@ def test_all_no_fill_cohort_is_reported_without_fabricating_performance():
     )
     a = report["cohorts"]["A"]
     assert a["fills"] == 0
+    assert a["terminal_fills"] == 0
+    assert a["expired_open"] == 0
+    assert a["entry_filled_total"] == 0
     assert a["no_fills"] == 2
     assert a["gross_pnl_dollars"] == 0.0
     assert a["profit_factor"] is None
