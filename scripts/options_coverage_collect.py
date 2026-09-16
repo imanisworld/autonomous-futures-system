@@ -142,6 +142,7 @@ class Collector:
         self.steps: dict[str, str] = {}
         self.outputs: list[str] = []
         self.logs: list[str] = []
+        self.observer_repair: dict[str, Any] | None = None
 
     # ------------------------------------------------------------------ #
     # commands (pure, so tests can assert what would run)
@@ -244,6 +245,15 @@ class Collector:
         if before.ok:
             self.steps["observer"] = "already_complete"
             return before
+        if before.run_id is not None:
+            # An earlier observer run exists but is incomplete (e.g. events stored
+            # without first-sight prices). Re-observing REPLACES its rows under the
+            # same frozen rules; the repair is recorded, never hidden.
+            self.observer_repair = {
+                "prior_run_id": before.run_id, "prior_ran_at": before.ran_at, "prior_events": before.events,
+                "prior_problems": list(before.problems), "repaired_at": datetime.now(timezone.utc).isoformat(),
+                "note": "session observed prospectively by the earlier run; outcome pricing repaired later under unchanged cov/ep/out rules",
+            }
         text = self._run(self.observer_cmd(session), self._log_path(session, "observer"), "observer")
         errors = provider_error_lines(text)
         if errors:
@@ -251,7 +261,7 @@ class Collector:
         after = observer_completion(self.sqlite_path, session.date, universe, self.allow_unobservable)
         if not after.ok:
             raise CollectorError("observer_coverage_incomplete", "; ".join(after.problems))
-        self.steps["observer"] = "ran"
+        self.steps["observer"] = "repaired" if self.observer_repair else "ran"
         return after
 
     def collect_outcomes(self, session: Session, coverage: Any) -> Any:
@@ -274,7 +284,7 @@ class Collector:
         unbound = outcomes_completion(self.daily_dir, session.date, None, reducer)
         if not unbound.ok:
             raise CollectorError("outcomes_incomplete", "; ".join(unbound.problems))
-        write_binding(self.daily_dir, session.date, coverage, reducer, unbound.episodes, self.source)
+        write_binding(self.daily_dir, session.date, coverage, reducer, unbound.episodes, self.source, observer_repair=self.observer_repair)
         after = outcomes_completion(self.daily_dir, session.date, coverage, reducer)
         if not after.ok:
             raise CollectorError("outcomes_binding_failed", "; ".join(after.problems))
@@ -352,12 +362,13 @@ class Collector:
         started = datetime.now(timezone.utc)
         self._record(session, "STARTED", started_at=started.isoformat(), observer_before=coverage_before.to_dict(), outcomes_before=outcomes_before.to_dict())
         coverage = self.collect_observer(session, universe)
-        if self.steps.get("observer") == "ran" and self.pause_seconds > 0:
+        if self.steps.get("observer") in ("ran", "repaired") and self.pause_seconds > 0:
             self.sleep(self.pause_seconds)
         outcomes = self.collect_outcomes(session, coverage)
         self._record(
             session, STATUS_DONE, started_at=started.isoformat(), finished_at=datetime.now(timezone.utc).isoformat(),
             steps=dict(self.steps), coverage=coverage.to_dict(), outcomes=outcomes.to_dict(), outputs=list(self.outputs), logs=list(self.logs),
+            observer_repair=self.observer_repair,
         )
         print(f"{STATUS_DONE}: {session.date} observable {coverage.observable}/{coverage.requested} events {coverage.events}; episodes {outcomes.episodes} (clean {outcomes.clean})")
         return STATUS_DONE

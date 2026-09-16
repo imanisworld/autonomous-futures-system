@@ -294,6 +294,12 @@ class CoverageCheck:
     unobservable: dict[str, str] = field(default_factory=dict)
     disallowed: list[str] = field(default_factory=list)
     index_context: dict[str, bool] = field(default_factory=dict)
+    # Events whose first sight falls inside the session must carry a first-sight
+    # price (cov-v0.1 prices it from 5Min bars). ``pricing_required`` counts them,
+    # ``unpriced`` those still NULL — a session with unpriced events is NOT
+    # complete, so the next run re-observes it instead of skipping it.
+    pricing_required: int = 0
+    unpriced: int = 0
     problems: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
@@ -308,6 +314,8 @@ class CoverageCheck:
             "unobservable": dict(self.unobservable),
             "disallowed": list(self.disallowed),
             "index_context": dict(self.index_context),
+            "pricing_required": self.pricing_required,
+            "unpriced": self.unpriced,
             "problems": list(self.problems),
         }
 
@@ -326,7 +334,10 @@ def observer_completion(
 
     Complete means: a ``coverage_runs`` row for this observer version, a
     ``coverage_symbols`` row for every universe symbol, no unobservable symbol
-    outside the allow-list, SPY and QQQ observable, and at least one event.
+    outside the allow-list, SPY and QQQ observable, at least one event, and a
+    first-sight price on every event whose first sight fell inside the session
+    (``first_sight_unpriced:N`` otherwise — events alone do not make a session
+    complete; the 2026-09-16 firing stored 1,410 events with no prices).
     """
     day = session_date.isoformat()
     wanted = list(dict.fromkeys(s.strip().upper() for s in universe if s.strip()))
@@ -365,6 +376,12 @@ def observer_completion(
                 (OBSERVER_VERSION, day),
             ).fetchone()[0]
         )
+        required, unpriced = conn.execute(
+            "SELECT COUNT(*), COALESCE(SUM(first_sight_price IS NULL), 0) FROM coverage_events "
+            "WHERE observer_version=? AND session_date=? AND COALESCE(first_sight_after_close, 0) = 0",
+            (OBSERVER_VERSION, day),
+        ).fetchone()
+        check.pricing_required, check.unpriced = int(required), int(unpriced)
     finally:
         conn.close()
 
@@ -383,6 +400,8 @@ def observer_completion(
         check.problems.append(f"index_context_unobservable:{','.join(bad_index)}")
     if check.events <= 0:
         check.problems.append("no_events")
+    if check.unpriced > 0:
+        check.problems.append(f"first_sight_unpriced:{check.unpriced}")
     check.ok = not check.problems
     return check
 
@@ -427,6 +446,11 @@ class OutcomeBinding:
     manifest_fingerprint: str | None
     collector_version: str
     written_at: str
+    # Present only when the observer for this session was re-run over an
+    # earlier, incomplete observer run (e.g. events stored without first-sight
+    # prices after a provider entitlement failure). Records that the session was
+    # observed prospectively but its outcome pricing was repaired later.
+    observer_repair: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -453,14 +477,17 @@ def reduced_episode_count(sqlite_path: Path, session_date: date) -> int:
     return len(reduce_events([json.loads(r[0]) for r in rows]))
 
 
-def write_binding(daily_dir: Path, session_date: date, coverage: CoverageCheck, reducer_episodes: int, outcome_episodes: int, source: SourceProvenance) -> OutcomeBinding:
+def write_binding(
+    daily_dir: Path, session_date: date, coverage: CoverageCheck, reducer_episodes: int, outcome_episodes: int, source: SourceProvenance,
+    observer_repair: dict[str, Any] | None = None,
+) -> OutcomeBinding:
     if coverage.run_id is None or coverage.ran_at is None:
         raise CollectorError("binding_without_observer_run", session_date.isoformat())
     binding = OutcomeBinding(
         session_date=session_date.isoformat(), observer_version=OBSERVER_VERSION, observer_run_id=coverage.run_id, observer_ran_at=coverage.ran_at,
         raw_events=coverage.events, reducer_version=REDUCER_VERSION, reducer_episodes=reducer_episodes, outcome_version=OUTCOME_VERSION,
         outcome_episodes=outcome_episodes, source_sha=source.sha, source_provenance=source.provenance, manifest_fingerprint=source.manifest_fingerprint,
-        collector_version=COLLECTOR_VERSION, written_at=datetime.now(timezone.utc).isoformat(),
+        collector_version=COLLECTOR_VERSION, written_at=datetime.now(timezone.utc).isoformat(), observer_repair=observer_repair,
     )
     binding_path(daily_dir, session_date).write_text(json.dumps(binding.to_dict(), indent=1, sort_keys=True))
     return binding
