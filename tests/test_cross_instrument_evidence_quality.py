@@ -69,7 +69,7 @@ def test_complete_m2k_dated_contract_window_is_quality_eligible(tmp_path):
         (13, 15), (13, 30), (13, 45), (14, 0), (14, 15),
         (14, 30), (14, 45), (15, 0), (15, 15),
     ):
-        _record(tmp_path, "M2K", _ts(hour, minute), "M2QU6")
+        _record(tmp_path, "M2K", _ts(hour, minute), "M2KU6")
     quality = assess_evidence_row(_row(), tmp_path)
     assert quality["eligible"] is True
     assert quality["status"] == VALID
