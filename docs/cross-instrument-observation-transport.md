@@ -26,22 +26,32 @@ Base: `b4cb614` (#584). Rule: **No proof, no run.** Default: **OFF**.
 ## Collection modes
 
 ### Structural outcome
-For **MNQ, MES, M2K, MGC, MCL**, selected price-structure populations may be
-resolved forward using gross geometry only: fill touch, MAE/MFE, R,
-pessimistic same-bar handling, WIN/LOSS/NO_FILL/EXPIRED. Commission and
-slippage assumptions remain `None`; these rows are not execution validation.
+Configured price-structure populations may be resolved forward using gross
+geometry only: fill touch, MAE/MFE, R, pessimistic same-bar handling,
+WIN/LOSS/NO_FILL/EXPIRED. Commission and slippage assumptions remain `None`;
+these rows are **observation evidence, not paper-execution validation**.
 
 ### Signal / metrics only
 Occurrence, direction and raw geometry only; `bracket_authoritative: false` and
-no simulated outcome. This includes ORB fade / EMA pullback broadly, VWAP/4HR
-observers only where already scoped, and **all MBT structural families**.
+no simulated outcome. This includes ORB fade / EMA pullback broadly, and
+VWAP/4HR observers only where already scoped.
 
-MBT is deliberately downgraded to signal/geometry for structural families.
-CME crypto is 24/7 in 2026 and this project has not established a defensible
-position-expiry horizon for a hypothetical structural trade. An arbitrary ET or
-UTC midnight must not manufacture MBT WIN/LOSS statistics. Gap-fill and
-"overnight" families remain excluded from MBT because their session semantics
-are also unproven.
+### MBT caution
+The transport currently records the configured structural geometry/outcomes for
+MBT so we do not throw away exploratory information, but **MBT terminal outcomes
+must not be used for strategy validation or promotion yet**. CME crypto is 24/7
+in 2026 and this project has not established a defensible hypothetical-position
+expiry horizon. The present observation-day boundary is a bookkeeping boundary,
+not a validated trading rule. Gap-fill and "overnight" families remain excluded
+from MBT because those session semantics are also unproven.
+
+Before any MBT performance conclusion, either:
+
+1. define and independently validate a causal MBT resolution horizon; or
+2. formally downgrade MBT structural populations to signal/geometry-only in a
+   separately reviewed policy change.
+
+Until one of those is proven, MBT structural outcomes are **exploratory / HOLD**.
 
 ## Authoritative feed-health gate
 
@@ -97,9 +107,9 @@ and known exchange closures must be classified separately from unexplained gaps.
 ### 2. MBT outcome horizon
 There is no proven daily expiry boundary for a 24/7 product.
 
-**Mitigation now:** MBT structural populations are signal/metrics only. No MBT
-terminal outcome can satisfy the 30-outcome gate until a causal horizon is
-explicitly designed and independently validated.
+**Mitigation:** collect the raw exploratory evidence, but classify MBT structural
+outcomes as HOLD and exclude them from any validation/promotion decision until a
+causal horizon or a signal-only policy is separately proven.
 
 ### 3. TradingView payload equivalence
 Parser acceptance does not prove that all six alerts send the same useful bar
@@ -139,13 +149,24 @@ New-instrument commission/slippage and broker liquidity behavior are not proven.
 paper-execution validation until instrument-specific costs/fills are separately
 proven.
 
-## Deferred
+### 8. Detector-input reproducibility
+A candidate is useful only if the state that produced it can later be explained.
+BarHistory preserves OHLC/volume/timeframe, but some detectors also consume
+payload-derived Strat/session/context fields.
 
-- product-aware continuity / data-gap contamination gate;
+**Mitigation before using results for validation:** preserve or reconstruct a
+sanitized per-bar detector-input snapshot (no secrets) so a sampled candidate can
+be replayed from its inputs. Until then, use spot-replay audits of first-arm rows
+as a required quality check.
+
+## Deferred / separate proof work
+
+- product-aware continuity / `DATA_GAP_CONTAMINATED` gate;
+- sanitized detector-input provenance / replay spot-check tooling;
+- MBT structural outcome horizon or formal signal-only policy;
 - MGC/MCL/MBT continuous historical roll schedules;
 - per-instrument commissions/slippage;
 - per-instrument trading rules;
-- MBT structural outcome horizon;
 - any broker or live eligibility expansion.
 
 None of those are implied by collecting observations.
