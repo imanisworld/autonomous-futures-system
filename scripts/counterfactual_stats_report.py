@@ -2,23 +2,23 @@
 """Aggregate already-produced counterfactual rows without re-running research logic.
 
 This script deliberately does NOT recreate detector replay, regime substitution,
-market-condition substitution, or fill simulation. Those rows must already have
-been produced by an audited study. The reporter only makes the statistics
-repeatable and explicit, including fill/no-fill counts, PF, H1/H2, chronological
-drawdown, MAE/MFE when supplied, break-even round-trip cost, and labelled
-hypothetical cost sensitivity.
+market-condition substitution, fill simulation, sample splitting, or trade
+ordering. Those decisions belong to the audited study that produced the rows.
+The reporter only aggregates explicit provenance and performance fields.
 
 Input JSONL contract (one candidate per row):
   cohort: str                 required (e.g. A, B, C, D0, D1, D2)
   sample_half: H1|H2          required; assigned by the audited study producer
-  ts: offset-aware ISO-8601   required; used only for chronological ordering
+  sequence: int >= 0          required; unique within cohort, used for drawdown
+  ts: offset-aware ISO-8601   required provenance timestamp
   filled: bool                required
   pnl_dollars: number|null    required number when filled
   mae_r: number|null          optional, non-negative when present
   mfe_r: number|null          optional, non-negative when present
 
-The reporter never assigns a candidate to a cohort or sample half; doing so here
-would invent research logic that belongs in the study that produced the row.
+The reporter never assigns a candidate to a cohort, sample half, or performance
+order. Missing half coverage is surfaced explicitly instead of being silently
+interpreted as a zero-result half.
 """
 from __future__ import annotations
 
@@ -74,6 +74,14 @@ def _timestamp(value: Any, *, label: str) -> datetime:
     return parsed.astimezone(timezone.utc)
 
 
+def _sequence(value: Any, *, label: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{label} must be an integer")
+    if value < 0:
+        raise ValueError(f"{label} cannot be negative")
+    return value
+
+
 def _validated_costs(values: Iterable[float]) -> list[float]:
     costs: list[float] = []
     for index, value in enumerate(values, start=1):
@@ -86,6 +94,7 @@ def _validated_costs(values: Iterable[float]) -> list[float]:
 
 def validate_rows(rows: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
     clean: list[dict[str, Any]] = []
+    seen_sequences: dict[str, set[int]] = defaultdict(set)
     for index, raw in enumerate(rows, start=1):
         cohort = str(raw.get("cohort") or "").strip()
         if not cohort:
@@ -93,12 +102,19 @@ def validate_rows(rows: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
         sample_half = str(raw.get("sample_half") or "").strip().upper()
         if sample_half not in {"H1", "H2"}:
             raise ValueError(f"row {index}: sample_half must be H1 or H2")
+        sequence = _sequence(raw.get("sequence"), label=f"row {index} sequence")
+        if sequence in seen_sequences[cohort]:
+            raise ValueError(
+                f"row {index}: duplicate sequence {sequence} in cohort {cohort}"
+            )
+        seen_sequences[cohort].add(sequence)
         if not isinstance(raw.get("filled"), bool):
             raise ValueError(f"row {index}: filled must be boolean")
 
         row = dict(raw)
         row["cohort"] = cohort
         row["sample_half"] = sample_half
+        row["sequence"] = sequence
         row["_ts"] = _timestamp(raw.get("ts"), label=f"row {index} ts")
 
         if row["filled"]:
@@ -147,7 +163,7 @@ def _mean(values: list[float]) -> float | None:
 def summarize_cohort(
     rows: list[dict[str, Any]], hypothetical_costs: Iterable[float]
 ) -> dict[str, Any]:
-    ordered = sorted(rows, key=lambda row: row["_ts"])
+    ordered = sorted(rows, key=lambda row: row["sequence"])
     filled_rows = [row for row in ordered if row["filled"]]
     pnls = [float(row["pnl_dollars"]) for row in filled_rows]
     gross = round(sum(pnls), 2)
@@ -157,8 +173,11 @@ def summarize_cohort(
     breakeven_cost = round(gross / fills, 4) if fills else None
     mae = [float(row["mae_r"]) for row in filled_rows if row.get("mae_r") is not None]
     mfe = [float(row["mfe_r"]) for row in filled_rows if row.get("mfe_r") is not None]
-    h1_filled = [row for row in filled_rows if row["sample_half"] == "H1"]
-    h2_filled = [row for row in filled_rows if row["sample_half"] == "H2"]
+    h1_rows = [row for row in ordered if row["sample_half"] == "H1"]
+    h2_rows = [row for row in ordered if row["sample_half"] == "H2"]
+    h1_filled = [row for row in h1_rows if row["filled"]]
+    h2_filled = [row for row in h2_rows if row["filled"]]
+    halves_present = sorted({row["sample_half"] for row in ordered})
     costs = _validated_costs(hypothetical_costs)
     return {
         "candidates": len(ordered),
@@ -171,6 +190,10 @@ def summarize_cohort(
         "win_rate_percent": round((wins / fills) * 100.0, 2) if fills else None,
         "gross_pnl_dollars": gross,
         "profit_factor": _profit_factor(pnls),
+        "sample_halves_present": halves_present,
+        "half_coverage_complete": halves_present == ["H1", "H2"],
+        "h1_candidates": len(h1_rows),
+        "h2_candidates": len(h2_rows),
         "h1_fills": len(h1_filled),
         "h2_fills": len(h2_filled),
         "h1_pnl_dollars": round(
@@ -180,7 +203,7 @@ def summarize_cohort(
             sum(float(row["pnl_dollars"]) for row in h2_filled), 2
         ),
         "worst_trade_dollars": round(min(pnls), 2) if pnls else None,
-        "max_drawdown_dollars": _max_drawdown(pnls),
+        "gross_max_drawdown_dollars": _max_drawdown(pnls),
         "mean_mae_r": _mean(mae),
         "mean_mfe_r": _mean(mfe),
         "break_even_round_trip_cost_dollars": breakeven_cost,
@@ -204,7 +227,9 @@ def build_report(
         "authority": "aggregation_only",
         "research_logic_replayed": False,
         "sample_split_source": "input.sample_half",
-        "chronology_source": "input.ts",
+        "performance_order_source": "input.sequence",
+        "timestamp_role": "provenance_only",
+        "performance_basis": "gross_before_hypothetical_costs",
         "commission_configured": False,
         "cost_note": (
             "Cost sensitivity is hypothetical; no commission value is inferred "
@@ -250,12 +275,14 @@ def main(argv: list[str] | None = None) -> int:
         print(rendered, end="")
     else:
         for cohort, stats in report["cohorts"].items():
+            coverage = "complete" if stats["half_coverage_complete"] else "INCOMPLETE"
             print(
                 f"{cohort}: fills={stats['fills']}/{stats['candidates']} "
                 f"gross=${stats['gross_pnl_dollars']:.2f} "
                 f"PF={stats['profit_factor']} "
                 f"H1/H2=${stats['h1_pnl_dollars']:.2f}/${stats['h2_pnl_dollars']:.2f} "
-                f"maxDD=${stats['max_drawdown_dollars']:.2f} "
+                f"half_coverage={coverage} "
+                f"gross_maxDD=${stats['gross_max_drawdown_dollars']:.2f} "
                 f"break_even_RT=${stats['break_even_round_trip_cost_dollars']}"
             )
     return 0
