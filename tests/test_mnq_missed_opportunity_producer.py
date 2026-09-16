@@ -215,7 +215,7 @@ def test_layer_variants_emit_strict_reporter_contract(monkeypatch):
     assert [row["sequence"] for row in rows if row["cohort"] == "A"] == [0, 1]
     assert [row["sample_half"] for row in rows if row["cohort"] == "A"] == ["H1", "H2"]
 
-    # Direct proof that producer rows satisfy #592's strict aggregation contract.
+    # Direct proof that legacy producer rows still satisfy the reporter contract.
     report = build_report(rows)
     assert report["cohorts"]["A"]["fills"] == 2
     assert report["cohorts"]["A"]["half_coverage_complete"] is True
@@ -274,10 +274,10 @@ def test_no_fill_rows_keep_null_pnl_and_still_receive_half_and_sequence(monkeypa
     assert a_rows[0]["pnl_dollars"] is None
     assert a_rows[0]["sequence"] == 0
     assert a_rows[0]["sample_half"] == "H1"
-    build_report(rows)  # contract validation must pass
+    build_report(rows)  # legacy contract validation must pass
 
 
-def test_expired_filled_candidate_fails_closed(monkeypatch):
+def test_legacy_producer_still_fails_closed_on_expired_candidate(monkeypatch):
     records = [
         _record(
             "2026-09-01T14:00:00+00:00",
