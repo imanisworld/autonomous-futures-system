@@ -57,7 +57,17 @@ condition): the producer read journal rows whose real-book decision was
 NO_TRADE / TRADE / RISK_REJECTED. This lane evaluates every claimed,
 authoritative 15m MNQ bar the runner processes, regardless of what the real
 book decides about that bar later. The D+EMA condition, the geometry dedupe,
-the fill model and the resolution horizon are identical.
+the fill model and the resolution horizon are identical. Population-delta
+proof 2026-09-16 on the full existing corpora (07-13..08-31 and September):
+the broader population adds exactly one bar (a TRADE_INTENT-only row at
+2026-07-14T15:00Z, New York session), zero candidates, and the two-strategy
+one-position streams are identical in every field.
+
+Persistence is write-ahead and idempotent: the bar's events are saved inside
+state.json as ``pending_events`` before any evidence line is appended, each
+event carries a deterministic ``event_id``, and the next call replays only
+the events that are not yet durable. State and evidence therefore cannot
+disagree after a crash at position open or close.
 """
 from __future__ import annotations
 
@@ -70,6 +80,7 @@ from pathlib import Path
 from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
+from config.futures_contracts import contract_economics
 from execution.broker_interface import BracketOrder
 from execution.cross_instrument_observation import observation_day
 from execution.paper_broker import NextBarOHLC, PaperBroker
@@ -95,9 +106,11 @@ MODE_PAPER = "paper_sim"
 DEFAULT_MODE = MODE_OFF
 VALID_MODES = (MODE_OFF, MODE_PAPER)
 
-# Canonical counterfactual fill model (archived producer constants).
-TICK = 0.25
-TICK_VALUE = 0.50
+# Canonical counterfactual fill model. Tick size / value are NOT defined here:
+# config/futures_contracts.py is the only source of contract economics. The
+# parity test asserts the resolved MNQ values are the archived producer's
+# 0.25 / $0.50.
+TICK, TICK_VALUE = contract_economics(INSTRUMENT)
 SLIP_TICKS = 1.0
 IOC_TOLERANCE_TICKS = 32.0
 CONTRACTS = 1
@@ -113,6 +126,10 @@ _POSITION_REQUIRED = (
     "candidate_key", "strategy", "direction", "entry", "stop", "target",
     "actual_entry", "entry_ts", "day", "paper_order_id",
 )
+# How many trailing evidence lines are scanned for already-written event ids
+# when replaying pending events. Pending events are always the newest, so a
+# bounded tail is sufficient and keeps recovery O(1) in the file size.
+_EVIDENCE_TAIL_LINES = 512
 
 
 # ─────────────────────────────── configuration ──────────────────────────────
@@ -172,7 +189,7 @@ class CohortStateError(RuntimeError):
 
 
 def _empty_state() -> dict[str, Any]:
-    return {"version": STATE_VERSION, "campaign_id": CAMPAIGN_ID, "seen": [], "position": None}
+    return {"version": STATE_VERSION, "campaign_id": CAMPAIGN_ID, "seen": [], "position": None, "pending_events": []}
 
 
 def load_state(log_dir) -> dict[str, Any]:
@@ -190,8 +207,13 @@ def load_state(log_dir) -> dict[str, Any]:
         raise CohortStateError("cohort state campaign/version mismatch")
     seen = raw.get("seen")
     position = raw.get("position")
+    pending = raw.get("pending_events", [])
     if not isinstance(seen, list):
         raise CohortStateError("cohort state 'seen' is not a list")
+    if not isinstance(pending, list) or any(
+        not isinstance(e, dict) or not e.get("event_id") for e in pending
+    ):
+        raise CohortStateError("cohort state 'pending_events' is malformed")
     if position is not None:
         if not isinstance(position, dict) or any(
             position.get(k) is None for k in _POSITION_REQUIRED
@@ -202,6 +224,7 @@ def load_state(log_dir) -> dict[str, Any]:
         "campaign_id": CAMPAIGN_ID,
         "seen": [str(k) for k in seen][-MAX_SEEN_KEYS:],
         "position": position,
+        "pending_events": pending,
     }
 
 
@@ -228,9 +251,71 @@ def append_event(log_dir, event: dict[str, Any]) -> None:
         try:
             handle.write(json.dumps(event, separators=(",", ":"), sort_keys=True) + "\n")
             handle.flush()
+            os.fsync(handle.fileno())
         finally:
             if fcntl is not None:
                 fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
+def _written_event_ids(log_dir) -> set[str]:
+    """Event ids already durable in the evidence tail (bounded read)."""
+    path = evidence_path(log_dir)
+    if not path.exists():
+        return set()
+    try:
+        lines = path.read_text().splitlines()[-_EVIDENCE_TAIL_LINES:]
+    except OSError:
+        return set()
+    ids: set[str] = set()
+    for line in lines:
+        try:
+            ids.add(str(json.loads(line).get("event_id") or ""))
+        except (json.JSONDecodeError, AttributeError):
+            continue
+    return ids
+
+
+def commit(log_dir, state: dict[str, Any], events: list[dict[str, Any]]) -> None:
+    """Crash-safe, idempotent persistence: write-ahead in state, then evidence.
+
+    1. The new state (position, seen) is saved atomically WITH the bar's
+       events as ``pending_events``. From this instant the events are durable
+       even if nothing else completes.
+    2. Each pending event is appended to the evidence file unless its
+       ``event_id`` is already present in the file tail (idempotent replay).
+    3. The state is saved again with ``pending_events`` cleared.
+
+    A crash before 1 leaves the previous consistent state (the bar is simply
+    not recorded, as for every lane). A crash after 1, during 2, or before 3
+    is recovered by ``recover_pending`` on the next call, which replays only
+    the events that are not yet durable and never duplicates one.
+    """
+    state["pending_events"] = list(events)
+    save_state(log_dir, state)
+    _flush_pending(log_dir, state)
+
+
+def _flush_pending(log_dir, state: dict[str, Any]) -> None:
+    pending = list(state.get("pending_events") or [])
+    if not pending:
+        return
+    written = _written_event_ids(log_dir)
+    for event in pending:
+        if event["event_id"] in written:
+            continue
+        append_event(log_dir, event)
+        written.add(event["event_id"])
+    state["pending_events"] = []
+    save_state(log_dir, state)
+
+
+def recover_pending(log_dir, state: dict[str, Any]) -> int:
+    """Replay events a previous call persisted but did not finish appending."""
+    count = len(state.get("pending_events") or [])
+    if count:
+        logger.warning("asia_d_ema cohort: replaying %d pending evidence event(s)", count)
+        _flush_pending(log_dir, state)
+    return count
 
 
 # ─────────────────────────────── definition ─────────────────────────────────
@@ -395,6 +480,7 @@ def advance(position: dict, bar: dict):
     position["mae_points"] = max(float(position.get("mae_points") or 0.0), adverse)
     position["mfe_points"] = max(float(position.get("mfe_points") or 0.0), favorable)
     position["bars_seen"] = int(position.get("bars_seen") or 0) + 1
+    position["last_bar_ts"] = bar["ts"]
     return broker.resolve_position(
         NextBarOHLC(open=float(bar["open"]), high=high, low=low)
     )
@@ -424,7 +510,7 @@ def resolve_offline(candidate: dict, decision_bar: dict, forward_bars: list[dict
     return _resolve_forward(position, forward_bars)
 
 
-def _resolve_forward(position: dict, forward_bars: list[dict]) -> dict:
+def _resolve_forward(position: dict, forward_bars: list[dict], *, roll_bar_ts: Optional[str] = None) -> dict:
     actual_entry = float(position["actual_entry"])
     actual_risk = abs(actual_entry - float(position["stop"]))
     for bar in forward_bars:
@@ -435,7 +521,11 @@ def _resolve_forward(position: dict, forward_bars: list[dict]) -> dict:
     return {
         "result": "EXPIRED",
         "exit_reason": "OBSERVATION_DATE_ROLLED",
-        "exit_ts": forward_bars[-1]["ts"] if forward_bars else position["entry_ts"],
+        # The last same-observation-day bar the position actually saw (the
+        # archived producer's ``forward_bars[-1]``). Never the entry timestamp:
+        # if no later same-day bar was ever seen, the roll bar that expired it.
+        "exit_ts": _expiry_ts(position, forward_bars, roll_bar_ts),
+        "expired_at_bar_ts": roll_bar_ts,
         "bars_seen": int(position.get("bars_seen") or 0),
         "entry_price": actual_entry,
         "pnl_r": None,
@@ -443,6 +533,15 @@ def _resolve_forward(position: dict, forward_bars: list[dict]) -> dict:
         "mae_r": float(position.get("mae_points") or 0.0) / actual_risk if actual_risk > 0 else None,
         "mfe_r": float(position.get("mfe_points") or 0.0) / actual_risk if actual_risk > 0 else None,
     }
+
+
+def _expiry_ts(position: dict, forward_bars: list[dict], roll_bar_ts: Optional[str]) -> str:
+    if forward_bars:
+        return forward_bars[-1]["ts"]
+    last_seen = position.get("last_bar_ts")
+    if last_seen and str(last_seen) > str(position["entry_ts"]):
+        return str(last_seen)
+    return str(roll_bar_ts or position["entry_ts"])
 
 
 def _outcome_fields(position: dict, terminal, exit_ts: str, actual_risk: float) -> dict:
@@ -487,6 +586,11 @@ def _bar_context(state) -> dict:
             "strength": getattr(trend, "strength", None) if trend is not None else None,
         },
     }
+
+
+def _event_id(event: str, ts: str, candidate_key: Optional[str]) -> str:
+    """Deterministic identity: one (event, bar, candidate) can be journaled once."""
+    return f"{CAMPAIGN_ID}|{event}|{ts}|{candidate_key or '-'}"
 
 
 def _base_event(event: str, ts: str, day: str, context: dict) -> dict:
@@ -545,13 +649,20 @@ def process_bar(
         logger.warning("asia_d_ema cohort: state invalid, failing closed: %s", exc)
         return {"campaign_id": CAMPAIGN_ID, "cohort_result": "STATE_INVALID", "detail": str(exc), "events": []}
 
+    # 0. Finish any persistence a previous call did not complete (idempotent).
+    try:
+        recovered = recover_pending(log_dir, cohort_state)
+    except OSError as exc:
+        logger.warning("asia_d_ema cohort: pending evidence replay failed, failing closed: %s", exc)
+        return {"campaign_id": CAMPAIGN_ID, "cohort_result": "STATE_INVALID", "detail": f"pending replay failed: {exc}", "events": []}
+
     events: list[dict] = []
     position = cohort_state.get("position")
 
     # 1. Advance / expire the open position on strictly-later bars.
     if position is not None and ts > str(position["entry_ts"]):
         if str(position["day"]) != day:
-            outcome = _resolve_forward(position, [])
+            outcome = _resolve_forward(position, [], roll_bar_ts=ts)
             events.append({**_base_event("OUTCOME", ts, day, context), **_position_fields(position), **outcome})
             cohort_state["position"] = position = None
         else:
@@ -602,13 +713,14 @@ def process_bar(
         events.append({**_base_event("CANDIDATE_FILLED", ts, day, context), **_position_fields(position),
                        "decision_close": bar["close"]})
 
-    save_state(log_dir, cohort_state)
     for event in events:
-        append_event(log_dir, event)
+        event["event_id"] = _event_id(event["event"], ts, event.get("candidate_key"))
+    commit(log_dir, cohort_state, events)
     return {
         "campaign_id": CAMPAIGN_ID,
         "cohort_result": "ADVANCED",
         "position_open": cohort_state.get("position") is not None,
+        "recovered_pending_events": recovered,
         "events": [{"event": e["event"], "candidate_key": e.get("candidate_key")} for e in events],
     }
 

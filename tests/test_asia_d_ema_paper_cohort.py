@@ -381,7 +381,33 @@ def test_open_position_expires_at_day_roll_and_never_carries(config, fresh_marke
     events = _events(tmp_path)
     assert events[-1]["event"] == "OUTCOME" and events[-1]["result"] == "EXPIRED"
     assert events[-1]["exit_reason"] == "OBSERVATION_DATE_ROLLED"
+    # No later same-day bar was ever seen, so the exit is the roll bar, never the entry.
+    assert events[-1]["exit_ts"] == bar2["ts"] != bar1["ts"]
+    assert events[-1]["expired_at_bar_ts"] == bar2["ts"]
     assert cohort.load_state(tmp_path)["position"] is None
+
+
+def test_day_roll_expiry_exit_ts_is_last_same_day_bar_seen(config, fresh_market_state, tmp_path):
+    cfg = _paper_cfg(config)
+    ctx = {"session": "asian", "market_condition": "RANGE_BOUND", "structural_market_condition": None,
+           "trend": {"direction": "UP", "strength": 1}}
+    cand = [{"strategy": "ema_pullback_trend", "direction": "LONG", "entry": 100.0, "stop": 90.0, "target": 120.0}]
+    entry_bar = {"ts": "2026-09-15T23:00:00+00:00", "open": 100.0, "high": 101.0, "low": 99.0, "close": 100.0}
+    cohort.process_bar(state=_bar_state(fresh_market_state, entry_bar, ctx), cfg=cfg, log_dir=tmp_path, shadow_candidates=cand)
+    same_day = ["2026-09-15T23:15:00+00:00", "2026-09-16T10:00:00+00:00", "2026-09-16T21:45:00+00:00"]  # last < 18:00 ET
+    for ts in same_day:
+        bar = {"ts": ts, "open": 100.0, "high": 101.0, "low": 99.0, "close": 100.0}
+        cohort.process_bar(state=_bar_state(fresh_market_state, bar, {**ctx, "session": "london"}), cfg=cfg,
+                           log_dir=tmp_path, shadow_candidates=[])
+    assert cohort.load_state(tmp_path)["position"]["last_bar_ts"] == same_day[-1]
+    roll = {"ts": "2026-09-16T22:15:00+00:00", "open": 100.0, "high": 101.0, "low": 99.0, "close": 100.0}
+    cohort.process_bar(state=_bar_state(fresh_market_state, roll, ctx), cfg=cfg, log_dir=tmp_path, shadow_candidates=[])
+    out = _events(tmp_path)[-1]
+    assert out["event"] == "OUTCOME" and out["result"] == "EXPIRED"
+    assert out["exit_ts"] == same_day[-1]
+    assert out["exit_ts"] != out["entry_ts"]
+    assert out["expired_at_bar_ts"] == roll["ts"]
+    assert out["bars_seen"] == 3
 
 
 def test_candidates_before_epoch_are_recorded_not_traded(config, fresh_market_state, tmp_path):
@@ -427,7 +453,9 @@ def test_invalid_state_fails_closed(config, fresh_market_state, tmp_path, payloa
 
 
 def test_missing_state_file_is_a_fresh_cohort(tmp_path):
-    assert cohort.load_state(tmp_path) == {"version": 1, "campaign_id": cohort.CAMPAIGN_ID, "seen": [], "position": None}
+    assert cohort.load_state(tmp_path) == {
+        "version": 1, "campaign_id": cohort.CAMPAIGN_ID, "seen": [], "position": None, "pending_events": [],
+    }
 
 
 # ── 6 / 7. exact ticker and paper-only execution path ───────────────────────
@@ -481,7 +509,7 @@ def test_runner_result_carries_only_a_summary(config, fresh_market_state, parity
     summaries = [s for s in _replay_day(day, data, fresh_market_state, _paper_cfg(config), tmp_path) if s]
     assert summaries
     for s in summaries:
-        assert set(s) == {"campaign_id", "cohort_result", "position_open", "events"}
+        assert set(s) == {"campaign_id", "cohort_result", "position_open", "events", "recovered_pending_events"}
         assert s["cohort_result"] == "ADVANCED"
 
 
@@ -547,3 +575,162 @@ def test_runner_real_book_identical_with_cohort_off_and_armed(config, tmp_path, 
         on_lines = (on_dir / name).read_text().splitlines() if name.endswith((".jsonl", ".json", ".txt")) else None
         if off_lines is not None:
             assert len(off_lines) == len(on_lines), name
+
+
+# ── contract economics resolve through config/futures_contracts.py ──────────
+
+
+def test_economics_are_resolved_centrally_and_equal_the_archived_producer_values():
+    import ast
+
+    from config.futures_contracts import contract_economics
+
+    assert (cohort.TICK, cohort.TICK_VALUE) == contract_economics("MNQ") == (0.25, 0.50)
+    tree = ast.parse(Path(cohort.__file__).read_text())
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name) and target.id in ("TICK", "TICK_VALUE"):
+                    assert not isinstance(node.value, ast.Constant), "tick economics must not be a local literal"
+
+
+# ── crash-safe, idempotent persistence (fault injection) ────────────────────
+
+
+_CTX = {"session": "asian", "market_condition": "RANGE_BOUND", "structural_market_condition": None,
+        "trend": {"direction": "UP", "strength": 1}}
+_CAND = [{"strategy": "ema_pullback_trend", "direction": "LONG", "entry": 100.0, "stop": 90.0, "target": 120.0}]
+_OPEN_BAR = {"ts": "2026-09-15T23:00:00+00:00", "open": 100.0, "high": 101.0, "low": 99.0, "close": 100.0}
+_WIN_BAR = {"ts": "2026-09-15T23:15:00+00:00", "open": 100.0, "high": 121.0, "low": 99.5, "close": 120.0}
+_NEXT_BAR = {"ts": "2026-09-15T23:30:00+00:00", "open": 120.0, "high": 121.0, "low": 119.0, "close": 120.0}
+
+
+class _Boom(OSError):
+    pass
+
+
+def _inject_append_failure(monkeypatch, *, fail_on_call: int):
+    """Make the Nth evidence append raise AFTER the write-ahead state is durable."""
+    real = cohort.append_event
+    calls = {"n": 0}
+
+    def flaky(log_dir, event):
+        calls["n"] += 1
+        if calls["n"] == fail_on_call:
+            raise _Boom("disk full")
+        return real(log_dir, event)
+
+    monkeypatch.setattr(cohort, "append_event", flaky)
+    return calls
+
+
+def test_crash_between_state_and_evidence_at_position_open_is_recovered_once(config, fresh_market_state, tmp_path, monkeypatch):
+    cfg = _paper_cfg(config)
+    _inject_append_failure(monkeypatch, fail_on_call=1)
+    with pytest.raises(_Boom):
+        cohort.process_bar(state=_bar_state(fresh_market_state, _OPEN_BAR, _CTX), cfg=cfg, log_dir=tmp_path, shadow_candidates=_CAND)
+    # Write-ahead: the fill is durable in state even though no evidence line exists yet.
+    state = cohort.load_state(tmp_path)
+    assert state["position"] is not None
+    assert [e["event"] for e in state["pending_events"]] == ["CANDIDATE_FILLED"]
+    assert _events(tmp_path) == []
+    monkeypatch.undo()
+    # Next bar replays the pending fill exactly once, then records its own outcome.
+    summary = cohort.process_bar(state=_bar_state(fresh_market_state, _WIN_BAR, _CTX), cfg=cfg, log_dir=tmp_path, shadow_candidates=[])
+    assert summary["recovered_pending_events"] == 1
+    events = _events(tmp_path)
+    assert [e["event"] for e in events] == ["CANDIDATE_FILLED", "OUTCOME"]
+    assert events[1]["result"] == "WIN" and events[1]["candidate_key"] == events[0]["candidate_key"]
+    assert cohort.load_state(tmp_path)["pending_events"] == []
+    assert cohort.load_state(tmp_path)["position"] is None
+    assert len({e["event_id"] for e in events}) == len(events)
+
+
+def test_crash_between_state_and_evidence_at_position_close_is_recovered_once(config, fresh_market_state, tmp_path, monkeypatch):
+    cfg = _paper_cfg(config)
+    cohort.process_bar(state=_bar_state(fresh_market_state, _OPEN_BAR, _CTX), cfg=cfg, log_dir=tmp_path, shadow_candidates=_CAND)
+    assert [e["event"] for e in _events(tmp_path)] == ["CANDIDATE_FILLED"]
+    _inject_append_failure(monkeypatch, fail_on_call=1)
+    with pytest.raises(_Boom):
+        cohort.process_bar(state=_bar_state(fresh_market_state, _WIN_BAR, _CTX), cfg=cfg, log_dir=tmp_path, shadow_candidates=[])
+    state = cohort.load_state(tmp_path)
+    assert state["position"] is None  # the close is durable in state ...
+    assert [e["event"] for e in state["pending_events"]] == ["OUTCOME"]  # ... and its evidence is pending
+    assert [e["event"] for e in _events(tmp_path)] == ["CANDIDATE_FILLED"]
+    monkeypatch.undo()
+    summary = cohort.process_bar(state=_bar_state(fresh_market_state, _NEXT_BAR, _CTX), cfg=cfg, log_dir=tmp_path, shadow_candidates=[])
+    assert summary["recovered_pending_events"] == 1
+    events = _events(tmp_path)
+    assert [e["event"] for e in events] == ["CANDIDATE_FILLED", "OUTCOME"]
+    assert events[1]["result"] == "WIN" and events[1]["exit_ts"] == _WIN_BAR["ts"]
+    assert cohort.load_state(tmp_path)["pending_events"] == []
+
+
+def test_partial_append_then_crash_never_duplicates_events(config, fresh_market_state, tmp_path, monkeypatch):
+    """Two events on one bar; the first append succeeds, the second crashes; replay adds only the missing one."""
+    cfg = _paper_cfg(config)
+    two = _CAND + [{"strategy": "strat_22_continuation_observed", "direction": "LONG", "entry": 100.0, "stop": 95.0, "target": 110.0}]
+    _inject_append_failure(monkeypatch, fail_on_call=2)
+    with pytest.raises(_Boom):
+        cohort.process_bar(state=_bar_state(fresh_market_state, _OPEN_BAR, _CTX), cfg=cfg, log_dir=tmp_path, shadow_candidates=two)
+    assert [e["event"] for e in _events(tmp_path)] == ["CANDIDATE_FILLED"]
+    assert len(cohort.load_state(tmp_path)["pending_events"]) == 2
+    monkeypatch.undo()
+    cohort.process_bar(state=_bar_state(fresh_market_state, _WIN_BAR, _CTX), cfg=cfg, log_dir=tmp_path, shadow_candidates=[])
+    events = _events(tmp_path)
+    assert [e["event"] for e in events] == ["CANDIDATE_FILLED", "CANDIDATE_SKIPPED_BUSY", "OUTCOME"]
+    assert len({e["event_id"] for e in events}) == 3
+
+
+def test_crash_before_write_ahead_leaves_previous_consistent_state(config, fresh_market_state, tmp_path, monkeypatch):
+    cfg = _paper_cfg(config)
+    cohort.process_bar(state=_bar_state(fresh_market_state, _OPEN_BAR, _CTX), cfg=cfg, log_dir=tmp_path, shadow_candidates=_CAND)
+    before_state = cohort.state_path(tmp_path).read_text()
+    before_events = _events(tmp_path)
+
+    def boom(*a, **kw):
+        raise _Boom("no space")
+
+    monkeypatch.setattr(cohort, "save_state", boom)
+    with pytest.raises(_Boom):
+        cohort.process_bar(state=_bar_state(fresh_market_state, _WIN_BAR, _CTX), cfg=cfg, log_dir=tmp_path, shadow_candidates=[])
+    assert cohort.state_path(tmp_path).read_text() == before_state
+    assert _events(tmp_path) == before_events
+
+
+def test_malformed_pending_events_fail_closed(config, fresh_market_state, tmp_path):
+    cohort.cohort_dir(tmp_path).mkdir(parents=True)
+    cohort.state_path(tmp_path).write_text(json.dumps({
+        "version": 1, "campaign_id": cohort.CAMPAIGN_ID, "seen": [], "position": None, "pending_events": [{"event": "X"}],
+    }))
+    summary = cohort.process_bar(state=_bar_state(fresh_market_state, _OPEN_BAR, _CTX), cfg=_paper_cfg(config),
+                                 log_dir=tmp_path, shadow_candidates=_CAND)
+    assert summary["cohort_result"] == "STATE_INVALID"
+    assert not cohort.evidence_path(tmp_path).exists()
+
+
+def test_every_evidence_row_has_a_unique_deterministic_event_id(config, fresh_market_state, parity, tmp_path):
+    day, data = next(iter(parity["days"].items()))
+    _replay_day(day, data, fresh_market_state, _paper_cfg(config), tmp_path / "a")
+    _replay_day(day, data, fresh_market_state, _paper_cfg(config), tmp_path / "b")
+    a = [e["event_id"] for e in _events(tmp_path / "a")]
+    b = [e["event_id"] for e in _events(tmp_path / "b")]
+    assert a == b and len(set(a)) == len(a) and a
+
+
+# ── fixture provenance ──────────────────────────────────────────────────────
+
+
+def test_parity_fixture_carries_immutable_source_provenance(parity):
+    prov = parity["provenance"]
+    assert prov["producer"]["file"] == "counterfactual_representation_v3.py"
+    assert len(prov["producer"]["sha256"]) == 64
+    assert len(prov["archived_expected_rows"]["sha256"]) == 64
+    assert prov["source_corpus"]["bars_15m"] == 1029
+    assert prov["source_corpus"]["distinct_shadow_candidates"] == 1119
+    files = prov["source_corpus"]["files"]
+    assert files and all(len(v["sha256"]) == 64 for v in files.values())
+    for day, data in parity["days"].items():
+        assert prov["days"][day]["bars"] == len(data["bars"])
+        assert prov["days"][day]["journal_rows"] == len(data["journal"])
+        assert prov["days"][day]["expected_d_ema_rows"] == len(data["expected_d_ema_rows"])
