@@ -19,7 +19,6 @@ from config.futures_contracts import (
     optional_tick_size,
     tick_size as contract_tick_size,
 )
-from risk.risk_engine import RiskEngine
 
 
 @dataclass(frozen=True)
@@ -211,6 +210,8 @@ def evaluate_shadow_setups(
     state: MarketState,
     recent_bars: list[dict] | None = None,
     config=None,
+    *,
+    include_canonical_observers: bool = True,
 ) -> list[ShadowSetupCandidate]:
     """Return all shadow-only setup candidates visible on this bar.
 
@@ -232,9 +233,13 @@ def evaluate_shadow_setups(
         _failed_breakdown_reclaim(state, recent_bars or []),
     ]
     resolved = [candidate for candidate in candidates if candidate is not None]
-    from strategy.canonical_observers import evaluate_canonical_observers
+    if include_canonical_observers:
+        # The canonical VWAP observers re-run the DecisionEngine's own setup
+        # builders. Collection-only instruments pass False so the engine is
+        # never instantiated for them (SIGNAL/METRICS only, by design).
+        from strategy.canonical_observers import evaluate_canonical_observers
 
-    resolved.extend(evaluate_canonical_observers(state, config))
+        resolved.extend(evaluate_canonical_observers(state, config))
     return resolved
 
 
@@ -659,6 +664,22 @@ def _tick(state: MarketState) -> float:
     return contract_tick_size(state.instrument)
 
 
+def _reward_to_risk(direction: str, entry: float, stop: float, target: float) -> float:
+    """Pure R:R arithmetic (identical to RiskEngine.calculate_rr) so the
+    observation detectors carry no import of the risk engine."""
+    if direction == "LONG":
+        risk = entry - stop
+        reward = target - entry
+    elif direction == "SHORT":
+        risk = stop - entry
+        reward = entry - target
+    else:
+        return 0.0
+    if risk <= 0:
+        return 0.0
+    return round(reward / risk, 4)
+
+
 def _candidate(
     *,
     strategy: str,
@@ -668,7 +689,7 @@ def _candidate(
     target: float,
     notes: str,
 ) -> ShadowSetupCandidate | None:
-    rr = RiskEngine.calculate_rr(direction, entry, stop, target)
+    rr = _reward_to_risk(direction, entry, stop, target)
     if rr <= 0:
         return None
     risk_tier, size_multiplier = RISK_MATRIX.get(strategy, ("C", 0.25))
