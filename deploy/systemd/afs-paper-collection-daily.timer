@@ -1,0 +1,16 @@
+[Unit]
+Description=Run the AFS daily paper collection digest after both collections have settled (weekdays)
+
+[Timer]
+# 17:15 ET: after the 16:35 ET options coverage collector (afs-coverage-collector.timer,
+# 45-min budget but normally minutes) and after the 17:00 ET CME equity-futures pause,
+# so both sides have persisted their end-of-day evidence. Same America/New_York
+# calendar as the collector, so DST never needs a re-pin.
+OnCalendar=Mon..Fri *-*-* 17:15:00 America/New_York
+# A missed firing (box down at 17:15) runs at the next boot for that calendar date.
+Persistent=true
+AccuracySec=1min
+Unit=afs-paper-collection-daily.service
+
+[Install]
+WantedBy=timers.target

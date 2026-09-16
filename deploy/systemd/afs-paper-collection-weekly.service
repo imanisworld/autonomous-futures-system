@@ -1,0 +1,34 @@
+[Unit]
+Description=AFS weekly paper collection digest (read-only; posts to the optional futures/options collection routes)
+# Network only. Deliberately NOT ordered with futures-bot / the options scanner /
+# the coverage collector: this unit reads their files, never touches them, never
+# pulls git, never restarts anything.
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Runs from the production release symlink because the digest composes the
+# runtime's own report modules (evidence_lane_health, collector_census, the
+# cross-instrument quality report, ...). It imports them; it never starts them.
+WorkingDirectory=/root/autonomous-futures-system
+# Provides the optional DISCORD_ROUTE_PAPER_COLLECTION_* webhooks and the lane
+# mode/epoch keys the digest labels lanes with. Never printed.
+EnvironmentFile=/root/afs-shared/.env
+Environment=PYTHONPATH=/root/autonomous-futures-system
+# Evidence paths are passed explicitly so nothing in .env can redirect them.
+# Two ExecStart lines: futures first, then options; each is independent and read-only.
+ExecStart=/root/autonomous-futures-system/.venv/bin/python -m scripts.paper_collection_digest \
+    --domain futures --period weekly --post \
+    --log-dir /root/afs-shared/logs
+ExecStart=/root/autonomous-futures-system/.venv/bin/python -m scripts.paper_collection_digest \
+    --domain options --period weekly --post \
+    --log-dir /root/afs-shared/logs \
+    --scanner-db /root/afs-shared/logs/options_scanner.sqlite \
+    --coverage-dir /root/afs-shared/coverage
+TimeoutStartSec=10min
+Nice=10
+NoNewPrivileges=true
+PrivateTmp=true
+StandardOutput=journal
+StandardError=journal

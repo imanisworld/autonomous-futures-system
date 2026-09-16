@@ -251,7 +251,7 @@ def test_options_daily_and_weekly_counts(options_dir, tmp_path):
     assert v1["window"]["scans"] == 2 and v1["window"]["symbols_scanned"] == 2
     assert v1["window"]["journal_rows"] == 3
     assert v1["window"]["active_loss"] == 1 and v1["window"]["active_profit"] == 1
-    assert cov["window"]["sessions_failed"] == 1 and cov["health"] == "FAILED_LAST_RUN"
+    assert cov["window"]["sessions_failed"] == 1 and cov["health"] == "FAILED_LAST_SESSION"
     assert comp["zero_activity"] is True and "Options companion" in digest.format_digest(d)
     w = digest.build_options_digest(options_dir, period="weekly", ref_date=date(2026, 9, 16), now=NOW,
                                     scanner_db=options_dir / "options_scanner.sqlite",
@@ -285,3 +285,40 @@ def test_chunking_respects_discord_limit():
     chunks = digest.chunk_message(text)
     assert len(chunks) > 1 and all(len(c) <= digest.DISCORD_CHUNK for c in chunks)
     assert "\n".join(chunks) == text
+
+
+def test_coverage_health_follows_final_status_not_any_failure(tmp_path):
+    cov = tmp_path / "cov"; cov.mkdir()
+    _jsonl(cov / "ledger.jsonl", [
+        {"session_date": "2026-09-16", "status": "STARTED", "recorded_at": "2026-09-16T20:35:00+00:00"},
+        {"session_date": "2026-09-16", "status": "FAILED", "reason": "observer_provider_errors", "detail": "x", "recorded_at": "2026-09-16T20:35:17+00:00"},
+        # later retry of the SAME session succeeds
+        {"session_date": "2026-09-16", "status": "STARTED", "recorded_at": "2026-09-16T22:05:00+00:00"},
+        {"session_date": "2026-09-16", "status": "DONE", "recorded_at": "2026-09-16T22:09:00+00:00"},
+    ])
+    lane = digest._coverage_lane(cov, date(2026, 9, 16), date(2026, 9, 16))
+    assert lane["health"] == "OK"
+    assert lane["window"]["sessions_done"] == 1 and lane["window"]["sessions_failed"] == 0
+    assert lane["window"]["failed_runs_later_recovered"] == 1
+    assert lane["note"] == ""
+    # and a session whose final status is still FAILED is unhealthy
+    _jsonl(cov / "ledger.jsonl", [
+        {"session_date": "2026-09-16", "status": "STARTED", "recorded_at": "2026-09-16T20:35:00+00:00"},
+        {"session_date": "2026-09-16", "status": "FAILED", "reason": "observer_provider_errors", "detail": "x", "recorded_at": "2026-09-16T20:35:17+00:00"},
+    ])
+    lane = digest._coverage_lane(cov, date(2026, 9, 16), date(2026, 9, 16))
+    assert lane["health"] == "FAILED_LAST_SESSION" and "observer_provider_errors" in lane["note"]
+
+
+def test_systemd_units_use_new_york_calendar_after_the_collector():
+    root = Path(__file__).resolve().parents[1] / "deploy" / "systemd"
+    daily = (root / "afs-paper-collection-daily.timer").read_text()
+    weekly = (root / "afs-paper-collection-weekly.timer").read_text()
+    assert "OnCalendar=Mon..Fri *-*-* 17:15:00 America/New_York" in daily
+    assert "OnCalendar=Fri *-*-* 17:25:00 America/New_York" in weekly
+    collector = (root / "afs-coverage-collector.timer").read_text()
+    assert "16:35:00 America/New_York" in collector  # digest fires after the collector
+    for name in ("afs-paper-collection-daily.service", "afs-paper-collection-weekly.service"):
+        text = (root / name).read_text()
+        assert "scripts.paper_collection_digest" in text and "--post" in text
+        assert "discord.com/api/webhooks" not in text

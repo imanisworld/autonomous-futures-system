@@ -1,0 +1,12 @@
+[Unit]
+Description=Run the AFS weekly paper collection digest after Friday's daily digest
+
+[Timer]
+# 17:25 ET Friday: ten minutes after the daily digest so the weekly covers the full ISO week.
+OnCalendar=Fri *-*-* 17:25:00 America/New_York
+Persistent=true
+AccuracySec=1min
+Unit=afs-paper-collection-weekly.service
+
+[Install]
+WantedBy=timers.target

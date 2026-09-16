@@ -706,8 +706,21 @@ def _coverage_lane(data_dir: Path, start: date, end: date) -> dict[str, Any]:
     final = Counter(status_by_session.get(s, "IN_PROGRESS") for s in win_sessions)
     failures = [
         {"session": str(r.get("session_date")), "reason": r.get("reason"), "detail": str(r.get("detail") or "")[:160]}
-        for r in win if r.get("status") == "FAILED"
+        for r in win if r.get("status") == STATUS_FAILED
     ]
+    newest = max(win_sessions, default="")
+    # Health follows the newest session's FINAL terminal status: a FAILED run that
+    # was later retried to DONE is healthy; only a still-failed newest session is not.
+    newest_final = status_by_session.get(newest) if newest else None
+    if not newest:
+        health = "NO_SESSIONS_IN_WINDOW"
+    elif newest_final == STATUS_FAILED:
+        health = "FAILED_LAST_SESSION"
+    elif newest_final is None:
+        health = "IN_PROGRESS"
+    else:
+        health = "OK"
+    still_failed = [f for f in failures if status_by_session.get(f["session"]) == STATUS_FAILED]
     return _lane(
         "Options coverage collector (col-v0.1)",
         instrument="RTH equities universe",
@@ -717,6 +730,7 @@ def _coverage_lane(data_dir: Path, start: date, end: date) -> dict[str, Any]:
             "sessions_attempted": len(win_sessions),
             "sessions_done": final[STATUS_DONE] + final[STATUS_ALREADY_COLLECTED],
             "sessions_failed": final[STATUS_FAILED],
+            "failed_runs_later_recovered": len(failures) - len(still_failed),
             "ledger_records": len(win),
         },
         cumulative={
@@ -724,9 +738,9 @@ def _coverage_lane(data_dir: Path, start: date, end: date) -> dict[str, Any]:
             "final_status_counts": dict(Counter(status_by_session.values())),
         },
         last_evidence=_last_ts(ledger, ("recorded_at",)),
-        health="FAILED_LAST_RUN" if failures and failures[-1]["session"] == max(win_sessions, default="") else "OK",
+        health=health,
         stalled=None,
-        note="; ".join(f"{f['session']} {f['reason']}: {f['detail']}" for f in failures[-2:]),
+        note="; ".join(f"{f['session']} {f['reason']}: {f['detail']}" for f in still_failed[-2:]),
     )
 
 

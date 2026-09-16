@@ -5,17 +5,14 @@
     python -m scripts.paper_collection_digest --domain options --period weekly --post
     python -m scripts.paper_collection_digest --domain futures --period daily --date 2026-09-16 --json
 
-Runs as an EXTERNAL cron on the box — never inside the trading service, so
-scheduling it requires no service restart.  Suggested crontab (box clock is
-UTC; 17:15 ET = 21:15 UTC during EDT, 22:15 UTC during EST — re-pin at the
-DST change, exactly like the existing companion/weekly_review entries):
-
-    # futures: daily 17:15 ET Mon-Fri, weekly Friday 17:20 ET
-    15 21 * * 1-5 cd /root/autonomous-futures-system && LOG_DIR=/root/afs-shared/logs PYTHONPATH=. .venv/bin/dotenv -f /root/afs-shared/.env run -- .venv/bin/python -m scripts.paper_collection_digest --domain futures --period daily --post >> /root/afs-shared/logs/paper_collection_digest.log 2>&1
-    20 21 * * 5   cd /root/autonomous-futures-system && LOG_DIR=/root/afs-shared/logs PYTHONPATH=. .venv/bin/dotenv -f /root/afs-shared/.env run -- .venv/bin/python -m scripts.paper_collection_digest --domain futures --period weekly --post >> /root/afs-shared/logs/paper_collection_digest.log 2>&1
-    # options: daily 16:20 ET Mon-Fri, weekly Friday 16:30 ET (skips non-NYSE sessions)
-    20 20 * * 1-5 cd /root/autonomous-futures-system && LOG_DIR=/root/afs-shared/logs PYTHONPATH=. .venv/bin/dotenv -f /root/afs-shared/.env run -- .venv/bin/python -m scripts.paper_collection_digest --domain options --period daily --post >> /root/afs-shared/logs/paper_collection_digest.log 2>&1
-    30 20 * * 5   cd /root/autonomous-futures-system && LOG_DIR=/root/afs-shared/logs PYTHONPATH=. .venv/bin/dotenv -f /root/afs-shared/.env run -- .venv/bin/python -m scripts.paper_collection_digest --domain options --period weekly --post >> /root/afs-shared/logs/paper_collection_digest.log 2>&1
+Runs as an EXTERNAL systemd oneshot on the box — never inside the trading
+service, so scheduling it requires no service restart.  Units live in
+deploy/systemd/ (afs-paper-collection-daily / -weekly) and use
+``OnCalendar=... America/New_York`` exactly like afs-coverage-collector, so DST
+needs no re-pinning: daily Mon-Fri 17:15 ET (after the 16:35 ET options
+coverage collector and the 17:00 ET CME pause), weekly Friday 17:25 ET.
+Runbook: docs/paper-collection-digest.md.  Paths are passed explicitly on the
+command line so nothing in .env can redirect them.
 
 Posting goes through notifications.discord_router.DiscordRouter on the
 optional routes ``paper_collection_futures`` / ``paper_collection_options``.
@@ -83,6 +80,8 @@ def main(argv: Optional[Sequence[str]] = None, *, router=None) -> int:
     parser.add_argument("--post", action="store_true", help="deliver via the optional Discord route")
     parser.add_argument("--skip-non-session", action="store_true",
                         help="options daily only: exit quietly when the date is not an NYSE session")
+    parser.add_argument("--scanner-db", type=Path, help="options: V1 scanner sqlite (default LOG_DIR/options_scanner.sqlite)")
+    parser.add_argument("--coverage-dir", type=Path, help="options: coverage collector data dir (default LOG_DIR/coverage_collector)")
     args = parser.parse_args(argv)
 
     now = datetime.now(timezone.utc)
@@ -95,7 +94,10 @@ def main(argv: Optional[Sequence[str]] = None, *, router=None) -> int:
             digest = build_futures_digest(args.log_dir, period=args.period, ref_date=ref, now=now)
             route = FUTURES_ROUTE
         else:
-            digest = build_options_digest(args.log_dir, period=args.period, ref_date=ref, now=now)
+            digest = build_options_digest(
+                args.log_dir, period=args.period, ref_date=ref, now=now,
+                scanner_db=args.scanner_db, coverage_dir=args.coverage_dir,
+            )
             route = OPTIONS_ROUTE
     except Exception as exc:  # noqa: BLE001 — a reporting failure is never fatal to anything else
         log.exception("digest build failed")
