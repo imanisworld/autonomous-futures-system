@@ -4,66 +4,158 @@ Observation-only evidence across **MNQ, MES, M2K, MGC, MCL, MBT**. Nothing in
 this design grants ingestion, strategy, risk, broker or execution eligibility.
 Base: `b4cb614` (#584). Rule: **No proof, no run.** Default: **OFF**.
 
-## Hard boundaries (all tested in `tests/test_cross_instrument_observation_transport.py`)
+## Hard boundaries
 
 | Boundary | Mechanism |
 |---|---|
-| Separate campaign | `execution/cross_instrument_observation.py`, own evidence file `cross_instrument_observation_v1.jsonl` + own state file. Never reads or writes `forward_ab_2026_08_v1` (config, populations, epoch untouched; asserted). |
-| M2K/MGC/MCL/MBT never reach DecisionEngine / RiskEngine / PaperBroker / Tradovate | (1) `webhook/app.py::_route_for_ticker` sends collection-only roots to `webhook/observation_transport.py`, never to `process_alert`. (2) `process_alert` has a first-line backstop returning `OBSERVATION_ONLY` for any collection-only root without touching journal/state. (3) The transport imports none of those modules (subprocess import-graph test). (4) End-to-end test monkeypatches `DecisionEngine.evaluate`, `RiskEngine.validate`, `PaperBroker.execute_bracket/resolve_position` to raise; evidence is still produced. |
-| Observation before trade-capacity gates | MNQ/MES leg runs inside `process_alert` after the bar claim and **before** `BLOCKED_MAX_TRADES` / `BLOCKED_LOSS_LOCKOUT` / `BLOCKED_OPEN_POSITION`. Collection-only roots never read daily state at all. Tested with capacity exhausted and with an open position seeded. |
-| M2K 5m normalization | `context/five_min_feed.py::_root` now uses the canonical `contract_root` (keeps the digit); legacy regex only for unknown roots. |
-| Pine advisory ignored | `strip_pine_advisory` clears `entry/stop/target/signal_strategy/signal_direction` before the market state is built; the ignored values are recorded on every evidence row as `pine_advisory_ignored`. Collection-only roots never call the engine that adopts Pine brackets anyway. |
-| M2K/MBT ingestion only into observation | Accepted by the webhook **only while the campaign is armed**, and only on the observation route. `_INGEST_FUTURES_ROOTS` (trading path) is unchanged. MGC/MCL, already in the ingest allowlist, are now diverted to the observation route unconditionally. |
-| Per-instrument feed freshness | `webhook/app.py::observation_feed_status` + `GET /status/observation-feeds`; `scripts/feed_watchdog.py::check_instruments` judges each of the six `latest_webhook_<ROOT>.json` files on its own product calendar and alerts per instrument (a healthy MNQ cannot mask a dead M2K/MBT). Never-reported instruments are not treated as outages — bar-arrival proof is the activation step. |
-| Product-aware sessions | `context/futures_session.py::product_session_active(root, now)`: equity index (MNQ/MES/M2K: Globex week + 17:00–18:00 ET + **16:15–16:30 ET halt**), metals/energy (MGC/MCL: Globex week + 17:00–18:00 ET), crypto (MBT: **24/7**, maintenance Mon–Fri 16:00–16:02 CT and Sat 02:00–04:00 CT). Unknown root → `None` (never "expected idle"). The legacy `futures_session_active()` is unchanged for its existing callers. |
-| Identity | `campaign × strategy × instrument × variant × evidence_epoch`; `population_key` refuses missing fields; candidate ids hash the full identity, so two epochs never share an id. |
-| Zero-count visibility | `configured_populations()` enumerates every population from `config/cross_instrument_observation.json`; `build_report` / `ops/cross_instrument_observation_report.py` list all of them (89) even at zero, with `NOT ARMED` before activation. |
-| No pooling | Report status is per population against the unchanged 30-terminal / 10-day gate; rows from another epoch are visible under `unconfigured_rows` and never review-eligible. |
-| Not activated | `CROSS_INSTRUMENT_OBSERVATION` and `CROSS_INSTRUMENT_OBSERVATION_EPOCH` are unset by default; with either missing the campaign writes nothing and M2K/MBT stay `IGNORED`. No deploy, restart, VPS, Tradovate, risk-rule, or strategy change. |
+| Separate campaign | `execution/cross_instrument_observation.py`, own evidence file `cross_instrument_observation_v1.jsonl` + own state file. Never reads or writes `forward_ab_2026_08_v1`. |
+| M2K/MGC/MCL/MBT never reach DecisionEngine / RiskEngine / PaperBroker / Tradovate | `webhook/app.py::_route_for_ticker` sends collection-only roots to `webhook/observation_transport.py`, never to `process_alert`; `process_alert` also has a first-line `OBSERVATION_ONLY` backstop. |
+| Observation before trade-capacity gates | MNQ/MES leg runs before max-trades / loss-lockout / open-position early returns. Collection-only roots never read daily trading state. |
+| 15m campaign only | The campaign is pinned to 15m. 5m uses its separate `tf5m/` lane. Other timeframes fail closed. Collection-only detector history is explicitly filtered to 15m. |
+| M2K 5m normalization | `context/five_min_feed.py::_root` uses the canonical contract parser so `M2K1!` stays `M2K`. |
+| Pine advisory ignored | Collection-only entry/stop/target/signal fields are stripped before market state is built. |
+| M2K/MBT ingestion only into observation | Accepted only while the campaign is armed and only on the observation route. The trading allowlist is unchanged. MGC/MCL are also diverted to observation. |
+| Product-aware sessions | Feed-health calendars are product-aware. This is feed expectation only, not strategy authority. |
+| Evidence identity | `campaign × strategy × instrument × variant × evidence_epoch`; population gates never pool. |
+| Crash idempotence | Evidence append is idempotent by `(record_type, candidate_id)`, and reporting defensively dedupes old duplicate rows. |
+| Epoch isolation | Seen-bar identity and canonical Strat state are epoch-scoped; an arm from one epoch cannot fire in another. |
+| Authoritative feed proof | `ops/cross_instrument_feed_health.py` requires an active-epoch 15m campaign seen-bar **and** the matching 15m BarHistory row. Generic webhook receipt and 5m freshness are non-authoritative. Collection-only roots also persist the latest 15m transport attempt and last error. |
+| Zero-count visibility | Every configured population remains visible at zero; no silent lane disappearance. |
+| Not activated | Campaign/env vars remain unset until a separate operator order. |
 
-## Collection modes (from the operator matrix)
+## Collection modes
 
-- **structural_outcome** — bar-derived bracket is resolved forward on the
-  instrument's own recorded bars: fill touch, MAE/MFE (points and R),
-  pessimistic same-bar handling (both-hit = LOSS; target on the fill bar is
-  never credited), WIN/LOSS/NO_FILL/EXPIRED at trading-date rollover. Gross
-  geometry only; `commission_assumption_dollars` / `slippage_assumption_ticks`
-  are `None` because no cost proof exists for these instruments.
-  Populations: canonical `strat_212` / `strat_122` (pure tick-size state
-  machine, all six), Strat 2-2 / 3-1-2 / 3-2-2 observers, impulse first
-  pullback, trend consolidation break, failed-breakdown reclaim; `strat_122_pullback`
-  MNQ/MES only (needs a stop-cap policy that does not exist elsewhere).
-- **signal_metrics** — occurrence, direction and raw geometry only;
-  `bracket_authoritative: false`; never resolved into a simulated trade.
-  Populations: ORB false-break fade, EMA pullback (all six); gap fill and
-  overnight sweeps (not MBT: no session semantics); VWAP hold / rejection
-  observers and 4HR observer **MNQ/MES only** (they re-run DecisionEngine
-  builders or are current-scope-only).
+### Structural outcome
+For **MNQ, MES, M2K, MGC, MCL**, selected price-structure populations may be
+resolved forward using gross geometry only: fill touch, MAE/MFE, R,
+pessimistic same-bar handling, WIN/LOSS/NO_FILL/EXPIRED. Commission and
+slippage assumptions remain `None`; these rows are not execution validation.
 
-Collection-only roots run `strategy/shadow_setups.evaluate_shadow_setups(..., include_canonical_observers=False)`;
-that module no longer imports the risk engine (`_reward_to_risk` mirrors
-`RiskEngine.calculate_rr` exactly, tested).
+### Signal / metrics only
+Occurrence, direction and raw geometry only; `bracket_authoritative: false` and
+no simulated outcome. This includes ORB fade / EMA pullback broadly, VWAP/4HR
+observers only where already scoped, and **all MBT structural families**.
 
-## Activation (NOT done here — separate operator step)
+MBT is deliberately downgraded to signal/geometry for structural families.
+CME crypto is 24/7 in 2026 and this project has not established a defensible
+position-expiry horizon for a hypothetical structural trade. An arbitrary ET or
+UTC midnight must not manufacture MBT WIN/LOSS statistics. Gap-fill and
+"overnight" families remain excluded from MBT because their session semantics
+are also unproven.
 
-1. Prove bar arrival per instrument (15m and, where used, 5m) with
-   `GET /status/observation-feeds` after TradingView alerts exist for each root.
-2. Set `CROSS_INSTRUMENT_OBSERVATION=cross_instrument_observation_v1` and
-   `CROSS_INSTRUMENT_OBSERVATION_EPOCH=<release sha>+<arm time>` on the box; restart.
-3. Watch `ops/cross_instrument_observation_report.py --log-dir …` — every
-   population must appear, most at zero on day one.
+## Authoritative feed-health gate
 
-## Deferred (unchanged)
+Use:
 
-MGC/MCL/MBT historical roll schedules; per-instrument commissions/slippage;
-per-instrument trading rules; `webhook/payload.py` price-sanity parser (M2K/MBT
-have no range yet, so unknown roots pass unchecked — noted for later);
-Tradovate adapter fallbacks (real book, MNQ-only).
+```sh
+python3 ops/cross_instrument_feed_health.py --log-dir <logs> --json
+```
+
+A root is not proven merely because a webhook arrived. `proven_15m` requires:
+
+1. the campaign persisted the exact bar under the active evidence epoch; and
+2. that exact 15m timestamp exists in the instrument BarHistory.
+
+For M2K/MGC/MCL/MBT, a newer failed 15m transport attempt produces
+`TRANSPORT_ERROR` immediately and exposes `last_error`. A 5m alert never
+updates the 15m transport marker. `ready_to_trust_collection_feed` is false
+until all six roots have independent proof and every active root is healthy.
+
+The ordinary `latest_webhook_<ROOT>.json` files remain useful receipt telemetry,
+but **receipt freshness is not the campaign activation/readiness authority**.
+
+## Activation sequence — provisional first, trusted only after proof
+
+M2K/MBT are intentionally rejected while the campaign is OFF, so their real
+bar arrival cannot be proven before the observation route is armed. Therefore
+the safe sequence is:
+
+1. Merge and deploy with both campaign env vars **unset**. Prove behavior-neutral
+   operation of the existing system first.
+2. Create/review TradingView alerts for all six roots. Do not infer feed support
+   from parser support.
+3. Arm a fresh epoch with the campaign still **observation-only**. This epoch is
+   initially **PROVISIONAL / UNTRUSTED**.
+4. Require `cross_instrument_feed_health.py` to prove every root independently.
+   Inspect first real 15m payloads for ticker, timeframe, timestamp cadence and
+   OHLC/context fields.
+5. Only after all-six feed proof may the epoch be treated as trustworthy
+   collection evidence. This does not authorize trading or strategy promotion.
+
+## Known uncertainties and mitigations
+
+### 1. Missing-bar contamination — highest remaining evidence risk
+Freshness does not prove completeness. One missing 15m bar can change a Strat
+sequence, a multi-bar detector, or a hypothetical resolution path.
+
+**Mitigation before strategy validation:** add product-aware continuity coverage
+for the campaign. Candidate detector windows and forward-resolution windows that
+cross an unexplained missing bar should be tagged `DATA_GAP_CONTAMINATED` and
+excluded from readiness gates. Do not backfill with invented bars. Maintenance
+and known exchange closures must be classified separately from unexplained gaps.
+
+### 2. MBT outcome horizon
+There is no proven daily expiry boundary for a 24/7 product.
+
+**Mitigation now:** MBT structural populations are signal/metrics only. No MBT
+terminal outcome can satisfy the 30-outcome gate until a causal horizon is
+explicitly designed and independently validated.
+
+### 3. TradingView payload equivalence
+Parser acceptance does not prove that all six alerts send the same useful bar
+semantics or survive contract changes.
+
+**Mitigation:** first-arm payload audit per root. Verify confirmed 15m cadence,
+contract/root, timestamps, OHLC, volume and required optional fields. A root
+with incomplete payload semantics remains collection-limited.
+
+### 4. Historical continuity / rolls
+M2K can use the existing quarterly-equity roll machinery. Continuous historical
+roll support for MGC/MCL/MBT is not proven.
+
+**Mitigation:** collect them forward. Do not claim continuous historical replay
+for MGC/MCL/MBT until dated-contract selection and roll provenance are proven.
+
+### 5. Session/calendar exceptions
+The product calendar is used for feed-health expectations, but holidays,
+special maintenance and exchange rule changes can create legitimate gaps.
+
+**Mitigation:** calendar exceptions must not silently become missing-data faults
+or strategy rules. Record them as known/unknown closure classifications and keep
+strategy/session semantics separate from feed-health semantics.
+
+### 6. Correlated instruments
+MNQ, MES and M2K are correlated equity-index products. Micros and their larger
+counterparts would also duplicate underlying moves.
+
+**Mitigation:** never pool instruments to satisfy sample gates. The campaign's
+population identity already enforces this; any future cross-market summary must
+remain informational only.
+
+### 7. Costs and execution realism
+New-instrument commission/slippage and broker liquidity behavior are not proven.
+
+**Mitigation:** signal collection may proceed, but no gross geometry row becomes
+paper-execution validation until instrument-specific costs/fills are separately
+proven.
+
+## Deferred
+
+- product-aware continuity / data-gap contamination gate;
+- MGC/MCL/MBT continuous historical roll schedules;
+- per-instrument commissions/slippage;
+- per-instrument trading rules;
+- MBT structural outcome horizon;
+- any broker or live eligibility expansion.
+
+None of those are implied by collecting observations.
 
 ## Verification
 
 ```sh
 python3 -m pytest -q tests/test_cross_instrument_observation_transport.py
+python3 -m pytest -q tests/test_cross_instrument_observation_integrity.py
+python3 -m pytest -q tests/test_cross_instrument_feed_health.py
 python3 -m pytest -q
 git diff --exit-code b4cb614 -- risk_rules.yaml config/forward_evidence_campaign.json execution/tradovate_broker.py execution/paper_broker.py execution/forward_evidence_campaign.py execution/evidence_identity.py strategy/signal_engine.py risk/risk_engine.py context/mes_122_paper_lane.py context/wide_stop_execution.py tradingview/ deploy/
 ```
