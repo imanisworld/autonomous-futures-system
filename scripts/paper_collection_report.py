@@ -1,12 +1,12 @@
 """Read-only EOD/EOW evidence rollups for futures and options.
 
 This module does not collect market data, mutate strategy state, place orders,
-or promote strategies.  It summarizes evidence that existing collectors have
-already written and posts the summaries to the dedicated optional Discord
-routes:
+or promote strategies. It summarizes evidence that existing collectors have
+already written and posts the summaries directly to the dedicated optional
+Discord webhook environment variables:
 
-- ``paper_collection_futures`` -> ``DISCORD_ROUTE_PAPER_COLLECTION_FUTURES``
-- ``paper_collection_options`` -> ``DISCORD_ROUTE_PAPER_COLLECTION_OPTIONS``
+- ``DISCORD_ROUTE_PAPER_COLLECTION_FUTURES``
+- ``DISCORD_ROUTE_PAPER_COLLECTION_OPTIONS``
 
 Usage::
 
@@ -25,16 +25,15 @@ import os
 import sqlite3
 import subprocess
 import sys
+import urllib.request
 from collections import Counter
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from notifications.discord_router import DiscordRouter
 
-
-FUTURES_ROUTE = "paper_collection_futures"
-OPTIONS_ROUTE = "paper_collection_options"
+FUTURES_ENV = "DISCORD_ROUTE_PAPER_COLLECTION_FUTURES"
+OPTIONS_ENV = "DISCORD_ROUTE_PAPER_COLLECTION_OPTIONS"
 
 
 def period_bounds(ref: date, period: str) -> tuple[date, date]:
@@ -44,21 +43,6 @@ def period_bounds(ref: date, period: str) -> tuple[date, date]:
         monday = ref - timedelta(days=ref.weekday())
         return monday, ref
     raise ValueError(f"unsupported period: {period}")
-
-
-def _iso_day(value: Any) -> str | None:
-    if not value:
-        return None
-    text = str(value)
-    try:
-        return datetime.fromisoformat(text.replace("Z", "+00:00")).date().isoformat()
-    except ValueError:
-        return text[:10] if len(text) >= 10 else None
-
-
-def _in_range(value: Any, start: date, end: date) -> bool:
-    day = _iso_day(value)
-    return bool(day and start.isoformat() <= day <= end.isoformat())
 
 
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -151,13 +135,12 @@ def _count_table_range(
             return {"status": "QUERY_ERROR", "rows": None}
         return {"status": "NO_TIMESTAMP_COLUMN", "rows": total}
     try:
-        rows = conn.execute(
+        cur = conn.execute(
             f"SELECT * FROM [{table}] WHERE substr([{timestamp_column}], 1, 10) BETWEEN ? AND ?",
             (start.isoformat(), end.isoformat()),
-        ).fetchall()
-        names = [d[0] for d in conn.execute(
-            f"SELECT * FROM [{table}] LIMIT 0"
-        ).description or []]
+        )
+        names = [d[0] for d in (cur.description or [])]
+        rows = cur.fetchall()
     except sqlite3.Error:
         return {"status": "QUERY_ERROR", "rows": None}
 
@@ -206,11 +189,7 @@ def run_collector_census(log_dir: Path) -> dict[str, Any]:
     try:
         payload = json.loads(proc.stdout)
     except ValueError:
-        return {
-            "status": "ERROR",
-            "exit_code": proc.returncode,
-            "error": "invalid_json",
-        }
+        return {"status": "ERROR", "exit_code": proc.returncode, "error": "invalid_json"}
     if isinstance(payload, dict):
         payload.setdefault("exit_code", proc.returncode)
         payload.setdefault("status", "OK" if proc.returncode == 0 else "ATTENTION")
@@ -290,6 +269,20 @@ def format_options_report(
     return "\n".join(lines)
 
 
+def _post_discord(webhook_url: str, content: str) -> bool:
+    try:
+        body = json.dumps({"content": content}).encode("utf-8")
+        req = urllib.request.Request(
+            webhook_url,
+            data=body,
+            headers={"Content-Type": "application/json", "User-Agent": "afs-paper-collection/1"},
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return 200 <= resp.status < 300
+    except Exception:
+        return False
+
+
 def _write_artifact(log_dir: Path, payload: dict[str, Any], *, ref: date, period: str) -> Path | None:
     try:
         log_dir.mkdir(parents=True, exist_ok=True)
@@ -338,13 +331,15 @@ def main(argv: list[str] | None = None) -> int:
 
     send_failures = 0
     if not args.no_discord:
-        router = DiscordRouter()
-        for route, report in ((FUTURES_ROUTE, futures_report), (OPTIONS_ROUTE, options_report)):
-            if router.is_enabled(route):
-                if not router.send(route, report):
-                    send_failures += 1
-            else:
-                print(f"[paper_collection_report] {route} disabled")
+        for env_name, report in ((FUTURES_ENV, futures_report), (OPTIONS_ENV, options_report)):
+            webhook = (os.getenv(env_name) or "").strip()
+            if not webhook:
+                print(f"[paper_collection_report] {env_name} unset; artifact only")
+                continue
+            ok = _post_discord(webhook, report)
+            print(f"[paper_collection_report] {env_name} posted={ok}")
+            if not ok:
+                send_failures += 1
 
     print(futures_report)
     print()
