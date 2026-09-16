@@ -6,10 +6,27 @@ from scripts import mes_asian_d_ema_baseline as mes
 from scripts import mnq_missed_opportunity_producer as representation_parent
 
 
-def test_parent_d0_population_semantics_are_not_reimplemented():
-    d0 = [predicate for name, predicate in representation_parent._variants() if name == "D0"]
-    assert len(d0) == 1
-    assert mes._d0_predicate() is d0[0]
+def _record(cohort: str, ema: str):
+    return {
+        "bar_cohort": cohort,
+        "ema_dir": ema,
+    }
+
+
+def _candidate(direction: str):
+    return {"direction": direction}
+
+
+def test_parent_d0_population_semantics_match_exhaustive_matrix():
+    parent_d0 = [predicate for name, predicate in representation_parent._variants() if name == "D0"]
+    assert len(parent_d0) == 1
+    mes_d0 = mes._d0_predicate()
+    for cohort in ("A", "B", "C", "D"):
+        for ema in ("UP", "DOWN", "NEUTRAL", None):
+            for direction in ("LONG", "SHORT"):
+                record = _record(cohort, ema)
+                candidate = _candidate(direction)
+                assert mes_d0(record, candidate) == parent_d0[0](record, candidate)
 
 
 def test_population_port_keeps_timeframe_dedupe_helpers_and_one_tick_slippage():
