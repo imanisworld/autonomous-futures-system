@@ -2,9 +2,13 @@
 Description=Run the AFS options coverage collector after the New York close (weekdays; the collector skips holidays, handles early closes and catches up missed sessions itself)
 
 [Timer]
-# 16:35 ET = regular close + 35 min (> the collector's 30-min settle buffer).
-# Early-close days (13:00 ET) settle long before this; holidays resolve to SKIPPED inside the collector.
-OnCalendar=Mon..Fri *-*-* 16:35:00 America/New_York
+# 16:45 ET = regular close + 45 min (> the collector's 30-min settle buffer).
+# The observer prices first sight from 5Min bars that end at close + 26 min
+# (16:26 ET, unchanged); the data plan refuses SIP bars younger than 15 min, so
+# the firing must sit at or after 16:41 ET. 16:35 ET failed on 2026-09-16 with
+# provider_entitlement on every symbol. Early-close days (13:00 ET) settle long
+# before this; holidays resolve to SKIPPED inside the collector.
+OnCalendar=Mon..Fri *-*-* 16:45:00 America/New_York
 # A missed firing (box down at 16:35) runs at the next boot; the collector then
 # collects EVERY settled, uncollected session since the collection start, oldest first.
 Persistent=true

@@ -69,7 +69,7 @@ def write_universe(path: Path, symbols=UNIVERSE) -> Path:
     return path
 
 
-def seed_observer(sqlite_path: Path, day: date, *, symbols: dict[str, tuple[int, str]], events: int = 3, index_ok=(True, True)) -> None:
+def seed_observer(sqlite_path: Path, day: date, *, symbols: dict[str, tuple[int, str]], events: int = 3, index_ok=(True, True), priced: bool = True) -> None:
     conn = sqlite3.connect(sqlite_path)
     conn.executescript(SCHEMA)
     d = day.isoformat()
@@ -80,8 +80,8 @@ def seed_observer(sqlite_path: Path, day: date, *, symbols: dict[str, tuple[int,
         )
     for i in range(events):
         conn.execute(
-            "INSERT OR REPLACE INTO coverage_events (observer_id, observer_version, symbol, timeframe, session_date, bar_start, bar_close, family, sequence, requested_family, v1_supported, direction, entry_trigger, invalidation, risk, nearest_geometry_ok, floor_geometry_ok, floor_rescued, alignment_ok, alignment_failures, first_sight_at, first_sight_after_close, row_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            ("OPTIONS_COVERAGE_OBSERVER", OBSERVER_VERSION, "AAPL", "30Min", d, f"{d}T1{i}:00:00+00:00", f"{d}T1{i}:30:00+00:00", "STRAT_222_CONTINUATION", "2-2-2", 1, 0, "LONG", 101.0, 100.0, 1.0, 1, 1, 0, 0, "spy", f"{d}T1{i}:47:57+00:00", 0, json.dumps(event_row(d, i))),
+            "INSERT OR REPLACE INTO coverage_events (observer_id, observer_version, symbol, timeframe, session_date, bar_start, bar_close, family, sequence, requested_family, v1_supported, direction, entry_trigger, invalidation, risk, nearest_geometry_ok, floor_geometry_ok, floor_rescued, alignment_ok, alignment_failures, first_sight_at, first_sight_after_close, first_sight_price, row_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            ("OPTIONS_COVERAGE_OBSERVER", OBSERVER_VERSION, "AAPL", "30Min", d, f"{d}T1{i}:00:00+00:00", f"{d}T1{i}:30:00+00:00", "STRAT_222_CONTINUATION", "2-2-2", 1, 0, "LONG", 101.0, 100.0, 1.0, 1, 1, 0, 0, "spy", f"{d}T1{i}:47:57+00:00", 0, 101.4 if priced else None, json.dumps(event_row(d, i))),
         )
     funnel = {"index_context": {"SPY": index_ok[0], "QQQ": index_ok[1]}}
     conn.execute(
@@ -728,9 +728,12 @@ def test_systemd_units_run_a_pinned_isolated_oneshot():
             assert "/root/autonomous-futures-system" not in line, line  # never the production tree
     for forbidden in ("git ", "systemctl", "futures-bot.service", "options_scanner.sqlite", "ExecStartPre"):
         assert forbidden not in service, forbidden
-    assert "OnCalendar=Mon..Fri *-*-* 16:35:00 America/New_York" in timer
+    assert "OnCalendar=Mon..Fri *-*-* 16:45:00 America/New_York" in timer
     assert "Persistent=true" in timer and "Unit=afs-coverage-collector.service" in timer
-    assert timedelta(minutes=35) > SETTLE_AFTER_CLOSE
+    assert timedelta(minutes=45) > SETTLE_AFTER_CLOSE
+    # The observer's 5Min first-sight pricing runs to close + 26 min (methodology, frozen);
+    # the data plan refuses SIP bars younger than 15 min → firing must be ≥ close + 41 min.
+    assert timedelta(minutes=45) >= timedelta(minutes=26) + timedelta(minutes=15)
 
 
 def test_install_script_touches_only_the_coverage_release():
@@ -745,3 +748,80 @@ def test_install_script_touches_only_the_coverage_release():
         if "systemctl" in line:
             assert "'$TIMER'" in line or "daemon-reload" in line, line
             assert "restart" not in line, line
+
+
+# --------------------------------------------------------------------------- #
+# 2026-09-16 entitlement-timing failure: completeness + repair provenance
+# --------------------------------------------------------------------------- #
+
+
+def test_observer_completion_requires_first_sight_prices(tmp_path):
+    db = tmp_path / "observer.sqlite"
+    seed_observer(db, DAY, symbols=GOOD_SYMBOLS, priced=False)
+    check = observer_completion(db, DAY, UNIVERSE, allow_unobservable=("SQ",))
+    assert not check.ok and check.problems == ["first_sight_unpriced:3"]
+    assert check.pricing_required == 3 and check.unpriced == 3
+    seed_observer(db, DAY, symbols=GOOD_SYMBOLS, priced=True)  # re-observe → INSERT OR REPLACE re-prices
+    fixed = observer_completion(db, DAY, UNIVERSE, allow_unobservable=("SQ",))
+    assert fixed.ok and fixed.unpriced == 0 and fixed.pricing_required == 3
+    assert fixed.to_dict()["unpriced"] == 0
+
+
+def test_after_close_first_sight_never_requires_a_price(tmp_path):
+    db = tmp_path / "observer.sqlite"
+    seed_observer(db, DAY, symbols=GOOD_SYMBOLS, priced=True)
+    conn = sqlite3.connect(db)
+    conn.execute("UPDATE coverage_events SET first_sight_after_close=1, first_sight_price=NULL WHERE bar_start LIKE '%T12:00:00%'")
+    conn.commit()
+    conn.close()
+    check = observer_completion(db, DAY, UNIVERSE, allow_unobservable=("SQ",))
+    assert check.ok and check.pricing_required == 2 and check.unpriced == 0
+
+
+def test_unpriced_session_is_reobserved_and_repair_is_recorded(tmp_path, creds):
+    """What 2026-09-16 looked like: events stored, no prices, run FAILED. The next run must
+    re-observe (not skip as already_complete) and stamp the repair in ledger + binding."""
+    kw = make_cli_args(tmp_path)
+    daily = kw["data_dir"] / "daily"
+    seed_observer(kw["sqlite_path"], DAY, symbols=GOOD_SYMBOLS, priced=False)
+    prior = observer_completion(kw["sqlite_path"], DAY, UNIVERSE, ("SQ",))
+    assert prior.run_id is not None and not prior.ok
+    runner = FakeRunner(kw["sqlite_path"], daily)
+    assert cli.main([], runner=runner, **kw) == 0
+    assert [Path(c[1]).name for c in runner.calls] == ["options_coverage_observer.py", "options_coverage_outcomes.py", "options_coverage_episodes.py"]
+    done = [r for r in read_ledger(kw["data_dir"] / "ledger.jsonl") if r["status"] == STATUS_DONE][-1]
+    assert done["steps"]["observer"] == "repaired"
+    assert done["observer_repair"]["prior_run_id"] == prior.run_id and done["observer_repair"]["prior_problems"] == ["first_sight_unpriced:3"]
+    assert done["coverage"]["unpriced"] == 0
+    binding = json.loads(binding_path(daily, DAY).read_text())
+    assert binding["observer_repair"]["prior_run_id"] == prior.run_id and binding["observer_run_id"] == done["coverage"]["run_id"]
+    assert binding["observer_run_id"] != prior.run_id
+
+
+def test_clean_session_carries_no_repair_flag(tmp_path, creds):
+    kw = make_cli_args(tmp_path)
+    daily = kw["data_dir"] / "daily"
+    assert cli.main([], runner=FakeRunner(kw["sqlite_path"], daily), **kw) == 0
+    done = [r for r in read_ledger(kw["data_dir"] / "ledger.jsonl") if r["status"] == STATUS_DONE][-1]
+    assert done["steps"]["observer"] == "ran" and done["observer_repair"] is None
+    assert json.loads(binding_path(daily, DAY).read_text())["observer_repair"] is None
+
+
+def test_provider_error_leaves_session_incomplete_for_the_next_run(tmp_path, creds):
+    kw = make_cli_args(tmp_path)
+    daily = kw["data_dir"] / "daily"
+
+    class EntitlementRunner(FakeRunner):
+        def __call__(self, cmd, log_path):
+            rc = super().__call__(cmd, log_path)
+            if Path(cmd[1]).name == "options_coverage_observer.py":
+                day = date.fromisoformat(cmd[cmd.index("--date") + 1])
+                seed_observer(self.sqlite_path, day, symbols=GOOD_SYMBOLS, priced=False)
+                log_path.write_text(log_path.read_text() + "  provider error: AAPL: 5Min:provider_entitlement:recent SIP\n")
+            return rc
+
+    assert cli.main([], runner=EntitlementRunner(kw["sqlite_path"], daily), **kw) == 1
+    failed = [r for r in read_ledger(kw["data_dir"] / "ledger.jsonl") if r["status"] == "FAILED"][-1]
+    assert failed["reason"] == "observer_provider_errors"
+    assert not observer_completion(kw["sqlite_path"], DAY, UNIVERSE, ("SQ",)).ok  # NOT already_complete next time
+    assert not list(daily.glob("*.json")) if daily.exists() else True

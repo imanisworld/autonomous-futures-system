@@ -156,6 +156,19 @@ commit. Then once per run: (3) episode reducer `--from F --to D` →
 daily outcome file → `<data>/aggregate/outcomes_F_D.{json,md}` (no provider
 call; sessions without a daily file are listed in `sessions_missing`).
 
+**Complete means priced.** Events alone do not make a session complete: every
+event whose first sight fell inside the session must carry a first-sight price
+(`first_sight_unpriced:N` otherwise), so a session whose 5Min pricing was
+refused is re-observed by the next run instead of being skipped as
+`already_complete`. When the observer is re-run over an earlier incomplete run
+the DONE ledger line and the binding sidecar carry `observer_repair` (prior run
+id, time, problems): the session was observed prospectively, its pricing was
+repaired later under the unchanged rules. First firing 2026-09-16 16:35 ET
+failed exactly this way (`provider_entitlement`, recent SIP): the observer's
+5Min window ends at close + 26 min and the data plan refuses bars younger than
+15 min, so the timer now fires at 16:45 ET. The first-sight semantics (close +
+960 s, 17.9 min) and the 30-min settle buffer are unchanged.
+
 **Complete means bound.** A daily file counts as complete only when its
 binding matches the *current* observer state for that date (latest run id,
 event count) and its episode count equals what the reducer produces from the
@@ -202,7 +215,7 @@ stages an immutable copy of exactly that commit (own `.venv`, `release_manifest.
 `chmod a-w`) under `/root/afs-shared/coverage/releases/<sha>`; `activate <sha>`
 points `/root/afs-shared/coverage/current` at it and installs
 `deploy/systemd/afs-coverage-collector.{service,timer}` (`Type=oneshot`,
-`Mon..Fri 16:35 America/New_York`, `Persistent=true`, `--require-pinned`,
+`Mon..Fri 16:45 America/New_York`, `Persistent=true`, `--require-pinned`,
 evidence paths passed explicitly under `/root/afs-shared/coverage/`). It never
 touches `/root/autonomous-futures-system`, `/root/afs-releases`, `futures-bot`,
 the scanner or the watcher. Moving the collector to a newer commit is a new
