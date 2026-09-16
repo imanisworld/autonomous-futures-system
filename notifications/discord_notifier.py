@@ -89,6 +89,34 @@ def send_discord_alert(
     return NotificationResult(sent=True, reason="sent")
 
 
+def send_operational_alert(
+    config: SystemConfig,
+    content: str,
+    transport: Optional[Transport] = None,
+) -> NotificationResult:
+    """Send a FAILURE / SAFETY alert a human should notice.
+
+    Destination policy (2026-09-16): these belong on the DiscordRouter
+    ``error`` route, not the heartbeat/legacy webhook. If the ``error`` route
+    is unset the message falls back to the legacy ``send_discord_alert`` path
+    so an alert is never silently lost. Never raises; a failed Discord send is
+    logged and returned as a result — it can never affect ingestion, trading,
+    risk, or broker state. Failure and recovery notices from the same monitor
+    must both use this function so they stay paired on one route.
+    """
+    if transport is None:
+        try:
+            from notifications.discord_router import DiscordRouter
+
+            router = DiscordRouter()
+            if router.is_enabled("error"):
+                delivered = router.send("error", content)
+                return NotificationResult(sent=bool(delivered), reason="sent" if delivered else "send_failed")
+        except Exception as exc:  # noqa: BLE001 — router trouble must never propagate
+            logger.warning("Discord error route unavailable, using legacy alert path: %s", exc)
+    return send_discord_alert(config, content, transport=transport)
+
+
 def _should_notify(result: dict, allowed_decisions: list[str]) -> bool:
     decision = result.get("decision")
     return decision in allowed_decisions
