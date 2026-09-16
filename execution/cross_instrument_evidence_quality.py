@@ -9,8 +9,8 @@ Quality rules are intentionally conservative:
 - missing expected 15m bars contaminate the sample;
 - unknown detector/code provenance blocks eligibility;
 - a contract change inside the detector/outcome window is roll-contaminated;
-- continuous MGC/MCL/MBT provenance remains unknown until a proven roll schedule
-  exists;
+- continuous-contract tickers cannot prove the actual underlying contract and
+  remain roll-provenance unknown until exact contract identity is established;
 - MBT structural populations remain population-level HOLD until a 24/7 outcome
   horizon is explicitly proven.
 """
@@ -280,14 +280,15 @@ def roll_assessment(row: dict, log_dir: str | Path) -> dict:
     if kind == "dated_contract":
         return {"status": VALID, "source_tickers": unique, "symbol_kinds": kinds}
     if kind == "continuous":
-        if instrument not in QUARTERLY_SYMBOLS:
-            return {"status": ROLL_PROVENANCE_UNKNOWN, "source_tickers": unique, "symbol_kinds": kinds}
-        contaminated = _quarterly_roll_window(instrument, start.date(), end.date())
+        # A continuous symbol (for example M2K1!) does not identify which dated
+        # contract actually supplied each bar. The repository's historical roll
+        # convention is not proof of the live feed's switch time, so continuous
+        # bars cannot be certified roll-clean from that convention.
         return {
-            "status": ROLL_CONTAMINATED if contaminated else VALID,
+            "status": ROLL_PROVENANCE_UNKNOWN,
             "source_tickers": unique,
             "symbol_kinds": kinds,
-            "quarterly_schedule_checked": True,
+            "continuous_contract_identity_proven": False,
         }
     return {"status": ROLL_PROVENANCE_UNKNOWN, "source_tickers": unique, "symbol_kinds": kinds}
 
