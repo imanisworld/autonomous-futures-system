@@ -1,192 +1,151 @@
 # Futures — Current State Handoff
 
-_As of 2026-09-16 13:53 EDT. Historical audit docs remain evidence records but do not override this file. Repository state is not proof of VPS state; verify the box separately before claiming anything is running._
+_As of 2026-09-16 evening. Historical audit docs remain evidence records but do not override this file. Repository state and runtime state are tracked separately._
 
 ## Verdict
 
-**PAPER / OBSERVATION / RESEARCH ONLY. NO LIVE EXECUTION OR STRATEGY PROMOTION IS APPROVED.**
+**PAPER / OBSERVATION ONLY. HOLD on strategy changes. NO LIVE EXECUTION OR STRATEGY PROMOTION.**
 
 Core rule: **No proof, no run.**
 
-## What we accomplished on 2026-09-16
+The retrospective futures investigation has reached a stopping point. The observation/evidence infrastructure is in place, the major representation/gate alternatives were tested, MES did not validate the MNQ idea, and no retrospective study justified changing strategy gates or execution rules.
 
-The work today built an evidence chain for missed-signal discovery without expanding live execution:
+## What was completed
 
-- **#585** — observation-only transport across MNQ/MES/M2K/MGC/MCL/MBT, 15m-isolated, epoch-scoped, idempotent, with execution backstops.
-- **#586** — evidence-quality/provenance gating for gaps, roll ambiguity, code/detector/timeframe/calendar provenance, and MBT horizon uncertainty.
-- **#587** — fail-closed MGC/MCL behavior while the campaign is OFF.
-- **#588** — release-manifest provenance + quality-gated status; **#589** — test-only deterministic fixture repair.
-- **#590/#591** — separate observation Discord events from operational/safety errors.
-- **#592** — repeatable read-only why-no-trade and counterfactual reporting.
-- **#593** — deterministic preserved MNQ counterfactual reproduction.
-- **#594** — causal BOS/MSS first-retest event study, no trade model.
-- **#595** — isolated MNQ Asian D+EMA forward-paper lane, default OFF and not activated.
-- **#596** — matched Asian pre-signal winner/loser precursor audit.
-- **#597** — docs-only current-state refresh.
-- **#598** — MES D+EMA portability producer required for the MES input to #596.
+### Observation and evidence infrastructure
 
-This does **not** mean a new strategy is validated. It means the system now has a safer, more reproducible path to determine where information disappears between market structure and execution.
+- **#585–#588** built the six-root observation system across MNQ, MES, M2K, MGC, MCL, and MBT with 15m isolation, epoch isolation, idempotent evidence writes, feed-health proof, continuity/roll/provenance gates, and fail-closed routing.
+- **#589** repaired time-expiring historical fixtures only; no runtime behavior change.
+- **#590/#591** separated observation Discord events from operational/safety errors.
+- **#592** added repeatable read-only why-no-trade and counterfactual reporting.
 
-## Current repository state
+### Reproducible missed-opportunity research
 
-GitHub `main` is **`6bf3691b5b87e19f50b5e7d98133c0db81607cdf`** (#592).
+- **#593** preserved and deterministically reproduced the MNQ missed-opportunity producer, including WIN / LOSS / NO_FILL / EXPIRED semantics and byte-identical reruns.
+- The full retrospective representation chain was then run: why-no-trade, layer-isolated counterfactuals, outcome-first missed moves, representation v2–v4, pre-entry, lateness, low-displacement, session validation, Asia validation, MES portability, and precursor analysis.
 
-Merged futures work today: **#585–#592**, including the test-only #589. These repository merges do **not** prove the VPS is currently running `main`.
+**Retrospective conclusion:** no gate relaxation, stop change, lateness filter, low-displacement filter, or alternative representation produced enough robust evidence to justify a strategy change. New York failed on both MNQ and MES. Broad gate relaxation and tighter-stop ideas failed or overfit.
 
-## Current open audit / research work
+## #595 — MNQ Asian D+EMA prospective paper cohort
 
-### #593 — MNQ missed-opportunity producer
+**Code verdict: APPROVE FOR MERGE. Operational verdict: HOLD / NOT ACTIVATED.**
 
-**AUDIT / RESEARCH ONLY.** The preserved counterfactual producer now reproduces the original snapshot including WIN/LOSS/NO_FILL/EXPIRED accounting. Repeated real-data output was byte-identical, cohort reconciliation passed, and exact-head CI is green. No runtime behavior change.
+#595 is the smallest isolated prospective test of the only historical population still worth observing.
 
-### #594 — BOS/MSS first-retest event study
+Safety boundary:
 
-**RESEARCH ONLY / EVENT STUDY ONLY. NOT A STRATEGY.**
+- MNQ only;
+- Asian session only;
+- `ema_pullback_trend` + `strat_22_continuation_observed` only;
+- 15m only;
+- PaperBroker only;
+- one open cohort position at a time;
+- default OFF;
+- activation requires both explicit env keys;
+- crash-safe/idempotent persistence;
+- central contract economics;
+- archived-population parity and provenance checks.
 
-Frozen causal definition:
+The population-delta follow-up found no material historical population change.
 
-- complete 5m bars -> complete 15m triples;
-- swing length 7;
-- first directional break establishes state only;
-- next same-direction break = BOS;
-- next opposite-direction break = MSS;
-- event known only at the 15m break-bar close;
-- first later retest within 120m decides `RETEST_HOLD`, `RETEST_FAIL`, or `NO_RETEST`;
-- no later successful touch can replace an earlier failed first touch.
+Historical evidence is **not strong enough for validation**:
 
-Measurements are descriptive only: signed move, MFE, MAE, directional rates, and mean/median movement at 15/30/60/120m.
+- collapsed MNQ Asia PF roughly **1.46–1.59** depending on the approved population view;
+- about **107 independent trades**;
+- null p95 PF about **1.94**;
+- September approximately flat;
+- MES did not replicate.
 
-No entry, stop, target, P&L strategy, PaperBroker, RiskEngine, promotion rule, or execution path exists. CHoCH is not claimed.
+Classification: **PROMISING BUT UNPROVEN / PAPER ONLY.** The result may still be sample noise.
 
-**Exact-head CI is green.** Remaining proof is the Phase-1 MNQ run against the preserved multi-month 5m corpus and review of the resulting event behavior. MES is conditional later; M2K/MGC/MCL/MBT remain out of scope.
+## MES validation
 
-### #595 — MNQ Asian D+EMA forward paper cohort
+The MES 5m corpus was extended through 2026-09-16 with provenance. The data matched the box feed within one tick, the 15m snapshot had zero duplicate/conflicting bars, the known 2026-09-14 22:00–23:55Z roll seam was explicitly quarantined, and study reruns were byte-identical.
 
-**DRAFT / OFF / NOT ACTIVATED.**
+### #598 / MES D+EMA result
 
-Scope: MNQ only, Asian only, 15m only, `ema_pullback_trend` + `strat_22_continuation_observed`, one open cohort position, canonical PaperBroker IOC, no external-broker route.
+**BROKEN.**
 
-The population-delta audit found no material change when evaluation expanded to every claimed authoritative 15m MNQ bar: no D+EMA candidates were added in either 2026-07-13..08-31 or September, and the historical one-position streams remained identical.
+The MES D+EMA idea failed after one-position collapse in every session and in both historical windows. It did not reproduce the MNQ Asian result. No MES forward cohort should be created from this evidence.
 
-The follow-up also centralized MNQ economics, added crash-safe/idempotent persistence, corrected day-roll EXPIRED timestamps, and pinned fixture provenance.
+## #596 precursor / representation result
 
-**Exact-head CI is green.** This proves stronger code/evidence parity, not forward profitability or activation authority.
+**PARTIAL / UNPROVEN. NO RULE CHANGE.**
 
-### #596 — Asian pre-signal precursor audit
+The broad shape partially replicated: winners more often emerged from range/chop rather than from an already-`TRENDING` label, and that tendency appeared in both MNQ and MES.
 
-**RESEARCH ONLY / DRAFT.**
+But the evidence was not stable enough for action:
 
-Compares already-labeled Asian winners and losers using strictly pre-signal information. Populations stay separated by instrument × strategy × session × direction. No feature ranking, threshold tuning, gate proposal, relabeling, or automatic strategy conclusion.
+- only `strat_22_continuation` had adequate September sample size;
+- **94 of 118 features were unstable**;
+- the result did not support threshold tuning or a new gate;
+- usable BOS/MSS coverage in the matched precursor data was **zero**.
 
-**Exact-head CI is green.** Remaining proof is the real preserved-corpus run plus per-strategy/direction and chronological H1/H2 review.
+## #594 BOS/MSS status
 
-The MES leg requires a canonical MES D+EMA terminal WIN/LOSS cohort from #598 first. #594 remains separate and is not an automatic dependency of #596.
+#594 remains a transparent causal BOS/MSS event-study tool, not a strategy. Its code/CI boundary is sound, but the completed precursor chain provided **zero usable BOS/MSS coverage**, so BOS/MSS was not empirically tested as a useful missing signal.
 
-### #598 — MES D+EMA baseline portability
+Status: **WAIT / NO DATA.** Do not build BOS/MSS strategy logic now. Reopen only if future preserved data provides real structure coverage or a specific new question requires it.
 
-**RESEARCH ONLY / AUDIT ONLY.**
+## Runtime state as of tonight
 
-Purpose: create the canonical MES D+EMA population and Asian terminal WIN/LOSS cohort consumed by the MES leg of #596.
+Final operator/Claude runtime ledger reports:
 
-Boundaries:
+- deployed futures release: **`62546883` (#588)**;
+- cross-instrument observation campaign armed at **12:17Z** with a fresh epoch;
+- all six roots healthy and collecting since;
+- TradingView webhook authentication repaired for the new roots;
+- feed watchdog installed and all six 15m feeds proven;
+- no box changes since arming;
+- both running futures evidence campaigns remain untouched;
+- release **`f9d5395`** containing #590/#591 routing work is built but held because `DISCORD_ROUTE_OBSERVATION` is still missing on the box.
 
-- stacked on #593; MNQ producer untouched;
-- MES 15m D+EMA only;
-- Asian/London/New York kept separate;
-- original shadow candidates and original entry/stop/target only;
-- canonical offline PaperBroker IOC;
-- MES tolerance 16 ticks / 4 points;
-- one adverse tick entry and stop slippage;
-- pessimistic same-bar stop-first;
-- WIN/LOSS/NO_FILL/EXPIRED stay separate;
-- no Tradovate, webhook, service, env, deployment, or trading-rule change.
+GitHub `main` is later than the deployed futures release. Do not conflate repository state with runtime state.
 
-**Exact-head CI is green.** The real evidence run is still required. Run 2026-07-13..08-31 separately from September, quarantine the **2026-09-14 22:00–23:55Z** roll seam, require byte-identical reruns/hashes, report sessions separately, and pass only Asian terminal WIN/LOSS rows to #596.
+## What is settled enough to stop investigating
 
-### #597 — docs refresh
+- Observation-only collection does not grant new instruments trading eligibility.
+- Bad or provenance-ambiguous evidence cannot count as proof.
+- The MNQ missed-opportunity analysis is reproducible.
+- Broad retrospective gate relaxation: **NO CHANGE**.
+- Tighter-stop / lateness / low-displacement rescue attempts: **NO CHANGE**.
+- New York D+EMA on MNQ or MES: **BROKEN**.
+- MES D+EMA portability: **BROKEN**.
+- Existing gates are not shown by this research to be obviously wrong.
+- BOS/MSS is not currently supported by usable evidence.
+- More retrospective variants are unlikely to answer the remaining question better than prospective evidence.
 
-**DOCS ONLY / DRAFT.** No runtime/config/risk/campaign/deployment behavior change.
+## What is still genuinely unknown
 
-## Current missed-signal question
+- Whether MNQ Asian D+EMA is a real repeatable edge or sample noise.
+- Whether its forward paper behavior will resemble the historical result.
+- Whether the range/chop precursor observation is causal/useful or merely descriptive.
+- Whether future data will eventually provide enough BOS/MSS coverage to study structure separately.
 
-The question is not merely “why did the bot say NO_TRADE?”
+## Required next sequence
 
-> **What useful market moves occur that the current futures system never turns into valid signals, and exactly where in the pipeline are they lost?**
+1. Operator adds the missing observation Discord route key.
+2. Release `f9d5395` under the existing lock-window rules and restart/re-baseline the watcher through the sanctioned path.
+3. Decide stack cleanup / merge disposition for #593 and merge disposition for #595 on explicit operator order.
+4. Remove detached #598/#596 research worktrees when those lanes are formally closed.
+5. Keep the current observation campaigns collecting.
+6. **Do not add more retrospective strategy experiments without a new, evidence-backed question.**
+7. When the September 30 no-release/no-restart restriction lifts, and only with explicit authorization, activate #595 prospectively using its two required env keys plus sanctioned release/restart.
 
-Audit:
+That prospective cohort is the next meaningful strategy-learning event.
 
-`market structure -> available inputs -> regime/state -> setup detection -> candidate creation -> filters/gates -> decision -> execution`
+## Later maintenance already logged
 
-Classify each miss as:
+- non-ASCII webhook secret should return 401 rather than 500;
+- calendar-sync unit removal before October 1;
+- add `source_ticker` provenance on the MNQ/MES trading path.
 
-1. **Input blindness** — needed information is absent.
-2. **Detector blindness** — information exists but no setup recognizes it.
-3. **Classification/gate suppression** — a candidate exists but current regime/trend/session/confluence logic removes it.
-4. **Execution-only rejection** — the signal exists but risk/fill/execution rejects it; this is not a missed-signal defect.
-
-Do not assume every visible historical move was a valid ex-ante signal.
-
-## What is settled vs. unproven
-
-### Settled enough not to redo
-
-- Additional roots can be observed without granting trading eligibility.
-- Bad/provenance-ambiguous evidence can be blocked from readiness counts without deleting it.
-- The MNQ missed-opportunity study has a reproducible preserved path (#593).
-- #595's broader 15m evaluation does not materially change the historical D+EMA population.
-- #594/#596/#598 have green exact-head CI and explicit research-only boundaries.
-
-### Still unproven
-
-- That the system actually should produce materially more **valid** signals.
-- Which missed-signal bucket dominates across enough independent sessions.
-- Whether BOS/MSS carries repeatable directional information on preserved MNQ history.
-- Whether pre-signal winner/loser differences survive preserved-corpus runs and chronological splits.
-- Whether MES independently reproduces the MNQ D+EMA behavior.
-- Whether #595 should ever be activated; green CI and historical parity are not forward evidence.
-- Current VPS/runtime state without fresh box proof.
-
-## Research-chain relationships
-
-- **#593** = reproducible MNQ counterfactual producer.
-- **#594** = separate BOS/MSS causal event study.
-- **#595** = paper-forward candidate for one MNQ Asian D+EMA population; OFF.
-- **#596** = broad matched pre-signal discovery.
-- **#598** = MES producer required to create the canonical MES input to #596.
-
-MES order:
-
-`#598 canonical MES D+EMA population -> Asian terminal WIN/LOSS cohort -> MES leg of #596`
-
-#594 is not an automatic dependency of #596.
-
-## Runtime facts requiring fresh box proof
-
-Do not infer from GitHub `main`:
-
-- exact running futures release SHA;
-- whether #590/#591/#592 are deployed in the futures process;
-- whether `DISCORD_ROUTE_OBSERVATION` is active;
-- current six-root 15m feed health;
-- current campaign counts/outcomes;
-- current paper/demo positions or working orders;
-- broker-account routing state.
-
-## Required sequence
-
-1. Finish the independent #595 audit; keep it OFF absent separate activation authorization.
-2. Complete #598 MES evidence runs with roll-seam quarantine and deterministic hashes.
-3. Feed only #598's Asian terminal WIN/LOSS cohort into the MES leg of #596.
-4. Run #596 on canonical preserved cohorts without threshold tuning.
-5. Run #594 Phase-1 MNQ on the preserved multi-month 5m corpus as the separate structure study.
-6. Complete the broader missed-signal census across the full pipeline.
-7. Only after repeatable independent evidence should a separate preregistered hypothesis be proposed.
-8. Only after that should the smallest paper-only forward test be considered.
+These are maintenance items, not reasons to reopen strategy research.
 
 ## Hard boundaries
 
-Do not enable live execution; submit broker orders from research code; relax global risk rules merely to make an experiment pass; change evidence parameters mid-study; pool instruments/sessions/strategies/directions to satisfy gates; fabricate MES candidates/labels; turn BOS/MSS event behavior directly into a trading strategy; or activate #595 based only on CI/historical parity.
+Do not enable live execution; add broker submission from research code; relax global risk rules to rescue a study; create an MES D+EMA forward lane; turn the precursor observation into a tuned rule; build BOS/MSS strategy logic without new real coverage; activate #595 before the restriction lifts and explicit authorization is given; or restart the retrospective research chain merely because the prospective result is unknown.
 
 ## Safe next step
 
-**Continue the offline evidence chain. #595 remains OFF. Complete #598 before the MES leg of #596. Run #596 on canonical preserved cohorts without rule tuning. Run #594's MNQ preserved-corpus event study separately. No deployment, restart, environment change, campaign change, or broker action is authorized by this handoff.**
+**Collect evidence, do not invent another retrospective study.** Add the observation Discord key, release `f9d5395` through the sanctioned path, keep the campaigns collecting, and treat prospective #595 paper evidence as the next meaningful strategy-learning event once activation is explicitly authorized after the restriction lifts.
