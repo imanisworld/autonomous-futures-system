@@ -157,7 +157,7 @@ def test_direct_cli_without_pythonpath_is_deterministic(tmp_path):
     assert len(precursor) == 1
     assert baseline[0]["result"] == "WIN"
     assert baseline[0]["instrument"] == "MES"
-    assert baseline[0]["source_variant"] == "D0_D_EMA"
+    assert baseline[0]["source_variant"] == "D0_D_EMA_CANONICAL_IOC"
     assert precursor[0]["outcome_label"] == "WIN"
     assert precursor[0]["candidate_id"] == baseline[0]["candidate_id"]
 
@@ -171,13 +171,18 @@ def test_direct_cli_without_pythonpath_is_deterministic(tmp_path):
     )
     assert m1["population_summary"]["wins"] == 1
     assert m1["population_summary"]["selected_candidates"] == 1
+    assert m1["population_summary"]["precursor_session"] == "asian"
     assert m1["economics"] == {
         "point_value": 5.0,
         "tick_size": 0.25,
         "tick_value": 1.25,
     }
+    assert m1["fill_assumptions"]["broker"] == "execution.paper_broker.PaperBroker"
+    assert m1["fill_assumptions"]["entry_fill_model"] == "ioc_limit"
+    assert m1["fill_assumptions"]["market_price"] == "decision_bar_close"
     assert m1["fill_assumptions"]["ioc_tolerance_ticks"] == 16.0
     assert m1["fill_assumptions"]["ioc_tolerance_points"] == 4.0
+    assert m1["fill_assumptions"]["entry_bar_reused_for_exit"] is False
     assert m1["journal_parse_skips"] == 0
 
 
