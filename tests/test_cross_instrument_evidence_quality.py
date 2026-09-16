@@ -1,6 +1,7 @@
 """Evidence-quality regressions for cross_instrument_observation_v1."""
 from __future__ import annotations
 
+import json
 from datetime import date, datetime, timedelta, timezone
 
 from context.bar_history import BarHistory
@@ -8,6 +9,7 @@ from execution import cross_instrument_observation as cio
 from execution.cross_instrument_evidence_quality import (
     CODE_PROVENANCE_UNKNOWN,
     DATA_GAP_CONTAMINATED,
+    DETECTOR_PROVENANCE_UNKNOWN,
     MBT_OUTCOME_HORIZON_UNPROVEN,
     ROLL_CONTAMINATED,
     ROLL_PROVENANCE_UNKNOWN,
@@ -61,13 +63,29 @@ def _row(root="M2K", signal=None, exit_ts=None, *, sha=SHA):
 
 
 def test_complete_m2k_continuous_window_is_quality_eligible_off_roll(tmp_path):
-    for hour, minute in ((14, 0), (14, 15), (14, 30), (14, 45), (15, 0), (15, 15)):
+    # Eight complete 15m dependencies exist at/before the 15:00 signal, plus
+    # the 15:15 terminal bar. Startup samples with a shorter reconstructed
+    # detector window are deliberately blocked by a separate regression below.
+    for hour, minute in (
+        (13, 15), (13, 30), (13, 45), (14, 0), (14, 15),
+        (14, 30), (14, 45), (15, 0), (15, 15),
+    ):
         _record(tmp_path, "M2K", _ts(hour, minute), "M2K1!")
     quality = assess_evidence_row(_row(), tmp_path)
     assert quality["eligible"] is True
     assert quality["status"] == VALID
     assert quality["continuity"]["missing_expected_bars"] == []
     assert quality["roll"]["status"] == VALID
+    assert quality["code_provenance"]["detector_dependency_count"] == 8
+
+
+def test_startup_sample_with_incomplete_reconstructed_detector_window_is_blocked(tmp_path):
+    for hour, minute in ((14, 30), (14, 45), (15, 0), (15, 15)):
+        _record(tmp_path, "M2K", _ts(hour, minute), "M2K1!")
+    quality = assess_evidence_row(_row(), tmp_path)
+    assert quality["eligible"] is False
+    assert DETECTOR_PROVENANCE_UNKNOWN in quality["issues"]
+    assert quality["code_provenance"]["detector_dependency_count"] < 8
 
 
 def test_missing_expected_15m_bar_contaminates_sample(tmp_path):
@@ -172,3 +190,78 @@ def test_bar_history_preserves_source_ticker_without_changing_legacy_shape(tmp_p
     )
     assert with_ticker["source_ticker"] == "CME_MINI:M2K1!"
     assert "source_ticker" not in without_ticker
+
+
+def test_resolver_ignores_non_15m_barhistory_rows(tmp_path, monkeypatch):
+    monkeypatch.setenv(cio.ENV_NAME, cio.CAMPAIGN_ID)
+    monkeypatch.setenv(cio.EPOCH_ENV_NAME, EPOCH)
+    signal_ts = _ts(15, 0)
+    record = {
+        "evidence_schema_version": cio.SCHEMA_VERSION,
+        "campaign_id": cio.CAMPAIGN_ID,
+        "record_type": "CANDIDATE",
+        "candidate_id": "resolver-15m-only",
+        "strategy": "strat_212",
+        "instrument": "M2K",
+        "variant": "observer",
+        "evidence_epoch": EPOCH,
+        "collection_mode": cio.STRUCTURAL_OUTCOME,
+        "direction": "LONG",
+        "signal_timestamp": signal_ts,
+        "trading_date": cio.observation_day("M2K", signal_ts).isoformat(),
+        "observation_date": cio.observation_day("M2K", signal_ts).isoformat(),
+        "source_timeframe": "15",
+        "entry": 100.0,
+        "stop": 99.0,
+        "target": 105.0,
+    }
+    state = {
+        "campaign_id": cio.CAMPAIGN_ID,
+        "pending": {
+            record["candidate_id"]: {
+                "record": record,
+                "filled": True,
+                "fill_ts": signal_ts,
+                "mae_points": 0.0,
+                "mfe_points": 0.0,
+                "bars_seen": 0,
+            }
+        },
+        "seen_candidate_ids": [record["candidate_id"]],
+        "seen_bars": [],
+        "strat_212_122": {},
+    }
+    (tmp_path / cio.STATE_FILENAME).write_text(json.dumps(state), encoding="utf-8")
+
+    history = BarHistory(log_dir=str(tmp_path))
+    history.record(
+        "M2K", ts=_ts(15, 15), open=100, high=104, low=100, close=103,
+        timeframe="15", source_ticker="M2K1!",
+    )
+    # This row would falsely resolve WIN if canonical history were not filtered.
+    history.record(
+        "M2K", ts=_ts(15, 30), open=103, high=106, low=100, close=105,
+        timeframe="60", source_ticker="M2K1!",
+    )
+    out = cio.resolve_pending(
+        tmp_path,
+        instrument="M2K",
+        bars=[],
+        current_bar_ts=_ts(15, 30),
+    )
+    assert out == []
+    assert record["candidate_id"] in json.loads((tmp_path / cio.STATE_FILENAME).read_text())["pending"]
+
+    history.record(
+        "M2K", ts=_ts(15, 45), open=103, high=106, low=101, close=105,
+        timeframe="15", source_ticker="M2K1!",
+    )
+    out = cio.resolve_pending(
+        tmp_path,
+        instrument="M2K",
+        bars=[],
+        current_bar_ts=_ts(15, 45),
+    )
+    assert len(out) == 1
+    assert out[0]["result"] == "WIN"
+    assert out[0]["exit_timestamp"] == _ts(15, 45)
