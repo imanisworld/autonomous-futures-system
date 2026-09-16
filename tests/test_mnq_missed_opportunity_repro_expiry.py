@@ -71,8 +71,8 @@ def test_repro_emits_expired_open_and_report_excludes_it_from_terminal_stats(mon
     rows, summary = repro.produce_rows(records, bars={}, bar_timestamps=())
     a_rows = [row for row in rows if row["cohort"] == "A"]
     assert [row["result"] for row in a_rows] == ["EXPIRED", "WIN"]
-    assert a_rows[0]["filled"] is True
-    assert a_rows[0]["terminal"] is False
+    assert a_rows[0]["filled"] is False
+    assert a_rows[0]["entry_filled"] is True
     assert a_rows[0]["pnl_dollars"] is None
     assert a_rows[0]["sample_half"] == "H1"
     assert a_rows[1]["sample_half"] == "H2"
@@ -81,7 +81,7 @@ def test_repro_emits_expired_open_and_report_excludes_it_from_terminal_stats(mon
     assert summary["A"]["entry_filled_total"] == 2
 
     report = build_report(rows)
-    assert "filled-but-unresolved" in report["expired_semantics"]
+    assert report["expired_policy"] == "count_separately_exclude_from_terminal_performance"
     a = report["cohorts"]["A"]
     assert a["candidates"] == 2
     assert a["fills"] == 1
@@ -97,7 +97,7 @@ def test_repro_emits_expired_open_and_report_excludes_it_from_terminal_stats(mon
 
 
 def test_reporter_fails_closed_on_inconsistent_expired_state():
-    with pytest.raises(ValueError, match="EXPIRED row must have filled=true"):
+    with pytest.raises(ValueError, match="EXPIRED row requires entry_filled=true"):
         validate_rows(
             [
                 {
@@ -111,7 +111,7 @@ def test_reporter_fails_closed_on_inconsistent_expired_state():
                 }
             ]
         )
-    with pytest.raises(ValueError, match="EXPIRED row must have null pnl_dollars"):
+    with pytest.raises(ValueError, match="EXPIRED row must not carry pnl_dollars"):
         validate_rows(
             [
                 {
@@ -120,7 +120,8 @@ def test_reporter_fails_closed_on_inconsistent_expired_state():
                     "sequence": 0,
                     "ts": "2026-09-01T14:00:00+00:00",
                     "result": "EXPIRED",
-                    "filled": True,
+                    "filled": False,
+                    "entry_filled": True,
                     "pnl_dollars": 1.0,
                 }
             ]
