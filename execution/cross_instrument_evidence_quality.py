@@ -42,6 +42,7 @@ MBT_OUTCOME_HORIZON_UNPROVEN = "MBT_OUTCOME_HORIZON_UNPROVEN"
 _MONTH_YEAR = re.compile(r"^[FGHJKMNQUVXZ]\d{1,4}$")
 _SHA = re.compile(r"^[0-9a-fA-F]{7,40}$")
 _CONFIG_PATH = Path(__file__).resolve().parents[1] / "config" / "cross_instrument_observation.json"
+_RECONSTRUCTED_DEPENDENCY_BARS = 8
 
 
 def _dt(value: object) -> Optional[datetime]:
@@ -122,8 +123,9 @@ def _detector_dependencies(row: dict, log_dir: str | Path) -> list[datetime]:
         return []
     # The live observation transport gives generic structural detectors at most
     # the latest eight 15m bars. Reconstruct that same conservative dependency
-    # window from BarHistory. This can over-block a detector that needed fewer
-    # bars, but it cannot make a dirty sample look clean.
+    # window from BarHistory. Samples observed before a full eight-bar window is
+    # available remain detector-provenance blocked rather than receiving credit
+    # from an unknowably truncated startup window.
     history = BarHistory(log_dir=str(log_dir)).recent(
         instrument,
         64,
@@ -139,7 +141,7 @@ def _detector_dependencies(row: dict, log_dir: str | Path) -> list[datetime]:
             and _timeframe_minutes(bar.get("timeframe")) == 15
         ):
             bars.append(ts)
-    return bars[-8:]
+    return bars[-_RECONSTRUCTED_DEPENDENCY_BARS:]
 
 
 def _expected_15m(
@@ -299,7 +301,16 @@ def assess_evidence_row(row: dict, log_dir: str | Path) -> dict:
     if not _SHA.match(sha) or str(row.get("provenance_status") or "") == "unknown":
         issues.append(CODE_PROVENANCE_UNKNOWN)
     detector = str(row.get("detector_id") or _detector_id(row.get("strategy")) or "").strip()
-    if not detector or not _detector_dependencies(row, log_dir):
+    explicit_dependency_values = list(row.get("detector_window_timestamps") or [])
+    detector_dependencies = _detector_dependencies(row, log_dir)
+    if (
+        not detector
+        or not detector_dependencies
+        or (
+            not explicit_dependency_values
+            and len(detector_dependencies) < _RECONSTRUCTED_DEPENDENCY_BARS
+        )
+    ):
         issues.append(DETECTOR_PROVENANCE_UNKNOWN)
 
     continuity = continuity_assessment(row, log_dir)
@@ -324,6 +335,8 @@ def assess_evidence_row(row: dict, log_dir: str | Path) -> dict:
             "generating_git_sha": sha or None,
             "provenance_status": row.get("provenance_status"),
             "detector_id": detector or None,
+            "detector_dependency_count": len(detector_dependencies),
+            "detector_dependencies_explicit": bool(explicit_dependency_values),
         },
     }
 
