@@ -14,7 +14,9 @@ Usage::
     python -m scripts.paper_collection_report --period eow
 
 The report is intentionally conservative: missing or unreadable inputs are
-shown explicitly instead of inferred as zero activity.
+shown explicitly instead of inferred as zero activity. EOW additionally
+includes a read-only master evidence registry so active populations and gaps do
+not disappear across separate collectors.
 """
 
 from __future__ import annotations
@@ -31,6 +33,8 @@ from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
+
+from ops.evidence_registry import build_registry, format_registry_lines
 
 
 NY_TZ = ZoneInfo("America/New_York")
@@ -327,8 +331,26 @@ def _count_lines(counter: dict[str, int], *, limit: int = 5) -> str:
     return "\n".join(lines)
 
 
+def _registry_field(registry: dict[str, Any] | None, *, system: str) -> dict[str, Any] | None:
+    if not registry:
+        return None
+    lines = format_registry_lines(registry, system=system, max_entries=8)
+    if not lines:
+        return None
+    value = "\n".join(lines[1:] if lines[0] == "evidence registry:" else lines)
+    if len(value) > 900:
+        value = value[:850] + "\n… Full registry in the JSON artifact."
+    return {"name": "Evidence registry", "value": value or "No registry entries"}
+
+
 def futures_discord_payload(
-    summary: dict[str, Any], census: dict[str, Any], *, period: str, start: date, end: date
+    summary: dict[str, Any],
+    census: dict[str, Any],
+    *,
+    period: str,
+    start: date,
+    end: date,
+    registry: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """A mobile-readable card; counts are observations, never inferred fills/P&L."""
     collectors = [
@@ -376,7 +398,11 @@ def futures_discord_payload(
         {"name": "Collection", "value": collection},
         {"name": "Observation lanes", "value": _count_lines(summary.get("shadow_lanes") or {})},
     ]
-    # Six bounded fields keep the card inside Discord's per-field and total limits.
+    if period == "eow":
+        field = _registry_field(registry, system="futures")
+        if field:
+            fields.append(field)
+    # Bounded fields keep the card inside Discord's per-field and total limits.
     for field in fields:
         if len(field["value"]) > 900:
             field["value"] = field["value"][:850] + "\n… Full counts in the JSON artifact."
@@ -396,10 +422,18 @@ def futures_discord_payload(
 
 
 def format_futures_report(
-    summary: dict[str, Any], census: dict[str, Any], *, period: str, start: date, end: date
+    summary: dict[str, Any],
+    census: dict[str, Any],
+    *,
+    period: str,
+    start: date,
+    end: date,
+    registry: dict[str, Any] | None = None,
 ) -> str:
     """Keep CLI/artifact-only runs readable using the same card content."""
-    embed = futures_discord_payload(summary, census, period=period, start=start, end=end)["embeds"][0]
+    embed = futures_discord_payload(
+        summary, census, period=period, start=start, end=end, registry=registry
+    )["embeds"][0]
     sections = [f"**{embed['title']}**\n{embed['description']}"]
     sections.extend(f"**{field['name']}**\n{field['value']}" for field in embed["fields"])
     sections.append(embed["footer"]["text"])
@@ -407,7 +441,13 @@ def format_futures_report(
 
 
 def format_options_report(
-    summary: dict[str, Any], census: dict[str, Any], *, period: str, start: date, end: date
+    summary: dict[str, Any],
+    census: dict[str, Any],
+    *,
+    period: str,
+    start: date,
+    end: date,
+    registry: dict[str, Any] | None = None,
 ) -> str:
     title = "EOD" if period == "eod" else "EOW"
     tables = summary.get("tables") or {}
@@ -423,6 +463,8 @@ def format_options_report(
     ]
     if scans.get("rows") == 0:
         lines.append("⚠️ zero option scans in the report window")
+    if period == "eow" and registry:
+        lines.extend(format_registry_lines(registry, system="options", max_entries=8))
     lines.append("READ ONLY — evidence rollup; no promotion or execution action")
     return "\n".join(lines)
 
@@ -452,6 +494,32 @@ def _write_artifact(log_dir: Path, payload: dict[str, Any], *, ref: date, period
         return None
 
 
+def _default_coverage_dir() -> str:
+    configured = (os.getenv("OPTIONS_COVERAGE_DATA_DIR") or "").strip()
+    if configured:
+        return configured
+    shared = Path("/root/afs-shared/coverage")
+    try:
+        if shared.exists():
+            return str(shared)
+    except OSError:
+        # Non-root/CI environments may be unable even to stat /root. Treat an
+        # inaccessible shared path exactly like an absent one; the report stays
+        # read-only and falls back to the repository-local collector directory.
+        pass
+    return str(Path("logs/coverage_collector"))
+
+
+def _resolve_family_summary(coverage_dir: Path, configured: str | None) -> Path | None:
+    if configured:
+        return Path(configured)
+    for name in ("prospective_family_summary.json", "prospective_family_summary.csv"):
+        candidate = coverage_dir / name
+        if candidate.exists():
+            return candidate
+    return None
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--period", choices=("eod", "eow"), required=True)
@@ -461,6 +529,16 @@ def main(argv: list[str] | None = None) -> int:
         "--options-db",
         default=os.getenv("OPTIONS_SCANNER_SQLITE_PATH", "logs/options_scanner.sqlite"),
     )
+    parser.add_argument(
+        "--coverage-data-dir",
+        default=_default_coverage_dir(),
+        help="options coverage collector data dir (read-only for the report)",
+    )
+    parser.add_argument(
+        "--prospective-family-summary",
+        default=os.getenv("OPTIONS_PROSPECTIVE_FAMILY_SUMMARY", ""),
+        help="optional JSON/CSV prospective-family summary artifact",
+    )
     parser.add_argument("--no-discord", action="store_true", help="build artifacts only")
     args = parser.parse_args(argv)
 
@@ -468,13 +546,31 @@ def main(argv: list[str] | None = None) -> int:
     start, end = period_bounds(ref, args.period)
     log_dir = Path(args.log_dir)
     options_db = Path(args.options_db)
+    coverage_dir = Path(args.coverage_data_dir)
 
     futures = summarize_futures(_futures_rows(log_dir, start, end))
     options = summarize_options(options_db, start, end)
     census = run_collector_census(log_dir)
 
-    futures_report = format_futures_report(futures, census, period=args.period, start=start, end=end)
-    options_report = format_options_report(options, census, period=args.period, start=start, end=end)
+    registry = None
+    if args.period == "eow":
+        registry = build_registry(
+            log_dir=log_dir,
+            coverage_dir=coverage_dir,
+            census=census,
+            start=start,
+            end=end,
+            family_summary_path=_resolve_family_summary(
+                coverage_dir, args.prospective_family_summary or None
+            ),
+        )
+
+    futures_report = format_futures_report(
+        futures, census, period=args.period, start=start, end=end, registry=registry
+    )
+    options_report = format_options_report(
+        options, census, period=args.period, start=start, end=end, registry=registry
+    )
 
     payload = {
         "schema": "paper_collection_rollup_v1",
@@ -486,11 +582,15 @@ def main(argv: list[str] | None = None) -> int:
         "options": options,
         "collector_census": census,
     }
+    if registry is not None:
+        payload["evidence_registry"] = registry
     artifact = _write_artifact(log_dir, payload, ref=ref, period=args.period)
 
     send_failures = 0
     if not args.no_discord:
-        futures_card = futures_discord_payload(futures, census, period=args.period, start=start, end=end)
+        futures_card = futures_discord_payload(
+            futures, census, period=args.period, start=start, end=end, registry=registry
+        )
         for env_name, report in ((FUTURES_ENV, futures_card), (OPTIONS_ENV, options_report)):
             webhook = (os.getenv(env_name) or "").strip()
             if not webhook:
