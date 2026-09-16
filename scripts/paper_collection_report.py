@@ -499,7 +499,15 @@ def _default_coverage_dir() -> str:
     if configured:
         return configured
     shared = Path("/root/afs-shared/coverage")
-    return str(shared if shared.exists() else Path("logs/coverage_collector"))
+    try:
+        if shared.exists():
+            return str(shared)
+    except OSError:
+        # Non-root/CI environments may be unable even to stat /root. Treat an
+        # inaccessible shared path exactly like an absent one; the report stays
+        # read-only and falls back to the repository-local collector directory.
+        pass
+    return str(Path("logs/coverage_collector"))
 
 
 def _resolve_family_summary(coverage_dir: Path, configured: str | None) -> Path | None:
