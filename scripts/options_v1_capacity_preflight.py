@@ -1,4 +1,4 @@
-"""Read-only 149-symbol capacity preflight for the V1 options scanner.
+"""Read-only capacity preflight for a broader V1 options universe.
 
 Runs the scanner's *normalized-data build stage only* in the same serial ticker
 order used by V1.  It never calls scan_ticker/scan_watchlist, never opens the V1
@@ -6,15 +6,20 @@ sqlite, never sends Discord, and deliberately exposes no option-chain methods to
 the scanner.  The probe therefore measures current snapshot + causal-bar +
 Signa enrichment latency/failures without creating evidence or contracts.
 
+By default the script audits the full derived 149-symbol candidate universe.  A
+comma-separated ``--tickers`` subset is available for an incremental activation
+proof (for example, the proposed 20-symbol V1 cohort) without changing the live
+watchlist.
+
 Run during regular market hours so quote freshness and the causal-bar cutoff are
 representative of the live five-minute cycle:
 
     python scripts/options_v1_capacity_preflight.py --json
+    python scripts/options_v1_capacity_preflight.py --tickers AAPL,MSFT,SPY,QQQ --json
     python scripts/options_v1_capacity_preflight.py --out /tmp/v1-capacity.json
 
-A PASS is necessary but not sufficient for universe activation.  Contract-chain
-capacity is intentionally outside this probe and must remain fail-closed until a
-separate proof exists.
+A PASS is necessary, not sufficient, for activation.  Contract-chain capacity is
+a separate proof handled by ``options_v1_contract_preflight.py``.
 """
 from __future__ import annotations
 
@@ -41,7 +46,7 @@ from alert_ranker.v1_capacity import run_serial_capacity_preflight  # noqa: E402
 from alert_ranker.v1_universe import load_candidate_universe, ticker_list  # noqa: E402
 
 PREFLIGHT_ID = "OPTIONS_V1_CAPACITY_PREFLIGHT"
-PREFLIGHT_VERSION = "cap-v0.1"
+PREFLIGHT_VERSION = "cap-v0.2"
 
 
 class _ForbiddenSideEffect:
@@ -126,7 +131,6 @@ class _CapacityScannerView:
         return data
 
 
-
 def _git_source() -> dict[str, Any]:
     def run(*args: str) -> str:
         return subprocess.check_output(
@@ -142,15 +146,29 @@ def _git_source() -> dict[str, Any]:
     return {"sha": sha, "branch": branch, "dirty": dirty}
 
 
-async def _run() -> tuple[int, dict[str, Any]]:
+def _parse_tickers(text: str | None) -> tuple[str, ...] | None:
+    if text is None:
+        return None
+    values = tuple(item.strip().upper() for item in text.split(",") if item.strip())
+    if not values:
+        raise ValueError("--tickers must contain at least one symbol")
+    if len(values) != len(set(values)):
+        raise ValueError("duplicate ticker in --tickers")
+    return values
+
+
+async def _run(requested_tickers: tuple[str, ...] | None = None) -> tuple[int, dict[str, Any]]:
     cfg = load_config()
-    entries = load_candidate_universe()
-    tickers = ticker_list(entries)
+    full_candidate_set = ticker_list(load_candidate_universe())
+    tickers = requested_tickers if requested_tickers is not None else full_candidate_set
+    unknown = tuple(ticker for ticker in tickers if ticker not in set(full_candidate_set))
     now = datetime.now(ZoneInfo(cfg.timezone))
 
     # The live V1 data path is bar-context dependent.  Do not benchmark a
     # degraded/off configuration and call it capacity proof.
     preconditions: list[str] = []
+    if unknown:
+        preconditions.append(f"ticker_not_in_candidate_universe:{','.join(unknown)}")
     if not cfg.market_data_configured:
         preconditions.append("market_data_unconfigured")
     if not cfg.bar_context_enabled:
@@ -167,6 +185,8 @@ async def _run() -> tuple[int, dict[str, Any]]:
         "preflight_version": PREFLIGHT_VERSION,
         "source": _git_source(),
         "candidate_count": len(tickers),
+        "candidate_scope": "subset" if requested_tickers is not None else "full_149",
+        "candidate_tickers": list(tickers),
         "live_watchlist": list(cfg.watchlist),
         "live_watchlist_changed": False,
         "market_data_provider": cfg.market_data_provider,
@@ -230,12 +250,16 @@ async def _run() -> tuple[int, dict[str, Any]]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--tickers",
+        help="Optional comma-separated subset from the validated 149-symbol candidate universe",
+    )
     parser.add_argument("--json", action="store_true", help="Print the full machine-readable report")
     parser.add_argument("--out", help="Also write the full JSON report to this path")
     args = parser.parse_args(argv)
 
     try:
-        code, payload = asyncio.run(_run())
+        code, payload = asyncio.run(_run(_parse_tickers(args.tickers)))
     except Exception as exc:  # fail closed; never turn a probe crash into PASS
         payload = {
             "preflight_id": PREFLIGHT_ID,
