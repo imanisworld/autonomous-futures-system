@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import date
+from datetime import date, datetime, timezone
 
+from ops.collector_census import build_census
 from scripts import paper_collection_report as report
 
 
@@ -185,7 +186,7 @@ def test_futures_card_prioritizes_attention_without_claiming_executed_results():
     summary = _screenshot_summary()
     before = json.dumps(summary, sort_keys=True)
     census = {"collectors": [
-        {"name": "overnight watch", "status": "DEAD"},
+        {"name": "proof backup", "status": "DEAD"},
         *[{"name": f"collector {i}", "status": "FRESH"} for i in range(12)],
         {"name": "options scans", "status": "DEAD"},
     ]}
@@ -194,7 +195,7 @@ def test_futures_card_prioritizes_attention_without_claiming_executed_results():
     assert "content" not in payload  # one card, no duplicate wall of text
     assert payload["allowed_mentions"] == {"parse": []}
     assert embed["color"] == 0xF0B232
-    assert "Overnight watch" in embed["fields"][0]["value"]
+    assert "Proof backup" in embed["fields"][0]["value"]
     assert "12 fresh" in embed["fields"][0]["value"]
     assert "options scans" not in json.dumps(embed)
     fields = {f["name"]: f["value"] for f in embed["fields"]}
@@ -241,3 +242,22 @@ def test_main_posts_futures_embed_and_retains_raw_artifact(tmp_path, monkeypatch
     posts.clear()
     assert report.main(args + ["--no-discord"]) == 0
     assert posts == []
+
+
+def test_retired_overnight_watch_log_never_raises_collector_attention(tmp_path):
+    """A stale legacy ``overnight_watch_summary.log`` on the box must not surface as
+    a false DEAD health item in the EOD/EOW cards once the census registration is
+    retired; the rest of the census flows through untouched."""
+    (tmp_path / "overnight_watch_summary.log").write_text(
+        "2026-09-01T18:04:25.671722+00:00 cycle ok: service=active\n"
+    )
+    census = build_census(tmp_path, datetime(2026, 9, 16, 21, 0, tzinfo=timezone.utc))
+    assert all(row["name"] != "overnight watch" for row in census["collectors"])
+    payload = report.futures_discord_payload(
+        _screenshot_summary(), census, period="eow", start=date(2026, 9, 14), end=date(2026, 9, 16)
+    )
+    assert "overnight" not in json.dumps(payload).lower()
+    text = report.format_futures_report(
+        _screenshot_summary(), census, period="eow", start=date(2026, 9, 14), end=date(2026, 9, 16)
+    )
+    assert "overnight" not in text.lower()

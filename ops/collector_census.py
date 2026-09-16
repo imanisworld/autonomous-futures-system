@@ -153,7 +153,17 @@ COLLECTORS: tuple[Collector, ...] = (
     Collector("health digest", "file", "health_digest_latest.json", 1560),
     Collector("proof backup", "file", "proof_backup.log", 1560),
     Collector("companion daily", "file", "companion_daily.log", 4320),
-    Collector("overnight watch", "file", "overnight_watch_summary.log", 60),
+    # RETIRED 2026-09-16: ``Collector("overnight watch", "file",
+    # "overnight_watch_summary.log", 60)``.  The producer was a legacy VPS-only
+    # script (/root/afs-shared/ops_overnight_watch.py, not in this repo) that
+    # watched the July-era entry-refresh shadow lane.  It was launched by hand
+    # (nohup, no systemd/timer/cron owner), its last cycle was
+    # 2026-09-01T18:04:25Z, and it died in the 2026-09-01T18:17:38Z reboot.
+    # It is intentionally NOT relaunched: it carries an automatic
+    # ``systemctl stop futures-bot`` fail-safe and its monitoring lane is no
+    # longer an active evidence collector, so the census was reporting a
+    # permanent DEAD for something nothing depends on.  The VPS script and its
+    # old logs are left in place; only the census registration is removed.
 )
 
 
