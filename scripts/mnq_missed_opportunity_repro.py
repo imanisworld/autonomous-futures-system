@@ -1,21 +1,16 @@
 #!/usr/bin/env python3
 """Reproduction driver for the preserved MNQ missed-opportunity study.
 
-This driver intentionally reuses the archived-study implementation in
-``mnq_missed_opportunity_producer.py`` for input discovery, regime evaluation,
-shadow-candidate dedupe, IOC fill geometry, pessimistic resolution, manifest
-hashing, and cohort predicates.
+This driver intentionally reuses ``mnq_missed_opportunity_producer.py`` for
+input discovery, regime evaluation, shadow-candidate dedupe, IOC geometry,
+pessimistic resolution, manifest hashing, and cohort predicates.
 
-It exists for two proof-only integration fixes discovered on the real preserved
-2026-09-01..16 snapshot:
-
-1. The archived study reports filled-but-unresolved candidates as ``EXPIRED``
-   and excludes them from terminal P&L.  The first strict producer aborted on
-   that state.  This driver emits EXPIRED explicitly so the stats reporter can
-   count it separately without changing P&L.
-2. Direct invocation from outside the repo now bootstraps the repository root
-   onto ``sys.path`` before importing repo modules; no PYTHONPATH workaround is
-   required.
+It adds only the two proof fixes discovered against the preserved 2026-09-01..16
+snapshot:
+1. Filled-but-unresolved candidates are emitted as ``EXPIRED`` instead of
+   aborting, and are excluded from terminal P&L exactly like the archived study.
+2. Direct invocation bootstraps the repo root onto ``sys.path`` so no PYTHONPATH
+   workaround is required.
 
 No trading/runtime path is called. Inputs and outputs are local files only.
 """
@@ -47,13 +42,7 @@ def produce_rows(
     bars: dict[str, dict[str, Any]],
     bar_timestamps: Iterable[str],
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """Emit strict rows while preserving archived EXPIRED semantics.
-
-    ``fills`` in the downstream reporter remains terminal WIN/LOSS count for
-    comparability with the recorded extended-statistics table.  EXPIRED rows
-    carry ``filled=true`` because the entry was filled, but P&L remains null and
-    they are counted separately as ``expired_open``.
-    """
+    """Emit strict rows while preserving archived EXPIRED semantics."""
     record_list = list(records)
     output: list[dict[str, Any]] = []
     variant_summary: dict[str, Any] = {}
@@ -86,7 +75,9 @@ def produce_rows(
             }
         )
         if resolved and not terminal_days:
-            raise core.StudyError(f"{cohort}: candidates exist but no terminal rows define H1/H2 split")
+            raise core.StudyError(
+                f"{cohort}: candidates exist but no terminal rows define H1/H2 split"
+            )
         midpoint = terminal_days[len(terminal_days) // 2] if terminal_days else None
 
         terminal_count = 0
@@ -94,23 +85,19 @@ def produce_rows(
         expired_count = 0
         for sequence, (record, candidate, outcome) in enumerate(resolved):
             result = str(outcome["result"])
-            if result in _TERMINAL:
+            terminal = result in _TERMINAL
+            entry_filled = terminal or result == _EXPIRED
+            if terminal:
                 terminal_count += 1
-                entry_filled = True
             elif result == _NO_FILL:
                 no_fill_count += 1
-                entry_filled = False
             elif result == _EXPIRED:
                 expired_count += 1
-                entry_filled = True
-            else:  # guarded above; retained as fail-closed defense
-                raise core.StudyError(f"{cohort}: unsupported outcome result {result!r}")
 
             if midpoint is None:
                 raise core.StudyError(f"{cohort}: cannot assign sample half without midpoint")
             day = core.observation_day(core.INSTRUMENT, record["ts"]).isoformat()
             sample_half = "H1" if day < midpoint else "H2"
-            terminal = result in _TERMINAL
             row = {
                 "cohort": cohort,
                 "cohort_description": core.VARIANT_DESCRIPTIONS[cohort],
@@ -128,16 +115,16 @@ def produce_rows(
                 "target": candidate.get("target"),
                 "result": result,
                 "exit_reason": outcome.get("exit_reason"),
-                "filled": entry_filled,
-                "terminal": terminal,
+                # #592 contract: filled=true means terminal WIN/LOSS. EXPIRED
+                # separately proves entry_filled=true with null terminal P&L.
+                "filled": terminal,
+                "entry_filled": entry_filled,
                 "pnl_dollars": float(outcome["pnl_dollars"]) if terminal else None,
                 "pnl_r": (
                     float(outcome["pnl_r"])
                     if terminal and outcome.get("pnl_r") is not None
                     else None
                 ),
-                # Preserve excursion evidence for EXPIRED rows as provenance,
-                # but the reporter excludes them from terminal MAE/MFE means.
                 "mae_r": (
                     float(outcome["mae_r"])
                     if entry_filled and outcome.get("mae_r") is not None
@@ -159,9 +146,10 @@ def produce_rows(
                 "ioc_tolerance_points": core.IOC_TOLERANCE_POINTS,
                 "slippage_assumption_ticks": core.SLIPPAGE_TICKS,
                 "commission_assumption_dollars": None,
-                "cost_note": "gross before commission; no configured commission value used",
+                "cost_note": "gross terminal performance; EXPIRED counted separately",
                 "producer": "scripts/mnq_missed_opportunity_repro.py",
                 "producer_version": REPRO_VERSION,
+                "archived_producer_version": core.PRODUCER_VERSION,
             }
             for key in ("pnl_dollars", "pnl_r", "mae_r", "mfe_r"):
                 value = row.get(key)
@@ -192,14 +180,14 @@ def main(argv: list[str] | None = None) -> int:
         required=True,
         help="Archive directory containing bars_MNQ_*.jsonl and journal_*.jsonl",
     )
-    parser.add_argument("--start-date", default="2026-09-01", help="Inclusive journal date, YYYY-MM-DD")
-    parser.add_argument("--end-date", default="2026-09-16", help="Inclusive journal date, YYYY-MM-DD")
-    parser.add_argument("--out", required=True, help="Output candidate JSONL path")
-    parser.add_argument("--manifest-out", required=True, help="Output provenance manifest JSON path")
+    parser.add_argument("--start-date", default="2026-09-01")
+    parser.add_argument("--end-date", default="2026-09-16")
+    parser.add_argument("--out", required=True)
+    parser.add_argument("--manifest-out", required=True)
     parser.add_argument(
         "--allow-journal-parse-skips",
         action="store_true",
-        help="Compatibility mode matching the archived script's invalid-journal-row skip behavior",
+        help="Compatibility mode matching the archived invalid-journal-row skip behavior",
     )
     args = parser.parse_args(argv)
 
@@ -231,9 +219,8 @@ def main(argv: list[str] | None = None) -> int:
         )
         manifest["producer"] = "scripts/mnq_missed_opportunity_repro.py"
         manifest["producer_version"] = REPRO_VERSION
-        manifest["expired_semantics"] = (
-            "filled-but-unresolved candidates are emitted as EXPIRED with null terminal P&L"
-        )
+        manifest["archived_producer_version"] = core.PRODUCER_VERSION
+        manifest["expired_policy"] = "count_separately_exclude_from_terminal_performance"
         manifest_path = Path(args.manifest_out)
         manifest_path.parent.mkdir(parents=True, exist_ok=True)
         manifest_path.write_text(
