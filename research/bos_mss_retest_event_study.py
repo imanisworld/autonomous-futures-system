@@ -456,15 +456,36 @@ def _metric_summary(records: list[dict], field: str, horizon: str) -> dict:
     }
 
 
+def _retest_latency_summary(records: list[dict]) -> dict:
+    values = [
+        int(row["retest_latency_minutes"])
+        for row in records
+        if row.get("retest_latency_minutes") is not None
+    ]
+    if not values:
+        return {"n": 0}
+    return {
+        "n": len(values),
+        "median_minutes": round(float(statistics.median(values)), 2),
+        "min_minutes": min(values),
+        "max_minutes": max(values),
+    }
+
+
 def summarize_records(
     records: Iterable[dict],
     *,
     horizons_minutes: Iterable[int] = DEFAULT_HORIZONS_MINUTES,
 ) -> dict:
-    rows = list(records)
+    rows = sorted(list(records), key=lambda row: parse_ts(row["event_ts"]))
     horizons = [str(int(h)) for h in horizons_minutes]
     by_type = {kind: [r for r in rows if r.get("event_type") == kind] for kind in ("BOS", "MSS")}
     by_direction = {d: [r for r in rows if r.get("direction") == d] for d in ("LONG", "SHORT")}
+    midpoint = len(rows) // 2
+    halves = {
+        "H1": rows[:midpoint],
+        "H2": rows[midpoint:],
+    }
     retest_counts = {
         status: sum(r.get("retest_status") == status for r in rows)
         for status in (RETEST_HOLD, RETEST_FAIL, NO_RETEST)
@@ -478,6 +499,9 @@ def summarize_records(
         "by_event_type": {key: len(value) for key, value in by_type.items()},
         "by_direction": {key: len(value) for key, value in by_direction.items()},
         "retest_counts": retest_counts,
+        "retest_latency": _retest_latency_summary(rows),
+        "sample_split_source": "chronological_event_order",
+        "sample_half_counts": {key: len(value) for key, value in halves.items()},
         "event_forward": {
             horizon: _metric_summary(rows, "event_forward", horizon) for horizon in horizons
         },
@@ -506,5 +530,41 @@ def summarize_records(
                 for horizon in horizons
             }
             for kind, group in by_type.items()
+        },
+        "event_forward_by_direction": {
+            direction: {
+                horizon: _metric_summary(group, "event_forward", horizon)
+                for horizon in horizons
+            }
+            for direction, group in by_direction.items()
+        },
+        "retest_hold_forward_by_direction": {
+            direction: {
+                horizon: _metric_summary(
+                    [r for r in group if r.get("retest_status") == RETEST_HOLD],
+                    "retest_forward",
+                    horizon,
+                )
+                for horizon in horizons
+            }
+            for direction, group in by_direction.items()
+        },
+        "event_forward_by_half": {
+            half: {
+                horizon: _metric_summary(group, "event_forward", horizon)
+                for horizon in horizons
+            }
+            for half, group in halves.items()
+        },
+        "retest_hold_forward_by_half": {
+            half: {
+                horizon: _metric_summary(
+                    [r for r in group if r.get("retest_status") == RETEST_HOLD],
+                    "retest_forward",
+                    horizon,
+                )
+                for horizon in horizons
+            }
+            for half, group in halves.items()
         },
     }
