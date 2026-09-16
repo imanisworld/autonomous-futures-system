@@ -120,7 +120,7 @@ def test_rate_limit_and_timeout_are_visible_and_block_when_critical():
     assert timeout.critical_ok is False
 
 
-def test_signa_failure_is_observational_but_still_reported():
+def test_signa_timeout_is_observational_for_setup_but_still_blocks_capacity_proof():
     clock = FakeClock()
     rows = {
         "AAPL": _ok(signa_error="ReadTimeout"),
@@ -129,13 +129,15 @@ def test_signa_failure_is_observational_but_still_reported():
     scanner = FakeScanner(clock, rows)
     report = _run(scanner, list(rows), clock, budget=20.0)
 
-    # Signa has zero V1 scoring authority. It does not invalidate price-action
-    # evidence, but its latency/failure remains explicit in the capacity report.
-    assert report.verdict == "PASS"
+    # Signa has zero V1 scoring authority, so these are not critical data
+    # failures.  But a capacity proof requires a clean provider cycle: repeated
+    # timeouts still block expansion because they consume serial scan time.
+    assert report.verdict == "FAIL"
     assert report.critical_failures == 0
     assert report.observational_failures == 2
     assert report.signa_error_symbols == ("AAPL", "MSFT")
     assert report.timed_out_symbols == ("AAPL", "MSFT")
+    assert "timeouts:2" in report.reasons
 
 
 def test_missing_or_incomplete_bar_context_blocks_capacity_proof():
