@@ -1,122 +1,156 @@
-# MES Asian D+EMA baseline portability v1
+# MES D+EMA canonical-baseline portability v2
 
 ## Verdict
 
 **RESEARCH ONLY / AUDIT ONLY.**
 
-This work creates the missing canonical MES baseline required before PR #596 can
-compare Asian-session winners versus losers. It is not a new strategy and does
-not change any runtime rule.
+This work creates the missing canonical MES D+EMA population required by the
+Asian precursor audit. It does not change strategy, risk, broker routing,
+session permission, Pine, runtime, deployment, or the VPS.
 
 ## Why this exists
 
-The first #596 proof stopped correctly because two prerequisites were absent:
+The first PR #596 real-data proof stopped correctly because:
 
-1. the proven D+EMA canonical WIN/LOSS producer was MNQ-only;
-2. the preserved MES 5m replay corpus ended before the requested July/September
+1. the proven candidate-level D+EMA WIN/LOSS work was MNQ-only; and
+2. the preserved MES 5m corpus ended before the requested July/September
    periods.
 
-This PR addresses only prerequisite (1): make the already-proven #593 D0/D+EMA
-research population mechanically portable to MES with explicit MES economics.
-It does **not** fetch or extend historical data.
+This PR solves only the first problem on the repo side. Historical MES data
+extension remains a separate local evidence step.
 
-## Parent proof
+## Source-of-truth methodology
 
-This branch is stacked on PR #593 exact head:
+The preserved MNQ v3/v4 artifacts define the canonical D+EMA population as:
+
+- cohort D = neither Pine `TRENDING` nor repo structural-trend classification
+- shadow-candidate direction aligned with EMA/trend direction
+- identical geometry de-duplicated once per observation day
+- original candidate entry, stop, and target unchanged
+- no daily trade cap for the isolated evidence population
+- canonical repo `PaperBroker(entry_fill_model="ioc_limit")`
+- decision-bar **close** passed to `PaperBroker.execute_bracket()` as
+  `market_price`
+- entry/decision bar never reused for bracket resolution
+- one adverse tick of entry/stop slippage
+- pessimistic stop-before-target when a later bar hits both
+- original stop, static target, no breakeven, no runner
+- unresolved opened positions become `EXPIRED` at observation-day rollover
+
+The v3/v4 MNQ baseline reported 544 D+EMA candidates, 342 terminal results,
+158 no-fills, and 44 expiries. That historical number is a reference for the
+methodology; it is not a target MES must reproduce.
+
+## Relationship to PR #593
+
+This branch is stacked on PR #593 head:
 
 `22a96b34fdfd4470014d708ba84d4588f9c74cdf`
 
-The parent producer was independently reproduced against its preserved MNQ
-snapshot and matched the archived study. This MES adapter intentionally leaves
-that proven MNQ code unchanged.
+#593 is reused for the representation/cohort mechanics that were already
+reproduced independently:
 
-## Canonical MES population
+- cohort assignment
+- EMA-direction alignment predicate (`D0`)
+- observation-day convention
+- shadow-candidate geometry de-duplication
+- journal/bar parsing helpers
 
-The emitted baseline is exactly:
+**#593's first-future-touch IOC approximation is not used for MES outcome
+resolution.** The canonical D+EMA source artifacts require the real repo
+`PaperBroker` with decision-bar-close arrival pricing, so this adapter calls
+`execution.paper_broker.PaperBroker` directly.
 
-- instrument = `MES`
-- 15-minute decision rows
-- session = `asian`
-- cohort D = Pine `market_condition != TRENDING` and repo structural condition
-  is not `STRUCTURAL_TREND_UP` / `STRUCTURAL_TREND_DOWN`
-- candidate direction must equal the existing trend/EMA direction
-- source candidates are the already-journaled `shadow_candidates`
-- dedupe identity is unchanged from #593:
-  `observation_day × strategy × direction × entry × stop × target`
-- source candidate entry/stop/target geometry is not rewritten
+## Full population first, Asian slice second
 
-The D+EMA predicate is retrieved directly from #593's D0 variant rather than
-re-authored as a second semantic implementation.
+The canonical MES producer emits **all D+EMA candidates across**:
+
+- Asian
+- London
+- New York
+
+This matches the MES validation plan, which requires session comparison before
+any session is treated as interesting.
+
+A separate `--precursor-session` output selects terminal WIN/LOSS rows for the
+chosen session. It defaults to `asian` because PR #596 is the current consumer.
+No-fill and expired rows remain visible in the full baseline and manifest; they
+are never relabeled as losses.
 
 ## MES economics
 
-The adapter resolves contract units through `config/futures_contracts.py` and
-fails immediately if the repo's proven metadata is not:
+The adapter resolves contract units from `config/futures_contracts.py` and
+fails immediately if they differ from:
 
 - tick size = `0.25`
 - tick value = `$1.25`
 - point value = `$5.00`
 
-IOC tolerance is pinned to the repo's existing PaperBroker MES proof:
+MES IOC tolerance is fixed to the repo-proven PaperBroker value:
 
 - 16 ticks
 - 4.0 points
 
-It is not a CLI tuning parameter.
+It is not a tunable CLI parameter.
 
-## Preserved fill / resolution assumptions
+## Canonical PaperBroker call
 
-The only instrument substitutions from #593 are MES root/economics/tolerance.
-The research fill model otherwise remains:
+For each selected shadow candidate:
 
-- first forward bar that touches planned entry is the fill opportunity
-- adverse one-tick entry slippage
-- one-tick adverse stop slippage
-- clean target fill
-- fill-bar stop is pessimistic even if target also trades
-- later same-bar stop + target resolves stop first through the existing
-  observation resolver
-- no configured commission is invented
-- `EXPIRED` means entry filled but remained unresolved before observation-day
-  rollover and is excluded from terminal WIN/LOSS P&L
+1. Read the already-closed 15m decision bar.
+2. Construct the original candidate bracket unchanged.
+3. Create a fresh paper-only broker:
+   - `entry_fill_model="ioc_limit"`
+   - MES tolerance 16 ticks
+   - 1 adverse slippage tick
+   - `pessimistic_both_hit=True`
+   - `breakeven_at_1r=False`
+   - `runner_mode=False`
+4. Call `execute_bracket(order, market_price=decision_bar.close)`.
+5. `CANCELLED` becomes `NO_FILL`.
+6. If the position opens, resolve it using only bars **strictly after** the
+   decision bar through `PaperBroker.resolve_position()`.
+7. If no exit occurs before observation-day rollover, label `EXPIRED`.
 
-This is a portability reproduction model, not a claim that every historical
-candidate would have received a live broker fill.
+P&L R and baseline stop distance are normalized to the **actual IOC fill to the
+original stop**, matching the v4 baseline-risk convention. Target geometry is
+still the original target.
 
 ## Inputs
 
-The CLI requires a proven local snapshot containing:
+The CLI accepts either proven 15m shape:
 
-- `bars_MES_*.jsonl` with 15m bars
-- `journal_YYYY-MM-DD*.jsonl` carrying MES 15m decision rows and their original
-  shadow candidates
+- archived-study `bars_MES_*.jsonl` with `ts`; or
+- canonical `polygon_to_replay.py` files `MES_*.jsonl` with `timestamp`.
 
-The requested `--start-date` / `--end-date` select journal files. Malformed
-journal JSON fails closed unless the operator explicitly uses the compatibility
-flag `--allow-journal-parse-skips`.
+Both are normalized internally. No operator rename/staging hack is required.
 
-The tool does not create the upstream journal or fetch market data. If a MES
-replay/journal snapshot does not exist for the desired period, the study stays
-blocked.
+It also requires the matching MES `journal_*.jsonl` decision rows carrying the
+normal shadow candidate output. The producer fails closed on conflicting
+bar timestamps or conflicting duplicate journal decision rows.
+
+The producer does **not** fabricate shadow candidates. If the historical replay
+path does not produce the expected shadow population, stop and fix/prove the
+upstream reconstruction rather than inventing rows here.
 
 ## Outputs
 
-### Full baseline
+### Full baseline (`--out`)
 
-`--out` writes every selected Asian D+EMA candidate, including:
+Every D+EMA candidate across all three sessions:
 
 - WIN
 - LOSS
 - NO_FILL
 - EXPIRED
 
-Each row contains source geometry, provenance state, MES economics, IOC
-assumptions, and a deterministic candidate ID.
+Rows retain candidate geometry, decision close, actual fill when one exists,
+post-fill risk, exit information, cohort context, MES economics, and exact fill
+assumptions.
 
-### PR #596 cohort
+### Precursor cohort (`--precursor-out`)
 
-`--precursor-out` writes **terminal WIN/LOSS only** in the explicit input format
-required by PR #596:
+Terminal WIN/LOSS only for `--precursor-session`, normalized for PR #596:
 
 - `candidate_id`
 - `instrument`
@@ -129,75 +163,71 @@ required by PR #596:
 - `baseline_stop_ticks`
 - `target_r`
 - `source_variant`
-- `source_file`
-
-NO_FILL and EXPIRED are never relabeled as losses; they remain visible in the
-full baseline and manifest but are not sent to the winner/loser precursor audit.
 
 ### Manifest
 
-The manifest records:
+Records:
 
-- exact parent #593 head
-- date range
+- source methodology / #593 helper head
 - input file hashes
-- journal parse skip count
-- selected/terminal/WIN/LOSS/NO_FILL/EXPIRED reconciliation
+- date range
+- parse-skip count
 - MES economics
-- IOC/slippage assumptions
-- both output hashes
+- real PaperBroker configuration
+- selected/terminal/no-fill/expired reconciliation
+- per-session counts
+- output hashes
 
-## Required two-period proof
+## Required periods
 
-Once trustworthy MES data exists, run two independent baselines:
+Once trustworthy MES history exists, run independently:
 
-1. historical: `2026-07-13 .. 2026-08-31`
-2. September: `2026-09-01 .. latest proven baseline date`
+1. `2026-07-13 .. 2026-08-31`
+2. `2026-09-01 .. latest proven date`
 
-Do not pool the inputs, outputs, manifests, or precursor conclusions.
+Do not pool them before each period is separately reported. Each run must be
+repeated and byte-identical before its Asian terminal cohort is sent to PR #596.
 
-Each period must be run twice with byte-identical baseline and precursor JSONL
-hashes before #596 consumes it.
+## Missing data prerequisite
 
-## Missing data prerequisite remains separate
+This PR does **not** fetch market data. The prior proof established that the
+preserved MES 5m corpus currently ends on 2026-06-26.
 
-This PR does **not** authorize or perform a Polygon data fetch. The earlier proof
-showed the preserved MES 5m corpus ends at 2026-06-26. Extending and preserving
-MES 5m history must be done separately with:
+Any extension must be staged and preserved separately with:
 
-- source/provenance recorded
-- exact date coverage
-- row/file counts
+- provider/source recorded
+- requested date coverage
+- file/row counts
+- first/last timestamps
 - per-file hashes
-- continuity checks
-- no silent mixing with scratch/live bars
+- duplicate/conflict checks
+- continuity/gap review
+- no overwrite of existing evidence
 
-Only after that data foundation exists should the normal historical replay path
-create the 15m bars/journal snapshot consumed here.
+The existing repo path `scripts/polygon_to_replay.py` should be reused for
+Polygon-derived replay candles; do not create a second converter.
 
 ## Safety boundary
 
-No existing runtime file is modified.
+`PaperBroker` is intentionally imported because it is the canonical offline fill
+model being tested. `PaperBroker.is_live` is false and it performs no external
+broker connection.
 
-The adapter imports the proven #593 offline research producer and therefore
-indirectly reuses `execution.cross_instrument_observation._resolve_one` for
-pessimistic outcome resolution. It does not import or call:
+This producer does not import or call:
 
-- PaperBroker order submission
-- Tradovate
+- Tradovate broker
 - webhook runner
-- DecisionEngine execution path
-- service control
-- deployment
-- HTTP/network clients
-- env mutation
+- order submission to an external service
+- HTTP clients
+- service/deploy controls
+- environment mutation
 
-No session permission, Pine logic, strategy gate, risk rule, campaign, broker,
-or VPS state is changed.
+No live, demo, or paper runtime order route is activated by this study.
 
-## What this can prove
+## What this proves
 
-A successful MES run can establish a reproducible **baseline population** for
-subsequent winner/loser precursor research.
+A successful run can establish a reproducible MES D+EMA research population and
+an explicit Asian terminal winner/loser cohort for precursor analysis.
 
-It cannot, by itself, establish a new edge or approve MES execution.
+It cannot validate MES, authorize MES execution, or justify a new gate by
+itself.
