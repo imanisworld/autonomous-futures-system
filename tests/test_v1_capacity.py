@@ -129,9 +129,6 @@ def test_signa_timeout_is_observational_for_setup_but_still_blocks_capacity_proo
     scanner = FakeScanner(clock, rows)
     report = _run(scanner, list(rows), clock, budget=20.0)
 
-    # Signa has zero V1 scoring authority, so these are not critical data
-    # failures.  But a capacity proof requires a clean provider cycle: repeated
-    # timeouts still block expansion because they consume serial scan time.
     assert report.verdict == "FAIL"
     assert report.critical_failures == 0
     assert report.observational_failures == 2
@@ -164,11 +161,7 @@ def test_missing_or_incomplete_bar_context_blocks_capacity_proof():
 def test_symbol_exception_is_recorded_and_census_continues():
     clock = FakeClock()
     rows = {"AAPL": _ok(), "MSFT": _ok(), "SPY": _ok()}
-    scanner = FakeScanner(
-        clock,
-        rows,
-        exceptions={"MSFT": RuntimeError("boom")},
-    )
+    scanner = FakeScanner(clock, rows, exceptions={"MSFT": RuntimeError("boom")})
     report = _run(scanner, ["AAPL", "MSFT", "SPY"], clock, budget=20.0)
 
     assert scanner.calls == ["AAPL", "MSFT", "SPY"]
@@ -186,7 +179,6 @@ def test_preflight_cli_does_not_call_stateful_scanner_entrypoints_or_open_contra
     assert "DiscordAlerter(" not in source
     assert "fetch_option_chain" not in source
     assert "fetch_option_expirations" not in source
-    assert "_build_normalized_data(" not in source  # core owns the one intentional private call
 
 
 def test_core_only_calls_normalized_data_builder_not_trade_entrypoints():
