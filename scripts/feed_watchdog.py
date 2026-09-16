@@ -10,11 +10,12 @@ Discord alert — once per outage, with a periodic reminder — and a recovery n
 when bars resume. This exists because on 2026-06-04 the ingestion path silently
 dropped every signal for ~10 hours and nothing actively warned the operator.
 
-Read-only with respect to trading. For the cross-instrument observation campaign,
-per-instrument health is based on a successfully processed 15m campaign bar plus
-a matching BarHistory row — not on generic webhook receipt freshness. Therefore
-a healthy 5m stream or a failed observation transport cannot mask a dead 15m
-collector.
+Read-only with respect to trading. Once the cross-instrument observation campaign
+has processed its first bar, per-instrument health is based on a successfully
+processed 15m campaign bar plus a matching BarHistory row — not on generic
+webhook receipt freshness. Before the first campaign state file exists, the
+legacy receipt monitor remains informational; the separate activation gate still
+reports the campaign UNPROVEN.
 """
 from __future__ import annotations
 
@@ -25,7 +26,6 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-# Make the repo importable when run directly by systemd.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from config.settings import load_config  # noqa: E402
@@ -34,13 +34,14 @@ from context.futures_session import (  # noqa: E402
 )
 from execution.cross_instrument_observation import (  # noqa: E402
     OBSERVATION_UNIVERSE,
+    STATE_FILENAME as OBSERVATION_STATE_FILENAME,
     campaign_enabled as observation_campaign_enabled,
 )
 from notifications.discord_notifier import NotificationResult, send_discord_alert  # noqa: E402
 from ops.cross_instrument_feed_health import build_feed_health  # noqa: E402
 
 logger = logging.getLogger("feed_watchdog")
-_REMINDER_SECONDS = 2 * 3600  # while still down, re-alert at most every 2h
+_REMINDER_SECONDS = 2 * 3600
 
 
 def _load_received_at(log_dir: Path) -> datetime | None:
@@ -60,7 +61,6 @@ def _load_received_at(log_dir: Path) -> datetime | None:
 
 
 def _load_instrument_received_at(log_dir: Path, root: str) -> tuple[datetime | None, int | None]:
-    """Legacy receipt freshness used only while the observation campaign is OFF."""
     path = log_dir / f"latest_webhook_{root}.json"
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -85,7 +85,6 @@ def _load_instrument_received_at(log_dir: Path, root: str) -> tuple[datetime | N
 
 
 def _check_campaign_instruments(now: datetime, log_dir: Path, state: dict, send, cfg) -> dict:
-    """Watch proven campaign-processing freshness, never generic receipt freshness."""
     per_state: dict = dict(state.get("instruments") or {})
     now_epoch = now.timestamp()
     stale_now: list[str] = []
@@ -96,23 +95,25 @@ def _check_campaign_instruments(now: datetime, log_dir: Path, state: dict, send,
         item = health["instruments"][root]
         prior = per_state.get(root, {})
         if not item["proven_15m"]:
-            # This is an activation-proof failure, not yet a runtime outage.
-            # Keep it visible in `unproven`; do not spam Discord before the
-            # operator has proven the first successful 15m bar for the root.
             continue
         if item["session_active"] is False:
             if prior.get("status") == "down":
                 per_state[root] = {"status": "ok"}
             continue
-        if item["stale_after_seconds"] is not None and item["status"] == "STALE":
+        if item["status"] in {"STALE", "TRANSPORT_ERROR", "BAR_HISTORY_MISSING"}:
             due = (now_epoch - float(prior.get("last_alert_epoch", 0))) >= _REMINDER_SECONDS
             if prior.get("status") != "down" or due:
-                age = item["age_seconds"]
-                stale_now.append(f"{root} ({int((age or 0) / 60)}m, authoritative 15m campaign bars)")
+                if item["status"] == "TRANSPORT_ERROR":
+                    detail = f"{root} (15m transport error: {item.get('last_error') or 'unknown'})"
+                else:
+                    age = item["age_seconds"]
+                    detail = f"{root} ({int((age or 0) / 60)}m, authoritative 15m campaign bars)"
+                stale_now.append(detail)
                 per_state[root] = {
                     "status": "down",
                     "last_alert_epoch": now_epoch,
                     "last_successful_15m_bar_ts": item["last_successful_15m_bar_ts"],
+                    "last_error": item.get("last_error"),
                 }
         elif prior.get("status") == "down":
             recovered.append(root)
@@ -137,7 +138,6 @@ def _check_campaign_instruments(now: datetime, log_dir: Path, state: dict, send,
 
 
 def _check_legacy_instruments(now: datetime, log_dir: Path, state: dict, send, cfg, tf_default: int) -> dict:
-    """Legacy receipt-based per-instrument monitor, retained while campaign OFF."""
     per_state: dict = dict(state.get("instruments") or {})
     now_epoch = now.timestamp()
     stale_now: list[str] = []
@@ -175,8 +175,8 @@ def _check_legacy_instruments(now: datetime, log_dir: Path, state: dict, send, c
 
 
 def check_instruments(now: datetime, log_dir: Path, state: dict, send, cfg, tf_default: int) -> dict:
-    """Per-instrument monitoring; campaign ON switches to authoritative 15m proof."""
-    if observation_campaign_enabled():
+    """Switch to authoritative 15m proof after actual campaign state exists."""
+    if observation_campaign_enabled() and (log_dir / OBSERVATION_STATE_FILENAME).exists():
         return _check_campaign_instruments(now, log_dir, state, send, cfg)
     return _check_legacy_instruments(now, log_dir, state, send, cfg, tf_default)
 
@@ -206,14 +206,9 @@ def run(now: datetime | None = None, send=send_discord_alert, config=None) -> di
     state_path = log_dir / "feed_watchdog_state.json"
     state = _read_state(state_path)
 
-    # Per-instrument pass first. When cross-instrument observation is armed,
-    # this reads campaign seen-bar + BarHistory proof, not latest webhook files.
     per = check_instruments(now, log_dir, state, send, cfg, tf)
     state["instruments"] = per["instruments"]
 
-    # Legacy/global ingestion check remains unchanged and independent. It still
-    # protects the primary trading webhook path; it is NOT the activation proof
-    # for cross-instrument collection.
     if not futures_session_active(now):
         if state.get("status") == "down":
             _write_state(state_path, {"status": "ok", "instruments": per["instruments"]})
