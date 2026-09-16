@@ -5,6 +5,10 @@ watchlist, scanner configuration, database, alerts, risk state, or services.
 
     python scripts/options_v1_universe_preflight.py
     python scripts/options_v1_universe_preflight.py --json
+
+Provider/cycle capacity is a separate read-only proof implemented by
+``scripts/options_v1_capacity_preflight.py``; this universe check alone is not
+activation authority.
 """
 from __future__ import annotations
 
@@ -41,6 +45,7 @@ def build_report() -> dict:
         "sectors": dict(sorted(sectors.items())),
         "tickers": list(tickers),
         "live_watchlist_changed": False,
+        "capacity_proof": "separate: scripts/options_v1_capacity_preflight.py",
     }
 
 
@@ -59,7 +64,7 @@ def main(argv: list[str] | None = None) -> int:
         print(
             f"PASS: {report['candidate_count']} proposed V1 symbols; "
             f"aliases={report['aliases']} excluded={list(report['excluded'])}; "
-            "live watchlist unchanged"
+            "live watchlist unchanged; capacity proof still separate"
         )
     return 0
 
