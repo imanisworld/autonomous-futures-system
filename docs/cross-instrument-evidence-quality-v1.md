@@ -31,10 +31,12 @@ include:
 
 - `DATA_GAP_CONTAMINATED` — an expected 15m bar is absent inside the detector or
   signal-to-resolution window.
-- `ROLL_CONTAMINATED` — the exact source contract changes inside the evidence
-  window, or a proven quarterly roll window intersects it.
-- `ROLL_PROVENANCE_UNKNOWN` — roll safety cannot be proven. Continuous
-  MGC/MCL/MBT remain here until their roll schedules/provenance are proven.
+- `ROLL_CONTAMINATED` — more than one exact dated source contract appears inside
+  the evidence window.
+- `ROLL_PROVENANCE_UNKNOWN` — roll safety cannot be proven. A continuous ticker
+  such as `M2K1!` does not identify which dated contract supplied each bar, so
+  continuous MNQ/MES/M2K/MGC/MCL/MBT evidence remains here until exact contract
+  identity is proven by another source.
 - `CODE_PROVENANCE_UNKNOWN` — no usable generating release SHA is attached.
 - `DETECTOR_PROVENANCE_UNKNOWN` — detector identity/dependency window cannot be
   reconstructed.
@@ -68,16 +70,17 @@ transport writes the exact incoming TradingView ticker for new 15m bars.
 
 Rules:
 
-- one stable dated contract through the evidence window: roll provenance can be
-  clear;
-- more than one source contract: `ROLL_CONTAMINATED`;
-- continuous MNQ/MES/M2K: the existing proven quarterly roll helper is used as a
-  conservative boundary check;
-- continuous MGC/MCL/MBT: `ROLL_PROVENANCE_UNKNOWN` until a real schedule is
-  proven;
+- one stable **dated** contract through the evidence window: roll provenance can
+  be clear;
+- more than one exact dated source contract: `ROLL_CONTAMINATED`;
+- any continuous ticker (`*1!` / `*!`): `ROLL_PROVENANCE_UNKNOWN` unless exact
+  underlying contract identity is independently proven;
 - missing per-bar source ticker: fail closed as unknown.
 
-The layer does **not** add MGC/MCL/MBT roll schedules.
+The repo's historical quarterly roll convention is not treated as proof of the
+live continuous feed's switch time. The 2026-09-14 M2K live-feed check showed the
+continuous switch later than that convention, so using the helper as a quality
+certificate could produce false-clean evidence.
 
 ### Current conservative limitation
 
@@ -121,10 +124,12 @@ Thirty dirty rows cannot satisfy the gate.
 
 `tests/test_cross_instrument_evidence_quality.py` covers:
 
-- a complete off-roll M2K window qualifying;
+- a complete exact-dated M2K window qualifying;
+- a complete continuous M2K window spanning the observed 2026-09-14 live roll
+  failing closed as `ROLL_PROVENANCE_UNKNOWN`;
 - an unexplained missing 15m bar blocking the sample;
 - the equity-index 16:15–16:30 ET halt not becoming a false gap;
-- continuous MGC failing closed while its roll schedule is unproven;
+- continuous MGC failing closed while exact contract identity is unproven;
 - an exact contract switch inside a window being roll-contaminated;
 - unknown release SHA blocking evidence;
 - MBT's structural outcome-horizon population blocker;
@@ -134,6 +139,7 @@ Thirty dirty rows cannot satisfy the gate.
 ## Explicitly not solved here
 
 - actual TradingView alert creation or live bar-arrival proof;
+- continuous-to-dated contract identity for any root;
 - MGC/MCL/MBT historical continuous-contract schedules;
 - MBT strategy outcome horizon;
 - holiday/early-close calendar completeness;
