@@ -238,6 +238,12 @@ Rulings and numbers live in `docs/options-current-state-handoff.md` (section
   show no excess. 3-1-2, 3-2-2 and inside break are too small to say.
   Mechanical numbers on the 13:30 opening bar are a gap artifact and are not
   evidence.
+- **First prospective session (2026-09-16).** Collected after the
+  entitlement-timing failure and repaired under unchanged rules (binding
+  sidecar carries `observer_repair`); 1,219 episodes, 977 clean, 0 unpriced.
+  2-1-2 reversal 10 episodes, 1-2-2 15 episodes: both `INSUFFICIENT
+  PROSPECTIVE SAMPLE`. Unattended collection is not yet proven; the first
+  clean timer firing is expected 2026-09-17 20:45Z.
 - **Prospective rule, fixed before any prospective session existed.** For
   2-1-2 reversal and 1-2-2 (inside break counted passively): `PERSISTING
   POSSIBLE SIGNAL` needs ≥30 prospective episodes over ≥3 sessions, both

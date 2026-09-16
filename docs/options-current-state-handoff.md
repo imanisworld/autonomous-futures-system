@@ -179,7 +179,7 @@ Everything in this section is **observation only**. None of it changed the scann
 ### What now runs beside V1
 
 - Observer `cov-v0.1` (#578), episode reducer `ep-v0.1` (#579), outcome study `out-v0.1` (#580) and the after-close collector `col-v0.1` (#581, `771b6cf`) form a read-only chain that classifies **every** directional 30m RTH bar of the observer universe into a Strat family each session and measures its same-session outcome in two views: mechanical (entry at the trigger) and **first-sight** (entry at the first scanner-visible price, close + about 18 minutes). First-sight is the decision-relevant view; the mechanical view is a frictionless upper bound.
-- The collector is installed on the box as a pinned, write-protected release under `/root/afs-shared/coverage/` with its own timer (16:35 ET weekdays). It never touches the production tree, `.env`, the scanner, or the V1 database. Five sessions (2026-09-09 to 2026-09-15) were backfilled by a proven manual run; the first unattended firing is 2026-09-16 20:35Z and the lane is frozen until it is checked.
+- The collector is installed on the box as a pinned, write-protected release under `/root/afs-shared/coverage/` with its own timer (16:45 ET weekdays). It never touches the production tree, `.env`, the scanner, or the V1 database. Five sessions (2026-09-09 to 2026-09-15) were backfilled by a proven manual run. The first unattended firing (2026-09-16, then at 16:35 ET) failed: the observer prices first sight from 5-minute bars ending at close + 26 min and the data plan refuses bars younger than 15 min, so every symbol returned an entitlement error and 1,410 events were stored without prices. #606 moved the timer to 16:45 ET and made completeness require a price on every in-session first sight, so an unpriced session is re-observed instead of skipped. #607 fixed a second latent bug (the two dead tickers on the allow-list were reported as fatal provider errors) and stamps `observer_repair` on any session whose observer ran more than once. The measurement modules are byte-identical to the original pin; only collector scheduling and completeness changed.
 - Sessions 2026-09-09 to 2026-09-15 are the **retrospective** partition and are byte-frozen. Every later session is the **prospective** partition. The two are never merged.
 
 ### Audit 1 — missed-signal discovery (ruled)
@@ -216,7 +216,20 @@ Operator ruling: most missing families are coverage, not edge, so **no broad det
 - Method: the unchanged observer, reducer and outcome modules; the same first-sight view, matched baseline and ex-opening reporting; a read-only analysis script over the collector's aggregate output. No new detector, lane, timer, threshold, or production change.
 - Status rule, fixed before any prospective data exists: `PERSISTING POSSIBLE SIGNAL` requires at least 30 prospective episodes, at least 3 sessions, both directions, and an ex-opening first-sight excess of at least +5 pp; otherwise `NO LONGER SHOWING EXCESS` or `INSUFFICIENT PROSPECTIVE SAMPLE`. Any drift in the collector's pinned commit, module versions, first-sight delay, or completeness stops the analysis as `METHODOLOGY / DATA BLOCKED`. The words validated, production-ready, approved, or trade are never outputs of this step.
 - Only the prospective view drives decisions. The retrospective tables above are hypothesis-generating and are not re-scored.
-- Expected first result after the 2026-09-16 collection: one session, therefore `INSUFFICIENT PROSPECTIVE SAMPLE`.
+- First prospective session, 2026-09-16 (collected 21:09Z after the repair, binding sidecar carries `observer_repair`: run 6 unpriced at 20:35Z, run 7 priced at 21:03Z, same rules; usable as strategy evidence because setup selection was prospective and the outcome rule was frozen beforehand):
+
+| Family | prospective n | L / S | first-sight 1R | matched baseline | diff | ex-opening diff | status |
+|---|---|---|---|---|---|---|---|
+| 2-1-2 reversal | 10 | 5 / 5 | 30.0% | 33.3% | −3.3 pp | −3.3 pp | INSUFFICIENT PROSPECTIVE SAMPLE |
+| 1-2-2 | 15 | 7 / 8 | 60.0% | 50.0% | +10.0 pp | +3.8 pp | INSUFFICIENT PROSPECTIVE SAMPLE |
+| inside break (passive) | 3 | — | — | — | — | — | counted only |
+
+- Retrospective hashes were verified unchanged after the repair. The retrospective tables are not re-scored.
+- **Automation is not proven.** The 09-16 data came from a failed timer firing, a failed catch-up run and a manual run. The first clean unattended firing must be 2026-09-17 at 20:45Z, verified with the same six checks (unit result, pinned tree executed, module versions, collector env fingerprints, session completeness with 17.9-minute first sight and an independent bar count, retrospective hashes frozen). Until then the lane collects but the timer is unproven.
+
+### Daily evidence rollups (reporting only)
+
+`scripts/paper_collection_report.py` (#603, corrected in #604, cards #608, EOW registry #609, census cleanup #610) posts read-only EOD and EOW rollups of the futures journal, the options scanner database and the collector census to two dedicated Discord routes and writes a JSON artifact per run. It runs from a pinned copy under `/root/afs-shared/paper_collection/` with its own oneshot timers (EOD 17:10 ET weekdays, EOW Friday 17:20 ET) because the production release predates it and no trading-service restart was sanctioned for reporting; it is absorbed into the production tree at the next release that already needs a restart. It changes nothing and is not evidence authority: shadow-journal status counts are row states, not option P&L.
 
 ### Parked, not authorized
 
@@ -252,7 +265,7 @@ The remaining uncertainty is primarily **operational proof + strategy evidence**
 Steps 1–5 of the deployment checklist are complete (deployed, smoke proven, epochs `V1-EPOCH-1` and `V1-EPOCH-2` recorded). What remains:
 
 1. Collect natural candidates on the 20-symbol universe without tuning V1. Any rule change starts a new cohort.
-2. Let the after-close collector add one session per weekday; verify the first unattended firing (2026-09-16) before trusting the timer.
+2. Let the after-close collector add one session per weekday; the first clean unattended firing (2026-09-17 20:45Z) must pass the six-point check before the timer is trusted.
 3. Re-run the pre-registered prospective family validation as sessions accrue and report its status only in the fixed vocabulary above.
 4. Diagnose signal/timeframe → entry → stop → target/exit → filters → execution realism once V1 samples are useful.
 5. Treat legacy Signa read timeouts as a separate reliability audit; they cannot alter a trade decision (scorer contribution 0, no branch on Signa state).
