@@ -24,7 +24,7 @@ def _cfg(range_on: bool):
     # observer generally, not the shipped isolated-lane config.
     from tests.conftest import load_permissive_config
     return load_permissive_config(
-        max_staleness_seconds=10_000_000,
+        max_staleness_seconds=0,  # disabled: fixtures use historical timestamps (same as conftest)
         range_observe_enabled=range_on,
     )
 
