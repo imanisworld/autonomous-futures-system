@@ -31,6 +31,12 @@ PROOF_CRITICAL_RUNTIME_OVERRIDES = (
     # realistic-ledger drawdown halt is measured from.
     "MES_122_PAPER_MODE",
     "MES_122_PAPER_EPOCH_START",
+    # Asia-session D+EMA forward paper cohort (2026-09-16). Paper-only by
+    # construction and OFF by default; proof-critical for the same reason as
+    # the MES lane: the mode decides whether the cohort collects at all and
+    # the epoch fixes its evidence identity.
+    "ASIA_D_EMA_PAPER_MODE",
+    "ASIA_D_EMA_PAPER_EPOCH_START",
     "STARTING_BALANCE",
     "REQUIRE_TRENDING_CONDITION",
     "VWAP_ENTRY_MAX_DISTANCE_TICKS",
