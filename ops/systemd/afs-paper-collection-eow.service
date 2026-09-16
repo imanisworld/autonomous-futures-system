@@ -1,0 +1,11 @@
+[Unit]
+Description=AFS read-only EOW paper collection rollup
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/root/autonomous-futures-system
+EnvironmentFile=/root/autonomous-futures-system/.env
+ExecStart=/root/autonomous-futures-system/.venv/bin/python -m scripts.paper_collection_report --period eow --log-dir /root/afs-shared/logs --options-db /root/afs-shared/logs/options_scanner.sqlite
+Restart=no

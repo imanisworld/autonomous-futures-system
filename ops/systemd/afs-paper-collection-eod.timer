@@ -1,0 +1,10 @@
+[Unit]
+Description=Run AFS paper collection EOD rollup after options collectors settle
+
+[Timer]
+OnCalendar=Mon..Fri *-*-* 17:10:00 America/New_York
+Persistent=true
+Unit=afs-paper-collection-eod.service
+
+[Install]
+WantedBy=timers.target
