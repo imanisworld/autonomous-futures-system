@@ -186,6 +186,14 @@ def observe_collection_only_alert(
             timeframe="15", for_date=for_date, source="observation_transport",
             pine_advisory_ignored=ignored,
         )
+        # Discord (optional "observation" route): informational only, after the
+        # evidence is already written; cannot influence collection or execution.
+        try:
+            from notifications.observation_notifier import notify_observation
+
+            notify_observation(list(summary.get("events") or []) + list(resolved))
+        except Exception:  # noqa: BLE001 — never let a notification touch the transport result
+            logger.warning("observation Discord notification failed", exc_info=True)
         # A duplicate bar is still a successful transport attempt: the exact 15m
         # bar is already persisted and its campaign identity already processed.
         _write_transport_status(
