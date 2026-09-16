@@ -57,6 +57,7 @@ def _session_window_decision(rules: list[dict], timestamp: datetime) -> tuple[bo
 
 
 from config.settings import SystemConfig, load_config, LiveTradingBlockedError
+from config.futures_contracts import UnsupportedContractError, point_value, tick_size
 
 
 # ─── Result Types ─────────────────────────────────────────────────────────────
@@ -606,8 +607,8 @@ class RiskEngine:
         return None
 
 
-    # Point value per instrument (dollars per 1-point move, 1 contract).
-    _POINT_VALUES: Dict[str, float] = {"MES": 5.0, "MNQ": 2.0, "ES": 50.0, "NQ": 20.0}
+    # Dollar conversions come ONLY from config/futures_contracts.py (point value
+    # = tick value / tick size). Unknown roots fail closed with a rejection.
 
     def _check_profit_protect_gate(
         self, setup: TradeSetup, daily_state: DailyState
@@ -619,7 +620,10 @@ class RiskEngine:
         day_pnl = daily_state.realized_pnl_dollars
         if day_pnl < threshold:
             return None
-        pv = self._POINT_VALUES.get(setup.instrument, 1.0)
+        try:
+            pv = point_value(setup.instrument)
+        except UnsupportedContractError:
+            return self._reject_missing_contract_metadata(setup, "profit_protect_gate")
         contracts = max(1, int(setup.contracts or 1))
         risk_distance = abs(
             (setup.entry - setup.stop)
@@ -899,6 +903,17 @@ class RiskEngine:
             )
         return None
 
+    @staticmethod
+    def _reject_missing_contract_metadata(setup: TradeSetup, rule: str) -> RiskResult:
+        return RiskResult(
+            result="REJECTED",
+            failed_rule="contract_metadata_missing",
+            reason=(
+                f"{rule}: no proven contract metadata for {setup.instrument!r}; "
+                "refusing to apply generic tick/point economics"
+            ),
+        )
+
     def _check_max_stop_distance(
         self, setup: TradeSetup, daily_state: DailyState
     ) -> Optional[RiskResult]:
@@ -906,13 +921,16 @@ class RiskEngine:
         max_ticks = self.config.max_stop_ticks.get(setup.instrument, 0)
         if max_ticks <= 0:
             return None
-        tick_size = {"MNQ": 0.25, "MES": 0.25, "ES": 0.25, "NQ": 0.25}.get(setup.instrument, 0.25)
+        try:
+            tick = tick_size(setup.instrument)
+        except UnsupportedContractError:
+            return self._reject_missing_contract_metadata(setup, "stop_too_wide")
         risk_pts = (
             setup.entry - setup.stop
             if setup.direction == "LONG"
             else setup.stop - setup.entry
         )
-        risk_ticks = risk_pts / tick_size
+        risk_ticks = risk_pts / tick
         if risk_ticks > max_ticks:
             return RiskResult(
                 result="REJECTED",
