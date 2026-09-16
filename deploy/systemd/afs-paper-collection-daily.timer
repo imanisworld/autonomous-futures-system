@@ -1,0 +1,13 @@
+[Unit]
+Description=Run AFS daily paper collection rollup after options + futures collection settles
+
+[Timer]
+# Options coverage collector runs at 16:35 ET; CME equity futures pause at 17:00 ET.
+# 17:15 ET gives both sides time to persist their end-of-day evidence first.
+OnCalendar=Mon..Fri *-*-* 17:15:00 America/New_York
+Persistent=true
+AccuracySec=1min
+Unit=afs-paper-collection-daily.service
+
+[Install]
+WantedBy=timers.target
