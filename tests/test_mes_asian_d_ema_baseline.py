@@ -96,8 +96,6 @@ def test_canonical_ioc_uses_decision_close_as_arrival_and_real_paperbroker():
     assert out["exit_price"] == 110.0
     assert out["bars_seen"] == 2
     assert out["pnl_dollars"] == pytest.approx(48.75)
-    # The decision bar itself hit both stop and target, but it is never reused
-    # for exit resolution because the IOC arrives only at that bar's close.
     assert out["exit_ts"] == "2026-09-01T23:30:00+00:00"
 
 
@@ -145,7 +143,6 @@ def test_pnl_r_uses_actual_post_fill_risk_like_v3_v4():
     out = mes.resolve_canonical_ioc(
         _candidate(), signal, bars=bars, bar_timestamps=sorted(bars)
     )
-    # Actual fill is 100.25, original stop is 95 -> post-fill risk 5.25.
     assert out["pnl_r"] == pytest.approx((110.0 - 100.25) / 5.25)
 
 
@@ -290,11 +287,8 @@ def test_candidate_id_is_stable_and_encodes_deduped_identity():
     assert first.startswith("MES-D-EMA-")
 
 
-def test_discovery_uses_mes_files_filters_date_and_dedupes_identical_journal_rows(tmp_path):
-    bars = tmp_path / "bars_MES_sample.jsonl"
-    bars.write_text(json.dumps(_bar("2026-09-01T23:00:00+00:00", 99, 101, 98, 100)) + "\n")
-    journal = tmp_path / "journal_2026-09-01.jsonl"
-    row = {
+def _journal_row():
+    return {
         "instrument": "MES",
         "decision": "NO_TRADE",
         "context": {
@@ -307,8 +301,14 @@ def test_discovery_uses_mes_files_filters_date_and_dedupes_identical_journal_row
             "shadow_candidates": [_candidate()],
         },
     }
-    journal.write_text(json.dumps(row) + "\n" + json.dumps(row) + "\n")
-    (tmp_path / "journal_2026-08-31.jsonl").write_text(json.dumps(row) + "\n")
+
+
+def test_discovery_accepts_unique_mes_inputs_and_filters_date(tmp_path):
+    bars = tmp_path / "bars_MES_sample.jsonl"
+    bars.write_text(json.dumps(_bar("2026-09-01T23:00:00+00:00", 99, 101, 98, 100)) + "\n")
+    journal = tmp_path / "journal_2026-09-01.jsonl"
+    journal.write_text(json.dumps(_journal_row()) + "\n")
+    (tmp_path / "journal_2026-08-31.jsonl").write_text(json.dumps(_journal_row()) + "\n")
 
     inputs = mes.discover_inputs(
         tmp_path,
@@ -320,25 +320,47 @@ def test_discovery_uses_mes_files_filters_date_and_dedupes_identical_journal_row
     assert inputs.journal_files == (journal,)
 
 
+def test_discovery_fails_closed_on_identical_duplicate_journal_rows(tmp_path):
+    (tmp_path / "bars_MES_sample.jsonl").write_text(
+        json.dumps(_bar("2026-09-01T23:00:00+00:00", 99, 101, 98, 100)) + "\n"
+    )
+    row = _journal_row()
+    (tmp_path / "journal_2026-09-01.jsonl").write_text(
+        json.dumps(row) + "\n" + json.dumps(row) + "\n"
+    )
+    with pytest.raises(mes.core.StudyError, match="duplicate MES journal row"):
+        mes.discover_inputs(
+            tmp_path,
+            start_date=date(2026, 9, 1),
+            end_date=date(2026, 9, 1),
+        )
+
+
 def test_discovery_fails_closed_on_conflicting_duplicate_journal_rows(tmp_path):
     (tmp_path / "bars_MES_sample.jsonl").write_text(
         json.dumps(_bar("2026-09-01T23:00:00+00:00", 99, 101, 98, 100)) + "\n"
     )
-    row = {
-        "instrument": "MES",
-        "decision": "NO_TRADE",
-        "context": {
-            "timeframe": "15",
-            "timestamp": "2026-09-01T23:00:00+00:00",
-            "session": "asian",
-        },
-    }
+    row = _journal_row()
     changed = json.loads(json.dumps(row))
     changed["context"]["market_condition"] = "DEAD"
     (tmp_path / "journal_2026-09-01.jsonl").write_text(
         json.dumps(row) + "\n" + json.dumps(changed) + "\n"
     )
-    with pytest.raises(mes.core.StudyError, match="conflicting duplicate MES journal row"):
+    with pytest.raises(mes.core.StudyError, match="duplicate MES journal row"):
+        mes.discover_inputs(
+            tmp_path,
+            start_date=date(2026, 9, 1),
+            end_date=date(2026, 9, 1),
+        )
+
+
+def test_discovery_fails_closed_on_duplicate_bar_timestamp(tmp_path):
+    row = _bar("2026-09-01T23:00:00+00:00", 99, 101, 98, 100)
+    (tmp_path / "bars_MES_sample.jsonl").write_text(
+        json.dumps(row) + "\n" + json.dumps(row) + "\n"
+    )
+    (tmp_path / "journal_2026-09-01.jsonl").write_text(json.dumps(_journal_row()) + "\n")
+    with pytest.raises(mes.core.StudyError, match="duplicate MES 15m bar timestamp"):
         mes.discover_inputs(
             tmp_path,
             start_date=date(2026, 9, 1),
