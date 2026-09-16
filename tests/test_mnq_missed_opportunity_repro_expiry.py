@@ -81,6 +81,7 @@ def test_repro_emits_expired_open_and_report_excludes_it_from_terminal_stats(mon
     assert summary["A"]["entry_filled_total"] == 2
 
     report = build_report(rows)
+    assert "filled-but-unresolved" in report["expired_semantics"]
     a = report["cohorts"]["A"]
     assert a["candidates"] == 2
     assert a["fills"] == 1
