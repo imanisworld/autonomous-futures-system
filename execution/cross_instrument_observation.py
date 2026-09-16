@@ -604,6 +604,14 @@ def resolve_pending(
         return []
     today = observation_day(instrument, current_dt).isoformat()
 
+    # Resolution is a 15m campaign invariant. Filter the caller's fallback too,
+    # then prefer the canonical two-file history only after applying the same
+    # filter. A stray 60m/1h row can never resolve a 15m candidate.
+    bars = [
+        bar for bar in bars
+        if normalize_timeframe_minutes(bar.get("timeframe")) == DECISION_TIMEFRAME_MINUTES
+    ]
+
     # Callers historically passed a one-UTC-day BarHistory window. Around 00:00Z
     # that omits the prior 23:45Z bar even though the CME session is continuous.
     # Prefer a two-file canonical history when available; explicit ``bars`` stay
@@ -611,9 +619,13 @@ def resolve_pending(
     try:
         from context.bar_history import BarHistory
 
-        canonical = BarHistory(log_dir=str(log_dir)).recent(
-            instrument, 500, for_date=current_dt.date(), lookback_days=2
-        )
+        canonical = [
+            bar
+            for bar in BarHistory(log_dir=str(log_dir)).recent(
+                instrument, 500, for_date=current_dt.date(), lookback_days=2
+            )
+            if normalize_timeframe_minutes(bar.get("timeframe")) == DECISION_TIMEFRAME_MINUTES
+        ]
         if canonical:
             bars = canonical
     except Exception:
