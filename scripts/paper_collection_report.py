@@ -296,24 +296,114 @@ def _top(counter: dict[str, int], limit: int = 5) -> str:
     )
 
 
+# Presentation aliases only: journal identifiers and counters remain unchanged.
+_DISPLAY_NAMES = {
+    "strat_22_continuation_observed": "2-2 continuation",
+    "strat_22_reversal_observed": "2-2 reversal",
+    "ema_pullback_trend": "EMA pullback",
+    "impulse_first_pullback_observed": "Impulse first pullback",
+    "orb_false_break_fade": "ORB false-break fade",
+    "SHADOW_OUTCOME": "shadow observations",
+    "BAR_CLAIM": "bar claims",
+    "DECISION": "decisions",
+    "shadow_setups": "Shadow setups",
+    "range_signal": "Range signals",
+}
+
+
+def _display_name(value: str) -> str:
+    # Bound and neutralize data-derived labels in Discord markdown.
+    label = _DISPLAY_NAMES.get(value, value.replace("_", " ").capitalize())
+    return label.translate(str.maketrans("", "", "*`~|<>\\"))[:80]
+
+
+def _count_lines(counter: dict[str, int], *, limit: int = 5) -> str:
+    if not counter:
+        return "None recorded"
+    ordered = sorted(counter.items(), key=lambda item: (-item[1], item[0]))
+    lines = [f"**{count:,}** · {_display_name(name)}" for name, count in ordered[:limit]]
+    if len(ordered) > limit:
+        lines.append(f"+ {sum(n for _, n in ordered[limit:]):,} across {len(ordered) - limit} other categories")
+    return "\n".join(lines)
+
+
+def futures_discord_payload(
+    summary: dict[str, Any], census: dict[str, Any], *, period: str, start: date, end: date
+) -> dict[str, Any]:
+    """A mobile-readable card; counts are observations, never inferred fills/P&L."""
+    collectors = [
+        item for item in census.get("collectors", [])
+        if isinstance(item, dict) and not str(item.get("name") or "").startswith("options ")
+    ] if isinstance(census.get("collectors"), list) else []
+    statuses = [(item, _effective_status(item, session_end=end)[0]) for item in collectors]
+    healthy = {"FRESH", "FRESH_AT_CLOSE", "QUIET_BY_DESIGN"}
+    attention = [(item, status) for item, status in statuses if status not in healthy]
+    health_counts = Counter(status for _, status in statuses)
+    health = " · ".join(f"{count} {_display_name(status).lower()}" for status, count in sorted(health_counts.items()))
+    if not statuses:
+        health = "Collector health unavailable — review the census."
+    elif attention:
+        health = "\n".join(
+            f"**{_display_name(str(item.get('name') or 'Unnamed collector'))}** — {_display_name(status).lower()}"
+            for item, status in attention[:5]
+        ) + (f"\n+ {len(attention) - 5} more needing review" if len(attention) > 5 else "") + "\n" + health
+
+    warning = bool(attention) or not statuses or summary["rows"] == 0
+    outcomes = summary.get("shadow_outcomes") or {}
+    outcome_lines = []
+    for keys in (("WIN", "LOSS"), ("NO_FILL", "OPEN")):
+        values = [f"**{outcomes[key]:,}** {_display_name(key).lower()}" for key in keys if key in outcomes]
+        if values:
+            outcome_lines.append(" · ".join(values))
+    other_outcomes = {k: v for k, v in outcomes.items() if k not in {"WIN", "LOSS", "NO_FILL", "OPEN"}}
+    if other_outcomes:
+        outcome_lines.append(_count_lines(other_outcomes))
+    outcome_text = "\n".join(outcome_lines) or "None recorded"
+
+    collection = f"**{summary['rows']:,}** journal rows\n" + _count_lines(summary.get("row_types") or {}, limit=4)
+    if summary.get("instruments"):
+        collection += "\nInstrument rows: " + " · ".join(
+            f"{_display_name(k).upper()} **{v:,}**" for k, v in sorted(summary["instruments"].items())[:6]
+        )
+    if summary["rows"] == 0:
+        collection += "\n⚠ zero futures journal rows in the report window"
+
+    fields = [
+        {"name": "⚠ Collector attention" if attention else ("Collector health" if not statuses else "✓ Collector health"), "value": health},
+        {"name": "Decisions", "value": _count_lines(summary.get("decisions") or {}), "inline": True},
+        {"name": "Shadow outcomes", "value": outcome_text + "\nObserved setups · not executed trades", "inline": True},
+        {"name": "Shadow activity · top 5", "value": _count_lines(summary.get("shadow_strategies") or {})},
+        {"name": "Collection", "value": collection},
+        {"name": "Observation lanes", "value": _count_lines(summary.get("shadow_lanes") or {})},
+    ]
+    # Six bounded fields keep the card inside Discord's per-field and total limits.
+    for field in fields:
+        if len(field["value"]) > 900:
+            field["value"] = field["value"][:850] + "\n… Full counts in the JSON artifact."
+    window = start.strftime("%b %d, %Y")
+    if start != end:
+        window += " → " + end.strftime("%b %d, %Y")
+    return {
+        "allowed_mentions": {"parse": []},
+        "embeds": [{
+            "title": "Futures · " + ("Daily paper report" if period == "eod" else "Weekly paper report"),
+            "description": window + " · UTC journal window",
+            "color": 0xF0B232 if warning else 0x5865F2,
+            "fields": fields,
+            "footer": {"text": "READ ONLY · Evidence collection · No promotion or execution action"},
+        }],
+    }
+
+
 def format_futures_report(
     summary: dict[str, Any], census: dict[str, Any], *, period: str, start: date, end: date
 ) -> str:
-    title = "EOD" if period == "eod" else "EOW"
-    lines = [
-        f"**FUTURES PAPER COLLECTION — {title}** {start.isoformat()}" + ("" if start == end else f" → {end.isoformat()}"),
-        f"journal rows: **{summary['rows']}** ({_top(summary.get('row_types') or {}, limit=4)})",
-        f"decisions: {_top(summary['decisions'])}",
-        f"shadow outcomes (paper resolutions of observed setups, not fills): {_top(summary.get('shadow_outcomes') or {})}",
-        f"shadow strategies resolved: {_top(summary.get('shadow_strategies') or {})}",
-        f"shadow lanes: {_top(summary.get('shadow_lanes') or {})}",
-        f"instruments seen: {_top(summary['instruments'])}",
-        *_census_lines(census, options=False, session_end=end),
-    ]
-    if summary["rows"] == 0:
-        lines.append("⚠️ zero futures journal rows in the report window")
-    lines.append("READ ONLY — evidence rollup; no promotion or execution action")
-    return "\n".join(lines)
+    """Keep CLI/artifact-only runs readable using the same card content."""
+    embed = futures_discord_payload(summary, census, period=period, start=start, end=end)["embeds"][0]
+    sections = [f"**{embed['title']}**\n{embed['description']}"]
+    sections.extend(f"**{field['name']}**\n{field['value']}" for field in embed["fields"])
+    sections.append(embed["footer"]["text"])
+    return "\n\n".join(sections)
 
 
 def format_options_report(
@@ -337,9 +427,10 @@ def format_options_report(
     return "\n".join(lines)
 
 
-def _post_discord(webhook_url: str, content: str) -> bool:
+def _post_discord(webhook_url: str, content: str | dict[str, Any]) -> bool:
     try:
-        body = json.dumps({"content": content}).encode("utf-8")
+        payload = content if isinstance(content, dict) else {"content": content, "allowed_mentions": {"parse": []}}
+        body = json.dumps(payload).encode("utf-8")
         req = urllib.request.Request(
             webhook_url,
             data=body,
@@ -399,7 +490,8 @@ def main(argv: list[str] | None = None) -> int:
 
     send_failures = 0
     if not args.no_discord:
-        for env_name, report in ((FUTURES_ENV, futures_report), (OPTIONS_ENV, options_report)):
+        futures_card = futures_discord_payload(futures, census, period=args.period, start=start, end=end)
+        for env_name, report in ((FUTURES_ENV, futures_card), (OPTIONS_ENV, options_report)):
             webhook = (os.getenv(env_name) or "").strip()
             if not webhook:
                 print(f"[paper_collection_report] {env_name} unset; artifact only")

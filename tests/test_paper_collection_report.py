@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from datetime import date
 
@@ -117,7 +118,7 @@ def test_format_reports_show_zero_activity_and_health():
         end=date(2026, 9, 16),
     )
     assert "zero futures journal rows" in f
-    assert "FRESH 1" in f
+    assert "1 fresh" in f
 
     o = report.format_options_report(
         {
@@ -159,3 +160,84 @@ def test_post_discord_uses_only_supplied_url(monkeypatch):
     assert report._post_discord("https://example.invalid/hook", "hello") is True
     assert seen["url"] == "https://example.invalid/hook"
     assert b"hello" in seen["data"]
+    card = {"embeds": [{"title": "Futures report", "fields": []}], "allowed_mentions": {"parse": []}}
+    assert report._post_discord("https://example.invalid/hook", card) is True
+    assert json.loads(seen["data"]) == card
+
+
+def _screenshot_summary():
+    return {
+        "rows": 554,
+        "row_types": {"SHADOW_OUTCOME": 218, "BAR_CLAIM": 168, "DECISION": 168},
+        "decisions": {"NO_TRADE": 168},
+        "shadow_outcomes": {"LOSS": 119, "WIN": 49, "NO_FILL": 30, "OPEN": 20},
+        "shadow_strategies": {
+            "strat_22_continuation_observed": 49, "ema_pullback_trend": 45,
+            "impulse_first_pullback_observed": 31, "strat_22_reversal_observed": 31,
+            "orb_false_break_fade": 14, "other_setup": 48,
+        },
+        "shadow_lanes": {"shadow_setups": 215, "range_signal": 3},
+        "instruments": {"MNQ": 285, "MES": 269},
+    }
+
+
+def test_futures_card_prioritizes_attention_without_claiming_executed_results():
+    summary = _screenshot_summary()
+    before = json.dumps(summary, sort_keys=True)
+    census = {"collectors": [
+        {"name": "overnight watch", "status": "DEAD"},
+        *[{"name": f"collector {i}", "status": "FRESH"} for i in range(12)],
+        {"name": "options scans", "status": "DEAD"},
+    ]}
+    payload = report.futures_discord_payload(summary, census, period="eod", start=date(2026, 9, 16), end=date(2026, 9, 16))
+    embed = payload["embeds"][0]
+    assert "content" not in payload  # one card, no duplicate wall of text
+    assert payload["allowed_mentions"] == {"parse": []}
+    assert embed["color"] == 0xF0B232
+    assert "Overnight watch" in embed["fields"][0]["value"]
+    assert "12 fresh" in embed["fields"][0]["value"]
+    assert "options scans" not in json.dumps(embed)
+    fields = {f["name"]: f["value"] for f in embed["fields"]}
+    assert "**49** win · **119** loss" in fields["Shadow outcomes"]
+    assert "**30** no fill · **20** open" in fields["Shadow outcomes"]
+    assert "not executed trades" in fields["Shadow outcomes"]
+    assert "**554** journal rows" in fields["Collection"]
+    assert "MNQ **285**" in fields["Collection"]
+    assert "2-2 continuation" in fields["Shadow activity · top 5"]
+    assert "+ 14 across 1 other categories" in fields["Shadow activity · top 5"]
+    assert "resolved" not in json.dumps(embed).lower()
+    assert json.dumps(summary, sort_keys=True) == before
+
+
+def test_futures_card_missing_health_and_long_unknown_categories_stay_visible_and_bounded():
+    summary = _screenshot_summary()
+    summary["shadow_strategies"] = {f"unknown_{i}_" + "x" * 2000: i for i in range(40)}
+    summary["shadow_outcomes"]["UNKNOWN"] = 7
+    payload = report.futures_discord_payload(summary, {"status": "ERROR"}, period="eow", start=date(2026, 9, 14), end=date(2026, 9, 18))
+    embed = payload["embeds"][0]
+    assert embed["color"] == 0xF0B232
+    assert "unavailable" in embed["fields"][0]["value"]
+    assert "Weekly" in embed["title"]
+    assert "Sep 14, 2026 → Sep 18, 2026" in embed["description"]
+    assert "**7** · Unknown" in embed["fields"][2]["value"]
+    assert all(len(f["value"]) <= 1024 for f in embed["fields"])
+    assert sum(len(f["name"]) + len(f["value"]) for f in embed["fields"]) + len(embed["title"]) + len(embed["description"]) + len(embed["footer"]["text"]) < 6000
+
+
+def test_main_posts_futures_embed_and_retains_raw_artifact(tmp_path, monkeypatch):
+    summary = _screenshot_summary()
+    monkeypatch.setattr(report, "summarize_futures", lambda rows: summary)
+    monkeypatch.setattr(report, "run_collector_census", lambda path: {"collectors": [{"name": "futures journal", "status": "FRESH"}]})
+    monkeypatch.setenv(report.FUTURES_ENV, "https://example.invalid/futures")
+    monkeypatch.delenv(report.OPTIONS_ENV, raising=False)
+    posts = []
+    monkeypatch.setattr(report, "_post_discord", lambda url, payload: posts.append((url, payload)) or True)
+    args = ["--period", "eod", "--date", "2026-09-16", "--log-dir", str(tmp_path), "--options-db", str(tmp_path / "missing.sqlite")]
+    assert report.main(args) == 0
+    assert len(posts) == 1
+    assert posts[0][1]["embeds"][0]["color"] == 0x5865F2
+    artifact = json.loads((tmp_path / "paper_collection_eod_2026-09-16.json").read_text())
+    assert artifact["futures"] == summary
+    posts.clear()
+    assert report.main(args + ["--no-discord"]) == 0
+    assert posts == []
