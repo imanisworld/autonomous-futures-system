@@ -12,17 +12,56 @@ def test_period_bounds():
     assert report.period_bounds(ref, "eow") == (date(2026, 9, 14), ref)
 
 
-def test_summarize_futures_counts_without_inference():
+def test_summarize_futures_reads_real_journal_row_shapes():
     rows = [
-        {"decision": "NO_TRADE", "strategy": "strat_212", "instrument": "MNQ"},
-        {"decision": "TRADE", "strategy": "asia_d_ema", "instrument": "MNQ"},
-        {"type": "OUTCOME", "instrument": "MNQ", "outcome": {"result": "WIN"}},
+        {"decision": "NO_TRADE", "setup": None, "instrument": "MNQ"},
+        {"type": "BAR_CLAIM", "instrument": "MNQ", "timeframe_minutes": 15},
+        {
+            "type": "SHADOW_OUTCOME",
+            "lane": "shadow_setups",
+            "strategy": "strat_22_continuation_observed",
+            "instrument": "MNQ",
+            "final": True,
+            "shadow_outcome": {"result": "WIN", "entry_filled": True},
+        },
+        {
+            "type": "SHADOW_OUTCOME",
+            "lane": "range_signal",
+            "strategy": "range_break_close",
+            "instrument": "MES",
+            "final": True,
+            "shadow_outcome": {"result": "NO_FILL", "entry_filled": False},
+        },
     ]
     out = report.summarize_futures(rows)
-    assert out["rows"] == 3
-    assert out["decisions"] == {"NO_TRADE": 1, "TRADE": 1}
-    assert out["outcomes"] == {"WIN": 1}
-    assert out["strategies"] == {"strat_212": 1, "asia_d_ema": 1}
+    assert out["rows"] == 4
+    assert out["row_types"] == {"DECISION": 1, "BAR_CLAIM": 1, "SHADOW_OUTCOME": 2}
+    assert out["decisions"] == {"NO_TRADE": 1}
+    assert out["shadow_outcomes"] == {"WIN": 1, "NO_FILL": 1}
+    assert out["shadow_strategies"] == {"strat_22_continuation_observed": 1, "range_break_close": 1}
+    assert out["shadow_lanes"] == {"shadow_setups": 1, "range_signal": 1}
+    assert out["instruments"] == {"MNQ": 3, "MES": 1}
+
+
+def test_census_options_scans_judged_against_session_close_not_wall_clock():
+    # 15:57 ET last scan on the report day: FRESH at the 16:00 close even though
+    # the census (run at 17:10 ET) calls it STALE.
+    census = {
+        "collectors": [
+            {"name": "options scans", "status": "STALE", "last": "2026-09-16T19:57:46+00:00", "limit_minutes": 30},
+            {"name": "options companion", "status": "DEAD", "last": "2026-07-21T00:00:00+00:00", "limit_minutes": 10080},
+            {"name": "options shadow journal", "status": "FRESH", "limit_minutes": 1440},
+        ]
+    }
+    lines = report._census_lines(census, options=True, session_end=date(2026, 9, 16))
+    assert "attention" not in lines[0]
+    assert "FRESH_AT_CLOSE 1" in lines[0]
+    assert "QUIET_BY_DESIGN 1" in lines[0]
+    assert "FRESH 1" in lines[0]
+    # A genuinely dead scanner (last scan hours before the close) is still raised.
+    census["collectors"][0]["last"] = "2026-09-16T14:05:00+00:00"
+    lines = report._census_lines(census, options=True, session_end=date(2026, 9, 16))
+    assert "attention: options scans" in lines[0]
 
 
 def test_summarize_options_is_read_only_and_date_scoped(tmp_path):
@@ -71,7 +110,7 @@ def test_format_reports_show_zero_activity_and_health():
         ]
     }
     f = report.format_futures_report(
-        {"rows": 0, "decisions": {}, "outcomes": {}, "strategies": {}, "instruments": {}},
+        {"rows": 0, "decisions": {}, "instruments": {}},
         census,
         period="eod",
         start=date(2026, 9, 16),
@@ -94,7 +133,8 @@ def test_format_reports_show_zero_activity_and_health():
         end=date(2026, 9, 16),
     )
     assert "zero option scans" in o
-    assert "STALE 1" in o
+    assert "NOT option P&L outcomes" in o
+    assert "attention: options scans" in o
 
 
 def test_post_discord_uses_only_supplied_url(monkeypatch):
