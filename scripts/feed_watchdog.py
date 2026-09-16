@@ -27,7 +27,10 @@ from zoneinfo import ZoneInfo
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from config.settings import load_config  # noqa: E402
-from context.futures_session import futures_session_active, feed_stale_after_minutes  # noqa: E402
+from context.futures_session import (  # noqa: E402
+    futures_session_active, feed_stale_after_minutes, product_session_active,
+)
+from execution.cross_instrument_observation import OBSERVATION_UNIVERSE  # noqa: E402
 from notifications.discord_notifier import NotificationResult, send_discord_alert  # noqa: E402
 
 logger = logging.getLogger("feed_watchdog")
@@ -48,6 +51,74 @@ def _load_received_at(log_dir: Path) -> datetime | None:
         return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
     except ValueError:
         return None
+
+
+def _load_instrument_received_at(log_dir: Path, root: str) -> tuple[datetime | None, int | None]:
+    """(received_at, timeframe_minutes) from latest_webhook_<ROOT>.json, or (None, None)
+    when that instrument has never reported (never-reported = not yet proven,
+    NOT an outage; bar-arrival proof is the activation step)."""
+    path = log_dir / f"latest_webhook_{root}.json"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None, None
+    raw = data.get("received_at")
+    if not raw:
+        return None, None
+    try:
+        dt = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+        dt = dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None, None
+    tf_raw = ((data.get("payload") or {}).get("timeframe"))
+    tf = None
+    try:
+        digits = "".join(ch for ch in str(tf_raw or "") if ch.isdigit())
+        tf = int(digits) if digits else None
+    except ValueError:
+        tf = None
+    return dt, tf
+
+
+def check_instruments(now: datetime, log_dir: Path, state: dict, send, cfg, tf_default: int) -> dict:
+    """Per-instrument freshness with product-aware sessions. One healthy feed
+    (e.g. MNQ) can never mask another dead one (e.g. M2K/MBT). Only
+    instruments that have reported at least once are judged."""
+    per_state: dict = dict(state.get("instruments") or {})
+    now_epoch = now.timestamp()
+    stale_now: list[str] = []
+    recovered: list[str] = []
+    for root in OBSERVATION_UNIVERSE:
+        received, tf = _load_instrument_received_at(log_dir, root)
+        if received is None:
+            continue  # never reported: not an outage
+        active = product_session_active(root, now)
+        if not active:
+            # Expected idle for THIS product; clear a prior down flag quietly.
+            if per_state.get(root, {}).get("status") == "down":
+                per_state[root] = {"status": "ok"}
+            continue
+        tolerance = feed_stale_after_minutes(tf or tf_default) * 60
+        age = (now - received).total_seconds()
+        prior = per_state.get(root, {})
+        if age > tolerance:
+            due = (now_epoch - float(prior.get("last_alert_epoch", 0))) >= _REMINDER_SECONDS
+            if prior.get("status") != "down" or due:
+                stale_now.append(f"{root} ({int(age / 60)}m, {tf or tf_default}m bars)")
+                per_state[root] = {"status": "down", "last_alert_epoch": now_epoch,
+                                   "last_received_at": received.isoformat()}
+        elif prior.get("status") == "down":
+            recovered.append(root)
+            per_state[root] = {"status": "ok"}
+    if stale_now:
+        send(cfg, (
+            "🚨 RiskSentinel feed watchdog — INSTRUMENT FEED STALE\n"
+            + "\n".join(f"• {item}" for item in stale_now)
+            + "\nOther instruments may be healthy; each feed is judged on its own product calendar."
+        ))
+    if recovered:
+        send(cfg, "✅ RiskSentinel feed watchdog — instrument feed recovered: " + ", ".join(recovered))
+    return {"instruments": per_state, "stale": stale_now, "recovered": recovered}
 
 
 def _read_state(path: Path) -> dict:
@@ -75,11 +146,18 @@ def run(now: datetime | None = None, send=send_discord_alert, config=None) -> di
     state_path = log_dir / "feed_watchdog_state.json"
     state = _read_state(state_path)
 
+    # Per-instrument pass first (product-aware; independent of the global
+    # equity-index gate below so an MBT outage on a Saturday is still seen).
+    per = check_instruments(now, log_dir, state, send, cfg, tf)
+    state["instruments"] = per["instruments"]
+
     # Outside an active session, no bars are expected — clear any prior alert.
     if not futures_session_active(now):
         if state.get("status") == "down":
-            _write_state(state_path, {"status": "ok"})
-        return {"action": "idle_session", "active": False}
+            _write_state(state_path, {"status": "ok", "instruments": per["instruments"]})
+        else:
+            _write_state(state_path, state)
+        return {"action": "idle_session", "active": False, "instruments": per}
 
     received_at = _load_received_at(log_dir)
     age = (now - received_at).total_seconds() if received_at else None
@@ -103,9 +181,11 @@ def run(now: datetime | None = None, send=send_discord_alert, config=None) -> di
                 "status": "down",
                 "last_alert_epoch": now_epoch,
                 "last_received_at": received_at.isoformat() if received_at else None,
+                "instruments": per["instruments"],
             })
-            return {"action": "alerted", "sent": getattr(result, "sent", None), "age_seconds": age}
-        return {"action": "still_down_no_reminder", "age_seconds": age}
+            return {"action": "alerted", "sent": getattr(result, "sent", None), "age_seconds": age, "instruments": per}
+        _write_state(state_path, state)
+        return {"action": "still_down_no_reminder", "age_seconds": age, "instruments": per}
 
     # Fresh again — send a recovery notice if we had previously alerted.
     if state.get("status") == "down":
@@ -113,10 +193,11 @@ def run(now: datetime | None = None, send=send_discord_alert, config=None) -> di
             "✅ RiskSentinel feed watchdog — INGESTION RECOVERED\n"
             f"TradingView webhooks are arriving again (last one {int(age / 60)}m ago)."
         ))
-        _write_state(state_path, {"status": "ok"})
-        return {"action": "recovered", "age_seconds": age}
+        _write_state(state_path, {"status": "ok", "instruments": per["instruments"]})
+        return {"action": "recovered", "age_seconds": age, "instruments": per}
 
-    return {"action": "ok", "age_seconds": age}
+    _write_state(state_path, state)
+    return {"action": "ok", "age_seconds": age, "instruments": per}
 
 
 def main(argv=None) -> int:
