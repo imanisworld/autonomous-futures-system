@@ -25,9 +25,10 @@ import math
 import os
 import threading
 from contextlib import contextmanager
-from datetime import date, datetime, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable, Optional
+from zoneinfo import ZoneInfo
 
 from config.futures_contracts import contract_economics, contract_root
 
@@ -50,6 +51,8 @@ STRUCTURAL_OUTCOME = "structural_outcome"
 SIGNAL_METRICS = "signal_metrics"
 TERMINAL_RESULTS = ("WIN", "LOSS")
 DECISION_OBSERVATION_ONLY = "OBSERVATION_ONLY"
+DECISION_TIMEFRAME_MINUTES = 15
+_ET = ZoneInfo("America/New_York")
 
 PopulationKey = tuple[str, str, str, str]  # strategy, instrument, variant, evidence_epoch
 
@@ -79,6 +82,66 @@ def is_observation_instrument(symbol: object) -> bool:
     return contract_root(symbol) in OBSERVATION_UNIVERSE
 
 
+def normalize_timeframe_minutes(value: object) -> Optional[int]:
+    """Normalize a timeframe token without importing the trading runner."""
+    if value is None:
+        return None
+    s = str(value).strip().lower()
+    if not s:
+        return None
+    if s.isdigit():
+        return int(s)
+    for suffix, mult in (("min", 1), ("m", 1), ("hr", 60), ("h", 60)):
+        if s.endswith(suffix):
+            head = s[: -len(suffix)].strip()
+            if head.isdigit():
+                return int(head) * mult
+    return None
+
+
+def _parse_timestamp(value: object) -> Optional[datetime]:
+    if isinstance(value, datetime):
+        dt = value
+    else:
+        raw = str(value or "").strip()
+        if not raw:
+            return None
+        try:
+            if raw.replace(".", "", 1).isdigit():
+                number = float(raw)
+                if number > 1e12:
+                    number /= 1000.0
+                dt = datetime.fromtimestamp(number, tz=timezone.utc)
+            else:
+                dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except (TypeError, ValueError, OSError, OverflowError):
+            return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def observation_day(instrument: str, timestamp: object, *, for_date: Optional[date] = None) -> date:
+    """Stable evidence day that does not roll at UTC midnight.
+
+    Globex equity/metals/energy products use the CME-style 18:00 ET trading-day
+    boundary: bars at/after the reopen belong to the following trading date.
+    MBT is 24/7 in 2026, so its observation horizon uses the ET calendar date.
+    ``for_date`` remains an explicit test/replay override.
+    """
+    if for_date is not None:
+        return for_date
+    dt = _parse_timestamp(timestamp)
+    if dt is None:
+        raise ObservationError(f"invalid observation timestamp {timestamp!r}")
+    et = dt.astimezone(_ET)
+    if instrument == "MBT":
+        return et.date()
+    if et.time() >= time(18, 0):
+        return et.date() + timedelta(days=1)
+    return et.date()
+
+
 # ── configuration ─────────────────────────────────────────────────────────────
 
 def load_config() -> dict:
@@ -91,6 +154,8 @@ def load_config() -> dict:
         raise ObservationError("campaign instruments must equal the observation universe")
     if tuple(config.get("collection_only_instruments") or ()) != COLLECTION_ONLY_ROOTS:
         raise ObservationError("collection-only roots drifted from the module constant")
+    if int(config.get("decision_timeframe", "15m").lower().rstrip("m")) != DECISION_TIMEFRAME_MINUTES:
+        raise ObservationError("campaign decision timeframe must remain 15m")
     return config
 
 
@@ -200,15 +265,43 @@ def _save_state(log_dir: str | Path, state: dict) -> None:
     tmp.replace(path)
 
 
-def _append_evidence(log_dir: str | Path, record: dict) -> None:
+def _evidence_identity(record: dict) -> Optional[tuple[str, str]]:
+    record_type = str(record.get("record_type") or "")
+    candidate = record.get("candidate_id")
+    if record_type in ("CANDIDATE", "SIGNAL", "OUTCOME") and isinstance(candidate, str) and candidate:
+        return record_type, candidate
+    return None
+
+
+def _append_evidence(log_dir: str | Path, record: dict) -> bool:
+    """Append one row exactly once by (record_type, candidate_id).
+
+    Evidence is written before mutable state, so a process crash can lose the
+    state save after the durable append. Replaying that bar must reconstruct
+    state without appending a second row or inflating readiness counts.
+    """
     path = Path(log_dir) / EVIDENCE_FILENAME
     path.parent.mkdir(parents=True, exist_ok=True)
     full = {"observed_at": datetime.now(timezone.utc).isoformat(), **record}
-    with path.open("a", encoding="utf-8") as handle:
+    identity = _evidence_identity(record)
+    with path.open("a+", encoding="utf-8") as handle:
         if fcntl is not None:
             fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
         try:
+            if identity is not None:
+                handle.seek(0)
+                for line in handle:
+                    try:
+                        existing = json.loads(line)
+                    except ValueError:
+                        continue
+                    if isinstance(existing, dict) and _evidence_identity(existing) == identity:
+                        return False
+            handle.seek(0, os.SEEK_END)
             handle.write(json.dumps(full, separators=(",", ":"), default=str) + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+            return True
         finally:
             if fcntl is not None:
                 fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
@@ -248,8 +341,8 @@ def candidate_id(pop: dict, *, bar_ts: str, direction: str, entry: float) -> str
     return "cio-cand-" + hashlib.sha256(raw.encode()).hexdigest()[:24]
 
 
-def _bar_key(instrument: str, timeframe: str, bar_ts: str) -> str:
-    return f"{instrument}|{timeframe}|{bar_ts}"
+def _bar_key(instrument: str, timeframe: str, bar_ts: str, epoch: str) -> str:
+    return f"{epoch}|{instrument}|{timeframe}|{bar_ts}"
 
 
 # ── observation (one bar) ─────────────────────────────────────────────────────
@@ -258,29 +351,33 @@ def _finite(value: object) -> bool:
     return isinstance(value, (int, float)) and math.isfinite(float(value))
 
 
-def _strat_212_122_candidate(state_obj, campaign_state: dict, instrument: str, trading_date: str) -> Optional[dict]:
+def _strat_212_122_candidate(
+    state_obj,
+    campaign_state: dict,
+    instrument: str,
+    trading_date: str,
+    epoch: str,
+) -> Optional[dict]:
     """Canonical 2-1-2 / 1-2-2 detector: pure, tick-size-driven, no policy table."""
     from strategy.strat_212_122 import advance_strat_212_122
 
     strat = getattr(state_obj, "strat", None)
     ohlc = state_obj.ohlc
     tick, _ = contract_economics(instrument)
-    persisted = campaign_state["strat_212_122"].get(instrument, {})
+    state_key = f"{epoch}|{instrument}"
+    persisted = campaign_state["strat_212_122"].get(state_key, {})
     next_state, candidate = advance_strat_212_122(
         current_bar_type=getattr(strat, "current_bar_type", None) if strat else None,
         previous_bar_type=getattr(strat, "previous_bar_type", None) if strat else None,
         current_open=float(ohlc.open), current_high=float(ohlc.high), current_low=float(ohlc.low),
         tick_size=tick, trading_date=trading_date, persisted_state=persisted,
     )
-    campaign_state["strat_212_122"][instrument] = next_state
+    campaign_state["strat_212_122"][state_key] = next_state
     if not candidate:
         return None
     pattern = str(candidate.get("pattern") or candidate.get("strategy") or "")
     if pattern not in ("strat_212", "strat_122"):
         return None
-    # The detector emits on the WATCH bar, where the entry has already traded
-    # (gap-aware fill). ``kind`` is RESOLVED (same-bar pessimistic WIN/LOSS) or
-    # OPEN (filled, still running). Carry that forward instead of re-deriving.
     out = {
         "strategy": pattern,
         "direction": str(candidate.get("direction") or "").upper(),
@@ -310,28 +407,34 @@ def observe_bar(
     pine_advisory_ignored: Optional[dict] = None,
     include_strat_212_122: bool = True,
 ) -> dict:
-    """Record this bar's observations for every CONFIGURED population.
-
-    ``candidates`` are detector outputs (dicts with strategy/direction/entry/
-    stop/target). Unconfigured strategies are counted and dropped. Returns a
-    summary; writes nothing when the campaign is disabled.
-    """
+    """Record this bar's observations for every CONFIGURED population."""
     if not campaign_enabled():
         return {"enabled": False, "written": 0}
+    tf_minutes = normalize_timeframe_minutes(timeframe)
+    if tf_minutes != DECISION_TIMEFRAME_MINUTES:
+        return {
+            "enabled": True,
+            "written": 0,
+            "skipped": "unsupported observation timeframe",
+            "timeframe_minutes": tf_minutes,
+        }
     instrument = contract_root(getattr(state_obj, "instrument", None))
     if instrument not in OBSERVATION_UNIVERSE:
         return {"enabled": True, "written": 0, "skipped": "outside observation universe"}
     bar_ts = state_obj.timestamp.isoformat()
-    trading_date = (for_date or state_obj.timestamp.date()).isoformat()
+    trading_date = observation_day(instrument, state_obj.timestamp, for_date=for_date).isoformat()
     epoch = evidence_epoch()
+    if epoch is None:
+        return {"enabled": False, "written": 0}
     pops = {(p["strategy"], p["variant"]): p for p in configured_populations(epoch) if p["instrument"] == instrument}
     sha, provenance = generating_sha()
     summary = {"enabled": True, "instrument": instrument, "bar_ts": bar_ts, "written": 0,
-               "structural": 0, "signal": 0, "unconfigured_dropped": [], "duplicate": False}
+               "structural": 0, "signal": 0, "unconfigured_dropped": [], "duplicate": False,
+               "duplicate_rows_skipped": 0}
 
     with _state_lock(log_dir):
         campaign_state = _load_state(log_dir)
-        bar_key = _bar_key(instrument, timeframe, bar_ts)
+        bar_key = _bar_key(instrument, str(tf_minutes), bar_ts, epoch)
         if bar_key in campaign_state["seen_bars"]:
             summary["duplicate"] = True
             return summary
@@ -340,7 +443,7 @@ def observe_bar(
 
         rows = [dict(c) for c in candidates if isinstance(c, dict)]
         if include_strat_212_122:
-            canonical = _strat_212_122_candidate(state_obj, campaign_state, instrument, trading_date)
+            canonical = _strat_212_122_candidate(state_obj, campaign_state, instrument, trading_date, epoch)
             if canonical:
                 rows.append(canonical)
 
@@ -377,7 +480,8 @@ def observe_bar(
                 "direction": direction,
                 "signal_timestamp": bar_ts,
                 "trading_date": trading_date,
-                "source_timeframe": timeframe,
+                "observation_date": trading_date,
+                "source_timeframe": str(tf_minutes),
                 "session": getattr(state_obj, "session", None),
                 "market_condition": getattr(state_obj, "market_condition", None),
                 "entry": entry, "stop": stop, "target": target,
@@ -396,8 +500,11 @@ def observe_bar(
                 "provenance_status": provenance,
             }
             population_key(record)
-            _append_evidence(log_dir, record)
-            summary["written"] += 1
+            appended = _append_evidence(log_dir, record)
+            if appended:
+                summary["written"] += 1
+            else:
+                summary["duplicate_rows_skipped"] += 1
             if pop["collection_mode"] == STRUCTURAL_OUTCOME and risk > 0:
                 summary["structural"] += 1
                 pending = {
@@ -411,7 +518,8 @@ def observe_bar(
                                         str(pre.get("exit_reason") or "PRE_RESOLVED_ON_SIGNAL_BAR"))
                     row = {**record, "record_type": "OUTCOME", "resolved_at_bar_ts": bar_ts, **outcome}
                     population_key(row)
-                    _append_evidence(log_dir, row)
+                    if not _append_evidence(log_dir, row):
+                        summary["duplicate_rows_skipped"] += 1
                     summary["pre_resolved"] = summary.get("pre_resolved", 0) + 1
                 else:
                     campaign_state["pending"][cid] = pending
@@ -424,19 +532,13 @@ def observe_bar(
 # ── resolution (structural populations only) ─────────────────────────────────
 
 def _resolve_one(pending: dict, forward: list[dict]) -> Optional[dict]:
-    """Walk forward bars (strictly after the signal bar, same trading date).
-
-    Pessimistic: a bar touching both stop and target is a LOSS; a target touch
-    on the fill bar itself is never credited. MAE/MFE are tracked after fill.
-    Returns an outcome dict when terminal, else None (state mutated in place).
-    """
+    """Walk forward bars (strictly after the signal bar, same observation day)."""
     rec = pending["record"]
     is_long = rec["direction"] == "LONG"
     entry, stop, target = rec["entry"], rec["stop"], rec["target"]
-    risk = abs(entry - stop)
     for bar in forward:
         try:
-            high, low, close = float(bar["high"]), float(bar["low"]), float(bar["close"])
+            high, low = float(bar["high"]), float(bar["low"])
         except (KeyError, TypeError, ValueError):
             continue
         ts = str(bar.get("ts") or "")
@@ -487,15 +589,13 @@ def _terminal(pending: dict, result: str, exit_price: float, exit_ts: str, reaso
 
 
 def _expired(pending: dict, last_close: Optional[float], reason: str) -> dict:
-    rec = pending["record"]
     if not pending["filled"] or last_close is None:
         return {"result": "NO_FILL" if not pending["filled"] else "EXPIRED", "exit_reason": reason,
                 "exit_price": None, "exit_timestamp": None, "entry_filled": pending["filled"],
                 "fill_timestamp": pending["fill_ts"], "pnl_points": None, "pnl_ticks": None, "pnl_r": None,
                 "mae_points": round(pending["mae_points"], 6), "mfe_points": round(pending["mfe_points"], 6),
                 "bars_seen": pending["bars_seen"]}
-    out = _terminal(pending, "EXPIRED", float(last_close), "", reason)
-    return out
+    return _terminal(pending, "EXPIRED", float(last_close), "", reason)
 
 
 def resolve_pending(
@@ -506,27 +606,37 @@ def resolve_pending(
     current_bar_ts: str,
     for_date: Optional[date] = None,
 ) -> list[dict]:
-    """Resolve pending structural candidates for ``instrument`` against
-    ``bars`` (the instrument's own recorded history). Candidates from an
-    earlier trading date than ``for_date`` are expired (EXPIRED / NO_FILL)."""
+    """Resolve active-epoch structural candidates on their product-aware day."""
     if not campaign_enabled():
         return []
     instrument = contract_root(instrument) or instrument
-    today = (for_date or datetime.fromisoformat(current_bar_ts).date()).isoformat()
+    epoch = evidence_epoch()
+    if epoch is None:
+        return []
+    today = observation_day(instrument, current_bar_ts, for_date=for_date).isoformat()
     resolved: list[dict] = []
     with _state_lock(log_dir):
         campaign_state = _load_state(log_dir)
         changed = False
         for cid, pending in list(campaign_state["pending"].items()):
             rec = pending["record"]
-            if rec["instrument"] != instrument:
+            if rec["instrument"] != instrument or rec.get("evidence_epoch") != epoch:
                 continue
             signal_ts = rec["signal_timestamp"]
-            same_day = [b for b in bars if str(b.get("ts") or "") > signal_ts and str(b.get("ts") or "") <= current_bar_ts
-                        and str(b.get("ts") or "")[:10] == signal_ts[:10]]
+            signal_day = str(rec.get("observation_date") or rec.get("trading_date") or "")
+            same_day: list[dict] = []
+            for bar in bars:
+                bar_ts = str(bar.get("ts") or "")
+                if not (signal_ts < bar_ts <= current_bar_ts):
+                    continue
+                try:
+                    bar_day = observation_day(instrument, bar_ts).isoformat()
+                except ObservationError:
+                    continue
+                if bar_day == signal_day:
+                    same_day.append(bar)
             outcome = None
-            if rec["trading_date"] < today:
-                # Earlier trading date: walk whatever same-day bars exist, then expire.
+            if signal_day < today:
                 outcome = _resolve_one(pending, same_day[pending["bars_seen"]:]) if same_day else None
                 if outcome is None:
                     last_close = None
@@ -535,11 +645,11 @@ def resolve_pending(
                             last_close = float(same_day[-1]["close"])
                         except (KeyError, TypeError, ValueError):
                             last_close = None
-                    outcome = _expired(pending, last_close, "TRADING_DATE_ROLLED")
+                    outcome = _expired(pending, last_close, "OBSERVATION_DATE_ROLLED")
             else:
                 outcome = _resolve_one(pending, same_day[pending["bars_seen"]:])
             if outcome is None:
-                changed = True  # MAE/MFE/bars_seen advanced
+                changed = True
                 continue
             row = {**rec, "record_type": "OUTCOME", "resolved_at_bar_ts": current_bar_ts, **outcome}
             population_key(row)
@@ -555,8 +665,26 @@ def resolve_pending(
 # ── report ────────────────────────────────────────────────────────────────────
 
 def _day(row: dict) -> Optional[str]:
+    explicit = row.get("observation_date") or row.get("trading_date")
+    if isinstance(explicit, str) and explicit:
+        return explicit
     ts = row.get("signal_timestamp")
     return ts[:10] if isinstance(ts, str) and len(ts) >= 10 else None
+
+
+def _dedupe_rows(rows: list[dict]) -> tuple[list[dict], int]:
+    seen: set[tuple[str, str]] = set()
+    out: list[dict] = []
+    duplicates = 0
+    for row in rows:
+        identity = _evidence_identity(row)
+        if identity is not None:
+            if identity in seen:
+                duplicates += 1
+                continue
+            seen.add(identity)
+        out.append(row)
+    return out, duplicates
 
 
 def build_report(log_dir: str | Path, *, epoch: Optional[str] = None) -> dict:
@@ -564,7 +692,8 @@ def build_report(log_dir: str | Path, *, epoch: Optional[str] = None) -> dict:
     config = load_config()
     gate = config["review_gate"]
     epoch = epoch if epoch is not None else evidence_epoch()
-    rows = read_evidence(log_dir)
+    raw_rows = read_evidence(log_dir)
+    rows, duplicate_rows_ignored = _dedupe_rows(raw_rows)
     by_pop: dict[tuple, list[dict]] = {}
     unconfigured: dict[tuple, int] = {}
     pops = configured_populations(epoch)
@@ -624,4 +753,6 @@ def build_report(log_dir: str | Path, *, epoch: Optional[str] = None) -> dict:
         "unconfigured_rows": [{"strategy": k[0], "instrument": k[1], "variant": k[2], "evidence_epoch": k[3], "rows": n}
                               for k, n in sorted(unconfigured.items(), key=str)],
         "evidence_rows": len(rows),
+        "evidence_rows_raw": len(raw_rows),
+        "duplicate_rows_ignored": duplicate_rows_ignored,
     }
