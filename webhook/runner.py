@@ -118,6 +118,7 @@ from strategy.shadow_resolver import resolve_pending_shadow_outcomes
 from strategy.shadow_setups import evaluate_shadow_setups
 from strategy.signal_engine import DecisionEngine
 from webhook.payload import AlertPayload
+from execution import cross_instrument_observation as _cio
 from webhook.state_builder import build_market_state
 from context.wall_context import build_wall_context as _build_wall_context
 from context.range_signal import (
@@ -445,6 +446,30 @@ def process_alert(
     five_min_trigger = None
     five_min_trigger_payload = None
     four_hr_five_min = False
+
+    # ── Hard boundary: collection-only roots never enter this pipeline ────────
+    # webhook/app.py routes M2K/MGC/MCL/MBT to the observation transport, so
+    # this is a structural backstop for any other caller. Nothing below this
+    # line (journal, daily state, DecisionEngine, RiskEngine, broker) runs.
+    if _cio.is_collection_only(payload.ticker):
+        return {
+            "timestamp": payload.timestamp,
+            "instrument": _cio.contract_root(payload.ticker),
+            "session": getattr(payload, "session", None),
+            "resolution": None,
+            "decision": _cio.DECISION_OBSERVATION_ONLY,
+            "reason": "collection-only root: never enters the execution path (use webhook.observation_transport)",
+            "risk": None,
+            "fill": None,
+            "context": None,
+            "regime": None,
+            "gex_status": None,
+            "signa_status": None,
+            "failed_gates": [],
+            "confidence_score": None,
+            "event_id": getattr(payload, "event_id", None),
+            "execution_reachable": False,
+        }
 
     # In paper mode we SIMULATE entry + resolution locally via PaperBroker
     # (next-bar OHLC), regardless of the BROKER env var. BROKER=tradovate is kept
@@ -989,6 +1014,28 @@ def process_alert(
         result["decision"] = "BLOCKED_DUPLICATE_BAR"
         result["failed_gates"] = [f"Duplicate bar already processed: {state.instrument} {bar_ts}"]
         return result
+
+    # Cross-instrument observation campaign (MNQ/MES leg). Runs HERE — after the
+    # bar claim, BEFORE the max-trades / loss-lockout / open-position early
+    # returns below — so trading state can never suppress observation state.
+    # Separate campaign + state file; never touches forward_ab_2026_08_v1.
+    if _cio.campaign_enabled() and not five_min_trigger and _cio.is_observation_instrument(state.instrument):
+        try:
+            _cio_hist = BarHistory(log_dir=log_dir).recent(state.instrument, 500, for_date=today, lookback_days=1)
+            _cio_resolved = _cio.resolve_pending(
+                log_dir, instrument=state.instrument, bars=_cio_hist, current_bar_ts=bar_ts, for_date=today,
+            )
+            _cio_summary = _cio.observe_bar(
+                log_dir, state, shadow_candidates,
+                timeframe=str(getattr(payload, "timeframe", "") or ""), for_date=today, source="process_alert",
+                pine_advisory_ignored=None,
+            )
+            result["cross_instrument_observation"] = {
+                "campaign_id": _cio.CAMPAIGN_ID, "observation_only": True,
+                "written": _cio_summary.get("written", 0), "outcomes_resolved": len(_cio_resolved),
+            }
+        except Exception:  # noqa: BLE001 — observation evidence must fail soft
+            logger.warning("cross-instrument observation skipped", exc_info=True)
 
     # Forward A/B campaign: resolve prior canonical VWAP candidates, then arm
     # only this bar's new canonical observers. This is an isolated evidence

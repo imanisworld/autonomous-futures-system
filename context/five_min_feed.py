@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from context.bar_history import BarHistory, _parse_dt
-from config.futures_contracts import optional_tick_size
+from config.futures_contracts import contract_root, optional_tick_size
 
 # Subdirectory under the journal dir that isolates the 5M lane from 15M bars.
 FIVE_MIN_LANE = "tf5m"
@@ -79,6 +79,12 @@ def _root(instrument: str) -> str:
     the upper-cased input when the shape is unexpected (kept internally consistent
     because record/recent both apply _root)."""
     s = (instrument or "").upper().strip()
+    # Canonical contract parser first: it keeps the digit in M2K (the alphabetic
+    # regex below would have turned 'M2K1!' into 'M') and strips exchange
+    # prefixes / '1!' / month+year suffixes exactly like the 15M lane.
+    canonical = contract_root(s)
+    if canonical is not None:
+        return canonical
     m = re.match(r"^([A-Z]+?)\d*!?$", s)
     return m.group(1) if m else s
 

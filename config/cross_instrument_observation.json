@@ -1,0 +1,41 @@
+{
+  "campaign_id": "cross_instrument_observation_v1",
+  "evidence_schema_version": "1.0.0",
+  "purpose": "Observation-only structural evidence across six micro futures. Never execution eligibility.",
+  "evidence_epoch": null,
+  "epoch_note": "Set CROSS_INSTRUMENT_OBSERVATION_EPOCH (release SHA + arm timestamp) at activation; the campaign is disabled while it is empty.",
+  "instruments": ["MNQ", "MES", "M2K", "MGC", "MCL", "MBT"],
+  "collection_only_instruments": ["M2K", "MGC", "MCL", "MBT"],
+  "decision_timeframe": "15m",
+  "collection_modes": {
+    "structural_outcome": "Pattern-derived entry/stop/target from bar structure; resolved forward (fill, MAE/MFE, pessimistic WIN/LOSS, R). No strategy approval implied.",
+    "signal_metrics": "Signal occurrence, direction and raw geometry only. Bracket is NOT authoritative and is never resolved into a simulated trade."
+  },
+  "populations": [
+    {"strategy": "strat_212", "instruments": ["MNQ", "MES", "M2K", "MGC", "MCL", "MBT"], "variant": "observer", "collection_mode": "structural_outcome", "detector": "strategy.strat_212_122.advance_strat_212_122"},
+    {"strategy": "strat_122", "instruments": ["MNQ", "MES", "M2K", "MGC", "MCL", "MBT"], "variant": "observer", "collection_mode": "structural_outcome", "detector": "strategy.strat_212_122.advance_strat_212_122"},
+    {"strategy": "strat_22_continuation_observed", "instruments": ["MNQ", "MES", "M2K", "MGC", "MCL", "MBT"], "variant": "observer", "collection_mode": "structural_outcome", "detector": "strategy.shadow_setups._missing_strat_family"},
+    {"strategy": "strat_22_reversal_observed", "instruments": ["MNQ", "MES", "M2K", "MGC", "MCL", "MBT"], "variant": "observer", "collection_mode": "structural_outcome", "detector": "strategy.shadow_setups._missing_strat_family"},
+    {"strategy": "strat_312_observed", "instruments": ["MNQ", "MES", "M2K", "MGC", "MCL", "MBT"], "variant": "observer", "collection_mode": "structural_outcome", "detector": "strategy.shadow_setups._missing_strat_family"},
+    {"strategy": "strat_322_reversal_observed", "instruments": ["MNQ", "MES", "M2K", "MGC", "MCL", "MBT"], "variant": "observer", "collection_mode": "structural_outcome", "detector": "strategy.shadow_setups._missing_strat_family"},
+    {"strategy": "impulse_first_pullback_observed", "instruments": ["MNQ", "MES", "M2K", "MGC", "MCL", "MBT"], "variant": "observer", "collection_mode": "structural_outcome", "detector": "strategy.shadow_setups._impulse_first_pullback"},
+    {"strategy": "trend_consolidation_break_observed", "instruments": ["MNQ", "MES", "M2K", "MGC", "MCL", "MBT"], "variant": "observer", "collection_mode": "structural_outcome", "detector": "strategy.shadow_setups._trend_consolidation_break"},
+    {"strategy": "transition_failed_breakdown_reclaim", "instruments": ["MNQ", "MES", "M2K", "MGC", "MCL", "MBT"], "variant": "observer", "collection_mode": "structural_outcome", "detector": "strategy.shadow_setups._failed_breakdown_reclaim"},
+    {"strategy": "strat_122_pullback", "instruments": ["MNQ", "MES"], "variant": "observer", "collection_mode": "structural_outcome", "detector": "strategy.shadow_setups._strat_122_pullback", "scope_note": "needs STRAT_122_MAX_STOP_TICKS policy; exists for MNQ/MES only"},
+    {"strategy": "vwap_hold_observed", "instruments": ["MNQ", "MES"], "variant": "observer", "collection_mode": "signal_metrics", "detector": "strategy.canonical_observers", "scope_note": "canonical observer re-runs DecisionEngine builders; never for collection-only roots"},
+    {"strategy": "vwap_rejection_observed", "instruments": ["MNQ", "MES"], "variant": "observer", "collection_mode": "signal_metrics", "detector": "strategy.canonical_observers", "scope_note": "canonical observer re-runs DecisionEngine builders; never for collection-only roots"},
+    {"strategy": "orb_false_break_fade", "instruments": ["MNQ", "MES", "M2K", "MGC", "MCL", "MBT"], "variant": "observer", "collection_mode": "signal_metrics", "detector": "strategy.shadow_setups._orb_false_break_fade"},
+    {"strategy": "ema_pullback_trend", "instruments": ["MNQ", "MES", "M2K", "MGC", "MCL", "MBT"], "variant": "observer", "collection_mode": "signal_metrics", "detector": "strategy.shadow_setups._ema_pullback_trend"},
+    {"strategy": "gap_fill", "instruments": ["MNQ", "MES", "M2K", "MGC", "MCL"], "variant": "observer", "collection_mode": "signal_metrics", "detector": "strategy.shadow_setups._gap_fill", "scope_note": "session semantics unproven for MBT (24/7): excluded"},
+    {"strategy": "ovn_high_sweep_reclaim", "instruments": ["MNQ", "MES", "M2K", "MGC", "MCL"], "variant": "observer", "collection_mode": "signal_metrics", "detector": "strategy.shadow_setups._overnight_sweep_reclaim", "scope_note": "no overnight session on MBT (24/7): excluded"},
+    {"strategy": "ovn_low_sweep_reclaim", "instruments": ["MNQ", "MES", "M2K", "MGC", "MCL"], "variant": "observer", "collection_mode": "signal_metrics", "detector": "strategy.shadow_setups._overnight_sweep_reclaim", "scope_note": "no overnight session on MBT (24/7): excluded"},
+    {"strategy": "strat_4hr_retrigger_observed", "instruments": ["MNQ", "MES"], "variant": "observer", "collection_mode": "signal_metrics", "detector": "strategy.shadow_setups._strat_4hr_retrigger_observed", "scope_note": "4HR stays MNQ/MES: current scope only"}
+  ],
+  "review_gate": {
+    "per_population_minimum_terminal_outcomes": 30,
+    "per_population_minimum_distinct_days": 10,
+    "pooling_across_populations": false,
+    "automatic_promotion": false,
+    "grants_execution_eligibility": false
+  }
+}

@@ -50,7 +50,7 @@ enforce_release_integrity()
 from agent.daily_summary import DailySummaryAgent, validate_review_date
 from config.settings import load_config
 from webhook import log_redaction as _log_redaction  # noqa: F401 — installs uvicorn.access secret redaction on import
-from context.futures_session import futures_session_active, feed_stale_after_minutes
+from context.futures_session import futures_session_active, feed_stale_after_minutes, product_of
 from execution.tradovate_supervisor import (
     reliability_snapshot,
     run_tradovate_supervisor,
@@ -71,13 +71,34 @@ from webhook.maintenance import maintenance_active
 from webhook.payload import AlertPayload
 from webhook.reconciler import run_reconciler_loop
 from notifications.heartbeat import run_heartbeat_loop
-from webhook.runner import process_alert
+from webhook.runner import process_alert, normalize_timeframe_minutes
+from webhook.observation_transport import observe_collection_only_alert
+from execution import cross_instrument_observation as _cio
+from context.futures_session import product_session_active
 from webhook.state_builder import futures_root
 
 # Roots accepted by the webhook ingest filter — the traded micros plus the ES/NQ
 # e-minis (recognized so they're acknowledged, then RISK_REJECTED downstream as
 # not in the allowed universe). Matching is exact-root + contract-suffix only.
 _INGEST_FUTURES_ROOTS = ("MNQ", "MES", "ES", "NQ", "MGC", "MCL")
+# Collection-only roots are routed to the observation transport and NEVER to
+# process_alert. M2K/MBT are accepted only while the observation campaign is
+# enabled; MGC/MCL (already in the ingest allowlist) are diverted unconditionally.
+_OBSERVATION_ONLY_ROOTS = _cio.COLLECTION_ONLY_ROOTS
+_OBSERVATION_GATED_ROOTS = ("M2K", "MBT")
+
+
+def _route_for_ticker(ticker: str | None) -> str | None:
+    """'observation' for collection-only roots, 'trading' for the real-book
+    ingest allowlist, None when the ticker is not accepted at all."""
+    obs_root = futures_root(ticker, _OBSERVATION_ONLY_ROOTS)
+    if obs_root is not None:
+        if obs_root in _OBSERVATION_GATED_ROOTS and not _cio.campaign_enabled():
+            return None
+        return "observation"
+    if futures_root(ticker, _INGEST_FUTURES_ROOTS) is not None:
+        return "trading"
+    return None
 
 logger = logging.getLogger(__name__)
 _RATE_BUCKETS: dict[tuple[str, str], list[float]] = {}
@@ -626,6 +647,24 @@ async def _process_alert_async(payload: AlertPayload) -> None:
         await asyncio.to_thread(_handle_alert_blocking, payload)
 
 
+def _handle_observation_blocking(payload: AlertPayload) -> None:
+    """Collection-only roots: observation transport only. process_alert is
+    never called; no decision engine, risk engine, broker or Discord trade
+    notification. The per-instrument latest-webhook file is still written so
+    feed freshness is visible for every observed instrument."""
+    try:
+        result = observe_collection_only_alert(payload, config=_config, log_dir=_config.log_dir)
+        _record_latest_webhook(payload, result)
+        logger.info("Observation-only alert: %s -> %s", payload.ticker, result.get("decision"))
+    except Exception as exc:
+        logger.exception("Error in observation transport for %s: %s", payload.ticker, exc)
+
+
+async def _process_observation_async(payload: AlertPayload) -> None:
+    async with _alert_lock:
+        await asyncio.to_thread(_handle_observation_blocking, payload)
+
+
 @app.post("/webhook/alert")
 async def receive_alert(
     payload: AlertPayload,
@@ -651,7 +690,8 @@ async def receive_alert(
     # Silently ignore non-futures tickers (e.g. stock alerts sharing the same
     # webhook). Exact root + contract-suffix matching — NOT a startswith prefix
     # — so a stock like ESTC or NQXX is never mistaken for the ES/NQ future.
-    if futures_root(payload.ticker, _INGEST_FUTURES_ROOTS) is None:
+    route = _route_for_ticker(payload.ticker)
+    if route is None:
         return JSONResponse(content={"ok": True, "event_id": event_id, "decision": "IGNORED", "reason": "non-futures ticker"})
 
     # ── Maintenance gate (default OFF) ───────────────────────────────────────
@@ -680,6 +720,12 @@ async def receive_alert(
         )
         return JSONResponse(content={"ok": True, "event_id": event_id, "decision": "DUPLICATE_IGNORED"})
 
+    if route == "observation":
+        task = asyncio.create_task(_process_observation_async(payload))
+        _alert_tasks.add(task)
+        task.add_done_callback(_log_alert_task_exception)
+        return JSONResponse(content={"ok": True, "event_id": event_id, "queued": True, "ticker": payload.ticker,
+                                     "route": "observation_only"})
     task = asyncio.create_task(_process_alert_async(payload))
     _alert_tasks.add(task)
     task.add_done_callback(_log_alert_task_exception)
@@ -816,6 +862,59 @@ async def status_today(request: Request) -> dict:
     site-gate session — see _sanitize_dashboard_payload."""
     payload = _dashboard_payload(date.today())
     return _sanitize_dashboard_payload(payload, request)
+
+
+def observation_feed_status(now: datetime | None = None) -> dict:
+    """Per-instrument feed freshness (read-only). One healthy feed can never
+    mask another: every observed root is listed with its own age, its own
+    product calendar and its own stale flag."""
+    now = now or datetime.now(timezone.utc)
+    tf_default = int(getattr(_config, "expected_timeframe_minutes", 15) or 15)
+    out: dict = {}
+    for inst, latest in _latest_webhooks_by_instrument().items():
+        received = None
+        raw = (latest or {}).get("received_at")
+        if raw:
+            try:
+                received = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+                if received.tzinfo is None:
+                    received = received.replace(tzinfo=timezone.utc)
+            except (TypeError, ValueError):
+                received = None
+        payload = (latest or {}).get("payload") or {}
+        tf = normalize_timeframe_minutes(payload.get("timeframe")) or tf_default
+        age = int((now - received).total_seconds()) if received else None
+        session_active = product_session_active(inst, now)
+        tolerance = feed_stale_after_minutes(tf) * 60
+        stale = bool(session_active) and (age is None or age > tolerance)
+        out[inst] = {
+            "received_at": received.isoformat() if received else None,
+            "age_seconds": age,
+            "timeframe_minutes": tf,
+            "stale_after_seconds": tolerance,
+            "session_active": session_active,
+            "product": product_of(inst),
+            "stale": stale,
+            "ever_received": received is not None,
+            "collection_only": inst in _cio.COLLECTION_ONLY_ROOTS,
+            "route": "observation_only" if inst in _cio.COLLECTION_ONLY_ROOTS else "trading",
+            "last_decision": ((latest or {}).get("result") or {}).get("decision"),
+        }
+    return {
+        "checked_at": now.isoformat(),
+        "campaign": {"id": _cio.CAMPAIGN_ID, "enabled": _cio.campaign_enabled(), "evidence_epoch": _cio.evidence_epoch()},
+        "instruments": out,
+        "stale_instruments": sorted(k for k, v in out.items() if v["stale"]),
+    }
+
+
+@app.get("/status/observation-feeds")
+async def status_observation_feeds() -> dict:
+    """Read-only: per-instrument feed freshness + zero-count population report."""
+    return {
+        **observation_feed_status(),
+        "report": _cio.build_report(_config.log_dir),
+    }
 
 
 @app.get("/status/five-min")
@@ -4591,12 +4690,13 @@ def _render_dashboard(status: dict) -> str:
 
 
 def _instrument_root_of(ticker: str | None) -> str | None:
-    """Map a TradingView ticker (MES1!, CME_MINI:MNQ1!, …) to MES/MNQ, else None.
+    """Map a TradingView ticker (MES1!, CME_MINI:MNQ1!, …) to one of the six
+    observed roots (MNQ/MES/M2K/MGC/MCL/MBT), else None.
 
     Exact root + contract-suffix matching (shared with the ingest filter) so a
     stock sharing a substring never buckets into a futures side.
     """
-    return futures_root(ticker, ("MES", "MNQ"))
+    return futures_root(ticker, _cio.OBSERVATION_UNIVERSE)
 
 
 def _latest_webhook_inst_path(inst: str) -> Path:
@@ -4634,7 +4734,7 @@ def _record_latest_webhook(payload: AlertPayload, result: dict) -> None:
 def _latest_webhooks_by_instrument() -> dict:
     empty = {"received_at": None, "payload": None, "context": None, "result": None}
     out: dict = {}
-    for inst in ("MES", "MNQ"):
+    for inst in _cio.OBSERVATION_UNIVERSE:
         path = _latest_webhook_inst_path(inst)
         if not path.exists():
             out[inst] = dict(empty)
