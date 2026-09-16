@@ -502,6 +502,14 @@ class SystemConfig:
     # trip its drawdown halt while every loss inside the epoch counts normally.
     mes_122_paper_epoch_start: Optional[str] = None
 
+    # ── Asia-session D+EMA forward paper cohort (approved 2026-09-16, paper-only) ──
+    # Isolated sibling lane; see context/asia_d_ema_paper_cohort.py. Default is
+    # explicitly OFF: with "off" the module performs no evaluation and no file
+    # I/O. Only the exact token "paper_sim" PLUS an offset-aware epoch activates
+    # it. It never reaches a broker route (PaperBroker only, by construction).
+    asia_d_ema_paper_mode: str = "off"
+    asia_d_ema_paper_epoch_start: Optional[str] = None
+
     # ── Wide-stop hypothetical-ledger paper lane (2026-09-07 spec, B+) ────
     # Isolated $4,000 / $6,000 HYPOTHETICAL ledgers for the parked wide-stop
     # family. Paper-only by construction: no demo or live value exists, and
@@ -832,6 +840,12 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
             os.getenv("MES_122_PAPER_MODE", "observe_only") or "observe_only"
         ).strip().lower(),
         mes_122_paper_epoch_start=(os.getenv("MES_122_PAPER_EPOCH_START") or None),
+        asia_d_ema_paper_mode=str(
+            os.getenv("ASIA_D_EMA_PAPER_MODE", "off") or "off"
+        ).strip().lower(),
+        asia_d_ema_paper_epoch_start=(
+            os.getenv("ASIA_D_EMA_PAPER_EPOCH_START") or None
+        ),
         wide_stop_ledger_mode=str(
             os.getenv("WIDE_STOP_LEDGER_MODE", "observe_only") or "observe_only"
         ).strip().lower(),
@@ -1172,6 +1186,29 @@ def _validate_config(config: SystemConfig) -> None:
             ) from exc
         if _parsed_mes_epoch.tzinfo is None:
             raise ConfigError("MES_122_PAPER_EPOCH_START must include a UTC offset.")
+    _valid_asia_modes = {"off", "paper_sim"}
+    if config.asia_d_ema_paper_mode not in _valid_asia_modes:
+        raise ConfigError(
+            "ASIA_D_EMA_PAPER_MODE must be one of "
+            f"{sorted(_valid_asia_modes)} (got {config.asia_d_ema_paper_mode!r}); "
+            "this cohort is paper-only and defaults to off."
+        )
+    if config.asia_d_ema_paper_mode == "paper_sim":
+        _asia_epoch = config.asia_d_ema_paper_epoch_start
+        if not _asia_epoch:
+            raise ConfigError(
+                "ASIA_D_EMA_PAPER_EPOCH_START is required when ASIA_D_EMA_PAPER_MODE=paper_sim."
+            )
+        try:
+            _parsed_asia_epoch = datetime.fromisoformat(
+                str(_asia_epoch).replace("Z", "+00:00")
+            )
+        except ValueError as exc:
+            raise ConfigError(
+                "ASIA_D_EMA_PAPER_EPOCH_START must be an ISO-8601 timestamp."
+            ) from exc
+        if _parsed_asia_epoch.tzinfo is None:
+            raise ConfigError("ASIA_D_EMA_PAPER_EPOCH_START must include a UTC offset.")
     if (
         config.mnq_orb_breakout_inverse_mode != "observe_only"
         and config.mnq_orb_breakout_proof_mode != "observe_only"

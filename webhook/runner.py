@@ -1096,6 +1096,28 @@ def process_alert(
         except Exception:  # noqa: BLE001 — evidence must never affect trading
             logger.warning("MNQ Strat evidence collection failed", exc_info=True)
 
+    # Asia-session D+EMA forward paper cohort (approved 2026-09-16, paper-only).
+    # Isolated sibling lane: OFF by default (the module returns None before any
+    # file I/O), own campaign id / epoch / evidence + state files, PaperBroker
+    # only, one open cohort position at a time. Consumes this bar's already
+    # computed observe-only `shadow_candidates`; never changes this result's
+    # decision, risk or broker path and never touches the other lanes' files.
+    if not five_min_trigger and not four_hr_five_min and state.instrument == "MNQ":
+        try:
+            from context import asia_d_ema_paper_cohort as _asia_cohort
+
+            _asia_summary = _asia_cohort.process_bar(
+                state=state,
+                cfg=cfg,
+                log_dir=log_dir,
+                shadow_candidates=shadow_candidates,
+                for_date=for_date,
+            )
+            if _asia_summary is not None:
+                result["asia_d_ema_cohort"] = _asia_summary
+        except Exception:  # noqa: BLE001 — evidence must never affect trading
+            logger.warning("asia_d_ema paper cohort skipped", exc_info=True)
+
     # Shadow candidate resolution: causally resolve PRIOR bars' journaled
     # observe-only candidates (shadow_setups + range_signal lanes) against the
     # bars ingested since, appending SHADOW_OUTCOME evidence rows. Runs AFTER
