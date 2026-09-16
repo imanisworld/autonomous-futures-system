@@ -16,13 +16,15 @@ Do not use this file alone to infer VPS deployment, enabled campaigns, environme
 
 ## Current repository facts
 
-At GitHub `main` **`6bf3691b5b87e19f50b5e7d98133c0db81607cdf`**:
+Current GitHub `main` is **`2521ebb92c4add36fb2c21f04c13df84250b332f`** after docs-only Options PR #599. The futures runtime state is tracked separately and must not be inferred from this SHA.
 
-- #585–#588 observation transport + evidence quality/provenance support are merged;
-- #589 deterministic historical fixture repair is merged (test-only);
-- #590 optional observation Discord route is merged;
-- #591 failure/safety routing to the error channel is merged;
-- #592 read-only missed-opportunity / why-no-trade reporting is merged.
+Relevant merged futures work:
+
+- #585–#588 observation transport + evidence quality/provenance support;
+- #589 deterministic historical fixture repair (test-only);
+- #590 optional observation Discord route;
+- #591 failure/safety routing to the error channel;
+- #592 read-only missed-opportunity / why-no-trade reporting.
 
 Open futures work remains research/docs/paper-only and is not deployment authority.
 
