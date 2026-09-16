@@ -17,6 +17,10 @@
 #     events (candidate/signal detections, structural outcomes), always labelled
 #     "OBSERVATION ONLY". Watchdog/transport/error/recovery/safety messages stay
 #     on their existing routes.
+#   - paper_collection_futures / paper_collection_options are OPTIONAL and carry
+#     ONLY the read-only daily/weekly collection digest
+#     (scripts/paper_collection_digest.py). Unset = digest prints locally and
+#     posts nothing; the trading runtime never sends on them.
 # ============================================================
 routes:
   heartbeat:
@@ -39,4 +43,10 @@ routes:
     required: false
   observation:
     env_var: DISCORD_ROUTE_OBSERVATION
+    required: false
+  paper_collection_futures:
+    env_var: DISCORD_ROUTE_PAPER_COLLECTION_FUTURES
+    required: false
+  paper_collection_options:
+    env_var: DISCORD_ROUTE_PAPER_COLLECTION_OPTIONS
     required: false

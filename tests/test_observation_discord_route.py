@@ -99,6 +99,9 @@ def test_observation_route_is_env_backed_optional_and_uncommitted():
         "error": ("DISCORD_ROUTE_ERROR", True),
         "daily_report": ("DISCORD_ROUTE_DAILY_REPORT", False),
         "deployment": ("DISCORD_ROUTE_DEPLOYMENT", False),
+        # Optional read-only digest routes (scripts/paper_collection_digest.py).
+        "paper_collection_futures": ("DISCORD_ROUTE_PAPER_COLLECTION_FUTURES", False),
+        "paper_collection_options": ("DISCORD_ROUTE_PAPER_COLLECTION_OPTIONS", False),
     }
 
 
