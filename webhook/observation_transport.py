@@ -13,8 +13,10 @@ non-MES/MNQ instruments are not proven geometry.
 """
 from __future__ import annotations
 
+import json
 import logging
-from datetime import date
+from datetime import date, datetime, timezone
+from pathlib import Path
 from typing import Optional
 
 from config.futures_contracts import contract_root
@@ -27,6 +29,7 @@ from webhook.state_builder import build_market_state
 logger = logging.getLogger(__name__)
 
 PINE_ADVISORY_FIELDS = ("entry", "stop", "target", "signal_strategy", "signal_direction")
+TRANSPORT_STATUS_PREFIX = f"{cio.CAMPAIGN_ID}_transport_"
 
 
 def strip_pine_advisory(payload: AlertPayload) -> tuple[AlertPayload, Optional[dict]]:
@@ -71,6 +74,37 @@ def _only_15m(bars: list[dict]) -> list[dict]:
     return [b for b in bars if normalize_minutes(b.get("timeframe")) == cio.DECISION_TIMEFRAME_MINUTES]
 
 
+def _transport_status_path(log_dir: str, root: str) -> Path:
+    return Path(log_dir) / f"{TRANSPORT_STATUS_PREFIX}{root}.json"
+
+
+def _write_transport_status(
+    log_dir: str,
+    root: str,
+    *,
+    bar_ts: str,
+    transport_ok: bool,
+    bar_recorded: bool,
+    error: Optional[str] = None,
+) -> None:
+    """Persist the latest *15m* transport attempt. 5m never calls this helper."""
+    path = _transport_status_path(log_dir, root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    row = {
+        "campaign_id": cio.CAMPAIGN_ID,
+        "evidence_epoch": cio.evidence_epoch(),
+        "attempted_at": datetime.now(timezone.utc).isoformat(),
+        "bar_ts": str(bar_ts),
+        "timeframe_minutes": cio.DECISION_TIMEFRAME_MINUTES,
+        "transport_ok": bool(transport_ok),
+        "bar_recorded": bool(bar_recorded),
+        "last_error": str(error) if error else None,
+    }
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(row, indent=2, sort_keys=True), encoding="utf-8")
+    tmp.replace(path)
+
+
 def observe_collection_only_alert(
     payload: AlertPayload,
     *,
@@ -92,21 +126,30 @@ def observe_collection_only_alert(
         )
 
     tf_minutes = normalize_minutes(clean.timeframe)
-    try:
-        if is_five_min(clean.timeframe):
+    if is_five_min(clean.timeframe):
+        try:
             record_five_min(clean, log_dir, for_date=for_date)
             return _result(
                 clean, root, lane="5m_feed", timeframe_minutes=5, bar_recorded=True,
                 transport_ok=True, pine_advisory_ignored=ignored,
             )
-        if tf_minutes != cio.DECISION_TIMEFRAME_MINUTES:
+        except Exception as exc:  # 5m health is separate; never overwrite 15m status
+            logger.warning("5m observation feed failed for %s: %s", payload.ticker, exc, exc_info=True)
             return _result(
-                clean, root, lane="unsupported_timeframe", timeframe_minutes=tf_minutes,
-                bar_recorded=False, transport_ok=False,
-                error=f"cross-instrument observation requires 15m bars, got {clean.timeframe!r}",
-                pine_advisory_ignored=ignored,
+                clean, root, lane="5m_feed", timeframe_minutes=5, bar_recorded=False,
+                transport_ok=False, error=str(exc), pine_advisory_ignored=ignored,
             )
 
+    if tf_minutes != cio.DECISION_TIMEFRAME_MINUTES:
+        return _result(
+            clean, root, lane="unsupported_timeframe", timeframe_minutes=tf_minutes,
+            bar_recorded=False, transport_ok=False,
+            error=f"cross-instrument observation requires 15m bars, got {clean.timeframe!r}",
+            pine_advisory_ignored=ignored,
+        )
+
+    bar_recorded = False
+    try:
         state = build_market_state(clean)
         bar_hist = BarHistory(log_dir=log_dir)
         bar_hist.record(
@@ -117,6 +160,7 @@ def observe_collection_only_alert(
             timeframe="15",
             for_date=for_date,
         )
+        bar_recorded = True
         # Two UTC files are required around midnight. Filter explicitly because
         # BarHistory is an instrument store, not a timeframe-partitioned store.
         # A 5m/native-strategy bar must never influence a 15m campaign detector
@@ -141,6 +185,16 @@ def observe_collection_only_alert(
             timeframe="15", for_date=for_date, source="observation_transport",
             pine_advisory_ignored=ignored,
         )
+        # A duplicate bar is still a successful transport attempt: the exact 15m
+        # bar is already persisted and its campaign identity already processed.
+        _write_transport_status(
+            log_dir,
+            root,
+            bar_ts=state.timestamp.isoformat(),
+            transport_ok=True,
+            bar_recorded=True,
+            error=None,
+        )
         out = _result(
             clean, root, lane="15m_observation", timeframe_minutes=15, bar_recorded=True,
             transport_ok=True, candidates_evaluated=len(candidates), outcomes_resolved=len(resolved),
@@ -152,7 +206,18 @@ def observe_collection_only_alert(
         return out
     except Exception as exc:  # noqa: BLE001 — observation must never raise into ingestion
         logger.warning("observation transport failed for %s: %s", payload.ticker, exc, exc_info=True)
+        try:
+            _write_transport_status(
+                log_dir,
+                root,
+                bar_ts=clean.timestamp,
+                transport_ok=False,
+                bar_recorded=bar_recorded,
+                error=str(exc),
+            )
+        except Exception:
+            logger.warning("could not persist observation transport failure status", exc_info=True)
         return _result(
-            clean, root, error=str(exc), transport_ok=False, bar_recorded=False,
+            clean, root, error=str(exc), transport_ok=False, bar_recorded=bar_recorded,
             timeframe_minutes=tf_minutes, pine_advisory_ignored=ignored,
         )
