@@ -40,26 +40,37 @@ def test_precursor_contract_contains_explicit_labels_and_never_no_fill(monkeypat
                 "result": "WIN",
                 "exit_reason": "TARGET_HIT",
                 "bars_seen": 2,
-                "pnl_r": 1.95,
+                "entry_price": 100.25,
+                "exit_price": 110.0,
+                "exit_ts": "2026-09-02T00:00:00+00:00",
+                "decision_close": 100.0,
+                "pnl_r": (110.0 - 100.25) / (100.25 - 95.0),
                 "pnl_dollars": 48.75,
                 "mae_r": 0.1,
                 "mfe_r": 2.0,
             }
         return {
             "result": "NO_FILL",
-            "exit_reason": "NEVER_TOUCHED",
-            "bars_seen": 3,
+            "exit_reason": "ENTRY_NOT_FILLED",
+            "bars_seen": 0,
+            "entry_price": 100.0,
+            "exit_price": None,
+            "exit_ts": None,
+            "decision_close": 105.0,
             "pnl_r": None,
             "pnl_dollars": None,
             "mae_r": None,
             "mfe_r": None,
         }
 
-    monkeypatch.setattr(mes, "resolve_ioc", fake_resolve)
-    full, precursor, summary = mes.produce_baseline(records, bars={}, bar_timestamps=[])
+    monkeypatch.setattr(mes, "resolve_canonical_ioc", fake_resolve)
+    full, precursor, summary = mes.produce_baseline(
+        records, bars={}, bar_timestamps=[], precursor_session="asian"
+    )
 
     assert [row["result"] for row in full] == ["WIN", "NO_FILL"]
     assert summary["selected_candidates"] == 2
+    assert summary["precursor_terminal_rows"] == 1
     assert len(precursor) == 1
     row = precursor[0]
     required = {
@@ -79,5 +90,7 @@ def test_precursor_contract_contains_explicit_labels_and_never_no_fill(monkeypat
     assert row["outcome_label"] in {"WIN", "LOSS"}
     assert row["instrument"] == "MES"
     assert row["session"] == "asian"
-    assert row["source_variant"] == "D0_D_EMA"
+    assert row["source_variant"] == "D0_D_EMA_CANONICAL_IOC"
+    # Post-fill risk uses actual PaperBroker fill 100.25 -> original stop 95.
+    assert row["baseline_stop_ticks"] == (100.25 - 95.0) / 0.25
     assert all(r["outcome_label"] in {"WIN", "LOSS"} for r in precursor)
