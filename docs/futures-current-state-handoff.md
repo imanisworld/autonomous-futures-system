@@ -1,6 +1,6 @@
 # Futures — Current State Handoff
 
-_As of 2026-09-16. This is the single current futures handoff. Historical audit docs remain evidence records, but they do not override this file. Repository state is not proof of VPS/deployment state; verify the box separately before claiming anything is running._
+_As of 2026-09-16 13:53 EDT. Historical audit docs remain evidence records but do not override this file. Repository state is not proof of VPS state; verify the box separately before claiming anything is running._
 
 ## Verdict
 
@@ -8,192 +8,185 @@ _As of 2026-09-16. This is the single current futures handoff. Historical audit 
 
 Core rule: **No proof, no run.**
 
+## What we accomplished on 2026-09-16
+
+The work today built an evidence chain for missed-signal discovery without expanding live execution:
+
+- **#585** — observation-only transport across MNQ/MES/M2K/MGC/MCL/MBT, 15m-isolated, epoch-scoped, idempotent, with execution backstops.
+- **#586** — evidence-quality/provenance gating for gaps, roll ambiguity, code/detector/timeframe/calendar provenance, and MBT horizon uncertainty.
+- **#587** — fail-closed MGC/MCL behavior while the campaign is OFF.
+- **#588** — release-manifest provenance + quality-gated status; **#589** — test-only deterministic fixture repair.
+- **#590/#591** — separate observation Discord events from operational/safety errors.
+- **#592** — repeatable read-only why-no-trade and counterfactual reporting.
+- **#593** — deterministic preserved MNQ counterfactual reproduction.
+- **#594** — causal BOS/MSS first-retest event study, no trade model.
+- **#595** — isolated MNQ Asian D+EMA forward-paper lane, default OFF and not activated.
+- **#596** — matched Asian pre-signal winner/loser precursor audit.
+- **#597** — docs-only current-state refresh.
+- **#598** — MES D+EMA portability producer required for the MES input to #596.
+
+This does **not** mean a new strategy is validated. It means the system now has a safer, more reproducible path to determine where information disappears between market structure and execution.
+
 ## Current repository state
 
-Current GitHub `main` is **`6bf3691b5b87e19f50b5e7d98133c0db81607cdf`** (#592).
+GitHub `main` is **`6bf3691b5b87e19f50b5e7d98133c0db81607cdf`** (#592).
 
-Merged on 2026-09-16:
+Merged futures work today: **#585–#592**, including the test-only #589. These repository merges do **not** prove the VPS is currently running `main`.
 
-- **#585–#588** — cross-instrument observation transport plus evidence-quality, continuity, roll, and provenance gates;
-- **#590** — dedicated optional Discord `observation` route;
-- **#591** — operational failures/safety alerts routed to `error` instead of heartbeat;
-- **#592** — read-only missed-opportunity and why-no-trade reporting.
+## Current open audit / research work
 
-These merges do **not** prove the VPS is running those commits. Deployed SHA, effective environment pins, Discord route activation, feed health, campaign state, positions/orders, and broker state remain box-side facts.
+### #593 — MNQ missed-opportunity producer
 
-## Current open audit / research PRs
+**AUDIT / RESEARCH ONLY.** The preserved counterfactual producer now reproduces the original snapshot including WIN/LOSS/NO_FILL/EXPIRED accounting. Repeated real-data output was byte-identical, cohort reconciliation passed, and exact-head CI is green. No runtime behavior change.
 
-### #593 — preserved MNQ missed-opportunity producer
-
-**AUDIT ONLY / RESEARCH ONLY.** The preserved September counterfactual producer now reproduces the original snapshot including WIN/LOSS/NO_FILL/EXPIRED accounting, and exact-head CI is green. It changes no runtime behavior. Merge still requires explicit operator authorization.
-
-### #594 — causal BOS/MSS first-retest event study
+### #594 — BOS/MSS first-retest event study
 
 **RESEARCH ONLY / EVENT STUDY ONLY. NOT A STRATEGY.**
 
-Question: does the repo's own causal swing-structure signal carry directional information that the current setup families are not exploiting?
+Frozen causal definition:
 
-Frozen event definition:
-
-- exact complete 5-minute bars aggregated into complete 15-minute triples;
-- incomplete 15-minute buckets skipped; duplicate 5-minute timestamps fail closed;
-- swing length fixed at 7;
-- pivot exists only after seven right-side 15-minute bars close;
+- complete 5m bars -> complete 15m triples;
+- swing length 7;
 - first directional break establishes state only;
 - next same-direction break = BOS;
 - next opposite-direction break = MSS;
-- event is knowable only at the 15-minute break-bar close;
-- equal-extreme pivot ties fail closed.
+- event known only at the 15m break-bar close;
+- first later retest within 120m decides `RETEST_HOLD`, `RETEST_FAIL`, or `NO_RETEST`;
+- no later successful touch can replace an earlier failed first touch.
 
-First retest uses only later 5-minute bars for up to 120 minutes. First touch decides: `RETEST_HOLD`, `RETEST_FAIL`, or `NO_RETEST`; a later successful touch cannot overwrite an earlier failed first touch.
+Measurements are descriptive only: signed move, MFE, MAE, directional rates, and mean/median movement at 15/30/60/120m.
 
-Measurements are descriptive only at 15/30/60/120 minutes: signed move, MFE, MAE, positive-direction rate, MFE>MAE, and mean/median movement.
+No entry, stop, target, P&L strategy, PaperBroker, RiskEngine, promotion rule, or execution path exists. CHoCH is not claimed.
 
-**No entry, stop, target, P&L strategy, commission model, PaperBroker, RiskEngine, promotion rule, or execution path exists in #594.**
-
-CHoCH is not claimed. The repo has no canonical causal CHoCH definition.
-
-Instrument order is MNQ first; MES only if MNQ evidence warrants portability; M2K/MGC/MCL/MBT remain out of scope. Never pool instruments.
-
-Remaining proof: exact-head CI plus Phase-1 MNQ against the preserved multi-month 5-minute corpus. Do not build bracket strategy logic from the event study alone.
+**Exact-head CI is green.** Remaining proof is the Phase-1 MNQ run against the preserved multi-month 5m corpus and review of the resulting event behavior. MES is conditional later; M2K/MGC/MCL/MBT remain out of scope.
 
 ### #595 — MNQ Asian D+EMA forward paper cohort
 
-**DRAFT / NOT ACTIVATED.**
+**DRAFT / OFF / NOT ACTIVATED.**
 
-Scope remains MNQ-only, Asian-session-only, 15-minute decision bars, `ema_pullback_trend` + `strat_22_continuation_observed`, one open cohort position, canonical PaperBroker IOC, default OFF, and no external-broker route.
+Scope: MNQ only, Asian only, 15m only, `ema_pullback_trend` + `strat_22_continuation_observed`, one open cohort position, canonical PaperBroker IOC, no external-broker route.
 
-Audit follow-up at head `8ff7cfb` closed one important population-parity concern. Expanding evaluation from the archived producer's qualifying journal decisions to every claimed authoritative 15-minute MNQ bar added **no D+EMA candidates** in either 2026-07-13..08-31 or September, and the historical one-position streams were identical.
+The population-delta audit found no material change when evaluation expanded to every claimed authoritative 15m MNQ bar: no D+EMA candidates were added in either 2026-07-13..08-31 or September, and the historical one-position streams remained identical.
 
-The same follow-up hardened:
+The follow-up also centralized MNQ economics, added crash-safe/idempotent persistence, corrected day-roll EXPIRED timestamps, and pinned fixture provenance.
 
-- MNQ contract economics through central metadata;
-- crash-safe/idempotent persistence;
-- day-roll EXPIRED timestamps;
-- fixture/provenance hashes.
-
-That is stronger parity and persistence proof, **not activation authorization**. Finish the independent audit and require separate deployment/runtime proof before any activation decision.
+**Exact-head CI is green.** This proves stronger code/evidence parity, not forward profitability or activation authority.
 
 ### #596 — Asian pre-signal precursor audit
 
-**RESEARCH ONLY / DRAFT.** It compares already-labeled Asian winners and losers using strictly pre-signal information. It does not create candidates, infer labels, rank features, tune thresholds, propose gates, or authorize a strategy change.
+**RESEARCH ONLY / DRAFT.**
 
-The **MES leg cannot run honestly yet** because it requires a canonical MES D+EMA terminal WIN/LOSS cohort. #598 now exists specifically to produce that input. Do not fabricate or relabel MES precursor rows.
+Compares already-labeled Asian winners and losers using strictly pre-signal information. Populations stay separated by instrument × strategy × session × direction. No feature ranking, threshold tuning, gate proposal, relabeling, or automatic strategy conclusion.
 
-#594 is separate. BOS/MSS is not an automatic dependency of #596; use #594 only if the broader precursor evidence leaves a structure-specific question unresolved.
+**Exact-head CI is green.** Remaining proof is the real preserved-corpus run plus per-strategy/direction and chronological H1/H2 review.
 
-### #598 — MES Asian D+EMA baseline portability
+The MES leg requires a canonical MES D+EMA terminal WIN/LOSS cohort from #598 first. #594 remains separate and is not an automatic dependency of #596.
 
-**RESEARCH ONLY / AUDIT ONLY.** This is the repo-side MES portability producer required to create the canonical MES D+EMA population and the Asian terminal WIN/LOSS cohort consumed by the MES leg of #596.
+### #598 — MES D+EMA baseline portability
+
+**RESEARCH ONLY / AUDIT ONLY.**
+
+Purpose: create the canonical MES D+EMA population and Asian terminal WIN/LOSS cohort consumed by the MES leg of #596.
 
 Boundaries:
 
-- stacked on #593; the MNQ producer is not modified;
-- MES 15-minute D+EMA population only;
-- Asian / London / New York kept separate;
-- cohort D + existing EMA alignment only; no A/B/C gate experiment;
-- original journal `shadow_candidates` and original entry/stop/target only;
-- canonical offline `PaperBroker` IOC;
-- MES tolerance = 16 ticks / 4.0 points;
+- stacked on #593; MNQ producer untouched;
+- MES 15m D+EMA only;
+- Asian/London/New York kept separate;
+- original shadow candidates and original entry/stop/target only;
+- canonical offline PaperBroker IOC;
+- MES tolerance 16 ticks / 4 points;
 - one adverse tick entry and stop slippage;
-- clean target, pessimistic same-bar stop-first;
-- WIN / LOSS / NO_FILL / EXPIRED remain separate;
-- no Tradovate, webhook, service, environment, deployment, or trading-rule change.
+- pessimistic same-bar stop-first;
+- WIN/LOSS/NO_FILL/EXPIRED stay separate;
+- no Tradovate, webhook, service, env, deployment, or trading-rule change.
 
-Exact-head repo proof is green: **5,587 passed / 7 skipped**, CodeQL success, Analyze python success, Analyze actions success.
+**Exact-head CI is green.** The real evidence run is still required. Run 2026-07-13..08-31 separately from September, quarantine the **2026-09-14 22:00–23:55Z** roll seam, require byte-identical reruns/hashes, report sessions separately, and pass only Asian terminal WIN/LOSS rows to #596.
 
-A provenance-manifested MES 5-minute extension exists locally through **2026-09-16 08:50Z**, but the actual evidence reproduction is still required. The **2026-09-14 22:00–23:55Z** contract-roll seam must be explicitly quarantined/flagged; September 16 is partial through 08:50Z.
+### #597 — docs refresh
 
-Required #598 evidence sequence:
+**DOCS ONLY / DRAFT.** No runtime/config/risk/campaign/deployment behavior change.
 
-1. produce/preserve MES 15-minute replay candles and journal rows through the existing replay path; never synthesize shadow candidates;
-2. run 2026-07-13..08-31 independently;
-3. run 2026-09-01..latest proven complete date independently;
-4. quarantine the Sept 14 roll seam;
-5. repeat runs and require byte-identical outputs/hashes;
-6. report the full D+EMA population and per-session counts separately;
-7. pass only Asian terminal WIN/LOSS rows into #596.
+## Current missed-signal question
 
-### #597 — current-state docs refresh
-
-**DOCS ONLY / DRAFT.** This PR updates current-state documentation only. It changes no runtime/config/risk/campaign/deployment behavior.
-
-## Current strategy question: missed-signal discovery
-
-The question is not simply “why did the bot say NO_TRADE?”
+The question is not merely “why did the bot say NO_TRADE?”
 
 > **What useful market moves occur that the current futures system never turns into valid signals, and exactly where in the pipeline are they lost?**
 
-Audit the chain:
+Audit:
 
-`market structure -> available inputs -> regime/state -> setup detection -> candidate creation -> filters/gates -> final decision -> execution`
+`market structure -> available inputs -> regime/state -> setup detection -> candidate creation -> filters/gates -> decision -> execution`
 
 Classify each miss as:
 
-1. **Input blindness** — needed information is not present in system inputs/state.
-2. **Detector blindness** — information is present but no existing setup recognizes it.
-3. **Classification/gate suppression** — a valid candidate exists but regime/trend/session/confluence logic removes it.
-4. **Execution-only rejection** — signal existed and only risk/fill/execution rejected it. This is **not** a missed-signal defect.
+1. **Input blindness** — needed information is absent.
+2. **Detector blindness** — information exists but no setup recognizes it.
+3. **Classification/gate suppression** — a candidate exists but current regime/trend/session/confluence logic removes it.
+4. **Execution-only rejection** — the signal exists but risk/fill/execution rejects it; this is not a missed-signal defect.
 
-Discovery is evidence-first. Do not create or tune a strategy because a historical move looks attractive. First prove that the missing information or failure stage repeats across multiple sessions and chronological splits.
+Do not assume every visible historical move was a valid ex-ante signal.
 
-## Relationship of the current research chain
+## What is settled vs. unproven
 
-- **#592** = merged read-only reporting infrastructure.
-- **#593** = preserved/reproduced MNQ counterfactual producer.
-- **#598** = canonical MES D+EMA producer for the MES precursor input.
-- **#596** = broad matched pre-signal precursor audit.
-- **#594** = narrower causal BOS/MSS first-retest event study; separate, not an automatic dependency.
-- **#595** = actual MNQ Asian D+EMA forward-paper candidate, still OFF.
+### Settled enough not to redo
 
-For MES precursor work the required order is:
+- Additional roots can be observed without granting trading eligibility.
+- Bad/provenance-ambiguous evidence can be blocked from readiness counts without deleting it.
+- The MNQ missed-opportunity study has a reproducible preserved path (#593).
+- #595's broader 15m evaluation does not materially change the historical D+EMA population.
+- #594/#596/#598 have green exact-head CI and explicit research-only boundaries.
 
-`#598 canonical MES D+EMA population -> Asian terminal WIN/LOSS cohort -> #596 precursor audit`
+### Still unproven
 
-Do not collapse this into one tuning exercise.
+- That the system actually should produce materially more **valid** signals.
+- Which missed-signal bucket dominates across enough independent sessions.
+- Whether BOS/MSS carries repeatable directional information on preserved MNQ history.
+- Whether pre-signal winner/loser differences survive preserved-corpus runs and chronological splits.
+- Whether MES independently reproduces the MNQ D+EMA behavior.
+- Whether #595 should ever be activated; green CI and historical parity are not forward evidence.
+- Current VPS/runtime state without fresh box proof.
 
-## Existing strategy work — do not restart without a new question
+## Research-chain relationships
 
-4HR Re-Trigger, 60M 3-2-2 First Live, Miyagi, ORB/VWAP/inverse-ORB have already had substantial detector/bracket/risk/fill evidence work. Do not rerun settled waterfalls merely because the broader missed-signal investigation exists. Historical evidence files remain preserved audit records.
+- **#593** = reproducible MNQ counterfactual producer.
+- **#594** = separate BOS/MSS causal event study.
+- **#595** = paper-forward candidate for one MNQ Asian D+EMA population; OFF.
+- **#596** = broad matched pre-signal discovery.
+- **#598** = MES producer required to create the canonical MES input to #596.
 
-## Runtime facts that remain UNKNOWN without fresh box proof
+MES order:
+
+`#598 canonical MES D+EMA population -> Asian terminal WIN/LOSS cohort -> MES leg of #596`
+
+#594 is not an automatic dependency of #596.
+
+## Runtime facts requiring fresh box proof
 
 Do not infer from GitHub `main`:
 
-- exact deployed release SHA;
-- whether #590/#591 are deployed;
-- whether `DISCORD_ROUTE_OBSERVATION` is populated and active;
-- current six-root 15-minute feed health;
-- current cross-instrument campaign counts/outcomes;
-- current status of older forward paper evidence lanes;
+- exact running futures release SHA;
+- whether #590/#591/#592 are deployed in the futures process;
+- whether `DISCORD_ROUTE_OBSERVATION` is active;
+- current six-root 15m feed health;
+- current campaign counts/outcomes;
 - current paper/demo positions or working orders;
 - broker-account routing state.
 
 ## Required sequence
 
-1. **Finish the independent audit of #595.** Do not activate it from code review alone.
-2. Preserve #593 as the proven MNQ counterfactual reproduction path.
-3. Complete #598's MES replay/evidence runs with roll-seam quarantine and deterministic hashes.
-4. Feed only #598's Asian terminal WIN/LOSS cohort into the MES leg of #596.
-5. Run #596 as descriptive precursor discovery; no strategy build or threshold tuning during discovery.
-6. Run #594 Phase-1 MNQ separately when a structure-specific question actually remains; #594 is not a dependency of #596.
-7. Only after repeatable independent evidence should the smallest possible paper-only forward hypothesis be proposed.
+1. Finish the independent #595 audit; keep it OFF absent separate activation authorization.
+2. Complete #598 MES evidence runs with roll-seam quarantine and deterministic hashes.
+3. Feed only #598's Asian terminal WIN/LOSS cohort into the MES leg of #596.
+4. Run #596 on canonical preserved cohorts without threshold tuning.
+5. Run #594 Phase-1 MNQ on the preserved multi-month 5m corpus as the separate structure study.
+6. Complete the broader missed-signal census across the full pipeline.
+7. Only after repeatable independent evidence should a separate preregistered hypothesis be proposed.
+8. Only after that should the smallest paper-only forward test be considered.
 
 ## Hard boundaries
 
-Do not:
-
-- enable live execution;
-- submit broker orders from research/audit code;
-- modify `risk_rules.yaml` to make an experiment pass;
-- change strategy parameters during an evidence epoch;
-- activate #595 without separate deployment/runtime proof and explicit authorization;
-- pool instruments, strategies, directions, sessions, variants, or epochs to satisfy evidence gates;
-- synthesize MES shadow candidates or let #596 infer outcome labels from price bars;
-- overwrite historical evidence or corpus artifacts;
-- treat BOS/MSS event behavior as a trade signal before separate bracket/fill/risk proof;
-- treat an open draft PR as deployment authority.
+Do not enable live execution; submit broker orders from research code; relax global risk rules merely to make an experiment pass; change evidence parameters mid-study; pool instruments/sessions/strategies/directions to satisfy gates; fabricate MES candidates/labels; turn BOS/MSS event behavior directly into a trading strategy; or activate #595 based only on CI/historical parity.
 
 ## Safe next step
 
-**Continue the offline evidence chain. #595 remains OFF. For MES precursor work, complete #598 before the MES leg of #596. For BOS/MSS, run the Phase-1 MNQ preserved-corpus event study only when the structure-specific question is needed. No deployment, restart, environment change, campaign change, or broker action is authorized by this handoff.**
+**Continue the offline evidence chain. #595 remains OFF. Complete #598 before the MES leg of #596. Run #596 on canonical preserved cohorts without rule tuning. Run #594's MNQ preserved-corpus event study separately. No deployment, restart, environment change, campaign change, or broker action is authorized by this handoff.**
