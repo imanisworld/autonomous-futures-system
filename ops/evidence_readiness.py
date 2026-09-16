@@ -23,6 +23,9 @@ STATUSES = {
     "DATA QUALITY BLOCKED",
 }
 RESULTS = {"WIN", "LOSS", "BREAKEVEN"}
+# Readiness is judged per population; populations are never pooled to reach
+# a review gate. Missing fields stay None (legacy MNQ rows carry no epoch/variant).
+POPULATION_KEY = ("lane", "strategy", "instrument", "evidence_epoch", "variant")
 STRATEGY_MIN_EXAMPLES = 30
 STRATEGY_MIN_DAYS = 10
 CONTEXT_MIN_EXAMPLES = 50
@@ -79,6 +82,14 @@ def build_evidence_readiness(
             "range_signal",
             "RangeSignal / WallContext",
             range_rows,
+            observation_populations=[
+                _population(
+                    "range_signal",
+                    str(((entry.get("range_signal") or entry.get("shadow_range_signal") or {}).get("signal_type")) or "range_signal").lower(),
+                    entry.get("instrument"), entry.get("evidence_epoch"), None,
+                )
+                for entry in range_rows
+            ],
             corrupt_rows=corrupt_rows,
             resolved_rows=[
                 row for row in shadow_outcomes if row.get("lane") == "range_signal"
@@ -93,6 +104,11 @@ def build_evidence_readiness(
             "Shadow setup candidates",
             [entry for entry, _ in shadow_candidates],
             observation_count=len(shadow_candidates),
+            observation_populations=[
+                _population("shadow_setups", candidate.get("strategy"), entry.get("instrument"),
+                            entry.get("evidence_epoch"), candidate.get("variant"))
+                for entry, candidate in shadow_candidates
+            ],
             malformed=sum(
                 not _valid_bracket(candidate) for _, candidate in shadow_candidates
             ),
@@ -226,12 +242,57 @@ def _base_track(key: str, name: str, status: str, **extra: Any) -> dict[str, Any
     }
 
 
+def _population(lane, strategy, instrument, evidence_epoch=None, variant=None) -> tuple:
+    return (
+        str(lane or "unknown"),
+        str(strategy or "unknown"),
+        str(instrument) if instrument else None,
+        str(evidence_epoch) if evidence_epoch else None,
+        str(variant) if variant else None,
+    )
+
+
+def _row_population(row: dict) -> tuple:
+    return _population(row.get("lane"), row.get("strategy"), row.get("instrument"),
+                       row.get("evidence_epoch"), row.get("variant"))
+
+
+def _population_status(observations: int, resolved_rows: list[dict]) -> tuple[str, dict]:
+    """Same thresholds as before, applied to ONE population only."""
+    breakdown = Counter(
+        str((row.get("shadow_outcome") or {}).get("result") or "UNKNOWN") for row in resolved_rows
+    )
+    terminal = breakdown["WIN"] + breakdown["LOSS"]
+    resolved_days = len({day for row in resolved_rows if (day := (row.get("candidate_day") or _day(row)))})
+    pnl_ticks = [
+        pnl for row in resolved_rows
+        if isinstance((pnl := (row.get("shadow_outcome") or {}).get("pnl_ticks")), (int, float))
+    ]
+    if terminal >= STRATEGY_MIN_EXAMPLES and resolved_days >= STRATEGY_MIN_DAYS:
+        status = "READY FOR REVIEW"
+    elif resolved_rows:
+        status = "INSUFFICIENT SAMPLE"
+    elif observations:
+        status = "COLLECTING"
+    else:
+        status = "NOT COLLECTING"
+    return status, {
+        "observations": observations,
+        "resolved_examples": len(resolved_rows),
+        "resolved_terminal_examples": terminal,
+        "resolved_breakdown": dict(breakdown),
+        "resolved_distinct_days": resolved_days,
+        "resolved_pnl_ticks_net": round(sum(pnl_ticks), 2),
+    }
+
+
 def _candidate_track(
     key: str,
     name: str,
     rows: list[dict],
     *,
     observation_count: int | None = None,
+    observation_populations: list[tuple] | None = None,
     malformed: int = 0,
     corrupt_rows: int = 0,
     resolved_rows: list[dict] | None = None,
@@ -259,10 +320,22 @@ def _candidate_track(
             (pnl := (row.get("shadow_outcome") or {}).get("pnl_ticks")), (int, float)
         )
     ]
+    # Per-population readiness. The lane-level status is derived from its
+    # populations; pooled lane totals never satisfy the review gate.
+    obs_by_pop: Counter = Counter(observation_populations or [])
+    resolved_by_pop: dict[tuple, list[dict]] = defaultdict(list)
+    for row in resolved_rows:
+        resolved_by_pop[_row_population(row)].append(row)
+    populations = []
+    for pop in sorted(set(obs_by_pop) | set(resolved_by_pop), key=lambda p: tuple(str(v) for v in p)):
+        pop_status, pop_metrics = _population_status(obs_by_pop.get(pop, 0), resolved_by_pop.get(pop, []))
+        populations.append({**dict(zip(POPULATION_KEY, pop)), "status": pop_status, **pop_metrics})
+    ready_populations = [{field: p[field] for field in POPULATION_KEY}
+                         for p in populations if p["status"] == "READY FOR REVIEW"]
     if malformed or corrupt_rows:
         status = "DATA QUALITY BLOCKED"
-    elif terminal >= STRATEGY_MIN_EXAMPLES and resolved_days >= STRATEGY_MIN_DAYS:
-        status = "READY FOR REVIEW"
+    elif ready_populations:
+        status = "READY FOR REVIEW"  # at least one population met the gate on its own
     elif resolved_rows:
         status = "INSUFFICIENT SAMPLE"
     elif observations:
@@ -282,6 +355,10 @@ def _candidate_track(
         distinct_days=distinct_days,
         malformed_examples=malformed,
         outcome_resolution_available=True,
+        partition_key=list(POPULATION_KEY),
+        pooled_gate=False,
+        populations=populations,
+        ready_populations=ready_populations,
         note=outcome_contract,
     )
 

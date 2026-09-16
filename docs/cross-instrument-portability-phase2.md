@@ -77,8 +77,17 @@ that pause is **not modelled**. Callers: `webhook/app.py`,
 `execution/tradovate_supervisor.py`, `scripts/feed_watchdog.py`,
 `adaptive/ops_monitor.py` — all use it for feed-staleness / heartbeat
 expectations, so the gap can only produce a false "stale feed" during the
-15-minute halt; it cannot open a trade. MGC/MCL/MBT follow the ordinary
-17:00–18:00 ET break, which is modelled. No failing regression isolates a
+15-minute halt; it cannot open a trade. MGC/MCL follow the ordinary
+17:00–18:00 ET break, which is modelled.
+
+**MBT is materially different and the helper is NOT valid for it.** CME moved
+cryptocurrency futures to 24/7 trading in 2026 (maintenance only 16:00–16:02 CT
+Mon–Fri plus Saturday 02:00–04:00 CT; a special extended window is listed for
+Saturday 2026-09-19 02:00–08:00 CT). `futures_session_active` treats Saturday,
+Sunday before 18:00 ET, Friday after 17:00 ET and 17:00–18:00 ET daily as closed,
+so for MBT it would report the feed as *expected-idle* during live trading and
+could never claim continuous collection. Session handling must become
+product-aware before any MBT observation claim. No failing regression isolates a
 one-line fix, so per the brief this is documented as the **next blocker**, not
 bundled here.
 
@@ -118,10 +127,23 @@ Protected-file diff proof (must be empty):
 git diff --exit-code origin/main -- risk_rules.yaml config/forward_evidence_campaign.json webhook/app.py execution/tradovate_broker.py context/mes_122_paper_lane.py context/wide_stop_execution.py tradingview/ deploy/
 ```
 
+## Evidence isolation (addendum) — report and readiness partitioned
+
+`ops/evidence_report.py::_bucket_shadow` previously grouped by `lane + strategy`
+and reported `instrument: None`; `ops/evidence_readiness.py` judged one
+aggregate `shadow_setups` (and `range_signal`) track against the 30-example /
+10-day gate. 8 M2K + 8 MGC + 8 MCL + 8 MBT outcomes would have read as a 32-example
+READY lane. Both now partition by `(lane, strategy, instrument, evidence_epoch,
+variant)`. Readiness computes the unchanged thresholds **per population**; the lane
+status is READY FOR REVIEW only when at least one population meets the gate on
+its own, and `ready_populations` names it. Lane-level totals remain as
+informational counts with `pooled_gate: false`. Legacy MNQ rows (no epoch /
+variant) keep their shape. Raw journals are not rewritten; thresholds unchanged.
+
 ## Remaining blockers before any population-creation PR
 
 1. `execution/tradovate_broker.py` fallbacks (real-book route only; MNQ-only today).
-2. 16:15–16:30 ET equity-index halt not modelled in `context/futures_session.py`.
+2. `context/futures_session.py`: 16:15–16:30 ET equity-index halt not modelled; **not valid for MBT's 24/7 schedule** (product-aware sessions required).
 3. No continuous roll schedule for MGC/MCL/MBT; live-feed roll continuity unproven for all roots.
 4. Commission / slippage proof per instrument (#582 requires explicit costs for non-MNQ outcomes; none recorded).
 5. Feed availability: TradingView alerts exist only for MNQ/MES 15m; nothing demonstrated for M2K/MGC/MCL/MBT.
