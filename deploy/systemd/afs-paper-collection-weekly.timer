@@ -1,0 +1,12 @@
+[Unit]
+Description=Run AFS weekly paper collection rollup after Friday collection settles
+
+[Timer]
+# Runs after the daily Friday rollup so the weekly report includes the full week.
+OnCalendar=Fri *-*-* 17:25:00 America/New_York
+Persistent=true
+AccuracySec=1min
+Unit=afs-paper-collection-weekly.service
+
+[Install]
+WantedBy=timers.target
