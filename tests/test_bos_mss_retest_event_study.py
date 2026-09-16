@@ -187,6 +187,7 @@ def test_summary_is_explicitly_event_only_and_not_a_trade_claim():
         {
             "event_type": "BOS",
             "direction": "LONG",
+            "event_ts": "2026-01-01T00:15:00+00:00",
             "retest_status": RETEST_HOLD,
             "event_forward": {
                 "15": {"signed_close_points": 2.0, "mfe_points": 3.0, "mae_points": 1.0}
@@ -198,6 +199,7 @@ def test_summary_is_explicitly_event_only_and_not_a_trade_claim():
         {
             "event_type": "MSS",
             "direction": "SHORT",
+            "event_ts": "2026-01-01T00:30:00+00:00",
             "retest_status": RETEST_FAIL,
             "event_forward": {
                 "15": {"signed_close_points": -1.0, "mfe_points": 0.5, "mae_points": 2.0}
@@ -217,6 +219,10 @@ def test_summary_is_explicitly_event_only_and_not_a_trade_claim():
     }
     assert report["event_forward"]["15"]["n"] == 2
     assert report["retest_hold_forward"]["15"]["n"] == 1
+    assert report["sample_split_source"] == "chronological_event_order"
+    assert report["sample_half_counts"] == {"H1": 1, "H2": 1}
+    assert report["event_forward_by_direction"]["LONG"]["15"]["n"] == 1
+    assert report["event_forward_by_direction"]["SHORT"]["15"]["n"] == 1
 
 
 def test_research_module_has_no_runtime_execution_import_surface():
