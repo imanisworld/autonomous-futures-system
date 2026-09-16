@@ -1,8 +1,8 @@
 # Options — Current State Handoff
 
-_As of 2026-09-15. This is the single current-state authority for the options lane._
+_As of 2026-09-16. This is the single current-state authority for the options lane._
 
-Historical dated notes and old/closed PRs are provenance only. They do not override this file. Operational deployment proof lives in `docs/options-paper-v1-deployment-checklist.md`; diagnostic definitions live in `docs/options-v1-diagnostics.md`.
+Historical dated notes and old/closed PRs are provenance only. They do not override this file. Operational deployment proof lives in `docs/options-paper-v1-deployment-checklist.md`; diagnostic definitions live in `docs/options-v1-diagnostics.md`; the read-only coverage evidence lane (observer, reducer, outcome study, after-close collector) is described in `docs/options-coverage-observer.md`.
 
 ## Current verdict
 
@@ -172,6 +172,56 @@ If premium stop and underlying target are both true on the same observed snapsho
 
 Later analysis can include/exclude the ambiguous cohort explicitly.
 
+## Coverage evidence lane and read-only audits (2026-09-16)
+
+Everything in this section is **observation only**. None of it changed the scanner, the policy, the universe, contracts, risk, or cadence, and none of it authorizes a change. Nothing here proves an edge.
+
+### What now runs beside V1
+
+- Observer `cov-v0.1` (#578), episode reducer `ep-v0.1` (#579), outcome study `out-v0.1` (#580) and the after-close collector `col-v0.1` (#581, `771b6cf`) form a read-only chain that classifies **every** directional 30m RTH bar of the observer universe into a Strat family each session and measures its same-session outcome in two views: mechanical (entry at the trigger) and **first-sight** (entry at the first scanner-visible price, close + about 18 minutes). First-sight is the decision-relevant view; the mechanical view is a frictionless upper bound.
+- The collector is installed on the box as a pinned, write-protected release under `/root/afs-shared/coverage/` with its own timer (16:35 ET weekdays). It never touches the production tree, `.env`, the scanner, or the V1 database. Five sessions (2026-09-09 to 2026-09-15) were backfilled by a proven manual run; the first unattended firing is 2026-09-16 20:35Z and the lane is frozen until it is checked.
+- Sessions 2026-09-09 to 2026-09-15 are the **retrospective** partition and are byte-frozen. Every later session is the **prospective** partition. The two are never merged.
+
+### Audit 1 — missed-signal discovery (ruled)
+
+- **Proven:** signal scarcity and coverage gaps. The 30m lane evaluates only 2-1-2 continuation, which is 59 of 835 structural episodes (7.1%) on the 20-symbol universe over five sessions. Market alignment then rejects 48 of 59 and target geometry 58 of 59, so no 30m episode has ever become ACTIVE. Every ACTIVE row in the sample came from the Daily 2-2-2 lanes. The `hourly=missing` context on the 15:00Z bar is a design blind spot, not an outage.
+- **Not proven:** that profitable trades are being missed. The 43-move sample used to find blind spots is outcome-selected and must never be quoted as a win rate. H1/H4 counterfactual win/loss counts are counts, not expectancy.
+
+### Audit 2 — opportunity coverage and attrition (closed, corrected v2)
+
+- Objective denominator: moves with MFE of at least 1.5 ATR14 within four 30m bars and at least 0.75 ATR net at bar four, deduplicated. That gives 191 opportunities across the 20 symbols and sessions 2026-09-09 to 2026-09-16.
+- Represented by an active detector: 33 (17.3%). Never represented: 158, of which 118 are unsupported-family structure. Matched non-move controls were represented 20.7% of the time, so the current detectors do not discriminate opportunities from non-opportunities.
+- Strict funnel among the 33 represented: market-context gate 12, observer-only H1/H4 lanes 9, late 6, target geometry 2, hourly missing 1, actionable 2.
+- Reading rule: the "never represented" share is a retrospective system-coverage measure over five sessions, not a live miss rate for the 20-symbol universe, and the 118 unsupported structures come from an outcome-selected population. Coverage problem proven; profitable coverage not proven.
+
+### Audit 3 — outcome-independent unsupported-family validation (closed)
+
+Population: every directional 30m bar (944 bars, 835 episodes, zero missing rows) on the 20 symbols over the five retrospective sessions, so no outcome selection. Baseline: other families, same symbol, direction and clock bucket. Opening-bar mechanical numbers are a gap artifact (the session opened through the trigger) and every table is read ex-opening, first-sight view.
+
+| Family | n | First-sight 1R vs matched baseline | Status |
+|---|---|---|---|
+| 2-1-2 reversal | 81 | +11.9 pp | POSSIBLE SIGNAL |
+| 1-2-2 | 60 | +12.1 pp | POSSIBLE SIGNAL (descriptive n) |
+| 2-2-2 reversal | 176 | +0.8 pp | NO EDGE |
+| 2-2-2 continuation | 197 | −11.4 pp | NO EDGE |
+| outside bar | 80 | −15 pp | NO EDGE |
+| 2-2 continuation | 83 | +1.7 pp (negative on the 148-symbol corpus) | NO EDGE |
+| 3-2-2 reversal, 3-1-2, inside break, 3-2-2 continuation | 21–29 each | — | INSUFFICIENT |
+
+Operator ruling: most missing families are coverage, not edge, so **no broad detector expansion**. 2-1-2 reversal is the strongest follow-up candidate, 1-2-2 the same pattern at a descriptive sample size. 2-2-2 continuation and outside bar are not to be pursued. Nothing is production-ready; no expectancy, P&L, or contract claim is made.
+
+### Pre-registered prospective validation (staged, not yet started)
+
+- Question: do the 2-1-2 reversal and 1-2-2 first-sight excesses persist on sessions after 2026-09-15 that were never used to find them? Inside break is counted passively with no dedicated lane.
+- Method: the unchanged observer, reducer and outcome modules; the same first-sight view, matched baseline and ex-opening reporting; a read-only analysis script over the collector's aggregate output. No new detector, lane, timer, threshold, or production change.
+- Status rule, fixed before any prospective data exists: `PERSISTING POSSIBLE SIGNAL` requires at least 30 prospective episodes, at least 3 sessions, both directions, and an ex-opening first-sight excess of at least +5 pp; otherwise `NO LONGER SHOWING EXCESS` or `INSUFFICIENT PROSPECTIVE SAMPLE`. Any drift in the collector's pinned commit, module versions, first-sight delay, or completeness stops the analysis as `METHODOLOGY / DATA BLOCKED`. The words validated, production-ready, approved, or trade are never outputs of this step.
+- Only the prospective view drives decisions. The retrospective tables above are hypothesis-generating and are not re-scored.
+- Expected first result after the 2026-09-16 collection: one session, therefore `INSUFFICIENT PROSPECTIVE SAMPLE`.
+
+### Parked, not authorized
+
+Target-geometry ablation on the full 2-1-2 continuation population, first-hour hourly-context audit, SPY/QQQ neutral-alignment ablation, legacy Signa timeout reliability audit, and option-chain snapshot retention. Each needs a separate operator instruction; none may run before the prospective work has sessions.
+
 ## Retired / superseded options clutter
 
 - **`options_companion` is not the V1 collector. Keep it disabled with `OPTIONS_COMPANION_ENABLED=false`.** Its old short-DTE/stop logic must not leak into this campaign.
@@ -199,16 +249,12 @@ The remaining uncertainty is primarily **operational proof + strategy evidence**
 
 ## Next action
 
-Use `docs/options-paper-v1-deployment-checklist.md`.
+Steps 1–5 of the deployment checklist are complete (deployed, smoke proven, epochs `V1-EPOCH-1` and `V1-EPOCH-2` recorded). What remains:
 
-1. Deploy current reviewed `main` through the normal options deployment path.
-2. Verify the explicit V1 runtime pins and keep old companion disabled.
-3. Run one normal market-hours smoke.
-4. Run both read-only smoke reports:
-   - `python -m alert_ranker.account_equity ...`
-   - `python -m alert_ranker.v1_diagnostics ...`
-5. Record deployed SHA + smoke timestamp as the V1 evidence epoch.
-6. Collect natural candidates without tuning V1.
-7. Diagnose signal/timeframe → entry → stop → target/exit → filters → execution realism once samples are useful.
+1. Collect natural candidates on the 20-symbol universe without tuning V1. Any rule change starts a new cohort.
+2. Let the after-close collector add one session per weekday; verify the first unattended firing (2026-09-16) before trusting the timer.
+3. Re-run the pre-registered prospective family validation as sessions accrue and report its status only in the fixed vocabulary above.
+4. Diagnose signal/timeframe → entry → stop → target/exit → filters → execution realism once V1 samples are useful.
+5. Treat legacy Signa read timeouts as a separate reliability audit; they cannot alter a trade decision (scorer contribution 0, no branch on Signa state).
 
 **No proof, no trade. No optimization before evidence.**
