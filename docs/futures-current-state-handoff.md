@@ -29,7 +29,44 @@ These repository merges do **not** prove the VPS is running those commits. The d
 
 ### #594 — causal BOS/MSS first-retest event study
 
-**RESEARCH ONLY / EVENT STUDY ONLY.** It measures causal swing-structure events and first retests. It defines no entry/stop/target/P&L strategy and grants no execution eligibility. Do not treat it as a new trading strategy.
+**RESEARCH ONLY / EVENT STUDY ONLY. NOT A STRATEGY.**
+
+This study asks one narrow missed-signal question: **does the repo's own causal swing-structure signal carry directional information that the current setup families are not exploiting?**
+
+The event definition is frozen for this pass:
+
+- source = exact complete 5-minute bars aggregated into complete 15-minute triples;
+- incomplete 15-minute buckets are skipped; duplicate 5-minute timestamps fail closed;
+- swing length is fixed at **7**, matching the current RiskSentinel default; no tuning in this pass;
+- a pivot exists only after seven right-side 15-minute bars have closed;
+- the first directional swing break establishes structure state but is not scored;
+- the next same-direction break is **BOS**;
+- the next opposite-direction break is **MSS**;
+- the event becomes knowable only at the 15-minute break-bar close;
+- equal-extreme pivot ties fail closed rather than guessing TradingView behavior.
+
+For the first-retest study, only post-event 5-minute bars are eligible. The first touch of the broken swing level within 120 minutes decides the retest classification:
+
+- close back on the breakout side = `RETEST_HOLD`;
+- close on the wrong side = `RETEST_FAIL`;
+- no touch = `NO_RETEST`.
+
+A later successful touch cannot replace an earlier failed first touch.
+
+Measurements are descriptive only at 15/30/60/120 minutes after the BOS/MSS close and after a `RETEST_HOLD` close: signed move, MFE, MAE, positive-direction rate, MFE>MAE rate, and mean/median movement statistics.
+
+**No entry, stop, target, P&L, commission model, PaperBroker, RiskEngine, promotion rule, or execution path exists in #594.** Do not convert an interesting event-study result directly into a bracket strategy.
+
+**CHoCH is not claimed.** The repo has no canonical causal CHoCH definition, and an external/proprietary indicator is not source-of-truth. A separate CHoCH study would require a transparent definition and proof that it is materially distinct from MSS.
+
+Instrument order is frozen:
+
+1. Phase 1 = **MNQ only** for interpretation;
+2. MES portability only if MNQ mechanics/evidence justify it;
+3. M2K/MGC/MCL/MBT remain out of scope;
+4. results must never be pooled across instruments.
+
+Remaining proof before #594 means anything: exact-head CI plus a Phase-1 MNQ run against the preserved multi-month 5-minute corpus. Until that exists and is reviewed, the classification remains **RESEARCH ONLY**.
 
 ### #595 — MNQ Asian D+EMA forward paper cohort
 
@@ -79,7 +116,7 @@ Discovery must be evidence-first. Do not create or tune a strategy merely becaus
 - **#592** is merged reporting infrastructure. It explains existing journal decisions and aggregates explicit counterfactual rows. It does **not** recreate the counterfactual producer by itself.
 - **#593** preserves/reproduces the producer that generates the audited MNQ counterfactual populations.
 - **#596** is the broader matched precursor study for already-labeled Asian winners vs losers.
-- **#594** is a narrower BOS/MSS event study and is **not** an automatic dependency of #596. Run it only if the broader evidence leaves a specific structure question unresolved.
+- **#594** is the narrower causal BOS/MSS first-retest event study. It is **not** an automatic dependency of #596. Use it to answer a structure-specific question, not as permission to build a new setup.
 
 Do not merge these into one broad tuning exercise.
 
@@ -138,8 +175,9 @@ If any of those facts matter to a decision, re-check the box first.
 2. Do **not** activate #595 from code review alone.
 3. Preserve/reconcile the research-only missed-signal work (#593/#594/#596) rather than rerunning proven corpus work.
 4. Run/finish missed-signal discovery and identify where useful moves actually disappear. **No strategy build during discovery.**
-5. Keep the MES D+EMA replication/validation separate and offline.
-6. Only after a missing pattern is repeatable across adequate independent evidence should the smallest possible paper-only forward cohort be proposed.
+5. For BOS/MSS specifically: run Phase-1 MNQ event evidence first; only if structure shows repeatable directional information should a separate, preregistered strategy hypothesis even be proposed.
+6. Keep the MES D+EMA replication/validation separate and offline.
+7. Only after a missing pattern is repeatable across adequate independent evidence should the smallest possible paper-only forward cohort be proposed.
 
 ## Hard boundaries
 
@@ -153,8 +191,9 @@ Do not:
 - pool instruments, strategies, directions, sessions, variants, or epochs to satisfy evidence gates;
 - overwrite historical evidence or corpus artifacts;
 - convert one-day, one-session, or one-sample results into validation;
+- treat BOS/MSS event behavior as a trade signal before separate bracket/fill/risk proof;
 - treat an open draft PR as approved deployment authority.
 
 ## Safe next step
 
-**Audit #595. Documentation and offline research may continue in parallel. This handoff update itself requires no deployment, restart, environment change, campaign change, or broker action.**
+**Audit #595. Documentation and offline research may continue in parallel. For BOS/MSS, the next evidence step is the Phase-1 MNQ preserved-corpus event study — not strategy construction. This handoff update itself requires no deployment, restart, environment change, campaign change, or broker action.**
