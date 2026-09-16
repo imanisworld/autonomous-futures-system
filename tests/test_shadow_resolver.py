@@ -407,7 +407,7 @@ def test_process_alert_wiring_resolves_prior_candidates_end_to_end(tmp_path):
 
     log_dir = tmp_path / "logs"
     log_dir.mkdir()
-    cfg = _replace(load_config(), max_staleness_seconds=10_000_000)
+    cfg = _replace(load_config(), max_staleness_seconds=0)  # disabled: historical fixture timestamps (same as conftest)
     day = date(2026, 5, 23)
 
     # Candidate journaled on an earlier bar: LONG 19500 / stop 19480 / target 19540.
