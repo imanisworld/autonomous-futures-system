@@ -99,10 +99,16 @@ def _candidate_source(row: dict[str, Any], key: str) -> list[dict[str, Any]]:
 
 
 def _primary_rejection(row: dict[str, Any]) -> str | None:
+    risk = row.get("risk_check")
+    if (
+        row.get("decision") == "RISK_REJECTED"
+        and isinstance(risk, dict)
+        and risk.get("failed_rule")
+    ):
+        return str(risk["failed_rule"])
     failed = row.get("failed_gates")
     if isinstance(failed, list) and failed:
         return str(failed[-1])
-    risk = row.get("risk_check")
     if isinstance(risk, dict) and risk.get("failed_rule"):
         return str(risk["failed_rule"])
     reason = str(row.get("reason") or "").strip()
