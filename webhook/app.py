@@ -910,10 +910,17 @@ def observation_feed_status(now: datetime | None = None) -> dict:
 
 @app.get("/status/observation-feeds")
 async def status_observation_feeds() -> dict:
-    """Read-only: per-instrument feed freshness + zero-count population report."""
+    """Read-only: per-instrument feed freshness + zero-count population report.
+
+    The report is the quality-gated one: raw campaign counts stay visible, but
+    ``status`` is authoritative only after the evidence-quality gate, and the
+    raw campaign status is exposed as ``raw_status`` (informational only).
+    """
+    from execution.cross_instrument_evidence_quality import build_quality_report
+
     return {
         **observation_feed_status(),
-        "report": _cio.build_report(_config.log_dir),
+        "report": build_quality_report(_config.log_dir),
     }
 
 
