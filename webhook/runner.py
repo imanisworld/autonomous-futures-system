@@ -1675,30 +1675,36 @@ def process_alert(
                         simulate=simulate,
                     )
 
-    # ── Step 2: Check hard daily capacity before evaluating a new signal ─────
+    # ── Step 2: Check hard daily capacity — record the block, keep observing ──
+    # The shared main journal's trade_count is rebuilt from EVERY approved
+    # TRADE row regardless of lane, so a paper_sim proof lane can exhaust the
+    # daily execution budget. That budget governs EXECUTION only. Until
+    # 2026-09-16 this step returned before the decision engine ran, so a
+    # budget-exhausted day left no candidate audit, no journal row and no
+    # why-no-trade reason for any later setup. The checks and their limits are
+    # unchanged; the early return moved to after Step 3's candidate audit, and
+    # the RiskEngine's own daily_trade_limit / consecutive_losses checks remain
+    # the second layer behind it.
+    execution_block = None
     total_daily_capacity = cfg.max_trades_per_day + int(getattr(cfg, "bonus_trades_after_max", 0) or 0)
     if daily_state.trade_count >= total_daily_capacity:
-        result["decision"] = "BLOCKED_MAX_TRADES"
-        result["reason"] = "Daily trade capacity reached before strategy evaluation."
-        _observe_strategy_context_once(
-            _capacity_observation(
-                "BLOCKED_MAX_TRADES",
-                result["reason"],
-            )
-        )
-        return result
+        execution_block = {
+            "code": "BLOCKED_MAX_TRADES",
+            "reason": "Daily trade capacity reached; setup observed, execution blocked.",
+            "trade_count": daily_state.trade_count,
+            "limit": total_daily_capacity,
+        }
     # max_consecutive_losses is the hard stop regardless of circuit breaker setting.
     # circuit_breaker_losses (lower threshold) triggers a temporary pause via adaptive layer.
-    if daily_state.consecutive_losses >= cfg.max_consecutive_losses:
-        result["decision"] = "BLOCKED_LOSS_LOCKOUT"
-        result["reason"] = "Maximum consecutive-loss limit reached before strategy evaluation."
-        _observe_strategy_context_once(
-            _capacity_observation(
-                "BLOCKED_LOSS_LOCKOUT",
-                result["reason"],
-            )
-        )
-        return result
+    elif daily_state.consecutive_losses >= cfg.max_consecutive_losses:
+        execution_block = {
+            "code": "BLOCKED_LOSS_LOCKOUT",
+            "reason": "Maximum consecutive-loss limit reached; setup observed, execution blocked.",
+            "consecutive_losses": daily_state.consecutive_losses,
+            "limit": cfg.max_consecutive_losses,
+        }
+    if execution_block is not None:
+        result["execution_block"] = execution_block
     if daily_state.has_open_position:
         result["decision"] = "BLOCKED_OPEN_POSITION"
         # Visibility layer (#304): the gate above is unchanged and still blocks —
@@ -1751,7 +1757,15 @@ def process_alert(
         # Every new authoritative 15M decision invalidates the previous arm.
         if five_min_enabled() and not four_hr_five_min:
             clear_armed_setup(state.instrument, log_dir, for_date)
-        decision = DecisionEngine(config=cfg).evaluate(state, daily_state)
+        if execution_block is not None:
+            # Budget already spent (Step 2): evaluate for observation only;
+            # the block branch after the candidate audit returns before any
+            # risk/broker step, so this decision can never execute.
+            decision = DecisionEngine(config=cfg).evaluate(
+                state, daily_state, observe_past_capacity=True
+            )
+        else:
+            decision = DecisionEngine(config=cfg).evaluate(state, daily_state)
 
     # ── MNQ orb_reclaim proof mode (Stage 2, 2026-07-11) ──────────────────────
     # Scoped narrowly: only ever runs for instrument==MNQ, strategy==orb_reclaim.
@@ -1926,6 +1940,73 @@ def process_alert(
     opportunity_candidate_ids = _record_candidate_audit(
         decision, state, log_dir, today
     )
+    if execution_block is not None:
+        # Execution budget exhausted (Step 2). The engine has run and the
+        # candidate audit is written; journal what was observed under the
+        # block label and stop here — before Step 3a/3b, before any broker is
+        # instantiated, before RiskEngine and before any proof/paper lane can
+        # open a position. Nothing below this point runs on such a bar,
+        # exactly as before the reposition.
+        _block_code = execution_block["code"]
+        result["decision"] = _block_code
+        result["reason"] = execution_block["reason"]
+        result["observed_decision"] = decision.decision
+        result["failed_gates"] = list(decision.failed_gates or []) + [_block_code]
+        journal_entry = decision.to_dict()
+        journal_entry["observed_decision"] = decision.decision
+        journal_entry["observed_reason"] = decision.reason
+        journal_entry["decision"] = _block_code
+        journal_entry["reason"] = execution_block["reason"]
+        journal_entry["failed_gates"] = result["failed_gates"]
+        journal_entry["execution_block"] = execution_block
+        journal_entry["event_id"] = getattr(payload, "event_id", None)
+        journal_entry["timeframe_minutes"] = bar_timeframe_minutes
+        journal_entry["strategy_state"] = {
+            "strat_4hr_retrigger": dict(daily_state.four_hr_retrigger_state),
+            "strat_212_122": dict(daily_state.strat_212_122_state),
+        }
+        journal_entry["context"] = _market_state_context(state)
+        if shadow_candidates:
+            journal_entry["shadow_candidates"] = shadow_candidates
+        _annotate_candidate_locations(journal_entry, state)
+        if mnq_proof_audit is not None:
+            journal_entry["mnq_orb_reclaim_proof_audit"] = mnq_proof_audit
+        if mnq_breakout_proof_audit is not None:
+            journal_entry["mnq_orb_breakout_proof_audit"] = mnq_breakout_proof_audit
+        if mnq_breakout_inverse_audit is not None:
+            journal_entry["mnq_orb_breakout_inverse_audit"] = mnq_breakout_inverse_audit
+        if mnq_vwap_hold_proof_audit is not None:
+            journal_entry["mnq_vwap_hold_proof_audit"] = mnq_vwap_hold_proof_audit
+        journal.log_decision(journal_entry, None, for_date=today)
+        if decision.setup is not None:
+            result["candidate"] = _candidate_snapshot(
+                setup=decision.setup,
+                instrument=state.instrument,
+                session=state.session,
+                timeframe=state.ohlc.timeframe if state.ohlc else None,
+                reject_code=_block_code,
+                reject_reason=execution_block["reason"],
+                blocking_gate=_block_code,
+                event_id=result.get("event_id"),
+            )
+        _record_candidate_lifecycle(
+            opportunity_candidate_ids,
+            log_dir,
+            today,
+            "DECISION_BLOCKED",
+            decision=_block_code,
+            failed_gates=result["failed_gates"],
+        )
+        _observe_strategy_context_once(
+            SimpleNamespace(
+                decision=_block_code,
+                reason=execution_block["reason"],
+                failed_gates=result["failed_gates"],
+                setup=decision.setup,
+                candidate_audit=list(getattr(decision, "candidate_audit", []) or []),
+            )
+        )
+        return result
     # MES trend-consolidation-break proof lane. Additive only: reuses the
     # existing shadow observer, records the normal gate that blocked/allowed the
     # bar, and owns any paper_sim order solely through PaperBroker. It never
