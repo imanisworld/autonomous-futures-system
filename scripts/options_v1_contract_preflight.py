@@ -29,7 +29,7 @@ import asyncio
 import json
 import subprocess
 import sys
-from datetime import datetime, time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -40,6 +40,7 @@ if str(ROOT) not in sys.path:
 
 from alert_ranker.config import load_config  # noqa: E402
 from alert_ranker.market_data import build_provider_capabilities, create_market_data_client  # noqa: E402
+from alert_ranker.session_calendar import EXCHANGE_TIMEZONE, nyse_session_for  # noqa: E402
 from alert_ranker.v1_contract_capacity import (  # noqa: E402
     PREFERRED_MAX_CONTRACT_COST_DOLLARS,
     run_contract_census,
@@ -47,8 +48,7 @@ from alert_ranker.v1_contract_capacity import (  # noqa: E402
 from alert_ranker.v1_universe import load_candidate_universe, ticker_list  # noqa: E402
 
 PREFLIGHT_ID = "OPTIONS_V1_CONTRACT_PREFLIGHT"
-PREFLIGHT_VERSION = "contract-cap-v0.1"
-_ET = ZoneInfo("America/New_York")
+PREFLIGHT_VERSION = "contract-cap-v0.2"
 
 
 def _git_source() -> dict[str, Any]:
@@ -77,8 +77,13 @@ def _parse_tickers(text: str | None) -> tuple[str, ...]:
 
 
 def _is_rth(now: datetime) -> bool:
-    local = now.astimezone(_ET)
-    return local.weekday() < 5 and time(9, 30) <= local.time().replace(tzinfo=None) < time(16, 0)
+    """Use the same NYSE holiday/early-close calendar as the live scanner."""
+    exchange_now = now.astimezone(ZoneInfo(EXCHANGE_TIMEZONE))
+    session = nyse_session_for(exchange_now.date())
+    if session is None:
+        return False
+    current = exchange_now.astimezone(timezone.utc)
+    return session.open <= current < session.close
 
 
 async def _run(tickers: tuple[str, ...], preferred_cost: float) -> tuple[int, dict[str, Any]]:
@@ -93,6 +98,7 @@ async def _run(tickers: tuple[str, ...], preferred_cost: float) -> tuple[int, di
         "candidate_count": len(tickers),
         "live_watchlist": list(cfg.watchlist),
         "live_watchlist_changed": False,
+        "market_calendar": "same_nyse_session_calendar_as_live_scanner",
         "provider": capabilities.to_dict(),
         "preferred_max_contract_cost_dollars": preferred_cost,
         "frozen_v1_policy_note": (
