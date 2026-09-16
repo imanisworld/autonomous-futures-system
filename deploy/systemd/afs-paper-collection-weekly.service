@@ -1,0 +1,20 @@
+[Unit]
+Description=AFS weekly paper collection rollup (read-only; Discord futures/options collection channels)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/root/autonomous-futures-system
+EnvironmentFile=/root/afs-shared/.env
+ExecStart=/root/autonomous-futures-system/.venv/bin/python -m scripts.paper_collection_rollup \
+    --period weekly \
+    --log-dir /root/afs-shared/logs \
+    --coverage-db /root/afs-shared/coverage/options_coverage_observer.sqlite \
+    --report-dir /root/afs-shared/logs/paper_collection_reports
+TimeoutStartSec=10min
+Nice=10
+NoNewPrivileges=true
+PrivateTmp=true
+StandardOutput=journal
+StandardError=journal
