@@ -10,6 +10,7 @@ import pytest
 
 from ops.collector_census import (
     ABSENT,
+    COLLECTORS,
     DEAD,
     FRESH,
     STALE,
@@ -296,3 +297,21 @@ def test_event_driven_futures_files_are_not_false_dead_cadence_collectors(tmp_pa
         "mnq_strat_32",
         "mnq_strat_322",
     })
+
+
+def test_legacy_overnight_watch_is_not_registered_even_when_its_log_exists(tmp_path):
+    """The July-era overnight watcher (a hand-launched VPS-only script that died in
+    the 2026-09-01 reboot and is intentionally not relaunched) must not appear in
+    the census at all -- not FRESH, STALE, DEAD or ABSENT -- even though its old
+    summary log is still on the box."""
+    (tmp_path / "overnight_watch_summary.log").write_text(
+        "2026-09-01T18:04:25.671722+00:00 cycle ok: service=active\n"
+    )
+    census = build_census(tmp_path, NOW)
+    names = {row["name"] for row in census["collectors"]}
+    assert "overnight watch" not in names
+    assert "overnight watch" not in census["dead"]
+    assert not any(c.target == "overnight_watch_summary.log" for c in COLLECTORS)
+    # Every current scheduled-report collector is still exposed.
+    assert {"health digest", "proof backup", "companion daily"} <= names
+    assert "overnight watch" not in format_census(census)
