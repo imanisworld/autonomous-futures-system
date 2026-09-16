@@ -11,12 +11,14 @@
 #     names and the env var name that carries the destination URL.
 #   - heartbeat, signal, and error are REQUIRED. A required route whose env
 #     var is unset/blank must fail the startup self-check.
-#   - signa, daily_report, deployment, and observation are OPTIONAL. An unset
-#     optional route is simply disabled (router returns False, logs a warning once).
+#   - signa, daily_report, deployment, observation, paper_collection_futures,
+#     and paper_collection_options are OPTIONAL. An unset optional route is
+#     simply disabled (router returns False, logs a warning once).
 #   - observation carries ONLY cross_instrument_observation_v1 informational
 #     events (candidate/signal detections, structural outcomes), always labelled
 #     "OBSERVATION ONLY". Watchdog/transport/error/recovery/safety messages stay
 #     on their existing routes.
+#   - paper_collection_* routes carry read-only EOD/EOW evidence rollups only.
 # ============================================================
 routes:
   heartbeat:
@@ -39,4 +41,10 @@ routes:
     required: false
   observation:
     env_var: DISCORD_ROUTE_OBSERVATION
+    required: false
+  paper_collection_futures:
+    env_var: DISCORD_ROUTE_PAPER_COLLECTION_FUTURES
+    required: false
+  paper_collection_options:
+    env_var: DISCORD_ROUTE_PAPER_COLLECTION_OPTIONS
     required: false
