@@ -266,10 +266,25 @@ class DecisionEngine:
         """
         return cls.MAX_ORB_STOP_TICKS.get(instrument)
 
-    def evaluate(self, state: MarketState, daily_state: DailyState) -> DecisionOutput:
+    def evaluate(
+        self,
+        state: MarketState,
+        daily_state: DailyState,
+        *,
+        observe_past_capacity: bool = False,
+    ) -> DecisionOutput:
         """
         Main evaluation method. Runs through the full decision flow.
         Always returns a DecisionOutput — never raises.
+
+        ``observe_past_capacity`` (default False, every existing caller
+        unchanged): skip ONLY the two daily-capacity pre-flight returns below
+        so the setup search still runs on a day whose execution budget is
+        spent. The caller must already hold the execution block and must not
+        act on the returned decision — webhook/runner.py Step 2/3 is the one
+        such caller; it journals the observed decision under the block label
+        and returns before any risk/broker step. The open-position WAIT and
+        every strategy gate are unaffected.
         """
         now = datetime.now(timezone.utc)
         self._advance_4hr_retrigger(state, daily_state)
@@ -281,7 +296,9 @@ class DecisionEngine:
             self.config.max_trades_per_day
             + int(getattr(self.config, "bonus_trades_after_max", 0) or 0)
         )
-        if daily_state.trade_count >= total_daily_capacity:
+        if observe_past_capacity:
+            pass  # execution already blocked upstream; keep observing
+        elif daily_state.trade_count >= total_daily_capacity:
             return DecisionOutput(
                 timestamp=now,
                 instrument=state.instrument,
@@ -293,7 +310,7 @@ class DecisionEngine:
                 ),
             )
 
-        if daily_state.consecutive_losses >= self.config.max_consecutive_losses:
+        elif daily_state.consecutive_losses >= self.config.max_consecutive_losses:
             return DecisionOutput(
                 timestamp=now,
                 instrument=state.instrument,
