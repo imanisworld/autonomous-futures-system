@@ -55,7 +55,7 @@ def test_aggregates_with_producer_defined_halves_and_order():
     assert report["sample_split_source"] == "input.sample_half"
     assert report["performance_order_source"] == "input.sequence"
     assert report["timestamp_role"] == "provenance_only"
-    assert report["performance_basis"] == "gross_before_hypothetical_costs"
+    assert report["performance_basis"] == "terminal_WIN_LOSS_gross_before_hypothetical_costs"
     assert report["commission_configured"] is False
 
     a = report["cohorts"]["A"]
