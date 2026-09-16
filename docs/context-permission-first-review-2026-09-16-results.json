@@ -1,0 +1,2460 @@
+{
+ "_provenance": {
+  "box_release": "8fd8b215063c-20260916-144801",
+  "cost_model": "1 adverse tick per side + 1.48 USD round-turn, applied at the analysis layer to S1; S2 net_dollars as journaled",
+  "holm_family": 22,
+  "permutations": {
+   "interaction": 2000,
+   "univariate": 10000
+  },
+  "plan": "docs/prereg-context-permission-layer-analysis-plan-2026-07-16.md",
+  "repaired_variants_excluded_from_family": [
+   "F7r",
+   "F8r",
+   "I1r",
+   "I2r",
+   "I7r",
+   "I9r"
+  ],
+  "review_date": "2026-09-16",
+  "seed": 20260916,
+  "snapshot_sha256_prefix": "fb78a377eaeb899a",
+  "snapshot_utc": "2026-09-16T22:38:05Z"
+ },
+ "features": {
+  "F1": {
+   "B2_within_TRENDING": {
+    "TRENDING": [
+     0.035,
+     872,
+     377
+    ]
+   },
+   "availability": 1.0,
+   "b1_partial": 0.016,
+   "by_family": {
+    "orb": [
+     -0.027,
+     266,
+     45
+    ],
+    "range": [
+     0.038,
+     1044,
+     514
+    ],
+    "strat": [
+     0.055,
+     2704,
+     888
+    ],
+    "strat_other": [
+     -0.079,
+     1551,
+     485
+    ],
+    "vwap": [
+     0.277,
+     48,
+     18
+    ]
+   },
+   "by_inst_dir": {
+    "MES_LONG": [
+     -0.207,
+     1520,
+     409
+    ],
+    "MES_SHORT": [
+     0.134,
+     1226,
+     437
+    ],
+    "MNQ_LONG": [
+     0.015,
+     1628,
+     442
+    ],
+    "MNQ_SHORT": [
+     0.053,
+     1239,
+     662
+    ]
+   },
+   "by_session": {
+    "asian": [
+     0.02,
+     2331,
+     819
+    ],
+    "london": [
+     -0.054,
+     1948,
+     648
+    ],
+    "new_york": [
+     0.043,
+     1334,
+     483
+    ]
+   },
+   "by_stratum": {
+    "S1": [
+     0.001,
+     5362,
+     1874
+    ],
+    "S2": [
+     0.003,
+     251,
+     76
+    ]
+   },
+   "clean_effect": [
+    0.008,
+    7358
+   ],
+   "desc": "middle_of_range: edge(False) vs middle(True) [H1 dir]",
+   "effect_grossR": 0.025,
+   "effect_netR": 0.001,
+   "effect_usd": 13.31,
+   "exec_capped_mae": [
+    27.3,
+    40.46
+   ],
+   "kind": "directional",
+   "mean_false": -0.169,
+   "mean_true": -0.168,
+   "n_avail": 7563,
+   "n_false": 1950,
+   "n_true": 5613,
+   "p_perm": 0.30696930306969306,
+   "raw_bar_mae": [
+    38.72,
+    54.76
+   ],
+   "testable": true,
+   "walk_forward": {
+    "folds": [
+     0.034,
+     0.147,
+     0.042
+    ],
+    "halves": [
+     0.018,
+     0.051
+    ],
+    "halves_sign_agree": true
+   },
+   "winner_removal": {
+    "ex_top1": 0.003,
+    "ex_top5": 0.004,
+    "full": 0.001
+   },
+   "winrate_true_false": [
+    0.394,
+    0.431
+   ]
+  },
+  "F10": {
+   "B2_within_TRENDING": {
+    "TRENDING": [
+     -0.117,
+     191,
+     675
+    ]
+   },
+   "availability": 0.604,
+   "b1_partial": -0.091,
+   "by_family": {
+    "orb": [
+     0.11,
+     124,
+     142
+    ],
+    "strat": [
+     -0.099,
+     1023,
+     1681
+    ],
+    "strat_other": [
+     -0.169,
+     279,
+     1272
+    ],
+    "vwap": [
+     0.544,
+     27,
+     21
+    ]
+   },
+   "by_inst_dir": {
+    "MES_LONG": [
+     -0.068,
+     182,
+     1075
+    ],
+    "MES_SHORT": [
+     -0.115,
+     477,
+     523
+    ],
+    "MNQ_LONG": [
+     -0.081,
+     188,
+     1097
+    ],
+    "MNQ_SHORT": [
+     -0.157,
+     606,
+     421
+    ]
+   },
+   "by_session": {
+    "asian": [
+     -0.218,
+     591,
+     1244
+    ],
+    "london": [
+     -0.023,
+     511,
+     1153
+    ],
+    "new_york": [
+     0.003,
+     351,
+     719
+    ]
+   },
+   "by_stratum": {
+    "S1": [
+     -0.103,
+     1359,
+     2959
+    ],
+    "S2": [
+     -0.025,
+     94,
+     157
+    ]
+   },
+   "clean_effect": [
+    -0.063,
+    4445
+   ],
+   "desc": "direction/zone aligned vs against (neutral excluded) [two-sided]",
+   "effect_grossR": -0.098,
+   "effect_netR": -0.096,
+   "effect_usd": -9.78,
+   "exec_capped_mae": [
+    24.36,
+    22.9
+   ],
+   "kind": "two-sided",
+   "mean_false": -0.171,
+   "mean_true": -0.268,
+   "n_avail": 4569,
+   "n_false": 3116,
+   "n_true": 1453,
+   "p_perm": 0.024697530246975304,
+   "raw_bar_mae": [
+    38.97,
+    35.72
+   ],
+   "testable": true,
+   "walk_forward": {
+    "folds": [
+     -0.287,
+     0.058,
+     -0.065
+    ],
+    "halves": [
+     -0.173,
+     -0.025
+    ],
+    "halves_sign_agree": true
+   },
+   "winner_removal": {
+    "ex_top1": -0.096,
+    "ex_top5": -0.092,
+    "full": -0.096
+   },
+   "winrate_true_false": [
+    0.273,
+    0.306
+   ]
+  },
+  "F11": {
+   "B2_within_TRENDING": {
+    "TRENDING": [
+     -0.193,
+     223,
+     776
+    ]
+   },
+   "availability": 0.672,
+   "b1_partial": -0.032,
+   "by_family": {
+    "orb": [
+     0.097,
+     108,
+     182
+    ],
+    "strat": [
+     -0.055,
+     927,
+     2167
+    ],
+    "strat_other": [
+     0.076,
+     204,
+     1450
+    ],
+    "vwap": [
+     -0.565,
+     18,
+     29
+    ]
+   },
+   "by_inst_dir": {
+    "MES_LONG": [
+     -0.109,
+     195,
+     1192
+    ],
+    "MES_SHORT": [
+     0.241,
+     234,
+     790
+    ],
+    "MNQ_LONG": [
+     -0.28,
+     332,
+     1195
+    ],
+    "MNQ_SHORT": [
+     -0.068,
+     496,
+     651
+    ]
+   },
+   "by_session": {
+    "asian": [
+     -0.114,
+     498,
+     1507
+    ],
+    "london": [
+     -0.06,
+     514,
+     1376
+    ],
+    "new_york": [
+     0.129,
+     245,
+     945
+    ]
+   },
+   "by_stratum": {
+    "S1": [
+     -0.027,
+     1166,
+     3626
+    ],
+    "S2": [
+     -0.219,
+     91,
+     202
+    ]
+   },
+   "clean_effect": [
+    -0.006,
+    4927
+   ],
+   "desc": "target clear vs blocked by opposing zone [H5 dir]",
+   "effect_grossR": -0.042,
+   "effect_netR": -0.036,
+   "effect_usd": -6.06,
+   "exec_capped_mae": [
+    28.58,
+    23.9
+   ],
+   "kind": "directional",
+   "mean_false": -0.197,
+   "mean_true": -0.233,
+   "n_avail": 5085,
+   "n_false": 3828,
+   "n_true": 1257,
+   "p_perm": 0.7676232376762324,
+   "raw_bar_mae": [
+    47.99,
+    36.38
+   ],
+   "testable": true,
+   "walk_forward": {
+    "folds": [
+     -0.139,
+     0.174,
+     -0.139
+    ],
+    "halves": [
+     -0.071,
+     -0.016
+    ],
+    "halves_sign_agree": true
+   },
+   "winner_removal": {
+    "ex_top1": -0.036,
+    "ex_top5": -0.033,
+    "full": -0.036
+   },
+   "winrate_true_false": [
+    0.287,
+    0.296
+   ]
+  },
+  "F12": {
+   "availability": 0.0,
+   "desc": "GEX regime positive vs negative [two-sided]",
+   "effect_grossR": NaN,
+   "effect_netR": NaN,
+   "effect_usd": NaN,
+   "kind": "two-sided",
+   "mean_false": NaN,
+   "mean_true": NaN,
+   "n_avail": 0,
+   "n_false": 0,
+   "n_true": 0,
+   "testable": false
+  },
+  "F2": {
+   "B2_within_TRENDING": {
+    "TRENDING": [
+     0.042,
+     725,
+     524
+    ]
+   },
+   "availability": 1.0,
+   "b1_partial": 0.034,
+   "by_family": {
+    "orb": [
+     -0.027,
+     213,
+     98
+    ],
+    "range": [
+     0.095,
+     858,
+     700
+    ],
+    "strat": [
+     0.077,
+     2313,
+     1279
+    ],
+    "strat_other": [
+     -0.102,
+     1330,
+     706
+    ],
+    "vwap": [
+     0.321,
+     46,
+     20
+    ]
+   },
+   "by_inst_dir": {
+    "MES_LONG": [
+     -0.127,
+     1304,
+     625
+    ],
+    "MES_SHORT": [
+     0.012,
+     936,
+     727
+    ],
+    "MNQ_LONG": [
+     0.038,
+     1411,
+     659
+    ],
+    "MNQ_SHORT": [
+     0.095,
+     1109,
+     792
+    ]
+   },
+   "by_session": {
+    "asian": [
+     0.026,
+     1994,
+     1156
+    ],
+    "london": [
+     0.006,
+     1613,
+     983
+    ],
+    "new_york": [
+     0.023,
+     1153,
+     664
+    ]
+   },
+   "by_stratum": {
+    "S1": [
+     0.01,
+     4550,
+     2686
+    ],
+    "S2": [
+     0.183,
+     210,
+     117
+    ]
+   },
+   "clean_effect": [
+    0.021,
+    7358
+   ],
+   "desc": "1H relation: inside/approaching vs middle [two-sided]",
+   "effect_grossR": 0.037,
+   "effect_netR": 0.018,
+   "effect_usd": 13.48,
+   "exec_capped_mae": [
+    26.98,
+    37.0
+   ],
+   "kind": "two-sided",
+   "mean_false": -0.18,
+   "mean_true": -0.161,
+   "n_avail": 7563,
+   "n_false": 2803,
+   "n_true": 4760,
+   "p_perm": 0.5952404759524048,
+   "raw_bar_mae": [
+    38.53,
+    50.21
+   ],
+   "testable": true,
+   "walk_forward": {
+    "folds": [
+     0.105,
+     0.134,
+     0.053
+    ],
+    "halves": [
+     0.052,
+     0.045
+    ],
+    "halves_sign_agree": true
+   },
+   "winner_removal": {
+    "ex_top1": 0.019,
+    "ex_top5": 0.019,
+    "full": 0.018
+   },
+   "winrate_true_false": [
+    0.397,
+    0.416
+   ]
+  },
+  "F3": {
+   "B2_within_TRENDING": {
+    "TRENDING": [
+     -0.042,
+     465,
+     784
+    ]
+   },
+   "availability": 1.0,
+   "b1_partial": -0.011,
+   "by_family": {
+    "orb": [
+     -0.02,
+     169,
+     142
+    ],
+    "range": [
+     -0.095,
+     609,
+     949
+    ],
+    "strat": [
+     0.027,
+     1623,
+     1969
+    ],
+    "strat_other": [
+     -0.015,
+     972,
+     1064
+    ],
+    "vwap": [
+     -0.391,
+     23,
+     43
+    ]
+   },
+   "by_inst_dir": {
+    "MES_LONG": [
+     -0.07,
+     1159,
+     770
+    ],
+    "MES_SHORT": [
+     0.082,
+     903,
+     760
+    ],
+    "MNQ_LONG": [
+     -0.034,
+     774,
+     1296
+    ],
+    "MNQ_SHORT": [
+     0.108,
+     560,
+     1341
+    ]
+   },
+   "by_session": {
+    "asian": [
+     -0.001,
+     1349,
+     1801
+    ],
+    "london": [
+     -0.013,
+     1257,
+     1339
+    ],
+    "new_york": [
+     -0.062,
+     790,
+     1027
+    ]
+   },
+   "by_stratum": {
+    "S1": [
+     -0.003,
+     3242,
+     3994
+    ],
+    "S2": [
+     -0.422,
+     154,
+     173
+    ]
+   },
+   "clean_effect": [
+    -0.017,
+    7358
+   ],
+   "desc": "4H relation: inside/approaching vs middle [two-sided]",
+   "effect_grossR": 0.009,
+   "effect_netR": -0.021,
+   "effect_usd": 3.31,
+   "exec_capped_mae": [
+    24.6,
+    35.65
+   ],
+   "kind": "two-sided",
+   "mean_false": -0.159,
+   "mean_true": -0.18,
+   "n_avail": 7563,
+   "n_false": 4167,
+   "n_true": 3396,
+   "p_perm": 0.4931506849315068,
+   "raw_bar_mae": [
+    34.83,
+    49.41
+   ],
+   "testable": true,
+   "walk_forward": {
+    "folds": [
+     -0.007,
+     -0.032,
+     0.036
+    ],
+    "halves": [
+     -0.05,
+     0.04
+    ],
+    "halves_sign_agree": "False"
+   },
+   "winner_removal": {
+    "ex_top1": -0.021,
+    "ex_top5": -0.021,
+    "full": -0.021
+   },
+   "winrate_true_false": [
+    0.385,
+    0.419
+   ]
+  },
+  "F4": {
+   "B2_within_TRENDING": {
+    "TRENDING": [
+     0.072,
+     557,
+     692
+    ]
+   },
+   "availability": 1.0,
+   "b1_partial": 0.029,
+   "by_family": {
+    "orb": [
+     -0.214,
+     94,
+     217
+    ],
+    "range": [
+     0.151,
+     737,
+     821
+    ],
+    "strat": [
+     -0.011,
+     1354,
+     2238
+    ],
+    "strat_other": [
+     0.041,
+     733,
+     1303
+    ],
+    "vwap": [
+     0.014,
+     28,
+     38
+    ]
+   },
+   "by_inst_dir": {
+    "MES_LONG": [
+     0.097,
+     555,
+     1374
+    ],
+    "MES_SHORT": [
+     0.037,
+     560,
+     1103
+    ],
+    "MNQ_LONG": [
+     -0.064,
+     903,
+     1167
+    ],
+    "MNQ_SHORT": [
+     0.034,
+     928,
+     973
+    ]
+   },
+   "by_session": {
+    "asian": [
+     0.075,
+     1259,
+     1891
+    ],
+    "london": [
+     -0.008,
+     952,
+     1644
+    ],
+    "new_york": [
+     0.057,
+     735,
+     1082
+    ]
+   },
+   "by_stratum": {
+    "S1": [
+     0.038,
+     2824,
+     4412
+    ],
+    "S2": [
+     0.163,
+     122,
+     205
+    ]
+   },
+   "clean_effect": [
+    0.045,
+    7358
+   ],
+   "desc": "4H nearest-zone fresh(0 tests) vs tested [H6 dir]",
+   "effect_grossR": 0.017,
+   "effect_netR": 0.043,
+   "effect_usd": 9.26,
+   "exec_capped_mae": [
+    34.6,
+    28.2
+   ],
+   "kind": "directional",
+   "mean_false": -0.185,
+   "mean_true": -0.142,
+   "n_avail": 7563,
+   "n_false": 4617,
+   "n_true": 2946,
+   "p_perm": 0.16518348165183483,
+   "raw_bar_mae": [
+    48.57,
+    39.21
+   ],
+   "testable": true,
+   "walk_forward": {
+    "folds": [
+     0.142,
+     -0.089,
+     -0.004
+    ],
+    "halves": [
+     0.081,
+     -0.001
+    ],
+    "halves_sign_agree": "False"
+   },
+   "winner_removal": {
+    "ex_top1": 0.043,
+    "ex_top5": 0.043,
+    "full": 0.043
+   },
+   "winrate_true_false": [
+    0.445,
+    0.377
+   ]
+  },
+  "F5": {
+   "B2_within_TRENDING": {
+    "TRENDING": [
+     0.006,
+     447,
+     802
+    ]
+   },
+   "availability": 1.0,
+   "b1_partial": 0.048,
+   "by_family": {
+    "orb": [
+     0.145,
+     122,
+     189
+    ],
+    "range": [
+     0.046,
+     623,
+     935
+    ],
+    "strat": [
+     0.1,
+     1384,
+     2208
+    ],
+    "strat_other": [
+     -0.014,
+     738,
+     1298
+    ],
+    "vwap": [
+     -0.112,
+     23,
+     43
+    ]
+   },
+   "by_inst_dir": {
+    "MES_LONG": [
+     0.167,
+     780,
+     1149
+    ],
+    "MES_SHORT": [
+     -0.003,
+     665,
+     998
+    ],
+    "MNQ_LONG": [
+     -0.022,
+     826,
+     1244
+    ],
+    "MNQ_SHORT": [
+     0.127,
+     619,
+     1282
+    ]
+   },
+   "by_session": {
+    "asian": [
+     0.031,
+     1261,
+     1889
+    ],
+    "london": [
+     -0.004,
+     1106,
+     1490
+    ],
+    "new_york": [
+     0.181,
+     523,
+     1294
+    ]
+   },
+   "by_stratum": {
+    "S1": [
+     0.06,
+     2771,
+     4465
+    ],
+    "S2": [
+     0.107,
+     119,
+     208
+    ]
+   },
+   "clean_effect": [
+    0.058,
+    7358
+   ],
+   "desc": "key-level proximity <=0.5xMTR vs beyond [two-sided]",
+   "effect_grossR": 0.07,
+   "effect_netR": 0.061,
+   "effect_usd": 11.19,
+   "exec_capped_mae": [
+    27.62,
+    32.59
+   ],
+   "kind": "two-sided",
+   "mean_false": -0.192,
+   "mean_true": -0.13,
+   "n_avail": 7563,
+   "n_false": 4673,
+   "n_true": 2890,
+   "p_perm": 0.06029397060293971,
+   "raw_bar_mae": [
+    38.85,
+    45.34
+   ],
+   "testable": true,
+   "walk_forward": {
+    "folds": [
+     0.013,
+     0.145,
+     0.012
+    ],
+    "halves": [
+     0.036,
+     0.064
+    ],
+    "halves_sign_agree": true
+   },
+   "winner_removal": {
+    "ex_top1": 0.062,
+    "ex_top5": 0.063,
+    "full": 0.061
+   },
+   "winrate_true_false": [
+    0.432,
+    0.386
+   ]
+  },
+  "F6": {
+   "B2_within_TRENDING": {
+    "TRENDING": [
+     0.029,
+     358,
+     637
+    ]
+   },
+   "availability": 0.756,
+   "b1_partial": 0.085,
+   "by_family": {
+    "orb": [
+     -0.251,
+     24,
+     254
+    ],
+    "range": [
+     -0.026,
+     341,
+     804
+    ],
+    "strat": [
+     0.12,
+     832,
+     1888
+    ],
+    "strat_other": [
+     0.069,
+     421,
+     1089
+    ],
+    "vwap": [
+     -0.528,
+     9,
+     53
+    ]
+   },
+   "by_inst_dir": {
+    "MES_LONG": [
+     0.193,
+     500,
+     951
+    ],
+    "MES_SHORT": [
+     0.009,
+     342,
+     885
+    ],
+    "MNQ_LONG": [
+     0.21,
+     427,
+     1132
+    ],
+    "MNQ_SHORT": [
+     -0.113,
+     358,
+     1120
+    ]
+   },
+   "by_session": {
+    "asian": [
+     -0.172,
+     420,
+     882
+    ],
+    "london": [
+     0.195,
+     358,
+     2238
+    ],
+    "new_york": [
+     0.23,
+     849,
+     968
+    ]
+   },
+   "by_stratum": {
+    "S1": [
+     0.077,
+     1545,
+     3916
+    ],
+    "S2": [
+     0.029,
+     82,
+     172
+    ]
+   },
+   "clean_effect": [
+    0.083,
+    5542
+   ],
+   "desc": "overnight: at/beyond extreme vs inside [H7 dir]",
+   "effect_grossR": 0.073,
+   "effect_netR": 0.076,
+   "effect_usd": 4.62,
+   "exec_capped_mae": [
+    28.13,
+    32.0
+   ],
+   "kind": "directional",
+   "mean_false": -0.204,
+   "mean_true": -0.128,
+   "n_avail": 5715,
+   "n_false": 4088,
+   "n_true": 1627,
+   "p_perm": 0.0052994700529947,
+   "raw_bar_mae": [
+    38.69,
+    46.2
+   ],
+   "testable": true,
+   "walk_forward": {
+    "folds": [
+     -0.045,
+     0.24,
+     -0.055
+    ],
+    "halves": [
+     0.022,
+     0.065
+    ],
+    "halves_sign_agree": true
+   },
+   "winner_removal": {
+    "ex_top1": 0.075,
+    "ex_top5": 0.069,
+    "full": 0.076
+   },
+   "winrate_true_false": [
+    0.43,
+    0.384
+   ]
+  },
+  "F7": {
+   "availability": 0.54,
+   "desc": "other instrument TRENDING & agreeing vs not [H2 dir]",
+   "effect_grossR": -0.188,
+   "effect_netR": -0.189,
+   "effect_usd": -6.05,
+   "kind": "directional",
+   "mean_false": -0.202,
+   "mean_true": -0.391,
+   "n_avail": 4081,
+   "n_false": 3547,
+   "n_true": 534,
+   "testable": false
+  },
+  "F7r": {
+   "B2_within_TRENDING": {
+    "TRENDING": [
+     -0.088,
+     679,
+     563
+    ]
+   },
+   "availability": 0.998,
+   "b1_partial": -0.065,
+   "by_family": {
+    "orb": [
+     0.126,
+     30,
+     280
+    ],
+    "range": [
+     0.253,
+     5,
+     1550
+    ],
+    "strat": [
+     -0.12,
+     685,
+     2895
+    ],
+    "strat_other": [
+     -0.08,
+     455,
+     1580
+    ],
+    "vwap": [
+     -0.479,
+     8,
+     58
+    ]
+   },
+   "by_inst_dir": {
+    "MES_LONG": [
+     -0.368,
+     308,
+     1618
+    ],
+    "MES_SHORT": [
+     -0.044,
+     290,
+     1370
+    ],
+    "MNQ_LONG": [
+     -0.136,
+     296,
+     1766
+    ],
+    "MNQ_SHORT": [
+     0.084,
+     289,
+     1609
+    ]
+   },
+   "by_session": {
+    "asian": [
+     0.022,
+     242,
+     2897
+    ],
+    "london": [
+     -0.172,
+     640,
+     1953
+    ],
+    "new_york": [
+     -0.111,
+     301,
+     1513
+    ]
+   },
+   "by_stratum": {
+    "S1": [
+     -0.133,
+     1113,
+     6108
+    ],
+    "S2": [
+     -0.095,
+     70,
+     255
+    ]
+   },
+   "clean_effect": [
+    -0.129,
+    7349
+   ],
+   "desc": "[analysis-layer repair] other instrument TRENDING & agreeing vs not, from context.market_condition",
+   "effect_grossR": -0.128,
+   "effect_netR": -0.128,
+   "effect_usd": -5.03,
+   "exec_capped_mae": [
+    30.75,
+    30.66
+   ],
+   "kind": "directional",
+   "mean_false": -0.148,
+   "mean_true": -0.276,
+   "n_avail": 7546,
+   "n_false": 6363,
+   "n_true": 1183,
+   "p_perm": 0.9424057594240576,
+   "raw_bar_mae": [
+    45.9,
+    42.17
+   ],
+   "testable": true,
+   "walk_forward": {
+    "folds": [
+     0.034,
+     -0.164,
+     -0.187
+    ],
+    "halves": [
+     -0.09,
+     -0.141
+    ],
+    "halves_sign_agree": true
+   },
+   "winner_removal": {
+    "ex_top1": -0.13,
+    "ex_top5": -0.131,
+    "full": -0.128
+   },
+   "winrate_true_false": [
+    0.265,
+    0.43
+   ]
+  },
+  "F8": {
+   "B2_within_TRENDING": {
+    "TRENDING": [
+     0.205,
+     670,
+     567
+    ]
+   },
+   "availability": 0.603,
+   "b1_partial": 0.206,
+   "by_family": {
+    "orb": [
+     -0.146,
+     20,
+     15
+    ],
+    "range": [
+     0.006,
+     3,
+     4
+    ],
+    "strat": [
+     0.209,
+     399,
+     338
+    ],
+    "strat_other": [
+     0.211,
+     243,
+     201
+    ],
+    "vwap": [
+     0.007,
+     5,
+     9
+    ]
+   },
+   "by_inst_dir": {
+    "MES_LONG": [
+     -0.048,
+     22,
+     46
+    ],
+    "MES_SHORT": [
+     -0.253,
+     32,
+     29
+    ],
+    "MNQ_LONG": [
+     0.333,
+     311,
+     271
+    ],
+    "MNQ_SHORT": [
+     0.117,
+     305,
+     221
+    ]
+   },
+   "by_session": {
+    "asian": [
+     -0.024,
+     192,
+     228
+    ],
+    "london": [
+     0.483,
+     371,
+     217
+    ],
+    "new_york": [
+     0.018,
+     107,
+     122
+    ]
+   },
+   "by_stratum": {
+    "S1": [
+     0.233,
+     612,
+     517
+    ],
+    "S2": [
+     -0.086,
+     58,
+     50
+    ]
+   },
+   "clean_effect": [
+    0.19,
+    1186
+   ],
+   "desc": "TRENDING persistent at +30m vs transient [H3 dir]",
+   "effect_grossR": 0.202,
+   "effect_netR": 0.205,
+   "effect_usd": 21.25,
+   "exec_capped_mae": [
+    44.07,
+    43.61
+   ],
+   "kind": "directional",
+   "mean_false": -0.213,
+   "mean_true": -0.008,
+   "n_avail": 1237,
+   "n_false": 567,
+   "n_true": 670,
+   "p_perm": 0.0051994800519948,
+   "raw_bar_mae": [
+    64.46,
+    72.92
+   ],
+   "testable": true,
+   "walk_forward": {
+    "folds": [
+     0.219,
+     0.197,
+     0.174
+    ],
+    "halves": [
+     0.27,
+     0.137
+    ],
+    "halves_sign_agree": true
+   },
+   "winner_removal": {
+    "ex_top1": 0.202,
+    "ex_top5": 0.206,
+    "full": 0.205
+   },
+   "winrate_true_false": [
+    0.349,
+    0.277
+   ]
+  },
+  "F8r": {
+   "B2_within_TRENDING": {
+    "TRENDING": [
+     0.19,
+     678,
+     559
+    ]
+   },
+   "availability": 0.994,
+   "b1_partial": 0.183,
+   "by_family": {
+    "orb": [
+     -0.135,
+     37,
+     27
+    ],
+    "range": [
+     0.006,
+     3,
+     4
+    ],
+    "strat": [
+     0.136,
+     649,
+     519
+    ],
+    "strat_other": [
+     0.265,
+     435,
+     351
+    ],
+    "vwap": [
+     0.007,
+     5,
+     9
+    ]
+   },
+   "by_inst_dir": {
+    "MES_LONG": [
+     0.179,
+     268,
+     237
+    ],
+    "MES_SHORT": [
+     0.038,
+     244,
+     182
+    ],
+    "MNQ_LONG": [
+     0.327,
+     312,
+     270
+    ],
+    "MNQ_SHORT": [
+     0.117,
+     305,
+     221
+    ]
+   },
+   "by_session": {
+    "asian": [
+     0.008,
+     279,
+     309
+    ],
+    "london": [
+     0.437,
+     630,
+     377
+    ],
+    "new_york": [
+     -0.097,
+     220,
+     224
+    ]
+   },
+   "by_stratum": {
+    "S1": [
+     0.197,
+     1057,
+     852
+    ],
+    "S2": [
+     -0.062,
+     72,
+     58
+    ]
+   },
+   "clean_effect": [
+    0.162,
+    1974
+   ],
+   "desc": "[analysis-layer repair] TRENDING persistent at +30m vs transient, from context.market_condition",
+   "effect_grossR": 0.177,
+   "effect_netR": 0.181,
+   "effect_usd": 13.31,
+   "exec_capped_mae": [
+    29.34,
+    30.37
+   ],
+   "kind": "directional",
+   "mean_false": -0.326,
+   "mean_true": -0.145,
+   "n_avail": 2039,
+   "n_false": 910,
+   "n_true": 1129,
+   "p_perm": 0.0011998800119988001,
+   "raw_bar_mae": [
+    42.62,
+    50.31
+   ],
+   "testable": true,
+   "walk_forward": {
+    "folds": [
+     0.292,
+     0.058,
+     0.209
+    ],
+    "halves": [
+     0.207,
+     0.14
+    ],
+    "halves_sign_agree": true
+   },
+   "winner_removal": {
+    "ex_top1": 0.179,
+    "ex_top5": 0.182,
+    "full": 0.181
+   },
+   "winrate_true_false": [
+    0.311,
+    0.249
+   ]
+  },
+  "F9": {
+   "B2_within_TRENDING": {
+    "TRENDING": [
+     0.139,
+     1078,
+     171
+    ]
+   },
+   "availability": 1.0,
+   "b1_partial": -0.077,
+   "by_family": {
+    "orb": [
+     0.536,
+     301,
+     10
+    ],
+    "range": [
+     0.011,
+     1480,
+     78
+    ],
+    "strat": [
+     -0.062,
+     3272,
+     320
+    ],
+    "strat_other": [
+     -0.073,
+     1906,
+     130
+    ],
+    "vwap": [
+     -0.028,
+     57,
+     9
+    ]
+   },
+   "by_inst_dir": {
+    "MES_LONG": [
+     -0.128,
+     1818,
+     111
+    ],
+    "MES_SHORT": [
+     -0.385,
+     1517,
+     146
+    ],
+    "MNQ_LONG": [
+     0.203,
+     1954,
+     116
+    ],
+    "MNQ_SHORT": [
+     0.153,
+     1727,
+     174
+    ]
+   },
+   "by_session": {
+    "asian": [
+     -0.149,
+     3040,
+     110
+    ],
+    "london": [
+     -0.004,
+     2398,
+     198
+    ],
+    "new_york": [
+     -0.084,
+     1578,
+     239
+    ]
+   },
+   "by_stratum": {
+    "S1": [
+     -0.032,
+     6727,
+     509
+    ],
+    "S2": [
+     0.08,
+     289,
+     38
+    ]
+   },
+   "clean_effect": [
+    -0.018,
+    7358
+   ],
+   "desc": "impulse pre/developing vs late_entry [H4 dir]",
+   "effect_grossR": -0.002,
+   "effect_netR": -0.027,
+   "effect_usd": 12.09,
+   "exec_capped_mae": [
+    30.08,
+    38.59
+   ],
+   "kind": "directional",
+   "mean_false": -0.143,
+   "mean_true": -0.17,
+   "n_avail": 7563,
+   "n_false": 547,
+   "n_true": 7016,
+   "p_perm": 0.9111088891110889,
+   "raw_bar_mae": [
+    41.94,
+    54.69
+   ],
+   "testable": true,
+   "walk_forward": {
+    "folds": [
+     -0.034,
+     0.028,
+     -0.106
+    ],
+    "halves": [
+     0.008,
+     -0.098
+    ],
+    "halves_sign_agree": "False"
+   },
+   "winner_removal": {
+    "ex_top1": -0.028,
+    "ex_top5": -0.02,
+    "full": -0.027
+   },
+   "winrate_true_false": [
+    0.406,
+    0.375
+   ]
+  }
+ },
+ "interactions": {
+  "I1": {
+   "effect_by_level": {
+    "asian": [
+     -0.024,
+     192,
+     228
+    ],
+    "london": [
+     0.483,
+     371,
+     217
+    ],
+    "new_york": [
+     0.018,
+     107,
+     122
+    ]
+   },
+   "factors": [
+    "F8",
+    "session"
+   ],
+   "min_cell": 107,
+   "n": 1237,
+   "table": {
+    "F8=False|session=asian": [
+     0.024,
+     228
+    ],
+    "F8=False|session=london": [
+     -0.418,
+     217
+    ],
+    "F8=False|session=new_york": [
+     -0.292,
+     122
+    ],
+    "F8=True|session=asian": [
+     -0.001,
+     192
+    ],
+    "F8=True|session=london": [
+     0.064,
+     371
+    ],
+    "F8=True|session=new_york": [
+     -0.274,
+     107
+    ]
+   },
+   "testable": true
+  },
+  "I10": {
+   "factors": [
+    "F2",
+    "F3"
+   ],
+   "interaction_contrast": 0.011,
+   "min_cell": 853,
+   "n": 7563,
+   "p_perm_2000": 0.8450774612693653,
+   "table": {
+    "F2=False|F3=False": [
+     -0.169,
+     1950
+    ],
+    "F2=False|F3=True": [
+     -0.203,
+     853
+    ],
+    "F2=True|F3=False": [
+     -0.149,
+     2217
+    ],
+    "F2=True|F3=True": [
+     -0.172,
+     2543
+    ]
+   },
+   "testable": true
+  },
+  "I1r": {
+   "effect_by_level": {
+    "asian": [
+     0.008,
+     279,
+     309
+    ],
+    "london": [
+     0.437,
+     630,
+     377
+    ],
+    "new_york": [
+     -0.097,
+     220,
+     224
+    ]
+   },
+   "factors": [
+    "F8r",
+    "session"
+   ],
+   "min_cell": 220,
+   "n": 2039,
+   "table": {
+    "F8r=False|session=asian": [
+     -0.122,
+     309
+    ],
+    "F8r=False|session=london": [
+     -0.508,
+     377
+    ],
+    "F8r=False|session=new_york": [
+     -0.299,
+     224
+    ],
+    "F8r=True|session=asian": [
+     -0.114,
+     279
+    ],
+    "F8r=True|session=london": [
+     -0.071,
+     630
+    ],
+    "F8r=True|session=new_york": [
+     -0.395,
+     220
+    ]
+   },
+   "testable": true
+  },
+  "I2": {
+   "effect_by_level": {
+    "asian": [
+     -0.01,
+     116,
+     1559
+    ],
+    "london": [
+     -0.286,
+     302,
+     1148
+    ],
+    "new_york": [
+     -0.133,
+     116,
+     840
+    ]
+   },
+   "factors": [
+    "F7",
+    "session"
+   ],
+   "min_cell": 116,
+   "n": 4081,
+   "table": {
+    "F7=False|session=asian": [
+     -0.16,
+     1559
+    ],
+    "F7=False|session=london": [
+     -0.157,
+     1148
+    ],
+    "F7=False|session=new_york": [
+     -0.343,
+     840
+    ],
+    "F7=True|session=asian": [
+     -0.169,
+     116
+    ],
+    "F7=True|session=london": [
+     -0.443,
+     302
+    ],
+    "F7=True|session=new_york": [
+     -0.475,
+     116
+    ]
+   },
+   "testable": true
+  },
+  "I2r": {
+   "effect_by_level": {
+    "asian": [
+     0.022,
+     242,
+     2897
+    ],
+    "london": [
+     -0.172,
+     640,
+     1953
+    ],
+    "new_york": [
+     -0.111,
+     301,
+     1513
+    ]
+   },
+   "factors": [
+    "F7r",
+    "session"
+   ],
+   "min_cell": 242,
+   "n": 7546,
+   "table": {
+    "F7r=False|session=asian": [
+     -0.098,
+     2897
+    ],
+    "F7r=False|session=london": [
+     -0.134,
+     1953
+    ],
+    "F7r=False|session=new_york": [
+     -0.262,
+     1513
+    ],
+    "F7r=True|session=asian": [
+     -0.077,
+     242
+    ],
+    "F7r=True|session=london": [
+     -0.307,
+     640
+    ],
+    "F7r=True|session=new_york": [
+     -0.373,
+     301
+    ]
+   },
+   "testable": true
+  },
+  "I3": {
+   "factors": [
+    "F1",
+    "F9"
+   ],
+   "interaction_contrast": -0.241,
+   "min_cell": 227,
+   "n": 7563,
+   "p_perm_2000": 0.06096951524237881,
+   "table": {
+    "F1=False|F9=False": [
+     -0.273,
+     227
+    ],
+    "F1=False|F9=True": [
+     -0.156,
+     1723
+    ],
+    "F1=True|F9=False": [
+     -0.051,
+     320
+    ],
+    "F1=True|F9=True": [
+     -0.175,
+     5293
+    ]
+   },
+   "testable": true
+  },
+  "I4": {
+   "factors": [
+    "F10",
+    "F4"
+   ],
+   "interaction_contrast": -0.022,
+   "min_cell": 450,
+   "n": 4569,
+   "p_perm_2000": 0.8235882058970515,
+   "table": {
+    "F10=False|F4=False": [
+     -0.157,
+     2310
+    ],
+    "F10=False|F4=True": [
+     -0.212,
+     806
+    ],
+    "F10=True|F4=False": [
+     -0.244,
+     1003
+    ],
+    "F10=True|F4=True": [
+     -0.32,
+     450
+    ]
+   },
+   "testable": true
+  },
+  "I5": {
+   "effect_by_level": {
+    "LONG": [
+     0.188,
+     927,
+     2083
+    ],
+    "SHORT": [
+     -0.064,
+     700,
+     2005
+    ]
+   },
+   "factors": [
+    "F6",
+    "direction"
+   ],
+   "min_cell": 700,
+   "n": 5715,
+   "table": {
+    "F6=False|direction=LONG": [
+     -0.235,
+     2083
+    ],
+    "F6=False|direction=SHORT": [
+     -0.172,
+     2005
+    ],
+    "F6=True|direction=LONG": [
+     -0.047,
+     927
+    ],
+    "F6=True|direction=SHORT": [
+     -0.236,
+     700
+    ]
+   },
+   "testable": true
+  },
+  "I6": {
+   "factors": [
+    "F11",
+    "F5"
+   ],
+   "interaction_contrast": 0.052,
+   "min_cell": 459,
+   "n": 5085,
+   "p_perm_2000": 0.5647176411794103,
+   "table": {
+    "F11=False|F5=False": [
+     -0.224,
+     2346
+    ],
+    "F11=False|F5=True": [
+     -0.154,
+     1482
+    ],
+    "F11=True|F5=False": [
+     -0.278,
+     798
+    ],
+    "F11=True|F5=True": [
+     -0.155,
+     459
+    ]
+   },
+   "testable": true
+  },
+  "I7": {
+   "factors": [
+    "F8",
+    "F7"
+   ],
+   "interaction_contrast": 0.253,
+   "min_cell": 63,
+   "n": 287,
+   "p_perm_2000": 0.42278860569715143,
+   "table": {
+    "F8=False|F7=False": [
+     -0.175,
+     70
+    ],
+    "F8=False|F7=True": [
+     -0.314,
+     70
+    ],
+    "F8=True|F7=False": [
+     -0.055,
+     84
+    ],
+    "F8=True|F7=True": [
+     0.06,
+     63
+    ]
+   },
+   "testable": true
+  },
+  "I7r": {
+   "factors": [
+    "F8r",
+    "F7r"
+   ],
+   "interaction_contrast": -0.046,
+   "min_cell": 395,
+   "n": 2033,
+   "p_perm_2000": 0.7001499250374813,
+   "table": {
+    "F8r=False|F7r=False": [
+     -0.279,
+     395
+    ],
+    "F8r=False|F7r=True": [
+     -0.371,
+     513
+    ],
+    "F8r=True|F7r=False": [
+     -0.06,
+     463
+    ],
+    "F8r=True|F7r=True": [
+     -0.199,
+     662
+    ]
+   },
+   "testable": true
+  },
+  "I8": {
+   "effect_by_level": {
+    "asian": [
+     0.02,
+     2331,
+     819
+    ],
+    "london": [
+     -0.054,
+     1948,
+     648
+    ],
+    "new_york": [
+     0.043,
+     1334,
+     483
+    ]
+   },
+   "factors": [
+    "F1",
+    "session"
+   ],
+   "min_cell": 483,
+   "n": 7563,
+   "table": {
+    "F1=False|session=asian": [
+     -0.112,
+     819
+    ],
+    "F1=False|session=london": [
+     -0.137,
+     648
+    ],
+    "F1=False|session=new_york": [
+     -0.308,
+     483
+    ],
+    "F1=True|session=asian": [
+     -0.092,
+     2331
+    ],
+    "F1=True|session=london": [
+     -0.191,
+     1948
+    ],
+    "F1=True|session=new_york": [
+     -0.266,
+     1334
+    ]
+   },
+   "testable": true
+  },
+  "I9": {
+   "factors": [
+    "F9",
+    "F8"
+   ],
+   "interaction_contrast": -0.294,
+   "min_cell": 36,
+   "n": 1237,
+   "p_perm_2000": 0.17791104447776113,
+   "table": {
+    "F9=False|F8=False": [
+     -0.612,
+     36
+    ],
+    "F9=False|F8=True": [
+     -0.113,
+     134
+    ],
+    "F9=True|F8=False": [
+     -0.186,
+     531
+    ],
+    "F9=True|F8=True": [
+     0.018,
+     536
+    ]
+   },
+   "testable": true
+  },
+  "I9r": {
+   "factors": [
+    "F9",
+    "F8r"
+   ],
+   "interaction_contrast": -0.048,
+   "min_cell": 73,
+   "n": 2039,
+   "p_perm_2000": 0.7931034482758621,
+   "table": {
+    "F9=False|F8r=False": [
+     -0.312,
+     73
+    ],
+    "F9=False|F8r=True": [
+     -0.096,
+     248
+    ],
+    "F9=True|F8r=False": [
+     -0.327,
+     837
+    ],
+    "F9=True|F8r=True": [
+     -0.159,
+     881
+    ]
+   },
+   "testable": true
+  }
+ },
+ "summary": {
+  "B0": {
+   "orb": [
+    -0.295,
+    311
+   ],
+   "range": [
+    -0.031,
+    1558
+   ],
+   "strat": [
+    -0.2,
+    3592
+   ],
+   "strat_other": [
+    -0.179,
+    2036
+   ],
+   "vwap": [
+    -0.745,
+    66
+   ]
+  },
+  "B1": {
+   "asian|orb": [
+    -0.153,
+    48
+   ],
+   "asian|range": [
+    -0.046,
+    736
+   ],
+   "asian|strat": [
+    -0.126,
+    1498
+   ],
+   "asian|strat_other": [
+    -0.084,
+    864
+   ],
+   "asian|vwap": [
+    -1.225,
+    4
+   ],
+   "london|orb": [
+    -0.215,
+    174
+   ],
+   "london|range": [
+    -0.019,
+    424
+   ],
+   "london|strat": [
+    -0.2,
+    1230
+   ],
+   "london|strat_other": [
+    -0.222,
+    768
+   ],
+   "new_york|orb": [
+    -0.529,
+    89
+   ],
+   "new_york|range": [
+    -0.017,
+    398
+   ],
+   "new_york|strat": [
+    -0.329,
+    864
+   ],
+   "new_york|strat_other": [
+    -0.301,
+    404
+   ],
+   "new_york|vwap": [
+    -0.714,
+    62
+   ]
+  },
+  "B2": {
+   "CHOPPY": [
+    -0.099,
+    576
+   ],
+   "DEAD": [
+    -0.147,
+    198
+   ],
+   "RANGE_BOUND": [
+    -0.099,
+    2552
+   ],
+   "TRENDING": [
+    -0.104,
+    1249
+   ],
+   "null": [
+    -0.269,
+    2988
+   ]
+  },
+  "F7r_cells": {
+   "false": 6363,
+   "null": 17,
+   "true": 1183
+  },
+  "F8_persistence_cells": {
+   "false": 567,
+   "null": 815,
+   "true": 670
+  },
+  "F8r_cells": {
+   "false": 910,
+   "null": 13,
+   "true": 1129
+  },
+  "S1_excl": {
+   "missing_location_context": 84,
+   "tf5_rows_0726_0728": 886,
+   "unresolved_or_nofill_open": 2973
+  },
+  "S2_stats": {
+   "strat_22_reversal_no_context_row": 5,
+   "strat_22_reversal_outcomes": 262,
+   "trend_consolidation_break_outcomes": 70
+  },
+  "date_range": [
+   "2026-07-16",
+   "2026-09-16"
+  ],
+  "days": 53,
+  "dist_dir": {
+   "LONG": 3999,
+   "SHORT": 3564
+  },
+  "dist_family": {
+   "orb": 311,
+   "range": 1558,
+   "strat": 3592,
+   "strat_other": 2036,
+   "vwap": 66
+  },
+  "dist_inst": {
+   "MES": 3592,
+   "MNQ": 3971
+  },
+  "dist_market_condition": {
+   "CHOPPY": 576,
+   "DEAD": 198,
+   "RANGE_BOUND": 2552,
+   "TRENDING": 1249,
+   "null": 2988
+  },
+  "dist_session": {
+   "asian": 3150,
+   "london": 2596,
+   "new_york": 1817
+  },
+  "dist_strategy": {
+   "ema_pullback_trend": 957,
+   "impulse_first_pullback_observed": 759,
+   "orb_false_break_fade": 311,
+   "range_break_close": 1558,
+   "strat_122_observed": 128,
+   "strat_122_pullback": 65,
+   "strat_22_continuation_observed": 1928,
+   "strat_22_reversal": 257,
+   "strat_22_reversal_observed": 975,
+   "strat_312_observed": 96,
+   "strat_322_reversal_observed": 110,
+   "strat_4hr_retrigger_observed": 33,
+   "transition_failed_breakdown_reclaim": 13,
+   "trend_consolidation_break": 70,
+   "trend_consolidation_break_observed": 237,
+   "vwap_hold_observed": 62,
+   "vwap_rejection_observed": 4
+  },
+  "dist_stratum": {
+   "S1": 7236,
+   "S2": 327
+  },
+  "gap": {
+   "S1:ctx_gap_4h": 333,
+   "S1:ctx_gap_overnight": 782,
+   "S1:ctx_gap_zone1h": 3997,
+   "S1:ctx_gap_zone4h": 5618,
+   "S1:feed_gap_contaminated": 196,
+   "S2:ctx_gap_4h": 20,
+   "S2:ctx_gap_overnight": 37,
+   "S2:ctx_gap_zone1h": 185,
+   "S2:ctx_gap_zone4h": 257,
+   "S2:feed_gap_contaminated": 9
+  },
+  "gap_ledger": {
+   "MES": {
+    "bars": 6386,
+    "first": "2026-06-05T07:00:00+00:00",
+    "gap_count": 155,
+    "gap_minutes": 5820,
+    "last": "2026-09-16T22:15:00+00:00"
+   },
+   "MNQ": {
+    "bars": 6426,
+    "first": "2026-06-05T07:00:00+00:00",
+    "gap_count": 123,
+    "gap_minutes": 5220,
+    "last": "2026-09-16T22:15:00+00:00"
+   }
+  },
+  "holm": {
+   "F1": 1.0,
+   "F10": 0.49395060493950604,
+   "F11": 1.0,
+   "F2": 1.0,
+   "F3": 1.0,
+   "F4": 1.0,
+   "F5": 1.0,
+   "F6": 0.1143885611438856,
+   "F8": 0.1143885611438856,
+   "F9": 1.0,
+   "I10": 1.0,
+   "I3": 1.0,
+   "I4": 1.0,
+   "I6": 1.0,
+   "I7": 1.0,
+   "I9": 1.0
+  },
+  "mae_by_stratum": {
+   "S1": [
+    42.71,
+    30.48,
+    0
+   ],
+   "S2": [
+    46.13,
+    35.47,
+    0
+   ]
+  },
+  "n_S1": 7236,
+  "n_S2": 327,
+  "n_trending_at_signal": 2052,
+  "net_R_mean": -0.1681,
+  "net_R_median": -1.0225,
+  "net_usd_sum": -66424.49,
+  "pvals": {
+   "F1": 0.30696930306969306,
+   "F10": 0.024697530246975304,
+   "F11": 0.7676232376762324,
+   "F2": 0.5952404759524048,
+   "F3": 0.4931506849315068,
+   "F4": 0.16518348165183483,
+   "F5": 0.06029397060293971,
+   "F6": 0.0052994700529947,
+   "F8": 0.0051994800519948,
+   "F9": 0.9111088891110889,
+   "I10": 0.8450774612693653,
+   "I3": 0.06096951524237881,
+   "I4": 0.8235882058970515,
+   "I6": 0.5647176411794103,
+   "I7": 0.42278860569715143,
+   "I9": 0.17791104447776113
+  },
+  "repaired_p": {
+   "F7r": 0.9424057594240576,
+   "F8r": 0.0011998800119988001,
+   "I7r": 0.7001499250374813,
+   "I9r": 0.7931034482758621
+  },
+  "unique_bar_dir_S1": 5698,
+  "unique_bars_S1": 4816,
+  "winrate": 0.404
+ }
+}

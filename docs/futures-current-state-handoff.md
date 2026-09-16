@@ -370,6 +370,11 @@ state byte-identical across the restart.
 - **MES D+EMA (Asian/London/New York):** REJECTED 2026-09-16 — no forward cohort; the MES precursor investigation is closed (HOLD / PAPER ONLY, representation hypothesis promising but unproven). Not another retrospective filter search.
 - **BOS/MSS (#594):** HOLD; separate research question, not scheduled.
 - **Shadow families in `strategy/shadow_setups.py`:** observation-only by design; they reach the journal and evidence files, never the DecisionEngine.
+- **Context-permission-layer study (prereg 2026-07-16):** first formal review run 2026-09-16 —
+  `docs/context-permission-first-review-2026-09-16.md`. 7,563 joined outcomes, 0 of 22 tests
+  reach gate candidacy; supply/demand alignment, mid-range, freshness, opposing-zone, key-level,
+  impulse and pair-agreement features do not discriminate. **No context gate is authorised.**
+  One pipeline defect recorded (MES top-level `market_condition` null since #376) — post-09-30 fix.
 
 ## Superseded / historical PRs
 
