@@ -10,6 +10,23 @@ Therefore C14 is not a VWAP arithmetic defect. The defect class is:
 
 > **Replay trading-day identity is derived from a mechanical 18:00 ET date rule, while TradingView/Pine daily-session identity can differ around exchange holiday transitions.**
 
+## External documentation check
+
+TradingView's current Pine documentation supports the **class** of this root cause:
+
+- exchanges define the default session for each symbol;
+- Pine time/session functions use the symbol's exchange session information when no explicit session is supplied;
+- calendar/time functions default to the symbol's exchange timezone;
+- chart bars align to session opening/closing times rather than to arbitrary fixed wall-clock buckets.
+
+Sources checked 2026-09-17:
+
+- TradingView Pine Script, `Concepts / Time`: https://www.tradingview.com/pine-script-docs/concepts/time/
+- TradingView Pine Script, `Concepts / Sessions`: https://www.tradingview.com/pine-script-docs/concepts/sessions/
+- CME holiday/trading-hours calendar: https://www.cmegroup.com/trading-hours.html
+
+These documents **do not** state a universal holiday reset rule for `ta.vwap`, nor do they prove that every Pine daily construct shares one exact holiday transition rule. Therefore documentation alone is insufficient to code a correction. Real boundary fixtures remain mandatory.
+
 ## Hypotheses
 
 ### H1 — exchange-session identity
