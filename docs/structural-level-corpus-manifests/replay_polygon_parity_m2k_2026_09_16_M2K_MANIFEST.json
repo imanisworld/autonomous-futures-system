@@ -1,0 +1,184 @@
+{
+ "tool": "slc-build-v1.4",
+ "corpus": "parity_m2k_2026_09_16/M2K",
+ "instrument": "M2K",
+ "timeframe_minutes": 15,
+ "schema": "scripts/polygon_to_replay.derive_candles (called unchanged; day-file split identical to polygon_to_replay.main)",
+ "source": {
+  "provider": "Polygon futures aggs (sources/polygon_client.PolygonFuturesClient)",
+  "endpoint": "/futures/v1/aggs/{ticker}?resolution=15min",
+  "fetched_utc": "2026-09-17T02:19:29Z",
+  "requested_range": "2026-09-01..2026-09-17",
+  "fetch_range_with_warmup": "2026-08-18..2026-09-17",
+  "warmup_days": 14,
+  "end_ts_exclusive": null,
+  "candles_dropped_at_end_cut": 0,
+  "roll_rule": "roll_days=3 (front contract advances 3 calendar days before 3rd-Friday expiry; sources.polygon_client.front_contract)",
+  "contract_segments": [
+   [
+    "M2KU6",
+    "2026-08-18",
+    "2026-09-14"
+   ],
+   [
+    "M2KZ6",
+    "2026-09-15",
+    "2026-09-17"
+   ]
+  ],
+  "raw_bars_fetched": 1978
+ },
+ "builder": {
+  "git_head_of_checkout": "89c90746cb781bd28e31025a55e99484489e4624",
+  "file_sha256": {
+   "scripts/polygon_to_replay.py": "a42e1cae7cb791648dfa6ed2c222342e45debdec18ae86aa6bf3c647c4c981d0",
+   "scripts/csv_to_replay.py": "332e48a951547819948a71a062a95c2b2acbff9b0da5433d1241df68c46d10ee",
+   "scripts/pine_market_condition.py": "df04b39eef02e53aff27aa4100ab49fb8e26e6e72c04091703c2ef8a69f15a11",
+   "sources/polygon_client.py": "3959cc1b41e7c0edcde909364b82fb9bc39577ff5dc264153767f8aaf3ac5896",
+   "context/trend.py": "24100349069f8ff9b53b3d0aec78513b547972298bdb5e641708578399819c1a",
+   "scripts/structural_level_corpus_build.py": "da62561fe199c3280de4eabb5972cac5bfba088d94cdc4815b6ec515de08f6b7"
+  }
+ },
+ "coverage": {
+  "files": 14,
+  "rows": 1058,
+  "first_bar": "2026-09-01T00:00:00+00:00",
+  "last_bar": "2026-09-16T18:15:00+00:00",
+  "required_fields_present": [
+   "timestamp",
+   "instrument",
+   "session",
+   "open",
+   "high",
+   "low",
+   "close",
+   "volume",
+   "orb_high",
+   "orb_low",
+   "orb_status",
+   "london_orb_high",
+   "london_orb_low",
+   "london_orb_status",
+   "reconstructed_market_condition",
+   "legacy_market_condition"
+  ]
+ },
+ "gap_ledger_cme_hours": [
+  {
+   "first_missing": "2026-09-07T17:00:00+00:00",
+   "last_missing": "2026-09-07T20:45:00+00:00",
+   "slots": 16,
+   "minutes": 240
+  },
+  {
+   "first_missing": "2026-09-11T17:00:00+00:00",
+   "last_missing": "2026-09-11T18:45:00+00:00",
+   "slots": 8,
+   "minutes": 120
+  },
+  {
+   "first_missing": "2026-09-11T20:00:00+00:00",
+   "last_missing": "2026-09-11T20:45:00+00:00",
+   "slots": 4,
+   "minutes": 60
+  }
+ ],
+ "roll_ledger": [
+  {
+   "from": "M2KU6",
+   "to": "M2KZ6",
+   "roll_utc_date": "2026-09-15",
+   "last_old_bar": "2026-09-14T23:45:00+00:00",
+   "last_old_close": 2895.0,
+   "first_new_bar": "2026-09-15T00:00:00+00:00",
+   "first_new_open": 2917.1,
+   "gap_points": 22.1
+  }
+ ],
+ "files": {
+  "M2K_2026-09-01.jsonl": {
+   "sha256": "0e3c354c1fa5b580fdb69032d1b7c753a7b70c29d7caf2c2248c9bf6c23e1a5a",
+   "rows": 92,
+   "first": "2026-09-01T00:00:00+00:00",
+   "last": "2026-09-01T23:45:00+00:00"
+  },
+  "M2K_2026-09-02.jsonl": {
+   "sha256": "b490009a06f7661edcd9e676ea6259b27613601712c107c4aaa52bb1950cd82e",
+   "rows": 92,
+   "first": "2026-09-02T00:00:00+00:00",
+   "last": "2026-09-02T23:45:00+00:00"
+  },
+  "M2K_2026-09-03.jsonl": {
+   "sha256": "90341d3e16419afa784384f6e20bb8a50a74372ac87bfba0e9050a8873c0bad0",
+   "rows": 92,
+   "first": "2026-09-03T00:00:00+00:00",
+   "last": "2026-09-03T23:45:00+00:00"
+  },
+  "M2K_2026-09-04.jsonl": {
+   "sha256": "98ae1ea3cf83dc6905f498798f95937bd624741cafc4b20cc62fa20595de9255",
+   "rows": 84,
+   "first": "2026-09-04T00:00:00+00:00",
+   "last": "2026-09-04T20:45:00+00:00"
+  },
+  "M2K_2026-09-06.jsonl": {
+   "sha256": "0b50c281c9e5787273c2a4b81522aa660cf3ccdfbcea2a17a7099652f49b83bd",
+   "rows": 8,
+   "first": "2026-09-06T22:00:00+00:00",
+   "last": "2026-09-06T23:45:00+00:00"
+  },
+  "M2K_2026-09-07.jsonl": {
+   "sha256": "d223d6322faeb6df0c4fe7b4e57d9108c88ba6a997cf633e7fa4664b821ba5c2",
+   "rows": 76,
+   "first": "2026-09-07T00:00:00+00:00",
+   "last": "2026-09-07T23:45:00+00:00"
+  },
+  "M2K_2026-09-08.jsonl": {
+   "sha256": "b4da243ecbd6590e2ede598987c377d05930ceb39831bc243d07e952c816b8f4",
+   "rows": 92,
+   "first": "2026-09-08T00:00:00+00:00",
+   "last": "2026-09-08T23:45:00+00:00"
+  },
+  "M2K_2026-09-09.jsonl": {
+   "sha256": "703b67f236de6178d2b8da9141c8dc327789ab5363c8e41bee3147790d75df54",
+   "rows": 92,
+   "first": "2026-09-09T00:00:00+00:00",
+   "last": "2026-09-09T23:45:00+00:00"
+  },
+  "M2K_2026-09-10.jsonl": {
+   "sha256": "f6301eb63ff2dd5b6d9ab7bcb2b9343dcdc4ce52bdf876200e8ce3cbff7f2d3a",
+   "rows": 92,
+   "first": "2026-09-10T00:00:00+00:00",
+   "last": "2026-09-10T23:45:00+00:00"
+  },
+  "M2K_2026-09-11.jsonl": {
+   "sha256": "ad207a2e61c10cabccfa7c400754264a3ccf3044c7016f6aa18f2f2cb48e2bd5",
+   "rows": 72,
+   "first": "2026-09-11T00:00:00+00:00",
+   "last": "2026-09-11T19:45:00+00:00"
+  },
+  "M2K_2026-09-13.jsonl": {
+   "sha256": "7d1ff0dc4319bd97a908829793529a1e4277b1e714112ac21d046177f116f8e9",
+   "rows": 8,
+   "first": "2026-09-13T22:00:00+00:00",
+   "last": "2026-09-13T23:45:00+00:00"
+  },
+  "M2K_2026-09-14.jsonl": {
+   "sha256": "18b06fc2c383255330ae942669747477258309cde8e4dee9299a24e7d5d1e5c5",
+   "rows": 92,
+   "first": "2026-09-14T00:00:00+00:00",
+   "last": "2026-09-14T23:45:00+00:00"
+  },
+  "M2K_2026-09-15.jsonl": {
+   "sha256": "955652fd2b21582428a007a8cba69aa1e55de011f8cc726930c871986c77bcef",
+   "rows": 92,
+   "first": "2026-09-15T00:00:00+00:00",
+   "last": "2026-09-15T23:45:00+00:00"
+  },
+  "M2K_2026-09-16.jsonl": {
+   "sha256": "b7c8c7eb2c45aad64906608a99a32c83410bac1534a882ce132dc7eb49ea2f1a",
+   "rows": 74,
+   "first": "2026-09-16T00:00:00+00:00",
+   "last": "2026-09-16T18:15:00+00:00"
+  }
+ }
+}

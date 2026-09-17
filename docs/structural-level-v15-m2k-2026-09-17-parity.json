@@ -1,0 +1,712 @@
+{
+ "tool": "slp2-v1.5",
+ "gates": {
+  "firing_jaccard_min": 0.9,
+  "bracket_agree_min": 0.98,
+  "bracket_tolerance": "one tick per leg (entry, stop, target)"
+ },
+ "bar_census": {
+  "M2K": {
+   "live_bars": 51,
+   "replay_bars": 1058,
+   "both_evaluated": 25,
+   "live_only_bars": 26,
+   "replay_only_bars": 1033,
+   "live_only_bars_absent_from_corpus": 26,
+   "live_only_bars_in_corpus_not_evaluated_by_replay": 0,
+   "corpus_bars": 1058
+  }
+ },
+ "duplicate_bars_first_seen_wins": {
+  "live": 0,
+  "replay": 0
+ },
+ "live_stale_orb_rows_excluded": 0,
+ "families": {
+  "ema_pullback_trend": {
+   "live_firings_all_live_bars": 10,
+   "replay_firings_all_replay_bars": 189,
+   "live_by_instrument": {
+    "M2K": 10
+   },
+   "replay_by_instrument": {
+    "M2K": 189
+   },
+   "on_both_evaluated_bars": {
+    "live_firings": 9,
+    "replay_firings": 9,
+    "intersection": 9,
+    "union": 9,
+    "firing_jaccard": 1.0,
+    "live_only_firings": 0,
+    "live_only_on_replay_warmup_bars": 0,
+    "replay_only_firings": 0,
+    "replay_only_on_replay_warmup_bars": 0
+   },
+   "bracket_on_cofired": {
+    "pairs": 9,
+    "all_three_within_one_tick_rate": 1.0,
+    "entry_rate": 1.0,
+    "stop_rate": 1.0,
+    "target_rate": 1.0,
+    "failing_examples": []
+   },
+   "input_source_mismatch_reason": "EMA source \u2014 \u22641-tick EMA touches decide firing",
+   "spec_verdict_reference": "BOTH \u2014 input-divergent (spec \u00a72; resolved by \u00a74 gates)",
+   "classification": "BOTH",
+   "classification_reason": "jaccard 1.000 \u2265 0.9; bracket 1.0",
+   "ruled_disposition": "REPLAY_ONLY + LIVE_ONLY strata, never pooled (prereg v1.4 Ruling 2: bracket 93.88% < 98% on the parity corpus; no tolerance/target/rounding change)",
+   "live_only_examples": [],
+   "replay_only_examples": []
+  },
+  "gap_fill": {
+   "live_firings_all_live_bars": 0,
+   "replay_firings_all_replay_bars": 0,
+   "live_by_instrument": {},
+   "replay_by_instrument": {},
+   "on_both_evaluated_bars": {
+    "live_firings": 0,
+    "replay_firings": 0,
+    "intersection": 0,
+    "union": 0,
+    "firing_jaccard": null,
+    "live_only_firings": 0,
+    "live_only_on_replay_warmup_bars": 0,
+    "replay_only_firings": 0,
+    "replay_only_on_replay_warmup_bars": 0
+   },
+   "bracket_on_cofired": {
+    "pairs": 0,
+    "all_three_within_one_tick_rate": null,
+    "entry_rate": null,
+    "stop_rate": null,
+    "target_rate": null,
+    "failing_examples": []
+   },
+   "input_source_mismatch_reason": "payload never carries rth_open/session_open",
+   "spec_verdict_reference": "DEAD (spec \u00a72)",
+   "classification": "DEAD",
+   "classification_reason": "never fires on either path (payload lacks the required field)",
+   "ruled_disposition": null,
+   "live_only_examples": [],
+   "replay_only_examples": []
+  },
+  "impulse_first_pullback_observed": {
+   "live_firings_all_live_bars": 4,
+   "replay_firings_all_replay_bars": 154,
+   "live_by_instrument": {
+    "M2K": 4
+   },
+   "replay_by_instrument": {
+    "M2K": 154
+   },
+   "on_both_evaluated_bars": {
+    "live_firings": 2,
+    "replay_firings": 2,
+    "intersection": 2,
+    "union": 2,
+    "firing_jaccard": 1.0,
+    "live_only_firings": 0,
+    "live_only_on_replay_warmup_bars": 0,
+    "replay_only_firings": 0,
+    "replay_only_on_replay_warmup_bars": 0
+   },
+   "bracket_on_cofired": {
+    "pairs": 2,
+    "all_three_within_one_tick_rate": 1.0,
+    "entry_rate": 1.0,
+    "stop_rate": 1.0,
+    "target_rate": 1.0,
+    "failing_examples": []
+   },
+   "input_source_mismatch_reason": "trend source (EMA) + replay recent-bars reset at day-file boundary",
+   "spec_verdict_reference": "BOTH \u2014 input-divergent (spec \u00a72; resolved by \u00a74 gates)",
+   "classification": "BOTH",
+   "classification_reason": "jaccard 1.000 \u2265 0.9; bracket 1.0",
+   "ruled_disposition": null,
+   "live_only_examples": [],
+   "replay_only_examples": []
+  },
+  "orb_false_break_fade": {
+   "live_firings_all_live_bars": 5,
+   "replay_firings_all_replay_bars": 40,
+   "live_by_instrument": {
+    "M2K": 5
+   },
+   "replay_by_instrument": {
+    "M2K": 40
+   },
+   "on_both_evaluated_bars": {
+    "live_firings": 5,
+    "replay_firings": 5,
+    "intersection": 5,
+    "union": 5,
+    "firing_jaccard": 1.0,
+    "live_only_firings": 0,
+    "live_only_on_replay_warmup_bars": 0,
+    "replay_only_firings": 0,
+    "replay_only_on_replay_warmup_bars": 0
+   },
+   "bracket_on_cofired": {
+    "pairs": 5,
+    "all_three_within_one_tick_rate": 1.0,
+    "entry_rate": 1.0,
+    "stop_rate": 1.0,
+    "target_rate": 1.0,
+    "failing_examples": []
+   },
+   "input_source_mismatch_reason": "ORB source (Pine NY/London ORB via state_builder vs corpus orb_*/london_orb_*); live asian rows STALE_ORB (C1)",
+   "spec_verdict_reference": "BOTH after corpus rebuild (spec \u00a72)",
+   "classification": "BOTH",
+   "classification_reason": "jaccard 1.000 \u2265 0.9; bracket 1.0",
+   "ruled_disposition": null,
+   "live_only_examples": [],
+   "replay_only_examples": []
+  },
+  "ovn_high_sweep_reclaim": {
+   "live_firings_all_live_bars": 0,
+   "replay_firings_all_replay_bars": 0,
+   "live_by_instrument": {},
+   "replay_by_instrument": {},
+   "on_both_evaluated_bars": {
+    "live_firings": 0,
+    "replay_firings": 0,
+    "intersection": 0,
+    "union": 0,
+    "firing_jaccard": null,
+    "live_only_firings": 0,
+    "live_only_on_replay_warmup_bars": 0,
+    "replay_only_firings": 0,
+    "replay_only_on_replay_warmup_bars": 0
+   },
+   "bracket_on_cofired": {
+    "pairs": 0,
+    "all_three_within_one_tick_rate": null,
+    "entry_rate": null,
+    "stop_rate": null,
+    "target_rate": null,
+    "failing_examples": []
+   },
+   "input_source_mismatch_reason": "payload never carries overnight_high/low",
+   "spec_verdict_reference": "DEAD (spec \u00a72)",
+   "classification": "DEAD",
+   "classification_reason": "never fires on either path (payload lacks the required field)",
+   "ruled_disposition": null,
+   "live_only_examples": [],
+   "replay_only_examples": []
+  },
+  "ovn_low_sweep_reclaim": {
+   "live_firings_all_live_bars": 0,
+   "replay_firings_all_replay_bars": 0,
+   "live_by_instrument": {},
+   "replay_by_instrument": {},
+   "on_both_evaluated_bars": {
+    "live_firings": 0,
+    "replay_firings": 0,
+    "intersection": 0,
+    "union": 0,
+    "firing_jaccard": null,
+    "live_only_firings": 0,
+    "live_only_on_replay_warmup_bars": 0,
+    "replay_only_firings": 0,
+    "replay_only_on_replay_warmup_bars": 0
+   },
+   "bracket_on_cofired": {
+    "pairs": 0,
+    "all_three_within_one_tick_rate": null,
+    "entry_rate": null,
+    "stop_rate": null,
+    "target_rate": null,
+    "failing_examples": []
+   },
+   "input_source_mismatch_reason": "payload never carries overnight_high/low",
+   "spec_verdict_reference": "DEAD (spec \u00a72)",
+   "classification": "DEAD",
+   "classification_reason": "never fires on either path (payload lacks the required field)",
+   "ruled_disposition": null,
+   "live_only_examples": [],
+   "replay_only_examples": []
+  },
+  "range_break_close": {
+   "live_firings_all_live_bars": 0,
+   "replay_firings_all_replay_bars": 0,
+   "live_by_instrument": {},
+   "replay_by_instrument": {},
+   "on_both_evaluated_bars": {
+    "live_firings": 0,
+    "replay_firings": 0,
+    "intersection": 0,
+    "union": 0,
+    "firing_jaccard": null,
+    "live_only_firings": 0,
+    "live_only_on_replay_warmup_bars": 0,
+    "replay_only_firings": 0,
+    "replay_only_on_replay_warmup_bars": 0
+   },
+   "bracket_on_cofired": {
+    "pairs": 0,
+    "all_three_within_one_tick_rate": null,
+    "entry_rate": null,
+    "stop_rate": null,
+    "target_rate": null,
+    "failing_examples": []
+   },
+   "input_source_mismatch_reason": "live-only range_signal lane (wall_context walls)",
+   "spec_verdict_reference": "LIVE_ONLY (spec \u00a72/\u00a76)",
+   "classification": "LIVE_ONLY",
+   "classification_reason": "live=0, replay=0 by construction (env/lane)",
+   "ruled_disposition": null,
+   "live_only_examples": [],
+   "replay_only_examples": []
+  },
+  "strat_122": {
+   "live_firings_all_live_bars": 0,
+   "replay_firings_all_replay_bars": 0,
+   "live_by_instrument": {},
+   "replay_by_instrument": {},
+   "on_both_evaluated_bars": {
+    "live_firings": 0,
+    "replay_firings": 0,
+    "intersection": 0,
+    "union": 0,
+    "firing_jaccard": null,
+    "live_only_firings": 0,
+    "live_only_on_replay_warmup_bars": 0,
+    "replay_only_firings": 0,
+    "replay_only_on_replay_warmup_bars": 0
+   },
+   "bracket_on_cofired": {
+    "pairs": 0,
+    "all_three_within_one_tick_rate": null,
+    "entry_rate": null,
+    "stop_rate": null,
+    "target_rate": null,
+    "failing_examples": []
+   },
+   "input_source_mismatch_reason": "observation-lane canonical detector (advance_strat_212_122), not a shadow_setups family (C21)",
+   "spec_verdict_reference": "LANE_ONLY (prereg v1.5 C21)",
+   "classification": "LANE_ONLY",
+   "classification_reason": "observation-lane canonical detector; live=0, replay=0 by construction (C21)",
+   "ruled_disposition": null,
+   "live_only_examples": [],
+   "replay_only_examples": []
+  },
+  "strat_122_observed": {
+   "live_firings_all_live_bars": 0,
+   "replay_firings_all_replay_bars": 0,
+   "live_by_instrument": {},
+   "replay_by_instrument": {},
+   "on_both_evaluated_bars": {
+    "live_firings": 0,
+    "replay_firings": 0,
+    "intersection": 0,
+    "union": 0,
+    "firing_jaccard": null,
+    "live_only_firings": 0,
+    "live_only_on_replay_warmup_bars": 0,
+    "replay_only_firings": 0,
+    "replay_only_on_replay_warmup_bars": 0
+   },
+   "bracket_on_cofired": {
+    "pairs": 0,
+    "all_three_within_one_tick_rate": null,
+    "entry_rate": null,
+    "stop_rate": null,
+    "target_rate": null,
+    "failing_examples": []
+   },
+   "input_source_mismatch_reason": "bar-type classification source",
+   "spec_verdict_reference": "BOTH (spec \u00a72; bar-type parity measured here)",
+   "classification": "ABSENT",
+   "classification_reason": "no firing on either side",
+   "ruled_disposition": null,
+   "live_only_examples": [],
+   "replay_only_examples": []
+  },
+  "strat_122_pullback": {
+   "live_firings_all_live_bars": 0,
+   "replay_firings_all_replay_bars": 0,
+   "live_by_instrument": {},
+   "replay_by_instrument": {},
+   "on_both_evaluated_bars": {
+    "live_firings": 0,
+    "replay_firings": 0,
+    "intersection": 0,
+    "union": 0,
+    "firing_jaccard": null,
+    "live_only_firings": 0,
+    "live_only_on_replay_warmup_bars": 0,
+    "replay_only_firings": 0,
+    "replay_only_on_replay_warmup_bars": 0
+   },
+   "bracket_on_cofired": {
+    "pairs": 0,
+    "all_three_within_one_tick_rate": null,
+    "entry_rate": null,
+    "stop_rate": null,
+    "target_rate": null,
+    "failing_examples": []
+   },
+   "input_source_mismatch_reason": "bar-type classification source",
+   "spec_verdict_reference": "BOTH (spec \u00a72; bar-type parity measured here)",
+   "classification": "ABSENT",
+   "classification_reason": "no firing on either side",
+   "ruled_disposition": null,
+   "live_only_examples": [],
+   "replay_only_examples": []
+  },
+  "strat_212": {
+   "live_firings_all_live_bars": 3,
+   "replay_firings_all_replay_bars": 0,
+   "live_by_instrument": {
+    "M2K": 3
+   },
+   "replay_by_instrument": {},
+   "on_both_evaluated_bars": {
+    "live_firings": 0,
+    "replay_firings": 0,
+    "intersection": 0,
+    "union": 0,
+    "firing_jaccard": null,
+    "live_only_firings": 0,
+    "live_only_on_replay_warmup_bars": 0,
+    "replay_only_firings": 0,
+    "replay_only_on_replay_warmup_bars": 0
+   },
+   "bracket_on_cofired": {
+    "pairs": 0,
+    "all_three_within_one_tick_rate": null,
+    "entry_rate": null,
+    "stop_rate": null,
+    "target_rate": null,
+    "failing_examples": []
+   },
+   "input_source_mismatch_reason": "observation-lane canonical detector (advance_strat_212_122), not a shadow_setups family (C21)",
+   "spec_verdict_reference": "LANE_ONLY (prereg v1.5 C21)",
+   "classification": "LANE_ONLY",
+   "classification_reason": "observation-lane canonical detector; live=3, replay=0 by construction (C21)",
+   "ruled_disposition": null,
+   "live_only_examples": [],
+   "replay_only_examples": []
+  },
+  "strat_22_continuation_observed": {
+   "live_firings_all_live_bars": 17,
+   "replay_firings_all_replay_bars": 359,
+   "live_by_instrument": {
+    "M2K": 17
+   },
+   "replay_by_instrument": {
+    "M2K": 359
+   },
+   "on_both_evaluated_bars": {
+    "live_firings": 7,
+    "replay_firings": 7,
+    "intersection": 7,
+    "union": 7,
+    "firing_jaccard": 1.0,
+    "live_only_firings": 0,
+    "live_only_on_replay_warmup_bars": 0,
+    "replay_only_firings": 0,
+    "replay_only_on_replay_warmup_bars": 0
+   },
+   "bracket_on_cofired": {
+    "pairs": 7,
+    "all_three_within_one_tick_rate": 1.0,
+    "entry_rate": 1.0,
+    "stop_rate": 1.0,
+    "target_rate": 1.0,
+    "failing_examples": []
+   },
+   "input_source_mismatch_reason": "bar-type classification source (Pine classify_bar vs corpus classify_htf_bar)",
+   "spec_verdict_reference": "BOTH (spec \u00a72; bar-type parity measured here)",
+   "classification": "BOTH",
+   "classification_reason": "jaccard 1.000 \u2265 0.9; bracket 1.0",
+   "ruled_disposition": null,
+   "live_only_examples": [],
+   "replay_only_examples": []
+  },
+  "strat_22_reversal_observed": {
+   "live_firings_all_live_bars": 6,
+   "replay_firings_all_replay_bars": 176,
+   "live_by_instrument": {
+    "M2K": 6
+   },
+   "replay_by_instrument": {
+    "M2K": 176
+   },
+   "on_both_evaluated_bars": {
+    "live_firings": 4,
+    "replay_firings": 4,
+    "intersection": 4,
+    "union": 4,
+    "firing_jaccard": 1.0,
+    "live_only_firings": 0,
+    "live_only_on_replay_warmup_bars": 0,
+    "replay_only_firings": 0,
+    "replay_only_on_replay_warmup_bars": 0
+   },
+   "bracket_on_cofired": {
+    "pairs": 4,
+    "all_three_within_one_tick_rate": 1.0,
+    "entry_rate": 1.0,
+    "stop_rate": 1.0,
+    "target_rate": 1.0,
+    "failing_examples": []
+   },
+   "input_source_mismatch_reason": "bar-type classification source",
+   "spec_verdict_reference": "BOTH (spec \u00a72; bar-type parity measured here)",
+   "classification": "BOTH",
+   "classification_reason": "jaccard 1.000 \u2265 0.9; bracket 1.0",
+   "ruled_disposition": null,
+   "live_only_examples": [],
+   "replay_only_examples": []
+  },
+  "strat_312_observed": {
+   "live_firings_all_live_bars": 0,
+   "replay_firings_all_replay_bars": 17,
+   "live_by_instrument": {},
+   "replay_by_instrument": {
+    "M2K": 17
+   },
+   "on_both_evaluated_bars": {
+    "live_firings": 0,
+    "replay_firings": 0,
+    "intersection": 0,
+    "union": 0,
+    "firing_jaccard": null,
+    "live_only_firings": 0,
+    "live_only_on_replay_warmup_bars": 0,
+    "replay_only_firings": 0,
+    "replay_only_on_replay_warmup_bars": 0
+   },
+   "bracket_on_cofired": {
+    "pairs": 0,
+    "all_three_within_one_tick_rate": null,
+    "entry_rate": null,
+    "stop_rate": null,
+    "target_rate": null,
+    "failing_examples": []
+   },
+   "input_source_mismatch_reason": "bar-type classification source",
+   "spec_verdict_reference": "BOTH (spec \u00a72; bar-type parity measured here)",
+   "classification": "NOT_TESTABLE",
+   "classification_reason": "no firing on bars evaluated by both sides",
+   "ruled_disposition": null,
+   "live_only_examples": [],
+   "replay_only_examples": []
+  },
+  "strat_322_reversal_observed": {
+   "live_firings_all_live_bars": 0,
+   "replay_firings_all_replay_bars": 21,
+   "live_by_instrument": {},
+   "replay_by_instrument": {
+    "M2K": 21
+   },
+   "on_both_evaluated_bars": {
+    "live_firings": 0,
+    "replay_firings": 0,
+    "intersection": 0,
+    "union": 0,
+    "firing_jaccard": null,
+    "live_only_firings": 0,
+    "live_only_on_replay_warmup_bars": 0,
+    "replay_only_firings": 0,
+    "replay_only_on_replay_warmup_bars": 0
+   },
+   "bracket_on_cofired": {
+    "pairs": 0,
+    "all_three_within_one_tick_rate": null,
+    "entry_rate": null,
+    "stop_rate": null,
+    "target_rate": null,
+    "failing_examples": []
+   },
+   "input_source_mismatch_reason": "bar-type classification source",
+   "spec_verdict_reference": "BOTH (spec \u00a72; bar-type parity measured here)",
+   "classification": "NOT_TESTABLE",
+   "classification_reason": "no firing on bars evaluated by both sides",
+   "ruled_disposition": null,
+   "live_only_examples": [],
+   "replay_only_examples": []
+  },
+  "strat_4hr_retrigger_observed": {
+   "live_firings_all_live_bars": 0,
+   "replay_firings_all_replay_bars": 0,
+   "live_by_instrument": {},
+   "replay_by_instrument": {},
+   "on_both_evaluated_bars": {
+    "live_firings": 0,
+    "replay_firings": 0,
+    "intersection": 0,
+    "union": 0,
+    "firing_jaccard": null,
+    "live_only_firings": 0,
+    "live_only_on_replay_warmup_bars": 0,
+    "replay_only_firings": 0,
+    "replay_only_on_replay_warmup_bars": 0
+   },
+   "bracket_on_cofired": {
+    "pairs": 0,
+    "all_three_within_one_tick_rate": null,
+    "entry_rate": null,
+    "stop_rate": null,
+    "target_rate": null,
+    "failing_examples": []
+   },
+   "input_source_mismatch_reason": "EMA source (Pine vs SMA-seeded corpus EMA) + avg-volume source",
+   "spec_verdict_reference": "BOTH \u2014 input-divergent (spec \u00a72; resolved by \u00a74 gates)",
+   "classification": "ABSENT",
+   "classification_reason": "no firing on either side",
+   "ruled_disposition": null,
+   "live_only_examples": [],
+   "replay_only_examples": []
+  },
+  "transition_failed_breakdown_reclaim": {
+   "live_firings_all_live_bars": 0,
+   "replay_firings_all_replay_bars": 12,
+   "live_by_instrument": {},
+   "replay_by_instrument": {
+    "M2K": 12
+   },
+   "on_both_evaluated_bars": {
+    "live_firings": 0,
+    "replay_firings": 0,
+    "intersection": 0,
+    "union": 0,
+    "firing_jaccard": null,
+    "live_only_firings": 0,
+    "live_only_on_replay_warmup_bars": 0,
+    "replay_only_firings": 0,
+    "replay_only_on_replay_warmup_bars": 0
+   },
+   "bracket_on_cofired": {
+    "pairs": 0,
+    "all_three_within_one_tick_rate": null,
+    "entry_rate": null,
+    "stop_rate": null,
+    "target_rate": null,
+    "failing_examples": []
+   },
+   "input_source_mismatch_reason": "regime label source (Pine market_condition, MES blind C8) + recent-bars reset",
+   "spec_verdict_reference": "NOT_TESTABLE (spec \u00a72/\u00a76)",
+   "classification": "NOT_TESTABLE",
+   "classification_reason": "spec \u00a76; live=0 replay=12 (reported, not gated)",
+   "ruled_disposition": null,
+   "live_only_examples": [],
+   "replay_only_examples": []
+  },
+  "trend_consolidation_break_observed": {
+   "live_firings_all_live_bars": 3,
+   "replay_firings_all_replay_bars": 54,
+   "live_by_instrument": {
+    "M2K": 3
+   },
+   "replay_by_instrument": {
+    "M2K": 54
+   },
+   "on_both_evaluated_bars": {
+    "live_firings": 1,
+    "replay_firings": 1,
+    "intersection": 1,
+    "union": 1,
+    "firing_jaccard": 1.0,
+    "live_only_firings": 0,
+    "live_only_on_replay_warmup_bars": 0,
+    "replay_only_firings": 0,
+    "replay_only_on_replay_warmup_bars": 0
+   },
+   "bracket_on_cofired": {
+    "pairs": 1,
+    "all_three_within_one_tick_rate": 1.0,
+    "entry_rate": 1.0,
+    "stop_rate": 1.0,
+    "target_rate": 1.0,
+    "failing_examples": []
+   },
+   "input_source_mismatch_reason": "trend source (EMA) + replay recent-bars reset at day-file boundary",
+   "spec_verdict_reference": "BOTH \u2014 input-divergent (spec \u00a72; resolved by \u00a74 gates)",
+   "classification": "BOTH",
+   "classification_reason": "jaccard 1.000 \u2265 0.9; bracket 1.0",
+   "ruled_disposition": null,
+   "live_only_examples": [],
+   "replay_only_examples": []
+  },
+  "vwap_hold_observed": {
+   "live_firings_all_live_bars": 0,
+   "replay_firings_all_replay_bars": 0,
+   "live_by_instrument": {},
+   "replay_by_instrument": {},
+   "on_both_evaluated_bars": {
+    "live_firings": 0,
+    "replay_firings": 0,
+    "intersection": 0,
+    "union": 0,
+    "firing_jaccard": null,
+    "live_only_firings": 0,
+    "live_only_on_replay_warmup_bars": 0,
+    "replay_only_firings": 0,
+    "replay_only_on_replay_warmup_bars": 0
+   },
+   "bracket_on_cofired": {
+    "pairs": 0,
+    "all_three_within_one_tick_rate": null,
+    "entry_rate": null,
+    "stop_rate": null,
+    "target_rate": null,
+    "failing_examples": []
+   },
+   "input_source_mismatch_reason": "FORWARD_EVIDENCE_CAMPAIGN env (live ON, replay unset) + VWAP holiday anchor (C14)",
+   "spec_verdict_reference": "LIVE_ONLY (spec \u00a72/\u00a76)",
+   "classification": "LIVE_ONLY",
+   "classification_reason": "live=0, replay=0 by construction (env/lane)",
+   "ruled_disposition": null,
+   "live_only_examples": [],
+   "replay_only_examples": []
+  },
+  "vwap_rejection_observed": {
+   "live_firings_all_live_bars": 0,
+   "replay_firings_all_replay_bars": 0,
+   "live_by_instrument": {},
+   "replay_by_instrument": {},
+   "on_both_evaluated_bars": {
+    "live_firings": 0,
+    "replay_firings": 0,
+    "intersection": 0,
+    "union": 0,
+    "firing_jaccard": null,
+    "live_only_firings": 0,
+    "live_only_on_replay_warmup_bars": 0,
+    "replay_only_firings": 0,
+    "replay_only_on_replay_warmup_bars": 0
+   },
+   "bracket_on_cofired": {
+    "pairs": 0,
+    "all_three_within_one_tick_rate": null,
+    "entry_rate": null,
+    "stop_rate": null,
+    "target_rate": null,
+    "failing_examples": []
+   },
+   "input_source_mismatch_reason": "as vwap_hold_observed",
+   "spec_verdict_reference": "LIVE_ONLY (spec \u00a72/\u00a76)",
+   "classification": "LIVE_ONLY",
+   "classification_reason": "live=0, replay=0 by construction (env/lane)",
+   "ruled_disposition": null,
+   "live_only_examples": [],
+   "replay_only_examples": []
+  }
+ },
+ "gate_failures": [],
+ "inputs": {
+  "live_source": "observation",
+  "live_logs_root": null,
+  "observation_evidence": "<local:cross_instrument_observation_v1.jsonl>",
+  "bars_root": "<local:m2k_snapshot>",
+  "replay_log_dir": "<local:replay_parity_m2k>",
+  "corpus_root": "<local:replay_polygon_parity_m2k_2026_09_16>",
+  "start": "2026-07-16",
+  "end_ts_exclusive": "2026-09-18T00:00:00+00:00",
+  "live_rows": 51,
+  "replay_rows": 1058
+ }
+}

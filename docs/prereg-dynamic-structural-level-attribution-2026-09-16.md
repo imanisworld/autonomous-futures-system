@@ -1,6 +1,38 @@
 # Pre-Registration — Dynamic Structural-Level Attribution Study
 
-**Version:** 1.4 (2026-09-17), frozen at the commit that introduces this version.
+**Version:** 1.5 (2026-09-17), frozen at the commit that introduces this version.
+Changelog v1.4 → v1.5 (operator instruction 2026-09-17: "add M2K first as a v1.5 amendment";
+MGC / MCL / MBT are deferred to later tranche-2 amendments because they need product-specific
+session / RTH-open / daily-roll level definitions and non-quarterly contract-roll schedules;
+no outcome was read; evidence in `docs/structural-level-v15-m2k-2026-09-17.md`): (1) **M2K
+(Micro Russell 2000) is added as a third instrument** to P-REPLAY (`data/replay_polygon_v2/M2K`,
+2024-10-01 → 2026-06-26, the v1.4 window, pinned builder, quarterly roll) and to
+P-OOS-PROSPECTIVE (from the cross-instrument observation epoch `2026-09-16T12:17:19Z`, Z6). M2K
+has **no P-LIVE calibration stratum** (no history before the epoch) and no P-OOS-MES-style
+holdout. (2) **M2K's live candidate source is the cross-instrument observation lane**
+(`webhook/observation_transport.observe_collection_only_alert` →
+`execution/cross_instrument_observation.observe_bar`, evidence file
+`logs/cross_instrument_observation_v1.jsonl`), not the runner journal. It calls the same
+`strategy.shadow_setups.evaluate_shadow_setups` as runner and replay with canonical VWAP
+observers off and Pine advisory brackets stripped; CANDIDATE rows (`structural_outcome`,
+bracket authoritative) and SIGNAL rows (`signal_metrics`, bracket recorded but not authoritative
+and never resolved by the lane) are both firings; the lane's own resolver (`_resolve_one`) is a
+second implementation of the shadow resolver rules — **C20**, proven equivalent on 30,000
+synthetic cases (P-R). Lane-only canonical families `strat_212` / `strat_122`
+(`advance_strat_212_122`) are not `shadow_setups` families → `LANE_ONLY`, never pooled — **C21**.
+(3) Level definitions (§3), events (§5), constants, hypotheses (§6), gates and kill criteria are
+**unchanged**: M2K is an equity-index micro on the same CME Globex session map, 18:00 ET day
+roll, 09:30 ET RTH / NY ORB and 03:00 ET London ORB; only the tick (0.10) differs. (4) §7
+strata: instrument ∈ {MNQ, MES, M2K}; every pooled statement prints all three beside it. (5) New
+prerequisites: **P3-M2K** bar-source levels parity (no journaled `location_context` copy exists
+for a collection-only root, so the P3 gate is applied to admitted levels built from the box's
+`bars_M2K` files vs the pinned Polygon corpus at the same B0, plus OHLC parity), **P5-M2K**
+observation-lane firing/bracket parity vs replay under the frozen §4 gates of the P2 spec, and
+**P-R** resolver equivalence. Preliminary results at n = 25 co-evaluated bars: firing Jaccard
+1.000 and bracket 1.000 on every family that fired (28 co-fired candidates); NY ORB 19/19; OHLC
+24/25 (one open two ticks apart) — **not a pass at that n**; rerun when ≥ 5 sessions of M2K
+history exist. (6) Family expectations for M2K from the lane config: `strat_122_pullback`,
+`strat_4hr_retrigger_observed` and `vwap_*` are not configured for M2K (absent by design).
 Changelog v1.3 → v1.4 (amendment based **only** on the R1–R4 corpus/parity evidence in
 `docs/structural-level-p2-parity-corpus-r4-2026-09-17.md`; no outcome was read; operator
 rulings of 2026-09-17, both taken before R5 / any outcome): (1) **P-REPLAY window amended to
@@ -120,10 +152,10 @@ proof and stratification, never as the feature source (see conflicts C1, C2, C3 
 
 | Population | Source | Window | Instruments | Bar grid | Candidate generator | Outcome provenance | Role |
 |---|---|---|---|---|---|---|---|
-| **P-REPLAY** (confirmatory in-sample) | `data/replay_polygon_v2/{MNQ,MES}` (Polygon 15m, raw front-month, pinned `scripts/polygon_to_replay.py` via `scripts/structural_level_corpus_build.py`, `MANIFEST.json` per corpus; **v1.4**: replaces the retired `data/replay_polygon` files) | **2024-10-01 → 2026-06-26** (v1.4, Ruling 1; warm-up 2024-09-17 → 09-30 fetched, not in-window; v1.0–v1.3 said 2024-07-01, no longer fetchable — C17) | MNQ, MES | 15m | `replay/replay_engine.py` shadow-candidate path at a pinned SHA, ungated (`shadow_candidates`), families per §2.3 | S1-R: replay shadow resolver (`strategy/shadow_setups.resolve_shadow_candidate`, pessimistic both-hit, resting-entry fill) | primary confirmatory sample; 3 chronological folds |
+| **P-REPLAY** (confirmatory in-sample) | `data/replay_polygon_v2/{MNQ,MES,M2K}` (M2K added v1.5) (Polygon 15m, raw front-month, pinned `scripts/polygon_to_replay.py` via `scripts/structural_level_corpus_build.py`, `MANIFEST.json` per corpus; **v1.4**: replaces the retired `data/replay_polygon` files) | **2024-10-01 → 2026-06-26** (v1.4, Ruling 1; warm-up 2024-09-17 → 09-30 fetched, not in-window; v1.0–v1.3 said 2024-07-01, no longer fetchable — C17) | MNQ, MES | 15m | `replay/replay_engine.py` shadow-candidate path at a pinned SHA, ungated (`shadow_candidates`), families per §2.3 | S1-R: replay shadow resolver (`strategy/shadow_setups.resolve_shadow_candidate`, pessimistic both-hit, resting-entry fill) | primary confirmatory sample; 3 chronological folds |
 | **P-LIVE** (calibration + provenance stratum) | VPS `logs/` read-only snapshot 2026-09-16 22:38Z (journal `journal_*.jsonl`, `bars_{MNQ,MES}_*.jsonl` 15m from 2026-06-05, `strategy_context_observations.jsonl`, PaperBroker evidence files) | 2026-07-16 → **2026-09-14T22:00Z** (contract-roll cut, §9) | MNQ, MES | 15m | live runner `shadow_candidates` + `range_signal` (the closed study's population, same `candidate_key` join) | S1: live `SHADOW_OUTCOME`; S2: PaperBroker (`mnq_strat_22_reversal`, `mes_trend_consolidation_break`); S3: Tradovate demo (n=2, below floor) | feature-definition calibration; live-vs-offline parity; S1/S2 fill-model check; **confirmatory only for constructs not viewed in the closed study** (§11) |
 | **P-OOS-MES** (pre-registered holdout, **H1/H2/H3/H5 only**) | `data/replay_polygon/MES_oos_2026-07-24_2026-09-08` (40 files) | 2026-07-24 → 2026-09-08 | MES | 15m | replay, same SHA | S1-R | never scored with any structural event; used once, after IS results are frozen. **Not pristine for H4/H6**: the closed study viewed F4/F11 (fresh-vs-tested, target-blocked) on live outcomes over this same market period, so H4/H6 results here are EXPLORATORY (§11) |
-| **P-OOS-PROSPECTIVE** | VPS journal + bar history collected **after 2026-09-17 00:00Z** (Z6 contracts) | 2026-09-17 → ≥ 2026-10-31 and ≥ 50% of fold-3 rows per instrument, unconditional once complete (§11) | MNQ, MES | 15m | live runner | S1, S2 | prospective OOS; the only route from "supported" to "v2 shadow-observation spec" |
+| **P-OOS-PROSPECTIVE** | VPS journal + bar history collected **after 2026-09-17 00:00Z** (Z6 contracts); **M2K (v1.5):** `logs/cross_instrument_observation_v1.jsonl` CANDIDATE/SIGNAL rows + `logs/bars_M2K_*.jsonl` from the observation epoch `2026-09-16T12:17:19Z` | 2026-09-17 → ≥ 2026-10-31 and ≥ 50% of fold-3 rows per instrument, unconditional once complete (§11) | MNQ, MES, **M2K** | 15m | live runner (MNQ/MES); cross-instrument observation lane (M2K, same `evaluate_shadow_setups`) | S1, S2 | prospective OOS; the only route from "supported" to "v2 shadow-observation spec" |
 
 Not admitted: `data/replay_polygon_5m/*` and the 5m-native families (4HR Re-Trigger, 60M
 3-2-2, MES 1-2-2 5m lane) — different bar grid, different resolver
@@ -181,6 +213,16 @@ candidates and brackets in replay and live at the pinned SHA. Expected classific
   `range_break_close`. `DEAD` = `ovn_*_sweep_reclaim`, `gap_fill`. The `orb_breakout` /
   `orb_reclaim` / `pdh_reclaim` / `continuation_pullback` names listed as "expected both"
   are DecisionEngine concepts, not `shadow_candidates` families, and are out of population.
+- **M2K (v1.5, P5-M2K to confirm):** expected `BOTH` for `strat_22_continuation_observed`,
+  `strat_22_reversal_observed`, `strat_312_observed`, `strat_322_reversal_observed`,
+  `impulse_first_pullback_observed`, `trend_consolidation_break_observed`,
+  `orb_false_break_fade`, `ema_pullback_trend` (all confirmed 1.000/1.000 on the first 25
+  co-evaluated bars — preliminary); `LANE_ONLY` = `strat_212`, `strat_122` (C21);
+  `NOT_TESTABLE` = `transition_failed_breakdown_reclaim`; absent by lane config =
+  `strat_122_pullback`, `strat_4hr_retrigger_observed`, `vwap_*`; `DEAD` = `ovn_*`, `gap_fill`.
+  For M2K, `ema_pullback_trend` is judged on its own P5-M2K bracket parity (Ruling 2 was an
+  MNQ/MES measurement) — until that gate is met at adequate n it is treated exactly as for
+  MNQ/MES: `REPLAY_ONLY` + `LIVE_ONLY` strata.
 
 ### 2.4 Bar-history coverage and gaps
 
@@ -350,7 +392,7 @@ provenance are **controls and mandatory strata** (§7), not features.
 
 Every TF and PR estimate is computed and printed per stratum **before** any pooled number:
 
-1. instrument: MNQ | MES (never a pooled MNQ+MES statistic without both strata beside it);
+1. instrument: MNQ | MES | M2K (v1.5; never a pooled statistic without every instrument stratum beside it);
 2. session at `B0`: asian | london | new_york;
 3. direction: LONG | SHORT;
 4. strategy family: orb | vwap | pdh_pdl | strat | continuation | live-only families
@@ -566,6 +608,9 @@ any level-identity subgroup ("only PDL works").
 | P6 | Roll ledger for P-REPLAY (dates, gap sizes) and gap ledger on the 15m grid; P-LIVE ledger reused | ledgers | no |
 | P7 | MNQ OOS corpus 2026-07-24 → 2026-09-14 via `polygon_to_replay` (data fetch only) so P-OOS is not MES-only; and the P-OOS-PROSPECTIVE collection is just the existing journal (no collector change) | corpus + manifest | no |
 | P8 | Independent spot-check protocol: ≥ 3 seeded rows re-derived end-to-end (levels, events, outcome, R) by a party other than the analysis author; ≥ 1 headline statistic recomputed from raw files | attestation | no |
+| P3-M2K (v1.5) | Bar-source levels parity for M2K: admitted levels from `logs/bars_M2K_*.jsonl` vs the pinned Polygon corpus at every common B0, one tick, ≥ 98% eligible rows, plus OHLC parity (`scripts/structural_level_bar_source_parity.py`); rerun until ≥ 5 sessions of live history exist | report JSON | no |
+| P5-M2K (v1.5) | Observation-lane vs replay firing/bracket parity for M2K under the P2 spec §4 gates (`scripts/structural_level_p2_parity.py --live-source observation`) | report JSON | no |
+| P-R (v1.5) | Resolver equivalence, synthetic only: `resolve_shadow_candidate` vs `cross_instrument_observation._resolve_one` (`scripts/structural_level_resolver_equivalence.py`) — never run on real candidates | report JSON | no |
 
 ## 15. Conflicts between current repo definitions that must be resolved before analysis
 
@@ -629,6 +674,28 @@ can be handled entirely in the offline builder):
   moves the cumulative VWAP by more than one tick; extremes (PDH/ONH/PWH) are robust to it.
   **Handling:** part of the VWAP `NOT_ADMITTED` ruling; any v2 readmission needs an
   "any missing bar in the current trading day" contamination rule.
+- **C17 — Polygon rolling ~2-year retention (v1.4).** The provider serves no bars older than
+  ≈ today − 2 years; P-REPLAY's v1.0 start was not re-fetchable. **Handling:** Ruling 1, window
+  2024-10-01 →; manifests + preserved files are the reproduction anchor.
+- **C18 — provider revisions between fetches (v1.4).** 8 revised + 138 backfilled bars between the
+  June-2026 and September-2026 fetches of the same contracts. **Handling:** manifests pin the fetch.
+- **C19 — replay research-deque reset at UTC day-file boundaries (v1.4).** `replay_engine.run`
+  cleared the 8-bar recent window per day file; live's BarHistory does not. **Handling:** fixed
+  offline by the operator in PR #621 (`4f07ea0`: prior 8-bar history kept across day files under
+  the same 3-day lookback, regression test added; nothing deployed). R4 rerun on the fix:
+  `impulse_first_pullback_observed` 0.937 → 0.972, `trend_consolidation_break_observed`
+  0.938 → 0.974, every other family unchanged (`docs/structural-level-v15-m2k-2026-09-17.md` §5).
+- **C20 — two resolver implementations (v1.5).** `strategy.shadow_setups.resolve_shadow_candidate`
+  (runner/replay) and `execution.cross_instrument_observation._resolve_one` (observation lane,
+  M2K's prospective outcomes) implement the same rules separately. **Handling:** P-R proves
+  equivalence on synthetic bars (30,000 cases, 0 disagreements); both stay in place.
+- **C21 — lane-only canonical families (v1.5).** The observation lane also writes `strat_212` /
+  `strat_122` from `advance_strat_212_122`, which replay never emits. **Handling:** `LANE_ONLY`,
+  reported in M2K prospective strata only, never pooled.
+- **C22 — no journaled level copy for collection-only roots (v1.5).** The observation lane does
+  not journal `location_context`, so the P3 gate cannot be run against a live copy for M2K.
+  **Handling:** P3-M2K compares the two bar sources instead (levels from live bars vs Polygon
+  bars); the level *definitions* are unchanged and already proven on MNQ/MES.
 
 ---
 

@@ -379,3 +379,144 @@ def test_no_runtime_imports():
         for line in imports:
             for bad in ("webhook", "execution", "broker", "replay", "risk", "tradovate", "adaptive"):
                 assert not line.startswith((f"from {bad}", f"import {bad}")), f"{rel}: {line}"
+
+
+# ── prereg v1.5: M2K via the cross-instrument observation lane ────────────────
+
+def _obs_record(inst, ts: datetime, strategy, rtype="CANDIDATE", entry=2900.0, stop=2897.0, target=2906.0,
+                session="new_york", direction="SHORT"):
+    mode = "structural_outcome" if rtype == "CANDIDATE" else "signal_metrics"
+    return {"record_type": rtype, "instrument": inst, "strategy": strategy, "direction": direction,
+            "signal_timestamp": ts.isoformat(), "session": session, "collection_mode": mode,
+            "bracket_authoritative": rtype == "CANDIDATE", "entry": entry, "stop": stop, "target": target,
+            "reward_to_risk": 2.0, "candidate_id": f"cio-{strategy}-{ts.isoformat()}"}
+
+
+def _bars_file(root: Path, inst, ts0: datetime, n, tf="15"):
+    rows = []
+    for i in range(n):
+        t = ts0 + timedelta(minutes=15 * i)
+        rows.append({"ts": t.isoformat(), "open": 2900 + i, "high": 2901 + i, "low": 2899 + i, "close": 2900.5 + i,
+                     "volume": 100, "timeframe": tf, "source_ticker": f"{inst}1!"})
+    _write_jsonl(root / f"bars_{inst}_{ts0.date().isoformat()}.jsonl", rows)
+
+
+def test_observation_rows_evaluated_bars_and_candidates_never_touch_outcomes(tmp_path):
+    root = tmp_path / "snap"
+    t0 = _ts(12, 15)
+    _bars_file(root, "M2K", t0, 6)
+    _bars_file(root, "MGC", t0, 3)                                   # other root: ignored
+    rows = [
+        _obs_record("M2K", t0, "strat_22_continuation_observed"),
+        _obs_record("M2K", t0, "orb_false_break_fade", rtype="SIGNAL"),
+        {"record_type": "OUTCOME", "instrument": "M2K", "strategy": "strat_22_continuation_observed",
+         "signal_timestamp": t0.isoformat(), "result": "WIN", "entry": None},   # must be skipped unread
+        _obs_record("M2K", t0 + timedelta(minutes=30), "strat_212"),
+        _obs_record("MGC", t0, "strat_22_continuation_observed"),
+    ]
+    _write_jsonl(root / "cross_instrument_observation_v1.jsonl", rows)
+    out = list(p2.iter_observation_rows(str(root / "cross_instrument_observation_v1.jsonl"), str(root),
+                                        instruments=("M2K",)))
+    assert [r.bar_ts for r in out] == [t0 + timedelta(minutes=15 * i) for i in range(6)]
+    assert all(r.source == "live" and r.instrument == "M2K" for r in out)
+    c0 = out[0].candidates
+    assert [c["strategy"] for c in c0] == ["strat_22_continuation_observed", "orb_false_break_fade"]
+    assert c0[0]["bracket_authoritative"] is True and c0[1]["bracket_authoritative"] is False
+    assert all("result" not in c and "outcome" not in c for r in out for c in r.candidates)
+    assert out[2].candidates[0]["strategy"] == "strat_212" and out[2].idx_in_file == 2
+    assert out[1].candidates == [] and out[1].session in ("new_york", "london", "asian")
+    # roll-cut / end exclusivity
+    cut = list(p2.iter_observation_rows(str(root / "cross_instrument_observation_v1.jsonl"), str(root),
+                                        instruments=("M2K",), end_ts_exclusive=t0 + timedelta(minutes=45)))
+    assert len(cut) == 3
+
+
+def test_parity_observation_source_lane_only_family_and_bar_census(tmp_path):
+    root = tmp_path / "snap"; t0 = _ts(12, 15)
+    _bars_file(root, "M2K", t0, 4)
+    fam = "strat_22_continuation_observed"
+    _write_jsonl(root / "cross_instrument_observation_v1.jsonl", [
+        _obs_record("M2K", t0, fam), _obs_record("M2K", t0 + timedelta(minutes=15), fam, entry=2901.0),
+        _obs_record("M2K", t0 + timedelta(minutes=30), "strat_212"),
+    ])
+    rlog = tmp_path / "replay"
+    _write_jsonl(rlog / "journal_2026-08-12.jsonl", [
+        _replay_row("M2K", t0, [_cand(fam, "SHORT", 2900.0, 2897.0, 2906.0, _outcome())]),
+        _replay_row("M2K", t0 + timedelta(minutes=15), [_cand(fam, "SHORT", 2901.1, 2897.0, 2906.0, _outcome())]),  # 1 tick (0.10)
+        _replay_row("M2K", t0 + timedelta(minutes=30), []),
+    ])
+    live = list(p2.iter_observation_rows(str(root / "cross_instrument_observation_v1.jsonl"), str(root), instruments=("M2K",)))
+    replay = list(p2.iter_replay_rows(str(rlog), instruments=("M2K",)))
+    rep = p2.compute_parity(live, replay)
+    assert rep["bar_census"]["M2K"]["both_evaluated"] == 3 and rep["bar_census"]["M2K"]["live_only_bars"] == 1
+    f = rep["families"][fam]
+    assert f["on_both_evaluated_bars"]["firing_jaccard"] == 1.0
+    assert f["bracket_on_cofired"]["all_three_within_one_tick_rate"] == 1.0    # M2K tick 0.10 honoured
+    assert f["classification"] == "BOTH"
+    assert rep["families"]["strat_212"]["classification"] == "LANE_ONLY"
+    assert rep["families"]["strat_212"]["live_firings_all_live_bars"] == 1
+    # a lane-only family leaking into replay is a manifest error
+    assert p2._classify("strat_212", 0, 0, None, None, 3, 1)[0].startswith("MANIFEST_ERROR")
+
+
+def test_bar_source_parity_ohlc_and_levels(tmp_path):
+    from scripts import structural_level_bar_source_parity as bsp
+    from scripts.structural_level_corpus_build import _slot_open as slot_open
+    root = tmp_path / "snap"; cdir = tmp_path / "corpus" / "M2K"; cdir.mkdir(parents=True)
+    # two CME days of 15m bars on both sides; corpus has one open 2 ticks off and a missing bar
+    t0 = datetime(2026, 9, 15, 22, 0, tzinfo=UTC)
+    live_rows, corp_rows = [], []
+    t = t0
+    for i in range(2 * 92):
+        if slot_open(t):
+            px = 2900 + (i % 17) * 0.3
+            row = {"ts": t.isoformat(), "open": px, "high": px + 1.0, "low": px - 1.0, "close": px + 0.2, "volume": 10, "timeframe": "15"}
+            live_rows.append(row)
+            c = dict(row); c["timestamp"] = c.pop("ts"); c["instrument"] = "M2K"
+            if i == 40:
+                c["open"] = px + 0.2
+            if i != 60:
+                corp_rows.append(c)
+        t += timedelta(minutes=15)
+    _write_jsonl(root / "bars_M2K_2026-09-15.jsonl", [r for r in live_rows if r["ts"] < "2026-09-16T"])
+    _write_jsonl(root / "bars_M2K_2026-09-16.jsonl", [r for r in live_rows if r["ts"] >= "2026-09-16T"])
+    _write_jsonl(cdir / "M2K_all.jsonl", corp_rows)
+    rep = bsp.run("M2K", str(root), str(cdir))
+    assert rep["tick"] == 0.10
+    assert rep["bars"]["common"] == len(live_rows) - 1 and rep["bars"]["live_only"] == 1
+    assert rep["ohlc"]["compared"] == len(live_rows) - 1 and rep["ohlc"]["agree"] == len(live_rows) - 2
+    assert rep["ohlc"]["examples"][0]["live"]["open"] + 0.2 == pytest.approx(rep["ohlc"]["examples"][0]["corpus"]["open"])
+    ny = rep["levels"]["NY_ORB_H"]
+    assert ny["compared_eligible"] > 0 and ny["pct_eligible"] == 100.0 and ny["status"] == "PASS"
+    assert "PDH" in rep["levels"] and "LC_ZONE_4H_SUPPLY" in rep["levels"]
+
+
+def test_resolver_equivalence_synthetic_agrees():
+    from scripts import structural_level_resolver_equivalence as req
+    rep = req.run(3000, seed=5)
+    assert rep["verdict"] == "EQUIVALENT" and rep["disagreements"] == 0 and rep["n"] == 3000
+    assert set(rep["by_shadow_result"]) <= {"WIN", "LOSS", "NO_FILL", "OPEN"}
+
+
+def test_resolver_equivalence_hand_cases():
+    from scripts import structural_level_resolver_equivalence as req
+    from strategy.shadow_setups import ShadowSetupCandidate
+    c = ShadowSetupCandidate("s", "LONG", 100.0, 98.0, 104.0, 2.0, "B", 1.0, "")
+    bars = lambda *hl: [{"ts": f"t{i}", "open": 0, "high": h, "low": l, "close": 0} for i, (h, l) in enumerate(hl)]
+    # target touched on the fill bar only → ignored → later stop = LOSS on both
+    r = req.compare(c, bars((105, 99), (101, 97)), "MNQ"); assert r["agree"] and r["shadow"] == "LOSS" and r["ambiguous_fill_bar_target_ignored"]
+    # fill then both hit on one bar → pessimistic LOSS
+    r = req.compare(c, bars((100.5, 99.5), (105, 97)), "MNQ"); assert r["agree"] and r["shadow"] == "LOSS"
+    # never fills
+    r = req.compare(c, bars((110, 106), (109, 105)), "MNQ"); assert r["agree"] and r["shadow"] == "NO_FILL"
+    # fills, unresolved → OPEN ≡ pending
+    r = req.compare(c, bars((101, 99), (102, 99)), "MNQ"); assert r["agree"] and r["shadow"] == "OPEN"
+
+
+def test_p1_levels_honour_m2k_tick_and_version():
+    from research import structural_level_features as slf
+    t0 = datetime(2026, 9, 15, 22, 0, tzinfo=UTC)
+    bars = [{"ts": t0 + timedelta(minutes=15 * i), "open": 2900.0, "high": 2901.0, "low": 2899.0,
+             "close": 2900.5, "volume": 10} for i in range(120)]
+    ls = slf.build_levels(bars, "M2K", b0_ts=bars[-1]["ts"])
+    assert ls.tick == 0.10 and slf.PREREG_VERSION == "1.5"

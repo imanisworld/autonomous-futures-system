@@ -207,6 +207,16 @@ the P2 spec §2 matrix.
 - All `strat_*` families and `orb_false_break_fade` → **BOTH** as predicted; bar-type and ORB
   routing sources are effectively identical on this window.
 
+### 4.4 Post-#621 rerun (2026-09-17, later the same day)
+
+The replay day-file history defect (C19) was fixed offline by the operator in PR #621
+(`4f07ea0`). R4 was rerun on the fixed engine with identical inputs:
+`impulse_first_pullback_observed` 0.937 → **0.972**, `trend_consolidation_break_observed`
+0.938 → **0.974**, every other family numerically identical, `ema_pullback_trend` still
+`BRACKET_CONFLICT` (Ruling 2). Full before/after table and artifacts:
+`docs/structural-level-v15-m2k-2026-09-17.md` §5 and
+`docs/structural-level-p2-parity-corpus-r4-2026-09-17-results-post621.json`.
+
 ## 5. Conflicts / findings to carry forward
 
 - **C17 — Polygon rolling retention (R1-A):** P-REPLAY as preregistered in v1.0–v1.3 is no
