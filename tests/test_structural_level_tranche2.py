@@ -66,3 +66,44 @@ def test_probe_never_imports_runtime():
     for line in imports:
         for bad in ("webhook", "execution", "broker", "replay", "risk", "tradovate", "adaptive", "strategy"):
             assert not line.startswith((f"from {bad}", f"import {bad}")), line
+
+
+def test_list_contracts_drops_spreads_and_dedupes(monkeypatch):
+    rows = [{"ticker": "MBTU6", "first_trade_date": "2025-03-31", "last_trade_date": "2026-09-25", "trading_venue": "XCME", "active": True},
+            {"ticker": "MBTU6", "first_trade_date": "2026-01-01", "last_trade_date": "2026-09-25", "trading_venue": "XCME", "active": False},
+            {"ticker": "MBTU6-MBTV6", "first_trade_date": "2026-04-27", "last_trade_date": "2026-09-25", "trading_venue": "XCME", "active": True},
+            {"ticker": "MBTU6-MBTV6XXX", "first_trade_date": "2026-04-27", "last_trade_date": "2026-09-25", "trading_venue": "XCME", "active": True},
+            {"ticker": "MBTV6", "first_trade_date": "2026-04-27", "last_trade_date": "2026-10-30", "trading_venue": "XCME", "active": True}]
+
+    calls = {"n": 0}
+
+    class _Resp:
+        def __init__(self, code):
+            self.status_code = code
+            self.request = None
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"results": rows, "next_url": None}
+
+    class _Http:
+        def __init__(self, *a, **k):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def get(self, url, headers=None, params=None):
+            calls["n"] += 1
+            return _Resp(503 if calls["n"] < 3 else 200)      # two transient 5xx, then the page
+
+    monkeypatch.setattr(t2.httpx, "Client", _Http)
+    out, raw = t2.list_contracts(_Client(), "MBT", pace=0.0)
+    assert calls["n"] == 3 and raw == 5                        # retried through the 503s
+    assert [r["ticker"] for r in out] == ["MBTU6", "MBTV6"]              # spreads dropped, U6 de-duplicated
+    assert out[0]["first_trade_date"] == "2025-03-31" and out[0]["active"] is True   # widest life kept

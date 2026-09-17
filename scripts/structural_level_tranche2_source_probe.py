@@ -45,7 +45,7 @@ sys.path.insert(0, str(REPO))
 from context.futures_session import product_session_active  # noqa: E402  (pure calendar helper)
 from sources.polygon_client import PolygonFuturesClient  # noqa: E402
 
-TOOL_VERSION = "slt2-source-probe-v1"
+TOOL_VERSION = "slt2-source-probe-v1.2"
 MONTH_CODES = {"F": 1, "G": 2, "H": 3, "J": 4, "K": 5, "M": 6, "N": 7, "Q": 8, "U": 9, "V": 10, "X": 11, "Z": 12}
 
 
@@ -64,6 +64,26 @@ def contract_month(ticker: str, root: str) -> tuple[int, int] | None:
     return 2020 + int(suf[1]), MONTH_CODES[suf[0]]
 
 
+LISTING_RETRIES = 5     # a 200-page listing must survive a transient 5xx (seen: 503 mid-walk)
+
+
+def _get_json(http: "httpx.Client", url: str, headers: dict, params: dict | None, pace: float) -> dict:
+    last: Exception | None = None
+    for attempt in range(LISTING_RETRIES):
+        try:
+            r = http.get(url, headers=headers, params=params)
+            if r.status_code >= 500:
+                raise httpx.HTTPStatusError(f"{r.status_code} from provider", request=r.request, response=r)
+            r.raise_for_status()
+            return r.json()
+        except (httpx.HTTPStatusError, httpx.TransportError) as e:
+            if isinstance(e, httpx.HTTPStatusError) and e.response.status_code < 500:
+                raise
+            last = e
+            _time.sleep(pace * (attempt + 1))
+    raise RuntimeError(f"provider listing failed after {LISTING_RETRIES} attempts: {last}")
+
+
 def list_contracts(client: PolygonFuturesClient, root: str, pace: float = 13.0) -> tuple[list[dict], int]:
     url = f"{client.base_url}/futures/v1/contracts"
     params: dict | None = {"product_code": root, "limit": 1000}
@@ -72,15 +92,13 @@ def list_contracts(client: PolygonFuturesClient, root: str, pace: float = 13.0) 
     raw = 0
     with httpx.Client(timeout=60.0) as http:
         while url:
-            r = http.get(url, headers=headers, params=params)
+            j = _get_json(http, url, headers, params, pace)
             params = None
-            r.raise_for_status()
-            j = r.json()
             for row in j.get("results") or []:
                 raw += 1
                 t = str(row.get("ticker") or "")
-                if not t.startswith(root):
-                    continue
+                if not t.startswith(root) or contract_month(t, root) is None:
+                    continue        # spreads ("MBTF5-MBTG5"), odd suffixes: not dated outrights
                 cur = seen.get(t)
                 rec = {"ticker": t, "first_trade_date": row.get("first_trade_date"),
                        "last_trade_date": row.get("last_trade_date"), "trading_venue": row.get("trading_venue"),

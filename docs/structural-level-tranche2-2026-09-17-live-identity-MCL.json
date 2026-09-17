@@ -1,0 +1,63 @@
+{
+ "live_bars": 55,
+ "live_first": "2026-09-16T12:15:00+00:00",
+ "live_last": "2026-09-17T02:45:00+00:00",
+ "source_tickers": [
+  "MCL1!"
+ ],
+ "identity_rule": {
+  "tolerance_ticks": 4,
+  "min_separation_ticks": 20
+ },
+ "identified_per_contract": {
+  "MCLV6": 37,
+  "NOT_SERVED_BY_PROVIDER": 18
+ },
+ "within_one_tick_per_contract": {
+  "MCLV6": 37
+ },
+ "identity_runs": [
+  {
+   "contract": "MCLV6",
+   "first": "2026-09-16T12:15:00+00:00",
+   "last": "2026-09-16T22:15:00+00:00",
+   "bars": 37
+  }
+ ],
+ "feed_switch_observed_in_live_span": false,
+ "examples_unidentified": [
+  {
+   "ts": "2026-09-16T22:30:00+00:00",
+   "reason": "no candidate contract has this bar"
+  },
+  {
+   "ts": "2026-09-16T22:45:00+00:00",
+   "reason": "no candidate contract has this bar"
+  },
+  {
+   "ts": "2026-09-16T23:00:00+00:00",
+   "reason": "no candidate contract has this bar"
+  },
+  {
+   "ts": "2026-09-16T23:15:00+00:00",
+   "reason": "no candidate contract has this bar"
+  },
+  {
+   "ts": "2026-09-16T23:30:00+00:00",
+   "reason": "no candidate contract has this bar"
+  }
+ ],
+ "root": "MCL",
+ "tick": 0.01,
+ "candidates": [
+  "MCLV6",
+  "MCLX6"
+ ],
+ "x0_tool": "slx0-roll-proof-v1.5.1",
+ "identity_tol_ticks": 4,
+ "min_separation_ticks": 20,
+ "live_source_ticker": [
+  "MCL1!"
+ ],
+ "bars_snapshot": "<scratchpad>/t2_snapshot"
+}

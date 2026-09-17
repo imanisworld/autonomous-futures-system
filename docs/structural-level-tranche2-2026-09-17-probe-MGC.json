@@ -1,0 +1,555 @@
+{
+ "tool": "slt2-source-probe-v1.2",
+ "root": "MGC",
+ "window": [
+  "2024-09-01",
+  "2026-09-17"
+ ],
+ "provider": {
+  "name": "Polygon futures (sources/polygon_client.PolygonFuturesClient)",
+  "inventory_endpoint": "/futures/v1/contracts?product_code=<ROOT>",
+  "bars_endpoint": "/futures/v1/aggs/{DATED_TICKER}?resolution=15min",
+  "fetched_utc": "2026-09-17T06:18:52Z"
+ },
+ "inventory": {
+  "raw_rows": 243864,
+  "unique_tickers": 60,
+  "month_codes_listed": {
+   "G": 10,
+   "J": 10,
+   "M": 10,
+   "Q": 10,
+   "V": 10,
+   "Z": 10
+  },
+  "trading_venues": [
+   "XCEC"
+  ],
+  "listed_life_min": "2015-03-30",
+  "listed_life_max": "2028-12-27",
+  "contracts_in_window": [
+   "MGCV4",
+   "MGCZ4",
+   "MGCG5",
+   "MGCJ5",
+   "MGCM5",
+   "MGCQ5",
+   "MGCV5",
+   "MGCZ5",
+   "MGCG6",
+   "MGCJ6",
+   "MGCM6",
+   "MGCQ6",
+   "MGCV6",
+   "MGCZ6"
+  ]
+ },
+ "contracts": {
+  "MGCV4": {
+   "listed_first_trade": "2022-11-29",
+   "listed_last_trade": "2024-10-29",
+   "fetched_range": [
+    "2024-09-01",
+    "2024-10-29"
+   ],
+   "bars": 860,
+   "first_bar": "2024-09-17T00:00:00+00:00",
+   "last_bar": "2024-10-28T01:30:00+00:00",
+   "volume": 30239.0,
+   "days_with_bars": 28
+  },
+  "MGCZ4": {
+   "listed_first_trade": "2022-12-29",
+   "listed_last_trade": "2024-12-27",
+   "fetched_range": [
+    "2024-09-01",
+    "2024-12-27"
+   ],
+   "bars": 4939,
+   "first_bar": "2024-09-17T00:00:00+00:00",
+   "last_bar": "2024-12-26T16:00:00+00:00",
+   "volume": 5908186.0,
+   "days_with_bars": 82
+  },
+  "MGCG5": {
+   "listed_first_trade": "2023-03-30",
+   "listed_last_trade": "2025-02-26",
+   "fetched_range": [
+    "2024-09-01",
+    "2025-02-26"
+   ],
+   "bars": 8763,
+   "first_bar": "2024-09-17T00:15:00+00:00",
+   "last_bar": "2025-02-25T21:30:00+00:00",
+   "volume": 4813050.0,
+   "days_with_bars": 135
+  },
+  "MGCJ5": {
+   "listed_first_trade": "2023-05-30",
+   "listed_last_trade": "2025-04-28",
+   "fetched_range": [
+    "2024-09-01",
+    "2025-04-28"
+   ],
+   "bars": 10233,
+   "first_bar": "2024-09-17T01:00:00+00:00",
+   "last_bar": "2025-04-28T12:30:00+00:00",
+   "volume": 5429196.0,
+   "days_with_bars": 188
+  },
+  "MGCM5": {
+   "listed_first_trade": "2023-06-29",
+   "listed_last_trade": "2025-06-26",
+   "fetched_range": [
+    "2024-09-01",
+    "2025-06-26"
+   ],
+   "bars": 11484,
+   "first_bar": "2024-09-17T01:45:00+00:00",
+   "last_bar": "2025-06-25T20:30:00+00:00",
+   "volume": 12865028.0,
+   "days_with_bars": 238
+  },
+  "MGCQ5": {
+   "listed_first_trade": "2023-09-28",
+   "listed_last_trade": "2025-08-27",
+   "fetched_range": [
+    "2024-09-01",
+    "2025-08-27"
+   ],
+   "bars": 12136,
+   "first_bar": "2024-09-17T15:30:00+00:00",
+   "last_bar": "2025-08-26T14:15:00+00:00",
+   "volume": 9756431.0,
+   "days_with_bars": 279
+  },
+  "MGCV5": {
+   "listed_first_trade": "2023-11-29",
+   "listed_last_trade": "2025-10-29",
+   "fetched_range": [
+    "2024-09-01",
+    "2025-10-29"
+   ],
+   "bars": 12739,
+   "first_bar": "2024-09-17T04:30:00+00:00",
+   "last_bar": "2025-10-28T15:45:00+00:00",
+   "volume": 804645.0,
+   "days_with_bars": 323
+  },
+  "MGCZ5": {
+   "listed_first_trade": "2023-12-28",
+   "listed_last_trade": "2025-12-29",
+   "fetched_range": [
+    "2024-09-01",
+    "2025-12-29"
+   ],
+   "bars": 15573,
+   "first_bar": "2024-09-17T15:30:00+00:00",
+   "last_bar": "2025-12-28T23:30:00+00:00",
+   "volume": 34056525.0,
+   "days_with_bars": 378
+  },
+  "MGCG6": {
+   "listed_first_trade": "2024-03-27",
+   "listed_last_trade": "2026-02-25",
+   "fetched_range": [
+    "2024-09-01",
+    "2026-02-25"
+   ],
+   "bars": 14899,
+   "first_bar": "2024-09-17T02:15:00+00:00",
+   "last_bar": "2026-02-24T16:00:00+00:00",
+   "volume": 19067568.0,
+   "days_with_bars": 379
+  },
+  "MGCJ6": {
+   "listed_first_trade": "2024-05-30",
+   "listed_last_trade": "2026-04-28",
+   "fetched_range": [
+    "2024-09-01",
+    "2026-04-28"
+   ],
+   "bars": 15482,
+   "first_bar": "2024-09-26T14:00:00+00:00",
+   "last_bar": "2026-04-27T20:30:00+00:00",
+   "volume": 25114476.0,
+   "days_with_bars": 371
+  },
+  "MGCM6": {
+   "listed_first_trade": "2024-06-27",
+   "listed_last_trade": "2026-06-26",
+   "fetched_range": [
+    "2024-09-01",
+    "2026-06-26"
+   ],
+   "bars": 15722,
+   "first_bar": "2024-09-17T10:30:00+00:00",
+   "last_bar": "2026-06-26T17:15:00+00:00",
+   "volume": 15245974.0,
+   "days_with_bars": 361
+  },
+  "MGCQ6": {
+   "listed_first_trade": "2024-09-27",
+   "listed_last_trade": "2026-08-27",
+   "fetched_range": [
+    "2024-09-27",
+    "2026-08-27"
+   ],
+   "bars": 16264,
+   "first_bar": "2025-03-27T15:30:00+00:00",
+   "last_bar": "2026-08-27T13:15:00+00:00",
+   "volume": 13644962.0,
+   "days_with_bars": 360
+  },
+  "MGCV6": {
+   "listed_first_trade": "2024-11-27",
+   "listed_last_trade": "2026-10-28",
+   "fetched_range": [
+    "2024-11-27",
+    "2026-09-17"
+   ],
+   "bars": 15485,
+   "first_bar": "2025-04-30T11:00:00+00:00",
+   "last_bar": "2026-09-16T22:15:00+00:00",
+   "volume": 1614989.0,
+   "days_with_bars": 333
+  },
+  "MGCZ6": {
+   "listed_first_trade": "2024-12-30",
+   "listed_last_trade": "2026-12-29",
+   "fetched_range": [
+    "2024-12-30",
+    "2026-09-17"
+   ],
+   "bars": 15703,
+   "first_bar": "2025-02-06T08:15:00+00:00",
+   "last_bar": "2026-09-16T22:15:00+00:00",
+   "volume": 11102967.0,
+   "days_with_bars": 360
+  }
+ },
+ "retention": {
+  "earliest_bar_served": "2024-09-17T00:00:00+00:00",
+  "days_with_any_bar": 624
+ },
+ "volume_front_chain": [
+  {
+   "ticker": "MGCZ4",
+   "first_day": "2024-09-17",
+   "last_day": "2024-11-26",
+   "days": 61
+  },
+  {
+   "ticker": "MGCG5",
+   "first_day": "2024-11-27",
+   "last_day": "2025-01-29",
+   "days": 55
+  },
+  {
+   "ticker": "MGCJ5",
+   "first_day": "2025-01-30",
+   "last_day": "2025-03-27",
+   "days": 49
+  },
+  {
+   "ticker": "MGCM5",
+   "first_day": "2025-03-28",
+   "last_day": "2025-05-27",
+   "days": 51
+  },
+  {
+   "ticker": "MGCQ5",
+   "first_day": "2025-05-28",
+   "last_day": "2025-07-28",
+   "days": 53
+  },
+  {
+   "ticker": "MGCZ5",
+   "first_day": "2025-07-29",
+   "last_day": "2025-11-24",
+   "days": 102
+  },
+  {
+   "ticker": "MGCG6",
+   "first_day": "2025-11-25",
+   "last_day": "2026-01-27",
+   "days": 55
+  },
+  {
+   "ticker": "MGCJ6",
+   "first_day": "2026-01-28",
+   "last_day": "2026-03-26",
+   "days": 50
+  },
+  {
+   "ticker": "MGCM6",
+   "first_day": "2026-03-27",
+   "last_day": "2026-05-26",
+   "days": 51
+  },
+  {
+   "ticker": "MGCQ6",
+   "first_day": "2026-05-27",
+   "last_day": "2026-07-28",
+   "days": 54
+  },
+  {
+   "ticker": "MGCZ6",
+   "first_day": "2026-07-29",
+   "last_day": "2026-09-16",
+   "days": 43
+  }
+ ],
+ "crossovers": [
+  {
+   "from": "MGCZ4",
+   "to": "MGCG5",
+   "crossover_utc_day": "2024-11-27",
+   "from_volume_prev_day": 80210.0,
+   "to_volume_prev_day": 72235.0,
+   "from_volume_on_day": 4418.0,
+   "to_volume_on_day": 113689.0,
+   "both_trading_on_day": true,
+   "from_bars_after": 251,
+   "to_bars_before": 4544
+  },
+  {
+   "from": "MGCG5",
+   "to": "MGCJ5",
+   "crossover_utc_day": "2025-01-30",
+   "from_volume_prev_day": 42962.0,
+   "to_volume_prev_day": 41896.0,
+   "from_volume_on_day": 3658.0,
+   "to_volume_on_day": 115890.0,
+   "both_trading_on_day": true,
+   "from_bars_after": 226,
+   "to_bars_before": 6174
+  },
+  {
+   "from": "MGCJ5",
+   "to": "MGCM5",
+   "crossover_utc_day": "2025-03-28",
+   "from_volume_prev_day": 74940.0,
+   "to_volume_prev_day": 67137.0,
+   "from_volume_on_day": 6702.0,
+   "to_volume_on_day": 156482.0,
+   "both_trading_on_day": true,
+   "from_bars_after": 301,
+   "to_bars_before": 7245
+  },
+  {
+   "from": "MGCM5",
+   "to": "MGCQ5",
+   "crossover_utc_day": "2025-05-28",
+   "from_volume_prev_day": 234660.0,
+   "to_volume_prev_day": 53354.0,
+   "from_volume_on_day": 113704.0,
+   "to_volume_on_day": 168317.0,
+   "both_trading_on_day": true,
+   "from_bars_after": 385,
+   "to_bars_before": 7807
+  },
+  {
+   "from": "MGCQ5",
+   "to": "MGCZ5",
+   "crossover_utc_day": "2025-07-29",
+   "from_volume_prev_day": 161589.0,
+   "to_volume_prev_day": 9534.0,
+   "from_volume_on_day": 45733.0,
+   "to_volume_on_day": 112033.0,
+   "both_trading_on_day": true,
+   "from_bars_after": 307,
+   "to_bars_before": 7284
+  },
+  {
+   "from": "MGCZ5",
+   "to": "MGCG6",
+   "crossover_utc_day": "2025-11-25",
+   "from_volume_prev_day": 327853.0,
+   "to_volume_prev_day": 54868.0,
+   "from_volume_on_day": 78573.0,
+   "to_volume_on_day": 401877.0,
+   "both_trading_on_day": true,
+   "from_bars_after": 483,
+   "to_bars_before": 10585
+  },
+  {
+   "from": "MGCG6",
+   "to": "MGCJ6",
+   "crossover_utc_day": "2026-01-28",
+   "from_volume_prev_day": 566136.0,
+   "to_volume_prev_day": 157750.0,
+   "from_volume_on_day": 121186.0,
+   "to_volume_on_day": 948767.0,
+   "both_trading_on_day": true,
+   "from_bars_after": 354,
+   "to_bars_before": 11358
+  },
+  {
+   "from": "MGCJ6",
+   "to": "MGCM6",
+   "crossover_utc_day": "2026-03-27",
+   "from_volume_prev_day": 509296.0,
+   "to_volume_prev_day": 102698.0,
+   "from_volume_on_day": 52706.0,
+   "to_volume_on_day": 369283.0,
+   "both_trading_on_day": true,
+   "from_bars_after": 273,
+   "to_bars_before": 11512
+  },
+  {
+   "from": "MGCM6",
+   "to": "MGCQ6",
+   "crossover_utc_day": "2026-05-27",
+   "from_volume_prev_day": 248384.0,
+   "to_volume_prev_day": 77231.0,
+   "from_volume_on_day": 73129.0,
+   "to_volume_on_day": 283893.0,
+   "both_trading_on_day": true,
+   "from_bars_after": 356,
+   "to_bars_before": 11821
+  },
+  {
+   "from": "MGCQ6",
+   "to": "MGCZ6",
+   "crossover_utc_day": "2026-07-29",
+   "from_volume_prev_day": 190182.0,
+   "to_volume_prev_day": 32174.0,
+   "from_volume_on_day": 84327.0,
+   "to_volume_on_day": 251863.0,
+   "both_trading_on_day": true,
+   "from_bars_after": 335,
+   "to_bars_before": 12407
+  }
+ ],
+ "chain_causally_ordered_by_expiry": true,
+ "chain_flip_flops": 0,
+ "continuity_front_contract_by_month": {
+  "2024-09": {
+   "expected_slots": 920,
+   "missing_slots": 0,
+   "missing_pct": 0.0
+  },
+  "2024-10": {
+   "expected_slots": 2116,
+   "missing_slots": 0,
+   "missing_pct": 0.0
+  },
+  "2024-11": {
+   "expected_slots": 1924,
+   "missing_slots": 23,
+   "missing_pct": 1.2
+  },
+  "2024-12": {
+   "expected_slots": 2028,
+   "missing_slots": 109,
+   "missing_pct": 5.37
+  },
+  "2025-01": {
+   "expected_slots": 2112,
+   "missing_slots": 110,
+   "missing_pct": 5.21
+  },
+  "2025-02": {
+   "expected_slots": 1840,
+   "missing_slots": 15,
+   "missing_pct": 0.82
+  },
+  "2025-03": {
+   "expected_slots": 1940,
+   "missing_slots": 0,
+   "missing_pct": 0.0
+  },
+  "2025-04": {
+   "expected_slots": 1940,
+   "missing_slots": 8,
+   "missing_pct": 0.41
+  },
+  "2025-05": {
+   "expected_slots": 2016,
+   "missing_slots": 10,
+   "missing_pct": 0.5
+  },
+  "2025-06": {
+   "expected_slots": 1940,
+   "missing_slots": 10,
+   "missing_pct": 0.52
+  },
+  "2025-07": {
+   "expected_slots": 2116,
+   "missing_slots": 16,
+   "missing_pct": 0.76
+  },
+  "2025-08": {
+   "expected_slots": 1932,
+   "missing_slots": 0,
+   "missing_pct": 0.0
+  },
+  "2025-09": {
+   "expected_slots": 2024,
+   "missing_slots": 10,
+   "missing_pct": 0.49
+  },
+  "2025-10": {
+   "expected_slots": 2108,
+   "missing_slots": 0,
+   "missing_pct": 0.0
+  },
+  "2025-11": {
+   "expected_slots": 1844,
+   "missing_slots": 62,
+   "missing_pct": 3.36
+  },
+  "2025-12": {
+   "expected_slots": 2116,
+   "missing_slots": 112,
+   "missing_pct": 5.29
+  },
+  "2026-01": {
+   "expected_slots": 2020,
+   "missing_slots": 98,
+   "missing_pct": 4.85
+  },
+  "2026-02": {
+   "expected_slots": 1840,
+   "missing_slots": 16,
+   "missing_pct": 0.87
+  },
+  "2026-03": {
+   "expected_slots": 2032,
+   "missing_slots": 1,
+   "missing_pct": 0.05
+  },
+  "2026-04": {
+   "expected_slots": 1940,
+   "missing_slots": 8,
+   "missing_pct": 0.41
+  },
+  "2026-05": {
+   "expected_slots": 1932,
+   "missing_slots": 10,
+   "missing_pct": 0.52
+  },
+  "2026-06": {
+   "expected_slots": 2024,
+   "missing_slots": 16,
+   "missing_pct": 0.79
+  },
+  "2026-07": {
+   "expected_slots": 2108,
+   "missing_slots": 16,
+   "missing_pct": 0.76
+  },
+  "2026-08": {
+   "expected_slots": 1940,
+   "missing_slots": 0,
+   "missing_pct": 0.0
+  },
+  "2026-09": {
+   "expected_slots": 1104,
+   "missing_slots": 16,
+   "missing_pct": 1.45
+  }
+ },
+ "note": "volume-front chain and crossovers are provider evidence for proposing a roll rule; they are not the rule and not live-feed provenance"
+}
