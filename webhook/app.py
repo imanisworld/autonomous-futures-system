@@ -318,11 +318,21 @@ def _verify_webhook_secret(provided: str | None) -> None:
         raise HTTPException(status_code=401, detail="Webhook secret is not configured.")
     if not provided:
         raise HTTPException(status_code=401, detail="Invalid webhook secret")
+    # A malformed credential is an authentication failure, never a server
+    # error. hmac.compare_digest raises TypeError on str operands that contain
+    # non-ASCII characters; on 2026-09-17 a re-created TradingView alert sent
+    # such a value and every one of its bar-close deliveries became a 500 (and
+    # a dropped bar) instead of a 401. Reject it here, fail closed.
+    if not provided.isascii():
+        raise HTTPException(status_code=401, detail="Invalid webhook secret")
     # Constant-time compare against every accepted secret (rotation-safe). The
-    # loop does not short-circuit, preserving constant-time behaviour.
+    # loop does not short-circuit, preserving constant-time behaviour. Compare
+    # UTF-8 bytes so the comparison itself can never raise, whatever the
+    # configured secrets contain.
+    provided_bytes = provided.encode("utf-8")
     matched = False
     for secret in accepted:
-        if hmac.compare_digest(provided, secret):
+        if hmac.compare_digest(provided_bytes, secret.encode("utf-8")):
             matched = True
     if not matched:
         raise HTTPException(status_code=401, detail="Invalid webhook secret")
