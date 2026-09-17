@@ -32,8 +32,15 @@ Corpus classification (frozen here, reported not tuned):
 * feed reconciliation — ``FEED_CONFIRMED`` / ``FEED_CONTRADICTED`` / ``NOT_OBSERVABLE`` per
   seam, ``NOT_APPLICABLE`` when no live bars are supplied (historical window with no feed);
 * ``roll_provenance`` — ``PROVEN`` when there is no seam or every seam is ``FEED_CONFIRMED``;
-  ``ROLL_PROVENANCE_UNKNOWN`` when a live feed is supplied and any seam is ``NOT_OBSERVABLE``
-  or contradicted; ``SCHEDULER_CONVENTION_ONLY`` when no live feed exists to reconcile against.
+  ``ROLL_PROVENANCE_UNKNOWN`` otherwise, including the historical case where no live feed
+  exists to reconcile against (#625: a scheduler seam proves nothing by itself, so a seam that
+  is not independently confirmed leaves the roll unproven — it is not a weaker "convention"
+  grade of proof). ``seam_rule_independently_proven`` says whether any evidence beyond the
+  scheduler was found; ``admission`` is ``ADMITTED`` only for ``PROVEN``.
+
+``--reclassify <report.json>`` re-derives the classification of an existing report from its
+recorded segments/seams/live-feed evidence without any provider request (used when the
+classification rule changes; the evidence is not touched and the source report is named).
 
 Read-only: Polygon GETs only; nothing on the box is touched; no outcome field exists in any
 input. Never a runtime import.
@@ -61,7 +68,7 @@ sys.path.insert(0, str(REPO))
 from research.structural_level_p2 import load_corpus_bars, parse_dt, read_jsonl  # noqa: E402
 from sources.polygon_client import PolygonBar, PolygonFuturesClient  # noqa: E402
 
-TOOL_VERSION = "slx0-roll-proof-v1.5"
+TOOL_VERSION = "slx0-roll-proof-v1.5.1"
 
 
 def _tick(inst: str) -> float:
@@ -349,23 +356,6 @@ def run(corpus_dir: str, client: PolygonFuturesClient, *, bars_root: str | None 
             s["feed_reconciliation"] = reconcile_seam(s, live_id)
             s["seam_provenance"] = "SCHEDULER_CONVENTION"
 
-    identity_ok = all(r["identity"] in ("PROVEN", "WARMUP_ONLY_NOT_IN_CORPUS") for r in seg_reports) \
-        and any(r["identity"] == "PROVEN" for r in seg_reports)
-    in_window_seams = [s for s in seams if "status" not in s]
-    if not in_window_seams:
-        seam_rule = "FIXED_DATED_CONTRACT" if len(segments) == 1 else "NO_SEAM_IN_CORPUS_WINDOW"
-        roll_prov = "PROVEN" if identity_ok else "NOT_PROVEN"
-    else:
-        seam_rule = "SCHEDULER_CONVENTION"
-        recs = {s["feed_reconciliation"] for s in in_window_seams}
-        if not identity_ok:
-            roll_prov = "NOT_PROVEN"
-        elif recs == {"NOT_APPLICABLE"}:
-            roll_prov = "SCHEDULER_CONVENTION_ONLY"
-        elif recs == {"FEED_CONFIRMED"}:
-            roll_prov = "PROVEN"
-        else:
-            roll_prov = "ROLL_PROVENANCE_UNKNOWN"
     report = {
         "tool": TOOL_VERSION, "instrument": inst, "tick": tick, "corpus_dir": str(corpus_dir),
         "manifest_sha256": hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
@@ -380,41 +370,86 @@ def run(corpus_dir: str, client: PolygonFuturesClient, *, bars_root: str | None 
         "segments": seg_reports,
         "seams": seams,
         "live_feed": live_id,
-        "classification": {
-            "contract_identity": "CONTRACT_IDENTITY_PROVEN" if identity_ok else "CONTRACT_IDENTITY_NOT_PROVEN",
-            "seam_rule": seam_rule,
-            "feed_reconciliation": (sorted({s["feed_reconciliation"] for s in in_window_seams})
-                                    if in_window_seams else ["NO_SEAM"]),
-            "roll_provenance": roll_prov,
-        },
     }
+    report["classification"] = classify(report)
     return report
+
+
+def classify(report: dict) -> dict:
+    """Pure function of the recorded evidence (segments, seams, live feed) — no network."""
+    seg_reports, seams = report["segments"], report["seams"]
+    identity_ok = all(r["identity"] in ("PROVEN", "WARMUP_ONLY_NOT_IN_CORPUS") for r in seg_reports) \
+        and any(r["identity"] == "PROVEN" for r in seg_reports)
+    in_window_seams = [s for s in seams if "status" not in s]
+    if not in_window_seams:
+        seam_rule = "FIXED_DATED_CONTRACT" if len(seg_reports) == 1 else "NO_SEAM_IN_CORPUS_WINDOW"
+        seam_proven = True                      # nothing to prove: identity is the whole story
+        roll_prov = "PROVEN" if identity_ok else "NOT_PROVEN"
+    else:
+        seam_rule = "SCHEDULER_CONVENTION"
+        recs = {s["feed_reconciliation"] for s in in_window_seams}
+        seam_proven = recs == {"FEED_CONFIRMED"}
+        if not identity_ok:
+            roll_prov = "NOT_PROVEN"
+        elif seam_proven:
+            roll_prov = "PROVEN"
+        else:
+            # NOT_OBSERVABLE / FEED_CONTRADICTED, or NOT_APPLICABLE (no live feed at all): the
+            # scheduler seam is unconfirmed either way (#625) — never a "convention" grade of proof
+            roll_prov = "ROLL_PROVENANCE_UNKNOWN"
+    return {
+        "contract_identity": "CONTRACT_IDENTITY_PROVEN" if identity_ok else "CONTRACT_IDENTITY_NOT_PROVEN",
+        "seam_rule": seam_rule,
+        "seam_rule_independently_proven": seam_proven,
+        "feed_reconciliation": (sorted({s["feed_reconciliation"] for s in in_window_seams})
+                                if in_window_seams else ["NO_SEAM"]),
+        "roll_provenance": roll_prov,
+        "admission": "ADMITTED" if roll_prov == "PROVEN" else "NOT_ADMITTED",
+    }
+
+
+def reclassify(report_path: str | os.PathLike) -> dict:
+    """Re-derive ``classification`` of an existing report; evidence untouched, source recorded."""
+    src = Path(report_path)
+    rep = json.loads(src.read_text(encoding="utf-8"))
+    rep["reclassified_from"] = {"path": src.name, "sha256": hashlib.sha256(src.read_bytes()).hexdigest(),
+                                "tool": rep.get("tool"),
+                                "utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
+    rep["tool"] = TOOL_VERSION
+    rep["classification"] = classify(rep)
+    return rep
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--corpus-dir", required=True)
+    g = ap.add_mutually_exclusive_group(required=True)
+    g.add_argument("--corpus-dir")
+    g.add_argument("--reclassify", metavar="REPORT_JSON", help="re-derive classification of an existing report (no network)")
     ap.add_argument("--bars-root", default=None, help="box bars snapshot (bars_<INST>_*.jsonl) for feed reconciliation")
     ap.add_argument("--seam-window-days", type=int, default=3)
     ap.add_argument("--out", required=True)
     args = ap.parse_args(argv)
-    try:
-        from dotenv import load_dotenv
-        load_dotenv(REPO / ".env")
-    except ImportError:
-        pass
-    client = PolygonFuturesClient(min_request_interval=13.0)
-    if not client.configured:
-        print("[x0] POLYGON_API_KEY not set", file=sys.stderr)
-        return 1
-    rep = run(args.corpus_dir, client, bars_root=args.bars_root, seam_window_days=args.seam_window_days)
+    if args.reclassify:
+        rep = reclassify(args.reclassify)
+    else:
+        try:
+            from dotenv import load_dotenv
+            load_dotenv(REPO / ".env")
+        except ImportError:
+            pass
+        client = PolygonFuturesClient(min_request_interval=13.0)
+        if not client.configured:
+            print("[x0] POLYGON_API_KEY not set", file=sys.stderr)
+            return 1
+        rep = run(args.corpus_dir, client, bars_root=args.bars_root, seam_window_days=args.seam_window_days)
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     with open(args.out, "w", encoding="utf-8") as fh:
         json.dump(rep, fh, indent=1)
         fh.write("\n")
     c = rep["classification"]
     print(f"[x0] {rep['instrument']} {rep['corpus']['rows']} rows  identity={c['contract_identity']}  "
-          f"seam_rule={c['seam_rule']}  feed={c['feed_reconciliation']}  roll_provenance={c['roll_provenance']}")
+          f"seam_rule={c['seam_rule']}  feed={c['feed_reconciliation']}  roll_provenance={c['roll_provenance']}  "
+          f"admission={c['admission']}")
     for s in rep["segments"]:
         print(f"[x0]   seg {s['ticker']} {s['segment_start']}..{s['segment_end']} rows={s['corpus_rows']} "
               f"found={s.get('found_in_dated_contract')} missing={s.get('missing_from_dated_contract')} "
@@ -430,9 +465,8 @@ def main(argv: list[str] | None = None) -> int:
         lf = rep["live_feed"]
         print(f"[x0]   live {lf['live_bars']} bars {lf['live_first']}..{lf['live_last']} "
               f"identified={lf['identified_per_contract']} switch_observed={lf['feed_switch_observed_in_live_span']}")
-    # 0 = PROVEN; 3 = identity proven but seams are convention-only (documented, not a pass);
-    # 2 = ROLL_PROVENANCE_UNKNOWN / NOT_PROVEN.
-    return {"PROVEN": 0, "SCHEDULER_CONVENTION_ONLY": 3}.get(c["roll_provenance"], 2)
+    # 0 = PROVEN (admitted); 2 = ROLL_PROVENANCE_UNKNOWN / NOT_PROVEN (not admitted).
+    return 0 if c["roll_provenance"] == "PROVEN" else 2
 
 
 if __name__ == "__main__":

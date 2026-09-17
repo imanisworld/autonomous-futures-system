@@ -1,5 +1,5 @@
 {
- "tool": "slx0-roll-proof-v1.5",
+ "tool": "slx0-roll-proof-v1.5.1",
  "instrument": "M2K",
  "tick": 0.1,
  "corpus_dir": "<checkout>/data/replay_polygon_v2/M2K",
@@ -771,9 +771,17 @@
  "classification": {
   "contract_identity": "CONTRACT_IDENTITY_PROVEN",
   "seam_rule": "SCHEDULER_CONVENTION",
+  "seam_rule_independently_proven": false,
   "feed_reconciliation": [
    "NOT_APPLICABLE"
   ],
-  "roll_provenance": "SCHEDULER_CONVENTION_ONLY"
+  "roll_provenance": "ROLL_PROVENANCE_UNKNOWN",
+  "admission": "NOT_ADMITTED"
+ },
+ "reclassified_from": {
+  "path": "structural-level-v15-m2k-2026-09-17-x0-v2.json",
+  "sha256": "7fac781aa3c4c698c38535904b0e0a33ca8bddae00487dedd2760abef28f33ce",
+  "tool": "slx0-roll-proof-v1.5",
+  "utc": "2026-09-17T03:18:56Z"
  }
 }

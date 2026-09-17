@@ -602,10 +602,21 @@ def test_x0_scheduler_seam_identity_proven_but_feed_not_observable(tmp_path):
     assert lf["feed_switch_observed_in_live_span"] is False
     c = rep["classification"]
     assert c["contract_identity"] == "CONTRACT_IDENTITY_PROVEN" and c["seam_rule"] == "SCHEDULER_CONVENTION"
-    assert c["roll_provenance"] == "ROLL_PROVENANCE_UNKNOWN"
-    # with no live feed at all the same corpus is convention-only, never "proven"
+    assert c["roll_provenance"] == "ROLL_PROVENANCE_UNKNOWN" and c["admission"] == "NOT_ADMITTED"
+    assert c["seam_rule_independently_proven"] is False
+    # with no live feed at all the scheduler seam is still unconfirmed (#625): UNKNOWN, never
+    # "proven" and never a softer convention grade
     rep2 = x0.run(str(out_root / "M2K"), client, bars_root=None, seam_window_days=3)
-    assert rep2["classification"]["roll_provenance"] == "SCHEDULER_CONVENTION_ONLY"
+    c2 = rep2["classification"]
+    assert c2["feed_reconciliation"] == ["NOT_APPLICABLE"]
+    assert c2["roll_provenance"] == "ROLL_PROVENANCE_UNKNOWN" and c2["admission"] == "NOT_ADMITTED"
+    assert "SCHEDULER_CONVENTION_ONLY" not in json.dumps(rep2)
+    # --reclassify re-derives the same classification from the saved evidence without a client
+    saved = tmp_path / "x0_saved.json"
+    saved.write_text(json.dumps(rep2, default=str))
+    rep3 = x0.reclassify(saved)
+    assert rep3["classification"] == c2 and rep3["reclassified_from"]["path"] == "x0_saved.json"
+    assert rep3["segments"] == json.loads(json.dumps(rep2["segments"], default=str))
 
 
 def test_x0_feed_confirmed_and_contradicted_seams(tmp_path):
@@ -646,7 +657,8 @@ def test_corpus_build_fixed_contract_has_no_seam_and_x0_proves_it(tmp_path):
     _x0_live_bars(live_root, "M2K", 20.0, datetime(2026, 9, 16, 12, 15, tzinfo=UTC), 12, client)
     rep = x0.run(str(out_root / "M2K"), client, bars_root=str(live_root))
     assert rep["classification"] == {"contract_identity": "CONTRACT_IDENTITY_PROVEN", "seam_rule": "FIXED_DATED_CONTRACT",
-                                     "feed_reconciliation": ["NO_SEAM"], "roll_provenance": "PROVEN"}
+                                     "seam_rule_independently_proven": True, "feed_reconciliation": ["NO_SEAM"],
+                                     "roll_provenance": "PROVEN", "admission": "ADMITTED"}
     assert rep["live_feed"]["identified_per_contract"] == {"M2KZ6": 12}
     with pytest.raises(SystemExit):
         cb.build(symbol="M2K", start=date(2026, 9, 9), end=date(2026, 9, 17), timeframe=15, warmup_days=1,

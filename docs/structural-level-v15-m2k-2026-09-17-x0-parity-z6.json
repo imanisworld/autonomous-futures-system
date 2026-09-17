@@ -1,5 +1,5 @@
 {
- "tool": "slx0-roll-proof-v1.5",
+ "tool": "slx0-roll-proof-v1.5.1",
  "instrument": "M2K",
  "tick": 0.1,
  "corpus_dir": "<checkout>/data/replay_polygon_parity_m2kz6_2026_09_16/M2K",
@@ -91,9 +91,17 @@
  "classification": {
   "contract_identity": "CONTRACT_IDENTITY_PROVEN",
   "seam_rule": "FIXED_DATED_CONTRACT",
+  "seam_rule_independently_proven": true,
   "feed_reconciliation": [
    "NO_SEAM"
   ],
-  "roll_provenance": "PROVEN"
+  "roll_provenance": "PROVEN",
+  "admission": "ADMITTED"
+ },
+ "reclassified_from": {
+  "path": "structural-level-v15-m2k-2026-09-17-x0-parity-z6.json",
+  "sha256": "09de06c1246b2c76854b2bbf5db7961235db0ad2335211c2f23ab27db5000061",
+  "tool": "slx0-roll-proof-v1.5",
+  "utc": "2026-09-17T03:18:57Z"
  }
 }

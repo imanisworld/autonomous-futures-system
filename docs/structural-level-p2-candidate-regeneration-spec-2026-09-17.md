@@ -186,13 +186,14 @@ Only after R7 may the sealed outcomes be opened — under a separate go.
 Prereg v1.5 adds M2K. For the regeneration and parity machinery this means:
 
 - **P-REPLAY corpus:** `data/replay_polygon_v2/M2K` (same window, pinned builder, quarterly
-  roll; 40,878 rows / 543 files; manifest `1f1e54f5…`). The §3.1 command runs per instrument
-  unchanged (`--candles data/replay_polygon_v2/M2K`). **X0 (#622 §3 / #625):** contract identity
-  re-established from the provider for every segment (40,878/40,878), seams recorded as
-  `SCHEDULER_CONVENTION_ONLY` (`roll_days=8`, UTC-midnight seams; no live feed in the window) —
-  `docs/structural-level-v15-m2k-2026-09-17-x0-v2.json`. The same convention defines the
-  MNQ/MES `replay_polygon_v2` corpora (§3.1); the seam rule is the population definition, not
-  feed provenance (prereg v1.5 C23).
+  scheduler; 40,878 rows / 543 files; manifest `1f1e54f5…`) was built but is **NOT ADMITTED**:
+  **X0 (#622 §3 / #625)** re-established contract identity from the provider for every segment
+  (40,878/40,878) but none of its seven `roll_days=8` UTC-midnight seams is independently
+  proven (no live feed in the window; provider volume crossed 3–4 days after every seam) →
+  `ROLL_PROVENANCE_UNKNOWN` — `docs/structural-level-v15-m2k-2026-09-17-x0-v2.json`. The §3.1
+  regeneration command is therefore **not run for M2K** (no `--candles data/replay_polygon_v2/M2K`
+  step until an M2K roll rule is proven or seam-free per-contract windows are admitted under a
+  separate go); the MNQ/MES v1.4 corpora are unchanged (prereg v1.5 C23, #622 §1.2).
 - **Live population source for M2K:** the cross-instrument observation lane
   (`logs/cross_instrument_observation_v1.jsonl` CANDIDATE + SIGNAL rows, `logs/bars_M2K_*.jsonl`),
   loaded by `research.structural_level_p2.iter_observation_rows`; P2-P takes

@@ -12,8 +12,9 @@ product-specific level definitions and non-quarterly roll schedules); (b) "rerun
 [the #621] fix included and confirm those two affected families improve without breaking
 anything else".
 
-Code SHA: `4d75226` (origin/main with #621, #622 and #625; first draft was written at
-`4f07ea0` and repaired after audit — §2a, §5). Machine artifacts in this PR:
+Code SHA: `03b1a5c` (origin/main with #621, #622, #625 and #626; first draft was written at
+`4f07ea0`, repaired after the first audit — §2a, §5 — and again after the follow-up audit,
+which held the long stitched historical corpus to #625: §2a item 6, §6). Machine artifacts in this PR:
 `…-v15-m2k-2026-09-17-x0-{v2,parity-stitched,parity-z6}.json` (X0 roll proofs),
 `…-parity.json` / `…-bar-source-parity.json` (P5-M2K / P3-M2K on the **admitted** `M2KZ6`
 corpus; the first-draft runs on the stitched corpus are kept as `…-parity-stitched-nonconfirmatory.json`
@@ -29,7 +30,7 @@ corpus; the first-draft runs on the stitched corpus are kept as `…-parity-stit
 | Layer | MNQ / MES (v1.4) | M2K (v1.5) |
 |---|---|---|
 | Level / event definitions (§3, §5) | frozen v1.3 | **unchanged** — equity-index micro on the same Globex session map, 18:00 ET day roll, 09:30 ET RTH/NY ORB, 03:00 ET London ORB; tick 0.10 from `config/futures_contracts` |
-| P-REPLAY | `data/replay_polygon_v2/{MNQ,MES}` 2024-10-01 → 2026-06-26 | `data/replay_polygon_v2/M2K`, same window, same pinned builder, quarterly roll (§2) |
+| P-REPLAY | `data/replay_polygon_v2/{MNQ,MES}` 2024-10-01 → 2026-06-26 | `data/replay_polygon_v2/M2K` built (same window, same pinned builder, quarterly scheduler) but **NOT ADMITTED** — X0 `ROLL_PROVENANCE_UNKNOWN` (§2a); no M2K P-REPLAY population until a roll rule is proven |
 | P-LIVE (calibration) | runner journal 2026-07-16 → 09-14T22Z | **none** — no M2K history before the observation epoch |
 | P-OOS-PROSPECTIVE | runner journal from 2026-09-17 | cross-instrument observation lane from epoch `2026-09-16T12:17:19Z` |
 | Live candidate source | runner `shadow_candidates` | `observe_collection_only_alert` → **same `evaluate_shadow_setups`** (canonical VWAP observers off, Pine advisory brackets stripped) → CANDIDATE (`structural_outcome`, bracket authoritative) + SIGNAL (`signal_metrics`, bracket not authoritative, never resolved by the lane) rows |
@@ -44,7 +45,7 @@ Prereg header records all of this as the v1.3 → v1.4 → **v1.5** changelog; `
 
 | Corpus | Range | Rows / files | Checks | X0 (§2a) |
 |---|---|---|---|---|
-| `data/replay_polygon_v2/M2K` (R1-M2K) | 2024-10-01T00:00Z → 2026-06-26T20:45Z (warm-up 2024-09-17 →) | **40,878 / 543** (29 fewer bars than MNQ/MES — thin M2K slots, all in the gap ledger) | `ema_200` + `previous_day_*` populated from row 1; all required fields; timestamps strictly increasing; manifest per-file sha256 = disk (543/543); 7 rolls (H5 +26.8 … U6 +20.5); 57 gap runs, every run ≥ 4 h an exchange holiday/early close; manifest `1f1e54f5…` | identity PROVEN 40,878/40,878; seams `SCHEDULER_CONVENTION_ONLY` |
+| `data/replay_polygon_v2/M2K` (R1-M2K, stitched, **NOT ADMITTED** as P-REPLAY) | 2024-10-01T00:00Z → 2026-06-26T20:45Z (warm-up 2024-09-17 →) | **40,878 / 543** (29 fewer bars than MNQ/MES — thin M2K slots, all in the gap ledger) | `ema_200` + `previous_day_*` populated from row 1; all required fields; timestamps strictly increasing; manifest per-file sha256 = disk (543/543); 7 rolls (H5 +26.8 … U6 +20.5); 57 gap runs, every run ≥ 4 h an exchange holiday/early close; manifest `1f1e54f5…` | identity PROVEN 40,878/40,878; 7 scheduler seams, none independently proven → **`ROLL_PROVENANCE_UNKNOWN`**, non-confirmatory |
 | `data/replay_polygon_parity_m2k_2026_09_16/M2K` (stitched, first draft) | 2026-09-01T00:00Z → 2026-09-16T18:15Z (`roll_days=3`: U6 → Z6 seam 2026-09-15T00:00Z, +22.1 pts) | 1,058 / 14 | manifest hashes = disk; gap = Labor Day early close only; manifest `78d4127d…` | identity PROVEN; seam **`ROLL_PROVENANCE_UNKNOWN`** → **NOT ADMITTED** |
 | `data/replay_polygon_parity_m2kz6_2026_09_16/M2K` (**admitted**, single dated contract) | 2026-09-01T00:00Z → 2026-09-16T18:45Z, `--contract M2KZ6` (fetch 2026-08-18 → 09-17, 1,454 raw bars), **no seam** | 894 / 14 | manifest hashes = disk; `ema_200` + `previous_day_*` populated from row 1; 98 gap runs / 194 missing slots, all 2026-09-01 → 09-11 (Z6 was the back month and traded thinly before the roll — recorded, not fabricated; per §9.5 those days are gap-contaminated for the affected windows); 09-12 → 09-16 complete; manifest `1e3ac8f2…` | identity PROVEN 894/894; `FIXED_DATED_CONTRACT`; live bars identified Z6 27/27 served → **`PROVEN`** |
 
@@ -69,7 +70,7 @@ separately). Nothing in it moves a seam.
 | 3. seam timestamp | 7 seams, each at **UTC midnight** of the scheduler date (2024-12-12, 2025-03-13, 06-12, 09-11, 12-11, 2026-03-12, 06-11) — i.e. 2 h into the Globex trading day that opened 22:00Z, so the seam trading day holds 8 bars of the old contract and the rest of the new one (roll-contaminated per prereg §9.5 item 5) |
 | 4. old final / new first bar | old last bar 23:45Z, new first bar 00:00Z at every seam; open − prior close = +26.8, +17.6, +17.3, +16.8, +19.0, +16.6, +20.5 pts (the contract spread, not a data hole) |
 | 5. overlap / gap / conflict census (±8 days) | both contracts have bars on 985–1,089 common timestamps at every seam; 0 old-only / 0 new-only timestamps; old-contract bars after the seam and new-contract bars before it exist on the provider (not used); **0 corpus bars outside their declared contract; 0 duplicate timestamps** |
-| 6. seam represents | **the local scheduler convention** (`roll_days=8` → Thursday of the week before expiry week, UTC-date granularity). Provider volume crossed to the new contract **3–4 calendar days after every seam** (crossover UTC days 2024-12-15, 2025-03-17, 06-15, 09-15, 12-14, 2026-03-15, 06-14 — the Sunday-evening/Monday session of expiry week, i.e. the same session in which the MNQ/MES live feeds were observed switching in September 2026); the 8-day rule is therefore a consistently early roll relative to volume and, by that analogy, relative to the continuous feed — recorded, not corrected. No M2K live feed existed in the window, so there is no continuous-feed provenance to reconcile: `feed_reconciliation = NOT_APPLICABLE`, **`roll_provenance = SCHEDULER_CONVENTION_ONLY`** — identity exact, seam rule = frozen population definition, the same provenance class as the admitted MNQ/MES v1.4 corpora (same builder, same rule) |
+| 6. seam represents | **the local scheduler convention only** (`roll_days=8` → Thursday of the week before expiry week, UTC-date granularity). Provider volume crossed to the new contract **3–4 calendar days after every seam** (crossover UTC days 2024-12-15, 2025-03-17, 06-15, 09-15, 12-14, 2026-03-15, 06-14), so the scheduler's seam disagrees with the one independent signal available at every one of the seven seams; no M2K live feed existed in the window, so there is no continuous-feed provenance to reconcile (`feed_reconciliation = NOT_APPLICABLE`). Under #625 the generic quarterly scheduler is only a candidate chain, and exact identity (item 2) proves the bars belong to their declared contracts, not that the declared seam is the correct continuous-series seam. **`roll_provenance = ROLL_PROVENANCE_UNKNOWN`, `admission = NOT_ADMITTED`** (follow-up audit; the first repair had graded this `SCHEDULER_CONVENTION_ONLY` and kept the corpus usable — that grade is withdrawn from the tool and the prereg; the comparison with the MNQ/MES v1.4 convention is not an argument for admission and is dropped). Consequence: no M2K P-REPLAY population is admitted; the corpus and its manifest stay on disk / in git as a non-confirmatory record. The historical seams could be proven later only from an authoritative continuous/roll source (not from this scheduler and not from volume alone); alternatively seam-free per-contract windows (`--contract`) could be built — neither is done here, and no roll rule was changed to make the seams pass |
 | 7. September disagreement | not applicable to this window; see the parity corpus |
 
 **September parity corpora** (`…-x0-parity-stitched.json`, `…-x0-parity-z6.json`):
@@ -170,6 +171,12 @@ away. The remaining misses in the two recent-bars families are no longer warm-up
 
 - MGC, MCL, MBT: not added — tranche-2 prereg/spec is a separate PR (definitions + X0 source/roll
   proof first; `polygon_client.front_contract` has no even-month/monthly roll schedules).
+- **M2K has no admitted P-REPLAY population.** `data/replay_polygon_v2/M2K` is
+  `ROLL_PROVENANCE_UNKNOWN` (§2a item 6) and non-confirmatory; the only admitted M2K corpus is
+  the seam-free `M2KZ6` September window. Admitting an M2K historical population needs either an
+  independent proof of each historical seam from an authoritative continuous/roll source or
+  seam-free per-dated-contract windows built with `--contract` under their own prereg step —
+  both require a separate go. Any future R5 go on P-REPLAY therefore covers `{MNQ, MES}` only.
 - P3-M2K and P5-M2K are preliminary (n = 27 bars); re-run after ≥ 5 sessions on a corpus whose
   X0 is `PROVEN` (a Z6-only window stays seam-free until the December roll).
 - The stitched September corpus stays on disk with its manifest committed as a record of the
@@ -178,10 +185,11 @@ away. The remaining misses in the two recent-bars families are no longer warm-up
 
 ---
 
-**Verdict: v1.5 AMENDMENT WRITTEN (M2K added to P-REPLAY + P-OOS-PROSPECTIVE; definitions
-unchanged; C23 added). X0: R1-M2K identity PROVEN 40,878/40,878 with `SCHEDULER_CONVENTION_ONLY`
-seams (same class as MNQ/MES v1.4); stitched September corpus `ROLL_PROVENANCE_UNKNOWN` → NOT
-ADMITTED; single-contract `M2KZ6` corpus `PROVEN` (live feed identified Z6 27/27). P-R EQUIVALENT.
+**Verdict: v1.5 AMENDMENT WRITTEN (M2K added to P-OOS-PROSPECTIVE; M2K P-REPLAY population
+NOT ADMITTED; definitions unchanged; C23 added). X0: R1-M2K identity PROVEN 40,878/40,878 but its
+seven scheduler seams are not independently proven → `ROLL_PROVENANCE_UNKNOWN`, non-confirmatory
+(#625); stitched September corpus `ROLL_PROVENANCE_UNKNOWN` → NOT ADMITTED; single-contract
+`M2KZ6` corpus `PROVEN` (live feed identified Z6 27/27) — the only admitted M2K corpus. P-R EQUIVALENT.
 On the admitted corpus: P5-M2K 1.000/1.000 (28 co-fired) and P3-M2K NY-ORB 21/21, OHLC 26/27 —
 both PRELIMINARY at n = 27. R4 RERUN ON #621: the two recent-bars families improve (0.937 →
 0.972, 0.938 → 0.974); admitted/testable families identical; `ema_pullback_trend` still
@@ -189,4 +197,5 @@ bracket-conflicted; `transition_failed_breakdown_reclaim` changed numerically an
 NOT_TESTABLE. R5 still HOLD.**
 
 **Safe next step:** operator review of this PR; the tranche-2 definitions/X0 PR for MGC/MCL/MBT
-is separate; the R5 go on `data/replay_polygon_v2/{MNQ,MES,M2K}` needs its own explicit go.
+is separate; the R5 go on `data/replay_polygon_v2/{MNQ,MES}` needs its own explicit go (M2K
+has no admitted P-REPLAY population).
