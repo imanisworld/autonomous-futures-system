@@ -73,6 +73,11 @@ _DEFAULT_HTF_FILES = {
 # _window_direction_bars must not either.
 _WINDOW_DIRECTION_LOOKBACK_DAYS = 3
 
+# Shadow observers receive BarHistory.recent(instrument, 8) in live, using the
+# same default calendar-file horizon. Replay's maxlen=8 deque persists across
+# day files, so apply that live horizon at read time rather than clearing it.
+_RESEARCH_BAR_LOOKBACK_DAYS = 3
+
 
 class ReplayEngine:
     """Runs local candle files through the paper system without live data."""
@@ -92,18 +97,18 @@ class ReplayEngine:
         # persists across days in run_many/run_manifest so the first bars of a
         # day still have a prior 4h window (like BarHistory's lookback live).
         self._live_dir_bars: dict[str, deque] = {}
+        # Shadow-setup input mirrors live BarHistory.recent(inst, 8): it may
+        # span the prior day-file tail, with the live 3-day horizon enforced
+        # at read time below.
         self._research_bars: dict[str, deque] = {}
         # Canonical 4HR input history.  Kept across run_many day boundaries so
         # Monday can see Sunday/Friday references exactly as live BarHistory can.
         self._four_hr_bars: dict[str, deque] = {}
-        # window_direction input. Deliberately separate from _research_bars:
-        # that deque is cleared every run() call (shadow-setup history must
-        # never leak across days), but live's BarHistory.recent(..., 6) can
-        # span up to 3 days — the first bar of a new day can still complete
-        # its 6-bar window from the prior day's tail. Kept across run_many/
-        # run_manifest day boundaries like _live_dir_bars/_four_hr_bars above.
-        # maxlen=6 exactly, since window_direction only ever looks at the
-        # last 6 closes.
+        # window_direction input. Live's BarHistory.recent(..., 6) can span up
+        # to 3 days — the first bar of a new day can still complete its 6-bar
+        # window from the prior day's tail. Kept across run_many/run_manifest
+        # day boundaries like _live_dir_bars/_four_hr_bars above. maxlen=6
+        # exactly, since window_direction only ever looks at the last 6 closes.
         self._window_direction_bars: dict[str, deque] = {}
         # Positions still open when a day's candle file ran out ("day-
         # boundary orphans" -- PR #333/commit f9eb7a2's root-cause writeup:
@@ -155,9 +160,10 @@ class ReplayEngine:
             return self._empty_report(candle_path, review_date)
 
         run_date = review_date or _date_from_timestamp(candles[0].timestamp)
-        # Continuation observers are intraday studies. Never let the previous
-        # replay file/day seed the next day's impulse or consolidation.
-        self._research_bars.clear()
+        # Preserve shadow history across replay day files, matching live's
+        # BarHistory.recent(inst, 8). The same 3-day horizon is enforced at
+        # the evaluate_shadow_setups call below so stale/out-of-order bars do
+        # not leak into later replay decisions.
         self._reset_run_outputs(run_date)
         # Replay/live parity fix (2026-07-27, confirmed defect, isolated
         # canonical-evidence audit): webhook/runner.py:545-558/632-634 sets
@@ -509,9 +515,8 @@ class ReplayEngine:
             # Pine's own strat/trend fields don't independently confirm it
             # (see DecisionEngine._has_directional_structure). BarHistory.
             # recent(..., lookback_days=3) means live's window can span into
-            # the prior day, so this reads _window_direction_bars (persists
-            # across run_many/run_manifest day boundaries) rather than
-            # _research_bars (deliberately cleared every run() call).
+            # the prior day, so this reads _window_direction_bars, which
+            # persists across run_many/run_manifest day boundaries.
             #
             # BarHistory.recent walks back at most `lookback_days` calendar-
             # day FILES from the current bar's own date — it cannot see
@@ -543,8 +548,17 @@ class ReplayEngine:
             try:
                 forward_bars = [(c.high, c.low) for c in candles[idx + 1:]]
                 shadow_candidates = []
+                _research_current_date = _parse_timestamp(candle.timestamp).date()
+                recent_research_bars = [
+                    bar
+                    for bar in self._research_bars.get(candle.instrument, ())
+                    if 0 <= (
+                        _research_current_date
+                        - _parse_timestamp(bar["ts"]).date()
+                    ).days < _RESEARCH_BAR_LOOKBACK_DAYS
+                ]
                 for cand in evaluate_shadow_setups(
-                    state, list(self._research_bars.get(candle.instrument, ()))
+                    state, recent_research_bars
                 ):
                     record = cand.to_dict()
                     record["outcome"] = resolve_shadow_candidate(
@@ -868,7 +882,7 @@ class ReplayEngine:
                         if day_only_trade:
                             # Day-only strategies (DAY_ONLY_STRATEGIES) are
                             # designed to always flatten before their file
-                            # ends -- still being open here means the
+                            # ends -- still being open here means its own
                             # day-only-flatten logic itself failed, a
                             # DIFFERENT bug from the general day-boundary
                             # carry-forward below. Fail visibly via the
