@@ -1,6 +1,32 @@
 # Pre-Registration — Dynamic Structural-Level Attribution Study
 
-**Version:** 1.3 (2026-09-17), frozen at the commit that introduces this version.
+**Version:** 1.4 (2026-09-17), frozen at the commit that introduces this version.
+Changelog v1.3 → v1.4 (amendment based **only** on the R1–R4 corpus/parity evidence in
+`docs/structural-level-p2-parity-corpus-r4-2026-09-17.md`; no outcome was read; operator
+rulings of 2026-09-17, both taken before R5 / any outcome): (1) **P-REPLAY window amended to
+2024-10-01 → 2026-06-26** (Ruling 1, option A). Reason: the Polygon futures feed retains a
+rolling ~2-year window (C17) — the U4 contracts return no bars and the series begins
+2024-09-17 — so the v1.0 start (2024-07-01) is no longer fetchable from the provider; the
+2024-09-17 → 2024-09-30 bars are the builder warm-up (EMA-200 and day-boundary fields
+populated from the first in-window bar), the corpus is `data/replay_polygon_v2/{MNQ,MES}`
+built by the pinned `scripts/polygon_to_replay.py` (emits `london_orb_*`; the old
+`data/replay_polygon` files are retired), single provider vintage by design (the hybrid
+option that would have mixed the preserved June-2026 fetch with today's was rejected because
+the overlap already shows 8 revised and 138 backfilled bars, C18). The ~11 % shorter in-sample
+window is accepted for documented provider-retention reasons, not for any result. (2) **§2.3
+family compatibility (P5) is now filled from the parity corpus (R4)**: `ema_pullback_trend`
+passed the firing gate (Jaccard 0.995) but **failed the frozen bracket gate** (93.88 % of
+co-fired rows with all three legs within one tick; target leg) → it is **REPLAY_ONLY +
+LIVE_ONLY strata, never pooled** (Ruling 2; no tolerance widening, no change to the 2.2×
+target, no rounding change, no row removal; the `BRACKET_CONFLICT` finding stands). `BOTH`
+(pooled-eligible): `strat_22_continuation_observed`, `strat_22_reversal_observed`,
+`strat_312_observed`, `strat_322_reversal_observed`, `strat_122_observed`,
+`strat_122_pullback` (MES cell `NOT_TESTABLE` on P-LIVE), `strat_4hr_retrigger_observed`,
+`orb_false_break_fade`, `impulse_first_pullback_observed`, `trend_consolidation_break_observed`.
+`NOT_TESTABLE`: `transition_failed_breakdown_reclaim`. `LIVE_ONLY`: `vwap_hold_observed`,
+`vwap_rejection_observed`, `range_break_close`. `DEAD`: `ovn_high/low_sweep_reclaim`, `gap_fill`.
+Level and event definitions, constants, hypotheses, strata, gates and kill criteria are
+unchanged from v1.3.
 Changelog v1.2 → v1.3 (amendment based **only** on the P3 levels-only parity evidence in
 `docs/structural-level-parity-p3-2026-09-16.md`; no outcome was read; operator rulings of
 2026-09-17): (1) the P3 parity denominator for a level excludes rows already
@@ -94,7 +120,7 @@ proof and stratification, never as the feature source (see conflicts C1, C2, C3 
 
 | Population | Source | Window | Instruments | Bar grid | Candidate generator | Outcome provenance | Role |
 |---|---|---|---|---|---|---|---|
-| **P-REPLAY** (confirmatory in-sample) | `data/replay_polygon/{MNQ,MES}` (Polygon 15m, raw front-month, `scripts/polygon_to_replay.py`) | 2024-07-01 → 2026-06-26 (622 files each) | MNQ, MES | 15m | `replay/replay_engine.py` shadow-candidate path at a pinned SHA, ungated (`shadow_candidates`), families per §2.3 | S1-R: replay shadow resolver (`strategy/shadow_setups.resolve_shadow_candidate`, pessimistic both-hit, resting-entry fill) | primary confirmatory sample; 3 chronological folds |
+| **P-REPLAY** (confirmatory in-sample) | `data/replay_polygon_v2/{MNQ,MES}` (Polygon 15m, raw front-month, pinned `scripts/polygon_to_replay.py` via `scripts/structural_level_corpus_build.py`, `MANIFEST.json` per corpus; **v1.4**: replaces the retired `data/replay_polygon` files) | **2024-10-01 → 2026-06-26** (v1.4, Ruling 1; warm-up 2024-09-17 → 09-30 fetched, not in-window; v1.0–v1.3 said 2024-07-01, no longer fetchable — C17) | MNQ, MES | 15m | `replay/replay_engine.py` shadow-candidate path at a pinned SHA, ungated (`shadow_candidates`), families per §2.3 | S1-R: replay shadow resolver (`strategy/shadow_setups.resolve_shadow_candidate`, pessimistic both-hit, resting-entry fill) | primary confirmatory sample; 3 chronological folds |
 | **P-LIVE** (calibration + provenance stratum) | VPS `logs/` read-only snapshot 2026-09-16 22:38Z (journal `journal_*.jsonl`, `bars_{MNQ,MES}_*.jsonl` 15m from 2026-06-05, `strategy_context_observations.jsonl`, PaperBroker evidence files) | 2026-07-16 → **2026-09-14T22:00Z** (contract-roll cut, §9) | MNQ, MES | 15m | live runner `shadow_candidates` + `range_signal` (the closed study's population, same `candidate_key` join) | S1: live `SHADOW_OUTCOME`; S2: PaperBroker (`mnq_strat_22_reversal`, `mes_trend_consolidation_break`); S3: Tradovate demo (n=2, below floor) | feature-definition calibration; live-vs-offline parity; S1/S2 fill-model check; **confirmatory only for constructs not viewed in the closed study** (§11) |
 | **P-OOS-MES** (pre-registered holdout, **H1/H2/H3/H5 only**) | `data/replay_polygon/MES_oos_2026-07-24_2026-09-08` (40 files) | 2026-07-24 → 2026-09-08 | MES | 15m | replay, same SHA | S1-R | never scored with any structural event; used once, after IS results are frozen. **Not pristine for H4/H6**: the closed study viewed F4/F11 (fresh-vs-tested, target-blocked) on live outcomes over this same market period, so H4/H6 results here are EXPLORATORY (§11) |
 | **P-OOS-PROSPECTIVE** | VPS journal + bar history collected **after 2026-09-17 00:00Z** (Z6 contracts) | 2026-09-17 → ≥ 2026-10-31 and ≥ 50% of fold-3 rows per instrument, unconditional once complete (§11) | MNQ, MES | 15m | live runner | S1, S2 | prospective OOS; the only route from "supported" to "v2 shadow-observation spec" |
@@ -145,6 +171,16 @@ candidates and brackets in replay and live at the pinned SHA. Expected classific
   P5 shows the replay engine emits them identically.
 - A live-only family is reported in P-LIVE strata only and is labelled `LIVE_ONLY`; it
   cannot reach the pooled confirmatory statistic.
+- **P5 result (v1.4, from the parity corpus, `docs/structural-level-p2-parity-corpus-r4-2026-09-17.md`):**
+  the expectations above are superseded by measurement. `BOTH` = all `strat_*_observed`
+  families, `strat_122_pullback`, `strat_4hr_retrigger_observed`, `orb_false_break_fade`,
+  `impulse_first_pullback_observed`, `trend_consolidation_break_observed` (firing Jaccard
+  0.937–1.000, bracket ≥ 0.999). **`ema_pullback_trend` = `REPLAY_ONLY` + `LIVE_ONLY`
+  strata** (firing 0.995 passed; bracket 93.88 % < 98 % failed — target leg; Ruling 2).
+  `NOT_TESTABLE` = `transition_failed_breakdown_reclaim`. `LIVE_ONLY` = `vwap_*_observed`,
+  `range_break_close`. `DEAD` = `ovn_*_sweep_reclaim`, `gap_fill`. The `orb_breakout` /
+  `orb_reclaim` / `pdh_reclaim` / `continuation_pullback` names listed as "expected both"
+  are DecisionEngine concepts, not `shadow_candidates` families, and are out of population.
 
 ### 2.4 Bar-history coverage and gaps
 

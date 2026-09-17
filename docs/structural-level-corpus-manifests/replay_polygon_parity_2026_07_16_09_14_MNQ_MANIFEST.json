@@ -1,0 +1,396 @@
+{
+ "tool": "slc-build-v1.3",
+ "corpus": "parity_2026_07_16_09_14/MNQ",
+ "instrument": "MNQ",
+ "timeframe_minutes": 15,
+ "schema": "scripts/polygon_to_replay.derive_candles (called unchanged; day-file split identical to polygon_to_replay.main)",
+ "source": {
+  "provider": "Polygon futures aggs (sources/polygon_client.PolygonFuturesClient)",
+  "endpoint": "/futures/v1/aggs/{ticker}?resolution=15min",
+  "fetched_utc": "2026-09-17T01:37:58Z",
+  "requested_range": "2026-07-16..2026-09-14",
+  "fetch_range_with_warmup": "2026-07-06..2026-09-14",
+  "warmup_days": 10,
+  "end_ts_exclusive": "2026-09-14T22:00:00+00:00",
+  "candles_dropped_at_end_cut": 8,
+  "roll_rule": "roll_days=3 (front contract advances 3 calendar days before 3rd-Friday expiry; sources.polygon_client.front_contract)",
+  "contract_segments": [
+   [
+    "MNQU6",
+    "2026-07-06",
+    "2026-09-14"
+   ]
+  ],
+  "raw_bars_fetched": 4665
+ },
+ "builder": {
+  "git_head_of_checkout": "b7bade85606229fc8e8e6b2040e9dbbeadfc44f1",
+  "file_sha256": {
+   "scripts/polygon_to_replay.py": "a42e1cae7cb791648dfa6ed2c222342e45debdec18ae86aa6bf3c647c4c981d0",
+   "scripts/csv_to_replay.py": "332e48a951547819948a71a062a95c2b2acbff9b0da5433d1241df68c46d10ee",
+   "scripts/pine_market_condition.py": "df04b39eef02e53aff27aa4100ab49fb8e26e6e72c04091703c2ef8a69f15a11",
+   "sources/polygon_client.py": "3959cc1b41e7c0edcde909364b82fb9bc39577ff5dc264153767f8aaf3ac5896",
+   "context/trend.py": "24100349069f8ff9b53b3d0aec78513b547972298bdb5e641708578399819c1a",
+   "scripts/structural_level_corpus_build.py": "664a497d88bcb2d3b6eb7374cea8140edd597c65e13c5cb281b6550300a6a65c"
+  }
+ },
+ "coverage": {
+  "files": 52,
+  "rows": 3921,
+  "first_bar": "2026-07-16T00:00:00+00:00",
+  "last_bar": "2026-09-14T20:45:00+00:00",
+  "required_fields_present": [
+   "timestamp",
+   "instrument",
+   "session",
+   "open",
+   "high",
+   "low",
+   "close",
+   "volume",
+   "orb_high",
+   "orb_low",
+   "orb_status",
+   "london_orb_high",
+   "london_orb_low",
+   "london_orb_status",
+   "reconstructed_market_condition",
+   "legacy_market_condition"
+  ]
+ },
+ "gap_ledger_cme_hours": [
+  {
+   "first_missing": "2026-09-07T17:00:00+00:00",
+   "last_missing": "2026-09-07T20:45:00+00:00",
+   "slots": 16,
+   "minutes": 240
+  },
+  {
+   "first_missing": "2026-09-11T17:00:00+00:00",
+   "last_missing": "2026-09-11T18:30:00+00:00",
+   "slots": 7,
+   "minutes": 105
+  },
+  {
+   "first_missing": "2026-09-11T20:00:00+00:00",
+   "last_missing": "2026-09-11T20:45:00+00:00",
+   "slots": 4,
+   "minutes": 60
+  }
+ ],
+ "roll_ledger": [],
+ "files": {
+  "MNQ_2026-07-16.jsonl": {
+   "sha256": "015176d8def9e9268999703136636a8eb0047a7fcaa61ee6b0120125df655196",
+   "rows": 92,
+   "first": "2026-07-16T00:00:00+00:00",
+   "last": "2026-07-16T23:45:00+00:00"
+  },
+  "MNQ_2026-07-17.jsonl": {
+   "sha256": "a917229ea384be32a4d45bf63a5ba3e75778be5580887dd101bfed373f38def9",
+   "rows": 84,
+   "first": "2026-07-17T00:00:00+00:00",
+   "last": "2026-07-17T20:45:00+00:00"
+  },
+  "MNQ_2026-07-19.jsonl": {
+   "sha256": "e95db5da89c295defad1b375023e71eea5a977af2d03a167ac026bcd6b1a65c7",
+   "rows": 8,
+   "first": "2026-07-19T22:00:00+00:00",
+   "last": "2026-07-19T23:45:00+00:00"
+  },
+  "MNQ_2026-07-20.jsonl": {
+   "sha256": "fa1b924cfb3785f89b90cc4fbb4eb54e8fe5375eb632956f7e3bce5bbff58b6b",
+   "rows": 92,
+   "first": "2026-07-20T00:00:00+00:00",
+   "last": "2026-07-20T23:45:00+00:00"
+  },
+  "MNQ_2026-07-21.jsonl": {
+   "sha256": "5c194f00d6ae2af8c19be42d4fad3cb037cfc21b8d5561034b267793cfeb9de5",
+   "rows": 92,
+   "first": "2026-07-21T00:00:00+00:00",
+   "last": "2026-07-21T23:45:00+00:00"
+  },
+  "MNQ_2026-07-22.jsonl": {
+   "sha256": "58c0d2cdbb8f19e575146a880cbd5ee0d03bd38120425e924baf67e504a5c72c",
+   "rows": 92,
+   "first": "2026-07-22T00:00:00+00:00",
+   "last": "2026-07-22T23:45:00+00:00"
+  },
+  "MNQ_2026-07-23.jsonl": {
+   "sha256": "8a19b3456243acf1586eb81bd92af3955a2848daa1edb9ef9579f1cf973d437c",
+   "rows": 92,
+   "first": "2026-07-23T00:00:00+00:00",
+   "last": "2026-07-23T23:45:00+00:00"
+  },
+  "MNQ_2026-07-24.jsonl": {
+   "sha256": "c6ecaff2c9e3c8d96d849cb8d39ed4e996a99eba397b48ad74fde755fdabae0b",
+   "rows": 84,
+   "first": "2026-07-24T00:00:00+00:00",
+   "last": "2026-07-24T20:45:00+00:00"
+  },
+  "MNQ_2026-07-26.jsonl": {
+   "sha256": "bd2600df3d857816f134e6fd88f729a95163670f95d44d1b3b5460fe3c667fcf",
+   "rows": 8,
+   "first": "2026-07-26T22:00:00+00:00",
+   "last": "2026-07-26T23:45:00+00:00"
+  },
+  "MNQ_2026-07-27.jsonl": {
+   "sha256": "ca07180be1318c86727b7150015537a98c5b1e0a806db23727a61122e9818bc9",
+   "rows": 92,
+   "first": "2026-07-27T00:00:00+00:00",
+   "last": "2026-07-27T23:45:00+00:00"
+  },
+  "MNQ_2026-07-28.jsonl": {
+   "sha256": "5e0abfae3900dd89d3cc54921d87c41f6a639236cc368532b95daec7efe999c2",
+   "rows": 92,
+   "first": "2026-07-28T00:00:00+00:00",
+   "last": "2026-07-28T23:45:00+00:00"
+  },
+  "MNQ_2026-07-29.jsonl": {
+   "sha256": "67587ba04c80df3bed155ef6ef3ffb765b1d9a9401d58750ebc606140332c806",
+   "rows": 92,
+   "first": "2026-07-29T00:00:00+00:00",
+   "last": "2026-07-29T23:45:00+00:00"
+  },
+  "MNQ_2026-07-30.jsonl": {
+   "sha256": "2e3d00f808af8ac15aef31bf98f2b0c5b71289a8fbdb905f1ef391241d2c35b9",
+   "rows": 92,
+   "first": "2026-07-30T00:00:00+00:00",
+   "last": "2026-07-30T23:45:00+00:00"
+  },
+  "MNQ_2026-07-31.jsonl": {
+   "sha256": "9bd1d68aae9a3a3e62a0d3e9454d09eb5796df91841779e515548e6efeabacfa",
+   "rows": 84,
+   "first": "2026-07-31T00:00:00+00:00",
+   "last": "2026-07-31T20:45:00+00:00"
+  },
+  "MNQ_2026-08-02.jsonl": {
+   "sha256": "5039e89783429955745d3a0f56c774ab778084f8adb1aa6930298a0fa0dcc6c0",
+   "rows": 8,
+   "first": "2026-08-02T22:00:00+00:00",
+   "last": "2026-08-02T23:45:00+00:00"
+  },
+  "MNQ_2026-08-03.jsonl": {
+   "sha256": "08a6e65bb9a4328346669523989d747c12ba80a488e7074a479ddb4057522d5f",
+   "rows": 92,
+   "first": "2026-08-03T00:00:00+00:00",
+   "last": "2026-08-03T23:45:00+00:00"
+  },
+  "MNQ_2026-08-04.jsonl": {
+   "sha256": "48c8a5ebc79f111f928c3b31f5570744daf4908bab9020e09ce173f373288c58",
+   "rows": 92,
+   "first": "2026-08-04T00:00:00+00:00",
+   "last": "2026-08-04T23:45:00+00:00"
+  },
+  "MNQ_2026-08-05.jsonl": {
+   "sha256": "cc440ce7365313c3e194b1ee911cbe813860e4150a8f5701bf634ffdc32995c9",
+   "rows": 92,
+   "first": "2026-08-05T00:00:00+00:00",
+   "last": "2026-08-05T23:45:00+00:00"
+  },
+  "MNQ_2026-08-06.jsonl": {
+   "sha256": "6c73020f1e2b5a21ac052043e6f19c5d2e440ada835c1f7d9b84df9f7e40434c",
+   "rows": 92,
+   "first": "2026-08-06T00:00:00+00:00",
+   "last": "2026-08-06T23:45:00+00:00"
+  },
+  "MNQ_2026-08-07.jsonl": {
+   "sha256": "439a809c7cefcb0c4a1df51a268843c9b48532f6e9b8dc69ab6859b020ee0510",
+   "rows": 84,
+   "first": "2026-08-07T00:00:00+00:00",
+   "last": "2026-08-07T20:45:00+00:00"
+  },
+  "MNQ_2026-08-09.jsonl": {
+   "sha256": "46a6c9237d17611df2e99504fd1e177fcbc6a71a5096276857a2def8c264be1e",
+   "rows": 8,
+   "first": "2026-08-09T22:00:00+00:00",
+   "last": "2026-08-09T23:45:00+00:00"
+  },
+  "MNQ_2026-08-10.jsonl": {
+   "sha256": "15441f2a36ce6988ad7bd969fd25e4e0ac11999673a513f30428be2c249c90d3",
+   "rows": 92,
+   "first": "2026-08-10T00:00:00+00:00",
+   "last": "2026-08-10T23:45:00+00:00"
+  },
+  "MNQ_2026-08-11.jsonl": {
+   "sha256": "673a5b66e0c6b2005b5e0fda35207355e3917ffea7e94c0f2fa17d38ab8f79b2",
+   "rows": 92,
+   "first": "2026-08-11T00:00:00+00:00",
+   "last": "2026-08-11T23:45:00+00:00"
+  },
+  "MNQ_2026-08-12.jsonl": {
+   "sha256": "c6b36d3c9f97d9b02c7c39b40a155d885e1caaaeed31be3374939b5190ad0302",
+   "rows": 92,
+   "first": "2026-08-12T00:00:00+00:00",
+   "last": "2026-08-12T23:45:00+00:00"
+  },
+  "MNQ_2026-08-13.jsonl": {
+   "sha256": "8aa825befa4b979b4fd22bbcc61c1a2a4c6935de57e277ffd1d3580ee2531f17",
+   "rows": 92,
+   "first": "2026-08-13T00:00:00+00:00",
+   "last": "2026-08-13T23:45:00+00:00"
+  },
+  "MNQ_2026-08-14.jsonl": {
+   "sha256": "4eb2cb04d28752aec364c2972494f4c7711e55afb36dfdf21cb2d7d456ed1bfc",
+   "rows": 84,
+   "first": "2026-08-14T00:00:00+00:00",
+   "last": "2026-08-14T20:45:00+00:00"
+  },
+  "MNQ_2026-08-16.jsonl": {
+   "sha256": "28fbe0a5cdd9c56bc1d1d3e74274c57cf8ef8a33a5d69e0c2a7978f891f17879",
+   "rows": 8,
+   "first": "2026-08-16T22:00:00+00:00",
+   "last": "2026-08-16T23:45:00+00:00"
+  },
+  "MNQ_2026-08-17.jsonl": {
+   "sha256": "9b919c18e6204fc8234f79d8d6f1c4926ac68e2b02fa40b814c24873d8089e92",
+   "rows": 92,
+   "first": "2026-08-17T00:00:00+00:00",
+   "last": "2026-08-17T23:45:00+00:00"
+  },
+  "MNQ_2026-08-18.jsonl": {
+   "sha256": "230ef0a8c82f4a4427abd70e60f6ceb1826bfc79d287ad6092da69cb527553e5",
+   "rows": 92,
+   "first": "2026-08-18T00:00:00+00:00",
+   "last": "2026-08-18T23:45:00+00:00"
+  },
+  "MNQ_2026-08-19.jsonl": {
+   "sha256": "1557685965ca10af7e7b76e3adf65eee187d6dd35fb2ba90d0bcf98de236ae2b",
+   "rows": 92,
+   "first": "2026-08-19T00:00:00+00:00",
+   "last": "2026-08-19T23:45:00+00:00"
+  },
+  "MNQ_2026-08-20.jsonl": {
+   "sha256": "4173cf239d8827792c4765b5dbd852ccae1dd59e05906417cacbf13c54f0be7b",
+   "rows": 92,
+   "first": "2026-08-20T00:00:00+00:00",
+   "last": "2026-08-20T23:45:00+00:00"
+  },
+  "MNQ_2026-08-21.jsonl": {
+   "sha256": "6dcda5230b74b347365f028e0985b6ee6a437b8355f326f613511fca93129e03",
+   "rows": 84,
+   "first": "2026-08-21T00:00:00+00:00",
+   "last": "2026-08-21T20:45:00+00:00"
+  },
+  "MNQ_2026-08-23.jsonl": {
+   "sha256": "2a17059138ac4f6d4807d510740050eb9bd5849fbd8fc74b723d9d7e31bf18e5",
+   "rows": 8,
+   "first": "2026-08-23T22:00:00+00:00",
+   "last": "2026-08-23T23:45:00+00:00"
+  },
+  "MNQ_2026-08-24.jsonl": {
+   "sha256": "dc84b0e1fce1ace16faca90d30ed085e33c72ee8f591144a631dc5ecfa6fc8ba",
+   "rows": 92,
+   "first": "2026-08-24T00:00:00+00:00",
+   "last": "2026-08-24T23:45:00+00:00"
+  },
+  "MNQ_2026-08-25.jsonl": {
+   "sha256": "8548aa520565fec4ecf3fae1067cffb1b171b5c5ddce0d977c0aa80c10b27ffd",
+   "rows": 92,
+   "first": "2026-08-25T00:00:00+00:00",
+   "last": "2026-08-25T23:45:00+00:00"
+  },
+  "MNQ_2026-08-26.jsonl": {
+   "sha256": "34d096f7d17a7ade99534e77fe16218507879a669f11bd79a2ee6af1762ea1e4",
+   "rows": 92,
+   "first": "2026-08-26T00:00:00+00:00",
+   "last": "2026-08-26T23:45:00+00:00"
+  },
+  "MNQ_2026-08-27.jsonl": {
+   "sha256": "030adeee311a0bc94ed5b68a1ed313f79cc81601bf82f1154e768478ff11786d",
+   "rows": 92,
+   "first": "2026-08-27T00:00:00+00:00",
+   "last": "2026-08-27T23:45:00+00:00"
+  },
+  "MNQ_2026-08-28.jsonl": {
+   "sha256": "9e6161cb7f89d14c9553a5a74ddee9f03e92d8998697443d0603811d8e91970e",
+   "rows": 84,
+   "first": "2026-08-28T00:00:00+00:00",
+   "last": "2026-08-28T20:45:00+00:00"
+  },
+  "MNQ_2026-08-30.jsonl": {
+   "sha256": "541ecaed54e780a1f21adef70a485d747138f1e7a4ae0771405a41be3671de0a",
+   "rows": 8,
+   "first": "2026-08-30T22:00:00+00:00",
+   "last": "2026-08-30T23:45:00+00:00"
+  },
+  "MNQ_2026-08-31.jsonl": {
+   "sha256": "e9aa78c654f2f525a0f528f5c8eb10c0ea32d06ec7b6c4661ecf3fc19cb0a9e1",
+   "rows": 92,
+   "first": "2026-08-31T00:00:00+00:00",
+   "last": "2026-08-31T23:45:00+00:00"
+  },
+  "MNQ_2026-09-01.jsonl": {
+   "sha256": "516c1297037a2d8ccf1918d114863544b3f5871d55ff5d70a58dca0f914a8d76",
+   "rows": 92,
+   "first": "2026-09-01T00:00:00+00:00",
+   "last": "2026-09-01T23:45:00+00:00"
+  },
+  "MNQ_2026-09-02.jsonl": {
+   "sha256": "854d7d62ee02d81b1cb8134f91246bd8141ead825dd33b40e559f6338c37fac4",
+   "rows": 92,
+   "first": "2026-09-02T00:00:00+00:00",
+   "last": "2026-09-02T23:45:00+00:00"
+  },
+  "MNQ_2026-09-03.jsonl": {
+   "sha256": "eddf73aeafd1fba7b7f735519d12d8b8fd63656852992a3a67a6fb878136b705",
+   "rows": 92,
+   "first": "2026-09-03T00:00:00+00:00",
+   "last": "2026-09-03T23:45:00+00:00"
+  },
+  "MNQ_2026-09-04.jsonl": {
+   "sha256": "9d91227ea4a1abb8474ca988d9bf4754422e5eef3c35e431c5a035206a026fad",
+   "rows": 84,
+   "first": "2026-09-04T00:00:00+00:00",
+   "last": "2026-09-04T20:45:00+00:00"
+  },
+  "MNQ_2026-09-06.jsonl": {
+   "sha256": "d838d01334214e00b91970db99904262edf52085df7e0ecafe3412a703fa1490",
+   "rows": 8,
+   "first": "2026-09-06T22:00:00+00:00",
+   "last": "2026-09-06T23:45:00+00:00"
+  },
+  "MNQ_2026-09-07.jsonl": {
+   "sha256": "0e184324a785eb7320c947507a7ce538f2134a18bee162f70d07d15e27e4798b",
+   "rows": 76,
+   "first": "2026-09-07T00:00:00+00:00",
+   "last": "2026-09-07T23:45:00+00:00"
+  },
+  "MNQ_2026-09-08.jsonl": {
+   "sha256": "f3f6943e598fe6e804494152925b78e57c8c1d14418016c9c28c45abeae38f06",
+   "rows": 92,
+   "first": "2026-09-08T00:00:00+00:00",
+   "last": "2026-09-08T23:45:00+00:00"
+  },
+  "MNQ_2026-09-09.jsonl": {
+   "sha256": "273016bb01795e4815d417c1ff9190ff9700727beb4b969fda2df3bccced95d8",
+   "rows": 92,
+   "first": "2026-09-09T00:00:00+00:00",
+   "last": "2026-09-09T23:45:00+00:00"
+  },
+  "MNQ_2026-09-10.jsonl": {
+   "sha256": "5f65e5e55679fab9b069a3d7a39f66b01a2b6aac1ca84ad469f738fcb658d056",
+   "rows": 92,
+   "first": "2026-09-10T00:00:00+00:00",
+   "last": "2026-09-10T23:45:00+00:00"
+  },
+  "MNQ_2026-09-11.jsonl": {
+   "sha256": "b25ea5943b16d9f0b10b325a33b9f8daedccdffa27a234d7d293f18c653bcbe4",
+   "rows": 73,
+   "first": "2026-09-11T00:00:00+00:00",
+   "last": "2026-09-11T19:45:00+00:00"
+  },
+  "MNQ_2026-09-13.jsonl": {
+   "sha256": "1f82a1686ebe6ca242e4501ff1b980e55020a7f85cc23b6cad15123a5002fe78",
+   "rows": 8,
+   "first": "2026-09-13T22:00:00+00:00",
+   "last": "2026-09-13T23:45:00+00:00"
+  },
+  "MNQ_2026-09-14.jsonl": {
+   "sha256": "e6dde66b10d128dd047c8000b12e227f70ac35535472cbc4c3e925be94d22c7b",
+   "rows": 84,
+   "first": "2026-09-14T00:00:00+00:00",
+   "last": "2026-09-14T20:45:00+00:00"
+  }
+ }
+}

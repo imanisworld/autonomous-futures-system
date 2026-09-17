@@ -1,0 +1,596 @@
+{
+ "parity_replay_integrity_manifest": {
+  "tool": "slp2-v1.4",
+  "mode": "integrity_only (outcomes NOT written)",
+  "replay_log_dir": "<local:both>",
+  "corpus_root": "<local:replay_polygon_parity_2026_07_16_09_14>",
+  "corpus_manifest_sha256": {
+   "MNQ": "939725d7d7a0bd927dd648613eaedf21b2482c6f0f39dea1be84c59728daca28",
+   "MES": "46e99ea5a4a0fff4dde727f82676b6d16c497004139d836156b78190f0a9a345"
+  },
+  "journal_files": {
+   "journal_2026-07-16.jsonl": "fa5f4b237ed92a3e08d8607bc329864047631e8acd1036fe7bdaa5349afb52d1",
+   "journal_2026-07-17.jsonl": "7420b615d07d4aba292bd52b546d7e121fecedffb1a834b24a8795e1ff42e7c2",
+   "journal_2026-07-19.jsonl": "1ff814ce9d7937d96dc1c7d66504d026598f3160a331b525e265b35a93f5f144",
+   "journal_2026-07-20.jsonl": "6e42a08e6bc717c01d039f21b1f65bf8ff5d517471ac272dd70cb95e97a1e360",
+   "journal_2026-07-21.jsonl": "153c0580610dc997d7b371d98f069732be1b5ff6cb09d9429df8b3849e367c92",
+   "journal_2026-07-22.jsonl": "8dd82ae0b4393099bc82904d3707fe3ea5f9499f0caf10f46748b9ee9b516263",
+   "journal_2026-07-23.jsonl": "6b20c1cd854f6aa852c3347421ee7cf1ab1fb2c1404f27bc9c5e338e286f4756",
+   "journal_2026-07-24.jsonl": "0267d4b173ce21a2f0e012854a8bac5e3f16f0a9341f12acc7ea682933a70696",
+   "journal_2026-07-26.jsonl": "106f97279502e073e79b63e86e6909c5542f28be7b519e1fda3bb908527d4f96",
+   "journal_2026-07-27.jsonl": "169a1004312b5512d153d3bdb8855caaebc1217e39dadb95c0ffcb6cb03c27ee",
+   "journal_2026-07-28.jsonl": "67d3a63ca2bd940be3b4ce92e08cfd066690217aa5c3d00d93b50b84251c2686",
+   "journal_2026-07-29.jsonl": "3259f5efca162e3aa49d16bf732f2cd9516ed16783ea5ea313ce966c176ffe2a",
+   "journal_2026-07-30.jsonl": "b59345269ca0849308843382c489b8cc8d6d620d8225a143f3d87ab062b298b1",
+   "journal_2026-07-31.jsonl": "2d03b399e7c199f6c51dc52a96dacafb6d94fd2a227e109f8a481fddc820840c",
+   "journal_2026-08-02.jsonl": "446a16905591f9b06c99b2253357c92846fb5a3895e96a0aedbaf989343d7486",
+   "journal_2026-08-03.jsonl": "4eef11f1845a2b8e85af619273323792f4b19f96c8ea9f12d65f1b4288bda02d",
+   "journal_2026-08-04.jsonl": "864ead1fcecc3d0e51c4c8090503ea74daa34e046c039f0b6a5a4888cf158f23",
+   "journal_2026-08-05.jsonl": "02fcffbf2cb76baa99344111ecb5b872a5aec1b60bfabcbd675561f0f0d7157e",
+   "journal_2026-08-06.jsonl": "302b8887cc1a3b0101b929662c4c1f51ed703b264617c1d2917bbbddde6add60",
+   "journal_2026-08-07.jsonl": "04f34ed59747f0d413391637e7d4666e007473f240488c5128fd2d1b7ea4d0b6",
+   "journal_2026-08-09.jsonl": "83835a23250f74dd9971d01630c6e23b348012a38b25f6ab22d9f3fec3af1fcd",
+   "journal_2026-08-10.jsonl": "eaad096556e768cc04df22c4ebf32ceb55628f9e5005eccec9dd2952811eb8cb",
+   "journal_2026-08-11.jsonl": "6ef59103969379cc8e9530e678f98b1b263a131188d73b1473cbf4ae9cfa34e6",
+   "journal_2026-08-12.jsonl": "512e5621680554b2b1768f7293659fae7eccb0da4580dee83c540b666e9a7d60",
+   "journal_2026-08-13.jsonl": "65b7be33a3873db4a47cc08ed3d278d263310af7a629d17caa82ad41ebb3d31d",
+   "journal_2026-08-14.jsonl": "8ad6f58fae96dd9045cc67179587e86e7670998105f26d3b00343acf5b62501a",
+   "journal_2026-08-16.jsonl": "c321fffe4393c1167b59473c01360ffc086b8c7dfd865f525d974f9be1a78f5d",
+   "journal_2026-08-17.jsonl": "b66c6c678d95a5f96f22d122b9a22183f09e26122b86cab2d7f4fe15ba827290",
+   "journal_2026-08-18.jsonl": "ca8b0ca41b362dbd7aa59febdc2d27056a8ba0ee50b80a71269ce0a70d064abc",
+   "journal_2026-08-19.jsonl": "e6ca5936e8927d7e4747754067ce7bc2c4f66dca7d65dab8c6b311030dd6b9af",
+   "journal_2026-08-20.jsonl": "2882388d98d996db80131710bd9a2df448a2b3087423560c8072cab3e53fdaf0",
+   "journal_2026-08-21.jsonl": "990e0908387668ee083068f6ad113479ff1aa4a12a9b7dac7680b77d110f6f17",
+   "journal_2026-08-23.jsonl": "a0a0624e211601f98c1105ff842e288aade548c9e018b67a23b0d506a2f2ae7e",
+   "journal_2026-08-24.jsonl": "62bb8d8753c6b954286aa4ae00fd3b728a408e16ef56250504cc972a8da97d73",
+   "journal_2026-08-25.jsonl": "ac6c6a5f0397db7d690207b2d07156c150306719e008cffe10f47d857770e1e8",
+   "journal_2026-08-26.jsonl": "31a1742b44915f729b922a50d294d55bcbb347d91d667178061321b69e9e5827",
+   "journal_2026-08-27.jsonl": "0969ac3b3aaaed264ace6563b0d5260a7f08a99a3841a8733d0d481ac8a0a878",
+   "journal_2026-08-28.jsonl": "23212f4e1132b5a4b156762bba8a95827526ea1fca053f544d56f2082a1ef6fa",
+   "journal_2026-08-30.jsonl": "ff34055ca5ec1821ad5ae90e4bd5743e5c91f3ec09190b5bd22d7692ce9fb4f6",
+   "journal_2026-08-31.jsonl": "23369892b32c5ba360f1364911269c859e2ce44553d9d7249097f4ddd2205159",
+   "journal_2026-09-01.jsonl": "0bfd47f17f77116fec796357cd2f4413cb02c78421b76520a7736f1b8bd32b47",
+   "journal_2026-09-02.jsonl": "3452ddb57e5ec1dd633a389cb73335f5f64eacc57e2b2a0f09af3e014cbe1a57",
+   "journal_2026-09-03.jsonl": "a78c8ffc96db817e348a8c99d184baccaf1be8a0cdc1699c9d477d6713abfe44",
+   "journal_2026-09-04.jsonl": "73962880730b818e54b73da4abee6a705fb72efa877bae3ef616918344ffeb82",
+   "journal_2026-09-06.jsonl": "3c2a5d7e3ee42fda1dc2f00ca1364e24b3fe69f50644c0e84c23457615ac3c94",
+   "journal_2026-09-07.jsonl": "0b70d94556903980675adbe79bcd35c11dd4817ecc7e6a9de5e021075e9b4795",
+   "journal_2026-09-08.jsonl": "0c3edaf842215cedf6c91bfa97ac316a8ee1fddcea29646c1c1107ea38f60709",
+   "journal_2026-09-09.jsonl": "8f755d6bd6de419b1368cc0125eb80bf08773bbc9ca99e100c93642d29c1f850",
+   "journal_2026-09-10.jsonl": "0f33be9dd81497007498cd323442e7c7148f87659bbd8ad469024ddf18047fae",
+   "journal_2026-09-11.jsonl": "cf9c6c09c47f90f4ddabcd87d0c9a7b3767494aea5ed01b49a83d49818fad51f",
+   "journal_2026-09-13.jsonl": "47f03d06271c1fbf1cd7bfa9e7db60c88d048a08d8abdadd4feda40034671ac4",
+   "journal_2026-09-14.jsonl": "ba09ddb0d32a7c8e50d5897472c49e7fced3d6d94e5fa5fe6465600e34c9737e"
+  },
+  "candidates_file": {
+   "path": "<local:candidates.jsonl>",
+   "sha256": "ad7cb95913c7816d71d225c130c6977f2f30368dd325aa297207d6baa82aa4e7",
+   "rows": 7960
+  },
+  "outcomes_sealed_file": null,
+  "end_ts_exclusive": "2026-09-14T22:00:00+00:00",
+  "integrity": {
+   "decision_rows": 7841,
+   "evaluated_bars_by_instrument": {
+    "MNQ": 3921,
+    "MES": 3920
+   },
+   "corpus_bars_by_instrument": {
+    "MNQ": 3921,
+    "MES": 3920
+   },
+   "bars_in_corpus_not_evaluated_by_replay": {
+    "MNQ": 0,
+    "MES": 0
+   },
+   "candidate_rows_seen": 7960,
+   "unique_candidate_keys": 7960,
+   "exact_duplicate_keys_collapsed": {},
+   "conflicting_duplicate_keys": {},
+   "families_blocked": [],
+   "census_by_family_by_instrument": {
+    "ema_pullback_trend": {
+     "MNQ": 636,
+     "MES": 713
+    },
+    "impulse_first_pullback_observed": {
+     "MNQ": 573,
+     "MES": 536
+    },
+    "orb_false_break_fade": {
+     "MNQ": 161,
+     "MES": 170
+    },
+    "strat_122_observed": {
+     "MES": 135,
+     "MNQ": 28
+    },
+    "strat_122_pullback": {
+     "MNQ": 72,
+     "MES": 7
+    },
+    "strat_22_continuation_observed": {
+     "MNQ": 1433,
+     "MES": 1318
+    },
+    "strat_22_reversal_observed": {
+     "MNQ": 643,
+     "MES": 661
+    },
+    "strat_312_observed": {
+     "MNQ": 70,
+     "MES": 71
+    },
+    "strat_322_reversal_observed": {
+     "MNQ": 90,
+     "MES": 70
+    },
+    "strat_4hr_retrigger_observed": {
+     "MNQ": 18,
+     "MES": 29
+    },
+    "transition_failed_breakdown_reclaim": {
+     "MNQ": 48,
+     "MES": 44
+    },
+    "trend_consolidation_break_observed": {
+     "MNQ": 202,
+     "MES": 232
+    }
+   },
+   "census_by_family_by_session": {
+    "ema_pullback_trend": {
+     "asian": 536,
+     "london": 418,
+     "new_york": 395
+    },
+    "impulse_first_pullback_observed": {
+     "asian": 393,
+     "london": 337,
+     "new_york": 379
+    },
+    "orb_false_break_fade": {
+     "london": 199,
+     "new_york": 132
+    },
+    "strat_122_observed": {
+     "asian": 77,
+     "new_york": 35,
+     "london": 51
+    },
+    "strat_122_pullback": {
+     "asian": 31,
+     "new_york": 21,
+     "london": 27
+    },
+    "strat_22_continuation_observed": {
+     "asian": 1042,
+     "london": 765,
+     "new_york": 944
+    },
+    "strat_22_reversal_observed": {
+     "asian": 512,
+     "london": 364,
+     "new_york": 428
+    },
+    "strat_312_observed": {
+     "new_york": 42,
+     "asian": 53,
+     "london": 46
+    },
+    "strat_322_reversal_observed": {
+     "asian": 69,
+     "new_york": 49,
+     "london": 42
+    },
+    "strat_4hr_retrigger_observed": {
+     "new_york": 47
+    },
+    "transition_failed_breakdown_reclaim": {
+     "asian": 25,
+     "new_york": 41,
+     "london": 26
+    },
+    "trend_consolidation_break_observed": {
+     "asian": 138,
+     "london": 101,
+     "new_york": 195
+    }
+   },
+   "asian_orb_false_break_fade_rows": 0,
+   "forbidden_families_present": {},
+   "orb_availability": {
+    "MNQ": {
+     "ny_session_days": 43,
+     "ny_orb_not_available_days": [],
+     "london_session_days": 43,
+     "london_orb_not_available_days": []
+    },
+    "MES": {
+     "ny_session_days": 43,
+     "ny_orb_not_available_days": [],
+     "london_session_days": 43,
+     "london_orb_not_available_days": []
+    }
+   },
+   "roll_ledger": {
+    "MNQ": [],
+    "MES": []
+   },
+   "gap_ledger_cme_hours": {
+    "MNQ": [
+     {
+      "first_missing": "2026-09-07T17:00:00+00:00",
+      "last_missing": "2026-09-07T20:45:00+00:00",
+      "slots": 16,
+      "minutes": 240
+     },
+     {
+      "first_missing": "2026-09-11T17:00:00+00:00",
+      "last_missing": "2026-09-11T18:30:00+00:00",
+      "slots": 7,
+      "minutes": 105
+     },
+     {
+      "first_missing": "2026-09-11T20:00:00+00:00",
+      "last_missing": "2026-09-11T20:45:00+00:00",
+      "slots": 4,
+      "minutes": 60
+     }
+    ],
+    "MES": [
+     {
+      "first_missing": "2026-09-07T17:00:00+00:00",
+      "last_missing": "2026-09-07T20:45:00+00:00",
+      "slots": 16,
+      "minutes": 240
+     },
+     {
+      "first_missing": "2026-09-11T17:00:00+00:00",
+      "last_missing": "2026-09-11T18:45:00+00:00",
+      "slots": 8,
+      "minutes": 120
+     },
+     {
+      "first_missing": "2026-09-11T20:00:00+00:00",
+      "last_missing": "2026-09-11T20:45:00+00:00",
+      "slots": 4,
+      "minutes": 60
+     }
+    ]
+   },
+   "problems": [],
+   "status": "PASS",
+   "determinism_single_day_MNQ_2026-08-12_two_runs": {
+    "rows_a": 92,
+    "rows_b": 92,
+    "rows_differ": 0,
+    "identical": true
+   }
+  }
+ },
+ "old_vs_rebuilt_corpus_ohlcv": {
+  "MNQ": {
+   "note": "old = retired data/replay_polygon (June-2026 fetch, 2024-07-01 start); new = replay_polygon_v2 (prereg v1.4 window 2024-10-01 start)",
+   "old_rows": 46740,
+   "new_rows": 40907,
+   "common": 40769,
+   "ohlcv_differ": 8,
+   "ohlcv_differ_bars": [
+    {
+     "ts": "2025-01-30T21:45:00+00:00",
+     "old": [
+      21622.0,
+      21633.5,
+      21595.0,
+      21607.0,
+      4409
+     ],
+     "new": [
+      21621.5,
+      21633.5,
+      21595.0,
+      21607.0,
+      4587
+     ]
+    },
+    {
+     "ts": "2025-02-13T19:45:00+00:00",
+     "old": [
+      22038.0,
+      22050.0,
+      22037.75,
+      22045.75,
+      2835
+     ],
+     "new": [
+      22038.0,
+      22075.5,
+      22037.75,
+      22057.75,
+      22951
+     ]
+    },
+    {
+     "ts": "2025-02-20T21:00:00+00:00",
+     "old": [
+      22148.75,
+      22148.75,
+      22131.5,
+      22136.5,
+      4810
+     ],
+     "new": [
+      22144.75,
+      22149.75,
+      22121.25,
+      22122.75,
+      14162
+     ]
+    },
+    {
+     "ts": "2025-08-08T19:45:00+00:00",
+     "old": [
+      23686.25,
+      23719.5,
+      23676.0,
+      23713.75,
+      41808
+     ],
+     "new": [
+      23686.25,
+      23719.5,
+      23676.0,
+      23713.75,
+      41805
+     ]
+    },
+    {
+     "ts": "2025-09-08T22:30:00+00:00",
+     "old": [
+      23815.5,
+      23823.75,
+      23814.25,
+      23823.25,
+      990
+     ],
+     "new": [
+      23815.5,
+      23826.75,
+      23814.25,
+      23822.75,
+      2290
+     ]
+    },
+    {
+     "ts": "2025-09-09T16:45:00+00:00",
+     "old": [
+      23828.0,
+      23829.25,
+      23820.25,
+      23821.25,
+      1780
+     ],
+     "new": [
+      23811.75,
+      23829.75,
+      23806.0,
+      23821.25,
+      19387
+     ]
+    },
+    {
+     "ts": "2025-12-11T21:30:00+00:00",
+     "old": [
+      26064.75,
+      26072.0,
+      26049.0,
+      26059.75,
+      69
+     ],
+     "new": [
+      26082.25,
+      26083.75,
+      26049.0,
+      26059.75,
+      158
+     ]
+    },
+    {
+     "ts": "2026-03-06T15:00:00+00:00",
+     "old": [
+      24692.0,
+      24767.75,
+      24687.75,
+      24763.25,
+      9166
+     ],
+     "new": [
+      24692.0,
+      24754.75,
+      24687.75,
+      24751.5,
+      7616
+     ]
+    }
+   ],
+   "old_only": 5971,
+   "old_only_range": [
+    "2024-07-01T13:30:00+00:00",
+    "2024-09-30T23:45:00+00:00"
+   ],
+   "new_only": 138,
+   "new_only_first": [
+    "2025-02-20T21:15:00+00:00",
+    "2025-02-20T21:30:00+00:00",
+    "2025-02-20T21:45:00+00:00"
+   ],
+   "new_only_last": [
+    "2025-12-11T21:00:00+00:00",
+    "2025-12-11T21:15:00+00:00",
+    "2026-03-06T15:45:00+00:00"
+   ]
+  },
+  "MES": {
+   "note": "old = retired data/replay_polygon (June-2026 fetch, 2024-07-01 start); new = replay_polygon_v2 (prereg v1.4 window 2024-10-01 start)",
+   "old_rows": 46740,
+   "new_rows": 40907,
+   "common": 40769,
+   "ohlcv_differ": 8,
+   "ohlcv_differ_bars": [
+    {
+     "ts": "2025-01-30T21:45:00+00:00",
+     "old": [
+      6094.5,
+      6096.5,
+      6089.5,
+      6092.5,
+      3113
+     ],
+     "new": [
+      6094.75,
+      6096.5,
+      6089.5,
+      6092.5,
+      3233
+     ]
+    },
+    {
+     "ts": "2025-02-13T19:45:00+00:00",
+     "old": [
+      6123.5,
+      6125.75,
+      6123.5,
+      6124.75,
+      1935
+     ],
+     "new": [
+      6123.5,
+      6131.75,
+      6123.5,
+      6127.5,
+      19602
+     ]
+    },
+    {
+     "ts": "2025-02-20T21:00:00+00:00",
+     "old": [
+      6137.75,
+      6137.75,
+      6134.25,
+      6135.0,
+      4083
+     ],
+     "new": [
+      6137.25,
+      6137.75,
+      6130.75,
+      6131.25,
+      10075
+     ]
+    },
+    {
+     "ts": "2025-08-08T19:45:00+00:00",
+     "old": [
+      6406.5,
+      6415.5,
+      6403.0,
+      6413.75,
+      47470
+     ],
+     "new": [
+      6406.5,
+      6415.5,
+      6403.0,
+      6413.75,
+      47456
+     ]
+    },
+    {
+     "ts": "2025-09-08T22:30:00+00:00",
+     "old": [
+      6510.5,
+      6512.25,
+      6510.0,
+      6512.25,
+      659
+     ],
+     "new": [
+      6510.5,
+      6512.5,
+      6510.0,
+      6512.0,
+      1285
+     ]
+    },
+    {
+     "ts": "2025-09-09T16:45:00+00:00",
+     "old": [
+      6508.75,
+      6509.0,
+      6507.5,
+      6507.5,
+      1594
+     ],
+     "new": [
+      6506.75,
+      6509.5,
+      6505.5,
+      6507.5,
+      14282
+     ]
+    },
+    {
+     "ts": "2025-12-11T21:30:00+00:00",
+     "old": [
+      6980.25,
+      6980.25,
+      6976.0,
+      6978.5,
+      108
+     ],
+     "new": [
+      6982.75,
+      6982.75,
+      6976.0,
+      6978.5,
+      334
+     ]
+    },
+    {
+     "ts": "2026-03-06T15:00:00+00:00",
+     "old": [
+      6727.5,
+      6746.5,
+      6726.0,
+      6745.25,
+      8401
+     ],
+     "new": [
+      6727.5,
+      6742.25,
+      6726.0,
+      6742.25,
+      6713
+     ]
+    }
+   ],
+   "old_only": 5971,
+   "old_only_range": [
+    "2024-07-01T13:30:00+00:00",
+    "2024-09-30T23:45:00+00:00"
+   ],
+   "new_only": 138,
+   "new_only_first": [
+    "2025-02-20T21:15:00+00:00",
+    "2025-02-20T21:30:00+00:00",
+    "2025-02-20T21:45:00+00:00"
+   ],
+   "new_only_last": [
+    "2025-12-11T21:00:00+00:00",
+    "2025-12-11T21:15:00+00:00",
+    "2026-03-06T15:45:00+00:00"
+   ]
+  }
+ }
+}
