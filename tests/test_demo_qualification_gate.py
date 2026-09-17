@@ -154,6 +154,7 @@ def test_complete_strategy_only_evidence_qualifies_for_demo(tmp_path: Path, monk
     assert report["demo_evidence_eligible"] is True
     assert report["long_internal_paper_phase_waived"] is True
     assert report["runtime_release_reconciliation_required"] is True
+    assert report["demo_forward_validation_required"] is True
     assert report["live_trading_authorized"] is False
 
 
@@ -184,6 +185,21 @@ def test_git_diff_must_mechanically_be_strategy_only(tmp_path: Path, monkeypatch
 
     assert report["gate_pass"] is False
     assert any("execution/paper_broker.py" in blocker for blocker in report["blockers"])
+
+
+def test_self_baselined_or_empty_diff_cannot_qualify(tmp_path: Path, monkeypatch) -> None:
+    _pin_runtime_head_and_diff(monkeypatch, changed_files="")
+    payload = _complete_evidence(tmp_path)
+    payload["change_scope"]["base_sha"] = "abc123"
+    evidence = _write_evidence(tmp_path, payload)
+
+    report = build_demo_qualification_report(
+        strategy="example", repo_root=tmp_path, evidence_path=evidence
+    )
+
+    assert report["gate_pass"] is False
+    assert any("pre-change commit" in blocker for blocker in report["blockers"])
+    assert any("diff is empty" in blocker for blocker in report["blockers"])
 
 
 def test_session_day_identity_must_be_proven(tmp_path: Path, monkeypatch) -> None:
