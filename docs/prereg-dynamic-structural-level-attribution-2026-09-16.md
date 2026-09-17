@@ -1,6 +1,13 @@
 # Pre-Registration — Dynamic Structural-Level Attribution Study
 
-**Version:** 1.0 (2026-09-16), frozen at the commit that introduces this file.
+**Version:** 1.1 (2026-09-16), frozen at the commit that introduces this version. No outcome
+had been read at either version. Changelog v1.0 → v1.1 (operator review of PR #616, all
+definition-level, pre-freeze): (1) missing opening-range bar → ORB `NOT_AVAILABLE`, the
+`orb_start_shifted` substitute is removed; (2) deterministic anchor for E8/H5 `CLUSTER`;
+(3) duplicate `candidate_key` handling fails closed on conflict; (4) H4/H6 clean confirmation
+is prospective-only — `P-OOS-MES` is not pristine for them; (5) primary prospective OOS is
+calendar/sample-size based and unconditional, volatility is descriptive / a labelled stress
+check only; (6) one parity tolerance (one tick) for every admitted level including VWAP.
 **Status:** RESEARCH DOCUMENT ONLY — AUDIT / RESEARCH / PAPER. Nothing here changes, or may be
 cited to change, runtime behaviour, strategy, risk, execution, broker routing, `.env`,
 services, Pine, collectors, gates, session permissions or deployment. **No proof, no gate. No
@@ -60,8 +67,8 @@ proof and stratification, never as the feature source (see conflicts C1, C2, C3 
 |---|---|---|---|---|---|---|---|
 | **P-REPLAY** (confirmatory in-sample) | `data/replay_polygon/{MNQ,MES}` (Polygon 15m, raw front-month, `scripts/polygon_to_replay.py`) | 2024-07-01 → 2026-06-26 (622 files each) | MNQ, MES | 15m | `replay/replay_engine.py` shadow-candidate path at a pinned SHA, ungated (`shadow_candidates`), families per §2.3 | S1-R: replay shadow resolver (`strategy/shadow_setups.resolve_shadow_candidate`, pessimistic both-hit, resting-entry fill) | primary confirmatory sample; 3 chronological folds |
 | **P-LIVE** (calibration + provenance stratum) | VPS `logs/` read-only snapshot 2026-09-16 22:38Z (journal `journal_*.jsonl`, `bars_{MNQ,MES}_*.jsonl` 15m from 2026-06-05, `strategy_context_observations.jsonl`, PaperBroker evidence files) | 2026-07-16 → **2026-09-14T22:00Z** (contract-roll cut, §9) | MNQ, MES | 15m | live runner `shadow_candidates` + `range_signal` (the closed study's population, same `candidate_key` join) | S1: live `SHADOW_OUTCOME`; S2: PaperBroker (`mnq_strat_22_reversal`, `mes_trend_consolidation_break`); S3: Tradovate demo (n=2, below floor) | feature-definition calibration; live-vs-offline parity; S1/S2 fill-model check; **confirmatory only for constructs not viewed in the closed study** (§11) |
-| **P-OOS-MES** (pre-registered holdout) | `data/replay_polygon/MES_oos_2026-07-24_2026-09-08` (40 files) | 2026-07-24 → 2026-09-08 | MES | 15m | replay, same SHA | S1-R | untouched by any structural feature; used once, after IS results are frozen |
-| **P-OOS-PROSPECTIVE** | VPS journal + bar history collected **after 2026-09-17 00:00Z** (Z6 contracts) | ≥ 6 weeks, calendar rule in §11 | MNQ, MES | 15m | live runner | S1, S2 | prospective OOS; the only route from "supported" to "v2 shadow-observation spec" |
+| **P-OOS-MES** (pre-registered holdout, **H1/H2/H3/H5 only**) | `data/replay_polygon/MES_oos_2026-07-24_2026-09-08` (40 files) | 2026-07-24 → 2026-09-08 | MES | 15m | replay, same SHA | S1-R | never scored with any structural event; used once, after IS results are frozen. **Not pristine for H4/H6**: the closed study viewed F4/F11 (fresh-vs-tested, target-blocked) on live outcomes over this same market period, so H4/H6 results here are EXPLORATORY (§11) |
+| **P-OOS-PROSPECTIVE** | VPS journal + bar history collected **after 2026-09-17 00:00Z** (Z6 contracts) | 2026-09-17 → ≥ 2026-10-31 and ≥ 50% of fold-3 rows per instrument, unconditional once complete (§11) | MNQ, MES | 15m | live runner | S1, S2 | prospective OOS; the only route from "supported" to "v2 shadow-observation spec" |
 
 Not admitted: `data/replay_polygon_5m/*` and the 5m-native families (4HR Re-Trigger, 60M
 3-2-2, MES 1-2-2 5m lane) — different bar grid, different resolver
@@ -138,8 +145,8 @@ in MTR15 units; point thresholds are never used in the confirmatory family.
 | 3.3 | **ONH / ONL** | high / low of current-trading-day bars with open in [18:00 ET, 09:30 ET) | forming during Asian/London (running); **frozen at 09:30 ET**; events evaluated only for `B0` in new_york | `location_context._day_ranges` overnight (identical); observer copy dead (C4) |
 | 3.4 | PMH / PML | as 3.3 restricted to [04:00, 09:30) ET | RTH-only | `location_context` premarket; exploratory |
 | 3.5 | HOD / LOD | running max/min of the current trading day up to `B0` | continuous; exploratory | Pine `ta.change(time("D"))` reset = 18:00 ET (Globex-inclusive, **not** RTH HOD/LOD); `polygon_to_replay` CME-day extremes — agree (C5) |
-| 3.6 | **NY ORB** | high / low of bars with open in [09:30, 09:45) ET = the single 09:30 15m bar; if that bar is absent (feed gap / holiday), the first observed bar with open in [09:30, 12:00) ET and the range is flagged `orb_start_shifted` | valid from the 09:45 bar to the first bar with open ≥ 17:00 ET; **no ORB exists outside 09:30–17:00** | Pine `i_orb_min=15`, `i_ny_session="0930-1200"`, expiry when leaving `"0930-1700"`; `state_builder` routes NY ORB only when `session == new_york`; `polygon_to_replay` first-bar-in-session reset — agree. Candle `orb_*` fields outside NY are stale and must not be read (C2) |
-| 3.6 | **London ORB** | high / low of bars with open in [03:00, 03:15) ET (shifted-start rule as above within [03:00, 08:30)) | valid from 03:15 to the first bar with open ≥ 09:30 ET | Pine `i_london_session="0300-0830"`, expiry when leaving `"0300-0930"`; `state_builder` routes it only for `session == london` — agree; older corpora need re-derivation (C2) |
+| 3.6 | **NY ORB** | high / low of bars with open in [09:30, 09:45) ET = the single 09:30 15m bar. If that bar is absent (feed gap, holiday, late open) the NY ORB for that trading day is **`NOT_AVAILABLE`** — no later bar is substituted, rows are counted under §9.9. (Pine and `polygon_to_replay` would start the range on the first observed in-session bar; that runtime behaviour is a known divergence from this definition and is *why* the study re-derives the ORB rather than reading it — a synthesized range is not the opening range.) | valid from the 09:45 bar to the first bar with open ≥ 17:00 ET; **no ORB exists outside 09:30–17:00** | Pine `i_orb_min=15`, `i_ny_session="0930-1200"`, expiry when leaving `"0930-1700"`; `state_builder` routes NY ORB only when `session == new_york`; `polygon_to_replay` first-bar-in-session reset — agree. Candle `orb_*` fields outside NY are stale and must not be read (C2) |
+| 3.6 | **London ORB** | high / low of bars with open in [03:00, 03:15) ET = the single 03:00 15m bar; absent bar → `NOT_AVAILABLE` for that day, same rule as NY, no substitute | valid from 03:15 to the first bar with open ≥ 09:30 ET | Pine `i_london_session="0300-0830"`, expiry when leaving `"0300-0930"`; `state_builder` routes it only for `session == london` — agree; older corpora need re-derivation (C2) |
 | 3.6 | Asian/Globex opening range | **NOT DEFINED AS A CANONICAL ORB.** If ever studied it is the research construct `GLOBEX_OR_15 := high/low of the 18:00 ET bar`, evaluated 18:15–02:59 ET only, and never called "ORB" | — | new construct; exploratory only; the canonical NY/London definitions are not altered |
 | 3.7 | **VWAP** | cumulative Σ(hlc3·volume)/Σvolume over bars of the current CME trading day, reset at the first bar with open ≥ 18:00 ET | continuous | Pine `ta.vwap(hlc3)` (session-anchored on the CME symbol = 18:00 ET); `csv_to_replay.vwap_day_range` / `compute_vwap` (the proven convention; sub-session resets were a replay bug, fixed, never to be resurrected); `polygon_to_replay` — agree |
 
@@ -204,7 +211,7 @@ side); the hypothesis states which side is used.
 | E5b `BREAK_RETEST_REJECT` / `FAILED_BREAKOUT` | break → retest → reject | as E5a but `B0.close` back through ℓ (the retest fails). For the hypothesis it is the mirror-side supportive event: a failed breakout *above* an opposing level is `FAILED_BREAKOUT` for a SHORT | B−R..B0 |
 | E6 `PROXIMITY_ONLY` | approach without touch | `0 < signed distance from B0.close to ℓ ≤ 0.5 × MTR15` and not `TOUCH` | B0 |
 | E7 `DIST` | distance at signal | `(B0.close − ℓ) / MTR15`, signed so that positive = level on the supportive side | B0 |
-| E8 `CLUSTER` | clustering / confluence | number of distinct admitted levels within ± 0.5 × MTR15 of the supportive-side reference level, after tautology removal: HOD≡ONH / LOD≡ONL before 09:30 ET count once; PDC and VWAP count; a `LC_ZONE` counts if the band intersects the zone; own-level exclusion (§6) applies | B0 |
+| E8 `CLUSTER` | clustering / confluence | **Anchor `A`** (deterministic, frozen): the admitted supportive-side level (after own-level exclusion) with the smallest absolute distance from the candidate's **entry**; ties (equal distance to the tick) resolve by fixed precedence PWH/PWL > PDH/PDL > ONH/ONL > NY ORB > London ORB > `LC_ZONE` 4H > `LC_ZONE` 1H > PDC > VWAP (higher-timeframe first), then lower price for LONG / higher price for SHORT. The anchor is the same regardless of which events fired (it is *not* switched to the H1/H3 event level). `CLUSTER` = number of distinct admitted levels (anchor included) within ± 0.5 × MTR15 of `A`, after tautology removal: HOD≡ONH / LOD≡ONL before 09:30 ET count once; PDC and VWAP count; a `LC_ZONE` counts if the band intersects the zone; own-level exclusion (§6) applies | B0 |
 | E9 `ROOM` | room to next opposing structure | distance from candidate **entry** to the nearest opposing admitted level (excluding the candidate's own level), divided by the candidate's stop distance → `ROOM_R`; `TARGET_REL` ∈ {`before`, `inside` (target within ± τ of the opposing level), `beyond`} | B0 |
 
 **Sequence rule.** Every event above is defined so that its confirmation bar is `B0` — the
@@ -235,7 +242,8 @@ feature set: ORB for `orb_*`, VWAP for `vwap_*`, PDH/PDL for `pdh_/pdl_reclaim`,
 
 H4 and H6 overlap constructs already viewed on P-LIVE (F4 fresh-vs-tested; F11
 target-blocked). §11 restricts them to exploratory status on P-LIVE; they are confirmatory
-on P-REPLAY and P-OOS only. H1, H2, H3, H5 use event constructs never computed before.
+on P-REPLAY (in-sample) and P-OOS-PROSPECTIVE only; P-OOS-MES is not pristine for them
+either (same market period). H1, H2, H3, H5 use event constructs never computed before.
 
 No interaction is confirmatory in tranche 1. Session, family, instrument, direction and
 provenance are **controls and mandatory strata** (§7), not features.
@@ -298,8 +306,13 @@ horizon h"; it is never converted into a trade statement.
 ## 9. Data-quality and exclusion rules (all exclusions counted, none silent)
 
 1. **Integrity gates (from the closed study, reused):** candidate→outcome join ≥ 90%;
-   duplicate `candidate_key` = 0 after documented dedupe (first row wins, count kept);
-   observer/journal duplicate keys counted.
+   duplicate `candidate_key` handling is **fail-closed**: rows sharing a key whose
+   compared payload (instrument, bar ts, strategy, direction, entry, stop, target, outcome
+   result, pnl_ticks, resolved_at) is byte-identical collapse to one row and the collapse
+   is counted; rows sharing a key that **differ** in any compared field are
+   `CONFLICTING_DUPLICATE` — the affected (population × family) is BLOCKED until the
+   provenance is explained in writing, and the block is reported. No "first row wins".
+   Observer/journal duplicate keys are counted the same way.
 2. **Timeframe:** rows with `timeframe_minutes == 5` on the 15m path (07-26..28) excluded.
 3. **Missing fields:** a level that is unavailable at `B0` (e.g. no PWH because the corpus
    has < 1 prior week; no ORB outside its window) makes the row `NOT_APPLICABLE` for that
@@ -326,8 +339,12 @@ horizon h"; it is never converted into a trade statement.
    resolver version; rows are never pooled across provenance without the stratum table.
 8. **Ambiguity pessimism:** same-bar stop/target → stop; fill-bar target-only → ignored
    (resolver rule); PR `REACT_1` adverse-first.
-9. **ORB shifted start** (`orb_start_shifted`) rows are reported separately; if > 5% of
-   ORB rows in a stratum, that stratum's ORB events are `NOT_TESTABLE`.
+9. **Missing opening-range bar:** when the 09:30 (NY) or 03:00 (London) 15m bar is absent
+   the ORB is `NOT_AVAILABLE` for that session-day; every hypothesis that needs it treats
+   the row as `NOT_APPLICABLE` for that level (item 3) and the count of affected
+   session-days is reported per population. Missing data never synthesizes a replacement
+   range. If > 5% of the session-days in a stratum lack the bar, that stratum's ORB events
+   are `NOT_TESTABLE`.
 
 ## 10. Statistical and robustness rules (binding)
 
@@ -362,13 +379,30 @@ horizon h"; it is never converted into a trade statement.
   after any outcome is read, changes apply only to a v2 on new data.
 - **Order of operations:** P1–P7 prerequisites → P-REPLAY folds (in-sample; results
   frozen in a results JSON) → P-OOS-MES once → P-LIVE (as calibration/provenance stratum)
-  → P-OOS-PROSPECTIVE after ≥ 6 weeks of Z6 data that contains ≥ 1 FOMC or monthly OPEX
-  week and whose daily realised-volatility median differs by ≥ 25% from P-REPLAY fold 3's;
-  no substitute window.
-- **Prior-viewing rule for P-LIVE:** H1, H2, H3, H5 constructs were never computed on the
-  07-16..09-14 sample and may be reported there as a provenance stratum (S1/S2). H4 and
-  H6 overlap F4/F11, which were viewed; on P-LIVE they are **EXPLORATORY** regardless of
-  result.
+  → P-OOS-PROSPECTIVE.
+- **Primary prospective OOS window (calendar / sample-size, unconditional):** all
+  MNQ/MES journal rows with `B0` from **2026-09-17 00:00Z** through the later of
+  **2026-10-31 23:59Z** (≥ 6 calendar weeks, which by the fixed calendar contains the
+  2026-10-16 monthly OPEX and the 2026-10-27/28 FOMC meeting) and the first date on which
+  the prospective terminal-outcome row count reaches **≥ 50% of the P-REPLAY fold-3 row
+  count** for each instrument. Once that window is complete it is **evaluated
+  unconditionally** — no characteristic observed during collection (volatility, regime
+  mix, trend, gap count) may decide whether it counts. Its daily realised-volatility
+  median relative to fold 3 is **reported descriptively**. A separately labelled
+  **volatility-stress check** (`OOS_VOLSTRESS`, non-primary) may additionally report the
+  prospective rows split at the fold-3 realised-volatility median; it cannot rescue or
+  overturn the primary OOS verdict. No substitute window.
+- **Prior-viewing status per hypothesis (binding):**
+  - **H1, H2, H3, H5** — event constructs never computed anywhere before this plan.
+    Confirmatory on P-REPLAY (in-sample) and on **P-OOS-MES** and **P-OOS-PROSPECTIVE**;
+    may also be reported on P-LIVE as a provenance stratum (S1/S2).
+  - **H4, H6** — overlap F4 (fresh vs tested) and F11 (target blocked), which the closed
+    study viewed on live outcomes for 2026-07-16..09-16. That viewing covers the market
+    period of both P-LIVE and P-OOS-MES (07-24..09-08). Therefore H4/H6 are confirmatory
+    on **P-REPLAY only** (in-sample, 2024-07..2026-06), **EXPLORATORY on P-LIVE and on
+    P-OOS-MES regardless of result**, and their only clean confirmation is
+    **P-OOS-PROSPECTIVE** (post-freeze data). A "supported" H4/H6 therefore cannot exist
+    before the prospective window completes.
 - OOS pass: sign agreement with in-sample and ≥ 50% of the in-sample effect; OOS sign
   reversal = K5.
 
@@ -377,7 +411,8 @@ horizon h"; it is never converted into a trade statement.
 - **K1 — nothing discriminates:** no hypothesis is "supported" in P-REPLAY, or none shows a
   consistent-sign ≥ 0.10R separation in ≥ 2 provenance strata → close the dynamic-level
   direction; no v1.1 on the same constructs without new mechanistic evidence.
-- **K2 — feature parity fails:** P3/P4 parity < 98% within one tick on any admitted level,
+- **K2 — feature parity fails:** P3/P4 parity < 98% within **one tick** (the single frozen
+  tolerance for every admitted level, VWAP included) on any admitted level,
   or replay/live bracket formulas differ for a family that carries > 25% of rows →
   analysis BLOCKED for that level/family until the definition is reconciled (not in this
   task).
@@ -385,8 +420,10 @@ horizon h"; it is never converted into a trade statement.
   family adjustment → session-policy finding, not a level finding.
 - **K4 — it's the fill model:** a headline TF effect reverses sign between S1-R/S1 and S2
   → simulation artefact; nothing proceeds to prospective collection on that hypothesis.
-- **K5 — OOS contradiction:** P-OOS-MES or P-OOS-PROSPECTIVE sign-reverses a supported
-  hypothesis → abandon it; no re-run against a friendlier window.
+- **K5 — OOS contradiction:** the applicable clean OOS (P-OOS-MES and P-OOS-PROSPECTIVE for
+  H1/H2/H3/H5; P-OOS-PROSPECTIVE only for H4/H6) sign-reverses a supported hypothesis →
+  abandon it; no re-run against a friendlier window and no substitution of the
+  `OOS_VOLSTRESS` split for the primary window.
 - **K6 — price-response-only:** PR supported but TF not, across all six → record "levels
   predict price, not these trades" and **close**; do not redesign brackets to capture it
   (that is the rejected 07-13 design).
@@ -414,7 +451,7 @@ count, acceptance length (`N`), event recency within `K` — any threshold varia
 |---|---|---|---|
 | P1 | Pure offline feature builder `research/structural_level_features.py`: levels §3, `LC_ZONE` §4.1 via the pure `location_context` functions, events §5, from a list of 15m bars ending at `B0`; no imports from webhook/strategy/execution/journal | module + unit tests on synthetic bars (one test per event) | no |
 | P2 | Candidate regeneration spec for P-REPLAY: pinned SHA, `enabled_concepts` list, shadow-candidate output with brackets and resolver outcomes, per family; family compatibility matrix (P5) filled from the run manifest | run manifest + candidate JSONL (not run here) | no (replay is offline) |
-| P3 | Parity proof on P-LIVE 07-16..09-14: offline PDH/PDL/PDC/ONH/ONL/PMH/PML vs `location_context.levels`; NY/London ORB vs `context.orb` (NY/London rows only); VWAP vs `context.vwap.value` (± 0.5 pt); PWH/PWL/HOD/LOD vs `wall_context`; 1H/4H zones vs `location_context.zones` (edges within 1 tick, same `tests`/`broken`) — thresholds ≥ 98% | parity report | no |
+| P3 | Parity proof on P-LIVE 07-16..09-14: offline PDH/PDL/PDC/ONH/ONL/PMH/PML vs `location_context.levels`; NY/London ORB vs `context.orb` (NY/London rows only); VWAP vs `context.vwap.value` (within **one tick**, 0.25 pt on MNQ/MES — same tolerance as every other admitted level; if Pine's volume basis makes this unattainable, VWAP is `NOT_ADMITTED` rather than the tolerance widened); PWH/PWL/HOD/LOD vs `wall_context`; 1H/4H zones vs `location_context.zones` (edges within 1 tick, same `tests`/`broken`) — thresholds ≥ 98% | parity report | no |
 | P4 | `PINE_SD` reconstruction parity (tranche-2 admission test) incl. determining the deployed `i_bos_swing` | parity report | no |
 | P5 | Live vs replay bracket-formula parity per family at the pinned SHA (entry/stop/target arithmetic, tick constants) | compatibility matrix (§2.3) | no |
 | P6 | Roll ledger for P-REPLAY (dates, gap sizes) and gap ledger on the 15m grid; P-LIVE ledger reused | ledgers | no |
@@ -468,7 +505,9 @@ can be handled entirely in the offline builder):
 
 ---
 
-**Verdict: NEEDS DEFINITION FIXES.** The data to answer the question exists (two years of
+**Verdict (v1.1): NEEDS DEFINITION FIXES.** The six pre-freeze definition gaps raised in the
+operator review of v1.0 are closed in this version; the verdict is unchanged because the
+remaining fixes are parity-level, not wording-level. The data to answer the question exists (two years of
 15m Polygon bars for both instruments, a 53-day live journal with bar history, an MES
 holdout, and a prospective Z6 window), and every admitted level is reconstructable from
 OHLCV. What does not yet exist is the single offline definition layer that makes the
