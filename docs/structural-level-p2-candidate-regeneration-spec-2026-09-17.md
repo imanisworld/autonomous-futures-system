@@ -86,7 +86,7 @@ confirmatory statistic.
 
 | Item | Value / rule |
 |---|---|
-| Code SHA | `origin/main` at the moment of the go (this spec written at `df18532`); the manifest records `git rev-parse HEAD` and the sha256 of `strategy/shadow_setups.py` (`4e535d70…`), `strategy/shadow_resolver.py` (`d200ae0d…`), `replay/replay_engine.py` (`8de84e13…`), `scripts/polygon_to_replay.py` (`a42e1cae…`), `scripts/csv_to_replay.py` (`332e48a9…`), `research/structural_level_features.py` (`4686ddf9…`), `risk_rules.yaml` (`6c7e3f13…`) |
+| Code SHA | `origin/main` at the moment of the go (this spec written at `df18532`); the manifest records `git rev-parse HEAD` and the sha256 of `strategy/shadow_setups.py` (`4e535d70…`), `strategy/shadow_resolver.py` (`d200ae0d…`), `replay/replay_engine.py` (`9ab1f72b…` after PR #621 `4f07ea0`, the day-file history fix; was `8de84e13…`), `scripts/polygon_to_replay.py` (`a42e1cae…`), `scripts/csv_to_replay.py` (`332e48a9…`), `research/structural_level_features.py` (`4686ddf9…`), `risk_rules.yaml` (`6c7e3f13…`) |
 | Corpus | **R1 (§5) — rebuilt** 15m Polygon corpora `data/replay_polygon_v2/{MNQ,MES}`, **2024-10-01 → 2026-06-26** (prereg v1.4 Ruling 1 — the provider retains ~2 years, so the v1.0 start 2024-07-01 is not fetchable; warm-up 2024-09-17 → 09-30 via `scripts/structural_level_corpus_build.py --start 2024-10-01 --warmup-days 14`), produced by the pinned `polygon_to_replay.py` (which emits `london_orb_*`, `reconstructed_market_condition`, `legacy_market_condition`); `MANIFEST.json` per corpus with contract segments and roll rule (as `MES_ext_boxroll` already has). The existing `data/replay_polygon/*` files predate the London ORB fields and **must not be used** |
 | Config | `risk_rules.yaml` byte-pinned by hash; `selection_mode: ranked` and `enabled_concepts` left exactly as pinned (they do not affect `shadow_candidates`; they are recorded so the DecisionEngine side of the journal is reproducible) |
 | Environment | `FORWARD_EVIDENCE_CAMPAIGN` **unset** (canonical VWAP observers OFF → `vwap_*_observed` absent, matching the `LIVE_ONLY` verdict); `htf_direction_source` as pinned in config; no other env |
@@ -180,6 +180,38 @@ Only after R7 may the sealed outcomes be opened — under a separate go.
   holiday weeks (C14).
 - `range_break_close`: `LIVE_ONLY`.
 - All rows with `bar_ts ≥ 2026-09-14T22:00Z` (Z6) excluded (roll cut), as in P3.
+
+## 6a. v1.5 addendum — M2K (2026-09-17)
+
+Prereg v1.5 adds M2K. For the regeneration and parity machinery this means:
+
+- **P-REPLAY corpus:** `data/replay_polygon_v2/M2K` (same window, pinned builder, quarterly
+  scheduler; 40,878 rows / 543 files; manifest `1f1e54f5…`) was built but is **NOT ADMITTED**:
+  **X0 (#622 §3 / #625)** re-established contract identity from the provider for every segment
+  (40,878/40,878) but none of its seven `roll_days=8` UTC-midnight seams is independently
+  proven (no live feed in the window; provider volume crossed 3–4 days after every seam) →
+  `ROLL_PROVENANCE_UNKNOWN` — `docs/structural-level-v15-m2k-2026-09-17-x0-v2.json`. The §3.1
+  regeneration command is therefore **not run for M2K** (no `--candles data/replay_polygon_v2/M2K`
+  step until an M2K roll rule is proven or seam-free per-contract windows are admitted under a
+  separate go); the MNQ/MES v1.4 corpora are unchanged (prereg v1.5 C23, #622 §1.2).
+- **Live population source for M2K:** the cross-instrument observation lane
+  (`logs/cross_instrument_observation_v1.jsonl` CANDIDATE + SIGNAL rows, `logs/bars_M2K_*.jsonl`),
+  loaded by `research.structural_level_p2.iter_observation_rows`; P2-P takes
+  `--live-source observation`. No P-LIVE history exists before the epoch `2026-09-16T12:17:19Z`.
+- **Parity corpus for M2K:** `data/replay_polygon_parity_m2kz6_2026_09_16/M2K` — **single dated
+  contract `M2KZ6`** (builder `--contract M2KZ6`, 2026-09-01 →, no seam; manifest `1e3ac8f2…`;
+  X0 `PROVEN`, live bars identified Z6 27/27), extended as the observation window grows and
+  seam-free until the December roll. The first-draft stitched corpus
+  `data/replay_polygon_parity_m2k_2026_09_16/M2K` (`roll_days=3`, seam 2026-09-15T00:00Z;
+  manifest `78d4127d…`) is **`ROLL_PROVENANCE_UNKNOWN` / NOT ADMITTED** — M2K's live feed
+  switch was never observed, so its seam cannot be reconciled (X0 report
+  `…-x0-parity-stitched.json`); do not use it for M2K parity.
+- **Family matrix additions (C21):** `strat_212`, `strat_122` = `LANE_ONLY` (observation-lane
+  canonical detector), must be absent from replay (manifest check). Not configured for M2K by
+  the lane: `strat_122_pullback`, `strat_4hr_retrigger_observed`, `vwap_*`.
+- **Extra prerequisites:** X0-M2K per corpus (`scripts/structural_level_x0_roll_proof.py`),
+  P3-M2K (bar-source levels parity), P5-M2K (lane vs replay parity), P-R (resolver equivalence,
+  synthetic). Evidence: `docs/structural-level-v15-m2k-2026-09-17.md`.
 
 ## 7. What P2 deliberately does not do
 

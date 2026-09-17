@@ -33,13 +33,21 @@ from zoneinfo import ZoneInfo
 from config.futures_contracts import optional_tick_size
 from strategy.shadow_resolver import _candidate_key
 
-TOOL_VERSION = "slp2-v1.4"
+TOOL_VERSION = "slp2-v1.5"
 LANE = "shadow_setups"
 _ET = ZoneInfo("America/New_York")
 
 # Roll cut (prereg §2 / P3): first Z6 bar on the box. Exclusive on both sides.
 ROLL_CUT = datetime(2026, 9, 14, 22, 0, tzinfo=timezone.utc)
 INSTRUMENTS = ("MNQ", "MES")
+# Prereg v1.5: M2K joins P-REPLAY + P-OOS-PROSPECTIVE. Its live candidates come from the
+# cross-instrument observation lane (logs/cross_instrument_observation_v1.jsonl), not the
+# runner journal — see iter_observation_rows.
+OBSERVATION_INSTRUMENTS = ("M2K",)
+# Lane-only canonical families written by execution.cross_instrument_observation
+# (_strat_212_122_candidate via strategy.strat_212_122.advance_strat_212_122). They are NOT
+# shadow_setups families, so replay never emits them (prereg v1.5 C21).
+OBSERVATION_LANE_ONLY_FAMILIES = ("strat_212", "strat_122")
 
 # Frozen parity gates (spec §4).
 FIRING_JACCARD_MIN = 0.90
@@ -88,6 +96,8 @@ INPUT_DIVERGENCE = {
     "ovn_low_sweep_reclaim": "payload never carries overnight_high/low",
     "gap_fill": "payload never carries rth_open/session_open",
     "range_break_close": "live-only range_signal lane (wall_context walls)",
+    "strat_212": "observation-lane canonical detector (advance_strat_212_122), not a shadow_setups family (C21)",
+    "strat_122": "observation-lane canonical detector (advance_strat_212_122), not a shadow_setups family (C21)",
 }
 
 
@@ -224,6 +234,61 @@ def iter_live_rows(logs_root: str, *, start_date: str, end_ts_exclusive: datetim
             yield EvalRow("live", r["instrument"], bar_ts, str(r.get("session") or ""), day, i,
                           cands, [None] * len(cands), r.get("decision"), r.get("ts"),
                           r.get("market_condition"))
+
+
+def iter_observation_rows(evidence_path: str, bars_root: str, *,
+                          instruments: Iterable[str] = OBSERVATION_INSTRUMENTS,
+                          end_ts_exclusive: Optional[datetime] = None,
+                          timeframe_minutes: int = 15) -> Iterator[EvalRow]:
+    """Live rows for a collection-only root from the cross-instrument observation lane.
+
+    An evaluated bar = every 15m bar in ``bars_<INST>_<day>.jsonl`` under ``bars_root`` (those
+    files are written by the observation transport itself, so a recorded bar is a bar the lane
+    evaluated). Candidates = CANDIDATE and SIGNAL records whose ``signal_timestamp`` is that
+    bar (SIGNAL rows carry a non-authoritative bracket and are still a firing; flagged
+    ``bracket_authoritative=False``). OUTCOME records are skipped by ``record_type`` before
+    anything else in the row is looked at — never read.
+    """
+    insts = set(instruments)
+    cands: dict[tuple[str, datetime], list[dict]] = collections.defaultdict(list)
+    sessions: dict[tuple[str, datetime], str] = {}
+    for r in read_jsonl(evidence_path):
+        if r.get("record_type") not in ("CANDIDATE", "SIGNAL"):
+            continue
+        inst = r.get("instrument")
+        if inst not in insts:
+            continue
+        ts = parse_dt(r.get("signal_timestamp"))
+        if ts is None:
+            continue
+        c = {"strategy": r.get("strategy"), "direction": r.get("direction"), "entry": r.get("entry"),
+             "stop": r.get("stop"), "target": r.get("target"), "rr_ratio": r.get("reward_to_risk"),
+             "record_type": r.get("record_type"), "collection_mode": r.get("collection_mode"),
+             "bracket_authoritative": bool(r.get("bracket_authoritative")),
+             "candidate_id": r.get("candidate_id")}
+        if _well_formed(c):
+            cands[(inst, ts)].append(c)
+            sessions.setdefault((inst, ts), str(r.get("session") or ""))
+    from research.structural_level_features import detect_session
+    for inst in sorted(insts):
+        for f in sorted(glob.glob(os.path.join(bars_root, f"bars_{inst}_*.jsonl"))):
+            day = os.path.basename(f)[len(f"bars_{inst}_"):][:10]
+            i = 0
+            for b in read_jsonl(f):
+                tf = b.get("timeframe")
+                if tf is not None and int(str(tf).rstrip("m") or 0) != timeframe_minutes:
+                    continue
+                ts = parse_dt(b.get("ts"))
+                if ts is None:
+                    continue
+                idx = i
+                i += 1
+                if end_ts_exclusive is not None and ts >= end_ts_exclusive:
+                    continue
+                k = (inst, ts)
+                cl = cands.get(k, [])
+                yield EvalRow("live", inst, ts, sessions.get(k) or detect_session(ts), day, idx,
+                              cl, [None] * len(cl), "OBSERVATION_ONLY", None, None)
 
 
 def load_corpus_bars(corpus_dir: str) -> dict[datetime, dict]:
@@ -449,6 +514,8 @@ def compute_parity(live_rows: Iterable[EvalRow], replay_rows: Iterable[EvalRow],
 
 
 def _spec_reference(fam: str) -> str:
+    if fam in OBSERVATION_LANE_ONLY_FAMILIES:
+        return "LANE_ONLY (prereg v1.5 C21)"
     if fam in DEAD_FAMILIES:
         return "DEAD (spec §2)"
     if fam in LIVE_ONLY_FAMILIES:
@@ -469,6 +536,10 @@ def _classify(fam: str, live_n: int, replay_n: int, jaccard: Optional[float],
               bracket_rate: Optional[float], live_all: int, replay_all: int) -> tuple[str, str]:
     """Final classification per the operator's list: BOTH, BOTH — input-divergent, LIVE_ONLY,
     NOT_TESTABLE, DEAD (+ the fail-closed states the spec names)."""
+    if fam in OBSERVATION_LANE_ONLY_FAMILIES:
+        if replay_all:
+            return "MANIFEST_ERROR — lane-only canonical family present in replay", f"replay={replay_all}"
+        return "LANE_ONLY", f"observation-lane canonical detector; live={live_all}, replay=0 by construction (C21)"
     if fam in DEAD_FAMILIES:
         if live_all or replay_all:
             return "MANIFEST_ERROR — DEAD family fired", f"live={live_all} replay={replay_all}"

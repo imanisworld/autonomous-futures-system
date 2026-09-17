@@ -34,6 +34,7 @@ from research.structural_level_p2 import (  # noqa: E402
     ROLL_CUT,
     compute_parity,
     iter_live_rows,
+    iter_observation_rows,
     iter_replay_rows,
     load_corpus_bars,
     parse_dt,
@@ -42,11 +43,18 @@ from research.structural_level_p2 import (  # noqa: E402
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--live-logs-root", required=True)
+    ap.add_argument("--live-source", choices=("journal", "observation"), default="journal",
+                    help="journal = runner decision rows (MNQ/MES); observation = cross-instrument "
+                         "observation lane (collection-only roots, prereg v1.5)")
+    ap.add_argument("--live-logs-root", default=None, help="journal source: snapshot dir with journal_*.jsonl")
+    ap.add_argument("--observation-evidence", default=None,
+                    help="observation source: cross_instrument_observation_v1.jsonl")
+    ap.add_argument("--bars-root", default=None, help="observation source: dir with bars_<INST>_*.jsonl")
     ap.add_argument("--replay-log-dir", required=True)
     ap.add_argument("--corpus-root", default=None, help="parity corpus root (<INST>/ day files) for bar census")
     ap.add_argument("--start", default="2026-07-16", help="first live journal day (YYYY-MM-DD)")
-    ap.add_argument("--end-ts", default=ROLL_CUT.isoformat(), help="exclusive end (roll cut)")
+    ap.add_argument("--end-ts", default=ROLL_CUT.isoformat(),
+                    help="exclusive end (default = the MNQ/MES roll cut; pass a later ts for observation roots)")
     ap.add_argument("--instruments", default=",".join(INSTRUMENTS))
     ap.add_argument("--out", required=True, help="report JSON path")
     args = ap.parse_args(argv)
@@ -56,12 +64,23 @@ def main(argv: list[str] | None = None) -> int:
     corpus = None
     if args.corpus_root:
         corpus = {i: load_corpus_bars(os.path.join(args.corpus_root, i)) for i in insts}
-    live = list(iter_live_rows(args.live_logs_root, start_date=args.start, end_ts_exclusive=end_ts,
-                               instruments=insts))
+    if args.live_source == "observation":
+        if not (args.observation_evidence and args.bars_root):
+            ap.error("--live-source observation needs --observation-evidence and --bars-root")
+        live = list(iter_observation_rows(args.observation_evidence, args.bars_root, instruments=insts,
+                                          end_ts_exclusive=end_ts))
+    else:
+        if not args.live_logs_root:
+            ap.error("--live-source journal needs --live-logs-root")
+        live = list(iter_live_rows(args.live_logs_root, start_date=args.start, end_ts_exclusive=end_ts,
+                                   instruments=insts))
     replay = list(iter_replay_rows(args.replay_log_dir, instruments=insts, end_ts_exclusive=end_ts))
     report = compute_parity(live, replay, corpus=corpus)
     report["inputs"] = {
-        "live_logs_root": os.path.abspath(args.live_logs_root),
+        "live_source": args.live_source,
+        "live_logs_root": os.path.abspath(args.live_logs_root) if args.live_logs_root else None,
+        "observation_evidence": os.path.abspath(args.observation_evidence) if args.observation_evidence else None,
+        "bars_root": os.path.abspath(args.bars_root) if args.bars_root else None,
         "replay_log_dir": os.path.abspath(args.replay_log_dir),
         "corpus_root": os.path.abspath(args.corpus_root) if args.corpus_root else None,
         "start": args.start, "end_ts_exclusive": end_ts.isoformat() if end_ts else None,

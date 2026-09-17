@@ -207,6 +207,31 @@ the P2 spec §2 matrix.
 - All `strat_*` families and `orb_false_break_fade` → **BOTH** as predicted; bar-type and ORB
   routing sources are effectively identical on this window.
 
+### 4.4 Post-#621 rerun (2026-09-17, later the same day)
+
+The replay day-file history defect (C19) was fixed offline by the operator in PR #621
+(`4f07ea0`). R4 was rerun on the fixed engine with identical inputs. Result, stated
+precisely (wording corrected after audit — an earlier draft said "every other family
+numerically identical", which was not literally true):
+
+- the two intended recent-bars families improved materially:
+  `impulse_first_pullback_observed` 0.937 → **0.972**, `trend_consolidation_break_observed`
+  0.938 → **0.974** (warm-up-bar live-only misses 40 → 1 and 15 → 0);
+- every previously admitted / testable family (`strat_*`, `strat_4hr_retrigger_observed`,
+  `orb_false_break_fade`) is numerically identical to §4.1 and keeps its classification;
+- `ema_pullback_trend` is unchanged (firing 0.995, bracket 0.939) and **remains
+  `BRACKET_CONFLICT`** under Ruling 2;
+- `transition_failed_breakdown_reclaim` **changed numerically** — Jaccard 0.101 → 0.102,
+  bracket 1.000 → 0.900 (9 → 10 co-fired pairs, one new pair with a bracket leg off),
+  live-only 3 → 2, replay-only 77 → 86 — and **remains `NOT_TESTABLE`** (spec §6, C8
+  regime-source divergence). The change is a consequence of the engine now seeing a full
+  8-bar history on bars 0–6 of each UTC day; it does not bear on the admitted-family result
+  and is not normalised away;
+- LIVE_ONLY / DEAD families: unchanged (no replay firings by manifest).
+
+Full before/after table and artifacts: `docs/structural-level-v15-m2k-2026-09-17.md` §5 and
+`docs/structural-level-p2-parity-corpus-r4-2026-09-17-results-post621.json`.
+
 ## 5. Conflicts / findings to carry forward
 
 - **C17 — Polygon rolling retention (R1-A):** P-REPLAY as preregistered in v1.0–v1.3 is no

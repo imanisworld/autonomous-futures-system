@@ -373,9 +373,293 @@ def test_gap_ledger_reports_missing_open_slots_only():
 
 def test_no_runtime_imports():
     for rel in ("research/structural_level_p2.py", "scripts/structural_level_p2_extract.py",
-                "scripts/structural_level_p2_parity.py", "scripts/structural_level_corpus_build.py"):
+                "scripts/structural_level_p2_parity.py", "scripts/structural_level_corpus_build.py",
+                "scripts/structural_level_x0_roll_proof.py", "scripts/structural_level_bar_source_parity.py"):
         imports = [l.strip() for l in (ROOT / rel).read_text().splitlines()
                    if l.startswith(("from ", "import "))]
         for line in imports:
             for bad in ("webhook", "execution", "broker", "replay", "risk", "tradovate", "adaptive"):
                 assert not line.startswith((f"from {bad}", f"import {bad}")), f"{rel}: {line}"
+
+
+# ── prereg v1.5: M2K via the cross-instrument observation lane ────────────────
+
+def _obs_record(inst, ts: datetime, strategy, rtype="CANDIDATE", entry=2900.0, stop=2897.0, target=2906.0,
+                session="new_york", direction="SHORT"):
+    mode = "structural_outcome" if rtype == "CANDIDATE" else "signal_metrics"
+    return {"record_type": rtype, "instrument": inst, "strategy": strategy, "direction": direction,
+            "signal_timestamp": ts.isoformat(), "session": session, "collection_mode": mode,
+            "bracket_authoritative": rtype == "CANDIDATE", "entry": entry, "stop": stop, "target": target,
+            "reward_to_risk": 2.0, "candidate_id": f"cio-{strategy}-{ts.isoformat()}"}
+
+
+def _bars_file(root: Path, inst, ts0: datetime, n, tf="15"):
+    rows = []
+    for i in range(n):
+        t = ts0 + timedelta(minutes=15 * i)
+        rows.append({"ts": t.isoformat(), "open": 2900 + i, "high": 2901 + i, "low": 2899 + i, "close": 2900.5 + i,
+                     "volume": 100, "timeframe": tf, "source_ticker": f"{inst}1!"})
+    _write_jsonl(root / f"bars_{inst}_{ts0.date().isoformat()}.jsonl", rows)
+
+
+def test_observation_rows_evaluated_bars_and_candidates_never_touch_outcomes(tmp_path):
+    root = tmp_path / "snap"
+    t0 = _ts(12, 15)
+    _bars_file(root, "M2K", t0, 6)
+    _bars_file(root, "MGC", t0, 3)                                   # other root: ignored
+    rows = [
+        _obs_record("M2K", t0, "strat_22_continuation_observed"),
+        _obs_record("M2K", t0, "orb_false_break_fade", rtype="SIGNAL"),
+        {"record_type": "OUTCOME", "instrument": "M2K", "strategy": "strat_22_continuation_observed",
+         "signal_timestamp": t0.isoformat(), "result": "WIN", "entry": None},   # must be skipped unread
+        _obs_record("M2K", t0 + timedelta(minutes=30), "strat_212"),
+        _obs_record("MGC", t0, "strat_22_continuation_observed"),
+    ]
+    _write_jsonl(root / "cross_instrument_observation_v1.jsonl", rows)
+    out = list(p2.iter_observation_rows(str(root / "cross_instrument_observation_v1.jsonl"), str(root),
+                                        instruments=("M2K",)))
+    assert [r.bar_ts for r in out] == [t0 + timedelta(minutes=15 * i) for i in range(6)]
+    assert all(r.source == "live" and r.instrument == "M2K" for r in out)
+    c0 = out[0].candidates
+    assert [c["strategy"] for c in c0] == ["strat_22_continuation_observed", "orb_false_break_fade"]
+    assert c0[0]["bracket_authoritative"] is True and c0[1]["bracket_authoritative"] is False
+    assert all("result" not in c and "outcome" not in c for r in out for c in r.candidates)
+    assert out[2].candidates[0]["strategy"] == "strat_212" and out[2].idx_in_file == 2
+    assert out[1].candidates == [] and out[1].session in ("new_york", "london", "asian")
+    # roll-cut / end exclusivity
+    cut = list(p2.iter_observation_rows(str(root / "cross_instrument_observation_v1.jsonl"), str(root),
+                                        instruments=("M2K",), end_ts_exclusive=t0 + timedelta(minutes=45)))
+    assert len(cut) == 3
+
+
+def test_parity_observation_source_lane_only_family_and_bar_census(tmp_path):
+    root = tmp_path / "snap"; t0 = _ts(12, 15)
+    _bars_file(root, "M2K", t0, 4)
+    fam = "strat_22_continuation_observed"
+    _write_jsonl(root / "cross_instrument_observation_v1.jsonl", [
+        _obs_record("M2K", t0, fam), _obs_record("M2K", t0 + timedelta(minutes=15), fam, entry=2901.0),
+        _obs_record("M2K", t0 + timedelta(minutes=30), "strat_212"),
+    ])
+    rlog = tmp_path / "replay"
+    _write_jsonl(rlog / "journal_2026-08-12.jsonl", [
+        _replay_row("M2K", t0, [_cand(fam, "SHORT", 2900.0, 2897.0, 2906.0, _outcome())]),
+        _replay_row("M2K", t0 + timedelta(minutes=15), [_cand(fam, "SHORT", 2901.1, 2897.0, 2906.0, _outcome())]),  # 1 tick (0.10)
+        _replay_row("M2K", t0 + timedelta(minutes=30), []),
+    ])
+    live = list(p2.iter_observation_rows(str(root / "cross_instrument_observation_v1.jsonl"), str(root), instruments=("M2K",)))
+    replay = list(p2.iter_replay_rows(str(rlog), instruments=("M2K",)))
+    rep = p2.compute_parity(live, replay)
+    assert rep["bar_census"]["M2K"]["both_evaluated"] == 3 and rep["bar_census"]["M2K"]["live_only_bars"] == 1
+    f = rep["families"][fam]
+    assert f["on_both_evaluated_bars"]["firing_jaccard"] == 1.0
+    assert f["bracket_on_cofired"]["all_three_within_one_tick_rate"] == 1.0    # M2K tick 0.10 honoured
+    assert f["classification"] == "BOTH"
+    assert rep["families"]["strat_212"]["classification"] == "LANE_ONLY"
+    assert rep["families"]["strat_212"]["live_firings_all_live_bars"] == 1
+    # a lane-only family leaking into replay is a manifest error
+    assert p2._classify("strat_212", 0, 0, None, None, 3, 1)[0].startswith("MANIFEST_ERROR")
+
+
+def test_bar_source_parity_ohlc_and_levels(tmp_path):
+    from scripts import structural_level_bar_source_parity as bsp
+    from scripts.structural_level_corpus_build import _slot_open as slot_open
+    root = tmp_path / "snap"; cdir = tmp_path / "corpus" / "M2K"; cdir.mkdir(parents=True)
+    # two CME days of 15m bars on both sides; corpus has one open 2 ticks off and a missing bar
+    t0 = datetime(2026, 9, 15, 22, 0, tzinfo=UTC)
+    live_rows, corp_rows = [], []
+    t = t0
+    for i in range(2 * 92):
+        if slot_open(t):
+            px = 2900 + (i % 17) * 0.3
+            row = {"ts": t.isoformat(), "open": px, "high": px + 1.0, "low": px - 1.0, "close": px + 0.2, "volume": 10, "timeframe": "15"}
+            live_rows.append(row)
+            c = dict(row); c["timestamp"] = c.pop("ts"); c["instrument"] = "M2K"
+            if i == 40:
+                c["open"] = px + 0.2
+            if i != 60:
+                corp_rows.append(c)
+        t += timedelta(minutes=15)
+    _write_jsonl(root / "bars_M2K_2026-09-15.jsonl", [r for r in live_rows if r["ts"] < "2026-09-16T"])
+    _write_jsonl(root / "bars_M2K_2026-09-16.jsonl", [r for r in live_rows if r["ts"] >= "2026-09-16T"])
+    _write_jsonl(cdir / "M2K_all.jsonl", corp_rows)
+    rep = bsp.run("M2K", str(root), str(cdir))
+    assert rep["tick"] == 0.10
+    assert rep["bars"]["common"] == len(live_rows) - 1 and rep["bars"]["live_only"] == 1
+    assert rep["ohlc"]["compared"] == len(live_rows) - 1 and rep["ohlc"]["agree"] == len(live_rows) - 2
+    assert rep["ohlc"]["examples"][0]["live"]["open"] + 0.2 == pytest.approx(rep["ohlc"]["examples"][0]["corpus"]["open"])
+    ny = rep["levels"]["NY_ORB_H"]
+    assert ny["compared_eligible"] > 0 and ny["pct_eligible"] == 100.0 and ny["status"] == "PASS"
+    assert "PDH" in rep["levels"] and "LC_ZONE_4H_SUPPLY" in rep["levels"]
+
+
+def test_resolver_equivalence_synthetic_agrees():
+    from scripts import structural_level_resolver_equivalence as req
+    rep = req.run(3000, seed=5)
+    assert rep["verdict"] == "EQUIVALENT" and rep["disagreements"] == 0 and rep["n"] == 3000
+    assert set(rep["by_shadow_result"]) <= {"WIN", "LOSS", "NO_FILL", "OPEN"}
+
+
+def test_resolver_equivalence_hand_cases():
+    from scripts import structural_level_resolver_equivalence as req
+    from strategy.shadow_setups import ShadowSetupCandidate
+    c = ShadowSetupCandidate("s", "LONG", 100.0, 98.0, 104.0, 2.0, "B", 1.0, "")
+    bars = lambda *hl: [{"ts": f"t{i}", "open": 0, "high": h, "low": l, "close": 0} for i, (h, l) in enumerate(hl)]
+    # target touched on the fill bar only → ignored → later stop = LOSS on both
+    r = req.compare(c, bars((105, 99), (101, 97)), "MNQ"); assert r["agree"] and r["shadow"] == "LOSS" and r["ambiguous_fill_bar_target_ignored"]
+    # fill then both hit on one bar → pessimistic LOSS
+    r = req.compare(c, bars((100.5, 99.5), (105, 97)), "MNQ"); assert r["agree"] and r["shadow"] == "LOSS"
+    # never fills
+    r = req.compare(c, bars((110, 106), (109, 105)), "MNQ"); assert r["agree"] and r["shadow"] == "NO_FILL"
+    # fills, unresolved → OPEN ≡ pending
+    r = req.compare(c, bars((101, 99), (102, 99)), "MNQ"); assert r["agree"] and r["shadow"] == "OPEN"
+
+
+def test_p1_levels_honour_m2k_tick_and_version():
+    from research import structural_level_features as slf
+    t0 = datetime(2026, 9, 15, 22, 0, tzinfo=UTC)
+    bars = [{"ts": t0 + timedelta(minutes=15 * i), "open": 2900.0, "high": 2901.0, "low": 2899.0,
+             "close": 2900.5, "volume": 10} for i in range(120)]
+    ls = slf.build_levels(bars, "M2K", b0_ts=bars[-1]["ts"])
+    assert ls.tick == 0.10 and slf.PREREG_VERSION == "1.5"
+
+
+# ── v1.5 X0: dated-contract identity + roll-seam provenance ───────────────────
+
+class _X0Client:
+    """Two dated contracts, OLD and NEW, trading in parallel (NEW = OLD + 20 pts), every open
+    15m slot in [2026-09-08, 2026-09-18]. NEW volume overtakes OLD from 2026-09-13."""
+    configured = True
+    OLD, NEW = "M2KU6", "M2KZ6"
+
+    def __init__(self):
+        self.calls: list[tuple] = []
+
+    def fetch_bars(self, ticker, s, e, tf=15):
+        from scripts import structural_level_corpus_build as cb
+        from sources.polygon_client import PolygonBar
+        self.calls.append((ticker, s, e))
+        bars = []
+        t = datetime(s.year, s.month, s.day, 0, 0, tzinfo=UTC)
+        end_dt = datetime(e.year, e.month, e.day, 23, 45, tzinfo=UTC)
+        while t <= end_dt:
+            if cb._slot_open(t):
+                base = 2800.0 + (t - datetime(2026, 9, 8, tzinfo=UTC)).total_seconds() / 3600 * 0.1
+                px = base + (20.0 if ticker == self.NEW else 0.0)
+                late = t.date() >= date(2026, 9, 13)
+                vol = (300.0 if late else 100.0) if ticker == self.NEW else (100.0 if late else 300.0)
+                bars.append(PolygonBar(t, round(px, 1), round(px + 1, 1), round(px - 1, 1), round(px + 0.5, 1), vol, ticker))
+            t += timedelta(minutes=15)
+        return bars
+
+    def fetch_continuous(self, symbol, s, e, tf=15, roll_days=8):
+        from sources.polygon_client import contract_schedule
+        out = []
+        for ticker, ss, ee in contract_schedule(symbol, s, e, roll_days):
+            out.extend(self.fetch_bars(ticker, ss, ee, tf))
+        return out
+
+
+def _x0_live_bars(root: Path, inst: str, contract_px_offset: float, first: datetime, n: int, client: _X0Client):
+    """Live bars copied from one dated contract (plus a 2-tick open revision on one bar)."""
+    src = {b.ts: b for b in client.fetch_bars(_X0Client.NEW if contract_px_offset else _X0Client.OLD,
+                                              first.date(), (first + timedelta(minutes=15 * n)).date())}
+    rows = []
+    t = first
+    while len(rows) < n:
+        if t in src:
+            b = src[t]
+            o = b.open + (0.2 if len(rows) == 3 else 0.0)
+            rows.append({"ts": t.isoformat(), "open": o, "high": b.high, "low": b.low, "close": b.close,
+                         "volume": b.volume, "timeframe": "15", "source_ticker": f"{inst}1!"})
+        t += timedelta(minutes=15)
+    _write_jsonl(root / f"bars_{inst}_{first.date().isoformat()}.jsonl", rows)
+
+
+def test_x0_scheduler_seam_identity_proven_but_feed_not_observable(tmp_path):
+    from scripts import structural_level_corpus_build as cb
+    from scripts import structural_level_x0_roll_proof as x0
+    client = _X0Client()
+    out_root = tmp_path / "parity"
+    # roll_days=3 → M2KU6 through 2026-09-14, M2KZ6 from 2026-09-15 (3rd Friday = 09-18)
+    cb.build(symbol="M2K", start=date(2026, 9, 9), end=date(2026, 9, 17), timeframe=15, warmup_days=1,
+             roll_days=3, out_root=out_root, end_ts_exclusive=None, client=client, corpus_label="t")
+    # live bars exist only AFTER the seam, on the new contract
+    live_root = tmp_path / "live"; live_root.mkdir()
+    _x0_live_bars(live_root, "M2K", 20.0, datetime(2026, 9, 16, 12, 15, tzinfo=UTC), 12, client)
+    rep = x0.run(str(out_root / "M2K"), client, bars_root=str(live_root), seam_window_days=3)
+    assert [s["identity"] for s in rep["segments"]] == ["PROVEN", "PROVEN"]
+    assert rep["corpus"]["raw_duplicate_timestamps"] == 0
+    seam = rep["seams"][0]
+    assert seam["from"] == "M2KU6" and seam["to"] == "M2KZ6" and seam["seam_utc"].startswith("2026-09-15T00:00")
+    assert seam["corpus_last_old_bar"].startswith("2026-09-14T23:45") and seam["corpus_first_new_bar"].startswith("2026-09-15T00:00")
+    assert abs(seam["gap_points_at_seam"] - 20.0) < 1.0           # ≈ NEW − OLD spread (open − prior close), not a data hole
+    assert seam["overlap_timestamps_both_contracts"] > 0 and seam["corpus_bars_not_in_declared_contract"] == 0
+    assert seam["provider_volume_crossover_utc_day"] == "2026-09-13" and seam["crossover_vs_seam_days"] == -2
+    assert seam["seam_provenance"] == "SCHEDULER_CONVENTION" and seam["feed_reconciliation"] == "NOT_OBSERVABLE"
+    lf = rep["live_feed"]
+    assert lf["identified_per_contract"] == {"M2KZ6": 12}          # 2-tick open revision does not defeat identity
+    assert lf["within_one_tick_per_contract"] == {"M2KZ6": 11}
+    assert lf["feed_switch_observed_in_live_span"] is False
+    c = rep["classification"]
+    assert c["contract_identity"] == "CONTRACT_IDENTITY_PROVEN" and c["seam_rule"] == "SCHEDULER_CONVENTION"
+    assert c["roll_provenance"] == "ROLL_PROVENANCE_UNKNOWN" and c["admission"] == "NOT_ADMITTED"
+    assert c["seam_rule_independently_proven"] is False
+    # with no live feed at all the scheduler seam is still unconfirmed (#625): UNKNOWN, never
+    # "proven" and never a softer convention grade
+    rep2 = x0.run(str(out_root / "M2K"), client, bars_root=None, seam_window_days=3)
+    c2 = rep2["classification"]
+    assert c2["feed_reconciliation"] == ["NOT_APPLICABLE"]
+    assert c2["roll_provenance"] == "ROLL_PROVENANCE_UNKNOWN" and c2["admission"] == "NOT_ADMITTED"
+    assert "SCHEDULER_CONVENTION_ONLY" not in json.dumps(rep2)
+    # --reclassify re-derives the same classification from the saved evidence without a client
+    saved = tmp_path / "x0_saved.json"
+    saved.write_text(json.dumps(rep2, default=str))
+    rep3 = x0.reclassify(saved)
+    assert rep3["classification"] == c2 and rep3["reclassified_from"]["path"] == "x0_saved.json"
+    assert rep3["segments"] == json.loads(json.dumps(rep2["segments"], default=str))
+
+
+def test_x0_feed_confirmed_and_contradicted_seams(tmp_path):
+    from scripts import structural_level_corpus_build as cb
+    from scripts import structural_level_x0_roll_proof as x0
+    client = _X0Client()
+    out_root = tmp_path / "parity"
+    cb.build(symbol="M2K", start=date(2026, 9, 9), end=date(2026, 9, 17), timeframe=15, warmup_days=1,
+             roll_days=3, out_root=out_root, end_ts_exclusive=None, client=client, corpus_label="t")
+    # live feed on OLD through 09-14 23:45Z and on NEW from 09-15 00:00Z → FEED_CONFIRMED
+    live_root = tmp_path / "live_ok"; live_root.mkdir()
+    _x0_live_bars(live_root, "M2K", 0.0, datetime(2026, 9, 14, 20, 0, tzinfo=UTC), 12, client)   # 20:00..23:45 (21:xx halt skipped)
+    _x0_live_bars(live_root, "M2K", 20.0, datetime(2026, 9, 15, 0, 0, tzinfo=UTC), 16, client)
+    rep = x0.run(str(out_root / "M2K"), client, bars_root=str(live_root), seam_window_days=3)
+    assert rep["live_feed"]["feed_switch_observed_in_live_span"] is True
+    assert rep["seams"][0]["feed_reconciliation"] == "FEED_CONFIRMED"
+    assert rep["classification"]["roll_provenance"] == "PROVEN"
+    # live feed already on NEW at 22:00Z on 09-14 (the MNQ/MES-style earlier switch) → CONTRADICTED
+    live_root2 = tmp_path / "live_bad"; live_root2.mkdir()
+    _x0_live_bars(live_root2, "M2K", 0.0, datetime(2026, 9, 14, 18, 0, tzinfo=UTC), 8, client)     # 18:00..19:45
+    _x0_live_bars(live_root2, "M2K", 20.0, datetime(2026, 9, 14, 22, 0, tzinfo=UTC), 16, client)   # 22:00..01:45
+    rep2 = x0.run(str(out_root / "M2K"), client, bars_root=str(live_root2), seam_window_days=3)
+    assert rep2["seams"][0]["feed_reconciliation"] == "FEED_CONTRADICTED"
+    assert rep2["classification"]["roll_provenance"] == "ROLL_PROVENANCE_UNKNOWN"
+
+
+def test_corpus_build_fixed_contract_has_no_seam_and_x0_proves_it(tmp_path):
+    from scripts import structural_level_corpus_build as cb
+    from scripts import structural_level_x0_roll_proof as x0
+    client = _X0Client()
+    out_root = tmp_path / "z6"
+    m = cb.build(symbol="M2K", start=date(2026, 9, 9), end=date(2026, 9, 17), timeframe=15, warmup_days=1,
+                 roll_days=3, out_root=out_root, end_ts_exclusive=None, client=client, contract="M2KZ6")
+    assert m["source"]["roll_rule"].startswith("fixed dated contract M2KZ6")
+    assert m["source"]["contract_segments"] == [["M2KZ6", "2026-09-08", "2026-09-17"]] and m["roll_ledger"] == []
+    assert all(c[0] == "M2KZ6" for c in client.calls)          # only the dated contract was ever requested
+    live_root = tmp_path / "live"; live_root.mkdir()
+    _x0_live_bars(live_root, "M2K", 20.0, datetime(2026, 9, 16, 12, 15, tzinfo=UTC), 12, client)
+    rep = x0.run(str(out_root / "M2K"), client, bars_root=str(live_root))
+    assert rep["classification"] == {"contract_identity": "CONTRACT_IDENTITY_PROVEN", "seam_rule": "FIXED_DATED_CONTRACT",
+                                     "seam_rule_independently_proven": True, "feed_reconciliation": ["NO_SEAM"],
+                                     "roll_provenance": "PROVEN", "admission": "ADMITTED"}
+    assert rep["live_feed"]["identified_per_contract"] == {"M2KZ6": 12}
+    with pytest.raises(SystemExit):
+        cb.build(symbol="M2K", start=date(2026, 9, 9), end=date(2026, 9, 17), timeframe=15, warmup_days=1,
+                 roll_days=3, out_root=tmp_path / "bad", end_ts_exclusive=None, client=client, contract="MNQZ6")

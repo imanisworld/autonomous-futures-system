@@ -1,0 +1,172 @@
+{
+ "tool": "slx0-roll-proof-v1.5.1",
+ "instrument": "M2K",
+ "tick": 0.1,
+ "corpus_dir": "<checkout>/data/replay_polygon_parity_m2k_2026_09_16/M2K",
+ "manifest_sha256": "78d4127d2ee9bc22e9a301b3ebe466b7b4b49cc643864d2f42266fa1fc7be5fb",
+ "provider": {
+  "name": "Polygon futures aggs (sources/polygon_client.PolygonFuturesClient)",
+  "endpoint": "/futures/v1/aggs/{ticker}?resolution=15min",
+  "request_form": "GET {base}/futures/v1/aggs/{DATED_TICKER}?resolution=15min&window_start.gte=<utc date>&window_start.lt=<utc date+1>",
+  "corpus_fetched_utc": "2026-09-17T02:19:29Z",
+  "proof_fetched_utc": "2026-09-17T02:45:46Z",
+  "declared_roll_rule": "roll_days=3 (front contract advances 3 calendar days before 3rd-Friday expiry; sources.polygon_client.front_contract)"
+ },
+ "corpus": {
+  "first_bar": "2026-09-01T00:00:00+00:00",
+  "last_bar": "2026-09-16T18:15:00+00:00",
+  "rows": 1058,
+  "raw_duplicate_timestamps": 0
+ },
+ "segments": [
+  {
+   "ticker": "M2KU6",
+   "segment_start": "2026-09-01",
+   "segment_end": "2026-09-14",
+   "corpus_rows": 892,
+   "found_in_dated_contract": 892,
+   "missing_from_dated_contract": 0,
+   "ohlcv_equal": 892,
+   "ohlcv_differs_provider_revision": 0,
+   "provider_rows_not_in_corpus": 0,
+   "provider_response_tickers": {
+    "M2KU6": 892
+   },
+   "identity": "PROVEN",
+   "examples_missing": [],
+   "examples_ohlcv_differs": []
+  },
+  {
+   "ticker": "M2KZ6",
+   "segment_start": "2026-09-15",
+   "segment_end": "2026-09-16",
+   "corpus_rows": 166,
+   "found_in_dated_contract": 166,
+   "missing_from_dated_contract": 0,
+   "ohlcv_equal": 166,
+   "ohlcv_differs_provider_revision": 0,
+   "provider_rows_not_in_corpus": 1,
+   "provider_response_tickers": {
+    "M2KZ6": 166
+   },
+   "identity": "PROVEN",
+   "examples_missing": [],
+   "examples_ohlcv_differs": []
+  }
+ ],
+ "seams": [
+  {
+   "from": "M2KU6",
+   "to": "M2KZ6",
+   "seam_utc": "2026-09-15T00:00:00+00:00",
+   "seam_rule_note": "seam is the first bar whose UTC date equals the new segment's start (UTC midnight, i.e. inside the Globex trading day that opened 22:00Z)",
+   "corpus_last_old_bar": "2026-09-14T23:45:00+00:00",
+   "corpus_last_old_close": 2895.0,
+   "corpus_first_new_bar": "2026-09-15T00:00:00+00:00",
+   "corpus_first_new_open": 2917.1,
+   "gap_points_at_seam": 22.1,
+   "window": {
+    "from": "2026-09-12T00:00:00+00:00",
+    "to": "2026-09-18T00:00:00+00:00",
+    "days_each_side": 3
+   },
+   "old_contract_bars_in_window": 268,
+   "new_contract_bars_in_window": 268,
+   "overlap_timestamps_both_contracts": 268,
+   "old_only_timestamps": 0,
+   "new_only_timestamps": 0,
+   "old_contract_bars_after_seam": 168,
+   "new_contract_bars_before_seam": 100,
+   "corpus_bars_in_window": 266,
+   "corpus_bars_not_in_declared_contract": 0,
+   "volume_by_utc_day": {
+    "2026-09-13": {
+     "old": 1388.0,
+     "new": 2322.0
+    },
+    "2026-09-14": {
+     "old": 37609.0,
+     "new": 60121.0
+    },
+    "2026-09-15": {
+     "old": 23457.0,
+     "new": 61357.0
+    },
+    "2026-09-16": {
+     "old": 14057.0,
+     "new": 63258.0
+    }
+   },
+   "provider_volume_crossover_utc_day": "2026-09-13",
+   "crossover_vs_seam_days": -2,
+   "feed_reconciliation": "NOT_OBSERVABLE",
+   "seam_provenance": "SCHEDULER_CONVENTION"
+  }
+ ],
+ "live_feed": {
+  "live_bars": 51,
+  "live_first": "2026-09-16T12:15:00+00:00",
+  "live_last": "2026-09-17T01:45:00+00:00",
+  "source_tickers": [
+   "M2K1!"
+  ],
+  "identity_rule": {
+   "tolerance_ticks": 4,
+   "min_separation_ticks": 20
+  },
+  "identified_per_contract": {
+   "M2KZ6": 27,
+   "NOT_SERVED_BY_PROVIDER": 24
+  },
+  "within_one_tick_per_contract": {
+   "M2KZ6": 26
+  },
+  "identity_runs": [
+   {
+    "contract": "M2KZ6",
+    "first": "2026-09-16T12:15:00+00:00",
+    "last": "2026-09-16T18:45:00+00:00",
+    "bars": 27
+   }
+  ],
+  "feed_switch_observed_in_live_span": false,
+  "examples_unidentified": [
+   {
+    "ts": "2026-09-16T19:00:00+00:00",
+    "reason": "no candidate contract has this bar"
+   },
+   {
+    "ts": "2026-09-16T19:15:00+00:00",
+    "reason": "no candidate contract has this bar"
+   },
+   {
+    "ts": "2026-09-16T19:30:00+00:00",
+    "reason": "no candidate contract has this bar"
+   },
+   {
+    "ts": "2026-09-16T19:45:00+00:00",
+    "reason": "no candidate contract has this bar"
+   },
+   {
+    "ts": "2026-09-16T20:00:00+00:00",
+    "reason": "no candidate contract has this bar"
+   }
+  ]
+ },
+ "classification": {
+  "contract_identity": "CONTRACT_IDENTITY_PROVEN",
+  "seam_rule": "SCHEDULER_CONVENTION",
+  "seam_rule_independently_proven": false,
+  "feed_reconciliation": [
+   "NOT_OBSERVABLE"
+  ],
+  "roll_provenance": "ROLL_PROVENANCE_UNKNOWN",
+  "admission": "NOT_ADMITTED"
+ },
+ "reclassified_from": {
+  "path": "structural-level-v15-m2k-2026-09-17-x0-parity-stitched.json",
+  "sha256": "fba299d47dfa4ea37ff19a4d01ba448c5d6e1fbae30226bf67a9108a84533905",
+  "tool": "slx0-roll-proof-v1.5",
+  "utc": "2026-09-17T03:18:56Z"
+ }
+}

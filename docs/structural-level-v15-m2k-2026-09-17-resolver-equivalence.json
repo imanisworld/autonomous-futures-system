@@ -1,0 +1,20 @@
+{
+ "tool": "slr-equiv-v1.5",
+ "n": 30000,
+ "seed": 17,
+ "instruments": [
+  "MNQ",
+  "MES",
+  "M2K"
+ ],
+ "by_shadow_result": {
+  "LOSS": 23324,
+  "NO_FILL": 1726,
+  "OPEN": 734,
+  "WIN": 4216
+ },
+ "ambiguous_fill_bar_target_cases": 3270,
+ "disagreements": 0,
+ "disagreement_examples": [],
+ "verdict": "EQUIVALENT"
+}

@@ -1,0 +1,738 @@
+{
+ "tool": "slc-build-v1.4",
+ "corpus": "replay_polygon_parity_m2kz6_2026_09_16/M2K (fixed dated contract M2KZ6, v1.5 X0)",
+ "instrument": "M2K",
+ "timeframe_minutes": 15,
+ "schema": "scripts/polygon_to_replay.derive_candles (called unchanged; day-file split identical to polygon_to_replay.main)",
+ "source": {
+  "provider": "Polygon futures aggs (sources/polygon_client.PolygonFuturesClient)",
+  "endpoint": "/futures/v1/aggs/{ticker}?resolution=15min",
+  "fetched_utc": "2026-09-17T02:50:52Z",
+  "requested_range": "2026-09-01..2026-09-17",
+  "fetch_range_with_warmup": "2026-08-18..2026-09-17",
+  "warmup_days": 14,
+  "end_ts_exclusive": null,
+  "candles_dropped_at_end_cut": 0,
+  "roll_rule": "fixed dated contract M2KZ6 (no roll; single segment)",
+  "contract_segments": [
+   [
+    "M2KZ6",
+    "2026-08-18",
+    "2026-09-17"
+   ]
+  ],
+  "raw_bars_fetched": 1454
+ },
+ "builder": {
+  "git_head_of_checkout": "ae7a30db328394c45f688b842d85daab4bbf390e",
+  "file_sha256": {
+   "scripts/polygon_to_replay.py": "a42e1cae7cb791648dfa6ed2c222342e45debdec18ae86aa6bf3c647c4c981d0",
+   "scripts/csv_to_replay.py": "332e48a951547819948a71a062a95c2b2acbff9b0da5433d1241df68c46d10ee",
+   "scripts/pine_market_condition.py": "df04b39eef02e53aff27aa4100ab49fb8e26e6e72c04091703c2ef8a69f15a11",
+   "sources/polygon_client.py": "3959cc1b41e7c0edcde909364b82fb9bc39577ff5dc264153767f8aaf3ac5896",
+   "context/trend.py": "24100349069f8ff9b53b3d0aec78513b547972298bdb5e641708578399819c1a",
+   "scripts/structural_level_corpus_build.py": "8e53355c55a993d8dd0de65dc74a77848ab9bc3815c506396e39c7ccaa1e8b9f"
+  }
+ },
+ "coverage": {
+  "files": 14,
+  "rows": 894,
+  "first_bar": "2026-09-01T00:00:00+00:00",
+  "last_bar": "2026-09-16T18:45:00+00:00",
+  "required_fields_present": [
+   "timestamp",
+   "instrument",
+   "session",
+   "open",
+   "high",
+   "low",
+   "close",
+   "volume",
+   "orb_high",
+   "orb_low",
+   "orb_status",
+   "london_orb_high",
+   "london_orb_low",
+   "london_orb_status",
+   "reconstructed_market_condition",
+   "legacy_market_condition"
+  ]
+ },
+ "gap_ledger_cme_hours": [
+  {
+   "first_missing": "2026-09-01T00:30:00+00:00",
+   "last_missing": "2026-09-01T00:30:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-01T01:45:00+00:00",
+   "last_missing": "2026-09-01T02:00:00+00:00",
+   "slots": 2,
+   "minutes": 30
+  },
+  {
+   "first_missing": "2026-09-01T02:45:00+00:00",
+   "last_missing": "2026-09-01T04:45:00+00:00",
+   "slots": 9,
+   "minutes": 135
+  },
+  {
+   "first_missing": "2026-09-01T05:15:00+00:00",
+   "last_missing": "2026-09-01T05:15:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-01T06:45:00+00:00",
+   "last_missing": "2026-09-01T06:45:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-01T07:45:00+00:00",
+   "last_missing": "2026-09-01T07:45:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-01T10:00:00+00:00",
+   "last_missing": "2026-09-01T10:00:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-01T17:45:00+00:00",
+   "last_missing": "2026-09-01T17:45:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-01T20:15:00+00:00",
+   "last_missing": "2026-09-01T20:30:00+00:00",
+   "slots": 2,
+   "minutes": 30
+  },
+  {
+   "first_missing": "2026-09-01T22:15:00+00:00",
+   "last_missing": "2026-09-01T22:15:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-02T00:30:00+00:00",
+   "last_missing": "2026-09-02T00:30:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-02T01:30:00+00:00",
+   "last_missing": "2026-09-02T01:45:00+00:00",
+   "slots": 2,
+   "minutes": 30
+  },
+  {
+   "first_missing": "2026-09-02T02:30:00+00:00",
+   "last_missing": "2026-09-02T03:30:00+00:00",
+   "slots": 5,
+   "minutes": 75
+  },
+  {
+   "first_missing": "2026-09-02T04:15:00+00:00",
+   "last_missing": "2026-09-02T05:15:00+00:00",
+   "slots": 5,
+   "minutes": 75
+  },
+  {
+   "first_missing": "2026-09-02T06:00:00+00:00",
+   "last_missing": "2026-09-02T06:00:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-02T07:15:00+00:00",
+   "last_missing": "2026-09-02T07:30:00+00:00",
+   "slots": 2,
+   "minutes": 30
+  },
+  {
+   "first_missing": "2026-09-02T08:30:00+00:00",
+   "last_missing": "2026-09-02T08:45:00+00:00",
+   "slots": 2,
+   "minutes": 30
+  },
+  {
+   "first_missing": "2026-09-02T09:45:00+00:00",
+   "last_missing": "2026-09-02T09:45:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-02T10:45:00+00:00",
+   "last_missing": "2026-09-02T10:45:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-02T11:30:00+00:00",
+   "last_missing": "2026-09-02T11:30:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-02T17:15:00+00:00",
+   "last_missing": "2026-09-02T17:15:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-02T22:15:00+00:00",
+   "last_missing": "2026-09-02T22:45:00+00:00",
+   "slots": 3,
+   "minutes": 45
+  },
+  {
+   "first_missing": "2026-09-02T23:15:00+00:00",
+   "last_missing": "2026-09-02T23:15:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-02T23:45:00+00:00",
+   "last_missing": "2026-09-02T23:45:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-03T00:15:00+00:00",
+   "last_missing": "2026-09-03T00:30:00+00:00",
+   "slots": 2,
+   "minutes": 30
+  },
+  {
+   "first_missing": "2026-09-03T01:45:00+00:00",
+   "last_missing": "2026-09-03T01:45:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-03T02:15:00+00:00",
+   "last_missing": "2026-09-03T02:15:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-03T02:45:00+00:00",
+   "last_missing": "2026-09-03T02:45:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-03T04:00:00+00:00",
+   "last_missing": "2026-09-03T04:30:00+00:00",
+   "slots": 3,
+   "minutes": 45
+  },
+  {
+   "first_missing": "2026-09-03T06:00:00+00:00",
+   "last_missing": "2026-09-03T06:00:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-03T07:30:00+00:00",
+   "last_missing": "2026-09-03T07:30:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-03T08:45:00+00:00",
+   "last_missing": "2026-09-03T09:00:00+00:00",
+   "slots": 2,
+   "minutes": 30
+  },
+  {
+   "first_missing": "2026-09-03T10:30:00+00:00",
+   "last_missing": "2026-09-03T10:45:00+00:00",
+   "slots": 2,
+   "minutes": 30
+  },
+  {
+   "first_missing": "2026-09-03T11:30:00+00:00",
+   "last_missing": "2026-09-03T11:45:00+00:00",
+   "slots": 2,
+   "minutes": 30
+  },
+  {
+   "first_missing": "2026-09-03T16:30:00+00:00",
+   "last_missing": "2026-09-03T16:30:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-03T18:45:00+00:00",
+   "last_missing": "2026-09-03T18:45:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-03T20:45:00+00:00",
+   "last_missing": "2026-09-03T20:45:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-03T22:15:00+00:00",
+   "last_missing": "2026-09-03T22:15:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-03T22:45:00+00:00",
+   "last_missing": "2026-09-03T23:30:00+00:00",
+   "slots": 4,
+   "minutes": 60
+  },
+  {
+   "first_missing": "2026-09-04T00:00:00+00:00",
+   "last_missing": "2026-09-04T00:00:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-04T00:30:00+00:00",
+   "last_missing": "2026-09-04T00:30:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-04T01:15:00+00:00",
+   "last_missing": "2026-09-04T01:15:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-04T01:45:00+00:00",
+   "last_missing": "2026-09-04T01:45:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-04T02:15:00+00:00",
+   "last_missing": "2026-09-04T02:30:00+00:00",
+   "slots": 2,
+   "minutes": 30
+  },
+  {
+   "first_missing": "2026-09-04T03:15:00+00:00",
+   "last_missing": "2026-09-04T03:15:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-04T03:45:00+00:00",
+   "last_missing": "2026-09-04T03:45:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-04T04:45:00+00:00",
+   "last_missing": "2026-09-04T05:15:00+00:00",
+   "slots": 3,
+   "minutes": 45
+  },
+  {
+   "first_missing": "2026-09-04T05:45:00+00:00",
+   "last_missing": "2026-09-04T05:45:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-04T06:30:00+00:00",
+   "last_missing": "2026-09-04T07:30:00+00:00",
+   "slots": 5,
+   "minutes": 75
+  },
+  {
+   "first_missing": "2026-09-04T08:00:00+00:00",
+   "last_missing": "2026-09-04T08:00:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-04T08:30:00+00:00",
+   "last_missing": "2026-09-04T09:15:00+00:00",
+   "slots": 4,
+   "minutes": 60
+  },
+  {
+   "first_missing": "2026-09-04T11:15:00+00:00",
+   "last_missing": "2026-09-04T11:30:00+00:00",
+   "slots": 2,
+   "minutes": 30
+  },
+  {
+   "first_missing": "2026-09-04T19:00:00+00:00",
+   "last_missing": "2026-09-04T19:00:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-06T23:15:00+00:00",
+   "last_missing": "2026-09-07T01:15:00+00:00",
+   "slots": 9,
+   "minutes": 135
+  },
+  {
+   "first_missing": "2026-09-07T01:45:00+00:00",
+   "last_missing": "2026-09-07T02:00:00+00:00",
+   "slots": 2,
+   "minutes": 30
+  },
+  {
+   "first_missing": "2026-09-07T02:30:00+00:00",
+   "last_missing": "2026-09-07T03:00:00+00:00",
+   "slots": 3,
+   "minutes": 45
+  },
+  {
+   "first_missing": "2026-09-07T05:45:00+00:00",
+   "last_missing": "2026-09-07T05:45:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-07T06:30:00+00:00",
+   "last_missing": "2026-09-07T06:30:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-07T07:45:00+00:00",
+   "last_missing": "2026-09-07T07:45:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-07T08:15:00+00:00",
+   "last_missing": "2026-09-07T08:15:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-07T08:45:00+00:00",
+   "last_missing": "2026-09-07T10:30:00+00:00",
+   "slots": 8,
+   "minutes": 120
+  },
+  {
+   "first_missing": "2026-09-07T12:00:00+00:00",
+   "last_missing": "2026-09-07T12:00:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-07T12:45:00+00:00",
+   "last_missing": "2026-09-07T13:00:00+00:00",
+   "slots": 2,
+   "minutes": 30
+  },
+  {
+   "first_missing": "2026-09-07T13:45:00+00:00",
+   "last_missing": "2026-09-07T14:00:00+00:00",
+   "slots": 2,
+   "minutes": 30
+  },
+  {
+   "first_missing": "2026-09-07T15:00:00+00:00",
+   "last_missing": "2026-09-07T15:00:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-07T15:30:00+00:00",
+   "last_missing": "2026-09-07T15:30:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-07T16:00:00+00:00",
+   "last_missing": "2026-09-07T16:00:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-07T17:00:00+00:00",
+   "last_missing": "2026-09-07T20:45:00+00:00",
+   "slots": 16,
+   "minutes": 240
+  },
+  {
+   "first_missing": "2026-09-07T22:15:00+00:00",
+   "last_missing": "2026-09-07T22:15:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-07T23:00:00+00:00",
+   "last_missing": "2026-09-07T23:00:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-07T23:45:00+00:00",
+   "last_missing": "2026-09-08T00:15:00+00:00",
+   "slots": 3,
+   "minutes": 45
+  },
+  {
+   "first_missing": "2026-09-08T00:45:00+00:00",
+   "last_missing": "2026-09-08T00:45:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-08T01:15:00+00:00",
+   "last_missing": "2026-09-08T01:15:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-08T01:45:00+00:00",
+   "last_missing": "2026-09-08T01:45:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-08T02:30:00+00:00",
+   "last_missing": "2026-09-08T02:30:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-08T03:45:00+00:00",
+   "last_missing": "2026-09-08T04:00:00+00:00",
+   "slots": 2,
+   "minutes": 30
+  },
+  {
+   "first_missing": "2026-09-08T08:15:00+00:00",
+   "last_missing": "2026-09-08T08:15:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-08T11:30:00+00:00",
+   "last_missing": "2026-09-08T11:30:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-08T15:45:00+00:00",
+   "last_missing": "2026-09-08T15:45:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-08T17:45:00+00:00",
+   "last_missing": "2026-09-08T17:45:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-08T18:30:00+00:00",
+   "last_missing": "2026-09-08T18:30:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-08T22:15:00+00:00",
+   "last_missing": "2026-09-08T22:30:00+00:00",
+   "slots": 2,
+   "minutes": 30
+  },
+  {
+   "first_missing": "2026-09-09T00:00:00+00:00",
+   "last_missing": "2026-09-09T00:00:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-09T00:45:00+00:00",
+   "last_missing": "2026-09-09T00:45:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-09T03:15:00+00:00",
+   "last_missing": "2026-09-09T03:30:00+00:00",
+   "slots": 2,
+   "minutes": 30
+  },
+  {
+   "first_missing": "2026-09-09T04:15:00+00:00",
+   "last_missing": "2026-09-09T04:15:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-09T04:45:00+00:00",
+   "last_missing": "2026-09-09T04:45:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-09T06:45:00+00:00",
+   "last_missing": "2026-09-09T06:45:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-09T07:30:00+00:00",
+   "last_missing": "2026-09-09T08:15:00+00:00",
+   "slots": 4,
+   "minutes": 60
+  },
+  {
+   "first_missing": "2026-09-09T09:00:00+00:00",
+   "last_missing": "2026-09-09T09:00:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-09T11:15:00+00:00",
+   "last_missing": "2026-09-09T11:15:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-09T22:00:00+00:00",
+   "last_missing": "2026-09-09T22:00:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-09T22:30:00+00:00",
+   "last_missing": "2026-09-09T22:30:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-10T02:45:00+00:00",
+   "last_missing": "2026-09-10T02:45:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-10T05:30:00+00:00",
+   "last_missing": "2026-09-10T05:30:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-10T09:15:00+00:00",
+   "last_missing": "2026-09-10T09:15:00+00:00",
+   "slots": 1,
+   "minutes": 15
+  },
+  {
+   "first_missing": "2026-09-11T17:00:00+00:00",
+   "last_missing": "2026-09-11T18:45:00+00:00",
+   "slots": 8,
+   "minutes": 120
+  },
+  {
+   "first_missing": "2026-09-11T20:00:00+00:00",
+   "last_missing": "2026-09-11T20:45:00+00:00",
+   "slots": 4,
+   "minutes": 60
+  }
+ ],
+ "roll_ledger": [],
+ "files": {
+  "M2K_2026-09-01.jsonl": {
+   "sha256": "4ac9cd5a03907baa7b1921e6eed70a17b72adb5e8f3c76bea51ddca925e58f52",
+   "rows": 72,
+   "first": "2026-09-01T00:00:00+00:00",
+   "last": "2026-09-01T23:45:00+00:00"
+  },
+  "M2K_2026-09-02.jsonl": {
+   "sha256": "e18556a869bbc726453810610930c9c4c1eab130c50d59802340a98b130764e9",
+   "rows": 65,
+   "first": "2026-09-02T00:00:00+00:00",
+   "last": "2026-09-02T23:30:00+00:00"
+  },
+  "M2K_2026-09-03.jsonl": {
+   "sha256": "33479e5b06d4d6a2855f5899df401e59b41af2b077c0a70bfe1e6c9fad7d1fb6",
+   "rows": 68,
+   "first": "2026-09-03T00:00:00+00:00",
+   "last": "2026-09-03T23:45:00+00:00"
+  },
+  "M2K_2026-09-04.jsonl": {
+   "sha256": "e69e866394beed373f8f5469fc0a49ad3ea83a571c010b9405d1fbc4d1da7863",
+   "rows": 59,
+   "first": "2026-09-04T00:15:00+00:00",
+   "last": "2026-09-04T20:45:00+00:00"
+  },
+  "M2K_2026-09-06.jsonl": {
+   "sha256": "a41adf7c61766806807af0a8a45fc50efa26e78e6be30957b6ae353a6a81ee36",
+   "rows": 5,
+   "first": "2026-09-06T22:00:00+00:00",
+   "last": "2026-09-06T23:00:00+00:00"
+  },
+  "M2K_2026-09-07.jsonl": {
+   "sha256": "fa7deb97561fdd0929d46a2102fa107e9c6893248f61e29c0f15db150c570ce1",
+   "rows": 42,
+   "first": "2026-09-07T01:30:00+00:00",
+   "last": "2026-09-07T23:30:00+00:00"
+  },
+  "M2K_2026-09-08.jsonl": {
+   "sha256": "45289157b0e7d68b77bd6e6ffc95fe88f63be710575c063db28635cdec7376a2",
+   "rows": 77,
+   "first": "2026-09-08T00:30:00+00:00",
+   "last": "2026-09-08T23:45:00+00:00"
+  },
+  "M2K_2026-09-09.jsonl": {
+   "sha256": "2d6a994f69e323a5cb9c863bdae64c3ea02e4b80b30b988bdef94a895e3655c7",
+   "rows": 77,
+   "first": "2026-09-09T00:15:00+00:00",
+   "last": "2026-09-09T23:45:00+00:00"
+  },
+  "M2K_2026-09-10.jsonl": {
+   "sha256": "b29175516037fda93a6427d418a776e5124441d18f73cf144ac729708c44af0c",
+   "rows": 89,
+   "first": "2026-09-10T00:00:00+00:00",
+   "last": "2026-09-10T23:45:00+00:00"
+  },
+  "M2K_2026-09-11.jsonl": {
+   "sha256": "77353b5a05bbfa09b71fa88789641abc8cbaec91912cd177751c425442cc3e57",
+   "rows": 72,
+   "first": "2026-09-11T00:00:00+00:00",
+   "last": "2026-09-11T19:45:00+00:00"
+  },
+  "M2K_2026-09-13.jsonl": {
+   "sha256": "9fc23a02204466b6701b276ca4ed7a1373217dad015ff35df6801ac4841eda53",
+   "rows": 8,
+   "first": "2026-09-13T22:00:00+00:00",
+   "last": "2026-09-13T23:45:00+00:00"
+  },
+  "M2K_2026-09-14.jsonl": {
+   "sha256": "5e73a9fe45a4f33df7888d838b16fce84d78d31418cd7196664cb7a89b247f38",
+   "rows": 92,
+   "first": "2026-09-14T00:00:00+00:00",
+   "last": "2026-09-14T23:45:00+00:00"
+  },
+  "M2K_2026-09-15.jsonl": {
+   "sha256": "da47ddeb5baef6a42fc6ebfa4bcdf2def4ff9a2b6071cd2679fec4a30995d514",
+   "rows": 92,
+   "first": "2026-09-15T00:00:00+00:00",
+   "last": "2026-09-15T23:45:00+00:00"
+  },
+  "M2K_2026-09-16.jsonl": {
+   "sha256": "b52945c3a976ea72b37e6014abff500f90345c571f31de8c082d1beaa0c4347b",
+   "rows": 76,
+   "first": "2026-09-16T00:00:00+00:00",
+   "last": "2026-09-16T18:45:00+00:00"
+  }
+ }
+}
