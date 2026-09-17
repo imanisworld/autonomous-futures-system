@@ -668,6 +668,8 @@ def _financial_outcome(recorded_pnl: float | None, status: str | None) -> str:
     """Financial result derived from recorded P&L, never from the journal label."""
     if str(status or "OPEN").upper() == "OPEN":
         return "OPEN"
+    if str(status or "").upper() in {"TARGET_CONSUMED_AT_ENTRY", "STOP_CONSUMED_AT_ENTRY"}:
+        return "NOT_AN_OUTCOME"
     if recorded_pnl is None:
         return "UNPRICED"
     if recorded_pnl > 0:
