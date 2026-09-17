@@ -18,7 +18,8 @@ Derivations from raw OHLCV (no Pine columns available):
   • Strat bar types — 1/2U/2D/3 vs the previous bar's high/low
     (classify_htf_bar), directional and uncollapsed — matches live's Pine
     classify_bar(), which never sends an undirected bare "2".
-  • HOD/LOD — running CME-day extremes; PDH/PDL/PDC via detect_day_boundaries.
+  • HOD/LOD — running CME trade-date extremes; PDH/PDL/PDC via
+    detect_day_boundaries (cme_trading_day identity, holiday-aware — C14).
   • HTF FTFC — 1h/4h/daily resampled from the same bars (bar-close delayed by
     htf_at, no lookahead).
   • Supply/demand zones — not derivable from OHLC; left None (engine treats
@@ -46,6 +47,7 @@ from scripts.csv_to_replay import (  # noqa: E402
     _ET,
     build_ftfc_context,
     classify_htf_bar,
+    cme_trading_day,
     compute_vwap,
     derive_market_condition,
     derive_orb_status,
@@ -108,14 +110,15 @@ def resample(bars: list[dict], minutes: int, label: str) -> list[dict]:
     return out
 
 
-def resample_daily(bars: list[dict]) -> list[dict]:
-    """Daily resample on the CME session day (18:00 ET boundary)."""
+def resample_daily(bars: list[dict], instrument: str) -> list[dict]:
+    """Daily resample on the trade date (cme_trading_day for ``instrument`` — the
+    same identity as the VWAP / HOD/LOD / PDH-PDL-PDC day ranges; for equity-
+    index products a holiday's 18:00 ET reopen continues the prior trade date,
+    C14; other products keep the mechanical key)."""
     groups: dict[date, dict] = {}
     order: list[date] = []
     for b in bars:
-        local = datetime.fromtimestamp(b["ts"], tz=_ET)
-        # Session belongs to the day it STARTED (>=18:00 ET starts next session).
-        session_day = local.date() if local.hour < 18 else local.date() + timedelta(days=1)
+        session_day = cme_trading_day(b["ts"], instrument)
         agg = groups.get(session_day)
         if agg is None:
             groups[session_day] = {
@@ -160,9 +163,9 @@ def derive_candles(
 
     one_hour_bars = resample(raw, 60, "1h")
     four_hour_bars = resample(raw, 240, "4h")
-    daily_bars = resample_daily(raw)
+    daily_bars = resample_daily(raw, instrument)
 
-    boundaries = detect_day_boundaries(raw)
+    boundaries = detect_day_boundaries(raw, instrument)
     day_ranges: list[tuple[int, int]] = []
     for i, start in enumerate(boundaries):
         end = boundaries[i + 1] if i + 1 < len(boundaries) else len(raw)
@@ -215,7 +218,8 @@ def derive_candles(
         is_london_session_start = session == "london" and prev_session != "london"
         prev_session = session
 
-        # CME-day extremes (HOD/LOD) reset at the 18:00 ET day boundary.
+        # CME trade-date extremes (HOD/LOD) reset where cme_trading_day changes
+        # (the same day_ranges VWAP and PDH/PDL/PDC use) — not at every 18:00 ET.
         day_range = next(((s, e) for (s, e) in day_ranges if s <= i < e), None)
         if day_range != current_day_range:
             current_day_range = day_range
@@ -257,8 +261,8 @@ def derive_candles(
         if orb_high is None or orb_low is None:
             continue  # no ORB yet (dataset starts before its first NY open)
 
-        # Reset VWAP accumulation once per CME trading day (18:00 ET) — NOT at
-        # Asian/London/New York/off-hours sub-session transitions. See
+        # Reset VWAP accumulation once per CME trade date (cme_trading_day) — NOT
+        # at Asian/London/New York/off-hours sub-session transitions. See
         # vwap_day_range() in csv_to_replay.py for why detect_session() must
         # not gate this (same helper csv_to_replay uses, single source of truth).
         vwap_range = vwap_day_range(day_ranges, i)

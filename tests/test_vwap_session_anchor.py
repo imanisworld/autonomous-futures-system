@@ -72,7 +72,7 @@ class TestVwapDayRangePure:
         idx_of["next_day"] = len(bars)
         bars.append({"ts": int((day_start + timedelta(hours=24)).timestamp())})
 
-        boundaries = detect_day_boundaries(bars)
+        boundaries = detect_day_boundaries(bars, "MES")
         day_ranges = [(boundaries[i], boundaries[i + 1] if i + 1 < len(boundaries) else len(bars))
                       for i in range(len(boundaries))]
         return day_ranges, idx_of
