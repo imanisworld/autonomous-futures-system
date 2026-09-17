@@ -63,6 +63,7 @@ def _complete_evidence(tmp_path: Path) -> dict:
         },
         "stated_classification": "PROMISING BUT UNPROVEN",
         "change_scope": {
+            "base_sha": "base123",
             "strategy_or_parameter_only": True,
             "risk_policy_unchanged": True,
             "execution_path_unchanged": True,
@@ -132,13 +133,17 @@ def _write_evidence(tmp_path: Path, payload: dict) -> Path:
     return path
 
 
-def _pin_runtime_and_head(monkeypatch) -> None:
+def _pin_runtime_head_and_diff(monkeypatch, changed_files: str = "strategy/example.py\ntests/test_example.py\n") -> None:
     monkeypatch.setattr("ops.project_check.promotion.runtime_snapshot", _runtime_snapshot)
     monkeypatch.setattr("ops.project_check.demo_qualification.gitutil.head_sha", lambda _root: "abc123")
+    monkeypatch.setattr(
+        "ops.project_check.demo_qualification.gitutil.run_git",
+        lambda _args, cwd: (changed_files, None),
+    )
 
 
 def test_complete_strategy_only_evidence_qualifies_for_demo(tmp_path: Path, monkeypatch) -> None:
-    _pin_runtime_and_head(monkeypatch)
+    _pin_runtime_head_and_diff(monkeypatch)
     evidence = _write_evidence(tmp_path, _complete_evidence(tmp_path))
 
     report = build_demo_qualification_report(
@@ -147,13 +152,13 @@ def test_complete_strategy_only_evidence_qualifies_for_demo(tmp_path: Path, monk
 
     assert report["gate_pass"] is True
     assert report["demo_evidence_eligible"] is True
-    assert report["internal_paper_forward_waived_by_gate"] is True
+    assert report["long_internal_paper_phase_waived"] is True
     assert report["runtime_release_reconciliation_required"] is True
     assert report["live_trading_authorized"] is False
 
 
 def test_execution_or_risk_change_cannot_skip_internal_paper(tmp_path: Path, monkeypatch) -> None:
-    _pin_runtime_and_head(monkeypatch)
+    _pin_runtime_head_and_diff(monkeypatch)
     payload = _complete_evidence(tmp_path)
     payload["change_scope"]["execution_path_unchanged"] = False
     evidence = _write_evidence(tmp_path, payload)
@@ -166,8 +171,23 @@ def test_execution_or_risk_change_cannot_skip_internal_paper(tmp_path: Path, mon
     assert any("execution_path_unchanged" in blocker for blocker in report["blockers"])
 
 
+def test_git_diff_must_mechanically_be_strategy_only(tmp_path: Path, monkeypatch) -> None:
+    _pin_runtime_head_and_diff(
+        monkeypatch,
+        changed_files="strategy/example.py\nexecution/paper_broker.py\n",
+    )
+    evidence = _write_evidence(tmp_path, _complete_evidence(tmp_path))
+
+    report = build_demo_qualification_report(
+        strategy="example", repo_root=tmp_path, evidence_path=evidence
+    )
+
+    assert report["gate_pass"] is False
+    assert any("execution/paper_broker.py" in blocker for blocker in report["blockers"])
+
+
 def test_session_day_identity_must_be_proven(tmp_path: Path, monkeypatch) -> None:
-    _pin_runtime_and_head(monkeypatch)
+    _pin_runtime_head_and_diff(monkeypatch)
     payload = _complete_evidence(tmp_path)
     payload["data_integrity"]["session_day_identity_proven"] = False
     evidence = _write_evidence(tmp_path, payload)
@@ -181,7 +201,7 @@ def test_session_day_identity_must_be_proven(tmp_path: Path, monkeypatch) -> Non
 
 
 def test_sample_floor_cannot_be_registered_below_30(tmp_path: Path, monkeypatch) -> None:
-    _pin_runtime_and_head(monkeypatch)
+    _pin_runtime_head_and_diff(monkeypatch)
     payload = _complete_evidence(tmp_path)
     payload["validation"]["required_resolved_fills"] = 12
     payload["validation"]["resolved_fills"] = 12
@@ -196,7 +216,7 @@ def test_sample_floor_cannot_be_registered_below_30(tmp_path: Path, monkeypatch)
 
 
 def test_manifest_bytes_are_verified_not_just_claimed(tmp_path: Path, monkeypatch) -> None:
-    _pin_runtime_and_head(monkeypatch)
+    _pin_runtime_head_and_diff(monkeypatch)
     payload = _complete_evidence(tmp_path)
     payload["data_integrity"]["dataset_manifest_sha256"] = "0" * 64
     evidence = _write_evidence(tmp_path, payload)
@@ -210,7 +230,7 @@ def test_manifest_bytes_are_verified_not_just_claimed(tmp_path: Path, monkeypatc
 
 
 def test_two_and_three_tick_stress_are_both_required(tmp_path: Path, monkeypatch) -> None:
-    _pin_runtime_and_head(monkeypatch)
+    _pin_runtime_head_and_diff(monkeypatch)
     payload = _complete_evidence(tmp_path)
     payload["execution_realism"]["slippage_stress_ticks"] = [1, 2]
     evidence = _write_evidence(tmp_path, payload)
