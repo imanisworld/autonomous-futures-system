@@ -1,0 +1,396 @@
+{
+ "tool": "slc-build-v1.3",
+ "corpus": "parity_2026_07_16_09_14/MES",
+ "instrument": "MES",
+ "timeframe_minutes": 15,
+ "schema": "scripts/polygon_to_replay.derive_candles (called unchanged; day-file split identical to polygon_to_replay.main)",
+ "source": {
+  "provider": "Polygon futures aggs (sources/polygon_client.PolygonFuturesClient)",
+  "endpoint": "/futures/v1/aggs/{ticker}?resolution=15min",
+  "fetched_utc": "2026-09-17T01:38:08Z",
+  "requested_range": "2026-07-16..2026-09-14",
+  "fetch_range_with_warmup": "2026-07-06..2026-09-14",
+  "warmup_days": 10,
+  "end_ts_exclusive": "2026-09-14T22:00:00+00:00",
+  "candles_dropped_at_end_cut": 8,
+  "roll_rule": "roll_days=3 (front contract advances 3 calendar days before 3rd-Friday expiry; sources.polygon_client.front_contract)",
+  "contract_segments": [
+   [
+    "MESU6",
+    "2026-07-06",
+    "2026-09-14"
+   ]
+  ],
+  "raw_bars_fetched": 4664
+ },
+ "builder": {
+  "git_head_of_checkout": "b7bade85606229fc8e8e6b2040e9dbbeadfc44f1",
+  "file_sha256": {
+   "scripts/polygon_to_replay.py": "a42e1cae7cb791648dfa6ed2c222342e45debdec18ae86aa6bf3c647c4c981d0",
+   "scripts/csv_to_replay.py": "332e48a951547819948a71a062a95c2b2acbff9b0da5433d1241df68c46d10ee",
+   "scripts/pine_market_condition.py": "df04b39eef02e53aff27aa4100ab49fb8e26e6e72c04091703c2ef8a69f15a11",
+   "sources/polygon_client.py": "3959cc1b41e7c0edcde909364b82fb9bc39577ff5dc264153767f8aaf3ac5896",
+   "context/trend.py": "24100349069f8ff9b53b3d0aec78513b547972298bdb5e641708578399819c1a",
+   "scripts/structural_level_corpus_build.py": "664a497d88bcb2d3b6eb7374cea8140edd597c65e13c5cb281b6550300a6a65c"
+  }
+ },
+ "coverage": {
+  "files": 52,
+  "rows": 3920,
+  "first_bar": "2026-07-16T00:00:00+00:00",
+  "last_bar": "2026-09-14T20:45:00+00:00",
+  "required_fields_present": [
+   "timestamp",
+   "instrument",
+   "session",
+   "open",
+   "high",
+   "low",
+   "close",
+   "volume",
+   "orb_high",
+   "orb_low",
+   "orb_status",
+   "london_orb_high",
+   "london_orb_low",
+   "london_orb_status",
+   "reconstructed_market_condition",
+   "legacy_market_condition"
+  ]
+ },
+ "gap_ledger_cme_hours": [
+  {
+   "first_missing": "2026-09-07T17:00:00+00:00",
+   "last_missing": "2026-09-07T20:45:00+00:00",
+   "slots": 16,
+   "minutes": 240
+  },
+  {
+   "first_missing": "2026-09-11T17:00:00+00:00",
+   "last_missing": "2026-09-11T18:45:00+00:00",
+   "slots": 8,
+   "minutes": 120
+  },
+  {
+   "first_missing": "2026-09-11T20:00:00+00:00",
+   "last_missing": "2026-09-11T20:45:00+00:00",
+   "slots": 4,
+   "minutes": 60
+  }
+ ],
+ "roll_ledger": [],
+ "files": {
+  "MES_2026-07-16.jsonl": {
+   "sha256": "dae4688cc4296412426bc60afd8850d79fe304387dacbab80a9720becc1501bf",
+   "rows": 92,
+   "first": "2026-07-16T00:00:00+00:00",
+   "last": "2026-07-16T23:45:00+00:00"
+  },
+  "MES_2026-07-17.jsonl": {
+   "sha256": "13c533020198e730822d9af08dd6c0a0af07d7f0fb032b1edf6d08c72d81995a",
+   "rows": 84,
+   "first": "2026-07-17T00:00:00+00:00",
+   "last": "2026-07-17T20:45:00+00:00"
+  },
+  "MES_2026-07-19.jsonl": {
+   "sha256": "6ec47b97c9f219f2acc7834bab1a0c4a4789a6581bd3edd17f953ab7433b7b4f",
+   "rows": 8,
+   "first": "2026-07-19T22:00:00+00:00",
+   "last": "2026-07-19T23:45:00+00:00"
+  },
+  "MES_2026-07-20.jsonl": {
+   "sha256": "2dcd36284b33371e81ab6a613efeec7aeca7ffe29e154d82a70b81923683152e",
+   "rows": 92,
+   "first": "2026-07-20T00:00:00+00:00",
+   "last": "2026-07-20T23:45:00+00:00"
+  },
+  "MES_2026-07-21.jsonl": {
+   "sha256": "8679bbf5dd955e44ce413bb6e1eabf21b1430ad88186c1cd81353cfafbee6b8d",
+   "rows": 92,
+   "first": "2026-07-21T00:00:00+00:00",
+   "last": "2026-07-21T23:45:00+00:00"
+  },
+  "MES_2026-07-22.jsonl": {
+   "sha256": "6da6219cb65f9f0ad2d3fde194121d89ba4aa856dfb2d8d9940503f68ce20cac",
+   "rows": 92,
+   "first": "2026-07-22T00:00:00+00:00",
+   "last": "2026-07-22T23:45:00+00:00"
+  },
+  "MES_2026-07-23.jsonl": {
+   "sha256": "858a355725ad7b915126ed8b57701dc41b25fc70b0369b42b2944816c183973a",
+   "rows": 92,
+   "first": "2026-07-23T00:00:00+00:00",
+   "last": "2026-07-23T23:45:00+00:00"
+  },
+  "MES_2026-07-24.jsonl": {
+   "sha256": "fe8cc51b7dfe033e08594838821d3aaef3db2f57d726cd7d1e044e60ce20126a",
+   "rows": 84,
+   "first": "2026-07-24T00:00:00+00:00",
+   "last": "2026-07-24T20:45:00+00:00"
+  },
+  "MES_2026-07-26.jsonl": {
+   "sha256": "ed582e1e73a8c356423cdba7ff2ac755988843a62d865e03bd2beea5f68ffbbd",
+   "rows": 8,
+   "first": "2026-07-26T22:00:00+00:00",
+   "last": "2026-07-26T23:45:00+00:00"
+  },
+  "MES_2026-07-27.jsonl": {
+   "sha256": "db00612afc9e8c1b5600973e0cbdcb49310f9be85c07a98fb5583b5b3ef4c42b",
+   "rows": 92,
+   "first": "2026-07-27T00:00:00+00:00",
+   "last": "2026-07-27T23:45:00+00:00"
+  },
+  "MES_2026-07-28.jsonl": {
+   "sha256": "0c07a2363fc61736e6ff3396decf965cc96de8ae9911a8305f33f590d603e36e",
+   "rows": 92,
+   "first": "2026-07-28T00:00:00+00:00",
+   "last": "2026-07-28T23:45:00+00:00"
+  },
+  "MES_2026-07-29.jsonl": {
+   "sha256": "2534fd44b3db6178371ea95207b5844075dfe898b60a8faf5020892bab0d3c4b",
+   "rows": 92,
+   "first": "2026-07-29T00:00:00+00:00",
+   "last": "2026-07-29T23:45:00+00:00"
+  },
+  "MES_2026-07-30.jsonl": {
+   "sha256": "f6783ced5c6da487d693b5c4e18a6fd0a395759aaa48106e091a536336e07af9",
+   "rows": 92,
+   "first": "2026-07-30T00:00:00+00:00",
+   "last": "2026-07-30T23:45:00+00:00"
+  },
+  "MES_2026-07-31.jsonl": {
+   "sha256": "a365b7970c787a77b03aaff15cc4744f34497ceb038aa474633881f65658e5ac",
+   "rows": 84,
+   "first": "2026-07-31T00:00:00+00:00",
+   "last": "2026-07-31T20:45:00+00:00"
+  },
+  "MES_2026-08-02.jsonl": {
+   "sha256": "2f830e79e9b7cd34501ae60318c5bbc46517b419aba4ca13b04abfebaff3ce70",
+   "rows": 8,
+   "first": "2026-08-02T22:00:00+00:00",
+   "last": "2026-08-02T23:45:00+00:00"
+  },
+  "MES_2026-08-03.jsonl": {
+   "sha256": "2301a7f593ba3525b29fc5509b58bdae8b866013ddb4126fad6d47f32fc3ff26",
+   "rows": 92,
+   "first": "2026-08-03T00:00:00+00:00",
+   "last": "2026-08-03T23:45:00+00:00"
+  },
+  "MES_2026-08-04.jsonl": {
+   "sha256": "f0da49436207232d2612dfdbb825a312b4c9b5bab2796dab143d889bd2b47e03",
+   "rows": 92,
+   "first": "2026-08-04T00:00:00+00:00",
+   "last": "2026-08-04T23:45:00+00:00"
+  },
+  "MES_2026-08-05.jsonl": {
+   "sha256": "6b59ed53b85506a79aaf412bfe79419d972cc78e752646f343394b5f06048d71",
+   "rows": 92,
+   "first": "2026-08-05T00:00:00+00:00",
+   "last": "2026-08-05T23:45:00+00:00"
+  },
+  "MES_2026-08-06.jsonl": {
+   "sha256": "b11c183af82cc0489f632b5d9c618ccdcb97f411c4e28fc1cb5dae5ec6a62133",
+   "rows": 92,
+   "first": "2026-08-06T00:00:00+00:00",
+   "last": "2026-08-06T23:45:00+00:00"
+  },
+  "MES_2026-08-07.jsonl": {
+   "sha256": "54eb06f9b70049a7d87772117e2fa9d185d32b8799397d0d1d955219ada50a3e",
+   "rows": 84,
+   "first": "2026-08-07T00:00:00+00:00",
+   "last": "2026-08-07T20:45:00+00:00"
+  },
+  "MES_2026-08-09.jsonl": {
+   "sha256": "ec8922d4aa234d2c7782e028cfbfbe8efa9eb32e544349f93d138070f91029bf",
+   "rows": 8,
+   "first": "2026-08-09T22:00:00+00:00",
+   "last": "2026-08-09T23:45:00+00:00"
+  },
+  "MES_2026-08-10.jsonl": {
+   "sha256": "052cb1bd04c89b49c86ae50b4d1453bdc1f07f836eca96bb99ed19c54ff2f73f",
+   "rows": 92,
+   "first": "2026-08-10T00:00:00+00:00",
+   "last": "2026-08-10T23:45:00+00:00"
+  },
+  "MES_2026-08-11.jsonl": {
+   "sha256": "2f19851aa4a3e5443aeaa0e7b32173438856eee2e1e9cec47c55aa49b63bcebe",
+   "rows": 92,
+   "first": "2026-08-11T00:00:00+00:00",
+   "last": "2026-08-11T23:45:00+00:00"
+  },
+  "MES_2026-08-12.jsonl": {
+   "sha256": "678dff22ee5da7c13c618f952e609c83a43171f60c5c2a42267d076ba2dbed11",
+   "rows": 92,
+   "first": "2026-08-12T00:00:00+00:00",
+   "last": "2026-08-12T23:45:00+00:00"
+  },
+  "MES_2026-08-13.jsonl": {
+   "sha256": "a46956a3cab3c18295fed2c159b69a41fbc99443ceb88d161e8db2f478ef141b",
+   "rows": 92,
+   "first": "2026-08-13T00:00:00+00:00",
+   "last": "2026-08-13T23:45:00+00:00"
+  },
+  "MES_2026-08-14.jsonl": {
+   "sha256": "2aefe79ec59d5a928ab8bfd3c893e44228f9933bd7acc5e92f9386d2acef3f87",
+   "rows": 84,
+   "first": "2026-08-14T00:00:00+00:00",
+   "last": "2026-08-14T20:45:00+00:00"
+  },
+  "MES_2026-08-16.jsonl": {
+   "sha256": "09c01f7a2632f69f447b0528d231803e3345ad074ace310e630fcae0149a6a63",
+   "rows": 8,
+   "first": "2026-08-16T22:00:00+00:00",
+   "last": "2026-08-16T23:45:00+00:00"
+  },
+  "MES_2026-08-17.jsonl": {
+   "sha256": "86808cd22946e3f7e1f93bf7ff91229592e844a289e5830492930000325649a2",
+   "rows": 92,
+   "first": "2026-08-17T00:00:00+00:00",
+   "last": "2026-08-17T23:45:00+00:00"
+  },
+  "MES_2026-08-18.jsonl": {
+   "sha256": "22f9144bb2161296884710e69a03c2dc7b0f08f42cf22d8902914a84ceeae290",
+   "rows": 92,
+   "first": "2026-08-18T00:00:00+00:00",
+   "last": "2026-08-18T23:45:00+00:00"
+  },
+  "MES_2026-08-19.jsonl": {
+   "sha256": "45c23670d3aabc839187ab9eb7bac9a043f236ba3ba44163c5a5d3ff0fec80d2",
+   "rows": 92,
+   "first": "2026-08-19T00:00:00+00:00",
+   "last": "2026-08-19T23:45:00+00:00"
+  },
+  "MES_2026-08-20.jsonl": {
+   "sha256": "cbeca665c7262baeb4065d3766343873b60ce3a153ad8bf2b189b9082031ff29",
+   "rows": 92,
+   "first": "2026-08-20T00:00:00+00:00",
+   "last": "2026-08-20T23:45:00+00:00"
+  },
+  "MES_2026-08-21.jsonl": {
+   "sha256": "0e24831e7cb49d769698c6f9830db727f5d1900aee944b96f271aaf0a11a7010",
+   "rows": 84,
+   "first": "2026-08-21T00:00:00+00:00",
+   "last": "2026-08-21T20:45:00+00:00"
+  },
+  "MES_2026-08-23.jsonl": {
+   "sha256": "8f0e9c06a30879d72227ded7cf23f635b29f627a3f418b31c966b63f163dc4b1",
+   "rows": 8,
+   "first": "2026-08-23T22:00:00+00:00",
+   "last": "2026-08-23T23:45:00+00:00"
+  },
+  "MES_2026-08-24.jsonl": {
+   "sha256": "bed96e1f13276d1965aff1caae541622594be46afe2b89a3311e0d1f763e8a48",
+   "rows": 92,
+   "first": "2026-08-24T00:00:00+00:00",
+   "last": "2026-08-24T23:45:00+00:00"
+  },
+  "MES_2026-08-25.jsonl": {
+   "sha256": "5499109e4295fb40ab1812feae0b5e0f5db366b2f08aab6e465063def2765779",
+   "rows": 92,
+   "first": "2026-08-25T00:00:00+00:00",
+   "last": "2026-08-25T23:45:00+00:00"
+  },
+  "MES_2026-08-26.jsonl": {
+   "sha256": "6d6e9a1e8b14212d6915c2b579c3f3d54fd75543757d4efb2d35bce17396524c",
+   "rows": 92,
+   "first": "2026-08-26T00:00:00+00:00",
+   "last": "2026-08-26T23:45:00+00:00"
+  },
+  "MES_2026-08-27.jsonl": {
+   "sha256": "11477362bf3d77ec67419fac36d797e5c5d057341fd595cdb69c6026d8108546",
+   "rows": 92,
+   "first": "2026-08-27T00:00:00+00:00",
+   "last": "2026-08-27T23:45:00+00:00"
+  },
+  "MES_2026-08-28.jsonl": {
+   "sha256": "335df49b5b56f7056f9443dd175eda932697e9773f9f06c5b9c9b34de84f60ea",
+   "rows": 84,
+   "first": "2026-08-28T00:00:00+00:00",
+   "last": "2026-08-28T20:45:00+00:00"
+  },
+  "MES_2026-08-30.jsonl": {
+   "sha256": "fde4aa8254582e26af273a6f21fd64f2c274c10f0561bdc7244a4ea37c4d5411",
+   "rows": 8,
+   "first": "2026-08-30T22:00:00+00:00",
+   "last": "2026-08-30T23:45:00+00:00"
+  },
+  "MES_2026-08-31.jsonl": {
+   "sha256": "4467d57f1760a27d26f6faf2484d4dc1d0f5c96d8645bf8f1be5e034bc650a71",
+   "rows": 92,
+   "first": "2026-08-31T00:00:00+00:00",
+   "last": "2026-08-31T23:45:00+00:00"
+  },
+  "MES_2026-09-01.jsonl": {
+   "sha256": "620d6118829aa59d6774f394d34ce98443f60202a7bbf9f4f70ef92bdcf2f668",
+   "rows": 92,
+   "first": "2026-09-01T00:00:00+00:00",
+   "last": "2026-09-01T23:45:00+00:00"
+  },
+  "MES_2026-09-02.jsonl": {
+   "sha256": "9755716c6bc39edb6b3214b8f686d7d5329836e64c79cc6aed5a4a945dd8c16e",
+   "rows": 92,
+   "first": "2026-09-02T00:00:00+00:00",
+   "last": "2026-09-02T23:45:00+00:00"
+  },
+  "MES_2026-09-03.jsonl": {
+   "sha256": "956f729e14845bc3869f9d9f84f22263e5c2e3d3378453da272d8791a47e13ed",
+   "rows": 92,
+   "first": "2026-09-03T00:00:00+00:00",
+   "last": "2026-09-03T23:45:00+00:00"
+  },
+  "MES_2026-09-04.jsonl": {
+   "sha256": "b943553f5f35064a6385c3b0a99082eeecc4bd2f876836640d411d01cb787f8f",
+   "rows": 84,
+   "first": "2026-09-04T00:00:00+00:00",
+   "last": "2026-09-04T20:45:00+00:00"
+  },
+  "MES_2026-09-06.jsonl": {
+   "sha256": "9b72793417b839b41ad54940d8ae5e8927868558709e44587eb41d5f11c31769",
+   "rows": 8,
+   "first": "2026-09-06T22:00:00+00:00",
+   "last": "2026-09-06T23:45:00+00:00"
+  },
+  "MES_2026-09-07.jsonl": {
+   "sha256": "586775170eef30b7bbefbf6a98501c87c0ab67eb80e3fdd5278444b6565edd2b",
+   "rows": 76,
+   "first": "2026-09-07T00:00:00+00:00",
+   "last": "2026-09-07T23:45:00+00:00"
+  },
+  "MES_2026-09-08.jsonl": {
+   "sha256": "00c72c483d5dc2eab1f21705912ff33102be55f8e0463c003ebcbc88cfa40ad7",
+   "rows": 92,
+   "first": "2026-09-08T00:00:00+00:00",
+   "last": "2026-09-08T23:45:00+00:00"
+  },
+  "MES_2026-09-09.jsonl": {
+   "sha256": "2d3039943769abd19bf60c318c08458efbeb30fcdb82e3e8a2eaad85d1e39c58",
+   "rows": 92,
+   "first": "2026-09-09T00:00:00+00:00",
+   "last": "2026-09-09T23:45:00+00:00"
+  },
+  "MES_2026-09-10.jsonl": {
+   "sha256": "6436ebf079bdfd15d6cc0be0838d2d712f0683b74a91ae1258788db78bc16d71",
+   "rows": 92,
+   "first": "2026-09-10T00:00:00+00:00",
+   "last": "2026-09-10T23:45:00+00:00"
+  },
+  "MES_2026-09-11.jsonl": {
+   "sha256": "dbfd0607192843116097662bb8e9b364ca0f86167ad95f58f326ef5db508c714",
+   "rows": 72,
+   "first": "2026-09-11T00:00:00+00:00",
+   "last": "2026-09-11T19:45:00+00:00"
+  },
+  "MES_2026-09-13.jsonl": {
+   "sha256": "c85da0ae76b3c8242d4fdc976484460300478a5a14559f268b3ad7762373b5db",
+   "rows": 8,
+   "first": "2026-09-13T22:00:00+00:00",
+   "last": "2026-09-13T23:45:00+00:00"
+  },
+  "MES_2026-09-14.jsonl": {
+   "sha256": "4fdd7a916267a5ac818f658c2855917a8b9a51fe3fb14754c0ba0e65e41d7aa3",
+   "rows": 84,
+   "first": "2026-09-14T00:00:00+00:00",
+   "last": "2026-09-14T20:45:00+00:00"
+  }
+ }
+}

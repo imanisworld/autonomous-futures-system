@@ -1,0 +1,1106 @@
+{
+ "tool": "slp2-v1.3",
+ "gates": {
+  "firing_jaccard_min": 0.9,
+  "bracket_agree_min": 0.98,
+  "bracket_tolerance": "one tick per leg (entry, stop, target)"
+ },
+ "bar_census": {
+  "MES": {
+   "live_bars": 3640,
+   "replay_bars": 3920,
+   "both_evaluated": 3628,
+   "live_only_bars": 12,
+   "replay_only_bars": 292,
+   "live_only_bars_absent_from_corpus": 12,
+   "live_only_bars_in_corpus_not_evaluated_by_replay": 0,
+   "corpus_bars": 3920
+  },
+  "MNQ": {
+   "live_bars": 3629,
+   "replay_bars": 3921,
+   "both_evaluated": 3617,
+   "live_only_bars": 12,
+   "replay_only_bars": 304,
+   "live_only_bars_absent_from_corpus": 12,
+   "live_only_bars_in_corpus_not_evaluated_by_replay": 0,
+   "corpus_bars": 3921
+  }
+ },
+ "duplicate_bars_first_seen_wins": {
+  "live": 2,
+  "replay": 0
+ },
+ "live_stale_orb_rows_excluded": 62,
+ "families": {
+  "ema_pullback_trend": {
+   "live_firings_all_live_bars": 1279,
+   "replay_firings_all_replay_bars": 1349,
+   "live_by_instrument": {
+    "MES": 670,
+    "MNQ": 609
+   },
+   "replay_by_instrument": {
+    "MNQ": 636,
+    "MES": 713
+   },
+   "on_both_evaluated_bars": {
+    "live_firings": 1278,
+    "replay_firings": 1278,
+    "intersection": 1275,
+    "union": 1281,
+    "firing_jaccard": 0.9953,
+    "live_only_firings": 3,
+    "live_only_on_replay_warmup_bars": 0,
+    "replay_only_firings": 3,
+    "replay_only_on_replay_warmup_bars": 0
+   },
+   "bracket_on_cofired": {
+    "pairs": 1275,
+    "all_three_within_one_tick_rate": 0.9388,
+    "entry_rate": 0.9945,
+    "stop_rate": 0.9992,
+    "target_rate": 0.9388,
+    "failing_examples": [
+     {
+      "key": [
+       "MES",
+       "2026-07-17T19:45:00+00:00",
+       "ema_pullback_trend",
+       "SHORT"
+      ],
+      "live": {
+       "entry": 7496.5,
+       "stop": 7510.2296,
+       "target": 7466.2949
+      },
+      "replay": {
+       "entry": 7496.75,
+       "stop": 7510.2547,
+       "target": 7467.0397
+      }
+     },
+     {
+      "key": [
+       "MES",
+       "2026-07-31T04:00:00+00:00",
+       "ema_pullback_trend",
+       "LONG"
+      ],
+      "live": {
+       "entry": 7497.75,
+       "stop": 7490.1946,
+       "target": 7514.3719
+      },
+      "replay": {
+       "entry": 7498.0,
+       "stop": 7490.2173,
+       "target": 7515.122
+      }
+     },
+     {
+      "key": [
+       "MES",
+       "2026-07-31T19:45:00+00:00",
+       "ema_pullback_trend",
+       "LONG"
+      ],
+      "live": {
+       "entry": 7520.0,
+       "stop": 7505.1842,
+       "target": 7552.5948
+      },
+      "replay": {
+       "entry": 7520.25,
+       "stop": 7505.207,
+       "target": 7553.3446
+      }
+     },
+     {
+      "key": [
+       "MES",
+       "2026-08-18T19:45:00+00:00",
+       "ema_pullback_trend",
+       "SHORT"
+      ],
+      "live": {
+       "entry": 7715.0,
+       "stop": 7722.2384,
+       "target": 7699.0755
+      },
+      "replay": {
+       "entry": 7715.25,
+       "stop": 7722.2611,
+       "target": 7699.8256
+      }
+     },
+     {
+      "key": [
+       "MES",
+       "2026-08-26T00:15:00+00:00",
+       "ema_pullback_trend",
+       "SHORT"
+      ],
+      "live": {
+       "entry": 7680.5,
+       "stop": 7688.2797,
+       "target": 7663.3847
+      },
+      "replay": {
+       "entry": 7681.0,
+       "stop": 7688.3252,
+       "target": 7664.8846
+      }
+     }
+    ]
+   },
+   "input_source_mismatch_reason": "EMA source \u2014 \u22641-tick EMA touches decide firing",
+   "spec_verdict_reference": "BOTH \u2014 input-divergent (spec \u00a72; resolved by \u00a74 gates)",
+   "classification": "BOTH \u2014 BRACKET_CONFLICT",
+   "classification_reason": "jaccard 0.995 \u2265 0.9 but bracket 0.939 < 0.98: same formula, input miss \u2014 definition conflict, reported",
+   "live_only_examples": [
+    [
+     "MES",
+     "2026-09-04T07:45:00+00:00",
+     "ema_pullback_trend",
+     "LONG"
+    ],
+    [
+     "MNQ",
+     "2026-09-09T12:45:00+00:00",
+     "ema_pullback_trend",
+     "SHORT"
+    ],
+    [
+     "MNQ",
+     "2026-09-10T02:00:00+00:00",
+     "ema_pullback_trend",
+     "SHORT"
+    ]
+   ],
+   "replay_only_examples": [
+    [
+     "MES",
+     "2026-08-24T07:45:00+00:00",
+     "ema_pullback_trend",
+     "SHORT"
+    ],
+    [
+     "MNQ",
+     "2026-08-04T19:45:00+00:00",
+     "ema_pullback_trend",
+     "LONG"
+    ],
+    [
+     "MNQ",
+     "2026-08-28T19:45:00+00:00",
+     "ema_pullback_trend",
+     "SHORT"
+    ]
+   ]
+  },
+  "gap_fill": {
+   "live_firings_all_live_bars": 0,
+   "replay_firings_all_replay_bars": 0,
+   "live_by_instrument": {},
+   "replay_by_instrument": {},
+   "on_both_evaluated_bars": {
+    "live_firings": 0,
+    "replay_firings": 0,
+    "intersection": 0,
+    "union": 0,
+    "firing_jaccard": null,
+    "live_only_firings": 0,
+    "live_only_on_replay_warmup_bars": 0,
+    "replay_only_firings": 0,
+    "replay_only_on_replay_warmup_bars": 0
+   },
+   "bracket_on_cofired": {
+    "pairs": 0,
+    "all_three_within_one_tick_rate": null,
+    "entry_rate": null,
+    "stop_rate": null,
+    "target_rate": null,
+    "failing_examples": []
+   },
+   "input_source_mismatch_reason": "payload never carries rth_open/session_open",
+   "spec_verdict_reference": "DEAD (spec \u00a72)",
+   "classification": "DEAD",
+   "classification_reason": "never fires on either path (payload lacks the required field)",
+   "live_only_examples": [],
+   "replay_only_examples": []
+  },
+  "impulse_first_pullback_observed": {
+   "live_firings_all_live_bars": 1077,
+   "replay_firings_all_replay_bars": 1109,
+   "live_by_instrument": {
+    "MES": 522,
+    "MNQ": 555
+   },
+   "replay_by_instrument": {
+    "MNQ": 573,
+    "MES": 536
+   },
+   "on_both_evaluated_bars": {
+    "live_firings": 1074,
+    "replay_firings": 1032,
+    "intersection": 1019,
+    "union": 1087,
+    "firing_jaccard": 0.9374,
+    "live_only_firings": 55,
+    "live_only_on_replay_warmup_bars": 40,
+    "replay_only_firings": 13,
+    "replay_only_on_replay_warmup_bars": 2
+   },
+   "bracket_on_cofired": {
+    "pairs": 1019,
+    "all_three_within_one_tick_rate": 0.999,
+    "entry_rate": 1.0,
+    "stop_rate": 0.999,
+    "target_rate": 0.999,
+    "failing_examples": [
+     {
+      "key": [
+       "MNQ",
+       "2026-07-16T19:45:00+00:00",
+       "impulse_first_pullback_observed",
+       "SHORT"
+      ],
+      "live": {
+       "entry": 29078.75,
+       "stop": 29253.5,
+       "target": 28729.25
+      },
+      "replay": {
+       "entry": 29078.75,
+       "stop": 29235.25,
+       "target": 28765.75
+      }
+     }
+    ]
+   },
+   "input_source_mismatch_reason": "trend source (EMA) + replay recent-bars reset at day-file boundary",
+   "spec_verdict_reference": "BOTH \u2014 input-divergent (spec \u00a72; resolved by \u00a74 gates)",
+   "classification": "BOTH",
+   "classification_reason": "jaccard 0.937 \u2265 0.9; bracket 0.9990186457311089",
+   "live_only_examples": [
+    [
+     "MES",
+     "2026-07-16T00:15:00+00:00",
+     "impulse_first_pullback_observed",
+     "LONG"
+    ],
+    [
+     "MES",
+     "2026-07-16T01:45:00+00:00",
+     "impulse_first_pullback_observed",
+     "SHORT"
+    ],
+    [
+     "MES",
+     "2026-07-16T07:15:00+00:00",
+     "impulse_first_pullback_observed",
+     "SHORT"
+    ],
+    [
+     "MES",
+     "2026-07-17T03:00:00+00:00",
+     "impulse_first_pullback_observed",
+     "SHORT"
+    ],
+    [
+     "MES",
+     "2026-07-19T22:15:00+00:00",
+     "impulse_first_pullback_observed",
+     "SHORT"
+    ]
+   ],
+   "replay_only_examples": [
+    [
+     "MES",
+     "2026-07-17T00:45:00+00:00",
+     "impulse_first_pullback_observed",
+     "SHORT"
+    ],
+    [
+     "MES",
+     "2026-07-17T02:30:00+00:00",
+     "impulse_first_pullback_observed",
+     "SHORT"
+    ],
+    [
+     "MES",
+     "2026-08-14T03:30:00+00:00",
+     "impulse_first_pullback_observed",
+     "LONG"
+    ],
+    [
+     "MES",
+     "2026-08-14T17:45:00+00:00",
+     "impulse_first_pullback_observed",
+     "SHORT"
+    ],
+    [
+     "MES",
+     "2026-09-11T19:00:00+00:00",
+     "impulse_first_pullback_observed",
+     "LONG"
+    ]
+   ]
+  },
+  "orb_false_break_fade": {
+   "live_firings_all_live_bars": 301,
+   "replay_firings_all_replay_bars": 331,
+   "live_by_instrument": {
+    "MES": 159,
+    "MNQ": 142
+   },
+   "replay_by_instrument": {
+    "MNQ": 161,
+    "MES": 170
+   },
+   "on_both_evaluated_bars": {
+    "live_firings": 299,
+    "replay_firings": 298,
+    "intersection": 298,
+    "union": 299,
+    "firing_jaccard": 0.9967,
+    "live_only_firings": 1,
+    "live_only_on_replay_warmup_bars": 0,
+    "replay_only_firings": 0,
+    "replay_only_on_replay_warmup_bars": 0
+   },
+   "bracket_on_cofired": {
+    "pairs": 298,
+    "all_three_within_one_tick_rate": 1.0,
+    "entry_rate": 1.0,
+    "stop_rate": 1.0,
+    "target_rate": 1.0,
+    "failing_examples": []
+   },
+   "input_source_mismatch_reason": "ORB source (Pine NY/London ORB via state_builder vs corpus orb_*/london_orb_*); live asian rows STALE_ORB (C1)",
+   "spec_verdict_reference": "BOTH after corpus rebuild (spec \u00a72)",
+   "classification": "BOTH",
+   "classification_reason": "jaccard 0.997 \u2265 0.9; bracket 1.0",
+   "live_only_examples": [
+    [
+     "MNQ",
+     "2026-08-19T18:30:00+00:00",
+     "orb_false_break_fade",
+     "LONG"
+    ]
+   ],
+   "replay_only_examples": []
+  },
+  "ovn_high_sweep_reclaim": {
+   "live_firings_all_live_bars": 0,
+   "replay_firings_all_replay_bars": 0,
+   "live_by_instrument": {},
+   "replay_by_instrument": {},
+   "on_both_evaluated_bars": {
+    "live_firings": 0,
+    "replay_firings": 0,
+    "intersection": 0,
+    "union": 0,
+    "firing_jaccard": null,
+    "live_only_firings": 0,
+    "live_only_on_replay_warmup_bars": 0,
+    "replay_only_firings": 0,
+    "replay_only_on_replay_warmup_bars": 0
+   },
+   "bracket_on_cofired": {
+    "pairs": 0,
+    "all_three_within_one_tick_rate": null,
+    "entry_rate": null,
+    "stop_rate": null,
+    "target_rate": null,
+    "failing_examples": []
+   },
+   "input_source_mismatch_reason": "payload never carries overnight_high/low",
+   "spec_verdict_reference": "DEAD (spec \u00a72)",
+   "classification": "DEAD",
+   "classification_reason": "never fires on either path (payload lacks the required field)",
+   "live_only_examples": [],
+   "replay_only_examples": []
+  },
+  "ovn_low_sweep_reclaim": {
+   "live_firings_all_live_bars": 0,
+   "replay_firings_all_replay_bars": 0,
+   "live_by_instrument": {},
+   "replay_by_instrument": {},
+   "on_both_evaluated_bars": {
+    "live_firings": 0,
+    "replay_firings": 0,
+    "intersection": 0,
+    "union": 0,
+    "firing_jaccard": null,
+    "live_only_firings": 0,
+    "live_only_on_replay_warmup_bars": 0,
+    "replay_only_firings": 0,
+    "replay_only_on_replay_warmup_bars": 0
+   },
+   "bracket_on_cofired": {
+    "pairs": 0,
+    "all_three_within_one_tick_rate": null,
+    "entry_rate": null,
+    "stop_rate": null,
+    "target_rate": null,
+    "failing_examples": []
+   },
+   "input_source_mismatch_reason": "payload never carries overnight_high/low",
+   "spec_verdict_reference": "DEAD (spec \u00a72)",
+   "classification": "DEAD",
+   "classification_reason": "never fires on either path (payload lacks the required field)",
+   "live_only_examples": [],
+   "replay_only_examples": []
+  },
+  "range_break_close": {
+   "live_firings_all_live_bars": 0,
+   "replay_firings_all_replay_bars": 0,
+   "live_by_instrument": {},
+   "replay_by_instrument": {},
+   "on_both_evaluated_bars": {
+    "live_firings": 0,
+    "replay_firings": 0,
+    "intersection": 0,
+    "union": 0,
+    "firing_jaccard": null,
+    "live_only_firings": 0,
+    "live_only_on_replay_warmup_bars": 0,
+    "replay_only_firings": 0,
+    "replay_only_on_replay_warmup_bars": 0
+   },
+   "bracket_on_cofired": {
+    "pairs": 0,
+    "all_three_within_one_tick_rate": null,
+    "entry_rate": null,
+    "stop_rate": null,
+    "target_rate": null,
+    "failing_examples": []
+   },
+   "input_source_mismatch_reason": "live-only range_signal lane (wall_context walls)",
+   "spec_verdict_reference": "LIVE_ONLY (spec \u00a72/\u00a76)",
+   "classification": "LIVE_ONLY",
+   "classification_reason": "live=0, replay=0 by construction (env/lane)",
+   "live_only_examples": [],
+   "replay_only_examples": []
+  },
+  "strat_122_observed": {
+   "live_firings_all_live_bars": 156,
+   "replay_firings_all_replay_bars": 163,
+   "live_by_instrument": {
+    "MES": 127,
+    "MNQ": 29
+   },
+   "replay_by_instrument": {
+    "MES": 135,
+    "MNQ": 28
+   },
+   "on_both_evaluated_bars": {
+    "live_firings": 154,
+    "replay_firings": 155,
+    "intersection": 154,
+    "union": 155,
+    "firing_jaccard": 0.9935,
+    "live_only_firings": 0,
+    "live_only_on_replay_warmup_bars": 0,
+    "replay_only_firings": 1,
+    "replay_only_on_replay_warmup_bars": 0
+   },
+   "bracket_on_cofired": {
+    "pairs": 154,
+    "all_three_within_one_tick_rate": 1.0,
+    "entry_rate": 1.0,
+    "stop_rate": 1.0,
+    "target_rate": 1.0,
+    "failing_examples": []
+   },
+   "input_source_mismatch_reason": "bar-type classification source",
+   "spec_verdict_reference": "BOTH (spec \u00a72; bar-type parity measured here)",
+   "classification": "BOTH",
+   "classification_reason": "jaccard 0.994 \u2265 0.9; bracket 1.0",
+   "live_only_examples": [],
+   "replay_only_examples": [
+    [
+     "MES",
+     "2026-09-11T19:15:00+00:00",
+     "strat_122_observed",
+     "LONG"
+    ]
+   ]
+  },
+  "strat_122_pullback": {
+   "live_firings_all_live_bars": 74,
+   "replay_firings_all_replay_bars": 79,
+   "live_by_instrument": {
+    "MNQ": 67,
+    "MES": 7
+   },
+   "replay_by_instrument": {
+    "MNQ": 72,
+    "MES": 7
+   },
+   "on_both_evaluated_bars": {
+    "live_firings": 74,
+    "replay_firings": 74,
+    "intersection": 74,
+    "union": 74,
+    "firing_jaccard": 1.0,
+    "live_only_firings": 0,
+    "live_only_on_replay_warmup_bars": 0,
+    "replay_only_firings": 0,
+    "replay_only_on_replay_warmup_bars": 0
+   },
+   "bracket_on_cofired": {
+    "pairs": 74,
+    "all_three_within_one_tick_rate": 1.0,
+    "entry_rate": 1.0,
+    "stop_rate": 1.0,
+    "target_rate": 1.0,
+    "failing_examples": []
+   },
+   "input_source_mismatch_reason": "bar-type classification source",
+   "spec_verdict_reference": "BOTH (spec \u00a72; bar-type parity measured here)",
+   "classification": "BOTH",
+   "classification_reason": "jaccard 1.000 \u2265 0.9; bracket 1.0",
+   "live_only_examples": [],
+   "replay_only_examples": []
+  },
+  "strat_22_continuation_observed": {
+   "live_firings_all_live_bars": 2536,
+   "replay_firings_all_replay_bars": 2751,
+   "live_by_instrument": {
+    "MES": 1211,
+    "MNQ": 1325
+   },
+   "replay_by_instrument": {
+    "MNQ": 1433,
+    "MES": 1318
+   },
+   "on_both_evaluated_bars": {
+    "live_firings": 2530,
+    "replay_firings": 2527,
+    "intersection": 2527,
+    "union": 2530,
+    "firing_jaccard": 0.9988,
+    "live_only_firings": 3,
+    "live_only_on_replay_warmup_bars": 1,
+    "replay_only_firings": 0,
+    "replay_only_on_replay_warmup_bars": 0
+   },
+   "bracket_on_cofired": {
+    "pairs": 2527,
+    "all_three_within_one_tick_rate": 0.9996,
+    "entry_rate": 0.9996,
+    "stop_rate": 0.9996,
+    "target_rate": 0.9996,
+    "failing_examples": [
+     {
+      "key": [
+       "MES",
+       "2026-09-13T22:00:00+00:00",
+       "strat_22_continuation_observed",
+       "SHORT"
+      ],
+      "live": {
+       "entry": 7659.5,
+       "stop": 7661.75,
+       "target": 7655.0
+      },
+      "replay": {
+       "entry": 7657.25,
+       "stop": 7668.0,
+       "target": 7635.75
+      }
+     }
+    ]
+   },
+   "input_source_mismatch_reason": "bar-type classification source (Pine classify_bar vs corpus classify_htf_bar)",
+   "spec_verdict_reference": "BOTH (spec \u00a72; bar-type parity measured here)",
+   "classification": "BOTH",
+   "classification_reason": "jaccard 0.999 \u2265 0.9; bracket 0.999604273842501",
+   "live_only_examples": [
+    [
+     "MES",
+     "2026-09-11T19:00:00+00:00",
+     "strat_22_continuation_observed",
+     "SHORT"
+    ],
+    [
+     "MNQ",
+     "2026-09-11T19:00:00+00:00",
+     "strat_22_continuation_observed",
+     "SHORT"
+    ],
+    [
+     "MNQ",
+     "2026-09-13T22:00:00+00:00",
+     "strat_22_continuation_observed",
+     "SHORT"
+    ]
+   ],
+   "replay_only_examples": []
+  },
+  "strat_22_reversal_observed": {
+   "live_firings_all_live_bars": 1222,
+   "replay_firings_all_replay_bars": 1304,
+   "live_by_instrument": {
+    "MNQ": 603,
+    "MES": 619
+   },
+   "replay_by_instrument": {
+    "MNQ": 643,
+    "MES": 661
+   },
+   "on_both_evaluated_bars": {
+    "live_firings": 1220,
+    "replay_firings": 1218,
+    "intersection": 1218,
+    "union": 1220,
+    "firing_jaccard": 0.9984,
+    "live_only_firings": 2,
+    "live_only_on_replay_warmup_bars": 0,
+    "replay_only_firings": 0,
+    "replay_only_on_replay_warmup_bars": 0
+   },
+   "bracket_on_cofired": {
+    "pairs": 1218,
+    "all_three_within_one_tick_rate": 1.0,
+    "entry_rate": 1.0,
+    "stop_rate": 1.0,
+    "target_rate": 1.0,
+    "failing_examples": []
+   },
+   "input_source_mismatch_reason": "bar-type classification source",
+   "spec_verdict_reference": "BOTH (spec \u00a72; bar-type parity measured here)",
+   "classification": "BOTH",
+   "classification_reason": "jaccard 0.998 \u2265 0.9; bracket 1.0",
+   "live_only_examples": [
+    [
+     "MES",
+     "2026-09-11T19:15:00+00:00",
+     "strat_22_reversal_observed",
+     "LONG"
+    ],
+    [
+     "MNQ",
+     "2026-09-11T18:45:00+00:00",
+     "strat_22_reversal_observed",
+     "SHORT"
+    ]
+   ],
+   "replay_only_examples": []
+  },
+  "strat_312_observed": {
+   "live_firings_all_live_bars": 131,
+   "replay_firings_all_replay_bars": 141,
+   "live_by_instrument": {
+    "MES": 65,
+    "MNQ": 66
+   },
+   "replay_by_instrument": {
+    "MNQ": 70,
+    "MES": 71
+   },
+   "on_both_evaluated_bars": {
+    "live_firings": 130,
+    "replay_firings": 131,
+    "intersection": 130,
+    "union": 131,
+    "firing_jaccard": 0.9924,
+    "live_only_firings": 0,
+    "live_only_on_replay_warmup_bars": 0,
+    "replay_only_firings": 1,
+    "replay_only_on_replay_warmup_bars": 0
+   },
+   "bracket_on_cofired": {
+    "pairs": 130,
+    "all_three_within_one_tick_rate": 1.0,
+    "entry_rate": 1.0,
+    "stop_rate": 1.0,
+    "target_rate": 1.0,
+    "failing_examples": []
+   },
+   "input_source_mismatch_reason": "bar-type classification source",
+   "spec_verdict_reference": "BOTH (spec \u00a72; bar-type parity measured here)",
+   "classification": "BOTH",
+   "classification_reason": "jaccard 0.992 \u2265 0.9; bracket 1.0",
+   "live_only_examples": [],
+   "replay_only_examples": [
+    [
+     "MES",
+     "2026-09-11T19:00:00+00:00",
+     "strat_312_observed",
+     "SHORT"
+    ]
+   ]
+  },
+  "strat_322_reversal_observed": {
+   "live_firings_all_live_bars": 147,
+   "replay_firings_all_replay_bars": 160,
+   "live_by_instrument": {
+    "MNQ": 82,
+    "MES": 65
+   },
+   "replay_by_instrument": {
+    "MNQ": 90,
+    "MES": 70
+   },
+   "on_both_evaluated_bars": {
+    "live_firings": 147,
+    "replay_firings": 147,
+    "intersection": 147,
+    "union": 147,
+    "firing_jaccard": 1.0,
+    "live_only_firings": 0,
+    "live_only_on_replay_warmup_bars": 0,
+    "replay_only_firings": 0,
+    "replay_only_on_replay_warmup_bars": 0
+   },
+   "bracket_on_cofired": {
+    "pairs": 147,
+    "all_three_within_one_tick_rate": 1.0,
+    "entry_rate": 1.0,
+    "stop_rate": 1.0,
+    "target_rate": 1.0,
+    "failing_examples": []
+   },
+   "input_source_mismatch_reason": "bar-type classification source",
+   "spec_verdict_reference": "BOTH (spec \u00a72; bar-type parity measured here)",
+   "classification": "BOTH",
+   "classification_reason": "jaccard 1.000 \u2265 0.9; bracket 1.0",
+   "live_only_examples": [],
+   "replay_only_examples": []
+  },
+  "strat_4hr_retrigger_observed": {
+   "live_firings_all_live_bars": 44,
+   "replay_firings_all_replay_bars": 47,
+   "live_by_instrument": {
+    "MES": 28,
+    "MNQ": 16
+   },
+   "replay_by_instrument": {
+    "MNQ": 18,
+    "MES": 29
+   },
+   "on_both_evaluated_bars": {
+    "live_firings": 44,
+    "replay_firings": 44,
+    "intersection": 44,
+    "union": 44,
+    "firing_jaccard": 1.0,
+    "live_only_firings": 0,
+    "live_only_on_replay_warmup_bars": 0,
+    "replay_only_firings": 0,
+    "replay_only_on_replay_warmup_bars": 0
+   },
+   "bracket_on_cofired": {
+    "pairs": 44,
+    "all_three_within_one_tick_rate": 1.0,
+    "entry_rate": 1.0,
+    "stop_rate": 1.0,
+    "target_rate": 1.0,
+    "failing_examples": []
+   },
+   "input_source_mismatch_reason": "EMA source (Pine vs SMA-seeded corpus EMA) + avg-volume source",
+   "spec_verdict_reference": "BOTH \u2014 input-divergent (spec \u00a72; resolved by \u00a74 gates)",
+   "classification": "BOTH",
+   "classification_reason": "jaccard 1.000 \u2265 0.9; bracket 1.0",
+   "live_only_examples": [],
+   "replay_only_examples": []
+  },
+  "transition_failed_breakdown_reclaim": {
+   "live_firings_all_live_bars": 12,
+   "replay_firings_all_replay_bars": 92,
+   "live_by_instrument": {
+    "MNQ": 6,
+    "MES": 6
+   },
+   "replay_by_instrument": {
+    "MNQ": 48,
+    "MES": 44
+   },
+   "on_both_evaluated_bars": {
+    "live_firings": 12,
+    "replay_firings": 86,
+    "intersection": 9,
+    "union": 89,
+    "firing_jaccard": 0.1011,
+    "live_only_firings": 3,
+    "live_only_on_replay_warmup_bars": 1,
+    "replay_only_firings": 77,
+    "replay_only_on_replay_warmup_bars": 0
+   },
+   "bracket_on_cofired": {
+    "pairs": 9,
+    "all_three_within_one_tick_rate": 1.0,
+    "entry_rate": 1.0,
+    "stop_rate": 1.0,
+    "target_rate": 1.0,
+    "failing_examples": []
+   },
+   "input_source_mismatch_reason": "regime label source (Pine market_condition, MES blind C8) + recent-bars reset",
+   "spec_verdict_reference": "NOT_TESTABLE (spec \u00a72/\u00a76)",
+   "classification": "NOT_TESTABLE",
+   "classification_reason": "spec \u00a76; live=12 replay=92 (reported, not gated)",
+   "live_only_examples": [
+    [
+     "MES",
+     "2026-09-08T11:15:00+00:00",
+     "transition_failed_breakdown_reclaim",
+     "LONG"
+    ],
+    [
+     "MNQ",
+     "2026-09-14T00:30:00+00:00",
+     "transition_failed_breakdown_reclaim",
+     "LONG"
+    ],
+    [
+     "MNQ",
+     "2026-09-14T13:15:00+00:00",
+     "transition_failed_breakdown_reclaim",
+     "LONG"
+    ]
+   ],
+   "replay_only_examples": [
+    [
+     "MES",
+     "2026-07-16T06:15:00+00:00",
+     "transition_failed_breakdown_reclaim",
+     "LONG"
+    ],
+    [
+     "MES",
+     "2026-07-16T20:00:00+00:00",
+     "transition_failed_breakdown_reclaim",
+     "LONG"
+    ],
+    [
+     "MES",
+     "2026-07-20T05:15:00+00:00",
+     "transition_failed_breakdown_reclaim",
+     "LONG"
+    ],
+    [
+     "MES",
+     "2026-07-20T06:45:00+00:00",
+     "transition_failed_breakdown_reclaim",
+     "LONG"
+    ],
+    [
+     "MES",
+     "2026-07-20T14:30:00+00:00",
+     "transition_failed_breakdown_reclaim",
+     "LONG"
+    ]
+   ]
+  },
+  "trend_consolidation_break_observed": {
+   "live_firings_all_live_bars": 414,
+   "replay_firings_all_replay_bars": 434,
+   "live_by_instrument": {
+    "MNQ": 192,
+    "MES": 222
+   },
+   "replay_by_instrument": {
+    "MNQ": 202,
+    "MES": 232
+   },
+   "on_both_evaluated_bars": {
+    "live_firings": 411,
+    "replay_firings": 395,
+    "intersection": 390,
+    "union": 416,
+    "firing_jaccard": 0.9375,
+    "live_only_firings": 21,
+    "live_only_on_replay_warmup_bars": 15,
+    "replay_only_firings": 5,
+    "replay_only_on_replay_warmup_bars": 1
+   },
+   "bracket_on_cofired": {
+    "pairs": 390,
+    "all_three_within_one_tick_rate": 1.0,
+    "entry_rate": 1.0,
+    "stop_rate": 1.0,
+    "target_rate": 1.0,
+    "failing_examples": []
+   },
+   "input_source_mismatch_reason": "trend source (EMA) + replay recent-bars reset at day-file boundary",
+   "spec_verdict_reference": "BOTH \u2014 input-divergent (spec \u00a72; resolved by \u00a74 gates)",
+   "classification": "BOTH",
+   "classification_reason": "jaccard 0.938 \u2265 0.9; bracket 1.0",
+   "live_only_examples": [
+    [
+     "MES",
+     "2026-07-16T15:15:00+00:00",
+     "trend_consolidation_break_observed",
+     "LONG"
+    ],
+    [
+     "MES",
+     "2026-07-17T03:30:00+00:00",
+     "trend_consolidation_break_observed",
+     "SHORT"
+    ],
+    [
+     "MES",
+     "2026-07-26T22:45:00+00:00",
+     "trend_consolidation_break_observed",
+     "LONG"
+    ],
+    [
+     "MES",
+     "2026-07-29T00:30:00+00:00",
+     "trend_consolidation_break_observed",
+     "LONG"
+    ],
+    [
+     "MES",
+     "2026-07-31T00:45:00+00:00",
+     "trend_consolidation_break_observed",
+     "LONG"
+    ]
+   ],
+   "replay_only_examples": [
+    [
+     "MES",
+     "2026-07-16T14:45:00+00:00",
+     "trend_consolidation_break_observed",
+     "LONG"
+    ],
+    [
+     "MNQ",
+     "2026-07-16T01:15:00+00:00",
+     "trend_consolidation_break_observed",
+     "SHORT"
+    ],
+    [
+     "MNQ",
+     "2026-07-16T10:30:00+00:00",
+     "trend_consolidation_break_observed",
+     "SHORT"
+    ],
+    [
+     "MNQ",
+     "2026-09-11T19:00:00+00:00",
+     "trend_consolidation_break_observed",
+     "LONG"
+    ],
+    [
+     "MNQ",
+     "2026-09-11T19:15:00+00:00",
+     "trend_consolidation_break_observed",
+     "LONG"
+    ]
+   ]
+  },
+  "vwap_hold_observed": {
+   "live_firings_all_live_bars": 155,
+   "replay_firings_all_replay_bars": 0,
+   "live_by_instrument": {
+    "MNQ": 155
+   },
+   "replay_by_instrument": {},
+   "on_both_evaluated_bars": {
+    "live_firings": 155,
+    "replay_firings": 0,
+    "intersection": 0,
+    "union": 155,
+    "firing_jaccard": 0.0,
+    "live_only_firings": 155,
+    "live_only_on_replay_warmup_bars": 0,
+    "replay_only_firings": 0,
+    "replay_only_on_replay_warmup_bars": 0
+   },
+   "bracket_on_cofired": {
+    "pairs": 0,
+    "all_three_within_one_tick_rate": null,
+    "entry_rate": null,
+    "stop_rate": null,
+    "target_rate": null,
+    "failing_examples": []
+   },
+   "input_source_mismatch_reason": "FORWARD_EVIDENCE_CAMPAIGN env (live ON, replay unset) + VWAP holiday anchor (C14)",
+   "spec_verdict_reference": "LIVE_ONLY (spec \u00a72/\u00a76)",
+   "classification": "LIVE_ONLY",
+   "classification_reason": "live=155, replay=0 by construction (env/lane)",
+   "live_only_examples": [
+    [
+     "MNQ",
+     "2026-08-14T14:15:00+00:00",
+     "vwap_hold_observed",
+     "SHORT"
+    ],
+    [
+     "MNQ",
+     "2026-08-14T14:30:00+00:00",
+     "vwap_hold_observed",
+     "SHORT"
+    ],
+    [
+     "MNQ",
+     "2026-08-14T14:45:00+00:00",
+     "vwap_hold_observed",
+     "SHORT"
+    ],
+    [
+     "MNQ",
+     "2026-08-14T15:00:00+00:00",
+     "vwap_hold_observed",
+     "SHORT"
+    ],
+    [
+     "MNQ",
+     "2026-08-14T15:15:00+00:00",
+     "vwap_hold_observed",
+     "SHORT"
+    ]
+   ],
+   "replay_only_examples": []
+  },
+  "vwap_rejection_observed": {
+   "live_firings_all_live_bars": 0,
+   "replay_firings_all_replay_bars": 0,
+   "live_by_instrument": {},
+   "replay_by_instrument": {},
+   "on_both_evaluated_bars": {
+    "live_firings": 0,
+    "replay_firings": 0,
+    "intersection": 0,
+    "union": 0,
+    "firing_jaccard": null,
+    "live_only_firings": 0,
+    "live_only_on_replay_warmup_bars": 0,
+    "replay_only_firings": 0,
+    "replay_only_on_replay_warmup_bars": 0
+   },
+   "bracket_on_cofired": {
+    "pairs": 0,
+    "all_three_within_one_tick_rate": null,
+    "entry_rate": null,
+    "stop_rate": null,
+    "target_rate": null,
+    "failing_examples": []
+   },
+   "input_source_mismatch_reason": "as vwap_hold_observed",
+   "spec_verdict_reference": "LIVE_ONLY (spec \u00a72/\u00a76)",
+   "classification": "LIVE_ONLY",
+   "classification_reason": "live=0, replay=0 by construction (env/lane)",
+   "live_only_examples": [],
+   "replay_only_examples": []
+  }
+ },
+ "gate_failures": [
+  "ema_pullback_trend: BOTH \u2014 BRACKET_CONFLICT"
+ ],
+ "inputs": {
+  "live_logs_root": "<local:raw>",
+  "replay_log_dir": "<local:both>",
+  "corpus_root": "<local:replay_polygon_parity_2026_07_16_09_14>",
+  "start": "2026-07-16",
+  "end_ts_exclusive": "2026-09-14T22:00:00+00:00",
+  "live_rows": 7271,
+  "replay_rows": 7841
+ }
+}
