@@ -328,35 +328,70 @@ def cme_equity_index_non_trade_dates(year: int) -> frozenset[date]:
     return frozenset(closed)
 
 
-def cme_trading_day(ts: "int | datetime") -> date:
-    """CME equity-index trade date a bar belongs to (Pine ``time_tradingday``).
+# Products whose daily identity is PROVEN to follow the CME equity-index holiday
+# calendar (Pine fixtures: MES1!/MNQ1!; M2K is the same CME equity-index product
+# group on the same Globex holiday schedule). Every other product (MGC, MCL, MBT,
+# ...) has NO proven exchange calendar here and keeps the pre-C14 mechanical
+# 18:00 ET key — documented UNPROVEN in the tranche-2 prereg — rather than
+# silently inheriting the equity-index calendar.
+CME_EQUITY_INDEX_INSTRUMENTS = frozenset({"MES", "MNQ", "M2K"})
+CALENDAR_CME_EQUITY_INDEX = "cme_equity_index"
 
-    Start from the ET civil date, advanced by one if the bar is at/after the
-    18:00 ET reopen, then move forward to the first weekday that is a trade
-    date (see cme_equity_index_non_trade_dates). This is the single daily
-    identity for replay VWAP, HOD/LOD, PDH/PDL/PDC and daily resampling; the
-    reset happens where THIS key changes, never merely because ET crossed 18:00.
+
+def trading_day_calendar(instrument: str) -> str | None:
+    """Exchange calendar that governs ``instrument``'s daily identity, or None.
+
+    None means "no calendar proven for this product": callers fall back to the
+    mechanical civil key (every 18:00 ET reopen == new day), which is exactly
+    what replay did before C14 for all products.
     """
+    if str(instrument).strip().upper() in CME_EQUITY_INDEX_INSTRUMENTS:
+        return CALENDAR_CME_EQUITY_INDEX
+    return None
+
+
+def _mechanical_1800_day(et: datetime) -> date:
+    """Pre-C14 civil key: the ET date, advanced by one at/after the 18:00 ET reopen."""
     from datetime import time
+    return et.date() + (timedelta(days=1) if et.time() >= time(18, 0) else timedelta(0))
+
+
+def cme_trading_day(ts: "int | datetime", instrument: str) -> date:
+    """Trade date a bar belongs to for ``instrument`` (Pine ``time_tradingday``).
+
+    Equity-index products (trading_day_calendar == "cme_equity_index"): start
+    from the ET civil date, advanced by one if the bar is at/after the 18:00 ET
+    reopen, then move forward to the first weekday that is a trade date (see
+    cme_equity_index_non_trade_dates). This is the single daily identity for
+    replay VWAP, HOD/LOD, PDH/PDL/PDC and daily resampling; the reset happens
+    where THIS key changes, never merely because ET crossed 18:00.
+
+    Any other product: the mechanical civil key, unchanged from before C14
+    (no holiday calendar is applied because none is proven for it).
+    """
     dt = ts_to_dt(ts) if isinstance(ts, int) else ts
     et = dt.astimezone(_ET)
-    day = et.date() + (timedelta(days=1) if et.time() >= time(18, 0) else timedelta(0))
+    day = _mechanical_1800_day(et)
+    if trading_day_calendar(instrument) != CALENDAR_CME_EQUITY_INDEX:
+        return day
     closed = cme_equity_index_non_trade_dates(day.year) | cme_equity_index_non_trade_dates(day.year + 1)
     while day.weekday() >= 5 or day in closed:
         day += timedelta(days=1)
     return day
 
 
-def detect_day_boundaries(bars: list[dict]) -> list[int]:
-    """Return indices where the CME equity-index trade date (cme_trading_day) changes.
+def detect_day_boundaries(bars: list[dict], instrument: str) -> list[int]:
+    """Return indices where the trade date (cme_trading_day for ``instrument``) changes.
 
-    Not every 18:00 ET reopen is a boundary: a holiday's 18:00 reopen continues
-    the same trade date (C14). Ordinary weekday and Sunday reopens are unchanged.
+    For equity-index products not every 18:00 ET reopen is a boundary: a
+    holiday's 18:00 reopen continues the same trade date (C14). Ordinary
+    weekday and Sunday reopens are unchanged; non-equity products keep the
+    mechanical key.
     """
     boundaries = [0]
-    prev_day = cme_trading_day(bars[0]["ts"]) if bars else None
+    prev_day = cme_trading_day(bars[0]["ts"], instrument) if bars else None
     for i in range(1, len(bars)):
-        curr_day = cme_trading_day(bars[i]["ts"])
+        curr_day = cme_trading_day(bars[i]["ts"], instrument)
         if curr_day != prev_day:
             boundaries.append(i)
             prev_day = curr_day
@@ -476,7 +511,7 @@ def convert(
         })
 
     # Detect day boundaries to track prev day high/low/close
-    boundaries = detect_day_boundaries(bars)
+    boundaries = detect_day_boundaries(bars, instrument)
     day_ranges: list[tuple[int, int]] = []
     for i, start in enumerate(boundaries):
         end = boundaries[i + 1] if i + 1 < len(boundaries) else len(bars)

@@ -110,14 +110,15 @@ def resample(bars: list[dict], minutes: int, label: str) -> list[dict]:
     return out
 
 
-def resample_daily(bars: list[dict]) -> list[dict]:
-    """Daily resample on the CME trade date (cme_trading_day — same identity as
-    the VWAP / HOD/LOD / PDH-PDL-PDC day ranges; a holiday's 18:00 ET reopen
-    continues the prior trade date, C14)."""
+def resample_daily(bars: list[dict], instrument: str) -> list[dict]:
+    """Daily resample on the trade date (cme_trading_day for ``instrument`` — the
+    same identity as the VWAP / HOD/LOD / PDH-PDL-PDC day ranges; for equity-
+    index products a holiday's 18:00 ET reopen continues the prior trade date,
+    C14; other products keep the mechanical key)."""
     groups: dict[date, dict] = {}
     order: list[date] = []
     for b in bars:
-        session_day = cme_trading_day(b["ts"])
+        session_day = cme_trading_day(b["ts"], instrument)
         agg = groups.get(session_day)
         if agg is None:
             groups[session_day] = {
@@ -162,9 +163,9 @@ def derive_candles(
 
     one_hour_bars = resample(raw, 60, "1h")
     four_hour_bars = resample(raw, 240, "4h")
-    daily_bars = resample_daily(raw)
+    daily_bars = resample_daily(raw, instrument)
 
-    boundaries = detect_day_boundaries(raw)
+    boundaries = detect_day_boundaries(raw, instrument)
     day_ranges: list[tuple[int, int]] = []
     for i, start in enumerate(boundaries):
         end = boundaries[i + 1] if i + 1 < len(boundaries) else len(raw)
