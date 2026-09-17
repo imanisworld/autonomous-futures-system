@@ -23,8 +23,8 @@ The direct-to-demo path is intentionally narrow. It is available only when:
 - IOC/no-fill behavior, adverse slippage, commission, gap handling and
   pessimistic same-bar resolution are modeled;
 - validation uses an untouched window, multiple months, walk-forward evidence,
-  a pre-registered sample requirement of at least 30 resolved fills, drawdown
-  limits and concentration checks;
+  a pre-registered sample requirement of at least 30 resolved fills in every
+  required validation cell, drawdown limits and concentration checks;
 - a frozen golden-parity fixture set covers no-fill, same-bar ambiguity, gap,
   session-boundary and roll-boundary cases.
 
@@ -41,7 +41,7 @@ from typing import Any
 from ops.project_check import gitutil
 from ops.project_check.promotion import build_promotion_report, load_evidence_facts
 
-MIN_RESOLVED_FILLS = 30
+MIN_RESOLVED_FILLS_PER_CELL = 30
 REQUIRED_SLIPPAGE_STRESS_TICKS = {2, 3}
 DEMO_CLASSIFICATIONS = {"VALIDATED", "PROMISING BUT UNPROVEN"}
 DIRECT_TO_DEMO_ALLOWED_DIFF_PREFIXES = ("strategy/", "tests/", "docs/")
@@ -267,17 +267,21 @@ def _check_validation(evidence: dict[str, Any], blockers: list[str]) -> dict[str
     ):
         _require_true(validation, key, blockers, "validation")
 
-    required = _as_int(validation.get("required_resolved_fills"))
-    actual = _as_int(validation.get("resolved_fills"))
-    if required is None or required < MIN_RESOLVED_FILLS:
+    required_per_cell = _as_int(validation.get("required_resolved_fills_per_cell"))
+    minimum_cell = _as_int(validation.get("minimum_resolved_fills_in_required_cells"))
+    if required_per_cell is None or required_per_cell < MIN_RESOLVED_FILLS_PER_CELL:
         blockers.append(
-            f"validation.required_resolved_fills must be pre-registered at >= {MIN_RESOLVED_FILLS}"
+            "validation.required_resolved_fills_per_cell must be pre-registered at "
+            f">= {MIN_RESOLVED_FILLS_PER_CELL}"
         )
-    if actual is None or actual < 0:
-        blockers.append("validation.resolved_fills must be a non-negative integer")
-    elif required is not None and actual < required:
+    if minimum_cell is None or minimum_cell < 0:
         blockers.append(
-            f"validation.resolved_fills={actual} is below the pre-registered requirement {required}"
+            "validation.minimum_resolved_fills_in_required_cells must be a non-negative integer"
+        )
+    elif required_per_cell is not None and minimum_cell < required_per_cell:
+        blockers.append(
+            "validation.minimum_resolved_fills_in_required_cells="
+            f"{minimum_cell} is below the pre-registered per-cell requirement {required_per_cell}"
         )
     return validation
 
