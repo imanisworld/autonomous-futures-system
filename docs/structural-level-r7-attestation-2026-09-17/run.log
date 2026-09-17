@@ -1,0 +1,35 @@
+===== shadow_setups|MNQ|2025-06-16T00:15:00+00:00|impulse_first_pullback_observed|LONG|21919.75
+ bracket: {"strategy": "impulse_first_pullback_observed", "b0": "2025-06-16T00:15:00+00:00", "firing": {"impulse_up": true, "pullback_down": true, "corpus_trend_direction": "UP"}, "direction": "LONG", "entry": 21919.75, "stop": 21881.5, "target": 21996.25, "rr": 2.0}
+ mtr15 40.5 close 21895.25 session asian n 960
+   H1 {'label': 'NOT_APPLICABLE', 'reason': 'anchor neither swept/reclaimed nor touched', 'anchor': 'PWL'}
+   H2 {'label': 'NOT_APPLICABLE', 'reason': 'no eligible broken MAJOR level (age 2..R, closes held)'}
+   H3 {'label': 'NOT_APPLICABLE', 'reason': 'anchor beyond proximity band', 'anchor': 'PWL'}
+   H4 {'label': 'NOT_APPLICABLE', 'reason': 'anchor neither touched nor within proximity band', 'anchor': 'PWL'}
+   H5 {'label': 'NOT_APPLICABLE', 'reason': 'anchor beyond relevance band', 'anchor': 'PDC_BAR', 'dist_mtr': 1.3333}
+   H6 {'label': 'F', 'opposing': 'LC_ZONE_1H_SUPPLY', 'room_points': 48.25, 'room_R': 1.2614, 'target_rel': 'beyond'}
+ DIFFS: none
+ ROW VERDICT: AGREE
+===== shadow_setups|MNQ|2026-02-04T14:30:00+00:00|strat_22_reversal_observed|SHORT|25333.25
+ bracket: {"strategy": "strat_22_reversal_observed", "b0": "2026-02-04T14:30:00+00:00", "firing": {"prev_bar_type": "2U", "cur_bar_type": "2D", "corpus_prev_high": 25389.25, "corpus_prev_low": 25333.5, "b1_high": 25389.25, "b1_low": 25333.5, "prev_fields_match_b1": true}, "direction": "SHORT", "entry": 25333.25, "stop": 25389.5, "target": 25220.75, "rr": 2.0}
+ mtr15 32.0 close 25333.25 session new_york n 960
+   H1 {'label': 'NOT_APPLICABLE', 'reason': 'anchor neither swept/reclaimed nor touched', 'anchor': 'PWL'}
+   H2 {'label': 'NOT_APPLICABLE', 'reason': 'retested_earlier', 'anchor': 'PWL', 'break_age': 6}
+   H3 {'label': 'NOT_APPLICABLE', 'reason': 'anchor beyond proximity band', 'anchor': 'PWL'}
+   H4 {'label': 'NOT_APPLICABLE', 'reason': 'anchor neither touched nor within proximity band', 'anchor': 'PWL'}
+   H5 {'label': 'NOT_APPLICABLE', 'reason': 'anchor beyond relevance band', 'anchor': 'PWL', 'dist_mtr': 2.0703}
+   H6 {'label': 'F', 'opposing': 'ONL', 'room_points': 8.25, 'room_R': 0.1467, 'target_rel': 'beyond'}
+ DIFFS: none
+ ROW VERDICT: AGREE
+===== shadow_setups|MES|2026-04-10T00:45:00+00:00|ema_pullback_trend|LONG|6864.0
+ bracket: {"strategy": "ema_pullback_trend", "b0": "2026-04-10T00:45:00+00:00", "ema_recomputed": {"ema9": 6858.401538476692, "ema21": 6856.586829562372, "ema55": 6844.213603849497}, "ema_corpus": {"ema_9": 6858.40153847669, "ema_21": 6856.586829562374, "ema_55": 6844.213603849492}, "ema_max_abs_diff": 5.4569682106375694e-12, "firing": {"stack_bull": true, "touched_zone": true, "resumed": true}, "direction": "LONG", "entry": 6864.0, "stop": 6855.5868, "target": 6882.509, "rr": 2.2}
+ mtr15 7.25 close 6864.0 session asian n 960
+   H1 {'label': 'NOT_APPLICABLE', 'reason': 'anchor neither swept/reclaimed nor touched', 'anchor': 'PDL'}
+   H2 {'label': 'NOT_APPLICABLE', 'reason': 'no eligible broken MAJOR level (age 2..R, closes held)'}
+   H3 {'label': 'NOT_APPLICABLE', 'reason': 'anchor beyond proximity band', 'anchor': 'LC_ZONE_1H_DEMAND'}
+   H4 {'label': 'NOT_APPLICABLE', 'reason': 'anchor neither touched nor within proximity band', 'anchor': 'LC_ZONE_1H_DEMAND'}
+   H5 {'label': 'F', 'anchor': 'PDC_BAR', 'cluster': 1}
+   H6 {'label': 'F', 'opposing': 'PDH', 'room_points': 12.0, 'room_R': 1.4263, 'target_rel': 'beyond'}
+ DIFFS: none
+ ROW VERDICT: AGREE
+
+ALL ROWS AGREE: True

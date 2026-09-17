@@ -1,0 +1,23 @@
+{
+ "seed_material": "R7|1bfd7edd3e14ae8c8ea09497b678e69b8f753bbf55ca04fcbd8c9f76c44c0503|eda7cfaf1dc24801b6b94a8e999625a87faefaa9b1c4d577cfcf257d7a84e6b1",
+ "selected": [
+  {
+   "rank": 1,
+   "digest": "00002c632dd56bdb34e8e3eb9a62cdab4c07f2b491dea450b01d2c6280e28a0c",
+   "instrument": "MNQ",
+   "candidate_key": "shadow_setups|MNQ|2026-02-04T14:30:00+00:00|strat_22_reversal_observed|SHORT|25333.25"
+  },
+  {
+   "rank": 2,
+   "digest": "0000b18f6ce00cb125340251d270357cec17a29e5b84c3536c40d3f99f2a1398",
+   "instrument": "MNQ",
+   "candidate_key": "shadow_setups|MNQ|2025-06-16T00:15:00+00:00|impulse_first_pullback_observed|LONG|21919.75"
+  },
+  {
+   "rank": 3,
+   "digest": "0000b381cfd6398926d9b099e4e243557edc6079f74b5703db090225c0ca9f6d",
+   "instrument": "MES",
+   "candidate_key": "shadow_setups|MES|2026-04-10T00:45:00+00:00|ema_pullback_trend|LONG|6864.0"
+  }
+ ]
+}
