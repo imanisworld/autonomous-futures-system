@@ -1,0 +1,1076 @@
+{
+ "tool_version": "slf-parity-v1",
+ "prereg_version": "1.2",
+ "prereg_sha": "fdeac72",
+ "logs_root": "/private/tmp/claude-501/-Users-djb-a-e-MAINVSCODE-autonomous-futures-system/39f94dbd-42bf-4e19-ad07-cb9174590cce/scratchpad/corpus/raw",
+ "start": "2026-07-16",
+ "end_ts": "2026-09-14T22:00:00+00:00",
+ "generated_utc": "2026-09-17T00:34:13+00:00",
+ "pass_threshold_pct": 98.0,
+ "tolerance": "one tick",
+ "stats": {
+  "LDN_ORB.rows_outside_validity": 82,
+  "NY_ORB.rows_not_available": 86,
+  "NY_ORB.rows_outside_validity": 77,
+  "VWAP.rows_with_any_missing_bar_in_day": 704,
+  "rows": 7271,
+  "rows_MES": 3642,
+  "rows_MNQ": 3629,
+  "rows_with_location_context": 7199,
+  "skipped_5m": 892,
+  "skipped_out_of_window": 368
+ },
+ "orb_denominators": {
+  "NY_ORB": {
+   "session_days_with_canonical_bar": 79,
+   "session_days_not_available": 3,
+   "not_available_days_where_runtime_still_had_an_orb": 3,
+   "not_available_days": [
+    "MES:2026-07-17",
+    "MES:2026-08-04",
+    "MNQ:2026-09-02"
+   ]
+  },
+  "LDN_ORB": {
+   "session_days_with_canonical_bar": 82,
+   "session_days_not_available": 0,
+   "not_available_days_where_runtime_still_had_an_orb": 0,
+   "not_available_days": []
+  }
+ },
+ "comparisons": {
+  "LDN_ORB.high": {
+   "compared": 2011,
+   "agree": 2011,
+   "disagree": 0,
+   "pct": 100.0,
+   "journal_missing": 0,
+   "mine_missing": 0,
+   "both_none": 0,
+   "examples": [],
+   "by_gap_flag": {
+    "agree.clean": 2011
+   },
+   "disagree_by_trading_day": {}
+  },
+  "LDN_ORB.low": {
+   "compared": 2011,
+   "agree": 2011,
+   "disagree": 0,
+   "pct": 100.0,
+   "journal_missing": 0,
+   "mine_missing": 0,
+   "both_none": 0,
+   "examples": [],
+   "by_gap_flag": {
+    "agree.clean": 2011
+   },
+   "disagree_by_trading_day": {}
+  },
+  "NY_ORB.high": {
+   "compared": 2150,
+   "agree": 2150,
+   "disagree": 0,
+   "pct": 100.0,
+   "journal_missing": 0,
+   "mine_missing": 0,
+   "both_none": 0,
+   "examples": [],
+   "by_gap_flag": {
+    "agree.clean": 2150
+   },
+   "disagree_by_trading_day": {}
+  },
+  "NY_ORB.low": {
+   "compared": 2150,
+   "agree": 2150,
+   "disagree": 0,
+   "pct": 100.0,
+   "journal_missing": 0,
+   "mine_missing": 0,
+   "both_none": 0,
+   "examples": [],
+   "by_gap_flag": {
+    "agree.clean": 2150
+   },
+   "disagree_by_trading_day": {}
+  },
+  "VWAP": {
+   "compared": 7271,
+   "agree": 6471,
+   "disagree": 800,
+   "pct": 88.997,
+   "journal_missing": 0,
+   "mine_missing": 0,
+   "both_none": 0,
+   "examples": [
+    {
+     "row": "MES@2026-07-16T00:15:00+00:00",
+     "mine": 7618.769661799932,
+     "journal": 7619.6018
+    },
+    {
+     "row": "MES@2026-07-16T00:30:00+00:00",
+     "mine": 7618.5626687068425,
+     "journal": 7619.3824
+    },
+    {
+     "row": "MNQ@2026-07-16T01:15:00+00:00",
+     "mine": 29691.180884394373,
+     "journal": 29686.1279
+    },
+    {
+     "row": "MES@2026-07-16T01:15:00+00:00",
+     "mine": 7617.578501503531,
+     "journal": 7618.2952
+    },
+    {
+     "row": "MNQ@2026-07-16T01:30:00+00:00",
+     "mine": 29684.791786510843,
+     "journal": 29680.6893
+    },
+    {
+     "row": "MNQ@2026-07-16T01:45:00+00:00",
+     "mine": 29681.6738356773,
+     "journal": 29678.1529
+    },
+    {
+     "row": "MES@2026-07-16T01:45:00+00:00",
+     "mine": 7617.237667558789,
+     "journal": 7617.736
+    },
+    {
+     "row": "MNQ@2026-07-16T02:00:00+00:00",
+     "mine": 29679.350332776048,
+     "journal": 29676.1744
+    },
+    {
+     "row": "MES@2026-07-16T02:00:00+00:00",
+     "mine": 7616.927571031582,
+     "journal": 7617.5324
+    },
+    {
+     "row": "MES@2026-07-16T02:15:00+00:00",
+     "mine": 7616.985329825981,
+     "journal": 7617.5352
+    },
+    {
+     "row": "MES@2026-07-16T02:30:00+00:00",
+     "mine": 7617.135166689161,
+     "journal": 7617.6059
+    },
+    {
+     "row": "MNQ@2026-07-16T02:30:00+00:00",
+     "mine": 29679.650300478937,
+     "journal": 29676.7002
+    }
+   ],
+   "by_gap_flag": {
+    "agree.clean": 6425,
+    "disagree.gap_flagged": 402,
+    "disagree.clean": 398,
+    "agree.gap_flagged": 46
+   },
+   "disagree_by_trading_day": {
+    "MES:2026-07-16": "45/66",
+    "MES:2026-07-17": "80/80",
+    "MES:2026-07-23": "29/29",
+    "MES:2026-08-04": "29/91",
+    "MES:2026-08-14": "44/72",
+    "MES:2026-09-04": "50/91",
+    "MES:2026-09-08": "92/92",
+    "MNQ:2026-07-16": "47/52",
+    "MNQ:2026-07-17": "79/81",
+    "MNQ:2026-07-23": "29/29",
+    "MNQ:2026-08-14": "66/73",
+    "MNQ:2026-09-02": "28/90",
+    "MNQ:2026-09-04": "90/91",
+    "MNQ:2026-09-08": "92/92"
+   }
+  },
+  "loc.MTR15": {
+   "compared": 7199,
+   "agree": 7199,
+   "disagree": 0,
+   "pct": 100.0,
+   "journal_missing": 0,
+   "mine_missing": 0,
+   "both_none": 0,
+   "examples": [],
+   "by_gap_flag": {
+    "agree.n/a": 7199
+   },
+   "disagree_by_trading_day": {}
+  },
+  "loc.ONH": {
+   "compared": 5337,
+   "agree": 5337,
+   "disagree": 0,
+   "pct": 100.0,
+   "journal_missing": 1862,
+   "mine_missing": 0,
+   "both_none": 0,
+   "examples": [],
+   "by_gap_flag": {
+    "agree.gap_flagged": 370,
+    "agree.clean": 4967
+   },
+   "disagree_by_trading_day": {}
+  },
+  "loc.ONL": {
+   "compared": 5337,
+   "agree": 5337,
+   "disagree": 0,
+   "pct": 100.0,
+   "journal_missing": 1862,
+   "mine_missing": 0,
+   "both_none": 0,
+   "examples": [],
+   "by_gap_flag": {
+    "agree.gap_flagged": 370,
+    "agree.clean": 4967
+   },
+   "disagree_by_trading_day": {}
+  },
+  "loc.PDC": {
+   "compared": 7199,
+   "agree": 7199,
+   "disagree": 0,
+   "pct": 100.0,
+   "journal_missing": 0,
+   "mine_missing": 0,
+   "both_none": 0,
+   "examples": [],
+   "by_gap_flag": {
+    "agree.gap_flagged": 1127,
+    "agree.clean": 6072
+   },
+   "disagree_by_trading_day": {}
+  },
+  "loc.PDH": {
+   "compared": 7199,
+   "agree": 7199,
+   "disagree": 0,
+   "pct": 100.0,
+   "journal_missing": 0,
+   "mine_missing": 0,
+   "both_none": 0,
+   "examples": [],
+   "by_gap_flag": {
+    "agree.gap_flagged": 1127,
+    "agree.clean": 6072
+   },
+   "disagree_by_trading_day": {}
+  },
+  "loc.PDL": {
+   "compared": 7199,
+   "agree": 7199,
+   "disagree": 0,
+   "pct": 100.0,
+   "journal_missing": 0,
+   "mine_missing": 0,
+   "both_none": 0,
+   "examples": [],
+   "by_gap_flag": {
+    "agree.gap_flagged": 1127,
+    "agree.clean": 6072
+   },
+   "disagree_by_trading_day": {}
+  },
+  "loc.PMH": {
+   "compared": 4058,
+   "agree": 4058,
+   "disagree": 0,
+   "pct": 100.0,
+   "journal_missing": 0,
+   "mine_missing": 0,
+   "both_none": 3141,
+   "examples": [],
+   "by_gap_flag": {
+    "agree.n/a": 4058
+   },
+   "disagree_by_trading_day": {}
+  },
+  "loc.PML": {
+   "compared": 4058,
+   "agree": 4058,
+   "disagree": 0,
+   "pct": 100.0,
+   "journal_missing": 0,
+   "mine_missing": 0,
+   "both_none": 3141,
+   "examples": [],
+   "by_gap_flag": {
+    "agree.n/a": 4058
+   },
+   "disagree_by_trading_day": {}
+  },
+  "pine.PDC_daily_close": {
+   "compared": 7271,
+   "agree": 92,
+   "disagree": 7179,
+   "pct": 1.265,
+   "journal_missing": 0,
+   "mine_missing": 0,
+   "both_none": 0,
+   "examples": [
+    {
+     "row": "MNQ@2026-07-15T23:45:00+00:00",
+     "mine": 29708.0,
+     "journal": 29693.25
+    },
+    {
+     "row": "MNQ@2026-07-16T00:00:00+00:00",
+     "mine": 29708.0,
+     "journal": 29693.25
+    },
+    {
+     "row": "MNQ@2026-07-16T00:15:00+00:00",
+     "mine": 29708.0,
+     "journal": 29693.25
+    },
+    {
+     "row": "MES@2026-07-16T00:15:00+00:00",
+     "mine": 7615.75,
+     "journal": 7614.75
+    },
+    {
+     "row": "MNQ@2026-07-16T00:30:00+00:00",
+     "mine": 29708.0,
+     "journal": 29693.25
+    },
+    {
+     "row": "MES@2026-07-16T00:30:00+00:00",
+     "mine": 7615.75,
+     "journal": 7614.75
+    },
+    {
+     "row": "MNQ@2026-07-16T00:45:00+00:00",
+     "mine": 29708.0,
+     "journal": 29693.25
+    },
+    {
+     "row": "MNQ@2026-07-16T01:15:00+00:00",
+     "mine": 29708.0,
+     "journal": 29693.25
+    },
+    {
+     "row": "MES@2026-07-16T01:15:00+00:00",
+     "mine": 7615.75,
+     "journal": 7614.75
+    },
+    {
+     "row": "MNQ@2026-07-16T01:30:00+00:00",
+     "mine": 29708.0,
+     "journal": 29693.25
+    },
+    {
+     "row": "MNQ@2026-07-16T01:45:00+00:00",
+     "mine": 29708.0,
+     "journal": 29693.25
+    },
+    {
+     "row": "MES@2026-07-16T01:45:00+00:00",
+     "mine": 7615.75,
+     "journal": 7614.75
+    }
+   ],
+   "by_gap_flag": {
+    "disagree.n/a": 7179,
+    "agree.n/a": 92
+   },
+   "disagree_by_trading_day": {}
+  },
+  "pine.PDH": {
+   "compared": 7271,
+   "agree": 6586,
+   "disagree": 685,
+   "pct": 90.579,
+   "journal_missing": 0,
+   "mine_missing": 0,
+   "both_none": 0,
+   "examples": [
+    {
+     "row": "MNQ@2026-07-15T23:45:00+00:00",
+     "mine": 30050.0,
+     "journal": 30062.5
+    },
+    {
+     "row": "MNQ@2026-07-16T00:00:00+00:00",
+     "mine": 30050.0,
+     "journal": 30062.5
+    },
+    {
+     "row": "MNQ@2026-07-16T00:15:00+00:00",
+     "mine": 30050.0,
+     "journal": 30062.5
+    },
+    {
+     "row": "MNQ@2026-07-16T00:30:00+00:00",
+     "mine": 30050.0,
+     "journal": 30062.5
+    },
+    {
+     "row": "MNQ@2026-07-16T00:45:00+00:00",
+     "mine": 30050.0,
+     "journal": 30062.5
+    },
+    {
+     "row": "MNQ@2026-07-16T01:15:00+00:00",
+     "mine": 30050.0,
+     "journal": 30062.5
+    },
+    {
+     "row": "MNQ@2026-07-16T01:30:00+00:00",
+     "mine": 30050.0,
+     "journal": 30062.5
+    },
+    {
+     "row": "MNQ@2026-07-16T01:45:00+00:00",
+     "mine": 30050.0,
+     "journal": 30062.5
+    },
+    {
+     "row": "MNQ@2026-07-16T02:00:00+00:00",
+     "mine": 30050.0,
+     "journal": 30062.5
+    },
+    {
+     "row": "MNQ@2026-07-16T02:30:00+00:00",
+     "mine": 30050.0,
+     "journal": 30062.5
+    },
+    {
+     "row": "MNQ@2026-07-16T02:45:00+00:00",
+     "mine": 30050.0,
+     "journal": 30062.5
+    },
+    {
+     "row": "MNQ@2026-07-16T03:00:00+00:00",
+     "mine": 30050.0,
+     "journal": 30062.5
+    }
+   ],
+   "by_gap_flag": {
+    "disagree.n/a": 685,
+    "agree.n/a": 6586
+   },
+   "disagree_by_trading_day": {}
+  },
+  "pine.PDL": {
+   "compared": 7271,
+   "agree": 6811,
+   "disagree": 460,
+   "pct": 93.673,
+   "journal_missing": 0,
+   "mine_missing": 0,
+   "both_none": 0,
+   "examples": [
+    {
+     "row": "MES@2026-07-19T22:00:00+00:00",
+     "mine": 7474.75,
+     "journal": 7473.0
+    },
+    {
+     "row": "MES@2026-07-19T22:15:00+00:00",
+     "mine": 7474.75,
+     "journal": 7473.0
+    },
+    {
+     "row": "MES@2026-07-19T22:30:00+00:00",
+     "mine": 7474.75,
+     "journal": 7473.0
+    },
+    {
+     "row": "MES@2026-07-19T22:45:00+00:00",
+     "mine": 7474.75,
+     "journal": 7473.0
+    },
+    {
+     "row": "MES@2026-07-19T23:00:00+00:00",
+     "mine": 7474.75,
+     "journal": 7473.0
+    },
+    {
+     "row": "MES@2026-07-19T23:15:00+00:00",
+     "mine": 7474.75,
+     "journal": 7473.0
+    },
+    {
+     "row": "MES@2026-07-19T23:30:00+00:00",
+     "mine": 7474.75,
+     "journal": 7473.0
+    },
+    {
+     "row": "MES@2026-07-19T23:45:00+00:00",
+     "mine": 7474.75,
+     "journal": 7473.0
+    },
+    {
+     "row": "MES@2026-07-20T00:00:00+00:00",
+     "mine": 7474.75,
+     "journal": 7473.0
+    },
+    {
+     "row": "MES@2026-07-20T00:15:00+00:00",
+     "mine": 7474.75,
+     "journal": 7473.0
+    },
+    {
+     "row": "MES@2026-07-20T00:30:00+00:00",
+     "mine": 7474.75,
+     "journal": 7473.0
+    },
+    {
+     "row": "MES@2026-07-20T00:45:00+00:00",
+     "mine": 7474.75,
+     "journal": 7473.0
+    }
+   ],
+   "by_gap_flag": {
+    "agree.n/a": 6811,
+    "disagree.n/a": 460
+   },
+   "disagree_by_trading_day": {}
+  },
+  "wall.HOD": {
+   "compared": 7271,
+   "agree": 7008,
+   "disagree": 263,
+   "pct": 96.383,
+   "journal_missing": 0,
+   "mine_missing": 0,
+   "both_none": 0,
+   "examples": [
+    {
+     "row": "MNQ@2026-07-16T05:45:00+00:00",
+     "mine": 29776.0,
+     "journal": 29796.5
+    },
+    {
+     "row": "MNQ@2026-07-16T06:30:00+00:00",
+     "mine": 29776.0,
+     "journal": 29796.5
+    },
+    {
+     "row": "MNQ@2026-07-16T06:45:00+00:00",
+     "mine": 29776.0,
+     "journal": 29796.5
+    },
+    {
+     "row": "MNQ@2026-07-16T07:00:00+00:00",
+     "mine": 29776.0,
+     "journal": 29796.5
+    },
+    {
+     "row": "MNQ@2026-07-16T07:30:00+00:00",
+     "mine": 29776.0,
+     "journal": 29796.5
+    },
+    {
+     "row": "MNQ@2026-07-16T07:45:00+00:00",
+     "mine": 29776.0,
+     "journal": 29796.5
+    },
+    {
+     "row": "MNQ@2026-07-16T08:45:00+00:00",
+     "mine": 29776.0,
+     "journal": 29796.5
+    },
+    {
+     "row": "MNQ@2026-07-16T09:30:00+00:00",
+     "mine": 29776.0,
+     "journal": 29796.5
+    },
+    {
+     "row": "MNQ@2026-07-16T09:45:00+00:00",
+     "mine": 29776.0,
+     "journal": 29796.5
+    },
+    {
+     "row": "MNQ@2026-07-16T10:15:00+00:00",
+     "mine": 29776.0,
+     "journal": 29796.5
+    },
+    {
+     "row": "MNQ@2026-07-16T10:30:00+00:00",
+     "mine": 29776.0,
+     "journal": 29796.5
+    },
+    {
+     "row": "MNQ@2026-07-16T10:45:00+00:00",
+     "mine": 29776.0,
+     "journal": 29796.5
+    }
+   ],
+   "by_gap_flag": {
+    "agree.clean": 6708,
+    "agree.gap_flagged": 300,
+    "disagree.gap_flagged": 148,
+    "disagree.clean": 115
+   },
+   "disagree_by_trading_day": {
+    "MES:2026-07-17": "80/80",
+    "MES:2026-08-14": "20/72",
+    "MES:2026-09-08": "92/92",
+    "MNQ:2026-07-16": "34/52",
+    "MNQ:2026-08-14": "18/73",
+    "MNQ:2026-09-02": "3/90",
+    "MNQ:2026-09-04": "2/91",
+    "MNQ:2026-09-08": "14/92"
+   }
+  },
+  "wall.LOD": {
+   "compared": 7271,
+   "agree": 7034,
+   "disagree": 237,
+   "pct": 96.74,
+   "journal_missing": 0,
+   "mine_missing": 0,
+   "both_none": 0,
+   "examples": [
+    {
+     "row": "MNQ@2026-07-16T08:45:00+00:00",
+     "mine": 29548.5,
+     "journal": 29478.0
+    },
+    {
+     "row": "MNQ@2026-07-16T09:30:00+00:00",
+     "mine": 29548.5,
+     "journal": 29478.0
+    },
+    {
+     "row": "MNQ@2026-07-16T09:45:00+00:00",
+     "mine": 29527.5,
+     "journal": 29478.0
+    },
+    {
+     "row": "MNQ@2026-07-16T10:15:00+00:00",
+     "mine": 29510.75,
+     "journal": 29478.0
+    },
+    {
+     "row": "MNQ@2026-07-16T10:30:00+00:00",
+     "mine": 29510.0,
+     "journal": 29478.0
+    },
+    {
+     "row": "MNQ@2026-07-16T10:45:00+00:00",
+     "mine": 29502.75,
+     "journal": 29478.0
+    },
+    {
+     "row": "MNQ@2026-07-16T12:00:00+00:00",
+     "mine": 29392.75,
+     "journal": 29353.5
+    },
+    {
+     "row": "MES@2026-07-16T12:00:00+00:00",
+     "mine": 7588.5,
+     "journal": 7580.5
+    },
+    {
+     "row": "MNQ@2026-07-16T12:15:00+00:00",
+     "mine": 29378.0,
+     "journal": 29353.5
+    },
+    {
+     "row": "MES@2026-07-16T12:15:00+00:00",
+     "mine": 7584.0,
+     "journal": 7580.5
+    },
+    {
+     "row": "MNQ@2026-07-16T12:30:00+00:00",
+     "mine": 29365.5,
+     "journal": 29353.5
+    },
+    {
+     "row": "MNQ@2026-07-16T12:45:00+00:00",
+     "mine": 29363.25,
+     "journal": 29353.5
+    }
+   ],
+   "by_gap_flag": {
+    "agree.clean": 6690,
+    "agree.gap_flagged": 344,
+    "disagree.gap_flagged": 104,
+    "disagree.clean": 133
+   },
+   "disagree_by_trading_day": {
+    "MES:2026-07-16": "3/66",
+    "MES:2026-07-17": "34/80",
+    "MES:2026-08-14": "11/72",
+    "MES:2026-09-04": "56/91",
+    "MES:2026-09-08": "2/92",
+    "MNQ:2026-07-16": "10/52",
+    "MNQ:2026-07-17": "3/81",
+    "MNQ:2026-08-14": "44/73",
+    "MNQ:2026-09-04": "69/91",
+    "MNQ:2026-09-08": "5/92"
+   }
+  },
+  "wall.PWH": {
+   "compared": 7271,
+   "agree": 6990,
+   "disagree": 281,
+   "pct": 96.135,
+   "journal_missing": 0,
+   "mine_missing": 0,
+   "both_none": 0,
+   "examples": [
+    {
+     "row": "MNQ@2026-07-19T22:00:00+00:00",
+     "mine": 30050.0,
+     "journal": 30062.5
+    },
+    {
+     "row": "MNQ@2026-07-19T22:15:00+00:00",
+     "mine": 30050.0,
+     "journal": 30062.5
+    },
+    {
+     "row": "MNQ@2026-07-19T22:30:00+00:00",
+     "mine": 30050.0,
+     "journal": 30062.5
+    },
+    {
+     "row": "MNQ@2026-07-19T22:45:00+00:00",
+     "mine": 30050.0,
+     "journal": 30062.5
+    },
+    {
+     "row": "MNQ@2026-07-19T23:00:00+00:00",
+     "mine": 30050.0,
+     "journal": 30062.5
+    },
+    {
+     "row": "MNQ@2026-07-19T23:15:00+00:00",
+     "mine": 30050.0,
+     "journal": 30062.5
+    },
+    {
+     "row": "MNQ@2026-07-19T23:30:00+00:00",
+     "mine": 30050.0,
+     "journal": 30062.5
+    },
+    {
+     "row": "MNQ@2026-07-19T23:45:00+00:00",
+     "mine": 30050.0,
+     "journal": 30062.5
+    },
+    {
+     "row": "MNQ@2026-07-20T00:00:00+00:00",
+     "mine": 30050.0,
+     "journal": 30062.5
+    },
+    {
+     "row": "MNQ@2026-07-20T00:15:00+00:00",
+     "mine": 30050.0,
+     "journal": 30062.5
+    },
+    {
+     "row": "MNQ@2026-07-20T00:30:00+00:00",
+     "mine": 30050.0,
+     "journal": 30062.5
+    },
+    {
+     "row": "MNQ@2026-07-20T00:45:00+00:00",
+     "mine": 30050.0,
+     "journal": 30062.5
+    }
+   ],
+   "by_gap_flag": {
+    "agree.gap_flagged": 3829,
+    "disagree.gap_flagged": 281,
+    "agree.clean": 3161
+   },
+   "disagree_by_trading_day": {
+    "MNQ:2026-07-20": "92/92",
+    "MNQ:2026-07-21": "68/68",
+    "MNQ:2026-07-23": "29/29",
+    "MNQ:2026-07-24": "92/92"
+   }
+  },
+  "wall.PWL": {
+   "compared": 7271,
+   "agree": 6989,
+   "disagree": 282,
+   "pct": 96.122,
+   "journal_missing": 0,
+   "mine_missing": 0,
+   "both_none": 0,
+   "examples": [
+    {
+     "row": "MES@2026-07-19T22:00:00+00:00",
+     "mine": 7474.75,
+     "journal": 7473.0
+    },
+    {
+     "row": "MES@2026-07-19T22:15:00+00:00",
+     "mine": 7474.75,
+     "journal": 7473.0
+    },
+    {
+     "row": "MES@2026-07-19T22:30:00+00:00",
+     "mine": 7474.75,
+     "journal": 7473.0
+    },
+    {
+     "row": "MES@2026-07-19T22:45:00+00:00",
+     "mine": 7474.75,
+     "journal": 7473.0
+    },
+    {
+     "row": "MES@2026-07-19T23:00:00+00:00",
+     "mine": 7474.75,
+     "journal": 7473.0
+    },
+    {
+     "row": "MES@2026-07-19T23:15:00+00:00",
+     "mine": 7474.75,
+     "journal": 7473.0
+    },
+    {
+     "row": "MES@2026-07-19T23:30:00+00:00",
+     "mine": 7474.75,
+     "journal": 7473.0
+    },
+    {
+     "row": "MES@2026-07-19T23:45:00+00:00",
+     "mine": 7474.75,
+     "journal": 7473.0
+    },
+    {
+     "row": "MES@2026-07-20T00:00:00+00:00",
+     "mine": 7474.75,
+     "journal": 7473.0
+    },
+    {
+     "row": "MES@2026-07-20T00:15:00+00:00",
+     "mine": 7474.75,
+     "journal": 7473.0
+    },
+    {
+     "row": "MES@2026-07-20T00:30:00+00:00",
+     "mine": 7474.75,
+     "journal": 7473.0
+    },
+    {
+     "row": "MES@2026-07-20T00:45:00+00:00",
+     "mine": 7474.75,
+     "journal": 7473.0
+    }
+   ],
+   "by_gap_flag": {
+    "agree.gap_flagged": 3828,
+    "disagree.gap_flagged": 282,
+    "agree.clean": 3161
+   },
+   "disagree_by_trading_day": {
+    "MES:2026-07-20": "92/92",
+    "MES:2026-07-21": "69/69",
+    "MES:2026-07-23": "29/29",
+    "MES:2026-07-24": "92/92"
+   }
+  },
+  "zone.1h.demand": {
+   "compared": 5530,
+   "agree": 5530,
+   "disagree": 0,
+   "pct": 100.0,
+   "journal_missing": 0,
+   "mine_missing": 0,
+   "both_none": 1669,
+   "examples": [],
+   "by_gap_flag": {
+    "agree.n/a": 5530
+   },
+   "disagree_by_trading_day": {}
+  },
+  "zone.1h.supply": {
+   "compared": 6563,
+   "agree": 6563,
+   "disagree": 0,
+   "pct": 100.0,
+   "journal_missing": 0,
+   "mine_missing": 0,
+   "both_none": 636,
+   "examples": [],
+   "by_gap_flag": {
+    "agree.n/a": 6563
+   },
+   "disagree_by_trading_day": {}
+  },
+  "zone.4h.demand": {
+   "compared": 4800,
+   "agree": 4783,
+   "disagree": 17,
+   "pct": 99.646,
+   "journal_missing": 18,
+   "mine_missing": 0,
+   "both_none": 2381,
+   "examples": [
+    {
+     "row": "MNQ@2026-07-30T15:15:00+00:00",
+     "mine": "27745.0/27337.0/t0/2026-07-30T08:00:00+00:00",
+     "journal": "27547.25/27351.75/t0/2026-07-30T04:00:00+00:00"
+    },
+    {
+     "row": "MNQ@2026-08-12T04:00:00+00:00",
+     "mine": "29246.0/29007.5/t1/2026-08-04T08:00:00+00:00",
+     "journal": "29697.0/29185.0/t20/2026-08-04T12:00:00+00:00"
+    },
+    {
+     "row": "MNQ@2026-08-12T04:15:00+00:00",
+     "mine": "29246.0/29007.5/t1/2026-08-04T08:00:00+00:00",
+     "journal": "29697.0/29185.0/t20/2026-08-04T12:00:00+00:00"
+    },
+    {
+     "row": "MNQ@2026-08-12T04:30:00+00:00",
+     "mine": "29246.0/29007.5/t1/2026-08-04T08:00:00+00:00",
+     "journal": "29697.0/29185.0/t20/2026-08-04T12:00:00+00:00"
+    },
+    {
+     "row": "MNQ@2026-08-12T04:45:00+00:00",
+     "mine": "29246.0/29007.5/t1/2026-08-04T08:00:00+00:00",
+     "journal": "29697.0/29185.0/t20/2026-08-04T12:00:00+00:00"
+    },
+    {
+     "row": "MNQ@2026-08-12T05:00:00+00:00",
+     "mine": "29246.0/29007.5/t1/2026-08-04T08:00:00+00:00",
+     "journal": "29697.0/29185.0/t20/2026-08-04T12:00:00+00:00"
+    },
+    {
+     "row": "MNQ@2026-08-12T05:15:00+00:00",
+     "mine": "29246.0/29007.5/t1/2026-08-04T08:00:00+00:00",
+     "journal": "29697.0/29185.0/t20/2026-08-04T12:00:00+00:00"
+    },
+    {
+     "row": "MNQ@2026-08-12T05:30:00+00:00",
+     "mine": "29246.0/29007.5/t1/2026-08-04T08:00:00+00:00",
+     "journal": "29697.0/29185.0/t20/2026-08-04T12:00:00+00:00"
+    },
+    {
+     "row": "MNQ@2026-08-12T05:45:00+00:00",
+     "mine": "29246.0/29007.5/t1/2026-08-04T08:00:00+00:00",
+     "journal": "29697.0/29185.0/t20/2026-08-04T12:00:00+00:00"
+    },
+    {
+     "row": "MNQ@2026-08-12T06:00:00+00:00",
+     "mine": "29246.0/29007.5/t1/2026-08-04T08:00:00+00:00",
+     "journal": "29697.0/29185.0/t20/2026-08-04T12:00:00+00:00"
+    },
+    {
+     "row": "MNQ@2026-08-12T06:15:00+00:00",
+     "mine": "29246.0/29007.5/t1/2026-08-04T08:00:00+00:00",
+     "journal": "29697.0/29185.0/t20/2026-08-04T12:00:00+00:00"
+    },
+    {
+     "row": "MNQ@2026-08-12T06:30:00+00:00",
+     "mine": "29246.0/29007.5/t1/2026-08-04T08:00:00+00:00",
+     "journal": "29697.0/29185.0/t20/2026-08-04T12:00:00+00:00"
+    }
+   ],
+   "by_gap_flag": {
+    "agree.n/a": 4783,
+    "disagree.n/a": 17
+   },
+   "disagree_by_trading_day": {}
+  },
+  "zone.4h.supply": {
+   "compared": 5831,
+   "agree": 5796,
+   "disagree": 35,
+   "pct": 99.4,
+   "journal_missing": 0,
+   "mine_missing": 0,
+   "both_none": 1368,
+   "examples": [
+    {
+     "row": "MNQ@2026-07-17T10:00:00+00:00",
+     "mine": "29106.5/28893.75/t0/2026-07-17T00:45:00+00:00",
+     "journal": "29952.5/29871.75/t0/2026-07-15T08:15:00+00:00"
+    },
+    {
+     "row": "MNQ@2026-07-17T10:15:00+00:00",
+     "mine": "29106.5/28893.75/t0/2026-07-17T00:45:00+00:00",
+     "journal": "29952.5/29871.75/t0/2026-07-15T08:15:00+00:00"
+    },
+    {
+     "row": "MNQ@2026-07-17T10:30:00+00:00",
+     "mine": "29106.5/28893.75/t0/2026-07-17T00:45:00+00:00",
+     "journal": "29952.5/29871.75/t0/2026-07-15T08:15:00+00:00"
+    },
+    {
+     "row": "MNQ@2026-07-17T10:45:00+00:00",
+     "mine": "29106.5/28893.75/t0/2026-07-17T00:45:00+00:00",
+     "journal": "29952.5/29871.75/t0/2026-07-15T08:15:00+00:00"
+    },
+    {
+     "row": "MNQ@2026-07-17T11:00:00+00:00",
+     "mine": "29106.5/28893.75/t0/2026-07-17T00:45:00+00:00",
+     "journal": "29952.5/29871.75/t0/2026-07-15T08:15:00+00:00"
+    },
+    {
+     "row": "MNQ@2026-07-17T11:15:00+00:00",
+     "mine": "29106.5/28893.75/t0/2026-07-17T00:45:00+00:00",
+     "journal": "29952.5/29871.75/t0/2026-07-15T08:15:00+00:00"
+    },
+    {
+     "row": "MNQ@2026-07-17T11:30:00+00:00",
+     "mine": "29106.5/28893.75/t0/2026-07-17T00:45:00+00:00",
+     "journal": "29952.5/29871.75/t0/2026-07-15T08:15:00+00:00"
+    },
+    {
+     "row": "MNQ@2026-07-17T11:45:00+00:00",
+     "mine": "29106.5/28893.75/t0/2026-07-17T00:45:00+00:00",
+     "journal": "29952.5/29871.75/t0/2026-07-15T08:15:00+00:00"
+    },
+    {
+     "row": "MNQ@2026-07-19T23:45:00+00:00",
+     "mine": "29952.5/29871.75/t0/2026-07-15T08:15:00+00:00",
+     "journal": "29106.5/28893.75/t2/2026-07-17T00:45:00+00:00"
+    },
+    {
+     "row": "MNQ@2026-07-20T01:30:00+00:00",
+     "mine": "29952.5/29871.75/t0/2026-07-15T08:15:00+00:00",
+     "journal": "29106.5/28893.75/t3/2026-07-17T00:45:00+00:00"
+    },
+    {
+     "row": "MNQ@2026-07-29T02:00:00+00:00",
+     "mine": "28105.0/27731.5/t0/2026-07-28T22:00:00+00:00",
+     "journal": "28763.75/28645.75/t0/2026-07-27T08:00:00+00:00"
+    },
+    {
+     "row": "MNQ@2026-07-29T02:45:00+00:00",
+     "mine": "28105.0/27731.5/t0/2026-07-28T22:00:00+00:00",
+     "journal": "28763.75/28645.75/t0/2026-07-27T08:00:00+00:00"
+    }
+   ],
+   "by_gap_flag": {
+    "agree.n/a": 5796,
+    "disagree.n/a": 35
+   },
+   "disagree_by_trading_day": {}
+  }
+ },
+ "admitted_level_verdicts": {
+  "PDH": "PASS 100.0% of 7199",
+  "PDL": "PASS 100.0% of 7199",
+  "PDC": "PASS 100.0% of 7199",
+  "ONH": "PASS 100.0% of 5337",
+  "ONL": "PASS 100.0% of 5337",
+  "NY ORB high": "PASS 100.0% of 2150",
+  "NY ORB low": "PASS 100.0% of 2150",
+  "London ORB high": "PASS 100.0% of 2011",
+  "London ORB low": "PASS 100.0% of 2011",
+  "VWAP": "FAIL 88.997% of 7271",
+  "PWH": "FAIL 96.135% of 7271",
+  "PWL": "FAIL 96.122% of 7271",
+  "LC_ZONE 1H supply": "PASS 100.0% of 6563",
+  "LC_ZONE 1H demand": "PASS 100.0% of 5530",
+  "LC_ZONE 4H supply": "PASS 99.4% of 5831",
+  "LC_ZONE 4H demand": "PASS 99.646% of 4800"
+ },
+ "overall": "FAIL"
+}
