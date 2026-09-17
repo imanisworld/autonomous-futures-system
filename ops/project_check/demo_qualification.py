@@ -110,10 +110,13 @@ def _check_change_scope(root: Path, evidence: dict[str, Any], blockers: list[str
     base_sha = str(scope.get("base_sha") or "").strip()
     current_head = gitutil.head_sha(root)
     changed_files: list[str] = []
+    strategy_files: list[str] = []
     non_strategy_scope_files: list[str] = []
     if current_head is None:
         blockers.append("change_scope current repository HEAD could not be resolved")
     elif base_sha:
+        if base_sha == current_head:
+            blockers.append("change_scope.base_sha must be the pre-change commit, not current HEAD")
         out, error = gitutil.run_git(
             [
                 "diff",
@@ -131,6 +134,11 @@ def _check_change_scope(root: Path, evidence: dict[str, Any], blockers: list[str
             )
         else:
             changed_files = [line.strip() for line in out.splitlines() if line.strip()]
+            if not changed_files:
+                blockers.append("change_scope base_sha...HEAD diff is empty; no strategy change is proven")
+            strategy_files = [path for path in changed_files if path.startswith("strategy/")]
+            if not strategy_files:
+                blockers.append("change_scope diff contains no strategy/ file")
             non_strategy_scope_files = [
                 path
                 for path in changed_files
@@ -145,6 +153,7 @@ def _check_change_scope(root: Path, evidence: dict[str, Any], blockers: list[str
         **scope,
         "current_head": current_head,
         "changed_files": changed_files,
+        "strategy_files": strategy_files,
         "non_strategy_scope_files": non_strategy_scope_files,
     }
 
@@ -355,6 +364,7 @@ def build_demo_qualification_report(
             "long_internal_paper_phase_waived": False,
             "fallback_to_existing_validation_path": True,
             "runtime_release_reconciliation_required": True,
+            "demo_forward_validation_required": True,
             "live_trading_authorized": False,
         }
 
@@ -410,6 +420,7 @@ def build_demo_qualification_report(
         "long_internal_paper_phase_waived": gate_pass,
         "fallback_to_existing_validation_path": not gate_pass,
         "runtime_release_reconciliation_required": True,
+        "demo_forward_validation_required": True,
         "live_trading_authorized": False,
         "verdict": "DEMO_EVIDENCE_ELIGIBLE" if gate_pass else "BLOCKED",
         "safety_boundary": (
