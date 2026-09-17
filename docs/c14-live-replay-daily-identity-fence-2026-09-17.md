@@ -1,6 +1,6 @@
 # C14 — Live/replay daily-identity divergence fence — 2026-09-17
 
-**Status:** AUDIT RECORD for PR #646. Documents every runtime consumer of a mechanical
+**Status:** AUDIT RECORD for PR #646 (merged 2026-09-17 as `bfcfc5209a8b345d980e758352b34e98f074e704`; C14 = PASS / FIXED OFFLINE, not deployed). Documents every runtime consumer of a mechanical
 "18:00 ET == new day" key that this PR deliberately leaves untouched, what it can and cannot
 affect, and the evidence restriction that applies until a separately authorized runtime PR
 unifies it. No runtime, execution, risk, broker, strategy, env, deploy or merge change.
@@ -68,8 +68,9 @@ memory already carries the related roll-contamination note for this lane.
 
 ## 4. Execution restriction until parity is repaired
 
-- Runtime is `SCHEDULE_MODE=always_on_shadow` + `EXIT_MODE=static` (paper/shadow, no orders) and the
-  standing directive forbids runtime changes before 2026-09-30; nothing in this PR relaxes that.
+- Runtime is paper/shadow only (no live orders). Runtime changes ship only through the sanctioned
+  controlled-release process (exact-head CI, operator go, `afs-deploy.sh --release`); #646 is not part
+  of any release and does not change that posture.
 - Live signal PDH/PDL/VWAP/HOD/LOD are Pine-sourced, so **no signal-path restriction is needed** for
   holiday rows — the divergence is confined to observation fields.
 - **Evidence restriction (binding for reviews using `location_context.levels` / `nearest_key_level`):**
