@@ -16,7 +16,7 @@ import bisect
 import csv
 import json
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -266,18 +266,100 @@ def first_value(row: dict, *names: str, default: str = "") -> str:
             return str(value).strip()
     return default
 
-def detect_day_boundaries(bars: list[dict]) -> list[int]:
-    """Return indices where the CME equity-futures trading day rolls at 18:00 ET."""
-    boundaries = [0]
+
+def _nth_weekday(year: int, month: int, weekday: int, occurrence: int) -> date:
+    first = date(year, month, 1)
+    return first + timedelta(days=(weekday - first.weekday()) % 7 + 7 * (occurrence - 1))
+
+
+def _last_weekday(year: int, month: int, weekday: int) -> date:
+    next_month = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
+    candidate = next_month - timedelta(days=1)
+    return candidate - timedelta(days=(candidate.weekday() - weekday) % 7)
+
+
+def _observed_fixed_holiday(year: int, month: int, day: int) -> date:
+    holiday = date(year, month, day)
+    if holiday.weekday() == 5:
+        return holiday - timedelta(days=1)
+    if holiday.weekday() == 6:
+        return holiday + timedelta(days=1)
+    return holiday
+
+
+def cme_equity_index_non_trade_dates(year: int) -> frozenset[date]:
+    """Civil dates that are NOT a CME equity-index futures trade date (C14).
+
+    CME assigns a holiday's sessions to the FOLLOWING business trade date: the
+    Sunday/eve 18:00 ET open, the holiday's 13:00 ET halt and the holiday's
+    18:00 ET reopen all belong to one trade date (e.g. Labor Day 2026: Sun
+    09-06 18:00 → Tue 09-08 17:00 is trade date 09-08). TradingView's daily bar
+    (``time("D")`` / ``time_tradingday``), native ``ta.vwap`` and HOD/LOD all
+    follow that identity, so an unconditional "18:00 ET == new day" rule
+    resets one day too many around every such holiday.
+
+    Rule-generated (no date-specific entries), mirroring the exchange holiday
+    schedule: New Year's Day, MLK, Presidents' Day, Memorial Day, Juneteenth
+    (2022+), Independence Day, Labor Day, Thanksgiving, Christmas — each on its
+    observed weekday. Good Friday is deliberately NOT here: CME either runs an
+    abbreviated Friday session whose trade date IS Friday, or is fully closed
+    (no bars map to it either way), so the mechanical rule already matched.
+
+    Proven against TradingView Pine ``time_tradingday`` on every bar of the
+    2026-06-16 → 2026-09-17 MES1!/MNQ1! diagnostic exports (0 mismatches on
+    76,541 rows across 11 exports, 5m + 15m), covering Juneteenth (Fri 06-19), observed
+    Independence Day (Fri 07-03) and Labor Day (Mon 09-07) plus every ordinary
+    weekday/Sunday boundary — see tests/test_c14_pine_daily_identity.py.
+    """
+    closed = {
+        _nth_weekday(year, 1, 0, 3),          # MLK Day
+        _nth_weekday(year, 2, 0, 3),          # Presidents' Day
+        _last_weekday(year, 5, 0),            # Memorial Day
+        _observed_fixed_holiday(year, 7, 4),  # Independence Day
+        _nth_weekday(year, 9, 0, 1),          # Labor Day
+        _nth_weekday(year, 11, 3, 4),         # Thanksgiving
+        _observed_fixed_holiday(year, 12, 25),  # Christmas
+    }
+    # A Saturday Jan 1 is not observed on Friday Dec 31 (previous year stays open).
+    if date(year, 1, 1).weekday() != 5:
+        closed.add(_observed_fixed_holiday(year, 1, 1))
+    if year >= 2022:
+        closed.add(_observed_fixed_holiday(year, 6, 19))  # Juneteenth
+    return frozenset(closed)
+
+
+def cme_trading_day(ts: "int | datetime") -> date:
+    """CME equity-index trade date a bar belongs to (Pine ``time_tradingday``).
+
+    Start from the ET civil date, advanced by one if the bar is at/after the
+    18:00 ET reopen, then move forward to the first weekday that is a trade
+    date (see cme_equity_index_non_trade_dates). This is the single daily
+    identity for replay VWAP, HOD/LOD, PDH/PDL/PDC and daily resampling; the
+    reset happens where THIS key changes, never merely because ET crossed 18:00.
+    """
     from datetime import time
+    dt = ts_to_dt(ts) if isinstance(ts, int) else ts
+    et = dt.astimezone(_ET)
+    day = et.date() + (timedelta(days=1) if et.time() >= time(18, 0) else timedelta(0))
+    closed = cme_equity_index_non_trade_dates(day.year) | cme_equity_index_non_trade_dates(day.year + 1)
+    while day.weekday() >= 5 or day in closed:
+        day += timedelta(days=1)
+    return day
+
+
+def detect_day_boundaries(bars: list[dict]) -> list[int]:
+    """Return indices where the CME equity-index trade date (cme_trading_day) changes.
+
+    Not every 18:00 ET reopen is a boundary: a holiday's 18:00 reopen continues
+    the same trade date (C14). Ordinary weekday and Sunday reopens are unchanged.
+    """
+    boundaries = [0]
+    prev_day = cme_trading_day(bars[0]["ts"]) if bars else None
     for i in range(1, len(bars)):
-        prev_dt = ts_to_dt(bars[i - 1]["ts"]).astimezone(_ET)
-        curr_dt = ts_to_dt(bars[i]["ts"]).astimezone(_ET)
-        # New CME day starts at 18:00 ET
-        prev_session_day = prev_dt.date() if prev_dt.time() >= time(18, 0) else (prev_dt - timedelta(days=1)).date()
-        curr_session_day = curr_dt.date() if curr_dt.time() >= time(18, 0) else (curr_dt - timedelta(days=1)).date()
-        if curr_session_day != prev_session_day:
+        curr_day = cme_trading_day(bars[i]["ts"])
+        if curr_day != prev_day:
             boundaries.append(i)
+            prev_day = curr_day
     return boundaries
 
 
@@ -286,7 +368,8 @@ def vwap_day_range(day_ranges: list[tuple[int, int]], bar_idx: int) -> tuple[int
 
     This is the sole valid reset anchor for a session VWAP accumulator.
     TradingView's ta.vwap(hlc3) — and RiskSentinel's own Pine VWAP — resets once
-    per CME trading day at 18:00 ET; it does NOT reset at the Asian/London/New
+    per CME trade date (cme_trading_day: normally the 18:00 ET reopen, but NOT a
+    holiday's 18:00 reopen — C14); it does NOT reset at the Asian/London/New
     York/off-hours sub-session boundaries detect_session() reports. Confirmed
     empirically against real TradingView Pine VWAP output (0.00 divergence
     within a day boundary, sharp divergence introduced by any extra reset).
@@ -447,9 +530,10 @@ def convert(
         dt = datetime.fromtimestamp(bar["ts"], tz=_UTC)
         session = detect_session(dt)
 
-        # Reset VWAP accumulation once per CME trading day (18:00 ET) — NOT at
-        # Asian/London/New York/off-hours sub-session transitions. See
-        # vwap_day_range() docstring for why detect_session() must not gate this.
+        # Reset VWAP accumulation once per CME trade date (cme_trading_day;
+        # a holiday's 18:00 ET reopen is NOT a new day) — NOT at Asian/London/
+        # New York/off-hours sub-session transitions. See vwap_day_range()
+        # docstring for why detect_session() must not gate this.
         vwap_range = vwap_day_range(day_ranges, i)
         if vwap_range != prev_vwap_range:
             session_bars = []
