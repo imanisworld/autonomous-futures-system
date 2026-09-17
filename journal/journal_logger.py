@@ -102,6 +102,11 @@ class JournalLogger:
             risk_result: Optional dict with {result, failed_rule, reason}
         """
         entry = dict(decision_dict)
+        context = entry.get("context")
+        if entry.get("market_condition") is None and isinstance(context, dict):
+            context_market_condition = context.get("market_condition")
+            if context_market_condition is not None:
+                entry["market_condition"] = context_market_condition
         if risk_result:
             entry["risk_check"] = risk_result
         entry.setdefault("outcome", None)
