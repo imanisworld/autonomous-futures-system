@@ -24,6 +24,7 @@ from .paper_v1 import (
     choose_contract,
     choose_expiration,
     data_invalid,
+    entry_geometry_state,
     entry_late,
     entry_late_reason,
     remaining_reward_to_risk,
@@ -231,6 +232,9 @@ class OptionsScanner:
         # price has already consumed the setup (see paper_v1.entry_late_reason).
         live_price = _float_or_none(normalized.get("price"))
         data["paper_entry_remaining_rr"] = remaining_reward_to_risk(
+            direction, live_price, _float_or_none(invalidation), _float_or_none(target_1)
+        )
+        data["paper_entry_geometry"] = entry_geometry_state(
             direction, live_price, _float_or_none(invalidation), _float_or_none(target_1)
         )
         late_reason = entry_late_reason(
@@ -863,6 +867,7 @@ def _selected_contract(raw: dict[str, Any]) -> dict[str, Any]:
         "paper_policy_status",
         "paper_policy_warnings",
         "paper_entry_remaining_rr",
+        "paper_entry_geometry",
         "entry_late_reason",
         "entry_late_active_episode_key",
         "contract",

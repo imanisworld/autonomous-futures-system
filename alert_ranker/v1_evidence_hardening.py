@@ -38,6 +38,9 @@ from .paper_v1 import (
     data_invalid,
     entry_late,
     setup_episode_key,
+    ENTRY_CONSUMED_STATES,
+    entry_geometry_state,
+    remaining_reward_to_risk,
 )
 from .scanner_legacy import (
     ScanOutcome,
@@ -235,6 +238,31 @@ def _observer_candidate(
         "daily_previous_type": verdict.previous_type,
         "daily_current_type": verdict.current_type,
     }
+
+
+def entry_geometry_of(setup: Any) -> str | None:
+    """Entry geometry of a stored shadow row: the persisted field when present,
+    else derived from the row's own first-sight inputs (price, stop, target)."""
+    contract = getattr(setup, "selected_contract", None) or {}
+    stored = contract.get("paper_entry_geometry")
+    inputs = getattr(setup, "setup_inputs", None) or {}
+    if not stored:
+        stored = inputs.get("paper_entry_geometry")
+    if stored:
+        return str(stored)
+    stop = _float_or_none(
+        contract.get("stop")
+        if contract.get("stop") is not None
+        else (inputs.get("underlying_invalidation") or inputs.get("stop"))
+    )
+    target = _float_or_none(
+        contract.get("target")
+        if contract.get("target") is not None
+        else (inputs.get("target_1") or inputs.get("target"))
+    )
+    return entry_geometry_state(
+        getattr(setup, "direction", None), _float_or_none(inputs.get("price")), stop, target
+    )
 
 
 def _target_hit(direction: str, target: float | None, price: float | None) -> bool:
@@ -500,6 +528,19 @@ def build_v1_evidence_hardening(base_cls):
                 data.update(data_invalid("target_missing"))
                 return data
 
+            # Observer accounting (operator ruling 2026-09-17): the counterfactual
+            # lane never refuses on entry geometry -- that is the filter being
+            # observed -- but it must RECORD it. A row whose first-sight price has
+            # already consumed the target/stop resolves into a non-outcome state
+            # (see _resolve_v1_candidate) instead of a next-tick WIN/LOSS.
+            live_price = _float_or_none(normalized.get("price"))
+            data["paper_entry_remaining_rr"] = remaining_reward_to_risk(
+                effective_direction, live_price, _float_or_none(invalidation), _float_or_none(target_1)
+            )
+            data["paper_entry_geometry"] = entry_geometry_state(
+                effective_direction, live_price, _float_or_none(invalidation), _float_or_none(target_1)
+            )
+
             fetch_expirations = getattr(self.market_data, "fetch_option_expirations", None)
             fetch_chain = getattr(self.market_data, "fetch_option_chain", None)
             if not callable(fetch_expirations) or not callable(fetch_chain):
@@ -676,6 +717,32 @@ def build_v1_evidence_hardening(base_cls):
             )
 
         async def _resolve_v1_candidate(self, setup, underlying_price, now, chain_cache):
+            # Entry geometry first: a row born with its target or stop already
+            # consumed is NOT an outcome. Rows written before the field existed
+            # derive it from the stored first-sight inputs, so no legacy row can
+            # still turn into a next-tick WIN/LOSS. No chain call is made.
+            contract = setup.selected_contract or {}
+            geometry = entry_geometry_of(setup)
+            if geometry in ENTRY_CONSUMED_STATES:
+                return (
+                    geometry,
+                    {
+                        "closed_reason": geometry.lower(),
+                        "resolved_at": now.isoformat(),
+                        "underlying_price_at_resolution": underlying_price,
+                        "paper_entry_geometry": geometry,
+                        "paper_entry_remaining_rr": _float_or_none(
+                            contract.get("paper_entry_remaining_rr")
+                            if contract.get("paper_entry_remaining_rr") is not None
+                            else (setup.setup_inputs or {}).get("paper_entry_remaining_rr")
+                        ),
+                        "resolution_ambiguity": "NOT_AN_OUTCOME",
+                        "pessimistic_resolution_used": False,
+                        "resolution_sampling": "entry_geometry",
+                        "intra_interval_path_known": False,
+                        "note": "level already consumed at first sight; excluded from win/loss and option P&L",
+                    },
+                )
             resolution = await super()._resolve_v1_candidate(
                 setup, underlying_price, now, chain_cache
             )

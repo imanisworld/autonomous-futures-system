@@ -57,6 +57,9 @@ class ShadowJournalSummary:
     total_pnl_dollars: float
     average_pnl_percent: float | None
     rejected: int = 0
+    # Closed non-outcomes: target/stop already consumed at first sight. Never in
+    # closed/wins/losses/win_rate/P&L; reported so the exclusion is visible.
+    entry_consumed: int = 0
 
 
 class ScanStorage:
@@ -410,7 +413,9 @@ class ScanStorage:
                 params,
             ):
                 status_counts[row["status"]] = int(row["n"])
-            resolved_where = f"{where} AND status != 'OPEN'"
+            resolved_where = (
+                f"{where} AND status NOT IN ('OPEN', 'TARGET_CONSUMED_AT_ENTRY', 'STOP_CONSUMED_AT_ENTRY')"
+            )
             for row in conn.execute(
                 f"SELECT outcome_json FROM options_shadow_journal {resolved_where}",
                 params,
@@ -447,6 +452,8 @@ class ScanStorage:
             total_pnl_dollars=round(pnl_dollars, 2),
             average_pnl_percent=average_percent,
             rejected=status_counts.get("REJECTED", 0),
+            entry_consumed=status_counts.get("TARGET_CONSUMED_AT_ENTRY", 0)
+            + status_counts.get("STOP_CONSUMED_AT_ENTRY", 0),
         )
 
     def find_open_duplicate(self, ticker: str, contract_key: str) -> int | None:
