@@ -1,0 +1,38 @@
+== MNQ (awk path)
+candidates=40460 outcomes=40460 unjoined=0
+WIN=9299 LOSS=22820 NO_FILL=4330 OPEN=4011 terminal=32119
+win_rate(terminal)=0.2895 mean_gross_R=-0.1308 mean_net_R=-0.1868 sum_net_R=-6000.74
+  session london    n= 11179 mean_net_R=-0.1976
+  session asian     n= 12491 mean_net_R=-0.1487
+  session new_york  n=  8449 mean_net_R=-0.2290
+  family strat_122_observed                     n=   662 WIN=  174 LOSS=  488 NO_FILL=   78 OPEN=   23 mean_net_R=-0.2882
+  family strat_312_observed                     n=   578 WIN=  141 LOSS=  437 NO_FILL=   78 OPEN=   63 mean_net_R=-0.3341
+  family impulse_first_pullback_observed        n=  4422 WIN= 1119 LOSS= 3303 NO_FILL= 1092 OPEN=  561 mean_net_R=-0.2897
+  family transition_failed_breakdown_reclaim    n=   597 WIN=  322 LOSS=  275 NO_FILL=    2 OPEN=   13 mean_net_R=-0.1886
+  family ema_pullback_trend                     n=  5203 WIN= 1557 LOSS= 3646 NO_FILL=  100 OPEN=  949 mean_net_R=-0.0977
+  family strat_322_reversal_observed            n=   715 WIN=  193 LOSS=  522 NO_FILL=   76 OPEN=  103 mean_net_R=-0.2463
+  family trend_consolidation_break_observed     n=  1475 WIN=  384 LOSS= 1091 NO_FILL=  523 OPEN=  338 mean_net_R=-0.2645
+  family strat_22_reversal_observed             n=  5477 WIN= 1646 LOSS= 3831 NO_FILL=  641 OPEN=  526 mean_net_R=-0.1572
+  family strat_4hr_retrigger_observed           n=   209 WIN=   56 LOSS=  153 NO_FILL=   59 OPEN=    3 mean_net_R=-0.2582
+  family strat_122_pullback                     n=   476 WIN=  137 LOSS=  339 NO_FILL=   81 OPEN=   27 mean_net_R=-0.1779
+  family orb_false_break_fade                   n=  1282 WIN=  312 LOSS=  970 NO_FILL=  136 OPEN=   73 mean_net_R=-0.2449
+  family strat_22_continuation_observed         n= 11023 WIN= 3258 LOSS= 7765 NO_FILL= 1464 OPEN= 1332 mean_net_R=-0.1665
+== MES (awk path)
+candidates=39987 outcomes=39987 unjoined=0
+WIN=9126 LOSS=22719 NO_FILL=4116 OPEN=4026 terminal=31845
+win_rate(terminal)=0.2866 mean_gross_R=-0.1363 mean_net_R=-0.2862 sum_net_R=-9113.33
+  session london    n= 11164 mean_net_R=-0.3050
+  session asian     n= 12072 mean_net_R=-0.2715
+  session new_york  n=  8609 mean_net_R=-0.2824
+  family strat_122_observed                     n=  1130 WIN=  300 LOSS=  830 NO_FILL=  165 OPEN=  107 mean_net_R=-0.3530
+  family strat_312_observed                     n=   518 WIN=  146 LOSS=  372 NO_FILL=   71 OPEN=   74 mean_net_R=-0.3400
+  family impulse_first_pullback_observed        n=  4037 WIN=  959 LOSS= 3078 NO_FILL= 1013 OPEN=  521 mean_net_R=-0.4213
+  family transition_failed_breakdown_reclaim    n=   484 WIN=  269 LOSS=  215 NO_FILL=    2 OPEN=   15 mean_net_R=-0.2923
+  family ema_pullback_trend                     n=  5749 WIN= 1705 LOSS= 4044 NO_FILL=  116 OPEN=  946 mean_net_R=-0.1985
+  family strat_322_reversal_observed            n=   613 WIN=  180 LOSS=  433 NO_FILL=   72 OPEN=   78 mean_net_R=-0.2711
+  family trend_consolidation_break_observed     n=  1474 WIN=  361 LOSS= 1113 NO_FILL=  568 OPEN=  316 mean_net_R=-0.4015
+  family strat_22_reversal_observed             n=  5236 WIN= 1531 LOSS= 3705 NO_FILL=  605 OPEN=  536 mean_net_R=-0.2831
+  family strat_4hr_retrigger_observed           n=   198 WIN=   63 LOSS=  135 NO_FILL=   56 OPEN=   19 mean_net_R=-0.1257
+  family strat_122_pullback                     n=    98 WIN=   35 LOSS=   63 NO_FILL=   30 OPEN=   27 mean_net_R=0.0184
+  family orb_false_break_fade                   n=  1361 WIN=  346 LOSS= 1015 NO_FILL=  108 OPEN=   81 mean_net_R=-0.3041
+  family strat_22_continuation_observed         n= 10947 WIN= 3231 LOSS= 7716 NO_FILL= 1310 OPEN= 1306 mean_net_R=-0.2629

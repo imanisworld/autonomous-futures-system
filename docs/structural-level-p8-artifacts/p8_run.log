@@ -1,0 +1,20 @@
+[p8] frozen artifact check: all 6 hashes match
+[p8] MNQ: 40460 candidates+features joined (outcome file not yet read)
+[p8] MNQ: folds at 2025-05-02T07:15:00+00:00 / 2025-11-24T16:15:00+00:00; H4 age tertiles 3.000/10.500 h
+[p8] MNQ: terminal 32119 WR 0.2895 mean net R -0.1868
+      H1: n=6102 T=3580 F=2522 effect=0.1564 p=0.0007 holm=0.0028 wf=True
+      H2: n=1841 T=127 F=1714 effect=-0.0573 p=0.67993 holm=1.0 wf=False
+      H3: n=4904 T=4029 F=875 effect=0.2073 p=0.0001 holm=0.0006 wf=True
+      H5: n=6514 T=4782 F=1732 effect=0.0142 p=0.41676 holm=1.0 wf=True
+      H6: n=20569 T=8454 F=12115 effect=-0.0748 p=1.0 holm=1.0 wf=False
+      H4: tc rho=-0.0992 p=0.0001; age rho=-0.0317 p=0.0011; bonf2=0.0002 holm=0.001
+[p8] MES: 39987 candidates+features joined (outcome file not yet read)
+[p8] MES: folds at 2025-05-02T20:00:00+00:00 / 2025-11-27T02:00:00+00:00; H4 age tertiles 2.750/10.000 h
+[p8] MES: terminal 31845 WR 0.2866 mean net R -0.2862
+      H1: n=6936 T=3631 F=3305 effect=0.1218 p=0.0004 holm=0.0016 wf=True
+      H2: n=1749 T=145 F=1604 effect=-0.1843 p=0.91491 holm=1.0 wf=False
+      H3: n=4898 T=4088 F=810 effect=0.1962 p=0.0001 holm=0.0006 wf=True
+      H5: n=7079 T=5220 F=1859 effect=0.0149 p=0.38396 holm=1.0 wf=False
+      H6: n=20663 T=7500 F=13163 effect=-0.1004 p=1.0 holm=1.0 wf=False
+      H4: tc rho=-0.1325 p=0.0001; age rho=-0.063 p=0.0014; bonf2=0.0002 holm=0.001
+[p8] wrote <scratch>/p8_out/p8_results.json
