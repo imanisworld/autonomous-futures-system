@@ -384,7 +384,7 @@ Legend for the two evidence rows: **dated-contract source** ∈ `SOURCE_PROVEN` 
 
 ---
 
-**Verdict (2026-09-17, code `bbe4c51` = main with #623/#629/#630): MGC `PARTIAL`, MCL `PARTIAL`,
+**Verdict (2026-09-17, base `8b20b9b` = main with #623/#629/#630/#633; probes ran on the pre-rebase tree at `bbe4c51`, which differs from `8b20b9b` in docs only): MGC `PARTIAL`, MCL `PARTIAL`,
 MBT `BLOCKED`.** Dated-contract sources are proven for MGC (14/14) and MCL (27/27) and the box
 feeds identify as `MGCZ6` / `MCLV6` / `MBTU6` on every served bar; every historical roll seam of
 all three is `ROLL_PROVENANCE_UNKNOWN` (no live feed existed; provider volume chains are
