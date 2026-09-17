@@ -12,6 +12,11 @@ requires and the builder lacks:
     known 2026-06-11 MNQ roll gap; R2 uses 3 so the U6 contract runs through
     2026-09-14 like the box did),
   • ``--end-ts-exclusive`` (R2 roll cut at 2026-09-14T22:00Z: bars at/after it are dropped),
+  • ``--contract`` (v1.5 X0): one FIXED dated contract for the whole fetch range instead of
+    the scheduler chain — no seam, so contract identity is exact by construction (#586's
+    "one stable dated contract" case); the manifest records ``roll_rule = fixed dated
+    contract``. Used when the live feed's underlying contract is proven for the window but
+    the scheduler seam before it is not (amendment 1 to the expansion prereg, #625).
   • a fail-closed schema check (``london_orb_*`` must be present — the whole reason the
     pre-existing ``data/replay_polygon`` corpora are unusable),
   • ``MANIFEST.json``: pins (git HEAD, builder file hashes), contract segments + roll
@@ -178,6 +183,7 @@ def build(
     client: PolygonFuturesClient,
     corpus_label: str | None = None,
     fresh: bool = False,
+    contract: str | None = None,
 ) -> dict:
     """Fetch, derive, write day files + MANIFEST.json. Returns the manifest dict.
 
@@ -189,10 +195,19 @@ def build(
         raise SystemExit(f"[build] {out_dir} already holds {len(existing)} day files — pass --fresh "
                          "to replace the corpus (stale days must never sit beside new ones)")
     fetch_start = start - timedelta(days=warmup_days)
-    segments = contract_schedule(symbol, fetch_start, end, roll_days)
-    print(f"[build] fetching {symbol} {timeframe}m bars {fetch_start}..{end} "
-          f"(warmup {warmup_days}d, roll_days={roll_days}, segments={len(segments)})")
-    bars = client.fetch_continuous(symbol, fetch_start, end, timeframe, roll_days=roll_days)
+    if contract:
+        contract = contract.strip().upper()
+        if not contract.startswith(symbol):
+            raise SystemExit(f"[build] --contract {contract} does not belong to symbol {symbol}")
+        segments = [(contract, fetch_start, end)]
+        print(f"[build] fetching {contract} (fixed dated contract, no roll) {timeframe}m bars "
+              f"{fetch_start}..{end} (warmup {warmup_days}d)")
+        bars = client.fetch_bars(contract, fetch_start, end, timeframe)
+    else:
+        segments = contract_schedule(symbol, fetch_start, end, roll_days)
+        print(f"[build] fetching {symbol} {timeframe}m bars {fetch_start}..{end} "
+              f"(warmup {warmup_days}d, roll_days={roll_days}, segments={len(segments)})")
+        bars = client.fetch_continuous(symbol, fetch_start, end, timeframe, roll_days=roll_days)
     print(f"[build] {len(bars)} bars fetched")
     if not bars:
         raise SystemExit("[build] no bars fetched — refusing to write an empty corpus")
@@ -255,9 +270,10 @@ def build(
             "warmup_days": warmup_days,
             "end_ts_exclusive": end_ts_exclusive.isoformat() if end_ts_exclusive else None,
             "candles_dropped_at_end_cut": dropped_after_cut,
-            "roll_rule": f"roll_days={roll_days} (front contract advances {roll_days} calendar "
-                         f"days before 3rd-Friday expiry; sources.polygon_client.front_contract)"
-                         + (" [DEFAULT_ROLL_DAYS]" if roll_days == DEFAULT_ROLL_DAYS else ""),
+            "roll_rule": (f"fixed dated contract {contract} (no roll; single segment)" if contract else
+                          f"roll_days={roll_days} (front contract advances {roll_days} calendar "
+                          f"days before 3rd-Friday expiry; sources.polygon_client.front_contract)"
+                          + (" [DEFAULT_ROLL_DAYS]" if roll_days == DEFAULT_ROLL_DAYS else "")),
             "contract_segments": [[t, s.isoformat(), e.isoformat()] for t, s, e in segments],
             "raw_bars_fetched": len(bars),
         },
@@ -298,6 +314,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out", required=True, help="corpus root; writes <out>/<SYMBOL>/")
     parser.add_argument("--label", default=None, help="corpus label for the manifest")
     parser.add_argument("--fresh", action="store_true", help="replace an existing corpus directory")
+    parser.add_argument("--contract", default=None,
+                        help="one fixed dated contract (e.g. M2KZ6) for the whole range; no roll/seam")
     args = parser.parse_args(argv)
 
     try:
@@ -322,6 +340,7 @@ def main(argv: list[str] | None = None) -> int:
         client=client,
         corpus_label=args.label,
         fresh=args.fresh,
+        contract=args.contract,
     )
     return 0
 

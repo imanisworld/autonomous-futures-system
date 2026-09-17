@@ -33,6 +33,25 @@ observation-lane firing/bracket parity vs replay under the frozen §4 gates of t
 24/25 (one open two ticks apart) — **not a pass at that n**; rerun when ≥ 5 sessions of M2K
 history exist. (6) Family expectations for M2K from the lane config: `strat_122_pullback`,
 `strat_4hr_retrigger_observed` and `vwap_*` are not configured for M2K (absent by design).
+(7) **X0 roll provenance (audit repair, same day; #622 §3 and amendment 1 #625 apply to M2K):**
+a `contract_schedule` chain and a clean manifest are *not* roll provenance. Every M2K corpus
+now carries an X0 proof (`scripts/structural_level_x0_roll_proof.py`): per-segment dated-contract
+identity re-established from the provider, per-seam census, and live-feed reconciliation by
+per-bar OHLC identification against the candidate dated contracts (the box's `M2K1!` bars prove
+nothing by themselves). Results: `data/replay_polygon_v2/M2K` = `CONTRACT_IDENTITY_PROVEN`,
+seams = `SCHEDULER_CONVENTION_ONLY` (`roll_days=8`, UTC-midnight seams; no M2K live feed existed
+in the window to reconcile against — same provenance class as the admitted MNQ/MES v1.4
+corpora); the September stitched parity corpus (`roll_days=3`, seam 2026-09-15T00:00Z) =
+**`ROLL_PROVENANCE_UNKNOWN`** — the live feed's contract between 2026-09-14T22:00Z and the
+first M2K live bar (2026-09-16T12:15Z) is unobservable for M2K (the MNQ/MES 22:00Z switch is
+not M2K evidence), so that corpus is **not admitted** and P3-M2K/P5-M2K run on it are
+non-confirmatory. The admitted September parity corpus is the **single dated contract
+`M2KZ6`** (`data/replay_polygon_parity_m2kz6_2026_09_16/M2K`, builder `--contract`, no seam,
+live bars identified as Z6 27/27 served) — not a new roll rule, the roll is simply outside the
+window. **C23** records this. Relationship to `docs/prereg-cross-instrument-historical-expansion-2026-09-17.md`
+(#622): M2K's population identity here is its own corpus and its own prospective stream
+(strata {MNQ, MES, M2K}, never pooled); the MNQ/MES P-REPLAY / P-LIVE populations of v1.4 are
+unchanged, and the expansion prereg's X0 / X1 / X2 gates are applied to M2K by this amendment.
 Changelog v1.3 → v1.4 (amendment based **only** on the R1–R4 corpus/parity evidence in
 `docs/structural-level-p2-parity-corpus-r4-2026-09-17.md`; no outcome was read; operator
 rulings of 2026-09-17, both taken before R5 / any outcome): (1) **P-REPLAY window amended to
@@ -608,9 +627,10 @@ any level-identity subgroup ("only PDL works").
 | P6 | Roll ledger for P-REPLAY (dates, gap sizes) and gap ledger on the 15m grid; P-LIVE ledger reused | ledgers | no |
 | P7 | MNQ OOS corpus 2026-07-24 → 2026-09-14 via `polygon_to_replay` (data fetch only) so P-OOS is not MES-only; and the P-OOS-PROSPECTIVE collection is just the existing journal (no collector change) | corpus + manifest | no |
 | P8 | Independent spot-check protocol: ≥ 3 seeded rows re-derived end-to-end (levels, events, outcome, R) by a party other than the analysis author; ≥ 1 headline statistic recomputed from raw files | attestation | no |
-| P3-M2K (v1.5) | Bar-source levels parity for M2K: admitted levels from `logs/bars_M2K_*.jsonl` vs the pinned Polygon corpus at every common B0, one tick, ≥ 98% eligible rows, plus OHLC parity (`scripts/structural_level_bar_source_parity.py`); rerun until ≥ 5 sessions of live history exist | report JSON | no |
-| P5-M2K (v1.5) | Observation-lane vs replay firing/bracket parity for M2K under the P2 spec §4 gates (`scripts/structural_level_p2_parity.py --live-source observation`) | report JSON | no |
+| P3-M2K (v1.5) | Bar-source levels parity for M2K: admitted levels from `logs/bars_M2K_*.jsonl` vs the X0-admitted Polygon corpus (single contract `M2KZ6` for September 2026) at every common B0, one tick, ≥ 98% eligible rows, plus OHLC parity (`scripts/structural_level_bar_source_parity.py`); rerun until ≥ 5 sessions of live history exist | report JSON | no |
+| P5-M2K (v1.5) | Observation-lane vs replay firing/bracket parity for M2K under the P2 spec §4 gates (`scripts/structural_level_p2_parity.py --live-source observation`), replay on an X0-admitted corpus only | report JSON | no |
 | P-R (v1.5) | Resolver equivalence, synthetic only: `resolve_shadow_candidate` vs `cross_instrument_observation._resolve_one` (`scripts/structural_level_resolver_equivalence.py`) — never run on real candidates | report JSON | no |
+| X0-M2K (v1.5, #622 §3 / #625) | Dated-contract identity + seam provenance per corpus (`scripts/structural_level_x0_roll_proof.py`): every segment re-fetched as its dated contract, seam census, live-feed per-bar contract identification; a corpus compared with a live feed is admitted only when `roll_provenance ∈ {PROVEN}` (no seam in window, or every seam `FEED_CONFIRMED`); P-REPLAY corpora record `SCHEDULER_CONVENTION_ONLY` | report JSON per corpus | no |
 
 ## 15. Conflicts between current repo definitions that must be resolved before analysis
 
@@ -684,7 +704,10 @@ can be handled entirely in the offline builder):
   offline by the operator in PR #621 (`4f07ea0`: prior 8-bar history kept across day files under
   the same 3-day lookback, regression test added; nothing deployed). R4 rerun on the fix:
   `impulse_first_pullback_observed` 0.937 → 0.972, `trend_consolidation_break_observed`
-  0.938 → 0.974, every other family unchanged (`docs/structural-level-v15-m2k-2026-09-17.md` §5).
+  0.938 → 0.974; every admitted/testable family numerically identical; `ema_pullback_trend`
+  still `BRACKET_CONFLICT`; `transition_failed_breakdown_reclaim` changed numerically (Jaccard
+  0.101 → 0.102, bracket 1.000 → 0.900, replay-only 77 → 86) and remains `NOT_TESTABLE`
+  (`docs/structural-level-v15-m2k-2026-09-17.md` §5).
 - **C20 — two resolver implementations (v1.5).** `strategy.shadow_setups.resolve_shadow_candidate`
   (runner/replay) and `execution.cross_instrument_observation._resolve_one` (observation lane,
   M2K's prospective outcomes) implement the same rules separately. **Handling:** P-R proves
@@ -696,6 +719,17 @@ can be handled entirely in the offline builder):
   not journal `location_context`, so the P3 gate cannot be run against a live copy for M2K.
   **Handling:** P3-M2K compares the two bar sources instead (levels from live bars vs Polygon
   bars); the level *definitions* are unchanged and already proven on MNQ/MES.
+- **C23 — scheduler seams are not feed provenance (v1.5 X0; #625).** `roll_days=N` places a
+  seam at UTC midnight of a calendar-derived date; the live continuous feed switches when it
+  switches (MNQ/MES: observed 2026-09-14T22:00Z, four trading days after the `roll_days=8`
+  convention and two hours before the `roll_days=3` one). For M2K the live switch was never
+  observed (no bars before 2026-09-16T12:15Z). **Handling:** every corpus gets an X0 report;
+  a corpus whose in-window seam is `NOT_OBSERVABLE` / `FEED_CONTRADICTED` against the live feed
+  it is compared with is `ROLL_PROVENANCE_UNKNOWN` and not admitted for parity; single-contract
+  windows (`--contract`) are used for live comparison where the feed's contract is proven; for
+  P-REPLAY (no feed) the seam rule is the frozen population definition, recorded as
+  `SCHEDULER_CONVENTION_ONLY` with the provider volume-crossover offset per seam (informational).
+  Detector windows spanning a seam are roll-contaminated per §9.5 item 5 regardless.
 
 ---
 

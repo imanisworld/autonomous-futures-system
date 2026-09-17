@@ -8,13 +8,13 @@
  "bar_census": {
   "M2K": {
    "live_bars": 51,
-   "replay_bars": 894,
-   "both_evaluated": 27,
-   "live_only_bars": 24,
-   "replay_only_bars": 867,
-   "live_only_bars_absent_from_corpus": 24,
+   "replay_bars": 1058,
+   "both_evaluated": 25,
+   "live_only_bars": 26,
+   "replay_only_bars": 1033,
+   "live_only_bars_absent_from_corpus": 26,
    "live_only_bars_in_corpus_not_evaluated_by_replay": 0,
-   "corpus_bars": 894
+   "corpus_bars": 1058
   }
  },
  "duplicate_bars_first_seen_wins": {
@@ -25,12 +25,12 @@
  "families": {
   "ema_pullback_trend": {
    "live_firings_all_live_bars": 10,
-   "replay_firings_all_replay_bars": 88,
+   "replay_firings_all_replay_bars": 189,
    "live_by_instrument": {
     "M2K": 10
    },
    "replay_by_instrument": {
-    "M2K": 88
+    "M2K": 189
    },
    "on_both_evaluated_bars": {
     "live_firings": 9,
@@ -93,12 +93,12 @@
   },
   "impulse_first_pullback_observed": {
    "live_firings_all_live_bars": 4,
-   "replay_firings_all_replay_bars": 124,
+   "replay_firings_all_replay_bars": 154,
    "live_by_instrument": {
     "M2K": 4
    },
    "replay_by_instrument": {
-    "M2K": 124
+    "M2K": 154
    },
    "on_both_evaluated_bars": {
     "live_firings": 2,
@@ -129,12 +129,12 @@
   },
   "orb_false_break_fade": {
    "live_firings_all_live_bars": 5,
-   "replay_firings_all_replay_bars": 38,
+   "replay_firings_all_replay_bars": 40,
    "live_by_instrument": {
     "M2K": 5
    },
    "replay_by_instrument": {
-    "M2K": 38
+    "M2K": 40
    },
    "on_both_evaluated_bars": {
     "live_firings": 5,
@@ -391,12 +391,12 @@
   },
   "strat_22_continuation_observed": {
    "live_firings_all_live_bars": 17,
-   "replay_firings_all_replay_bars": 277,
+   "replay_firings_all_replay_bars": 359,
    "live_by_instrument": {
     "M2K": 17
    },
    "replay_by_instrument": {
-    "M2K": 277
+    "M2K": 359
    },
    "on_both_evaluated_bars": {
     "live_firings": 7,
@@ -427,12 +427,12 @@
   },
   "strat_22_reversal_observed": {
    "live_firings_all_live_bars": 6,
-   "replay_firings_all_replay_bars": 169,
+   "replay_firings_all_replay_bars": 176,
    "live_by_instrument": {
     "M2K": 6
    },
    "replay_by_instrument": {
-    "M2K": 169
+    "M2K": 176
    },
    "on_both_evaluated_bars": {
     "live_firings": 4,
@@ -463,10 +463,10 @@
   },
   "strat_312_observed": {
    "live_firings_all_live_bars": 0,
-   "replay_firings_all_replay_bars": 18,
+   "replay_firings_all_replay_bars": 17,
    "live_by_instrument": {},
    "replay_by_instrument": {
-    "M2K": 18
+    "M2K": 17
    },
    "on_both_evaluated_bars": {
     "live_firings": 0,
@@ -497,10 +497,10 @@
   },
   "strat_322_reversal_observed": {
    "live_firings_all_live_bars": 0,
-   "replay_firings_all_replay_bars": 23,
+   "replay_firings_all_replay_bars": 21,
    "live_by_instrument": {},
    "replay_by_instrument": {
-    "M2K": 23
+    "M2K": 21
    },
    "on_both_evaluated_bars": {
     "live_firings": 0,
@@ -563,10 +563,10 @@
   },
   "transition_failed_breakdown_reclaim": {
    "live_firings_all_live_bars": 0,
-   "replay_firings_all_replay_bars": 7,
+   "replay_firings_all_replay_bars": 12,
    "live_by_instrument": {},
    "replay_by_instrument": {
-    "M2K": 7
+    "M2K": 12
    },
    "on_both_evaluated_bars": {
     "live_firings": 0,
@@ -590,19 +590,19 @@
    "input_source_mismatch_reason": "regime label source (Pine market_condition, MES blind C8) + recent-bars reset",
    "spec_verdict_reference": "NOT_TESTABLE (spec \u00a72/\u00a76)",
    "classification": "NOT_TESTABLE",
-   "classification_reason": "spec \u00a76; live=0 replay=7 (reported, not gated)",
+   "classification_reason": "spec \u00a76; live=0 replay=12 (reported, not gated)",
    "ruled_disposition": null,
    "live_only_examples": [],
    "replay_only_examples": []
   },
   "trend_consolidation_break_observed": {
    "live_firings_all_live_bars": 3,
-   "replay_firings_all_replay_bars": 70,
+   "replay_firings_all_replay_bars": 54,
    "live_by_instrument": {
     "M2K": 3
    },
    "replay_by_instrument": {
-    "M2K": 70
+    "M2K": 54
    },
    "on_both_evaluated_bars": {
     "live_firings": 1,
@@ -700,13 +700,13 @@
  "inputs": {
   "live_source": "observation",
   "live_logs_root": null,
-  "observation_evidence": "<scratchpad>/m2k_snapshot/cross_instrument_observation_v1.jsonl",
-  "bars_root": "<scratchpad>/m2k_snapshot",
-  "replay_log_dir": "<scratchpad>/replay_parity_m2kz6",
-  "corpus_root": "<checkout>/data/replay_polygon_parity_m2kz6_2026_09_16",
+  "observation_evidence": "<local:cross_instrument_observation_v1.jsonl>",
+  "bars_root": "<local:m2k_snapshot>",
+  "replay_log_dir": "<local:replay_parity_m2k>",
+  "corpus_root": "<local:replay_polygon_parity_m2k_2026_09_16>",
   "start": "2026-07-16",
   "end_ts_exclusive": "2026-09-18T00:00:00+00:00",
   "live_rows": 51,
-  "replay_rows": 894
+  "replay_rows": 1058
  }
 }

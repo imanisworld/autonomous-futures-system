@@ -187,18 +187,30 @@ Prereg v1.5 adds M2K. For the regeneration and parity machinery this means:
 
 - **P-REPLAY corpus:** `data/replay_polygon_v2/M2K` (same window, pinned builder, quarterly
   roll; 40,878 rows / 543 files; manifest `1f1e54f5…`). The §3.1 command runs per instrument
-  unchanged (`--candles data/replay_polygon_v2/M2K`).
+  unchanged (`--candles data/replay_polygon_v2/M2K`). **X0 (#622 §3 / #625):** contract identity
+  re-established from the provider for every segment (40,878/40,878), seams recorded as
+  `SCHEDULER_CONVENTION_ONLY` (`roll_days=8`, UTC-midnight seams; no live feed in the window) —
+  `docs/structural-level-v15-m2k-2026-09-17-x0-v2.json`. The same convention defines the
+  MNQ/MES `replay_polygon_v2` corpora (§3.1); the seam rule is the population definition, not
+  feed provenance (prereg v1.5 C23).
 - **Live population source for M2K:** the cross-instrument observation lane
   (`logs/cross_instrument_observation_v1.jsonl` CANDIDATE + SIGNAL rows, `logs/bars_M2K_*.jsonl`),
   loaded by `research.structural_level_p2.iter_observation_rows`; P2-P takes
   `--live-source observation`. No P-LIVE history exists before the epoch `2026-09-16T12:17:19Z`.
-- **Parity corpus for M2K:** `data/replay_polygon_parity_m2k_2026_09_16/M2K` (2026-09-01 →,
-  `roll_days=3`, Z6 from 09-15; manifest `78d4127d…`), extended as the observation window grows.
+- **Parity corpus for M2K:** `data/replay_polygon_parity_m2kz6_2026_09_16/M2K` — **single dated
+  contract `M2KZ6`** (builder `--contract M2KZ6`, 2026-09-01 →, no seam; manifest `1e3ac8f2…`;
+  X0 `PROVEN`, live bars identified Z6 27/27), extended as the observation window grows and
+  seam-free until the December roll. The first-draft stitched corpus
+  `data/replay_polygon_parity_m2k_2026_09_16/M2K` (`roll_days=3`, seam 2026-09-15T00:00Z;
+  manifest `78d4127d…`) is **`ROLL_PROVENANCE_UNKNOWN` / NOT ADMITTED** — M2K's live feed
+  switch was never observed, so its seam cannot be reconciled (X0 report
+  `…-x0-parity-stitched.json`); do not use it for M2K parity.
 - **Family matrix additions (C21):** `strat_212`, `strat_122` = `LANE_ONLY` (observation-lane
   canonical detector), must be absent from replay (manifest check). Not configured for M2K by
   the lane: `strat_122_pullback`, `strat_4hr_retrigger_observed`, `vwap_*`.
-- **Extra prerequisites:** P3-M2K (bar-source levels parity), P5-M2K (lane vs replay parity),
-  P-R (resolver equivalence, synthetic). Evidence: `docs/structural-level-v15-m2k-2026-09-17.md`.
+- **Extra prerequisites:** X0-M2K per corpus (`scripts/structural_level_x0_roll_proof.py`),
+  P3-M2K (bar-source levels parity), P5-M2K (lane vs replay parity), P-R (resolver equivalence,
+  synthetic). Evidence: `docs/structural-level-v15-m2k-2026-09-17.md`.
 
 ## 7. What P2 deliberately does not do
 
