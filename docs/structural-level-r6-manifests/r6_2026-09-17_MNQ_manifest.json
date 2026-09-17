@@ -1,0 +1,501 @@
+{
+ "b0_census": {
+  "b0_not_in_corpus": 0,
+  "unique_b0": 30464
+ },
+ "built_utc": "2026-09-17T11:37:08Z",
+ "corpus": {
+  "bars": 40907,
+  "first_bar": "2024-10-01T00:00:00+00:00",
+  "last_bar": "2026-06-26T20:45:00+00:00"
+ },
+ "features_file": {
+  "path": "logs/structural_level_r6/MNQ/features.jsonl",
+  "rows": 40460,
+  "sha256": "1bfd7edd3e14ae8c8ea09497b678e69b8f753bbf55ca04fcbd8c9f76c44c0503"
+ },
+ "inputs": {
+  "candidates": {
+   "path": "logs/structural_level_r5/MNQ/candidates.jsonl",
+   "sha256": "148768cd9a7b9b6f48d003d91cdf73b757b3018dca1343dc9a56b7e4f91c1a7a"
+  },
+  "corpus_dir": "data/replay_polygon_v2/MNQ",
+  "corpus_manifest_sha256": "1f16b81b232f0275753c295bbca4686dcc675eec6f0b488cff3099693103d8ac",
+  "p1_module": {
+   "path": "research/structural_level_features.py",
+   "prereg_sha": "v1.5 amendment (M2K added; v1.4 base 89c9074); level/event definitions unchanged since v1.3",
+   "prereg_version": "1.5",
+   "sha256": "14043ae4a783a51d601d138e49597c56a68af74242a4f00a84932b57752e0ad9"
+  }
+ },
+ "instrument": "MNQ",
+ "outcome_files_read": [],
+ "summary": {
+  "admitted_level_gap_contaminated_counts": {
+   "LC_ZONE_1H_DEMAND": 9573,
+   "LC_ZONE_1H_SUPPLY": 7893,
+   "LC_ZONE_4H_DEMAND": 14972,
+   "LC_ZONE_4H_SUPPLY": 9236,
+   "ONH": 298,
+   "ONL": 298,
+   "PDC_BAR": 2013,
+   "PDH": 2013,
+   "PDL": 2013,
+   "PWH": 8098,
+   "PWL": 8098
+  },
+  "admitted_level_not_available_counts": {
+   "LC_ZONE_1H_DEMAND": 2838,
+   "LC_ZONE_1H_SUPPLY": 9753,
+   "LC_ZONE_4H_DEMAND": 4256,
+   "LC_ZONE_4H_SUPPLY": 14782,
+   "LDN_ORB_H": 15041,
+   "LDN_ORB_L": 15041,
+   "NY_ORB_H": 26829,
+   "NY_ORB_L": 26829,
+   "PDC_BAR": 82,
+   "PDH": 82,
+   "PDL": 82,
+   "PWH": 2879,
+   "PWL": 2879
+  },
+  "admitted_level_not_in_window_counts": {
+   "LDN_ORB_H": 14014,
+   "LDN_ORB_L": 14014,
+   "NY_ORB_H": 261,
+   "NY_ORB_L": 261,
+   "ONH": 26829,
+   "ONL": 26829
+  },
+  "duplicate_candidate_keys": {},
+  "families": [
+   "ema_pullback_trend",
+   "impulse_first_pullback_observed",
+   "orb_false_break_fade",
+   "strat_122_observed",
+   "strat_122_pullback",
+   "strat_22_continuation_observed",
+   "strat_22_reversal_observed",
+   "strat_312_observed",
+   "strat_322_reversal_observed",
+   "strat_4hr_retrigger_observed",
+   "transition_failed_breakdown_reclaim",
+   "trend_consolidation_break_observed"
+  ],
+  "hypothesis_labels_by_family": {
+   "ema_pullback_trend": {
+    "H1": {
+     "F": 368,
+     "NOT_APPLICABLE": 4849,
+     "NOT_AVAILABLE": 1,
+     "T": 1034
+    },
+    "H2": {
+     "F": 384,
+     "NOT_APPLICABLE": 5775,
+     "NOT_AVAILABLE": 1,
+     "T": 92
+    },
+    "H3": {
+     "F": 167,
+     "NOT_APPLICABLE": 4821,
+     "NOT_AVAILABLE": 1,
+     "T": 1263
+    },
+    "H4": {
+     "APPLICABLE": 1865,
+     "NOT_APPLICABLE": 4386,
+     "NOT_AVAILABLE": 1
+    },
+    "H5": {
+     "F": 368,
+     "NOT_APPLICABLE": 4827,
+     "NOT_AVAILABLE": 1,
+     "T": 1056
+    },
+    "H6": {
+     "F": 3239,
+     "NOT_APPLICABLE": 1318,
+     "NOT_AVAILABLE": 1,
+     "T": 1694
+    }
+   },
+   "impulse_first_pullback_observed": {
+    "H1": {
+     "F": 1304,
+     "NOT_APPLICABLE": 4367,
+     "T": 404
+    },
+    "H2": {
+     "F": 805,
+     "NOT_APPLICABLE": 5195,
+     "T": 75
+    },
+    "H3": {
+     "F": 354,
+     "NOT_APPLICABLE": 5263,
+     "T": 458
+    },
+    "H4": {
+     "APPLICABLE": 2639,
+     "NOT_APPLICABLE": 3436
+    },
+    "H5": {
+     "F": 333,
+     "NOT_APPLICABLE": 4717,
+     "T": 1025
+    },
+    "H6": {
+     "F": 2761,
+     "NOT_APPLICABLE": 1280,
+     "T": 2034
+    }
+   },
+   "orb_false_break_fade": {
+    "H1": {
+     "F": 68,
+     "NOT_APPLICABLE": 1282,
+     "T": 141
+    },
+    "H2": {
+     "F": 38,
+     "NOT_APPLICABLE": 1450,
+     "T": 3
+    },
+    "H3": {
+     "F": 3,
+     "NOT_APPLICABLE": 1242,
+     "T": 246
+    },
+    "H4": {
+     "APPLICABLE": 350,
+     "NOT_APPLICABLE": 1141
+    },
+    "H5": {
+     "F": 65,
+     "NOT_APPLICABLE": 1229,
+     "T": 197
+    },
+    "H6": {
+     "F": 649,
+     "NOT_APPLICABLE": 162,
+     "T": 680
+    }
+   },
+   "strat_122_observed": {
+    "H1": {
+     "F": 68,
+     "NOT_APPLICABLE": 611,
+     "T": 84
+    },
+    "H2": {
+     "F": 27,
+     "NOT_APPLICABLE": 736
+    },
+    "H3": {
+     "F": 24,
+     "NOT_APPLICABLE": 634,
+     "T": 105
+    },
+    "H4": {
+     "APPLICABLE": 229,
+     "NOT_APPLICABLE": 534
+    },
+    "H5": {
+     "F": 53,
+     "NOT_APPLICABLE": 565,
+     "T": 145
+    },
+    "H6": {
+     "F": 277,
+     "NOT_APPLICABLE": 125,
+     "T": 361
+    }
+   },
+   "strat_122_pullback": {
+    "H1": {
+     "F": 42,
+     "NOT_APPLICABLE": 430,
+     "T": 112
+    },
+    "H2": {
+     "F": 46,
+     "NOT_APPLICABLE": 538
+    },
+    "H3": {
+     "F": 8,
+     "NOT_APPLICABLE": 437,
+     "T": 139
+    },
+    "H4": {
+     "APPLICABLE": 211,
+     "NOT_APPLICABLE": 373
+    },
+    "H5": {
+     "F": 38,
+     "NOT_APPLICABLE": 429,
+     "T": 117
+    },
+    "H6": {
+     "F": 298,
+     "NOT_APPLICABLE": 99,
+     "T": 187
+    }
+   },
+   "strat_22_continuation_observed": {
+    "H1": {
+     "F": 1052,
+     "NOT_APPLICABLE": 11166,
+     "T": 1601
+    },
+    "H2": {
+     "F": 1282,
+     "NOT_APPLICABLE": 12537
+    },
+    "H3": {
+     "F": 407,
+     "NOT_APPLICABLE": 11335,
+     "T": 2077
+    },
+    "H4": {
+     "APPLICABLE": 3948,
+     "NOT_APPLICABLE": 9871
+    },
+    "H5": {
+     "F": 901,
+     "NOT_APPLICABLE": 10354,
+     "T": 2564
+    },
+    "H6": {
+     "F": 6944,
+     "NOT_APPLICABLE": 2156,
+     "T": 4719
+    }
+   },
+   "strat_22_reversal_observed": {
+    "H1": {
+     "F": 490,
+     "NOT_APPLICABLE": 5303,
+     "T": 851
+    },
+    "H2": {
+     "F": 274,
+     "NOT_APPLICABLE": 6370
+    },
+    "H3": {
+     "F": 180,
+     "NOT_APPLICABLE": 5397,
+     "T": 1067
+    },
+    "H4": {
+     "APPLICABLE": 1920,
+     "NOT_APPLICABLE": 4724
+    },
+    "H5": {
+     "F": 427,
+     "NOT_APPLICABLE": 4943,
+     "T": 1274
+    },
+    "H6": {
+     "F": 3540,
+     "NOT_APPLICABLE": 797,
+     "T": 2307
+    }
+   },
+   "strat_312_observed": {
+    "H1": {
+     "F": 55,
+     "NOT_APPLICABLE": 593,
+     "T": 71
+    },
+    "H2": {
+     "F": 42,
+     "NOT_APPLICABLE": 677
+    },
+    "H3": {
+     "F": 24,
+     "NOT_APPLICABLE": 596,
+     "T": 99
+    },
+    "H4": {
+     "APPLICABLE": 196,
+     "NOT_APPLICABLE": 523
+    },
+    "H5": {
+     "F": 56,
+     "NOT_APPLICABLE": 503,
+     "T": 160
+    },
+    "H6": {
+     "F": 338,
+     "NOT_APPLICABLE": 113,
+     "T": 268
+    }
+   },
+   "strat_322_reversal_observed": {
+    "H1": {
+     "F": 76,
+     "NOT_APPLICABLE": 687,
+     "T": 131
+    },
+    "H2": {
+     "F": 24,
+     "NOT_APPLICABLE": 870
+    },
+    "H3": {
+     "F": 20,
+     "NOT_APPLICABLE": 713,
+     "T": 161
+    },
+    "H4": {
+     "APPLICABLE": 280,
+     "NOT_APPLICABLE": 614
+    },
+    "H5": {
+     "F": 58,
+     "NOT_APPLICABLE": 659,
+     "T": 177
+    },
+    "H6": {
+     "F": 519,
+     "NOT_APPLICABLE": 84,
+     "T": 291
+    }
+   },
+   "strat_4hr_retrigger_observed": {
+    "H1": {
+     "F": 197,
+     "T": 74
+    },
+    "H2": {
+     "F": 18,
+     "NOT_APPLICABLE": 251,
+     "T": 2
+    },
+    "H3": {
+     "NOT_APPLICABLE": 197,
+     "T": 74
+    },
+    "H4": {
+     "APPLICABLE": 271
+    },
+    "H5": {
+     "F": 87,
+     "T": 184
+    },
+    "H6": {
+     "F": 120,
+     "NOT_APPLICABLE": 61,
+     "T": 90
+    }
+   },
+   "transition_failed_breakdown_reclaim": {
+    "H1": {
+     "F": 21,
+     "NOT_APPLICABLE": 505,
+     "T": 86
+    },
+    "H2": {
+     "F": 3,
+     "NOT_APPLICABLE": 609
+    },
+    "H3": {
+     "F": 30,
+     "NOT_APPLICABLE": 465,
+     "T": 117
+    },
+    "H4": {
+     "APPLICABLE": 176,
+     "NOT_APPLICABLE": 436
+    },
+    "H5": {
+     "F": 37,
+     "NOT_APPLICABLE": 449,
+     "T": 126
+    },
+    "H6": {
+     "F": 116,
+     "NOT_APPLICABLE": 137,
+     "T": 359
+    }
+   },
+   "trend_consolidation_break_observed": {
+    "H1": {
+     "F": 255,
+     "NOT_APPLICABLE": 1870,
+     "T": 211
+    },
+    "H2": {
+     "F": 483,
+     "NOT_APPLICABLE": 1834,
+     "T": 19
+    },
+    "H3": {
+     "F": 109,
+     "NOT_APPLICABLE": 1991,
+     "T": 236
+    },
+    "H4": {
+     "APPLICABLE": 797,
+     "NOT_APPLICABLE": 1539
+    },
+    "H5": {
+     "F": 108,
+     "NOT_APPLICABLE": 1831,
+     "T": 397
+    },
+    "H6": {
+     "F": 1083,
+     "NOT_APPLICABLE": 490,
+     "T": 763
+    }
+   }
+  },
+  "hypothesis_labels_total": {
+   "H1": {
+    "F": 3996,
+    "NOT_APPLICABLE": 31663,
+    "NOT_AVAILABLE": 1,
+    "T": 4800
+   },
+   "H2": {
+    "F": 3426,
+    "NOT_APPLICABLE": 36842,
+    "NOT_AVAILABLE": 1,
+    "T": 191
+   },
+   "H3": {
+    "F": 1326,
+    "NOT_APPLICABLE": 33091,
+    "NOT_AVAILABLE": 1,
+    "T": 6042
+   },
+   "H4": {
+    "APPLICABLE": 12882,
+    "NOT_APPLICABLE": 27577,
+    "NOT_AVAILABLE": 1
+   },
+   "H5": {
+    "F": 2531,
+    "NOT_APPLICABLE": 30506,
+    "NOT_AVAILABLE": 1,
+    "T": 7422
+   },
+   "H6": {
+    "F": 19884,
+    "NOT_APPLICABLE": 6822,
+    "NOT_AVAILABLE": 1,
+    "T": 13753
+   }
+  },
+  "instruments": [
+   "MNQ"
+  ],
+  "rows": 40460,
+  "rows_with_any_admitted_level_gap_contaminated": 16180,
+  "rows_with_any_admitted_level_not_available": 34200,
+  "rows_with_any_admitted_level_not_in_window": 40446,
+  "unique_candidate_keys": 40460
+ },
+ "tool": "slr6-features-v1"
+}
