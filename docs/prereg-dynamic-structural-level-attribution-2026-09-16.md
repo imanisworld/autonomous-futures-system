@@ -1,6 +1,20 @@
 # Pre-Registration — Dynamic Structural-Level Attribution Study
 
-**Version:** 1.2 (2026-09-16), frozen at the commit that introduces this version.
+**Version:** 1.3 (2026-09-17), frozen at the commit that introduces this version.
+Changelog v1.2 → v1.3 (amendment based **only** on the P3 levels-only parity evidence in
+`docs/structural-level-parity-p3-2026-09-16.md`; no outcome was read; operator rulings of
+2026-09-17): (1) the P3 parity denominator for a level excludes rows already
+`context_gap_contaminated` for that level under §9.4 — exclusions stay counted and reported;
+PWH/PWL remain admitted, bar-derived (Pine `wall_context` is a parity source, never the feature
+source); (2) **VWAP is `NOT_ADMITTED` for tranche 1** — the frozen §3.7 formula diverges from Pine
+on a complete-data holiday session (C14) and moves by more than one tick on a single missing bar
+(C16); it stays computed and parity-reported as a diagnostic, and is removed from H5 and every
+confirmatory level set (no tolerance change, no holiday rule invented from one case); (3) the
+previous-day close is `PDC_BAR` (last 15m close of the prior CME trading day, the collector/bar
+construct); Pine daily `previous_day.close` is a separate, non-admitted construct (C15), and the
+claim that Pine previous-day H/L/C and the collector copies are identical is withdrawn — the study
+uses the bar-derived PDH/PDL/PDC_BAR, which reproduced the collector at 100%; (4) C14 is queued
+as a post-2026-09-30 live/replay parity **blocker** for `vwap_*` evidence.
 **Outcome-provenance statement:** no outcome analysis of the hypotheses defined here (15m
 conditioning of existing strategy candidates with unchanged brackets, H1–H6) was run while
 drafting v1.0, v1.1 or v1.2. Previously viewed evidence that informed the drafting is
@@ -99,14 +113,14 @@ of rows in the window where the source existed).
 
 | Level | Reconstructable from OHLCV | Journaled live copy (parity source) | P-REPLAY | P-LIVE | Admitted to tranche 1 |
 |---|---|---|---|---|---|
-| PDH / PDL / prior close (PDC) | yes (CME trading day, §3.1) | `context.previous_day.*` 100%; `location_context.levels.pdh/pdl/prev_close` 07-16+ | yes | yes | **yes** |
+| PDH / PDL / prior close (`PDC_BAR`) | yes (CME trading day, §3.1) | `location_context.levels.pdh/pdl/prev_close` 07-16+ (the parity source; **P3: 100%**). Pine `context.previous_day.high/low/close` is a *different* copy (P3: 90.6% / 93.7% / **1.3%** agreement) and is not a parity source (C15) | yes | yes | **yes** |
 | PWH / PWL | yes (CME trading week, §3.2) | `wall_context` PWH/PWL 75.8% of rows 06-29+ (Pine weekly) | yes (needs ≥1 full prior week of warm-up) | yes | **yes** |
 | ONH / ONL | yes (§3.3) | `location_context.levels.onh/onl` (44% of rows — only rows after the 18:00 ET reopen have one) | yes | yes | **yes, RTH-only evaluation** |
 | PMH / PML | yes (§3.4) | `location_context.levels.pmh/pml` 33.6% | yes | yes | no — exploratory (subset of the overnight range; RTH-only; small) |
 | Running HOD / LOD | yes (§3.5) | `wall_context` HOD/LOD 75.8% (Pine, trading-day reset) | yes | yes | no — exploratory (≡ ONH/ONL before 09:30 ET; touching the running extreme is tautological) |
 | NY ORB high/low | yes (§3.6) | `context.orb` when `session == new_york` (31.7% of rows, 06-03+) | re-derived (candle `orb_*` field is stale outside NY — C2) | yes | **yes** |
 | London ORB high/low | yes (§3.6) | `context.orb` when `session == london` (28.3%) | re-derived (older corpora lack `london_orb_*` — C2) | yes | **yes** |
-| VWAP (CME-day anchored) | yes (§3.7) | `context.vwap.value` 100% | candle `vwap` (same convention) | yes | **yes, price-response only + own-level exclusion (§6)** |
+| VWAP (CME-day anchored) | yes (§3.7) | `context.vwap.value` 100% — **P3: 89.0%**, diverges from Pine on a complete-data holiday session (C14) and on any missing bar (C16) | candle `vwap` (same 18:00 convention — shares C14) | yes | **NO — `NOT_ADMITTED` tranche 1 (v1.3)**; computed and parity-reported as a diagnostic only |
 | `location_context` 1H supply/demand zones | yes — pure `aggregate`/`detect_zones`/`nearest_zones` (§4.1) | `location_context.zones.1h` 59.6% (07-16+) | yes (replay never computed it live; offline only) | yes | **yes** |
 | `location_context` 4H zones | yes (§4.1) | `location_context.zones.4h` 59.7% | yes | yes | **yes** |
 | Pine pivot supply/demand (`risksentinel_context.pine`) | in principle (ta.pivothigh/low 7/7 + pivot-bar body, §4.2) — **parity unproven**, deployed `i_bos_swing` input unverified (C11) | `wall_context` SUPPLY_ZONE/DEMAND_ZONE 75.8%; observer `supply_demand_confluence` 100% of 15m observer rows | only via reconstruction | yes | no — tranche 2 after P4 parity passes |
@@ -155,7 +169,7 @@ in MTR15 units; point thresholds are never used in the confirmatory family.
 
 | # | Level | Definition (frozen) | Formed / valid | Source-of-truth parity |
 |---|---|---|---|---|
-| 3.1 | **PDH / PDL / PDC** | high / low / last close of all bars in the previous CME trading day | valid for the entire current trading day 18:00 → 17:00 ET; age = time since 17:00 ET prior day | Pine `request.security("D", high[1]/low[1]/close[1])` on a CME symbol = the 18:00-anchored daily bar; `csv_to_replay.get_prev_day_stats`; `location_context._day_ranges` — all agree |
+| 3.1 | **PDH / PDL / `PDC_BAR`** | high / low / **last 15m bar close** of all bars in the previous CME trading day (bar-derived; `PDC_BAR` is the collector's `prev_close`) | valid for the entire current trading day 18:00 → 17:00 ET; age = time since 17:00 ET prior day | `location_context._day_ranges` and `csv_to_replay.get_prev_day_stats` (same construct; **P3: 100%**). Pine `request.security("D", high[1]/low[1]/close[1])` is a **separate construct**: its `close[1]` is the 17:00 ET daily print, not the last 15m close (P3: 1.3% agreement, C15), and its H/L differ on outage/holiday days (P3: 90.6% / 93.7%). Pine previous-day fields are not admitted and not a parity source |
 | 3.2 | **PWH / PWL** | high / low of all bars whose trading day falls in the previous Monday–Friday trading-week (Sunday 18:00 ET reopen belongs to Monday) | valid for the whole current trading week | Pine weekly `high[1]/low[1]`; **no replay copy exists** — parity proven against `wall_context` PWH/PWL on P-LIVE (P3) |
 | 3.3 | **ONH / ONL** | high / low of current-trading-day bars with open in [18:00 ET, 09:30 ET) | forming during Asian/London (running); **frozen at 09:30 ET**; events evaluated only for `B0` in new_york | `location_context._day_ranges` overnight (identical); observer copy dead (C4) |
 | 3.4 | PMH / PML | as 3.3 restricted to [04:00, 09:30) ET | RTH-only | `location_context` premarket; exploratory |
@@ -163,7 +177,7 @@ in MTR15 units; point thresholds are never used in the confirmatory family.
 | 3.6 | **NY ORB** | high / low of bars with open in [09:30, 09:45) ET = the single 09:30 15m bar. If that bar is absent (feed gap, holiday, late open) the NY ORB for that trading day is **`NOT_AVAILABLE`** — no later bar is substituted, rows are counted under §9.9. (Pine and `polygon_to_replay` would start the range on the first observed in-session bar; that runtime behaviour is a known divergence from this definition and is *why* the study re-derives the ORB rather than reading it — a synthesized range is not the opening range.) | valid from the 09:45 bar to the first bar with open ≥ 17:00 ET; **no ORB exists outside 09:30–17:00** | Pine `i_orb_min=15`, `i_ny_session="0930-1200"`, expiry when leaving `"0930-1700"`; `state_builder` routes NY ORB only when `session == new_york`; `polygon_to_replay` first-bar-in-session reset — agree. Candle `orb_*` fields outside NY are stale and must not be read (C2) |
 | 3.6 | **London ORB** | high / low of bars with open in [03:00, 03:15) ET = the single 03:00 15m bar; absent bar → `NOT_AVAILABLE` for that day, same rule as NY, no substitute | valid from 03:15 to the first bar with open ≥ 09:30 ET | Pine `i_london_session="0300-0830"`, expiry when leaving `"0300-0930"`; `state_builder` routes it only for `session == london` — agree; older corpora need re-derivation (C2) |
 | 3.6 | Asian/Globex opening range | **NOT DEFINED AS A CANONICAL ORB.** If ever studied it is the research construct `GLOBEX_OR_15 := high/low of the 18:00 ET bar`, evaluated 18:15–02:59 ET only, and never called "ORB" | — | new construct; exploratory only; the canonical NY/London definitions are not altered |
-| 3.7 | **VWAP** | cumulative Σ(hlc3·volume)/Σvolume over bars of the current CME trading day, reset at the first bar with open ≥ 18:00 ET | continuous | Pine `ta.vwap(hlc3)` (session-anchored on the CME symbol = 18:00 ET); `csv_to_replay.vwap_day_range` / `compute_vwap` (the proven convention; sub-session resets were a replay bug, fixed, never to be resurrected); `polygon_to_replay` — agree |
+| 3.7 | VWAP — **`NOT_ADMITTED` tranche 1 (v1.3), diagnostic only** | cumulative Σ(hlc3·volume)/Σvolume over bars of the current CME trading day, reset at the first bar with open ≥ 18:00 ET (kept as the diagnostic definition; not tuned) | continuous | `csv_to_replay.vwap_day_range` / `compute_vwap` and `polygon_to_replay` use this convention (sub-session resets were a replay bug, fixed, never to be resurrected). **P3 disproved parity with Pine `ta.vwap(hlc3)` as a general statement:** 100% on regular complete-data days, but Pine did not reset at the 18:00 ET reopen after the 2026-09-07 holiday session (C14) and one missing 15m bar moves the cumulative value by more than one tick (C16). No holiday-anchor rule is invented from one case; readmission needs a v2 definition with its own parity proof |
 
 **Dynamic validity / state.** A level carries a state at `B0`: `intact` (no close through it
 since it became valid), `broken` (a close through it has occurred; the break bar index is
@@ -226,7 +240,8 @@ inspected. "Any level that makes T true" is forbidden.
   that hypothesis's own level set** (§6, after own-level exclusion) with the smallest
   absolute distance from the candidate's **entry** (zones: distance to the facing edge).
   Ties at tick resolution resolve by the fixed precedence PWH/PWL > PDH/PDL > ONH/ONL >
-  NY ORB > London ORB > `LC_ZONE` 4H > `LC_ZONE` 1H > PDC > VWAP (higher timeframe first),
+  NY ORB > London ORB > `LC_ZONE` 4H > `LC_ZONE` 1H > `PDC_BAR` (higher timeframe first; VWAP is
+  not admitted and never enters an anchor or cluster),
   then lower price for LONG / higher price for SHORT. The anchor is chosen from geometry
   only; it is never switched to whichever level happens to carry an event.
 - H1, H3, H4 are then evaluated on `A_H` alone. If `A_H` satisfies neither the T nor the F
@@ -255,7 +270,7 @@ inspected. "Any level that makes T true" is forbidden.
 | E5b `BREAK_RETEST_REJECT` / `FAILED_BREAKOUT` | break → retest → reject | as E5a but `B0.close` back through ℓ (the retest fails). For the hypothesis it is the mirror-side supportive event: a failed breakout *above* an opposing level is `FAILED_BREAKOUT` for a SHORT | B−R..B0 |
 | E6 `PROXIMITY_ONLY` | approach without touch | `0 < signed distance from B0.close to ℓ ≤ 0.5 × MTR15` and not `TOUCH` | B0 |
 | E7 `DIST` | distance at signal | `(B0.close − ℓ) / MTR15`, signed so that positive = level on the supportive side | B0 |
-| E8 `CLUSTER` | clustering / confluence | Anchor `A` = `A_H` of §5.1 computed over the H5 level set (nearest admitted supportive level to entry, fixed tie precedence, never switched to an event level). **Relevance band:** if the distance from entry to `A` exceeds 0.5 × MTR15, `CLUSTER` is `NOT_APPLICABLE` (structure that merely exists somewhere below/above the entry is not clustered structure *at* the setup). Otherwise `CLUSTER` = number of distinct admitted levels (anchor included) within ± 0.5 × MTR15 of `A`, after tautology removal: HOD≡ONH / LOD≡ONL before 09:30 ET count once; PDC and VWAP count; a `LC_ZONE` counts if the band intersects the zone; own-level exclusion (§6) applies | B0 |
+| E8 `CLUSTER` | clustering / confluence | Anchor `A` = `A_H` of §5.1 computed over the H5 level set (nearest admitted supportive level to entry, fixed tie precedence, never switched to an event level). **Relevance band:** if the distance from entry to `A` exceeds 0.5 × MTR15, `CLUSTER` is `NOT_APPLICABLE` (structure that merely exists somewhere below/above the entry is not clustered structure *at* the setup). Otherwise `CLUSTER` = number of distinct admitted levels (anchor included) within ± 0.5 × MTR15 of `A`, after tautology removal: HOD≡ONH / LOD≡ONL before 09:30 ET count once; `PDC_BAR` counts; VWAP does **not** count (v1.3, not admitted); a `LC_ZONE` counts if the band intersects the zone; own-level exclusion (§6) applies | B0 |
 | E9 `ROOM` | room to next opposing structure | distance from candidate **entry** to the nearest opposing admitted level (excluding the candidate's own level), divided by the candidate's stop distance → `ROOM_R`; `TARGET_REL` ∈ {`before`, `inside` (target within ± τ of the opposing level), `beyond`} | B0 |
 
 **Sequence rule.** Every event above is defined so that its confirmation bar is `B0` — the
@@ -281,7 +296,7 @@ feature set: ORB for `orb_*`, VWAP for `vwap_*`, PDH/PDL for `pdh_/pdl_reclaim`,
 | **H2** | Break → retest → hold (role reversal) beats an age-matched accepted break that has not retested | On `A_2` (§5.1), break age `j ∈ [2, R]`. T: `E5a` — every close since the break stayed beyond ℓ, **no** bar in `B−j+1..B−1` came within τ of ℓ, and `B0` is the first bar that comes within τ and closes beyond ℓ (retest-hold). F: same break age window, every close since the break stayed beyond ℓ, and **no** bar in `B−j+1..B0` has come within τ of ℓ (accepted, not yet retested). Candidates whose level already retested at an earlier bar (`B−m`, m < j) are neither T nor F → `NOT_APPLICABLE`, counted. **Age matching (binding):** the effect is the stratified difference across frozen break-age bins {2–3, 4–5, 6–8} bars (equal-weight across bins with n ≥ 12; a bin below that is dropped and counted); permutation shuffles labels within age bin × instrument × session × family. Immediate-chase breaks (`j ∈ {0, 1}`) are a **descriptive third group only** (exploratory, §13), never the control | `MAJOR` | T better |
 | **H3** | Actual rejection beats mere proximity | On `A_H` (§5.1, H3 level set). T: `E3a` (wick-reject) on `A_H`; F: `E6 PROXIMITY_ONLY` to `A_H`; a plain touch that closes through `A_H` is neither → `NOT_APPLICABLE` (descriptive third group, §13) | `MAJOR ∪ LC_ZONE` (zone edge) | T better |
 | **H4** | Test count and age matter *separately* | On `A_H` (§5.1, H4 level set), among candidates with `TOUCH` or `PROXIMITY_ONLY` on `A_H`: ordered `TEST_COUNT` bins {0, 1–2, ≥3} and, separately, `AGE` tertiles fixed from P-REPLAY fold 1 before any outcome is read; test = permutation Spearman trend of net R across bins (one test each; H4 counts as one Holm entry using the smaller of the two p-values, Bonferroni-2 inside) | `MAJOR ∪ LC_ZONE` | two-sided (the closed study's F4 flipped sign) |
-| **H5** | Structural clustering improves the candidate | Anchor `A` must lie within **≤ 0.5 × MTR15 of entry** (E8 relevance band) or the row is `NOT_APPLICABLE`, counted. T: `CLUSTER ≥ 2`; F: `CLUSTER == 1` (only the anchor in band) | `MAJOR ∪ LC_ZONE ∪ {PDC, VWAP}` (VWAP allowed here as a cluster member, not as an event) | T better |
+| **H5** | Structural clustering improves the candidate | Anchor `A` must lie within **≤ 0.5 × MTR15 of entry** (E8 relevance band) or the row is `NOT_APPLICABLE`, counted. T: `CLUSTER ≥ 2`; F: `CLUSTER == 1` (only the anchor in band) | `MAJOR ∪ LC_ZONE ∪ {PDC_BAR}` (VWAP removed in v1.3 — not admitted) | T better |
 | **H6** | Room to the next opposing structure relative to the planned target | T: `TARGET_REL == before` (target reached before the nearest opposing level); F: `TARGET_REL == beyond` | opposing side of `MAJOR ∪ LC_ZONE` | T better |
 
 H4 and H6 overlap constructs already viewed on P-LIVE (F4 fresh-vs-tested; F11
@@ -465,7 +480,9 @@ horizon h"; it is never converted into a trade statement.
   consistent-sign ≥ 0.10R separation in ≥ 2 provenance strata → close the dynamic-level
   direction; no v1.1 on the same constructs without new mechanistic evidence.
 - **K2 — feature parity fails:** P3/P4 parity < 98% within **one tick** (the single frozen
-  tolerance for every admitted level, VWAP included) on any admitted level,
+  tolerance for every admitted level) on any admitted level over its **eligible rows** (rows
+  not `context_gap_contaminated` for that level under §9.4; exclusions counted and reported —
+  v1.3),
   or replay/live bracket formulas differ for a family that carries > 25% of rows →
   analysis BLOCKED for that level/family until the definition is reconciled (not in this
   task).
@@ -486,8 +503,9 @@ horizon h"; it is never converted into a trade statement.
 ## 13. Exploratory-only variables (not admitted to the confirmatory family)
 
 Reported, if at all, under an `EXPLORATORY` fence; never Holm-corrected into the family;
-never gate evidence: PMH/PML events; running HOD/LOD events; VWAP events as a feature for
-non-VWAP families (PR only, and as a cluster member in H5); `PINE_SD` (until P4);
+never gate evidence: PMH/PML events; running HOD/LOD events; VWAP in any role (not admitted
+from v1.3 — diagnostic parity reporting only, no PR use, no cluster membership); Pine
+`previous_day.high/low/close` (C15); `PINE_SD` (until P4);
 BOS/MSS reconstructions; any FVG definition; `GLOBEX_OR_15`; `wall_context.wall_alignment`
 tags and their 0.2/0.3/0.5% thresholds; `confluence_scorer` composite score and its point
 weights (unvalidated — no outcome validation exists in the repo; the score is also a
@@ -506,7 +524,7 @@ any level-identity subgroup ("only PDL works").
 |---|---|---|---|
 | P1 | Pure offline feature builder `research/structural_level_features.py`: levels §3, `LC_ZONE` §4.1 via the pure `location_context` functions, events §5, from a list of 15m bars ending at `B0`; no imports from webhook/strategy/execution/journal | module + unit tests on synthetic bars (one test per event) | no |
 | P2 | Candidate regeneration spec for P-REPLAY: pinned SHA, `enabled_concepts` list, shadow-candidate output with brackets and resolver outcomes, per family; family compatibility matrix (P5) filled from the run manifest | run manifest + candidate JSONL (not run here) | no (replay is offline) |
-| P3 | Parity proof on P-LIVE 07-16..09-14: offline PDH/PDL/PDC/ONH/ONL/PMH/PML vs `location_context.levels`; NY/London ORB vs `context.orb` (NY/London rows only, and **only session-days where the canonical 09:30 / 03:00 bar exists** — `NOT_AVAILABLE` days are excluded from the ≥ 98% denominator and reported separately, because runtime intentionally falls back to the first observed in-session bar on those days and that divergence is by design, not a parity failure); VWAP vs `context.vwap.value` (within **one tick**, 0.25 pt on MNQ/MES — same tolerance as every other admitted level; if Pine's volume basis makes this unattainable, VWAP is `NOT_ADMITTED` rather than the tolerance widened); PWH/PWL/HOD/LOD vs `wall_context`; 1H/4H zones vs `location_context.zones` (edges within 1 tick, same `tests`/`broken`) — thresholds ≥ 98% | parity report | no |
+| P3 | Parity proof on P-LIVE 07-16..09-14: offline PDH/PDL/PDC/ONH/ONL/PMH/PML vs `location_context.levels`; NY/London ORB vs `context.orb` (NY/London rows only, and **only session-days where the canonical 09:30 / 03:00 bar exists** — `NOT_AVAILABLE` days are excluded from the ≥ 98% denominator and reported separately, because runtime intentionally falls back to the first observed in-session bar on those days and that divergence is by design, not a parity failure); VWAP vs `context.vwap.value` (**diagnostic only from v1.3** — reported, not in the pass/fail family); PWH/PWL/HOD/LOD vs `wall_context` (Pine copies are the parity *source*, never the feature source); 1H/4H zones vs `location_context.zones` (edges within 1 tick, same `tests`/`broken`). **Denominator (v1.3):** for every admitted level, rows already `context_gap_contaminated` for that level under §9.4 are excluded from the ≥ 98% denominator and reported as excluded with their own agreement rate. Thresholds ≥ 98% within one tick. **Status: RUN — see `docs/structural-level-parity-p3-2026-09-16.md`** | parity report | no |
 | P4 | `PINE_SD` reconstruction parity (tranche-2 admission test) incl. determining the deployed `i_bos_swing` | parity report | no |
 | P5 | Live vs replay bracket-formula parity per family at the pinned SHA (entry/stop/target arithmetic, tick constants) | compatibility matrix (§2.3) | no |
 | P6 | Roll ledger for P-REPLAY (dates, gap sizes) and gap ledger on the 15m grid; P-LIVE ledger reused | ledgers | no |
@@ -557,13 +575,32 @@ can be handled entirely in the offline builder):
 - **C13 — `range_signal` candidates have no per-candidate `location` block and their
   bracket derives from `wall_context` (C1).** **Handling:** `LIVE_ONLY` family; features
   are computed offline from bars for them like any other row.
+- **C14 — Pine VWAP holiday anchor (found by P3, 2026-09-16).** After the 2026-09-07 CME
+  holiday session TradingView's `ta.vwap` did not reset at the Mon 18:00 ET reopen (09-08,
+  both instruments, zero bar gap, first-bar difference −3.96 MNQ / −5.61 MES). The repo's
+  "one reset per CME trading day at 18:00 ET" convention (`csv_to_replay.vwap_day_range`,
+  `polygon_to_replay`, §3.7) reproduces Pine on regular days only. **Handling:** VWAP
+  `NOT_ADMITTED` tranche 1; **queued post-2026-09-30 as a live/replay parity BLOCKER for
+  `vwap_*` lanes** — no promotion-quality VWAP-family conclusion on a holiday week until
+  the exact holiday/session anchor is established and live and replay share one formula.
+- **C15 — two "previous close" constructs (P3).** Pine `previous_day.close` (daily
+  `close[1]`, the 17:00 ET print) agrees with the collector's last-15m-close `prev_close` on
+  1.3% of rows; Pine daily H/L differ from the bar-derived PDH/PDL on 9.4% / 6.3% (outage and
+  holiday days). **Handling:** the study's level is `PDC_BAR`; Pine previous-day fields are a
+  separate, non-admitted construct; consumers of `context.previous_day.close` (confluence
+  "target near PDC", key-level observer) are using the other one.
+- **C16 — VWAP gap sensitivity (P3).** One missing 15m bar (below the §9.4 45-minute flag)
+  moves the cumulative VWAP by more than one tick; extremes (PDH/ONH/PWH) are robust to it.
+  **Handling:** part of the VWAP `NOT_ADMITTED` ruling; any v2 readmission needs an
+  "any missing bar in the current trading day" contamination rule.
 
 ---
 
-**Verdict (v1.2): NEEDS DEFINITION FIXES.** The ten definition gaps raised across the two
-operator reviews (six in v1.1, four in v1.2) are closed; every per-candidate label is now
-fixed by geometry before any event or outcome is inspected. The verdict is unchanged
-because what remains is parity-level, not wording-level. The data to answer the question exists (two years of
+**Verdict (v1.3): NEEDS DEFINITION FIXES → resolved to the P3 result.** The ten wording
+gaps from the two operator reviews are closed (v1.1/v1.2), and v1.3 records what the P3
+parity run proved: every admitted level reproduces its journaled copy at ≥ 98% within one
+tick on eligible rows, with VWAP withdrawn from tranche 1 and Pine previous-day fields
+demoted to a separate construct. The data to answer the question exists (two years of
 15m Polygon bars for both instruments, a 53-day live journal with bar history, an MES
 holdout, and a prospective Z6 window), and every admitted level is reconstructable from
 OHLCV. What does not yet exist is the single offline definition layer that makes the

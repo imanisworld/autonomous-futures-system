@@ -84,7 +84,7 @@ def test_pdh_pdl_pdc_previous_trading_day_including_globex():
     ls = slf.build_levels(bars, INST, b0_ts=_et(2026, 9, 9, 10))
     assert ls.levels["PDH"].value == 20030.0
     assert ls.levels["PDL"].value == 19970.0
-    assert ls.levels["PDC"].value == 19995.0
+    assert ls.levels["PDC_BAR"].value == 19995.0
 
 
 def test_pwh_pwl_previous_full_week_and_not_available_when_incomplete():
@@ -162,6 +162,24 @@ def test_vwap_resets_at_1800_et_not_at_sub_sessions():
     # London → NY boundary must not reset: same accumulator continues
     ls_ldn = slf.build_levels(bars, INST, b0_ts=_et(2026, 9, 9, 9, 15))
     assert ls_ldn.levels["VWAP"].value > 20000.0
+
+
+def test_vwap_is_diagnostic_only_never_anchor_or_cluster():
+    """v1.3: VWAP is computed (diagnostic) but NOT_ADMITTED — it can never be an anchor or
+    count toward CLUSTER, even when it is the nearest level to entry."""
+    bars = _day_with_levels()
+    b0 = _et(2026, 9, 9, 11)
+    ls = slf.build_levels(bars, INST, b0_ts=b0)
+    assert ls.levels["VWAP"].status == "AVAILABLE" and ls.levels["VWAP"].exploratory
+    vw = ls.levels["VWAP"].value
+    # entry a tick above VWAP: VWAP would be the nearest supportive level if admitted
+    a = slf.select_anchor(ls, slf.H_LEVEL_SETS["H5"], "strat", entry=vw + TICK, sign=+1)
+    assert a is not None and a.name != "VWAP"
+    assert "VWAP" not in slf.H_LEVEL_SETS["H5"] and "VWAP" in slf.DIAGNOSTIC_LEVELS
+    lab = slf.label_candidate(bars, INST, direction="LONG", entry=vw + TICK, stop=vw - 10, target=vw + 20,
+                              strategy="strat_212", b0_ts=b0)
+    for h in lab["hypotheses"].values():
+        assert h.get("anchor") != "VWAP" and h.get("opposing") != "VWAP"
 
 
 def test_lc_zone_matches_live_collector_exactly():

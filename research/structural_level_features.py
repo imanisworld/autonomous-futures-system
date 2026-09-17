@@ -4,8 +4,12 @@ Implements, from a list of 15-minute OHLCV bars ending at the decision bar ``B0`
 level definitions (§3), the ``LC_ZONE`` construct (§4.1), the event taxonomy (§5), the
 candidate-level reduction rule (§5.1) and the per-hypothesis T / F / NOT_APPLICABLE /
 NOT_AVAILABLE labels (§6) of
-``docs/prereg-dynamic-structural-level-attribution-2026-09-16.md`` (v1.2, frozen at
-fdeac72).
+``docs/prereg-dynamic-structural-level-attribution-2026-09-16.md`` (v1.3).
+
+v1.3 (operator rulings on the P3 parity result): VWAP is NOT_ADMITTED for tranche 1 — it is
+still computed and returned for diagnostics/parity but never enters an anchor, a cluster or
+any hypothesis level set; the previous-day close is ``PDC_BAR`` (last 15m close of the prior
+CME trading day, the collector's ``prev_close``), distinct from Pine's daily ``close[1]``.
 
 Contract (binding, per the prereg):
   * pure — no I/O, no journal, no broker/risk/runner/replay/webhook imports; the only repo
@@ -41,8 +45,8 @@ from context.location_context import (
     nearest_zones,
 )
 
-PREREG_VERSION = "1.2"
-PREREG_SHA = "fdeac72"
+PREREG_VERSION = "1.3"
+PREREG_SHA = "v1.3 amendment on PR #617 (v1.2 base fdeac72)"
 
 _ET = ZoneInfo("America/New_York")
 
@@ -61,6 +65,7 @@ MAJOR = ("PWH", "PWL", "PDH", "PDL", "ONH", "ONL", "NY_ORB_H", "NY_ORB_L",
          "LDN_ORB_H", "LDN_ORB_L")
 ZONE_NAMES = ("LC_ZONE_4H_SUPPLY", "LC_ZONE_4H_DEMAND", "LC_ZONE_1H_SUPPLY", "LC_ZONE_1H_DEMAND")
 EXPLORATORY_LEVELS = ("PMH", "PML", "HOD", "LOD")
+DIAGNOSTIC_LEVELS = ("VWAP",)   # v1.3: computed + parity-reported, never admitted
 
 # §5.1 tie precedence (higher timeframe first)
 TIE_PRECEDENCE = {
@@ -68,7 +73,7 @@ TIE_PRECEDENCE = {
     "NY_ORB_H": 3, "NY_ORB_L": 3, "LDN_ORB_H": 4, "LDN_ORB_L": 4,
     "LC_ZONE_4H_SUPPLY": 5, "LC_ZONE_4H_DEMAND": 5,
     "LC_ZONE_1H_SUPPLY": 6, "LC_ZONE_1H_DEMAND": 6,
-    "PDC": 7, "VWAP": 8,
+    "PDC_BAR": 7,
     # exploratory levels never enter a confirmatory anchor; ranked last for completeness
     "PMH": 9, "PML": 9, "HOD": 10, "LOD": 10,
 }
@@ -79,7 +84,7 @@ H_LEVEL_SETS = {
     "H2": MAJOR,
     "H3": MAJOR + ZONE_NAMES,
     "H4": MAJOR + ZONE_NAMES,
-    "H5": MAJOR + ZONE_NAMES + ("PDC", "VWAP"),
+    "H5": MAJOR + ZONE_NAMES + ("PDC_BAR",),   # v1.3: VWAP removed
     "H6": MAJOR + ZONE_NAMES,
 }
 
@@ -277,7 +282,7 @@ def build_levels(bars15: list[dict], instrument: str, *, b0_ts: Optional[datetim
     today_bars = by_day.get(today, [])
     first_today_idx = len(past) - len(today_bars)
 
-    # 3.1 PDH / PDL / PDC — previous trading day present in the window
+    # 3.1 PDH / PDL / PDC_BAR — previous trading day present in the window
     prev_keys = [k for k in day_keys if k < today]
     if prev_keys:
         pk = prev_keys[-1]
@@ -288,14 +293,14 @@ def build_levels(bars15: list[dict], instrument: str, *, b0_ts: Optional[datetim
         formed = pb[-1]["ts"] + timedelta(minutes=15)
         levels["PDH"] = Level("PDH", max(b["high"] for b in pb), "AVAILABLE", "point", formed_ts=formed, valid_from_idx=first_today_idx)
         levels["PDL"] = Level("PDL", min(b["low"] for b in pb), "AVAILABLE", "point", formed_ts=formed, valid_from_idx=first_today_idx)
-        levels["PDC"] = Level("PDC", pb[-1]["close"], "AVAILABLE", "point", formed_ts=formed, valid_from_idx=first_today_idx)
+        levels["PDC_BAR"] = Level("PDC_BAR", pb[-1]["close"], "AVAILABLE", "point", formed_ts=formed, valid_from_idx=first_today_idx)
         pd_start = _et(pb[0]["ts"]).replace(hour=18, minute=0, second=0, microsecond=0) - timedelta(days=1) \
             if _et(pb[0]["ts"]).hour < 18 else _et(pb[0]["ts"]).replace(hour=18, minute=0, second=0, microsecond=0)
         pd_end = pd_start + timedelta(hours=23)
-        for n in ("PDH", "PDL", "PDC"):
+        for n in ("PDH", "PDL", "PDC_BAR"):
             _flag_gap(levels[n], past, pd_start, pd_end)
     else:
-        for n in ("PDH", "PDL", "PDC"):
+        for n in ("PDH", "PDL", "PDC_BAR"):
             levels[n] = Level(n, None, "NOT_AVAILABLE", "point", reason="no previous trading day in window")
 
     # 3.2 PWH / PWL — previous Mon–Fri trading week fully inside the window
@@ -400,10 +405,11 @@ def build_levels(bars15: list[dict], instrument: str, *, b0_ts: Optional[datetim
         num += (b["high"] + b["low"] + b["close"]) / 3.0 * v
         den += v
     if today_bars and vwap_ok and den > 0:
-        levels["VWAP"] = Level("VWAP", num / den, "AVAILABLE", "point", valid_from_idx=first_today_idx)
+        levels["VWAP"] = Level("VWAP", num / den, "AVAILABLE", "point", valid_from_idx=first_today_idx,
+                               exploratory=True, reason="NOT_ADMITTED tranche 1 (v1.3): diagnostic only")
         _flag_gap(levels["VWAP"], past, datetime.combine(today - timedelta(days=1), time(18, 0), tzinfo=_ET), now + timedelta(minutes=15))
     else:
-        levels["VWAP"] = Level("VWAP", None, "NOT_AVAILABLE", "point",
+        levels["VWAP"] = Level("VWAP", None, "NOT_AVAILABLE", "point", exploratory=True,
                                reason="no volume on a current-day bar" if today_bars else "no bars for the current trading day")
 
     # 4.1 LC_ZONE — identical code path to the live collector
@@ -609,7 +615,7 @@ def _admitted(ls: LevelSet, names: tuple[str, ...], family: str) -> list[Level]:
         if n in excl:
             continue
         lv = ls.levels.get(n)
-        if lv is None or lv.status != "AVAILABLE" or lv.exploratory:
+        if lv is None or lv.status != "AVAILABLE" or lv.exploratory or n in DIAGNOSTIC_LEVELS:
             continue
         if lv.kind == "point" and lv.value is None:
             continue

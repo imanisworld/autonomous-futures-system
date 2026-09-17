@@ -11,13 +11,20 @@ Reads evidence only; never reads a SHADOW_OUTCOME, PaperBroker or demo outcome r
 scores a candidate, never touches the journal, collectors, config or the box. Writes only
 into ``--out-dir``. Imports nothing from webhook/strategy/execution/journal/replay.
 
-Denominator rules (frozen in the prereg):
+Denominator rules (frozen in the prereg; v1.3):
+  * ELIGIBLE rows only: a row already ``context_gap_contaminated`` for a level under §9.4
+    (a gap >= 45 min inside that level's formation window in the bar history) is excluded from
+    that level's >= 98% denominator — it is COUNTED and its own agreement rate is reported
+    (``excluded_gap_contaminated`` / ``excluded_agree``), never silently dropped. The raw
+    all-rows rate is reported beside it.
   * NY / London ORB: only rows in that session whose canonical 09:30 / 03:00 bar exists in
     bar history; ``NOT_AVAILABLE`` session-days are counted separately, never as failures.
   * ONH/ONL, PMH/PML: rows where the journal carries the level.
   * zones: (top, bottom, tests, broken, formed_ts) of the nearest unbroken zone per
     timeframe/kind; None==None is agreement.
-  * VWAP: rows whose ``price_vs_vwap`` is defined.
+  * VWAP: DIAGNOSTIC ONLY (v1.3, NOT_ADMITTED) — reported, not in the pass/fail family.
+  * Pine ``previous_day.*`` (daily high[1]/low[1]/close[1]) is a separate construct (C15):
+    reported as informational, never a parity source for PDH/PDL/PDC_BAR.
 
 Usage:
     python3 scripts/structural_level_parity_check.py --logs-root <snapshot> \
@@ -42,7 +49,7 @@ if str(REPO) not in sys.path:
 from context.bar_history import _parse_dt  # noqa: E402  (pure parser)
 from research import structural_level_features as slf  # noqa: E402
 
-TOOL_VERSION = "slf-parity-v1"
+TOOL_VERSION = "slf-parity-v1.3"
 INSTRUMENTS = ("MNQ", "MES")
 PASS_PCT = 98.0
 LIVE_LOOKBACK_DAYS = 14   # runner: BarHistory.recent(inst, 960, lookback_days=14)
@@ -58,19 +65,35 @@ def _read_jsonl(path: str):
 
 
 def load_bars(logs_root: str, inst: str) -> list[dict]:
-    """All 15m bars for the instrument, sorted, first-seen-wins on duplicate ts."""
+    """All 15m bars for the instrument, sorted, first-seen-wins on duplicate ts (the snapshot
+    has none). Each bar keeps ``file_date`` (the runner's processing-date file it lives in) so
+    the live window can be replicated exactly."""
     seen: dict[datetime, dict] = {}
     for f in sorted(glob.glob(os.path.join(logs_root, f"bars_{inst}_*.jsonl"))):
+        fdate = os.path.basename(f)[len(f"bars_{inst}_"):][:10]
         for r in _read_jsonl(f):
             ts = _parse_dt(r.get("ts"))
             if ts is None or ts in seen:
                 continue
             try:
                 seen[ts] = {"ts": ts, "open": float(r["open"]), "high": float(r["high"]),
-                            "low": float(r["low"]), "close": float(r["close"]), "volume": r.get("volume")}
+                            "low": float(r["low"]), "close": float(r["close"]), "volume": r.get("volume"),
+                            "file_date": fdate}
             except (KeyError, TypeError, ValueError):
                 continue
     return [seen[k] for k in sorted(seen)]
+
+
+def live_window(bars: list[dict], b0: datetime, for_date: str) -> list[dict]:
+    """Exactly the runner's ``BarHistory.recent(inst, 960, for_date=today, lookback_days=14)``
+    as seen at decision time: day files ``for_date-13 .. for_date`` (processing dates), bars
+    with ts <= B0 (later bars did not exist yet), last 960. When those files hold fewer than
+    960 bars (14 calendar days ≈ 10 trading days ≈ 920 bars) the window starts at the file
+    boundary — which is why ``ts >= B0 - 14d`` is not an exact replica."""
+    d_end = datetime.fromisoformat(for_date).date()
+    d_lo = (d_end - timedelta(days=LIVE_LOOKBACK_DAYS - 1)).isoformat()
+    win = [b for b in bars if d_lo <= b["file_date"] <= for_date and b["ts"] <= b0]
+    return win[-slf.LIVE_BAR_WINDOW:]
 
 
 def _is_decision_row(r: dict) -> bool:
@@ -98,7 +121,8 @@ class Tally:
             self.c[f"{key}.mine_missing"] += 1
             self._ex(key, row_id, mine, theirs)
             return
-        self.c[f"{key}.compared"] += 1
+        if not gap_flag:
+            self.c[f"{key}.compared"] += 1   # eligible rows
         if exact:
             ok = mine == theirs
         else:
@@ -107,14 +131,26 @@ class Tally:
             except (TypeError, ValueError):
                 ok = mine == theirs
         g = "gap_flagged" if gap_flag else ("clean" if gap_flag is not None else "n/a")
+        self.c[f"{key}.all_rows"] += 1
+        if ok:
+            self.c[f"{key}.all_agree"] += 1
+        self.by_gap[(key, "agree" if ok else "disagree", g)] += 1
         if day:
             self.day_n[key][day] += 1
+        if gap_flag:
+            # §9.4-contaminated for this level: counted, reported, excluded from the denominator
+            self.c[f"{key}.excluded_gap_contaminated"] += 1
+            if ok:
+                self.c[f"{key}.excluded_agree"] += 1
+            else:
+                if day:
+                    self.by_day[key][day] += 1
+                self._ex(key, row_id, mine, theirs)
+            return
         if ok:
             self.c[f"{key}.agree"] += 1
-            self.by_gap[(key, "agree", g)] += 1
         else:
             self.c[f"{key}.disagree"] += 1
-            self.by_gap[(key, "disagree", g)] += 1
             if day:
                 self.by_day[key][day] += 1
             self._ex(key, row_id, mine, theirs)
@@ -129,9 +165,14 @@ class Tally:
         for k in keys:
             n = self.c[f"{k}.compared"]
             a = self.c[f"{k}.agree"]
+            all_n, all_a = self.c[f"{k}.all_rows"], self.c[f"{k}.all_agree"]
             out[k] = {
                 "compared": n, "agree": a, "disagree": self.c[f"{k}.disagree"],
                 "pct": round(100.0 * a / n, 3) if n else None,
+                "excluded_gap_contaminated": self.c[f"{k}.excluded_gap_contaminated"],
+                "excluded_agree": self.c[f"{k}.excluded_agree"],
+                "all_rows": all_n, "all_agree": all_a,
+                "pct_all_rows": round(100.0 * all_a / all_n, 3) if all_n else None,
                 "journal_missing": self.c[f"{k}.journal_missing"],
                 "mine_missing": self.c[f"{k}.mine_missing"],
                 "both_none": self.c[f"{k}.both_none"],
@@ -170,9 +211,9 @@ def run(args) -> dict:
             inst = r["instrument"]
             stats["rows"] += 1
             stats[f"rows_{inst}"] += 1
-            # live window: bars recorded up to and including B0, last 960 within 14 days
-            lo = b0 - timedelta(days=LIVE_LOOKBACK_DAYS)
-            win = [b for b in bars[inst] if lo <= b["ts"] <= b0]
+            # live window: replicate the runner's file-date rule exactly (see live_window)
+            row_ts = _parse_dt(r.get("ts")) or b0
+            win = live_window(bars[inst], b0, row_ts.date().isoformat())
             if not win:
                 stats["rows_no_bars"] += 1
                 continue
@@ -198,7 +239,7 @@ def run(args) -> dict:
             # location_context levels (the collector's own PDH/PDL/PDC/ONH/ONL/PMH/PML)
             if loc:
                 stats["rows_with_location_context"] += 1
-                for mine, theirs in (("PDH", "pdh"), ("PDL", "pdl"), ("PDC", "prev_close"),
+                for mine, theirs in (("PDH", "pdh"), ("PDL", "pdl"), ("PDC_BAR", "prev_close"),
                                      ("ONH", "onh"), ("ONL", "onl"), ("PMH", "pmh"), ("PML", "pml")):
                     tally.cmp(f"loc.{mine}", L[mine].value, lv.get(theirs), tick, rid, gap_flag=G(mine), day=tday)
                 tally.cmp("loc.MTR15", round(ls.mtr15, 4) if ls.mtr15 else None, loc.get("mtr_15m_points"), tick, rid)
@@ -207,24 +248,26 @@ def run(args) -> dict:
                     for kind in ("supply", "demand"):
                         mine_z = (ls.zones_raw.get(tf) or {}).get(kind)
                         their_z = (zj.get(tf) or {}).get(kind)
+                        zname = f"LC_ZONE_{tf.upper()}_{kind.upper()}"
+                        zgap = L[zname].gap_contaminated if L[zname].status == "AVAILABLE" else None
                         if mine_z is None and their_z is None:
                             tally.cmp(f"zone.{tf}.{kind}", None, None, tick, rid)
                             continue
                         if mine_z is None or their_z is None:
-                            tally.cmp(f"zone.{tf}.{kind}", mine_z and "zone", their_z and "zone", tick, rid, exact=True)
+                            tally.cmp(f"zone.{tf}.{kind}", mine_z and "zone", their_z and "zone", tick, rid, exact=True, gap_flag=zgap, day=tday)
                             continue
                         same = (abs(mine_z["top"] - their_z["top"]) <= tick and abs(mine_z["bottom"] - their_z["bottom"]) <= tick
                                 and mine_z["tests"] == their_z["tests"] and mine_z["broken"] == their_z["broken"]
                                 and mine_z["formed_ts"] == their_z["formed_ts"])
                         tally.cmp(f"zone.{tf}.{kind}", "match" if same else f"{mine_z['top']}/{mine_z['bottom']}/t{mine_z['tests']}/{mine_z['formed_ts']}",
-                                  "match" if same else f"{their_z['top']}/{their_z['bottom']}/t{their_z['tests']}/{their_z['formed_ts']}", tick, rid, exact=True)
+                                  "match" if same else f"{their_z['top']}/{their_z['bottom']}/t{their_z['tests']}/{their_z['formed_ts']}", tick, rid, exact=True, gap_flag=zgap, day=tday)
 
             # Pine previous_day (payload) — informational secondary source
             pd = ctx.get("previous_day") or {}
             if pd.get("price_vs_pdh") not in (None, "undefined", "unknown"):
                 tally.cmp("pine.PDH", L["PDH"].value, pd.get("high"), tick, rid)
                 tally.cmp("pine.PDL", L["PDL"].value, pd.get("low"), tick, rid)
-                tally.cmp("pine.PDC_daily_close", L["PDC"].value, pd.get("close"), tick, rid)
+                tally.cmp("pine.PDC_daily_close_vs_PDC_BAR", L["PDC_BAR"].value, pd.get("close"), tick, rid)
 
             # ORBs — canonical-bar denominator only
             orb = ctx.get("orb") or {}
@@ -271,9 +314,9 @@ def run(args) -> dict:
     rep = tally.report()
     verdict = {}
     admitted = {
-        "loc.PDH": "PDH", "loc.PDL": "PDL", "loc.PDC": "PDC", "loc.ONH": "ONH", "loc.ONL": "ONL",
+        "loc.PDH": "PDH", "loc.PDL": "PDL", "loc.PDC_BAR": "PDC_BAR", "loc.ONH": "ONH", "loc.ONL": "ONL",
         "NY_ORB.high": "NY ORB high", "NY_ORB.low": "NY ORB low", "LDN_ORB.high": "London ORB high",
-        "LDN_ORB.low": "London ORB low", "VWAP": "VWAP", "wall.PWH": "PWH", "wall.PWL": "PWL",
+        "LDN_ORB.low": "London ORB low", "wall.PWH": "PWH", "wall.PWL": "PWL",
         "zone.1h.supply": "LC_ZONE 1H supply", "zone.1h.demand": "LC_ZONE 1H demand",
         "zone.4h.supply": "LC_ZONE 4H supply", "zone.4h.demand": "LC_ZONE 4H demand",
     }
@@ -282,7 +325,15 @@ def run(args) -> dict:
         if not e or not e["compared"]:
             verdict[label] = "NOT_TESTABLE (no comparable rows)"
         else:
-            verdict[label] = ("PASS" if e["pct"] >= PASS_PCT else "FAIL") + f" {e['pct']}% of {e['compared']}"
+            verdict[label] = (("PASS" if e["pct"] >= PASS_PCT else "FAIL")
+                              + f" {e['pct']}% of {e['compared']} eligible"
+                              + (f" (+{e['excluded_gap_contaminated']} §9.4-excluded, {e['excluded_agree']} of them agree; all-rows {e['pct_all_rows']}%)"
+                                 if e["excluded_gap_contaminated"] else ""))
+    diagnostic = {}
+    e = rep.get("VWAP")
+    if e and e["all_rows"]:
+        diagnostic["VWAP"] = (f"NOT_ADMITTED (v1.3) — diagnostic: {e['pct']}% of {e['compared']} eligible, "
+                              f"all-rows {e['pct_all_rows']}% of {e['all_rows']}")
     out = {
         "tool_version": TOOL_VERSION, "prereg_version": slf.PREREG_VERSION, "prereg_sha": slf.PREREG_SHA,
         "logs_root": os.path.abspath(args.logs_root), "start": args.start, "end_ts": args.end_ts,
@@ -295,6 +346,7 @@ def run(args) -> dict:
                                  "not_available_days": sorted(orb_na_days[p])} for p in orb_days},
         "comparisons": rep,
         "admitted_level_verdicts": verdict,
+        "diagnostic_levels": diagnostic,
         "overall": "PASS" if all(v.startswith("PASS") for v in verdict.values() if not v.startswith("NOT_TESTABLE")) else "FAIL",
     }
     os.makedirs(args.out_dir, exist_ok=True)
@@ -314,17 +366,20 @@ def _md(out: dict) -> str:
              "| level | verdict |", "|---|---|"]
     for k, v in out["admitted_level_verdicts"].items():
         lines.append(f"| {k} | {v} |")
+    for k, v in out.get("diagnostic_levels", {}).items():
+        lines.append(f"| {k} (diagnostic) | {v} |")
     lines += ["", "**ORB denominators (canonical bar present / NOT_AVAILABLE session-days):**"]
     for p, d in out["orb_denominators"].items():
         lines.append(f"- {p}: {d['session_days_with_canonical_bar']} comparable session-days; {d['session_days_not_available']} NOT_AVAILABLE "
                      f"(runtime still carried an ORB on {d['not_available_days_where_runtime_still_had_an_orb']} of them — designed divergence, excluded from the denominator)")
-    lines += ["", "**All comparisons:**", "", "| key | compared | agree | pct | journal_missing | mine_missing | both_none |", "|---|---|---|---|---|---|---|"]
+    lines += ["", "**All comparisons (eligible = not §9.4-contaminated for that level):**", "",
+              "| key | eligible | agree | pct | §9.4-excluded | excluded agree | all rows | pct all | journal_missing | mine_missing | both_none |",
+              "|---|---|---|---|---|---|---|---|---|---|---|"]
     for k, e in out["comparisons"].items():
-        lines.append(f"| {k} | {e['compared']} | {e['agree']} | {e['pct']} | {e['journal_missing']} | {e['mine_missing']} | {e['both_none']} |")
-    lines += ["", "**Disagreement decomposition (admitted levels that FAIL):**"]
+        lines.append(f"| {k} | {e['compared']} | {e['agree']} | {e['pct']} | {e['excluded_gap_contaminated']} | {e['excluded_agree']} | {e['all_rows']} | {e['pct_all_rows']} | {e['journal_missing']} | {e['mine_missing']} | {e['both_none']} |")
+    lines += ["", "**Disagreement decomposition (any level with a disagreement, eligible or excluded):**"]
     for k, e in out["comparisons"].items():
-        if k in ("VWAP", "wall.PWH", "wall.PWL", "loc.PDH", "loc.PDL", "loc.PDC", "loc.ONH", "loc.ONL",
-                 "NY_ORB.high", "NY_ORB.low", "LDN_ORB.high", "LDN_ORB.low") and e["pct"] is not None and e["pct"] < out["pass_threshold_pct"]:
+        if e["all_rows"] and e["all_agree"] < e["all_rows"] and not k.startswith("pine."):
             lines.append(f"- `{k}`: by gap flag {e['by_gap_flag']}; disagreements by trading day: {e['disagree_by_trading_day']}")
     lines += ["", f"**Overall: {out['overall']}**"]
     return "\n".join(lines) + "\n"
