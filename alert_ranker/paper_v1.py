@@ -403,6 +403,48 @@ def entry_late_reason(
 EPISODE_BLOCKED_REASON = "episode_blocked_after_entry_late"
 
 
+# --------------------------------------------------------------------------- #
+# Entry geometry at first sight (observer accounting, operator ruling 2026-09-17)
+# --------------------------------------------------------------------------- #
+# The ACTIVE lane refuses an entry whose live price has already consumed the
+# setup (entry_late_reason above). The COUNTERFACTUAL lane deliberately keeps
+# such rows for observation -- but a row born with price already beyond its
+# target (or stop) must never later be labelled WIN/LOSS: the level-state
+# resolver would confirm it on the next tick and the "outcome" would only
+# measure the bid/ask spread. Every shadow row therefore records its entry
+# geometry at creation, and a consumed row resolves into a distinct
+# non-outcome state that performance summaries exclude.
+ENTRY_GEOMETRY_AHEAD = "AHEAD"
+TARGET_CONSUMED_AT_ENTRY = "TARGET_CONSUMED_AT_ENTRY"
+STOP_CONSUMED_AT_ENTRY = "STOP_CONSUMED_AT_ENTRY"
+ENTRY_CONSUMED_STATES = frozenset({TARGET_CONSUMED_AT_ENTRY, STOP_CONSUMED_AT_ENTRY})
+
+
+def entry_geometry_state(
+    direction: str,
+    price: float | None,
+    stop: float | None,
+    target: float | None,
+) -> str | None:
+    """Where the first-sight price sits relative to the setup's levels.
+
+    ``TARGET_CONSUMED_AT_ENTRY`` when price is already at/beyond the target,
+    ``STOP_CONSUMED_AT_ENTRY`` when already at/beyond the stop, ``AHEAD``
+    otherwise; ``None`` when any input is missing (fail closed elsewhere).
+    Same comparisons as :func:`entry_late_reason`, same order (target first).
+    """
+    if price is None or stop is None or target is None:
+        return None
+    side = str(direction or "").upper()
+    if side not in {"LONG", "SHORT"}:
+        return None
+    if (side == "LONG" and price >= target) or (side == "SHORT" and price <= target):
+        return TARGET_CONSUMED_AT_ENTRY
+    if (side == "LONG" and price <= stop) or (side == "SHORT" and price >= stop):
+        return STOP_CONSUMED_AT_ENTRY
+    return ENTRY_GEOMETRY_AHEAD
+
+
 def entry_late(reason: str) -> dict[str, Any]:
     return {
         "paper_policy_id": POLICY_ID,

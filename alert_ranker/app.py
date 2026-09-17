@@ -44,7 +44,10 @@ from .scanner import OptionsScanner
 from .storage import ScanStorage
 
 
-SHADOW_OUTCOME_STATUSES = {"OPEN", "WIN", "LOSS", "BREAKEVEN", "CANCELLED", "EXPIRED", "REJECTED"}
+SHADOW_OUTCOME_STATUSES = {
+    "OPEN", "WIN", "LOSS", "BREAKEVEN", "CANCELLED", "EXPIRED", "REJECTED",
+    "TARGET_CONSUMED_AT_ENTRY", "STOP_CONSUMED_AT_ENTRY",
+}
 
 def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | None = None) -> FastAPI:
     cfg = config or load_config()

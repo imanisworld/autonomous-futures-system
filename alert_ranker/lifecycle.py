@@ -13,7 +13,9 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Any
 
-RESOLVED_STATUSES = ("WIN", "LOSS", "BREAKEVEN", "CANCELLED", "EXPIRED", "REJECTED")
+# TARGET/STOP_CONSUMED_AT_ENTRY are closed NON-outcomes (level already consumed at
+# first sight); they are resolved but never counted as wins, losses or P&L.
+RESOLVED_STATUSES = ("WIN", "LOSS", "BREAKEVEN", "CANCELLED", "EXPIRED", "REJECTED", "TARGET_CONSUMED_AT_ENTRY", "STOP_CONSUMED_AT_ENTRY")
 
 _FIELD_ALIASES: dict[str, tuple[str, ...]] = {
     "direction": ("direction",),
