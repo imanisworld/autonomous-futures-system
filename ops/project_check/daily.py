@@ -336,6 +336,22 @@ def _repo_hygiene(root: Path) -> dict[str, Any]:
     }
 
 
+def _proof_critical_unverified(drift: dict[str, Any]) -> list[str]:
+    """Structured reasons the live-box guard could not verify proof-critical state.
+
+    Reads the guard's own lists rather than its summary text so the daily gate
+    and the live preflight fail on the same facts.
+    """
+    reasons: list[str] = []
+    missing_pins = [str(name) for name in (drift.get("missing_pins") or [])]
+    if missing_pins:
+        reasons.append(f"missing expected pin(s): {', '.join(missing_pins)}")
+    unpinned = [str(name) for name in (drift.get("unpinned_runtime_overrides") or [])]
+    if unpinned:
+        reasons.append(f"active unpinned proof-critical runtime override(s): {', '.join(unpinned)}")
+    return reasons
+
+
 def _overall_blockers(
     *,
     hygiene: dict[str, Any],
@@ -356,6 +372,32 @@ def _overall_blockers(
                 "detail": str(drift.get("summary") or "live-box/runtime drift check returned error"),
             }
         )
+    else:
+        # A "warn" guard status is not one thing. The guard reports the
+        # structured reasons separately, and only some of them mean the
+        # proof-critical runtime state is UNVERIFIABLE:
+        #   - missing_pins: a required identity comparison (branch, commit,
+        #     risk_rules sha, repo root, journal dir, evidence source) has no
+        #     EXPECTED_* pin, so deployed-state drift cannot be checked;
+        #   - unpinned_runtime_overrides: a proof-critical override is active
+        #     without an EXPECTED_PROOF_<NAME> pin, so the proof box is
+        #     irreproducible.
+        # Both must fail this gate closed, exactly as execution/live_preflight.py
+        # already refuses to arm on them. The remaining warn source
+        # (security_runtime.status == "warn": webhook-secret rotation alias not
+        # staged) is a verified hardening posture, not unverifiable state, and
+        # stays informational here; its "error" form is already covered above.
+        unverified = _proof_critical_unverified(drift)
+        if unverified:
+            blockers.append(
+                {
+                    "code": "RUNTIME_DRIFT_UNVERIFIED",
+                    "detail": (
+                        "proof-critical runtime state cannot be verified: "
+                        + "; ".join(unverified)
+                    ),
+                }
+            )
     if runtime.get("risk_rules_load_error"):
         blockers.append(
             {"code": "RISK_RULES_UNVERIFIED", "detail": str(runtime["risk_rules_load_error"])}
