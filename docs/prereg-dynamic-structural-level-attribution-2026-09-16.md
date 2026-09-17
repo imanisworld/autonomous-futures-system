@@ -1,7 +1,22 @@
 # Pre-Registration — Dynamic Structural-Level Attribution Study
 
-**Version:** 1.1 (2026-09-16), frozen at the commit that introduces this version. No outcome
-had been read at either version. Changelog v1.0 → v1.1 (operator review of PR #616, all
+**Version:** 1.2 (2026-09-16), frozen at the commit that introduces this version.
+**Outcome-provenance statement:** no outcome analysis of the hypotheses defined here (15m
+conditioning of existing strategy candidates with unchanged brackets, H1–H6) was run while
+drafting v1.0, v1.1 or v1.2. Previously viewed evidence that informed the drafting is
+disclosed and fenced as prior information: the closed context-permission review (F1–F12,
+I1–I10 on live outcomes 2026-07-16..09-16) and the 2026-07-13 MNQ 5m structural-level study
+(reclaim / failed-breakdown / rejection / break-and-retest on PDH/PDL/ORB as a standalone
+strategy, 2024-07..2026-06). Nothing else has been read.
+Changelog v1.1 → v1.2 (second operator review, definition-level, pre-freeze): (1) §5.1
+deterministic candidate-level reduction rule for H1–H4 (nearest-to-entry anchor per
+hypothesis level set, fixed tie precedence; no "any level that makes T true"); (2) H2
+break-age confound removed — F is an age-matched accepted-but-not-retested break, immediate
+chase is descriptive only; (3) H5 anchor must lie within the frozen ≤ 0.5 × MTR15 relevance
+band else `NOT_APPLICABLE`; (4) provenance wording corrected (the 07-13 study computed these
+event concepts before; what is new is 15m candidate-conditioning with fixed brackets) and
+P3's ORB parity denominator excludes `NOT_AVAILABLE` session-days.
+Changelog v1.0 → v1.1 (operator review of PR #616, all
 definition-level, pre-freeze): (1) missing opening-range bar → ORB `NOT_AVAILABLE`, the
 `orb_start_shifted` substitute is removed; (2) deterministic anchor for E8/H5 `CLUSTER`;
 (3) duplicate `candidate_key` handling fails closed on conflict; (4) H4/H6 clean confirmation
@@ -200,6 +215,35 @@ Side convention: for a **LONG** candidate the "supportive" levels are those at o
 entry, the "opposing" are above; mirrored for SHORT. Events are computed per (level,
 side); the hypothesis states which side is used.
 
+### 5.1 Candidate-level reduction rule (binding; one label per candidate per hypothesis)
+
+Several admitted supportive levels can qualify on the same candidate (e.g. a PDL
+`WICK_REJECT`, a demand-zone `PROXIMITY_ONLY` and an ONL with two prior tests). Each
+hypothesis is labelled from **exactly one** level, chosen mechanically before any event is
+inspected. "Any level that makes T true" is forbidden.
+
+- **Anchor `A_H`** for H1, H3, H4 (and E8/H5): the admitted supportive-side level **from
+  that hypothesis's own level set** (§6, after own-level exclusion) with the smallest
+  absolute distance from the candidate's **entry** (zones: distance to the facing edge).
+  Ties at tick resolution resolve by the fixed precedence PWH/PWL > PDH/PDL > ONH/ONL >
+  NY ORB > London ORB > `LC_ZONE` 4H > `LC_ZONE` 1H > PDC > VWAP (higher timeframe first),
+  then lower price for LONG / higher price for SHORT. The anchor is chosen from geometry
+  only; it is never switched to whichever level happens to carry an event.
+- H1, H3, H4 are then evaluated on `A_H` alone. If `A_H` satisfies neither the T nor the F
+  condition of the hypothesis (e.g. it is farther than 0.5 × MTR15 from entry, or it has
+  no touch/proximity/sweep), the candidate is `NOT_APPLICABLE` for that hypothesis and
+  counted. Because T and F for H1/H3/H4 all require a touch or proximity event, this
+  makes the relevance band `≤ 0.5 × MTR15` inherent for them.
+- **Anchor `A_2`** for H2: an *eligible broken level* is a `MAJOR` level (trade-direction
+  side, own-level exclusion applied) with a `BREAK` in the trade direction at `B−j`,
+  `2 ≤ j ≤ R`, and no close back through it in `B−j+1..B0`. Among eligible broken levels
+  the one with the smallest absolute distance from entry is `A_2` (same tie precedence).
+  H2 is evaluated on `A_2` alone; a candidate with no eligible broken level is
+  `NOT_APPLICABLE` for H2 and counted.
+- H6 already reduces to one level by construction (the nearest opposing admitted level to
+  entry; same tie precedence).
+- E8/H5 uses `A_H` with the H5 level set, plus the relevance band in §6.
+
 | Code | Event | Mechanical definition at `B0` | Bars allowed |
 |---|---|---|---|
 | E1 `TOUCH` | touch | `B0.low ≤ ℓ ≤ B0.high` | B0 |
@@ -207,11 +251,11 @@ side); the hypothesis states which side is used.
 | E3a `WICK_REJECT` (same-bar sweep) | wick through, close back | supportive side, LONG: `B0.low ≤ ℓ − tick ∧ B0.close > ℓ ∧ (ℓ − B0.low) ≤ D_max`; SHORT mirrored. Equivalent to the 07-13 study's `failed_breakdown`/`failed_reclaim` (definition inherited, verdict on *trading it* not) | B0 |
 | E3b `SWEEP_RECLAIM` (multi-bar) | sweep + close back through | supportive side, LONG: ∃ k ∈ [1, K] with `B−k.close < ℓ` (a close on the far side), `min(low over B−k..B0) ≥ ℓ − D_max`, every close `B−k..B−1 ≤ ℓ`, and `B0.close > ℓ` (first close back). Equivalent to the 07-13 `reclaim`. SHORT mirrored | B−K..B0 |
 | E4 `BREAK` / `ACCEPT` | close-through / acceptance | `BREAK` at bar `Bj`: `Bj.close` beyond ℓ by ≥ 1 tick and `Bj−1.close` not beyond. `ACCEPT` = `N` consecutive closes beyond ℓ ending at B0 | ≤ B0 |
-| E5a `BREAK_RETEST_HOLD` | break → retest → hold (role reversal) | a `BREAK` of ℓ in the trade direction at `B−j`, 2 ≤ j ≤ R; every close in `B−j+1..B−1` stays beyond ℓ; `B0` range comes within τ of ℓ from the far side (`B0.low ≤ ℓ + τ` for LONG) and `B0.close` stays beyond ℓ | B−R..B0 |
+| E5a `BREAK_RETEST_HOLD` | break → retest → hold (role reversal) | a `BREAK` of ℓ in the trade direction at `B−j`, 2 ≤ j ≤ R; every close in `B−j+1..B−1` stays beyond ℓ; **no** bar in `B−j+1..B−1` came within τ of ℓ (so `B0` is the *first* retest); `B0` range comes within τ of ℓ from the far side (`B0.low ≤ ℓ + τ` for LONG) and `B0.close` stays beyond ℓ. Companion state `ACCEPT_NO_RETEST`: same break-age window and held closes, and no bar in `B−j+1..B0` within τ (H2's control) | B−R..B0 |
 | E5b `BREAK_RETEST_REJECT` / `FAILED_BREAKOUT` | break → retest → reject | as E5a but `B0.close` back through ℓ (the retest fails). For the hypothesis it is the mirror-side supportive event: a failed breakout *above* an opposing level is `FAILED_BREAKOUT` for a SHORT | B−R..B0 |
 | E6 `PROXIMITY_ONLY` | approach without touch | `0 < signed distance from B0.close to ℓ ≤ 0.5 × MTR15` and not `TOUCH` | B0 |
 | E7 `DIST` | distance at signal | `(B0.close − ℓ) / MTR15`, signed so that positive = level on the supportive side | B0 |
-| E8 `CLUSTER` | clustering / confluence | **Anchor `A`** (deterministic, frozen): the admitted supportive-side level (after own-level exclusion) with the smallest absolute distance from the candidate's **entry**; ties (equal distance to the tick) resolve by fixed precedence PWH/PWL > PDH/PDL > ONH/ONL > NY ORB > London ORB > `LC_ZONE` 4H > `LC_ZONE` 1H > PDC > VWAP (higher-timeframe first), then lower price for LONG / higher price for SHORT. The anchor is the same regardless of which events fired (it is *not* switched to the H1/H3 event level). `CLUSTER` = number of distinct admitted levels (anchor included) within ± 0.5 × MTR15 of `A`, after tautology removal: HOD≡ONH / LOD≡ONL before 09:30 ET count once; PDC and VWAP count; a `LC_ZONE` counts if the band intersects the zone; own-level exclusion (§6) applies | B0 |
+| E8 `CLUSTER` | clustering / confluence | Anchor `A` = `A_H` of §5.1 computed over the H5 level set (nearest admitted supportive level to entry, fixed tie precedence, never switched to an event level). **Relevance band:** if the distance from entry to `A` exceeds 0.5 × MTR15, `CLUSTER` is `NOT_APPLICABLE` (structure that merely exists somewhere below/above the entry is not clustered structure *at* the setup). Otherwise `CLUSTER` = number of distinct admitted levels (anchor included) within ± 0.5 × MTR15 of `A`, after tautology removal: HOD≡ONH / LOD≡ONL before 09:30 ET count once; PDC and VWAP count; a `LC_ZONE` counts if the band intersects the zone; own-level exclusion (§6) applies | B0 |
 | E9 `ROOM` | room to next opposing structure | distance from candidate **entry** to the nearest opposing admitted level (excluding the candidate's own level), divided by the candidate's stop distance → `ROOM_R`; `TARGET_REL` ∈ {`before`, `inside` (target within ± τ of the opposing level), `beyond`} | B0 |
 
 **Sequence rule.** Every event above is defined so that its confirmation bar is `B0` — the
@@ -233,17 +277,20 @@ feature set: ORB for `orb_*`, VWAP for `vwap_*`, PDH/PDL for `pdh_/pdl_reclaim`,
 
 | ID | Hypothesis | Contrast (T vs F) | Level set | Direction |
 |---|---|---|---|---|
-| **H1** | Sweep → reclaim of a major level in the trade direction improves the candidate | T: `E3a ∨ E3b` on a supportive-side level within K bars; F: `TOUCH` of a supportive-side level at B0 without E3a/E3b (plain touch or `BREAK` through it) | `MAJOR` = {PDH, PDL, PWH, PWL, ONH, ONL (RTH only), NY ORB H/L, London ORB H/L} | T better |
-| **H2** | Break → retest → hold (role reversal) beats chasing the break | T: `E5a` on a level in the trade direction; F: `BREAK` of the same level set at `B0` or `B−1` with no retest (`ACCEPT` may be true) | `MAJOR` | T better |
-| **H3** | Actual rejection beats mere proximity | T: `E3a` (wick-reject) on a supportive-side level; F: `E6 PROXIMITY_ONLY` to a supportive-side level | `MAJOR ∪ LC_ZONE` (zone edge) | T better |
-| **H4** | Test count and age matter *separately* | among candidates with `TOUCH` or `PROXIMITY_ONLY` on a supportive-side level: ordered `TEST_COUNT` bins {0, 1–2, ≥3} and, separately, `AGE` tertiles fixed from P-REPLAY fold 1 before any outcome is read; test = permutation Spearman trend of net R across bins (one test each; H4 counts as one Holm entry using the smaller of the two p-values, Bonferroni-2 inside) | `MAJOR ∪ LC_ZONE` | two-sided (the closed study's F4 flipped sign) |
-| **H5** | Structural clustering improves the candidate | T: `CLUSTER ≥ 2`; F: `CLUSTER == 1` (exactly one supportive level in band); rows with `CLUSTER == 0` are excluded from this contrast and counted | `MAJOR ∪ LC_ZONE ∪ {PDC, VWAP}` (VWAP allowed here as a cluster member, not as an event) | T better |
+| **H1** | Sweep → reclaim of a major level in the trade direction improves the candidate | On `A_H` (§5.1, H1 level set). T: `E3a ∨ E3b` on `A_H` within K bars; F: `TOUCH` of `A_H` at B0 without E3a/E3b (plain touch or `BREAK` through it); neither → `NOT_APPLICABLE` | `MAJOR` = {PDH, PDL, PWH, PWL, ONH, ONL (RTH only), NY ORB H/L, London ORB H/L} | T better |
+| **H2** | Break → retest → hold (role reversal) beats an age-matched accepted break that has not retested | On `A_2` (§5.1), break age `j ∈ [2, R]`. T: `E5a` — every close since the break stayed beyond ℓ, **no** bar in `B−j+1..B−1` came within τ of ℓ, and `B0` is the first bar that comes within τ and closes beyond ℓ (retest-hold). F: same break age window, every close since the break stayed beyond ℓ, and **no** bar in `B−j+1..B0` has come within τ of ℓ (accepted, not yet retested). Candidates whose level already retested at an earlier bar (`B−m`, m < j) are neither T nor F → `NOT_APPLICABLE`, counted. **Age matching (binding):** the effect is the stratified difference across frozen break-age bins {2–3, 4–5, 6–8} bars (equal-weight across bins with n ≥ 12; a bin below that is dropped and counted); permutation shuffles labels within age bin × instrument × session × family. Immediate-chase breaks (`j ∈ {0, 1}`) are a **descriptive third group only** (exploratory, §13), never the control | `MAJOR` | T better |
+| **H3** | Actual rejection beats mere proximity | On `A_H` (§5.1, H3 level set). T: `E3a` (wick-reject) on `A_H`; F: `E6 PROXIMITY_ONLY` to `A_H`; a plain touch that closes through `A_H` is neither → `NOT_APPLICABLE` (descriptive third group, §13) | `MAJOR ∪ LC_ZONE` (zone edge) | T better |
+| **H4** | Test count and age matter *separately* | On `A_H` (§5.1, H4 level set), among candidates with `TOUCH` or `PROXIMITY_ONLY` on `A_H`: ordered `TEST_COUNT` bins {0, 1–2, ≥3} and, separately, `AGE` tertiles fixed from P-REPLAY fold 1 before any outcome is read; test = permutation Spearman trend of net R across bins (one test each; H4 counts as one Holm entry using the smaller of the two p-values, Bonferroni-2 inside) | `MAJOR ∪ LC_ZONE` | two-sided (the closed study's F4 flipped sign) |
+| **H5** | Structural clustering improves the candidate | Anchor `A` must lie within **≤ 0.5 × MTR15 of entry** (E8 relevance band) or the row is `NOT_APPLICABLE`, counted. T: `CLUSTER ≥ 2`; F: `CLUSTER == 1` (only the anchor in band) | `MAJOR ∪ LC_ZONE ∪ {PDC, VWAP}` (VWAP allowed here as a cluster member, not as an event) | T better |
 | **H6** | Room to the next opposing structure relative to the planned target | T: `TARGET_REL == before` (target reached before the nearest opposing level); F: `TARGET_REL == beyond` | opposing side of `MAJOR ∪ LC_ZONE` | T better |
 
 H4 and H6 overlap constructs already viewed on P-LIVE (F4 fresh-vs-tested; F11
 target-blocked). §11 restricts them to exploratory status on P-LIVE; they are confirmatory
 on P-REPLAY (in-sample) and P-OOS-PROSPECTIVE only; P-OOS-MES is not pristine for them
-either (same market period). H1, H2, H3, H5 use event constructs never computed before.
+either (same market period). H1, H2, H3, H5 use event *concepts* that the 2026-07-13 MNQ
+5m study did compute (as a standalone 5m strategy with its own bracket, PDH/PDL/ORB only);
+what is new — and what has never been outcome-analysed — is their use as 15m conditioning
+features on existing strategy candidates with unchanged brackets, on the level sets above.
 
 No interaction is confirmatory in tranche 1. Session, family, instrument, direction and
 provenance are **controls and mandatory strata** (§7), not features.
@@ -393,7 +440,13 @@ horizon h"; it is never converted into a trade statement.
   prospective rows split at the fold-3 realised-volatility median; it cannot rescue or
   overturn the primary OOS verdict. No substitute window.
 - **Prior-viewing status per hypothesis (binding):**
-  - **H1, H2, H3, H5** — event constructs never computed anywhere before this plan.
+  - **H1, H2, H3, H5** — the underlying event concepts (reclaim, failed breakdown,
+    rejection, break-and-retest) were computed by the 2026-07-13 MNQ 5m structural-level
+    study on PDH/PDL/ORB over 2024-07..2026-06, as a standalone 5m strategy with its own
+    bracket, and that study's outcomes are known. The **candidate-conditioning hypotheses**
+    here (15m grid, existing candidates, unchanged brackets, MAJOR/LC_ZONE level sets,
+    the §5 event definitions with MTR15 normalisation) have never been outcome-analysed.
+    The 07-13 result is disclosed as prior information and is the reason K6 exists.
     Confirmatory on P-REPLAY (in-sample) and on **P-OOS-MES** and **P-OOS-PROSPECTIVE**;
     may also be reported on P-LIVE as a provenance stratum (S1/S2).
   - **H4, H6** — overlap F4 (fresh vs tested) and F11 (target blocked), which the closed
@@ -443,7 +496,9 @@ study uses the full ungated candidate set); observer `supply_demand_confluence` 
 `key_level_confluence` (different "near" definitions); impulse phase (two disagreeing
 heuristics); structural regime (46% INSUFFICIENT_DATA); sweep depth, wick ratio, retest
 count, acceptance length (`N`), event recency within `K` — any threshold variation of
-§5; interactions among H1–H6; any level-identity subgroup ("only PDL works").
+§5; the descriptive third groups of H2 (immediate-chase breaks, `j ∈ {0,1}`) and H3
+(touch-and-close-through); `E5b` break-retest-reject as a feature; interactions among H1–H6;
+any level-identity subgroup ("only PDL works").
 
 ## 14. Implementation / data prerequisites (none executed in this task)
 
@@ -451,7 +506,7 @@ count, acceptance length (`N`), event recency within `K` — any threshold varia
 |---|---|---|---|
 | P1 | Pure offline feature builder `research/structural_level_features.py`: levels §3, `LC_ZONE` §4.1 via the pure `location_context` functions, events §5, from a list of 15m bars ending at `B0`; no imports from webhook/strategy/execution/journal | module + unit tests on synthetic bars (one test per event) | no |
 | P2 | Candidate regeneration spec for P-REPLAY: pinned SHA, `enabled_concepts` list, shadow-candidate output with brackets and resolver outcomes, per family; family compatibility matrix (P5) filled from the run manifest | run manifest + candidate JSONL (not run here) | no (replay is offline) |
-| P3 | Parity proof on P-LIVE 07-16..09-14: offline PDH/PDL/PDC/ONH/ONL/PMH/PML vs `location_context.levels`; NY/London ORB vs `context.orb` (NY/London rows only); VWAP vs `context.vwap.value` (within **one tick**, 0.25 pt on MNQ/MES — same tolerance as every other admitted level; if Pine's volume basis makes this unattainable, VWAP is `NOT_ADMITTED` rather than the tolerance widened); PWH/PWL/HOD/LOD vs `wall_context`; 1H/4H zones vs `location_context.zones` (edges within 1 tick, same `tests`/`broken`) — thresholds ≥ 98% | parity report | no |
+| P3 | Parity proof on P-LIVE 07-16..09-14: offline PDH/PDL/PDC/ONH/ONL/PMH/PML vs `location_context.levels`; NY/London ORB vs `context.orb` (NY/London rows only, and **only session-days where the canonical 09:30 / 03:00 bar exists** — `NOT_AVAILABLE` days are excluded from the ≥ 98% denominator and reported separately, because runtime intentionally falls back to the first observed in-session bar on those days and that divergence is by design, not a parity failure); VWAP vs `context.vwap.value` (within **one tick**, 0.25 pt on MNQ/MES — same tolerance as every other admitted level; if Pine's volume basis makes this unattainable, VWAP is `NOT_ADMITTED` rather than the tolerance widened); PWH/PWL/HOD/LOD vs `wall_context`; 1H/4H zones vs `location_context.zones` (edges within 1 tick, same `tests`/`broken`) — thresholds ≥ 98% | parity report | no |
 | P4 | `PINE_SD` reconstruction parity (tranche-2 admission test) incl. determining the deployed `i_bos_swing` | parity report | no |
 | P5 | Live vs replay bracket-formula parity per family at the pinned SHA (entry/stop/target arithmetic, tick constants) | compatibility matrix (§2.3) | no |
 | P6 | Roll ledger for P-REPLAY (dates, gap sizes) and gap ledger on the 15m grid; P-LIVE ledger reused | ledgers | no |
@@ -505,9 +560,10 @@ can be handled entirely in the offline builder):
 
 ---
 
-**Verdict (v1.1): NEEDS DEFINITION FIXES.** The six pre-freeze definition gaps raised in the
-operator review of v1.0 are closed in this version; the verdict is unchanged because the
-remaining fixes are parity-level, not wording-level. The data to answer the question exists (two years of
+**Verdict (v1.2): NEEDS DEFINITION FIXES.** The ten definition gaps raised across the two
+operator reviews (six in v1.1, four in v1.2) are closed; every per-candidate label is now
+fixed by geometry before any event or outcome is inspected. The verdict is unchanged
+because what remains is parity-level, not wording-level. The data to answer the question exists (two years of
 15m Polygon bars for both instruments, a 53-day live journal with bar history, an MES
 holdout, and a prospective Z6 window), and every admitted level is reconstructable from
 OHLCV. What does not yet exist is the single offline definition layer that makes the
