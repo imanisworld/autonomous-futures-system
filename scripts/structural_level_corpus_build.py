@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Structural-level prereg P2 — R1/R2 corpus build with a pinned builder + MANIFEST.
 
-Read-only research tooling (prereg v1.3 §14 P5/P6, P2 spec §3.1 / §5 R1–R2). This is a
+Read-only research tooling (prereg v1.4 §14 P5/P6, P2 spec §3.1 / §5 R1–R2). This is a
 thin, faithful wrapper around ``scripts/polygon_to_replay.py``: it calls the SAME
 ``PolygonFuturesClient.fetch_continuous`` + ``derive_candles`` + day-file split that
 ``polygon_to_replay.main`` runs, so the candle schema and every derived field are
@@ -21,9 +21,9 @@ requires and the builder lacks:
 Nothing here touches runtime, config, ``.env`` or the box. Network: Polygon REST only,
 via the pinned client (free-tier pacing).
 
-Usage (R1):
+Usage (R1, prereg v1.4 window; warm-up 2024-09-17 → 09-30 = the provider's retention start):
     python3 scripts/structural_level_corpus_build.py --symbol MNQ \
-        --start 2024-07-01 --end 2026-06-26 --out data/replay_polygon_v2
+        --start 2024-10-01 --end 2026-06-26 --warmup-days 14 --out data/replay_polygon_v2
 Usage (R2):
     python3 scripts/structural_level_corpus_build.py --symbol MNQ \
         --start 2026-07-16 --end 2026-09-14 --roll-days 3 \
@@ -52,7 +52,7 @@ from sources.polygon_client import (  # noqa: E402
     contract_schedule,
 )
 
-TOOL_VERSION = "slc-build-v1.3"
+TOOL_VERSION = "slc-build-v1.4"
 _ET = ZoneInfo("America/New_York")
 
 # Files whose bytes define the corpus content (P2 spec §3.1 pins).
@@ -177,8 +177,17 @@ def build(
     end_ts_exclusive: datetime | None,
     client: PolygonFuturesClient,
     corpus_label: str | None = None,
+    fresh: bool = False,
 ) -> dict:
-    """Fetch, derive, write day files + MANIFEST.json. Returns the manifest dict."""
+    """Fetch, derive, write day files + MANIFEST.json. Returns the manifest dict.
+
+    Refuses to write into a directory that already holds day files unless ``fresh`` (which
+    removes them first) — a partial overwrite would leave stale days beside new ones."""
+    out_dir = out_root / symbol
+    existing = sorted(out_dir.glob("*.jsonl")) if out_dir.exists() else []
+    if existing and not fresh:
+        raise SystemExit(f"[build] {out_dir} already holds {len(existing)} day files — pass --fresh "
+                         "to replace the corpus (stale days must never sit beside new ones)")
     fetch_start = start - timedelta(days=warmup_days)
     segments = contract_schedule(symbol, fetch_start, end, roll_days)
     print(f"[build] fetching {symbol} {timeframe}m bars {fetch_start}..{end} "
@@ -207,7 +216,12 @@ def build(
             raise SystemExit(f"[build] builder output lacks required fields {missing} — "
                              "wrong builder version; refusing to write")
 
-    out_dir = out_root / symbol
+    # Replace only after a successful fetch + derivation (a failed fetch must not destroy
+    # the previous corpus).
+    for stale in existing:
+        stale.unlink()
+    if existing and (out_dir / "MANIFEST.json").exists():
+        (out_dir / "MANIFEST.json").unlink()
     out_dir.mkdir(parents=True, exist_ok=True)
     by_day: dict[str, list[dict]] = {}
     for c in candles:
@@ -283,6 +297,7 @@ def main(argv: list[str] | None = None) -> int:
                         help="ISO timestamp; candles at/after it are dropped (roll cut)")
     parser.add_argument("--out", required=True, help="corpus root; writes <out>/<SYMBOL>/")
     parser.add_argument("--label", default=None, help="corpus label for the manifest")
+    parser.add_argument("--fresh", action="store_true", help="replace an existing corpus directory")
     args = parser.parse_args(argv)
 
     try:
@@ -306,6 +321,7 @@ def main(argv: list[str] | None = None) -> int:
         end_ts_exclusive=_parse_ts(args.end_ts_exclusive) if args.end_ts_exclusive else None,
         client=client,
         corpus_label=args.label,
+        fresh=args.fresh,
     )
     return 0
 

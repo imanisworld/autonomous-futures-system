@@ -1,5 +1,5 @@
 {
- "tool": "slp2-v1.3",
+ "tool": "slp2-v1.4",
  "gates": {
   "firing_jaccard_min": 0.9,
   "bracket_agree_min": 0.98,
@@ -158,6 +158,7 @@
    "spec_verdict_reference": "BOTH \u2014 input-divergent (spec \u00a72; resolved by \u00a74 gates)",
    "classification": "BOTH \u2014 BRACKET_CONFLICT",
    "classification_reason": "jaccard 0.995 \u2265 0.9 but bracket 0.939 < 0.98: same formula, input miss \u2014 definition conflict, reported",
+   "ruled_disposition": "REPLAY_ONLY + LIVE_ONLY strata, never pooled (prereg v1.4 Ruling 2: bracket 93.88% < 98% on the parity corpus; no tolerance/target/rounding change)",
    "live_only_examples": [
     [
      "MES",
@@ -227,6 +228,7 @@
    "spec_verdict_reference": "DEAD (spec \u00a72)",
    "classification": "DEAD",
    "classification_reason": "never fires on either path (payload lacks the required field)",
+   "ruled_disposition": null,
    "live_only_examples": [],
    "replay_only_examples": []
   },
@@ -283,6 +285,7 @@
    "spec_verdict_reference": "BOTH \u2014 input-divergent (spec \u00a72; resolved by \u00a74 gates)",
    "classification": "BOTH",
    "classification_reason": "jaccard 0.937 \u2265 0.9; bracket 0.9990186457311089",
+   "ruled_disposition": null,
    "live_only_examples": [
     [
      "MES",
@@ -382,6 +385,7 @@
    "spec_verdict_reference": "BOTH after corpus rebuild (spec \u00a72)",
    "classification": "BOTH",
    "classification_reason": "jaccard 0.997 \u2265 0.9; bracket 1.0",
+   "ruled_disposition": null,
    "live_only_examples": [
     [
      "MNQ",
@@ -420,6 +424,7 @@
    "spec_verdict_reference": "DEAD (spec \u00a72)",
    "classification": "DEAD",
    "classification_reason": "never fires on either path (payload lacks the required field)",
+   "ruled_disposition": null,
    "live_only_examples": [],
    "replay_only_examples": []
   },
@@ -451,6 +456,7 @@
    "spec_verdict_reference": "DEAD (spec \u00a72)",
    "classification": "DEAD",
    "classification_reason": "never fires on either path (payload lacks the required field)",
+   "ruled_disposition": null,
    "live_only_examples": [],
    "replay_only_examples": []
   },
@@ -482,6 +488,7 @@
    "spec_verdict_reference": "LIVE_ONLY (spec \u00a72/\u00a76)",
    "classification": "LIVE_ONLY",
    "classification_reason": "live=0, replay=0 by construction (env/lane)",
+   "ruled_disposition": null,
    "live_only_examples": [],
    "replay_only_examples": []
   },
@@ -519,6 +526,7 @@
    "spec_verdict_reference": "BOTH (spec \u00a72; bar-type parity measured here)",
    "classification": "BOTH",
    "classification_reason": "jaccard 0.994 \u2265 0.9; bracket 1.0",
+   "ruled_disposition": null,
    "live_only_examples": [],
    "replay_only_examples": [
     [
@@ -563,6 +571,7 @@
    "spec_verdict_reference": "BOTH (spec \u00a72; bar-type parity measured here)",
    "classification": "BOTH",
    "classification_reason": "jaccard 1.000 \u2265 0.9; bracket 1.0",
+   "ruled_disposition": null,
    "live_only_examples": [],
    "replay_only_examples": []
   },
@@ -619,6 +628,7 @@
    "spec_verdict_reference": "BOTH (spec \u00a72; bar-type parity measured here)",
    "classification": "BOTH",
    "classification_reason": "jaccard 0.999 \u2265 0.9; bracket 0.999604273842501",
+   "ruled_disposition": null,
    "live_only_examples": [
     [
      "MES",
@@ -675,6 +685,7 @@
    "spec_verdict_reference": "BOTH (spec \u00a72; bar-type parity measured here)",
    "classification": "BOTH",
    "classification_reason": "jaccard 0.998 \u2265 0.9; bracket 1.0",
+   "ruled_disposition": null,
    "live_only_examples": [
     [
      "MES",
@@ -725,6 +736,7 @@
    "spec_verdict_reference": "BOTH (spec \u00a72; bar-type parity measured here)",
    "classification": "BOTH",
    "classification_reason": "jaccard 0.992 \u2265 0.9; bracket 1.0",
+   "ruled_disposition": null,
    "live_only_examples": [],
    "replay_only_examples": [
     [
@@ -769,6 +781,7 @@
    "spec_verdict_reference": "BOTH (spec \u00a72; bar-type parity measured here)",
    "classification": "BOTH",
    "classification_reason": "jaccard 1.000 \u2265 0.9; bracket 1.0",
+   "ruled_disposition": null,
    "live_only_examples": [],
    "replay_only_examples": []
   },
@@ -806,6 +819,7 @@
    "spec_verdict_reference": "BOTH \u2014 input-divergent (spec \u00a72; resolved by \u00a74 gates)",
    "classification": "BOTH",
    "classification_reason": "jaccard 1.000 \u2265 0.9; bracket 1.0",
+   "ruled_disposition": null,
    "live_only_examples": [],
    "replay_only_examples": []
   },
@@ -843,6 +857,7 @@
    "spec_verdict_reference": "NOT_TESTABLE (spec \u00a72/\u00a76)",
    "classification": "NOT_TESTABLE",
    "classification_reason": "spec \u00a76; live=12 replay=92 (reported, not gated)",
+   "ruled_disposition": null,
    "live_only_examples": [
     [
      "MES",
@@ -930,6 +945,7 @@
    "spec_verdict_reference": "BOTH \u2014 input-divergent (spec \u00a72; resolved by \u00a74 gates)",
    "classification": "BOTH",
    "classification_reason": "jaccard 0.938 \u2265 0.9; bracket 1.0",
+   "ruled_disposition": null,
    "live_only_examples": [
     [
      "MES",
@@ -1025,6 +1041,7 @@
    "spec_verdict_reference": "LIVE_ONLY (spec \u00a72/\u00a76)",
    "classification": "LIVE_ONLY",
    "classification_reason": "live=155, replay=0 by construction (env/lane)",
+   "ruled_disposition": null,
    "live_only_examples": [
     [
      "MNQ",
@@ -1087,6 +1104,7 @@
    "spec_verdict_reference": "LIVE_ONLY (spec \u00a72/\u00a76)",
    "classification": "LIVE_ONLY",
    "classification_reason": "live=0, replay=0 by construction (env/lane)",
+   "ruled_disposition": null,
    "live_only_examples": [],
    "replay_only_examples": []
   }

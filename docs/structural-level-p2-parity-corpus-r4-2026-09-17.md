@@ -12,6 +12,11 @@ Prereg v1.3 (`df18532`), P2 spec (#618 → `b7bade8`). Code SHA for this run: `b
 `d200ae0d…`, `replay_engine` `8de84e13…`, `polygon_to_replay` `a42e1cae…`, `csv_to_replay`
 `332e48a9…`, `risk_rules.yaml` `6c7e3f13…`).
 
+**Rulings applied (2026-09-17, second pass on this PR, before R5 / any outcome):** Ruling 1 —
+P-REPLAY window amended to **2024-10-01 → 2026-06-26** (option A; prereg **v1.4**); R1 rebuilt
+under it (§3.1). Ruling 2 — **`ema_pullback_trend` fails pooled parity**: `REPLAY_ONLY` +
+`LIVE_ONLY` strata, never pooled; the `BRACKET_CONFLICT` finding is preserved unchanged (§4.2).
+
 Machine artifacts (this PR): `docs/structural-level-p2-parity-corpus-r4-2026-09-17-results.json`
 (P2-P report), `…-integrity.json` (P2-X integrity-only manifest of the parity run, determinism
 check, old-vs-rebuilt corpus OHLCV comparison), and the four corpus `MANIFEST.json` copies under
@@ -23,8 +28,8 @@ check, old-vs-rebuilt corpus OHLCV comparison), and the four corpus `MANIFEST.js
 
 | Tool | Purpose | Imports from runtime? |
 |---|---|---|
-| `scripts/structural_level_corpus_build.py` (`slc-build-v1.3`) | R1/R2 corpus build: calls the pinned `polygon_to_replay.derive_candles` + the same day-file split as `polygon_to_replay.main`; adds `--roll-days`, `--end-ts-exclusive` (roll cut), a fail-closed schema check (`london_orb_*` etc. must be present) and `MANIFEST.json` (git HEAD, builder file hashes, contract segments + roll rule, per-file sha256/rows/first/last, 15m-grid gap ledger inside CME hours, roll ledger with the session-open gap at every seam) | no (Polygon client + builder only) |
-| `research/structural_level_p2.py` (`slp2-v1.3`) | Library: journal loaders (live = 15m decision rows, `context.timestamp` as bar time; replay = `bar_ts`), `split_outcome`, `candidate_key` = `shadow_resolver._candidate_key("shadow_setups", …)` byte-identical, `compute_parity` (spec §4 gates frozen: Jaccard ≥ 0.90; each bracket leg within one tick on ≥ 98 % of co-fired), `extract` (P2-X), `determinism_check` | no |
+| `scripts/structural_level_corpus_build.py` (`slc-build-v1.4`) | R1/R2 corpus build: calls the pinned `polygon_to_replay.derive_candles` + the same day-file split as `polygon_to_replay.main`; adds `--roll-days`, `--end-ts-exclusive` (roll cut), a fail-closed schema check (`london_orb_*` etc. must be present) and `MANIFEST.json` (git HEAD, builder file hashes, contract segments + roll rule, per-file sha256/rows/first/last, 15m-grid gap ledger inside CME hours, roll ledger with the session-open gap at every seam) | no (Polygon client + builder only) |
+| `research/structural_level_p2.py` (`slp2-v1.4`) | Library: journal loaders (live = 15m decision rows, `context.timestamp` as bar time; replay = `bar_ts`), `split_outcome`, `candidate_key` = `shadow_resolver._candidate_key("shadow_setups", …)` byte-identical, `compute_parity` (spec §4 gates frozen: Jaccard ≥ 0.90; each bracket leg within one tick on ≥ 98 % of co-fired), `extract` (P2-X), `determinism_check` | no |
 | `scripts/structural_level_p2_extract.py` (P2-X) | replay journals → `candidates.jsonl` (no outcome field) + `outcomes.sealed.jsonl` (hashed, not opened) + `manifest.json` with the §3.3 integrity report; `--integrity-only` never writes outcomes; `--determinism-log-dir` byte-compares two runs | no |
 | `scripts/structural_level_p2_parity.py` (P2-P) | live vs replay firing/bracket parity per family with the operator's six-column report and final classification | no |
 | `tests/test_structural_level_p2.py` | 16 synthetic tests: key identity vs resolver, outcome seal (no `outcome`/`result` string anywhere in candidates), integrity-only never writes outcomes, exact/conflicting duplicates → BLOCKED, asian ORB-fade and forbidden-family fail-closed, roll-cut exclusivity, Jaccard/bracket/bar-census arithmetic, BRACKET_CONFLICT when firing agrees but a leg is two ticks off, classifier states, LIVE_ONLY-in-replay gate failure, live loader (`context.timestamp`, roll cut), determinism, ORB NOT_AVAILABLE days, corpus build with a fake client (warm-up drop, end cut, required fields, roll ledger reproduces a 277.5 gap, manifest hashes), gap ledger, no-runtime-import guard | — |
@@ -42,13 +47,12 @@ Full suite in the worktree: **5,685 passed, 7 skipped**.
 | ORB availability (from corpus) | 43 NY session-days, **0** NOT_AVAILABLE; 43 London, **0** NOT_AVAILABLE | same |
 | Manifest sha256 | `939725d7…` | `46e99ea5…` |
 
-## 3. R1 — P-REPLAY corpus `data/replay_polygon_v2/{MNQ,MES}` (built; **window shortfall — needs a ruling**)
+## 3. R1 — P-REPLAY corpus `data/replay_polygon_v2/{MNQ,MES}` (first build: window shortfall → Ruling 1 → rebuilt, §3.1)
 
-Built with the pinned builder, `roll_days=8` (default), requested 2024-07-01 → 2026-06-26 with
-the builder's 10-day warm-up. Result per instrument: **41,773 rows / 555 day files,
-2024-09-17T13:30Z → 2026-06-26T20:45Z**, `london_orb_*`, `reconstructed_market_condition`,
-`legacy_market_condition` present on every row (schema check passed). Manifest sha256 MNQ
-`9e60b4c0…`, MES `a9826475…`.
+**First build (superseded, kept for the record):** pinned builder, `roll_days=8`, requested
+2024-07-01 → 2026-06-26 with the builder's 10-day warm-up → 41,773 rows / 555 day files per
+instrument, 2024-09-17T13:30Z → 2026-06-26T20:45Z, schema check passed. Those files and their
+manifests (sha256 MNQ `9e60b4c0…`, MES `a9826475…`) were replaced by the §3.1 rebuild.
 
 **Finding R1-A — Polygon retention.** Polygon returns **zero bars for the U4 contracts**
 (`MNQU4`, `MESU4`, probed directly) and `MNQZ4` data begins 2024-09-17T00:00Z — exactly two
@@ -81,9 +85,39 @@ bars are listed in `…-integrity.json` → `old_vs_rebuilt_corpus_ohlcv`.
   the raw bars for that stretch are no longer re-fetchable, so reproducibility rests on the
   preserved files' hashes.
 
-Recommendation: **(B)** if the operator accepts a preserved-file provenance for 2.5 months;
-otherwise **(A)**. Either is a docs + rebuild step with its own go. Nothing downstream (R5)
-should run on the current `replay_polygon_v2` as-is because its first days lack warm-up.
+**Ruling 1 (operator, 2026-09-17): option A.** Single provider vintage, freshly reproducible,
+no data-vintage seam; the ~11 % shorter in-sample window is accepted for documented
+provider-retention reasons before any outcome exists. Option B rejected (it would mix the
+June-2026 and September-2026 vintages that already differ by 8 revised + 138 backfilled bars).
+Recorded as prereg **v1.4** (§2.4 P-REPLAY row + changelog) and in the P2 spec §3.1/§5.
+
+### 3.1 R1 rebuilt under Ruling 1 (prereg v1.4 window)
+
+`scripts/structural_level_corpus_build.py --symbol <INST> --start 2024-10-01 --end 2026-06-26
+--warmup-days 14 --out data/replay_polygon_v2 --fresh` (warm-up fetch from 2024-09-17 = the
+provider's retention start; `--fresh` replaces the superseded build only after a successful
+fetch + derivation). Builder `slc-build-v1.4`, pinned file hashes unchanged
+(`polygon_to_replay` `a42e1cae…`, `csv_to_replay` `332e48a9…`, `pine_market_condition`
+`df04b39e…`, `polygon_client` `3959cc1b…`, `context/trend` `24100349…`).
+
+| | MNQ | MES |
+|---|---|---|
+| Raw bars fetched (with warm-up) | 41,827 (identical count to the first fetch 15 min earlier) | 41,827 |
+| Rows / day files in window | **40,907 / 543** | **40,907 / 543** |
+| Range | **2024-10-01T00:00Z → 2026-06-26T20:45Z** | same |
+| Warm-up check | `ema_200` populated on row 1 (20232.03), `previous_day_*` populated on row 1; **0 rows** with `ema_200` or `previous_day_high` = `None` | row 1 `ema_200` 5794.71; 0 `None` rows |
+| Required fields (`london_orb_*`, `reconstructed_market_condition`, `legacy_market_condition`, …) | present on every row | same |
+| Timestamps | strictly increasing, no duplicates | same |
+| Manifest per-file sha256 vs disk | 543/543 match | 543/543 match |
+| Contract segments | Z4 (2024-09-17 warm-up) → H5 12-12 → M5 03-13 → U5 06-12 → Z5 09-11 → H6 12-11 → M6 03-12 → U6 06-11 | same |
+| Roll ledger (session-open gap, pts) | H5 +268.75, M5 +214.75, U5 +225.5, Z5 +230.75, H6 +258.0, M6 +217.0, **U6 +277.5 (the known 2026-06-11 gap reproduced)** | +66.5, +52.0, +53.0, +54.25, +58.75, +50.75, +61.25 |
+| Gap ledger (CME hours) | 35 runs, 12,795 min; every run ≥ 4 h is an exchange holiday/early close (Thanksgiving ×2, Christmas Eve/NYE ×2, MLK, Presidents, Good Friday 2025/2026, Memorial, Juneteenth, July 4, Labor Day, 2025-01-09 national day of mourning) plus one 645-min hole 2025-11-28T02:45Z (Black Friday) — listed in the manifest | identical runs |
+| Manifest sha256 | `1f16b81b…` | `ca448150…` |
+
+Old (retired `data/replay_polygon`, June-2026 fetch) vs rebuilt on the 2024-10-01 → 2026-06-26
+overlap: 40,769 common bars per instrument, the same **8** provider-revised bars and **138**
+backfilled bars as before (all listed in `…-integrity.json`); 5,971 old-only bars =
+2024-07-01 → 2024-09-30 (outside the v1.4 window). **R1 proof complete; nothing downstream run.**
 
 ## 4. R4 — parity run on R2 (replay engine, pinned) and P2-P vs the live snapshot
 
@@ -154,23 +188,32 @@ at 99.45 % / 99.92 %). Decomposition (computed from the same candidate rows, in
 Largest target difference: 2.27 pts (MNQ 2026-08-27T10:00Z; entries 29598.25 vs 29599.0). This
 is an **input miss** (feed close + EMA source), exactly the case §4 anticipated ("the formula is
 the same function, so a bracket miss means an input miss"). It is reported, not tolerated: the
-family fails the frozen bracket gate as written. Whether the pooled statement admits it as
-`BOTH — input-divergent` strata (firing agrees at 0.995) or excludes it is the operator's
-ruling; the tooling does not decide it.
+family fails the frozen bracket gate as written.
+
+**Ruling 2 (operator, 2026-09-17): `ema_pullback_trend` fails pooled parity** → analysed as
+`REPLAY_ONLY` + `LIVE_ONLY` strata, **never** in the pooled live/replay confirmatory statistic.
+No tolerance widening, no change to the 2.2× target, no rounding change, no row removal, and
+93.9 % is not "close enough". The P2-P tool keeps reporting the raw `BOTH — BRACKET_CONFLICT`
+classification and now attaches the ruled disposition beside it (`ruled_disposition`,
+`RULED_SPLIT_STRATA` in `research/structural_level_p2.py`); recorded in prereg v1.4 §2.3 and
+the P2 spec §2 matrix.
 
 ### 4.3 Resolution of the spec §2 "BOTH — input-divergent" rows
 
 - `strat_4hr_retrigger_observed`, `impulse_first_pullback_observed`, `trend_consolidation_break_observed`
   → **BOTH** (Jaccard 1.000 / 0.937 / 0.938, bracket 1.000 / 0.999 / 1.000).
-- `ema_pullback_trend` → firing **BOTH** (0.995) but **bracket gate fails** → `BOTH — BRACKET_CONFLICT`.
+- `ema_pullback_trend` → firing **BOTH** (0.995) but **bracket gate fails** → `BOTH — BRACKET_CONFLICT`
+  → **Ruling 2: `REPLAY_ONLY` + `LIVE_ONLY` strata, not pooled.**
 - All `strat_*` families and `orb_false_break_fade` → **BOTH** as predicted; bar-type and ORB
   routing sources are effectively identical on this window.
 
 ## 5. Conflicts / findings to carry forward
 
-- **C17 — Polygon rolling retention (R1-A):** P-REPLAY as preregistered is no longer fetchable
-  before 2024-09-17; a rebuilt corpus fetched on date D starts at ≈ D − 2 years. Any
-  reproduction of P-REPLAY after today must rely on preserved files + manifest hashes.
+- **C17 — Polygon rolling retention (R1-A):** P-REPLAY as preregistered in v1.0–v1.3 is no
+  longer fetchable before 2024-09-17; a rebuilt corpus fetched on date D starts at ≈ D − 2 years.
+  **Resolved by Ruling 1 (v1.4 window 2024-10-01 →).** Any reproduction after ~2026-10-01 will
+  again lose the start of the window from the provider and must rely on the preserved files +
+  manifest hashes (the retention edge moves one day per day).
 - **C18 — provider revisions (R1-B):** 8 revised bars + 138 backfilled bars between the June-2026
   and September-2026 fetches of the same contracts. The manifests pin *this* fetch.
 - **C19 — replay research-deque reset at UTC day-file boundaries:** the first 7 bars of every
@@ -192,11 +235,12 @@ repo.
 
 ---
 
-**Verdict: R1 BUILT WITH WINDOW SHORTFALL (needs ruling A/B); R2 BUILT; R3 DELIVERED (16 tests,
-suite 5,685 pass); R4 PARITY: 11 families BOTH, 1 BRACKET_CONFLICT (`ema_pullback_trend`,
-target leg 93.9 %), 1 NOT_TESTABLE, 3 LIVE_ONLY, 3 DEAD. P2 remains UNPROVEN until the operator
-rules on the P-REPLAY window and the `ema_pullback_trend` bracket gate. STOP before R5.**
+**Verdict: R1 REBUILT under Ruling 1 (prereg v1.4 window 2024-10-01 → 2026-06-26; 40,907 rows
+× 2, warm-up complete, manifests + integrity clean); R2 BUILT; R3 DELIVERED (16 tests, suite
+green); R4 PARITY: 10 families BOTH (pooled-eligible), `ema_pullback_trend` BRACKET_CONFLICT →
+split strata by Ruling 2, 1 NOT_TESTABLE, 3 LIVE_ONLY, 3 DEAD. P2 remains UNPROVEN (no
+candidate regenerated on P-REPLAY, no outcome read). STOP before R5.**
 
-**Safe next step:** operator rulings on (1) P-REPLAY window (option A or B → rebuild + prereg
-§2 docs amendment), (2) `ema_pullback_trend` disposition under the bracket gate. Then, with a
-separate go: R5 regeneration on the ruled corpus with P2-X sealing outcomes.
+**Safe next step:** operator review of the rebuilt-R1 proof (§3.1) and the v1.4 amendment;
+then, with a separate go, R5 = regeneration on `data/replay_polygon_v2` (v1.4) with P2-X
+sealing outcomes, followed by R6 (feature table) and R7 (spot-check) before any seal is opened.

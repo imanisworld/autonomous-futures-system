@@ -45,8 +45,8 @@ from context.location_context import (
     nearest_zones,
 )
 
-PREREG_VERSION = "1.3"
-PREREG_SHA = "v1.3 amendment on PR #617 (v1.2 base fdeac72)"
+PREREG_VERSION = "1.4"
+PREREG_SHA = "v1.4 amendment on PR #620 (v1.3 base df18532); level/event definitions unchanged since v1.3"
 
 _ET = ZoneInfo("America/New_York")
 

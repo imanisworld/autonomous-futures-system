@@ -1,5 +1,5 @@
 {
- "tool": "slc-build-v1.3",
+ "tool": "slc-build-v1.4",
  "corpus": "replay_polygon_v2/MNQ",
  "instrument": "MNQ",
  "timeframe_minutes": 15,
@@ -7,22 +7,17 @@
  "source": {
   "provider": "Polygon futures aggs (sources/polygon_client.PolygonFuturesClient)",
   "endpoint": "/futures/v1/aggs/{ticker}?resolution=15min",
-  "fetched_utc": "2026-09-17T01:40:19Z",
-  "requested_range": "2024-07-01..2026-06-26",
-  "fetch_range_with_warmup": "2024-06-21..2026-06-26",
-  "warmup_days": 10,
+  "fetched_utc": "2026-09-17T01:55:19Z",
+  "requested_range": "2024-10-01..2026-06-26",
+  "fetch_range_with_warmup": "2024-09-17..2026-06-26",
+  "warmup_days": 14,
   "end_ts_exclusive": null,
   "candles_dropped_at_end_cut": 0,
   "roll_rule": "roll_days=8 (front contract advances 8 calendar days before 3rd-Friday expiry; sources.polygon_client.front_contract) [DEFAULT_ROLL_DAYS]",
   "contract_segments": [
    [
-    "MNQU4",
-    "2024-06-21",
-    "2024-09-11"
-   ],
-   [
     "MNQZ4",
-    "2024-09-12",
+    "2024-09-17",
     "2024-12-11"
    ],
    [
@@ -64,20 +59,20 @@
   "raw_bars_fetched": 41827
  },
  "builder": {
-  "git_head_of_checkout": "b7bade85606229fc8e8e6b2040e9dbbeadfc44f1",
+  "git_head_of_checkout": "a1bce20d1a76f620e1830723600a877648da4661",
   "file_sha256": {
    "scripts/polygon_to_replay.py": "a42e1cae7cb791648dfa6ed2c222342e45debdec18ae86aa6bf3c647c4c981d0",
    "scripts/csv_to_replay.py": "332e48a951547819948a71a062a95c2b2acbff9b0da5433d1241df68c46d10ee",
    "scripts/pine_market_condition.py": "df04b39eef02e53aff27aa4100ab49fb8e26e6e72c04091703c2ef8a69f15a11",
    "sources/polygon_client.py": "3959cc1b41e7c0edcde909364b82fb9bc39577ff5dc264153767f8aaf3ac5896",
    "context/trend.py": "24100349069f8ff9b53b3d0aec78513b547972298bdb5e641708578399819c1a",
-   "scripts/structural_level_corpus_build.py": "664a497d88bcb2d3b6eb7374cea8140edd597c65e13c5cb281b6550300a6a65c"
+   "scripts/structural_level_corpus_build.py": "da62561fe199c3280de4eabb5972cac5bfba088d94cdc4815b6ec515de08f6b7"
   }
  },
  "coverage": {
-  "files": 555,
-  "rows": 41773,
-  "first_bar": "2024-09-17T13:30:00+00:00",
+  "files": 543,
+  "rows": 40907,
+  "first_bar": "2024-10-01T00:00:00+00:00",
   "last_bar": "2026-06-26T20:45:00+00:00",
   "required_fields_present": [
    "timestamp",
@@ -312,12 +307,6 @@
  ],
  "roll_ledger": [
   {
-   "from": "MNQU4",
-   "to": "MNQZ4",
-   "roll_utc_date": "2024-09-12",
-   "status": "NOT_IN_CORPUS"
-  },
-  {
    "from": "MNQZ4",
    "to": "MNQH5",
    "roll_utc_date": "2024-12-12",
@@ -389,78 +378,6 @@
   }
  ],
  "files": {
-  "MNQ_2024-09-17.jsonl": {
-   "sha256": "d9496b7aefbeddcd35dd9df4975d3e5c65aa469694ee10e23b9c92f3dfbdba32",
-   "rows": 38,
-   "first": "2024-09-17T13:30:00+00:00",
-   "last": "2024-09-17T23:45:00+00:00"
-  },
-  "MNQ_2024-09-18.jsonl": {
-   "sha256": "7f2627cb9aca10da774a4080a0a1ed3862867bee95fea3ce391ebe967a09d466",
-   "rows": 92,
-   "first": "2024-09-18T00:00:00+00:00",
-   "last": "2024-09-18T23:45:00+00:00"
-  },
-  "MNQ_2024-09-19.jsonl": {
-   "sha256": "8740922cf481aa6d263c7fcf75bda55c6b05ce078a0d971ce6f3aff4b2152c34",
-   "rows": 92,
-   "first": "2024-09-19T00:00:00+00:00",
-   "last": "2024-09-19T23:45:00+00:00"
-  },
-  "MNQ_2024-09-20.jsonl": {
-   "sha256": "5e564fd6043e5b338b4fe26fe1da29df87e5322d093239330bef65503daf18a8",
-   "rows": 84,
-   "first": "2024-09-20T00:00:00+00:00",
-   "last": "2024-09-20T20:45:00+00:00"
-  },
-  "MNQ_2024-09-22.jsonl": {
-   "sha256": "63faac7c70b1fa64dd8bbd12bc832447a773b20ede28e25a463863b8b9f0cdde",
-   "rows": 8,
-   "first": "2024-09-22T22:00:00+00:00",
-   "last": "2024-09-22T23:45:00+00:00"
-  },
-  "MNQ_2024-09-23.jsonl": {
-   "sha256": "e215576375695635c2e59466c8da32b78a5c6881d6caa2930fb6a31269f7a248",
-   "rows": 92,
-   "first": "2024-09-23T00:00:00+00:00",
-   "last": "2024-09-23T23:45:00+00:00"
-  },
-  "MNQ_2024-09-24.jsonl": {
-   "sha256": "8dc3718d894ced8f40e4da8cd5615e6bb6e6ec79ecd232fa6cb94c131e476fe1",
-   "rows": 92,
-   "first": "2024-09-24T00:00:00+00:00",
-   "last": "2024-09-24T23:45:00+00:00"
-  },
-  "MNQ_2024-09-25.jsonl": {
-   "sha256": "5f1415fd87350b4ab67826eb230cc6245f125c4a75ed1a663fd8899e19cd6ef2",
-   "rows": 92,
-   "first": "2024-09-25T00:00:00+00:00",
-   "last": "2024-09-25T23:45:00+00:00"
-  },
-  "MNQ_2024-09-26.jsonl": {
-   "sha256": "a1409832468637a9d2e8e62701190c20f1c7c9dc1d39ebf5f26fa29f4329c1f8",
-   "rows": 92,
-   "first": "2024-09-26T00:00:00+00:00",
-   "last": "2024-09-26T23:45:00+00:00"
-  },
-  "MNQ_2024-09-27.jsonl": {
-   "sha256": "80d3dd9394e275560e6b6a458c63f5563c8088b03e17ad7a75d172ecb6b68d05",
-   "rows": 84,
-   "first": "2024-09-27T00:00:00+00:00",
-   "last": "2024-09-27T20:45:00+00:00"
-  },
-  "MNQ_2024-09-29.jsonl": {
-   "sha256": "c0e0b61622a5916673fbf8a7ec2d54e8bf91c0d14deee4b1f176801855b4d662",
-   "rows": 8,
-   "first": "2024-09-29T22:00:00+00:00",
-   "last": "2024-09-29T23:45:00+00:00"
-  },
-  "MNQ_2024-09-30.jsonl": {
-   "sha256": "20a519a45e95deb2ee7af4cc86e179c5477a28a6679eaad460ae0f9d660bb909",
-   "rows": 92,
-   "first": "2024-09-30T00:00:00+00:00",
-   "last": "2024-09-30T23:45:00+00:00"
-  },
   "MNQ_2024-10-01.jsonl": {
    "sha256": "36ef6b1b5ab003d0b30dc998510d27e861f3971b45abf8f6242e02a3734b73ca",
    "rows": 92,

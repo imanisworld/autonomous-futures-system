@@ -33,7 +33,7 @@ from zoneinfo import ZoneInfo
 from config.futures_contracts import optional_tick_size
 from strategy.shadow_resolver import _candidate_key
 
-TOOL_VERSION = "slp2-v1.3"
+TOOL_VERSION = "slp2-v1.4"
 LANE = "shadow_setups"
 _ET = ZoneInfo("America/New_York")
 
@@ -55,6 +55,13 @@ DEAD_FAMILIES = ("ovn_high_sweep_reclaim", "ovn_low_sweep_reclaim", "gap_fill")
 LIVE_ONLY_FAMILIES = ("vwap_hold_observed", "vwap_rejection_observed", "range_break_close")
 NOT_TESTABLE_FAMILIES = ("transition_failed_breakdown_reclaim",)
 NOT_TESTABLE_CELLS = (("strat_122_pullback", "MES"),)
+# Prereg v1.4 Ruling 2: families that failed the frozen bracket gate on the parity corpus are
+# analysed as REPLAY_ONLY + LIVE_ONLY strata, never pooled. The tool still reports the raw
+# BRACKET_CONFLICT classification; the disposition is attached alongside, never in its place.
+RULED_SPLIT_STRATA = {
+    "ema_pullback_trend": "REPLAY_ONLY + LIVE_ONLY strata, never pooled (prereg v1.4 Ruling 2: "
+                          "bracket 93.88% < 98% on the parity corpus; no tolerance/target/rounding change)",
+}
 # Families whose detector reads the 8-bar recent window: replay clears that deque at every
 # day-file boundary (replay_engine.run → _research_bars.clear()), live's BarHistory does not.
 RECENT_BAR_FAMILIES = (
@@ -424,6 +431,7 @@ def compute_parity(live_rows: Iterable[EvalRow], replay_rows: Iterable[EvalRow],
             "spec_verdict_reference": _spec_reference(fam),
             "classification": cls,
             "classification_reason": reason,
+            "ruled_disposition": RULED_SPLIT_STRATA.get(fam),
             "live_only_examples": [list(x) for x in live_only_f[:example_limit]],
             "replay_only_examples": [list(x) for x in replay_only_f[:example_limit]],
         }

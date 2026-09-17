@@ -228,6 +228,8 @@ def test_parity_jaccard_bracket_and_bar_census(tmp_path):
     assert rep["families"]["vwap_hold_observed"]["classification"] == "LIVE_ONLY"
     assert rep["families"]["transition_failed_breakdown_reclaim"]["classification"] == "NOT_TESTABLE"
     assert rep["gate_failures"] == []
+    assert fam["ruled_disposition"] is None
+    assert rep["families"]["ema_pullback_trend"]["ruled_disposition"].startswith("REPLAY_ONLY + LIVE_ONLY")
 
 
 def test_parity_bracket_conflict_when_firing_agrees_but_bracket_off_by_two_ticks(tmp_path):
@@ -348,6 +350,14 @@ def test_corpus_build_writes_pinned_schema_manifest_and_roll_ledger(tmp_path, mo
     assert m["coverage"]["files"] == len(files) == len(m["files"])
     manifest = json.loads((out_root / "MNQ" / "MANIFEST.json").read_text())
     assert manifest["files"][files[0]]["sha256"] == cb.sha256_file(out_root / "MNQ" / files[0])
+    # a second build into the same directory is refused unless --fresh (no stale days beside new)
+    with pytest.raises(SystemExit):
+        cb.build(symbol="MNQ", start=start, end=end, timeframe=15, warmup_days=1, roll_days=8,
+                 out_root=out_root, end_ts_exclusive=None, client=FakeClient())
+    m2 = cb.build(symbol="MNQ", start=date(2026, 6, 10), end=end, timeframe=15, warmup_days=1, roll_days=8,
+                  out_root=out_root, end_ts_exclusive=None, client=FakeClient(), fresh=True)
+    assert sorted(p.name for p in (out_root / "MNQ").glob("*.jsonl"))[0] == "MNQ_2026-06-10.jsonl"
+    assert m2["coverage"]["files"] == len(list((out_root / "MNQ").glob("*.jsonl")))
 
 
 def test_gap_ledger_reports_missing_open_slots_only():
