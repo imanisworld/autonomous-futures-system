@@ -1,6 +1,6 @@
 # C14 Pine Boundary Fixture Capture Protocol — 2026-09-17
 
-**Status:** AUDIT / OFFLINE EVIDENCE ONLY. No Pine deployment, strategy change, replay change, outcome read, R5 step, broker change, runtime release or restart is authorized.
+**Status:** COMPLETED 2026-09-17 — fixtures captured and the candidate rule reached `PROVEN_FOR_IMPLEMENTATION_TEST`; implemented in PR #646 (see *Outcome* at the end). The protocol below is kept verbatim.
 
 This protocol supplements `docs/c14-holiday-session-anchor-proof-plan-2026-09-17.md`. Its purpose is to make the remaining C14 evidence collection mechanical and non-interpretive.
 
@@ -134,3 +134,18 @@ Do not overwrite the original Labor Day evidence or prior parity artifacts.
 ## What a successful proof authorizes
 
 Only a successful fixture proof authorizes a **separate offline implementation PR** for a shared `trading_day_key(ts, product)`-style helper plus regression tests. It does not authorize strategy admission, R5, deployment or live execution.
+
+## Outcome — 2026-09-17
+
+| case class | fixture | result |
+|---|---|---|
+| ordinary weekday control | every Mon–Thu 18:00 ET in 2026-06-16 → 09-17 (both instruments) | AGREE (reset) |
+| ordinary weekend control | every non-holiday Sunday 18:00 ET in the window, incl. 09-13 | AGREE (reset) |
+| known Labor Day case | Sun 09-06 18:00 reset, **Mon 09-07 18:00 no reset**, Tue 09-08 18:00 reset | AGREE — explained by `time_tradingday`, no date-specific exception |
+| independent full-holiday case | Juneteenth Fri 06-19 (MES) and observed Independence Day Fri 07-03 (both): Thu 18:00 reset, **Sun 18:00 no reset**, Mon 18:00 reset | AGREE — same rule |
+| early-close case | the 13:00 ET holiday halts on 06-19 / 07-03 / 09-07 sit inside the holiday sessions above; no separate early-close-only trade date fell in the export window | no special boundary required |
+
+Both instruments agree on every non-gap fixture; the only bar gaps are exchange halts (no `C16_GAP_CONTAMINATED`
+rows). Machine-readable comparison: `tests/test_c14_pine_daily_identity.py` against
+`tests/fixtures/c14_pine_daily_identity/` (verbatim export windows; provenance in its README).
+Implementation and residuals: `docs/c14-holiday-session-anchor-proof-plan-2026-09-17.md` → *Outcome*.

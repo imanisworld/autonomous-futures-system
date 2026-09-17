@@ -1,6 +1,6 @@
 # C14 Holiday / Daily-Session Anchor Proof Plan — 2026-09-17
 
-**Status:** AUDIT / OFFLINE PROOF ONLY. VWAP remains `NOT_ADMITTED`. No runtime change, Pine change, tolerance change, strategy change, outcome read, R5 step, deploy, or restart is authorized.
+**Status:** CLOSED 2026-09-17 — verdict **`C14 FIX PROVEN`** (see *Outcome* at the end). VWAP remains `NOT_ADMITTED`. The plan below is kept verbatim as the pre-registered procedure.
 
 ## Proven starting fact
 
@@ -121,3 +121,24 @@ Return exactly one:
 - `C14 BLOCKED — INSUFFICIENT EXTERNAL SESSION EVIDENCE`
 
 No C14 result authorizes VWAP strategy promotion or R5.
+## Outcome — 2026-09-17: `C14 FIX PROVEN`
+
+- **Evidence:** operator-captured TradingView Pine diagnostic exports (MES1! and MNQ1!, 5m + 15m,
+  2026-06-16 → 2026-09-17, per-bar `time("D")`, `time_tradingday`, `ta.vwap(hlc3)`, HOD, LOD).
+  H1 held: Pine daily identity = the CME **trade date**. Labor Day (Mon 09-07 18:00 reopen → still
+  09-08), Juneteenth (Fri 06-19 → Sun 06-21 18:00 no reset) and observed Independence Day
+  (Fri 07-03 → Sun 07-05 18:00 no reset) are all explained by one rule with no date-specific branch;
+  every ordinary weekday/Sunday boundary is unchanged. H2 held: VWAP and HOD/LOD reset on the same
+  identity. H3 held: ordinary-session behaviour identical.
+- **Rule:** `cme_trading_day(ts, instrument)` = ET date (+1 at/after 18:00 ET) advanced to the first
+  weekday that is a CME equity-index trade date (rule-generated non-trade dates; Good Friday
+  deliberately excluded). 0 mismatches vs Pine `time_tradingday` on 76,541 export rows.
+- **Implementation:** PR #646, merged `bfcfc5209a8b345d980e758352b34e98f074e704` (reviewed head
+  `7a702d14d13658e8298f1f23b04528d93e922a33`). Replay converters only; calendar applied to
+  `MES/MNQ/M2K` only, other products keep the mechanical key; fixtures in
+  `tests/fixtures/c14_pine_daily_identity/`, tests in `tests/test_c14_pine_daily_identity.py`.
+- **Not done / still open:** frozen P-REPLAY corpus not rebuilt and P3 VWAP/HOD-LOD parity not rerun
+  (needs its own go); `context/location_context._trading_day` (live, observation-only) still
+  mechanical — fenced in `docs/c14-live-replay-daily-identity-fence-2026-09-17.md`; un-fixtured
+  holidays (MLK, Presidents', Memorial, Thanksgiving, Christmas, New Year's) and unscheduled closures
+  remain an evidence limitation. VWAP admission is unchanged (`NOT_ADMITTED`).

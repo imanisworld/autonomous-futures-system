@@ -16,7 +16,7 @@ P3 is closed. P2 specification is complete and landed. The next authorized work 
   - P3 parity tooling/report
   - all admitted P3 checks pass on eligible rows
   - VWAP remains diagnostic-only / not admitted
-  - C14 remains unresolved and blocks `vwap_*` live/replay parity
+  - C14 replay defect fixed offline in #646 (`bfcfc52`); `vwap_*` live/replay parity still unproven until the corpus is rebuilt and P3 rerun (own go)
 - PR #618 merged as `b7bade85606229fc8e8e6b2040e9dbbeadfc44f1`.
   - P2 candidate-regeneration specification
   - family compatibility matrix
@@ -35,7 +35,7 @@ Binding points:
 - §9.4-contaminated rows are excluded from the admitted parity denominator but remain counted/reported separately.
 - PWH/PWL remain admitted and pass on eligible rows.
 - VWAP is `NOT_ADMITTED`, remains diagnostic, and does not contribute to P3 pass/fail.
-- C14 is unresolved: TradingView/Pine daily-session anchoring after a CME holiday diverges from the rebuilt source for VWAP and related daily-session constructs. No tolerance widening or holiday-specific rule was adopted to hide this.
+- C14 (TradingView/Pine daily-session anchoring after a CME holiday) is **fixed offline in #646** with a general CME trade-date rule proven against Pine `time_tradingday` — no tolerance widening, no holiday-specific rule. The P3 numbers above were measured before that fix; the rebuilt-corpus parity has not been rerun.
 
 ## P2 status
 
@@ -51,7 +51,7 @@ The existing `data/replay_polygon/*` 15m corpora predate `london_orb_*`, which t
 |---|---|
 | `BOTH` | `strat_22_continuation_observed`, `strat_22_reversal_observed`, `strat_312_observed`, `strat_322_reversal_observed`, `strat_122_observed`, `strat_122_pullback`; bar-type/input parity still must be measured where applicable |
 | `BOTH — input-divergent` | `ema_pullback_trend`, `impulse_first_pullback_observed`, `trend_consolidation_break_observed`, `strat_4hr_retrigger_observed`; Pine/live vs corpus EMA/trend/regime inputs require explicit parity measurement |
-| `LIVE_ONLY` | `vwap_hold_observed`, `vwap_rejection_observed` (campaign-env / MNQ-NY and C14-blocked); `range_break_close` |
+| `LIVE_ONLY` | `vwap_hold_observed`, `vwap_rejection_observed` (campaign-env / MNQ-NY; C14 replay fix landed in #646 but corpus not rebuilt / parity not rerun); `range_break_close` |
 | `NOT_TESTABLE` | `transition_failed_breakdown_reclaim`; current P2 population n=12 and MES blind under C8 |
 | `DEAD` | `ovn_*_sweep_reclaim`, `gap_fill`; required payload fields were never present, so they must not be represented as replay-capable populations |
 

@@ -19,11 +19,11 @@
 - **Do not change:** DecisionEngine gates, Pine label, collector formula, historical rows.
 - **Disposition:** small offline code/test PR, then include in a later sanctioned runtime release only after exact-head CI.
 
-### C14 — holiday daily-session anchor divergence
+### C14 — holiday daily-session anchor divergence — **FIXED OFFLINE (#646, 2026-09-17)**
 
-- **Root-cause class:** proven; generalized calendar rule not yet proven.
-- **Impact:** VWAP and other Pine daily-session constructs are not promotion-grade across holiday transitions.
-- **Disposition:** execute the separate C14 proof plan. No date-specific patch. VWAP remains `NOT_ADMITTED`.
+- **Root cause:** proven — replay rolled the day at every 18:00 ET; Pine/CME use the exchange trade date (a holiday's sessions belong to the next trade date). Generalized rule proven against Pine `time_tradingday` (Labor Day + two independent Friday holidays + all ordinary controls).
+- **Fix:** PR #646 merged `bfcfc5209a8b345d980e758352b34e98f074e704` — replay `cme_trading_day(ts, instrument)` for `MES/MNQ/M2K` only; VWAP/HOD-LOD/PDH-PDL-PDC/daily resample share it. Not deployed (replay tooling only). VWAP remains `NOT_ADMITTED`.
+- **Residual:** frozen corpus not rebuilt / P3 parity not rerun (own go); live `context/location_context._trading_day` still mechanical — observation-only, fenced in `docs/c14-live-replay-daily-identity-fence-2026-09-17.md`, separate authorized runtime PR.
 
 ## Known issues that are not current runtime must-fixes
 
@@ -75,6 +75,6 @@ Unless separate evidence proves a defect, do not change:
 
 1. finish #623/M2K roll provenance and tranche-2 definitions in their own lane;
 2. complete C8 repair/test package;
-3. execute C14 generalized-session proof when the necessary Pine/calendar evidence is available;
+3. ~~execute C14 generalized-session proof~~ — done (#646 merged); remaining C14 items are the corpus rebuild/P3 rerun and the observation-only live helper, each needing its own go;
 4. deploy #612/C8 only through the sanctioned post-freeze paper release path;
 5. otherwise let forward evidence accumulate rather than inventing features.
