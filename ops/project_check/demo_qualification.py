@@ -13,7 +13,8 @@ proof.
 
 The direct-to-demo path is intentionally narrow. It is available only when:
 - the change is strategy/parameter-only; risk/execution/broker/session-contract
-  semantics are explicitly unchanged;
+  semantics are explicitly unchanged, and the git diff is mechanically limited
+  to strategy/tests/docs paths;
 - canonical replay uses the real engine path and matches runtime logic;
 - candidate/direction/entry-stop-target/timeframe/causal parity is proven;
 - the replay dataset/manifest, code SHA and risk_rules hash are pinned;
@@ -43,6 +44,7 @@ from ops.project_check.promotion import build_promotion_report, load_evidence_fa
 MIN_RESOLVED_FILLS = 30
 REQUIRED_SLIPPAGE_STRESS_TICKS = {2, 3}
 DEMO_CLASSIFICATIONS = {"VALIDATED", "PROMISING BUT UNPROVEN"}
+DIRECT_TO_DEMO_ALLOWED_DIFF_PREFIXES = ("strategy/", "tests/", "docs/")
 
 
 def _sha256(path: Path) -> str | None:
@@ -81,10 +83,9 @@ def _require_nonempty(section: dict[str, Any], key: str, blockers: list[str], pr
 
 def _as_int(value: Any) -> int | None:
     try:
-        parsed = int(value)
+        return int(value)
     except (TypeError, ValueError):
         return None
-    return parsed
 
 
 def _as_float(value: Any) -> float | None:
@@ -94,7 +95,7 @@ def _as_float(value: Any) -> float | None:
         return None
 
 
-def _check_change_scope(evidence: dict[str, Any], blockers: list[str]) -> dict[str, Any]:
+def _check_change_scope(root: Path, evidence: dict[str, Any], blockers: list[str]) -> dict[str, Any]:
     scope = evidence.get("change_scope") or {}
     _require_true(scope, "strategy_or_parameter_only", blockers, "change_scope")
     for key in (
@@ -104,7 +105,48 @@ def _check_change_scope(evidence: dict[str, Any], blockers: list[str]) -> dict[s
         "session_contract_semantics_unchanged",
     ):
         _require_true(scope, key, blockers, "change_scope")
-    return scope
+    _require_nonempty(scope, "base_sha", blockers, "change_scope")
+
+    base_sha = str(scope.get("base_sha") or "").strip()
+    current_head = gitutil.head_sha(root)
+    changed_files: list[str] = []
+    non_strategy_scope_files: list[str] = []
+    if current_head is None:
+        blockers.append("change_scope current repository HEAD could not be resolved")
+    elif base_sha:
+        out, error = gitutil.run_git(
+            [
+                "diff",
+                "--no-ext-diff",
+                "--no-textconv",
+                "--name-only",
+                f"{base_sha}...{current_head}",
+            ],
+            cwd=root,
+        )
+        if error is not None or out is None:
+            blockers.append(
+                "change_scope could not mechanically enumerate the base_sha...HEAD diff: "
+                + (error or "unknown git error")
+            )
+        else:
+            changed_files = [line.strip() for line in out.splitlines() if line.strip()]
+            non_strategy_scope_files = [
+                path
+                for path in changed_files
+                if not path.startswith(DIRECT_TO_DEMO_ALLOWED_DIFF_PREFIXES)
+            ]
+            if non_strategy_scope_files:
+                blockers.append(
+                    "change_scope git diff is not strategy-only; direct-to-demo disallows: "
+                    + ", ".join(non_strategy_scope_files)
+                )
+    return {
+        **scope,
+        "current_head": current_head,
+        "changed_files": changed_files,
+        "non_strategy_scope_files": non_strategy_scope_files,
+    }
 
 
 def _check_canonical_replay(evidence: dict[str, Any], blockers: list[str]) -> dict[str, Any]:
@@ -310,7 +352,8 @@ def build_demo_qualification_report(
             "evidence_path": str(path),
             "evidence_load_error": load_error,
             "blockers": [load_error or "evidence facts unavailable"],
-            "internal_paper_forward_required": True,
+            "long_internal_paper_phase_waived": False,
+            "fallback_to_existing_validation_path": True,
             "runtime_release_reconciliation_required": True,
             "live_trading_authorized": False,
         }
@@ -331,7 +374,7 @@ def build_demo_qualification_report(
             "effective classification must be VALIDATED or PROMISING BUT UNPROVEN for direct-to-demo"
         )
 
-    scope = _check_change_scope(evidence, blockers)
+    scope = _check_change_scope(root, evidence, blockers)
     canonical = _check_canonical_replay(evidence, blockers)
     identity = _check_identity_parity(evidence, blockers)
     data = _check_data_integrity(root, evidence, blockers)
@@ -341,7 +384,6 @@ def build_demo_qualification_report(
     provenance = _check_replay_provenance(root, evidence, blockers)
     execution_claims = _check_execution_claims(evidence, blockers)
 
-    # De-duplicate while preserving the first causal explanation.
     blockers = list(dict.fromkeys(blockers))
     gate_pass = not blockers
     return {
@@ -365,8 +407,8 @@ def build_demo_qualification_report(
         "execution_context_claimed": execution_claims,
         "execution_context_live_check": promotion.get("execution_context"),
         "accounting_identities": promotion.get("accounting_identities"),
-        "internal_paper_forward_required": not gate_pass,
-        "internal_paper_forward_waived_by_gate": gate_pass,
+        "long_internal_paper_phase_waived": gate_pass,
+        "fallback_to_existing_validation_path": not gate_pass,
         "runtime_release_reconciliation_required": True,
         "live_trading_authorized": False,
         "verdict": "DEMO_EVIDENCE_ELIGIBLE" if gate_pass else "BLOCKED",
