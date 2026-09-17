@@ -14,24 +14,42 @@ Therefore C14 is not a VWAP arithmetic defect. The defect class is:
 
 TradingView's current Pine documentation supports the **class** of this root cause:
 
-- exchanges define the default session for each symbol;
+- exchanges define a default session for every symbol;
 - Pine time/session functions use the symbol's exchange session information when no explicit session is supplied;
-- calendar/time functions default to the symbol's exchange timezone;
-- chart bars align to session opening/closing times rather than to arbitrary fixed wall-clock buckets.
+- `time_tradingday` is specifically defined for overnight symbols: on intraday bars it identifies the trading day of the session the bar belongs to, even when the session opened on the prior calendar day;
+- TradingView's time FAQ recommends `time_tradingday` when calendar calculations must remain correct across sessions that span days;
+- `timeframe.change("1D")` detects the opening of a new TradingView daily bar, so it is a useful independent Pine-side boundary oracle;
+- chart/session calculations therefore need not equal an arbitrary fixed wall-clock rollover.
 
 Sources checked 2026-09-17:
 
 - TradingView Pine Script, `Concepts / Time`: https://www.tradingview.com/pine-script-docs/concepts/time/
+- TradingView Pine Script, `FAQ / Times, dates, and sessions`: https://www.tradingview.com/pine-script-docs/faq/times-dates-and-sessions/
 - TradingView Pine Script, `Concepts / Sessions`: https://www.tradingview.com/pine-script-docs/concepts/sessions/
 - CME holiday/trading-hours calendar: https://www.cmegroup.com/trading-hours.html
 
-These documents **do not** state a universal holiday reset rule for `ta.vwap`, nor do they prove that every Pine daily construct shares one exact holiday transition rule. Therefore documentation alone is insufficient to code a correction. Real boundary fixtures remain mandatory.
+These documents still do **not** state a universal implementation rule for unanchored `ta.vwap`, nor do they prove that every Pine daily construct shares one exact holiday transition rule. Real boundary fixtures remain mandatory before code.
+
+## Stronger candidate rule after the documentation check
+
+The leading generalized hypothesis is now narrower than merely "holiday aware":
+
+> **Replay daily-session identity should follow the exchange/trading-feed trade-date identity used by the TradingView daily bar, not `civil_date + fixed 18:00 ET rollover`.**
+
+Why this fits the known Labor Day evidence:
+
+- CME's 2026 calendar marks Labor Day as a holiday span covering September 6–8 and documents holiday/weekend handling in terms of the following business **trade date** rather than ordinary civil-date rollover.
+- CME's own holiday-calendar explanation distinguishes the Sunday restart, the holiday early halt, and the Monday-night restart through Tuesday close as separate market sessions around a Monday holiday.
+- The repo's observed TradingView/Pine data treated the relevant Monday-evening reopen as a continuation of the September 8 daily identity: neither Pine VWAP nor HOD/LOD reset there.
+- A mechanical `18:00 ET => new day` rule cannot represent that case because it has no exchange trade-date/calendar state.
+
+This is a **candidate generalized rule**, not yet an implementation authorization. The next fixture must directly record Pine `time_tradingday` and `timeframe.change("1D")` around the known Labor Day case and at least one additional holiday. If those Pine-side identities do not explain the observed VWAP/HOD/LOD boundary, reject this candidate rule rather than fitting the code to one holiday.
 
 ## Hypotheses
 
-### H1 — exchange-session identity
+### H1 — exchange trade-date identity
 
-TradingView's daily/session boundary follows the exchange's effective daily session/calendar identity, not a bare local-clock 18:00 transition on every civil day.
+TradingView's daily/session boundary follows the symbol's exchange/feed trading-day identity, not a bare local-clock 18:00 transition on every civil day.
 
 ### H2 — VWAP is only one consumer
 
@@ -55,12 +73,13 @@ For every case record:
 
 - last bar before the candidate boundary;
 - first bar after it;
-- Pine `time("D")` identity or equivalent daily-bar identity;
+- Pine `time_tradingday`;
+- Pine `timeframe.change("1D")` (or the exact equivalent daily-bar identity already emitted by the study fixture);
 - whether `ta.vwap` resets;
 - whether Pine HOD/LOD resets;
 - replay `detect_day_boundaries()` result;
 - bar-gap status;
-- exchange session/calendar status;
+- exchange session/calendar/trade-date status;
 - agreement/disagreement classification.
 
 One historical anomaly is not enough to infer a generalized rule.
@@ -70,11 +89,12 @@ One historical anomaly is not enough to infer a generalized rule.
 A proposed shared daily-session rule is admissible only if:
 
 - it explains all observed boundary cases without instrument-specific/date-specific exceptions;
+- Pine `time_tradingday` / daily-bar identity agrees with the proposed replay day key on every accepted fixture;
 - ordinary weekday and weekend behavior is unchanged;
 - the Labor Day case changes in the direction Pine actually showed;
 - VWAP and HOD/LOD use the same daily-session identity;
 - missing-bar behavior remains separately classified as C16 and is not disguised as C14;
-- the rule can be computed causally from information available at the bar timestamp;
+- the rule can be computed causally from exchange calendar/session facts available at the bar timestamp;
 - deterministic replay is preserved.
 
 If no generalized rule satisfies these criteria, C14 remains `BLOCKED` and VWAP stays `NOT_ADMITTED`.
@@ -89,6 +109,8 @@ Only after the rule is proven:
 4. do not change VWAP arithmetic, thresholds, setup predicates, brackets, or tolerances;
 5. add regression fixtures for ordinary weekday, weekend, known holiday, and additional verified holiday/early-close case;
 6. rerun P3 VWAP/HOD/LOD parity and any affected replay parity before reconsidering admission.
+
+A safe implementation shape, **only if the fixtures prove H1**, is an exchange-calendar-backed `trading_day_key(ts, product)` helper whose key corresponds to the same trade-date identity observed from Pine. The helper must not infer a new day solely because ET crossed 18:00.
 
 ## Required verdict after the proof run
 
