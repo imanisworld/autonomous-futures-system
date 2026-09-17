@@ -54,7 +54,15 @@ Direct-to-DEMO is only for a strategy/parameter-only change. Evidence must expli
 - broker routing unchanged;
 - session/contract semantics unchanged.
 
-If any of those changed, the long paper phase is **not automatically waived** by this gate. The changed infrastructure needs its own parity/smoke proof first.
+The evidence must also name the exact `base_sha`. The gate mechanically runs a read-only `base_sha...HEAD` filename diff. Direct-to-DEMO is allowed only when every changed file is under:
+
+- `strategy/`
+- `tests/`
+- `docs/`
+
+A claimed strategy-only change therefore cannot hide an execution, risk, config, broker, webhook, session, contract, or replay-engine edit.
+
+If any infrastructure semantics changed, the long paper phase is **not automatically waived** by this gate. The changed infrastructure needs its own parity/smoke proof first.
 
 ### 3. Canonical replay path
 
@@ -140,7 +148,7 @@ untouched validation + walk-forward + stress
         v
 Backtest -> DEMO qualification gate
         |
-        +-- BLOCKED -> fix proof gap / use internal paper when required
+        +-- BLOCKED -> fix proof gap / use existing validation path
         |
         `-- PASS
              |
@@ -199,6 +207,7 @@ Exit code:
   },
   "stated_classification": "PROMISING BUT UNPROVEN",
   "change_scope": {
+    "base_sha": "exact pre-change commit SHA",
     "strategy_or_parameter_only": true,
     "risk_policy_unchanged": true,
     "execution_path_unchanged": true,
