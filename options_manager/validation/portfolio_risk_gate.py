@@ -99,7 +99,7 @@ def planned_risk_from_premium_stop(
         or contract_multiplier <= 0
     ):
         return None, f"{PLANNED_RISK_INVALID_CODE}: contract_multiplier must be a positive integer"
-    if not _usable_budget(max_trade_risk_dollars):
+    if isinstance(max_trade_risk_dollars, bool) or not _usable_budget(max_trade_risk_dollars):
         return None, f"{PLANNED_RISK_INVALID_CODE}: max_trade_risk_dollars must be finite and > 0"
 
     entry = float(entry_fill)
@@ -183,10 +183,10 @@ def evaluate_portfolio_risk(
             blocking.append(f"{label} missing ticker")
         if exposure.direction not in ("CALL", "PUT"):
             blocking.append(f"{label} invalid direction")
-        if exposure.planned_dollar_risk < 0:
-            blocking.append(f"{label} has negative planned_dollar_risk")
-        if exposure.capital_deployed < 0:
-            blocking.append(f"{label} has negative capital_deployed")
+        if not math.isfinite(exposure.planned_dollar_risk) or exposure.planned_dollar_risk < 0:
+            blocking.append(f"{label} has non-finite/negative planned_dollar_risk")
+        if not math.isfinite(exposure.capital_deployed) or exposure.capital_deployed < 0:
+            blocking.append(f"{label} has non-finite/negative capital_deployed")
 
     aggregate_open_risk = sum(p.planned_dollar_risk for p in exposures)
     aggregate_capital = sum(p.capital_deployed for p in exposures)
