@@ -8,7 +8,7 @@ It does **not** modify the preserved #653 evidence package, does not activate DE
 
 ## Current baseline
 
-- `main`: `3b343b040be58847d06a6dc544543c516ec3bcda`.
+- current repository `main`: `f3149be8c5fa9559fd405015f03346cc5c1e8500`; selector replay code baseline: `3b343b040be58847d06a6dc544543c516ec3bcda`.
 - PR #706 merged: parameterized base-vs-adverse slippage stress runner.
 - PR #710 merged: append-only prospective decision-time selector evidence capture.
 - PR #712 merged: exact replay of the actual `OPTIONS_PAPER_V1` production selector from retained evidence.

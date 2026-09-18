@@ -10,13 +10,15 @@ Historical dated notes and old/closed PRs are provenance only. They do not overr
 
 Epoch record: `docs/options_v1_evidence_epoch.json`. **Cohort `V1-EPOCH-2` (`UNIVERSE_EXPANSION_6_TO_20`) started 2026-09-16T16:47:46Z** on the first clean RTH cycle after the watchlist grew from 6 to 20 symbols (deployed release `62546883`, scanner code identical to `899a524`; rules, risk, cadence and Signa authority unchanged). `V1-EPOCH-1` (six symbols, 2026-09-15T16:50:00Z to 2026-09-16T16:47:46Z) is retained inside the record. Rows before an epoch's start belong to the previous cohort, not to it. Rules in force: #570 late-entry guard, #571 Daily-lane timing + 1R target floor, #575 ENTRY_LATE episode block (counterfactual preservation). Any rule change starts a new cohort.
 
-Deployed baseline on the box since 2026-09-17T21:36Z: **`94eb7d388c02b744eed5a3d3d36b14fa724f1781`** (release dir `94eb7d388c02-20260917-173551`) = the live minimal futures release `11b3d91` plus #648 only. Scanner behaviour (entries, targets, guards, risk, contracts) is unchanged from `899a524`; #648 changes shadow-row accounting only.
+The options scanner now has its **own service-specific immutable release**, independent of the futures bot. Current options-scanner production release: **`3b9770d8fed4ad1825cc325bab536ffea618a94e`**. It carries the two justified runtime provenance files from #667 (`alert_ranker/market_data.py`, `alert_ranker/paper_v1.py`) on top of the proven curated service base. Post-restart proof showed healthy advisory-only operation, Public read-only provider, `order_supported=false`, account endpoints forbidden, unchanged production SQLite path, preserved aggregate open planned risk, and no broker/order activity.
 
-Current repository `main` is **`3b343b040be58847d06a6dc544543c516ec3bcda`** after #710/#712. Those two PRs add evidence capture/replay and do **not** change the frozen production contract-selection policy. They are not deployed on the VPS as of this handoff.
+The futures bot is separately pinned and must not be conflated with the options-scanner release. Service-aware drift monitoring verifies each pinned release independently.
 
-Final CI for the deployed baseline: **4,921 passed / 7 skipped / 2 warnings**. Targeted selector-evidence regression on merged current `main`: **26 passed**.
+Current repository `main` is **`f3149be8c5fa9559fd405015f03346cc5c1e8500`** after #710/#712/#713. #710/#712 add selector evidence capture/replay and do **not** change the frozen production contract-selection policy. They are **not deployed** in the options-scanner service-specific release as of this handoff.
 
-Do not claim the VPS is on current `main` until a separate box-side deployment and market-hours smoke prove it.
+Focused options-scanner regression for the service-specific provenance deployment: **144 passed**. Targeted selector-evidence regression on merged current `main`: **26 passed**.
+
+Do not claim the options scanner is on current `main` until a separate service-specific deployment and market-hours smoke prove it.
 
 ## What is built
 
@@ -56,7 +58,7 @@ Evidence schema v2 now preserves:
 - exact production replay result + parity;
 - canonical/reference selector result, explicitly labeled non-authoritative.
 
-Post-merge proof on `main@3b343b0` used an isolated temp SQLite DB and a live SPY chain with no Discord send and no broker/order path: 282 chain rows were retained, all 282 carried bid/ask timestamps, OI, delta and IV, production selected `SPY261120C00775000`, retained-input production replay selected the same contract, and `production_replay_parity=true`. The reference canonical selector chose a different contract in the same capture, which is why its role is explicitly non-authoritative.
+Post-merge proof on code baseline `3b343b0` used an isolated temp SQLite DB and a live SPY chain with no Discord send and no broker/order path: 282 chain rows were retained, all 282 carried bid/ask timestamps, OI, delta and IV, production selected `SPY261120C00775000`, retained-input production replay selected the same contract, and `production_replay_parity=true`. The reference canonical selector chose a different contract in the same capture, which is why its role is explicitly non-authoritative.
 
 This proves the **current forward capture/replay boundary for the observed capture**, not historical strategy results. Full historical 212R contract-selection replay remains **DATA BLOCKED** because the frozen historical population still lacks proven decision-time delta/open-interest and exact underlying-price provenance. Do not synthesize those fields or substitute current snapshots.
 
