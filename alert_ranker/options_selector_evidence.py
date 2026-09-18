@@ -146,6 +146,20 @@ def build_selector_evidence_capture(
     return envelope
 
 
+def finalize_selector_evidence(
+    evidence: Mapping[str, Any],
+    *,
+    production_selection: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Attach the scanner's actual selection result and refresh evidence hash."""
+
+    out = dict(evidence)
+    out.pop("evidence_sha256", None)
+    out["production_selection"] = dict(production_selection)
+    out["evidence_sha256"] = hashlib.sha256(_canonical_json_bytes(out)).hexdigest()
+    return out
+
+
 def blocked_selector_evidence(
     *,
     ticker: str,
