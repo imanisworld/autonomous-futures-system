@@ -25,7 +25,9 @@ Therefore the box must not be summarized as globally paper-only: **live executio
 
 **#663 source-ticker provenance** is merged on `main` but is not in the verified VPS release. It adds MNQ/MES BarHistory `source_ticker` provenance only—no strategy, risk, broker, routing, or execution behavior. It should ride the next sanctioned minimal release; it does **not** justify a standalone restart.
 
-**Immediate action:** keep the current collection epochs intact. Do not deploy/restart solely for Transition, #644, or #663. Existing forward lanes continue under their frozen contracts. The next safe offline research gate is the preregistered structural-level P8 one-shot **MES out-of-sample holdout** from #645; do not retune the active 4HR/3-2-2/Daily/MES/Asia lanes mid-epoch.
+**Immediate action:** keep the current collection epochs intact. Do not deploy/restart solely for Transition, #644, #645, or #663. Existing forward lanes continue under their frozen contracts. Do not retune the active 4HR/3-2-2/Daily/MES/Asia lanes mid-epoch.
+
+**Structural-level P8 OOS update (#645 merged as `1f4d901`):** the preregistered one-shot P-OOS-MES holdout is now **consumed**. H1 preserved sign and narrowly cleared its frozen effect floor (+0.0644 R vs +0.061 R); H3 preserved sign but missed its floor (+0.0618 R vs +0.098 R). Neither sign reversed, so K5 is not triggered, but the single H1≈H3 wick-reject finding is **not confirmed**. Classification remains **PROMISING BUT UNPROVEN / PARTIAL REPLICATION**. Do not rerun or tune against this holdout. The next confirmatory gate is the already-frozen P-OOS-PROSPECTIVE window after its calendar/sample threshold; **no new runtime collector, deployment, or restart is required**.
 
 ## Verdict
 
