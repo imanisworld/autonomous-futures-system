@@ -10,7 +10,7 @@ import httpx
 from alert_ranker.config import ScannerConfig
 from alert_ranker.contract_marks import contract_marks
 from alert_ranker.discord import DiscordAlerter
-from alert_ranker.market_data import OptionChain, OptionContractQuote
+from alert_ranker.market_data import PUBLIC_OPTION_CHAIN_SOURCE, OptionChain, OptionContractQuote
 from alert_ranker.paper_v1 import (
     POLICY_ID,
     build_v1_contract_fields,
@@ -60,6 +60,8 @@ def quote(*, bid: float = 4.80, ask: float = 5.00) -> OptionContractQuote:
         open_interest=5000,
         delta=0.40,
         implied_volatility=0.30,
+        quote_timestamp="2026-09-08T13:59:30+00:00",
+        source=PUBLIC_OPTION_CHAIN_SOURCE,
     )
 
 
@@ -163,6 +165,8 @@ def test_v1_risk_uses_premium_stop_not_full_debit():
     assert fields["planned_risk_dollars"] != 500.0
     assert fields["max_trade_planned_risk"] == 300.0
     assert fields["max_aggregate_open_planned_risk"] == 1000.0
+    assert fields["option_quote_timestamp"] == "2026-09-08T13:59:30+00:00"
+    assert fields["option_quote_source"] == PUBLIC_OPTION_CHAIN_SOURCE
 
 
 def test_aggregate_risk_cap_blocks_candidate():
