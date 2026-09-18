@@ -47,9 +47,14 @@ def _parse_ts(value: Any) -> datetime | None:
     return parsed.astimezone(timezone.utc)
 
 
-def _age_seconds(now: datetime, value: Any) -> float | None:
+def _age_seconds(reference: datetime, value: Any) -> float | None:
     parsed = _parse_ts(value)
-    return round((now - parsed).total_seconds(), 3) if parsed else None
+    return round((reference - parsed).total_seconds(), 3) if parsed else None
+
+
+def _is_future(reference: datetime, value: Any) -> bool | None:
+    parsed = _parse_ts(value)
+    return parsed > reference if parsed else None
 
 
 def _scenario(current: Any, previous: Any) -> str:
@@ -114,6 +119,7 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
                 pub._marketdata_path("quotes"),
                 {"instruments": [{"symbol": ticker, "type": "EQUITY"}]},
             )
+            quote_received_at = datetime.now(timezone.utc)
             quote_rows = (quote_body or {}).get("quotes") if isinstance(quote_body, dict) else None
             quote = quote_rows[0] if isinstance(quote_rows, list) and quote_rows else {}
             day = await _public_chart(pub, ticker, "DAY")
@@ -128,12 +134,16 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
             report["public"][ticker] = {
                 "quote": {
                     "outcome": quote.get("outcome"),
+                    "received_at": quote_received_at.isoformat(),
                     "last_timestamp": quote.get("lastTimestamp"),
-                    "last_age_seconds": _age_seconds(now, quote.get("lastTimestamp")),
+                    "last_age_seconds": _age_seconds(quote_received_at, quote.get("lastTimestamp")),
+                    "last_timestamp_future": _is_future(quote_received_at, quote.get("lastTimestamp")),
                     "bid_timestamp": quote.get("bidTimestamp"),
-                    "bid_age_seconds": _age_seconds(now, quote.get("bidTimestamp")),
+                    "bid_age_seconds": _age_seconds(quote_received_at, quote.get("bidTimestamp")),
+                    "bid_timestamp_future": _is_future(quote_received_at, quote.get("bidTimestamp")),
                     "ask_timestamp": quote.get("askTimestamp"),
-                    "ask_age_seconds": _age_seconds(now, quote.get("askTimestamp")),
+                    "ask_age_seconds": _age_seconds(quote_received_at, quote.get("askTimestamp")),
+                    "ask_timestamp_future": _is_future(quote_received_at, quote.get("askTimestamp")),
                 },
                 "day_5m": {
                     "complete_bars": len(day_bars.bars),
@@ -148,6 +158,29 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
                     "ignored_outside_session": week_bars.ignored_outside_session_rows,
                 },
             }
+
+    quote_rows_report = [item["quote"] for item in report["public"].values()]
+    report["public_quote_summary"] = {
+        "tickers": len(quote_rows_report),
+        "missing_last_timestamp": sum(item.get("last_timestamp") is None for item in quote_rows_report),
+        "missing_bid_timestamp": sum(item.get("bid_timestamp") is None for item in quote_rows_report),
+        "missing_ask_timestamp": sum(item.get("ask_timestamp") is None for item in quote_rows_report),
+        "future_last_timestamp": sum(item.get("last_timestamp_future") is True for item in quote_rows_report),
+        "future_bid_timestamp": sum(item.get("bid_timestamp_future") is True for item in quote_rows_report),
+        "future_ask_timestamp": sum(item.get("ask_timestamp_future") is True for item in quote_rows_report),
+        "max_last_age_seconds": max(
+            (float(item["last_age_seconds"]) for item in quote_rows_report if item.get("last_age_seconds") is not None),
+            default=None,
+        ),
+        "max_bid_age_seconds": max(
+            (float(item["bid_age_seconds"]) for item in quote_rows_report if item.get("bid_age_seconds") is not None),
+            default=None,
+        ),
+        "max_ask_age_seconds": max(
+            (float(item["ask_age_seconds"]) for item in quote_rows_report if item.get("ask_age_seconds") is not None),
+            default=None,
+        ),
+    }
 
     if args.compare_sip:
         key, secret = resolve_alpaca_credentials()
@@ -217,6 +250,7 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
             "max_high_low_abs_diff": round(max_hilo_diff, 6),
             "per_ticker": per_ticker,
         }
+    report["completed_at"] = datetime.now(timezone.utc).isoformat()
     return report
 
 

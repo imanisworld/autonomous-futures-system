@@ -14,7 +14,7 @@ Probe: `scripts/options_212r_trigger_source_probe.py`
 
 Frozen report: `data/options_212r_trigger_source_probe_2026_09_18/report.json`
 
-Capture time: **2026-09-18T18:21:54.414263Z** during RTH.
+Capture window: **2026-09-18T18:30:17.537925Z to 18:30:37.147112Z** during RTH.
 
 Universe: primary 20.
 
@@ -24,10 +24,13 @@ All 20 Public equity quote responses carried last, bid, and ask timestamps.
 
 At capture:
 
-- maximum last-trade age: **4.414 seconds**;
-- maximum bid age: **0.414 seconds**;
-- maximum ask age: **0.414 seconds**;
-- 20/20 had both executable-side timestamps.
+- maximum last-trade age: **14.201 seconds**;
+- maximum bid age: **3.201 seconds**;
+- maximum ask age: **3.201 seconds**;
+- 20/20 had last, bid, and ask timestamps;
+- 0/20 had a timestamp later than that ticker's quote-response receipt time.
+
+Quote age is measured against each ticker's own response-receipt timestamp, not against one run-start timestamp. The earlier single-clock calculation could produce negative ages for later sequential requests and is not used in this proof.
 
 The quote request uses only Public's read-only market-data endpoint. No account/trading/order endpoint is used.
 
