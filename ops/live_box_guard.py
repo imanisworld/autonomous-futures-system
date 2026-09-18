@@ -47,6 +47,10 @@ PROOF_CRITICAL_RUNTIME_OVERRIDES = (
     # proof-critical because enabling it changes which inbound timeframe is
     # accepted and what trigger evidence is recorded.
     "ONE_MIN_TRIGGER_ENABLED",
+    # Dedicated observation-only MNQ 3-2-2 First Live 1m observer. Default OFF.
+    # Proof-critical because it changes accepted evidence behavior and maintains
+    # a new isolated armed-state record from the 5m feed.
+    "ONE_MIN_322_OBSERVER_ENABLED",
     "SCHEDULE_MODE",
     "DEMO_EXECUTION_HOLD_SESSIONS",
     "PRIMARY_DECISION_TF",
