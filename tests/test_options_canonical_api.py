@@ -67,6 +67,22 @@ def _payload(**overrides) -> dict:
     payload = {
         "proof_packet": proof,
         "contract_quality": contract,
+        "quote_retention": {
+            "contract_id": f"ORCL{expiry.replace('-', '')}C00110000",
+            "underlying": "ORCL",
+            "expiration": expiry,
+            "strike": 110.0,
+            "right": "CALL",
+            "bid": 2.05,
+            "ask": 2.15,
+            "quote_ts": "2026-09-01T13:59:00+00:00",
+            "decision_ts": "2026-09-01T14:00:00+00:00",
+            "source": "fixture:option_chain_snapshot",
+            "volume": 800,
+            "open_interest": 3000,
+            "delta": 0.50,
+            "iv": 0.30,
+        },
         "portfolio_risk": {
             "open_positions": [],
             "candidate_correlation_group": "mega_cap_tech",
@@ -88,6 +104,8 @@ def test_canonical_endpoint_returns_take_and_journals(monkeypatch, tmp_path):
     assert body["verdict"] == "TAKE"
     assert body["proof_valid"] is True
     assert body["portfolio_verdict"] == "pass"
+    assert body["quote_retention_approved"] is True
+    assert body["quote_status"] == "OK"
     assert body["actionable"] is True
 
     journal_files = list(tmp_path.glob("options_journal_*.jsonl"))
@@ -95,6 +113,9 @@ def test_canonical_endpoint_returns_take_and_journals(monkeypatch, tmp_path):
     record = json.loads(journal_files[0].read_text().splitlines()[-1])
     assert record["record_type"] == "advisory_decision"
     assert record["decision"]["verdict"] == "take"
+    assert record["decision"]["quote_retention_approved"] is True
+    assert record["decision"]["quote_record"]["status"] == "OK"
+    assert record["decision"]["quote_record"]["quote_ts"] == "2026-09-01T13:59:00+00:00"
 
 
 def test_missing_invalidation_is_advisory_avoid_not_http_failure(monkeypatch, tmp_path):
@@ -350,3 +371,47 @@ def test_legacy_flat_packet_is_never_actionable_regardless_of_budget(monkeypatch
     assert body["actionable"] is False
     assert "verdict" not in body
     assert body.get("status") != "TAKE"
+
+
+def test_missing_quote_retention_is_avoid(monkeypatch, tmp_path):
+    monkeypatch.delenv("OPTIONS_MANAGER_INGEST_SECRET", raising=False)
+    monkeypatch.setenv("OPTIONS_MANAGER_JOURNAL_DIR", str(tmp_path))
+    monkeypatch.setenv("OPTIONS_MANAGER_MAX_AGGREGATE_OPEN_RISK_DOLLARS", "1000")
+    payload = _payload()
+    del payload["quote_retention"]
+
+    body = client.post("/options/packet", json=payload).json()
+    assert body["verdict"] == "AVOID"
+    assert body["actionable"] is False
+    assert body["quote_retention_approved"] is False
+    assert any("quote retention:" in r for r in body["blocking_reasons"])
+
+
+def test_stale_quote_retention_is_avoid_and_journaled(monkeypatch, tmp_path):
+    monkeypatch.delenv("OPTIONS_MANAGER_INGEST_SECRET", raising=False)
+    monkeypatch.setenv("OPTIONS_MANAGER_JOURNAL_DIR", str(tmp_path))
+    monkeypatch.setenv("OPTIONS_MANAGER_MAX_AGGREGATE_OPEN_RISK_DOLLARS", "1000")
+    payload = _payload()
+    payload["quote_retention"]["quote_ts"] = "2026-09-01T13:00:00+00:00"
+
+    body = client.post("/options/packet", json=payload).json()
+    assert body["verdict"] == "AVOID"
+    assert body["quote_retention_approved"] is False
+    assert body["quote_status"] == "STALE"
+
+    journal_files = list(tmp_path.glob("options_journal_*.jsonl"))
+    record = json.loads(journal_files[0].read_text().splitlines()[-1])
+    assert record["decision"]["quote_record"]["status"] == "STALE"
+
+
+def test_quote_contract_mismatch_is_avoid(monkeypatch, tmp_path):
+    monkeypatch.delenv("OPTIONS_MANAGER_INGEST_SECRET", raising=False)
+    monkeypatch.setenv("OPTIONS_MANAGER_JOURNAL_DIR", str(tmp_path))
+    monkeypatch.setenv("OPTIONS_MANAGER_MAX_AGGREGATE_OPEN_RISK_DOLLARS", "1000")
+    payload = _payload()
+    payload["quote_retention"]["strike"] = 111.0
+
+    body = client.post("/options/packet", json=payload).json()
+    assert body["verdict"] == "AVOID"
+    assert body["quote_retention_approved"] is False
+    assert any("quote/contract mismatch for strike" in r for r in body["blocking_reasons"])
