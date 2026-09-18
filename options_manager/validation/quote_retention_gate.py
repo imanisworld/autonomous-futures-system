@@ -87,6 +87,7 @@ def check_quote_retention_intake(
             ("strike", record.strike, contract.strike, True),
             ("bid", record.bid, contract.bid, True),
             ("ask", record.ask, contract.ask, True),
+            ("spread_percent", record.spread_percent, contract.spread_percent, True),
             ("volume", record.volume, contract.volume, True),
             ("open_interest", record.open_interest, contract.open_interest, True),
         )
