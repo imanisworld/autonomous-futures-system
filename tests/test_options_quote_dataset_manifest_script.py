@@ -103,3 +103,63 @@ def test_rejects_non_jsonl_or_empty_input_set(tmp_path: Path):
         materialize_manifest(dataset_root=root, quote_files=[bad], output_path=Path("manifest.json"))
     with pytest.raises(ValueError, match="at least one quote dataset file"):
         materialize_manifest(dataset_root=root, quote_files=[], output_path=Path("manifest.json"))
+
+
+def test_rejects_manifest_output_outside_dataset_root(tmp_path: Path):
+    root = tmp_path / "dataset"
+    root.mkdir()
+    quote = root / "quotes.jsonl"
+    quote.write_bytes(_record("A"))
+    with pytest.raises(ValueError, match="must stay inside dataset root"):
+        materialize_manifest(
+            dataset_root=root,
+            quote_files=[quote],
+            output_path=Path("../escaped.json"),
+        )
+    assert not (tmp_path / "escaped.json").exists()
+
+
+def test_rejects_manifest_output_that_overwrites_quote_input(tmp_path: Path):
+    root = tmp_path / "dataset"
+    root.mkdir()
+    quote = root / "quotes.jsonl"
+    original = _record("A")
+    quote.write_bytes(original)
+    with pytest.raises(ValueError, match="must not overwrite quote dataset input"):
+        materialize_manifest(
+            dataset_root=root,
+            quote_files=[quote],
+            output_path=Path("quotes.jsonl"),
+        )
+    assert quote.read_bytes() == original
+
+
+def test_manifest_cli_is_directly_invokable_from_repo_root():
+    import subprocess
+    import sys
+
+    root = Path(__file__).resolve().parents[1]
+    result = subprocess.run(
+        [sys.executable, "scripts/options_quote_dataset_manifest.py", "--help"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "Materialize a canonical frozen option-quote dataset manifest" in result.stdout
+
+
+def test_generator_input_still_protects_quote_file_from_manifest_overwrite(tmp_path: Path):
+    root = tmp_path / "dataset"
+    root.mkdir()
+    quote = root / "quotes.jsonl"
+    original = _record("A")
+    quote.write_bytes(original)
+    with pytest.raises(ValueError, match="must not overwrite quote dataset input"):
+        materialize_manifest(
+            dataset_root=root,
+            quote_files=(item for item in [quote]),
+            output_path=Path("quotes.jsonl"),
+        )
+    assert quote.read_bytes() == original
