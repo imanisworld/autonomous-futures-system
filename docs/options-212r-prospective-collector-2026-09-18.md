@@ -21,6 +21,15 @@ Every structural level remains labeled `public_chart`. It is not relabeled as SI
 
 Malformed, off-grid, partial, duplicate, or gapped 5m evidence fails closed. No live/partial chart row is rounded into a completed bar.
 
+## Review-tightened timing boundary
+
+Independent review tightened two timing details without changing the lane's observation-only scope:
+
+- `ARMED` evidence is timestamped with the time that ticker's Public source payload was actually received, not one process-wide run-start timestamp. A later ticker in a serial 20-symbol pass cannot inherit an earlier observation time.
+- The capture-lag gate is checked again after the option/selector evidence finishes, using the selector evidence's actual `captured_at` timestamp. Starting a chain request inside the window is not enough if it finishes after the pre-registered deadline.
+
+These checks prevent serial-loop latency or network latency from being mislabeled as decision-time evidence. The numeric capture-lag threshold remains an operator policy decision; no value is approved by this review.
+
 ## No-hindsight requirement
 
 A historical reconstruction is not allowed to become prospective evidence merely because the structure can be recognized later.

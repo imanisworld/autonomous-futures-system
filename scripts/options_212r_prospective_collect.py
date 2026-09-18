@@ -254,12 +254,41 @@ async def _capture_selector_evidence(
     }
 
 
+def _enforce_final_capture_lag(
+    option_evidence: Mapping[str, Any],
+    *,
+    observation: Any,
+    prearmed_at: datetime | None,
+    max_capture_lag_seconds: float,
+) -> dict[str, Any]:
+    """Fail closed if selector evidence finishes outside the pre-registered window."""
+    result = dict(option_evidence)
+    if result.get("status") != "CAPTURED":
+        return result
+    captured_at = _parse_ts(result.get("captured_at"))
+    if captured_at is None:
+        result["status"] = "DATA_BLOCKED"
+        result["reason_code"] = "selector_capture_timestamp_missing"
+        return result
+    gate = evaluate_capture_gate(
+        observation,
+        prearmed_at=prearmed_at,
+        decision_ts=captured_at,
+        max_capture_lag_seconds=max_capture_lag_seconds,
+    )
+    result["capture_lag_seconds"] = gate.lag_seconds
+    if not gate.eligible:
+        result["status"] = "DATA_BLOCKED"
+        result["reason_code"] = f"post_selector_{gate.reason_code or 'capture_gate_blocked'}"
+    return result
+
+
 async def run(args: argparse.Namespace) -> dict[str, Any]:
     if args.env_file:
         load_dotenv(args.env_file, override=True)
     cfg = load_config()
-    now = datetime.now(timezone.utc)
-    session = nyse_session_for(now.date())
+    run_started_at = datetime.now(timezone.utc)
+    session = nyse_session_for(run_started_at.date())
     if session is None:
         raise RuntimeError("not_a_nyse_session")
     if args.max_capture_lag_seconds <= 0:
@@ -271,7 +300,7 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
     summary = {
         "collector_id": COLLECTOR_ID,
         "collector_version": COLLECTOR_VERSION,
-        "captured_at": now.isoformat(),
+        "captured_at": run_started_at.isoformat(),
         "source": PUBLIC_CHART_SOURCE,
         "max_capture_lag_seconds": args.max_capture_lag_seconds,
         "tickers": list(tickers),
@@ -292,8 +321,9 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
                     _public_chart(pub, ticker, "DAY"),
                     _public_chart(pub, ticker, "WEEK"),
                 )
+                source_observed_at = datetime.now(timezone.utc)
                 current5 = parse_regular_market_bars(
-                    day_payload, timeframe=MINUTE_5, decision_ts=now, session=session
+                    day_payload, timeframe=MINUTE_5, decision_ts=source_observed_at, session=session
                 ).bars
                 current30 = build_session_timeframe(current5, MINUTE_5, MINUTE_30, session.open)
                 history30 = []
@@ -301,7 +331,7 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
                     if prior.date == session.date:
                         continue
                     parsed = parse_regular_market_bars(
-                        week_payload, timeframe=MINUTE_30, decision_ts=now, session=prior
+                        week_payload, timeframe=MINUTE_30, decision_ts=source_observed_at, session=prior
                     )
                     history30.extend(parsed.bars)
                 history30.extend(current30)
@@ -311,14 +341,15 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
                     history_30m=history30,
                     session_5m=current5,
                     session=session,
-                    decision_ts=now,
+                    decision_ts=source_observed_at,
                 )
             except Exception as exc:
                 summary["data_blocked"] += 1
+                error_at = datetime.now(timezone.utc)
                 if not args.dry_run:
                     _append(journal, {
                         "record_type": "COLLECTOR_ERROR", "setup_id": f"{ticker}|{session.date.isoformat()}|collector",
-                        "ticker": ticker, "observed_at": now.isoformat(),
+                        "ticker": ticker, "observed_at": error_at.isoformat(),
                         "reason_code": f"source_error:{type(exc).__name__}",
                     })
                 continue
@@ -332,7 +363,7 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
                     if not args.dry_run:
                         _append(journal, {
                             "record_type": "SOURCE_DRIFT",
-                            "observed_at": now.isoformat(),
+                            "observed_at": source_observed_at.isoformat(),
                             "collector_id": COLLECTOR_ID,
                             "collector_version": COLLECTOR_VERSION,
                             "setup_id": setup_id,
@@ -347,7 +378,7 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
                         continue
                     record = {
                         "record_type": "ARMED",
-                        "observed_at": now.isoformat(),
+                        "observed_at": source_observed_at.isoformat(),
                         "collector_id": COLLECTOR_ID,
                         "collector_version": COLLECTOR_VERSION,
                         "setup_id": setup_id,
@@ -355,7 +386,7 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
                     }
                     if not args.dry_run:
                         _append(journal, record)
-                    armed_seen[setup_id] = now
+                    armed_seen[setup_id] = source_observed_at
                     fingerprint_seen[setup_id] = obs.setup_fingerprint
                     summary["armed_written"] += 1
                     continue
@@ -373,8 +404,9 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
                 prearmed_at = armed_seen.get(setup_id)
                 if obs.family == "STRAT_212_REVERSAL" and obs.status == "TRIGGERED":
                     summary["reversal_triggers"] += 1
+                    gate_checked_at = datetime.now(timezone.utc)
                     gate = evaluate_capture_gate(
-                        obs, prearmed_at=prearmed_at, decision_ts=now,
+                        obs, prearmed_at=prearmed_at, decision_ts=gate_checked_at,
                         max_capture_lag_seconds=args.max_capture_lag_seconds,
                     )
                     if not gate.eligible:
@@ -382,12 +414,16 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
                         if gate.lag_seconds is not None:
                             detail += f":{round(gate.lag_seconds,3)}"
                         option_evidence = _blocked_option(
-                            detail, ticker=ticker, direction=obs.direction, decision_ts=now,
+                            detail, ticker=ticker, direction=obs.direction, decision_ts=gate_checked_at,
                         )
                     else:
                         prospective_eligible = True
                         option_evidence = await _capture_selector_evidence(
                             pub, ticker=ticker, direction=str(obs.direction), cfg=cfg
+                        )
+                        option_evidence = _enforce_final_capture_lag(
+                            option_evidence, observation=obs, prearmed_at=prearmed_at,
+                            max_capture_lag_seconds=args.max_capture_lag_seconds,
                         )
                     if option_evidence and option_evidence.get("status") == "CAPTURED":
                         summary["option_evidence_captured"] += 1
@@ -396,12 +432,15 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
 
                 record = {
                     "record_type": "RESOLUTION",
-                    "observed_at": now.isoformat(),
+                    "observed_at": source_observed_at.isoformat(),
                     "collector_id": COLLECTOR_ID,
                     "collector_version": COLLECTOR_VERSION,
                     "setup_id": setup_id,
                     "prearmed_at": prearmed_at.isoformat() if prearmed_at else None,
                     "prospective_eligible": prospective_eligible,
+                    "option_evidence_usable": bool(
+                        option_evidence and option_evidence.get("status") == "CAPTURED"
+                    ),
                     "market_context": {
                         "status": "DEFERRED_SIP_RECONCILIATION",
                         "reason": "Public chart bars do not expose the VWAP input used by the frozen context formula",
@@ -414,6 +453,7 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
                 terminal_seen.add(setup_id)
                 summary["resolutions_written"] += 1
 
+    summary["completed_at"] = datetime.now(timezone.utc).isoformat()
     return summary
 
 
