@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
 from options_manager.contracts.selector import (
     OptionChainRow,
     select_contract,
+    selection_result_json,
     selector_rule_from_mapping,
 )
 
@@ -16,6 +18,10 @@ RULE_PATH = Path("options_manager/contracts/selector_rule_v1.json")
 
 def _rule():
     return selector_rule_from_mapping(json.loads(RULE_PATH.read_text()))
+
+
+def _rule_sha():
+    return hashlib.sha256(RULE_PATH.read_bytes()).hexdigest()
 
 
 def _row(**overrides):
@@ -39,6 +45,7 @@ def _row(**overrides):
 def _select(chain, **overrides):
     params = dict(
         rule=_rule(),
+        rule_sha256=_rule_sha(),
         decision_ts="2026-09-18T14:01:00+00:00",
         underlying_price=550.0,
         direction="CALL",
@@ -66,37 +73,60 @@ def test_same_inputs_are_deterministic_and_chain_order_independent():
     permuted = _select([b, a])
     assert first == second == permuted
     assert first.contract_id == "A"
+    assert first.rule_sha256 == _rule_sha()
 
 
-def test_prefers_45_plus_dte_when_available():
-    short = _row(
-        contract_id="SHORT",
-        expiration="2026-10-16",
-        dte=28,
+def test_nearest_eligible_preferred_expiration_is_selected_before_strike_rank():
+    nearer = _row(
+        contract_id="NEARER",
+        expiration="2026-11-06",
+        dte=49,
+        delta=0.58,
+        strike=555.0,
+    )
+    farther_better_delta = _row(
+        contract_id="FARTHER",
+        expiration="2026-12-18",
+        dte=91,
         delta=0.50,
         strike=550.0,
     )
-    preferred = _row(
-        contract_id="PREFERRED",
-        expiration="2026-11-06",
-        dte=49,
-        delta=0.56,
+    result = _select([farther_better_delta, nearer])
+    assert result.contract_id == "NEARER"
+    assert result.expiration == "2026-11-06"
+    assert result.selection_reason == (
+        "nearest_preferred_expiration_then_delta_liquidity_rank"
+    )
+
+
+def test_falls_back_to_nearest_14_to_44_dte_expiration_when_no_preferred_exists():
+    farther = _row(
+        contract_id="FARTHER",
+        expiration="2026-10-30",
+        dte=42,
+        delta=0.50,
+        strike=550.0,
+    )
+    nearer = _row(
+        contract_id="NEARER",
+        expiration="2026-10-02",
+        dte=14,
+        delta=0.58,
         strike=555.0,
     )
-    result = _select([short, preferred])
-    assert result.contract_id == "PREFERRED"
-    assert result.selection_reason == "preferred_dte_delta_liquidity_rank"
-
-
-def test_falls_back_to_14_to_44_dte_only_when_no_preferred_contract_exists():
-    row = _row(
-        contract_id="FALLBACK",
-        expiration="2026-10-16",
-        dte=28,
+    result = _select([farther, nearer])
+    assert result.contract_id == "NEARER"
+    assert result.dte == 14
+    assert result.selection_reason == (
+        "nearest_min_dte_expiration_then_delta_liquidity_rank"
     )
-    result = _select([row])
-    assert result.contract_id == "FALLBACK"
-    assert result.selection_reason == "fallback_min_dte_delta_liquidity_rank"
+
+
+def test_strike_rank_is_applied_only_within_selected_expiration():
+    worse = _row(contract_id="WORSE", strike=560.0, delta=0.60)
+    better = _row(contract_id="BETTER", strike=552.0, delta=0.51)
+    result = _select([worse, better])
+    assert result.contract_id == "BETTER"
 
 
 def test_below_minimum_dte_is_rejected():
@@ -164,6 +194,23 @@ def test_empty_chain_fails_closed():
     result = _select([])
     assert result.status == "NO_CONTRACT"
     assert result.reason_code == "no_eligible_contract"
+
+
+def test_invalid_rule_sha_fails_closed():
+    result = _select([_row()], rule_sha256="not-a-sha")
+    assert result.status == "NO_CONTRACT"
+    assert result.reason_code == "invalid_rule_sha256"
+
+
+def test_serialized_output_is_byte_stable_for_identical_inputs():
+    first = _select([_row(contract_id="A"), _row(contract_id="B", strike=552.0)])
+    second = _select([_row(contract_id="A"), _row(contract_id="B", strike=552.0)])
+    encoded_first = selection_result_json(first).encode("utf-8")
+    encoded_second = selection_result_json(second).encode("utf-8")
+    assert encoded_first == encoded_second
+    assert hashlib.sha256(encoded_first).hexdigest() == hashlib.sha256(
+        encoded_second
+    ).hexdigest()
 
 
 def test_invalid_rule_booleans_do_not_coerce_to_numbers():
