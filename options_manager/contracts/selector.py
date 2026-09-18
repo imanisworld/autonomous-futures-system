@@ -13,8 +13,9 @@ row survives, the result is NO_CONTRACT.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
+import json
 import math
 from typing import Literal, Mapping, Sequence
 
@@ -55,6 +56,7 @@ class ContractSelectionResult:
     status: SelectionStatus
     reason_code: str
     rule_id: str
+    rule_sha256: str
     contract_id: str | None = None
     expiration: str | None = None
     strike: float | None = None
@@ -129,6 +131,12 @@ def selector_rule_from_mapping(raw: Mapping[str, object]) -> SelectorRule:
     return rule
 
 
+def selection_result_json(result: ContractSelectionResult) -> str:
+    """Canonical byte-stable JSON serialization for evidence/parity checks."""
+
+    return json.dumps(asdict(result), sort_keys=True, separators=(",", ":")) + "\n"
+
+
 def _parse_ts(value: str) -> datetime:
     if not isinstance(value, str) or not value.strip():
         raise ValueError("timestamp must be a non-empty string")
@@ -151,9 +159,18 @@ def _spread_percent(bid: float, ask: float) -> float:
     return ((ask - bid) / mid) * 100.0
 
 
+def _valid_sha256(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == 64
+        and all(ch in "0123456789abcdefABCDEF" for ch in value)
+    )
+
+
 def select_contract(
     *,
     rule: SelectorRule,
+    rule_sha256: str,
     decision_ts: str,
     underlying_price: float,
     direction: OptionRight,
@@ -161,11 +178,21 @@ def select_contract(
 ) -> ContractSelectionResult:
     """Select one contract deterministically from information known at decision_ts."""
 
+    if not _valid_sha256(rule_sha256):
+        return ContractSelectionResult(
+            status="NO_CONTRACT",
+            reason_code="invalid_rule_sha256",
+            rule_id=rule.rule_id,
+            rule_sha256=str(rule_sha256),
+        )
+    rule_sha256 = rule_sha256.lower()
+
     if direction not in ("CALL", "PUT"):
         return ContractSelectionResult(
             status="NO_CONTRACT",
             reason_code="invalid_direction",
             rule_id=rule.rule_id,
+            rule_sha256=rule_sha256,
         )
 
     if not _finite_number(underlying_price) or float(underlying_price) <= 0:
@@ -173,6 +200,7 @@ def select_contract(
             status="NO_CONTRACT",
             reason_code="invalid_underlying_price",
             rule_id=rule.rule_id,
+            rule_sha256=rule_sha256,
         )
 
     try:
@@ -182,10 +210,11 @@ def select_contract(
             status="NO_CONTRACT",
             reason_code="invalid_decision_timestamp",
             rule_id=rule.rule_id,
+            rule_sha256=rule_sha256,
         )
 
     excluded: dict[str, int] = {}
-    eligible: list[tuple[tuple[object, ...], OptionChainRow, float]] = []
+    eligible: list[tuple[OptionChainRow, float]] = []
 
     def reject(reason: str) -> None:
         excluded[reason] = excluded.get(reason, 0) + 1
@@ -207,12 +236,7 @@ def select_contract(
             reject("future_quote")
             continue
 
-        numeric_values = (
-            row.strike,
-            row.bid,
-            row.ask,
-            row.delta,
-        )
+        numeric_values = (row.strike, row.bid, row.ask, row.delta)
         if not all(_finite_number(v) for v in numeric_values):
             reject("invalid_numeric_field")
             continue
@@ -255,45 +279,69 @@ def select_contract(
             reject("spread_too_wide")
             continue
 
-        preferred_bucket = 0 if row.dte >= rule.preferred_min_dte else 1
-        delta_distance = abs(abs_delta - rule.target_abs_delta)
-        moneyness_distance = abs(strike - float(underlying_price)) / float(underlying_price)
-
-        rank = (
-            preferred_bucket,
-            delta_distance,
-            moneyness_distance,
-            row.dte,
-            spread_percent,
-            -row.open_interest,
-            -row.volume,
-            row.expiration,
-            strike,
-            row.contract_id,
-        )
-        eligible.append((rank, row, spread_percent))
+        eligible.append((row, spread_percent))
 
     if not eligible:
         return ContractSelectionResult(
             status="NO_CONTRACT",
             reason_code="no_eligible_contract",
             rule_id=rule.rule_id,
+            rule_sha256=rule_sha256,
             candidates_considered=len(chain),
             candidates_excluded_by_reason=dict(sorted(excluded.items())),
         )
 
-    _, selected, spread_percent = min(eligible, key=lambda item: item[0])
-    preferred = selected.dte >= rule.preferred_min_dte
+    # Frozen expiration rule:
+    # 1) nearest eligible expiration at/above preferred_min_dte;
+    # 2) otherwise nearest eligible expiration at/above min_dte;
+    # 3) rank strikes/contracts only inside that one expiration.
+    preferred_dtes = sorted(
+        {row.dte for row, _ in eligible if row.dte >= rule.preferred_min_dte}
+    )
+    if preferred_dtes:
+        selected_dte = preferred_dtes[0]
+        expiration_mode = "preferred"
+    else:
+        selected_dte = min(row.dte for row, _ in eligible)
+        expiration_mode = "fallback"
+
+    same_dte = [(row, spread) for row, spread in eligible if row.dte == selected_dte]
+    selected_expiration = min(row.expiration for row, _ in same_dte)
+    expiration_rows = [
+        (row, spread)
+        for row, spread in same_dte
+        if row.expiration == selected_expiration
+    ]
+
+    def strike_rank(item: tuple[OptionChainRow, float]) -> tuple[object, ...]:
+        row, spread_percent = item
+        abs_delta = abs(float(row.delta))
+        delta_distance = abs(abs_delta - rule.target_abs_delta)
+        moneyness_distance = (
+            abs(float(row.strike) - float(underlying_price)) / float(underlying_price)
+        )
+        return (
+            delta_distance,
+            moneyness_distance,
+            spread_percent,
+            -row.open_interest,
+            -row.volume,
+            float(row.strike),
+            row.contract_id,
+        )
+
+    selected, spread_percent = min(expiration_rows, key=strike_rank)
     selection_reason = (
-        "preferred_dte_delta_liquidity_rank"
-        if preferred
-        else "fallback_min_dte_delta_liquidity_rank"
+        "nearest_preferred_expiration_then_delta_liquidity_rank"
+        if expiration_mode == "preferred"
+        else "nearest_min_dte_expiration_then_delta_liquidity_rank"
     )
 
     return ContractSelectionResult(
         status="SELECTED",
         reason_code="contract_selected",
         rule_id=rule.rule_id,
+        rule_sha256=rule_sha256,
         contract_id=selected.contract_id,
         expiration=selected.expiration,
         strike=float(selected.strike),
