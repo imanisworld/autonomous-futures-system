@@ -2,7 +2,7 @@
 
 ## Verdict
 
-The historical options backtest remains **DATA BLOCKED** on complete real decision-time option-chain evidence. Historical bid/ask entitlement is now proven with an isolated test-only Polygon/Massive credential, but the repository still does not have a complete decision-time selector dataset for the 212R population because historical Greeks/open interest and exact underlying-price provenance remain unproven.
+The historical options backtest remains **DATA BLOCKED** on complete real decision-time option-chain evidence. Historical option bid/ask entitlement is proven with an isolated test-only Polygon/Massive credential, and #733/#738 now prove the exact causal underlying trigger-cross time/price plus the production `context.price -> normalized price -> OPTIONS_PAPER_V1` path. The remaining causal selector-data gaps are historical decision-time **Delta** and contract-level **open interest**.
 
 ## What was checked
 
@@ -40,7 +40,7 @@ A separate isolated test-only credential supplied on 2026-09-18 was stored only 
 - Historical options quotes `GET /v3/quotes/{optionsTicker}`: HTTP 200 / API `OK`.
 - A real 2026-09-10 SPY option quote query returned bid, ask, and nanosecond SIP timestamp data.
 - The merged read-only entitlement probe (`scripts/options_polygon_historical_quote_probe.py`, PR #698) independently returned `ENTITLED` / HTTP 200 / API `OK` against the same isolated key.
-- Historical AMZN stock quote access under the same credential returned HTTP 403 / `NOT_AUTHORIZED`, so stock/underlying historical quote entitlement is not established by this key.
+- Historical AMZN stock quote access under the same credential returned HTTP 403 / `NOT_AUTHORIZED`. That Massive stock entitlement gap is no longer the 212R underlying-price blocker because #733 independently resolves exact causal trigger-cross trades for 81/81 frozen rows from Alpaca SIP, and #738 proves that causal price can traverse the production selector price path with replay parity.
 
 Massive's official options documentation describes `GET /v3/quotes/{optionsTicker}` as historical bid/ask quote history with precise timestamps. That specific bid/ask entitlement blocker is therefore cleared for the isolated test credential, but only for options quote history.
 
@@ -51,7 +51,17 @@ Sources:
 
 ## Important selector gap
 
-The frozen selector requires bid, ask, volume, open interest, and delta at the decision boundary. Historical bid/ask access alone is not enough to claim full selector replay. Massive's historical quote endpoint covers quote history; its snapshot products separately expose Greeks, IV, open interest, and the current underlying price. This audit has not established a decision-time historical source for every selector field, and the isolated test credential does not currently establish historical stock-quote entitlement for the underlying. None of those missing values will be synthesized or back-filled from future/current snapshots.
+The frozen selector requires bid, ask, volume, open interest, and delta at the decision boundary. Historical bid/ask access plus exact causal underlying trigger price still is not enough to claim full selector replay. Massive's historical quote endpoint covers quote history; its snapshot products expose current Greeks/IV/open interest, not a proven historical decision-time snapshot for the frozen selector. Therefore the remaining unresolved selector fields are historical decision-time **Delta** and contract-level **open interest**. Neither will be synthesized, model-derived, or back-filled from future/current snapshots.
+
+## External historical-data candidates
+
+Read-only research on 2026-09-18 found technically relevant external products, but none is currently configured on the VPS and none is authorized as a replacement selector source:
+
+- **ThetaData** documents historical per-contract open interest and historical Greeks. Its Greeks are vendor-calculated from option/underlying pricing inputs, so adopting them would be a source-semantics decision rather than proof of historical Public-provider Delta.
+- **ORATS** documents one-minute historical option-chain/Greeks data. It likewise represents an external vendor model/source, not a byte-for-byte reconstruction of the current Public selector analytics.
+- Cboe DataShop remains a plausible raw historical market-data source, but no purchase or entitlement has been authorized.
+
+No `THETA*`, `ORATS*`, `CBOE*`, or `DATABENTO*` credentials/configuration are present in the current VPS environment. Do not purchase or integrate any of these sources implicitly. If an external source is chosen later, its Delta/OI semantics must be explicitly accepted and parity-tested before it can retire the historical selector blocker.
 
 ## Safe work completed around the blocker
 
@@ -61,14 +71,14 @@ The same PR adds an outcome-independent acquisition-index builder. Against the f
 
 ## Next evidence step
 
-Historical option bid/ask access now exists, so the next step remains a minimal complete decision-time sample before any broad pull:
+Historical option bid/ask access and exact causal underlying trigger price now exist. The next evidence step is therefore narrower:
 
-1. use one frozen 212R acquisition-index decision as the sample boundary;
+1. keep the exact frozen 212R trigger timestamp/price from #733/#738 as the decision boundary;
 2. retrieve exact historical option bid/ask evidence for candidate contracts at that timestamp;
-3. prove decision-time sources for the remaining selector fields (especially delta/open interest and the underlying price) without using current/future snapshots;
-4. normalize through the existing quote-retention rule without inference;
+3. obtain a causal historical source for per-contract Delta and open interest, or explicitly authorize a different historical analytics source and prove its selector semantics before use;
+4. normalize only source-attributed fields through the existing quote-retention rule without inference;
 5. materialize + hash the dataset and manifest through PR #686 tooling;
-6. run selector/fill parity on those exact bytes;
+6. run production-selector/fill parity on those exact bytes;
 7. expand only after the one-sample proof passes.
 
 Until then, no historical options backtest result should be treated as executable-price evidence, and `strat_212_reversal_30m_options` remains **BLOCKED / WAIT**.
