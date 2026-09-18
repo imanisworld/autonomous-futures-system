@@ -224,9 +224,9 @@ Re-running the epoch-2 snapshot through the corrected classification: 84 WIN / 2
 2. **Option translation loses on small moves.** On the 22 rows where the underlying did reach `target_1`, the option still netted −$48 (+8 / −13); a 0.17 R move does not cover the spread.
 3. **Horizon may be wrong for Daily/4H.** Those rows show a median MFE of 0.24 R under every geometry because the same-session horizon truncates them.
 
-Widening the target improves average underlying R (fixed 1.5 R: +0.30; 2.0 R: +0.42 vs +0.05 at `target_1`) **but** unresolved-at-close rises from 15 to 27 of 47, so the gain is entangled with censoring. "Bad target geometry first" is a strong hypothesis from this sample, not proof that wider targets improve expectancy.
+The earlier descriptive widening check suggested better underlying R at 1.5R/2R but was entangled with censoring. The controlled target-geometry test is now complete (`docs/options-shadow-target-geometry-controlled-2026-09-18.md`). On the exact 47 `AHEAD` rows, holding entry, stop, premium stop, contract, ASK/BID cost basis and same-session horizon fixed, all-row forced-horizon P&L was **-$840** at recorded `target_1`, **-$783** at 1.5R, and **-$748** at 2R. Event censoring rose from **24/47** to **33/47** and **35/47** respectively. Wider targets helped slightly but did **not** make this mixed shadow sample positive; target width alone does not rescue it. This is not a 212R-specific expectancy result and does not authorize V1 tuning.
 
-**Research order (ruled):** (1) live acceptance of #648; (2) the third prospective collector session, independently; (3) no V1 tuning; (4) a controlled target-geometry test holding entry, stop, contract, costs and **horizon** constant with censoring handled explicitly; (5) a **separate** horizon-compatibility test for Daily/4H. Never combine a longer holding window with the geometry test.
+**Research order (updated):** (1) no V1 tuning; (2) the controlled clean-shadow target-geometry test is complete; (3) keep the **separate** Daily/4H horizon-compatibility test separate if pursued; (4) for 212R, resolve the prospective recent-SIP source blocker before collector deployment and retain the historical Delta/OI blocker. Never use a longer holding window to retroactively improve the geometry test.
 
 ## Coverage evidence lane and read-only audits (2026-09-16)
 

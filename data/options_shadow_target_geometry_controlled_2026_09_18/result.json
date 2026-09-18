@@ -1,0 +1,1484 @@
+{
+  "controls": {
+    "censoring": "reported explicitly; all-row comparison also forces unresolved rows out at last executable BID by the same fixed horizon",
+    "changed_variable": "underlying target only",
+    "contract": "unchanged selected contract",
+    "costs": "unchanged ASK entry / BID exit, no added fee",
+    "entry": "unchanged first-sight underlying price",
+    "horizon": "unchanged same-session session_close",
+    "stop": "unchanged underlying invalidation plus unchanged premium stop"
+  },
+  "frozen_cohort": {
+    "ahead_rows": 47,
+    "end_exclusive": "2026-09-18",
+    "entry_geometry_counts": {
+      "AHEAD": 47,
+      "STOP_CONSUMED_AT_ENTRY": 12,
+      "TARGET_CONSUMED_AT_ENTRY": 58
+    },
+    "raw_rows": 117,
+    "start": "2026-09-16T16:47:46"
+  },
+  "input_sha256": "0074cd80b659ea84766737b3199f9bce1c689c4cbf09c9306f43da13f3c364ea",
+  "limitations": [
+    "observed 5-minute-ish scanner/contract snapshots do not reveal intra-snapshot path",
+    "same-session horizon is intentionally held fixed and is not a Daily/4H horizon test",
+    "population is the 47 clean AHEAD counterfactual shadow rows from V1-EPOCH-2 snapshot boundary, not 212R-specific",
+    "research result does not authorize V1 tuning or strategy promotion"
+  ],
+  "rows": [
+    {
+      "direction": "LONG",
+      "setup_type": "DAILY_222_CONTINUATION",
+      "shadow_id": 9207,
+      "ticker": "INTC",
+      "timeframe": "1D",
+      "variants": {
+        "FIXED_1_5R": {
+          "exit_bid": 6.75,
+          "exit_ts": "2026-09-16T19:57:46.551927+00:00",
+          "pnl_dollars": -35.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 109.86925
+        },
+        "FIXED_2R": {
+          "exit_bid": 6.75,
+          "exit_ts": "2026-09-16T19:57:46.551927+00:00",
+          "pnl_dollars": -35.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 112.539
+        },
+        "RECORDED_TARGET_1": {
+          "exit_bid": 6.75,
+          "exit_ts": "2026-09-16T19:57:46.551927+00:00",
+          "pnl_dollars": -35.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 104.9
+        }
+      }
+    },
+    {
+      "direction": "LONG",
+      "setup_type": "DAILY_222_REVERSAL",
+      "shadow_id": 9209,
+      "ticker": "IWM",
+      "timeframe": "1D",
+      "variants": {
+        "FIXED_1_5R": {
+          "exit_bid": 4.73,
+          "exit_ts": "2026-09-16T18:57:46.552332+00:00",
+          "pnl_dollars": -127.0,
+          "resolution": "STOP",
+          "target": 289.9925
+        },
+        "FIXED_2R": {
+          "exit_bid": 4.73,
+          "exit_ts": "2026-09-16T18:57:46.552332+00:00",
+          "pnl_dollars": -127.0,
+          "resolution": "STOP",
+          "target": 291.175
+        },
+        "RECORDED_TARGET_1": {
+          "exit_bid": 4.73,
+          "exit_ts": "2026-09-16T18:57:46.552332+00:00",
+          "pnl_dollars": -127.0,
+          "resolution": "STOP",
+          "target": 289.83
+        }
+      }
+    },
+    {
+      "direction": "LONG",
+      "setup_type": "H4_322_CONTINUATION",
+      "shadow_id": 9210,
+      "ticker": "JPM",
+      "timeframe": "4H_RTH",
+      "variants": {
+        "FIXED_1_5R": {
+          "exit_bid": 6.05,
+          "exit_ts": "2026-09-16T19:57:46.551927+00:00",
+          "pnl_dollars": -100.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 359.84
+        },
+        "FIXED_2R": {
+          "exit_bid": 6.05,
+          "exit_ts": "2026-09-16T19:57:46.551927+00:00",
+          "pnl_dollars": -100.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 362.97
+        },
+        "RECORDED_TARGET_1": {
+          "exit_bid": 6.05,
+          "exit_ts": "2026-09-16T19:57:46.551927+00:00",
+          "pnl_dollars": -100.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 354.79
+        }
+      }
+    },
+    {
+      "direction": "LONG",
+      "setup_type": "DAILY_222_REVERSAL",
+      "shadow_id": 9212,
+      "ticker": "MRK",
+      "timeframe": "1D",
+      "variants": {
+        "FIXED_1_5R": {
+          "exit_bid": 5.65,
+          "exit_ts": "2026-09-16T19:57:46.551927+00:00",
+          "pnl_dollars": -5.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 146.595
+        },
+        "FIXED_2R": {
+          "exit_bid": 5.65,
+          "exit_ts": "2026-09-16T19:57:46.551927+00:00",
+          "pnl_dollars": -5.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 147.45
+        },
+        "RECORDED_TARGET_1": {
+          "exit_bid": 5.65,
+          "exit_ts": "2026-09-16T19:57:46.551927+00:00",
+          "pnl_dollars": -5.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 146.281
+        }
+      }
+    },
+    {
+      "direction": "SHORT",
+      "setup_type": "STRAT_212_CONTINUATION",
+      "shadow_id": 9214,
+      "ticker": "AAPL",
+      "timeframe": "30m",
+      "variants": {
+        "FIXED_1_5R": {
+          "exit_bid": 10.1,
+          "exit_ts": "2026-09-16T18:02:46.552217+00:00",
+          "pnl_dollars": -70.0,
+          "resolution": "STOP",
+          "target": 331.09525
+        },
+        "FIXED_2R": {
+          "exit_bid": 10.1,
+          "exit_ts": "2026-09-16T18:02:46.552217+00:00",
+          "pnl_dollars": -70.0,
+          "resolution": "STOP",
+          "target": 330.6003
+        },
+        "RECORDED_TARGET_1": {
+          "exit_bid": 10.1,
+          "exit_ts": "2026-09-16T18:02:46.552217+00:00",
+          "pnl_dollars": -70.0,
+          "resolution": "STOP",
+          "target": 332.2751
+        }
+      }
+    },
+    {
+      "direction": "LONG",
+      "setup_type": "H1_212_CONTINUATION",
+      "shadow_id": 9215,
+      "ticker": "PLTR",
+      "timeframe": "1H",
+      "variants": {
+        "FIXED_1_5R": {
+          "exit_bid": 10.65,
+          "exit_ts": "2026-09-16T17:27:46.552216+00:00",
+          "pnl_dollars": -5.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 173.8
+        },
+        "FIXED_2R": {
+          "exit_bid": 10.65,
+          "exit_ts": "2026-09-16T17:27:46.552216+00:00",
+          "pnl_dollars": -5.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 174.29
+        },
+        "RECORDED_TARGET_1": {
+          "exit_bid": 10.65,
+          "exit_ts": "2026-09-16T17:27:46.552216+00:00",
+          "pnl_dollars": -5.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 172.8399
+        }
+      }
+    },
+    {
+      "direction": "LONG",
+      "setup_type": "DAILY_222_REVERSAL",
+      "shadow_id": 9216,
+      "ticker": "IWM",
+      "timeframe": "1D",
+      "variants": {
+        "FIXED_1_5R": {
+          "exit_bid": 4.73,
+          "exit_ts": "2026-09-16T18:57:46.552332+00:00",
+          "pnl_dollars": -131.0,
+          "resolution": "STOP",
+          "target": 290.205
+        },
+        "FIXED_2R": {
+          "exit_bid": 4.73,
+          "exit_ts": "2026-09-16T18:57:46.552332+00:00",
+          "pnl_dollars": -131.0,
+          "resolution": "STOP",
+          "target": 291.43
+        },
+        "RECORDED_TARGET_1": {
+          "exit_bid": 4.73,
+          "exit_ts": "2026-09-16T18:57:46.552332+00:00",
+          "pnl_dollars": -131.0,
+          "resolution": "STOP",
+          "target": 289.83
+        }
+      }
+    },
+    {
+      "direction": "SHORT",
+      "setup_type": "STRAT_212_CONTINUATION",
+      "shadow_id": 9217,
+      "ticker": "BAC",
+      "timeframe": "30m",
+      "variants": {
+        "FIXED_1_5R": {
+          "exit_bid": 1.94,
+          "exit_ts": "2026-09-16T18:12:46.552130+00:00",
+          "pnl_dollars": -10.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 57.74625
+        },
+        "FIXED_2R": {
+          "exit_bid": 1.94,
+          "exit_ts": "2026-09-16T18:12:46.552130+00:00",
+          "pnl_dollars": -10.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 57.5585
+        },
+        "RECORDED_TARGET_1": {
+          "exit_bid": 1.94,
+          "exit_ts": "2026-09-16T18:12:46.552130+00:00",
+          "pnl_dollars": -10.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 58.26
+        }
+      }
+    },
+    {
+      "direction": "LONG",
+      "setup_type": "DAILY_222_REVERSAL",
+      "shadow_id": 9218,
+      "ticker": "MRK",
+      "timeframe": "1D",
+      "variants": {
+        "FIXED_1_5R": {
+          "exit_bid": 5.65,
+          "exit_ts": "2026-09-16T19:57:46.551927+00:00",
+          "pnl_dollars": -20.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 147.6825
+        },
+        "FIXED_2R": {
+          "exit_bid": 5.65,
+          "exit_ts": "2026-09-16T19:57:46.551927+00:00",
+          "pnl_dollars": -20.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 148.755
+        },
+        "RECORDED_TARGET_1": {
+          "exit_bid": 5.65,
+          "exit_ts": "2026-09-16T19:57:46.551927+00:00",
+          "pnl_dollars": -20.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 146.281
+        }
+      }
+    },
+    {
+      "direction": "SHORT",
+      "setup_type": "H1_222_CONTINUATION",
+      "shadow_id": 9226,
+      "ticker": "NVDA",
+      "timeframe": "1H",
+      "variants": {
+        "FIXED_1_5R": {
+          "exit_bid": 10.6,
+          "exit_ts": "2026-09-16T18:37:46.552290+00:00",
+          "pnl_dollars": 35.0,
+          "resolution": "TARGET",
+          "target": 214.57525
+        },
+        "FIXED_2R": {
+          "exit_bid": 10.6,
+          "exit_ts": "2026-09-16T18:37:46.552290+00:00",
+          "pnl_dollars": 35.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 214.2503
+        },
+        "RECORDED_TARGET_1": {
+          "exit_bid": 10.6,
+          "exit_ts": "2026-09-16T18:37:46.552290+00:00",
+          "pnl_dollars": 35.0,
+          "resolution": "TARGET",
+          "target": 214.8415
+        }
+      }
+    },
+    {
+      "direction": "SHORT",
+      "setup_type": "H1_222_CONTINUATION",
+      "shadow_id": 9227,
+      "ticker": "INTC",
+      "timeframe": "1H",
+      "variants": {
+        "FIXED_1_5R": {
+          "exit_bid": 9.95,
+          "exit_ts": "2026-09-16T18:27:46.552101+00:00",
+          "pnl_dollars": 5.0,
+          "resolution": "TARGET",
+          "target": 101.8225
+        },
+        "FIXED_2R": {
+          "exit_bid": 9.95,
+          "exit_ts": "2026-09-16T18:27:46.552101+00:00",
+          "pnl_dollars": 5.0,
+          "resolution": "TARGET",
+          "target": 101.685
+        },
+        "RECORDED_TARGET_1": {
+          "exit_bid": 9.75,
+          "exit_ts": "2026-09-16T18:42:46.553612+00:00",
+          "pnl_dollars": -15.0,
+          "resolution": "STOP",
+          "target": 101.33
+        }
+      }
+    },
+    {
+      "direction": "LONG",
+      "setup_type": "H1_222_REVERSAL",
+      "shadow_id": 9230,
+      "ticker": "BAC",
+      "timeframe": "1H",
+      "variants": {
+        "FIXED_1_5R": {
+          "exit_bid": 1.91,
+          "exit_ts": "2026-09-16T18:22:46.552324+00:00",
+          "pnl_dollars": -1.0,
+          "resolution": "TARGET",
+          "target": 58.2775
+        },
+        "FIXED_2R": {
+          "exit_bid": 1.91,
+          "exit_ts": "2026-09-16T18:22:46.552324+00:00",
+          "pnl_dollars": -1.0,
+          "resolution": "TARGET",
+          "target": 58.305
+        },
+        "RECORDED_TARGET_1": {
+          "exit_bid": 1.86,
+          "exit_ts": "2026-09-16T18:27:46.552101+00:00",
+          "pnl_dollars": -6.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 58.76
+        }
+      }
+    },
+    {
+      "direction": "LONG",
+      "setup_type": "H1_222_CONTINUATION",
+      "shadow_id": 9231,
+      "ticker": "MRK",
+      "timeframe": "1H",
+      "variants": {
+        "FIXED_1_5R": {
+          "exit_bid": 5.65,
+          "exit_ts": "2026-09-16T18:22:46.552324+00:00",
+          "pnl_dollars": -25.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 145.365
+        },
+        "FIXED_2R": {
+          "exit_bid": 5.65,
+          "exit_ts": "2026-09-16T18:22:46.552324+00:00",
+          "pnl_dollars": -25.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 145.67
+        },
+        "RECORDED_TARGET_1": {
+          "exit_bid": 5.65,
+          "exit_ts": "2026-09-16T18:22:46.552324+00:00",
+          "pnl_dollars": -25.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 144.55
+        }
+      }
+    },
+    {
+      "direction": "SHORT",
+      "setup_type": "H1_212_CONTINUATION",
+      "shadow_id": 9232,
+      "ticker": "NFLX",
+      "timeframe": "1H",
+      "variants": {
+        "FIXED_1_5R": {
+          "exit_bid": 3.7,
+          "exit_ts": "2026-09-16T18:22:46.552324+00:00",
+          "pnl_dollars": -10.0,
+          "resolution": "STOP",
+          "target": 77.2475
+        },
+        "FIXED_2R": {
+          "exit_bid": 3.7,
+          "exit_ts": "2026-09-16T18:22:46.552324+00:00",
+          "pnl_dollars": -10.0,
+          "resolution": "STOP",
+          "target": 77.225
+        },
+        "RECORDED_TARGET_1": {
+          "exit_bid": 3.7,
+          "exit_ts": "2026-09-16T18:22:46.552324+00:00",
+          "pnl_dollars": -10.0,
+          "resolution": "STOP",
+          "target": 77.1704
+        }
+      }
+    },
+    {
+      "direction": "LONG",
+      "setup_type": "H1_222_CONTINUATION",
+      "shadow_id": 9238,
+      "ticker": "MRK",
+      "timeframe": "1H",
+      "variants": {
+        "FIXED_1_5R": {
+          "exit_bid": 5.6,
+          "exit_ts": "2026-09-16T18:42:46.553612+00:00",
+          "pnl_dollars": -25.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 144.865
+        },
+        "FIXED_2R": {
+          "exit_bid": 5.6,
+          "exit_ts": "2026-09-16T18:42:46.553612+00:00",
+          "pnl_dollars": -25.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 145.07
+        },
+        "RECORDED_TARGET_1": {
+          "exit_bid": 5.6,
+          "exit_ts": "2026-09-16T18:42:46.553612+00:00",
+          "pnl_dollars": -25.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 144.55
+        }
+      }
+    },
+    {
+      "direction": "SHORT",
+      "setup_type": "H1_212_CONTINUATION",
+      "shadow_id": 9239,
+      "ticker": "NFLX",
+      "timeframe": "1H",
+      "variants": {
+        "FIXED_1_5R": {
+          "exit_bid": 3.75,
+          "exit_ts": "2026-09-16T18:37:46.552290+00:00",
+          "pnl_dollars": -10.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 76.9475
+        },
+        "FIXED_2R": {
+          "exit_bid": 3.75,
+          "exit_ts": "2026-09-16T18:37:46.552290+00:00",
+          "pnl_dollars": -10.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 76.865
+        },
+        "RECORDED_TARGET_1": {
+          "exit_bid": 3.75,
+          "exit_ts": "2026-09-16T18:37:46.552290+00:00",
+          "pnl_dollars": -10.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 77.1704
+        }
+      }
+    },
+    {
+      "direction": "LONG",
+      "setup_type": "H4_222_REVERSAL",
+      "shadow_id": 9241,
+      "ticker": "WMT",
+      "timeframe": "4H_RTH",
+      "variants": {
+        "FIXED_1_5R": {
+          "exit_bid": 2.44,
+          "exit_ts": "2026-09-16T19:52:46.552100+00:00",
+          "pnl_dollars": -32.0,
+          "resolution": "STOP",
+          "target": 109.0825
+        },
+        "FIXED_2R": {
+          "exit_bid": 2.44,
+          "exit_ts": "2026-09-16T19:52:46.552100+00:00",
+          "pnl_dollars": -32.0,
+          "resolution": "STOP",
+          "target": 109.385
+        },
+        "RECORDED_TARGET_1": {
+          "exit_bid": 2.44,
+          "exit_ts": "2026-09-16T19:52:46.552100+00:00",
+          "pnl_dollars": -32.0,
+          "resolution": "STOP",
+          "target": 108.8704
+        }
+      }
+    },
+    {
+      "direction": "SHORT",
+      "setup_type": "DAILY_222_CONTINUATION",
+      "shadow_id": 9244,
+      "ticker": "WMT",
+      "timeframe": "1D",
+      "variants": {
+        "FIXED_1_5R": {
+          "exit_bid": 5.75,
+          "exit_ts": "2026-09-16T19:57:46.551927+00:00",
+          "pnl_dollars": 15.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 106.34
+        },
+        "FIXED_2R": {
+          "exit_bid": 5.75,
+          "exit_ts": "2026-09-16T19:57:46.551927+00:00",
+          "pnl_dollars": 15.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 105.76
+        },
+        "RECORDED_TARGET_1": {
+          "exit_bid": 5.75,
+          "exit_ts": "2026-09-16T19:57:46.551927+00:00",
+          "pnl_dollars": 15.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 106.145
+        }
+      }
+    },
+    {
+      "direction": "SHORT",
+      "setup_type": "DAILY_222_CONTINUATION",
+      "shadow_id": 9251,
+      "ticker": "WMT",
+      "timeframe": "1D",
+      "variants": {
+        "FIXED_1_5R": {
+          "exit_bid": 5.75,
+          "exit_ts": "2026-09-16T19:57:46.551927+00:00",
+          "pnl_dollars": -10.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 105.265
+        },
+        "FIXED_2R": {
+          "exit_bid": 5.75,
+          "exit_ts": "2026-09-16T19:57:46.551927+00:00",
+          "pnl_dollars": -10.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 104.47
+        },
+        "RECORDED_TARGET_1": {
+          "exit_bid": 5.75,
+          "exit_ts": "2026-09-16T19:57:46.551927+00:00",
+          "pnl_dollars": -10.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 106.145
+        }
+      }
+    },
+    {
+      "direction": "SHORT",
+      "setup_type": "H4_222_REVERSAL",
+      "shadow_id": 9252,
+      "ticker": "AAPL",
+      "timeframe": "4H_RTH",
+      "variants": {
+        "FIXED_1_5R": {
+          "exit_bid": 10.9,
+          "exit_ts": "2026-09-16T19:57:46.551927+00:00",
+          "pnl_dollars": -30.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 326.755
+        },
+        "FIXED_2R": {
+          "exit_bid": 10.9,
+          "exit_ts": "2026-09-16T19:57:46.551927+00:00",
+          "pnl_dollars": -30.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 325.01
+        },
+        "RECORDED_TARGET_1": {
+          "exit_bid": 10.9,
+          "exit_ts": "2026-09-16T19:57:46.551927+00:00",
+          "pnl_dollars": -30.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 331.78
+        }
+      }
+    },
+    {
+      "direction": "SHORT",
+      "setup_type": "H4_222_REVERSAL",
+      "shadow_id": 9253,
+      "ticker": "INTC",
+      "timeframe": "4H_RTH",
+      "variants": {
+        "FIXED_1_5R": {
+          "exit_bid": 9.15,
+          "exit_ts": "2026-09-16T19:57:46.551927+00:00",
+          "pnl_dollars": -20.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 95.42
+        },
+        "FIXED_2R": {
+          "exit_bid": 9.15,
+          "exit_ts": "2026-09-16T19:57:46.551927+00:00",
+          "pnl_dollars": -20.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 93.62
+        },
+        "RECORDED_TARGET_1": {
+          "exit_bid": 9.15,
+          "exit_ts": "2026-09-16T19:57:46.551927+00:00",
+          "pnl_dollars": -20.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 100.48
+        }
+      }
+    },
+    {
+      "direction": "SHORT",
+      "setup_type": "H4_222_CONTINUATION",
+      "shadow_id": 9254,
+      "ticker": "XOM",
+      "timeframe": "4H_RTH",
+      "variants": {
+        "FIXED_1_5R": {
+          "exit_bid": 4.55,
+          "exit_ts": "2026-09-16T19:57:46.551927+00:00",
+          "pnl_dollars": -40.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 156.5825
+        },
+        "FIXED_2R": {
+          "exit_bid": 4.55,
+          "exit_ts": "2026-09-16T19:57:46.551927+00:00",
+          "pnl_dollars": -40.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 154.4
+        },
+        "RECORDED_TARGET_1": {
+          "exit_bid": 4.55,
+          "exit_ts": "2026-09-16T19:57:46.551927+00:00",
+          "pnl_dollars": -40.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 163.11
+        }
+      }
+    },
+    {
+      "direction": "LONG",
+      "setup_type": "DAILY_222_CONTINUATION",
+      "shadow_id": 9255,
+      "ticker": "NVDA",
+      "timeframe": "1D",
+      "variants": {
+        "FIXED_1_5R": {
+          "exit_bid": 9.35,
+          "exit_ts": "2026-09-17T19:57:46.552586+00:00",
+          "pnl_dollars": -35.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 229.625
+        },
+        "FIXED_2R": {
+          "exit_bid": 9.35,
+          "exit_ts": "2026-09-17T19:57:46.552586+00:00",
+          "pnl_dollars": -35.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 233.05
+        },
+        "RECORDED_TARGET_1": {
+          "exit_bid": 9.35,
+          "exit_ts": "2026-09-17T19:57:46.552586+00:00",
+          "pnl_dollars": -35.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 222.0
+        }
+      }
+    },
+    {
+      "direction": "LONG",
+      "setup_type": "H4_222_REVERSAL",
+      "shadow_id": 9257,
+      "ticker": "SPY",
+      "timeframe": "4H_RTH",
+      "variants": {
+        "FIXED_1_5R": {
+          "exit_bid": 10.12,
+          "exit_ts": "2026-09-17T14:22:46.552138+00:00",
+          "pnl_dollars": 17.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 778.65
+        },
+        "FIXED_2R": {
+          "exit_bid": 10.12,
+          "exit_ts": "2026-09-17T14:22:46.552138+00:00",
+          "pnl_dollars": 17.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 784.46
+        },
+        "RECORDED_TARGET_1": {
+          "exit_bid": 10.12,
+          "exit_ts": "2026-09-17T14:22:46.552138+00:00",
+          "pnl_dollars": 17.0,
+          "resolution": "TARGET",
+          "target": 761.67
+        }
+      }
+    },
+    {
+      "direction": "LONG",
+      "setup_type": "DAILY_222_REVERSAL",
+      "shadow_id": 9259,
+      "ticker": "AMZN",
+      "timeframe": "1D",
+      "variants": {
+        "FIXED_1_5R": {
+          "exit_bid": 10.5,
+          "exit_ts": "2026-09-17T19:57:46.552586+00:00",
+          "pnl_dollars": 10.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 259.5875
+        },
+        "FIXED_2R": {
+          "exit_bid": 10.5,
+          "exit_ts": "2026-09-17T19:57:46.552586+00:00",
+          "pnl_dollars": 10.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 262.645
+        },
+        "RECORDED_TARGET_1": {
+          "exit_bid": 10.5,
+          "exit_ts": "2026-09-17T19:57:46.552586+00:00",
+          "pnl_dollars": 10.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 254.69
+        }
+      }
+    },
+    {
+      "direction": "LONG",
+      "setup_type": "H4_222_REVERSAL",
+      "shadow_id": 9261,
+      "ticker": "GOOGL",
+      "timeframe": "4H_RTH",
+      "variants": {
+        "FIXED_1_5R": {
+          "exit_bid": 12.6,
+          "exit_ts": "2026-09-17T14:42:46.554176+00:00",
+          "pnl_dollars": 60.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 353.365
+        },
+        "FIXED_2R": {
+          "exit_bid": 12.6,
+          "exit_ts": "2026-09-17T14:42:46.554176+00:00",
+          "pnl_dollars": 60.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 355.91
+        },
+        "RECORDED_TARGET_1": {
+          "exit_bid": 12.6,
+          "exit_ts": "2026-09-17T14:42:46.554176+00:00",
+          "pnl_dollars": 60.0,
+          "resolution": "TARGET",
+          "target": 348.07
+        }
+      }
+    },
+    {
+      "direction": "LONG",
+      "setup_type": "H4_222_REVERSAL",
+      "shadow_id": 9264,
+      "ticker": "JPM",
+      "timeframe": "4H_RTH",
+      "variants": {
+        "FIXED_1_5R": {
+          "exit_bid": 11.5,
+          "exit_ts": "2026-09-17T15:12:46.552613+00:00",
+          "pnl_dollars": 45.0,
+          "resolution": "TARGET",
+          "target": 348.6725
+        },
+        "FIXED_2R": {
+          "exit_bid": 11.85,
+          "exit_ts": "2026-09-17T15:57:46.552229+00:00",
+          "pnl_dollars": 80.0,
+          "resolution": "TARGET",
+          "target": 349.47
+        },
+        "RECORDED_TARGET_1": {
+          "exit_bid": 11.2,
+          "exit_ts": "2026-09-17T19:57:46.552586+00:00",
+          "pnl_dollars": 15.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 353.23
+        }
+      }
+    },
+    {
+      "direction": "SHORT",
+      "setup_type": "H1_222_REVERSAL",
+      "shadow_id": 9272,
+      "ticker": "NVDA",
+      "timeframe": "1H",
+      "variants": {
+        "FIXED_1_5R": {
+          "exit_bid": 10.7,
+          "exit_ts": "2026-09-17T16:57:46.552190+00:00",
+          "pnl_dollars": -15.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 217.1325
+        },
+        "FIXED_2R": {
+          "exit_bid": 10.7,
+          "exit_ts": "2026-09-17T16:57:46.552190+00:00",
+          "pnl_dollars": -15.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 216.585
+        },
+        "RECORDED_TARGET_1": {
+          "exit_bid": 10.7,
+          "exit_ts": "2026-09-17T16:57:46.552190+00:00",
+          "pnl_dollars": -15.0,
+          "resolution": "TARGET",
+          "target": 218.685
+        }
+      }
+    },
+    {
+      "direction": "LONG",
+      "setup_type": "H1_212_CONTINUATION",
+      "shadow_id": 9275,
+      "ticker": "MRK",
+      "timeframe": "1H",
+      "variants": {
+        "FIXED_1_5R": {
+          "exit_bid": 6.75,
+          "exit_ts": "2026-09-17T16:22:46.553337+00:00",
+          "pnl_dollars": -20.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 148.8775
+        },
+        "FIXED_2R": {
+          "exit_bid": 6.75,
+          "exit_ts": "2026-09-17T16:22:46.553337+00:00",
+          "pnl_dollars": -20.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 149.5
+        },
+        "RECORDED_TARGET_1": {
+          "exit_bid": 6.75,
+          "exit_ts": "2026-09-17T16:22:46.553337+00:00",
+          "pnl_dollars": -20.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 147.05
+        }
+      }
+    },
+    {
+      "direction": "LONG",
+      "setup_type": "H1_212_CONTINUATION",
+      "shadow_id": 9276,
+      "ticker": "SPY",
+      "timeframe": "1H",
+      "variants": {
+        "FIXED_1_5R": {
+          "exit_bid": 10.26,
+          "exit_ts": "2026-09-17T16:42:46.552777+00:00",
+          "pnl_dollars": 6.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 764.835
+        },
+        "FIXED_2R": {
+          "exit_bid": 10.26,
+          "exit_ts": "2026-09-17T16:42:46.552777+00:00",
+          "pnl_dollars": 6.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 765.73
+        },
+        "RECORDED_TARGET_1": {
+          "exit_bid": 10.26,
+          "exit_ts": "2026-09-17T16:42:46.552777+00:00",
+          "pnl_dollars": 6.0,
+          "resolution": "TARGET",
+          "target": 762.28
+        }
+      }
+    },
+    {
+      "direction": "LONG",
+      "setup_type": "H1_212_CONTINUATION",
+      "shadow_id": 9278,
+      "ticker": "MRK",
+      "timeframe": "1H",
+      "variants": {
+        "FIXED_1_5R": {
+          "exit_bid": 6.7,
+          "exit_ts": "2026-09-17T16:42:46.552777+00:00",
+          "pnl_dollars": -25.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 148.69
+        },
+        "FIXED_2R": {
+          "exit_bid": 6.7,
+          "exit_ts": "2026-09-17T16:42:46.552777+00:00",
+          "pnl_dollars": -25.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 149.275
+        },
+        "RECORDED_TARGET_1": {
+          "exit_bid": 6.7,
+          "exit_ts": "2026-09-17T16:37:46.552466+00:00",
+          "pnl_dollars": -25.0,
+          "resolution": "TARGET",
+          "target": 147.05
+        }
+      }
+    },
+    {
+      "direction": "SHORT",
+      "setup_type": "H1_222_CONTINUATION",
+      "shadow_id": 9279,
+      "ticker": "NVDA",
+      "timeframe": "1H",
+      "variants": {
+        "FIXED_1_5R": {
+          "exit_bid": 10.4,
+          "exit_ts": "2026-09-17T17:42:46.552398+00:00",
+          "pnl_dollars": -30.0,
+          "resolution": "STOP",
+          "target": 218.23
+        },
+        "FIXED_2R": {
+          "exit_bid": 10.4,
+          "exit_ts": "2026-09-17T17:42:46.552398+00:00",
+          "pnl_dollars": -30.0,
+          "resolution": "STOP",
+          "target": 218.02
+        },
+        "RECORDED_TARGET_1": {
+          "exit_bid": 10.4,
+          "exit_ts": "2026-09-17T17:42:46.552398+00:00",
+          "pnl_dollars": -30.0,
+          "resolution": "STOP",
+          "target": 218.59
+        }
+      }
+    },
+    {
+      "direction": "LONG",
+      "setup_type": "H4_222_CONTINUATION",
+      "shadow_id": 9285,
+      "ticker": "PLTR",
+      "timeframe": "4H_RTH",
+      "variants": {
+        "FIXED_1_5R": {
+          "exit_bid": 11.65,
+          "exit_ts": "2026-09-17T18:07:46.554874+00:00",
+          "pnl_dollars": 30.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 180.7275
+        },
+        "FIXED_2R": {
+          "exit_bid": 11.65,
+          "exit_ts": "2026-09-17T18:07:46.554874+00:00",
+          "pnl_dollars": 30.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 182.68
+        },
+        "RECORDED_TARGET_1": {
+          "exit_bid": 11.65,
+          "exit_ts": "2026-09-17T18:07:46.554874+00:00",
+          "pnl_dollars": 30.0,
+          "resolution": "TARGET",
+          "target": 175.82
+        }
+      }
+    },
+    {
+      "direction": "LONG",
+      "setup_type": "H4_222_REVERSAL",
+      "shadow_id": 9287,
+      "ticker": "IWM",
+      "timeframe": "4H_RTH",
+      "variants": {
+        "FIXED_1_5R": {
+          "exit_bid": 7.41,
+          "exit_ts": "2026-09-17T19:57:46.552586+00:00",
+          "pnl_dollars": -50.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 294.705
+        },
+        "FIXED_2R": {
+          "exit_bid": 7.41,
+          "exit_ts": "2026-09-17T19:57:46.552586+00:00",
+          "pnl_dollars": -50.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 297.44
+        },
+        "RECORDED_TARGET_1": {
+          "exit_bid": 7.41,
+          "exit_ts": "2026-09-17T19:57:46.552586+00:00",
+          "pnl_dollars": -50.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 287.04
+        }
+      }
+    },
+    {
+      "direction": "LONG",
+      "setup_type": "STRAT_212_CONTINUATION",
+      "shadow_id": 9293,
+      "ticker": "AAPL",
+      "timeframe": "30m",
+      "variants": {
+        "FIXED_1_5R": {
+          "exit_bid": 9.5,
+          "exit_ts": "2026-09-17T18:52:46.553297+00:00",
+          "pnl_dollars": -15.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 337.51
+        },
+        "FIXED_2R": {
+          "exit_bid": 9.5,
+          "exit_ts": "2026-09-17T18:52:46.553297+00:00",
+          "pnl_dollars": -15.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 337.96
+        },
+        "RECORDED_TARGET_1": {
+          "exit_bid": 9.5,
+          "exit_ts": "2026-09-17T18:52:46.553297+00:00",
+          "pnl_dollars": -15.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 336.22
+        }
+      }
+    },
+    {
+      "direction": "SHORT",
+      "setup_type": "DAILY_222_CONTINUATION",
+      "shadow_id": 9294,
+      "ticker": "WMT",
+      "timeframe": "1D",
+      "variants": {
+        "FIXED_1_5R": {
+          "exit_bid": 3.55,
+          "exit_ts": "2026-09-17T19:57:46.552586+00:00",
+          "pnl_dollars": -20.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 104.05
+        },
+        "FIXED_2R": {
+          "exit_bid": 3.55,
+          "exit_ts": "2026-09-17T19:57:46.552586+00:00",
+          "pnl_dollars": -20.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 103.125
+        },
+        "RECORDED_TARGET_1": {
+          "exit_bid": 3.55,
+          "exit_ts": "2026-09-17T19:57:46.552586+00:00",
+          "pnl_dollars": -20.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 106.145
+        }
+      }
+    },
+    {
+      "direction": "LONG",
+      "setup_type": "H1_222_CONTINUATION",
+      "shadow_id": 9296,
+      "ticker": "WMT",
+      "timeframe": "1H",
+      "variants": {
+        "FIXED_1_5R": {
+          "exit_bid": 3.65,
+          "exit_ts": "2026-09-17T18:27:46.552514+00:00",
+          "pnl_dollars": -15.0,
+          "resolution": "STOP",
+          "target": 106.66
+        },
+        "FIXED_2R": {
+          "exit_bid": 3.65,
+          "exit_ts": "2026-09-17T18:27:46.552514+00:00",
+          "pnl_dollars": -15.0,
+          "resolution": "STOP",
+          "target": 106.675
+        },
+        "RECORDED_TARGET_1": {
+          "exit_bid": 3.65,
+          "exit_ts": "2026-09-17T18:27:46.552514+00:00",
+          "pnl_dollars": -15.0,
+          "resolution": "STOP",
+          "target": 106.9
+        }
+      }
+    },
+    {
+      "direction": "LONG",
+      "setup_type": "H4_222_CONTINUATION",
+      "shadow_id": 9297,
+      "ticker": "COIN",
+      "timeframe": "4H_RTH",
+      "variants": {
+        "FIXED_1_5R": {
+          "exit_bid": 10.35,
+          "exit_ts": "2026-09-17T18:27:46.552514+00:00",
+          "pnl_dollars": -55.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 183.25095
+        },
+        "FIXED_2R": {
+          "exit_bid": 10.35,
+          "exit_ts": "2026-09-17T18:27:46.552514+00:00",
+          "pnl_dollars": -55.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 186.7546
+        },
+        "RECORDED_TARGET_1": {
+          "exit_bid": 10.35,
+          "exit_ts": "2026-09-17T18:27:46.552514+00:00",
+          "pnl_dollars": -55.0,
+          "resolution": "TARGET",
+          "target": 172.8
+        }
+      }
+    },
+    {
+      "direction": "LONG",
+      "setup_type": "STRAT_212_CONTINUATION",
+      "shadow_id": 9300,
+      "ticker": "SPY",
+      "timeframe": "30m",
+      "variants": {
+        "FIXED_1_5R": {
+          "exit_bid": 10.41,
+          "exit_ts": "2026-09-17T19:07:46.552294+00:00",
+          "pnl_dollars": 17.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 763.225
+        },
+        "FIXED_2R": {
+          "exit_bid": 10.41,
+          "exit_ts": "2026-09-17T19:07:46.552294+00:00",
+          "pnl_dollars": 17.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 763.49
+        },
+        "RECORDED_TARGET_1": {
+          "exit_bid": 10.41,
+          "exit_ts": "2026-09-17T19:07:46.552294+00:00",
+          "pnl_dollars": 17.0,
+          "resolution": "TARGET",
+          "target": 762.7999
+        }
+      }
+    },
+    {
+      "direction": "SHORT",
+      "setup_type": "H4_222_REVERSAL",
+      "shadow_id": 9302,
+      "ticker": "IWM",
+      "timeframe": "4H_RTH",
+      "variants": {
+        "FIXED_1_5R": {
+          "exit_bid": 7.65,
+          "exit_ts": "2026-09-17T19:42:46.551889+00:00",
+          "pnl_dollars": 8.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 282.7275
+        },
+        "FIXED_2R": {
+          "exit_bid": 7.65,
+          "exit_ts": "2026-09-17T19:42:46.551889+00:00",
+          "pnl_dollars": 8.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 281.615
+        },
+        "RECORDED_TARGET_1": {
+          "exit_bid": 7.63,
+          "exit_ts": "2026-09-17T19:32:46.552489+00:00",
+          "pnl_dollars": 6.0,
+          "resolution": "TARGET",
+          "target": 285.74
+        }
+      }
+    },
+    {
+      "direction": "SHORT",
+      "setup_type": "H1_222_CONTINUATION",
+      "shadow_id": 9306,
+      "ticker": "INTC",
+      "timeframe": "1H",
+      "variants": {
+        "FIXED_1_5R": {
+          "exit_bid": 9.55,
+          "exit_ts": "2026-09-17T19:27:46.552060+00:00",
+          "pnl_dollars": 0.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 108.4765
+        },
+        "FIXED_2R": {
+          "exit_bid": 9.55,
+          "exit_ts": "2026-09-17T19:27:46.552060+00:00",
+          "pnl_dollars": 0.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 107.9318
+        },
+        "RECORDED_TARGET_1": {
+          "exit_bid": 9.55,
+          "exit_ts": "2026-09-17T19:27:46.552060+00:00",
+          "pnl_dollars": 0.0,
+          "resolution": "TARGET",
+          "target": 109.84
+        }
+      }
+    },
+    {
+      "direction": "SHORT",
+      "setup_type": "H1_222_CONTINUATION",
+      "shadow_id": 9309,
+      "ticker": "BAC",
+      "timeframe": "1H",
+      "variants": {
+        "FIXED_1_5R": {
+          "exit_bid": 1.91,
+          "exit_ts": "2026-09-17T19:47:46.564215+00:00",
+          "pnl_dollars": -1.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 57.9925
+        },
+        "FIXED_2R": {
+          "exit_bid": 1.91,
+          "exit_ts": "2026-09-17T19:47:46.564215+00:00",
+          "pnl_dollars": -1.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 57.915
+        },
+        "RECORDED_TARGET_1": {
+          "exit_bid": 1.91,
+          "exit_ts": "2026-09-17T19:47:46.564215+00:00",
+          "pnl_dollars": -1.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 58.14
+        }
+      }
+    },
+    {
+      "direction": "SHORT",
+      "setup_type": "H1_222_REVERSAL",
+      "shadow_id": 9310,
+      "ticker": "XOM",
+      "timeframe": "1H",
+      "variants": {
+        "FIXED_1_5R": {
+          "exit_bid": 6.45,
+          "exit_ts": "2026-09-17T19:52:46.552076+00:00",
+          "pnl_dollars": -30.0,
+          "resolution": "STOP",
+          "target": 162.485
+        },
+        "FIXED_2R": {
+          "exit_bid": 6.45,
+          "exit_ts": "2026-09-17T19:52:46.552076+00:00",
+          "pnl_dollars": -30.0,
+          "resolution": "STOP",
+          "target": 162.37
+        },
+        "RECORDED_TARGET_1": {
+          "exit_bid": 6.45,
+          "exit_ts": "2026-09-17T19:52:46.552076+00:00",
+          "pnl_dollars": -30.0,
+          "resolution": "STOP",
+          "target": 162.56
+        }
+      }
+    },
+    {
+      "direction": "LONG",
+      "setup_type": "STRAT_212_CONTINUATION",
+      "shadow_id": 9318,
+      "ticker": "NVDA",
+      "timeframe": "30m",
+      "variants": {
+        "FIXED_1_5R": {
+          "exit_bid": 9.55,
+          "exit_ts": "2026-09-17T19:52:46.552076+00:00",
+          "pnl_dollars": 15.0,
+          "resolution": "TARGET",
+          "target": 219.6475
+        },
+        "FIXED_2R": {
+          "exit_bid": 9.55,
+          "exit_ts": "2026-09-17T19:52:46.552076+00:00",
+          "pnl_dollars": 15.0,
+          "resolution": "TARGET",
+          "target": 219.715
+        },
+        "RECORDED_TARGET_1": {
+          "exit_bid": 9.55,
+          "exit_ts": "2026-09-17T19:52:46.552076+00:00",
+          "pnl_dollars": 15.0,
+          "resolution": "TARGET",
+          "target": 219.83
+        }
+      }
+    },
+    {
+      "direction": "LONG",
+      "setup_type": "H4_322_CONTINUATION",
+      "shadow_id": 9319,
+      "ticker": "TLT",
+      "timeframe": "4H_RTH",
+      "variants": {
+        "FIXED_1_5R": {
+          "exit_bid": 0.98,
+          "exit_ts": "2026-09-17T19:57:46.552586+00:00",
+          "pnl_dollars": 1.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 82.27
+        },
+        "FIXED_2R": {
+          "exit_bid": 0.98,
+          "exit_ts": "2026-09-17T19:57:46.552586+00:00",
+          "pnl_dollars": 1.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 82.44
+        },
+        "RECORDED_TARGET_1": {
+          "exit_bid": 0.98,
+          "exit_ts": "2026-09-17T19:57:46.552586+00:00",
+          "pnl_dollars": 1.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 81.835
+        }
+      }
+    },
+    {
+      "direction": "LONG",
+      "setup_type": "STRAT_212_CONTINUATION",
+      "shadow_id": 9320,
+      "ticker": "MRK",
+      "timeframe": "30m",
+      "variants": {
+        "FIXED_1_5R": {
+          "exit_bid": 6.85,
+          "exit_ts": "2026-09-17T19:52:46.552076+00:00",
+          "pnl_dollars": -15.0,
+          "resolution": "TARGET",
+          "target": 147.475
+        },
+        "FIXED_2R": {
+          "exit_bid": 6.85,
+          "exit_ts": "2026-09-17T19:52:46.552076+00:00",
+          "pnl_dollars": -15.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 147.58
+        },
+        "RECORDED_TARGET_1": {
+          "exit_bid": 6.85,
+          "exit_ts": "2026-09-17T19:52:46.552076+00:00",
+          "pnl_dollars": -15.0,
+          "resolution": "TARGET",
+          "target": 147.4
+        }
+      }
+    },
+    {
+      "direction": "LONG",
+      "setup_type": "H4_222_CONTINUATION",
+      "shadow_id": 9321,
+      "ticker": "MRK",
+      "timeframe": "4H_RTH",
+      "variants": {
+        "FIXED_1_5R": {
+          "exit_bid": 6.85,
+          "exit_ts": "2026-09-17T19:52:46.552076+00:00",
+          "pnl_dollars": -15.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 149.9155
+        },
+        "FIXED_2R": {
+          "exit_bid": 6.85,
+          "exit_ts": "2026-09-17T19:52:46.552076+00:00",
+          "pnl_dollars": -15.0,
+          "resolution": "CENSORED_AT_HORIZON",
+          "target": 150.834
+        },
+        "RECORDED_TARGET_1": {
+          "exit_bid": 6.85,
+          "exit_ts": "2026-09-17T19:52:46.552076+00:00",
+          "pnl_dollars": -15.0,
+          "resolution": "TARGET",
+          "target": 147.47
+        }
+      }
+    }
+  ],
+  "study": "OPTIONS_SHADOW_TARGET_GEOMETRY_CONTROLLED_V0_1",
+  "summaries": {
+    "FIXED_1_5R": {
+      "censored_n": 33,
+      "forced_horizon_avg_pnl": -16.66,
+      "forced_horizon_pnl_all_rows": -783.0,
+      "n": 47,
+      "resolution_counts": {
+        "CENSORED_AT_HORIZON": 33,
+        "STOP": 8,
+        "TARGET": 6
+      },
+      "resolved_event_n": 14,
+      "resolved_event_pnl_only": -361.0
+    },
+    "FIXED_2R": {
+      "censored_n": 35,
+      "forced_horizon_avg_pnl": -15.91,
+      "forced_horizon_pnl_all_rows": -748.0,
+      "n": 47,
+      "resolution_counts": {
+        "CENSORED_AT_HORIZON": 35,
+        "STOP": 8,
+        "TARGET": 4
+      },
+      "resolved_event_n": 12,
+      "resolved_event_pnl_only": -346.0
+    },
+    "RECORDED_TARGET_1": {
+      "censored_n": 24,
+      "forced_horizon_avg_pnl": -17.87,
+      "forced_horizon_pnl_all_rows": -840.0,
+      "n": 47,
+      "resolution_counts": {
+        "CENSORED_AT_HORIZON": 24,
+        "STOP": 9,
+        "TARGET": 14
+      },
+      "resolved_event_n": 23,
+      "resolved_event_pnl_only": -399.0
+    }
+  },
+  "verdict_scope": "research_only_no_v1_tuning"
+}
