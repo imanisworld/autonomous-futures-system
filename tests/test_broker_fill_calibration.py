@@ -106,3 +106,22 @@ def test_corrupt_json_fails_closed_for_calibration(tmp_path: Path) -> None:
 
     assert report["status"] == "CORRUPT_SOURCE"
     assert report["read_errors"]
+
+
+def test_duplicate_exact_fill_identity_is_counted_once(tmp_path: Path) -> None:
+    fill = _external_fill("MNQ", "AFS-dup", 1.0, 1.0)
+    report = audit([_write(tmp_path / "journal.jsonl", [fill, dict(fill)])])
+
+    assert report["status"] == "MEASURED"
+    assert report["overall"]["exact_fills"] == 1
+    assert report["duplicate_identity_rows_deduplicated"] == 1
+    assert report["identity_conflicts"] == []
+
+
+def test_conflicting_fill_identity_fails_closed(tmp_path: Path) -> None:
+    a = _external_fill("MNQ", "AFS-conflict", 1.0, 1.0)
+    b = _external_fill("MNQ", "AFS-conflict", 3.0, 3.0)
+    report = audit([_write(tmp_path / "journal.jsonl", [a, b])])
+
+    assert report["status"] == "CORRUPT_SOURCE"
+    assert report["identity_conflicts"]
