@@ -8,8 +8,11 @@ quote state through separate code paths.
 from __future__ import annotations
 
 from dataclasses import fields
+from datetime import datetime
 import json
 from typing import Any
+
+from options_manager.contract_quality import ContractMarketSnapshot
 
 from .retention import QuoteRecord
 
@@ -72,3 +75,19 @@ def executable_quote_projection(payload: bytes) -> dict[str, object]:
         "implied_volatility": record.iv,
         "executable": executable,
     }
+
+
+def contract_market_snapshot_from_retained_quote(payload: bytes) -> ContractMarketSnapshot:
+    """Project frozen retained bytes into the shared executable fill snapshot."""
+    projected = executable_quote_projection(payload)
+    quote_ts = projected["quote_ts"]
+    parsed_ts = datetime.fromisoformat(quote_ts) if isinstance(quote_ts, str) else None
+    executable = projected["executable"] is True
+    return ContractMarketSnapshot(
+        ticker=str(projected["underlying"]), contract_symbol=str(projected["contract_id"]),
+        bid=projected["bid"] if executable else None, ask=projected["ask"] if executable else None,
+        last=None, volume=projected["volume"], open_interest=projected["open_interest"],
+        implied_volatility=projected["implied_volatility"], delta=projected["delta"], theta=None,
+        underlying_price=None, quote_timestamp=parsed_ts, provider=str(projected["source"]),
+        is_snapshot_complete=executable,
+    )
