@@ -31,6 +31,12 @@ from strategy.four_hr_retrigger import advance_4hr_retrigger
 from strategy.strat_322_first_live import advance_strat_322_first_live
 from strategy.strat_212_122 import STRAT_122, STRAT_212, advance_strat_212_122
 from strategy.strat_classifier import TWO_DOWN, normalize_bar_type
+from strategy.transition_failed_breakdown_reclaim import (
+    RESEARCH_DUMMY_TARGET_TICKS as TRANSITION_RESEARCH_DUMMY_TARGET_TICKS,
+    RESEARCH_STOP_TICKS as TRANSITION_RESEARCH_STOP_TICKS,
+    RESEARCH_STRATEGY as TRANSITION_RESEARCH_STRATEGY,
+    detect_transition_failed_breakdown_reclaim,
+)
 
 
 # Setups eligible for momentum re-anchor: entry rests AT a level, so price leaving
@@ -1748,6 +1754,7 @@ class DecisionEngine:
             ("vwap_hold", self._try_vwap_hold),
             ("pdh_reclaim", self._try_pdh_reclaim),
             ("pdl_reclaim", self._try_pdl_reclaim),
+            ("transition_failed_breakdown_reclaim_400t_30m", self._try_transition_failed_breakdown_reclaim_400t_30m),
             ("continuation_pullback", self._try_continuation_pullback),
             ("strat_212", self._try_strat_212),
             ("strat_122", self._try_strat_122),
@@ -2710,6 +2717,42 @@ class DecisionEngine:
         )
         daily_state.strat_212_122_state[state.instrument] = next_state
         state.strat_212_122_candidate = candidate
+
+    def _try_transition_failed_breakdown_reclaim_400t_30m(
+        self, state: MarketState
+    ) -> Optional[SetupDetail]:
+        """Research-only executable geometry for the frozen Transition variant.
+
+        The signal identity comes from the exact shared shadow detector. The
+        economic target is intentionally absent from the variant; a distant
+        non-economic target exists only because TradeSetup/PaperBroker require
+        a complete bracket. The isolated research executor force-resolves the
+        position after six available 5-minute bars; this target never determines
+        an economic exit.
+        """
+        signal = detect_transition_failed_breakdown_reclaim(
+            state, list(getattr(state, "bar_history_15m", []) or [])
+        )
+        if signal is None:
+            return None
+        tick = self._tick_size(state.instrument)
+        entry = float(signal.entry)
+        stop = entry - TRANSITION_RESEARCH_STOP_TICKS * tick
+        target = entry + TRANSITION_RESEARCH_DUMMY_TARGET_TICKS * tick
+        rr = RiskEngine.calculate_rr("LONG", entry, stop, target)
+        return SetupDetail(
+            direction="LONG",
+            entry=round(entry, 4),
+            stop=round(stop, 4),
+            target=round(target, 4),
+            rr_ratio=rr,
+            strategy=TRANSITION_RESEARCH_STRATEGY,
+            entry_time=state.timestamp,
+            notes=(
+                "RESEARCH ONLY: frozen Transition 400t stop / six-available-5m-bar "
+                f"time-exit variant; shared signal identity; {signal.notes}"
+            ),
+        )
 
     def _try_strat_4hr_retrigger(self, state: MarketState) -> Optional[SetupDetail]:
         """Return only the candidate produced by the resolved state machine."""

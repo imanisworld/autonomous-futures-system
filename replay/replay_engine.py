@@ -557,6 +557,7 @@ class ReplayEngine:
                         - _parse_timestamp(bar["ts"]).date()
                     ).days < _RESEARCH_BAR_LOOKBACK_DAYS
                 ]
+                state.bar_history_15m = list(recent_research_bars)
                 for cand in evaluate_shadow_setups(
                     state, recent_research_bars
                 ):

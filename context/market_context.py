@@ -256,6 +256,9 @@ class MarketState:
     # already-arrived 5-minute bars; the candidate is populated transiently by
     # DecisionEngine from the shared live/replay state machine.
     bar_history_5m: list[dict] = field(default_factory=list)
+    # Authoritative recent 15-minute bars for explicitly enabled canonical
+    # research strategies. Passive by default; existing strategies ignore it.
+    bar_history_15m: list[dict] = field(default_factory=list)
     four_hr_retrigger_candidate: Optional[dict] = None
     canonical_4hr_only: bool = False
     # Canonical MNQ 60M 3-2-2 First Live candidate, populated transiently by

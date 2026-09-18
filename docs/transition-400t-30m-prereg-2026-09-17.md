@@ -141,6 +141,45 @@ The existing `wide_stop_4k` ledger is **not reusable as-is**:
 
 Any Transition ledger would therefore be a distinct evidence contract, not a silent extension of `wide_stop_4k`.
 
+
+
+## Isolated-ledger sizing audit (2026-09-17)
+
+After preregistration, the frozen 400-tick trade sequence was replayed against
+the same isolated-ledger survival convention already used by the wide-stop
+family: fixed 1 contract, lane-scoped daily-loss lockout, and a 20% peak-to-
+trough drawdown stop.
+
+A $4,000 Transition ledger is **not viable** under that contract:
+- full population halts at trade 268;
+- re-anchored audit population halts at trade 8.
+
+The full population also fails at $5,000 and $6,000 starting balances.
+The smallest whole-dollar starting balance that survives the frozen full
+sequence at the 20% drawdown floor with a $400 daily-loss floor is **$7,907**.
+The research contract therefore rounds up to an **$8,000 hypothetical ledger**.
+
+At $8,000 / 20% drawdown / $400 daily-loss floor:
+- full population: 843 taken, 3 daily-floor skips, +$3,337.36, PF 1.100975,
+  H1 +$2,863.92, H2 +$473.44, max drawdown $2,262.74 (19.84%);
+- audit population: 73 taken, 1 daily-floor skip, +$575.96, PF 1.151959,
+  H1 +$76.72, H2 +$499.24, max drawdown $825.36 (10.02%).
+
+This sizing result is a survival constraint, not an equity recommendation and
+not permission to fund or activate a real account. The $8,000 ledger is
+hypothetical research capital only.
+
+The isolated executor must therefore use:
+- hypothetical starting balance: **$8,000**;
+- fixed contracts: **1**;
+- stop cap: **400 ticks / about $200 planned stop risk**;
+- lane daily-loss floor: **$400** (post-realized-loss lockout);
+- peak drawdown stop: **20%**;
+- max trades/day: **3**;
+- no aggregation with the real book.
+
+No smaller ledger may be substituted without a new pre-registered sizing study.
+
 ## Canonicalization blocker
 
 `transition_failed_breakdown_reclaim` currently exists as a shadow detector in `strategy/shadow_setups.py`.
