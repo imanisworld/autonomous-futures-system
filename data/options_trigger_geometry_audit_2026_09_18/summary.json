@@ -9,6 +9,8 @@
     "real-time trigger observability"
   ],
   "from_date": "2026-09-09",
+  "frozen_212_reversal": null,
+  "frozen_observer_sha256": null,
   "rows": null,
   "snapshot_id": "OPTIONS_TRIGGER_BAR_SNAPSHOT",
   "snapshot_manifest_sha256": "8d9cd8a4674827abc11bf60805d53ca812c738bb28417b672a10e3f98790dc1b",
@@ -29,6 +31,7 @@
         "canonical_r_zero_n": 0,
         "canonical_stop_defined_n": 0,
         "canonical_stop_matches_generic_n": 0,
+        "canonical_target_consumed_at_entry_n": 0,
         "canonical_target_defined_n": 0,
         "canonical_target_invalid_side_n": 0,
         "floor_outcomes_with_canonical_stop": {},
@@ -54,6 +57,7 @@
         "canonical_r_zero_n": 0,
         "canonical_stop_defined_n": 64,
         "canonical_stop_matches_generic_n": 64,
+        "canonical_target_consumed_at_entry_n": 0,
         "canonical_target_defined_n": 0,
         "canonical_target_invalid_side_n": 0,
         "floor_outcomes_with_canonical_stop": {
@@ -83,8 +87,8 @@
       },
       "STRAT_212_REVERSAL": {
         "canonical_outcomes": {
-          "INVALID_GEOMETRY": 3,
           "STOP_FIRST": 20,
+          "TARGET_CONSUMED_AT_ENTRY": 3,
           "TARGET_FIRST": 61,
           "UNRESOLVED_AT_CLOSE": 5
         },
@@ -94,8 +98,9 @@
         "canonical_r_zero_n": 3,
         "canonical_stop_defined_n": 89,
         "canonical_stop_matches_generic_n": 89,
+        "canonical_target_consumed_at_entry_n": 3,
         "canonical_target_defined_n": 89,
-        "canonical_target_invalid_side_n": 3,
+        "canonical_target_invalid_side_n": 0,
         "floor_outcomes_with_canonical_stop": {
           "STOP_FIRST": 31,
           "TARGET_FIRST": 23,
@@ -133,6 +138,7 @@
         "canonical_r_zero_n": 0,
         "canonical_stop_defined_n": 0,
         "canonical_stop_matches_generic_n": 0,
+        "canonical_target_consumed_at_entry_n": 0,
         "canonical_target_defined_n": 198,
         "canonical_target_invalid_side_n": 0,
         "floor_outcomes_with_canonical_stop": {},
@@ -163,6 +169,7 @@
         "canonical_r_zero_n": 0,
         "canonical_stop_defined_n": 7,
         "canonical_stop_matches_generic_n": 7,
+        "canonical_target_consumed_at_entry_n": 0,
         "canonical_target_defined_n": 0,
         "canonical_target_invalid_side_n": 0,
         "floor_outcomes_with_canonical_stop": {
@@ -198,6 +205,7 @@
         "canonical_r_zero_n": 0,
         "canonical_stop_defined_n": 15,
         "canonical_stop_matches_generic_n": 15,
+        "canonical_target_consumed_at_entry_n": 0,
         "canonical_target_defined_n": 15,
         "canonical_target_invalid_side_n": 0,
         "floor_outcomes_with_canonical_stop": {
@@ -236,6 +244,7 @@
         "canonical_r_zero_n": 0,
         "canonical_stop_defined_n": 0,
         "canonical_stop_matches_generic_n": 0,
+        "canonical_target_consumed_at_entry_n": 0,
         "canonical_target_defined_n": 30,
         "canonical_target_invalid_side_n": 0,
         "floor_outcomes_with_canonical_stop": {},
@@ -265,6 +274,7 @@
         "canonical_r_zero_n": 0,
         "canonical_stop_defined_n": 0,
         "canonical_stop_matches_generic_n": 0,
+        "canonical_target_consumed_at_entry_n": 0,
         "canonical_target_defined_n": 0,
         "canonical_target_invalid_side_n": 0,
         "floor_outcomes_with_canonical_stop": {},
@@ -290,6 +300,7 @@
         "canonical_r_zero_n": 0,
         "canonical_stop_defined_n": 0,
         "canonical_stop_matches_generic_n": 0,
+        "canonical_target_consumed_at_entry_n": 0,
         "canonical_target_defined_n": 0,
         "canonical_target_invalid_side_n": 0,
         "floor_outcomes_with_canonical_stop": {},

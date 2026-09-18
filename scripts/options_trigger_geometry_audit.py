@@ -15,9 +15,10 @@ import hashlib
 import json
 import math
 import statistics
+import sqlite3
 import sys
 from collections import Counter, defaultdict
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -80,6 +81,89 @@ def verify_snapshot(
             raise ValueError(f"snapshot row count mismatch: {path.name}")
     manifest["_verified_manifest_sha256"] = actual_manifest_sha
     return manifest
+
+
+def _event_key(
+    *,
+    symbol: str,
+    session_date: str,
+    bar_start: str,
+    direction: str,
+    entry: float,
+    invalidation: float,
+) -> tuple[str, str, str, str, float, float]:
+    parsed = datetime.fromisoformat(str(bar_start).replace("Z", "+00:00"))
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise ValueError("bar_start must be timezone-aware")
+    return (
+        str(symbol).upper(),
+        str(session_date),
+        parsed.astimezone(timezone.utc).isoformat(),
+        str(direction),
+        round(float(entry), 9),
+        round(float(invalidation), 9),
+    )
+
+
+def frozen_212_reversal_keys(
+    observer_db: Path,
+    *,
+    expected_sha256: str,
+    symbols: Sequence[str],
+    from_date: str,
+    to_date: str,
+) -> set[tuple[str, str, str, str, float, float]]:
+    payload = observer_db.read_bytes()
+    actual = _sha256(payload)
+    if actual != expected_sha256:
+        raise ValueError(
+            f"observer db sha256 mismatch: expected={expected_sha256} actual={actual}"
+        )
+    wanted = {str(symbol).upper() for symbol in symbols}
+    conn = sqlite3.connect(f"file:{observer_db}?mode=ro", uri=True)
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute(
+        """
+        SELECT symbol, session_date, bar_start, direction, entry_trigger, invalidation
+        FROM coverage_events
+        WHERE observer_version = ?
+          AND family = ?
+          AND session_date BETWEEN ? AND ?
+        """,
+        ("cov-v0.1", "STRAT_212_REVERSAL", from_date, to_date),
+    ).fetchall()
+    conn.close()
+    return {
+        _event_key(
+            symbol=row["symbol"],
+            session_date=row["session_date"],
+            bar_start=row["bar_start"],
+            direction=row["direction"],
+            entry=row["entry_trigger"],
+            invalidation=row["invalidation"],
+        )
+        for row in rows
+        if str(row["symbol"]).upper() in wanted
+    }
+
+
+def annotate_frozen_212_membership(
+    rows: Sequence[dict[str, Any]],
+    frozen_keys: set[tuple[str, str, str, str, float, float]],
+) -> None:
+    for row in rows:
+        row["frozen_212_reversal_match"] = False
+        if row.get("family") != "STRAT_212_REVERSAL":
+            continue
+        key = _event_key(
+            symbol=row["symbol"],
+            session_date=row["session_date"],
+            bar_start=row["watch_bar_start"],
+            direction=row["direction"],
+            entry=row["entry"],
+            invalidation=row["generic_stop"],
+        )
+        row["frozen_212_reversal_match"] = key in frozen_keys
 
 
 def _bar_from_row(row: Mapping[str, Any]) -> Bar:
@@ -161,6 +245,8 @@ def _walk_target_stop(
 ) -> str | None:
     if target is None or stop is None or trigger_bar_start is None:
         return None
+    if math.isclose(target, entry, rel_tol=0.0, abs_tol=1e-9):
+        return "TARGET_CONSUMED_AT_ENTRY"
     entry_side_valid = target > entry if direction == "LONG" else target < entry
     if not entry_side_valid:
         return "INVALID_GEOMETRY"
@@ -257,12 +343,20 @@ def audit_session(
             floor_t1 = floor.target_1 if floor.status == "VALID" else None
             canonical_target = geometry.target
             canonical_target_valid = None
+            canonical_target_consumed_at_entry = False
             if canonical_target is not None:
-                canonical_target_valid = (
-                    canonical_target > entry
-                    if result.direction == "LONG"
-                    else canonical_target < entry
+                canonical_target_consumed_at_entry = math.isclose(
+                    canonical_target,
+                    entry,
+                    rel_tol=0.0,
+                    abs_tol=1e-9,
                 )
+                if not canonical_target_consumed_at_entry:
+                    canonical_target_valid = (
+                        canonical_target > entry
+                        if result.direction == "LONG"
+                        else canonical_target < entry
+                    )
 
             canonical_stop_parity = None
             if geometry.stop is not None:
@@ -335,6 +429,7 @@ def audit_session(
                     "canonical_target": canonical_target,
                     "canonical_target_source": geometry.target_source,
                     "canonical_target_valid": canonical_target_valid,
+                    "canonical_target_consumed_at_entry": canonical_target_consumed_at_entry,
                     "canonical_r": canonical_r,
                     "canonical_outcome": canonical_outcome,
                     "canonical_stop": geometry.stop,
@@ -354,6 +449,48 @@ def audit_session(
                 }
             )
     return rows
+
+
+def summarize_frozen_212(rows: Sequence[dict[str, Any]], expected_count: int) -> dict[str, Any]:
+    subset = [
+        row
+        for row in rows
+        if row.get("family") == "STRAT_212_REVERSAL"
+        and row.get("frozen_212_reversal_match") is True
+    ]
+    values = [
+        float(row["canonical_r"])
+        for row in subset
+        if row.get("canonical_r") is not None
+    ]
+    return {
+        "expected_frozen_rows": expected_count,
+        "matched_rows": len(subset),
+        "all_expected_rows_matched": len(subset) == expected_count,
+        "target_consumed_at_entry_n": sum(
+            bool(row.get("canonical_target_consumed_at_entry")) for row in subset
+        ),
+        "wrong_side_target_n": sum(
+            row.get("canonical_target_valid") is False for row in subset
+        ),
+        "canonical_stop_matches_generic_n": sum(
+            row.get("canonical_stop_matches_generic") is True for row in subset
+        ),
+        "canonical_r_n": len(values),
+        "canonical_r_median": _median(values),
+        "canonical_r_below_1_n": sum(value < 1.0 for value in values),
+        "nearest_relation": dict(Counter(row["nearest_relation"] for row in subset)),
+        "floor_relation": dict(Counter(row["floor_relation"] for row in subset)),
+        "canonical_outcomes": dict(
+            Counter(row["canonical_outcome"] for row in subset if row["canonical_outcome"] is not None)
+        ),
+        "nearest_outcomes": dict(
+            Counter(row["nearest_outcome"] for row in subset if row["nearest_outcome"] is not None)
+        ),
+        "floor_outcomes": dict(
+            Counter(row["floor_outcome"] for row in subset if row["floor_outcome"] is not None)
+        ),
+    }
 
 
 def summarize(rows: Sequence[dict[str, Any]]) -> dict[str, Any]:
@@ -379,6 +516,9 @@ def summarize(rows: Sequence[dict[str, Any]]) -> dict[str, Any]:
             "canonical_target_defined_n": len(target_defined),
             "canonical_target_invalid_side_n": sum(
                 row["canonical_target_valid"] is False for row in target_defined
+            ),
+            "canonical_target_consumed_at_entry_n": sum(
+                bool(row["canonical_target_consumed_at_entry"]) for row in target_defined
             ),
             "nearest_relation": dict(Counter(row["nearest_relation"] for row in subset)),
             "floor_relation": dict(Counter(row["floor_relation"] for row in subset)),
@@ -426,6 +566,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--expected-manifest-sha256")
     parser.add_argument("--out")
     parser.add_argument("--include-rows", action="store_true")
+    parser.add_argument("--frozen-observer-db")
+    parser.add_argument("--expected-observer-sha256")
     args = parser.parse_args(argv)
 
     snapshot_dir = Path(args.snapshot_dir).resolve()
@@ -443,6 +585,25 @@ def main(argv: Sequence[str] | None = None) -> int:
             rows.extend(audit_session(snapshot_dir, cursor, symbols))
         cursor = cursor.fromordinal(cursor.toordinal() + 1)
 
+    frozen_212_summary = None
+    observer_sha256 = None
+    if args.frozen_observer_db or args.expected_observer_sha256:
+        if not args.frozen_observer_db or not args.expected_observer_sha256:
+            raise ValueError(
+                "--frozen-observer-db and --expected-observer-sha256 must be supplied together"
+            )
+        observer_path = Path(args.frozen_observer_db).resolve()
+        frozen_keys = frozen_212_reversal_keys(
+            observer_path,
+            expected_sha256=args.expected_observer_sha256,
+            symbols=symbols,
+            from_date=manifest["from_date"],
+            to_date=manifest["to_date"],
+        )
+        annotate_frozen_212_membership(rows, frozen_keys)
+        frozen_212_summary = summarize_frozen_212(rows, len(frozen_keys))
+        observer_sha256 = args.expected_observer_sha256
+
     report = {
         "audit_id": AUDIT_ID,
         "audit_version": AUDIT_VERSION,
@@ -453,6 +614,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         "to_date": manifest["to_date"],
         "symbols": list(symbols),
         "source_rules": SOURCE_RULES,
+        "frozen_observer_sha256": observer_sha256,
+        "frozen_212_reversal": frozen_212_summary,
         "summary": summarize(rows),
         "rows": rows if args.include_rows else None,
         "claims_not_made": [

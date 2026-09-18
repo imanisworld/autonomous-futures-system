@@ -1,93 +1,139 @@
 # Options trigger-time geometry audit — 2026-09-18
 
-## Status
+## Verdict
 
-**PARTIALLY PROVEN / WAIT.**
+**PROMISING BUT UNPROVEN / WAIT.**
 
-The trigger-time clock is now separated from the old delayed first-sight clock, but the target/stop rules are not uniform across Strat families. This audit compares source-defined family geometry with the existing generic structural target finder on the frozen primary-20 SIP snapshot.
+The causal trigger-time correction is now separated from target geometry. For the exact frozen 81-row 2-1-2 reversal population, trigger/invalidation structure is stable, but the existing generic >=1R target-floor rule is **not equivalent** to source-defined Strat magnitude.
 
-Snapshot manifest SHA-256: `8d9cd8a4674827abc11bf60805d53ca812c738bb28417b672a10e3f98790dc1b`.
+This audit is research/evidence only. It does not change the scanner, production target policy, contract selection, risk, broker/order routes, DEMO eligibility, or live trading.
 
-No runtime, scanner activation, broker path, option order, or promotion decision is changed.
+## Evidence identity
+
+Trigger-bar snapshot:
+
+- snapshot id: `OPTIONS_TRIGGER_BAR_SNAPSHOT`
+- version: `trigger-bars-v0.1`
+- feed: Alpaca consolidated SIP
+- sessions: 2026-09-09 through 2026-09-15
+- manifest SHA-256: `8d9cd8a4674827abc11bf60805d53ca812c738bb28417b672a10e3f98790dc1b`
+
+Frozen observer reference:
+
+- observer version: `cov-v0.1`
+- source DB SHA-256: `edba1ab55e859357f38db843c48b9942e685c1b148db82e2cefafaca632df286`
+- universe for this audit: the primary 20 symbols carried by the trigger snapshot
+
+The audit refuses either evidence source when its SHA-256 does not match. Frozen 2-1-2 reversal membership is joined on symbol, session date, watched-bar start, direction, trigger, and invalidation.
+
+**81 / 81 expected frozen 2-1-2 reversal rows matched exactly.**
+
+The eight additional trigger-time 2-1-2 reversals identified by #722 remain a separate descriptive population; they are not silently added to the frozen 81.
 
 ## External rule basis
 
-Primary source:
+Primary rule references:
+
 - https://thestrat.ai/docs/types-of-reversals/
 - https://thestrat.ai/docs/3-2/
 - https://thestrat.ai/docs/trading-continuation/
+- https://thestrat.ai/docs/2-2-2-continuation/
 
-The reversal rule defines the trigger as the previous bar's high/low and the target as the far side of the bar before the trigger bar. For 2-1-2 and 3-1-2, the stop is the other side of the inside bar. For 2-2 / 3-2-2 reversals, the stop is entry-bar based and cannot be reconstructed from the 30m precursor alone.
+For the geometry encoded here:
 
-The 3-2 source explicitly says it has no magnitude of its own and that the stop should be tight at the trigger line, not the far side of the outside bar.
+- 2-1-2 reversal: trigger at the inside-bar break, stop at the opposite side of the inside bar, magnitude at the far extreme of the preceding 2;
+- 3-1-2 reversal: same inside-bar risk box, magnitude at the far extreme of the preceding 3;
+- 2-2 / 3-2-2 reversal: source magnitude can be identified, but the entry-bar stop is not inferred from the 30m precursor;
+- direct 3-2: no magnitude of its own; a far-side-of-3 stop is not substituted;
+- unproven continuation/1-2-2 geometry stays unresolved.
 
-## Audit result
+Equality is handled explicitly. Because the shared Strat classifier treats an equal high/low as not breaking that side, an inside bar may share an extreme with its parent. When the source magnitude then equals the trigger, the row is labeled `TARGET_CONSUMED_AT_ENTRY`, not a wrong-side target and not a win.
 
-The trigger-time corpus contains **560** currently admitted first-break rows. Of those, **332** have a source-defined target under the reversal rules.
+## Frozen 81-row 2-1-2 reversal result
+
+Structural binding:
+
+- frozen rows expected: **81**
+- exact rows matched: **81**
+- source stop matches retained trigger invalidation: **81 / 81**
+- wrong-side source targets: **0**
+- source magnitude already consumed at entry: **3**
+
+Source-defined magnitude:
+
+- median reward/risk: **0.3333R**
+- source magnitude below 1R: **67 / 81**
+- source-defined underlying path:
+  - target first: **60**
+  - stop first: **13**
+  - unresolved at close: **5**
+  - target consumed at entry: **3**
+
+These are underlying-path geometry observations, not option expectancy.
+
+### Existing nearest structural target versus source magnitude
+
+| Relation | Rows |
+|---|---:|
+| Match source magnitude | 53 |
+| Before source magnitude | 24 |
+| Beyond source magnitude | 3 |
+| Generic invalid | 1 |
+
+The nearest-level finder often coincides with source magnitude, but not universally.
+
+### Existing >=1R floor target versus source magnitude
+
+| Relation | Rows |
+|---|---:|
+| Match source magnitude | 8 |
+| Before source magnitude | 5 |
+| **Beyond source magnitude** | **57** |
+| Generic invalid | 11 |
+
+The >=1R floor therefore reaches beyond the source-defined 2-1-2 reversal magnitude on **57 / 81** frozen rows. That floor is a separate trade-management hypothesis; it must not be represented as the source-defined Strat target.
+
+## Broader trigger-time corpus
+
+The frozen trigger snapshot produces **560** currently admitted first-break rows across the supported research families. Of those, **332** have a source-defined target under the reversal rules.
 
 Across those 332 rows:
 
-| Target rule | Match source magnitude | Before source magnitude | Beyond source magnitude | Generic invalid |
+| Generic target rule | Match source | Before source | Beyond source | Generic invalid |
 |---|---:|---:|---:|---:|
-| Existing nearest structural target | 205 | 120 | 3 | 4 |
-| Existing >=1R floor target | 47 | 29 | **202** | 54 |
+| Nearest structural target | 205 | 120 | 3 | 4 |
+| >=1R floor target | 47 | 29 | **202** | 54 |
 
-The >=1R floor therefore frequently skips the canonical Strat magnitude and reaches for a farther structural level. It must not be described as canonical Strat target geometry.
+This broader table is diagnostic only. It does not make every family eligible for backtesting or promotion. Family-specific stop/target rules that are not proven remain unresolved.
 
-## 2-1-2 reversal
+## Interpretation for 212R backtesting
 
-Trigger-time population: **89**.
+The original 81-row structural population survives the causal trigger-time correction, but the target semantics need to be explicit before option-side outcome testing.
 
-- source stop defined: 89/89
-- existing generic invalidation matches source stop: **89/89**
-- source target defined: 89/89
-- median source target reward/risk: **0.3333R**
-- source target below 1R: **75/89**
-- source target on invalid/non-favorable side: **3/89**
+For an honest 2-1-2 reversal backtest, preserve these as separate concepts:
 
-Nearest structural target versus source target:
-- match: 60
-- before source magnitude: 25
-- beyond source magnitude: 3
-- invalid: 1
+1. **source magnitude / exhaustion target** — the preceding 2's far extreme;
+2. **farther structural runner target** — if studied, a separate management hypothesis;
+3. **inside-bar invalidation** — the opposite side of the inside bar.
 
->=1R floor target versus source target:
-- match: 8
-- before source magnitude: 5
-- beyond source magnitude: **62**
-- invalid: 14
+Do not silently replace source magnitude with a >=1R floor. Doing so changes the strategy being tested.
 
-Underlying-only source-geometry path result:
-- target first: 61
-- stop first: 20
-- unresolved at close: 5
-- invalid geometry: 3
+The three `TARGET_CONSUMED_AT_ENTRY` rows have no remaining source magnitude at the trigger and must not be counted as ordinary target wins.
 
-This is not option expectancy. It proves that the old >=1R target-floor rescue is not equivalent to the source-defined 2-1-2 reversal magnitude.
+## What remains blocked
 
-## Other family adjustments
+This audit does **not** retire the options backtest gate. Remaining blockers include:
 
-- **3-1-2 reversal:** source target and inside-bar stop are defined. In this corpus 15 reversal rows had complete source geometry; median source magnitude was 0.7128R and 10/15 were below 1R.
-- **2-2 reversal / 3-2-2 reversal:** source target is defined, but the stop is entry-bar based. A 30m far-side stop must not be silently substituted.
-- **2-1-2 continuation:** inside-bar stop is defined; standalone continuation target remains unresolved in this audit.
+- historical decision-time option Delta/open interest and exact underlying-price provenance for the trigger-time population;
+- a frozen/pre-registered fill-cost/slippage policy and aggregate stress result;
+- option contract/fill outcomes keyed to the corrected trigger-time decision clock;
+- final replay/forward parity for the combined strategy + selector + fill + risk packet;
+- untouched chronological / multi-month validation.
 
-- **1-2-2:** target/stop are not sufficiently frozen here; keep unresolved.
-- **3-2:** no own magnitude and no far-side-of-3 stop. It needs higher-timeframe magnitude plus a tight trigger-line stop.
-- **same-direction 2-2-2 / 3-2-2 continuation:** already fail closed as entry families on current main; treat them as run/context unless a separate lower-timeframe entry rule is proven.
+The eight additional later-outside trigger-time reversals are not added to the frozen 81 until their full trigger-time context, contract evidence, fill path, and outcomes are evaluated under the same rules.
 
-## Consequence
+## Safe next step
 
-The trigger-time correction is not just a latency repair. It exposes a second modeling problem: a single generic target finder cannot stand in for every Strat family's source-defined magnitude and stop logic.
+Keep 212R **WAIT**.
 
-For 2-1-2 reversal specifically, the entry and stop are structurally stable, but the target rule used in prior >=1R-floor tests is materially different from the source-defined magnitude. Any future 212R option backtest should carry both facts explicitly:
-1. source magnitude / exhaustion target;
-2. any farther structural runner target as a separate management hypothesis, never as a replacement for magnitude.
-
-## Still missing
-
-- lower-timeframe entry-bar stop definition for 2-2 / 3-2-2 / 1-2-2 families;
-- causal option contract and quote evidence at the trigger timestamp;
-- option costs/slippage applied to the final family-specific geometry;
-- prospective evidence under the corrected timing + geometry rules.
-
-No strategy is promoted by this audit.
+Use the SHA-bound trigger-time population and this source-defined geometry to define the decision boundary for future option-side evidence. Do not tune production V1, widen targets, or promote the family from these underlying-path counts alone.
