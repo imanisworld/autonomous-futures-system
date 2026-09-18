@@ -15,6 +15,7 @@ does not choose them.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 import math
 from typing import Literal, Sequence
 
@@ -119,19 +120,39 @@ def resolve_exit_trigger(
     return ExitTriggerResult("NONE", detail="no_exit_level_touched")
 
 
+def _parse_timestamp(value: object) -> datetime | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        return None
+    return parsed
+
+
 def first_executable_retained_quote(
     payloads: Sequence[bytes],
+    *,
+    trigger_ts: str,
 ) -> ExecutableQuoteChoice:
-    """Choose the first retained quote that is actually executable.
+    """Choose the earliest executable retained quote at/after an exit trigger.
 
-    Non-OK retained rows are preserved evidence but are not fills. The function
-    never reconstructs or substitutes a quote. Malformed frozen bytes fail
-    closed as INVALID_DATA rather than being skipped.
+    Caller ordering and pre-filtering are not trusted. An OK quote before the
+    trigger is ineligible; among eligible rows, the earliest quote timestamp
+    wins. Non-OK rows remain evidence but are not fills. Malformed bytes or an
+    invalid trigger timestamp fail closed.
     """
+
+    trigger_dt = _parse_timestamp(trigger_ts)
+    if trigger_dt is None:
+        return ExecutableQuoteChoice("INVALID_DATA", "invalid_trigger_timestamp")
 
     if not payloads:
         return ExecutableQuoteChoice("NO_FILL", "no_quote_after_trigger")
 
+    eligible: list[tuple[datetime, int, bytes]] = []
     for index, payload in enumerate(payloads):
         try:
             record = quote_record_from_json_line(payload)
@@ -141,12 +162,27 @@ def first_executable_retained_quote(
                 "retained_quote_parse_failed",
                 index=index,
             )
-        if record.status == "OK":
-            return ExecutableQuoteChoice(
-                "FOUND",
-                "first_executable_quote",
-                index=index,
-                payload=payload,
-            )
+        if record.status != "OK":
+            continue
 
-    return ExecutableQuoteChoice("NO_FILL", "no_executable_quote_after_trigger")
+        quote_dt = _parse_timestamp(record.quote_ts)
+        if quote_dt is None:
+            return ExecutableQuoteChoice(
+                "INVALID_DATA",
+                "retained_quote_timestamp_invalid",
+                index=index,
+            )
+        if quote_dt < trigger_dt:
+            continue
+        eligible.append((quote_dt, index, payload))
+
+    if not eligible:
+        return ExecutableQuoteChoice("NO_FILL", "no_executable_quote_after_trigger")
+
+    _, index, payload = min(eligible, key=lambda item: (item[0], item[1]))
+    return ExecutableQuoteChoice(
+        "FOUND",
+        "first_executable_quote",
+        index=index,
+        payload=payload,
+    )

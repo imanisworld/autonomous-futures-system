@@ -123,7 +123,7 @@ def test_first_executable_quote_skips_non_ok_rows_without_reconstruction():
     wide = _quote(bid=1.0, ask=2.0)
     ok = _quote(bid=4.7, ask=4.9)
 
-    choice = first_executable_retained_quote([missing, stale, wide, ok])
+    choice = first_executable_retained_quote([missing, stale, wide, ok], trigger_ts="2026-09-18T13:59:59+00:00")
 
     assert choice.status == "FOUND"
     assert choice.reason_code == "first_executable_quote"
@@ -141,7 +141,8 @@ def test_no_executable_quote_is_explicit_no_fill():
             _quote(quote_ts=None),
             _quote(quote_ts="2026-09-18T13:40:00+00:00"),
             _quote(bid=1.0, ask=2.0),
-        ]
+        ],
+        trigger_ts="2026-09-18T13:59:59+00:00",
     )
     assert choice.status == "NO_FILL"
     assert choice.reason_code == "no_executable_quote_after_trigger"
@@ -149,13 +150,13 @@ def test_no_executable_quote_is_explicit_no_fill():
 
 
 def test_no_quote_after_trigger_is_explicit_no_fill():
-    choice = first_executable_retained_quote([])
+    choice = first_executable_retained_quote([], trigger_ts="2026-09-18T14:00:00+00:00")
     assert choice.status == "NO_FILL"
     assert choice.reason_code == "no_quote_after_trigger"
 
 
 def test_malformed_retained_quote_bytes_fail_closed_not_skipped():
-    choice = first_executable_retained_quote([b"{not-json}\n", _quote()])
+    choice = first_executable_retained_quote([b"{not-json}\n", _quote()], trigger_ts="2026-09-18T13:59:59+00:00")
     assert choice.status == "INVALID_DATA"
     assert choice.reason_code == "retained_quote_parse_failed"
     assert choice.index == 0
@@ -191,3 +192,67 @@ def test_invalid_directional_stop_target_geometry_fails_closed():
     assert call.detail == "invalid_call_stop_target_geometry"
     assert put.reason == "INVALID"
     assert put.detail == "invalid_put_stop_target_geometry"
+
+
+def test_pretrigger_ok_quote_cannot_be_used_as_exit():
+    before = _quote(
+        bid=4.9,
+        ask=5.1,
+        quote_ts="2026-09-18T14:00:00+00:00",
+        decision_ts="2026-09-18T14:00:05+00:00",
+    )
+    after = _quote(
+        bid=4.5,
+        ask=4.7,
+        quote_ts="2026-09-18T14:01:01+00:00",
+        decision_ts="2026-09-18T14:01:05+00:00",
+    )
+    choice = first_executable_retained_quote(
+        [before, after],
+        trigger_ts="2026-09-18T14:01:00+00:00",
+    )
+    assert choice.status == "FOUND"
+    assert choice.index == 1
+    assert choice.payload == after
+
+
+def test_quote_order_cannot_change_earliest_posttrigger_choice():
+    later = _quote(
+        bid=4.4,
+        ask=4.6,
+        quote_ts="2026-09-18T14:02:00+00:00",
+        decision_ts="2026-09-18T14:02:05+00:00",
+    )
+
+    earlier = _quote(
+        bid=4.6,
+        ask=4.8,
+        quote_ts="2026-09-18T14:01:10+00:00",
+        decision_ts="2026-09-18T14:01:15+00:00",
+    )
+    choice = first_executable_retained_quote(
+        [later, earlier],
+        trigger_ts="2026-09-18T14:01:00+00:00",
+    )
+    assert choice.status == "FOUND"
+    assert choice.index == 1
+    assert choice.payload == earlier
+
+
+def test_only_pretrigger_quotes_are_explicit_no_fill():
+    before = _quote(
+        quote_ts="2026-09-18T14:00:00+00:00",
+        decision_ts="2026-09-18T14:00:05+00:00",
+    )
+    choice = first_executable_retained_quote(
+        [before],
+        trigger_ts="2026-09-18T14:01:00+00:00",
+    )
+    assert choice.status == "NO_FILL"
+    assert choice.reason_code == "no_executable_quote_after_trigger"
+
+
+def test_invalid_trigger_timestamp_fails_closed():
+    choice = first_executable_retained_quote([_quote()], trigger_ts="not-a-time")
+    assert choice.status == "INVALID_DATA"
+    assert choice.reason_code == "invalid_trigger_timestamp"
