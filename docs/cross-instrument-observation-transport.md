@@ -104,6 +104,21 @@ cross an unexplained missing bar should be tagged `DATA_GAP_CONTAMINATED` and
 excluded from readiness gates. Do not backfill with invented bars. Maintenance
 and known exchange closures must be classified separately from unexplained gaps.
 
+**Verified incident — M2K 2026-09-17:** the persisted 15m BarHistory is missing
+11 M2K bars from **13:30Z through 16:00Z** (surrounding boundary 13:15Z →
+16:15Z), while MNQ/MES/MGC/MCL/MBT are complete over the audited 13:00Z–16:30Z
+window. Server logs split the incident into two phases: 13:45Z–14:15Z had only
+11 normal successful webhook POSTs and no 500s, so one expected alert path was
+absent/not arriving for a cause that remains unproven; 14:30Z–16:15Z had 11
+normal successes plus four retries of one failing alert every 15 minutes. The
+second phase is proven to be a re-created TradingView alert with a non-ASCII
+webhook secret triggering the old string `hmac.compare_digest` TypeError.
+Current/deployed authentication code fails such input closed as HTTP 401 instead.
+Treat any M2K detector/resolution window crossing the missing interval as
+`DATA_GAP_CONTAMINATED`; do not backfill or attribute the pre-14:30 phase to
+the malformed-secret defect without new evidence. Full incident record:
+[`m2k-feed-gap-incident-2026-09-17.md`](m2k-feed-gap-incident-2026-09-17.md).
+
 ### 2. MBT outcome horizon
 There is no proven daily expiry boundary for a 24/7 product.
 
