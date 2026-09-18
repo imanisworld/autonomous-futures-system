@@ -99,6 +99,12 @@ from context.five_min_feed import (
     recent_five_min,
     triggered_armed_setup,
 )
+from context.one_min_trigger import (
+    evaluate_armed_4hr_touch,
+    is_one_min,
+    one_min_enabled,
+    record_one_min,
+)
 from execution.mnq_strat_evidence import process_mnq_strat_evidence
 from execution.mes_trend_consolidation_break_evidence import (
     process_mes_trend_consolidation_break_evidence,
@@ -543,6 +549,42 @@ def process_alert(
             "failed_gates": [quality_error],
             "confidence_score": None,
             "event_id": getattr(payload, "event_id", None),
+        }
+
+    # ── Step 0a0: isolated 1-minute armed-trigger evidence lane ───────────────
+    # Default OFF. A 1m alert can only observe a touch of an already-persisted
+    # ARMED MNQ 4HR state. It returns before DecisionEngine, RiskEngine, and all
+    # broker paths, so it cannot discover/authorize/execute a trade.
+    if one_min_enabled() and is_one_min(payload.timeframe):
+        one_min_event = None
+        one_min_error = None
+        try:
+            record_one_min(payload, log_dir, for_date=for_date)
+            if "strat_4hr_retrigger" in cfg.enabled_concepts:
+                one_min_event = evaluate_armed_4hr_touch(
+                    payload, log_dir, for_date=for_date
+                )
+        except Exception as _exc:  # evidence ingestion must never break webhook
+            logger.warning("1m trigger lane skipped: %s", _exc)
+            one_min_error = str(_exc)
+        return {
+            "timestamp": payload.timestamp,
+            "instrument": _contract_root(payload.ticker) or payload.ticker,
+            "session": payload.session,
+            "resolution": None,
+            "decision": "ONE_MIN_CONTEXT",
+            "risk": None,
+            "fill": None,
+            "context": None,
+            "regime": None,
+            "gex_status": None,
+            "signa_status": None,
+            "failed_gates": [],
+            "confidence_score": None,
+            "event_id": getattr(payload, "event_id", None),
+            "one_min_trigger": one_min_event,
+            "one_min_error": one_min_error,
+            "execution_reachable": False,
         }
 
     # ── Step 0a: 5-minute entry feed ──────────────────────────────────────────
